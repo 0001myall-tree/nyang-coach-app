@@ -1,0 +1,46 @@
+{
+  "project_info": {
+    "project_number": "912621917226",
+    "project_id": "nyangcoach",
+    "storage_bucket": "nyangcoach.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:912621917226:android:1fc904ef2302f0bfc69f53",
+        "android_client_info": {
+          "package_name": "com.nyang.nyang_coach"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "912621917226-7i963r1k8mjkf4llrlda93pelj6tpkro.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD9xoVzpI5jLQeUxNdLJSXue7MC0hl-qmM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "912621917226-7i963r1k8mjkf4llrlda93pelj6tpkro.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "912621917226-ajnj53vsr2q11ikd6osla0aog9e4p2u3.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.nyang.nyangCoach"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
