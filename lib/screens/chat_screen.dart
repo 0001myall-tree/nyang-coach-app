@@ -12,6 +12,7 @@ import 'package:speech_to_text/speech_to_text.dart';
 import 'package:speech_to_text/speech_recognition_result.dart';
 import 'package:nyang_coach/screens/coach_selection_screen.dart';
 import 'package:nyang_coach/services/notification_service.dart';
+import 'package:nyang_coach/services/analytics_service.dart';
 import 'package:nyang_coach/services/tasks_sync_service.dart';
 import 'package:nyang_coach/services/user_title_service.dart';
 import 'coach_config.dart';
@@ -2080,6 +2081,10 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       });
       _scrollToBottom();
       await _saveHistory();
+      AnalyticsService.logConversationMessage(
+        coachId: widget.coachId,
+        usedApi: false,
+      );
       return;
     }
 
@@ -2094,6 +2099,11 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       });
       _scrollToBottom();
       await _saveHistory();
+      AnalyticsService.logConversationMessage(
+        coachId: widget.coachId,
+        usedApi: false,
+        coachReplied: false,
+      );
       widget.onBedtimeMoveRequested?.call(
         trimmed == '다음 날로 옮기기' ? 'nextDay' : 'date',
       );
@@ -2139,6 +2149,10 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         });
         _scrollToBottom();
         await _saveHistory();
+        AnalyticsService.logConversationMessage(
+          coachId: widget.coachId,
+          usedApi: false,
+        );
         return;
       }
     }
@@ -2167,12 +2181,21 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         });
         await _saveHistory();
         _scrollToBottom();
+        AnalyticsService.logConversationMessage(
+          coachId: widget.coachId,
+          usedApi: false,
+        );
         await Future.delayed(const Duration(milliseconds: 300));
         if (mounted) _showCatUpsellBottomSheet();
         return;
       } else if (_catFreeTrialStep >= 2) {
         // 이미 업셀 완료 → 팝업만 다시 표시
         _showCatUpsellBottomSheet();
+        AnalyticsService.logConversationMessage(
+          coachId: widget.coachId,
+          usedApi: false,
+          coachReplied: false,
+        );
         return;
       }
     }
@@ -2229,6 +2252,10 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       });
       _scrollToBottom();
       await _saveHistory();
+      AnalyticsService.logConversationMessage(
+        coachId: widget.coachId,
+        usedApi: true,
+      );
     } catch (e) {
       if (!mounted || widget.coachId != currentId) return;
       setState(() => _isLoading = false);
@@ -2760,12 +2787,63 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
     final content = result.data['content'] as String? ?? '';
     if (content.isEmpty) throw Exception('Empty response from chatProxy');
 
+    final estimatedTokens = _estimateChatTokens(messages, content);
+    final usageData = result.data is Map ? result.data as Map : const {};
+    final actualTokens = _readIntValue(usageData, [
+      'totalTokens',
+      'total_tokens',
+      'tokens',
+      'usage.totalTokens',
+      'usage.total_tokens',
+    ]);
+    final actualCostWon = _readIntValue(usageData, [
+      'costWon',
+      'cost_won',
+      'estimatedCostWon',
+      'estimated_cost_won',
+      'usage.costWon',
+    ]);
+    AnalyticsService.logApiUsage(
+      coachId: widget.coachId,
+      estimatedTokens: estimatedTokens,
+      actualTokens: actualTokens,
+      actualCostWon: actualCostWon,
+    );
+
     // 마크다운 포맷 제거 (웹앱과 동일)
     return content
         .replaceAll(RegExp(r'\*\*(.*?)\*\*'), r'$1')
         .replaceAll(RegExp(r'\*(.*?)\*'), r'$1')
         .replaceAll(RegExp(r'^#{1,6}\s+', multiLine: true), '')
         .trim();
+  }
+
+  int _estimateChatTokens(List<Map<String, String>> messages, String reply) {
+    final totalChars =
+        messages.fold<int>(
+          0,
+          (sum, item) => sum + (item['content'] ?? '').length,
+        ) +
+        reply.length;
+    return (totalChars / 3.2).ceil();
+  }
+
+  int? _readIntValue(Map data, List<String> keys) {
+    for (final key in keys) {
+      dynamic value = data;
+      for (final segment in key.split('.')) {
+        if (value is Map && value.containsKey(segment)) {
+          value = value[segment];
+        } else {
+          value = null;
+          break;
+        }
+      }
+      if (value is int) return value;
+      if (value is num) return value.round();
+      if (value is String) return int.tryParse(value);
+    }
+    return null;
   }
 
   void _scrollToBottom() {

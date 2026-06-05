@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:audioplayers/audioplayers.dart';
 import '../models/user_data.dart';
 import '../services/notification_service.dart';
+import '../services/analytics_service.dart';
 import 'chat_screen.dart';
 import 'coach_config.dart';
 import 'coach_selection_screen.dart';
@@ -412,6 +413,7 @@ class _MainTabScreenState extends State<MainTabScreen>
     _loadVacation();
     _startMorningCallEngine();
     _startCoreReminderEngine();
+    AnalyticsService.logAppOpen();
   }
 
   @override
@@ -519,6 +521,7 @@ class _MainTabScreenState extends State<MainTabScreen>
   }
 
   void _fireMorningCall(String configuredCoachId) async {
+    AnalyticsService.logFeatureUsage('morning_call');
     String targetCoachId = configuredCoachId;
     final userData = await UserDataService.load();
 
@@ -647,6 +650,7 @@ class _MainTabScreenState extends State<MainTabScreen>
     int advanceMinutes,
     String taskText,
   ) async {
+    AnalyticsService.logFeatureUsage('core_reminder');
     String targetCoachId = configuredCoachId;
 
     if (targetCoachId == 'push') {
