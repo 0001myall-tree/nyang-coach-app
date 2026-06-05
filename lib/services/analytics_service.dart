@@ -6,6 +6,10 @@ class AnalyticsService {
   static final _firestore = FirebaseFirestore.instance;
   static final _auth = FirebaseAuth.instance;
 
+  static String _dateKey(DateTime date) {
+    return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+  }
+
   /// 매일 최초 접속 시 DAU(일간 활성 사용자) 및 접속 기록 저장
   static Future<void> logAppOpen() async {
     final user = _auth.currentUser;
@@ -13,8 +17,7 @@ class AnalyticsService {
 
     try {
       final now = DateTime.now();
-      final dateKey =
-          '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+      final dateKey = _dateKey(now);
 
       // 사용자별 타임라인 이벤트 추가
       await _logTimelineEvent(user.uid, 'app_open', '앱 접속');
@@ -40,6 +43,7 @@ class AnalyticsService {
     if (user == null) return;
 
     try {
+      final dateKey = _dateKey(DateTime.now());
       await _firestore.collection('analytics').doc('conversation_usage').set({
         'totalUserMessages': FieldValue.increment(1),
         'totalCoachReplies': FieldValue.increment(coachReplied ? 1 : 0),
@@ -64,6 +68,21 @@ class AnalyticsService {
             ),
             '$coachId.updatedAt': FieldValue.serverTimestamp(),
           }, SetOptions(merge: true));
+
+      await _firestore
+          .collection('analytics')
+          .doc('conversation_usage_daily_$dateKey')
+          .set({
+            'date': dateKey,
+            'activeUsers': FieldValue.arrayUnion([user.uid]),
+            'totalUserMessages': FieldValue.increment(1),
+            'totalCoachReplies': FieldValue.increment(coachReplied ? 1 : 0),
+            'apiReplies': FieldValue.increment(usedApi && coachReplied ? 1 : 0),
+            'localReplies': FieldValue.increment(
+              !usedApi && coachReplied ? 1 : 0,
+            ),
+            'updatedAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
     } catch (e) {
       debugPrint('Analytics conversation logging failed: $e');
     }
@@ -80,6 +99,7 @@ class AnalyticsService {
     if (user == null) return;
 
     try {
+      final dateKey = _dateKey(DateTime.now());
       final tokenCount = actualTokens ?? estimatedTokens;
       // 서버에서 실제 비용을 내려주지 않으면 임시 추정 비용을 기록합니다.
       final costWon = actualCostWon ?? (tokenCount * 0.1).round();
@@ -100,6 +120,18 @@ class AnalyticsService {
         'apiCallCount': FieldValue.increment(1),
         'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
+
+      await _firestore
+          .collection('analytics')
+          .doc('api_costs_daily_$dateKey')
+          .set({
+            'date': dateKey,
+            'activeUsers': FieldValue.arrayUnion([user.uid]),
+            'totalTokens': FieldValue.increment(tokenCount),
+            'totalCostWon': FieldValue.increment(costWon),
+            'apiCallCount': FieldValue.increment(1),
+            'updatedAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
     } catch (e) {
       debugPrint('Analytics api usage logging failed: $e');
     }
