@@ -10,6 +10,7 @@ import 'package:audioplayers/audioplayers.dart';
 import '../models/user_data.dart';
 import '../services/notification_service.dart';
 import '../services/analytics_service.dart';
+import '../services/morning_call_alarm_session.dart';
 import 'chat_screen.dart';
 import 'coach_config.dart';
 import 'coach_selection_screen.dart';
@@ -421,6 +422,7 @@ class _MainTabScreenState extends State<MainTabScreen>
     _tabCtrl.dispose();
     _morningCallTimer?.cancel();
     _coreReminderTimer?.cancel();
+    MorningCallAlarmSession().stop();
     _audioPlayer.dispose();
     super.dispose();
   }
@@ -540,20 +542,18 @@ class _MainTabScreenState extends State<MainTabScreen>
 
     final coach = CoachConfigs.get(targetCoachId);
     final count = coach.voiceCount;
+    String? soundName;
 
     if (count > 0) {
       final randNum = Random().nextInt(count) + 1;
-      _audioPlayer.setReleaseMode(ReleaseMode.loop);
-      try {
-        await _audioPlayer.play(
-          AssetSource('voice/${targetCoachId}_$randNum.mp3'),
-        );
-      } catch (e) {
-        debugPrint('Audio play error: $e');
-      }
+      soundName = '${targetCoachId}_$randNum';
     }
 
     if (mounted) {
+      MorningCallAlarmSession().start(
+        coachId: targetCoachId,
+        soundName: soundName,
+      );
       showGeneralDialog(
         context: context,
         barrierDismissible: false,
@@ -616,7 +616,7 @@ class _MainTabScreenState extends State<MainTabScreen>
               const SizedBox(height: 64),
               ElevatedButton(
                 onPressed: () {
-                  _audioPlayer.stop();
+                  MorningCallAlarmSession().stop();
                   Navigator.pop(context);
                 },
                 style: ElevatedButton.styleFrom(

@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import '../services/morning_call_alarm_session.dart';
 import 'coach_config.dart';
-import 'dart:math';
 
 class MorningCallScreen extends StatefulWidget {
   final String coachId;
@@ -15,59 +14,18 @@ class MorningCallScreen extends StatefulWidget {
 }
 
 class _MorningCallScreenState extends State<MorningCallScreen> {
-  late final AudioPlayer _audioPlayer;
-  bool _isPlaying = false;
-
   @override
   void initState() {
     super.initState();
-    _audioPlayer = AudioPlayer();
-    _playMorningCallAudio();
-  }
-
-  Future<void> _playMorningCallAudio() async {
-    // CoachConfig에서 목소리 개수 읽기 → 나중에 목소리 추가 시 coach_config.dart만 수정하면 됨
-    final count = CoachConfigs.get(widget.coachId).voiceCount;
-    if (count > 0) {
-      final soundName =
-          widget.soundName ??
-          '${widget.coachId}_${Random().nextInt(count) + 1}';
-      final soundPath = 'voice/$soundName.mp3';
-
-      try {
-        await _audioPlayer.setAudioContext(
-          AudioContext(
-            android: AudioContextAndroid(
-              usageType: AndroidUsageType.alarm,
-              contentType: AndroidContentType.music,
-              audioFocus: AndroidAudioFocus.none,
-            ),
-            iOS: AudioContextIOS(
-              category: AVAudioSessionCategory.playback,
-              options: {
-                AVAudioSessionOptions.mixWithOthers,
-                AVAudioSessionOptions.defaultToSpeaker,
-              },
-            ),
-          ),
-        );
-        await _audioPlayer.setVolume(1.0);
-        await _audioPlayer.setReleaseMode(ReleaseMode.loop);
-        await _audioPlayer.play(AssetSource(soundPath));
-        if (mounted) {
-          setState(() {
-            _isPlaying = true;
-          });
-        }
-      } catch (e) {
-        debugPrint('모닝콜 오디오 재생 실패: $e');
-      }
-    }
+    MorningCallAlarmSession().start(
+      coachId: widget.coachId,
+      soundName: widget.soundName,
+    );
   }
 
   @override
   void dispose() {
-    _audioPlayer.dispose();
+    MorningCallAlarmSession().stop();
     FlutterLocalNotificationsPlugin().cancel(id: 0);
     super.dispose();
   }
@@ -185,8 +143,7 @@ class _MorningCallScreenState extends State<MorningCallScreen> {
                       width: double.infinity,
                       child: ElevatedButton(
                         onPressed: () {
-                          // 오디오 중지 및 화면 닫기
-                          _audioPlayer.stop();
+                          MorningCallAlarmSession().stop();
                           FlutterLocalNotificationsPlugin().cancel(id: 0);
                           Navigator.pop(context);
                         },

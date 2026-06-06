@@ -25,7 +25,7 @@ class NotificationService {
   DateTime? _lastMorningOpenedAt;
 
   String _morningCallChannelId(String? soundName) {
-    return 'nyang_morning_call_${soundName ?? 'default'}_v2';
+    return 'nyang_morning_call_screen_${soundName ?? 'default'}_v3';
   }
 
   String _coreReminderChannelId(String? soundName) {
@@ -194,17 +194,12 @@ class NotificationService {
           channelDescription: '냥냥코치 모닝콜 알림입니다.',
           importance: Importance.max,
           priority: Priority.high,
-          sound: soundName != null
-              ? RawResourceAndroidNotificationSound(soundName)
-              : null,
-          playSound: true,
+          playSound: false,
           fullScreenIntent: true,
-          audioAttributesUsage:
-              AudioAttributesUsage.alarm, // 진동/무음 모드에서도 알람 볼륨으로 무조건 재생!
+          audioAttributesUsage: AudioAttributesUsage.alarm,
         );
-    final DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
-      sound: soundName != null ? '$soundName.caf' : null,
-      presentSound: true,
+    const DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
+      presentSound: false,
       presentAlert: true,
       presentBadge: true,
     );
