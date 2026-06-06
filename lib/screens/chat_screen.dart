@@ -278,6 +278,19 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin, 
           _completedTasks = completed;
         });
       }
+
+      // 이월 제안이 켜져있으나 더 이상 옮길 미완료 일정이 없으면 제안창을 종료합니다.
+      if (_bedtimeMoveOfferActive) {
+        final hasTasks = await _hasMovableIncompleteTasks();
+        if (!hasTasks) {
+          if (mounted) {
+            setState(() {
+              _dynamicChips = _coach.chips;
+              _bedtimeMoveOfferActive = false;
+            });
+          }
+        }
+      }
     } catch (e) {
       debugPrint('Error loading tasks: $e');
     }
@@ -2156,8 +2169,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin, 
         _messages.add(
           ChatMessage(text: trimmed, isUser: true, time: DateTime.now()),
         );
-        _dynamicChips = _coach.chips;
-        _bedtimeMoveOfferActive = false;
+        // 즉시 버튼을 숨기지 않고 팝업 조작이 끝나고 갱신될 때까지 유지합니다.
       });
       _scrollToBottom();
       await _saveHistory();
