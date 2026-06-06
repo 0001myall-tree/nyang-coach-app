@@ -11,6 +11,7 @@ import '../models/user_data.dart';
 import '../services/notification_service.dart';
 import '../services/tasks_sync_service.dart';
 import '../services/user_title_service.dart';
+import '../services/analytics_service.dart';
 
 // ─────────────────────────────────────────────────────────────
 // 데이터 모델 (웹앱 그대로)
@@ -1897,6 +1898,7 @@ class _TasksScreenState extends State<TasksScreen>
                         _saveTasks();
                         _saveCoreTasks();
                         _saveSchedules();
+                        AnalyticsService.logFeatureUsage('move_task');
                         Navigator.pop(ctx);
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
