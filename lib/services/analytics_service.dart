@@ -145,6 +145,7 @@ class AnalyticsService {
         'totalCoachReplies': FieldValue.increment(coachReplied ? 1 : 0),
         'apiReplies': FieldValue.increment(usedApi && coachReplied ? 1 : 0),
         'localReplies': FieldValue.increment(!usedApi && coachReplied ? 1 : 0),
+        'coachUsage.$coachId': FieldValue.increment(1),
         'updatedAt': FieldValue.serverTimestamp(),
       };
 
