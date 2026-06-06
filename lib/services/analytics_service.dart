@@ -10,6 +10,27 @@ class AnalyticsService {
     return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
   }
 
+  static DocumentReference<Map<String, dynamic>> _userAnalyticsSummaryRef(
+    String uid,
+  ) {
+    return _firestore
+        .collection('users')
+        .doc(uid)
+        .collection('analytics')
+        .doc('summary');
+  }
+
+  static DocumentReference<Map<String, dynamic>> _userAnalyticsDailyRef(
+    String uid,
+    String dateKey,
+  ) {
+    return _firestore
+        .collection('users')
+        .doc(uid)
+        .collection('analytics_daily')
+        .doc(dateKey);
+  }
+
   /// 매일 최초 접속 시 DAU(일간 활성 사용자) 및 접속 기록 저장
   static Future<void> logAppOpen() async {
     final user = _auth.currentUser;
@@ -27,6 +48,32 @@ class AnalyticsService {
         'date': dateKey,
         'activeUsers': FieldValue.arrayUnion([user.uid]),
         'totalVisits': FieldValue.increment(1),
+      }, SetOptions(merge: true));
+
+      final summaryRef = _userAnalyticsSummaryRef(user.uid);
+      final summaryDoc = await summaryRef.get();
+      final summaryData = summaryDoc.data();
+      if (summaryData == null || summaryData['joinedAt'] == null) {
+        await summaryRef.set({
+          'joinedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+      }
+
+      await summaryRef.set({
+        'uid': user.uid,
+        'email': user.email,
+        'lastActiveAt': FieldValue.serverTimestamp(),
+        'activeDates': FieldValue.arrayUnion([dateKey]),
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      await _userAnalyticsDailyRef(user.uid, dateKey).set({
+        'date': dateKey,
+        'uid': user.uid,
+        'email': user.email,
+        'openedAt': FieldValue.serverTimestamp(),
+        'appOpenCount': FieldValue.increment(1),
+        'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
     } catch (e) {
       debugPrint('Analytics app open logging failed: $e');
@@ -83,6 +130,23 @@ class AnalyticsService {
             ),
             'updatedAt': FieldValue.serverTimestamp(),
           }, SetOptions(merge: true));
+
+      final conversationPayload = {
+        'totalUserMessages': FieldValue.increment(1),
+        'totalCoachReplies': FieldValue.increment(coachReplied ? 1 : 0),
+        'apiReplies': FieldValue.increment(usedApi && coachReplied ? 1 : 0),
+        'localReplies': FieldValue.increment(!usedApi && coachReplied ? 1 : 0),
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
+
+      await _userAnalyticsSummaryRef(
+        user.uid,
+      ).set(conversationPayload, SetOptions(merge: true));
+
+      await _userAnalyticsDailyRef(
+        user.uid,
+        dateKey,
+      ).set({'date': dateKey, ...conversationPayload}, SetOptions(merge: true));
     } catch (e) {
       debugPrint('Analytics conversation logging failed: $e');
     }
@@ -132,6 +196,22 @@ class AnalyticsService {
             'apiCallCount': FieldValue.increment(1),
             'updatedAt': FieldValue.serverTimestamp(),
           }, SetOptions(merge: true));
+
+      final apiPayload = {
+        'totalTokens': FieldValue.increment(tokenCount),
+        'totalCostWon': FieldValue.increment(costWon),
+        'apiCallCount': FieldValue.increment(1),
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
+
+      await _userAnalyticsSummaryRef(
+        user.uid,
+      ).set(apiPayload, SetOptions(merge: true));
+
+      await _userAnalyticsDailyRef(
+        user.uid,
+        dateKey,
+      ).set({'date': dateKey, ...apiPayload}, SetOptions(merge: true));
     } catch (e) {
       debugPrint('Analytics api usage logging failed: $e');
     }
