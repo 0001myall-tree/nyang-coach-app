@@ -132,7 +132,10 @@ class UserDataService {
     if (user != null) {
       try {
         await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+          'email': user.email,
+          'loginEmail': user.email,
           'userData': data.toJson(),
+          'updatedAt': FieldValue.serverTimestamp(),
         }, SetOptions(merge: true));
       } catch (e) {
         debugPrint('Firestore UserData sync error: $e');
