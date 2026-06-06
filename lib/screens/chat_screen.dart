@@ -471,7 +471,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin, 
 
     final displayTime = _formatTime12(minSleepTime);
     final rawMsg =
-        '그런데 대표님은 $displayTime 전에 주무셔야 덜 피곤하다고 하셨죠? 남은 계획을 지금 다 하기엔 빠듯해 보여요.';
+        '그런데 대표님은 $displayTime 전에 주무셔야 덜 피곤하다고 하셨죠? 남은 계획을 지금 다 하기엔 빠듯해 보여요. 혹시 오늘까지 꼭 끝내야 하는 일정이 있으신가요?';
     final msg = await UserTitleService.applyForCoach(rawMsg, widget.coachId);
 
     if (!mounted) return;
@@ -479,8 +479,6 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin, 
       _messages.add(
         ChatMessage(text: msg, isUser: false, time: DateTime.now()),
       );
-      _dynamicChips = ['다음 날로 옮기기', '다른 날짜로 옮기기', '알아서 할게요'];
-      _bedtimeMoveOfferActive = true;
     });
     await _saveHistory();
     _scrollToBottom();
