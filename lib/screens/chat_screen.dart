@@ -158,14 +158,12 @@ class _LocalResponses {
 class ChatScreen extends StatefulWidget {
   final String coachId;
   final VoidCallback? onOpenDrawer;
-  final ValueChanged<String>? onBedtimeMoveRequested;
   final dynamic vacationInfo;
   final ChatScreenController? controller;
   const ChatScreen({
     super.key,
     required this.coachId,
     this.onOpenDrawer,
-    this.onBedtimeMoveRequested,
     this.vacationInfo,
     this.controller,
   });
@@ -220,7 +218,6 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin, 
   String? _timerConfirmTaskName;
   // 할 일 추가 제안 카드
   List<_SuggestedTask> _suggestedTasks = [];
-  bool _bedtimeMoveOfferActive = false;
   // 활성 타이머
   int? _timerActiveMinutes;
 
@@ -277,19 +274,6 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin, 
           _totalTasks = total;
           _completedTasks = completed;
         });
-      }
-
-      // 이월 제안이 켜져있으나 더 이상 옮길 미완료 일정이 없으면 제안창을 종료합니다.
-      if (_bedtimeMoveOfferActive) {
-        final hasTasks = await _hasMovableIncompleteTasks();
-        if (!hasTasks) {
-          if (mounted) {
-            setState(() {
-              _dynamicChips = _coach.chips;
-              _bedtimeMoveOfferActive = false;
-            });
-          }
-        }
       }
     } catch (e) {
       debugPrint('Error loading tasks: $e');
@@ -2139,49 +2123,6 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin, 
     _ctrl.clear();
     HapticFeedback.lightImpact();
 
-    if (_bedtimeMoveOfferActive && trimmed == '알아서 할게요') {
-      final rawMsg = '알겠습니다. 대표님의 말씀을 따르도록 하겠습니다.';
-      final msg = await UserTitleService.applyForCoach(rawMsg, widget.coachId);
-      setState(() {
-        _messages.add(
-          ChatMessage(text: trimmed, isUser: true, time: DateTime.now()),
-        );
-        _messages.add(
-          ChatMessage(text: msg, isUser: false, time: DateTime.now()),
-        );
-        _dynamicChips = _coach.chips;
-        _bedtimeMoveOfferActive = false;
-      });
-      _scrollToBottom();
-      await _saveHistory();
-      AnalyticsService.logConversationMessage(
-        coachId: widget.coachId,
-        usedApi: false,
-      );
-      return;
-    }
-
-    if (_bedtimeMoveOfferActive &&
-        (trimmed == '다음 날로 옮기기' || trimmed == '다른 날짜로 옮기기')) {
-      setState(() {
-        _messages.add(
-          ChatMessage(text: trimmed, isUser: true, time: DateTime.now()),
-        );
-        // 즉시 버튼을 숨기지 않고 팝업 조작이 끝나고 갱신될 때까지 유지합니다.
-      });
-      _scrollToBottom();
-      await _saveHistory();
-      AnalyticsService.logConversationMessage(
-        coachId: widget.coachId,
-        usedApi: false,
-        coachReplied: false,
-      );
-      widget.onBedtimeMoveRequested?.call(
-        trimmed == '다음 날로 옮기기' ? 'nextDay' : 'date',
-      );
-      return;
-    }
-
     // ── 나이트콜 설정 버튼 인터셉트 ──────────────────────
     if (trimmed == '🌙 나이트콜 설정하기') {
       final prefs = await SharedPreferences.getInstance();
@@ -3088,7 +3029,7 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
                           ? _buildEmptyState()
                           : _buildMessageList(),
                     ),
-                    if ((!_coach.isMaster || _bedtimeMoveOfferActive) &&
+                    if (!_coach.isMaster &&
                         (_dynamicChips.isNotEmpty || _coach.chips.isNotEmpty))
                       _buildChips(),
                   ],
@@ -4140,14 +4081,9 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
         separatorBuilder: (_, __) => const SizedBox(width: 8),
         itemBuilder: (ctx, i) {
           final chip = chips[i];
-          final isBedtimeChip = _bedtimeMoveOfferActive;
-          final chipBg = isBedtimeChip ? const Color(0xFFF5F3FF) : Colors.white;
-          final chipBorder = isBedtimeChip
-              ? const Color(0xFFDDD6FE)
-              : _coach.accentColor.withOpacity(0.3);
-          final chipText = isBedtimeChip
-              ? const Color(0xFF7C5CFC)
-              : _coach.accentColor;
+          final chipBg = Colors.white;
+          final chipBorder = _coach.accentColor.withOpacity(0.3);
+          final chipText = _coach.accentColor;
           return GestureDetector(
             onTap: () => _send(chip),
             child: Container(

@@ -818,14 +818,6 @@ class _MainTabScreenState extends State<MainTabScreen>
       vacationInfo: _vacationInfo,
       controller: _chatController,
       onOpenDrawer: () => setState(() => _openDrawerIndex = 1),
-      onBedtimeMoveRequested: (mode) {
-        setState(() => _openDrawerIndex = 1);
-        Future.delayed(
-          const Duration(milliseconds: 350),
-          () =>
-              _tasksController.openBedtimeMoveFlow(nextDay: mode == 'nextDay'),
-        );
-      },
     ),
     const TasksPlaceholderScreen(),
     RecordsScreen(coachId: widget.coachId),
