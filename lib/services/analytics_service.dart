@@ -5,6 +5,8 @@ import 'package:flutter/foundation.dart';
 class AnalyticsService {
   static final _firestore = FirebaseFirestore.instance;
   static final _auth = FirebaseAuth.instance;
+  static const double _krwPerUsd = 1400;
+  static const double _geminiFlashLiteOutputUsdPerMillionTokens = 0.40;
 
   static String _dateKey(DateTime date) {
     return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
@@ -29,6 +31,13 @@ class AnalyticsService {
         .doc(uid)
         .collection('analytics_daily')
         .doc(dateKey);
+  }
+
+  static int _estimateCostWonFromTokens(int tokenCount) {
+    if (tokenCount <= 0) return 0;
+    final usdCost =
+        tokenCount / 1000000 * _geminiFlashLiteOutputUsdPerMillionTokens;
+    return (usdCost * _krwPerUsd).round();
   }
 
   /// 매일 최초 접속 시 DAU(일간 활성 사용자) 및 접속 기록 저장
@@ -165,8 +174,8 @@ class AnalyticsService {
     try {
       final dateKey = _dateKey(DateTime.now());
       final tokenCount = actualTokens ?? estimatedTokens;
-      // 서버에서 실제 비용을 내려주지 않으면 임시 추정 비용을 기록합니다.
-      final costWon = actualCostWon ?? (tokenCount * 0.1).round();
+      // 서버에서 실제 비용을 내려주지 않으면 Gemini Flash-Lite 출력 단가 기준으로 보수적으로 추정합니다.
+      final costWon = actualCostWon ?? _estimateCostWonFromTokens(tokenCount);
 
       // 사용자 타임라인 이벤트 추가
       await _logTimelineEvent(user.uid, 'chat', '코치($coachId)와 대화 진행');
@@ -223,10 +232,28 @@ class AnalyticsService {
     if (user == null) return;
 
     try {
+      final now = DateTime.now();
+      final dateKey = _dateKey(now);
+
       await _logTimelineEvent(user.uid, 'feature', '기능 사용: $featureName');
 
       await _firestore.collection('analytics').doc('feature_usage').set({
         featureName: FieldValue.increment(1),
+      }, SetOptions(merge: true));
+
+      await _userAnalyticsSummaryRef(user.uid).set({
+        'uid': user.uid,
+        'email': user.email,
+        'features.$featureName': FieldValue.increment(1),
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      await _userAnalyticsDailyRef(user.uid, dateKey).set({
+        'date': dateKey,
+        'uid': user.uid,
+        'email': user.email,
+        'features.$featureName': FieldValue.increment(1),
+        'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
     } catch (e) {
       debugPrint('Analytics feature logging failed: $e');

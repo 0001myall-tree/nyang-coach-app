@@ -1,5 +1,4 @@
 import 'dart:math';
-import 'dart:typed_data';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
@@ -13,6 +12,7 @@ import '../screens/night_call_screen.dart';
 import '../screens/core_reminder_screen.dart';
 import '../screens/coach_config.dart';
 import '../models/user_data.dart';
+import 'analytics_service.dart';
 import 'morning_call_alarm_session.dart';
 
 class NotificationService {
@@ -59,6 +59,7 @@ class NotificationService {
     _lastMorningOpenedAt = now;
 
     final parsed = _parseMorningPayload(payload);
+    AnalyticsService.logFeatureUsage('morning_call');
     MorningCallAlarmSession().start(
       coachId: parsed.coachId,
       soundName: parsed.soundName,
@@ -87,6 +88,7 @@ class NotificationService {
 
   void _openNightCall(String payload) {
     final parsed = _parseNightPayload(payload);
+    AnalyticsService.logFeatureUsage('night_call');
     navigatorKey.currentState?.push(
       MaterialPageRoute(
         builder: (context) => NightCallScreen(
@@ -209,7 +211,7 @@ class NotificationService {
     String? soundName;
     if (count > 0) {
       final randNum = Random().nextInt(count) + 1;
-      soundName = '${targetCoachId}_${randNum}';
+      soundName = '${targetCoachId}_$randNum';
     }
     final AndroidNotificationDetails androidDetails =
         AndroidNotificationDetails(
