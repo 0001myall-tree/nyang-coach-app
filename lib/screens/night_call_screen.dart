@@ -8,7 +8,9 @@ import 'coach_config.dart';
 
 class NightCallScreen extends StatefulWidget {
   final String coachId;
-  const NightCallScreen({super.key, required this.coachId});
+  final String? soundName;
+
+  const NightCallScreen({super.key, required this.coachId, this.soundName});
 
   @override
   State<NightCallScreen> createState() => _NightCallScreenState();
@@ -40,8 +42,9 @@ class _NightCallScreenState extends State<NightCallScreen> {
   }
 
   Future<void> _playNightCallAudio() async {
-    final randNum = Random().nextInt(6) + 1;
-    final soundPath = 'voice/${_safeCoachId}_night_$randNum.mp3';
+    final soundName =
+        widget.soundName ?? '${_safeCoachId}_night_${Random().nextInt(6) + 1}';
+    final soundPath = 'voice/$soundName.mp3';
 
     try {
       await _audioPlayer.setAudioContext(

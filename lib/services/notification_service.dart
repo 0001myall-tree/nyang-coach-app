@@ -32,6 +32,10 @@ class NotificationService {
     return 'nyang_core_reminder_${soundName ?? 'push'}_v2';
   }
 
+  String _nightCallChannelId(String? soundName) {
+    return 'nyang_night_call_${soundName ?? 'default'}_v2';
+  }
+
   ({String coachId, String? soundName}) _parseMorningPayload(String payload) {
     if (!payload.startsWith('morning:')) {
       return (coachId: payload, soundName: null);
@@ -64,10 +68,25 @@ class NotificationService {
     );
   }
 
-  void _openNightCall(String coachId) {
+  ({String coachId, String? soundName}) _parseNightPayload(String payload) {
+    if (!payload.startsWith('night:')) {
+      return (coachId: payload, soundName: null);
+    }
+    final parts = payload.split(':');
+    return (
+      coachId: parts.length > 1 ? parts[1] : 'sec_male',
+      soundName: parts.length > 2 && parts[2].isNotEmpty ? parts[2] : null,
+    );
+  }
+
+  void _openNightCall(String payload) {
+    final parsed = _parseNightPayload(payload);
     navigatorKey.currentState?.push(
       MaterialPageRoute(
-        builder: (context) => NightCallScreen(coachId: coachId),
+        builder: (context) => NightCallScreen(
+          coachId: parsed.coachId,
+          soundName: parsed.soundName,
+        ),
       ),
     );
   }
@@ -113,8 +132,7 @@ class NotificationService {
         final payload = response.payload;
         if (payload == null) return;
         if (payload.startsWith('night:')) {
-          final coachId = payload.substring('night:'.length);
-          _openNightCall(coachId);
+          _openNightCall(payload);
           return;
         }
         if (payload.startsWith('core:')) {
@@ -147,7 +165,7 @@ class NotificationService {
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (payload.startsWith('night:')) {
-        _openNightCall(payload.substring('night:'.length));
+        _openNightCall(payload);
       } else if (payload.startsWith('core:')) {
         _openCoreReminder(payload);
       } else {
@@ -252,21 +270,24 @@ class NotificationService {
     final targetCoachId = coachId == 'sec_female' || coachId == 'sec_male'
         ? coachId
         : 'sec_male';
+    final soundName = '${targetCoachId}_night_${Random().nextInt(6) + 1}';
 
     final AndroidNotificationDetails androidDetails =
         AndroidNotificationDetails(
-          'nyang_night_call_channel',
+          _nightCallChannelId(soundName),
           '냥냥코치 나이트콜',
           channelDescription: '비서의 하루 마무리 알람입니다.',
           importance: Importance.max,
           priority: Priority.high,
-          playSound: false,
+          sound: RawResourceAndroidNotificationSound(soundName),
+          playSound: true,
           fullScreenIntent: true,
           audioAttributesUsage: AudioAttributesUsage.alarm,
         );
 
     final DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
-      presentSound: false,
+      sound: '$soundName.caf',
+      presentSound: true,
       presentAlert: true,
       presentBadge: true,
     );
@@ -297,7 +318,7 @@ class NotificationService {
       scheduledDate: scheduled,
       notificationDetails: details,
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-      payload: 'night:$targetCoachId',
+      payload: 'night:$targetCoachId:$soundName',
     );
   }
 
@@ -310,26 +331,29 @@ class NotificationService {
     final targetCoachId = coachId == 'sec_female' || coachId == 'sec_male'
         ? coachId
         : 'sec_male';
+    final soundName = '${targetCoachId}_night_${Random().nextInt(6) + 1}';
 
-    const AndroidNotificationDetails androidDetails =
+    final AndroidNotificationDetails androidDetails =
         AndroidNotificationDetails(
-          'nyang_night_call_channel',
+          _nightCallChannelId(soundName),
           '냥냥코치 나이트콜',
           channelDescription: '비서의 하루 마무리 알림입니다.',
           importance: Importance.max,
           priority: Priority.high,
-          playSound: false,
+          sound: RawResourceAndroidNotificationSound(soundName),
+          playSound: true,
           fullScreenIntent: true,
           audioAttributesUsage: AudioAttributesUsage.alarm,
         );
 
-    const DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
-      presentSound: false,
+    final DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
+      sound: '$soundName.caf',
+      presentSound: true,
       presentAlert: true,
       presentBadge: true,
     );
 
-    const NotificationDetails details = NotificationDetails(
+    final NotificationDetails details = NotificationDetails(
       android: androidDetails,
       iOS: iosDetails,
     );
@@ -356,7 +380,7 @@ class NotificationService {
       notificationDetails: details,
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
       matchDateTimeComponents: DateTimeComponents.time,
-      payload: 'night:$targetCoachId',
+      payload: 'night:$targetCoachId:$soundName',
     );
   }
 
