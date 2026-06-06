@@ -31,6 +31,7 @@ class TaskItem {
   bool isReminderEnabled;
   int? achievedCount;
   int? achievedDuration;
+  int deferredCount;
 
   TaskItem({
     required this.id,
@@ -46,6 +47,7 @@ class TaskItem {
     required this.createdAt,
     this.completedAt,
     this.isReminderEnabled = true,
+    this.deferredCount = 0,
   });
 
   Map<String, dynamic> toJson() => {
@@ -64,6 +66,7 @@ class TaskItem {
     'isReminderEnabled': isReminderEnabled,
     if (achievedCount != null) 'achievedCount': achievedCount,
     if (achievedDuration != null) 'achievedDuration': achievedDuration,
+    'deferredCount': deferredCount,
   };
 
   factory TaskItem.fromJson(Map<String, dynamic> j) => TaskItem(
@@ -80,6 +83,7 @@ class TaskItem {
     createdAt: j['createdAt'] ?? DateTime.now().toIso8601String(),
     completedAt: j['completedAt'],
     isReminderEnabled: j['isReminderEnabled'] ?? true,
+    deferredCount: j['deferredCount'] ?? 0,
   );
 }
 
@@ -173,6 +177,7 @@ class ScheduleItem {
   bool done;
   String createdAt;
   bool isReminderEnabled;
+  int deferredCount;
 
   ScheduleItem({
     required this.id,
@@ -184,6 +189,7 @@ class ScheduleItem {
     this.done = false,
     required this.createdAt,
     this.isReminderEnabled = false,
+    this.deferredCount = 0,
   });
 
   Map<String, dynamic> toJson() => {
@@ -196,6 +202,7 @@ class ScheduleItem {
     'done': done,
     'createdAt': createdAt,
     'isReminderEnabled': isReminderEnabled,
+    'deferredCount': deferredCount,
   };
 
   factory ScheduleItem.fromJson(Map<String, dynamic> j) => ScheduleItem(
@@ -208,6 +215,7 @@ class ScheduleItem {
     done: j['done'] ?? false,
     createdAt: j['createdAt'] ?? DateTime.now().toIso8601String(),
     isReminderEnabled: j['isReminderEnabled'] ?? false,
+    deferredCount: j['deferredCount'] ?? 0,
   );
 }
 
@@ -518,6 +526,7 @@ class _TasksScreenState extends State<TasksScreen>
       await prefs.setBool('nyang_core_reminder_enabled', false);
       await prefs.remove('nyang_core_reminder_coach');
       await prefs.remove('nyang_core_reminder_advance');
+      await prefs.remove('nyang_deferred_tasks_today');
       await NotificationService().cancelCoreReminders();
       await _saveTasks();
       await _saveCoreTasks();
@@ -851,16 +860,39 @@ class _TasksScreenState extends State<TasksScreen>
 
     final todayStr = _getTodayStr();
     final doneTasks = tasks.where((t) => t.done).toList();
+
+    // 밤 9시 이후 이월된 일정 로드
+    final rawDeferred = prefs.getString('nyang_deferred_tasks_today');
+    List<dynamic> deferredList = [];
+    if (rawDeferred != null) {
+      try {
+        deferredList = jsonDecode(rawDeferred);
+      } catch (_) {}
+    }
+
+    final mergedTasks = [
+      ...tasks.map((t) => {
+        'text': t.text,
+        'done': t.done,
+        'category': t.category,
+        'deferred': false,
+      }),
+      ...deferredList.map((t) => {
+        'text': t['text'],
+        'done': t['done'] ?? false,
+        'category': t['category'] ?? 'today',
+        'deferred': true,
+      }),
+    ];
+
     final record = {
       'date': todayStr,
-      'totalCount': tasks.length,
+      'totalCount': tasks.length + deferredList.length,
       'doneCount': doneTasks.length,
       'success': doneTasks.isNotEmpty,
       'isVacation': vacationInfo != null,
       'updatedAt': DateTime.now().toIso8601String(),
-      'tasks': tasks
-          .map((t) => {'text': t.text, 'done': t.done, 'category': t.category})
-          .toList(),
+      'tasks': mergedTasks,
     };
 
     final idx = history.indexWhere((h) => h['date'] == todayStr);
@@ -1047,6 +1079,7 @@ class _TasksScreenState extends State<TasksScreen>
         existingTask.timeEnd = s.timeEnd;
         existingTask.duration = s.duration;
         existingTask.done = s.done;
+        existingTask.deferredCount = s.deferredCount;
 
         // Check if reminder was toggled from schedule edit
         bool reminderToggled =
@@ -1077,6 +1110,7 @@ class _TasksScreenState extends State<TasksScreen>
             coreTasks[coreIndex].timeEnd = s.timeEnd;
             coreTasks[coreIndex].duration = s.duration;
             coreTasks[coreIndex].done = s.done;
+            coreTasks[coreIndex].deferredCount = s.deferredCount;
             coreTasksChanged = true;
           }
         }
@@ -1092,6 +1126,7 @@ class _TasksScreenState extends State<TasksScreen>
           timeEnd: s.timeEnd,
           createdAt: s.createdAt,
           isReminderEnabled: s.isReminderEnabled,
+          deferredCount: s.deferredCount,
         );
         tasks.add(newTask);
 
@@ -1608,7 +1643,34 @@ class _TasksScreenState extends State<TasksScreen>
     ).showSnackBar(const SnackBar(content: Text('오늘은 쉬기로 표시했어요.')));
   }
 
+  Future<void> _recordDeferredTaskIfLate(TaskItem task) async {
+    final now = DateTime.now();
+    if (now.hour >= 21) {
+      final prefs = await SharedPreferences.getInstance();
+      final rawDeferred = prefs.getString('nyang_deferred_tasks_today');
+      List<dynamic> deferredList = [];
+      if (rawDeferred != null) {
+        try {
+          deferredList = jsonDecode(rawDeferred);
+        } catch (_) {}
+      }
+
+      final taskId = task.id.toString();
+      if (!deferredList.any((t) => t['id'].toString() == taskId)) {
+        deferredList.add({
+          'id': taskId,
+          'text': task.text,
+          'category': task.category,
+          'done': false,
+          'deferred': true,
+        });
+        await prefs.setString('nyang_deferred_tasks_today', jsonEncode(deferredList));
+      }
+    }
+  }
+
   void _removeTaskForMove(TaskItem task) {
+    _recordDeferredTaskIfLate(task);
     tasks.removeWhere((t) => t.id.toString() == task.id.toString());
     coreTasks.removeWhere((t) => t.id.toString() == task.id.toString());
 
@@ -5702,6 +5764,7 @@ class _TasksScreenState extends State<TasksScreen>
       done: false,
       createdAt: DateTime.now().toIso8601String(),
       isReminderEnabled: reminderEnabled,
+      deferredCount: task.deferredCount + 1,
     );
 
     if (timeType == 'single' && startTime != null) {
