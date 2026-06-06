@@ -1346,7 +1346,20 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
             ),
           )
         else
-          ...purchasedCoachIds.map(_buildPurchasedCoachRow),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 180),
+            child: Scrollbar(
+              thumbVisibility: true,
+              child: ListView.builder(
+                padding: const EdgeInsets.only(right: 12),
+                shrinkWrap: true,
+                itemCount: purchasedCoachIds.length,
+                itemBuilder: (context, index) {
+                  return _buildPurchasedCoachRow(purchasedCoachIds[index]);
+                },
+              ),
+            ),
+          ),
       ],
     );
   }

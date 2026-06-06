@@ -145,7 +145,9 @@ class AnalyticsService {
         'totalCoachReplies': FieldValue.increment(coachReplied ? 1 : 0),
         'apiReplies': FieldValue.increment(usedApi && coachReplied ? 1 : 0),
         'localReplies': FieldValue.increment(!usedApi && coachReplied ? 1 : 0),
-        'coachUsage.$coachId': FieldValue.increment(1),
+        'coachUsage': {
+          coachId: FieldValue.increment(1),
+        },
         'updatedAt': FieldValue.serverTimestamp(),
       };
 
@@ -245,7 +247,9 @@ class AnalyticsService {
       await _userAnalyticsSummaryRef(user.uid).set({
         'uid': user.uid,
         'email': user.email,
-        'features.$featureName': FieldValue.increment(1),
+        'features': {
+          featureName: FieldValue.increment(1),
+        },
         'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
 
@@ -253,7 +257,9 @@ class AnalyticsService {
         'date': dateKey,
         'uid': user.uid,
         'email': user.email,
-        'features.$featureName': FieldValue.increment(1),
+        'features': {
+          featureName: FieldValue.increment(1),
+        },
         'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
     } catch (e) {

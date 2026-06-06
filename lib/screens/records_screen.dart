@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:nyang_coach/services/user_title_service.dart';
+import 'package:nyang_coach/services/analytics_service.dart';
 import 'coach_config.dart';
 import 'tasks_screen.dart'; // for HabitItem, etc.
 
@@ -173,6 +174,49 @@ class _RecordsScreenState extends State<RecordsScreen> {
           .trim();
 
       if (feedbackText.isEmpty) return;
+
+      // API 사용 기록 (주간 리포트 생성에 따른 토큰/비용 집계)
+      int? readIntValue(Map data, List<String> keys) {
+        for (final key in keys) {
+          dynamic value = data;
+          for (final segment in key.split('.')) {
+            if (value is Map && value.containsKey(segment)) {
+              value = value[segment];
+            } else {
+              value = null;
+              break;
+            }
+          }
+          if (value is int) return value;
+          if (value is num) return value.round();
+          if (value is String) return int.tryParse(value);
+        }
+        return null;
+      }
+
+      final estimatedTokens = ((prompt.length + feedbackText.length) / 3.2).ceil();
+      final usageData = response.data is Map ? response.data as Map : const {};
+      final actualTokens = readIntValue(usageData, [
+        'totalTokens',
+        'total_tokens',
+        'tokens',
+        'usage.totalTokens',
+        'usage.total_tokens',
+      ]);
+      final actualCostWon = readIntValue(usageData, [
+        'costWon',
+        'cost_won',
+        'estimatedCostWon',
+        'estimated_cost_won',
+        'usage.costWon',
+      ]);
+
+      AnalyticsService.logApiUsage(
+        coachId: widget.coachId,
+        estimatedTokens: estimatedTokens,
+        actualTokens: actualTokens,
+        actualCostWon: actualCostWon,
+      );
 
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(
@@ -454,14 +498,14 @@ $recordBuffer
                 ),
                 child: Column(
                   children: [
-                    // 4칸 통계 요약 (패턴 써머리)
+                    // 4칸 통계 요약 (패턴 써머리) -> 2칸으로 축소됨
                     _buildSummaryGrid(
                       successDays,
                       flowPct,
                       streak,
                       vacationDays,
                     ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 4),
 
                     // 코치의 한마디
                     _buildCoachCommentCard(records),
@@ -499,28 +543,12 @@ $recordBuffer
       childAspectRatio: 1.15,
       children: [
         _summaryCard(
-          '성공일',
-          '$successDays',
-          '지난주보다 -',
-          Icons.check_circle_outline,
-          _coach.accentColor,
-          false,
-        ),
-        _summaryCard(
-          '이번 주 흐름',
-          '$flowPct%',
-          '지난주보다 -',
-          Icons.loop_rounded,
-          _coach.accentColor,
-          true,
-        ),
-        _summaryCard(
-          '연속 기록',
+          '연속 출석',
           '$streak일',
           '최고 -일',
           Icons.local_fire_department_outlined,
           _coach.accentColor,
-          false,
+          true,
         ),
         _summaryCard(
           '쉬는 날',
@@ -726,8 +754,8 @@ $recordBuffer
                   _isMaster
                       ? (_weeklyFeedbackText ??
                             (widget.coachId == 'sec_male'
-                                ? '이번 주 활동과 목표를 분석하여 $_userTitle께 드릴 한마디를 작성하고 있습니다...'
-                                : '이번 주 활동과 목표를 분석하여 $_userTitle께 드릴 한마디를 작성하고 있어요...'))
+                                ? '이번 주 활동과 목표를 분석하여 $_userTitle께 드릴 한마디를 작성하고 있습니다. 약 5초 정도만 잠시 기다려주십시오...'
+                                : '이번 주 활동과 목표를 분석하여 $_userTitle께 드릴 한마디를 작성하고 있어요. 약 5초 정도만 잠시 기다려주세요...'))
                       : _getPatternFeedback(records),
                   style: GoogleFonts.notoSansKr(
                     fontSize: 14,

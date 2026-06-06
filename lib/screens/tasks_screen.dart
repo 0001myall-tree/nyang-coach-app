@@ -553,7 +553,7 @@ class _TasksScreenState extends State<TasksScreen>
         'sec_female',
       ];
       for (final id in coachIds) {
-        await prefs.remove('nyang_chat_history_$id');
+        await prefs.setString('nyang_chat_history_$id', '[]');
       }
 
       await prefs.setString('nyang_last_date', today);
@@ -1190,9 +1190,15 @@ class _TasksScreenState extends State<TasksScreen>
             if (sItem.id == sId) sItem.done = false;
           }
         }
+        final coreIdx = coreTasks.indexWhere((ct) => ct.id.toString() == t.id.toString());
+        if (coreIdx >= 0) {
+          coreTasks[coreIdx].done = false;
+          coreTasks[coreIdx].completedAt = null;
+        }
       });
       _saveTasks();
       _saveHabitLogs();
+      _saveCoreTasks();
       if (t.category == 'schedule') _saveSchedules();
     } else {
       HabitItem? habitInfo;
@@ -1252,9 +1258,16 @@ class _TasksScreenState extends State<TasksScreen>
             if (sItem.id == sId) sItem.done = true;
           }
         }
+        final coreIdx = coreTasks.indexWhere((ct) => ct.id.toString() == t.id.toString());
+        if (coreIdx >= 0) {
+          coreTasks[coreIdx].done = true;
+          coreTasks[coreIdx].completedAt = t.completedAt;
+        }
       });
       _saveTasks();
       _saveHabitLogs();
+      _saveCoreTasks();
+      if (t.category == 'schedule') _saveSchedules();
       // 미뤄둔 할일 리마인드 체크 (완료했는지 여부 반환)
       final bool isDeferredResolved = await _checkAndStoreDeferReminder(t.text);
       final bool isCoreTask = coreTasks.any(
@@ -1289,36 +1302,38 @@ class _TasksScreenState extends State<TasksScreen>
       if (pool.isNotEmpty) {
         final randomMsg = pool[Random().nextInt(pool.length)];
         ScaffoldMessenger.of(context).hideCurrentSnackBar();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                Text(
-                  _coach.id.contains('female')
-                      ? '💼 '
-                      : (_coach.id.contains('male') ? '👔 ' : ''),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    randomMsg,
-                    style: GoogleFonts.notoSansKr(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  Text(
+                    _coach.id.contains('female')
+                        ? '💼 '
+                        : (_coach.id.contains('male') ? '👔 ' : ''),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      randomMsg,
+                      style: GoogleFonts.notoSansKr(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: const Color(0xFF1F1F1F),
+                      ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
+              backgroundColor: Colors.white,
+              elevation: 4,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              duration: const Duration(seconds: 2),
+              margin: const EdgeInsets.only(bottom: 108, left: 20, right: 20),
             ),
-            backgroundColor: const Color(0xFF3D3A4E),
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
-            ),
-            duration: const Duration(seconds: 2),
-            margin: const EdgeInsets.only(bottom: 20, left: 20, right: 20),
-          ),
-        );
+          );
       }
     }
     HapticFeedback.lightImpact();
@@ -2501,44 +2516,7 @@ class _TasksScreenState extends State<TasksScreen>
                       _saveCoreTasks();
                       Navigator.pop(ctx);
 
-                      // 비서 코치 전용: 핵심 설정 완료 반응 메시지
-                      if (widget.onCoreTaskSet != null &&
-                          pendingCore.isNotEmpty) {
-                        final addedTexts = pendingCore
-                            .map((pid) {
-                              final t = tasks.firstWhere(
-                                (t) => t.id.toString() == pid,
-                                orElse: () => TaskItem(
-                                  id: 0,
-                                  text: pid,
-                                  category: 'direct',
-                                  createdAt: DateTime.now().toIso8601String(),
-                                ),
-                              );
-                              return t.text;
-                            })
-                            .join(', ');
-
-                        final String rawConfirmMsg;
-                        if (widget.coachId == 'sec_male') {
-                          rawConfirmMsg =
-                              '알겠습니다, 대표님. 오늘 집중하실 핵심 과제는 "$addedTexts"입니다. 차질 없이 성공적으로 완수하실 수 있도록 돕겠습니다.';
-                        } else if (widget.coachId == 'sec_female') {
-                          rawConfirmMsg =
-                              '네, 대표님! 오늘 정해주신 소중한 핵심 목표는 "$addedTexts"이네요. 지치지 않고 차근차근 이루어내실 수 있도록 곁에서 정성껏 서포트할게요.';
-                        } else {
-                          rawConfirmMsg = '';
-                        }
-
-                        if (rawConfirmMsg.isNotEmpty) {
-                          final confirmMsg =
-                              await UserTitleService.applyForCoach(
-                                rawConfirmMsg,
-                                widget.coachId,
-                              );
-                          widget.onCoreTaskSet!(confirmMsg);
-                        }
-                      }
+                      // 비서 코치 전용 반응 메시지 제거됨
                     },
                     child: Container(
                       width: double.infinity,

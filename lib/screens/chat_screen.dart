@@ -200,7 +200,7 @@ class ChatScreenController {
   }
 }
 
-class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
+class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin, WidgetsBindingObserver {
   final _ctrl = TextEditingController();
   final _scrollCtrl = ScrollController();
   final List<ChatMessage> _messages = [];
@@ -246,6 +246,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _coach = CoachConfigs.get(widget.coachId);
     _flirtAnim = AnimationController(
       vsync: this,
@@ -265,12 +266,9 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       int completed = 0;
 
       for (var item in list) {
-        final cat = item['category'] ?? '';
-        if (cat == 'today') {
-          total++;
-          if (item['done'] == true) {
-            completed++;
-          }
+        total++;
+        if (item['done'] == true) {
+          completed++;
         }
       }
 
@@ -365,8 +363,43 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     return DateFormat('yyyy-MM-dd-HH-mm').format(bedtime);
   }
 
+  Future<String> _getEffectiveTodayStr() async {
+    final prefs = await SharedPreferences.getInstance();
+    final resetHour = prefs.getDouble('nyang_reset_hour') ?? 3.0;
+    final n = DateTime.now();
+    var base = DateTime(n.year, n.month, n.day);
+    if (n.hour < resetHour) {
+      base = base.subtract(const Duration(days: 1));
+    }
+    return DateFormat('yyyy-MM-dd').format(base);
+  }
+
   Future<bool> _hasMovableIncompleteTasks() async {
     final prefs = await SharedPreferences.getInstance();
+    final today = await _getEffectiveTodayStr();
+    final lastDate = prefs.getString('nyang_last_date');
+
+    if (lastDate != today) {
+      // 날짜가 바뀌었으나 할일 탭을 아직 열지 않아 리셋/스케줄 주입이 안 된 경우
+      // nyang_schedules의 오늘 날짜 일정을 읽어서 미완료된 것이 있는지 직접 체크합니다.
+      final rawSchedules = prefs.getString('nyang_schedules');
+      if (rawSchedules != null) {
+        try {
+          final Map<String, dynamic> decodedMap = jsonDecode(rawSchedules);
+          final todaySchedules = decodedMap[today] as List?;
+          if (todaySchedules != null && todaySchedules.isNotEmpty) {
+            final hasIncomplete = todaySchedules.any((s) {
+              if (s is! Map) return false;
+              if (s['done'] == true) return false;
+              return true; // 스케줄 일정은 미루기 가능
+            });
+            if (hasIncomplete) return true;
+          }
+        } catch (_) {}
+      }
+      return false;
+    }
+
     final raw = prefs.getString('nyang_tasks') ?? '[]';
     try {
       final list = jsonDecode(raw) as List;
@@ -391,15 +424,34 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     final minSleepTime = prefs.getString('nyang_premium_min_sleep_time');
     if (minSleepTime == null) return;
 
-    final now = DateTime.now();
-    final bedtime = _nextMinSleepTime(now, minSleepTime);
-    if (bedtime == null) return;
+    final parts = minSleepTime.split(':');
+    if (parts.length < 2) return;
+    final hour = int.tryParse(parts[0]);
+    final minute = int.tryParse(parts[1]);
+    if (hour == null || minute == null) return;
 
-    final remaining = bedtime.difference(now);
-    if (remaining.isNegative || remaining > const Duration(hours: 2)) return;
+    final now = DateTime.now();
+    final baseBedtime = DateTime(now.year, now.month, now.day, hour, minute);
+    final candidates = [
+      baseBedtime.subtract(const Duration(days: 1)),
+      baseBedtime,
+      baseBedtime.add(const Duration(days: 1)),
+    ];
+
+    DateTime? matchedBedtime;
+    for (final bedtime in candidates) {
+      final startThreshold = bedtime.subtract(const Duration(hours: 2));
+      final endThreshold = bedtime.add(const Duration(hours: 4));
+      if (now.isAfter(startThreshold) && now.isBefore(endThreshold)) {
+        matchedBedtime = bedtime;
+        break;
+      }
+    }
+
+    if (matchedBedtime == null) return;
     if (!await _hasMovableIncompleteTasks()) return;
 
-    final offerKey = _bedtimeOfferKey(bedtime);
+    final offerKey = _bedtimeOfferKey(matchedBedtime);
     final lastOfferKey = prefs.getString('nyang_bedtime_move_offer_key');
     if (lastOfferKey == offerKey) return;
     await prefs.setString('nyang_bedtime_move_offer_key', offerKey);
@@ -490,11 +542,21 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     widget.controller?._detach();
     _ctrl.dispose();
     _scrollCtrl.dispose();
     _flirtAnim.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _loadTaskProgress();
+      _checkDeferredReminder();
+      _checkBedtimeMoveOffer();
+    }
   }
 
   /// 외부에서 AI 메시지를 채팅창에 직접 주입합니다 (핵심 설정 완료 반응 등).
@@ -2404,9 +2466,16 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
           for (final t in allTasks) {
             final done = t['done'] == true;
             final timeStr = t['time'] != null ? '${t['time']}' : '';
-            final durStr = t['duration'] != null
-                ? '예상 소요시간: ${t['duration']}'
-                : '';
+            String durStr = '';
+            if (t['duration'] != null) {
+              String rawDur = t['duration'].toString();
+              String explicitDur = rawDur;
+              if (rawDur == '1시간') explicitDur = '1시간(60분)';
+              else if (rawDur == '2시간') explicitDur = '2시간(120분)';
+              else if (rawDur == '3시간') explicitDur = '3시간(180분)';
+              else if (rawDur == '4시간+') explicitDur = '4시간 이상(240분 이상)';
+              durStr = '예상 소요시간: $explicitDur';
+            }
             final timeInfoParts = [
               timeStr,
               durStr,
@@ -2762,20 +2831,47 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
 4. [TIMER_START] 태그는 절대 사용 금지. 사용자가 같은 할 일을 2회 이상 반복 회피할 때만 [TIMER_CONFIRM:분:할일이름] 태그로 선택지를 제시할 수 있습니다. 예: [TIMER_CONFIRM:5:보고서 작성]. 처음 귀찮다거나 한 번만 언급한 경우에는 절대 사용하지 않습니다.
 5. 사용자가 특정 할 일을 언급하고 그걸 오늘 할 일로 등록할 만한 상황이라면 답변에 [TASK: 할일명] 태그를 포함하세요. 예: "5시에 청소해야지" → [TASK: 5시에 청소], "오후 3시에 회의가 있어" → [TASK: 오후 3시 회의]. 억지로 추가하지 말고 사용자가 명확히 할 일을 언급할 때만 사용하세요.$halmaeHint''';
 
+    String effectiveUserText = userText;
+    if (userText == '일정 에스코트') {
+      effectiveUserText = '일정 에스코트\n[System: 사용자가 방금 현재 시간 기준으로 일정 에스코트를 다시 요청했습니다. 반드시 시스템 프롬프트 상의 **최신 시간**과 **최신 할 일 현황(완료/미완료 상태 등)**을 확인하여, 이전 대화 맥락에 얽매이지 말고 지금 당장 할 수 있는 미완료 일정을 새롭게 추천해주세요. **주의사항: 1) 미완료된 일정이 여러 개라면 단 하나도 누락하지 말고 모두 포함하여 스케줄을 짜세요.** 2) 할 일에 배정된 "예상 소요시간"을 철저하게 지키고 소요시간 계산(덧셈)을 틀리지 마세요. 3) 사용자가 별도로 할 일이나 습관으로 지정해 둔 식사 시간이 없다면, 기본적으로 점심식사(대략 12시~13시)와 저녁식사(대략 18시~19시) 시간을 반드시 휴식 및 식사 시간으로 비워두고 스케줄을 짜세요.]';
+    } else if (userText == '비전을 위한 오늘') {
+      effectiveUserText = '''비전을 위한 오늘
+[System: 사용자가 방금 현재 시간 기준으로 "비전을 위한 오늘"을 다시 요청했습니다. 반드시 이전 대화 맥락에 얽매이지 말고 시스템 프롬프트 상의 **최신 시간**과 **최신 할 일 현황(추가/완료 상태 등)**을 바탕으로 완전히 새롭게 분석을 진행하세요. 절대 단순 일정 생성이나 시간 배치를 제안하지 마세요. 대신 다음의 **비전 추적 및 점검** 역할을 수행해야 합니다.
+
+*데이터 분석 범위 및 연관성 판단 규칙:*
+1. 제공된 시스템 프롬프트를 참고하여 오늘 등록된 할 일/일정/습관이 장기 비전, 마일스톤, 월목표, 주목표와 어떻게 연결되는지 판단하세요.
+2. 만약 오늘의 할 일이 장기 비전, 마일스톤, 월/주 목표와 의미적/맥락적으로 연관성이 불확실하거나 없다고 판단된다면 절대 억지로 연결지어 설명하지 마세요.
+3. 연관성이 불확실하지만 해당 할 일이 '오늘의 핵심(우선순위)'으로 지정된 경우:
+   "장기 비전과 관련 있는 일인지 확실치는 않지만, 오늘의 핵심으로 지정하신 것으로 보아 중요한 일인 것으로 판단됩니다."라는 취지의 내용을 현재 코치 캐릭터의 말투와 톤에 맞게 자연스럽게 조언에 포함해 주세요. (예: 남비서라면 존댓말로 "대표님, 해당 비전과 직접적인 연관성은 불확실하나 오늘의 핵심으로 지정해 두신 만큼...", 고양이라면 "장기 비전이랑 상관있는진 잘 모르겠다냥, 하지만 오늘의 핵심이니까 엄청 중요한 일이다냥!" 등)
+4. 연관성이 불확실하고 '오늘의 핵심'도 아닌 일반 할 일인 경우:
+   "해당 일정은 장기 목표와 관련 있는지 확실치 않아 분석에서 제외했습니다."라는 취지의 내용을 현재 코치 캐릭터의 말투와 톤에 맞게 자연스럽게 언급하여 설명해 주세요.
+
+*6대 점검 규칙 (조건에 맞는 상황을 분석해 코치의 톤으로 자연스럽게 대화체로 조언할 것):*
+1. 비전 진행 점검: 장기 비전, 마일스톤, 월목표, 주목표와 연관된 오늘의 일정 완료율을 파악합니다.
+2. 반복 미룸 탐지: 최근 계속 미뤄지고 있는 비전/목표 관련 일정이 있다면, "이번 주에 계속 미뤄지고 있는 목표가 있습니다. 오늘 시간이 괜찮으시다면 조금이라도 진행해보시는 건 어떨까요?" 식으로 부드럽게 제안합니다.
+3. 중복 제안 금지: 이미 오늘 계획에 비전/목표 관련 일정이 있다면 새 일정 추가 없이 "오늘 계획에 이미 포함되어 있는 만큼 이 일정은 꼭 챙겨보셨으면 좋겠습니다."라고 강조합니다.
+4. 마일스톤 지연: 마일스톤이나 장기 비전의 진척이 늦어지고 있다면 "원래 예상보다 조금 늦어지고 있는 것 같습니다. 오늘 조금만 진행해도 흐름을 이어갈 수 있을 것 같아요."라고 조언합니다.
+5. 긍정적 흐름: 비전/목표 관련 일정 완료율이 높다면 "최근 목표 관련 일정 완료율이 높습니다. 지금의 흐름을 유지하면 마일스톤에 더 가까워질 수 있을 것 같아요."라고 칭찬합니다.
+6. 구조 부족: 장기 비전은 있으나 마일스톤/기한이 없다면 "마일스톤 기한을 추가해주시거나 월목표, 주목표를 정해주시면 목표 진행 상황을 더 정확하게 도와드릴 수 있습니다."라고 제안합니다.]''';
+    }
+
+    final now = DateTime.now();
+    final timePrefix = '[${now.hour}:${now.minute.toString().padLeft(2, '0')}] ';
+
     final messages = isGreeting
         ? [
             {'role': 'system', 'content': systemPromptWithChips},
-            {'role': 'user', 'content': userText},
+            {'role': 'user', 'content': '$timePrefix$effectiveUserText'},
           ]
         : [
             {'role': 'system', 'content': systemPromptWithChips},
             ...history.map(
               (m) => {
                 'role': m.isUser ? 'user' : 'assistant',
-                'content': m.text,
+                'content': m.isUser ? '[${m.time.hour}:${m.time.minute.toString().padLeft(2, '0')}] ${m.text}' : m.text,
               },
             ),
-            {'role': 'user', 'content': userText},
+            {'role': 'user', 'content': '$timePrefix$effectiveUserText'},
           ];
 
     // Firebase Cloud Functions chatProxy 호출 (웹앱과 동일한 Gemini AI 서버)
@@ -2812,8 +2908,8 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
 
     // 마크다운 포맷 제거 (웹앱과 동일)
     return content
-        .replaceAll(RegExp(r'\*\*(.*?)\*\*'), r'$1')
-        .replaceAll(RegExp(r'\*(.*?)\*'), r'$1')
+        .replaceAllMapped(RegExp(r'\*\*(.*?)\*\*'), (m) => m.group(1) ?? '')
+        .replaceAllMapped(RegExp(r'\*(.*?)\*'), (m) => m.group(1) ?? '')
         .replaceAll(RegExp(r'^#{1,6}\s+', multiLine: true), '')
         .trim();
   }
@@ -2992,8 +3088,15 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
             Container(color: chatBackgroundColor, child: _buildInputArea()),
           ],
         ),
-        if (_coach.isMaster && _cheatKeyOpen && !keyboardOpen)
+        if (_coach.isMaster && _cheatKeyOpen && !keyboardOpen) ...[
+          Positioned.fill(
+            child: GestureDetector(
+              onTap: () => setState(() => _cheatKeyOpen = false),
+              behavior: HitTestBehavior.translucent,
+            ),
+          ),
           Positioned(top: 76, left: 28, child: _buildCheatKeyMenu()),
+        ],
         // 타이머 확인 버튼 (마스터 전용)
         if (_coach.isMaster && _timerConfirmMinutes != null)
           _buildTimerConfirmCard(),
@@ -3411,6 +3514,15 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
           return GestureDetector(
             onTap: () {
               setState(() => _cheatKeyOpen = false);
+              
+              if (item['label'] == '오늘 핵심 추천') {
+                AnalyticsService.logFeatureUsage('cheat_core_recommend');
+              } else if (item['label'] == '일정 에스코트') {
+                AnalyticsService.logFeatureUsage('cheat_schedule_escort');
+              } else if (item['label'] == '비전을 위한 오늘') {
+                AnalyticsService.logFeatureUsage('cheat_today_vision');
+              }
+              
               _send(item['label']!);
             },
             child: Container(
@@ -3542,6 +3654,7 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
           const SizedBox(width: 20),
           Expanded(
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
                 Row(
@@ -3570,6 +3683,7 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
                 ClipRRect(
                   borderRadius: BorderRadius.circular(8),
                   child: Container(
+                    width: double.infinity,
                     height: 7,
                     color: const Color(0xFFE8E3F8),
                     child: FractionallySizedBox(

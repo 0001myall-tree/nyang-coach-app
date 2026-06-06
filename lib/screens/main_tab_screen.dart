@@ -875,6 +875,17 @@ class _MainTabScreenState extends State<MainTabScreen>
     setState(() => _openDrawerIndex = index);
   }
 
+  Future<void> _closeDrawerAndCheck() async {
+    setState(() => _openDrawerIndex = 0);
+    _chatController.refreshTaskProgress();
+    await _loadVacation();
+    // 채팅 탭으로 복귀 시 미뤄둔 할일 리마인드 및 취침시간 이동 제안 확인
+    Future.delayed(const Duration(milliseconds: 400), () {
+      _chatController.checkDeferredReminder();
+      _chatController.checkBedtimeMoveOffer();
+    });
+  }
+
   // 배경 이미지 경로
   String get _bgImagePath {
     if (_vacationInfo != null) return 'assets/images/vacation_bg.jpg';
@@ -1285,9 +1296,7 @@ class _MainTabScreenState extends State<MainTabScreen>
         // 오버레이 (drawer-overlay)
         GestureDetector(
           onTap: () async {
-            setState(() => _openDrawerIndex = 0);
-            _chatController.refreshTaskProgress();
-            await _loadVacation();
+            await _closeDrawerAndCheck();
           },
           child: Container(color: Colors.black.withOpacity(0.5)),
         ),
@@ -1317,9 +1326,7 @@ class _MainTabScreenState extends State<MainTabScreen>
                     alignment: Alignment.centerRight,
                     child: GestureDetector(
                       onTap: () async {
-                        setState(() => _openDrawerIndex = 0);
-                        _chatController.refreshTaskProgress();
-                        await _loadVacation();
+                        await _closeDrawerAndCheck();
                       },
                       child: Container(
                         margin: const EdgeInsets.fromLTRB(0, 2, 10, 0),

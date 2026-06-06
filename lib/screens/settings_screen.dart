@@ -1595,7 +1595,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           )
         else
-          ...purchasedCoachIds.map(_buildPurchasedCoachRow),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 180),
+            child: Scrollbar(
+              thumbVisibility: true,
+              child: ListView.builder(
+                padding: const EdgeInsets.only(right: 12),
+                shrinkWrap: true,
+                itemCount: purchasedCoachIds.length,
+                itemBuilder: (context, index) {
+                  return _buildPurchasedCoachRow(purchasedCoachIds[index]);
+                },
+              ),
+            ),
+          ),
       ],
     );
   }
