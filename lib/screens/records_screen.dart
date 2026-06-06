@@ -309,7 +309,11 @@ class _RecordsScreenState extends State<RecordsScreen> {
           .join(', ');
       final undone = tasks
           .where((task) => (task as Map?)?['done'] != true)
-          .map((task) => (task as Map)['text'].toString())
+          .map((task) {
+            final map = task as Map;
+            final isDeferred = map['deferred'] == true;
+            return map['text'].toString() + (isDeferred ? ' (다른 날로 이월함)' : '');
+          })
           .where((text) => text.trim().isNotEmpty)
           .join(', ');
       recordBuffer.writeln(
