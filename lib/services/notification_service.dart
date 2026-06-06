@@ -13,6 +13,7 @@ import '../screens/night_call_screen.dart';
 import '../screens/core_reminder_screen.dart';
 import '../screens/coach_config.dart';
 import '../models/user_data.dart';
+import 'morning_call_alarm_session.dart';
 
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
@@ -25,7 +26,7 @@ class NotificationService {
   DateTime? _lastMorningOpenedAt;
 
   String _morningCallChannelId(String? soundName) {
-    return 'nyang_morning_call_screen_${soundName ?? 'default'}_v3';
+    return 'nyang_morning_call_${soundName ?? 'default'}_v4';
   }
 
   String _coreReminderChannelId(String? soundName) {
@@ -58,6 +59,11 @@ class NotificationService {
     _lastMorningOpenedAt = now;
 
     final parsed = _parseMorningPayload(payload);
+    MorningCallAlarmSession().start(
+      coachId: parsed.coachId,
+      soundName: parsed.soundName,
+      initialDelay: const Duration(seconds: 3),
+    );
     navigatorKey.currentState?.push(
       MaterialPageRoute(
         builder: (context) => MorningCallScreen(
@@ -212,12 +218,16 @@ class NotificationService {
           channelDescription: '냥냥코치 모닝콜 알림입니다.',
           importance: Importance.max,
           priority: Priority.high,
-          playSound: false,
+          sound: soundName != null
+              ? RawResourceAndroidNotificationSound(soundName)
+              : null,
+          playSound: true,
           fullScreenIntent: true,
           audioAttributesUsage: AudioAttributesUsage.alarm,
         );
-    const DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
-      presentSound: false,
+    final DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
+      sound: soundName != null ? '$soundName.caf' : null,
+      presentSound: true,
       presentAlert: true,
       presentBadge: true,
     );

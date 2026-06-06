@@ -15,15 +15,6 @@ class MorningCallScreen extends StatefulWidget {
 
 class _MorningCallScreenState extends State<MorningCallScreen> {
   @override
-  void initState() {
-    super.initState();
-    MorningCallAlarmSession().start(
-      coachId: widget.coachId,
-      soundName: widget.soundName,
-    );
-  }
-
-  @override
   void dispose() {
     MorningCallAlarmSession().stop();
     FlutterLocalNotificationsPlugin().cancel(id: 0);

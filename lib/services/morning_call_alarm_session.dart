@@ -19,7 +19,11 @@ class MorningCallAlarmSession {
   String? _soundPath;
   bool _isActive = false;
 
-  Future<void> start({required String coachId, String? soundName}) async {
+  Future<void> start({
+    required String coachId,
+    String? soundName,
+    Duration initialDelay = Duration.zero,
+  }) async {
     await stop();
 
     final count = CoachConfigs.get(coachId).voiceCount;
@@ -50,7 +54,13 @@ class MorningCallAlarmSession {
       _completeSubscription = _player.onPlayerComplete.listen((_) {
         _scheduleReplay();
       });
-      await _playOnce();
+      if (initialDelay == Duration.zero) {
+        await _playOnce();
+      } else {
+        _repeatTimer = Timer(initialDelay, () {
+          _playOnce();
+        });
+      }
     } catch (e) {
       debugPrint('모닝콜 알람 세션 시작 실패: $e');
     }
