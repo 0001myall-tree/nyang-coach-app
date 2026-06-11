@@ -401,6 +401,7 @@ class _TasksScreenState extends State<TasksScreen>
   bool _speechEnabled = false;
   bool _isListeningToday = false;
   bool _isListeningSchedule = false;
+  bool _isConfirmDialogShowing = false;
 
   DateTime _calFocusedDay = DateTime.now();
   DateTime _calSelectedDay = DateTime.now();
@@ -6573,24 +6574,38 @@ class _TasksScreenState extends State<TasksScreen>
   }
 
   Future<void> _stopListening() async {
+    final wasListeningToday = _isListeningToday;
+    final wasListeningSchedule = _isListeningSchedule;
     await _speechToText.stop();
     if (mounted) {
       setState(() {
         _isListeningToday = false;
         _isListeningSchedule = false;
       });
+      Future.delayed(const Duration(milliseconds: 200), () {
+        if (mounted) {
+          if (wasListeningToday) {
+            _handleSpeechFinished(_todayInputCtrl.text.trim(), isToday: true);
+          } else if (wasListeningSchedule) {
+            _handleSpeechFinished(_schInputCtrl.text.trim(), isToday: false);
+          }
+        }
+      });
     }
   }
 
   void _handleSpeechFinished(String spokenText, {required bool isToday}) {
+    if (_isConfirmDialogShowing) return;
+    final cleaned = spokenText.replaceAll(RegExp(r'[.\s]+$'), '');
     final suffixRegex = RegExp(r'\s*(등록해줘|추가해줘)$');
-    if (suffixRegex.hasMatch(spokenText)) {
+    if (suffixRegex.hasMatch(cleaned)) {
       _showVoiceRegistrationConfirmDialog(spokenText, isToday: isToday);
     }
   }
 
   ParsedVoiceRegistration _parseNaturalLanguageVoice(String input, DateTime defaultDate) {
     String cleaned = input.trim();
+    cleaned = cleaned.replaceAll(RegExp(r'[.\s]+$'), '');
     final suffixRegex = RegExp(r'\s*(등록해줘|추가해줘)$');
     cleaned = cleaned.replaceFirst(suffixRegex, '').trim();
 
@@ -6732,6 +6747,9 @@ class _TasksScreenState extends State<TasksScreen>
   }
 
   void _showVoiceRegistrationConfirmDialog(String speechText, {required bool isToday}) {
+    if (_isConfirmDialogShowing) return;
+    _isConfirmDialogShowing = true;
+
     final defaultDate = isToday ? DateTime.now() : _calSelectedDay;
     final parsed = _parseNaturalLanguageVoice(speechText, defaultDate);
 
@@ -7008,7 +7026,9 @@ class _TasksScreenState extends State<TasksScreen>
           },
         );
       },
-    );
+    ).then((_) {
+      _isConfirmDialogShowing = false;
+    });
   }
 
   String _getVoiceDateLabel(DateTime date) {
