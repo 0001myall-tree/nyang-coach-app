@@ -50,6 +50,18 @@ class _SuggestedTask {
   _SuggestedTask({required this.text, this.time});
 }
 
+class _ParsedScheduleRegistration {
+  final String title;
+  final DateTime date;
+  final TimeOfDay? time;
+
+  _ParsedScheduleRegistration({
+    required this.title,
+    required this.date,
+    this.time,
+  });
+}
+
 class _ParsedReply {
   final String text;
   final List<String> chips;
@@ -198,7 +210,8 @@ class ChatScreenController {
   }
 }
 
-class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin, WidgetsBindingObserver {
+class _ChatScreenState extends State<ChatScreen>
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   final _ctrl = TextEditingController();
   final _scrollCtrl = ScrollController();
   final List<ChatMessage> _messages = [];
@@ -441,7 +454,10 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin, 
     if (!await _hasMovableIncompleteTasks()) return;
 
     // Save actual fired time immediately to lock it for 7 days
-    await prefs.setString('nyang_last_bedtime_offer_time', now.toIso8601String());
+    await prefs.setString(
+      'nyang_last_bedtime_offer_time',
+      now.toIso8601String(),
+    );
 
     final displayTime = _formatTime12(minSleepTime);
 
@@ -1770,7 +1786,12 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin, 
     Map<String, dynamic> habitLogs = rawLogs != null ? jsonDecode(rawLogs) : {};
 
     final todayTasks = tasksList
-        .where((t) => t['category'] == 'today' || t['category'] == 'habit' || t['category'] == 'schedule')
+        .where(
+          (t) =>
+              t['category'] == 'today' ||
+              t['category'] == 'habit' ||
+              t['category'] == 'schedule',
+        )
         .toList();
     final incompleteTasks = todayTasks.where((t) => t['done'] != true).toList();
     final completedTasks = todayTasks.where((t) => t['done'] == true).toList();
@@ -2130,6 +2151,508 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin, 
     }
   }
 
+  bool _isScheduleRegistrationCommand(String input) {
+    final cleaned = input.trim().replaceAll(RegExp(r'[.\s]+$'), '');
+    final suffixRegex = RegExp(r'\s*(등록해\s*줘요?|추가해\s*줘요?|등록해\s*달라|추가해\s*달라)$');
+    return suffixRegex.hasMatch(cleaned);
+  }
+
+  _ParsedScheduleRegistration _parseScheduleRegistration(String input) {
+    String cleaned = input.trim().replaceAll(RegExp(r'[.\s]+$'), '');
+    final suffixRegex = RegExp(r'\s*(등록해\s*줘요?|추가해\s*줘요?|등록해\s*달라|추가해\s*달라)$');
+    cleaned = cleaned.replaceFirst(suffixRegex, '').trim();
+
+    DateTime parsedDate = DateTime.now();
+    bool hasDate = false;
+
+    int dayOfWeek(String value) {
+      if (value.contains('월')) return DateTime.monday;
+      if (value.contains('화')) return DateTime.tuesday;
+      if (value.contains('수')) return DateTime.wednesday;
+      if (value.contains('목')) return DateTime.thursday;
+      if (value.contains('금')) return DateTime.friday;
+      if (value.contains('토')) return DateTime.saturday;
+      if (value.contains('일')) return DateTime.sunday;
+      return -1;
+    }
+
+    final lastWeekdayRegex = RegExp(r'이번\s*달\s+마지막\s+([월화수목금토일])(?:요일)?');
+    final lastWeekdayMatch = lastWeekdayRegex.firstMatch(cleaned);
+    if (lastWeekdayMatch != null) {
+      final targetWeekday = dayOfWeek(lastWeekdayMatch.group(1)!);
+      if (targetWeekday != -1) {
+        var date = DateTime(parsedDate.year, parsedDate.month + 1, 0);
+        while (date.weekday != targetWeekday) {
+          date = date.subtract(const Duration(days: 1));
+        }
+        parsedDate = date;
+        hasDate = true;
+        cleaned = cleaned.replaceFirst(lastWeekdayMatch.group(0)!, '').trim();
+      }
+    }
+
+    if (!hasDate) {
+      final weekRelRegex = RegExp(
+        r'(이번\s*주|다음\s*주|다다음\s*주)\s+([월화수목금토일])(?:요일)?',
+      );
+      final weekRelMatch = weekRelRegex.firstMatch(cleaned);
+      if (weekRelMatch != null) {
+        final rel = weekRelMatch.group(1)!.replaceAll(RegExp(r'\s'), '');
+        final targetWeekday = dayOfWeek(weekRelMatch.group(2)!);
+        if (targetWeekday != -1) {
+          final now = DateTime.now();
+          var diff = targetWeekday - now.weekday;
+          if (rel == '다음주') diff += 7;
+          if (rel == '다다음주') diff += 14;
+          parsedDate = now.add(Duration(days: diff));
+          hasDate = true;
+          cleaned = cleaned.replaceFirst(weekRelMatch.group(0)!, '').trim();
+        }
+      }
+    }
+
+    if (!hasDate) {
+      if (cleaned.contains('오늘')) {
+        parsedDate = DateTime.now();
+        hasDate = true;
+        cleaned = cleaned.replaceAll('오늘', '').trim();
+      } else if (cleaned.contains('내일')) {
+        parsedDate = DateTime.now().add(const Duration(days: 1));
+        hasDate = true;
+        cleaned = cleaned.replaceAll('내일', '').trim();
+      } else if (cleaned.contains('모레')) {
+        parsedDate = DateTime.now().add(const Duration(days: 2));
+        hasDate = true;
+        cleaned = cleaned.replaceAll('모레', '').trim();
+      }
+    }
+
+    if (!hasDate) {
+      final bareWeekdayRegex = RegExp(r'([월화수목금토일])요일');
+      final bareWeekdayMatch = bareWeekdayRegex.firstMatch(cleaned);
+      if (bareWeekdayMatch != null) {
+        final targetWeekday = dayOfWeek(bareWeekdayMatch.group(1)!);
+        if (targetWeekday != -1) {
+          final now = DateTime.now();
+          var diff = targetWeekday - now.weekday;
+          if (diff < 0) diff += 7;
+          parsedDate = now.add(Duration(days: diff));
+          cleaned = cleaned.replaceFirst(bareWeekdayMatch.group(0)!, '').trim();
+        }
+      }
+    }
+
+    TimeOfDay? parsedTime;
+    final timeRegex = RegExp(
+      r'((?:오전|아침|오후|저녁|밤)\s*)?(\d{1,2})시(?:\s*(\d{1,2})분|\s*반)?(?:\s*(?:에|쯤|경|까지))?',
+    );
+    final timeMatch = timeRegex.firstMatch(cleaned);
+    if (timeMatch != null) {
+      final prefix = (timeMatch.group(1) ?? '').replaceAll(RegExp(r'\s'), '');
+      final rawHour = int.tryParse(timeMatch.group(2)!) ?? 0;
+      var minute = 0;
+      if (timeMatch.group(3) != null) {
+        minute = int.tryParse(timeMatch.group(3)!) ?? 0;
+      } else if (timeMatch.group(0)!.contains('반')) {
+        minute = 30;
+      }
+
+      if (rawHour >= 1 && rawHour <= 24) {
+        var hour24 = rawHour;
+        if (prefix == '오전' || prefix == '아침') {
+          hour24 = rawHour == 12 ? 0 : rawHour;
+        } else if (prefix == '오후' || prefix == '저녁' || prefix == '밤') {
+          hour24 = rawHour == 12 ? 12 : rawHour + 12;
+        } else if (rawHour < 12) {
+          final now = DateTime.now();
+          if (now.hour > rawHour ||
+              (now.hour == rawHour && now.minute >= minute)) {
+            hour24 = rawHour + 12;
+          }
+        }
+        parsedTime = TimeOfDay(hour: hour24, minute: minute);
+        cleaned = cleaned.replaceFirst(timeMatch.group(0)!, '').trim();
+      }
+    }
+
+    cleaned = cleaned.replaceAll(RegExp(r'\s+'), ' ').trim();
+    return _ParsedScheduleRegistration(
+      title: cleaned.isEmpty ? '새 일정' : cleaned,
+      date: parsedDate,
+      time: parsedTime,
+    );
+  }
+
+  String _storedTime(TimeOfDay time) => '${time.hour}:${time.minute}';
+
+  String _formatTimeOfDay(TimeOfDay time) {
+    final h = time.hour;
+    final m = time.minute;
+    final prefix = h < 12 ? '오전' : '오후';
+    final hour12 = h == 0 ? 12 : (h > 12 ? h - 12 : h);
+    return '$prefix $hour12:${m.toString().padLeft(2, '0')}';
+  }
+
+  String _scheduleDateLabel(DateTime date) {
+    final today = DateTime.now();
+    final base = DateTime(today.year, today.month, today.day);
+    final target = DateTime(date.year, date.month, date.day);
+    final diff = target.difference(base).inDays;
+    final ymd = _dateKey(date);
+    if (diff == 0) return '오늘 ($ymd)';
+    if (diff == 1) return '내일 ($ymd)';
+    if (diff == 2) return '모레 ($ymd)';
+    return ymd;
+  }
+
+  Future<void> _saveRegisteredSchedule(
+    String title,
+    DateTime date,
+    TimeOfDay? time,
+    bool reminderEnabled,
+  ) async {
+    final prefs = await SharedPreferences.getInstance();
+    final rawSchedules = prefs.getString('nyang_schedules');
+    final Map<String, dynamic> schedules = rawSchedules == null
+        ? {}
+        : Map<String, dynamic>.from(jsonDecode(rawSchedules));
+    final dateStr = _dateKey(date);
+    final dayList = List<dynamic>.from(schedules[dateStr] ?? []);
+    final id = DateTime.now().millisecondsSinceEpoch.toString();
+    final entry = {
+      'id': id,
+      'text': title,
+      'done': false,
+      'createdAt': DateTime.now().toIso8601String(),
+      'deferredCount': 0,
+      'isReminderEnabled': reminderEnabled,
+      if (time != null) 'timeStart': _storedTime(time),
+      if (time != null) 'time': _formatTimeOfDay(time),
+    };
+    dayList.add(entry);
+    schedules[dateStr] = dayList;
+    await prefs.setString('nyang_schedules', jsonEncode(schedules));
+
+    if (dateStr == _dateKey(DateTime.now())) {
+      final rawTasks = prefs.getString('nyang_tasks') ?? '[]';
+      final tasks = List<dynamic>.from(jsonDecode(rawTasks));
+      tasks.add({
+        ...entry,
+        'id':
+            DateTime.now().millisecondsSinceEpoch +
+            DateTime.now().microsecond % 1000,
+        'category': 'schedule',
+        'isHabit': false,
+      });
+      await prefs.setString('nyang_tasks', jsonEncode(tasks));
+    }
+
+    TasksSyncService.scheduleSyncToCloud();
+  }
+
+  Future<void> _showScheduleRegistrationDialog(String speechText) async {
+    final parsed = _parseScheduleRegistration(speechText);
+    final titleCtrl = TextEditingController(text: parsed.title);
+    DateTime confirmedDate = parsed.date;
+    TimeOfDay? confirmedTime = parsed.time;
+    bool reminderEnabled = false;
+
+    final prefs = await SharedPreferences.getInstance();
+    reminderEnabled = prefs.getBool('nyang_core_reminder_enabled') ?? false;
+
+    if (!mounted) return;
+    await showDialog(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return Dialog(
+              backgroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(24),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            const Text('📌', style: TextStyle(fontSize: 16)),
+                            const SizedBox(width: 6),
+                            Text(
+                              '일정 등록 제안',
+                              style: GoogleFonts.notoSansKr(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w800,
+                                color: const Color(0xFF1E1E2D),
+                              ),
+                            ),
+                          ],
+                        ),
+                        GestureDetector(
+                          onTap: () => Navigator.pop(ctx),
+                          child: const Icon(
+                            Icons.close,
+                            color: Color(0xFF9CA3AF),
+                            size: 20,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 18),
+                    TextField(
+                      controller: titleCtrl,
+                      style: GoogleFonts.notoSansKr(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w900,
+                        color: const Color(0xFF1E1E2D),
+                      ),
+                      decoration: const InputDecoration(
+                        border: InputBorder.none,
+                        isDense: true,
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        GestureDetector(
+                          onTap: () async {
+                            final d = await showDatePicker(
+                              context: context,
+                              initialDate: confirmedDate,
+                              firstDate: DateTime.now().subtract(
+                                const Duration(days: 365),
+                              ),
+                              lastDate: DateTime.now().add(
+                                const Duration(days: 365 * 2),
+                              ),
+                            );
+                            if (d != null) {
+                              setDialogState(() => confirmedDate = d);
+                            }
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF3F4F6),
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Text(
+                                  '📅',
+                                  style: TextStyle(fontSize: 13),
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  _scheduleDateLabel(confirmedDate),
+                                  style: GoogleFonts.notoSansKr(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.bold,
+                                    color: const Color(0xFF4B5563),
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                const Icon(
+                                  Icons.edit,
+                                  size: 12,
+                                  color: Color(0xFF9CA3AF),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        GestureDetector(
+                          onTap: () async {
+                            final t = await showTimePicker(
+                              context: context,
+                              initialTime: confirmedTime ?? TimeOfDay.now(),
+                            );
+                            if (t != null) {
+                              setDialogState(() => confirmedTime = t);
+                            }
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF5F3FF),
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Text(
+                                  '🕒',
+                                  style: TextStyle(fontSize: 13),
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  confirmedTime != null
+                                      ? _formatTimeOfDay(confirmedTime!)
+                                      : '시간 설정 안 함',
+                                  style: GoogleFonts.notoSansKr(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.bold,
+                                    color: const Color(0xFF8B7CFF),
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                const Icon(
+                                  Icons.edit,
+                                  size: 12,
+                                  color: Color(0xFF8B7CFF),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    GestureDetector(
+                      onTap: () async {
+                        if (!reminderEnabled) {
+                          final enabled =
+                              prefs.getBool('nyang_core_reminder_enabled') ??
+                              false;
+                          if (!enabled) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('설정에서 일정 알람을 먼저 켜주세요.'),
+                              ),
+                            );
+                            return;
+                          }
+                        }
+                        setDialogState(
+                          () => reminderEnabled = !reminderEnabled,
+                        );
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: const Color(0xFF1E1E2D),
+                            width: 1.5,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Text('🔔', style: TextStyle(fontSize: 13)),
+                            const SizedBox(width: 6),
+                            Text(
+                              reminderEnabled ? '알람 ON' : '알람 OFF',
+                              style: GoogleFonts.notoSansKr(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w800,
+                                color: const Color(0xFF1E1E2D),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF1E1E2D),
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              elevation: 0,
+                            ),
+                            onPressed: () async {
+                              final finalTitle = titleCtrl.text.trim();
+                              if (finalTitle.isEmpty) return;
+                              final navigator = Navigator.of(ctx);
+                              final messenger = ScaffoldMessenger.of(
+                                this.context,
+                              );
+                              await _saveRegisteredSchedule(
+                                finalTitle,
+                                confirmedDate,
+                                confirmedTime,
+                                reminderEnabled,
+                              );
+                              if (!mounted) return;
+                              navigator.pop();
+                              messenger.showSnackBar(
+                                SnackBar(
+                                  content: Text('"$finalTitle" 일정을 추가했어요 ✓'),
+                                  duration: const Duration(seconds: 2),
+                                ),
+                              );
+                            },
+                            child: Text(
+                              '추가하기 ✓',
+                              style: GoogleFonts.notoSansKr(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFFF3F4F6),
+                              foregroundColor: const Color(0xFF4B5563),
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              elevation: 0,
+                            ),
+                            onPressed: () => Navigator.pop(ctx),
+                            child: Text(
+                              '괜찮아',
+                              style: GoogleFonts.notoSansKr(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+    titleCtrl.dispose();
+  }
+
   // ── 메시지 전송 (웹앱 sendMessage 이식) ─────────────────
   Future<void> _send(String text) async {
     final trimmed = text.trim();
@@ -2186,6 +2709,26 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin, 
         );
         return;
       }
+    }
+
+    if (_userData.isPlanActive && _isScheduleRegistrationCommand(trimmed)) {
+      setState(() {
+        _messages.add(
+          ChatMessage(text: trimmed, isUser: true, time: DateTime.now()),
+        );
+        _dynamicChips = [];
+      });
+      _scrollToBottom();
+      await _saveHistory();
+      AnalyticsService.logConversationMessage(
+        coachId: widget.coachId,
+        usedApi: false,
+        coachReplied: false,
+      );
+      await Future.delayed(const Duration(milliseconds: 120));
+      if (!mounted) return;
+      await _showScheduleRegistrationDialog(trimmed);
+      return;
     }
 
     // ── 냥냥코치 비구독자 무료체험 인터셉트 (API 호출 금지) ─
@@ -2439,10 +2982,14 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin, 
             if (t['duration'] != null) {
               String rawDur = t['duration'].toString();
               String explicitDur = rawDur;
-              if (rawDur == '1시간') explicitDur = '1시간(60분)';
-              else if (rawDur == '2시간') explicitDur = '2시간(120분)';
-              else if (rawDur == '3시간') explicitDur = '3시간(180분)';
-              else if (rawDur == '4시간+') explicitDur = '4시간 이상(240분 이상)';
+              if (rawDur == '1시간')
+                explicitDur = '1시간(60분)';
+              else if (rawDur == '2시간')
+                explicitDur = '2시간(120분)';
+              else if (rawDur == '3시간')
+                explicitDur = '3시간(180분)';
+              else if (rawDur == '4시간+')
+                explicitDur = '4시간 이상(240분 이상)';
               durStr = '예상 소요시간: $explicitDur';
             }
             final timeInfoParts = [
@@ -2457,8 +3004,8 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin, 
             final typeLabel = isHabit
                 ? '습관'
                 : isSchedule
-                    ? '일정'
-                    : '일반 할 일';
+                ? '일정'
+                : '일반 할 일';
             sb.writeln(
               '- [${done ? 'V' : ' '}] [$typeLabel] ${t['text']}$timeInfo',
             );
@@ -2582,7 +3129,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin, 
             int miss = 0;
             for (int i = 1; i <= 7; i++) {
               final d = now.subtract(Duration(days: i));
-              
+
               if (createdAtDate != null) {
                 final dDate = DateTime(d.year, d.month, d.day);
                 if (dDate.isBefore(createdAtDate)) {
@@ -2826,7 +3373,8 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
 
     String effectiveUserText = userText;
     if (userText == '일정 에스코트') {
-      effectiveUserText = '일정 에스코트\n[System: 사용자가 방금 현재 시간 기준으로 일정 에스코트를 다시 요청했습니다. 반드시 시스템 프롬프트 상의 **최신 시간**과 **최신 할 일 현황(완료/미완료 상태 등)**을 확인하여, 이전 대화 맥락에 얽매이지 말고 지금 당장 할 수 있는 미완료 일정을 새롭게 추천해주세요. **주의사항: 1) 미완료된 일정이 여러 개라면 단 하나도 누락하지 말고 모두 포함하여 스케줄을 짜세요.** 2) 할 일에 배정된 "예상 소요시간"을 철저하게 지키고 소요시간 계산(덧셈)을 틀리지 마세요. 3) 사용자가 별도로 할 일이나 습관으로 지정해 둔 식사 시간이 없다면, 기본적으로 점심식사(대략 12시~13시)와 저녁식사(대략 18시~19시) 시간을 반드시 휴식 및 식사 시간으로 비워두고 스케줄을 짜세요.]';
+      effectiveUserText =
+          '일정 에스코트\n[System: 사용자가 방금 현재 시간 기준으로 일정 에스코트를 다시 요청했습니다. 반드시 시스템 프롬프트 상의 **최신 시간**과 **최신 할 일 현황(완료/미완료 상태 등)**을 확인하여, 이전 대화 맥락에 얽매이지 말고 지금 당장 할 수 있는 미완료 일정을 새롭게 추천해주세요. **주의사항: 1) 미완료된 일정이 여러 개라면 단 하나도 누락하지 말고 모두 포함하여 스케줄을 짜세요.** 2) 할 일에 배정된 "예상 소요시간"을 철저하게 지키고 소요시간 계산(덧셈)을 틀리지 마세요. 3) 사용자가 별도로 할 일이나 습관으로 지정해 둔 식사 시간이 없다면, 기본적으로 점심식사(대략 12시~13시)와 저녁식사(대략 18시~19시) 시간을 반드시 휴식 및 식사 시간으로 비워두고 스케줄을 짜세요.]';
     } else if (userText == '비전을 위한 오늘') {
       effectiveUserText = '''비전을 위한 오늘
 [System: 사용자가 방금 현재 시간 기준으로 "비전을 위한 오늘"을 다시 요청했습니다. 반드시 이전 대화 맥락에 얽매이지 말고 시스템 프롬프트 상의 **최신 시간**과 **최신 할 일 현황(추가/완료 상태 등)**을 바탕으로 완전히 새롭게 분석을 진행하세요. 절대 단순 일정 생성이나 시간 배치를 제안하지 마세요. 대신 다음의 **비전 추적 및 점검** 역할을 수행해야 합니다.
@@ -2849,7 +3397,8 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
     }
 
     final now = DateTime.now();
-    final timePrefix = '[${now.hour}:${now.minute.toString().padLeft(2, '0')}] ';
+    final timePrefix =
+        '[${now.hour}:${now.minute.toString().padLeft(2, '0')}] ';
 
     final messages = isGreeting
         ? [
@@ -2861,7 +3410,9 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
             ...history.map(
               (m) => {
                 'role': m.isUser ? 'user' : 'assistant',
-                'content': m.isUser ? '[${m.time.hour}:${m.time.minute.toString().padLeft(2, '0')}] ${m.text}' : m.text,
+                'content': m.isUser
+                    ? '[${m.time.hour}:${m.time.minute.toString().padLeft(2, '0')}] ${m.text}'
+                    : m.text,
               },
             ),
             {'role': 'user', 'content': '$timePrefix$effectiveUserText'},
@@ -3507,7 +4058,7 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
           return GestureDetector(
             onTap: () {
               setState(() => _cheatKeyOpen = false);
-              
+
               if (item['label'] == '오늘 핵심 추천') {
                 AnalyticsService.logFeatureUsage('cheat_core_recommend');
               } else if (item['label'] == '일정 에스코트') {
@@ -3515,7 +4066,7 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
               } else if (item['label'] == '비전을 위한 오늘') {
                 AnalyticsService.logFeatureUsage('cheat_today_vision');
               }
-              
+
               _send(item['label']!);
             },
             child: Container(
