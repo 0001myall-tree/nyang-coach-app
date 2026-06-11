@@ -11,6 +11,7 @@ import '../models/user_data.dart';
 import '../services/notification_service.dart';
 import '../services/analytics_service.dart';
 import '../services/morning_call_alarm_session.dart';
+import '../services/daily_reset_service.dart';
 import 'chat_screen.dart';
 import 'coach_config.dart';
 import 'coach_selection_screen.dart';
@@ -121,15 +122,17 @@ bool _isMasterCoach(String coachId) =>
 // ─────────────────────────────────────────────────────────────
 class MainTabScreen extends StatefulWidget {
   final String coachId;
-  const MainTabScreen({super.key, required this.coachId});
+  final int initialDrawerIndex;
+  final String? initialBottomSheet;
+  const MainTabScreen({super.key, required this.coachId, this.initialDrawerIndex = 0, this.initialBottomSheet});
 
   @override
   State<MainTabScreen> createState() => _MainTabScreenState();
 }
 
 class _MainTabScreenState extends State<MainTabScreen>
-    with SingleTickerProviderStateMixin {
-  int _openDrawerIndex = 0; // 0: 채팅, 1: 할일, 2: 기록, 3: 설정
+    with TickerProviderStateMixin, WidgetsBindingObserver {
+  late int _openDrawerIndex; // 0: 채팅, 1: 할일, 2: 기록, 3: 설정
   Map<String, dynamic>? _vacationInfo;
   late TabController _tabCtrl;
   final ChatScreenController _chatController = ChatScreenController();
@@ -397,6 +400,9 @@ class _MainTabScreenState extends State<MainTabScreen>
   @override
   void initState() {
     super.initState();
+    _openDrawerIndex = widget.initialDrawerIndex;
+    WidgetsBinding.instance.addObserver(this);
+    DailyResetService.checkAndExecuteReset();
     _audioPlayer.setAudioContext(
       AudioContext(
         android: const AudioContextAndroid(
@@ -419,6 +425,7 @@ class _MainTabScreenState extends State<MainTabScreen>
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _tabCtrl.dispose();
     _morningCallTimer?.cancel();
     _coreReminderTimer?.cancel();
@@ -427,11 +434,62 @@ class _MainTabScreenState extends State<MainTabScreen>
     super.dispose();
   }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _checkWidgetIntent();
+    }
+  }
+
+  Future<void> _checkWidgetIntent() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.reload();
+    final widgetRoute = prefs.getString('widget_route');
+    final widgetCoachId = prefs.getString('widget_coach_id');
+    
+    if (widgetRoute != null || widgetCoachId != null) {
+      if (widgetRoute != null) prefs.remove('widget_route');
+      if (widgetCoachId != null) prefs.remove('widget_coach_id');
+      
+      int targetIndex = (widgetRoute == 'tasks' || widgetRoute == 'tasks_done_bottom_sheet' || widgetRoute == 'tasks_remaining_bottom_sheet') ? 1 : 0;
+      String targetCoachId = widgetCoachId ?? widget.coachId;
+      final type = widgetRoute == 'tasks_done_bottom_sheet' ? 'done' : null;
+      
+      if (targetCoachId != widget.coachId) {
+        await UserDataService.setSelectedCoach(targetCoachId);
+        if (!mounted) return;
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (_) => MainTabScreen(
+              coachId: targetCoachId,
+              initialDrawerIndex: targetIndex,
+              initialBottomSheet: type,
+            ),
+          ),
+        );
+      } else {
+        if (_openDrawerIndex != targetIndex && mounted) {
+          setState(() {
+            _openDrawerIndex = targetIndex;
+          });
+        }
+        if (targetIndex == 1 && type != null && type != 'remaining') {
+          // Wait for drawer panel to build/slide in, then trigger opening of the bottom sheet
+          Future.delayed(const Duration(milliseconds: 300), () {
+            _tasksController.openBottomSheet(type);
+          });
+        }
+      }
+    }
+  }
+
   void _startMorningCallEngine() {
     _morningCallTimer = Timer.periodic(const Duration(seconds: 10), (
       timer,
     ) async {
+      if (MorningCallAlarmSession().isActive) return;
       final prefs = await SharedPreferences.getInstance();
+      await prefs.reload();
       final enabled = prefs.getBool('nyang_morning_call_enabled') ?? false;
       if (!enabled) return;
 
@@ -443,10 +501,19 @@ class _MainTabScreenState extends State<MainTabScreen>
           '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
       final currentDate = '${now.year}-${now.month}-${now.day}';
 
-      if (currentHHMM == alarmTimeStr && _lastMorningCallDate != currentDate) {
+      final lastFiredDate = prefs.getString('nyang_last_morning_call_date');
+
+      if (currentHHMM == alarmTimeStr &&
+          _lastMorningCallDate != currentDate &&
+          lastFiredDate != currentDate) {
         _lastMorningCallDate = currentDate;
+        await prefs.setString('nyang_last_morning_call_date', currentDate);
+        
         final coachIdStr = prefs.getString('nyang_morning_call_coach') ?? 'cat';
         _fireMorningCall(coachIdStr);
+
+        // Reschedule next morning call (picks a new random coach for tomorrow)
+        await NotificationService().rescheduleNextMorningCall();
       }
     });
   }
@@ -476,6 +543,10 @@ class _MainTabScreenState extends State<MainTabScreen>
       final coreList = jsonDecode(rawCore) as List;
       bool shouldFire = false;
       String fireTaskText = '';
+      
+      final firedList = prefs.getStringList('nyang_fired_core_reminders') ?? [];
+      final Set<String> firedSet = Set.from(firedList);
+
       for (var item in coreList) {
         if (item['isReminderEnabled'] == false) continue;
         final tTimeStart = item['timeStart'];
@@ -502,8 +573,10 @@ class _MainTabScreenState extends State<MainTabScreen>
               // Include the exact target timestamp in the fireKey so a schedule change creates a new key
               final fireKey =
                   'reminder_${item['id']}_${targetDate.toIso8601String()}_$currentDate';
-              if (!_firedCoreReminders.contains(fireKey)) {
+              if (!firedSet.contains(fireKey) && !_firedCoreReminders.contains(fireKey)) {
                 _firedCoreReminders.add(fireKey);
+                firedSet.add(fireKey);
+                await prefs.setStringList('nyang_fired_core_reminders', firedSet.toList());
                 shouldFire = true;
                 fireTaskText = item['text'] ?? '';
                 break;
@@ -523,11 +596,16 @@ class _MainTabScreenState extends State<MainTabScreen>
   }
 
   void _fireMorningCall(String configuredCoachId) async {
+    if (MorningCallAlarmSession().isActive) return;
     AnalyticsService.logFeatureUsage('morning_call');
-    String targetCoachId = configuredCoachId;
+    final prefs = await SharedPreferences.getInstance();
+    
+    // Use the resolved coach ID from SharedPreferences if it matches the configured setting,
+    // which aligns the in-app engine with the background notification selection.
+    String targetCoachId = prefs.getString('nyang_morning_call_resolved_coach') ?? configuredCoachId;
     final userData = await UserDataService.load();
 
-    if (targetCoachId == 'random') {
+    if (targetCoachId == 'random' || !userData.canAccessCoach(targetCoachId)) {
       final availableCoaches = CoachConfigs.all.values
           .where((coach) => userData.canAccessCoach(coach.id))
           .map((coach) => coach.id)
@@ -651,7 +729,11 @@ class _MainTabScreenState extends State<MainTabScreen>
     String taskText,
   ) async {
     AnalyticsService.logFeatureUsage('core_reminder');
-    String targetCoachId = configuredCoachId;
+    final prefs = await SharedPreferences.getInstance();
+    
+    // Use the resolved core reminder coach ID from SharedPreferences if it matches the configured setting,
+    // which aligns the in-app engine with the background notification selection.
+    String targetCoachId = prefs.getString('nyang_core_reminder_resolved_coach') ?? configuredCoachId;
 
     if (targetCoachId == 'push') {
       NotificationService().showImmediateNotification(
@@ -676,7 +758,7 @@ class _MainTabScreenState extends State<MainTabScreen>
 
     final userData = await UserDataService.load();
 
-    if (targetCoachId == 'random') {
+    if (targetCoachId == 'random' || !userData.canAccessCoach(targetCoachId)) {
       final availableCoaches = CoachConfigs.all.values
           .where((coach) => userData.canAccessCoach(coach.id))
           .map((coach) => coach.id)
@@ -854,7 +936,7 @@ class _MainTabScreenState extends State<MainTabScreen>
         HapticFeedback.lightImpact();
         setState(() => _openDrawerIndex = 0);
         _chatController.refreshTaskProgress();
-        // 채팅 탭으로 복귀 시 미뤄둔 할일 리마인드 확인
+        // 채팅 탭으로 복귀 시 미뤄둔 할일 리마인드 확인 및 취침시간 이동 제안 확인
         Future.delayed(const Duration(milliseconds: 400), () {
           _chatController.checkDeferredReminder();
           _chatController.checkBedtimeMoveOffer();
@@ -1257,7 +1339,6 @@ class _MainTabScreenState extends State<MainTabScreen>
   Widget _buildAvatarAction() {
     return const SizedBox.shrink();
   }
-
   // ── 서랍 (모든 탭 공통) ────────────────────────
   Widget _buildSideDrawer() {
     Widget drawerContent;
@@ -1265,6 +1346,7 @@ class _MainTabScreenState extends State<MainTabScreen>
       drawerContent = TasksScreen(
         coachId: widget.coachId,
         controller: _tasksController,
+        initialBottomSheet: widget.initialBottomSheet,
         onCoreTaskSet: (msg) {
           // 핵심 설정 완료 시 채팅창에 비서 반응 메시지 주입
           setState(() => _openDrawerIndex = 0);

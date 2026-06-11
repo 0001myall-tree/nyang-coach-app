@@ -7,7 +7,11 @@ import '../services/tasks_sync_service.dart';
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
-  final GoogleSignIn _googleSignIn = GoogleSignIn();
+  final GoogleSignIn _googleSignIn = GoogleSignIn(
+    scopes: [
+      'email',
+    ],
+  );
 
   // 유저 상태 스트림 (로그인/로그아웃 상태 변화 감지)
   Stream<User?> get authStateChanges => _auth.authStateChanges();
@@ -28,7 +32,8 @@ class AuthService {
         final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
         if (googleUser == null) return null; // 사용자가 창을 닫아 취소함
 
-        final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+        final GoogleSignInAuthentication googleAuth =
+            await googleUser.authentication;
 
         final AuthCredential credential = GoogleAuthProvider.credential(
           accessToken: googleAuth.accessToken,
@@ -37,14 +42,14 @@ class AuthService {
 
         cred = await _auth.signInWithCredential(credential);
       }
-      
+
       // Cloud Data Sync
-      if (cred?.user != null) {
+      if (cred.user != null) {
         await UserDataService.syncFromCloud();
         await MemoryService().syncFromCloud();
         await TasksSyncService.syncFromCloud();
       }
-      
+
       return cred;
     } catch (e) {
       debugPrint("Google Sign-In Error: $e");

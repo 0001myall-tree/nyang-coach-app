@@ -14,10 +14,10 @@ class MorningCallAlarmSession {
       MorningCallAlarmSession._internal();
 
   final AudioPlayer _player = AudioPlayer();
-  StreamSubscription<void>? _completeSubscription;
-  Timer? _repeatTimer;
+  Timer? _initialDelayTimer;
   String? _soundPath;
   bool _isActive = false;
+  bool get isActive => _isActive;
 
   Future<void> start({
     required String coachId,
@@ -50,15 +50,15 @@ class MorningCallAlarmSession {
         ),
       );
       await _player.setVolume(1.0);
-      await _player.setReleaseMode(ReleaseMode.stop);
-      _completeSubscription = _player.onPlayerComplete.listen((_) {
-        _scheduleReplay();
-      });
+      
+      // Set to loop mode so native OS player handles repeating without needing Dart code
+      await _player.setReleaseMode(ReleaseMode.loop);
+
       if (initialDelay == Duration.zero) {
-        await _playOnce();
+        await _play();
       } else {
-        _repeatTimer = Timer(initialDelay, () {
-          _playOnce();
+        _initialDelayTimer = Timer(initialDelay, () {
+          _play();
         });
       }
     } catch (e) {
@@ -68,10 +68,8 @@ class MorningCallAlarmSession {
 
   Future<void> stop() async {
     _isActive = false;
-    _repeatTimer?.cancel();
-    _repeatTimer = null;
-    await _completeSubscription?.cancel();
-    _completeSubscription = null;
+    _initialDelayTimer?.cancel();
+    _initialDelayTimer = null;
     try {
       await _player.stop();
     } catch (e) {
@@ -79,22 +77,14 @@ class MorningCallAlarmSession {
     }
   }
 
-  void _scheduleReplay() {
-    if (!_isActive) return;
-    _repeatTimer?.cancel();
-    _repeatTimer = Timer(const Duration(seconds: 3), () {
-      _playOnce();
-    });
-  }
-
-  Future<void> _playOnce() async {
+  Future<void> _play() async {
     if (!_isActive || _soundPath == null) return;
     try {
       await _player.stop();
+      await _player.setReleaseMode(ReleaseMode.loop);
       await _player.play(AssetSource(_soundPath!));
     } catch (e) {
       debugPrint('모닝콜 알람 세션 재생 실패: $e');
-      _scheduleReplay();
     }
   }
 }

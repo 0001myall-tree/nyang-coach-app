@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'main_tab_screen.dart';
 import 'landing_screen.dart';
+import 'coach_config.dart';
 import '../models/user_data.dart';
 import '../services/auth_service.dart';
 
@@ -442,13 +443,13 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
                           ),
                           _buildTeamIntroSpeaker(
                             imagePath: 'assets/images/sec_male.png',
-                            name: '남비서 코치',
+                            name: CoachConfigs.all['sec_male']?.name ?? '남비서 코치',
                             text:
                                 '마스터 코치는 목표와 패턴을 함께 보고, 중요한 흐름을 놓치지 않게 챙겨드립니다.',
                           ),
                           _buildTeamIntroSpeaker(
                             imagePath: 'assets/images/sec_female.png',
-                            name: '여비서 코치',
+                            name: CoachConfigs.all['sec_female']?.name ?? '여비서 코치',
                             text:
                                 '계획만 세우고 끝나는 플래너가 아니라, 행동을 함께하는 플래너. 그게 냥냥코치입니다.',
                           ),
@@ -1600,7 +1601,7 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
   List<Map<String, dynamic>> get _masterCoaches => [
     {
       'id': 'sec_male',
-      'name': '남비서 코치',
+      'name': CoachConfigs.all['sec_male']?.name ?? '남비서 코치',
       'subtitle': '"우선순위부터 잡죠"',
       'image': 'assets/images/sec_male.png',
       'color': _masterGold,
@@ -1626,7 +1627,7 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
     },
     {
       'id': 'sec_female',
-      'name': '여비서 코치',
+      'name': CoachConfigs.all['sec_female']?.name ?? '여비서 코치',
       'subtitle': '"더 효율적인 전략은..."',
       'image': 'assets/images/sec_female.png',
       'color': _masterGold,

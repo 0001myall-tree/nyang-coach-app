@@ -3,10 +3,13 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'firebase_options.dart';
 import 'screens/landing_screen.dart';
+import 'screens/coach_config.dart';
 import 'services/notification_service.dart';
 import 'services/tasks_sync_service.dart';
+import 'services/widget_sync_service.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
@@ -16,6 +19,15 @@ void main() async {
   await initializeDateFormatting('ko', null);
   await NotificationService().init();
   await NotificationService().syncDailyNightCall();
+  
+  final prefs = await SharedPreferences.getInstance();
+  final _secMaleName = prefs.getString('nyang_coach_name_sec_male');
+  final _secFemaleName = prefs.getString('nyang_coach_name_sec_female');
+  CoachConfigs.customSecMaleName = (_secMaleName != null && _secMaleName.isNotEmpty) ? _secMaleName : null;
+  CoachConfigs.customSecFemaleName = (_secFemaleName != null && _secFemaleName.isNotEmpty) ? _secFemaleName : null;
+
+  await WidgetSyncService.syncFromStoredTasks();
+
   runApp(const ProviderScope(child: NyangCoachApp()));
   await NotificationService().handleLaunchNotification();
 }

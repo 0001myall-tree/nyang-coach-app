@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/user_data.dart';
+import 'widget_sync_service.dart';
 
 class TasksSyncService {
   static Timer? _syncTimer;
@@ -100,6 +101,7 @@ class TasksSyncService {
         }
       }
 
+      await WidgetSyncService.syncFromStoredTasks();
       debugPrint('✅ TasksSyncService: 클라우드 데이터를 로컬에 성공적으로 복원했습니다.');
     } catch (e) {
       debugPrint('❌ TasksSyncService syncFromCloud 오류: $e');

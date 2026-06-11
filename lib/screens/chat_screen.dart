@@ -342,24 +342,6 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin, 
     TasksSyncService.scheduleSyncToCloud();
   }
 
-  DateTime? _nextMinSleepTime(DateTime now, String minSleepTime) {
-    final parts = minSleepTime.split(':');
-    if (parts.length < 2) return null;
-    final hour = int.tryParse(parts[0]);
-    final minute = int.tryParse(parts[1]);
-    if (hour == null || minute == null) return null;
-
-    var bedtime = DateTime(now.year, now.month, now.day, hour, minute);
-    if (!bedtime.isAfter(now)) {
-      bedtime = bedtime.add(const Duration(days: 1));
-    }
-    return bedtime;
-  }
-
-  String _bedtimeOfferKey(DateTime bedtime) {
-    return DateFormat('yyyy-MM-dd-HH-mm').format(bedtime);
-  }
-
   Future<String> _getEffectiveTodayStr() async {
     final prefs = await SharedPreferences.getInstance();
     final resetHour = prefs.getDouble('nyang_reset_hour') ?? 3.0;
@@ -377,8 +359,6 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin, 
     final lastDate = prefs.getString('nyang_last_date');
 
     if (lastDate != today) {
-      // 날짜가 바뀌었으나 할일 탭을 아직 열지 않아 리셋/스케줄 주입이 안 된 경우
-      // nyang_schedules의 오늘 날짜 일정을 읽어서 미완료된 것이 있는지 직접 체크합니다.
       final rawSchedules = prefs.getString('nyang_schedules');
       if (rawSchedules != null) {
         try {
@@ -388,7 +368,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin, 
             final hasIncomplete = todaySchedules.any((s) {
               if (s is! Map) return false;
               if (s['done'] == true) return false;
-              return true; // 스케줄 일정은 미루기 가능
+              return true;
             });
             if (hasIncomplete) return true;
           }
@@ -438,25 +418,51 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin, 
     DateTime? matchedBedtime;
     for (final bedtime in candidates) {
       final startThreshold = bedtime.subtract(const Duration(hours: 2));
-      final endThreshold = bedtime.add(const Duration(hours: 4));
-      if (now.isAfter(startThreshold) && now.isBefore(endThreshold)) {
+      // User requested window: 2 hours before bedtime up to the bedtime itself (inclusive)
+      if (now.isAfter(startThreshold) && !now.isAfter(bedtime)) {
         matchedBedtime = bedtime;
         break;
       }
     }
 
     if (matchedBedtime == null) return;
+
+    // Check 7-day cooldown
+    final lastFiredStr = prefs.getString('nyang_last_bedtime_offer_time');
+    if (lastFiredStr != null) {
+      try {
+        final lastFired = DateTime.parse(lastFiredStr);
+        if (now.difference(lastFired).inDays < 7) {
+          return;
+        }
+      } catch (_) {}
+    }
+
     if (!await _hasMovableIncompleteTasks()) return;
 
-    final offerKey = _bedtimeOfferKey(matchedBedtime);
-    final lastOfferKey = prefs.getString('nyang_bedtime_move_offer_key');
-    if (lastOfferKey == offerKey) return;
-    await prefs.setString('nyang_bedtime_move_offer_key', offerKey);
+    // Save actual fired time immediately to lock it for 7 days
+    await prefs.setString('nyang_last_bedtime_offer_time', now.toIso8601String());
 
     final displayTime = _formatTime12(minSleepTime);
-    final rawMsg =
-        '그런데 대표님은 $displayTime 전에 주무셔야 덜 피곤하다고 하셨죠? 남은 계획을 지금 다 하기엔 빠듯해 보여요. 혹시 오늘까지 꼭 끝내야 하는 일정이 있으신가요?';
-    final msg = await UserTitleService.applyForCoach(rawMsg, widget.coachId);
+
+    // 3 templates to vary the phrasing
+    final templates = [
+      '그런데 대표님은 $displayTime 전에 주무셔야 덜 피곤하다고 하셨죠? 남은 계획을 지금 다 하기엔 빠듯해 보여요. 혹시 오늘까지 꼭 끝내야 하는 일정이 있으신가요?',
+      '대표님, 설정해 두신 취침 시간($displayTime)이 얼마 남지 않았습니다. 오늘 계획 중 일부는 내일로 조정하고 슬슬 잘 준비를 해보시는 건 어떨까요?',
+      '벌써 시간이 이렇게 되었네요. 대표님이 말씀하신 $displayTime 취침 시간을 지키려면 지금 정리가 필요해 보입니다. 오늘 꼭 해야만 하는 일만 남기고 미뤄드릴까요?',
+    ];
+
+    // Select a template randomly
+    final rawMsg = templates[Random().nextInt(templates.length)];
+    String msg = await UserTitleService.applyForCoach(rawMsg, widget.coachId);
+
+    // 비서 코치 + 커스텀 애칭 설정 시 이름 로컬 앞에 붙이기
+    final customName = widget.coachId == 'sec_male'
+        ? CoachConfigs.customSecMaleName
+        : CoachConfigs.customSecFemaleName;
+    if (customName != null && customName.trim().isNotEmpty) {
+      msg = '${customName.trim()}입니다. $msg';
+    }
 
     if (!mounted) return;
     setState(() {
@@ -1764,7 +1770,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin, 
     Map<String, dynamic> habitLogs = rawLogs != null ? jsonDecode(rawLogs) : {};
 
     final todayTasks = tasksList
-        .where((t) => t['category'] == 'today' || t['category'] == 'habit')
+        .where((t) => t['category'] == 'today' || t['category'] == 'habit' || t['category'] == 'schedule')
         .toList();
     final incompleteTasks = todayTasks.where((t) => t['done'] != true).toList();
     final completedTasks = todayTasks.where((t) => t['done'] == true).toList();
@@ -2098,9 +2104,21 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin, 
       final raw = await _callOpenAI(prompt, isGreeting: true);
       if (!mounted || widget.coachId != currentId) return;
       final parsed = _parseReply(raw);
+
+      // 비서 코치 + 커스텀 애칭 설정 시 로컬에서 이름 앞에 붙이기
+      String greetingText = parsed.text;
+      if (widget.coachId == 'sec_male' || widget.coachId == 'sec_female') {
+        final customName = widget.coachId == 'sec_male'
+            ? CoachConfigs.customSecMaleName
+            : CoachConfigs.customSecFemaleName;
+        if (customName != null && customName.trim().isNotEmpty) {
+          greetingText = '${customName.trim()}입니다. $greetingText';
+        }
+      }
+
       setState(() {
         _messages.add(
-          ChatMessage(text: parsed.text, isUser: false, time: DateTime.now()),
+          ChatMessage(text: greetingText, isUser: false, time: DateTime.now()),
         );
         _dynamicChips = parsed.chips.isNotEmpty ? parsed.chips : _coach.chips;
         _isLoading = false;
@@ -2434,8 +2452,15 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin, 
             final timeInfo = timeInfoParts.isNotEmpty
                 ? ' ($timeInfoParts)'
                 : '';
+            final isHabit = t['isHabit'] == true || t['category'] == 'habit';
+            final isSchedule = t['category'] == 'schedule';
+            final typeLabel = isHabit
+                ? '습관'
+                : isSchedule
+                    ? '일정'
+                    : '일반 할 일';
             sb.writeln(
-              '- [${done ? 'V' : ' '}] [id: ${t['id']}] ${t['text']}$timeInfo',
+              '- [${done ? 'V' : ' '}] [$typeLabel] ${t['text']}$timeInfo',
             );
           }
           sb.writeln('*[V] 표시된 항목은 완료됨. 완료 항목은 절대 다시 실행 유도하지 말 것.');
@@ -2545,9 +2570,26 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin, 
           for (final h in habits) {
             final hId = h['id'].toString();
             final logs = (habitLogs[hId] as Map<String, dynamic>?) ?? {};
+            final createdAtStr = h['createdAt'] as String?;
+            DateTime? createdAtDate;
+            if (createdAtStr != null) {
+              final parsed = DateTime.tryParse(createdAtStr);
+              if (parsed != null) {
+                createdAtDate = DateTime(parsed.year, parsed.month, parsed.day);
+              }
+            }
+
             int miss = 0;
             for (int i = 1; i <= 7; i++) {
               final d = now.subtract(Duration(days: i));
+              
+              if (createdAtDate != null) {
+                final dDate = DateTime(d.year, d.month, d.day);
+                if (dDate.isBefore(createdAtDate)) {
+                  break; // Stop counting if we check dates before habit creation
+                }
+              }
+
               final ds =
                   '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
               final log = logs[ds] as Map<String, dynamic>?;

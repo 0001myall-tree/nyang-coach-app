@@ -1,0 +1,20 @@
+--------- beginning of main
+06-09 21:47:47.374   707   932 D ControlsListingControllerImpl: Subscribing callback, service count: 0
+06-09 21:47:47.440   707   932 D ControlsListingControllerImpl: Unsubscribing callback
+06-09 21:47:49.021   319   319 E android.hardware.power.stats@1.0-service-mock: Failed to getEnergyData
+06-09 21:47:53.698   698   698 I wpa_supplicant: wlan0: CTRL-EVENT-BEACON-LOSS 
+--------- beginning of kernel
+06-09 21:47:56.395   156   156 I logd    : logdr: UID=2000 GID=2000 PID=14756 n tail=0 logMask=99 pid=0 start=0ns deadline=0ns
+06-09 21:47:57.345   707   928 D EGL_emulation: app_time_stats: avg=40025.95ms min=40025.95ms max=40025.95ms count=1
+06-09 21:48:00.016  1566  1867 I AiAiEcho: Predicting[0]: 
+06-09 21:48:00.017  1566  1867 I AiAiEcho: Ranked targets strategy: SORT, count: 0, ranking metadata: 
+06-09 21:48:00.019   707   928 D EGL_emulation: app_time_stats: avg=2674.49ms min=2674.49ms max=2674.49ms count=1
+06-09 21:48:00.022  1566  1867 I AiAiEcho: #postPredictionTargets: Sending updates to UISurface lockscreen with targets# 0
+06-09 21:48:00.023  1566  1867 I AiAiEcho: #postPredictionTargets: Sending updates to UISurface home with targets# 0
+06-09 21:48:00.024  1566  1867 I AiAiEcho: #postPredictionTargets: Sending updates to UISurface media_data_manager with targets# 0
+06-09 21:48:00.028   707   707 D SsMediaDataProvider: Forwarding Smartspace updates []
+06-09 21:48:01.633   698   698 I wpa_supplicant: wlan0: CTRL-EVENT-BEACON-LOSS 
+--------- beginning of system
+06-09 21:48:02.230   509   591 D ActivityManager: freezing 7737 com.google.android.apps.messaging
+06-09 21:48:02.310   509   591 D ActivityManager: freezing 13119 android.process.acore
+06-09 21:48:02.438   509   591 D ActivityManager: freezing 13481 com.android.chrome

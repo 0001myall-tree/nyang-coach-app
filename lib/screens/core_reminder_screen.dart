@@ -54,7 +54,7 @@ class _CoreReminderScreenState extends State<CoreReminderScreen> {
         await _audioPlayer.setVolume(1.0);
         await _audioPlayer.play(AssetSource(soundPath));
       } catch (e) {
-        debugPrint('핵심 리마인더 오디오 재생 실패: $e');
+        debugPrint('일정 알람 오디오 재생 실패: $e');
       }
     }
   }

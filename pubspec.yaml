@@ -51,6 +51,8 @@ dependencies:
   cloud_functions: any
   cloud_firestore: ^6.4.1
   speech_to_text: ^7.4.0
+  confetti: ^0.8.0
+  home_widget: ^0.9.3
 
 dev_dependencies:
   flutter_test:
@@ -78,6 +80,7 @@ flutter:
   assets:
     - assets/images/
     - assets/voice/
+    - assets/sounds/
     - assets/images/girlfriend.jpg
     - assets/images/bro.jpg
 

@@ -7,6 +7,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../services/auth_service.dart';
 import '../models/user_data.dart';
 import '../services/tasks_sync_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'coach_selection_screen.dart';
 import 'main_tab_screen.dart';
 
@@ -50,10 +51,34 @@ class _LandingScreenState extends State<LandingScreen> with TickerProviderStateM
     if (user != null) {
       final data = await UserDataService.load();
       await TasksSyncService.syncFromCloud(); // 자동 로그인 시 클라우드 데이터 복원
+      
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.reload();
+      final widgetRoute = prefs.getString('widget_route');
+      final widgetCoachId = prefs.getString('widget_coach_id');
+      
+      if (widgetRoute != null) prefs.remove('widget_route');
+      if (widgetCoachId != null) prefs.remove('widget_coach_id');
+      
+      String targetCoachId = widgetCoachId ?? data.selectedCoachId ?? 'cat';
+
       if (data.selectedCoachId != null && mounted) {
+        if (widgetCoachId != null && widgetCoachId != data.selectedCoachId) {
+          await UserDataService.setSelectedCoach(widgetCoachId);
+        }
+        
+        final initialDrawerIdx = (widgetRoute == 'tasks' || widgetRoute == 'tasks_done_bottom_sheet' || widgetRoute == 'tasks_remaining_bottom_sheet') ? 1 : 0;
+        final initBottomSheet = widgetRoute == 'tasks_done_bottom_sheet' ? 'done' : null;
+
         final nav = Navigator.of(context);
         final landingRoute = ModalRoute.of(context);
-        final mainRoute = MaterialPageRoute(builder: (context) => MainTabScreen(coachId: data.selectedCoachId!));
+        final mainRoute = MaterialPageRoute(
+          builder: (context) => MainTabScreen(
+            coachId: targetCoachId,
+            initialDrawerIndex: initialDrawerIdx,
+            initialBottomSheet: initBottomSheet,
+          )
+        );
         
         if (landingRoute != null && landingRoute.isActive && nav.canPop()) {
           // LandingScreen 위에 모닝콜 등 다른 화면이 덮여있는 경우
@@ -65,6 +90,8 @@ class _LandingScreenState extends State<LandingScreen> with TickerProviderStateM
       }
     }
   }
+
+
 
   @override
   void dispose() {

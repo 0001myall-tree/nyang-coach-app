@@ -920,16 +920,43 @@ $recordBuffer
             // 임시로 달성률 계산 (habitLogs 사용)
             final days = _isMaster ? 30 : 7;
             int hSuccess = 0;
+            int hTotal = 0;
             final logs = _habitLogs[h.id.toString()] ?? {};
 
             final now = DateTime.now();
+            DateTime? createdAtDate;
+            try {
+              final parsed = DateTime.parse(h.createdAt);
+              createdAtDate = DateTime(parsed.year, parsed.month, parsed.day);
+            } catch (_) {}
+
             for (int i = 0; i < days; i++) {
               final d = now.subtract(Duration(days: i));
+              final dNormalized = DateTime(d.year, d.month, d.day);
+
+              // 생성일 이전은 카운트 제외
+              if (createdAtDate != null && dNormalized.isBefore(createdAtDate)) {
+                continue;
+              }
+
+              // 요일 체크 (주간 반복일 경우 지정된 요일만 카운트)
+              if (h.freq == 'weekly' && h.days.isNotEmpty) {
+                if (!h.days.contains(d.weekday - 1)) {
+                  continue;
+                }
+              }
+
+              hTotal++;
               final dateStr =
                   "${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}";
               if (logs[dateStr]?['done'] == true) hSuccess++;
             }
-            final hPct = ((hSuccess / days) * 100).round();
+            final hPct = hTotal == 0 ? 0 : ((hSuccess / hTotal) * 100).round();
+
+            const dayNames = ['월', '화', '수', '목', '금', '토', '일'];
+            final freqLabel = h.freq == 'daily'
+                ? '매일'
+                : h.days.map((d) => dayNames[d]).join('/');
 
             return Padding(
               padding: const EdgeInsets.only(bottom: 12),
@@ -940,13 +967,39 @@ $recordBuffer
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Expanded(
-                        child: Text(
-                          h.name,
-                          style: GoogleFonts.notoSansKr(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                            color: const Color(0xFF3D3A4E),
-                          ),
+                        child: Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                h.name,
+                                style: GoogleFonts.notoSansKr(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                  color: const Color(0xFF3D3A4E),
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF3F4F6),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                freqLabel,
+                                style: GoogleFonts.notoSansKr(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w600,
+                                  color: const Color(0xFF6B7280),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                       Text(
@@ -960,21 +1013,273 @@ $recordBuffer
                     ],
                   ),
                   const SizedBox(height: 6),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(4),
-                    child: LinearProgressIndicator(
-                      value: hPct / 100.0,
-                      minHeight: 6,
-                      backgroundColor: const Color(0xFFF3F4F6),
-                      valueColor: AlwaysStoppedAnimation(_coach.accentColor),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: LinearProgressIndicator(
+                        value: hPct / 100.0,
+                        minHeight: 6,
+                        backgroundColor: const Color(0xFFF3F4F6),
+                        valueColor: AlwaysStoppedAnimation(_coach.accentColor),
+                      ),
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 12),
+                    _buildHabitPattern(h),
+                  ],
               ),
             );
           }),
         ],
       ),
+    );
+  }
+
+  Widget _buildHabitPattern(HabitItem h) {
+    final logs = _habitLogs[h.id.toString()] ?? {};
+    final validLogs = <Map<String, dynamic>>[];
+
+    DateTime? createdAtDate;
+    try {
+      final parsed = DateTime.parse(h.createdAt);
+      createdAtDate = DateTime(parsed.year, parsed.month, parsed.day);
+    } catch (_) {}
+
+    final now = DateTime.now();
+    for (int i = 0; i < 30; i++) {
+      final d = now.subtract(Duration(days: i));
+      final dNormalized = DateTime(d.year, d.month, d.day);
+
+      if (createdAtDate != null && dNormalized.isBefore(createdAtDate)) {
+        continue;
+      }
+      final dateStr =
+          "${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}";
+
+      final log = logs[dateStr];
+      if (log != null && log['done'] == true && log['completedAt'] != null) {
+        validLogs.add({
+          'dateStr': dateStr,
+          'completedAt': log['completedAt'],
+        });
+      }
+    }
+
+    if (validLogs.length < 3) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF9FAFB),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Text(
+          '아직 분석하기에 충분한 기록이 쌓이지 않았어요.\n조금만 더 이어가시면 습관 패턴을 찾아드릴게요.',
+          style: GoogleFonts.notoSansKr(
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+            color: const Color(0xFF6B7280),
+            height: 1.5,
+          ),
+          textAlign: TextAlign.center,
+        ),
+      );
+    }
+
+    final timeCounts = <int, int>{};
+    final dayCounts = <int, int>{};
+    final priorTaskCounts = <String, int>{};
+
+    for (final log in validLogs) {
+      try {
+        final dt = DateTime.parse(log['completedAt']);
+        // Time slot (2-hour windows)
+        final slot = dt.hour ~/ 2;
+        timeCounts[slot] = (timeCounts[slot] ?? 0) + 1;
+
+        // Weekday (1=Mon..7=Sun)
+        dayCounts[dt.weekday] = (dayCounts[dt.weekday] ?? 0) + 1;
+
+        // Prior task
+        final dateStr = log['dateStr'];
+        final dayHistory = _history.where((r) => r['date'] == dateStr).toList();
+        if (dayHistory.isNotEmpty) {
+          final tasks = (dayHistory.last['tasks'] as List?) ?? [];
+          final completedTasks = tasks.where((t) {
+            if (t is! Map) return false;
+            if (t['done'] != true || t['completedAt'] == null) return false;
+            if (t['text'] == h.name) return false;
+            return true;
+          }).map((t) => t as Map<String, dynamic>).toList();
+
+          completedTasks.sort((a, b) {
+            final ta = DateTime.parse(a['completedAt']);
+            final tb = DateTime.parse(b['completedAt']);
+            return ta.compareTo(tb);
+          });
+
+          for (int j = completedTasks.length - 1; j >= 0; j--) {
+            final taskTime = DateTime.parse(completedTasks[j]['completedAt']);
+            if (taskTime.isBefore(dt)) {
+              // 가장 직전에 완료한 단 1개의 할 일만 확인
+              if (dt.difference(taskTime).inMinutes <= 180) {
+                final text = completedTasks[j]['text'].toString();
+                priorTaskCounts[text] = (priorTaskCounts[text] ?? 0) + 1;
+              }
+              break; // 3시간 이내든 아니든 직전 1개만 보고 루프 종료
+            }
+          }
+        }
+      } catch (_) {}
+    }
+
+    // Top time
+    int bestSlot = 0;
+    int maxSlotCount = -1;
+    timeCounts.forEach((slot, count) {
+      if (count > maxSlotCount) {
+        maxSlotCount = count;
+        bestSlot = slot;
+      }
+    });
+
+    final slotNames = {
+      0: '밤 12시~2시',
+      1: '새벽 2시~4시',
+      2: '새벽 4시~6시',
+      3: '아침 6시~8시',
+      4: '오전 8시~10시',
+      5: '오전 10시~12시',
+      6: '낮 12시~2시',
+      7: '오후 2시~4시',
+      8: '오후 4시~6시',
+      9: '저녁 6시~8시',
+      10: '밤 8시~10시',
+      11: '밤 10시~12시',
+    };
+    final bestTimeStr = slotNames[bestSlot] ?? '알 수 없음';
+
+    // Top days
+    int maxDayCount = -1;
+    dayCounts.forEach((day, count) {
+      if (count > maxDayCount) maxDayCount = count;
+    });
+    final bestDays = dayCounts.entries
+        .where((e) => e.value == maxDayCount)
+        .map((e) => e.key)
+        .toList();
+    
+    final dayNames = {1: '월요일', 2: '화요일', 3: '수요일', 4: '목요일', 5: '금요일', 6: '토요일', 7: '일요일'};
+    String bestDayStr = bestDays.map((d) => dayNames[d]!).join(' · ');
+    if (bestDays.length == 2 && bestDays.contains(6) && bestDays.contains(7)) {
+      bestDayStr = '주말';
+    } else if (bestDays.length == 5 && !bestDays.contains(6) && !bestDays.contains(7)) {
+      bestDayStr = '평일';
+    } else if (bestDays.length == 7) {
+      bestDayStr = '매일';
+    }
+
+    // Top prior task
+    String? bestPriorTask;
+    if (validLogs.length >= 5) {
+      int maxPriorCount = -1;
+      priorTaskCounts.forEach((text, count) {
+        if (count >= 2 && count > maxPriorCount) {
+          maxPriorCount = count;
+          bestPriorTask = text;
+        }
+      });
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF9FAFB),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFF3F4F6)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Text('🌱', style: TextStyle(fontSize: 14)),
+              const SizedBox(width: 6),
+              Text(
+                '습관 패턴',
+                style: GoogleFonts.notoSansKr(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                  color: const Color(0xFF3D3A4E),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _patternRow('🕒', '주로 완료한 시간', bestTimeStr),
+          const SizedBox(height: 6),
+          _patternRow('📅', '주로 완료한 요일', bestDayStr),
+          if (bestPriorTask != null) ...[
+            const SizedBox(height: 6),
+            _patternRow('🔄', '습관 전에 자주 한 일', bestPriorTask!),
+          ],
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('💡', style: TextStyle(fontSize: 14)),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '최근에는 $bestDayStr $bestTimeStr에 가장 꾸준히 이어졌어요.\n안정적으로 이어가고 싶다면 비슷한 시간대를 활용해보세요.',
+                    style: GoogleFonts.notoSansKr(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: const Color(0xFF4B5563),
+                      height: 1.5,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _patternRow(String emoji, String label, String value) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(emoji, style: const TextStyle(fontSize: 12)),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: GoogleFonts.notoSansKr(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: const Color(0xFF6B7280),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            value,
+            style: GoogleFonts.notoSansKr(
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              color: const Color(0xFF3D3A4E),
+            ),
+            textAlign: TextAlign.right,
+          ),
+        ),
+      ],
     );
   }
 }

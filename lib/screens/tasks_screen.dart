@@ -247,12 +247,28 @@ class MilestoneItem {
   String text;
   bool done;
   String? date;
+  String? achievedDate;
 
-  MilestoneItem({required this.text, this.done = false, this.date});
+  MilestoneItem({required this.text, this.done = false, this.date, this.achievedDate});
 
-  Map<String, dynamic> toJson() => {'text': text, 'done': done, 'date': date};
-  factory MilestoneItem.fromJson(Map<String, dynamic> j) =>
-      MilestoneItem(text: j['text'], done: j['done'] ?? false, date: j['date']);
+  Map<String, dynamic> toJson() => {
+        'text': text,
+        'done': done,
+        'date': date,
+        'achievedDate': achievedDate,
+      };
+  factory MilestoneItem.fromJson(Map<String, dynamic> j) => MilestoneItem(
+        text: j['text'],
+        done: j['done'] ?? false,
+        date: j['date'],
+        achievedDate: j['achievedDate'],
+      );
+}
+
+class MilestoneWithVision {
+  final MilestoneItem milestone;
+  final VisionItem vision;
+  MilestoneWithVision(this.milestone, this.vision);
 }
 
 class VisionItem {
@@ -306,11 +322,13 @@ class TasksScreen extends StatefulWidget {
   final String coachId;
   final void Function(String message)? onCoreTaskSet;
   final TasksScreenController? controller;
+  final String? initialBottomSheet;
   const TasksScreen({
     super.key,
     required this.coachId,
     this.onCoreTaskSet,
     this.controller,
+    this.initialBottomSheet,
   });
 
   @override
@@ -324,6 +342,10 @@ class TasksScreenController {
 
   void openBedtimeMoveFlow({bool nextDay = false}) {
     _state?._openBedtimeMoveFlow(nextDay: nextDay);
+  }
+
+  void openBottomSheet(String type) {
+    _state?._openBottomSheet(type);
   }
 }
 
@@ -462,6 +484,105 @@ class _TasksScreenState extends State<TasksScreen>
     await _checkWeekMonthReset(prefs);
     _injectTodayHabits();
     _injectTodaySchedules();
+
+    if (widget.initialBottomSheet != null) {
+      _openBottomSheet(widget.initialBottomSheet!);
+    }
+  }
+
+  void _openBottomSheet(String type) {
+    if (type == 'done') {
+      _showTasksBottomSheet(title: '오늘 완료한 할 일', showDone: true);
+    } else if (type == 'remaining') {
+      _showTasksBottomSheet(title: '오늘 남은 할 일', showDone: false);
+    }
+  }
+
+  void _showTasksBottomSheet({required String title, required bool showDone}) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        final filteredTasks = tasks.where((t) => t.done == showDone).toList();
+        return Container(
+          padding: const EdgeInsets.fromLTRB(20, 22, 20, 24),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: GoogleFonts.notoSansKr(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: const Color(0xFF3D3A4E),
+                ),
+              ),
+              const SizedBox(height: 14),
+              if (filteredTasks.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 20),
+                  child: Center(
+                    child: Text(
+                      '해당하는 할 일이 없습니다.',
+                      style: GoogleFonts.notoSansKr(
+                        fontSize: 14,
+                        color: const Color(0xFFA0A0B0),
+                      ),
+                    ),
+                  ),
+                )
+              else
+                ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxHeight: MediaQuery.of(context).size.height * 0.4,
+                  ),
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: filteredTasks.length,
+                    itemBuilder: (ctx, i) {
+                      final t = filteredTasks[i];
+                      return Container(
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        decoration: const BoxDecoration(
+                          border: Border(
+                            bottom: BorderSide(color: Color(0xFFF3F4F6)),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              showDone ? Icons.check_circle : Icons.radio_button_unchecked,
+                              color: showDone ? const Color(0xFF8B7CFF) : const Color(0xFFD1D5DB),
+                              size: 20,
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                t.text,
+                                style: GoogleFonts.notoSansKr(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w500,
+                                  color: const Color(0xFF3D3A4E),
+                                  decoration: showDone ? TextDecoration.lineThrough : null,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _checkReset(SharedPreferences prefs) async {
@@ -1837,37 +1958,50 @@ class _TasksScreenState extends State<TasksScreen>
                       setDuration: (value) =>
                           setModalState(() => moveDuration = value),
                     ),
-                    if (_isCoreReminderEnabledGlobally &&
-                        (moveTimeType == 'single' || moveTimeType == 'range') &&
-                        moveStartTime != null)
+                    if (moveTimeType == 'single' || moveTimeType == 'range')
                       Padding(
                         padding: const EdgeInsets.only(top: 8),
                         child: GestureDetector(
-                          onTap: () => setModalState(
-                            () => moveReminderEnabled = !moveReminderEnabled,
-                          ),
+                          onTap: () {
+                            if (!_isCoreReminderEnabledGlobally) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('설정에서 코치의 일정 알람을 켜주세요.'),
+                                  duration: Duration(seconds: 2),
+                                ),
+                              );
+                              return;
+                            }
+                            setModalState(
+                              () => moveReminderEnabled = !moveReminderEnabled,
+                            );
+                          },
                           child: Row(
                             children: [
                               Icon(
-                                moveReminderEnabled
-                                    ? Icons.notifications_active
-                                    : Icons.notifications_none_outlined,
+                                !_isCoreReminderEnabledGlobally
+                                    ? Icons.notifications_off
+                                    : (moveReminderEnabled
+                                        ? Icons.notifications_active
+                                        : Icons.notifications_none_outlined),
                                 size: 18,
-                                color: moveReminderEnabled
+                                color: (_isCoreReminderEnabledGlobally && moveReminderEnabled)
                                     ? _coach.accentColor
                                     : const Color(0xFFB0B0C8),
                               ),
                               const SizedBox(width: 6),
                               Text(
-                                moveReminderEnabled
-                                    ? '알림 켜짐 (핵심에 자동 추가)'
-                                    : '알림 끄기',
+                                !_isCoreReminderEnabledGlobally
+                                    ? '알림 꺼짐'
+                                    : (moveReminderEnabled
+                                        ? '알림 켜짐 (자동 추가)'
+                                        : '알림 끄기'),
                                 style: GoogleFonts.notoSansKr(
                                   fontSize: 12,
-                                  color: moveReminderEnabled
+                                  color: (_isCoreReminderEnabledGlobally && moveReminderEnabled)
                                       ? _coach.accentColor
                                       : const Color(0xFFB0B0C8),
-                                  fontWeight: moveReminderEnabled
+                                  fontWeight: (_isCoreReminderEnabledGlobally && moveReminderEnabled)
                                       ? FontWeight.w600
                                       : FontWeight.w400,
                                 ),
@@ -2191,7 +2325,7 @@ class _TasksScreenState extends State<TasksScreen>
                     content: Text(
                       _isCoreReminderEnabledGlobally
                           ? '시간이 지정된 일정만 리마인더를 받을 수 있습니다.'
-                          : '설정에서 코치의 핵심 리마인더를 켜주세요.',
+                          : '설정에서 코치의 일정 알람을 켜주세요.',
                     ),
                     duration: const Duration(seconds: 2),
                     backgroundColor: const Color(0xFF1A1A2E),
@@ -2502,7 +2636,7 @@ class _TasksScreenState extends State<TasksScreen>
                                               content: Text(
                                                 _isCoreReminderEnabledGlobally
                                                     ? '시간이 지정된 일정만 리마인더를 받을 수 있습니다.'
-                                                    : '설정에서 코치의 핵심 리마인더를 켜주세요.',
+                                                    : '설정에서 코치의 일정 알람을 켜주세요.',
                                               ),
                                               duration: const Duration(
                                                 seconds: 2,
@@ -3446,10 +3580,16 @@ class _TasksScreenState extends State<TasksScreen>
       );
     }
 
+    final sortedTasks = List<TaskItem>.from(tasks)..sort((a, b) {
+      if (a.done && !b.done) return 1;
+      if (!a.done && b.done) return -1;
+      return 0;
+    });
+
     return ListView.builder(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-      itemCount: tasks.length,
-      itemBuilder: (ctx, i) => _buildTaskItem(tasks[i]),
+      itemCount: sortedTasks.length,
+      itemBuilder: (ctx, i) => _buildTaskItem(sortedTasks[i]),
     );
   }
 
@@ -5152,13 +5292,14 @@ class _TasksScreenState extends State<TasksScreen>
                                   margin: const EdgeInsets.only(bottom: 8),
                                   padding: const EdgeInsets.all(12),
                                   decoration: BoxDecoration(
-                                    color: Colors.white,
+                                    color: m.done ? const Color(0xFFF8FCFA) : Colors.white,
                                     borderRadius: BorderRadius.circular(12),
                                     border: Border.all(
-                                      color: const Color(0xFFE8E3F8),
+                                      color: m.done ? const Color(0xFFDFF8EE) : const Color(0xFFE8E3F8),
                                     ),
                                   ),
                                   child: Row(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
                                       ReorderableDragStartListener(
                                         index: i,
@@ -5166,28 +5307,19 @@ class _TasksScreenState extends State<TasksScreen>
                                           width: 28,
                                           height: 28,
                                           alignment: Alignment.center,
+                                          margin: const EdgeInsets.only(top: 2),
                                           decoration: BoxDecoration(
-                                            color: m.done
-                                                ? const Color(0xFF8B7CFF)
-                                                : const Color(0xFFF5F3FF),
-                                            borderRadius: BorderRadius.circular(
-                                              8,
-                                            ),
+                                            color: m.done ? const Color(0xFF5AD7B0) : const Color(0xFFF5F3FF),
+                                            borderRadius: BorderRadius.circular(m.done ? 14 : 8),
                                           ),
                                           child: m.done
-                                              ? const Icon(
-                                                  Icons.check,
-                                                  color: Colors.white,
-                                                  size: 16,
-                                                )
+                                              ? const Icon(Icons.check, color: Colors.white, size: 16)
                                               : Text(
                                                   '${i + 1}',
                                                   style: GoogleFonts.notoSansKr(
                                                     fontSize: 12,
                                                     fontWeight: FontWeight.bold,
-                                                    color: const Color(
-                                                      0xFFA0A0B0,
-                                                    ),
+                                                    color: const Color(0xFFA0A0B0),
                                                   ),
                                                 ),
                                         ),
@@ -5195,213 +5327,274 @@ class _TasksScreenState extends State<TasksScreen>
                                       const SizedBox(width: 12),
                                       Expanded(
                                         child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
+                                          crossAxisAlignment: CrossAxisAlignment.start,
                                           children: [
-                                            TextField(
-                                              controller:
-                                                  TextEditingController(
-                                                      text: m.text,
-                                                    )
-                                                    ..selection =
-                                                        TextSelection.collapsed(
-                                                          offset: m.text.length,
-                                                        ),
-                                              onChanged: (val) => m.text = val,
-                                              style: GoogleFonts.notoSansKr(
-                                                fontSize: 14,
-                                                fontWeight: FontWeight.w600,
-                                                color: m.done
-                                                    ? const Color(0xFFA0A0B0)
-                                                    : const Color(0xFF3D3A4E),
-                                                decoration: m.done
-                                                    ? TextDecoration.lineThrough
-                                                    : null,
-                                              ),
-                                              decoration: InputDecoration(
-                                                hintText: '단계 목표 입력...',
-                                                hintStyle:
-                                                    GoogleFonts.notoSansKr(
-                                                      color: const Color(
-                                                        0xFFA0A0B0,
-                                                      ),
+                                            Row(
+                                              crossAxisAlignment: CrossAxisAlignment.center,
+                                              children: [
+                                                Expanded(
+                                                  child: TextField(
+                                                    controller: TextEditingController(text: m.text)
+                                                      ..selection = TextSelection.collapsed(offset: m.text.length),
+                                                    onChanged: (val) => m.text = val,
+                                                    style: GoogleFonts.notoSansKr(
+                                                      fontSize: 14,
+                                                      fontWeight: FontWeight.w600,
+                                                      color: const Color(0xFF3D3A4E),
+                                                      decoration: TextDecoration.none,
                                                     ),
-                                                border: InputBorder.none,
-                                                isDense: true,
-                                                contentPadding: EdgeInsets.zero,
-                                              ),
-                                            ),
-                                            const SizedBox(height: 8),
-                                            GestureDetector(
-                                              onTap: () async {
-                                                final picked = await showDatePicker(
-                                                  context: context,
-                                                  initialDate:
-                                                      m.date != null &&
-                                                          m.date!.isNotEmpty
-                                                      ? DateTime.tryParse(
-                                                              m.date!,
-                                                            ) ??
-                                                            DateTime.now()
-                                                      : DateTime.now(),
-                                                  firstDate: DateTime(2000),
-                                                  lastDate: DateTime(2050),
-                                                  builder: (context, child) {
-                                                    return Theme(
-                                                      data: Theme.of(context).copyWith(
-                                                        colorScheme:
-                                                            ColorScheme.light(
-                                                              primary: _coach
-                                                                  .accentColor,
-                                                              onPrimary:
-                                                                  Colors.white,
-                                                              onSurface:
-                                                                  const Color(
-                                                                    0xFF3D3A4E,
-                                                                  ),
-                                                            ),
-                                                        textButtonTheme:
-                                                            TextButtonThemeData(
-                                                              style: TextButton.styleFrom(
-                                                                foregroundColor:
-                                                                    _coach
-                                                                        .accentColor,
-                                                              ),
-                                                            ),
-                                                      ),
-                                                      child: child!,
-                                                    );
-                                                  },
-                                                );
-                                                if (picked != null) {
-                                                  setModalState(() {
-                                                    m.date =
-                                                        "${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}";
-                                                  });
-                                                }
-                                              },
-                                              child: Container(
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                      horizontal: 10,
-                                                      vertical: 4,
-                                                    ),
-                                                decoration: BoxDecoration(
-                                                  color: Colors.white,
-                                                  borderRadius:
-                                                      BorderRadius.circular(12),
-                                                  border: Border.all(
-                                                    color: const Color(
-                                                      0xFFE8E3F8,
+                                                    decoration: InputDecoration(
+                                                      hintText: '단계 목표 입력...',
+                                                      hintStyle: GoogleFonts.notoSansKr(color: const Color(0xFFA0A0B0)),
+                                                      border: InputBorder.none,
+                                                      isDense: true,
+                                                      contentPadding: EdgeInsets.zero,
                                                     ),
                                                   ),
                                                 ),
-                                                child: Row(
-                                                  mainAxisSize:
-                                                      MainAxisSize.min,
-                                                  children: [
-                                                    const Icon(
-                                                      Icons.calendar_month,
-                                                      color: Color(0xFF8B7CFF),
-                                                      size: 14,
+                                                if (m.done) ...[
+                                                  const SizedBox(width: 8),
+                                                  Container(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                    decoration: BoxDecoration(
+                                                      color: const Color(0xFFDFF8EE),
+                                                      borderRadius: BorderRadius.circular(12),
                                                     ),
-                                                    const SizedBox(width: 4),
-                                                    Text(
-                                                      m.date != null &&
-                                                              m.date!.isNotEmpty
-                                                          ? m.date!
-                                                          : '기한 선택',
-                                                      style: GoogleFonts.notoSansKr(
-                                                        fontSize: 12,
-                                                        fontWeight:
-                                                            FontWeight.w700,
-                                                        color:
-                                                            m.date != null &&
-                                                                m
-                                                                    .date!
-                                                                    .isNotEmpty
-                                                            ? const Color(
-                                                                0xFF8B7CFF,
-                                                              )
-                                                            : const Color(
-                                                                0xFFA0A0B0,
-                                                              ),
-                                                      ),
+                                                    child: Row(
+                                                      mainAxisSize: MainAxisSize.min,
+                                                      children: [
+                                                        const Icon(Icons.check, size: 12, color: Color(0xFF33A883)),
+                                                        const SizedBox(width: 2),
+                                                        Text(
+                                                          '완료',
+                                                          style: GoogleFonts.notoSansKr(
+                                                            fontSize: 11,
+                                                            fontWeight: FontWeight.bold,
+                                                            color: const Color(0xFF33A883),
+                                                          ),
+                                                        ),
+                                                      ],
                                                     ),
-                                                  ],
+                                                  ),
+                                                ],
+                                                const SizedBox(width: 8),
+                                                GestureDetector(
+                                                  onTap: () {
+                                                    setModalState(() {
+                                                      milestones.removeAt(i);
+                                                    });
+                                                  },
+                                                  child: const Icon(
+                                                    Icons.more_vert,
+                                                    color: Color(0xFF9CA3AF),
+                                                    size: 18,
+                                                  ),
                                                 ),
-                                              ),
+                                              ],
                                             ),
                                             const SizedBox(height: 8),
-                                            // 완료 토글 버튼
+                                            if (!m.done)
+                                              GestureDetector(
+                                                onTap: () async {
+                                                  final picked = await showDatePicker(
+                                                    context: context,
+                                                    initialDate:
+                                                        m.date != null &&
+                                                                m.date!.isNotEmpty
+                                                            ? DateTime.tryParse(
+                                                                    m.date!,
+                                                                  ) ??
+                                                                  DateTime.now()
+                                                            : DateTime.now(),
+                                                    firstDate: DateTime(2000),
+                                                    lastDate: DateTime(2050),
+                                                    builder: (context, child) {
+                                                      return Theme(
+                                                        data: Theme.of(context).copyWith(
+                                                          colorScheme:
+                                                              ColorScheme.light(
+                                                                primary: _coach
+                                                                    .accentColor,
+                                                                onPrimary:
+                                                                    Colors.white,
+                                                                onSurface:
+                                                                    const Color(
+                                                                      0xFF3D3A4E,
+                                                                    ),
+                                                              ),
+                                                          textButtonTheme:
+                                                              TextButtonThemeData(
+                                                                style: TextButton.styleFrom(
+                                                                  foregroundColor:
+                                                                      _coach
+                                                                          .accentColor,
+                                                                ),
+                                                              ),
+                                                        ),
+                                                        child: child!,
+                                                      );
+                                                    },
+                                                  );
+                                                  if (picked != null) {
+                                                    setModalState(() {
+                                                      m.date =
+                                                          "${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}";
+                                                    });
+                                                  }
+                                                },
+                                                child: Container(
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
+                                                        horizontal: 10,
+                                                        vertical: 4,
+                                                      ),
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.white,
+                                                    borderRadius:
+                                                        BorderRadius.circular(12),
+                                                    border: Border.all(
+                                                      color: const Color(
+                                                        0xFFE8E3F8,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  child: Row(
+                                                    mainAxisSize:
+                                                        MainAxisSize.min,
+                                                    children: [
+                                                      const Icon(
+                                                        Icons.calendar_month,
+                                                        color: Color(0xFF8B7CFF),
+                                                        size: 14,
+                                                      ),
+                                                      const SizedBox(width: 4),
+                                                      Text(
+                                                        m.date != null &&
+                                                                m.date!.isNotEmpty
+                                                            ? m.date!
+                                                            : '기한 선택',
+                                                        style: GoogleFonts.notoSansKr(
+                                                          fontSize: 12,
+                                                          fontWeight:
+                                                              FontWeight.w700,
+                                                          color:
+                                                              m.date != null &&
+                                                                  m
+                                                                      .date!
+                                                                      .isNotEmpty
+                                                              ? const Color(
+                                                                  0xFF8B7CFF,
+                                                                )
+                                                              : const Color(
+                                                                  0xFFA0A0B0,
+                                                                ),
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              )
+                                            else if (m.achievedDate != null)
+                                              Row(
+                                                children: [
+                                                  const Icon(Icons.calendar_month, size: 14, color: Color(0xFF5AD7B0)),
+                                                  const SizedBox(width: 4),
+                                                  Text(
+                                                    '${m.achievedDate} 달성 완료',
+                                                    style: GoogleFonts.notoSansKr(
+                                                      fontSize: 12,
+                                                      color: const Color(0xFF6B7280),
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 4),
+                                                  const Icon(Icons.pets, size: 12, color: Color(0xFF8B7CFF)),
+                                                ],
+                                              ),
+                                            
+                                            if (m.done) ...[
+                                              const SizedBox(height: 12),
+                                              const Divider(color: Color(0xFFDFF8EE), height: 1, thickness: 1),
+                                              const SizedBox(height: 12),
+                                              Row(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  const Text('🎉', style: TextStyle(fontSize: 18)),
+                                                  const SizedBox(width: 8),
+                                                  Expanded(
+                                                    child: Column(
+                                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                                      children: [
+                                                        Text(
+                                                          '목표 달성을 축하해요!',
+                                                          style: GoogleFonts.notoSansKr(
+                                                            fontSize: 13,
+                                                            fontWeight: FontWeight.bold,
+                                                            color: const Color(0xFF3D3A4E),
+                                                          ),
+                                                        ),
+                                                        const SizedBox(height: 2),
+                                                        Text(
+                                                          '오늘의 작은 성취가 미래의 큰 변화를 만들어요.',
+                                                          style: GoogleFonts.notoSansKr(
+                                                            fontSize: 12,
+                                                            color: const Color(0xFF6B7280),
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                              const SizedBox(height: 12),
+                                            ],
+                                            if (!m.done)
+                                              const SizedBox(height: 8),
+                                            
                                             GestureDetector(
                                               onTap: () {
                                                 setModalState(() {
                                                   m.done = !m.done;
+                                                  if (m.done) {
+                                                    final now = DateTime.now();
+                                                    m.achievedDate = "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
+                                                  } else {
+                                                    m.achievedDate = null;
+                                                  }
                                                 });
                                               },
                                               child: Container(
                                                 width: double.infinity,
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                      vertical: 8,
-                                                    ),
+                                                padding: const EdgeInsets.symmetric(vertical: 8),
                                                 decoration: BoxDecoration(
-                                                  color: m.done
-                                                      ? const Color(0xFFF5F0FF)
-                                                      : const Color(0xFFF9FAFB),
-                                                  borderRadius:
-                                                      BorderRadius.circular(10),
+                                                  color: m.done ? Colors.transparent : const Color(0xFFF9FAFB),
+                                                  borderRadius: BorderRadius.circular(10),
                                                   border: Border.all(
-                                                    color: m.done
-                                                        ? const Color(
-                                                            0xFF8B5CF6,
-                                                          )
-                                                        : const Color(
-                                                            0xFFE5E7EB,
-                                                          ),
-                                                    width: 1.5,
+                                                    color: m.done ? const Color(0xFF5AD7B0) : const Color(0xFFE5E7EB),
+                                                    width: m.done ? 1.0 : 1.5,
                                                   ),
                                                 ),
                                                 child: Row(
-                                                  mainAxisAlignment:
-                                                      MainAxisAlignment.center,
+                                                  mainAxisAlignment: MainAxisAlignment.center,
                                                   children: [
+                                                    Icon(
+                                                      m.done ? Icons.refresh : Icons.radio_button_unchecked,
+                                                      size: 16,
+                                                      color: m.done ? const Color(0xFF33A883) : const Color(0xFF9CA3AF),
+                                                    ),
+                                                    const SizedBox(width: 4),
                                                     Text(
-                                                      m.done
-                                                          ? '✅ 완료됨'
-                                                          : '○ 완료 표시',
-                                                      style:
-                                                          GoogleFonts.notoSansKr(
-                                                            fontSize: 13,
-                                                            fontWeight:
-                                                                FontWeight.w700,
-                                                            color: m.done
-                                                                ? const Color(
-                                                                    0xFF7C3AED,
-                                                                  )
-                                                                : const Color(
-                                                                    0xFF9CA3AF,
-                                                                  ),
-                                                          ),
+                                                      m.done ? '완료 취소 (다시 진행 중으로)' : '완료 표시',
+                                                      style: GoogleFonts.notoSansKr(
+                                                        fontSize: m.done ? 12 : 13,
+                                                        fontWeight: FontWeight.w700,
+                                                        color: m.done ? const Color(0xFF33A883) : const Color(0xFF9CA3AF),
+                                                      ),
                                                     ),
                                                   ],
                                                 ),
                                               ),
                                             ),
                                           ],
-                                        ),
-                                      ),
-                                      GestureDetector(
-                                        onTap: () {
-                                          setModalState(() {
-                                            milestones.removeAt(i);
-                                          });
-                                        },
-                                        child: const Icon(
-                                          Icons.close,
-                                          color: Color(0xFFD1D5DB),
-                                          size: 18,
                                         ),
                                       ),
                                     ],
@@ -6007,113 +6200,233 @@ class _TasksScreenState extends State<TasksScreen>
     _saveSchedules();
   }
 
-  Widget _buildScheduleTab() {
-    final isVacation = vacationInfo != null;
+  List<MilestoneWithVision> _getMilestonesForDay(DateTime day) {
+    final list = <MilestoneWithVision>[];
+    final dateStr = _dateKey(day);
+    for (final v in visions) {
+      for (final m in v.milestones) {
+        if (m.date == dateStr) {
+          list.add(MilestoneWithVision(m, v));
+        }
+      }
+    }
+    return list;
+  }
+
+  Widget _buildCalendarCell(DateTime day, {required bool isSelected, required bool isToday, required bool isOutside}) {
+    final dateStr = _dateKey(day);
+    final hasEvents = schedules[dateStr]?.isNotEmpty ?? false;
+    final dayMilestones = _getMilestonesForDay(day);
+    final hasMilestones = dayMilestones.isNotEmpty;
+
+    // Style text
+    TextStyle textStyle;
+    if (isSelected) {
+      textStyle = GoogleFonts.notoSansKr(
+        fontSize: 12,
+        color: Colors.white,
+        fontWeight: FontWeight.w700,
+      );
+    } else if (isToday) {
+      textStyle = GoogleFonts.notoSansKr(
+        fontSize: 12,
+        color: const Color(0xFF3D3A4E),
+        fontWeight: FontWeight.w700,
+      );
+    } else if (isOutside) {
+      textStyle = GoogleFonts.notoSansKr(
+        fontSize: 12,
+        color: const Color(0xFFCCCCCC),
+      );
+    } else if (day.weekday == DateTime.saturday || day.weekday == DateTime.sunday) {
+      textStyle = GoogleFonts.notoSansKr(
+        fontSize: 12,
+        color: const Color(0xFFE05C5C),
+      );
+    } else {
+      textStyle = GoogleFonts.notoSansKr(
+        fontSize: 12,
+        color: const Color(0xFF3D3A4E),
+      );
+    }
+
+    // Decoration
+    BoxDecoration? decoration;
+    if (isSelected) {
+      decoration = BoxDecoration(
+        color: _coach.accentColor,
+        shape: BoxShape.circle,
+      );
+    } else if (isToday) {
+      decoration = BoxDecoration(
+        color: _coach.accentColor.withOpacity(0.3),
+        shape: BoxShape.circle,
+      );
+    }
+
     return Container(
-      color: isVacation ? Colors.transparent : Colors.white,
-      child: SingleChildScrollView(
-        child: Column(
-          children: [
-            Container(
-              color: Colors.white,
-              padding: const EdgeInsets.only(bottom: 8),
-              child: TableCalendar(
-                locale: 'ko_KR',
-                calendarFormat: CalendarFormat.month,
-                rowHeight: 28,
-                daysOfWeekHeight: 24,
-                firstDay: DateTime.utc(2020, 1, 1),
-                lastDay: DateTime.utc(2050, 12, 31),
-                focusedDay: _calFocusedDay,
-                selectedDayPredicate: (day) => isSameDay(_calSelectedDay, day),
-                onDaySelected: (selectedDay, focusedDay) {
-                  setState(() {
-                    _calSelectedDay = selectedDay;
-                    _calFocusedDay = focusedDay;
-                  });
-                },
-                eventLoader: (day) {
-                  return schedules[_dateKey(day)] ?? [];
-                },
-                calendarStyle: CalendarStyle(
-                  cellMargin: const EdgeInsets.all(2),
-                  markerSize: 4,
-                  markerDecoration: BoxDecoration(
-                    color: _coach.accentColor,
-                    shape: BoxShape.circle,
-                  ),
-                  selectedDecoration: BoxDecoration(
-                    color: _coach.accentColor,
-                    shape: BoxShape.circle,
-                  ),
-                  todayDecoration: BoxDecoration(
-                    color: _coach.accentColor.withOpacity(0.3),
-                    shape: BoxShape.circle,
-                  ),
-                  defaultTextStyle: GoogleFonts.notoSansKr(fontSize: 12),
-                  weekendTextStyle: GoogleFonts.notoSansKr(
-                    fontSize: 12,
-                    color: const Color(0xFFE05C5C),
-                  ),
-                  outsideTextStyle: GoogleFonts.notoSansKr(
-                    fontSize: 12,
-                    color: const Color(0xFFCCCCCC),
-                  ),
-                  selectedTextStyle: GoogleFonts.notoSansKr(
-                    fontSize: 12,
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700,
-                  ),
-                  todayTextStyle: GoogleFonts.notoSansKr(
-                    fontSize: 12,
-                    color: const Color(0xFF3D3A4E),
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                daysOfWeekStyle: DaysOfWeekStyle(
-                  weekdayStyle: GoogleFonts.notoSansKr(
-                    fontSize: 11,
-                    color: const Color(0xFF9CA3AF),
-                  ),
-                  weekendStyle: GoogleFonts.notoSansKr(
-                    fontSize: 11,
-                    color: const Color(0xFFE05C5C),
-                  ),
-                ),
-                headerStyle: HeaderStyle(
-                  formatButtonVisible: false,
-                  titleCentered: true,
-                  headerPadding: const EdgeInsets.symmetric(vertical: 6),
-                  titleTextStyle: GoogleFonts.notoSansKr(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: const Color(0xFF3D3A4E),
-                  ),
-                  leftChevronIcon: const Icon(
-                    Icons.chevron_left,
-                    size: 20,
-                    color: Color(0xFF6B7280),
-                  ),
-                  rightChevronIcon: const Icon(
-                    Icons.chevron_right,
-                    size: 20,
-                    color: Color(0xFF6B7280),
-                  ),
+      margin: const EdgeInsets.all(2),
+      alignment: Alignment.center,
+      decoration: decoration,
+      child: Stack(
+        alignment: Alignment.center,
+        clipBehavior: Clip.none,
+        children: [
+          Text('${day.day}', style: textStyle),
+          if (hasMilestones)
+            Positioned(
+              top: -6,
+              right: -6,
+              child: Icon(
+                dayMilestones.every((m) => m.milestone.done)
+                    ? Icons.diamond
+                    : Icons.flag,
+                size: 10,
+                color: const Color(0xFFC084FC), // 연보라색
+              ),
+            ),
+          if (hasEvents)
+            Positioned(
+              bottom: -4,
+              child: Container(
+                width: 4,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: isSelected ? Colors.white : _coach.accentColor,
+                  shape: BoxShape.circle,
                 ),
               ),
             ),
-            _buildScheduleList(),
-          ],
-        ),
+        ],
       ),
     );
   }
 
-  Widget _buildScheduleList() {
+  Widget _buildScheduleTab() {
+    final isVacation = vacationInfo != null;
+    return Container(
+      color: isVacation ? Colors.transparent : Colors.white,
+      child: Column(
+        children: [
+          // 상단: 달력
+          Container(
+            color: Colors.white,
+            padding: const EdgeInsets.only(bottom: 8),
+            child: TableCalendar(
+              locale: 'ko_KR',
+              calendarFormat: CalendarFormat.month,
+              rowHeight: 28,
+              daysOfWeekHeight: 24,
+              firstDay: DateTime.utc(2020, 1, 1),
+              lastDay: DateTime.utc(2050, 12, 31),
+              focusedDay: _calFocusedDay,
+              selectedDayPredicate: (day) => isSameDay(_calSelectedDay, day),
+              onDaySelected: (selectedDay, focusedDay) {
+                setState(() {
+                  _calSelectedDay = selectedDay;
+                  _calFocusedDay = focusedDay;
+                });
+              },
+              eventLoader: (day) {
+                return schedules[_dateKey(day)] ?? [];
+              },
+              calendarBuilders: CalendarBuilders(
+                defaultBuilder: (context, day, focusedDay) =>
+                    _buildCalendarCell(day, isSelected: false, isToday: false, isOutside: false),
+                selectedBuilder: (context, day, focusedDay) =>
+                    _buildCalendarCell(day, isSelected: true, isToday: false, isOutside: false),
+                todayBuilder: (context, day, focusedDay) =>
+                    _buildCalendarCell(day, isSelected: false, isToday: true, isOutside: false),
+                outsideBuilder: (context, day, focusedDay) =>
+                    _buildCalendarCell(day, isSelected: false, isToday: false, isOutside: true),
+              ),
+              calendarStyle: CalendarStyle(
+                cellMargin: const EdgeInsets.all(2),
+                markerSize: 4,
+                markerDecoration: BoxDecoration(
+                  color: _coach.accentColor,
+                  shape: BoxShape.circle,
+                ),
+                selectedDecoration: BoxDecoration(
+                  color: _coach.accentColor,
+                  shape: BoxShape.circle,
+                ),
+                todayDecoration: BoxDecoration(
+                  color: _coach.accentColor.withOpacity(0.3),
+                  shape: BoxShape.circle,
+                ),
+                defaultTextStyle: GoogleFonts.notoSansKr(fontSize: 12),
+                weekendTextStyle: GoogleFonts.notoSansKr(
+                  fontSize: 12,
+                  color: const Color(0xFFE05C5C),
+                ),
+                outsideTextStyle: GoogleFonts.notoSansKr(
+                  fontSize: 12,
+                  color: const Color(0xFFCCCCCC),
+                ),
+                selectedTextStyle: GoogleFonts.notoSansKr(
+                  fontSize: 12,
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                ),
+                todayTextStyle: GoogleFonts.notoSansKr(
+                  fontSize: 12,
+                  color: const Color(0xFF3D3A4E),
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              daysOfWeekStyle: DaysOfWeekStyle(
+                weekdayStyle: GoogleFonts.notoSansKr(
+                  fontSize: 11,
+                  color: const Color(0xFF9CA3AF),
+                ),
+                weekendStyle: GoogleFonts.notoSansKr(
+                  fontSize: 11,
+                  color: const Color(0xFFE05C5C),
+                ),
+              ),
+              headerStyle: HeaderStyle(
+                formatButtonVisible: false,
+                titleCentered: true,
+                headerPadding: const EdgeInsets.symmetric(vertical: 6),
+                titleTextStyle: GoogleFonts.notoSansKr(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: const Color(0xFF3D3A4E),
+                ),
+                leftChevronIcon: const Icon(
+                  Icons.chevron_left,
+                  size: 20,
+                  color: Color(0xFF6B7280),
+                ),
+                rightChevronIcon: const Icon(
+                  Icons.chevron_right,
+                  size: 20,
+                  color: Color(0xFF6B7280),
+                ),
+              ),
+            ),
+          ),
+          // 중단: 일정 목록 (스크롤)
+          Expanded(
+            child: SingleChildScrollView(
+              child: _buildScheduleListOnly(),
+            ),
+          ),
+          // 하단: 일정 등록 영역 (고정)
+          _buildScheduleInputArea(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildScheduleListOnly() {
     final dateStr = _dateKey(_calSelectedDay);
     final daySch = schedules[dateStr] ?? [];
+    final dayMilestones = _getMilestonesForDay(_calSelectedDay);
 
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
@@ -6131,7 +6444,175 @@ class _TasksScreenState extends State<TasksScreen>
             ],
           ),
         ),
-        if (daySch.isEmpty)
+
+        // 마일스톤들 (맨 위에 렌더링)
+        if (dayMilestones.isNotEmpty) ...[
+          ListView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            itemCount: dayMilestones.length,
+            itemBuilder: (ctx, i) {
+              final m = dayMilestones[i];
+              final isDone = m.milestone.done;
+              return Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: isDone ? const Color(0xFFF8FCFA) : const Color(0xFFF3F0FF),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: isDone ? const Color(0xFFDFF8EE) : const Color(0xFFD8D0FA),
+                  ),
+                ),
+                child: Stack(
+                  children: [
+                    Row(
+                      children: [
+                        // 마일스톤 완료 체크 박스
+                        GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              m.milestone.done = !m.milestone.done;
+                              if (m.milestone.done) {
+                                final now = DateTime.now();
+                                m.milestone.achievedDate =
+                                    "${now.year}.${now.month.toString().padLeft(2, '0')}.${now.day.toString().padLeft(2, '0')}";
+                              } else {
+                                m.milestone.achievedDate = null;
+                              }
+                            });
+                            _saveVisions();
+                          },
+                          child: Container(
+                            width: 28,
+                            height: 28,
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              color: isDone ? const Color(0xFF5AD7B0) : Colors.white,
+                              border: Border.all(
+                                color: isDone ? const Color(0xFF5AD7B0) : const Color(0xFF8B7CFF),
+                                width: 1.5,
+                              ),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: isDone
+                                ? const Icon(
+                                    Icons.check,
+                                    color: Colors.white,
+                                    size: 16,
+                                  )
+                                : const Icon(
+                                    Icons.flag,
+                                    color: Color(0xFF8B7CFF),
+                                    size: 16,
+                                  ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        // 마일스톤 텍스트
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () {
+                              _showVisionModal(m.vision);
+                            },
+                            child: Container(
+                              color: Colors.transparent,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 6,
+                                          vertical: 2,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFE0E0FF),
+                                          borderRadius: BorderRadius.circular(4),
+                                        ),
+                                        child: Text(
+                                          '마일스톤',
+                                          style: GoogleFonts.notoSansKr(
+                                            fontSize: 9,
+                                            fontWeight: FontWeight.bold,
+                                            color: const Color(0xFF5A50E6),
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Expanded(
+                                        child: Text(
+                                          m.vision.name,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: GoogleFonts.notoSansKr(
+                                            fontSize: 11,
+                                            color: const Color(0xFF7C6EFA),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    m.milestone.text.isNotEmpty
+                                        ? m.milestone.text
+                                        : '단계 목표 없음',
+                                    style: GoogleFonts.notoSansKr(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: const Color(0xFF3D3A4E),
+                                      decoration: TextDecoration.none,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        if (isDone) ...[
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFDFF8EE),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.check, size: 12, color: Color(0xFF33A883)),
+                                const SizedBox(width: 4),
+                                Text(
+                                  '완료',
+                                  style: GoogleFonts.notoSansKr(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: const Color(0xFF33A883),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                        const SizedBox(width: 8),
+                        const Icon(
+                          Icons.chevron_right,
+                          color: Color(0xFFCCCCCC),
+                          size: 20,
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ],
+
+        // 일반 일정 목록
+        if (daySch.isEmpty && dayMilestones.isEmpty)
           Center(
             child: Padding(
               padding: const EdgeInsets.all(20),
@@ -6144,7 +6625,7 @@ class _TasksScreenState extends State<TasksScreen>
               ),
             ),
           )
-        else
+        else if (daySch.isNotEmpty)
           ListView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
@@ -6284,294 +6765,328 @@ class _TasksScreenState extends State<TasksScreen>
               );
             },
           ),
-        // 시간 설정 UI
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: ['single', 'range', 'duration'].map((t) {
-                  final labels = {
-                    'single': '특정 시간',
-                    'range': '시간 범위',
-                    'duration': '소요 시간',
-                  };
-                  final isActive = _schTimeType == t;
-                  final isLast = t == 'duration';
-                  return Expanded(
-                    child: GestureDetector(
-                      onTap: () => setState(() {
-                        _schTimeType = _schTimeType == t ? 'none' : t;
-                        if (t != 'duration') _schDuration = null;
-                      }),
+      ],
+    );
+  }
+
+  Widget _buildScheduleInputArea() {
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    final isKeyboardOpen = bottomInset > 0;
+    
+    // Bottom padding: when keyboard is open, pad by bottomInset.
+    // When keyboard is closed, pad by SafeArea bottom padding + some default padding (e.g. 16).
+    final double paddingBottom = isKeyboardOpen
+        ? bottomInset + 16
+        : (16.0 + MediaQuery.of(context).padding.bottom);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, -4),
+          ),
+        ],
+      ),
+      padding: EdgeInsets.fromLTRB(16, 10, 16, paddingBottom),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 시간 설정 UI
+          Row(
+            children: ['single', 'range', 'duration'].map((t) {
+              final labels = {
+                'single': '특정 시간',
+                'range': '시간 범위',
+                'duration': '소요 시간',
+              };
+              final isActive = _schTimeType == t;
+              final isLast = t == 'duration';
+              return Expanded(
+                child: GestureDetector(
+                  onTap: () => setState(() {
+                    _schTimeType = _schTimeType == t ? 'none' : t;
+                    if (t != 'duration') _schDuration = null;
+                  }),
+                  child: Container(
+                    margin: EdgeInsets.only(right: isLast ? 0 : 6),
+                    padding: const EdgeInsets.symmetric(vertical: 9),
+                    decoration: BoxDecoration(
+                      color: isActive
+                          ? _coach.accentColor.withOpacity(0.08)
+                          : Colors.white,
+                      border: Border.all(
+                        color: isActive
+                            ? _coach.accentColor
+                            : const Color(0xFFE5E7EB),
+                        width: 2,
+                      ),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      labels[t]!,
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.notoSansKr(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: isActive
+                            ? _coach.accentColor
+                            : const Color(0xFF9CA3AF),
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+          if (_schTimeType == 'single' || _schTimeType == 'range')
+            Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: Row(
+                children: [
+                  Text(
+                    _schTimeType == 'range' ? '시작: ' : '시간: ',
+                    style: GoogleFonts.notoSansKr(
+                      fontSize: 13,
+                      color: const Color(0xFF6B7280),
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: () async {
+                      final t = await showTimePicker(
+                        context: context,
+                        initialTime: _schStartTime ?? TimeOfDay.now(),
+                      );
+                      if (t != null) setState(() => _schStartTime = t);
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: const Color(0xFFE5E7EB)),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        _schStartTime != null
+                            ? _formatTime(_schStartTime!)
+                            : '선택',
+                        style: GoogleFonts.notoSansKr(
+                          fontSize: 13,
+                          color: _schStartTime != null
+                              ? _coach.accentColor
+                              : const Color(0xFFA0A0B0),
+                        ),
+                      ),
+                    ),
+                  ),
+                  if (_schTimeType == 'range') ...[
+                    const SizedBox(width: 8),
+                    Text(
+                      '~',
+                      style: GoogleFonts.notoSansKr(
+                        fontSize: 13,
+                        color: const Color(0xFF6B7280),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      '종료: ',
+                      style: GoogleFonts.notoSansKr(
+                        fontSize: 13,
+                        color: const Color(0xFF6B7280),
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: () async {
+                        final t = await showTimePicker(
+                          context: context,
+                          initialTime: _schEndTime ?? TimeOfDay.now(),
+                        );
+                        if (t != null) setState(() => _schEndTime = t);
+                      },
                       child: Container(
-                        margin: EdgeInsets.only(right: isLast ? 0 : 6),
-                        padding: const EdgeInsets.symmetric(vertical: 9),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
                         decoration: BoxDecoration(
-                          color: isActive
-                              ? _coach.accentColor.withOpacity(0.08)
-                              : Colors.white,
                           border: Border.all(
-                            color: isActive
-                                ? _coach.accentColor
-                                : const Color(0xFFE5E7EB),
-                            width: 2,
+                            color: const Color(0xFFE5E7EB),
                           ),
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(8),
                         ),
                         child: Text(
-                          labels[t]!,
-                          textAlign: TextAlign.center,
+                          _schEndTime != null
+                              ? _formatTime(_schEndTime!)
+                              : '선택',
                           style: GoogleFonts.notoSansKr(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: isActive
+                            fontSize: 13,
+                            color: _schEndTime != null
                                 ? _coach.accentColor
-                                : const Color(0xFF9CA3AF),
+                                : const Color(0xFFA0A0B0),
                           ),
                         ),
                       ),
                     ),
-                  );
-                }).toList(),
+                  ],
+                ],
               ),
-              if (_schTimeType == 'single' || _schTimeType == 'range')
-                Padding(
-                  padding: const EdgeInsets.only(top: 12),
-                  child: Row(
-                    children: [
-                      Text(
-                        _schTimeType == 'range' ? '시작: ' : '시간: ',
-                        style: GoogleFonts.notoSansKr(
-                          fontSize: 13,
-                          color: const Color(0xFF6B7280),
-                        ),
-                      ),
-                      GestureDetector(
-                        onTap: () async {
-                          final t = await showTimePicker(
-                            context: context,
-                            initialTime: _schStartTime ?? TimeOfDay.now(),
-                          );
-                          if (t != null) setState(() => _schStartTime = t);
-                        },
+            ),
+          if (_schTimeType == 'duration')
+            Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: ['10분', '15분', '30분', '1시간', '2시간', '3시간', '4시간+']
+                    .map((d) {
+                      final isActive = _schDuration == d;
+                      return GestureDetector(
+                        onTap: () => setState(() => _schDuration = d),
                         child: Container(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 10,
                             vertical: 6,
                           ),
                           decoration: BoxDecoration(
-                            border: Border.all(color: const Color(0xFFE5E7EB)),
+                            color: isActive
+                                ? const Color(0xFFFDF2F8)
+                                : Colors.white,
+                            border: Border.all(
+                              color: isActive
+                                  ? const Color(0xFFDB2777)
+                                  : const Color(0xFFE5E7EB),
+                            ),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text(
-                            _schStartTime != null
-                                ? _formatTime(_schStartTime!)
-                                : '선택',
+                            d,
                             style: GoogleFonts.notoSansKr(
                               fontSize: 13,
-                              color: _schStartTime != null
-                                  ? _coach.accentColor
-                                  : const Color(0xFFA0A0B0),
+                              color: isActive
+                                  ? const Color(0xFFDB2777)
+                                  : const Color(0xFF6B7280),
                             ),
                           ),
                         ),
-                      ),
-                      if (_schTimeType == 'range') ...[
-                        const SizedBox(width: 8),
-                        Text(
-                          '~',
-                          style: GoogleFonts.notoSansKr(
-                            fontSize: 13,
-                            color: const Color(0xFF6B7280),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          '종료: ',
-                          style: GoogleFonts.notoSansKr(
-                            fontSize: 13,
-                            color: const Color(0xFF6B7280),
-                          ),
-                        ),
-                        GestureDetector(
-                          onTap: () async {
-                            final t = await showTimePicker(
-                              context: context,
-                              initialTime: _schEndTime ?? TimeOfDay.now(),
-                            );
-                            if (t != null) setState(() => _schEndTime = t);
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 6,
-                            ),
-                            decoration: BoxDecoration(
-                              border: Border.all(
-                                color: const Color(0xFFE5E7EB),
-                              ),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              _schEndTime != null
-                                  ? _formatTime(_schEndTime!)
-                                  : '선택',
-                              style: GoogleFonts.notoSansKr(
-                                fontSize: 13,
-                                color: _schEndTime != null
-                                    ? _coach.accentColor
-                                    : const Color(0xFFA0A0B0),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              if (_schTimeType == 'duration')
-                Padding(
-                  padding: const EdgeInsets.only(top: 12),
-                  child: Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
-                    children: ['10분', '15분', '30분', '1시간', '2시간', '3시간', '4시간+']
-                        .map((d) {
-                          final isActive = _schDuration == d;
-                          return GestureDetector(
-                            onTap: () => setState(() => _schDuration = d),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 6,
-                              ),
-                              decoration: BoxDecoration(
-                                color: isActive
-                                    ? const Color(0xFFFDF2F8)
-                                    : Colors.white,
-                                border: Border.all(
-                                  color: isActive
-                                      ? const Color(0xFFDB2777)
-                                      : const Color(0xFFE5E7EB),
-                                ),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Text(
-                                d,
-                                style: GoogleFonts.notoSansKr(
-                                  fontSize: 13,
-                                  color: isActive
-                                      ? const Color(0xFFDB2777)
-                                      : const Color(0xFF6B7280),
-                                ),
-                              ),
-                            ),
-                          );
-                        })
-                        .toList(),
-                  ),
-                ),
-            ],
-          ),
-        ),
-        // 알림 토글 + 입력부
-        if (_isCoreReminderEnabledGlobally &&
-            (_schTimeType == 'single' || _schTimeType == 'range') &&
-            _schStartTime != null)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
-            child: GestureDetector(
-              onTap: () =>
-                  setState(() => _schReminderEnabled = !_schReminderEnabled),
-              child: Row(
-                children: [
-                  AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    width: 28,
-                    height: 28,
-                    decoration: BoxDecoration(
-                      color: _schReminderEnabled
-                          ? _coach.accentColor.withOpacity(0.12)
-                          : Colors.transparent,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      _schReminderEnabled
-                          ? Icons.notifications_active
-                          : Icons.notifications_none_outlined,
-                      size: 18,
-                      color: _schReminderEnabled
-                          ? _coach.accentColor
-                          : const Color(0xFFB0B0C8),
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    _schReminderEnabled ? '알림 켜짐 (핵심에 자동 추가)' : '알림 끄기',
-                    style: GoogleFonts.notoSansKr(
-                      fontSize: 12,
-                      color: _schReminderEnabled
-                          ? _coach.accentColor
-                          : const Color(0xFFB0B0C8),
-                      fontWeight: _schReminderEnabled
-                          ? FontWeight.w600
-                          : FontWeight.w400,
-                    ),
-                  ),
-                ],
+                      );
+                    })
+                    .toList(),
               ),
             ),
-          ),
-        Container(
-          padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
-          color: Colors.transparent,
-          child: Row(
-            children: [
-              Expanded(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFFDDD6FE)),
-                  ),
-                  child: TextField(
-                    controller: _schInputCtrl,
-                    style: GoogleFonts.notoSansKr(
-                      fontSize: 14,
-                      color: const Color(0xFF3D3A4E),
-                    ),
-                    decoration: InputDecoration(
-                      hintText: '일정 입력...',
-                      hintStyle: GoogleFonts.notoSansKr(
-                        color: const Color(0xFFA0A0B0),
+          // 알림 토글 + 입력부
+          if (_schTimeType == 'single' || _schTimeType == 'range')
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: GestureDetector(
+                onTap: () {
+                  if (!_isCoreReminderEnabledGlobally) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('설정에서 코치의 일정 알람을 켜주세요.'),
+                        duration: Duration(seconds: 2),
                       ),
-                      border: InputBorder.none,
-                      contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                    );
+                    return;
+                  }
+                  setState(() => _schReminderEnabled = !_schReminderEnabled);
+                },
+                child: Row(
+                  children: [
+                    AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      width: 28,
+                      height: 28,
+                      decoration: BoxDecoration(
+                        color: (_isCoreReminderEnabledGlobally && _schReminderEnabled)
+                            ? _coach.accentColor.withOpacity(0.12)
+                            : Colors.transparent,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        !_isCoreReminderEnabledGlobally
+                            ? Icons.notifications_off
+                            : (_schReminderEnabled
+                                ? Icons.notifications_active
+                                : Icons.notifications_none_outlined),
+                        size: 18,
+                        color: (_isCoreReminderEnabledGlobally && _schReminderEnabled)
+                            ? _coach.accentColor
+                            : const Color(0xFFB0B0C8),
+                      ),
                     ),
-                    onSubmitted: (v) => _addSchedule(),
-                  ),
+                    const SizedBox(width: 4),
+                    Text(
+                      !_isCoreReminderEnabledGlobally
+                          ? '알림 꺼짐'
+                          : (_schReminderEnabled ? '알림 켜짐 (자동 추가)' : '알림 끄기'),
+                      style: GoogleFonts.notoSansKr(
+                        fontSize: 12,
+                        color: (_isCoreReminderEnabledGlobally && _schReminderEnabled)
+                            ? _coach.accentColor
+                            : const Color(0xFFB0B0C8),
+                        fontWeight: (_isCoreReminderEnabledGlobally && _schReminderEnabled)
+                            ? FontWeight.w600
+                            : FontWeight.w400,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(width: 8),
-              GestureDetector(
-                onTap: _addSchedule,
-                child: Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: _coach.accentColor,
-                    borderRadius: BorderRadius.circular(12),
+            ),
+          Padding(
+            padding: const EdgeInsets.only(top: 10),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFDDD6FE)),
+                    ),
+                    child: TextField(
+                      controller: _schInputCtrl,
+                      style: GoogleFonts.notoSansKr(
+                        fontSize: 14,
+                        color: const Color(0xFF3D3A4E),
+                      ),
+                      decoration: InputDecoration(
+                        hintText: '일정 입력...',
+                        hintStyle: GoogleFonts.notoSansKr(
+                          color: const Color(0xFFA0A0B0),
+                        ),
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                      onSubmitted: (v) => _addSchedule(),
+                    ),
                   ),
-                  child: const Icon(Icons.add, color: Colors.white, size: 24),
                 ),
-              ),
-            ],
+                const SizedBox(width: 8),
+                GestureDetector(
+                  onTap: _addSchedule,
+                  child: Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: _coach.accentColor,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(Icons.add, color: Colors.white, size: 24),
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 class CoachConfig {
   final String id;
-  final String name;
+  final String _name;
   final String tier;
   final Color accentColor;
   final Color accentLight;
@@ -22,7 +22,7 @@ class CoachConfig {
 
   const CoachConfig({
     required this.id,
-    required this.name,
+    required String name,
     required this.tier,
     required this.accentColor,
     required this.accentLight,
@@ -35,7 +35,19 @@ class CoachConfig {
     this.flirtCore = const [],
     required this.systemPrompt,
     this.voiceCount = 0,
-  });
+    // ignore: prefer_initializing_formals
+  }) : _name = name;
+
+  String get name {
+    if (id == 'sec_male') {
+      final custom = CoachConfigs.customSecMaleName;
+      return (custom != null && custom.isNotEmpty) ? custom : _name;
+    } else if (id == 'sec_female') {
+      final custom = CoachConfigs.customSecFemaleName;
+      return (custom != null && custom.isNotEmpty) ? custom : _name;
+    }
+    return _name;
+  }
 
   bool get isMaster => tier == 'master';
   String get imagePath => 'assets/images/$id.png';
@@ -43,6 +55,9 @@ class CoachConfig {
 }
 
 class CoachConfigs {
+  static String? customSecMaleName;
+  static String? customSecFemaleName;
+
   static const Map<String, CoachConfig> all = {
     'cat': CoachConfig(
       id: 'cat',
@@ -443,7 +458,7 @@ class CoachConfigs {
       tier: 'master',
       accentColor: Color(0xFF1A1A2E),
       accentLight: Color(0xFFF0EEFF),
-      chips: ['오늘 브리핑해줘', '우선순위 정리해줘', '리마인드 설정해줘'],
+      chips: ['오늘 브리핑해줘', '우선순위 정리해줘', '일정 알람 설정해줘'],
       voiceCount: 5, // 목소리 파일 5개
       backFlirts: [
         '오셨네요. 밀린 일정 브리핑부터 시작할까요?',
@@ -540,6 +555,7 @@ class CoachConfigs {
 - 일정을 제안할 때는 반드시 '현재 시간'을 기준으로 비어있는 시간부터 순서대로 할 일을 배치한다. 특정 시간에 고정된 일정이 있다면, 현재 시간부터 그 고정 일정 전까지의 남는 시간에 다른 할 일들을 먼저 할 수 있도록 제안한다.
 - 완벽주의적이고 숨막히는 '정확한 시간 단위(예: 7시 30분부터 8시까지 A 하세요)' 배정은 가급적 피하고, 기존 루틴(저녁 식사, 기상 등)이나 앞선 일정에 이어붙이는 '흐름 위주의 제안'을 곁들인다.
 - 유저의 미완료 할 일을 기본적으로 모두 고려하여 흐름을 설계하되, 만약 남은 시간 대비 할 일이 물리적으로 너무 많다면 핵심(우선순위) 위주로 일정을 제안하고 덜 중요한 일은 무리하지 말고 내일로 미루거나 쪼개서 하도록 유도한다. 소요 시간이나 고정 시간을 바탕으로 대략적인 가이드라인만 가볍게 덧붙인다.
+- **[식사 시간 비워두기 규칙 (필수)]** 사용자가 별도로 식사 시간을 일정/할 일에 명시적으로 추가해 두지 않았더라도, 점심시간(12:00~13:00)과 저녁식사시간(18:00~19:00)에는 **절대로 어떠한 할 일도 배치하지 마십시오.** 이 두 시간대는 오직 식사와 휴식만을 위한 시간으로 완벽히 비워두어야 하며, 다른 할 일들은 13:00 이후 또는 19:00 이후로 밀어서 배치해야 합니다. (예: 점심시간(12시~1시)을 고려하겠다는 언급을 하면서 동시에 12:00~12:30 사이에 '청소' 등의 일을 하라고 스케줄을 제안하는 모순적인 행위는 절대로 금지됩니다. 청소는 13:00 이후나 다른 빈 시간으로 완전히 밀어 배치하십시오.)
 예시: "대표님, 지금 오전 시간부터 오후 7시 당근 거래 전까지 시간이 꽤 있습니다. 이 시간에 먼저 '운동'과 '글 피드백'을 해치우는 건 어떨까요? 그리고 7시에 거래 다녀오신 후 남은 일들을 가볍게 마무리하시면 딱 좋을 것 같습니다."
 
 [집중 타이머]
@@ -575,7 +591,7 @@ class CoachConfigs {
       tier: 'master',
       accentColor: Color(0xFFD4A017),
       accentLight: Color(0xFFFFF8E8),
-      chips: ['컨디션 체크해줘', '루틴 밸런스 봐줘', '부드러운 알림 설정'],
+      chips: ['컨디션 체크해줘', '루틴 밸런스 봐줘', '부드러운 알람 설정'],
       voiceCount: 5, // 목소리 파일 5개
       backFlirts: [
         '다시 오셨네요. 제가 도와드릴 일이 있을까요?',
@@ -668,6 +684,7 @@ class CoachConfigs {
 - 일정을 제안할 때는 반드시 '현재 시간'을 기준으로 비어있는 시간부터 순서대로 할 일을 배치한다. 특정 시간에 고정된 일정이 있다면, 현재 시간부터 그 고정 일정 전까지의 남는 시간에 다른 할 일들을 먼저 할 수 있도록 제안한다.
 - 완벽주의적이고 숨막히는 '정확한 시간 단위(예: 7시 30분부터 8시까지 A 하세요)' 배정은 가급적 피하고, 기존 루틴(저녁 식사, 기상 등)이나 앞선 일정에 이어붙이는 '흐름 위주의 제안'을 곁들인다.
 - 유저의 미완료 할 일을 기본적으로 모두 고려하여 흐름을 설계하되, 만약 남은 시간 대비 할 일이 물리적으로 너무 많다면 핵심(우선순위) 위주로 일정을 제안하고 덜 중요한 일은 무리하지 말고 내일로 미루거나 쪼개서 하도록 유도한다. 소요 시간이나 고정 시간을 바탕으로 대략적인 가이드라인만 가볍게 덧붙인다.
+- **[식사 시간 비워두기 규칙 (필수)]** 사용자가 별도로 식사 시간을 일정/할 일에 명시적으로 추가해 두지 않았더라도, 점심시간(12:00~13:00)과 저녁식사시간(18:00~19:00)에는 **절대로 어떠한 할 일도 배치하지 마십시오.** 이 두 시간대는 오직 식사와 휴식만을 위한 시간으로 완벽히 비워두어야 하며, 다른 할 일들은 13:00 이후 또는 19:00 이후로 밀어서 배치해야 합니다. (예: 점심시간(12시~1시)을 고려하겠다는 언급을 하면서 동시에 12:00~12:30 사이에 '청소' 등의 일을 하라고 스케줄을 제안하는 모순적인 행위는 절대로 금지됩니다. 청소는 13:00 이후나 다른 빈 시간으로 완전히 밀어 배치하십시오.)
 예시: "대표님, 지금 오전 시간부터 오후 7시 당근 거래 전까지 시간이 꽤 있습니다. 이 시간에 먼저 '운동'과 '글 피드백'을 해치우는 건 어떨까요? 그리고 7시에 거래 다녀오신 후 남은 일들을 가볍게 마무리하시면 딱 좋을 것 같습니다."
 
 [집중 타이머]
