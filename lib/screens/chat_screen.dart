@@ -2152,13 +2152,17 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   bool _isScheduleRegistrationCommand(String input) {
-    final cleaned = input.trim().replaceAll(RegExp(r'[.\s]+$'), '');
+    final cleaned = _cleanScheduleRegistrationInput(input);
     final suffixRegex = RegExp(r'\s*(등록해\s*줘요?|추가해\s*줘요?|등록해\s*달라|추가해\s*달라)$');
     return suffixRegex.hasMatch(cleaned);
   }
 
+  String _cleanScheduleRegistrationInput(String input) {
+    return input.trim().replaceAll(RegExp(r'[\s.。!！~〜]+$'), '');
+  }
+
   _ParsedScheduleRegistration _parseScheduleRegistration(String input) {
-    String cleaned = input.trim().replaceAll(RegExp(r'[.\s]+$'), '');
+    String cleaned = _cleanScheduleRegistrationInput(input);
     final suffixRegex = RegExp(r'\s*(등록해\s*줘요?|추가해\s*줘요?|등록해\s*달라|추가해\s*달라)$');
     cleaned = cleaned.replaceFirst(suffixRegex, '').trim();
 
