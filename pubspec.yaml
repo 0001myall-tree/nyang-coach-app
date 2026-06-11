@@ -53,6 +53,8 @@ dependencies:
   speech_to_text: ^7.4.0
   confetti: ^0.8.0
   home_widget: ^0.9.3
+  url_launcher: ^6.3.2
+  flutter_linkify: ^6.0.0
 
 dev_dependencies:
   flutter_test:

@@ -84,7 +84,7 @@
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:text="0개 남음"
-                android:textColor="#3A4660"
+                android:textColor="#C28A2E"
                 android:textSize="13sp"
                 android:textStyle="bold" />
 
@@ -92,7 +92,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="›"
-                android:textColor="#9AA4B8"
+                android:textColor="#D8A547"
                 android:textSize="16sp"
                 android:textStyle="bold" />
         </LinearLayout>
@@ -117,7 +117,7 @@
                 android:layout_width="24dp"
                 android:layout_height="24dp"
                 android:src="@drawable/ic_bookmark"
-                android:tint="#5C6B89"
+                android:tint="#C28A2E"
                 android:layout_marginBottom="2dp" />
 
             <TextView
@@ -125,7 +125,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="코치와 대화"
-                android:textColor="#5C6B89"
+                android:textColor="#C28A2E"
                 android:textSize="11sp"
                 android:textStyle="bold" />
         </LinearLayout>

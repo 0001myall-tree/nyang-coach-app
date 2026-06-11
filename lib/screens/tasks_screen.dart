@@ -2,9 +2,13 @@ import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/gestures.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:table_calendar/table_calendar.dart';
+import 'package:speech_to_text/speech_to_text.dart';
+import 'package:speech_to_text/speech_recognition_result.dart';
+import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'coach_config.dart';
 import '../services/memory_service.dart';
 import '../models/user_data.dart';
@@ -46,8 +50,8 @@ class TaskItem {
     this.timeStart,
     this.timeEnd,
     required this.createdAt,
-    this.completedAt,
     this.isReminderEnabled = true,
+    this.completedAt,
     this.deferredCount = 0,
   });
 
@@ -63,8 +67,8 @@ class TaskItem {
     if (timeStart != null) 'timeStart': timeStart,
     if (timeEnd != null) 'timeEnd': timeEnd,
     'createdAt': createdAt,
-    if (completedAt != null) 'completedAt': completedAt,
     'isReminderEnabled': isReminderEnabled,
+    if (completedAt != null) 'completedAt': completedAt,
     if (achievedCount != null) 'achievedCount': achievedCount,
     if (achievedDuration != null) 'achievedDuration': achievedDuration,
     'deferredCount': deferredCount,
@@ -82,8 +86,8 @@ class TaskItem {
     timeStart: j['timeStart'],
     timeEnd: j['timeEnd'],
     createdAt: j['createdAt'] ?? DateTime.now().toIso8601String(),
-    completedAt: j['completedAt'],
     isReminderEnabled: j['isReminderEnabled'] ?? true,
+    completedAt: j['completedAt'],
     deferredCount: j['deferredCount'] ?? 0,
   );
 }
@@ -115,6 +119,7 @@ class HabitItem {
   String? timeEnd;
   String? habitDuration;
   String createdAt;
+  bool isReminderEnabled;
 
   HabitItem({
     required this.id,
@@ -131,6 +136,7 @@ class HabitItem {
     this.timeEnd,
     this.habitDuration,
     required this.createdAt,
+    this.isReminderEnabled = true,
   });
 
   Map<String, dynamic> toJson() => {
@@ -148,6 +154,7 @@ class HabitItem {
     if (timeEnd != null) 'timeEnd': timeEnd,
     if (habitDuration != null) 'habitDuration': habitDuration,
     'createdAt': createdAt,
+    'isReminderEnabled': isReminderEnabled,
   };
 
   factory HabitItem.fromJson(Map<String, dynamic> j) => HabitItem(
@@ -165,6 +172,7 @@ class HabitItem {
     timeEnd: j['timeEnd'],
     habitDuration: j['habitDuration'],
     createdAt: j['createdAt'] ?? DateTime.now().toIso8601String(),
+    isReminderEnabled: j['isReminderEnabled'] ?? true,
   );
 }
 
@@ -202,7 +210,6 @@ class ScheduleItem {
     'duration': duration,
     'done': done,
     'createdAt': createdAt,
-    'isReminderEnabled': isReminderEnabled,
     'deferredCount': deferredCount,
   };
 
@@ -248,20 +255,23 @@ class MilestoneItem {
   bool done;
   String? date;
   String? achievedDate;
+  String? memo;
 
-  MilestoneItem({required this.text, this.done = false, this.date, this.achievedDate});
+  MilestoneItem({required this.text, this.done = false, this.date, this.achievedDate, this.memo});
 
   Map<String, dynamic> toJson() => {
         'text': text,
         'done': done,
         'date': date,
         'achievedDate': achievedDate,
+        'memo': memo,
       };
   factory MilestoneItem.fromJson(Map<String, dynamic> j) => MilestoneItem(
         text: j['text'],
         done: j['done'] ?? false,
         date: j['date'],
         achievedDate: j['achievedDate'],
+        memo: j['memo'],
       );
 }
 
@@ -379,6 +389,7 @@ class _TasksScreenState extends State<TasksScreen>
   bool _schReminderEnabled = false;
 
   String _todayTimeType = 'none'; // 'none', 'single', 'range', 'duration'
+  bool _todayReminderEnabled = true;
   TimeOfDay? _todayStartTime;
   TimeOfDay? _todayEndTime;
   String? _todayDuration;
@@ -429,6 +440,7 @@ class _TasksScreenState extends State<TasksScreen>
 
     setState(() {
       _isCoreReminderEnabledGlobally = coreEnabled;
+      _todayReminderEnabled = coreEnabled;
       if (rawTasks != null) {
         tasks = (jsonDecode(rawTasks) as List)
             .map((e) => TaskItem.fromJson(e))
@@ -488,6 +500,23 @@ class _TasksScreenState extends State<TasksScreen>
     if (widget.initialBottomSheet != null) {
       _openBottomSheet(widget.initialBottomSheet!);
     }
+  }
+
+  Future<bool> _checkCoreReminderEnabledGlobally() async {
+    final prefs = await SharedPreferences.getInstance();
+    final enabled = prefs.getBool('nyang_core_reminder_enabled') ?? false;
+    if (mounted && _isCoreReminderEnabledGlobally != enabled) {
+      setState(() {
+        _isCoreReminderEnabledGlobally = enabled;
+        if (!enabled) {
+          _todayReminderEnabled = false;
+          _schReminderEnabled = false;
+        } else {
+          _todayReminderEnabled = true;
+        }
+      });
+    }
+    return enabled;
   }
 
   void _openBottomSheet(String type) {
@@ -1308,10 +1337,12 @@ class _TasksScreenState extends State<TasksScreen>
       duration: durStr,
       done: false,
       createdAt: DateTime.now().toIso8601String(),
+      isReminderEnabled: _todayReminderEnabled,
     );
     setState(() {
       tasks.add(task);
       _todayTimeType = 'none';
+      _todayReminderEnabled = _isCoreReminderEnabledGlobally;
       _todayStartTime = null;
       _todayEndTime = null;
       _todayDuration = null;
@@ -1822,7 +1853,7 @@ class _TasksScreenState extends State<TasksScreen>
     TimeOfDay? moveEndTime = _parseStoredTime(task.timeEnd);
     String? moveDuration = task.duration;
     bool moveReminderEnabled =
-        task.category == 'schedule' && task.isReminderEnabled;
+        _isCoreReminderEnabledGlobally && task.category == 'schedule' && task.isReminderEnabled;
 
     showModalBottomSheet(
       context: context,
@@ -1962,11 +1993,12 @@ class _TasksScreenState extends State<TasksScreen>
                       Padding(
                         padding: const EdgeInsets.only(top: 8),
                         child: GestureDetector(
-                          onTap: () {
-                            if (!_isCoreReminderEnabledGlobally) {
+                          onTap: () async {
+                            final enabled = await _checkCoreReminderEnabledGlobally();
+                            if (!enabled) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
-                                  content: Text('설정에서 코치의 일정 알람을 켜주세요.'),
+                                  content: Text('설정에서 일정 알람을 켜주세요.'),
                                   duration: Duration(seconds: 2),
                                 ),
                               );
@@ -2125,6 +2157,7 @@ class _TasksScreenState extends State<TasksScreen>
 
   @override
   Widget build(BuildContext context) {
+    WidgetsBinding.instance.addPostFrameCallback((_) => _checkCoreReminderEnabledGlobally());
     final bool isVacation = vacationInfo != null;
 
     return Scaffold(
@@ -2318,14 +2351,15 @@ class _TasksScreenState extends State<TasksScreen>
             ),
           ),
           GestureDetector(
-            onTap: () {
-              if (!_isCoreReminderEnabledGlobally || c.time == null) {
+            onTap: () async {
+              final enabled = await _checkCoreReminderEnabledGlobally();
+              if (!enabled || c.time == null) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text(
-                      _isCoreReminderEnabledGlobally
+                      enabled
                           ? '시간이 지정된 일정만 리마인더를 받을 수 있습니다.'
-                          : '설정에서 코치의 일정 알람을 켜주세요.',
+                          : '설정에서 일정 알람을 켜주세요.',
                     ),
                     duration: const Duration(seconds: 2),
                     backgroundColor: const Color(0xFF1A1A2E),
@@ -2626,17 +2660,17 @@ class _TasksScreenState extends State<TasksScreen>
                                   ),
                                   if (isSelected)
                                     GestureDetector(
-                                      onTap: () {
-                                        if (!_isCoreReminderEnabledGlobally ||
-                                            t.time == null) {
+                                      onTap: () async {
+                                        final enabled = await _checkCoreReminderEnabledGlobally();
+                                        if (!enabled || t.time == null) {
                                           ScaffoldMessenger.of(
                                             context,
                                           ).showSnackBar(
                                             SnackBar(
                                               content: Text(
-                                                _isCoreReminderEnabledGlobally
+                                                enabled
                                                     ? '시간이 지정된 일정만 리마인더를 받을 수 있습니다.'
-                                                    : '설정에서 코치의 일정 알람을 켜주세요.',
+                                                    : '설정에서 일정 알람을 켜주세요.',
                                               ),
                                               duration: const Duration(
                                                 seconds: 2,
@@ -3600,9 +3634,12 @@ class _TasksScreenState extends State<TasksScreen>
     TimeOfDay? mStartTime;
     TimeOfDay? mEndTime;
     String? mDuration;
-    bool mReminderEnabled = (item is ScheduleItem)
-        ? item.isReminderEnabled
-        : false;
+    bool mReminderEnabled = _isCoreReminderEnabledGlobally &&
+        ((item is ScheduleItem)
+            ? item.isReminderEnabled
+            : (item is TaskItem)
+                ? item.isReminderEnabled
+                : false);
     final bool isScheduleItem = item is ScheduleItem;
 
     if (item.timeStart != null && item.timeEnd != null) {
@@ -3818,6 +3855,43 @@ class _TasksScreenState extends State<TasksScreen>
                               ),
                             ),
                           ],
+                          const SizedBox(width: 8),
+                          if (isScheduleItem || item is TaskItem)
+                            GestureDetector(
+                              onTap: () async {
+                                final enabled = await _checkCoreReminderEnabledGlobally();
+                                if (!enabled) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('설정에서 일정 알람을 켜주세요.'),
+                                      duration: Duration(seconds: 2),
+                                    ),
+                                  );
+                                  return;
+                                }
+                                setModalState(() => mReminderEnabled = !mReminderEnabled);
+                              },
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 200),
+                                width: 28,
+                                height: 28,
+                                decoration: BoxDecoration(
+                                  color: (_isCoreReminderEnabledGlobally && mReminderEnabled)
+                                      ? _coach.accentColor.withOpacity(0.12)
+                                      : Colors.transparent,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(
+                                  !_isCoreReminderEnabledGlobally
+                                      ? Icons.notifications_off
+                                      : (mReminderEnabled ? Icons.notifications_active : Icons.notifications_off),
+                                  size: 18,
+                                  color: (_isCoreReminderEnabledGlobally && mReminderEnabled)
+                                      ? _coach.accentColor
+                                      : const Color(0xFFB0B0C8),
+                                ),
+                              ),
+                            ),
                         ],
                       ),
                     ),
@@ -3956,6 +4030,8 @@ class _TasksScreenState extends State<TasksScreen>
                       }
 
                       if (isScheduleItem) {
+                        item.isReminderEnabled = mReminderEnabled;
+                      } else if (item is TaskItem) {
                         item.isReminderEnabled = mReminderEnabled;
                       }
 
@@ -4325,6 +4401,42 @@ class _TasksScreenState extends State<TasksScreen>
                               ),
                             ),
                           ],
+                          const SizedBox(width: 8),
+                          GestureDetector(
+                            onTap: () async {
+                              final enabled = await _checkCoreReminderEnabledGlobally();
+                              if (!enabled) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('설정에서 일정 알람을 켜주세요.'),
+                                    duration: Duration(seconds: 2),
+                                  ),
+                                );
+                                return;
+                              }
+                              setState(() => _todayReminderEnabled = !_todayReminderEnabled);
+                            },
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 200),
+                              width: 28,
+                              height: 28,
+                              decoration: BoxDecoration(
+                                color: (_isCoreReminderEnabledGlobally && _todayReminderEnabled)
+                                    ? _coach.accentColor.withOpacity(0.12)
+                                    : Colors.transparent,
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(
+                                !_isCoreReminderEnabledGlobally
+                                    ? Icons.notifications_off
+                                    : (_todayReminderEnabled ? Icons.notifications_active : Icons.notifications_off),
+                                size: 18,
+                                color: (_isCoreReminderEnabledGlobally && _todayReminderEnabled)
+                                    ? _coach.accentColor
+                                    : const Color(0xFFB0B0C8),
+                              ),
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -4916,6 +5028,30 @@ class _TasksScreenState extends State<TasksScreen>
     );
   }
 
+  void _showMemoDialog(
+    BuildContext context,
+    MilestoneItem milestone,
+    StateSetter setModalState,
+  ) {
+    final coach = CoachConfigs.get(widget.coachId);
+    
+    showDialog(
+      context: context,
+      builder: (dialogCtx) {
+        return MilestoneMemoDialog(
+          milestone: milestone,
+          coach: coach,
+          onSave: (newMemo) {
+            setModalState(() {
+              milestone.memo = newMemo;
+            });
+            _saveVisions();
+          },
+        );
+      },
+    );
+  }
+
   void _showVisionModal([VisionItem? vision]) {
     final isNew = vision == null;
     final nameCtrl = TextEditingController(text: vision?.name ?? '');
@@ -5380,14 +5516,30 @@ class _TasksScreenState extends State<TasksScreen>
                                                 const SizedBox(width: 8),
                                                 GestureDetector(
                                                   onTap: () {
+                                                    _showMemoDialog(context, m, setModalState);
+                                                  },
+                                                  child: const Padding(
+                                                    padding: EdgeInsets.only(top: 4.0, right: 10.0),
+                                                    child: Icon(
+                                                      Icons.note_alt_outlined,
+                                                      color: Color(0xFF8B7CFF),
+                                                      size: 20,
+                                                    ),
+                                                  ),
+                                                ),
+                                                GestureDetector(
+                                                  onTap: () {
                                                     setModalState(() {
                                                       milestones.removeAt(i);
                                                     });
                                                   },
-                                                  child: const Icon(
-                                                    Icons.more_vert,
-                                                    color: Color(0xFF9CA3AF),
-                                                    size: 18,
+                                                  child: const Padding(
+                                                    padding: EdgeInsets.only(top: 5.0),
+                                                    child: Icon(
+                                                      Icons.close,
+                                                      color: Color(0xFFD1D5DB),
+                                                      size: 18,
+                                                    ),
                                                   ),
                                                 ),
                                               ],
@@ -5510,7 +5662,32 @@ class _TasksScreenState extends State<TasksScreen>
                                                   const Icon(Icons.pets, size: 12, color: Color(0xFF8B7CFF)),
                                                 ],
                                               ),
-                                            
+                                            if (m.memo != null && m.memo!.isNotEmpty) ...[
+                                              const SizedBox(height: 8),
+                                              GestureDetector(
+                                                onTap: () {
+                                                  _showMemoDialog(context, m, setModalState);
+                                                },
+                                                child: Container(
+                                                  width: double.infinity,
+                                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                                  decoration: BoxDecoration(
+                                                    color: const Color(0xFFF3F4F6),
+                                                    borderRadius: BorderRadius.circular(8),
+                                                  ),
+                                                  child: Text(
+                                                    m.memo!,
+                                                    style: GoogleFonts.notoSansKr(
+                                                      fontSize: 13,
+                                                      fontWeight: FontWeight.w500,
+                                                      color: const Color(0xFF4B5563),
+                                                    ),
+                                                    maxLines: 2,
+                                                    overflow: TextOverflow.ellipsis,
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
                                             if (m.done) ...[
                                               const SizedBox(height: 12),
                                               const Divider(color: Color(0xFFDFF8EE), height: 1, thickness: 1),
@@ -6566,6 +6743,19 @@ class _TasksScreenState extends State<TasksScreen>
                                       decoration: TextDecoration.none,
                                     ),
                                   ),
+                                  if (m.milestone.memo != null && m.milestone.memo!.isNotEmpty) ...[
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      m.milestone.memo!,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: GoogleFonts.notoSansKr(
+                                        fontSize: 12,
+                                        color: const Color(0xFF6B7280),
+                                        height: 1.3,
+                                      ),
+                                    ),
+                                  ],
                                 ],
                               ),
                             ),
@@ -6934,6 +7124,42 @@ class _TasksScreenState extends State<TasksScreen>
                       ),
                     ),
                   ],
+                  const SizedBox(width: 8),
+                  GestureDetector(
+                    onTap: () async {
+                      final enabled = await _checkCoreReminderEnabledGlobally();
+                      if (!enabled) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('설정에서 일정 알람을 켜주세요.'),
+                            duration: Duration(seconds: 2),
+                          ),
+                        );
+                        return;
+                      }
+                      setState(() => _schReminderEnabled = !_schReminderEnabled);
+                    },
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      width: 28,
+                      height: 28,
+                      decoration: BoxDecoration(
+                        color: (_isCoreReminderEnabledGlobally && _schReminderEnabled)
+                            ? _coach.accentColor.withOpacity(0.12)
+                            : Colors.transparent,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        !_isCoreReminderEnabledGlobally
+                            ? Icons.notifications_off
+                            : (_schReminderEnabled ? Icons.notifications_active : Icons.notifications_off),
+                        size: 18,
+                        color: (_isCoreReminderEnabledGlobally && _schReminderEnabled)
+                            ? _coach.accentColor
+                            : const Color(0xFFB0B0C8),
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -6977,66 +7203,6 @@ class _TasksScreenState extends State<TasksScreen>
                       );
                     })
                     .toList(),
-              ),
-            ),
-          // 알림 토글 + 입력부
-          if (_schTimeType == 'single' || _schTimeType == 'range')
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: GestureDetector(
-                onTap: () {
-                  if (!_isCoreReminderEnabledGlobally) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('설정에서 코치의 일정 알람을 켜주세요.'),
-                        duration: Duration(seconds: 2),
-                      ),
-                    );
-                    return;
-                  }
-                  setState(() => _schReminderEnabled = !_schReminderEnabled);
-                },
-                child: Row(
-                  children: [
-                    AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      width: 28,
-                      height: 28,
-                      decoration: BoxDecoration(
-                        color: (_isCoreReminderEnabledGlobally && _schReminderEnabled)
-                            ? _coach.accentColor.withOpacity(0.12)
-                            : Colors.transparent,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(
-                        !_isCoreReminderEnabledGlobally
-                            ? Icons.notifications_off
-                            : (_schReminderEnabled
-                                ? Icons.notifications_active
-                                : Icons.notifications_none_outlined),
-                        size: 18,
-                        color: (_isCoreReminderEnabledGlobally && _schReminderEnabled)
-                            ? _coach.accentColor
-                            : const Color(0xFFB0B0C8),
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      !_isCoreReminderEnabledGlobally
-                          ? '알림 꺼짐'
-                          : (_schReminderEnabled ? '알림 켜짐 (자동 추가)' : '알림 끄기'),
-                      style: GoogleFonts.notoSansKr(
-                        fontSize: 12,
-                        color: (_isCoreReminderEnabledGlobally && _schReminderEnabled)
-                            ? _coach.accentColor
-                            : const Color(0xFFB0B0C8),
-                        fontWeight: (_isCoreReminderEnabledGlobally && _schReminderEnabled)
-                            ? FontWeight.w600
-                            : FontWeight.w400,
-                      ),
-                    ),
-                  ],
-                ),
               ),
             ),
           Padding(
@@ -7294,6 +7460,7 @@ class _TasksScreenState extends State<TasksScreen>
       );
     }
     String? mDuration = editHabit?.habitDuration;
+    bool mReminderEnabled = _isCoreReminderEnabledGlobally && (editHabit?.isReminderEnabled ?? true);
 
     final countCtrl = TextEditingController(
       text: editHabit?.countGoal?.toString() ?? '',
@@ -7615,6 +7782,42 @@ class _TasksScreenState extends State<TasksScreen>
                                   ),
                                 ),
                               ],
+                              const SizedBox(width: 8),
+                              GestureDetector(
+                                onTap: () async {
+                                  final enabled = await _checkCoreReminderEnabledGlobally();
+                                  if (!enabled) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text('설정에서 일정 알람을 켜주세요.'),
+                                        duration: Duration(seconds: 2),
+                                      ),
+                                    );
+                                    return;
+                                  }
+                                  setModalState(() => mReminderEnabled = !mReminderEnabled);
+                                },
+                                child: AnimatedContainer(
+                                  duration: const Duration(milliseconds: 200),
+                                  width: 28,
+                                  height: 28,
+                                  decoration: BoxDecoration(
+                                    color: (_isCoreReminderEnabledGlobally && mReminderEnabled)
+                                        ? _coach.accentColor.withOpacity(0.12)
+                                        : Colors.transparent,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Icon(
+                                    !_isCoreReminderEnabledGlobally
+                                        ? Icons.notifications_off
+                                        : (mReminderEnabled ? Icons.notifications_active : Icons.notifications_off),
+                                    size: 18,
+                                    color: (_isCoreReminderEnabledGlobally && mReminderEnabled)
+                                        ? _coach.accentColor
+                                        : const Color(0xFFB0B0C8),
+                                  ),
+                                ),
+                              ),
                             ],
                           ),
                         ),
@@ -7755,6 +7958,7 @@ class _TasksScreenState extends State<TasksScreen>
                       createdAt:
                           editHabit?.createdAt ??
                           DateTime.now().toIso8601String(),
+                      isReminderEnabled: mReminderEnabled,
                     );
 
                     setState(() {
@@ -7928,6 +8132,632 @@ class _TasksScreenState extends State<TasksScreen>
             fontSize: 12,
             fontWeight: FontWeight.w700,
             color: isActive ? _coach.accentColor : const Color(0xFFA0A0B0),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// 마일스톤 메모 프리미엄 다이얼로그
+// ─────────────────────────────────────────────────────────────
+class MilestoneMemoDialog extends StatefulWidget {
+  final MilestoneItem milestone;
+  final CoachConfig coach;
+  final Function(String?) onSave;
+
+  const MilestoneMemoDialog({
+    super.key,
+    required this.milestone,
+    required this.coach,
+    required this.onSave,
+  });
+
+  @override
+  State<MilestoneMemoDialog> createState() => _MilestoneMemoDialogState();
+}
+
+class _MilestoneMemoDialogState extends State<MilestoneMemoDialog> {
+  late TextEditingController _textCtrl;
+  final FocusNode _focusNode = FocusNode();
+  final SpeechToText _speechToText = SpeechToText();
+  bool _speechEnabled = false;
+  bool _isListening = false;
+  String _baseText = '';
+  TextSelection _baseSelection = const TextSelection.collapsed(offset: 0);
+  bool _isEditing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _textCtrl = TextEditingController(text: widget.milestone.memo ?? '');
+    _isEditing = widget.milestone.memo == null || widget.milestone.memo!.isEmpty;
+    _focusNode.addListener(_onFocusChange);
+    _initSpeech();
+  }
+
+  void _onFocusChange() {
+    if (mounted) setState(() {});
+  }
+
+  void _initSpeech() async {
+    try {
+      _speechEnabled = await _speechToText.initialize(
+        onStatus: (status) {
+          if (status == 'notListening' || status == 'done') {
+            if (mounted) setState(() => _isListening = false);
+          }
+        },
+        onError: (error) {
+          debugPrint("Speech error: $error");
+          if (mounted) {
+            setState(() => _isListening = false);
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('음성 인식 오류: ${error.errorMsg}')),
+            );
+          }
+        },
+      );
+      if (mounted) setState(() {});
+    } catch (e) {
+      debugPrint("Speech init error: $e");
+    }
+  }
+
+  void _startListening() async {
+    if (!_speechEnabled) {
+      _initSpeech();
+      return;
+    }
+    _baseText = _textCtrl.text;
+    _baseSelection = _textCtrl.selection;
+    await _speechToText.listen(
+      onResult: (result) {
+        if (mounted) {
+          setState(() {
+            final spoken = result.recognizedWords;
+            int start = _baseSelection.start;
+            int end = _baseSelection.end;
+            if (start < 0) {
+              start = _baseText.length;
+              end = _baseText.length;
+            }
+            final insertText = (_baseText.isNotEmpty && start > 0 && _baseText[start - 1] != ' ' ? ' ' : '') + spoken;
+            _textCtrl.text = _baseText.replaceRange(start, end, insertText);
+            _textCtrl.selection = TextSelection.collapsed(offset: start + insertText.length);
+          });
+        }
+      },
+      localeId: 'ko_KR',
+      cancelOnError: false,
+      partialResults: true,
+    );
+    setState(() => _isListening = true);
+  }
+
+  Future<void> _stopListening() async {
+    await _speechToText.stop();
+    if (mounted) setState(() => _isListening = false);
+  }
+
+  void _insertTextAtCursor(String textToInsert) {
+    final currentText = _textCtrl.text;
+    final selection = _textCtrl.selection;
+    int start = selection.start;
+    int end = selection.end;
+    if (start < 0) {
+      start = currentText.length;
+      end = currentText.length;
+    }
+    final newText = currentText.replaceRange(start, end, textToInsert);
+    _textCtrl.text = newText;
+    _textCtrl.selection = TextSelection.collapsed(offset: start + textToInsert.length);
+    setState(() {});
+  }
+
+  Future<void> _launchURL(String urlString) async {
+    try {
+      String normalized = urlString.trim();
+      if (!normalized.startsWith('http://') && !normalized.startsWith('https://')) {
+        normalized = 'https://$normalized';
+      }
+      final uri = WebUri(normalized);
+      await InAppBrowser.openWithSystemBrowser(url: uri);
+    } catch (e) {
+      debugPrint("Error launching URL: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('링크를 열 수 없습니다: $urlString')),
+      );
+    }
+  }
+
+  void _showLinkInsertDialog() {
+    final nameCtrl = TextEditingController();
+    final urlCtrl = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Text(
+            '링크 추가하기',
+            style: GoogleFonts.notoSansKr(
+              fontWeight: FontWeight.bold,
+              color: const Color(0xFF3D3A4E),
+            ),
+          ),
+          content: Form(
+            key: formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextFormField(
+                  controller: nameCtrl,
+                  decoration: InputDecoration(
+                    labelText: '링크 이름 (선택)',
+                    labelStyle: GoogleFonts.notoSansKr(color: const Color(0xFFA0A0B0)),
+                    focusedBorder: UnderlineInputBorder(
+                      borderSide: BorderSide(color: widget.coach.accentColor),
+                    ),
+                  ),
+                  style: GoogleFonts.notoSansKr(color: const Color(0xFF3D3A4E)),
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: urlCtrl,
+                  decoration: InputDecoration(
+                    labelText: '링크 주소 (URL)',
+                    labelStyle: GoogleFonts.notoSansKr(color: const Color(0xFFA0A0B0)),
+                    focusedBorder: UnderlineInputBorder(
+                      borderSide: BorderSide(color: widget.coach.accentColor),
+                    ),
+                  ),
+                  style: GoogleFonts.notoSansKr(color: const Color(0xFF3D3A4E)),
+                  validator: (val) {
+                    if (val == null || val.trim().isEmpty) {
+                      return 'URL을 입력해주세요.';
+                    }
+                    return null;
+                  },
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(
+                '취소',
+                style: GoogleFonts.notoSansKr(color: const Color(0xFF6B7280)),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                if (formKey.currentState!.validate()) {
+                  final name = nameCtrl.text.trim();
+                  final url = urlCtrl.text.trim();
+                  _insertTextAtCursor(name.isEmpty ? url : '[$name]($url)');
+                  Navigator.pop(ctx);
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: widget.coach.accentColor,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              child: const Text('추가', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildLinkableText(String text) {
+    final RegExp combinedRegex = RegExp(
+      r'\[([^\]]+)\]\((https?:\/\/[^\s\)]+)\)|(https?:\/\/[^\s\)]+)',
+      caseSensitive: false,
+    );
+    
+    final List<InlineSpan> spans = [];
+    int lastMatchEnd = 0;
+    
+    for (final match in combinedRegex.allMatches(text)) {
+      if (match.start > lastMatchEnd) {
+        spans.add(TextSpan(text: text.substring(lastMatchEnd, match.start)));
+      }
+      
+      if (match.group(1) != null) {
+        final label = match.group(1)!;
+        final url = match.group(2)!;
+        spans.add(
+          TextSpan(
+            text: label,
+            style: const TextStyle(
+              color: Color(0xFF8B7CFF),
+              decoration: TextDecoration.underline,
+              fontWeight: FontWeight.bold,
+            ),
+            recognizer: TapGestureRecognizer()..onTap = () => _launchURL(url),
+          ),
+        );
+      } else {
+        final url = match.group(3)!;
+        spans.add(
+          TextSpan(
+            text: url,
+            style: const TextStyle(
+              color: Color(0xFF8B7CFF),
+              decoration: TextDecoration.underline,
+            ),
+            recognizer: TapGestureRecognizer()..onTap = () => _launchURL(url),
+          ),
+        );
+      }
+      
+      lastMatchEnd = match.end;
+    }
+    
+    if (lastMatchEnd < text.length) {
+      spans.add(TextSpan(text: text.substring(lastMatchEnd)));
+    }
+    
+    return SelectableText.rich(
+      TextSpan(
+        children: spans,
+        style: GoogleFonts.notoSansKr(
+          fontSize: 14,
+          color: const Color(0xFF3D3A4E),
+          height: 1.5,
+        ),
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _focusNode.removeListener(_onFocusChange);
+    _speechToText.stop();
+    _textCtrl.dispose();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isTextEmpty = _textCtrl.text.trim().isEmpty;
+
+    return Dialog(
+      backgroundColor: Colors.white,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(24),
+      ),
+      child: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(20.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          widget.milestone.text.isNotEmpty ? widget.milestone.text : '마일스톤 메모',
+                          style: GoogleFonts.notoSansKr(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                            color: const Color(0xFF3D3A4E),
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            const Icon(
+                              Icons.calendar_today_outlined,
+                              size: 14,
+                              color: Color(0xFF8B7CFF),
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              widget.milestone.date ?? '기한 없음',
+                              style: GoogleFonts.notoSansKr(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: const Color(0xFF8B7CFF),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.more_horiz,
+                        color: Color(0xFFA0A0B0),
+                        size: 20,
+                      ),
+                      const SizedBox(width: 12),
+                      GestureDetector(
+                        onTap: () {
+                          final text = _textCtrl.text.trim();
+                          widget.onSave(text.isEmpty ? null : text);
+                          Navigator.pop(context);
+                        },
+                        child: const Icon(
+                          Icons.close,
+                          color: Color(0xFFA0A0B0),
+                          size: 20,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              // Main card panel
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF7F5FF), // Soft purple tint background
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Conditional Middle State (Empty or Text box)
+                    if (isTextEmpty && !_focusNode.hasFocus) ...[
+                      const SizedBox(height: 40),
+                      Text(
+                        '아이디어, 참고, 링크, 해야 할 일을\n말이나 글로 간단히 기록해보세요.',
+                        style: GoogleFonts.notoSansKr(
+                          fontSize: 13,
+                          color: const Color(0xFFA0A0B0),
+                          height: 1.5,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 40),
+                    ] else ...[
+                      // View mode or edit mode text container
+                      Container(
+                        width: double.infinity,
+                        constraints: const BoxConstraints(minHeight: 120, maxHeight: 240),
+                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                        child: SingleChildScrollView(
+                          child: _isEditing
+                              ? TextField(
+                                  controller: _textCtrl,
+                                  focusNode: _focusNode,
+                                  maxLines: null,
+                                  maxLength: 2000,
+                                  keyboardType: TextInputType.multiline,
+                                  autofocus: true,
+                                  style: GoogleFonts.notoSansKr(
+                                    fontSize: 14,
+                                    color: const Color(0xFF3D3A4E),
+                                    height: 1.5,
+                                  ),
+                                  decoration: const InputDecoration(
+                                    border: InputBorder.none,
+                                    counterText: '',
+                                    isDense: true,
+                                    contentPadding: EdgeInsets.zero,
+                                  ),
+                                  onChanged: (val) {
+                                    setState(() {});
+                                  },
+                                )
+                              : GestureDetector(
+                                  onTap: () {
+                                    setState(() {
+                                      _isEditing = true;
+                                    });
+                                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                                      _focusNode.requestFocus();
+                                    });
+                                  },
+                                  child: Container(
+                                    width: double.infinity,
+                                    color: Colors.transparent,
+                                    child: _buildLinkableText(_textCtrl.text),
+                                  ),
+                                ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          // Done / Toggle Edit Mode button
+                          GestureDetector(
+                            onTap: () {
+                              setState(() {
+                                _isEditing = !_isEditing;
+                                if (!_isEditing) {
+                                  _focusNode.unfocus();
+                                }
+                              });
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: _isEditing ? const Color(0xFF8B7CFF) : const Color(0xFFE5E7EB),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                _isEditing ? '완료' : '수정',
+                                style: GoogleFonts.notoSansKr(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  color: _isEditing ? Colors.white : const Color(0xFF6B7280),
+                                ),
+                              ),
+                            ),
+                          ),
+                          // Character count
+                          Text(
+                            '${_textCtrl.text.length} / 2000자',
+                            style: GoogleFonts.notoSansKr(
+                              fontSize: 11,
+                              color: _textCtrl.text.length > 2000 ? Colors.red : const Color(0xFFA0A0B0),
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+
+                    // White Input Bar at the bottom of the purple card
+                    Container(
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.02),
+                            blurRadius: 4,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: _textCtrl,
+                              maxLines: 1,
+                              focusNode: isTextEmpty && !_focusNode.hasFocus ? null : _focusNode,
+                              style: GoogleFonts.notoSansKr(
+                                fontSize: 14,
+                                color: const Color(0xFF3D3A4E),
+                              ),
+                              decoration: InputDecoration(
+                                hintText: '메모를 입력하세요...',
+                                hintStyle: GoogleFonts.notoSansKr(
+                                  fontSize: 14,
+                                  color: const Color(0xFFA0A0B0),
+                                ),
+                                border: InputBorder.none,
+                                isDense: true,
+                              ),
+                              onTap: () {
+                                if (isTextEmpty) {
+                                  setState(() {
+                                    _isEditing = true;
+                                  });
+                                }
+                              },
+                              onChanged: (val) {
+                                setState(() {});
+                              },
+                            ),
+                          ),
+                          // Microphone Button (Voice recognition)
+                          GestureDetector(
+                            onTap: () {
+                              if (_isListening) {
+                                _stopListening();
+                              } else {
+                                if (isTextEmpty) {
+                                  setState(() {
+                                    _isEditing = true;
+                                  });
+                                }
+                                _startListening();
+                              }
+                            },
+                            child: Container(
+                              width: 32,
+                              height: 32,
+                              decoration: BoxDecoration(
+                                color: _isListening
+                                    ? Colors.red.withOpacity(0.1)
+                                    : const Color(0xFFF5F3FF),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(
+                                _isListening ? Icons.mic : Icons.mic_none,
+                                size: 18,
+                                color: _isListening ? Colors.red : const Color(0xFF8B7CFF),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          // Link Button
+                          GestureDetector(
+                            onTap: () {
+                              if (isTextEmpty) {
+                                setState(() {
+                                  _isEditing = true;
+                                });
+                              }
+                              _showLinkInsertDialog();
+                            },
+                            child: Container(
+                              width: 32,
+                              height: 32,
+                              decoration: const BoxDecoration(
+                                color: Color(0xFFF5F3FF),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.link,
+                                size: 18,
+                                color: Color(0xFF8B7CFF),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              // Tip Text at the bottom
+              Center(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.lightbulb_outline,
+                      size: 14,
+                      color: Color(0xFF8B7CFF),
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      'TIP 음성으로 말하거나 링크를 추가할 수 있어요!',
+                      style: GoogleFonts.notoSansKr(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: const Color(0xFFA0A0B0),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
         ),
       ),
