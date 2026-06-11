@@ -16,6 +16,7 @@ import '../services/notification_service.dart';
 import '../services/tasks_sync_service.dart';
 import '../services/user_title_service.dart';
 import '../services/analytics_service.dart';
+import '../services/widget_sync_service.dart';
 
 // ─────────────────────────────────────────────────────────────
 // 데이터 모델 (웹앱 그대로)
@@ -998,8 +999,10 @@ class _TasksScreenState extends State<TasksScreen>
       jsonEncode(tasks.map((t) => t.toJson()).toList()),
     );
     await _saveTodayRecord();
+    await WidgetSyncService.syncFromStoredTasks();
     TasksSyncService.scheduleSyncToCloud();
   }
+
 
   Future<void> _saveTodayRecord() async {
     final prefs = await SharedPreferences.getInstance();
