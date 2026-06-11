@@ -105,6 +105,24 @@ class GoalItem {
       GoalItem(id: j['id'], text: j['text'], done: j['done'] ?? false);
 }
 
+class ParsedVoiceRegistration {
+  final String title;
+  final DateTime date;
+  final TimeOfDay? time;
+  final bool hasDate;
+  final bool hasTime;
+  final String rawSpeech;
+
+  ParsedVoiceRegistration({
+    required this.title,
+    required this.date,
+    this.time,
+    required this.hasDate,
+    required this.hasTime,
+    required this.rawSpeech,
+  });
+}
+
 class HabitItem {
   final dynamic id;
   String name;
@@ -379,6 +397,11 @@ class _TasksScreenState extends State<TasksScreen>
   Map<String, dynamic>? vacationInfo;
   double _resetHour = 3.0;
 
+  final SpeechToText _speechToText = SpeechToText();
+  bool _speechEnabled = false;
+  bool _isListeningToday = false;
+  bool _isListeningSchedule = false;
+
   DateTime _calFocusedDay = DateTime.now();
   DateTime _calSelectedDay = DateTime.now();
   final _schInputCtrl = TextEditingController();
@@ -412,6 +435,7 @@ class _TasksScreenState extends State<TasksScreen>
     _tabCtrl = TabController(length: 4, vsync: this);
     widget.controller?._attach(this);
     _loadAll();
+    _initSpeech();
   }
 
   @override
@@ -1301,6 +1325,54 @@ class _TasksScreenState extends State<TasksScreen>
     _saveTasks();
   }
 
+  // ── 자연어 시간 표현 추출 ─────────────────────────────────
+  ({String cleanText, TimeOfDay? time})? _parseNaturalLanguageTime(String input) {
+    // 오전/오후/아침/저녁/밤 + H시 (+ M분 또는 반)
+    final timeRegex = RegExp(
+      r'((?:오전|아침|오후|저녁|밤)\s*)?(\d{1,2})시(?:\s*(?:(\d{1,2})분|반))?(?:\s*(?:에|쯤|경|까지))?',
+    );
+    final match = timeRegex.firstMatch(input);
+    if (match == null) return null;
+
+    final prefix = (match.group(1) ?? '').replaceAll(RegExp(r'\s'), '');
+    final rawHour = int.tryParse(match.group(2)!) ?? 0;
+    
+    int minute = 0;
+    if (match.group(3) != null) {
+      minute = int.tryParse(match.group(3)!) ?? 0;
+    } else if (match.group(0)!.contains('반')) {
+      minute = 30;
+    }
+
+    if (rawHour < 1 || rawHour > 24) return null;
+
+    int hour24 = rawHour;
+    if (prefix == '오전' || prefix == '아침') {
+      hour24 = rawHour == 12 ? 0 : rawHour;
+    } else if (prefix == '오후' || prefix == '저녁' || prefix == '밤') {
+      hour24 = rawHour == 12 ? 12 : rawHour + 12;
+    } else {
+      // 오전/오후 접두사가 없을 때 현재 시간 기준
+      if (rawHour < 12) {
+        final now = DateTime.now();
+        if (now.hour > rawHour || (now.hour == rawHour && now.minute >= minute)) {
+          hour24 = rawHour + 12;
+        }
+      }
+    }
+
+    final time = TimeOfDay(hour: hour24, minute: minute);
+    final cleanText = input
+        .replaceFirst(match.group(0)!, '')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+
+    return (
+      cleanText: cleanText.isEmpty ? input.trim() : cleanText,
+      time: time,
+    );
+  }
+
   // ── addTask (웹앱 그대로) ─────────────────────────────────
   void _addTodayTask(String text) {
     final trimmed = text.trim();
@@ -1310,29 +1382,43 @@ class _TasksScreenState extends State<TasksScreen>
     String? timeEndStr;
     String? durStr;
     String? timeStartStr;
+    String finalTitle = trimmed;
+    bool reminderEnabled = _todayReminderEnabled;
 
-    if (_todayTimeType == 'single' && _todayStartTime != null) {
-      timeStr = _formatTime(_todayStartTime!);
-      timeStartStr =
-          '${_todayStartTime!.hour.toString().padLeft(2, '0')}:${_todayStartTime!.minute.toString().padLeft(2, '0')}';
-    } else if (_todayTimeType == 'range' && _todayStartTime != null) {
-      timeStr = _formatTime(_todayStartTime!);
-      if (_todayEndTime != null) {
-        timeStr += ' ~ ${_formatTime(_todayEndTime!)}';
-        timeEndStr =
-            '${_todayEndTime!.hour.toString().padLeft(2, '0')}:${_todayEndTime!.minute.toString().padLeft(2, '0')}';
+    if (_todayTimeType == 'none') {
+      final parsed = _parseNaturalLanguageTime(trimmed);
+      if (parsed != null) {
+        finalTitle = parsed.cleanText;
+        timeStr = _formatTime(parsed.time!);
+        timeStartStr =
+            '${parsed.time!.hour.toString().padLeft(2, '0')}:${parsed.time!.minute.toString().padLeft(2, '0')}';
+        // 자연어로 등록하는 일정이므로 글로벌 설정 상태에 따라 알람 자동 활성화
+        reminderEnabled = _isCoreReminderEnabledGlobally;
       }
-      timeStartStr =
-          '${_todayStartTime!.hour.toString().padLeft(2, '0')}:${_todayStartTime!.minute.toString().padLeft(2, '0')}';
-    } else if (_todayTimeType == 'duration' && _todayDuration != null) {
-      durStr = _todayDuration;
+    } else {
+      if (_todayTimeType == 'single' && _todayStartTime != null) {
+        timeStr = _formatTime(_todayStartTime!);
+        timeStartStr =
+            '${_todayStartTime!.hour.toString().padLeft(2, '0')}:${_todayStartTime!.minute.toString().padLeft(2, '0')}';
+      } else if (_todayTimeType == 'range' && _todayStartTime != null) {
+        timeStr = _formatTime(_todayStartTime!);
+        if (_todayEndTime != null) {
+          timeStr += ' ~ ${_formatTime(_todayEndTime!)}';
+          timeEndStr =
+              '${_todayEndTime!.hour.toString().padLeft(2, '0')}:${_todayEndTime!.minute.toString().padLeft(2, '0')}';
+        }
+        timeStartStr =
+            '${_todayStartTime!.hour.toString().padLeft(2, '0')}:${_todayStartTime!.minute.toString().padLeft(2, '0')}';
+      } else if (_todayTimeType == 'duration' && _todayDuration != null) {
+        durStr = _todayDuration;
+      }
     }
 
     final task = TaskItem(
       id:
           DateTime.now().millisecondsSinceEpoch +
           DateTime.now().microsecond % 1000,
-      text: trimmed,
+      text: finalTitle,
       category: 'today',
       time: timeStr,
       timeStart: timeStartStr,
@@ -1340,7 +1426,7 @@ class _TasksScreenState extends State<TasksScreen>
       duration: durStr,
       done: false,
       createdAt: DateTime.now().toIso8601String(),
-      isReminderEnabled: _todayReminderEnabled,
+      isReminderEnabled: reminderEnabled,
     );
     setState(() {
       tasks.add(task);
@@ -4504,27 +4590,57 @@ class _TasksScreenState extends State<TasksScreen>
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(color: const Color(0xFFDDD6FE)),
                     ),
-                    child: Material(
-                      type: MaterialType.transparency,
-                      child: TextField(
-                        controller: _todayInputCtrl,
-                        style: GoogleFonts.notoSansKr(
-                          fontSize: 14,
-                          color: const Color(0xFF3D3A4E),
-                        ),
-                        decoration: InputDecoration(
-                          hintText: '오늘 할 일 직접 추가...',
-                          hintStyle: GoogleFonts.notoSansKr(
-                            fontSize: 14,
-                            color: const Color(0xFFA0A0B0),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Material(
+                            type: MaterialType.transparency,
+                            child: TextField(
+                              controller: _todayInputCtrl,
+                              style: GoogleFonts.notoSansKr(
+                                fontSize: 14,
+                                color: const Color(0xFF3D3A4E),
+                              ),
+                              decoration: InputDecoration(
+                                hintText: '오늘 할 일 직접 추가...',
+                                hintStyle: GoogleFonts.notoSansKr(
+                                  fontSize: 14,
+                                  color: const Color(0xFFA0A0B0),
+                                ),
+                                border: InputBorder.none,
+                                contentPadding: const EdgeInsets.symmetric(
+                                  vertical: 12,
+                                ),
+                              ),
+                              onSubmitted: (v) => _addTodayTask(v),
+                            ),
                           ),
-                          border: InputBorder.none,
-                          contentPadding: const EdgeInsets.symmetric(
-                            vertical: 12,
+                        ),
+                        GestureDetector(
+                          onTap: () {
+                            if (_isListeningToday) {
+                              _stopListening();
+                            } else {
+                              _startListening(isToday: true);
+                            }
+                          },
+                          child: Container(
+                            width: 32,
+                            height: 32,
+                            decoration: BoxDecoration(
+                              color: _isListeningToday
+                                  ? Colors.red.withOpacity(0.1)
+                                  : Colors.transparent,
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              _isListeningToday ? Icons.mic : Icons.mic_none,
+                              size: 18,
+                              color: _isListeningToday ? Colors.red : const Color(0xFF8B7CFF),
+                            ),
                           ),
                         ),
-                        onSubmitted: (v) => _addTodayTask(v),
-                      ),
+                      ],
                     ),
                   ),
                 ),
@@ -6378,6 +6494,550 @@ class _TasksScreenState extends State<TasksScreen>
     _saveSchedules();
   }
 
+  void _initSpeech() async {
+    try {
+      _speechEnabled = await _speechToText.initialize(
+        onStatus: (status) {
+          if (status == 'notListening' || status == 'done') {
+            if (mounted) {
+              setState(() {
+                _isListeningToday = false;
+                _isListeningSchedule = false;
+              });
+            }
+          }
+        },
+        onError: (error) {
+          debugPrint("Speech error: $error");
+          if (mounted) {
+            setState(() {
+              _isListeningToday = false;
+              _isListeningSchedule = false;
+            });
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('음성 인식 오류: ${error.errorMsg}')),
+            );
+          }
+        },
+      );
+      if (mounted) setState(() {});
+    } catch (e) {
+      debugPrint("Speech init error: $e");
+    }
+  }
+
+  void _startListening({required bool isToday}) async {
+    if (!_speechEnabled) {
+      _initSpeech();
+      return;
+    }
+    final controller = isToday ? _todayInputCtrl : _schInputCtrl;
+    final baseText = controller.text;
+    final baseSelection = controller.selection;
+
+    setState(() {
+      if (isToday) {
+        _isListeningToday = true;
+        _isListeningSchedule = false;
+      } else {
+        _isListeningToday = false;
+        _isListeningSchedule = true;
+      }
+    });
+
+    await _speechToText.listen(
+      onResult: (result) {
+        if (mounted) {
+          setState(() {
+            final spoken = result.recognizedWords;
+            int start = baseSelection.start;
+            int end = baseSelection.end;
+            if (start < 0) {
+              start = baseText.length;
+              end = baseText.length;
+            }
+            final insertText = (baseText.isNotEmpty && start > 0 && baseText[start - 1] != ' ' ? ' ' : '') + spoken;
+            controller.text = baseText.replaceRange(start, end, insertText);
+            controller.selection = TextSelection.collapsed(offset: start + insertText.length);
+          });
+          
+          if (result.finalResult) {
+            _handleSpeechFinished(controller.text.trim(), isToday: isToday);
+          }
+        }
+      },
+      localeId: 'ko_KR',
+      cancelOnError: false,
+      partialResults: true,
+    );
+  }
+
+  Future<void> _stopListening() async {
+    await _speechToText.stop();
+    if (mounted) {
+      setState(() {
+        _isListeningToday = false;
+        _isListeningSchedule = false;
+      });
+    }
+  }
+
+  void _handleSpeechFinished(String spokenText, {required bool isToday}) {
+    final suffixRegex = RegExp(r'\s*(등록해줘|추가해줘)$');
+    if (suffixRegex.hasMatch(spokenText)) {
+      _showVoiceRegistrationConfirmDialog(spokenText, isToday: isToday);
+    }
+  }
+
+  ParsedVoiceRegistration _parseNaturalLanguageVoice(String input, DateTime defaultDate) {
+    String cleaned = input.trim();
+    final suffixRegex = RegExp(r'\s*(등록해줘|추가해줘)$');
+    cleaned = cleaned.replaceFirst(suffixRegex, '').trim();
+
+    DateTime parsedDate = defaultDate;
+    bool hasDate = false;
+
+    int getDayOfWeek(String str) {
+      if (str.contains('월')) return DateTime.monday;
+      if (str.contains('화')) return DateTime.tuesday;
+      if (str.contains('수')) return DateTime.wednesday;
+      if (str.contains('목')) return DateTime.thursday;
+      if (str.contains('금')) return DateTime.friday;
+      if (str.contains('토')) return DateTime.saturday;
+      if (str.contains('일')) return DateTime.sunday;
+      return -1;
+    }
+
+    // 1. Check "이번달 마지막 [요일]"
+    final lastWeekdayRegex = RegExp(r'이번달\s+마지막\s+([월화수목금토일])(?:요일)?');
+    final lastWeekdayMatch = lastWeekdayRegex.firstMatch(cleaned);
+    if (lastWeekdayMatch != null) {
+      final weekdayStr = lastWeekdayMatch.group(1)!;
+      final targetWeekday = getDayOfWeek(weekdayStr);
+      if (targetWeekday != -1) {
+        final now = DateTime.now();
+        var tempDate = DateTime(now.year, now.month + 1, 0);
+        while (tempDate.weekday != targetWeekday) {
+          tempDate = tempDate.subtract(const Duration(days: 1));
+        }
+        parsedDate = tempDate;
+        hasDate = true;
+        cleaned = cleaned.replaceFirst(lastWeekdayMatch.group(0)!, '').trim();
+      }
+    }
+
+    // 2. Check "이번주/다음주/다다음주 [요일]"
+    if (!hasDate) {
+      final weekRelRegex = RegExp(r'(이번주|다음주|다다음주)\s+([월화수목금토일])(?:요일)?');
+      final weekRelMatch = weekRelRegex.firstMatch(cleaned);
+      if (weekRelMatch != null) {
+        final rel = weekRelMatch.group(1)!;
+        final weekdayStr = weekRelMatch.group(2)!;
+        final targetWeekday = getDayOfWeek(weekdayStr);
+        if (targetWeekday != -1) {
+          final now = DateTime.now();
+          int diff = targetWeekday - now.weekday;
+          int weeksAdd = 0;
+          if (rel == '다음주') weeksAdd = 7;
+          if (rel == '다다음주') weeksAdd = 14;
+          parsedDate = now.add(Duration(days: diff + weeksAdd));
+          hasDate = true;
+          cleaned = cleaned.replaceFirst(weekRelMatch.group(0)!, '').trim();
+        }
+      }
+    }
+
+    // 3. Check "오늘", "내일", "모레"
+    if (!hasDate) {
+      if (cleaned.contains('오늘')) {
+        parsedDate = DateTime.now();
+        hasDate = true;
+        cleaned = cleaned.replaceAll('오늘', '').trim();
+      } else if (cleaned.contains('내일')) {
+        parsedDate = DateTime.now().add(const Duration(days: 1));
+        hasDate = true;
+        cleaned = cleaned.replaceAll('내일', '').trim();
+      } else if (cleaned.contains('모레')) {
+        parsedDate = DateTime.now().add(const Duration(days: 2));
+        hasDate = true;
+        cleaned = cleaned.replaceAll('모레', '').trim();
+      }
+    }
+
+    // 4. Check bare "[요일]요일" or "[요일]"
+    if (!hasDate) {
+      final bareWeekdayRegex = RegExp(r'([월화수목금토일])요일');
+      final bareWeekdayMatch = bareWeekdayRegex.firstMatch(cleaned);
+      if (bareWeekdayMatch != null) {
+        final weekdayStr = bareWeekdayMatch.group(1)!;
+        final targetWeekday = getDayOfWeek(weekdayStr);
+        if (targetWeekday != -1) {
+          final now = DateTime.now();
+          int diff = targetWeekday - now.weekday;
+          if (diff < 0) diff += 7;
+          parsedDate = now.add(Duration(days: diff));
+          hasDate = true;
+          cleaned = cleaned.replaceFirst(bareWeekdayMatch.group(0)!, '').trim();
+        }
+      }
+    }
+
+    // Parse Time: e.g. "3시", "오후 3시 반", "오전 11시 10분"
+    TimeOfDay? parsedTime;
+    bool hasTime = false;
+    final timeRegex = RegExp(
+      r'((?:오전|아침|오후|저녁|밤)\s*)?(\d{1,2})시(?:\s*(\d{1,2})분|\s*반)?(?:\s*(?:에|쯤|경|까지))?',
+    );
+    final timeMatch = timeRegex.firstMatch(cleaned);
+    if (timeMatch != null) {
+      final prefix = (timeMatch.group(1) ?? '').replaceAll(RegExp(r'\s'), '');
+      final rawHour = int.tryParse(timeMatch.group(2)!) ?? 0;
+      int minute = 0;
+      if (timeMatch.group(3) != null) {
+        minute = int.tryParse(timeMatch.group(3)!) ?? 0;
+      } else if (timeMatch.group(0)!.contains('반')) {
+        minute = 30;
+      }
+
+      if (rawHour >= 1 && rawHour <= 24) {
+        int hour24 = rawHour;
+        if (prefix == '오전' || prefix == '아침') {
+          hour24 = rawHour == 12 ? 0 : rawHour;
+        } else if (prefix == '오후' || prefix == '저녁' || prefix == '밤') {
+          hour24 = rawHour == 12 ? 12 : rawHour + 12;
+        } else {
+          if (rawHour < 12) {
+            final now = DateTime.now();
+            if (now.hour > rawHour || (now.hour == rawHour && now.minute >= minute)) {
+              hour24 = rawHour + 12;
+            }
+          }
+        }
+        parsedTime = TimeOfDay(hour: hour24, minute: minute);
+        hasTime = true;
+        cleaned = cleaned.replaceFirst(timeMatch.group(0)!, '').trim();
+      }
+    }
+
+    cleaned = cleaned.replaceAll(RegExp(r'\s+'), ' ').trim();
+
+    return ParsedVoiceRegistration(
+      title: cleaned.isEmpty ? "새 일정" : cleaned,
+      date: parsedDate,
+      time: parsedTime,
+      hasDate: hasDate,
+      hasTime: hasTime,
+      rawSpeech: input,
+    );
+  }
+
+  void _showVoiceRegistrationConfirmDialog(String speechText, {required bool isToday}) {
+    final defaultDate = isToday ? DateTime.now() : _calSelectedDay;
+    final parsed = _parseNaturalLanguageVoice(speechText, defaultDate);
+
+    final titleCtrl = TextEditingController(text: parsed.title);
+    DateTime confirmedDate = parsed.date;
+    TimeOfDay? confirmedTime = parsed.time;
+    bool isReminderEnabled = _isCoreReminderEnabledGlobally;
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return Dialog(
+              backgroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(24),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Header Row
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            const Text('📌', style: TextStyle(fontSize: 16)),
+                            const SizedBox(width: 6),
+                            Text(
+                              '일정 등록 제안',
+                              style: GoogleFonts.notoSansKr(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w800,
+                                color: const Color(0xFF1E1E2D),
+                              ),
+                            ),
+                          ],
+                        ),
+                        GestureDetector(
+                          onTap: () => Navigator.pop(ctx),
+                          child: const Icon(Icons.close, color: Color(0xFF9CA3AF), size: 20),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 18),
+                    // Editable Title
+                    TextField(
+                      controller: titleCtrl,
+                      style: GoogleFonts.notoSansKr(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w900,
+                        color: const Color(0xFF1E1E2D),
+                      ),
+                      decoration: const InputDecoration(
+                        border: InputBorder.none,
+                        isDense: true,
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    // Date and Time Badges (Row or Wrap)
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        // Date Badge
+                        GestureDetector(
+                          onTap: () async {
+                            final d = await showDatePicker(
+                              context: context,
+                              initialDate: confirmedDate,
+                              firstDate: DateTime.now().subtract(const Duration(days: 365)),
+                              lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
+                            );
+                            if (d != null) {
+                              setDialogState(() => confirmedDate = d);
+                            }
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF3F4F6),
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Text('📅', style: TextStyle(fontSize: 13)),
+                                const SizedBox(width: 6),
+                                Text(
+                                  _getVoiceDateLabel(confirmedDate),
+                                  style: GoogleFonts.notoSansKr(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.bold,
+                                    color: const Color(0xFF4B5563),
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                const Icon(Icons.edit, size: 12, color: Color(0xFF9CA3AF)),
+                              ],
+                            ),
+                          ),
+                        ),
+                        // Time Badge
+                        GestureDetector(
+                          onTap: () async {
+                            final t = await showTimePicker(
+                              context: context,
+                              initialTime: confirmedTime ?? TimeOfDay.now(),
+                            );
+                            if (t != null) {
+                              setDialogState(() => confirmedTime = t);
+                            }
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF5F3FF),
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Text('🕒', style: TextStyle(fontSize: 13)),
+                                const SizedBox(width: 6),
+                                Text(
+                                  confirmedTime != null ? _getVoiceTimeLabel(confirmedTime!) : "시간 설정 안 함",
+                                  style: GoogleFonts.notoSansKr(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.bold,
+                                    color: const Color(0xFF8B7CFF),
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                const Icon(Icons.edit, size: 12, color: Color(0xFF8B7CFF)),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    // Alarm Toggle Button
+                    GestureDetector(
+                      onTap: () async {
+                        if (!isReminderEnabled) {
+                          final globalEnabled = await _checkCoreReminderEnabledGlobally();
+                          if (!globalEnabled) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('설정에서 일정 알람을 먼저 켜주세요.')),
+                            );
+                            return;
+                          }
+                        }
+                        setDialogState(() => isReminderEnabled = !isReminderEnabled);
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: const Color(0xFF1E1E2D), width: 1.5),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Text('🔔', style: TextStyle(fontSize: 13)),
+                            const SizedBox(width: 6),
+                            Text(
+                              isReminderEnabled ? '알람 ON' : '알람 OFF',
+                              style: GoogleFonts.notoSansKr(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w800,
+                                color: const Color(0xFF1E1E2D),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    // Bottom Buttons
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF1E1E2D),
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              elevation: 0,
+                            ),
+                            onPressed: () {
+                              final finalTitle = titleCtrl.text.trim();
+                              if (finalTitle.isEmpty) return;
+
+                              final dateStr = _dateKey(confirmedDate);
+                              final entry = ScheduleItem(
+                                id: DateTime.now().millisecondsSinceEpoch.toString(),
+                                text: finalTitle,
+                                createdAt: DateTime.now().toIso8601String(),
+                                isReminderEnabled: isReminderEnabled,
+                              );
+
+                              if (confirmedTime != null) {
+                                entry.timeStart = "${confirmedTime!.hour}:${confirmedTime!.minute}";
+                                entry.time = _formatTime(confirmedTime!);
+                              }
+
+                              setState(() {
+                                if (!schedules.containsKey(dateStr)) schedules[dateStr] = [];
+                                schedules[dateStr]!.add(entry);
+                              });
+
+                              if (isToday) {
+                                _todayInputCtrl.clear();
+                              } else {
+                                _schInputCtrl.clear();
+                              }
+
+                              _saveSchedules();
+                              Navigator.pop(ctx);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('"${finalTitle}" 일정을 추가했다냥! 🐾'),
+                                  duration: const Duration(seconds: 2),
+                                ),
+                              );
+                            },
+                            child: Text(
+                              '추가하기 ✓',
+                              style: GoogleFonts.notoSansKr(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFFF3F4F6),
+                              foregroundColor: const Color(0xFF4B5563),
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              elevation: 0,
+                            ),
+                            onPressed: () => Navigator.pop(ctx),
+                            child: Text(
+                              '괜찮아',
+                              style: GoogleFonts.notoSansKr(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  String _getVoiceDateLabel(DateTime date) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final target = DateTime(date.year, date.month, date.day);
+    final diff = target.difference(today).inDays;
+
+    final ymd = "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
+
+    if (diff == 0) return "오늘 ($ymd)";
+    if (diff == 1) return "내일 ($ymd)";
+    if (diff == 2) return "모레 ($ymd)";
+    
+    final weekdays = ["월요일", "화요일", "수요일", "목요일", "금요일", "토요일", "일요일"];
+    final w = weekdays[date.weekday - 1];
+    return "$w ($ymd)";
+  }
+
+  String _getVoiceTimeLabel(TimeOfDay time) {
+    final hour = time.hour;
+    final minute = time.minute;
+    final isPm = hour >= 12;
+    final displayHour = hour == 0 ? 12 : (hour > 12 ? hour - 12 : hour);
+    final displayMinute = minute.toString().padLeft(2, '0');
+    final ampm = isPm ? "오후" : "오전";
+    return "$ampm $displayHour:$displayMinute";
+  }
+
   List<MilestoneWithVision> _getMilestonesForDay(DateTime day) {
     final list = <MilestoneWithVision>[];
     final dateStr = _dateKey(day);
@@ -7218,21 +7878,51 @@ class _TasksScreenState extends State<TasksScreen>
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(color: const Color(0xFFDDD6FE)),
                     ),
-                    child: TextField(
-                      controller: _schInputCtrl,
-                      style: GoogleFonts.notoSansKr(
-                        fontSize: 14,
-                        color: const Color(0xFF3D3A4E),
-                      ),
-                      decoration: InputDecoration(
-                        hintText: '일정 입력...',
-                        hintStyle: GoogleFonts.notoSansKr(
-                          color: const Color(0xFFA0A0B0),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _schInputCtrl,
+                            style: GoogleFonts.notoSansKr(
+                              fontSize: 14,
+                              color: const Color(0xFF3D3A4E),
+                            ),
+                            decoration: InputDecoration(
+                              hintText: '일정 입력...',
+                              hintStyle: GoogleFonts.notoSansKr(
+                                color: const Color(0xFFA0A0B0),
+                              ),
+                              border: InputBorder.none,
+                              contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                            ),
+                            onSubmitted: (v) => _addSchedule(),
+                          ),
                         ),
-                        border: InputBorder.none,
-                        contentPadding: const EdgeInsets.symmetric(vertical: 12),
-                      ),
-                      onSubmitted: (v) => _addSchedule(),
+                        GestureDetector(
+                          onTap: () {
+                            if (_isListeningSchedule) {
+                              _stopListening();
+                            } else {
+                              _startListening(isToday: false);
+                            }
+                          },
+                          child: Container(
+                            width: 32,
+                            height: 32,
+                            decoration: BoxDecoration(
+                              color: _isListeningSchedule
+                                  ? Colors.red.withOpacity(0.1)
+                                  : Colors.transparent,
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              _isListeningSchedule ? Icons.mic : Icons.mic_none,
+                              size: 18,
+                              color: _isListeningSchedule ? Colors.red : const Color(0xFF8B7CFF),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
