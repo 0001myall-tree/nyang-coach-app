@@ -77,6 +77,12 @@ class _NyangCoachAppState extends State<NyangCoachApp>
       ),
       navigatorKey: navigatorKey,
       home: const LandingScreen(),
+      onGenerateRoute: (settings) {
+        return MaterialPageRoute(
+          builder: (context) => const LandingScreen(),
+          settings: settings,
+        );
+      },
       debugShowCheckedModeBanner: false,
     );
   }

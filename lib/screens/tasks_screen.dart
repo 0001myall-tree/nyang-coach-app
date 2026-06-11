@@ -4083,6 +4083,7 @@ class _TasksScreenState extends State<TasksScreen>
               ],
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           // 체크버튼
           GestureDetector(
@@ -4111,7 +4112,7 @@ class _TasksScreenState extends State<TasksScreen>
               ),
             ),
           ),
-          // 텍스트
+          // 텍스트와 메타데이터 (Column으로 세로 배치)
           Expanded(
             child: GestureDetector(
               onTap: () {
@@ -4133,92 +4134,89 @@ class _TasksScreenState extends State<TasksScreen>
               },
               child: Container(
                 color: Colors.transparent,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                child: Text(
-                  t.text,
-                  style: GoogleFonts.notoSansKr(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: t.done
-                        ? const Color(0xFFA0A0B0)
-                        : const Color(0xFF3D3A4E),
-                    decoration: t.done ? TextDecoration.lineThrough : null,
-                  ),
-                ),
-              ),
-            ),
-          ),
-          // 시간/소요시간 표시
-          GestureDetector(
-            onTap: () {
-              if (t.done) return;
-              _showEditItemModal(t, () {
-                setState(() {
-                  final cIdx = coreTasks.indexWhere((ct) => ct.id == t.id);
-                  if (cIdx != -1) {
-                    coreTasks[cIdx].time = t.time;
-                    coreTasks[cIdx].timeStart = t.timeStart;
-                    coreTasks[cIdx].timeEnd = t.timeEnd;
-                    coreTasks[cIdx].duration = t.duration;
-                    coreTasks[cIdx].text = t.text;
-                  }
-                });
-                _saveTasks();
-                _saveCoreTasks();
-              });
-            },
-            child: (t.time != null || t.duration != null)
-                ? Container(
-                    margin: const EdgeInsets.only(right: 6),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 6,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: t.time != null
-                          ? const Color(0xFFF5F3FF)
-                          : const Color(0xFFFDF2F8),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      t.time != null ? t.time! : '⏱ ${t.duration}',
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // 할 일 텍스트
+                    Text(
+                      t.text,
                       style: GoogleFonts.notoSansKr(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        color: t.time != null
-                            ? const Color(0xFF8B7CFF)
-                            : const Color(0xFFDB2777),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: t.done
+                            ? const Color(0xFFA0A0B0)
+                            : const Color(0xFF3D3A4E),
+                        decoration: t.done ? TextDecoration.lineThrough : null,
                       ),
                     ),
-                  )
-                : Container(
-                    margin: const EdgeInsets.only(right: 6),
-                    padding: const EdgeInsets.all(4),
-                    child: const Icon(
-                      Icons.access_time,
-                      size: 16,
-                      color: Color(0xFFD1D5DB),
-                    ),
-                  ),
-          ),
-          // 습관 뱃지
-          if (t.isHabit)
-            Container(
-              margin: const EdgeInsets.only(right: 8),
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: BoxDecoration(
-                color: _coach.accentColor.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Text(
-                '습관',
-                style: GoogleFonts.notoSansKr(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700,
-                  color: _coach.accentColor,
+                    // 알림 종 아이콘, 시간/소요시간 뱃지, 습관 뱃지 표시
+                    if (t.time != null || t.duration != null || t.isHabit || (t.isReminderEnabled && _isCoreReminderEnabledGlobally)) ...[
+                      const SizedBox(height: 4),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // 깨끗한 보라색 종 아이콘
+                          if (t.isReminderEnabled && _isCoreReminderEnabledGlobally)
+                            const Padding(
+                              padding: EdgeInsets.only(right: 6),
+                              child: Icon(
+                                Icons.notifications_active,
+                                size: 14,
+                                color: Color(0xFF8B7CFF),
+                              ),
+                            ),
+                          // 시간/소요시간 뱃지
+                          if (t.time != null || t.duration != null)
+                            Container(
+                              margin: const EdgeInsets.only(right: 6),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: t.time != null
+                                    ? const Color(0xFFF5F3FF)
+                                    : const Color(0xFFFDF2F8),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                t.time != null ? t.time! : '⏱ ${t.duration}',
+                                style: GoogleFonts.notoSansKr(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                  color: t.time != null
+                                      ? const Color(0xFF8B7CFF)
+                                      : const Color(0xFFDB2777),
+                                ),
+                              ),
+                            ),
+                          // 습관 뱃지
+                          if (t.isHabit)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: _coach.accentColor.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                '습관',
+                                style: GoogleFonts.notoSansKr(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                  color: _coach.accentColor,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ],
+                  ],
                 ),
               ),
             ),
+          ),
           // 삭제 버튼
           GestureDetector(
             onTap: () => _showTaskDeleteOptions(t),
