@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:math';
 import 'dart:ui';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -10,6 +11,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 import 'package:speech_to_text/speech_recognition_result.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:nyang_coach/screens/coach_selection_screen.dart';
 import 'package:nyang_coach/services/notification_service.dart';
 import 'package:nyang_coach/services/analytics_service.dart';
@@ -78,6 +80,97 @@ class _ParsedReply {
     this.nightCallOffer = false,
   }) : suggestedTasks = suggestedTasks ?? [];
 }
+
+class _BroWorkoutLink {
+  final String id;
+  final String title;
+  final String url;
+
+  const _BroWorkoutLink({
+    required this.id,
+    required this.title,
+    required this.url,
+  });
+}
+
+const _broWorkoutWarmupLinks = [
+  _BroWorkoutLink(
+    id: 'warmup_basic',
+    title: '운동 전 워밍업',
+    url: 'https://www.youtube.com/shorts/FHct19rKIVg',
+  ),
+  _BroWorkoutLink(
+    id: 'warmup_lower_body',
+    title: '하체운동하기 전 스트레칭',
+    url: 'https://www.youtube.com/shorts/B70dXLEq_lA',
+  ),
+  _BroWorkoutLink(
+    id: 'warmup_simple',
+    title: '간단 스트레칭',
+    url: 'https://www.youtube.com/shorts/BcS1Eg4Cpt0',
+  ),
+  _BroWorkoutLink(
+    id: 'warmup_full_body',
+    title: '몸 전체 풀어주는 전신 스트레칭',
+    url: 'https://www.youtube.com/watch?v=X2s3RZR8lPI',
+  ),
+  _BroWorkoutLink(
+    id: 'warmup_full_body_24',
+    title: '24분 전신 스트레칭',
+    url: 'https://www.youtube.com/watch?v=jw1gxrzRgeU',
+  ),
+];
+
+const _broWorkoutHiitLinks = [
+  _BroWorkoutLink(
+    id: 'hiit_diet_10',
+    title: '10분 다이어트 홈트',
+    url: 'https://www.youtube.com/watch?v=N-15wUPnqpc',
+  ),
+  _BroWorkoutLink(
+    id: 'hiit_15',
+    title: '15분 고강도 홈트',
+    url: 'https://www.youtube.com/watch?v=QvE69Q1ugFU',
+  ),
+  _BroWorkoutLink(
+    id: 'hiit_no_noise_24',
+    title: '층간소음 걱정 없는 고강도 타바타 24분',
+    url: 'https://www.youtube.com/watch?v=4EKo44DUvjg',
+  ),
+  _BroWorkoutLink(
+    id: 'hiit_belly_15',
+    title: '뱃살빼기 15분 타바타',
+    url: 'https://www.youtube.com/watch?v=0iqP6WP2ET4',
+  ),
+  _BroWorkoutLink(
+    id: 'hiit_abs_10',
+    title: '악마의 10분 복근운동',
+    url: 'https://www.youtube.com/watch?v=ee1alaQgE9U',
+  ),
+  _BroWorkoutLink(
+    id: 'hiit_full_body_23',
+    title: '땅끄부부 전신 다이어트 운동 23분',
+    url: 'https://www.youtube.com/watch?v=DCAp0b16kyo',
+  ),
+];
+
+const _broWorkoutGymLinks = [
+  _BroWorkoutLink(
+    id: 'gym_female_han_hye_jin',
+    title: '한혜진 헬스장 루틴',
+    url: 'https://www.youtube.com/watch?v=l4THcKL-sPM',
+  ),
+  _BroWorkoutLink(
+    id: 'gym_male_beginner',
+    title: '헬스장 초보 남자 루틴',
+    url: 'https://www.youtube.com/shorts/Xx75VdQXZ18',
+  ),
+  _BroWorkoutLink(
+    id: 'gym_common_beginner_5',
+    title: '헬스장 초보 남녀 공통 5가지 운동',
+    url: 'https://www.youtube.com/shorts/TvBX2_iHlAo',
+  ),
+];
 
 // ─────────────────────────────────────────────────────────────
 // 로컬 응답 (API 절감용) - 웹앱 getLocalResponse / localCoachLine 이식
@@ -2674,6 +2767,201 @@ class _ChatScreenState extends State<ChatScreen>
     titleCtrl.dispose();
   }
 
+  bool _containsAny(String text, List<String> keywords) {
+    return keywords.any((keyword) => text.contains(keyword));
+  }
+
+  String _workoutNormalized(String input) {
+    return input.replaceAll(RegExp(r'\s+'), '').toLowerCase();
+  }
+
+  Future<_BroWorkoutLink> _pickBroWorkoutLink(
+    List<_BroWorkoutLink> links,
+  ) async {
+    final prefs = await SharedPreferences.getInstance();
+    final lastId = prefs.getString('bro_last_workout_link_id');
+    final candidates = links.length <= 1
+        ? links
+        : links.where((link) => link.id != lastId).toList();
+    final pool = candidates.isEmpty ? links : candidates;
+    final picked = pool[Random().nextInt(pool.length)];
+    await prefs.setString('bro_last_workout_link_id', picked.id);
+    return picked;
+  }
+
+  Future<_BroWorkoutLink> _selectBroWarmupLink(String normalized) {
+    if (_containsAny(normalized, ['하체', '다리', '스쿼트', '런지'])) {
+      return _pickBroWorkoutLink([
+        _broWorkoutWarmupLinks.firstWhere(
+          (link) => link.id == 'warmup_lower_body',
+        ),
+      ]);
+    }
+    if (_containsAny(normalized, ['24분', '길게', '제대로', '회복'])) {
+      return _pickBroWorkoutLink([
+        _broWorkoutWarmupLinks.firstWhere(
+          (link) => link.id == 'warmup_full_body_24',
+        ),
+      ]);
+    }
+    if (_containsAny(normalized, ['전신', '몸전체', '온몸', '전체'])) {
+      return _pickBroWorkoutLink([
+        _broWorkoutWarmupLinks.firstWhere(
+          (link) => link.id == 'warmup_full_body',
+        ),
+      ]);
+    }
+    return _pickBroWorkoutLink([
+      _broWorkoutWarmupLinks.firstWhere((link) => link.id == 'warmup_basic'),
+      _broWorkoutWarmupLinks.firstWhere((link) => link.id == 'warmup_simple'),
+    ]);
+  }
+
+  Future<_BroWorkoutLink> _selectBroWorkoutLink(String normalized) {
+    if (_containsAny(normalized, ['층간소음', '조용', '점프없이', '노점프'])) {
+      return _pickBroWorkoutLink([
+        _broWorkoutHiitLinks.firstWhere(
+          (link) => link.id == 'hiit_no_noise_24',
+        ),
+      ]);
+    }
+    if (_containsAny(normalized, ['복근', 'abs'])) {
+      return _pickBroWorkoutLink([
+        _broWorkoutHiitLinks.firstWhere((link) => link.id == 'hiit_abs_10'),
+      ]);
+    }
+    if (_containsAny(normalized, ['뱃살', '배살', '복부'])) {
+      return _pickBroWorkoutLink([
+        _broWorkoutHiitLinks.firstWhere((link) => link.id == 'hiit_belly_15'),
+      ]);
+    }
+    if (_containsAny(normalized, ['전신', '몸전체', '온몸'])) {
+      return _pickBroWorkoutLink([
+        _broWorkoutHiitLinks.firstWhere(
+          (link) => link.id == 'hiit_full_body_23',
+        ),
+      ]);
+    }
+    if (_containsAny(normalized, ['고강도', '타바타', '빡세', '빡센'])) {
+      return _pickBroWorkoutLink([
+        _broWorkoutHiitLinks.firstWhere((link) => link.id == 'hiit_15'),
+      ]);
+    }
+    if (_containsAny(normalized, ['다이어트', '살빼', '살빼기', '감량'])) {
+      return _pickBroWorkoutLink([
+        _broWorkoutHiitLinks.firstWhere((link) => link.id == 'hiit_diet_10'),
+        _broWorkoutHiitLinks.firstWhere(
+          (link) => link.id == 'hiit_full_body_23',
+        ),
+      ]);
+    }
+    return _pickBroWorkoutLink([
+      _broWorkoutHiitLinks.firstWhere((link) => link.id == 'hiit_diet_10'),
+      _broWorkoutHiitLinks.firstWhere((link) => link.id == 'hiit_15'),
+    ]);
+  }
+
+  Future<_BroWorkoutLink> _selectBroGymLink(String normalized) {
+    if (_containsAny(normalized, ['여자', '여성'])) {
+      return _pickBroWorkoutLink([
+        _broWorkoutGymLinks.firstWhere(
+          (link) => link.id == 'gym_female_han_hye_jin',
+        ),
+      ]);
+    }
+    if (_containsAny(normalized, ['남자', '남성'])) {
+      return _pickBroWorkoutLink([
+        _broWorkoutGymLinks.firstWhere(
+          (link) => link.id == 'gym_male_beginner',
+        ),
+      ]);
+    }
+    return _pickBroWorkoutLink([
+      _broWorkoutGymLinks.firstWhere(
+        (link) => link.id == 'gym_common_beginner_5',
+      ),
+    ]);
+  }
+
+  Future<String?> _tryBuildBroWorkoutReply(String input) async {
+    if (_coach.id != 'bro') return null;
+    final normalized = _workoutNormalized(input);
+    final isWorkoutRelated = _containsAny(normalized, [
+      '운동',
+      '홈트',
+      '헬스',
+      '헬스장',
+      '웨이트',
+      '스트레칭',
+      '몸풀',
+      '폼롤러',
+      '밴드',
+      '러닝',
+      '조깅',
+      '타바타',
+      '복근',
+      '뱃살',
+      '다이어트',
+      '하체',
+      '상체',
+      '전신',
+      '층간소음',
+      '풀고왔다',
+      '풀었어',
+      '워밍업',
+      'workout',
+      'exercise',
+    ]);
+    if (!isWorkoutRelated) return null;
+
+    final warmedUp = _containsAny(normalized, [
+      '풀고왔다',
+      '풀었어',
+      '스트레칭했',
+      '워밍업끝',
+      '몸풀었',
+      '운동중',
+    ]);
+    final gym = _containsAny(normalized, ['헬스장', '웨이트', '기구', '헬린이', '루틴']);
+
+    if (gym && warmedUp) {
+      final link = await _selectBroGymLink(normalized);
+      return _pickLine([
+        '좋아. 헬스장 갔으면 방황하지 마라. 루틴 없으면 시간 다 날린다.\n이거 보고 오늘 할 것만 딱 정해.\n${link.url}\n\n복잡하게 가지 말고, 몇 개만 제대로 해도 충분하다.',
+        '좋다. 몸 풀었으면 이제 루틴 잡고 가자.\n이거 하나 보고 오늘 할 거만 정해.\n${link.url}\n\n기구 앞에서 멍 때리지 말고 바로 시작해.',
+      ]);
+    }
+
+    if (warmedUp) {
+      final link = await _selectBroWorkoutLink(normalized);
+      if (_containsAny(normalized, ['층간소음', '조용', '점프없이', '노점프'])) {
+        return '집이면 층간소음 신경 써야지. 괜히 점프하다가 운동보다 민원 먼저 온다.\n이걸로 가자. 조용한데 빡세다.\n${link.url}\n\n하고 나서 더 할 만하면 그대로 이어가.';
+      }
+      if (_containsAny(normalized, ['복근', '뱃살', '배살', '복부'])) {
+        return '복근이면 짧고 굵게 가자. 대신 허리 꺾지 말고 배에 힘 제대로 줘.\n이거 얼마 안 걸린다.\n${link.url}\n\n더 할 만하면 그대로 이어가. 흐름 탔을 때 가는 거다.';
+      }
+      return _pickLine([
+        '좋아. 이제 몸 깨웠지?\n그럼 이거 하나만 가자. 짧게 치고 흐름 만들기 좋다.\n${link.url}\n\n하고 나서 더 할 만하면 그대로 이어가. 오늘은 시작한 네가 이긴 거다.',
+        '좋다. 이제 본운동 들어가자.\n이거 얼마 안 걸린다. 일단 하나만 따라 해.\n${link.url}\n\n끝나고 몸 괜찮으면 더 가도 된다. 흐름 탔을 때 밀어붙이는 거다.',
+      ]);
+    }
+
+    final link = gym
+        ? await _selectBroGymLink(normalized)
+        : await _selectBroWarmupLink(normalized);
+
+    if (gym) {
+      return '헬스장 가는 건 좋은데, 바로 무게부터 들지 마라. 관절 놀란다.\n일단 가볍게 몸 풀고 이 루틴으로 오늘 할 것만 딱 정해.\n${link.url}\n\n복잡하게 가지 말고, 몇 개만 제대로 해도 충분하다.';
+    }
+    if (_containsAny(normalized, ['하체', '다리', '스쿼트', '런지'])) {
+      return '하체 갈 거면 더더욱 바로 들이박지 마라.\n무릎이랑 고관절 먼저 깨워야 된다.\n이거 얼마 안 걸리니까 먼저 풀고 가.\n${link.url}\n\n하고 나서 더 할 만하면 그대로 이어가.';
+    }
+    return _pickLine([
+      '야 잠깐. 바로 고강도 박지 마라. 관절 놀란다.\n폼롤러 있으면 하체랑 등부터 굴리고, 밴드 있으면 어깨랑 고관절부터 열어.\n없으면 이거 하나만 보고 몸부터 깨워.\n이거 얼마 안 걸린다.\n${link.url}\n\n하고 나서 더 할 만하면 그대로 이어가. 흐름 탔을 때 가는 거다.',
+      '좋다. 근데 바로 빡세게 가지 마라. 몸부터 깨워야 오래 간다.\n이거 얼마 안 걸린다. 일단 이걸로 관절이랑 근육 깨워.\n${link.url}\n\n하고 나서 더 하고 싶으면 그대로 이어가. 시작만 해도 이긴 거다.',
+    ]);
+  }
+
   // ── 메시지 전송 (웹앱 sendMessage 이식) ─────────────────
   Future<void> _send(String text) async {
     final trimmed = text.trim();
@@ -2793,6 +3081,30 @@ class _ChatScreenState extends State<ChatScreen>
         );
         return;
       }
+    }
+
+    final broWorkoutReply = await _tryBuildBroWorkoutReply(trimmed);
+    if (broWorkoutReply != null) {
+      setState(() {
+        _messages.add(
+          ChatMessage(text: trimmed, isUser: true, time: DateTime.now()),
+        );
+        _messages.add(
+          ChatMessage(
+            text: broWorkoutReply,
+            isUser: false,
+            time: DateTime.now(),
+          ),
+        );
+        _dynamicChips = _coach.chips;
+      });
+      _scrollToBottom();
+      await _saveHistory();
+      AnalyticsService.logConversationMessage(
+        coachId: widget.coachId,
+        usedApi: false,
+      );
+      return;
     }
 
     final currentId = widget.coachId;
@@ -3611,6 +3923,62 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
   void _showError(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(msg), backgroundColor: Colors.red[400]),
+    );
+  }
+
+  Future<void> _openMessageUrl(String rawUrl) async {
+    final cleaned = rawUrl.replaceAll(RegExp(r'[).,!?]+$'), '');
+    final uri = Uri.tryParse(cleaned);
+    if (uri == null) {
+      _showError('링크를 열 수 없습니다.');
+      return;
+    }
+    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!opened) {
+      _showError('링크를 열 수 없습니다.');
+    }
+  }
+
+  Widget _buildMessageText(ChatMessage msg, TextStyle style) {
+    final urlRegex = RegExp(r'https?:\/\/[^\s]+');
+    final matches = urlRegex.allMatches(msg.text).toList();
+    if (matches.isEmpty) {
+      return Text(msg.text, style: style);
+    }
+
+    final spans = <TextSpan>[];
+    var cursor = 0;
+    for (final match in matches) {
+      if (match.start > cursor) {
+        spans.add(TextSpan(text: msg.text.substring(cursor, match.start)));
+      }
+      final rawUrl = match.group(0)!;
+      final visibleUrl = rawUrl.replaceAll(RegExp(r'[).,!?]+$'), '');
+      spans.add(
+        TextSpan(
+          text: visibleUrl,
+          style: style.copyWith(
+            color: msg.isUser ? Colors.white : _coach.accentColor,
+            decoration: TextDecoration.underline,
+            decorationColor: msg.isUser ? Colors.white : _coach.accentColor,
+            fontWeight: FontWeight.w800,
+          ),
+          recognizer: TapGestureRecognizer()
+            ..onTap = () => _openMessageUrl(rawUrl),
+        ),
+      );
+      final trailing = rawUrl.substring(visibleUrl.length);
+      if (trailing.isNotEmpty) {
+        spans.add(TextSpan(text: trailing));
+      }
+      cursor = match.end;
+    }
+    if (cursor < msg.text.length) {
+      spans.add(TextSpan(text: msg.text.substring(cursor)));
+    }
+
+    return RichText(
+      text: TextSpan(style: style, children: spans),
     );
   }
 
@@ -4611,9 +4979,9 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
                   ),
                 ],
               ),
-              child: Text(
-                msg.text,
-                style: GoogleFonts.notoSansKr(
+              child: _buildMessageText(
+                msg,
+                GoogleFonts.notoSansKr(
                   fontSize: 14,
                   height: 1.6,
                   fontWeight: FontWeight.w500,
