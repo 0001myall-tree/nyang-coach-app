@@ -172,6 +172,19 @@ const _broWorkoutGymLinks = [
   ),
 ];
 
+const _broWorkoutStarterLinks = [
+  _BroWorkoutLink(
+    id: 'starter_hip_hinge',
+    title: '힙힌지',
+    url: 'https://www.youtube.com/shorts/U-Q-wTeHqks',
+  ),
+  _BroWorkoutLink(
+    id: 'starter_bridge',
+    title: '브릿지',
+    url: 'https://www.youtube.com/shorts/GOfayAYXbYk',
+  ),
+];
+
 // ─────────────────────────────────────────────────────────────
 // 로컬 응답 (API 절감용) - 웹앱 getLocalResponse / localCoachLine 이식
 // ─────────────────────────────────────────────────────────────
@@ -2789,6 +2802,25 @@ class _ChatScreenState extends State<ChatScreen>
     return picked;
   }
 
+  _BroWorkoutLink _broStarterLink(String id) {
+    return _broWorkoutStarterLinks.firstWhere((link) => link.id == id);
+  }
+
+  bool _isBroVideoRequest(String normalized) {
+    return _containsAny(normalized, [
+      '응',
+      'ㅇㅇ',
+      '줘',
+      '알려줘',
+      '추천',
+      '추천해줘',
+      '영상',
+      '링크',
+      '보내',
+      '보내줘',
+    ]);
+  }
+
   Future<_BroWorkoutLink> _selectBroWarmupLink(String normalized) {
     if (_containsAny(normalized, ['하체', '다리', '스쿼트', '런지'])) {
       return _pickBroWorkoutLink([
@@ -2886,6 +2918,25 @@ class _ChatScreenState extends State<ChatScreen>
   Future<String?> _tryBuildBroWorkoutReply(String input) async {
     if (_coach.id != 'bro') return null;
     final normalized = _workoutNormalized(input);
+    final prefs = await SharedPreferences.getInstance();
+    final pendingVideo = prefs.getString('bro_pending_workout_video');
+    final bridgeLink = _broStarterLink('starter_bridge');
+    final hipHingeLink = _broStarterLink('starter_hip_hinge');
+
+    if (pendingVideo == 'bridge' && _isBroVideoRequest(normalized)) {
+      await prefs.remove('bro_pending_workout_video');
+      return '좋아. 이거 보면 바로 감 잡힐 거다.\n${bridgeLink.url}\n\n형도 전문가 아니다. 그냥 운동 좋아해서 이것저것 해본 사람인데, 이건 몸 깨우기 괜찮더라.';
+    }
+
+    if (_containsAny(normalized, ['브릿지가뭐야', '브릿지뭐야', '브릿지어떻게'])) {
+      await prefs.setString('bro_pending_workout_video', 'bridge');
+      return '브릿지는 누워서 무릎 세우고 엉덩이 들어올리는 운동.\n엉덩이 근육 깨우는 데 좋다.\n아 나 헬스 전문가 아니고 그냥 운동 좋아하는 사람이다. 😂\n필요하면 영상도 줄까?';
+    }
+
+    if (_containsAny(normalized, ['브릿지영상', '브릿지링크', '브릿지추천'])) {
+      return '브릿지는 이거 보면 된다.\n${bridgeLink.url}\n\n짧게 감만 잡고, 무리하지 말고 천천히 해.';
+    }
+
     final isWorkoutRelated = _containsAny(normalized, [
       '운동',
       '홈트',
@@ -2909,6 +2960,16 @@ class _ChatScreenState extends State<ChatScreen>
       '풀고왔다',
       '풀었어',
       '워밍업',
+      '오래쉬',
+      '오랜만',
+      '몇년만',
+      '몇달만',
+      '운동안한',
+      '초보',
+      '입문',
+      '브릿지',
+      '힙힌지',
+      '계단',
       'workout',
       'exercise',
     ]);
@@ -2942,6 +3003,46 @@ class _ChatScreenState extends State<ChatScreen>
       '러닝',
       '조깅',
     ]);
+    final longBreak = _containsAny(normalized, [
+      '오래쉬',
+      '오랜만',
+      '몇년만',
+      '몇달만',
+      '운동안한',
+      '안한지오래',
+      '초보',
+      '입문',
+      '처음',
+    ]);
+    final lowerBody = _containsAny(normalized, [
+      '하체',
+      '다리',
+      '엉덩이',
+      '고관절',
+      '무릎',
+      '스쿼트',
+      '런지',
+    ]);
+    final genericWorkout = _containsAny(normalized, [
+      '운동',
+      '홈트',
+      '헬스',
+      '헬스장',
+      '웨이트',
+      '다이어트',
+      '몸만들',
+    ]);
+
+    if (!warmedUp &&
+        !reluctant &&
+        !longBreak &&
+        genericWorkout &&
+        Random().nextDouble() < 0.25) {
+      return _pickLine([
+        '아 근데 너 운동 요새 많이 하냐?\n오래 쉬었으면 갑자기 빡세게 가지 말고, 몸 깨우는 것부터 잡자.',
+        '잠깐. 너 혹시 운동 오래 쉬었어?\n그거면 형이 바로 고강도 안 던진다. 먼저 몸부터 깨우자.',
+      ]);
+    }
 
     if (reluctant && !warmedUp) {
       if (gym) {
@@ -2954,6 +3055,25 @@ class _ChatScreenState extends State<ChatScreen>
         return '야 하기 싫은 거 정상이다. 밖에 있으면 더더욱 생각 길게 하지 마라.\n근데 포기하진 말자.\n일단 5분만 걸어. 뛰는 건 그다음이다.\n몸 좀 풀리면 그때 이어갈지 정하자.';
       }
       return '야 하기 싫은 거 정상이다. 운동은 시작 전이 제일 귀찮아.\n근데 포기하진 말자.\n지금 어디야? 집이야, 헬스장이야, 밖이야?\n장소만 말해. 형이 거기에 맞춰서 제일 덜 귀찮은 걸로 쪼개줄게.';
+    }
+
+    if (longBreak && !warmedUp) {
+      if (lowerBody && Random().nextBool()) {
+        await prefs.setString('bro_pending_workout_video', 'bridge');
+        return '오케이. 오래 쉬었으면 바로 스쿼트부터 박지 마라.\n너 하체도 좀 깨워야 할 것 같은데 브릿지 해봤냐?\n누워서 하는 거라 진입 장벽 낮다.\n필요하면 영상도 줄까?';
+      }
+      final starter = Random().nextInt(4);
+      if (starter == 0) {
+        return '오케이.\n그럼 갑자기 빡세게 하는 것보다 몸부터 깨우는 게 좋겠다.\n형이 운동하면서 자주 보는 동작인데 한번 해볼래?\n${hipHingeLink.url}\n\n형도 전문가 아니다. 그냥 운동 좋아해서 이것저것 해본 사람인데, 오래 쉬었을 땐 이런 식으로 몸 깨우는 게 낫더라.';
+      }
+      if (starter == 1) {
+        final link = await _selectBroWarmupLink(normalized);
+        return '오케이. 오래 쉬었으면 오늘은 이기는 기준을 낮추자.\n갑자기 빡세게 말고, 몸부터 깨워.\n스트레칭 영상 필요하면 말해. 형이 추천해 줄 수 있으니까.\n참고할 거면 이거 봐.\n${link.url}\n\n풀고 오면 그때 더 할지 보자.';
+      }
+      if (starter == 2) {
+        return '오케이. 오래 쉬었으면 오늘은 운동복 입고 10분 산책만 해도 성공이다.\n몸이 깨어나야 다음 것도 된다.\n형도 전문가 아니다. 그냥 운동 좋아해서 이것저것 해본 사람인데, 다시 시작할 땐 이렇게 문턱 낮추는 게 제일 세다.';
+      }
+      return '오케이. 오래 쉬었으면 오늘 바로 고강도 가지 마라.\n집이면 제자리 걷기 5분, 밖이면 산책 10분, 건물 안이면 계단 한두 층만 가자.\n운동을 가르치려는 게 아니라, 오늘 다시 시작하게 만드는 게 먼저다.';
     }
 
     if (gym && warmedUp) {
