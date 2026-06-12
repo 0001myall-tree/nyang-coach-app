@@ -2362,7 +2362,9 @@ class _ChatScreenState extends State<ChatScreen>
     bool reminderEnabled = false;
 
     final prefs = await SharedPreferences.getInstance();
-    reminderEnabled = prefs.getBool('nyang_core_reminder_enabled') ?? false;
+    reminderEnabled =
+        (prefs.getBool('nyang_core_reminder_enabled') ?? false) &&
+        confirmedTime != null;
 
     if (!mounted) return;
     await showDialog(
@@ -2485,7 +2487,14 @@ class _ChatScreenState extends State<ChatScreen>
                               initialTime: confirmedTime ?? TimeOfDay.now(),
                             );
                             if (t != null) {
-                              setDialogState(() => confirmedTime = t);
+                              setDialogState(() {
+                                confirmedTime = t;
+                                reminderEnabled =
+                                    prefs.getBool(
+                                      'nyang_core_reminder_enabled',
+                                    ) ??
+                                    false;
+                              });
                             }
                           },
                           child: Container(
@@ -2542,6 +2551,14 @@ class _ChatScreenState extends State<ChatScreen>
                             );
                             return;
                           }
+                        }
+                        if (confirmedTime == null) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('알람을 켜려면 시간을 먼저 선택해주세요.'),
+                            ),
+                          );
+                          return;
                         }
                         setDialogState(
                           () => reminderEnabled = !reminderEnabled,
@@ -2602,7 +2619,7 @@ class _ChatScreenState extends State<ChatScreen>
                                 finalTitle,
                                 confirmedDate,
                                 confirmedTime,
-                                reminderEnabled,
+                                reminderEnabled && confirmedTime != null,
                               );
                               if (!mounted) return;
                               navigator.pop();

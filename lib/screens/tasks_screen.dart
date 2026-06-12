@@ -276,22 +276,28 @@ class MilestoneItem {
   String? achievedDate;
   String? memo;
 
-  MilestoneItem({required this.text, this.done = false, this.date, this.achievedDate, this.memo});
+  MilestoneItem({
+    required this.text,
+    this.done = false,
+    this.date,
+    this.achievedDate,
+    this.memo,
+  });
 
   Map<String, dynamic> toJson() => {
-        'text': text,
-        'done': done,
-        'date': date,
-        'achievedDate': achievedDate,
-        'memo': memo,
-      };
+    'text': text,
+    'done': done,
+    'date': date,
+    'achievedDate': achievedDate,
+    'memo': memo,
+  };
   factory MilestoneItem.fromJson(Map<String, dynamic> j) => MilestoneItem(
-        text: j['text'],
-        done: j['done'] ?? false,
-        date: j['date'],
-        achievedDate: j['achievedDate'],
-        memo: j['memo'],
-      );
+    text: j['text'],
+    done: j['done'] ?? false,
+    date: j['date'],
+    achievedDate: j['achievedDate'],
+    memo: j['memo'],
+  );
 }
 
 class MilestoneWithVision {
@@ -414,7 +420,7 @@ class _TasksScreenState extends State<TasksScreen>
   bool _schReminderEnabled = false;
 
   String _todayTimeType = 'none'; // 'none', 'single', 'range', 'duration'
-  bool _todayReminderEnabled = true;
+  bool _todayReminderEnabled = false;
   TimeOfDay? _todayStartTime;
   TimeOfDay? _todayEndTime;
   String? _todayDuration;
@@ -466,7 +472,7 @@ class _TasksScreenState extends State<TasksScreen>
 
     setState(() {
       _isCoreReminderEnabledGlobally = coreEnabled;
-      _todayReminderEnabled = coreEnabled;
+      _todayReminderEnabled = false;
       if (rawTasks != null) {
         tasks = (jsonDecode(rawTasks) as List)
             .map((e) => TaskItem.fromJson(e))
@@ -537,8 +543,6 @@ class _TasksScreenState extends State<TasksScreen>
         if (!enabled) {
           _todayReminderEnabled = false;
           _schReminderEnabled = false;
-        } else {
-          _todayReminderEnabled = true;
         }
       });
     }
@@ -611,8 +615,12 @@ class _TasksScreenState extends State<TasksScreen>
                         child: Row(
                           children: [
                             Icon(
-                              showDone ? Icons.check_circle : Icons.radio_button_unchecked,
-                              color: showDone ? const Color(0xFF8B7CFF) : const Color(0xFFD1D5DB),
+                              showDone
+                                  ? Icons.check_circle
+                                  : Icons.radio_button_unchecked,
+                              color: showDone
+                                  ? const Color(0xFF8B7CFF)
+                                  : const Color(0xFFD1D5DB),
                               size: 20,
                             ),
                             const SizedBox(width: 12),
@@ -623,7 +631,9 @@ class _TasksScreenState extends State<TasksScreen>
                                   fontSize: 15,
                                   fontWeight: FontWeight.w500,
                                   color: const Color(0xFF3D3A4E),
-                                  decoration: showDone ? TextDecoration.lineThrough : null,
+                                  decoration: showDone
+                                      ? TextDecoration.lineThrough
+                                      : null,
                                 ),
                               ),
                             ),
@@ -1028,7 +1038,6 @@ class _TasksScreenState extends State<TasksScreen>
     TasksSyncService.scheduleSyncToCloud();
   }
 
-
   Future<void> _saveTodayRecord() async {
     final prefs = await SharedPreferences.getInstance();
     final rawHistory = prefs.getString('nyang_history');
@@ -1050,18 +1059,22 @@ class _TasksScreenState extends State<TasksScreen>
     }
 
     final mergedTasks = [
-      ...tasks.map((t) => {
-        'text': t.text,
-        'done': t.done,
-        'category': t.category,
-        'deferred': false,
-      }),
-      ...deferredList.map((t) => {
-        'text': t['text'],
-        'done': t['done'] ?? false,
-        'category': t['category'] ?? 'today',
-        'deferred': true,
-      }),
+      ...tasks.map(
+        (t) => {
+          'text': t.text,
+          'done': t.done,
+          'category': t.category,
+          'deferred': false,
+        },
+      ),
+      ...deferredList.map(
+        (t) => {
+          'text': t['text'],
+          'done': t['done'] ?? false,
+          'category': t['category'] ?? 'today',
+          'deferred': true,
+        },
+      ),
     ];
 
     final record = {
@@ -1327,7 +1340,9 @@ class _TasksScreenState extends State<TasksScreen>
   }
 
   // ── 자연어 시간 표현 추출 ─────────────────────────────────
-  ({String cleanText, TimeOfDay? time})? _parseNaturalLanguageTime(String input) {
+  ({String cleanText, TimeOfDay? time})? _parseNaturalLanguageTime(
+    String input,
+  ) {
     // 오전/오후/아침/저녁/밤 + H시 (+ M분 또는 반)
     final timeRegex = RegExp(
       r'((?:오전|아침|오후|저녁|밤)\s*)?(\d{1,2})시(?:\s*(?:(\d{1,2})분|반))?(?:\s*(?:에|쯤|경|까지))?',
@@ -1337,7 +1352,7 @@ class _TasksScreenState extends State<TasksScreen>
 
     final prefix = (match.group(1) ?? '').replaceAll(RegExp(r'\s'), '');
     final rawHour = int.tryParse(match.group(2)!) ?? 0;
-    
+
     int minute = 0;
     if (match.group(3) != null) {
       minute = int.tryParse(match.group(3)!) ?? 0;
@@ -1356,7 +1371,8 @@ class _TasksScreenState extends State<TasksScreen>
       // 오전/오후 접두사가 없을 때 현재 시간 기준
       if (rawHour < 12) {
         final now = DateTime.now();
-        if (now.hour > rawHour || (now.hour == rawHour && now.minute >= minute)) {
+        if (now.hour > rawHour ||
+            (now.hour == rawHour && now.minute >= minute)) {
           hour24 = rawHour + 12;
         }
       }
@@ -1384,7 +1400,7 @@ class _TasksScreenState extends State<TasksScreen>
     String? durStr;
     String? timeStartStr;
     String finalTitle = trimmed;
-    bool reminderEnabled = _todayReminderEnabled;
+    bool reminderEnabled = false;
 
     if (_todayTimeType == 'none') {
       final parsed = _parseNaturalLanguageTime(trimmed);
@@ -1413,6 +1429,11 @@ class _TasksScreenState extends State<TasksScreen>
       } else if (_todayTimeType == 'duration' && _todayDuration != null) {
         durStr = _todayDuration;
       }
+      reminderEnabled = _resolvedTimeReminderEnabled(
+        _todayTimeType,
+        _todayStartTime,
+        _todayReminderEnabled,
+      );
     }
 
     final task = TaskItem(
@@ -1432,7 +1453,7 @@ class _TasksScreenState extends State<TasksScreen>
     setState(() {
       tasks.add(task);
       _todayTimeType = 'none';
-      _todayReminderEnabled = _isCoreReminderEnabledGlobally;
+      _todayReminderEnabled = false;
       _todayStartTime = null;
       _todayEndTime = null;
       _todayDuration = null;
@@ -1468,7 +1489,9 @@ class _TasksScreenState extends State<TasksScreen>
             if (sItem.id == sId) sItem.done = false;
           }
         }
-        final coreIdx = coreTasks.indexWhere((ct) => ct.id.toString() == t.id.toString());
+        final coreIdx = coreTasks.indexWhere(
+          (ct) => ct.id.toString() == t.id.toString(),
+        );
         if (coreIdx >= 0) {
           coreTasks[coreIdx].done = false;
           coreTasks[coreIdx].completedAt = null;
@@ -1536,7 +1559,9 @@ class _TasksScreenState extends State<TasksScreen>
             if (sItem.id == sId) sItem.done = true;
           }
         }
-        final coreIdx = coreTasks.indexWhere((ct) => ct.id.toString() == t.id.toString());
+        final coreIdx = coreTasks.indexWhere(
+          (ct) => ct.id.toString() == t.id.toString(),
+        );
         if (coreIdx >= 0) {
           coreTasks[coreIdx].done = true;
           coreTasks[coreIdx].completedAt = t.completedAt;
@@ -1580,38 +1605,38 @@ class _TasksScreenState extends State<TasksScreen>
       if (pool.isNotEmpty) {
         final randomMsg = pool[Random().nextInt(pool.length)];
         ScaffoldMessenger.of(context).hideCurrentSnackBar();
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Row(
-                children: [
-                  Text(
-                    _coach.id.contains('female')
-                        ? '💼 '
-                        : (_coach.id.contains('male') ? '👔 ' : ''),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      randomMsg,
-                      style: GoogleFonts.notoSansKr(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                        color: const Color(0xFF1F1F1F),
-                      ),
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                Text(
+                  _coach.id.contains('female')
+                      ? '💼 '
+                      : (_coach.id.contains('male') ? '👔 ' : ''),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    randomMsg,
+                    style: GoogleFonts.notoSansKr(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: const Color(0xFF1F1F1F),
                     ),
                   ),
-                ],
-              ),
-              backgroundColor: Colors.white,
-              elevation: 4,
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              duration: const Duration(seconds: 2),
-              margin: const EdgeInsets.only(bottom: 108, left: 20, right: 20),
+                ),
+              ],
             ),
-          );
+            backgroundColor: Colors.white,
+            elevation: 4,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            duration: const Duration(seconds: 2),
+            margin: const EdgeInsets.only(bottom: 108, left: 20, right: 20),
+          ),
+        );
       }
     }
     HapticFeedback.lightImpact();
@@ -1907,7 +1932,10 @@ class _TasksScreenState extends State<TasksScreen>
           'done': false,
           'deferred': true,
         });
-        await prefs.setString('nyang_deferred_tasks_today', jsonEncode(deferredList));
+        await prefs.setString(
+          'nyang_deferred_tasks_today',
+          jsonEncode(deferredList),
+        );
       }
     }
   }
@@ -1943,7 +1971,9 @@ class _TasksScreenState extends State<TasksScreen>
     TimeOfDay? moveEndTime = _parseStoredTime(task.timeEnd);
     String? moveDuration = task.duration;
     bool moveReminderEnabled =
-        _isCoreReminderEnabledGlobally && task.category == 'schedule' && task.isReminderEnabled;
+        _isCoreReminderEnabledGlobally &&
+        task.category == 'schedule' &&
+        task.isReminderEnabled;
 
     showModalBottomSheet(
       context: context,
@@ -2084,7 +2114,8 @@ class _TasksScreenState extends State<TasksScreen>
                         padding: const EdgeInsets.only(top: 8),
                         child: GestureDetector(
                           onTap: () async {
-                            final enabled = await _checkCoreReminderEnabledGlobally();
+                            final enabled =
+                                await _checkCoreReminderEnabledGlobally();
                             if (!enabled) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
@@ -2104,10 +2135,12 @@ class _TasksScreenState extends State<TasksScreen>
                                 !_isCoreReminderEnabledGlobally
                                     ? Icons.notifications_off
                                     : (moveReminderEnabled
-                                        ? Icons.notifications_active
-                                        : Icons.notifications_none_outlined),
+                                          ? Icons.notifications_active
+                                          : Icons.notifications_none_outlined),
                                 size: 18,
-                                color: (_isCoreReminderEnabledGlobally && moveReminderEnabled)
+                                color:
+                                    (_isCoreReminderEnabledGlobally &&
+                                        moveReminderEnabled)
                                     ? _coach.accentColor
                                     : const Color(0xFFB0B0C8),
                               ),
@@ -2116,14 +2149,18 @@ class _TasksScreenState extends State<TasksScreen>
                                 !_isCoreReminderEnabledGlobally
                                     ? '알림 꺼짐'
                                     : (moveReminderEnabled
-                                        ? '알림 켜짐 (자동 추가)'
-                                        : '알림 끄기'),
+                                          ? '알림 켜짐 (자동 추가)'
+                                          : '알림 끄기'),
                                 style: GoogleFonts.notoSansKr(
                                   fontSize: 12,
-                                  color: (_isCoreReminderEnabledGlobally && moveReminderEnabled)
+                                  color:
+                                      (_isCoreReminderEnabledGlobally &&
+                                          moveReminderEnabled)
                                       ? _coach.accentColor
                                       : const Color(0xFFB0B0C8),
-                                  fontWeight: (_isCoreReminderEnabledGlobally && moveReminderEnabled)
+                                  fontWeight:
+                                      (_isCoreReminderEnabledGlobally &&
+                                          moveReminderEnabled)
                                       ? FontWeight.w600
                                       : FontWeight.w400,
                                 ),
@@ -2247,7 +2284,9 @@ class _TasksScreenState extends State<TasksScreen>
 
   @override
   Widget build(BuildContext context) {
-    WidgetsBinding.instance.addPostFrameCallback((_) => _checkCoreReminderEnabledGlobally());
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _checkCoreReminderEnabledGlobally(),
+    );
     final bool isVacation = vacationInfo != null;
 
     return Scaffold(
@@ -2751,7 +2790,8 @@ class _TasksScreenState extends State<TasksScreen>
                                   if (isSelected)
                                     GestureDetector(
                                       onTap: () async {
-                                        final enabled = await _checkCoreReminderEnabledGlobally();
+                                        final enabled =
+                                            await _checkCoreReminderEnabledGlobally();
                                         if (!enabled || t.time == null) {
                                           ScaffoldMessenger.of(
                                             context,
@@ -3704,11 +3744,12 @@ class _TasksScreenState extends State<TasksScreen>
       );
     }
 
-    final sortedTasks = List<TaskItem>.from(tasks)..sort((a, b) {
-      if (a.done && !b.done) return 1;
-      if (!a.done && b.done) return -1;
-      return 0;
-    });
+    final sortedTasks = List<TaskItem>.from(tasks)
+      ..sort((a, b) {
+        if (a.done && !b.done) return 1;
+        if (!a.done && b.done) return -1;
+        return 0;
+      });
 
     return ListView.builder(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
@@ -3724,12 +3765,13 @@ class _TasksScreenState extends State<TasksScreen>
     TimeOfDay? mStartTime;
     TimeOfDay? mEndTime;
     String? mDuration;
-    bool mReminderEnabled = _isCoreReminderEnabledGlobally &&
+    bool mReminderEnabled =
+        _isCoreReminderEnabledGlobally &&
         ((item is ScheduleItem)
             ? item.isReminderEnabled
             : (item is TaskItem)
-                ? item.isReminderEnabled
-                : false);
+            ? item.isReminderEnabled
+            : false);
     final bool isScheduleItem = item is ScheduleItem;
 
     if (item.timeStart != null && item.timeEnd != null) {
@@ -3822,6 +3864,9 @@ class _TasksScreenState extends State<TasksScreen>
                         child: GestureDetector(
                           onTap: () => setModalState(() {
                             mTimeType = mTimeType == t ? 'none' : t;
+                            mReminderEnabled = false;
+                            mStartTime = null;
+                            mEndTime = null;
                             if (t != 'duration') mDuration = null;
                           }),
                           child: Container(
@@ -3875,8 +3920,13 @@ class _TasksScreenState extends State<TasksScreen>
                                 context: context,
                                 initialTime: mStartTime ?? TimeOfDay.now(),
                               );
-                              if (t != null)
-                                setModalState(() => mStartTime = t);
+                              if (t != null) {
+                                setModalState(() {
+                                  mStartTime = t;
+                                  mReminderEnabled =
+                                      _isCoreReminderEnabledGlobally;
+                                });
+                              }
                             },
                             child: Container(
                               padding: const EdgeInsets.symmetric(
@@ -3949,7 +3999,8 @@ class _TasksScreenState extends State<TasksScreen>
                           if (isScheduleItem || item is TaskItem)
                             GestureDetector(
                               onTap: () async {
-                                final enabled = await _checkCoreReminderEnabledGlobally();
+                                final enabled =
+                                    await _checkCoreReminderEnabledGlobally();
                                 if (!enabled) {
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     const SnackBar(
@@ -3959,14 +4010,25 @@ class _TasksScreenState extends State<TasksScreen>
                                   );
                                   return;
                                 }
-                                setModalState(() => mReminderEnabled = !mReminderEnabled);
+                                if (mStartTime == null) {
+                                  _showSelectTimeBeforeReminderSnackBar();
+                                  return;
+                                }
+                                setModalState(
+                                  () => mReminderEnabled = !mReminderEnabled,
+                                );
                               },
                               child: AnimatedContainer(
                                 duration: const Duration(milliseconds: 200),
                                 width: 28,
                                 height: 28,
                                 decoration: BoxDecoration(
-                                  color: (_isCoreReminderEnabledGlobally && mReminderEnabled)
+                                  color:
+                                      _resolvedTimeReminderEnabled(
+                                        mTimeType,
+                                        mStartTime,
+                                        mReminderEnabled,
+                                      )
                                       ? _coach.accentColor.withOpacity(0.12)
                                       : Colors.transparent,
                                   shape: BoxShape.circle,
@@ -3974,9 +4036,20 @@ class _TasksScreenState extends State<TasksScreen>
                                 child: Icon(
                                   !_isCoreReminderEnabledGlobally
                                       ? Icons.notifications_off
-                                      : (mReminderEnabled ? Icons.notifications_active : Icons.notifications_off),
+                                      : (_resolvedTimeReminderEnabled(
+                                              mTimeType,
+                                              mStartTime,
+                                              mReminderEnabled,
+                                            )
+                                            ? Icons.notifications_active
+                                            : Icons.notifications_off),
                                   size: 18,
-                                  color: (_isCoreReminderEnabledGlobally && mReminderEnabled)
+                                  color:
+                                      _resolvedTimeReminderEnabled(
+                                        mTimeType,
+                                        mStartTime,
+                                        mReminderEnabled,
+                                      )
                                       ? _coach.accentColor
                                       : const Color(0xFFB0B0C8),
                                 ),
@@ -4120,9 +4193,17 @@ class _TasksScreenState extends State<TasksScreen>
                       }
 
                       if (isScheduleItem) {
-                        item.isReminderEnabled = mReminderEnabled;
+                        item.isReminderEnabled = _resolvedTimeReminderEnabled(
+                          mTimeType,
+                          mStartTime,
+                          mReminderEnabled,
+                        );
                       } else if (item is TaskItem) {
-                        item.isReminderEnabled = mReminderEnabled;
+                        item.isReminderEnabled = _resolvedTimeReminderEnabled(
+                          mTimeType,
+                          mStartTime,
+                          mReminderEnabled,
+                        );
                       }
 
                       onSave();
@@ -4242,13 +4323,18 @@ class _TasksScreenState extends State<TasksScreen>
                       ),
                     ),
                     // 알림 종 아이콘, 시간/소요시간 뱃지, 습관 뱃지 표시
-                    if (t.time != null || t.duration != null || t.isHabit || (t.isReminderEnabled && _isCoreReminderEnabledGlobally)) ...[
+                    if (t.time != null ||
+                        t.duration != null ||
+                        t.isHabit ||
+                        (t.isReminderEnabled &&
+                            _isCoreReminderEnabledGlobally)) ...[
                       const SizedBox(height: 4),
                       Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           // 깨끗한 보라색 종 아이콘
-                          if (t.isReminderEnabled && _isCoreReminderEnabledGlobally)
+                          if (t.isReminderEnabled &&
+                              _isCoreReminderEnabledGlobally)
                             const Padding(
                               padding: EdgeInsets.only(right: 6),
                               child: Icon(
@@ -4285,7 +4371,10 @@ class _TasksScreenState extends State<TasksScreen>
                           // 습관 뱃지
                           if (t.isHabit)
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
                               decoration: BoxDecoration(
                                 color: _coach.accentColor.withOpacity(0.1),
                                 borderRadius: BorderRadius.circular(6),
@@ -4360,6 +4449,9 @@ class _TasksScreenState extends State<TasksScreen>
                         child: GestureDetector(
                           onTap: () => setState(() {
                             _todayTimeType = _todayTimeType == t ? 'none' : t;
+                            _todayReminderEnabled = false;
+                            _todayStartTime = null;
+                            _todayEndTime = null;
                             if (t != 'duration') _todayDuration = null;
                           }),
                           child: Container(
@@ -4411,8 +4503,13 @@ class _TasksScreenState extends State<TasksScreen>
                                 context: context,
                                 initialTime: _todayStartTime ?? TimeOfDay.now(),
                               );
-                              if (t != null)
-                                setState(() => _todayStartTime = t);
+                              if (t != null) {
+                                setState(() {
+                                  _todayStartTime = t;
+                                  _todayReminderEnabled =
+                                      _isCoreReminderEnabledGlobally;
+                                });
+                              }
                             },
                             child: Container(
                               padding: const EdgeInsets.symmetric(
@@ -4492,7 +4589,8 @@ class _TasksScreenState extends State<TasksScreen>
                           const SizedBox(width: 8),
                           GestureDetector(
                             onTap: () async {
-                              final enabled = await _checkCoreReminderEnabledGlobally();
+                              final enabled =
+                                  await _checkCoreReminderEnabledGlobally();
                               if (!enabled) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
@@ -4502,14 +4600,26 @@ class _TasksScreenState extends State<TasksScreen>
                                 );
                                 return;
                               }
-                              setState(() => _todayReminderEnabled = !_todayReminderEnabled);
+                              if (_todayStartTime == null) {
+                                _showSelectTimeBeforeReminderSnackBar();
+                                return;
+                              }
+                              setState(
+                                () => _todayReminderEnabled =
+                                    !_todayReminderEnabled,
+                              );
                             },
                             child: AnimatedContainer(
                               duration: const Duration(milliseconds: 200),
                               width: 28,
                               height: 28,
                               decoration: BoxDecoration(
-                                color: (_isCoreReminderEnabledGlobally && _todayReminderEnabled)
+                                color:
+                                    _resolvedTimeReminderEnabled(
+                                      _todayTimeType,
+                                      _todayStartTime,
+                                      _todayReminderEnabled,
+                                    )
                                     ? _coach.accentColor.withOpacity(0.12)
                                     : Colors.transparent,
                                 shape: BoxShape.circle,
@@ -4517,9 +4627,20 @@ class _TasksScreenState extends State<TasksScreen>
                               child: Icon(
                                 !_isCoreReminderEnabledGlobally
                                     ? Icons.notifications_off
-                                    : (_todayReminderEnabled ? Icons.notifications_active : Icons.notifications_off),
+                                    : (_resolvedTimeReminderEnabled(
+                                            _todayTimeType,
+                                            _todayStartTime,
+                                            _todayReminderEnabled,
+                                          )
+                                          ? Icons.notifications_active
+                                          : Icons.notifications_off),
                                 size: 18,
-                                color: (_isCoreReminderEnabledGlobally && _todayReminderEnabled)
+                                color:
+                                    _resolvedTimeReminderEnabled(
+                                      _todayTimeType,
+                                      _todayStartTime,
+                                      _todayReminderEnabled,
+                                    )
                                     ? _coach.accentColor
                                     : const Color(0xFFB0B0C8),
                               ),
@@ -4637,7 +4758,9 @@ class _TasksScreenState extends State<TasksScreen>
                             child: Icon(
                               _isListeningToday ? Icons.mic : Icons.mic_none,
                               size: 18,
-                              color: _isListeningToday ? Colors.red : const Color(0xFF8B7CFF),
+                              color: _isListeningToday
+                                  ? Colors.red
+                                  : const Color(0xFF8B7CFF),
                             ),
                           ),
                         ),
@@ -5152,7 +5275,7 @@ class _TasksScreenState extends State<TasksScreen>
     StateSetter setModalState,
   ) {
     final coach = CoachConfigs.get(widget.coachId);
-    
+
     showDialog(
       context: context,
       builder: (dialogCtx) {
@@ -5546,14 +5669,19 @@ class _TasksScreenState extends State<TasksScreen>
                                   margin: const EdgeInsets.only(bottom: 8),
                                   padding: const EdgeInsets.all(12),
                                   decoration: BoxDecoration(
-                                    color: m.done ? const Color(0xFFF8FCFA) : Colors.white,
+                                    color: m.done
+                                        ? const Color(0xFFF8FCFA)
+                                        : Colors.white,
                                     borderRadius: BorderRadius.circular(12),
                                     border: Border.all(
-                                      color: m.done ? const Color(0xFFDFF8EE) : const Color(0xFFE8E3F8),
+                                      color: m.done
+                                          ? const Color(0xFFDFF8EE)
+                                          : const Color(0xFFE8E3F8),
                                     ),
                                   ),
                                   child: Row(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       ReorderableDragStartListener(
                                         index: i,
@@ -5563,17 +5691,27 @@ class _TasksScreenState extends State<TasksScreen>
                                           alignment: Alignment.center,
                                           margin: const EdgeInsets.only(top: 2),
                                           decoration: BoxDecoration(
-                                            color: m.done ? const Color(0xFF5AD7B0) : const Color(0xFFF5F3FF),
-                                            borderRadius: BorderRadius.circular(m.done ? 14 : 8),
+                                            color: m.done
+                                                ? const Color(0xFF5AD7B0)
+                                                : const Color(0xFFF5F3FF),
+                                            borderRadius: BorderRadius.circular(
+                                              m.done ? 14 : 8,
+                                            ),
                                           ),
                                           child: m.done
-                                              ? const Icon(Icons.check, color: Colors.white, size: 16)
+                                              ? const Icon(
+                                                  Icons.check,
+                                                  color: Colors.white,
+                                                  size: 16,
+                                                )
                                               : Text(
                                                   '${i + 1}',
                                                   style: GoogleFonts.notoSansKr(
                                                     fontSize: 12,
                                                     fontWeight: FontWeight.bold,
-                                                    color: const Color(0xFFA0A0B0),
+                                                    color: const Color(
+                                                      0xFFA0A0B0,
+                                                    ),
                                                   ),
                                                 ),
                                         ),
@@ -5581,51 +5719,98 @@ class _TasksScreenState extends State<TasksScreen>
                                       const SizedBox(width: 12),
                                       Expanded(
                                         child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
                                           children: [
                                             Row(
-                                              crossAxisAlignment: CrossAxisAlignment.center,
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.center,
                                               children: [
                                                 Expanded(
                                                   child: TextField(
-                                                    controller: TextEditingController(text: m.text)
-                                                      ..selection = TextSelection.collapsed(offset: m.text.length),
-                                                    onChanged: (val) => m.text = val,
-                                                    style: GoogleFonts.notoSansKr(
-                                                      fontSize: 14,
-                                                      fontWeight: FontWeight.w600,
-                                                      color: const Color(0xFF3D3A4E),
-                                                      decoration: TextDecoration.none,
-                                                    ),
+                                                    controller:
+                                                        TextEditingController(
+                                                            text: m.text,
+                                                          )
+                                                          ..selection =
+                                                              TextSelection.collapsed(
+                                                                offset: m
+                                                                    .text
+                                                                    .length,
+                                                              ),
+                                                    onChanged: (val) =>
+                                                        m.text = val,
+                                                    style:
+                                                        GoogleFonts.notoSansKr(
+                                                          fontSize: 14,
+                                                          fontWeight:
+                                                              FontWeight.w600,
+                                                          color: const Color(
+                                                            0xFF3D3A4E,
+                                                          ),
+                                                          decoration:
+                                                              TextDecoration
+                                                                  .none,
+                                                        ),
                                                     decoration: InputDecoration(
                                                       hintText: '단계 목표 입력...',
-                                                      hintStyle: GoogleFonts.notoSansKr(color: const Color(0xFFA0A0B0)),
+                                                      hintStyle:
+                                                          GoogleFonts.notoSansKr(
+                                                            color: const Color(
+                                                              0xFFA0A0B0,
+                                                            ),
+                                                          ),
                                                       border: InputBorder.none,
                                                       isDense: true,
-                                                      contentPadding: EdgeInsets.zero,
+                                                      contentPadding:
+                                                          EdgeInsets.zero,
                                                     ),
                                                   ),
                                                 ),
                                                 if (m.done) ...[
                                                   const SizedBox(width: 8),
                                                   Container(
-                                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                    padding:
+                                                        const EdgeInsets.symmetric(
+                                                          horizontal: 8,
+                                                          vertical: 4,
+                                                        ),
                                                     decoration: BoxDecoration(
-                                                      color: const Color(0xFFDFF8EE),
-                                                      borderRadius: BorderRadius.circular(12),
+                                                      color: const Color(
+                                                        0xFFDFF8EE,
+                                                      ),
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            12,
+                                                          ),
                                                     ),
                                                     child: Row(
-                                                      mainAxisSize: MainAxisSize.min,
+                                                      mainAxisSize:
+                                                          MainAxisSize.min,
                                                       children: [
-                                                        const Icon(Icons.check, size: 12, color: Color(0xFF33A883)),
-                                                        const SizedBox(width: 2),
+                                                        const Icon(
+                                                          Icons.check,
+                                                          size: 12,
+                                                          color: Color(
+                                                            0xFF33A883,
+                                                          ),
+                                                        ),
+                                                        const SizedBox(
+                                                          width: 2,
+                                                        ),
                                                         Text(
                                                           '완료',
-                                                          style: GoogleFonts.notoSansKr(
-                                                            fontSize: 11,
-                                                            fontWeight: FontWeight.bold,
-                                                            color: const Color(0xFF33A883),
-                                                          ),
+                                                          style:
+                                                              GoogleFonts.notoSansKr(
+                                                                fontSize: 11,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .bold,
+                                                                color:
+                                                                    const Color(
+                                                                      0xFF33A883,
+                                                                    ),
+                                                              ),
                                                         ),
                                                       ],
                                                     ),
@@ -5634,10 +5819,17 @@ class _TasksScreenState extends State<TasksScreen>
                                                 const SizedBox(width: 8),
                                                 GestureDetector(
                                                   onTap: () {
-                                                    _showMemoDialog(context, m, setModalState);
+                                                    _showMemoDialog(
+                                                      context,
+                                                      m,
+                                                      setModalState,
+                                                    );
                                                   },
                                                   child: const Padding(
-                                                    padding: EdgeInsets.only(top: 4.0, right: 10.0),
+                                                    padding: EdgeInsets.only(
+                                                      top: 4.0,
+                                                      right: 10.0,
+                                                    ),
                                                     child: Icon(
                                                       Icons.note_alt_outlined,
                                                       color: Color(0xFF8B7CFF),
@@ -5652,7 +5844,9 @@ class _TasksScreenState extends State<TasksScreen>
                                                     });
                                                   },
                                                   child: const Padding(
-                                                    padding: EdgeInsets.only(top: 5.0),
+                                                    padding: EdgeInsets.only(
+                                                      top: 5.0,
+                                                    ),
                                                     child: Icon(
                                                       Icons.close,
                                                       color: Color(0xFFD1D5DB),
@@ -5670,12 +5864,12 @@ class _TasksScreenState extends State<TasksScreen>
                                                     context: context,
                                                     initialDate:
                                                         m.date != null &&
-                                                                m.date!.isNotEmpty
-                                                            ? DateTime.tryParse(
-                                                                    m.date!,
-                                                                  ) ??
-                                                                  DateTime.now()
-                                                            : DateTime.now(),
+                                                            m.date!.isNotEmpty
+                                                        ? DateTime.tryParse(
+                                                                m.date!,
+                                                              ) ??
+                                                              DateTime.now()
+                                                        : DateTime.now(),
                                                     firstDate: DateTime(2000),
                                                     lastDate: DateTime(2050),
                                                     builder: (context, child) {
@@ -5686,7 +5880,8 @@ class _TasksScreenState extends State<TasksScreen>
                                                                 primary: _coach
                                                                     .accentColor,
                                                                 onPrimary:
-                                                                    Colors.white,
+                                                                    Colors
+                                                                        .white,
                                                                 onSurface:
                                                                     const Color(
                                                                       0xFF3D3A4E,
@@ -5721,7 +5916,9 @@ class _TasksScreenState extends State<TasksScreen>
                                                   decoration: BoxDecoration(
                                                     color: Colors.white,
                                                     borderRadius:
-                                                        BorderRadius.circular(12),
+                                                        BorderRadius.circular(
+                                                          12,
+                                                        ),
                                                     border: Border.all(
                                                       color: const Color(
                                                         0xFFE8E3F8,
@@ -5734,13 +5931,17 @@ class _TasksScreenState extends State<TasksScreen>
                                                     children: [
                                                       const Icon(
                                                         Icons.calendar_month,
-                                                        color: Color(0xFF8B7CFF),
+                                                        color: Color(
+                                                          0xFF8B7CFF,
+                                                        ),
                                                         size: 14,
                                                       ),
                                                       const SizedBox(width: 4),
                                                       Text(
                                                         m.date != null &&
-                                                                m.date!.isNotEmpty
+                                                                m
+                                                                    .date!
+                                                                    .isNotEmpty
                                                             ? m.date!
                                                             : '기한 선택',
                                                         style: GoogleFonts.notoSansKr(
@@ -5767,73 +5968,127 @@ class _TasksScreenState extends State<TasksScreen>
                                             else if (m.achievedDate != null)
                                               Row(
                                                 children: [
-                                                  const Icon(Icons.calendar_month, size: 14, color: Color(0xFF5AD7B0)),
+                                                  const Icon(
+                                                    Icons.calendar_month,
+                                                    size: 14,
+                                                    color: Color(0xFF5AD7B0),
+                                                  ),
                                                   const SizedBox(width: 4),
                                                   Text(
                                                     '${m.achievedDate} 달성 완료',
-                                                    style: GoogleFonts.notoSansKr(
-                                                      fontSize: 12,
-                                                      color: const Color(0xFF6B7280),
-                                                    ),
+                                                    style:
+                                                        GoogleFonts.notoSansKr(
+                                                          fontSize: 12,
+                                                          color: const Color(
+                                                            0xFF6B7280,
+                                                          ),
+                                                        ),
                                                   ),
                                                   const SizedBox(width: 4),
-                                                  const Icon(Icons.pets, size: 12, color: Color(0xFF8B7CFF)),
+                                                  const Icon(
+                                                    Icons.pets,
+                                                    size: 12,
+                                                    color: Color(0xFF8B7CFF),
+                                                  ),
                                                 ],
                                               ),
-                                            if (m.memo != null && m.memo!.isNotEmpty) ...[
+                                            if (m.memo != null &&
+                                                m.memo!.isNotEmpty) ...[
                                               const SizedBox(height: 8),
                                               GestureDetector(
                                                 onTap: () {
-                                                  _showMemoDialog(context, m, setModalState);
+                                                  _showMemoDialog(
+                                                    context,
+                                                    m,
+                                                    setModalState,
+                                                  );
                                                 },
                                                 child: Container(
                                                   width: double.infinity,
-                                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
+                                                        horizontal: 12,
+                                                        vertical: 8,
+                                                      ),
                                                   decoration: BoxDecoration(
-                                                    color: const Color(0xFFF3F4F6),
-                                                    borderRadius: BorderRadius.circular(8),
+                                                    color: const Color(
+                                                      0xFFF3F4F6,
+                                                    ),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          8,
+                                                        ),
                                                   ),
                                                   child: Text(
                                                     m.memo!,
-                                                    style: GoogleFonts.notoSansKr(
-                                                      fontSize: 13,
-                                                      fontWeight: FontWeight.w500,
-                                                      color: const Color(0xFF4B5563),
-                                                    ),
+                                                    style:
+                                                        GoogleFonts.notoSansKr(
+                                                          fontSize: 13,
+                                                          fontWeight:
+                                                              FontWeight.w500,
+                                                          color: const Color(
+                                                            0xFF4B5563,
+                                                          ),
+                                                        ),
                                                     maxLines: 2,
-                                                    overflow: TextOverflow.ellipsis,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
                                                   ),
                                                 ),
                                               ),
                                             ],
                                             if (m.done) ...[
                                               const SizedBox(height: 12),
-                                              const Divider(color: Color(0xFFDFF8EE), height: 1, thickness: 1),
+                                              const Divider(
+                                                color: Color(0xFFDFF8EE),
+                                                height: 1,
+                                                thickness: 1,
+                                              ),
                                               const SizedBox(height: 12),
                                               Row(
-                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
                                                 children: [
-                                                  const Text('🎉', style: TextStyle(fontSize: 18)),
+                                                  const Text(
+                                                    '🎉',
+                                                    style: TextStyle(
+                                                      fontSize: 18,
+                                                    ),
+                                                  ),
                                                   const SizedBox(width: 8),
                                                   Expanded(
                                                     child: Column(
-                                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                                      crossAxisAlignment:
+                                                          CrossAxisAlignment
+                                                              .start,
                                                       children: [
                                                         Text(
                                                           '목표 달성을 축하해요!',
-                                                          style: GoogleFonts.notoSansKr(
-                                                            fontSize: 13,
-                                                            fontWeight: FontWeight.bold,
-                                                            color: const Color(0xFF3D3A4E),
-                                                          ),
+                                                          style:
+                                                              GoogleFonts.notoSansKr(
+                                                                fontSize: 13,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .bold,
+                                                                color:
+                                                                    const Color(
+                                                                      0xFF3D3A4E,
+                                                                    ),
+                                                              ),
                                                         ),
-                                                        const SizedBox(height: 2),
+                                                        const SizedBox(
+                                                          height: 2,
+                                                        ),
                                                         Text(
                                                           '오늘의 작은 성취가 미래의 큰 변화를 만들어요.',
-                                                          style: GoogleFonts.notoSansKr(
-                                                            fontSize: 12,
-                                                            color: const Color(0xFF6B7280),
-                                                          ),
+                                                          style:
+                                                              GoogleFonts.notoSansKr(
+                                                                fontSize: 12,
+                                                                color:
+                                                                    const Color(
+                                                                      0xFF6B7280,
+                                                                    ),
+                                                              ),
                                                         ),
                                                       ],
                                                     ),
@@ -5844,14 +6099,15 @@ class _TasksScreenState extends State<TasksScreen>
                                             ],
                                             if (!m.done)
                                               const SizedBox(height: 8),
-                                            
+
                                             GestureDetector(
                                               onTap: () {
                                                 setModalState(() {
                                                   m.done = !m.done;
                                                   if (m.done) {
                                                     final now = DateTime.now();
-                                                    m.achievedDate = "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
+                                                    m.achievedDate =
+                                                        "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
                                                   } else {
                                                     m.achievedDate = null;
                                                   }
@@ -5859,31 +6115,65 @@ class _TasksScreenState extends State<TasksScreen>
                                               },
                                               child: Container(
                                                 width: double.infinity,
-                                                padding: const EdgeInsets.symmetric(vertical: 8),
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      vertical: 8,
+                                                    ),
                                                 decoration: BoxDecoration(
-                                                  color: m.done ? Colors.transparent : const Color(0xFFF9FAFB),
-                                                  borderRadius: BorderRadius.circular(10),
+                                                  color: m.done
+                                                      ? Colors.transparent
+                                                      : const Color(0xFFF9FAFB),
+                                                  borderRadius:
+                                                      BorderRadius.circular(10),
                                                   border: Border.all(
-                                                    color: m.done ? const Color(0xFF5AD7B0) : const Color(0xFFE5E7EB),
+                                                    color: m.done
+                                                        ? const Color(
+                                                            0xFF5AD7B0,
+                                                          )
+                                                        : const Color(
+                                                            0xFFE5E7EB,
+                                                          ),
                                                     width: m.done ? 1.0 : 1.5,
                                                   ),
                                                 ),
                                                 child: Row(
-                                                  mainAxisAlignment: MainAxisAlignment.center,
+                                                  mainAxisAlignment:
+                                                      MainAxisAlignment.center,
                                                   children: [
                                                     Icon(
-                                                      m.done ? Icons.refresh : Icons.radio_button_unchecked,
+                                                      m.done
+                                                          ? Icons.refresh
+                                                          : Icons
+                                                                .radio_button_unchecked,
                                                       size: 16,
-                                                      color: m.done ? const Color(0xFF33A883) : const Color(0xFF9CA3AF),
+                                                      color: m.done
+                                                          ? const Color(
+                                                              0xFF33A883,
+                                                            )
+                                                          : const Color(
+                                                              0xFF9CA3AF,
+                                                            ),
                                                     ),
                                                     const SizedBox(width: 4),
                                                     Text(
-                                                      m.done ? '완료 취소 (다시 진행 중으로)' : '완료 표시',
-                                                      style: GoogleFonts.notoSansKr(
-                                                        fontSize: m.done ? 12 : 13,
-                                                        fontWeight: FontWeight.w700,
-                                                        color: m.done ? const Color(0xFF33A883) : const Color(0xFF9CA3AF),
-                                                      ),
+                                                      m.done
+                                                          ? '완료 취소 (다시 진행 중으로)'
+                                                          : '완료 표시',
+                                                      style:
+                                                          GoogleFonts.notoSansKr(
+                                                            fontSize: m.done
+                                                                ? 12
+                                                                : 13,
+                                                            fontWeight:
+                                                                FontWeight.w700,
+                                                            color: m.done
+                                                                ? const Color(
+                                                                    0xFF33A883,
+                                                                  )
+                                                                : const Color(
+                                                                    0xFF9CA3AF,
+                                                                  ),
+                                                          ),
                                                     ),
                                                   ],
                                                 ),
@@ -6233,6 +6523,29 @@ class _TasksScreenState extends State<TasksScreen>
     return '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
   }
 
+  bool _canEnableTimeReminder(String timeType, TimeOfDay? startTime) {
+    return _isCoreReminderEnabledGlobally &&
+        (timeType == 'single' || timeType == 'range') &&
+        startTime != null;
+  }
+
+  bool _resolvedTimeReminderEnabled(
+    String timeType,
+    TimeOfDay? startTime,
+    bool requested,
+  ) {
+    return requested && _canEnableTimeReminder(timeType, startTime);
+  }
+
+  void _showSelectTimeBeforeReminderSnackBar() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('알람을 켜려면 시간을 먼저 선택해주세요.'),
+        duration: Duration(seconds: 2),
+      ),
+    );
+  }
+
   String _timeTypeFromTask(TaskItem task) {
     if (task.timeStart != null && task.timeEnd != null) return 'range';
     if (task.timeStart != null) return 'single';
@@ -6253,7 +6566,11 @@ class _TasksScreenState extends State<TasksScreen>
       text: task.text,
       done: false,
       createdAt: DateTime.now().toIso8601String(),
-      isReminderEnabled: reminderEnabled,
+      isReminderEnabled: _resolvedTimeReminderEnabled(
+        timeType,
+        startTime,
+        reminderEnabled,
+      ),
       deferredCount: task.deferredCount + 1,
     );
 
@@ -6467,7 +6784,11 @@ class _TasksScreenState extends State<TasksScreen>
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       text: text,
       createdAt: DateTime.now().toIso8601String(),
-      isReminderEnabled: _schReminderEnabled,
+      isReminderEnabled: _resolvedTimeReminderEnabled(
+        _schTimeType,
+        _schStartTime,
+        _schReminderEnabled,
+      ),
     );
 
     if (_schTimeType == 'single' && _schStartTime != null) {
@@ -6557,11 +6878,17 @@ class _TasksScreenState extends State<TasksScreen>
               start = baseText.length;
               end = baseText.length;
             }
-            final insertText = (baseText.isNotEmpty && start > 0 && baseText[start - 1] != ' ' ? ' ' : '') + spoken;
+            final insertText =
+                (baseText.isNotEmpty && start > 0 && baseText[start - 1] != ' '
+                    ? ' '
+                    : '') +
+                spoken;
             controller.text = baseText.replaceRange(start, end, insertText);
-            controller.selection = TextSelection.collapsed(offset: start + insertText.length);
+            controller.selection = TextSelection.collapsed(
+              offset: start + insertText.length,
+            );
           });
-          
+
           if (result.finalResult) {
             _handleSpeechFinished(controller.text.trim(), isToday: isToday);
           }
@@ -6603,7 +6930,10 @@ class _TasksScreenState extends State<TasksScreen>
     }
   }
 
-  ParsedVoiceRegistration _parseNaturalLanguageVoice(String input, DateTime defaultDate) {
+  ParsedVoiceRegistration _parseNaturalLanguageVoice(
+    String input,
+    DateTime defaultDate,
+  ) {
     String cleaned = input.trim();
     cleaned = cleaned.replaceAll(RegExp(r'[.\s]+$'), '');
     final suffixRegex = RegExp(r'\s*(등록해줘|추가해줘)$');
@@ -6723,7 +7053,8 @@ class _TasksScreenState extends State<TasksScreen>
         } else {
           if (rawHour < 12) {
             final now = DateTime.now();
-            if (now.hour > rawHour || (now.hour == rawHour && now.minute >= minute)) {
+            if (now.hour > rawHour ||
+                (now.hour == rawHour && now.minute >= minute)) {
               hour24 = rawHour + 12;
             }
           }
@@ -6746,7 +7077,10 @@ class _TasksScreenState extends State<TasksScreen>
     );
   }
 
-  void _showVoiceRegistrationConfirmDialog(String speechText, {required bool isToday}) {
+  void _showVoiceRegistrationConfirmDialog(
+    String speechText, {
+    required bool isToday,
+  }) {
     if (_isConfirmDialogShowing) return;
     _isConfirmDialogShowing = true;
 
@@ -6756,7 +7090,8 @@ class _TasksScreenState extends State<TasksScreen>
     final titleCtrl = TextEditingController(text: parsed.title);
     DateTime confirmedDate = parsed.date;
     TimeOfDay? confirmedTime = parsed.time;
-    bool isReminderEnabled = _isCoreReminderEnabledGlobally;
+    bool isReminderEnabled =
+        _isCoreReminderEnabledGlobally && confirmedTime != null;
 
     showDialog(
       context: context,
@@ -6794,7 +7129,11 @@ class _TasksScreenState extends State<TasksScreen>
                         ),
                         GestureDetector(
                           onTap: () => Navigator.pop(ctx),
-                          child: const Icon(Icons.close, color: Color(0xFF9CA3AF), size: 20),
+                          child: const Icon(
+                            Icons.close,
+                            color: Color(0xFF9CA3AF),
+                            size: 20,
+                          ),
                         ),
                       ],
                     ),
@@ -6825,15 +7164,22 @@ class _TasksScreenState extends State<TasksScreen>
                             final d = await showDatePicker(
                               context: context,
                               initialDate: confirmedDate,
-                              firstDate: DateTime.now().subtract(const Duration(days: 365)),
-                              lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
+                              firstDate: DateTime.now().subtract(
+                                const Duration(days: 365),
+                              ),
+                              lastDate: DateTime.now().add(
+                                const Duration(days: 365 * 2),
+                              ),
                             );
                             if (d != null) {
                               setDialogState(() => confirmedDate = d);
                             }
                           },
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
                             decoration: BoxDecoration(
                               color: const Color(0xFFF3F4F6),
                               borderRadius: BorderRadius.circular(14),
@@ -6841,7 +7187,10 @@ class _TasksScreenState extends State<TasksScreen>
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                const Text('📅', style: TextStyle(fontSize: 13)),
+                                const Text(
+                                  '📅',
+                                  style: TextStyle(fontSize: 13),
+                                ),
                                 const SizedBox(width: 6),
                                 Text(
                                   _getVoiceDateLabel(confirmedDate),
@@ -6852,7 +7201,11 @@ class _TasksScreenState extends State<TasksScreen>
                                   ),
                                 ),
                                 const SizedBox(width: 6),
-                                const Icon(Icons.edit, size: 12, color: Color(0xFF9CA3AF)),
+                                const Icon(
+                                  Icons.edit,
+                                  size: 12,
+                                  color: Color(0xFF9CA3AF),
+                                ),
                               ],
                             ),
                           ),
@@ -6865,11 +7218,18 @@ class _TasksScreenState extends State<TasksScreen>
                               initialTime: confirmedTime ?? TimeOfDay.now(),
                             );
                             if (t != null) {
-                              setDialogState(() => confirmedTime = t);
+                              setDialogState(() {
+                                confirmedTime = t;
+                                isReminderEnabled =
+                                    _isCoreReminderEnabledGlobally;
+                              });
                             }
                           },
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
                             decoration: BoxDecoration(
                               color: const Color(0xFFF5F3FF),
                               borderRadius: BorderRadius.circular(14),
@@ -6877,10 +7237,15 @@ class _TasksScreenState extends State<TasksScreen>
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                const Text('🕒', style: TextStyle(fontSize: 13)),
+                                const Text(
+                                  '🕒',
+                                  style: TextStyle(fontSize: 13),
+                                ),
                                 const SizedBox(width: 6),
                                 Text(
-                                  confirmedTime != null ? _getVoiceTimeLabel(confirmedTime!) : "시간 설정 안 함",
+                                  confirmedTime != null
+                                      ? _getVoiceTimeLabel(confirmedTime!)
+                                      : "시간 설정 안 함",
                                   style: GoogleFonts.notoSansKr(
                                     fontSize: 13,
                                     fontWeight: FontWeight.bold,
@@ -6888,7 +7253,11 @@ class _TasksScreenState extends State<TasksScreen>
                                   ),
                                 ),
                                 const SizedBox(width: 6),
-                                const Icon(Icons.edit, size: 12, color: Color(0xFF8B7CFF)),
+                                const Icon(
+                                  Icons.edit,
+                                  size: 12,
+                                  color: Color(0xFF8B7CFF),
+                                ),
                               ],
                             ),
                           ),
@@ -6900,22 +7269,37 @@ class _TasksScreenState extends State<TasksScreen>
                     GestureDetector(
                       onTap: () async {
                         if (!isReminderEnabled) {
-                          final globalEnabled = await _checkCoreReminderEnabledGlobally();
+                          final globalEnabled =
+                              await _checkCoreReminderEnabledGlobally();
                           if (!globalEnabled) {
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('설정에서 일정 알람을 먼저 켜주세요.')),
+                              const SnackBar(
+                                content: Text('설정에서 일정 알람을 먼저 켜주세요.'),
+                              ),
                             );
                             return;
                           }
                         }
-                        setDialogState(() => isReminderEnabled = !isReminderEnabled);
+                        if (confirmedTime == null) {
+                          _showSelectTimeBeforeReminderSnackBar();
+                          return;
+                        }
+                        setDialogState(
+                          () => isReminderEnabled = !isReminderEnabled,
+                        );
                       },
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 8,
+                        ),
                         decoration: BoxDecoration(
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: const Color(0xFF1E1E2D), width: 1.5),
+                          border: Border.all(
+                            color: const Color(0xFF1E1E2D),
+                            width: 1.5,
+                          ),
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
@@ -6955,19 +7339,25 @@ class _TasksScreenState extends State<TasksScreen>
 
                               final dateStr = _dateKey(confirmedDate);
                               final entry = ScheduleItem(
-                                id: DateTime.now().millisecondsSinceEpoch.toString(),
+                                id: DateTime.now().millisecondsSinceEpoch
+                                    .toString(),
                                 text: finalTitle,
                                 createdAt: DateTime.now().toIso8601String(),
-                                isReminderEnabled: isReminderEnabled,
+                                isReminderEnabled:
+                                    isReminderEnabled &&
+                                    _isCoreReminderEnabledGlobally &&
+                                    confirmedTime != null,
                               );
 
                               if (confirmedTime != null) {
-                                entry.timeStart = "${confirmedTime!.hour}:${confirmedTime!.minute}";
+                                entry.timeStart =
+                                    "${confirmedTime!.hour}:${confirmedTime!.minute}";
                                 entry.time = _formatTime(confirmedTime!);
                               }
 
                               setState(() {
-                                if (!schedules.containsKey(dateStr)) schedules[dateStr] = [];
+                                if (!schedules.containsKey(dateStr))
+                                  schedules[dateStr] = [];
                                 schedules[dateStr]!.add(entry);
                               });
 
@@ -6981,7 +7371,9 @@ class _TasksScreenState extends State<TasksScreen>
                               Navigator.pop(ctx);
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
-                                  content: Text('"${finalTitle}" 일정을 추가했다냥! 🐾'),
+                                  content: Text(
+                                    '"${finalTitle}" 일정을 추가했다냥! 🐾',
+                                  ),
                                   duration: const Duration(seconds: 2),
                                 ),
                               );
@@ -7037,12 +7429,13 @@ class _TasksScreenState extends State<TasksScreen>
     final target = DateTime(date.year, date.month, date.day);
     final diff = target.difference(today).inDays;
 
-    final ymd = "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
+    final ymd =
+        "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
 
     if (diff == 0) return "오늘 ($ymd)";
     if (diff == 1) return "내일 ($ymd)";
     if (diff == 2) return "모레 ($ymd)";
-    
+
     final weekdays = ["월요일", "화요일", "수요일", "목요일", "금요일", "토요일", "일요일"];
     final w = weekdays[date.weekday - 1];
     return "$w ($ymd)";
@@ -7071,7 +7464,12 @@ class _TasksScreenState extends State<TasksScreen>
     return list;
   }
 
-  Widget _buildCalendarCell(DateTime day, {required bool isSelected, required bool isToday, required bool isOutside}) {
+  Widget _buildCalendarCell(
+    DateTime day, {
+    required bool isSelected,
+    required bool isToday,
+    required bool isOutside,
+  }) {
     final dateStr = _dateKey(day);
     final hasEvents = schedules[dateStr]?.isNotEmpty ?? false;
     final dayMilestones = _getMilestonesForDay(day);
@@ -7096,7 +7494,8 @@ class _TasksScreenState extends State<TasksScreen>
         fontSize: 12,
         color: const Color(0xFFCCCCCC),
       );
-    } else if (day.weekday == DateTime.saturday || day.weekday == DateTime.sunday) {
+    } else if (day.weekday == DateTime.saturday ||
+        day.weekday == DateTime.sunday) {
       textStyle = GoogleFonts.notoSansKr(
         fontSize: 12,
         color: const Color(0xFFE05C5C),
@@ -7190,13 +7589,32 @@ class _TasksScreenState extends State<TasksScreen>
               },
               calendarBuilders: CalendarBuilders(
                 defaultBuilder: (context, day, focusedDay) =>
-                    _buildCalendarCell(day, isSelected: false, isToday: false, isOutside: false),
+                    _buildCalendarCell(
+                      day,
+                      isSelected: false,
+                      isToday: false,
+                      isOutside: false,
+                    ),
                 selectedBuilder: (context, day, focusedDay) =>
-                    _buildCalendarCell(day, isSelected: true, isToday: false, isOutside: false),
-                todayBuilder: (context, day, focusedDay) =>
-                    _buildCalendarCell(day, isSelected: false, isToday: true, isOutside: false),
+                    _buildCalendarCell(
+                      day,
+                      isSelected: true,
+                      isToday: false,
+                      isOutside: false,
+                    ),
+                todayBuilder: (context, day, focusedDay) => _buildCalendarCell(
+                  day,
+                  isSelected: false,
+                  isToday: true,
+                  isOutside: false,
+                ),
                 outsideBuilder: (context, day, focusedDay) =>
-                    _buildCalendarCell(day, isSelected: false, isToday: false, isOutside: true),
+                    _buildCalendarCell(
+                      day,
+                      isSelected: false,
+                      isToday: false,
+                      isOutside: true,
+                    ),
               ),
               calendarStyle: CalendarStyle(
                 cellMargin: const EdgeInsets.all(2),
@@ -7267,9 +7685,7 @@ class _TasksScreenState extends State<TasksScreen>
           ),
           // 중단: 일정 목록 (스크롤)
           Expanded(
-            child: SingleChildScrollView(
-              child: _buildScheduleListOnly(),
-            ),
+            child: SingleChildScrollView(child: _buildScheduleListOnly()),
           ),
           // 하단: 일정 등록 영역 (고정)
           _buildScheduleInputArea(),
@@ -7317,10 +7733,14 @@ class _TasksScreenState extends State<TasksScreen>
                 margin: const EdgeInsets.only(bottom: 8),
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: isDone ? const Color(0xFFF8FCFA) : const Color(0xFFF3F0FF),
+                  color: isDone
+                      ? const Color(0xFFF8FCFA)
+                      : const Color(0xFFF3F0FF),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color: isDone ? const Color(0xFFDFF8EE) : const Color(0xFFD8D0FA),
+                    color: isDone
+                        ? const Color(0xFFDFF8EE)
+                        : const Color(0xFFD8D0FA),
                   ),
                 ),
                 child: Stack(
@@ -7347,9 +7767,13 @@ class _TasksScreenState extends State<TasksScreen>
                             height: 28,
                             alignment: Alignment.center,
                             decoration: BoxDecoration(
-                              color: isDone ? const Color(0xFF5AD7B0) : Colors.white,
+                              color: isDone
+                                  ? const Color(0xFF5AD7B0)
+                                  : Colors.white,
                               border: Border.all(
-                                color: isDone ? const Color(0xFF5AD7B0) : const Color(0xFF8B7CFF),
+                                color: isDone
+                                    ? const Color(0xFF5AD7B0)
+                                    : const Color(0xFF8B7CFF),
                                 width: 1.5,
                               ),
                               borderRadius: BorderRadius.circular(8),
@@ -7388,7 +7812,9 @@ class _TasksScreenState extends State<TasksScreen>
                                         ),
                                         decoration: BoxDecoration(
                                           color: const Color(0xFFE0E0FF),
-                                          borderRadius: BorderRadius.circular(4),
+                                          borderRadius: BorderRadius.circular(
+                                            4,
+                                          ),
                                         ),
                                         child: Text(
                                           '마일스톤',
@@ -7424,7 +7850,8 @@ class _TasksScreenState extends State<TasksScreen>
                                       decoration: TextDecoration.none,
                                     ),
                                   ),
-                                  if (m.milestone.memo != null && m.milestone.memo!.isNotEmpty) ...[
+                                  if (m.milestone.memo != null &&
+                                      m.milestone.memo!.isNotEmpty) ...[
                                     const SizedBox(height: 4),
                                     Text(
                                       m.milestone.memo!,
@@ -7445,7 +7872,10 @@ class _TasksScreenState extends State<TasksScreen>
                         if (isDone) ...[
                           const SizedBox(width: 8),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
                             decoration: BoxDecoration(
                               color: const Color(0xFFDFF8EE),
                               borderRadius: BorderRadius.circular(12),
@@ -7453,7 +7883,11 @@ class _TasksScreenState extends State<TasksScreen>
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                const Icon(Icons.check, size: 12, color: Color(0xFF33A883)),
+                                const Icon(
+                                  Icons.check,
+                                  size: 12,
+                                  color: Color(0xFF33A883),
+                                ),
                                 const SizedBox(width: 4),
                                 Text(
                                   '완료',
@@ -7643,7 +8077,7 @@ class _TasksScreenState extends State<TasksScreen>
   Widget _buildScheduleInputArea() {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
     final isKeyboardOpen = bottomInset > 0;
-    
+
     // Bottom padding: when keyboard is open, pad by bottomInset.
     // When keyboard is closed, pad by SafeArea bottom padding + some default padding (e.g. 16).
     final double paddingBottom = isKeyboardOpen
@@ -7680,6 +8114,9 @@ class _TasksScreenState extends State<TasksScreen>
                 child: GestureDetector(
                   onTap: () => setState(() {
                     _schTimeType = _schTimeType == t ? 'none' : t;
+                    _schReminderEnabled = false;
+                    _schStartTime = null;
+                    _schEndTime = null;
                     if (t != 'duration') _schDuration = null;
                   }),
                   child: Container(
@@ -7731,7 +8168,12 @@ class _TasksScreenState extends State<TasksScreen>
                         context: context,
                         initialTime: _schStartTime ?? TimeOfDay.now(),
                       );
-                      if (t != null) setState(() => _schStartTime = t);
+                      if (t != null) {
+                        setState(() {
+                          _schStartTime = t;
+                          _schReminderEnabled = _isCoreReminderEnabledGlobally;
+                        });
+                      }
                     },
                     child: Container(
                       padding: const EdgeInsets.symmetric(
@@ -7786,9 +8228,7 @@ class _TasksScreenState extends State<TasksScreen>
                           vertical: 6,
                         ),
                         decoration: BoxDecoration(
-                          border: Border.all(
-                            color: const Color(0xFFE5E7EB),
-                          ),
+                          border: Border.all(color: const Color(0xFFE5E7EB)),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Text(
@@ -7818,14 +8258,25 @@ class _TasksScreenState extends State<TasksScreen>
                         );
                         return;
                       }
-                      setState(() => _schReminderEnabled = !_schReminderEnabled);
+                      if (_schStartTime == null) {
+                        _showSelectTimeBeforeReminderSnackBar();
+                        return;
+                      }
+                      setState(
+                        () => _schReminderEnabled = !_schReminderEnabled,
+                      );
                     },
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 200),
                       width: 28,
                       height: 28,
                       decoration: BoxDecoration(
-                        color: (_isCoreReminderEnabledGlobally && _schReminderEnabled)
+                        color:
+                            _resolvedTimeReminderEnabled(
+                              _schTimeType,
+                              _schStartTime,
+                              _schReminderEnabled,
+                            )
                             ? _coach.accentColor.withOpacity(0.12)
                             : Colors.transparent,
                         shape: BoxShape.circle,
@@ -7833,9 +8284,20 @@ class _TasksScreenState extends State<TasksScreen>
                       child: Icon(
                         !_isCoreReminderEnabledGlobally
                             ? Icons.notifications_off
-                            : (_schReminderEnabled ? Icons.notifications_active : Icons.notifications_off),
+                            : (_resolvedTimeReminderEnabled(
+                                    _schTimeType,
+                                    _schStartTime,
+                                    _schReminderEnabled,
+                                  )
+                                  ? Icons.notifications_active
+                                  : Icons.notifications_off),
                         size: 18,
-                        color: (_isCoreReminderEnabledGlobally && _schReminderEnabled)
+                        color:
+                            _resolvedTimeReminderEnabled(
+                              _schTimeType,
+                              _schStartTime,
+                              _schReminderEnabled,
+                            )
                             ? _coach.accentColor
                             : const Color(0xFFB0B0C8),
                       ),
@@ -7913,7 +8375,9 @@ class _TasksScreenState extends State<TasksScreen>
                                 color: const Color(0xFFA0A0B0),
                               ),
                               border: InputBorder.none,
-                              contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                              contentPadding: const EdgeInsets.symmetric(
+                                vertical: 12,
+                              ),
                             ),
                             onSubmitted: (v) => _addSchedule(),
                           ),
@@ -7938,7 +8402,9 @@ class _TasksScreenState extends State<TasksScreen>
                             child: Icon(
                               _isListeningSchedule ? Icons.mic : Icons.mic_none,
                               size: 18,
-                              color: _isListeningSchedule ? Colors.red : const Color(0xFF8B7CFF),
+                              color: _isListeningSchedule
+                                  ? Colors.red
+                                  : const Color(0xFF8B7CFF),
                             ),
                           ),
                         ),
@@ -8171,7 +8637,9 @@ class _TasksScreenState extends State<TasksScreen>
       );
     }
     String? mDuration = editHabit?.habitDuration;
-    bool mReminderEnabled = _isCoreReminderEnabledGlobally && (editHabit?.isReminderEnabled ?? true);
+    bool mReminderEnabled =
+        _isCoreReminderEnabledGlobally &&
+        (editHabit?.isReminderEnabled ?? true);
 
     final countCtrl = TextEditingController(
       text: editHabit?.countGoal?.toString() ?? '',
@@ -8496,7 +8964,8 @@ class _TasksScreenState extends State<TasksScreen>
                               const SizedBox(width: 8),
                               GestureDetector(
                                 onTap: () async {
-                                  final enabled = await _checkCoreReminderEnabledGlobally();
+                                  final enabled =
+                                      await _checkCoreReminderEnabledGlobally();
                                   if (!enabled) {
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       const SnackBar(
@@ -8506,14 +8975,18 @@ class _TasksScreenState extends State<TasksScreen>
                                     );
                                     return;
                                   }
-                                  setModalState(() => mReminderEnabled = !mReminderEnabled);
+                                  setModalState(
+                                    () => mReminderEnabled = !mReminderEnabled,
+                                  );
                                 },
                                 child: AnimatedContainer(
                                   duration: const Duration(milliseconds: 200),
                                   width: 28,
                                   height: 28,
                                   decoration: BoxDecoration(
-                                    color: (_isCoreReminderEnabledGlobally && mReminderEnabled)
+                                    color:
+                                        (_isCoreReminderEnabledGlobally &&
+                                            mReminderEnabled)
                                         ? _coach.accentColor.withOpacity(0.12)
                                         : Colors.transparent,
                                     shape: BoxShape.circle,
@@ -8521,9 +8994,13 @@ class _TasksScreenState extends State<TasksScreen>
                                   child: Icon(
                                     !_isCoreReminderEnabledGlobally
                                         ? Icons.notifications_off
-                                        : (mReminderEnabled ? Icons.notifications_active : Icons.notifications_off),
+                                        : (mReminderEnabled
+                                              ? Icons.notifications_active
+                                              : Icons.notifications_off),
                                     size: 18,
-                                    color: (_isCoreReminderEnabledGlobally && mReminderEnabled)
+                                    color:
+                                        (_isCoreReminderEnabledGlobally &&
+                                            mReminderEnabled)
                                         ? _coach.accentColor
                                         : const Color(0xFFB0B0C8),
                                   ),
@@ -8883,7 +9360,8 @@ class _MilestoneMemoDialogState extends State<MilestoneMemoDialog> {
   void initState() {
     super.initState();
     _textCtrl = TextEditingController(text: widget.milestone.memo ?? '');
-    _isEditing = widget.milestone.memo == null || widget.milestone.memo!.isEmpty;
+    _isEditing =
+        widget.milestone.memo == null || widget.milestone.memo!.isEmpty;
     _focusNode.addListener(_onFocusChange);
     _initSpeech();
   }
@@ -8934,9 +9412,17 @@ class _MilestoneMemoDialogState extends State<MilestoneMemoDialog> {
               start = _baseText.length;
               end = _baseText.length;
             }
-            final insertText = (_baseText.isNotEmpty && start > 0 && _baseText[start - 1] != ' ' ? ' ' : '') + spoken;
+            final insertText =
+                (_baseText.isNotEmpty &&
+                        start > 0 &&
+                        _baseText[start - 1] != ' '
+                    ? ' '
+                    : '') +
+                spoken;
             _textCtrl.text = _baseText.replaceRange(start, end, insertText);
-            _textCtrl.selection = TextSelection.collapsed(offset: start + insertText.length);
+            _textCtrl.selection = TextSelection.collapsed(
+              offset: start + insertText.length,
+            );
           });
         }
       },
@@ -8963,23 +9449,26 @@ class _MilestoneMemoDialogState extends State<MilestoneMemoDialog> {
     }
     final newText = currentText.replaceRange(start, end, textToInsert);
     _textCtrl.text = newText;
-    _textCtrl.selection = TextSelection.collapsed(offset: start + textToInsert.length);
+    _textCtrl.selection = TextSelection.collapsed(
+      offset: start + textToInsert.length,
+    );
     setState(() {});
   }
 
   Future<void> _launchURL(String urlString) async {
     try {
       String normalized = urlString.trim();
-      if (!normalized.startsWith('http://') && !normalized.startsWith('https://')) {
+      if (!normalized.startsWith('http://') &&
+          !normalized.startsWith('https://')) {
         normalized = 'https://$normalized';
       }
       final uri = WebUri(normalized);
       await InAppBrowser.openWithSystemBrowser(url: uri);
     } catch (e) {
       debugPrint("Error launching URL: $e");
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('링크를 열 수 없습니다: $urlString')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('링크를 열 수 없습니다: $urlString')));
     }
   }
 
@@ -8993,7 +9482,9 @@ class _MilestoneMemoDialogState extends State<MilestoneMemoDialog> {
       builder: (ctx) {
         return AlertDialog(
           backgroundColor: Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
           title: Text(
             '링크 추가하기',
             style: GoogleFonts.notoSansKr(
@@ -9010,7 +9501,9 @@ class _MilestoneMemoDialogState extends State<MilestoneMemoDialog> {
                   controller: nameCtrl,
                   decoration: InputDecoration(
                     labelText: '링크 이름 (선택)',
-                    labelStyle: GoogleFonts.notoSansKr(color: const Color(0xFFA0A0B0)),
+                    labelStyle: GoogleFonts.notoSansKr(
+                      color: const Color(0xFFA0A0B0),
+                    ),
                     focusedBorder: UnderlineInputBorder(
                       borderSide: BorderSide(color: widget.coach.accentColor),
                     ),
@@ -9022,7 +9515,9 @@ class _MilestoneMemoDialogState extends State<MilestoneMemoDialog> {
                   controller: urlCtrl,
                   decoration: InputDecoration(
                     labelText: '링크 주소 (URL)',
-                    labelStyle: GoogleFonts.notoSansKr(color: const Color(0xFFA0A0B0)),
+                    labelStyle: GoogleFonts.notoSansKr(
+                      color: const Color(0xFFA0A0B0),
+                    ),
                     focusedBorder: UnderlineInputBorder(
                       borderSide: BorderSide(color: widget.coach.accentColor),
                     ),
@@ -9057,9 +9552,17 @@ class _MilestoneMemoDialogState extends State<MilestoneMemoDialog> {
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: widget.coach.accentColor,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
               ),
-              child: const Text('추가', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              child: const Text(
+                '추가',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
             ),
           ],
         );
@@ -9072,15 +9575,15 @@ class _MilestoneMemoDialogState extends State<MilestoneMemoDialog> {
       r'\[([^\]]+)\]\((https?:\/\/[^\s\)]+)\)|(https?:\/\/[^\s\)]+)',
       caseSensitive: false,
     );
-    
+
     final List<InlineSpan> spans = [];
     int lastMatchEnd = 0;
-    
+
     for (final match in combinedRegex.allMatches(text)) {
       if (match.start > lastMatchEnd) {
         spans.add(TextSpan(text: text.substring(lastMatchEnd, match.start)));
       }
-      
+
       if (match.group(1) != null) {
         final label = match.group(1)!;
         final url = match.group(2)!;
@@ -9108,14 +9611,14 @@ class _MilestoneMemoDialogState extends State<MilestoneMemoDialog> {
           ),
         );
       }
-      
+
       lastMatchEnd = match.end;
     }
-    
+
     if (lastMatchEnd < text.length) {
       spans.add(TextSpan(text: text.substring(lastMatchEnd)));
     }
-    
+
     return SelectableText.rich(
       TextSpan(
         children: spans,
@@ -9144,9 +9647,7 @@ class _MilestoneMemoDialogState extends State<MilestoneMemoDialog> {
     return Dialog(
       backgroundColor: Colors.white,
       insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(24),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       child: SingleChildScrollView(
         child: Padding(
           padding: const EdgeInsets.all(20.0),
@@ -9164,7 +9665,9 @@ class _MilestoneMemoDialogState extends State<MilestoneMemoDialog> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          widget.milestone.text.isNotEmpty ? widget.milestone.text : '마일스톤 메모',
+                          widget.milestone.text.isNotEmpty
+                              ? widget.milestone.text
+                              : '마일스톤 메모',
                           style: GoogleFonts.notoSansKr(
                             fontSize: 18,
                             fontWeight: FontWeight.w800,
@@ -9250,8 +9753,14 @@ class _MilestoneMemoDialogState extends State<MilestoneMemoDialog> {
                       // View mode or edit mode text container
                       Container(
                         width: double.infinity,
-                        constraints: const BoxConstraints(minHeight: 120, maxHeight: 240),
-                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                        constraints: const BoxConstraints(
+                          minHeight: 120,
+                          maxHeight: 240,
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 4,
+                          vertical: 4,
+                        ),
                         child: SingleChildScrollView(
                           child: _isEditing
                               ? TextField(
@@ -9281,9 +9790,10 @@ class _MilestoneMemoDialogState extends State<MilestoneMemoDialog> {
                                     setState(() {
                                       _isEditing = true;
                                     });
-                                    WidgetsBinding.instance.addPostFrameCallback((_) {
-                                      _focusNode.requestFocus();
-                                    });
+                                    WidgetsBinding.instance
+                                        .addPostFrameCallback((_) {
+                                          _focusNode.requestFocus();
+                                        });
                                   },
                                   child: Container(
                                     width: double.infinity,
@@ -9308,9 +9818,14 @@ class _MilestoneMemoDialogState extends State<MilestoneMemoDialog> {
                               });
                             },
                             child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 4,
+                              ),
                               decoration: BoxDecoration(
-                                color: _isEditing ? const Color(0xFF8B7CFF) : const Color(0xFFE5E7EB),
+                                color: _isEditing
+                                    ? const Color(0xFF8B7CFF)
+                                    : const Color(0xFFE5E7EB),
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: Text(
@@ -9318,7 +9833,9 @@ class _MilestoneMemoDialogState extends State<MilestoneMemoDialog> {
                                 style: GoogleFonts.notoSansKr(
                                   fontSize: 11,
                                   fontWeight: FontWeight.bold,
-                                  color: _isEditing ? Colors.white : const Color(0xFF6B7280),
+                                  color: _isEditing
+                                      ? Colors.white
+                                      : const Color(0xFF6B7280),
                                 ),
                               ),
                             ),
@@ -9328,7 +9845,9 @@ class _MilestoneMemoDialogState extends State<MilestoneMemoDialog> {
                             '${_textCtrl.text.length} / 2000자',
                             style: GoogleFonts.notoSansKr(
                               fontSize: 11,
-                              color: _textCtrl.text.length > 2000 ? Colors.red : const Color(0xFFA0A0B0),
+                              color: _textCtrl.text.length > 2000
+                                  ? Colors.red
+                                  : const Color(0xFFA0A0B0),
                               fontWeight: FontWeight.w500,
                             ),
                           ),
@@ -9351,14 +9870,19 @@ class _MilestoneMemoDialogState extends State<MilestoneMemoDialog> {
                           ),
                         ],
                       ),
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 4,
+                      ),
                       child: Row(
                         children: [
                           Expanded(
                             child: TextField(
                               controller: _textCtrl,
                               maxLines: 1,
-                              focusNode: isTextEmpty && !_focusNode.hasFocus ? null : _focusNode,
+                              focusNode: isTextEmpty && !_focusNode.hasFocus
+                                  ? null
+                                  : _focusNode,
                               style: GoogleFonts.notoSansKr(
                                 fontSize: 14,
                                 color: const Color(0xFF3D3A4E),
@@ -9410,7 +9934,9 @@ class _MilestoneMemoDialogState extends State<MilestoneMemoDialog> {
                               child: Icon(
                                 _isListening ? Icons.mic : Icons.mic_none,
                                 size: 18,
-                                color: _isListening ? Colors.red : const Color(0xFF8B7CFF),
+                                color: _isListening
+                                    ? Colors.red
+                                    : const Color(0xFF8B7CFF),
                               ),
                             ),
                           ),
