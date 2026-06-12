@@ -38,7 +38,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _coreReminderEnabled = false;
   String _coreReminderCoachId = 'cat';
   int _coreReminderAdvanceMinutes = 10;
-  bool _hasCoreReminderTasks = false;
   bool _homeWidgetEnabled = false;
   UserData? _userData;
 
@@ -62,15 +61,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
     final userData = await UserDataService.load();
-    final rawCoreTasks = prefs.getString('nyang_core_tasks');
-    bool hasCoreReminderTasks = false;
-    if (rawCoreTasks != null && rawCoreTasks.isNotEmpty) {
-      try {
-        hasCoreReminderTasks = (jsonDecode(rawCoreTasks) as List).isNotEmpty;
-      } catch (_) {
-        hasCoreReminderTasks = false;
-      }
-    }
     setState(() {
       _userData = userData;
       _morningCallEnabled =
@@ -86,9 +76,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _morningCallCoachId =
           prefs.getString('nyang_morning_call_coach') ?? 'cat';
       _coreReminderEnabled =
-          (prefs.getBool('nyang_core_reminder_enabled') ?? false) &&
-          hasCoreReminderTasks;
-      _hasCoreReminderTasks = hasCoreReminderTasks;
+          prefs.getBool('nyang_core_reminder_enabled') ?? false;
       _coreReminderCoachId =
           prefs.getString('nyang_core_reminder_coach') ?? 'cat';
       _coreReminderAdvanceMinutes =
@@ -1599,7 +1587,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   String get _coreReminderStatusLabel {
-    if (!_coreReminderEnabled || !_hasCoreReminderTasks) return '';
+    if (!_coreReminderEnabled) return '';
     return '${_coreReminderAdvanceMinutes}분 전 · ${_shortCoachName(_coreReminderCoachId)}';
   }
 
