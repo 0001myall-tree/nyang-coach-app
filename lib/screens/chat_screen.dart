@@ -2923,6 +2923,38 @@ class _ChatScreenState extends State<ChatScreen>
       '운동중',
     ]);
     final gym = _containsAny(normalized, ['헬스장', '웨이트', '기구', '헬린이', '루틴']);
+    final reluctant = _containsAny(normalized, [
+      '하기싫',
+      '하기싫어',
+      '귀찮',
+      '못하겠',
+      '싫다',
+      '싫어',
+      '미루고싶',
+      '안하고싶',
+    ]);
+    final home = _containsAny(normalized, ['집', '홈트', '방', '거실']);
+    final outside = _containsAny(normalized, [
+      '밖',
+      '야외',
+      '공원',
+      '산책',
+      '러닝',
+      '조깅',
+    ]);
+
+    if (reluctant && !warmedUp) {
+      if (gym) {
+        return '야 하기 싫은 거 정상이다. 헬스장은 도착해도 시작 전이 제일 귀찮아.\n근데 포기하진 말자.\n일단 러닝머신 5분만 걷고, 무게는 그다음에 보자.\n몸 풀고 오면 형이 오늘 루틴 딱 줄게.';
+      }
+      if (home) {
+        return '야 하기 싫은 거 정상이다. 운동은 시작 전이 제일 귀찮아.\n근데 포기하진 말자.\n일단 매트 펴고 스트레칭 3분만 해. 3분이면 몸이 좀 깬다.\n스트레칭 영상 필요하면 말해. 형이 추천해 줄 수 있으니까.';
+      }
+      if (outside) {
+        return '야 하기 싫은 거 정상이다. 밖에 있으면 더더욱 생각 길게 하지 마라.\n근데 포기하진 말자.\n일단 5분만 걸어. 뛰는 건 그다음이다.\n몸 좀 풀리면 그때 이어갈지 정하자.';
+      }
+      return '야 하기 싫은 거 정상이다. 운동은 시작 전이 제일 귀찮아.\n근데 포기하진 말자.\n지금 어디야? 집이야, 헬스장이야, 밖이야?\n장소만 말해. 형이 거기에 맞춰서 제일 덜 귀찮은 걸로 쪼개줄게.';
+    }
 
     if (gym && warmedUp) {
       final link = await _selectBroGymLink(normalized);
