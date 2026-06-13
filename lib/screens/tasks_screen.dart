@@ -288,12 +288,46 @@ class VisionDeadline {
   );
 }
 
+class MemoSection {
+  String title;
+  String content;
+
+  MemoSection({required this.title, required this.content});
+
+  Map<String, dynamic> toJson() => {
+        'title': title,
+        'content': content,
+      };
+  factory MemoSection.fromJson(Map<String, dynamic> j) => MemoSection(
+        title: j['title'] ?? '',
+        content: j['content'] ?? '',
+      );
+}
+
+class ActionCandidate {
+  String text;
+  bool isConverted;
+
+  ActionCandidate({required this.text, this.isConverted = false});
+
+  Map<String, dynamic> toJson() => {
+        'text': text,
+        'isConverted': isConverted,
+      };
+  factory ActionCandidate.fromJson(Map<String, dynamic> j) => ActionCandidate(
+        text: j['text'] ?? '',
+        isConverted: j['isConverted'] ?? false,
+      );
+}
+
 class MilestoneItem {
   String text;
   bool done;
   String? date;
   String? achievedDate;
   String? memo;
+  List<MemoSection>? memoSections;
+  List<ActionCandidate>? actionCandidates;
 
   MilestoneItem({
     required this.text,
@@ -301,22 +335,37 @@ class MilestoneItem {
     this.date,
     this.achievedDate,
     this.memo,
+    this.memoSections,
+    this.actionCandidates,
   });
 
   Map<String, dynamic> toJson() => {
-    'text': text,
-    'done': done,
-    'date': date,
-    'achievedDate': achievedDate,
-    'memo': memo,
-  };
+        'text': text,
+        'done': done,
+        'date': date,
+        'achievedDate': achievedDate,
+        'memo': memo,
+        'memoSections': memoSections?.map((e) => e.toJson()).toList(),
+        'actionCandidates': actionCandidates?.map((e) => e.toJson()).toList(),
+      };
+
   factory MilestoneItem.fromJson(Map<String, dynamic> j) => MilestoneItem(
-    text: j['text'],
-    done: j['done'] ?? false,
-    date: j['date'],
-    achievedDate: j['achievedDate'],
-    memo: j['memo'],
-  );
+        text: j['text'],
+        done: j['done'] ?? false,
+        date: j['date'],
+        achievedDate: j['achievedDate'],
+        memo: j['memo'],
+        memoSections: j['memoSections'] != null
+            ? (j['memoSections'] as List)
+                .map((e) => MemoSection.fromJson(e))
+                .toList()
+            : null,
+        actionCandidates: j['actionCandidates'] != null
+            ? (j['actionCandidates'] as List)
+                .map((e) => ActionCandidate.fromJson(e))
+                .toList()
+            : null,
+      );
 }
 
 class MilestoneWithVision {
@@ -5309,6 +5358,63 @@ class _TasksScreenState extends State<TasksScreen>
             });
             _saveVisions();
           },
+          onConvertAction: (action, type) {
+            if (type == 'task_today') {
+              final String todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
+              final newTask = TaskItem(
+                id: DateTime.now().millisecondsSinceEpoch.toString(),
+                text: action.title,
+                category: 'schedule',
+                done: false,
+                date: todayStr,
+                createdAt: DateTime.now(),
+              );
+              setState(() {
+                tasks.add(newTask);
+              });
+              _saveTasks();
+              action.convertedTaskId = newTask.id;
+            } else if (type == 'task_date') {
+              // Show date picker
+              showDatePicker(
+                context: context,
+                initialDate: DateTime.now(),
+                firstDate: DateTime(2020),
+                lastDate: DateTime(2100),
+              ).then((picked) {
+                if (picked != null) {
+                  final String dateStr = DateFormat('yyyy-MM-dd').format(picked);
+                  final newTask = TaskItem(
+                    id: DateTime.now().millisecondsSinceEpoch.toString(),
+                    text: action.title,
+                    category: 'schedule',
+                    done: false,
+                    date: dateStr,
+                    createdAt: DateTime.now(),
+                  );
+                  setState(() {
+                    tasks.add(newTask);
+                  });
+                  _saveTasks();
+                  action.convertedTaskId = newTask.id;
+                  _saveVisions(); // Save milestone to persist conversion status
+                }
+              });
+            } else if (type == 'habit') {
+              final newHabit = HabitItem(
+                id: DateTime.now().millisecondsSinceEpoch.toString(),
+                text: action.title,
+                createdAt: DateTime.now(),
+                routineBits: 127, // Everyday by default
+              );
+              setState(() {
+                habits.add(newHabit);
+              });
+              _saveHabits();
+              action.convertedHabitId = newHabit.id;
+            }
+            _saveVisions(); // Save the updated milestone actions
+          },
         );
       },
     );
@@ -6013,8 +6119,9 @@ class _TasksScreenState extends State<TasksScreen>
                                                   ),
                                                 ],
                                               ),
-                                            if (m.memo != null &&
-                                                m.memo!.isNotEmpty) ...[
+                                            if ((m.memo != null && m.memo!.isNotEmpty) ||
+                                                (m.memoSections != null && m.memoSections!.isNotEmpty) ||
+                                                (m.actionCandidates != null && m.actionCandidates!.isNotEmpty)) ...[
                                               const SizedBox(height: 8),
                                               GestureDetector(
                                                 onTap: () {
@@ -6040,8 +6147,8 @@ class _TasksScreenState extends State<TasksScreen>
                                                           8,
                                                         ),
                                                   ),
-                                                  child: MemoDisplayWidget(
-                                                    text: m.memo!,
+                                                  child: MilestoneMemoDisplayWidget(
+                                                    milestone: m,
                                                     style: GoogleFonts.notoSansKr(
                                                       fontSize: 13,
                                                       fontWeight: FontWeight.w500,
@@ -8217,11 +8324,12 @@ class _TasksScreenState extends State<TasksScreen>
                                       decoration: TextDecoration.none,
                                     ),
                                   ),
-                                  if (m.milestone.memo != null &&
-                                      m.milestone.memo!.isNotEmpty) ...[
+                                  if ((m.milestone.memo != null && m.milestone.memo!.isNotEmpty) ||
+                                      (m.milestone.memoSections != null && m.milestone.memoSections!.isNotEmpty) ||
+                                      (m.milestone.actionCandidates != null && m.milestone.actionCandidates!.isNotEmpty)) ...[
                                     const SizedBox(height: 6),
-                                    MemoDisplayWidget(
-                                      text: m.milestone.memo!,
+                                    MilestoneMemoDisplayWidget(
+                                      milestone: m.milestone,
                                       style: GoogleFonts.notoSansKr(
                                         fontSize: 12,
                                         color: const Color(0xFF6B7280),
@@ -10230,12 +10338,14 @@ class MilestoneMemoDialog extends StatefulWidget {
   final MilestoneItem milestone;
   final CoachConfig coach;
   final Function(String?) onSave;
+  final void Function(ActionCandidate action, String convertType)? onConvertAction;
 
   const MilestoneMemoDialog({
     super.key,
     required this.milestone,
     required this.coach,
     required this.onSave,
+    this.onConvertAction,
   });
 
   @override
@@ -10243,29 +10353,142 @@ class MilestoneMemoDialog extends StatefulWidget {
 }
 
 class _MilestoneMemoDialogState extends State<MilestoneMemoDialog> {
-  late TextEditingController _textCtrl;
-  final FocusNode _focusNode = FocusNode();
+  // --- Phase 1: 다중 섹션 데이터 및 컨트롤러 ---
+  List<MemoSection> _sections = [];
+  final List<TextEditingController> _titleCtrls = [];
+  final List<TextEditingController> _contentCtrls = [];
+  final List<FocusNode> _titleFocusNodes = [];
+  final List<FocusNode> _contentFocusNodes = [];
+
+  // --- Phase 2: 실행 아이템 데이터 및 컨트롤러 ---
+  List<ActionCandidate> _actions = [];
+  final List<TextEditingController> _actionCtrls = [];
+  final List<FocusNode> _actionFocusNodes = [];
+
+  TextEditingController? _focusedCtrl;
+  TextSelection _baseSelection = const TextSelection.collapsed(offset: 0);
+  String _baseText = '';
+
+  // --- 음성 인식 ---
   final SpeechToText _speechToText = SpeechToText();
   bool _speechEnabled = false;
   bool _isListening = false;
-  String _baseText = '';
-  TextSelection _baseSelection = const TextSelection.collapsed(offset: 0);
-  bool _isEditing = false;
-
+  
   @override
   void initState() {
     super.initState();
-    _textCtrl = TextEditingController(text: widget.milestone.memo ?? '');
-    _isEditing =
-        widget.milestone.memo == null || widget.milestone.memo!.isEmpty;
-    _focusNode.addListener(_onFocusChange);
+    _migrateAndInitData();
     _initSpeech();
   }
 
-  void _onFocusChange() {
-    if (mounted) setState(() {});
+  void _migrateAndInitData() {
+    // 1. Sections
+    if (widget.milestone.memoSections != null &&
+        widget.milestone.memoSections!.isNotEmpty) {
+      _sections = List.from(widget.milestone.memoSections!);
+    } else {
+      String oldMemo = widget.milestone.memo ?? '';
+      if (oldMemo.trim().isNotEmpty) {
+        _sections.add(MemoSection(title: '기본 메모', content: oldMemo));
+      } else {
+        _sections.add(MemoSection(title: '', content: ''));
+      }
+    }
+
+    for (var section in _sections) {
+      _addSectionControllers(section.title, section.content);
+    }
+
+    // 2. Actions
+    if (widget.milestone.actionCandidates != null) {
+      _actions = List.from(widget.milestone.actionCandidates!);
+    }
+    for (var action in _actions) {
+      _addActionControllers(action.title);
+    }
   }
 
+  void _updateFocus(TextEditingController ctrl, FocusNode node) {
+    if (node.hasFocus) {
+      _focusedCtrl = ctrl;
+      if (mounted) setState(() {});
+    }
+  }
+
+  void _addSectionControllers(String title, String content) {
+    final tCtrl = TextEditingController(text: title);
+    final cCtrl = TextEditingController(text: content);
+    final tNode = FocusNode();
+    final cNode = FocusNode();
+
+    tNode.addListener(() => _updateFocus(tCtrl, tNode));
+    cNode.addListener(() => _updateFocus(cCtrl, cNode));
+
+    _titleCtrls.add(tCtrl);
+    _contentCtrls.add(cCtrl);
+    _titleFocusNodes.add(tNode);
+    _contentFocusNodes.add(cNode);
+  }
+
+  void _addActionControllers(String title) {
+    final aCtrl = TextEditingController(text: title);
+    final aNode = FocusNode();
+
+    aNode.addListener(() => _updateFocus(aCtrl, aNode));
+
+    _actionCtrls.add(aCtrl);
+    _actionFocusNodes.add(aNode);
+  }
+
+  void _addNewSection() {
+    setState(() {
+      _sections.add(MemoSection(title: '', content: ''));
+      _addSectionControllers('', '');
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _titleFocusNodes.last.requestFocus();
+    });
+  }
+
+  void _removeSection(int index) {
+    setState(() {
+      _sections.removeAt(index);
+      _titleCtrls[index].dispose();
+      _contentCtrls[index].dispose();
+      _titleFocusNodes[index].dispose();
+      _contentFocusNodes[index].dispose();
+      _titleCtrls.removeAt(index);
+      _contentCtrls.removeAt(index);
+      _titleFocusNodes.removeAt(index);
+      _contentFocusNodes.removeAt(index);
+
+      if (_sections.isEmpty) {
+        _addNewSection();
+      }
+    });
+  }
+
+  void _addNewAction() {
+    setState(() {
+      _actions.add(ActionCandidate(id: DateTime.now().millisecondsSinceEpoch.toString(), title: ''));
+      _addActionControllers('');
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _actionFocusNodes.last.requestFocus();
+    });
+  }
+
+  void _removeAction(int index) {
+    setState(() {
+      _actions.removeAt(index);
+      _actionCtrls[index].dispose();
+      _actionFocusNodes[index].dispose();
+      _actionCtrls.removeAt(index);
+      _actionFocusNodes.removeAt(index);
+    });
+  }
+
+  // --- 음성 인식 로직 ---
   void _initSpeech() async {
     try {
       _speechEnabled = await _speechToText.initialize(
@@ -10295,11 +10518,20 @@ class _MilestoneMemoDialogState extends State<MilestoneMemoDialog> {
       _initSpeech();
       return;
     }
-    _baseText = _textCtrl.text;
-    _baseSelection = _textCtrl.selection;
+    if (_focusedCtrl == null) {
+      if (_contentFocusNodes.isNotEmpty) {
+        _contentFocusNodes.first.requestFocus();
+        _focusedCtrl = _contentCtrls.first;
+      } else {
+        return;
+      }
+    }
+
+    _baseText = _focusedCtrl!.text;
+    _baseSelection = _focusedCtrl!.selection;
     await _speechToText.listen(
       onResult: (result) {
-        if (mounted) {
+        if (mounted && _focusedCtrl != null) {
           setState(() {
             final spoken = result.recognizedWords;
             int start = _baseSelection.start;
@@ -10308,15 +10540,14 @@ class _MilestoneMemoDialogState extends State<MilestoneMemoDialog> {
               start = _baseText.length;
               end = _baseText.length;
             }
-            final insertText =
-                (_baseText.isNotEmpty &&
-                        start > 0 &&
-                        _baseText[start - 1] != ' '
-                    ? ' '
-                    : '') +
+            final insertText = (_baseText.isNotEmpty &&
+                    start > 0 &&
+                    _baseText[start - 1] != ' '
+                ? ' '
+                : '') +
                 spoken;
-            _textCtrl.text = _baseText.replaceRange(start, end, insertText);
-            _textCtrl.selection = TextSelection.collapsed(
+            _focusedCtrl!.text = _baseText.replaceRange(start, end, insertText);
+            _focusedCtrl!.selection = TextSelection.collapsed(
               offset: start + insertText.length,
             );
           });
@@ -10334,566 +10565,670 @@ class _MilestoneMemoDialogState extends State<MilestoneMemoDialog> {
     if (mounted) setState(() => _isListening = false);
   }
 
-  void _insertTextAtCursor(String textToInsert) {
-    final currentText = _textCtrl.text;
-    final selection = _textCtrl.selection;
-    int start = selection.start;
-    int end = selection.end;
-    if (start < 0) {
-      start = currentText.length;
-      end = currentText.length;
+  // --- 저장 로직 ---
+  void _saveDataAndClose() {
+    // 1. Sections
+    for (int i = 0; i < _sections.length; i++) {
+      _sections[i].title = _titleCtrls[i].text.trim();
+      _sections[i].content = _contentCtrls[i].text.trim();
     }
-    final newText = currentText.replaceRange(start, end, textToInsert);
-    _textCtrl.text = newText;
-    _textCtrl.selection = TextSelection.collapsed(
-      offset: start + textToInsert.length,
-    );
-    setState(() {});
+    _sections.removeWhere((s) => s.title.isEmpty && s.content.isEmpty);
+    widget.milestone.memoSections = _sections;
+    
+    if (_sections.isNotEmpty) {
+      widget.milestone.memo = _sections.first.content;
+    } else {
+      widget.milestone.memo = '';
+    }
+
+    // 2. Actions
+    for (int i = 0; i < _actions.length; i++) {
+      _actions[i].title = _actionCtrls[i].text.trim();
+    }
+    _actions.removeWhere((a) => a.title.isEmpty);
+    widget.milestone.actionCandidates = _actions;
+
+    widget.onSave('saved');
+    Navigator.pop(context);
   }
 
-  Future<void> _launchURL(String urlString) async {
-    try {
-      String normalized = urlString.trim();
-      if (!normalized.startsWith('http://') &&
-          !normalized.startsWith('https://')) {
-        normalized = 'https://$normalized';
-      }
-      final uri = WebUri(normalized);
-      await InAppBrowser.openWithSystemBrowser(url: uri);
-    } catch (e) {
-      debugPrint("Error launching URL: $e");
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('링크를 열 수 없습니다: $urlString')));
-    }
+  @override
+  void dispose() {
+    _speechToText.stop();
+    for (var ctrl in _titleCtrls) ctrl.dispose();
+    for (var ctrl in _contentCtrls) ctrl.dispose();
+    for (var node in _titleFocusNodes) node.dispose();
+    for (var node in _contentFocusNodes) node.dispose();
+    
+    for (var ctrl in _actionCtrls) ctrl.dispose();
+    for (var node in _actionFocusNodes) node.dispose();
+    
+    super.dispose();
   }
 
-  void _showLinkInsertDialog() {
-    final nameCtrl = TextEditingController();
-    final urlCtrl = TextEditingController();
-    final formKey = GlobalKey<FormState>();
-
-    showDialog(
-      context: context,
-      builder: (ctx) {
-        return AlertDialog(
-          backgroundColor: Colors.white,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          title: Text(
-            '링크 추가하기',
-            style: GoogleFonts.notoSansKr(
-              fontWeight: FontWeight.bold,
-              color: const Color(0xFF3D3A4E),
-            ),
-          ),
-          content: Form(
-            key: formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
+  // --- 위젯 빌드 ---
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: Colors.white,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      child: Column(
+        children: [
+          // Header
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                TextFormField(
-                  controller: nameCtrl,
-                  decoration: InputDecoration(
-                    labelText: '링크 이름 (선택)',
-                    labelStyle: GoogleFonts.notoSansKr(
-                      color: const Color(0xFFA0A0B0),
-                    ),
-                    focusedBorder: UnderlineInputBorder(
-                      borderSide: BorderSide(color: widget.coach.accentColor),
-                    ),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        widget.milestone.text.isNotEmpty
+                            ? widget.milestone.text
+                            : '마일스톤 메모',
+                        style: GoogleFonts.notoSansKr(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                          color: const Color(0xFF3D3A4E),
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.calendar_today_outlined,
+                            size: 14,
+                            color: Color(0xFF8B7CFF),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            widget.milestone.date ?? '기한 없음',
+                            style: GoogleFonts.notoSansKr(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: const Color(0xFF8B7CFF),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
-                  style: GoogleFonts.notoSansKr(color: const Color(0xFF3D3A4E)),
                 ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: urlCtrl,
-                  decoration: InputDecoration(
-                    labelText: '링크 주소 (URL)',
-                    labelStyle: GoogleFonts.notoSansKr(
-                      color: const Color(0xFFA0A0B0),
-                    ),
-                    focusedBorder: UnderlineInputBorder(
-                      borderSide: BorderSide(color: widget.coach.accentColor),
-                    ),
+                const SizedBox(width: 12),
+                GestureDetector(
+                  onTap: _saveDataAndClose,
+                  child: const Icon(
+                    Icons.close,
+                    color: Color(0xFFA0A0B0),
+                    size: 24,
                   ),
-                  style: GoogleFonts.notoSansKr(color: const Color(0xFF3D3A4E)),
-                  validator: (val) {
-                    if (val == null || val.trim().isEmpty) {
-                      return 'URL을 입력해주세요.';
-                    }
-                    return null;
-                  },
                 ),
               ],
             ),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: Text(
-                '취소',
-                style: GoogleFonts.notoSansKr(color: const Color(0xFF6B7280)),
+          
+          // Body
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // --- Sections ---
+                  ...List.generate(_sections.length, (index) => _buildSectionCard(index)),
+                  
+                  GestureDetector(
+                    onTap: _addNewSection,
+                    child: Container(
+                      margin: const EdgeInsets.only(top: 8, bottom: 24),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF7F5FF),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFF8B7CFF).withOpacity(0.3)),
+                      ),
+                      alignment: Alignment.center,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.add, size: 16, color: Color(0xFF8B7CFF)),
+                          const SizedBox(width: 4),
+                          Text(
+                            '섹션 추가',
+                            style: GoogleFonts.notoSansKr(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: const Color(0xFF8B7CFF),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  const Divider(color: Color(0xFFE5E7EB), height: 32, thickness: 1),
+
+                  // --- Action Items ---
+                  Row(
+                    children: [
+                      const Text(
+                        '⚡️',
+                        style: TextStyle(fontSize: 18),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        '실행 아이템 (행동 후보)',
+                        style: GoogleFonts.notoSansKr(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                          color: const Color(0xFF3D3A4E),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  
+                  ...List.generate(_actions.length, (index) => _buildActionCard(index)),
+
+                  GestureDetector(
+                    onTap: _addNewAction,
+                    child: Container(
+                      margin: const EdgeInsets.only(top: 8, bottom: 40),
+                      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFE5E7EB)),
+                      ),
+                      alignment: Alignment.center,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.add, size: 16, color: Color(0xFF6B7280)),
+                          const SizedBox(width: 6),
+                          Text(
+                            '실행 아이템 추가',
+                            style: GoogleFonts.notoSansKr(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: const Color(0xFF6B7280),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
-            ElevatedButton(
-              onPressed: () {
-                if (formKey.currentState!.validate()) {
-                  final name = nameCtrl.text.trim();
-                  final url = urlCtrl.text.trim();
-                  _insertTextAtCursor(name.isEmpty ? url : '[$name]($url)');
-                  Navigator.pop(ctx);
-                }
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: widget.coach.accentColor,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-              child: const Text(
-                '추가',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                ),
+          ),
+
+          // Bottom Action Bar
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 10,
+                  offset: const Offset(0, -4),
+                )
+              ],
+              borderRadius: const BorderRadius.only(
+                bottomLeft: Radius.circular(24),
+                bottomRight: Radius.circular(24),
               ),
             ),
-          ],
+            child: Row(
+              children: [
+                GestureDetector(
+                  onTap: () {
+                    if (_isListening) {
+                      _stopListening();
+                    } else {
+                      _startListening();
+                    }
+                  },
+                  child: Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: _isListening
+                          ? Colors.red.withOpacity(0.1)
+                          : const Color(0xFFF5F3FF),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      _isListening ? Icons.mic : Icons.mic_none,
+                      size: 20,
+                      color: _isListening
+                          ? Colors.red
+                          : const Color(0xFF8B7CFF),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    _isListening ? '말씀하세요. 듣고 있습니다...' : '음성으로 내용을 입력해보세요!',
+                    style: GoogleFonts.notoSansKr(
+                      fontSize: 13,
+                      color: _isListening ? Colors.red : const Color(0xFFA0A0B0),
+                    ),
+                  ),
+                ),
+                ElevatedButton(
+                  onPressed: _saveDataAndClose,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: widget.coach.accentColor,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  child: const Text(
+                    '저장',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSectionCard(int index) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF7F5FF),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _titleCtrls[index],
+                  focusNode: _titleFocusNodes[index],
+                  style: GoogleFonts.notoSansKr(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFF3D3A4E),
+                  ),
+                  decoration: InputDecoration(
+                    hintText: '섹션 제목 (예: 성장 고민)',
+                    hintStyle: GoogleFonts.notoSansKr(
+                      color: const Color(0xFFA0A0B0),
+                      fontWeight: FontWeight.w500,
+                    ),
+                    border: InputBorder.none,
+                    isDense: true,
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ),
+              ),
+              GestureDetector(
+                onTap: () => _removeSection(index),
+                child: const Icon(Icons.close, size: 16, color: Color(0xFFA0A0B0)),
+              ),
+            ],
+          ),
+          const Divider(color: Color(0xFFE5E7EB), height: 20),
+          TextField(
+            controller: _contentCtrls[index],
+            focusNode: _contentFocusNodes[index],
+            maxLines: null,
+            keyboardType: TextInputType.multiline,
+            style: GoogleFonts.notoSansKr(
+              fontSize: 14,
+              color: const Color(0xFF3D3A4E),
+              height: 1.5,
+            ),
+            decoration: InputDecoration(
+              hintText: '내용을 입력하세요...',
+              hintStyle: GoogleFonts.notoSansKr(
+                color: const Color(0xFFA0A0B0),
+              ),
+              border: InputBorder.none,
+              isDense: true,
+              contentPadding: EdgeInsets.zero,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showConversionBottomSheet(BuildContext context, ActionCandidate action, int index) {
+    if (widget.onConvertAction == null) return;
+    
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '어떤 일정으로 전환할까요?',
+                  style: GoogleFonts.notoSansKr(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    color: const Color(0xFF3D3A4E),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  '"${action.title}"',
+                  style: GoogleFonts.notoSansKr(
+                    fontSize: 14,
+                    color: const Color(0xFF8B7CFF),
+                    fontWeight: FontWeight.w600,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 24),
+                
+                _buildConversionOption(
+                  icon: Icons.today,
+                  title: '오늘 할 일로 추가',
+                  subtitle: '오늘 일정에 즉시 추가됩니다.',
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    widget.onConvertAction!(action, 'task_today');
+                    setState(() {});
+                  },
+                ),
+                _buildConversionOption(
+                  icon: Icons.calendar_month,
+                  title: '특정 날짜 일정으로 추가',
+                  subtitle: '원하는 날짜를 선택하여 추가합니다.',
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    widget.onConvertAction!(action, 'task_date');
+                    // Date picker will trigger a rebuild in the callback if needed
+                    // But we might want to manually refresh Dialog if callback does not
+                    Future.delayed(const Duration(milliseconds: 500), () {
+                      if (mounted) setState(() {});
+                    });
+                  },
+                ),
+                _buildConversionOption(
+                  icon: Icons.repeat,
+                  title: '습관 트래커로 추가',
+                  subtitle: '매일 실천하는 습관 목록에 추가합니다.',
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    widget.onConvertAction!(action, 'habit');
+                    setState(() {});
+                  },
+                ),
+                const SizedBox(height: 12),
+              ],
+            ),
+          ),
         );
       },
     );
   }
 
-  Widget _buildLinkableText(String text) {
-    final RegExp combinedRegex = RegExp(
-      r'\[([^\]]+)\]\((https?:\/\/[^\s\)]+)\)|(https?:\/\/[^\s\)]+)',
-      caseSensitive: false,
-    );
-
-    final List<InlineSpan> spans = [];
-    int lastMatchEnd = 0;
-
-    for (final match in combinedRegex.allMatches(text)) {
-      if (match.start > lastMatchEnd) {
-        spans.add(TextSpan(text: text.substring(lastMatchEnd, match.start)));
-      }
-
-      if (match.group(1) != null) {
-        final label = match.group(1)!;
-        final url = match.group(2)!;
-        spans.add(
-          TextSpan(
-            text: label,
-            style: const TextStyle(
-              color: Color(0xFF8B7CFF),
-              decoration: TextDecoration.underline,
-              fontWeight: FontWeight.bold,
+  Widget _buildConversionOption({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF7F5FF),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, color: const Color(0xFF8B7CFF), size: 22),
             ),
-            recognizer: TapGestureRecognizer()..onTap = () => _launchURL(url),
-          ),
-        );
-      } else {
-        final url = match.group(3)!;
-        spans.add(
-          TextSpan(
-            text: url,
-            style: const TextStyle(
-              color: Color(0xFF8B7CFF),
-              decoration: TextDecoration.underline,
-            ),
-            recognizer: TapGestureRecognizer()..onTap = () => _launchURL(url),
-          ),
-        );
-      }
-
-      lastMatchEnd = match.end;
-    }
-
-    if (lastMatchEnd < text.length) {
-      spans.add(TextSpan(text: text.substring(lastMatchEnd)));
-    }
-
-    return SelectableText.rich(
-      TextSpan(
-        children: spans,
-        style: GoogleFonts.notoSansKr(
-          fontSize: 14,
-          color: const Color(0xFF3D3A4E),
-          height: 1.5,
-        ),
-      ),
-    );
-  }
-
-  @override
-  void dispose() {
-    _focusNode.removeListener(_onFocusChange);
-    _speechToText.stop();
-    _textCtrl.dispose();
-    _focusNode.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final isTextEmpty = _textCtrl.text.trim().isEmpty;
-
-    return Dialog(
-      backgroundColor: Colors.white,
-      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-      child: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.all(20.0),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Header
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          widget.milestone.text.isNotEmpty
-                              ? widget.milestone.text
-                              : '마일스톤 메모',
-                          style: GoogleFonts.notoSansKr(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w800,
-                            color: const Color(0xFF3D3A4E),
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            const Icon(
-                              Icons.calendar_today_outlined,
-                              size: 14,
-                              color: Color(0xFF8B7CFF),
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              widget.milestone.date ?? '기한 없음',
-                              style: GoogleFonts.notoSansKr(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
-                                color: const Color(0xFF8B7CFF),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
+                  Text(
+                    title,
+                    style: GoogleFonts.notoSansKr(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: const Color(0xFF3D3A4E),
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(
-                        Icons.more_horiz,
-                        color: Color(0xFFA0A0B0),
-                        size: 20,
-                      ),
-                      const SizedBox(width: 12),
-                      GestureDetector(
-                        onTap: () {
-                          final text = _textCtrl.text.trim();
-                          widget.onSave(text.isEmpty ? null : text);
-                          Navigator.pop(context);
-                        },
-                        child: const Icon(
-                          Icons.close,
-                          color: Color(0xFFA0A0B0),
-                          size: 20,
-                        ),
-                      ),
-                    ],
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: GoogleFonts.notoSansKr(
+                      fontSize: 12,
+                      color: const Color(0xFFA0A0B0),
+                    ),
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
-              // Main card panel
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF7F5FF), // Soft purple tint background
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Conditional Middle State (Empty or Text box)
-                    if (isTextEmpty && !_focusNode.hasFocus) ...[
-                      const SizedBox(height: 40),
-                      Text(
-                        '아이디어, 참고, 링크, 해야 할 일을\n말이나 글로 간단히 기록해보세요.',
-                        style: GoogleFonts.notoSansKr(
-                          fontSize: 13,
-                          color: const Color(0xFFA0A0B0),
-                          height: 1.5,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 40),
-                    ] else ...[
-                      // View mode or edit mode text container
-                      Container(
-                        width: double.infinity,
-                        constraints: const BoxConstraints(
-                          minHeight: 120,
-                          maxHeight: 240,
-                        ),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 4,
-                          vertical: 4,
-                        ),
-                        child: SingleChildScrollView(
-                          child: _isEditing
-                              ? TextField(
-                                  controller: _textCtrl,
-                                  focusNode: _focusNode,
-                                  maxLines: null,
-                                  maxLength: 2000,
-                                  keyboardType: TextInputType.multiline,
-                                  autofocus: true,
-                                  style: GoogleFonts.notoSansKr(
-                                    fontSize: 14,
-                                    color: const Color(0xFF3D3A4E),
-                                    height: 1.5,
-                                  ),
-                                  decoration: const InputDecoration(
-                                    border: InputBorder.none,
-                                    counterText: '',
-                                    isDense: true,
-                                    contentPadding: EdgeInsets.zero,
-                                  ),
-                                  onChanged: (val) {
-                                    setState(() {});
-                                  },
-                                )
-                              : GestureDetector(
-                                  onTap: () {
-                                    setState(() {
-                                      _isEditing = true;
-                                    });
-                                    WidgetsBinding.instance
-                                        .addPostFrameCallback((_) {
-                                          _focusNode.requestFocus();
-                                        });
-                                  },
-                                  child: Container(
-                                    width: double.infinity,
-                                    color: Colors.transparent,
-                                    child: _buildLinkableText(_textCtrl.text),
-                                  ),
-                                ),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          // Done / Toggle Edit Mode button
-                          GestureDetector(
-                            onTap: () {
-                              setState(() {
-                                _isEditing = !_isEditing;
-                                if (!_isEditing) {
-                                  _focusNode.unfocus();
-                                }
-                              });
-                            },
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 4,
-                              ),
-                              decoration: BoxDecoration(
-                                color: _isEditing
-                                    ? const Color(0xFF8B7CFF)
-                                    : const Color(0xFFE5E7EB),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Text(
-                                _isEditing ? '완료' : '수정',
-                                style: GoogleFonts.notoSansKr(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.bold,
-                                  color: _isEditing
-                                      ? Colors.white
-                                      : const Color(0xFF6B7280),
-                                ),
-                              ),
-                            ),
-                          ),
-                          // Character count
-                          Text(
-                            '${_textCtrl.text.length} / 2000자',
-                            style: GoogleFonts.notoSansKr(
-                              fontSize: 11,
-                              color: _textCtrl.text.length > 2000
-                                  ? Colors.red
-                                  : const Color(0xFFA0A0B0),
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                    ],
-
-                    // White Input Bar at the bottom of the purple card
-                    Container(
-                      width: double.infinity,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.02),
-                            blurRadius: 4,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 4,
-                      ),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: TextField(
-                              controller: _textCtrl,
-                              maxLines: 1,
-                              focusNode: isTextEmpty && !_focusNode.hasFocus
-                                  ? null
-                                  : _focusNode,
-                              style: GoogleFonts.notoSansKr(
-                                fontSize: 14,
-                                color: const Color(0xFF3D3A4E),
-                              ),
-                              decoration: InputDecoration(
-                                hintText: '메모를 입력하세요...',
-                                hintStyle: GoogleFonts.notoSansKr(
-                                  fontSize: 14,
-                                  color: const Color(0xFFA0A0B0),
-                                ),
-                                border: InputBorder.none,
-                                isDense: true,
-                              ),
-                              onTap: () {
-                                if (isTextEmpty) {
-                                  setState(() {
-                                    _isEditing = true;
-                                  });
-                                }
-                              },
-                              onChanged: (val) {
-                                setState(() {});
-                              },
-                            ),
-                          ),
-                          // Microphone Button (Voice recognition)
-                          GestureDetector(
-                            onTap: () {
-                              if (_isListening) {
-                                _stopListening();
-                              } else {
-                                if (isTextEmpty) {
-                                  setState(() {
-                                    _isEditing = true;
-                                  });
-                                }
-                                _startListening();
-                              }
-                            },
-                            child: Container(
-                              width: 32,
-                              height: 32,
-                              decoration: BoxDecoration(
-                                color: _isListening
-                                    ? Colors.red.withOpacity(0.1)
-                                    : const Color(0xFFF5F3FF),
-                                shape: BoxShape.circle,
-                              ),
-                              child: Icon(
-                                _isListening ? Icons.mic : Icons.mic_none,
-                                size: 18,
-                                color: _isListening
-                                    ? Colors.red
-                                    : const Color(0xFF8B7CFF),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          // Link Button
-                          GestureDetector(
-                            onTap: () {
-                              if (isTextEmpty) {
-                                setState(() {
-                                  _isEditing = true;
-                                });
-                              }
-                              _showLinkInsertDialog();
-                            },
-                            child: Container(
-                              width: 32,
-                              height: 32,
-                              decoration: const BoxDecoration(
-                                color: Color(0xFFF5F3FF),
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(
-                                Icons.link,
-                                size: 18,
-                                color: Color(0xFF8B7CFF),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 12),
-              // Tip Text at the bottom
-              Center(
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(
-                      Icons.lightbulb_outline,
-                      size: 14,
-                      color: Color(0xFF8B7CFF),
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      'TIP 음성으로 말하거나 링크를 추가할 수 있어요!',
-                      style: GoogleFonts.notoSansKr(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: const Color(0xFFA0A0B0),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
+            ),
+            const Icon(Icons.chevron_right, color: Color(0xFFD1D5DB)),
+          ],
         ),
       ),
+    );
+  }
+
+  Widget _buildActionCard(int index) {
+    final action = _actions[index];
+    final isConverted = action.convertedTaskId != null || action.convertedHabitId != null;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.02),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Icon(
+            isConverted ? Icons.check_circle : Icons.radio_button_unchecked,
+            color: isConverted ? const Color(0xFF10B981) : const Color(0xFFD1D5DB),
+            size: 20,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: TextField(
+              controller: _actionCtrls[index],
+              focusNode: _actionFocusNodes[index],
+              enabled: !isConverted, // Disable editing if already converted
+              style: GoogleFonts.notoSansKr(
+                fontSize: 14,
+                color: isConverted ? const Color(0xFF9CA3AF) : const Color(0xFF3D3A4E),
+                decoration: isConverted ? TextDecoration.lineThrough : null,
+              ),
+              decoration: InputDecoration(
+                hintText: '구체적인 행동 입력 (예: 개발 컨퍼런스 등록하기)',
+                hintStyle: GoogleFonts.notoSansKr(
+                  color: const Color(0xFFA0A0B0),
+                  fontSize: 13,
+                ),
+                border: InputBorder.none,
+                isDense: true,
+                contentPadding: EdgeInsets.zero,
+              ),
+              onChanged: (val) {
+                action.title = val;
+              },
+            ),
+          ),
+          if (!isConverted) ...[
+            const SizedBox(width: 8),
+            GestureDetector(
+              onTap: () {
+                if (action.title.trim().isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('실행 아이템 내용을 먼저 입력해주세요!')),
+                  );
+                  return;
+                }
+                _showConversionBottomSheet(context, action, index);
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFFBEB),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFFFDE68A)),
+                ),
+                child: Text(
+                  '전환',
+                  style: GoogleFonts.notoSansKr(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFFD97706),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            GestureDetector(
+              onTap: () => _removeAction(index),
+              child: const Icon(Icons.close, size: 16, color: Color(0xFFA0A0B0)),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+class MilestoneMemoDisplayWidget extends StatelessWidget {
+  final MilestoneItem milestone;
+  final TextStyle style;
+
+  const MilestoneMemoDisplayWidget({
+    super.key,
+    required this.milestone,
+    required this.style,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final sections = milestone.memoSections ?? [];
+    final actions = milestone.actionCandidates ?? [];
+
+    if (sections.isEmpty && actions.isEmpty) {
+      if (milestone.memo != null && milestone.memo!.isNotEmpty) {
+        return MemoDisplayWidget(text: milestone.memo!, style: style);
+      }
+      return const SizedBox.shrink();
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (sections.isNotEmpty)
+          ...sections.map((section) {
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 8.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (section.title.isNotEmpty)
+                    Text(
+                      '[${section.title}]',
+                      style: style.copyWith(
+                        fontWeight: FontWeight.w800,
+                        color: const Color(0xFF6B7280),
+                      ),
+                    ),
+                  if (section.content.isNotEmpty)
+                    Padding(
+                      padding: EdgeInsets.only(top: section.title.isNotEmpty ? 4.0 : 0),
+                      child: MemoDisplayWidget(text: section.content, style: style),
+                    ),
+                ],
+              ),
+            );
+          }),
+        if (actions.isNotEmpty) ...[
+          if (sections.isNotEmpty) const SizedBox(height: 4),
+          Text(
+            '⚡️ 실행 아이템',
+            style: style.copyWith(
+              fontWeight: FontWeight.w800,
+              color: const Color(0xFFD97706),
+            ),
+          ),
+          const SizedBox(height: 4),
+          ...actions.map((action) {
+            final isConverted = action.convertedTaskId != null || action.convertedHabitId != null;
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 4.0),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2.0),
+                    child: Icon(
+                      isConverted ? Icons.check_circle : Icons.radio_button_unchecked,
+                      size: 14,
+                      color: isConverted ? const Color(0xFF10B981) : const Color(0xFFD1D5DB),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      action.title,
+                      style: style.copyWith(
+                        color: isConverted ? const Color(0xFF9CA3AF) : style.color,
+                        decoration: isConverted ? TextDecoration.lineThrough : null,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }),
+        ],
+      ],
     );
   }
 }
