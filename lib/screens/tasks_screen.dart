@@ -6029,7 +6029,7 @@ class _TasksScreenState extends State<TasksScreen>
                                                   padding:
                                                       const EdgeInsets.symmetric(
                                                         horizontal: 12,
-                                                        vertical: 8,
+                                                        vertical: 12,
                                                       ),
                                                   decoration: BoxDecoration(
                                                     color: const Color(
@@ -6040,20 +6040,14 @@ class _TasksScreenState extends State<TasksScreen>
                                                           8,
                                                         ),
                                                   ),
-                                                  child: Text(
-                                                    m.memo!,
-                                                    style:
-                                                        GoogleFonts.notoSansKr(
-                                                          fontSize: 13,
-                                                          fontWeight:
-                                                              FontWeight.w500,
-                                                          color: const Color(
-                                                            0xFF4B5563,
-                                                          ),
-                                                        ),
-                                                    maxLines: 2,
-                                                    overflow:
-                                                        TextOverflow.ellipsis,
+                                                  child: MemoDisplayWidget(
+                                                    text: m.memo!,
+                                                    style: GoogleFonts.notoSansKr(
+                                                      fontSize: 13,
+                                                      fontWeight: FontWeight.w500,
+                                                      color: const Color(0xFF4B5563),
+                                                      height: 1.5,
+                                                    ),
                                                   ),
                                                 ),
                                               ),
@@ -8225,15 +8219,13 @@ class _TasksScreenState extends State<TasksScreen>
                                   ),
                                   if (m.milestone.memo != null &&
                                       m.milestone.memo!.isNotEmpty) ...[
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      m.milestone.memo!,
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
+                                    const SizedBox(height: 6),
+                                    MemoDisplayWidget(
+                                      text: m.milestone.memo!,
                                       style: GoogleFonts.notoSansKr(
                                         fontSize: 12,
                                         color: const Color(0xFF6B7280),
-                                        height: 1.3,
+                                        height: 1.5,
                                       ),
                                     ),
                                   ],
@@ -10903,5 +10895,54 @@ class _MilestoneMemoDialogState extends State<MilestoneMemoDialog> {
         ),
       ),
     );
+  }
+}
+
+class MemoDisplayWidget extends StatelessWidget {
+  final String text;
+  final TextStyle style;
+
+  const MemoDisplayWidget({super.key, required this.text, required this.style});
+
+  @override
+  Widget build(BuildContext context) {
+    final RegExp urlRegex = RegExp(r'(https?:\/\/[^\s]+)', caseSensitive: false);
+    final Iterable<RegExpMatch> matches = urlRegex.allMatches(text);
+
+    if (matches.isEmpty) {
+      return Text(text, style: style);
+    }
+
+    final List<TextSpan> spans = [];
+    int currentPosition = 0;
+
+    for (final match in matches) {
+      if (match.start > currentPosition) {
+        spans.add(TextSpan(text: text.substring(currentPosition, match.start), style: style));
+      }
+      final String url = match.group(0)!;
+      spans.add(
+        TextSpan(
+          text: url,
+          style: style.copyWith(color: const Color(0xFF3B82F6), decoration: TextDecoration.underline),
+          recognizer: TapGestureRecognizer()
+            ..onTap = () async {
+              try {
+                final uri = WebUri(url);
+                await InAppBrowser.openWithSystemBrowser(url: uri);
+              } catch (e) {
+                debugPrint('Error launching url: $e');
+              }
+            },
+        ),
+      );
+      currentPosition = match.end;
+    }
+
+    if (currentPosition < text.length) {
+      spans.add(TextSpan(text: text.substring(currentPosition), style: style));
+    }
+
+    return Text.rich(TextSpan(children: spans));
   }
 }
