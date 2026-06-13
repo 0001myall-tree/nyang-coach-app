@@ -454,7 +454,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         await WidgetSyncService.syncFromStoredTasks();
 
                         if (context.mounted) Navigator.pop(context);
-                        if (selectedProviderId == null && mounted) {
+                        if (selectedProviderId != null) {
+                          await requestWidgetPin(selectedProviderId);
+                        } else if (mounted) {
                           ScaffoldMessenger.of(this.context).showSnackBar(
                             const SnackBar(
                               content: Text('홈 화면에 남아 있는 위젯은 길게 눌러 삭제해 주세요.'),
