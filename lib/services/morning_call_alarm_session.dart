@@ -15,8 +15,12 @@ class MorningCallAlarmSession {
 
   final AudioPlayer _player = AudioPlayer();
   Timer? _initialDelayTimer;
+  Timer? _watchdogTimer;
+  StreamSubscription<void>? _completeSub;
+  StreamSubscription<PlayerState>? _stateSub;
   String? _soundPath;
   bool _isActive = false;
+  bool _isPlaying = false;
   bool get isActive => _isActive;
 
   Future<void> start({
@@ -34,8 +38,22 @@ class MorningCallAlarmSession {
         : '${coachId}_${Random().nextInt(count) + 1}';
     _soundPath = 'voice/$selectedSoundName.mp3';
     _isActive = true;
+    _isPlaying = false;
 
     try {
+      await _completeSub?.cancel();
+      await _stateSub?.cancel();
+      _completeSub = _player.onPlayerComplete.listen((_) {
+        _isPlaying = false;
+        if (!_isActive) return;
+        Future<void>.delayed(const Duration(milliseconds: 250), () {
+          if (_isActive) _play();
+        });
+      });
+      _stateSub = _player.onPlayerStateChanged.listen((state) {
+        _isPlaying = state == PlayerState.playing;
+      });
+
       await _player.setAudioContext(
         AudioContext(
           android: const AudioContextAndroid(
@@ -50,9 +68,7 @@ class MorningCallAlarmSession {
         ),
       );
       await _player.setVolume(1.0);
-      
-      // Set to loop mode so native OS player handles repeating without needing Dart code
-      await _player.setReleaseMode(ReleaseMode.loop);
+      await _player.setReleaseMode(ReleaseMode.stop);
 
       if (initialDelay == Duration.zero) {
         await _play();
@@ -61,6 +77,10 @@ class MorningCallAlarmSession {
           _play();
         });
       }
+      _watchdogTimer = Timer.periodic(const Duration(seconds: 3), (_) {
+        if (!_isActive || _isPlaying) return;
+        _play();
+      });
     } catch (e) {
       debugPrint('모닝콜 알람 세션 시작 실패: $e');
     }
@@ -68,9 +88,16 @@ class MorningCallAlarmSession {
 
   Future<void> stop() async {
     _isActive = false;
+    _isPlaying = false;
     _initialDelayTimer?.cancel();
     _initialDelayTimer = null;
+    _watchdogTimer?.cancel();
+    _watchdogTimer = null;
     try {
+      await _completeSub?.cancel();
+      await _stateSub?.cancel();
+      _completeSub = null;
+      _stateSub = null;
       await _player.stop();
     } catch (e) {
       debugPrint('모닝콜 알람 세션 중지 실패: $e');
@@ -81,7 +108,8 @@ class MorningCallAlarmSession {
     if (!_isActive || _soundPath == null) return;
     try {
       await _player.stop();
-      await _player.setReleaseMode(ReleaseMode.loop);
+      _isPlaying = false;
+      await _player.setReleaseMode(ReleaseMode.stop);
       await _player.play(AssetSource(_soundPath!));
     } catch (e) {
       debugPrint('모닝콜 알람 세션 재생 실패: $e');
