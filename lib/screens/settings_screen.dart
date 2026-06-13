@@ -163,15 +163,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
               );
               if (!mounted) return;
 
-              ScaffoldMessenger.of(this.context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    didRequestPin
-                        ? '홈 화면에 위젯을 추가해 주세요.'
-                        : '이 기기에서는 앱에서 위젯 추가 요청을 띄울 수 없어요.',
+              if (!didRequestPin) {
+                ScaffoldMessenger.of(this.context).showSnackBar(
+                  const SnackBar(
+                    content: Text('이 기기에서는 앱에서 위젯 추가 요청을 띄울 수 없어요.'),
                   ),
-                ),
-              );
+                );
+              }
             }
 
             Widget _buildWidgetToggle({
@@ -453,10 +451,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             ? 'sec_female'
                             : null;
 
+                        await WidgetSyncService.syncFromStoredTasks();
+
                         if (context.mounted) Navigator.pop(context);
-                        if (selectedProviderId != null) {
-                          await requestWidgetPin(selectedProviderId);
-                        } else if (mounted) {
+                        if (selectedProviderId == null && mounted) {
                           ScaffoldMessenger.of(this.context).showSnackBar(
                             const SnackBar(
                               content: Text('홈 화면에 남아 있는 위젯은 길게 눌러 삭제해 주세요.'),
