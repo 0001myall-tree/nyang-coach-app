@@ -111,6 +111,7 @@ class ParsedVoiceRegistration {
   final TimeOfDay? time;
   final bool hasDate;
   final bool hasTime;
+  final Map<String, dynamic>? repeatRule;
   final String rawSpeech;
 
   ParsedVoiceRegistration({
@@ -119,8 +120,11 @@ class ParsedVoiceRegistration {
     this.time,
     required this.hasDate,
     required this.hasTime,
+    this.repeatRule,
     required this.rawSpeech,
   });
+
+  bool get isRecurring => repeatRule != null;
 }
 
 class HabitItem {
@@ -6931,6 +6935,12 @@ class _TasksScreenState extends State<TasksScreen>
   void _addSchedule() {
     final text = _schInputCtrl.text.trim();
     if (text.isEmpty) return;
+    final cleaned = text.replaceAll(RegExp(r'[.\s]+$'), '');
+    final commandSuffixRegex = RegExp(r'\s*(등록해줘|추가해줘|넣어줘)$');
+    if (commandSuffixRegex.hasMatch(cleaned)) {
+      _showVoiceRegistrationConfirmDialog(text, isToday: false);
+      return;
+    }
 
     final nowMs = DateTime.now().millisecondsSinceEpoch;
     final createdAt = DateTime.now().toIso8601String();
@@ -7099,10 +7109,131 @@ class _TasksScreenState extends State<TasksScreen>
   void _handleSpeechFinished(String spokenText, {required bool isToday}) {
     if (_isConfirmDialogShowing) return;
     final cleaned = spokenText.replaceAll(RegExp(r'[.\s]+$'), '');
-    final suffixRegex = RegExp(r'\s*(등록해줘|추가해줘)$');
+    final suffixRegex = RegExp(r'\s*(등록해줘|추가해줘|넣어줘)$');
     if (suffixRegex.hasMatch(cleaned)) {
       _showVoiceRegistrationConfirmDialog(spokenText, isToday: isToday);
     }
+  }
+
+  int _weekdayFromKorean(String value) {
+    if (value.contains('월')) return DateTime.monday;
+    if (value.contains('화')) return DateTime.tuesday;
+    if (value.contains('수')) return DateTime.wednesday;
+    if (value.contains('목')) return DateTime.thursday;
+    if (value.contains('금')) return DateTime.friday;
+    if (value.contains('토')) return DateTime.saturday;
+    if (value.contains('일')) return DateTime.sunday;
+    return -1;
+  }
+
+  String _normalizeKoreanTimeWords(String input) {
+    const hourWords = {
+      '한': '1',
+      '하나': '1',
+      '두': '2',
+      '둘': '2',
+      '세': '3',
+      '셋': '3',
+      '네': '4',
+      '넷': '4',
+      '다섯': '5',
+      '여섯': '6',
+      '일곱': '7',
+      '여덟': '8',
+      '아홉': '9',
+      '열': '10',
+      '열한': '11',
+      '열하나': '11',
+      '열두': '12',
+      '열둘': '12',
+    };
+    var normalized = input;
+    final keys = hourWords.keys.toList()
+      ..sort((a, b) => b.length.compareTo(a.length));
+    for (final word in keys) {
+      normalized = normalized.replaceAllMapped(
+        RegExp('$word\\s*시'),
+        (_) => '${hourWords[word]}시',
+      );
+    }
+    return normalized;
+  }
+
+  ({String text, Map<String, dynamic>? rule}) _parseNaturalLanguageRepeat(
+    String input,
+    DateTime defaultDate,
+  ) {
+    var cleaned = input;
+    final rule = <String, dynamic>{'endType': 'never'};
+
+    final monthlyNthRegex = RegExp(
+      r'(?:매월|매달)\s*(첫째|첫|둘째|두번째|셋째|세번째|넷째|네번째|다섯째|마지막|1째|1번째|2째|2번째|3째|3번째|4째|4번째|5째|5번째)\s*주\s*([월화수목금토일])(?:요일)?',
+    );
+    final monthlyNthMatch = monthlyNthRegex.firstMatch(cleaned);
+    if (monthlyNthMatch != null) {
+      final nthText = monthlyNthMatch.group(1)!;
+      final weekday = _weekdayFromKorean(monthlyNthMatch.group(2)!);
+      final nth = switch (nthText) {
+        '첫째' || '첫' || '1째' || '1번째' => 1,
+        '둘째' || '두번째' || '2째' || '2번째' => 2,
+        '셋째' || '세번째' || '3째' || '3번째' => 3,
+        '넷째' || '네번째' || '4째' || '4번째' => 4,
+        _ => 5,
+      };
+      rule
+        ..['type'] = 'monthly'
+        ..['monthlyMode'] = 'nthWeekday'
+        ..['nth'] = nth
+        ..['weekday'] = weekday == -1 ? defaultDate.weekday : weekday;
+      cleaned = cleaned.replaceFirst(monthlyNthMatch.group(0)!, '').trim();
+      return (text: cleaned, rule: rule);
+    }
+
+    final monthlyDateRegex = RegExp(r'(?:매월|매달)\s*(\d{1,2})\s*일');
+    final monthlyDateMatch = monthlyDateRegex.firstMatch(cleaned);
+    if (monthlyDateMatch != null) {
+      final day = int.tryParse(monthlyDateMatch.group(1)!) ?? defaultDate.day;
+      rule
+        ..['type'] = 'monthly'
+        ..['monthlyMode'] = 'date'
+        ..['dayOfMonth'] = day.clamp(1, 31);
+      cleaned = cleaned.replaceFirst(monthlyDateMatch.group(0)!, '').trim();
+      return (text: cleaned, rule: rule);
+    }
+
+    final weeklyRegex = RegExp(
+      r'매주\s*((?:[월화수목금토일](?:요일)?(?:\s*(?:,|과|와|랑|하고|및)?\s*)?)+)',
+    );
+    final weeklyMatch = weeklyRegex.firstMatch(cleaned);
+    if (weeklyMatch != null) {
+      final weekdays = <int>[];
+      final weekdaysText = weeklyMatch.group(1)!;
+      for (final match in RegExp(
+        r'[월화수목금토일](?:요일)?',
+      ).allMatches(weekdaysText)) {
+        final weekday = _weekdayFromKorean(match.group(0)!);
+        if (weekday != -1 && !weekdays.contains(weekday)) {
+          weekdays.add(weekday);
+        }
+      }
+      if (weekdays.isNotEmpty) {
+        rule
+          ..['type'] = 'weekly'
+          ..['weekdays'] = weekdays;
+        cleaned = cleaned.replaceFirst(weeklyMatch.group(0)!, '').trim();
+        return (text: cleaned, rule: rule);
+      }
+    }
+
+    final dailyRegex = RegExp(r'(?:매일|매일마다|날마다|매일\s*매일)');
+    final dailyMatch = dailyRegex.firstMatch(cleaned);
+    if (dailyMatch != null) {
+      rule['type'] = 'daily';
+      cleaned = cleaned.replaceFirst(dailyMatch.group(0)!, '').trim();
+      return (text: cleaned, rule: rule);
+    }
+
+    return (text: input, rule: null);
   }
 
   ParsedVoiceRegistration _parseNaturalLanguageVoice(
@@ -7111,29 +7242,23 @@ class _TasksScreenState extends State<TasksScreen>
   ) {
     String cleaned = input.trim();
     cleaned = cleaned.replaceAll(RegExp(r'[.\s]+$'), '');
-    final suffixRegex = RegExp(r'\s*(등록해줘|추가해줘)$');
+    final suffixRegex = RegExp(r'\s*(등록해줘|추가해줘|넣어줘)$');
     cleaned = cleaned.replaceFirst(suffixRegex, '').trim();
+    cleaned = _normalizeKoreanTimeWords(cleaned);
+
+    final repeatParse = _parseNaturalLanguageRepeat(cleaned, defaultDate);
+    cleaned = repeatParse.text;
+    final repeatRule = repeatParse.rule;
 
     DateTime parsedDate = defaultDate;
-    bool hasDate = false;
-
-    int getDayOfWeek(String str) {
-      if (str.contains('월')) return DateTime.monday;
-      if (str.contains('화')) return DateTime.tuesday;
-      if (str.contains('수')) return DateTime.wednesday;
-      if (str.contains('목')) return DateTime.thursday;
-      if (str.contains('금')) return DateTime.friday;
-      if (str.contains('토')) return DateTime.saturday;
-      if (str.contains('일')) return DateTime.sunday;
-      return -1;
-    }
+    bool hasDate = repeatRule != null;
 
     // 1. Check "이번달 마지막 [요일]"
     final lastWeekdayRegex = RegExp(r'이번달\s+마지막\s+([월화수목금토일])(?:요일)?');
     final lastWeekdayMatch = lastWeekdayRegex.firstMatch(cleaned);
     if (lastWeekdayMatch != null) {
       final weekdayStr = lastWeekdayMatch.group(1)!;
-      final targetWeekday = getDayOfWeek(weekdayStr);
+      final targetWeekday = _weekdayFromKorean(weekdayStr);
       if (targetWeekday != -1) {
         final now = DateTime.now();
         var tempDate = DateTime(now.year, now.month + 1, 0);
@@ -7153,7 +7278,7 @@ class _TasksScreenState extends State<TasksScreen>
       if (weekRelMatch != null) {
         final rel = weekRelMatch.group(1)!;
         final weekdayStr = weekRelMatch.group(2)!;
-        final targetWeekday = getDayOfWeek(weekdayStr);
+        final targetWeekday = _weekdayFromKorean(weekdayStr);
         if (targetWeekday != -1) {
           final now = DateTime.now();
           int diff = targetWeekday - now.weekday;
@@ -7190,7 +7315,7 @@ class _TasksScreenState extends State<TasksScreen>
       final bareWeekdayMatch = bareWeekdayRegex.firstMatch(cleaned);
       if (bareWeekdayMatch != null) {
         final weekdayStr = bareWeekdayMatch.group(1)!;
-        final targetWeekday = getDayOfWeek(weekdayStr);
+        final targetWeekday = _weekdayFromKorean(weekdayStr);
         if (targetWeekday != -1) {
           final now = DateTime.now();
           int diff = targetWeekday - now.weekday;
@@ -7248,6 +7373,7 @@ class _TasksScreenState extends State<TasksScreen>
       time: parsedTime,
       hasDate: hasDate,
       hasTime: hasTime,
+      repeatRule: repeatRule,
       rawSpeech: input,
     );
   }
@@ -7265,6 +7391,7 @@ class _TasksScreenState extends State<TasksScreen>
     final titleCtrl = TextEditingController(text: parsed.title);
     DateTime confirmedDate = parsed.date;
     TimeOfDay? confirmedTime = parsed.time;
+    Map<String, dynamic>? confirmedRepeatRule = parsed.repeatRule;
     bool isReminderEnabled =
         _isCoreReminderEnabledGlobally && confirmedTime != null;
 
@@ -7437,6 +7564,50 @@ class _TasksScreenState extends State<TasksScreen>
                             ),
                           ),
                         ),
+                        if (confirmedRepeatRule != null)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF5F3FF),
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                color: const Color(0xFFD9D0FF),
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.repeat_rounded,
+                                  size: 15,
+                                  color: _coach.accentColor,
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  _repeatRuleLabel(confirmedRepeatRule),
+                                  style: GoogleFonts.notoSansKr(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.bold,
+                                    color: _coach.accentColor,
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                GestureDetector(
+                                  onTap: () => setDialogState(
+                                    () => confirmedRepeatRule = null,
+                                  ),
+                                  child: const Icon(
+                                    Icons.close_rounded,
+                                    size: 14,
+                                    color: Color(0xFF9CA3AF),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                       ],
                     ),
                     const SizedBox(height: 16),
@@ -7512,28 +7683,55 @@ class _TasksScreenState extends State<TasksScreen>
                               final finalTitle = titleCtrl.text.trim();
                               if (finalTitle.isEmpty) return;
 
-                              final dateStr = _dateKey(confirmedDate);
-                              final entry = ScheduleItem(
-                                id: DateTime.now().millisecondsSinceEpoch
-                                    .toString(),
-                                text: finalTitle,
-                                createdAt: DateTime.now().toIso8601String(),
-                                isReminderEnabled:
-                                    isReminderEnabled &&
-                                    _isCoreReminderEnabledGlobally &&
-                                    confirmedTime != null,
-                              );
-
-                              if (confirmedTime != null) {
-                                entry.timeStart =
-                                    "${confirmedTime!.hour}:${confirmedTime!.minute}";
-                                entry.time = _formatTime(confirmedTime!);
-                              }
+                              final nowMs =
+                                  DateTime.now().millisecondsSinceEpoch;
+                              final createdAt = DateTime.now()
+                                  .toIso8601String();
+                              final repeatRule = confirmedRepeatRule;
+                              final repeatDates = repeatRule == null
+                                  ? [confirmedDate]
+                                  : _datesForScheduleRepeat(
+                                      confirmedDate,
+                                      repeatRule,
+                                    );
+                              final recurrenceGroupId = repeatRule == null
+                                  ? null
+                                  : 'repeat_$nowMs';
 
                               setState(() {
-                                if (!schedules.containsKey(dateStr))
-                                  schedules[dateStr] = [];
-                                schedules[dateStr]!.add(entry);
+                                for (var i = 0; i < repeatDates.length; i++) {
+                                  final dateStr = _dateKey(repeatDates[i]);
+                                  final entry = ScheduleItem(
+                                    id: repeatRule == null
+                                        ? nowMs.toString()
+                                        : '${nowMs}_$i',
+                                    text: finalTitle,
+                                    createdAt: createdAt,
+                                    isReminderEnabled:
+                                        isReminderEnabled &&
+                                        _isCoreReminderEnabledGlobally &&
+                                        confirmedTime != null,
+                                    isRecurring: repeatRule != null,
+                                    recurrenceGroupId: recurrenceGroupId,
+                                    recurrenceRule: repeatRule == null
+                                        ? null
+                                        : {
+                                            ...repeatRule,
+                                            'startDate': _dateKey(
+                                              confirmedDate,
+                                            ),
+                                          },
+                                  );
+
+                                  if (confirmedTime != null) {
+                                    entry.timeStart =
+                                        "${confirmedTime!.hour}:${confirmedTime!.minute}";
+                                    entry.time = _formatTime(confirmedTime!);
+                                  }
+
+                                  schedules.putIfAbsent(dateStr, () => []);
+                                  schedules[dateStr]!.add(entry);
+                                }
                               });
 
                               if (isToday) {
