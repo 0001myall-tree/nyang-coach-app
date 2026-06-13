@@ -2821,6 +2821,27 @@ class _ChatScreenState extends State<ChatScreen>
     ]);
   }
 
+  bool _isBroWorkoutRecommendationRequest(String normalized) {
+    return _containsAny(normalized, [
+      '추천',
+      '추천해줘',
+      '뭐해야',
+      '뭘해야',
+      '뭐부터',
+      '어디서부터',
+      '알려줘',
+      '골라줘',
+      '루틴',
+      '영상',
+      '링크',
+      '따라할',
+      '시작할까',
+      '하면돼',
+      '하면되',
+      '해볼까',
+    ]);
+  }
+
   Future<_BroWorkoutLink> _selectBroWarmupLink(String normalized) {
     if (_containsAny(normalized, ['하체', '다리', '스쿼트', '런지'])) {
       return _pickBroWorkoutLink([
@@ -2920,6 +2941,7 @@ class _ChatScreenState extends State<ChatScreen>
     final normalized = _workoutNormalized(input);
     final prefs = await SharedPreferences.getInstance();
     final pendingVideo = prefs.getString('bro_pending_workout_video');
+    final pendingContext = prefs.getString('bro_pending_workout_context');
     final bridgeLink = _broStarterLink('starter_bridge');
     final hipHingeLink = _broStarterLink('starter_hip_hinge');
 
@@ -2935,6 +2957,20 @@ class _ChatScreenState extends State<ChatScreen>
 
     if (_containsAny(normalized, ['브릿지영상', '브릿지링크', '브릿지추천'])) {
       return '브릿지는 이거 보면 된다.\n${bridgeLink.url}\n\n짧게 감만 잡고, 무리하지 말고 천천히 해.';
+    }
+
+    if (pendingContext == 'reluctant_reason') {
+      await prefs.remove('bro_pending_workout_context');
+      if (_containsAny(normalized, ['몸', '피곤', '힘들', '아파', '컨디션', '지침'])) {
+        return '오케이. 몸이 힘든 거면 오늘은 운동으로 이기려 하지 마라.\n그냥 몸 깨우는 정도만 가자.\n지금 제일 부담 없는 게 뭐냐. 5분 걷기, 스트레칭, 아니면 아예 쉬면서 내일 다시 잡기.';
+      }
+      if (_containsAny(normalized, ['귀찮', '의욕', '누워', '침대', '미루'])) {
+        return '오케이. 귀찮은 거면 의지 싸움으로 끌고 가지 마라.\n딱 하나만 정하자.\n집이야, 헬스장이야, 밖이야? 장소 말하면 형이 제일 덜 귀찮은 첫 행동만 잘라줄게.';
+      }
+      if (_containsAny(normalized, ['무섭', '오래쉬', '오랜만', '몇달', '몇년', '모르겠'])) {
+        return '그럼 바로 빡센 거 추천하면 안 되겠다.\n지금은 운동을 잘하는 게 아니라 다시 시작하는 게 목표다.\n뭐 해야 할지 모르겠으면 추천해달라고 해. 형이 가볍게 시작할 걸로 골라줄게.';
+      }
+      return '오케이. 그럼 오늘은 이유부터 잡자.\n몸이 힘든 쪽이야, 귀찮은 쪽이야, 아니면 뭘 해야 할지 몰라서 막힌 거야?';
     }
 
     final isWorkoutRelated = _containsAny(normalized, [
@@ -2964,6 +3000,10 @@ class _ChatScreenState extends State<ChatScreen>
       '오랜만',
       '몇년만',
       '몇달만',
+      '몇년',
+      '몇달',
+      '쉬었다',
+      '쉬었',
       '운동안한',
       '초보',
       '입문',
@@ -2994,15 +3034,6 @@ class _ChatScreenState extends State<ChatScreen>
       '미루고싶',
       '안하고싶',
     ]);
-    final home = _containsAny(normalized, ['집', '홈트', '방', '거실']);
-    final outside = _containsAny(normalized, [
-      '밖',
-      '야외',
-      '공원',
-      '산책',
-      '러닝',
-      '조깅',
-    ]);
     final longBreak = _containsAny(normalized, [
       '오래쉬',
       '오랜만',
@@ -3032,32 +3063,38 @@ class _ChatScreenState extends State<ChatScreen>
       '다이어트',
       '몸만들',
     ]);
+    final explicitWorkoutRequest = _isBroWorkoutRecommendationRequest(
+      normalized,
+    );
 
     if (!warmedUp &&
         !reluctant &&
         !longBreak &&
         genericWorkout &&
+        !explicitWorkoutRequest &&
         Random().nextDouble() < 0.25) {
       return _pickLine([
-        '아 근데 너 운동 요새 많이 하냐?\n오래 쉬었으면 갑자기 빡세게 가지 말고, 몸 깨우는 것부터 잡자.',
-        '잠깐. 너 혹시 운동 오래 쉬었어?\n그거면 형이 바로 고강도 안 던진다. 먼저 몸부터 깨우자.',
+        '아 근데 너 운동 요새 많이 하냐?\n오래 쉬었으면 바로 추천부터 안 하고, 먼저 상태부터 보고 가자.',
+        '잠깐. 너 혹시 운동 오래 쉬었어?\n몸이 무거운 건지, 뭘 해야 할지 모르는 건지부터 보자.',
       ]);
     }
 
     if (reluctant && !warmedUp) {
-      if (gym) {
-        return '야 하기 싫은 거 정상이다. 헬스장은 도착해도 시작 전이 제일 귀찮아.\n근데 포기하진 말자.\n일단 러닝머신 5분만 걷고, 무게는 그다음에 보자.\n몸 풀고 오면 형이 오늘 루틴 딱 줄게.';
-      }
-      if (home) {
-        return '야 하기 싫은 거 정상이다. 운동은 시작 전이 제일 귀찮아.\n근데 포기하진 말자.\n일단 매트 펴고 스트레칭 3분만 해. 3분이면 몸이 좀 깬다.\n스트레칭 영상 필요하면 말해. 형이 추천해 줄 수 있으니까.';
-      }
-      if (outside) {
-        return '야 하기 싫은 거 정상이다. 밖에 있으면 더더욱 생각 길게 하지 마라.\n근데 포기하진 말자.\n일단 5분만 걸어. 뛰는 건 그다음이다.\n몸 좀 풀리면 그때 이어갈지 정하자.';
-      }
-      return '야 하기 싫은 거 정상이다. 운동은 시작 전이 제일 귀찮아.\n근데 포기하진 말자.\n지금 어디야? 집이야, 헬스장이야, 밖이야?\n장소만 말해. 형이 거기에 맞춰서 제일 덜 귀찮은 걸로 쪼개줄게.';
+      await prefs.setString('bro_pending_workout_context', 'reluctant_reason');
+      return _pickLine([
+        '야 하기 싫은 거 정상이다.\n오늘은 왜 하기 싫은데?\n몸이 힘든 거냐, 귀찮은 거냐?',
+        '오케이. 바로 운동 추천 안 한다.\n먼저 이유부터 보자. 몸이 무거운 거야, 아니면 그냥 시작이 귀찮은 거야?',
+      ]);
     }
 
-    if (longBreak && !warmedUp) {
+    if (longBreak && !warmedUp && !explicitWorkoutRequest) {
+      return _pickLine([
+        '몇 달 쉬었으면 무서울 수 있다. 정상이다.\n바로 운동 던지기 전에 하나만 보자.\n뭐가 제일 걸려? 체력, 부상 걱정, 아니면 뭘 해야 할지 모르는 거?',
+        '오케이. 오래 쉬었으면 바로 빡세게 가는 건 별로다.\n지금은 네 상태부터 보는 게 먼저야.\n운동 추천이 필요한 거야, 아니면 그냥 다시 시작할 용기가 필요한 거야?',
+      ]);
+    }
+
+    if (longBreak && !warmedUp && explicitWorkoutRequest) {
       if (lowerBody && Random().nextBool()) {
         await prefs.setString('bro_pending_workout_video', 'bridge');
         return '오케이. 오래 쉬었으면 바로 스쿼트부터 박지 마라.\n너 하체도 좀 깨워야 할 것 같은데 브릿지 해봤냐?\n누워서 하는 거라 진입 장벽 낮다.\n필요하면 영상도 줄까?';
@@ -3096,6 +3133,10 @@ class _ChatScreenState extends State<ChatScreen>
         '좋아. 이제 몸 깨웠지?\n그럼 이거 하나만 가자. 짧게 치고 흐름 만들기 좋다.\n${link.url}\n\n하고 나서 더 할 만하면 그대로 이어가. 오늘은 시작한 네가 이긴 거다.',
         '좋다. 이제 본운동 들어가자.\n이거 얼마 안 걸린다. 일단 하나만 따라 해.\n${link.url}\n\n끝나고 몸 괜찮으면 더 가도 된다. 흐름 탔을 때 밀어붙이는 거다.',
       ]);
+    }
+
+    if (!explicitWorkoutRequest) {
+      return null;
     }
 
     final link = await _selectBroWarmupLink(normalized);
