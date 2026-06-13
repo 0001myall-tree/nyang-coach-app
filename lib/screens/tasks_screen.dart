@@ -206,6 +206,9 @@ class ScheduleItem {
   String createdAt;
   bool isReminderEnabled;
   int deferredCount;
+  bool isRecurring;
+  String? recurrenceGroupId;
+  Map<String, dynamic>? recurrenceRule;
 
   ScheduleItem({
     required this.id,
@@ -218,6 +221,9 @@ class ScheduleItem {
     required this.createdAt,
     this.isReminderEnabled = false,
     this.deferredCount = 0,
+    this.isRecurring = false,
+    this.recurrenceGroupId,
+    this.recurrenceRule,
   });
 
   Map<String, dynamic> toJson() => {
@@ -230,6 +236,10 @@ class ScheduleItem {
     'done': done,
     'createdAt': createdAt,
     'deferredCount': deferredCount,
+    'isReminderEnabled': isReminderEnabled,
+    'isRecurring': isRecurring,
+    if (recurrenceGroupId != null) 'recurrenceGroupId': recurrenceGroupId,
+    if (recurrenceRule != null) 'recurrenceRule': recurrenceRule,
   };
 
   factory ScheduleItem.fromJson(Map<String, dynamic> j) => ScheduleItem(
@@ -243,6 +253,11 @@ class ScheduleItem {
     createdAt: j['createdAt'] ?? DateTime.now().toIso8601String(),
     isReminderEnabled: j['isReminderEnabled'] ?? false,
     deferredCount: j['deferredCount'] ?? 0,
+    isRecurring: j['isRecurring'] ?? false,
+    recurrenceGroupId: j['recurrenceGroupId'],
+    recurrenceRule: j['recurrenceRule'] is Map
+        ? Map<String, dynamic>.from(j['recurrenceRule'])
+        : null,
   );
 }
 
@@ -418,6 +433,8 @@ class _TasksScreenState extends State<TasksScreen>
   TimeOfDay? _schEndTime;
   String? _schDuration;
   bool _schReminderEnabled = false;
+  bool _schRepeatEnabled = false;
+  Map<String, dynamic>? _schRepeatRule;
 
   String _todayTimeType = 'none'; // 'none', 'single', 'range', 'duration'
   bool _todayReminderEnabled = false;
@@ -6775,44 +6792,202 @@ class _TasksScreenState extends State<TasksScreen>
     );
   }
 
+  List<DateTime> _datesForScheduleRepeat(
+    DateTime startDate,
+    Map<String, dynamic> rule,
+  ) {
+    final normalizedStart = DateTime(
+      startDate.year,
+      startDate.month,
+      startDate.day,
+    );
+    final endType = rule['endType']?.toString() ?? 'never';
+    final endDate = DateTime.tryParse(rule['endDate']?.toString() ?? '');
+    final repeatCount = int.tryParse(rule['count']?.toString() ?? '');
+    final hardEnd = endType == 'date' && endDate != null
+        ? DateTime(endDate.year, endDate.month, endDate.day)
+        : normalizedStart.add(const Duration(days: 365));
+    final maxCount = endType == 'count'
+        ? (repeatCount == null || repeatCount < 1 ? 1 : repeatCount)
+        : 370;
+    final dates = <DateTime>[];
+    final type = rule['type']?.toString() ?? 'daily';
+
+    bool canAdd(DateTime day) {
+      if (day.isBefore(normalizedStart)) return false;
+      if (day.isAfter(hardEnd)) return false;
+      return dates.length < maxCount;
+    }
+
+    if (type == 'daily') {
+      var day = normalizedStart;
+      while (canAdd(day)) {
+        dates.add(day);
+        day = day.add(const Duration(days: 1));
+      }
+      return dates;
+    }
+
+    if (type == 'weekly') {
+      final weekdays =
+          (rule['weekdays'] as List?)
+              ?.map((e) => int.tryParse(e.toString()))
+              .whereType<int>()
+              .toSet() ??
+          {normalizedStart.weekday};
+      var day = normalizedStart;
+      while (canAdd(day)) {
+        if (weekdays.contains(day.weekday)) dates.add(day);
+        day = day.add(const Duration(days: 1));
+      }
+      return dates;
+    }
+
+    if (type == 'monthly') {
+      final monthlyMode = rule['monthlyMode']?.toString() ?? 'date';
+      var cursor = DateTime(normalizedStart.year, normalizedStart.month);
+      while (dates.length < maxCount && !cursor.isAfter(hardEnd)) {
+        DateTime? candidate;
+        if (monthlyMode == 'nthWeekday') {
+          candidate = _nthWeekdayOfMonth(
+            cursor.year,
+            cursor.month,
+            int.tryParse(rule['nth']?.toString() ?? '') ?? 1,
+            int.tryParse(rule['weekday']?.toString() ?? '') ??
+                normalizedStart.weekday,
+          );
+        } else {
+          final dayOfMonth =
+              int.tryParse(rule['dayOfMonth']?.toString() ?? '') ??
+              normalizedStart.day;
+          final lastDay = DateTime(cursor.year, cursor.month + 1, 0).day;
+          candidate = DateTime(
+            cursor.year,
+            cursor.month,
+            dayOfMonth.clamp(1, lastDay),
+          );
+        }
+        if (candidate != null && canAdd(candidate)) dates.add(candidate);
+        cursor = DateTime(cursor.year, cursor.month + 1);
+      }
+      return dates;
+    }
+
+    return [normalizedStart];
+  }
+
+  DateTime? _nthWeekdayOfMonth(int year, int month, int nth, int weekday) {
+    final matches = <DateTime>[];
+    final lastDay = DateTime(year, month + 1, 0).day;
+    for (var day = 1; day <= lastDay; day++) {
+      final date = DateTime(year, month, day);
+      if (date.weekday == weekday) matches.add(date);
+    }
+    if (matches.isEmpty) return null;
+    final index = nth.clamp(1, matches.length) - 1;
+    return matches[index];
+  }
+
+  String _weekdayLabel(int weekday) {
+    const labels = {1: '월', 2: '화', 3: '수', 4: '목', 5: '금', 6: '토', 7: '일'};
+    return labels[weekday] ?? '';
+  }
+
+  String _repeatRuleLabel(Map<String, dynamic>? rule) {
+    if (rule == null) return '';
+    final type = rule['type']?.toString() ?? 'daily';
+    if (type == 'daily') return '매일';
+    if (type == 'weekly') {
+      final weekdays =
+          (rule['weekdays'] as List?)
+              ?.map((e) => int.tryParse(e.toString()))
+              .whereType<int>()
+              .toList() ??
+          [];
+      final ordered = [
+        7,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+      ].where(weekdays.contains).map(_weekdayLabel).join(' · ');
+      return ordered.isEmpty ? '매주' : '매주 $ordered';
+    }
+    if (type == 'monthly') {
+      if (rule['monthlyMode'] == 'nthWeekday') {
+        final nth = int.tryParse(rule['nth']?.toString() ?? '') ?? 1;
+        final weekday =
+            int.tryParse(rule['weekday']?.toString() ?? '') ?? DateTime.monday;
+        return '매월 ${nth}째주 ${_weekdayLabel(weekday)}요일';
+      }
+      final day = int.tryParse(rule['dayOfMonth']?.toString() ?? '') ?? 1;
+      return '매월 $day일';
+    }
+    return '반복';
+  }
+
   void _addSchedule() {
     final text = _schInputCtrl.text.trim();
     if (text.isEmpty) return;
 
-    final dateStr = _dateKey(_calSelectedDay);
-    final entry = ScheduleItem(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      text: text,
-      createdAt: DateTime.now().toIso8601String(),
-      isReminderEnabled: _resolvedTimeReminderEnabled(
-        _schTimeType,
-        _schStartTime,
-        _schReminderEnabled,
-      ),
-    );
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    final createdAt = DateTime.now().toIso8601String();
+    final repeatRule = _schRepeatEnabled ? _schRepeatRule : null;
+    final repeatDates = repeatRule == null
+        ? [_calSelectedDay]
+        : _datesForScheduleRepeat(_calSelectedDay, repeatRule);
+    final recurrenceGroupId = repeatRule == null ? null : 'repeat_$nowMs';
 
-    if (_schTimeType == 'single' && _schStartTime != null) {
-      entry.timeStart = "${_schStartTime!.hour}:${_schStartTime!.minute}";
-      entry.time = _formatTime(_schStartTime!);
-    } else if (_schTimeType == 'range' && _schStartTime != null) {
-      entry.timeStart = "${_schStartTime!.hour}:${_schStartTime!.minute}";
-      if (_schEndTime != null) {
-        entry.timeEnd = "${_schEndTime!.hour}:${_schEndTime!.minute}";
-        entry.time =
-            "${_formatTime(_schStartTime!)} ~ ${_formatTime(_schEndTime!)}";
-      } else {
+    ScheduleItem buildEntry(DateTime date, int index) {
+      final entry = ScheduleItem(
+        id: repeatRule == null ? nowMs.toString() : '${nowMs}_$index',
+        text: text,
+        createdAt: createdAt,
+        isReminderEnabled: _resolvedTimeReminderEnabled(
+          _schTimeType,
+          _schStartTime,
+          _schReminderEnabled,
+        ),
+        isRecurring: repeatRule != null,
+        recurrenceGroupId: recurrenceGroupId,
+        recurrenceRule: repeatRule == null
+            ? null
+            : {...repeatRule, 'startDate': _dateKey(_calSelectedDay)},
+      );
+
+      if (_schTimeType == 'single' && _schStartTime != null) {
+        entry.timeStart = "${_schStartTime!.hour}:${_schStartTime!.minute}";
         entry.time = _formatTime(_schStartTime!);
+      } else if (_schTimeType == 'range' && _schStartTime != null) {
+        entry.timeStart = "${_schStartTime!.hour}:${_schStartTime!.minute}";
+        if (_schEndTime != null) {
+          entry.timeEnd = "${_schEndTime!.hour}:${_schEndTime!.minute}";
+          entry.time =
+              "${_formatTime(_schStartTime!)} ~ ${_formatTime(_schEndTime!)}";
+        } else {
+          entry.time = _formatTime(_schStartTime!);
+        }
+      } else if (_schTimeType == 'duration' && _schDuration != null) {
+        entry.duration = _schDuration;
       }
-    } else if (_schTimeType == 'duration' && _schDuration != null) {
-      entry.duration = _schDuration;
+      return entry;
     }
 
     setState(() {
-      if (!schedules.containsKey(dateStr)) schedules[dateStr] = [];
-      schedules[dateStr]!.add(entry);
+      for (var i = 0; i < repeatDates.length; i++) {
+        final dateStr = _dateKey(repeatDates[i]);
+        schedules.putIfAbsent(dateStr, () => []);
+        schedules[dateStr]!.add(buildEntry(repeatDates[i], i));
+      }
     });
     _schInputCtrl.clear();
-    setState(() => _schReminderEnabled = false);
+    setState(() {
+      _schReminderEnabled = false;
+      _schRepeatEnabled = false;
+      _schRepeatRule = null;
+    });
     _saveSchedules();
   }
 
@@ -8008,7 +8183,10 @@ class _TasksScreenState extends State<TasksScreen>
                           _saveSchedules();
                         });
                       },
-                      child: (s.time != null || s.duration != null)
+                      child:
+                          (s.time != null ||
+                              s.duration != null ||
+                              s.isRecurring)
                           ? Row(
                               children: [
                                 if (s.time != null)
@@ -8050,6 +8228,39 @@ class _TasksScreenState extends State<TasksScreen>
                                       ),
                                     ),
                                   ),
+                                if (s.isRecurring)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 6,
+                                      vertical: 2,
+                                    ),
+                                    margin: const EdgeInsets.only(left: 6),
+                                    decoration: BoxDecoration(
+                                      color: _coach.accentColor.withOpacity(
+                                        0.08,
+                                      ),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(
+                                          Icons.repeat_rounded,
+                                          size: 12,
+                                          color: _coach.accentColor,
+                                        ),
+                                        const SizedBox(width: 3),
+                                        Text(
+                                          _repeatRuleLabel(s.recurrenceRule),
+                                          style: GoogleFonts.notoSansKr(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w800,
+                                            color: _coach.accentColor,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
                               ],
                             )
                           : Row(
@@ -8074,6 +8285,468 @@ class _TasksScreenState extends State<TasksScreen>
     );
   }
 
+  Future<void> _showScheduleRepeatDialog() async {
+    String repeatType = _schRepeatRule?['type']?.toString() ?? 'weekly';
+    String monthlyMode = _schRepeatRule?['monthlyMode']?.toString() ?? 'date';
+    final selectedWeekdays =
+        ((_schRepeatRule?['weekdays'] as List?)
+            ?.map((e) => int.tryParse(e.toString()))
+            .whereType<int>()
+            .toSet() ??
+        {_calSelectedDay.weekday});
+    int dayOfMonth =
+        int.tryParse(_schRepeatRule?['dayOfMonth']?.toString() ?? '') ??
+        _calSelectedDay.day;
+    int nth = int.tryParse(_schRepeatRule?['nth']?.toString() ?? '') ?? 1;
+    int monthlyWeekday =
+        int.tryParse(_schRepeatRule?['weekday']?.toString() ?? '') ??
+        _calSelectedDay.weekday;
+    String endType = _schRepeatRule?['endType']?.toString() ?? 'never';
+    DateTime? endDate = DateTime.tryParse(
+      _schRepeatRule?['endDate']?.toString() ?? '',
+    );
+    final countCtrl = TextEditingController(
+      text: _schRepeatRule?['count']?.toString() ?? '10',
+    );
+    final dayCtrl = TextEditingController(text: dayOfMonth.toString());
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            Widget weekdayChip(int weekday) {
+              final active = selectedWeekdays.contains(weekday);
+              return GestureDetector(
+                onTap: () {
+                  setDialogState(() {
+                    if (active && selectedWeekdays.length > 1) {
+                      selectedWeekdays.remove(weekday);
+                    } else {
+                      selectedWeekdays.add(weekday);
+                    }
+                  });
+                },
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  width: 38,
+                  height: 38,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: active ? _coach.accentColor : Colors.white,
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: active
+                          ? _coach.accentColor
+                          : const Color(0xFFE5E7EB),
+                    ),
+                  ),
+                  child: Text(
+                    _weekdayLabel(weekday),
+                    style: GoogleFonts.notoSansKr(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                      color: active ? Colors.white : const Color(0xFF6B7280),
+                    ),
+                  ),
+                ),
+              );
+            }
+
+            InputDecoration inputDecoration(String hint) => InputDecoration(
+              hintText: hint,
+              isDense: true,
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: 12,
+              ),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: _coach.accentColor, width: 1.5),
+              ),
+            );
+
+            Widget radioRow({
+              required String value,
+              required String label,
+              required Widget trailing,
+            }) {
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Row(
+                  children: [
+                    Radio<String>(
+                      value: value,
+                      groupValue: endType,
+                      activeColor: _coach.accentColor,
+                      onChanged: (v) => setDialogState(() => endType = v!),
+                    ),
+                    SizedBox(
+                      width: 72,
+                      child: Text(
+                        label,
+                        style: GoogleFonts.notoSansKr(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: const Color(0xFF3D3A4E),
+                        ),
+                      ),
+                    ),
+                    Expanded(child: trailing),
+                  ],
+                ),
+              );
+            }
+
+            return Dialog(
+              insetPadding: const EdgeInsets.symmetric(horizontal: 28),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: SingleChildScrollView(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              '사용자 지정',
+                              textAlign: TextAlign.center,
+                              style: GoogleFonts.notoSansKr(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w900,
+                                color: const Color(0xFF1A1A2E),
+                              ),
+                            ),
+                          ),
+                          GestureDetector(
+                            onTap: () => Navigator.pop(dialogContext),
+                            child: const Icon(
+                              Icons.close_rounded,
+                              color: Color(0xFFB8B5C8),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 18),
+                      Row(
+                        children: [
+                          SizedBox(
+                            width: 92,
+                            child: Text(
+                              '반복 주기',
+                              style: GoogleFonts.notoSansKr(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w800,
+                                color: const Color(0xFF3D3A4E),
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            child: DropdownButtonFormField<String>(
+                              value: repeatType,
+                              decoration: inputDecoration('반복 주기'),
+                              items: const [
+                                DropdownMenuItem(
+                                  value: 'daily',
+                                  child: Text('매일'),
+                                ),
+                                DropdownMenuItem(
+                                  value: 'weekly',
+                                  child: Text('매주'),
+                                ),
+                                DropdownMenuItem(
+                                  value: 'monthly',
+                                  child: Text('매월'),
+                                ),
+                              ],
+                              onChanged: (v) {
+                                if (v == null) return;
+                                setDialogState(() => repeatType = v);
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (repeatType == 'weekly') ...[
+                        const SizedBox(height: 18),
+                        Text(
+                          '반복 요일',
+                          style: GoogleFonts.notoSansKr(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w800,
+                            color: const Color(0xFF3D3A4E),
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            7,
+                            1,
+                            2,
+                            3,
+                            4,
+                            5,
+                            6,
+                          ].map(weekdayChip).toList(),
+                        ),
+                      ],
+                      if (repeatType == 'monthly') ...[
+                        const SizedBox(height: 18),
+                        Text(
+                          '매월 반복 방식',
+                          style: GoogleFonts.notoSansKr(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w800,
+                            color: const Color(0xFF3D3A4E),
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        SegmentedButton<String>(
+                          segments: const [
+                            ButtonSegment(value: 'date', label: Text('날짜')),
+                            ButtonSegment(
+                              value: 'nthWeekday',
+                              label: Text('몇째주 요일'),
+                            ),
+                          ],
+                          selected: {monthlyMode},
+                          onSelectionChanged: (set) =>
+                              setDialogState(() => monthlyMode = set.first),
+                        ),
+                        const SizedBox(height: 12),
+                        if (monthlyMode == 'date')
+                          TextField(
+                            controller: dayCtrl,
+                            keyboardType: TextInputType.number,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly,
+                            ],
+                            decoration: inputDecoration(
+                              '예: 11',
+                            ).copyWith(suffixText: '일'),
+                          )
+                        else
+                          Row(
+                            children: [
+                              Expanded(
+                                child: DropdownButtonFormField<int>(
+                                  value: nth,
+                                  decoration: inputDecoration('몇째주'),
+                                  items: const [
+                                    DropdownMenuItem(
+                                      value: 1,
+                                      child: Text('1째주'),
+                                    ),
+                                    DropdownMenuItem(
+                                      value: 2,
+                                      child: Text('2째주'),
+                                    ),
+                                    DropdownMenuItem(
+                                      value: 3,
+                                      child: Text('3째주'),
+                                    ),
+                                    DropdownMenuItem(
+                                      value: 4,
+                                      child: Text('4째주'),
+                                    ),
+                                    DropdownMenuItem(
+                                      value: 5,
+                                      child: Text('5째주'),
+                                    ),
+                                  ],
+                                  onChanged: (v) {
+                                    if (v != null) {
+                                      setDialogState(() => nth = v);
+                                    }
+                                  },
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: DropdownButtonFormField<int>(
+                                  value: monthlyWeekday,
+                                  decoration: inputDecoration('요일'),
+                                  items: [7, 1, 2, 3, 4, 5, 6]
+                                      .map(
+                                        (w) => DropdownMenuItem(
+                                          value: w,
+                                          child: Text('${_weekdayLabel(w)}요일'),
+                                        ),
+                                      )
+                                      .toList(),
+                                  onChanged: (v) {
+                                    if (v != null) {
+                                      setDialogState(() => monthlyWeekday = v);
+                                    }
+                                  },
+                                ),
+                              ),
+                            ],
+                          ),
+                      ],
+                      const SizedBox(height: 18),
+                      Text(
+                        '종료',
+                        style: GoogleFonts.notoSansKr(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w800,
+                          color: const Color(0xFF3D3A4E),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      radioRow(
+                        value: 'never',
+                        label: '종료 안함',
+                        trailing: const SizedBox.shrink(),
+                      ),
+                      radioRow(
+                        value: 'date',
+                        label: '날짜 지정',
+                        trailing: GestureDetector(
+                          onTap: () async {
+                            final picked = await showDatePicker(
+                              context: context,
+                              initialDate:
+                                  endDate ??
+                                  _calSelectedDay.add(const Duration(days: 30)),
+                              firstDate: _calSelectedDay,
+                              lastDate: DateTime(_calSelectedDay.year + 5),
+                            );
+                            if (picked != null) {
+                              setDialogState(() {
+                                endDate = picked;
+                                endType = 'date';
+                              });
+                            }
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 11,
+                            ),
+                            decoration: BoxDecoration(
+                              border: Border.all(
+                                color: const Color(0xFFE5E7EB),
+                              ),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  endDate == null
+                                      ? '날짜 선택'
+                                      : '${endDate!.year}. ${endDate!.month.toString().padLeft(2, '0')}. ${endDate!.day.toString().padLeft(2, '0')}',
+                                  style: GoogleFonts.notoSansKr(
+                                    fontSize: 13,
+                                    color: const Color(0xFF6B7280),
+                                  ),
+                                ),
+                                const Icon(
+                                  Icons.calendar_today_rounded,
+                                  size: 16,
+                                  color: Color(0xFF8B7CFF),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      radioRow(
+                        value: 'count',
+                        label: '반복 횟수',
+                        trailing: TextField(
+                          controller: countCtrl,
+                          keyboardType: TextInputType.number,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly,
+                          ],
+                          decoration: inputDecoration(
+                            '10',
+                          ).copyWith(suffixText: '회'),
+                          onTap: () => setDialogState(() => endType = 'count'),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 52,
+                        child: ElevatedButton(
+                          onPressed: () {
+                            final rule = <String, dynamic>{
+                              'type': repeatType,
+                              'endType': endType,
+                            };
+                            if (repeatType == 'weekly') {
+                              rule['weekdays'] = selectedWeekdays.toList();
+                            } else if (repeatType == 'monthly') {
+                              rule['monthlyMode'] = monthlyMode;
+                              if (monthlyMode == 'date') {
+                                rule['dayOfMonth'] =
+                                    int.tryParse(dayCtrl.text) ??
+                                    _calSelectedDay.day;
+                              } else {
+                                rule['nth'] = nth;
+                                rule['weekday'] = monthlyWeekday;
+                              }
+                            }
+                            if (endType == 'date' && endDate != null) {
+                              rule['endDate'] = _dateKey(endDate!);
+                            }
+                            if (endType == 'count') {
+                              rule['count'] =
+                                  int.tryParse(countCtrl.text) ?? 10;
+                            }
+                            setState(() {
+                              _schRepeatEnabled = true;
+                              _schRepeatRule = rule;
+                            });
+                            Navigator.pop(dialogContext);
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: _coach.accentColor,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: Text(
+                            '적용',
+                            style: GoogleFonts.notoSansKr(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w900,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    countCtrl.dispose();
+    dayCtrl.dispose();
+  }
+
   Widget _buildScheduleInputArea() {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
     final isKeyboardOpen = bottomInset > 0;
@@ -8083,6 +8756,80 @@ class _TasksScreenState extends State<TasksScreen>
     final double paddingBottom = isKeyboardOpen
         ? bottomInset + 16
         : (16.0 + MediaQuery.of(context).padding.bottom);
+
+    Widget scheduleModeButton(String type, {bool isLast = false}) {
+      const labels = {
+        'single': '특정 시간',
+        'range': '시간 범위',
+        'duration': '소요 시간',
+        'repeat': '반복',
+      };
+      final isRepeat = type == 'repeat';
+      final isActive = isRepeat ? _schRepeatEnabled : _schTimeType == type;
+
+      return Expanded(
+        child: GestureDetector(
+          onTap: () async {
+            if (isRepeat) {
+              await _showScheduleRepeatDialog();
+              return;
+            }
+            setState(() {
+              _schTimeType = _schTimeType == type ? 'none' : type;
+              _schReminderEnabled = false;
+              _schStartTime = null;
+              _schEndTime = null;
+              if (type != 'duration') _schDuration = null;
+            });
+          },
+          child: Container(
+            margin: EdgeInsets.only(right: isLast ? 0 : 6),
+            padding: const EdgeInsets.symmetric(vertical: 9),
+            decoration: BoxDecoration(
+              color: isActive
+                  ? _coach.accentColor.withOpacity(0.08)
+                  : Colors.white,
+              border: Border.all(
+                color: isActive ? _coach.accentColor : const Color(0xFFE5E7EB),
+                width: 2,
+              ),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (isRepeat) ...[
+                  Icon(
+                    Icons.repeat_rounded,
+                    size: 16,
+                    color: isActive
+                        ? _coach.accentColor
+                        : const Color(0xFF9CA3AF),
+                  ),
+                  const SizedBox(width: 3),
+                ],
+                Flexible(
+                  child: Text(
+                    labels[type]!,
+                    textAlign: TextAlign.center,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.notoSansKr(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: isActive
+                          ? _coach.accentColor
+                          : const Color(0xFF9CA3AF),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
 
     return Container(
       decoration: BoxDecoration(
@@ -8102,53 +8849,12 @@ class _TasksScreenState extends State<TasksScreen>
         children: [
           // 시간 설정 UI
           Row(
-            children: ['single', 'range', 'duration'].map((t) {
-              final labels = {
-                'single': '특정 시간',
-                'range': '시간 범위',
-                'duration': '소요 시간',
-              };
-              final isActive = _schTimeType == t;
-              final isLast = t == 'duration';
-              return Expanded(
-                child: GestureDetector(
-                  onTap: () => setState(() {
-                    _schTimeType = _schTimeType == t ? 'none' : t;
-                    _schReminderEnabled = false;
-                    _schStartTime = null;
-                    _schEndTime = null;
-                    if (t != 'duration') _schDuration = null;
-                  }),
-                  child: Container(
-                    margin: EdgeInsets.only(right: isLast ? 0 : 6),
-                    padding: const EdgeInsets.symmetric(vertical: 9),
-                    decoration: BoxDecoration(
-                      color: isActive
-                          ? _coach.accentColor.withOpacity(0.08)
-                          : Colors.white,
-                      border: Border.all(
-                        color: isActive
-                            ? _coach.accentColor
-                            : const Color(0xFFE5E7EB),
-                        width: 2,
-                      ),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      labels[t]!,
-                      textAlign: TextAlign.center,
-                      style: GoogleFonts.notoSansKr(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: isActive
-                            ? _coach.accentColor
-                            : const Color(0xFF9CA3AF),
-                      ),
-                    ),
-                  ),
-                ),
-              );
-            }).toList(),
+            children: [
+              scheduleModeButton('single'),
+              scheduleModeButton('range'),
+              scheduleModeButton('duration'),
+              scheduleModeButton('repeat', isLast: true),
+            ],
           ),
           if (_schTimeType == 'single' || _schTimeType == 'range')
             Padding(
