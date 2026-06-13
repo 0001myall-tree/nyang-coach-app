@@ -1,5 +1,8 @@
+import 'dart:io';
 import 'dart:convert';
 import 'dart:math';
+import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/gestures.dart';
@@ -305,18 +308,30 @@ class MemoSection {
 }
 
 class ActionCandidate {
-  String text;
-  bool isConverted;
+  String? id;
+  String title;
+  String? convertedTaskId;
+  String? convertedHabitId;
 
-  ActionCandidate({required this.text, this.isConverted = false});
+  ActionCandidate({
+    this.id,
+    required this.title,
+    this.convertedTaskId,
+    this.convertedHabitId,
+  });
 
   Map<String, dynamic> toJson() => {
-        'text': text,
-        'isConverted': isConverted,
+        'id': id,
+        'title': title,
+        'convertedTaskId': convertedTaskId,
+        'convertedHabitId': convertedHabitId,
       };
+
   factory ActionCandidate.fromJson(Map<String, dynamic> j) => ActionCandidate(
-        text: j['text'] ?? '',
-        isConverted: j['isConverted'] ?? false,
+        id: j['id'],
+        title: j['title'] ?? j['text'] ?? '',
+        convertedTaskId: j['convertedTaskId'],
+        convertedHabitId: j['convertedHabitId'],
       );
 }
 
@@ -5366,8 +5381,7 @@ class _TasksScreenState extends State<TasksScreen>
                 text: action.title,
                 category: 'schedule',
                 done: false,
-                date: todayStr,
-                createdAt: DateTime.now(),
+                createdAt: todayStr,
               );
               setState(() {
                 tasks.add(newTask);
@@ -5389,8 +5403,7 @@ class _TasksScreenState extends State<TasksScreen>
                     text: action.title,
                     category: 'schedule',
                     done: false,
-                    date: dateStr,
-                    createdAt: DateTime.now(),
+                    createdAt: dateStr,
                   );
                   setState(() {
                     tasks.add(newTask);
@@ -5403,9 +5416,9 @@ class _TasksScreenState extends State<TasksScreen>
             } else if (type == 'habit') {
               final newHabit = HabitItem(
                 id: DateTime.now().millisecondsSinceEpoch.toString(),
-                text: action.title,
-                createdAt: DateTime.now(),
-                routineBits: 127, // Everyday by default
+                name: action.title,
+                createdAt: DateFormat('yyyy-MM-dd').format(DateTime.now()),
+                freq: 'daily',
               );
               setState(() {
                 habits.add(newHabit);
