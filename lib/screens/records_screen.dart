@@ -1166,8 +1166,9 @@ $recordBuffer
         .where((e) => e.value == maxDayCount)
         .map((e) => e.key)
         .toList();
+    bestDays.sort();
     
-    final dayNames = {1: '월요일', 2: '화요일', 3: '수요일', 4: '목요일', 5: '금요일', 6: '토요일', 7: '일요일'};
+    final dayNames = {1: '월', 2: '화', 3: '수', 4: '목', 5: '금', 6: '토', 7: '일'};
     String bestDayStr = bestDays.map((d) => dayNames[d]!).join(' · ');
     if (bestDays.length == 2 && bestDays.contains(6) && bestDays.contains(7)) {
       bestDayStr = '주말';
@@ -1175,6 +1176,8 @@ $recordBuffer
       bestDayStr = '평일';
     } else if (bestDays.length == 7) {
       bestDayStr = '매일';
+    } else {
+      bestDayStr += '요일';
     }
 
     // Top prior task
