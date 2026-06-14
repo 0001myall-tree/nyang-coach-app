@@ -308,12 +308,16 @@ class ActionCandidate {
   String title;
   String? convertedTaskId;
   String? convertedHabitId;
+  String? convertedType;
+  String? convertedDate;
 
   ActionCandidate({
     this.id,
     required this.title,
     this.convertedTaskId,
     this.convertedHabitId,
+    this.convertedType,
+    this.convertedDate,
   });
 
   Map<String, dynamic> toJson() => {
@@ -321,6 +325,8 @@ class ActionCandidate {
     'title': title,
     'convertedTaskId': convertedTaskId,
     'convertedHabitId': convertedHabitId,
+    'convertedType': convertedType,
+    'convertedDate': convertedDate,
   };
 
   factory ActionCandidate.fromJson(Map<String, dynamic> j) => ActionCandidate(
@@ -328,6 +334,8 @@ class ActionCandidate {
     title: j['title'] ?? j['text'] ?? '',
     convertedTaskId: j['convertedTaskId'],
     convertedHabitId: j['convertedHabitId'],
+    convertedType: j['convertedType'],
+    convertedDate: j['convertedDate'],
   );
 }
 
@@ -5386,6 +5394,8 @@ class _TasksScreenState extends State<TasksScreen>
               });
               _saveTasks();
               action.convertedTaskId = newTask.id;
+              action.convertedType = 'task_today';
+              action.convertedDate = DateFormat('yyyy.MM.dd').format(DateTime.now());
             } else if (type == 'task_date') {
               // Show date picker
               showDatePicker(
@@ -5410,6 +5420,8 @@ class _TasksScreenState extends State<TasksScreen>
                   });
                   _saveSchedules();
                   action.convertedTaskId = newSchedule.id;
+                  action.convertedType = 'task_date';
+                  action.convertedDate = DateFormat('yyyy.MM.dd').format(picked);
                   _saveVisions(); // Save milestone to persist conversion status
                 }
               });
@@ -5425,6 +5437,8 @@ class _TasksScreenState extends State<TasksScreen>
               });
               _saveHabits();
               action.convertedHabitId = newHabit.id;
+              action.convertedType = 'habit';
+              action.convertedDate = DateFormat('yyyy.MM.dd').format(DateTime.now());
             }
             _saveVisions(); // Save the updated milestone actions
           },
@@ -11440,106 +11454,303 @@ $content
     );
   }
 
+  Future<bool?> _showDeleteConfirmation() async {
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        contentPadding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: const BoxDecoration(
+                color: Color(0xFFFEF2F2),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.delete_outline, color: Color(0xFFEF4444), size: 28),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              '이 실행 아이템을 삭제할까요?',
+              style: GoogleFonts.notoSansKr(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: const Color(0xFF111827),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '삭제된 내용은 되돌릴 수 없어요.',
+              style: GoogleFonts.notoSansKr(
+                fontSize: 13,
+                color: const Color(0xFF6B7280),
+              ),
+            ),
+            const SizedBox(height: 24),
+            Row(
+              children: [
+                Expanded(
+                  child: TextButton(
+                    onPressed: () => Navigator.pop(ctx, false),
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        side: const BorderSide(color: Color(0xFFD1D5DB)),
+                      ),
+                    ),
+                    child: Text(
+                      '취소',
+                      style: GoogleFonts.notoSansKr(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: const Color(0xFF4B5563),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(ctx, true),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFEF4444),
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    child: Text(
+                      '삭제',
+                      style: GoogleFonts.notoSansKr(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildActionCard(int index) {
     final action = _actions[index];
     final isConverted =
         action.convertedTaskId != null || action.convertedHabitId != null;
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.02),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
+    IconData stateIcon;
+    Color iconColor;
+    Widget stateBadge;
+
+    if (isConverted) {
+      if (action.convertedType == 'habit') {
+        stateIcon = Icons.autorenew;
+        iconColor = const Color(0xFF3B82F6);
+        stateBadge = Container(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          decoration: BoxDecoration(
+            color: const Color(0xFFEFF6FF),
+            borderRadius: BorderRadius.circular(4),
           ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Icon(
-            isConverted ? Icons.check_circle : Icons.radio_button_unchecked,
-            color: isConverted
-                ? const Color(0xFF10B981)
-                : const Color(0xFFD1D5DB),
-            size: 20,
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: TextField(
-              controller: _actionCtrls[index],
-              focusNode: _actionFocusNodes[index],
-              enabled: !isConverted, // Disable editing if already converted
-              style: GoogleFonts.notoSansKr(
-                fontSize: 14,
-                color: isConverted
-                    ? const Color(0xFF9CA3AF)
-                    : const Color(0xFF3D3A4E),
-                decoration: isConverted ? TextDecoration.lineThrough : null,
-              ),
-              decoration: InputDecoration(
-                hintText: '구체적인 행동 입력 (예: 개발 컨퍼런스 등록하기)',
-                hintStyle: GoogleFonts.notoSansKr(
-                  color: const Color(0xFFA0A0B0),
-                  fontSize: 13,
-                ),
-                border: InputBorder.none,
-                isDense: true,
-                contentPadding: EdgeInsets.zero,
-              ),
-              onChanged: (val) {
-                action.title = val;
-              },
+          child: Text(
+            '습관으로 전환됨',
+            style: GoogleFonts.notoSansKr(
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              color: const Color(0xFF3B82F6),
             ),
           ),
-          if (!isConverted) ...[
+        );
+      } else {
+        stateIcon = Icons.check_circle;
+        iconColor = const Color(0xFF10B981);
+        stateBadge = Container(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          decoration: BoxDecoration(
+            color: const Color(0xFFEEF2FF),
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: Text(
+            action.convertedType == 'task_today' ? '할 일로 전환됨' : '일정으로 전환됨',
+            style: GoogleFonts.notoSansKr(
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              color: const Color(0xFF6366F1),
+            ),
+          ),
+        );
+      }
+    } else {
+      stateIcon = Icons.radio_button_unchecked;
+      iconColor = const Color(0xFFD1D5DB);
+      stateBadge = Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF3F4F6),
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Text(
+          '대기 중',
+          style: GoogleFonts.notoSansKr(
+            fontSize: 10,
+            fontWeight: FontWeight.w500,
+            color: const Color(0xFF6B7280),
+          ),
+        ),
+      );
+    }
+
+    return Dismissible(
+      key: ObjectKey(action),
+      direction: DismissDirection.endToStart,
+      confirmDismiss: (direction) async {
+        return await _showDeleteConfirmation();
+      },
+      onDismissed: (direction) {
+        _removeAction(index);
+      },
+      background: Container(
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.only(right: 20),
+        margin: const EdgeInsets.only(bottom: 12),
+        decoration: BoxDecoration(
+          color: const Color(0xFFEF4444),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: const Icon(Icons.delete, color: Colors.white),
+      ),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFE5E7EB)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.02),
+              blurRadius: 4,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Icon(stateIcon, color: iconColor, size: 20),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  TextField(
+                    controller: _actionCtrls[index],
+                    focusNode: _actionFocusNodes[index],
+                    style: GoogleFonts.notoSansKr(
+                      fontSize: 14,
+                      color: const Color(0xFF3D3A4E),
+                    ),
+                    decoration: InputDecoration(
+                      hintText: '구체적인 행동 입력 (예: 개발 컨퍼런스 등록하기)',
+                      hintStyle: GoogleFonts.notoSansKr(
+                        color: const Color(0xFFA0A0B0),
+                        fontSize: 13,
+                      ),
+                      border: InputBorder.none,
+                      isDense: true,
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                    onChanged: (val) {
+                      action.title = val;
+                    },
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      stateBadge,
+                      if (isConverted && action.convertedDate != null) ...[
+                        const SizedBox(width: 8),
+                        Text(
+                          action.convertedDate!,
+                          style: GoogleFonts.notoSansKr(
+                            fontSize: 10,
+                            color: const Color(0xFF9CA3AF),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
+              ),
+            ),
             const SizedBox(width: 8),
-            GestureDetector(
-              onTap: () {
-                if (action.title.trim().isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('실행 아이템 내용을 먼저 입력해주세요!')),
-                  );
-                  return;
-                }
-                _showConversionBottomSheet(context, action, index);
-              },
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFFFBEB),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: const Color(0xFFFDE68A)),
-                ),
-                child: Text(
-                  '전환',
-                  style: GoogleFonts.notoSansKr(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: const Color(0xFFD97706),
+            if (!isConverted) ...[
+              GestureDetector(
+                onTap: () {
+                  if (action.title.trim().isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('실행 아이템 내용을 먼저 입력해주세요!')),
+                    );
+                    return;
+                  }
+                  _showConversionBottomSheet(context, action, index);
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFFBEB),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFFFDE68A)),
+                  ),
+                  child: Text(
+                    '전환',
+                    style: GoogleFonts.notoSansKr(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: const Color(0xFFD97706),
+                    ),
                   ),
                 ),
               ),
-            ),
-            const SizedBox(width: 8),
-            GestureDetector(
-              onTap: () => _removeAction(index),
-              child: const Icon(
-                Icons.close,
-                size: 16,
-                color: Color(0xFFA0A0B0),
-              ),
+              const SizedBox(width: 4),
+            ],
+            PopupMenuButton<String>(
+              icon: const Icon(Icons.more_vert, color: Color(0xFFA0A0B0), size: 20),
+              padding: EdgeInsets.zero,
+              onSelected: (val) async {
+                if (val == 'edit') {
+                  _actionFocusNodes[index].requestFocus();
+                } else if (val == 'delete') {
+                  final confirm = await _showDeleteConfirmation();
+                  if (confirm == true) {
+                    _removeAction(index);
+                  }
+                }
+              },
+              itemBuilder: (ctx) => [
+                const PopupMenuItem(
+                  value: 'edit',
+                  child: Text('수정하기'),
+                ),
+                const PopupMenuItem(
+                  value: 'delete',
+                  child: Text('삭제하기', style: TextStyle(color: Colors.red)),
+                ),
+              ],
             ),
           ],
-        ],
+        ),
       ),
     );
   }
