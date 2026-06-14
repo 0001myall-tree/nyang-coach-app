@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/gestures.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:speech_to_text/speech_to_text.dart';
@@ -297,14 +298,9 @@ class MemoSection {
 
   MemoSection({required this.title, required this.content});
 
-  Map<String, dynamic> toJson() => {
-        'title': title,
-        'content': content,
-      };
-  factory MemoSection.fromJson(Map<String, dynamic> j) => MemoSection(
-        title: j['title'] ?? '',
-        content: j['content'] ?? '',
-      );
+  Map<String, dynamic> toJson() => {'title': title, 'content': content};
+  factory MemoSection.fromJson(Map<String, dynamic> j) =>
+      MemoSection(title: j['title'] ?? '', content: j['content'] ?? '');
 }
 
 class ActionCandidate {
@@ -321,18 +317,18 @@ class ActionCandidate {
   });
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'title': title,
-        'convertedTaskId': convertedTaskId,
-        'convertedHabitId': convertedHabitId,
-      };
+    'id': id,
+    'title': title,
+    'convertedTaskId': convertedTaskId,
+    'convertedHabitId': convertedHabitId,
+  };
 
   factory ActionCandidate.fromJson(Map<String, dynamic> j) => ActionCandidate(
-        id: j['id'],
-        title: j['title'] ?? j['text'] ?? '',
-        convertedTaskId: j['convertedTaskId'],
-        convertedHabitId: j['convertedHabitId'],
-      );
+    id: j['id'],
+    title: j['title'] ?? j['text'] ?? '',
+    convertedTaskId: j['convertedTaskId'],
+    convertedHabitId: j['convertedHabitId'],
+  );
 }
 
 class MilestoneItem {
@@ -355,32 +351,32 @@ class MilestoneItem {
   });
 
   Map<String, dynamic> toJson() => {
-        'text': text,
-        'done': done,
-        'date': date,
-        'achievedDate': achievedDate,
-        'memo': memo,
-        'memoSections': memoSections?.map((e) => e.toJson()).toList(),
-        'actionCandidates': actionCandidates?.map((e) => e.toJson()).toList(),
-      };
+    'text': text,
+    'done': done,
+    'date': date,
+    'achievedDate': achievedDate,
+    'memo': memo,
+    'memoSections': memoSections?.map((e) => e.toJson()).toList(),
+    'actionCandidates': actionCandidates?.map((e) => e.toJson()).toList(),
+  };
 
   factory MilestoneItem.fromJson(Map<String, dynamic> j) => MilestoneItem(
-        text: j['text'],
-        done: j['done'] ?? false,
-        date: j['date'],
-        achievedDate: j['achievedDate'],
-        memo: j['memo'],
-        memoSections: j['memoSections'] != null
-            ? (j['memoSections'] as List)
-                .map((e) => MemoSection.fromJson(e))
-                .toList()
-            : null,
-        actionCandidates: j['actionCandidates'] != null
-            ? (j['actionCandidates'] as List)
-                .map((e) => ActionCandidate.fromJson(e))
-                .toList()
-            : null,
-      );
+    text: j['text'],
+    done: j['done'] ?? false,
+    date: j['date'],
+    achievedDate: j['achievedDate'],
+    memo: j['memo'],
+    memoSections: j['memoSections'] != null
+        ? (j['memoSections'] as List)
+              .map((e) => MemoSection.fromJson(e))
+              .toList()
+        : null,
+    actionCandidates: j['actionCandidates'] != null
+        ? (j['actionCandidates'] as List)
+              .map((e) => ActionCandidate.fromJson(e))
+              .toList()
+        : null,
+  );
 }
 
 class MilestoneWithVision {
@@ -5375,7 +5371,9 @@ class _TasksScreenState extends State<TasksScreen>
           },
           onConvertAction: (action, type) {
             if (type == 'task_today') {
-              final String todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
+              final String todayStr = DateFormat(
+                'yyyy-MM-dd',
+              ).format(DateTime.now());
               final newTask = TaskItem(
                 id: DateTime.now().millisecondsSinceEpoch.toString(),
                 text: action.title,
@@ -5397,7 +5395,9 @@ class _TasksScreenState extends State<TasksScreen>
                 lastDate: DateTime(2100),
               ).then((picked) {
                 if (picked != null) {
-                  final String dateStr = DateFormat('yyyy-MM-dd').format(picked);
+                  final String dateStr = DateFormat(
+                    'yyyy-MM-dd',
+                  ).format(picked);
                   final newTask = TaskItem(
                     id: DateTime.now().millisecondsSinceEpoch.toString(),
                     text: action.title,
@@ -6132,9 +6132,16 @@ class _TasksScreenState extends State<TasksScreen>
                                                   ),
                                                 ],
                                               ),
-                                            if ((m.memo != null && m.memo!.isNotEmpty) ||
-                                                (m.memoSections != null && m.memoSections!.isNotEmpty) ||
-                                                (m.actionCandidates != null && m.actionCandidates!.isNotEmpty)) ...[
+                                            if ((m.memo != null &&
+                                                    m.memo!.isNotEmpty) ||
+                                                (m.memoSections != null &&
+                                                    m
+                                                        .memoSections!
+                                                        .isNotEmpty) ||
+                                                (m.actionCandidates != null &&
+                                                    m
+                                                        .actionCandidates!
+                                                        .isNotEmpty)) ...[
                                               const SizedBox(height: 8),
                                               GestureDetector(
                                                 onTap: () {
@@ -6162,12 +6169,17 @@ class _TasksScreenState extends State<TasksScreen>
                                                   ),
                                                   child: MilestoneMemoDisplayWidget(
                                                     milestone: m,
-                                                    style: GoogleFonts.notoSansKr(
-                                                      fontSize: 13,
-                                                      fontWeight: FontWeight.w500,
-                                                      color: const Color(0xFF4B5563),
-                                                      height: 1.5,
-                                                    ),
+                                                    style:
+                                                        GoogleFonts.notoSansKr(
+                                                          fontSize: 13,
+                                                          fontWeight:
+                                                              FontWeight.w500,
+                                                          color: const Color(
+                                                            0xFF4B5563,
+                                                          ),
+                                                          height: 1.5,
+                                                        ),
+                                                    maxLines: 1,
                                                   ),
                                                 ),
                                               ),
@@ -8337,9 +8349,18 @@ class _TasksScreenState extends State<TasksScreen>
                                       decoration: TextDecoration.none,
                                     ),
                                   ),
-                                  if ((m.milestone.memo != null && m.milestone.memo!.isNotEmpty) ||
-                                      (m.milestone.memoSections != null && m.milestone.memoSections!.isNotEmpty) ||
-                                      (m.milestone.actionCandidates != null && m.milestone.actionCandidates!.isNotEmpty)) ...[
+                                  if ((m.milestone.memo != null &&
+                                          m.milestone.memo!.isNotEmpty) ||
+                                      (m.milestone.memoSections != null &&
+                                          m
+                                              .milestone
+                                              .memoSections!
+                                              .isNotEmpty) ||
+                                      (m.milestone.actionCandidates != null &&
+                                          m
+                                              .milestone
+                                              .actionCandidates!
+                                              .isNotEmpty)) ...[
                                     const SizedBox(height: 6),
                                     MilestoneMemoDisplayWidget(
                                       milestone: m.milestone,
@@ -8348,6 +8369,7 @@ class _TasksScreenState extends State<TasksScreen>
                                         color: const Color(0xFF6B7280),
                                         height: 1.5,
                                       ),
+                                      maxLines: 1,
                                     ),
                                   ],
                                 ],
@@ -10351,7 +10373,8 @@ class MilestoneMemoDialog extends StatefulWidget {
   final MilestoneItem milestone;
   final CoachConfig coach;
   final Function(String?) onSave;
-  final void Function(ActionCandidate action, String convertType)? onConvertAction;
+  final void Function(ActionCandidate action, String convertType)?
+  onConvertAction;
 
   const MilestoneMemoDialog({
     super.key,
@@ -10366,6 +10389,13 @@ class MilestoneMemoDialog extends StatefulWidget {
 }
 
 class _MilestoneMemoDialogState extends State<MilestoneMemoDialog> {
+  static const int _sectionContentMaxLength = 3000;
+  static final _memoSummaryProxy =
+      FirebaseFunctions.instanceFor(region: 'asia-northeast3').httpsCallable(
+        'chatProxy',
+        options: HttpsCallableOptions(timeout: const Duration(seconds: 60)),
+      );
+
   // --- Phase 1: 다중 섹션 데이터 및 컨트롤러 ---
   List<MemoSection> _sections = [];
   final List<TextEditingController> _titleCtrls = [];
@@ -10386,7 +10416,8 @@ class _MilestoneMemoDialogState extends State<MilestoneMemoDialog> {
   final SpeechToText _speechToText = SpeechToText();
   bool _speechEnabled = false;
   bool _isListening = false;
-  
+  int? _summarizingSectionIndex;
+
   @override
   void initState() {
     super.initState();
@@ -10483,7 +10514,12 @@ class _MilestoneMemoDialogState extends State<MilestoneMemoDialog> {
 
   void _addNewAction() {
     setState(() {
-      _actions.add(ActionCandidate(id: DateTime.now().millisecondsSinceEpoch.toString(), title: ''));
+      _actions.add(
+        ActionCandidate(
+          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          title: '',
+        ),
+      );
       _addActionControllers('');
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -10499,6 +10535,233 @@ class _MilestoneMemoDialogState extends State<MilestoneMemoDialog> {
       _actionCtrls.removeAt(index);
       _actionFocusNodes.removeAt(index);
     });
+  }
+
+  Future<void> _summarizeSection(int index) async {
+    final content = _contentCtrls[index].text.trim();
+    if (content.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('정리할 내용을 먼저 입력해 주세요.')));
+      return;
+    }
+
+    FocusScope.of(context).unfocus();
+    setState(() => _summarizingSectionIndex = index);
+
+    try {
+      final title = _titleCtrls[index].text.trim();
+      final summary = await _requestMemoSummary(title: title, content: content);
+
+      if (!mounted) return;
+      await _showSummaryPreviewSheet(
+        sectionIndex: index,
+        originalContent: content,
+        summary: summary,
+      );
+    } catch (e) {
+      debugPrint('Memo summary error: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('정리 중 오류가 발생했어요. 잠시 후 다시 시도해 주세요.')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _summarizingSectionIndex = null);
+      }
+    }
+  }
+
+  Future<String> _requestMemoSummary({
+    required String title,
+    required String content,
+  }) async {
+    final prompt =
+        '''아래는 장기 목표 마일스톤 메모의 한 섹션입니다. 본문을 사용자가 다시 읽기 쉽게 정리하세요.
+
+[섹션 제목]
+${title.isEmpty ? '제목 없음' : title}
+
+[본문]
+$content
+
+[정리 규칙]
+- 중복 표현을 제거하세요.
+- 핵심 항목을 추출하세요.
+- 실행 가능한 문장은 더 명확한 행동 문장으로 정리하세요.
+- 링크(URL)는 절대 삭제하거나 바꾸지 마세요.
+- 링크에 대한 설명이 본문에 있다면 링크와 설명을 함께 보존하세요.
+- 사용자의 의도를 과하게 미화하거나 새로운 내용을 지어내지 마세요.
+- 꼭 1~3줄로 제한하지 말고, 필요한 만큼만 간결하게 정리하세요.
+- 마크다운 헤딩(#)은 쓰지 마세요.
+- 결과 본문만 출력하세요.''';
+
+    final response = await _memoSummaryProxy.call({
+      'messages': [
+        {
+          'role': 'system',
+          'content':
+              '당신은 장기 목표 플래너의 메모를 정리하는 편집 AI입니다. 원문 의도와 링크를 보존하면서 중복을 줄이고 핵심과 실행 문장을 명확히 정리합니다.',
+        },
+        {'role': 'user', 'content': prompt},
+      ],
+      'temperature': 0.2,
+    });
+
+    final raw = response.data['content'].toString().trim();
+    return raw.replaceAll('```', '').trim();
+  }
+
+  Future<void> _showSummaryPreviewSheet({
+    required int sectionIndex,
+    required String originalContent,
+    required String summary,
+  }) {
+    return showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(
+              20,
+              20,
+              20,
+              20 + MediaQuery.of(ctx).viewInsets.bottom,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      '핵심 정리 미리보기',
+                      style: GoogleFonts.notoSansKr(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        color: const Color(0xFF3D3A4E),
+                      ),
+                    ),
+                    const Spacer(),
+                    GestureDetector(
+                      onTap: () => Navigator.pop(ctx),
+                      child: const Icon(
+                        Icons.close,
+                        color: Color(0xFFA0A0B0),
+                        size: 22,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                Container(
+                  constraints: BoxConstraints(
+                    maxHeight: MediaQuery.of(ctx).size.height * 0.45,
+                  ),
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF7F5FF),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0xFFE5E0FF)),
+                  ),
+                  child: SingleChildScrollView(
+                    child: SelectableText(
+                      summary,
+                      style: GoogleFonts.notoSansKr(
+                        fontSize: 14,
+                        height: 1.55,
+                        color: const Color(0xFF3D3A4E),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () {
+                          setState(() {
+                            _contentCtrls[sectionIndex].text =
+                                _limitSectionContent(
+                                  _buildContentWithSummary(
+                                    summary: summary,
+                                    originalContent: originalContent,
+                                  ),
+                                );
+                          });
+                          Navigator.pop(ctx);
+                        },
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: widget.coach.accentColor,
+                          side: BorderSide(color: widget.coach.accentColor),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                        child: Text(
+                          '요약 추가',
+                          style: GoogleFonts.notoSansKr(
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () {
+                          setState(() {
+                            _contentCtrls[sectionIndex].text =
+                                _limitSectionContent(summary);
+                          });
+                          Navigator.pop(ctx);
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: widget.coach.accentColor,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                        child: Text(
+                          '본문 대체',
+                          style: GoogleFonts.notoSansKr(
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  String _buildContentWithSummary({
+    required String summary,
+    required String originalContent,
+  }) {
+    return '[핵심 요약]\n$summary\n\n[원문]\n$originalContent';
+  }
+
+  String _limitSectionContent(String content) {
+    if (content.length <= _sectionContentMaxLength) {
+      return content;
+    }
+    return content.substring(0, _sectionContentMaxLength);
   }
 
   // --- 음성 인식 로직 ---
@@ -10553,11 +10816,12 @@ class _MilestoneMemoDialogState extends State<MilestoneMemoDialog> {
               start = _baseText.length;
               end = _baseText.length;
             }
-            final insertText = (_baseText.isNotEmpty &&
-                    start > 0 &&
-                    _baseText[start - 1] != ' '
-                ? ' '
-                : '') +
+            final insertText =
+                (_baseText.isNotEmpty &&
+                        start > 0 &&
+                        _baseText[start - 1] != ' '
+                    ? ' '
+                    : '') +
                 spoken;
             _focusedCtrl!.text = _baseText.replaceRange(start, end, insertText);
             _focusedCtrl!.selection = TextSelection.collapsed(
@@ -10587,7 +10851,7 @@ class _MilestoneMemoDialogState extends State<MilestoneMemoDialog> {
     }
     _sections.removeWhere((s) => s.title.isEmpty && s.content.isEmpty);
     widget.milestone.memoSections = _sections;
-    
+
     if (_sections.isNotEmpty) {
       widget.milestone.memo = _sections.first.content;
     } else {
@@ -10612,10 +10876,10 @@ class _MilestoneMemoDialogState extends State<MilestoneMemoDialog> {
     for (var ctrl in _contentCtrls) ctrl.dispose();
     for (var node in _titleFocusNodes) node.dispose();
     for (var node in _contentFocusNodes) node.dispose();
-    
+
     for (var ctrl in _actionCtrls) ctrl.dispose();
     for (var node in _actionFocusNodes) node.dispose();
-    
+
     super.dispose();
   }
 
@@ -10685,7 +10949,7 @@ class _MilestoneMemoDialogState extends State<MilestoneMemoDialog> {
               ],
             ),
           ),
-          
+
           // Body
           Expanded(
             child: SingleChildScrollView(
@@ -10694,8 +10958,11 @@ class _MilestoneMemoDialogState extends State<MilestoneMemoDialog> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // --- Sections ---
-                  ...List.generate(_sections.length, (index) => _buildSectionCard(index)),
-                  
+                  ...List.generate(
+                    _sections.length,
+                    (index) => _buildSectionCard(index),
+                  ),
+
                   GestureDetector(
                     onTap: _addNewSection,
                     child: Container(
@@ -10704,13 +10971,19 @@ class _MilestoneMemoDialogState extends State<MilestoneMemoDialog> {
                       decoration: BoxDecoration(
                         color: const Color(0xFFF7F5FF),
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFF8B7CFF).withOpacity(0.3)),
+                        border: Border.all(
+                          color: const Color(0xFF8B7CFF).withOpacity(0.3),
+                        ),
                       ),
                       alignment: Alignment.center,
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(Icons.add, size: 16, color: Color(0xFF8B7CFF)),
+                          const Icon(
+                            Icons.add,
+                            size: 16,
+                            color: Color(0xFF8B7CFF),
+                          ),
                           const SizedBox(width: 4),
                           Text(
                             '섹션 추가',
@@ -10725,15 +10998,16 @@ class _MilestoneMemoDialogState extends State<MilestoneMemoDialog> {
                     ),
                   ),
 
-                  const Divider(color: Color(0xFFE5E7EB), height: 32, thickness: 1),
+                  const Divider(
+                    color: Color(0xFFE5E7EB),
+                    height: 32,
+                    thickness: 1,
+                  ),
 
                   // --- Action Items ---
                   Row(
                     children: [
-                      const Text(
-                        '⚡️',
-                        style: TextStyle(fontSize: 18),
-                      ),
+                      const Text('⚡️', style: TextStyle(fontSize: 18)),
                       const SizedBox(width: 6),
                       Text(
                         '실행 아이템 (행동 후보)',
@@ -10746,14 +11020,20 @@ class _MilestoneMemoDialogState extends State<MilestoneMemoDialog> {
                     ],
                   ),
                   const SizedBox(height: 12),
-                  
-                  ...List.generate(_actions.length, (index) => _buildActionCard(index)),
+
+                  ...List.generate(
+                    _actions.length,
+                    (index) => _buildActionCard(index),
+                  ),
 
                   GestureDetector(
                     onTap: _addNewAction,
                     child: Container(
                       margin: const EdgeInsets.only(top: 8, bottom: 40),
-                      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 12,
+                        horizontal: 16,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(12),
@@ -10763,7 +11043,11 @@ class _MilestoneMemoDialogState extends State<MilestoneMemoDialog> {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(Icons.add, size: 16, color: Color(0xFF6B7280)),
+                          const Icon(
+                            Icons.add,
+                            size: 16,
+                            color: Color(0xFF6B7280),
+                          ),
                           const SizedBox(width: 6),
                           Text(
                             '실행 아이템 추가',
@@ -10792,7 +11076,7 @@ class _MilestoneMemoDialogState extends State<MilestoneMemoDialog> {
                   color: Colors.black.withOpacity(0.05),
                   blurRadius: 10,
                   offset: const Offset(0, -4),
-                )
+                ),
               ],
               borderRadius: const BorderRadius.only(
                 bottomLeft: Radius.circular(24),
@@ -10833,7 +11117,9 @@ class _MilestoneMemoDialogState extends State<MilestoneMemoDialog> {
                     _isListening ? '말씀하세요. 듣고 있습니다...' : '음성으로 내용을 입력해보세요!',
                     style: GoogleFonts.notoSansKr(
                       fontSize: 13,
-                      color: _isListening ? Colors.red : const Color(0xFFA0A0B0),
+                      color: _isListening
+                          ? Colors.red
+                          : const Color(0xFFA0A0B0),
                     ),
                   ),
                 ),
@@ -10862,6 +11148,8 @@ class _MilestoneMemoDialogState extends State<MilestoneMemoDialog> {
   }
 
   Widget _buildSectionCard(int index) {
+    final isSummarizing = _summarizingSectionIndex == index;
+
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(16),
@@ -10895,9 +11183,47 @@ class _MilestoneMemoDialogState extends State<MilestoneMemoDialog> {
                   ),
                 ),
               ),
+              const SizedBox(width: 8),
+              GestureDetector(
+                onTap: isSummarizing ? null : () => _summarizeSection(index),
+                child: Container(
+                  height: 30,
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.68),
+                    borderRadius: BorderRadius.circular(9),
+                    border: Border.all(color: const Color(0xFFE5E0FF)),
+                  ),
+                  alignment: Alignment.center,
+                  child: isSummarizing
+                      ? SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              widget.coach.accentColor,
+                            ),
+                          ),
+                        )
+                      : Text(
+                          '✨ 정리',
+                          style: GoogleFonts.notoSansKr(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                            color: widget.coach.accentColor,
+                          ),
+                        ),
+                ),
+              ),
+              const SizedBox(width: 8),
               GestureDetector(
                 onTap: () => _removeSection(index),
-                child: const Icon(Icons.close, size: 16, color: Color(0xFFA0A0B0)),
+                child: const Icon(
+                  Icons.close,
+                  size: 16,
+                  color: Color(0xFFA0A0B0),
+                ),
               ),
             ],
           ),
@@ -10906,6 +11232,8 @@ class _MilestoneMemoDialogState extends State<MilestoneMemoDialog> {
             controller: _contentCtrls[index],
             focusNode: _contentFocusNodes[index],
             maxLines: null,
+            maxLength: _sectionContentMaxLength,
+            maxLengthEnforcement: MaxLengthEnforcement.enforced,
             keyboardType: TextInputType.multiline,
             style: GoogleFonts.notoSansKr(
               fontSize: 14,
@@ -10913,13 +11241,12 @@ class _MilestoneMemoDialogState extends State<MilestoneMemoDialog> {
               height: 1.5,
             ),
             decoration: InputDecoration(
-              hintText: '내용을 입력하세요...',
-              hintStyle: GoogleFonts.notoSansKr(
-                color: const Color(0xFFA0A0B0),
-              ),
+              hintText: '내용을 입력하세요(최대 3000자)...',
+              hintStyle: GoogleFonts.notoSansKr(color: const Color(0xFFA0A0B0)),
               border: InputBorder.none,
               isDense: true,
               contentPadding: EdgeInsets.zero,
+              counterText: '',
             ),
           ),
         ],
@@ -10927,9 +11254,13 @@ class _MilestoneMemoDialogState extends State<MilestoneMemoDialog> {
     );
   }
 
-  void _showConversionBottomSheet(BuildContext context, ActionCandidate action, int index) {
+  void _showConversionBottomSheet(
+    BuildContext context,
+    ActionCandidate action,
+    int index,
+  ) {
     if (widget.onConvertAction == null) return;
-    
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.white,
@@ -10964,7 +11295,7 @@ class _MilestoneMemoDialogState extends State<MilestoneMemoDialog> {
                   overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 24),
-                
+
                 _buildConversionOption(
                   icon: Icons.today,
                   title: '오늘 할 일로 추가',
@@ -11062,7 +11393,8 @@ class _MilestoneMemoDialogState extends State<MilestoneMemoDialog> {
 
   Widget _buildActionCard(int index) {
     final action = _actions[index];
-    final isConverted = action.convertedTaskId != null || action.convertedHabitId != null;
+    final isConverted =
+        action.convertedTaskId != null || action.convertedHabitId != null;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -11083,7 +11415,9 @@ class _MilestoneMemoDialogState extends State<MilestoneMemoDialog> {
         children: [
           Icon(
             isConverted ? Icons.check_circle : Icons.radio_button_unchecked,
-            color: isConverted ? const Color(0xFF10B981) : const Color(0xFFD1D5DB),
+            color: isConverted
+                ? const Color(0xFF10B981)
+                : const Color(0xFFD1D5DB),
             size: 20,
           ),
           const SizedBox(width: 12),
@@ -11094,7 +11428,9 @@ class _MilestoneMemoDialogState extends State<MilestoneMemoDialog> {
               enabled: !isConverted, // Disable editing if already converted
               style: GoogleFonts.notoSansKr(
                 fontSize: 14,
-                color: isConverted ? const Color(0xFF9CA3AF) : const Color(0xFF3D3A4E),
+                color: isConverted
+                    ? const Color(0xFF9CA3AF)
+                    : const Color(0xFF3D3A4E),
                 decoration: isConverted ? TextDecoration.lineThrough : null,
               ),
               decoration: InputDecoration(
@@ -11125,7 +11461,10 @@ class _MilestoneMemoDialogState extends State<MilestoneMemoDialog> {
                 _showConversionBottomSheet(context, action, index);
               },
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   color: const Color(0xFFFFFBEB),
                   borderRadius: BorderRadius.circular(8),
@@ -11144,7 +11483,11 @@ class _MilestoneMemoDialogState extends State<MilestoneMemoDialog> {
             const SizedBox(width: 8),
             GestureDetector(
               onTap: () => _removeAction(index),
-              child: const Icon(Icons.close, size: 16, color: Color(0xFFA0A0B0)),
+              child: const Icon(
+                Icons.close,
+                size: 16,
+                color: Color(0xFFA0A0B0),
+              ),
             ),
           ],
         ],
@@ -11152,14 +11495,17 @@ class _MilestoneMemoDialogState extends State<MilestoneMemoDialog> {
     );
   }
 }
+
 class MilestoneMemoDisplayWidget extends StatelessWidget {
   final MilestoneItem milestone;
   final TextStyle style;
+  final int? maxLines;
 
   const MilestoneMemoDisplayWidget({
     super.key,
     required this.milestone,
     required this.style,
+    this.maxLines,
   });
 
   @override
@@ -11167,9 +11513,26 @@ class MilestoneMemoDisplayWidget extends StatelessWidget {
     final sections = milestone.memoSections ?? [];
     final actions = milestone.actionCandidates ?? [];
 
+    if (maxLines != null) {
+      final previewText = _buildPreviewText(sections, actions);
+      if (previewText.isNotEmpty) {
+        return MemoDisplayWidget(
+          text: previewText,
+          style: style,
+          maxLines: maxLines,
+          overflow: TextOverflow.ellipsis,
+        );
+      }
+    }
+
     if (sections.isEmpty && actions.isEmpty) {
       if (milestone.memo != null && milestone.memo!.isNotEmpty) {
-        return MemoDisplayWidget(text: milestone.memo!, style: style);
+        return MemoDisplayWidget(
+          text: milestone.memo!,
+          style: style,
+          maxLines: maxLines,
+          overflow: maxLines == null ? null : TextOverflow.ellipsis,
+        );
       }
       return const SizedBox.shrink();
     }
@@ -11194,8 +11557,13 @@ class MilestoneMemoDisplayWidget extends StatelessWidget {
                     ),
                   if (section.content.isNotEmpty)
                     Padding(
-                      padding: EdgeInsets.only(top: section.title.isNotEmpty ? 4.0 : 0),
-                      child: MemoDisplayWidget(text: section.content, style: style),
+                      padding: EdgeInsets.only(
+                        top: section.title.isNotEmpty ? 4.0 : 0,
+                      ),
+                      child: MemoDisplayWidget(
+                        text: section.content,
+                        style: style,
+                      ),
                     ),
                 ],
               ),
@@ -11212,7 +11580,9 @@ class MilestoneMemoDisplayWidget extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           ...actions.map((action) {
-            final isConverted = action.convertedTaskId != null || action.convertedHabitId != null;
+            final isConverted =
+                action.convertedTaskId != null ||
+                action.convertedHabitId != null;
             return Padding(
               padding: const EdgeInsets.only(bottom: 4.0),
               child: Row(
@@ -11221,9 +11591,13 @@ class MilestoneMemoDisplayWidget extends StatelessWidget {
                   Padding(
                     padding: const EdgeInsets.only(top: 2.0),
                     child: Icon(
-                      isConverted ? Icons.check_circle : Icons.radio_button_unchecked,
+                      isConverted
+                          ? Icons.check_circle
+                          : Icons.radio_button_unchecked,
                       size: 14,
-                      color: isConverted ? const Color(0xFF10B981) : const Color(0xFFD1D5DB),
+                      color: isConverted
+                          ? const Color(0xFF10B981)
+                          : const Color(0xFFD1D5DB),
                     ),
                   ),
                   const SizedBox(width: 6),
@@ -11231,8 +11605,12 @@ class MilestoneMemoDisplayWidget extends StatelessWidget {
                     child: Text(
                       action.title,
                       style: style.copyWith(
-                        color: isConverted ? const Color(0xFF9CA3AF) : style.color,
-                        decoration: isConverted ? TextDecoration.lineThrough : null,
+                        color: isConverted
+                            ? const Color(0xFF9CA3AF)
+                            : style.color,
+                        decoration: isConverted
+                            ? TextDecoration.lineThrough
+                            : null,
                       ),
                     ),
                   ),
@@ -11244,21 +11622,70 @@ class MilestoneMemoDisplayWidget extends StatelessWidget {
       ],
     );
   }
+
+  String _buildPreviewText(
+    List<MemoSection> sections,
+    List<ActionCandidate> actions,
+  ) {
+    final parts = <String>[];
+
+    if (sections.isEmpty && actions.isEmpty) {
+      final memo = milestone.memo?.trim();
+      if (memo != null && memo.isNotEmpty) {
+        parts.add(memo);
+      }
+    }
+
+    for (final section in sections) {
+      final sectionParts = <String>[];
+      final title = section.title.trim();
+      final content = section.content.trim();
+
+      if (title.isNotEmpty) {
+        sectionParts.add('[$title]');
+      }
+      if (content.isNotEmpty) {
+        sectionParts.add(content);
+      }
+      if (sectionParts.isNotEmpty) {
+        parts.add(sectionParts.join(' '));
+      }
+    }
+
+    if (actions.isNotEmpty) {
+      parts.add(
+        '실행 아이템 ${actions.map((action) => action.title.trim()).where((title) => title.isNotEmpty).join(', ')}',
+      );
+    }
+
+    return parts.join('  ').replaceAll(RegExp(r'\s+'), ' ').trim();
+  }
 }
 
 class MemoDisplayWidget extends StatelessWidget {
   final String text;
   final TextStyle style;
+  final int? maxLines;
+  final TextOverflow? overflow;
 
-  const MemoDisplayWidget({super.key, required this.text, required this.style});
+  const MemoDisplayWidget({
+    super.key,
+    required this.text,
+    required this.style,
+    this.maxLines,
+    this.overflow,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final RegExp urlRegex = RegExp(r'(https?:\/\/[^\s]+)', caseSensitive: false);
+    final RegExp urlRegex = RegExp(
+      r'(https?:\/\/[^\s]+)',
+      caseSensitive: false,
+    );
     final Iterable<RegExpMatch> matches = urlRegex.allMatches(text);
 
     if (matches.isEmpty) {
-      return Text(text, style: style);
+      return Text(text, style: style, maxLines: maxLines, overflow: overflow);
     }
 
     final List<TextSpan> spans = [];
@@ -11266,13 +11693,21 @@ class MemoDisplayWidget extends StatelessWidget {
 
     for (final match in matches) {
       if (match.start > currentPosition) {
-        spans.add(TextSpan(text: text.substring(currentPosition, match.start), style: style));
+        spans.add(
+          TextSpan(
+            text: text.substring(currentPosition, match.start),
+            style: style,
+          ),
+        );
       }
       final String url = match.group(0)!;
       spans.add(
         TextSpan(
           text: url,
-          style: style.copyWith(color: const Color(0xFF3B82F6), decoration: TextDecoration.underline),
+          style: style.copyWith(
+            color: const Color(0xFF3B82F6),
+            decoration: TextDecoration.underline,
+          ),
           recognizer: TapGestureRecognizer()
             ..onTap = () async {
               try {
@@ -11291,6 +11726,10 @@ class MemoDisplayWidget extends StatelessWidget {
       spans.add(TextSpan(text: text.substring(currentPosition), style: style));
     }
 
-    return Text.rich(TextSpan(children: spans));
+    return Text.rich(
+      TextSpan(children: spans),
+      maxLines: maxLines,
+      overflow: overflow ?? TextOverflow.clip,
+    );
   }
 }

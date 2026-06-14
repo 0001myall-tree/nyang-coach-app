@@ -58,13 +58,10 @@ class NotificationService {
     _lastMorningPayload = payload;
     _lastMorningOpenedAt = now;
 
-    // Check if morning call was already fired today
+    // Removed 1-time per day restriction so users can test the morning call multiple times.
+    // Instead of completely blocking it for the day, we just rely on the 2-second debounce above.
     final todayStr = '${now.year}-${now.month}-${now.day}';
     final prefs = await SharedPreferences.getInstance();
-    final lastFiredDate = prefs.getString('nyang_last_morning_call_date');
-    if (lastFiredDate == todayStr) {
-      return; // Already handled today
-    }
     await prefs.setString('nyang_last_morning_call_date', todayStr);
 
     final parsed = _parseMorningPayload(payload);
@@ -218,7 +215,9 @@ class NotificationService {
     required String coachId,
   }) async {
     if (kIsWeb) return;
-    await _plugin.cancel(id: 0);
+    for (int i = 0; i < 3; i++) {
+      await _plugin.cancel(id: i);
+    }
     String targetCoachId = coachId;
 
     // UserDataService 로드하여 보유 코치 체크
@@ -259,6 +258,7 @@ class NotificationService {
               : null,
           playSound: true,
           fullScreenIntent: true,
+          category: AndroidNotificationCategory.alarm,
           audioAttributesUsage: AudioAttributesUsage.alarm,
         );
     final DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
@@ -283,16 +283,21 @@ class NotificationService {
     if (scheduled.isBefore(now)) {
       scheduled = scheduled.add(const Duration(days: 1));
     }
-    await _plugin.zonedSchedule(
-      id: 0,
-      title: '⏰ 모닝콜 시간입니다!',
-      body: '코치가 깨우러 왔어요. 얼른 일어나세요!',
-      scheduledDate: scheduled,
-      notificationDetails: details,
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-      matchDateTimeComponents: DateTimeComponents.time,
-      payload: 'morning:$targetCoachId:${soundName ?? ''}',
-    );
+    
+    // 1분 간격으로 3번 연속 울리도록 스케줄링 (id: 0, 1, 2)
+    for (int i = 0; i < 3; i++) {
+      final targetTime = scheduled.add(Duration(minutes: i));
+      await _plugin.zonedSchedule(
+        id: i,
+        title: '⏰ 모닝콜 시간입니다!',
+        body: '코치가 깨우러 왔어요. 얼른 일어나세요!',
+        scheduledDate: targetTime,
+        notificationDetails: details,
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        matchDateTimeComponents: DateTimeComponents.time,
+        payload: 'morning:$targetCoachId:${soundName ?? ''}',
+      );
+    }
   }
 
   Future<void> rescheduleNextMorningCall() async {
@@ -319,7 +324,9 @@ class NotificationService {
 
   Future<void> cancelAllMorningCalls() async {
     if (kIsWeb) return;
-    await _plugin.cancel(id: 0);
+    for (int i = 0; i < 3; i++) {
+      await _plugin.cancel(id: i);
+    }
   }
 
   Future<void> cancelCoreReminders() async {
