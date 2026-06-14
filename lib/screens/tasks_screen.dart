@@ -5398,18 +5398,18 @@ class _TasksScreenState extends State<TasksScreen>
                   final String dateStr = DateFormat(
                     'yyyy-MM-dd',
                   ).format(picked);
-                  final newTask = TaskItem(
+                  final newSchedule = ScheduleItem(
                     id: DateTime.now().millisecondsSinceEpoch.toString(),
                     text: action.title,
-                    category: 'schedule',
                     done: false,
-                    createdAt: dateStr,
+                    createdAt: DateFormat('yyyy-MM-dd').format(DateTime.now()),
                   );
                   setState(() {
-                    tasks.add(newTask);
+                    schedules.putIfAbsent(dateStr, () => []);
+                    schedules[dateStr]!.add(newSchedule);
                   });
-                  _saveTasks();
-                  action.convertedTaskId = newTask.id;
+                  _saveSchedules();
+                  action.convertedTaskId = newSchedule.id;
                   _saveVisions(); // Save milestone to persist conversion status
                 }
               });
