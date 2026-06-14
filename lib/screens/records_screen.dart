@@ -5,6 +5,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:nyang_coach/services/user_title_service.dart';
 import 'package:nyang_coach/services/analytics_service.dart';
+import 'package:nyang_coach/services/api_usage_limit_service.dart';
 import 'coach_config.dart';
 import 'tasks_screen.dart'; // for HabitItem, etc.
 
@@ -161,6 +162,21 @@ class _RecordsScreenState extends State<RecordsScreen> {
 
     try {
       final prompt = await _buildWeeklyFeedbackPrompt();
+      final estimatedPromptTokens = AnalyticsService.estimateChatTokens([
+        {'content': prompt},
+      ], '');
+      final limit = await ApiUsageLimitService.checkChatAllowance(
+        estimatedTokens: estimatedPromptTokens,
+      );
+      if (!limit.allowed) {
+        if (mounted) {
+          setState(() {
+            _weeklyFeedbackText = limit.message;
+          });
+        }
+        return;
+      }
+
       final response = await _chatProxy.call({
         'messages': [
           {'role': 'user', 'content': prompt},
@@ -176,7 +192,9 @@ class _RecordsScreenState extends State<RecordsScreen> {
       if (feedbackText.isEmpty) return;
 
       // API 사용 기록 (주간 리포트 생성에 따른 토큰/비용 집계)
-      final estimatedTokens = AnalyticsService.estimateChatTokens([{'content': prompt}], feedbackText);
+      final estimatedTokens = AnalyticsService.estimateChatTokens([
+        {'content': prompt},
+      ], feedbackText);
       final usageData = response.data is Map ? response.data as Map : const {};
       final actualTokens = AnalyticsService.readIntValue(usageData, [
         'totalTokens',
@@ -917,7 +935,8 @@ $recordBuffer
               final dNormalized = DateTime(d.year, d.month, d.day);
 
               // 생성일 이전은 카운트 제외
-              if (createdAtDate != null && dNormalized.isBefore(createdAtDate)) {
+              if (createdAtDate != null &&
+                  dNormalized.isBefore(createdAtDate)) {
                 continue;
               }
 
@@ -995,18 +1014,18 @@ $recordBuffer
                     ],
                   ),
                   const SizedBox(height: 6),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(4),
-                      child: LinearProgressIndicator(
-                        value: hPct / 100.0,
-                        minHeight: 6,
-                        backgroundColor: const Color(0xFFF3F4F6),
-                        valueColor: AlwaysStoppedAnimation(_coach.accentColor),
-                      ),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: LinearProgressIndicator(
+                      value: hPct / 100.0,
+                      minHeight: 6,
+                      backgroundColor: const Color(0xFFF3F4F6),
+                      valueColor: AlwaysStoppedAnimation(_coach.accentColor),
                     ),
-                    const SizedBox(height: 12),
-                    _buildHabitPattern(h),
-                  ],
+                  ),
+                  const SizedBox(height: 12),
+                  _buildHabitPattern(h),
+                ],
               ),
             );
           }),
@@ -1038,10 +1057,7 @@ $recordBuffer
 
       final log = logs[dateStr];
       if (log != null && log['done'] == true && log['completedAt'] != null) {
-        validLogs.add({
-          'dateStr': dateStr,
-          'completedAt': log['completedAt'],
-        });
+        validLogs.add({'dateStr': dateStr, 'completedAt': log['completedAt']});
       }
     }
 
@@ -1085,12 +1101,15 @@ $recordBuffer
         final dayHistory = _history.where((r) => r['date'] == dateStr).toList();
         if (dayHistory.isNotEmpty) {
           final tasks = (dayHistory.last['tasks'] as List?) ?? [];
-          final completedTasks = tasks.where((t) {
-            if (t is! Map) return false;
-            if (t['done'] != true || t['completedAt'] == null) return false;
-            if (t['text'] == h.name) return false;
-            return true;
-          }).map((t) => t as Map<String, dynamic>).toList();
+          final completedTasks = tasks
+              .where((t) {
+                if (t is! Map) return false;
+                if (t['done'] != true || t['completedAt'] == null) return false;
+                if (t['text'] == h.name) return false;
+                return true;
+              })
+              .map((t) => t as Map<String, dynamic>)
+              .toList();
 
           completedTasks.sort((a, b) {
             final ta = DateTime.parse(a['completedAt']);
@@ -1149,12 +1168,14 @@ $recordBuffer
         .map((e) => e.key)
         .toList();
     bestDays.sort();
-    
+
     final dayNames = {1: '월', 2: '화', 3: '수', 4: '목', 5: '금', 6: '토', 7: '일'};
     String bestDayStr = bestDays.map((d) => dayNames[d]!).join(' · ');
     if (bestDays.length == 2 && bestDays.contains(6) && bestDays.contains(7)) {
       bestDayStr = '주말';
-    } else if (bestDays.length == 5 && !bestDays.contains(6) && !bestDays.contains(7)) {
+    } else if (bestDays.length == 5 &&
+        !bestDays.contains(6) &&
+        !bestDays.contains(7)) {
       bestDayStr = '평일';
     } else if (bestDays.length == 7) {
       bestDayStr = '매일';

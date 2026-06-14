@@ -15,6 +15,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:nyang_coach/screens/coach_selection_screen.dart';
 import 'package:nyang_coach/services/notification_service.dart';
 import 'package:nyang_coach/services/analytics_service.dart';
+import 'package:nyang_coach/services/api_usage_limit_service.dart';
 import 'package:nyang_coach/services/tasks_sync_service.dart';
 import 'package:nyang_coach/services/user_title_service.dart';
 import 'coach_config.dart';
@@ -3357,7 +3358,11 @@ class _ChatScreenState extends State<ChatScreen>
     } catch (e) {
       if (!mounted || widget.coachId != currentId) return;
       setState(() => _isLoading = false);
-      _showError('메시지 전송 실패. 잠시 후 다시 시도해주세요.');
+      if (e is ApiUsageLimitException) {
+        _showError(e.message);
+      } else {
+        _showError('메시지 전송 실패. 잠시 후 다시 시도해주세요.');
+      }
     }
   }
 
@@ -3942,6 +3947,14 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
             {'role': 'user', 'content': '$timePrefix$effectiveUserText'},
           ];
 
+    final estimatedPromptTokens = AnalyticsService.estimateChatTokens(
+      messages,
+      '',
+    );
+    await ApiUsageLimitService.ensureChatAllowed(
+      estimatedTokens: estimatedPromptTokens,
+    );
+
     // Firebase Cloud Functions chatProxy 호출 (웹앱과 동일한 Gemini AI 서버)
     final result = await _chatProxy.call({
       'messages': messages,
@@ -3951,7 +3964,10 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
     final content = result.data['content'] as String? ?? '';
     if (content.isEmpty) throw Exception('Empty response from chatProxy');
 
-    final estimatedTokens = AnalyticsService.estimateChatTokens(messages, content);
+    final estimatedTokens = AnalyticsService.estimateChatTokens(
+      messages,
+      content,
+    );
     final usageData = result.data is Map ? result.data as Map : const {};
     final actualTokens = AnalyticsService.readIntValue(usageData, [
       'totalTokens',

@@ -20,6 +20,7 @@ import '../services/notification_service.dart';
 import '../services/tasks_sync_service.dart';
 import '../services/user_title_service.dart';
 import '../services/analytics_service.dart';
+import '../services/api_usage_limit_service.dart';
 import '../services/widget_sync_service.dart';
 
 // ─────────────────────────────────────────────────────────────
@@ -5395,7 +5396,9 @@ class _TasksScreenState extends State<TasksScreen>
               _saveTasks();
               action.convertedTaskId = newTask.id;
               action.convertedType = 'task_today';
-              action.convertedDate = DateFormat('yyyy.MM.dd').format(DateTime.now());
+              action.convertedDate = DateFormat(
+                'yyyy.MM.dd',
+              ).format(DateTime.now());
             } else if (type == 'task_date') {
               // Show date picker
               showDatePicker(
@@ -5421,7 +5424,9 @@ class _TasksScreenState extends State<TasksScreen>
                   _saveSchedules();
                   action.convertedTaskId = newSchedule.id;
                   action.convertedType = 'task_date';
-                  action.convertedDate = DateFormat('yyyy.MM.dd').format(picked);
+                  action.convertedDate = DateFormat(
+                    'yyyy.MM.dd',
+                  ).format(picked);
                   _saveVisions(); // Save milestone to persist conversion status
                 }
               });
@@ -5438,7 +5443,9 @@ class _TasksScreenState extends State<TasksScreen>
               _saveHabits();
               action.convertedHabitId = newHabit.id;
               action.convertedType = 'habit';
-              action.convertedDate = DateFormat('yyyy.MM.dd').format(DateTime.now());
+              action.convertedDate = DateFormat(
+                'yyyy.MM.dd',
+              ).format(DateTime.now());
             }
             _saveVisions(); // Save the updated milestone actions
           },
@@ -10582,6 +10589,16 @@ class _MilestoneMemoDialogState extends State<MilestoneMemoDialog> {
       return;
     }
 
+    final limit = await ApiUsageLimitService.checkOrganizeAllowance();
+    if (!limit.allowed) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(limit.message)));
+      return;
+    }
+
+    if (!mounted) return;
     FocusScope.of(context).unfocus();
     setState(() => _summarizingSectionIndex = index);
 
@@ -10600,6 +10617,12 @@ class _MilestoneMemoDialogState extends State<MilestoneMemoDialog> {
     } catch (e) {
       debugPrint('Memo summary error: $e');
       if (!mounted) return;
+      if (e is ApiUsageLimitException) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.message)));
+        return;
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('정리 중 오류가 발생했어요. 잠시 후 다시 시도해 주세요.')),
       );
@@ -10643,6 +10666,14 @@ $content
       {'role': 'user', 'content': prompt},
     ];
 
+    final estimatedPromptTokens = AnalyticsService.estimateChatTokens(
+      messages,
+      '',
+    );
+    await ApiUsageLimitService.ensureChatAllowed(
+      estimatedTokens: estimatedPromptTokens,
+    );
+
     final response = await _memoSummaryProxy.call({
       'messages': messages,
       'temperature': 0.2,
@@ -10651,10 +10682,18 @@ $content
     final raw = response.data['content'].toString().trim();
     final usageData = response.data is Map ? response.data as Map : const {};
     final actualTokens = AnalyticsService.readIntValue(usageData, [
-      'totalTokens', 'total_tokens', 'tokens', 'usage.totalTokens', 'usage.total_tokens',
+      'totalTokens',
+      'total_tokens',
+      'tokens',
+      'usage.totalTokens',
+      'usage.total_tokens',
     ]);
     final actualCostWon = AnalyticsService.readIntValue(usageData, [
-      'costWon', 'cost_won', 'estimatedCostWon', 'estimated_cost_won', 'usage.costWon',
+      'costWon',
+      'cost_won',
+      'estimatedCostWon',
+      'estimated_cost_won',
+      'usage.costWon',
     ]);
     final estimatedTokens = AnalyticsService.estimateChatTokens(messages, raw);
 
@@ -11489,7 +11528,11 @@ $content
                 color: Color(0xFFFEF2F2),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.delete_outline, color: Color(0xFFEF4444), size: 28),
+              child: const Icon(
+                Icons.delete_outline,
+                color: Color(0xFFEF4444),
+                size: 28,
+              ),
             ),
             const SizedBox(height: 16),
             Text(
@@ -11727,7 +11770,10 @@ $content
                   _showConversionBottomSheet(context, action, index);
                 },
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
                     color: const Color(0xFFFFFBEB),
                     borderRadius: BorderRadius.circular(8),
@@ -11746,7 +11792,11 @@ $content
               const SizedBox(width: 4),
             ],
             PopupMenuButton<String>(
-              icon: const Icon(Icons.more_vert, color: Color(0xFFA0A0B0), size: 20),
+              icon: const Icon(
+                Icons.more_vert,
+                color: Color(0xFFA0A0B0),
+                size: 20,
+              ),
               padding: EdgeInsets.zero,
               onSelected: (val) async {
                 if (val == 'edit') {
@@ -11759,10 +11809,7 @@ $content
                 }
               },
               itemBuilder: (ctx) => [
-                const PopupMenuItem(
-                  value: 'edit',
-                  child: Text('수정하기'),
-                ),
+                const PopupMenuItem(value: 'edit', child: Text('수정하기')),
                 const PopupMenuItem(
                   value: 'delete',
                   child: Text('삭제하기', style: TextStyle(color: Colors.red)),

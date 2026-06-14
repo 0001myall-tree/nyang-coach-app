@@ -4,6 +4,8 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
+import 'analytics_service.dart';
+import 'api_usage_limit_service.dart';
 
 class MemoryService {
   static final MemoryService _instance = MemoryService._internal();
@@ -19,25 +21,22 @@ class MemoryService {
         'decision_pattern': '',
         'success_failure_formula': '',
         'communication_protocol': '',
-        'intervention_rules': ''
+        'intervention_rules': '',
       },
       'mid_change': {
         'chapter': {'title': '', 'description': ''},
         'keywords_axis': [],
         'focus_projects': [],
         'active_experiments': [],
-        'environment_variables': []
+        'environment_variables': [],
       },
       'high_change': {
         'energy_fatigue': '',
         'mood_condition': '',
         'obstacles': '',
-        'scenes_insights': []
+        'scenes_insights': [],
       },
-      'meta': {
-        'last_batch_run': '',
-        'history_log': []
-      }
+      'meta': {'last_batch_run': '', 'history_log': []},
     };
   }
 
@@ -46,20 +45,26 @@ class MemoryService {
 
   Future<void> loadMemoryData() async {
     final prefs = await SharedPreferences.getInstance();
-    
+
     final mpStr = prefs.getString('nyang_master_profile');
     if (mpStr != null && mpStr.isNotEmpty) {
-      try { masterProfile = jsonDecode(mpStr); } catch (_) {}
+      try {
+        masterProfile = jsonDecode(mpStr);
+      } catch (_) {}
     }
-    
+
     final dsStr = prefs.getString('nyang_daily_summaries');
     if (dsStr != null && dsStr.isNotEmpty) {
-      try { dailySummaries = jsonDecode(dsStr); } catch (_) {}
+      try {
+        dailySummaries = jsonDecode(dsStr);
+      } catch (_) {}
     }
-    
+
     final ltStr = prefs.getString('nyang_long_term_memory');
     if (ltStr != null && ltStr.isNotEmpty) {
-      try { longTermMemory = jsonDecode(ltStr); } catch (_) {}
+      try {
+        longTermMemory = jsonDecode(ltStr);
+      } catch (_) {}
     }
   }
 
@@ -73,16 +78,13 @@ class MemoryService {
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
       try {
-        await FirebaseFirestore.instance
-            .collection('users')
-            .doc(user.uid)
-            .set({
-              'memory': {
-                'masterProfile': masterProfile,
-                'dailySummaries': dailySummaries,
-                'longTermMemory': longTermMemory,
-              }
-            }, SetOptions(merge: true));
+        await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+          'memory': {
+            'masterProfile': masterProfile,
+            'dailySummaries': dailySummaries,
+            'longTermMemory': longTermMemory,
+          },
+        }, SetOptions(merge: true));
       } catch (e) {
         debugPrint('Firestore Memory sync error: $e');
       }
@@ -97,7 +99,9 @@ class MemoryService {
             .collection('users')
             .doc(user.uid)
             .get();
-        if (doc.exists && doc.data() != null && doc.data()!.containsKey('memory')) {
+        if (doc.exists &&
+            doc.data() != null &&
+            doc.data()!.containsKey('memory')) {
           final memoryData = doc.data()!['memory'];
           if (memoryData['masterProfile'] != null) {
             masterProfile = memoryData['masterProfile'];
@@ -108,11 +112,20 @@ class MemoryService {
           if (memoryData['longTermMemory'] != null) {
             longTermMemory = List<dynamic>.from(memoryData['longTermMemory']);
           }
-          
+
           final prefs = await SharedPreferences.getInstance();
-          await prefs.setString('nyang_master_profile', jsonEncode(masterProfile));
-          await prefs.setString('nyang_daily_summaries', jsonEncode(dailySummaries));
-          await prefs.setString('nyang_long_term_memory', jsonEncode(longTermMemory));
+          await prefs.setString(
+            'nyang_master_profile',
+            jsonEncode(masterProfile),
+          );
+          await prefs.setString(
+            'nyang_daily_summaries',
+            jsonEncode(dailySummaries),
+          );
+          await prefs.setString(
+            'nyang_long_term_memory',
+            jsonEncode(longTermMemory),
+          );
         }
       } catch (e) {
         debugPrint('Firestore Memory load error: $e');
@@ -128,11 +141,12 @@ class MemoryService {
 
   String buildMemoryContext(String coachTier) {
     String profileCtx = "\n[사용자 마스터 프로필]";
-    
+
     String formatMidItem(dynamic item) {
       if (item == null) return '';
       if (item is String) return item;
-      if (item is Map && item.containsKey('value')) return item['value'].toString();
+      if (item is Map && item.containsKey('value'))
+        return item['value'].toString();
       return item.toString();
     }
 
@@ -141,17 +155,24 @@ class MemoryService {
     final lowChange = masterProfile['low_change'] ?? {};
 
     if (coachTier == 'friends') {
-      profileCtx += '''\n- 실시간 상태: ${highChange['energy_fatigue'] ?? '관찰 중'} / ${highChange['mood_condition'] ?? '기록 전'}
+      profileCtx +=
+          '''\n- 실시간 상태: ${highChange['energy_fatigue'] ?? '관찰 중'} / ${highChange['mood_condition'] ?? '기록 전'}
 - 오늘의 장애물: ${highChange['obstacles'] ?? '없음'}''';
     } else if (coachTier == 'pro') {
-      profileCtx += '''\n[실시간 상태]\n- 에너지/기분: ${highChange['energy_fatigue']} / ${highChange['mood_condition']}
+      profileCtx +=
+          '''\n[실시간 상태]\n- 에너지/기분: ${highChange['energy_fatigue']} / ${highChange['mood_condition']}
 \n[현재 챕터]\n- 챕터: ${midChange['chapter']?['title']}
 - 상세: ${midChange['chapter']?['description']}
 \n[관찰된 패턴]\n- 의사결정 패턴: ${lowChange['decision_pattern']}
 - 성공/실패 공식: ${lowChange['success_failure_formula']}''';
     } else {
-      final keywords = (midChange['keywords_axis'] as List?)?.map((e) => formatMidItem(e)).join(', ') ?? '';
-      profileCtx += '''\n[고변화 - 실시간]\n- 상태: ${highChange['energy_fatigue']} / ${highChange['mood_condition']}\n- 장애물: ${highChange['obstacles']}
+      final keywords =
+          (midChange['keywords_axis'] as List?)
+              ?.map((e) => formatMidItem(e))
+              .join(', ') ??
+          '';
+      profileCtx +=
+          '''\n[고변화 - 실시간]\n- 상태: ${highChange['energy_fatigue']} / ${highChange['mood_condition']}\n- 장애물: ${highChange['obstacles']}
 \n[중변화 - 최근 맥락]\n- 챕터: ${midChange['chapter']?['title']} (${midChange['chapter']?['description']})\n- 관심 축: $keywords
 \n[저변화 - 본질/패턴]\n- 정체성: ${lowChange['identity']}\n- 의사결정 패턴: ${lowChange['decision_pattern']}\n- 소통 프로토콜: ${lowChange['communication_protocol']}\n- 성공/실패 공식: ${lowChange['success_failure_formula']}
 - 개입 규칙: ${lowChange['intervention_rules']}''';
@@ -161,7 +182,8 @@ class MemoryService {
         profileCtx += '\n\n[코칭 개입 데이터 - 언어적 동기화 용]\n';
         for (var s in scenes) {
           if (s is Map) {
-            profileCtx += '- [인상적인 장면]: ${s['scene']}\n  [사용자 고유 표현]: "${s['expression']}"\n  [인사이트]: ${s['insight']}\n';
+            profileCtx +=
+                '- [인상적인 장면]: ${s['scene']}\n  [사용자 고유 표현]: "${s['expression']}"\n  [인사이트]: ${s['insight']}\n';
           }
         }
       }
@@ -171,14 +193,17 @@ class MemoryService {
         profileCtx += '\n[저변화 승급 후보 (30일 지속 패턴 - 승인 요청 필요)]\n';
         for (var c in candidates) {
           if (c is Map) {
-            profileCtx += '- ${c['field']}: ${c['value']} (이유: ${c['reason']})\n';
+            profileCtx +=
+                '- ${c['field']}: ${c['value']} (이유: ${c['reason']})\n';
           }
         }
-        profileCtx += '\n*위 후보에 대해 "요즘 이런 모습이 자주 보이는데, 제가 기억해두고 계속 챙겨드릴까요?" 혹은 "이건 대표님만의 중요한 루틴인 것 같은데, 제가 잊지 않게 적어둘게요!"와 같이 자연스럽게 제안하세요.';
+        profileCtx +=
+            '\n*위 후보에 대해 "요즘 이런 모습이 자주 보이는데, 제가 기억해두고 계속 챙겨드릴까요?" 혹은 "이건 대표님만의 중요한 루틴인 것 같은데, 제가 잊지 않게 적어둘게요!"와 같이 자연스럽게 제안하세요.';
       }
     }
 
-    String ctx = '''
+    String ctx =
+        '''
 $profileCtx
 
 [코칭 개입 규칙 (매우 중요)]
@@ -199,11 +224,14 @@ $profileCtx
     }
 
     if (dailySummaries.isNotEmpty) {
-      final recent = dailySummaries.length > 7 ? dailySummaries.sublist(dailySummaries.length - 7) : dailySummaries;
+      final recent = dailySummaries.length > 7
+          ? dailySummaries.sublist(dailySummaries.length - 7)
+          : dailySummaries;
       ctx += '\n[최근 7일 요약]\n';
       for (var s in recent) {
         if (s is Map) {
-          ctx += '${s['date']}: 달성(${s['achieved']}) / 못함(${s['missed']}) / 컨디션(${s['condition']}) / 고민(${s['concern']})\n';
+          ctx +=
+              '${s['date']}: 달성(${s['achieved']}) / 못함(${s['missed']}) / 컨디션(${s['condition']}) / 고민(${s['concern']})\n';
         }
       }
     }
@@ -211,11 +239,17 @@ $profileCtx
     return ctx;
   }
 
-  Future<void> generateDailySummary(String date, List<dynamic> chatHistory) async {
+  Future<void> generateDailySummary(
+    String date,
+    List<dynamic> chatHistory,
+  ) async {
     if (chatHistory.isEmpty) return;
     try {
-      final textLogs = chatHistory.map((m) => '${m['role']}: ${m['content']}').join('\n');
-      final prompt = '''당신은 사용자의 하루를 회고하고 기록하는 전문 데이터 분석가입니다. 오늘 대화 내역을 바탕으로 하루를 요약해주세요.
+      final textLogs = chatHistory
+          .map((m) => '${m['role']}: ${m['content']}')
+          .join('\n');
+      final prompt =
+          '''당신은 사용자의 하루를 회고하고 기록하는 전문 데이터 분석가입니다. 오늘 대화 내역을 바탕으로 하루를 요약해주세요.
 
 [오늘의 대화 내역]
 $textLogs
@@ -238,24 +272,43 @@ $textLogs
 
       final messages = [
         {'role': 'system', 'content': '당신은 일일 요약을 생성하는 백그라운드 분석 AI입니다.'},
-        {'role': 'user', 'content': prompt}
+        {'role': 'user', 'content': prompt},
       ];
+
+      final estimatedPromptTokens = AnalyticsService.estimateChatTokens(
+        messages,
+        '',
+      );
+      await ApiUsageLimitService.ensureChatAllowed(
+        estimatedTokens: estimatedPromptTokens,
+      );
 
       final callable = FirebaseFunctions.instance.httpsCallable('chatProxy');
       final response = await callable.call({
         'messages': messages,
-        'temperature': 0.2
+        'temperature': 0.2,
       });
 
       final raw = response.data['content'].toString().trim();
       final usageData = response.data is Map ? response.data as Map : const {};
       final actualTokens = AnalyticsService.readIntValue(usageData, [
-        'totalTokens', 'total_tokens', 'tokens', 'usage.totalTokens', 'usage.total_tokens',
+        'totalTokens',
+        'total_tokens',
+        'tokens',
+        'usage.totalTokens',
+        'usage.total_tokens',
       ]);
       final actualCostWon = AnalyticsService.readIntValue(usageData, [
-        'costWon', 'cost_won', 'estimatedCostWon', 'estimated_cost_won', 'usage.costWon',
+        'costWon',
+        'cost_won',
+        'estimatedCostWon',
+        'estimated_cost_won',
+        'usage.costWon',
       ]);
-      final estimatedTokens = AnalyticsService.estimateChatTokens(messages, raw);
+      final estimatedTokens = AnalyticsService.estimateChatTokens(
+        messages,
+        raw,
+      );
 
       AnalyticsService.logApiUsage(
         coachId: 'system',
@@ -270,8 +323,10 @@ $textLogs
 
       dailySummaries.removeWhere((s) => s['date'] == date);
       dailySummaries.add(summary);
-      dailySummaries.sort((a, b) => (a['date'] as String).compareTo(b['date'] as String));
-      
+      dailySummaries.sort(
+        (a, b) => (a['date'] as String).compareTo(b['date'] as String),
+      );
+
       if (dailySummaries.length > 30) {
         dailySummaries = dailySummaries.sublist(dailySummaries.length - 30);
       }
@@ -287,12 +342,18 @@ $textLogs
 
   Future<void> distillLifeOperationMemory(String todayStr) async {
     try {
-      final recent = dailySummaries.length > 14 ? dailySummaries.sublist(dailySummaries.length - 14) : dailySummaries;
-      final recentSummaries = recent.map((s) =>
-        '[${s['date']}] 달성:${s['achieved']} / 못함:${s['missed']} / 컨디션:${s['condition']} / 고민:${s['concern']} / 감정:${s['emotion']}'
-      ).join('\n');
+      final recent = dailySummaries.length > 14
+          ? dailySummaries.sublist(dailySummaries.length - 14)
+          : dailySummaries;
+      final recentSummaries = recent
+          .map(
+            (s) =>
+                '[${s['date']}] 달성:${s['achieved']} / 못함:${s['missed']} / 컨디션:${s['condition']} / 고민:${s['concern']} / 감정:${s['emotion']}',
+          )
+          .join('\n');
 
-      final prompt = '''당신은 사용자의 삶을 체계적으로 관리하는 수석 비서이자 데이터 분석가입니다. 최근 기록과 현재 메모리를 분석하여 [Life Operation Memory]를 최적화하세요.
+      final prompt =
+          '''당신은 사용자의 삶을 체계적으로 관리하는 수석 비서이자 데이터 분석가입니다. 최근 기록과 현재 메모리를 분석하여 [Life Operation Memory]를 최적화하세요.
 
 [최근 기록]
 $recentSummaries
@@ -329,25 +390,47 @@ ${jsonEncode(masterProfile)}
 }''';
 
       final messages = [
-        {'role': 'system', 'content': '당신은 정밀한 데이터 승급 및 망각 알고리즘을 수행하는 분석 비서입니다.'},
-        {'role': 'user', 'content': prompt}
+        {
+          'role': 'system',
+          'content': '당신은 정밀한 데이터 승급 및 망각 알고리즘을 수행하는 분석 비서입니다.',
+        },
+        {'role': 'user', 'content': prompt},
       ];
+
+      final estimatedPromptTokens = AnalyticsService.estimateChatTokens(
+        messages,
+        '',
+      );
+      await ApiUsageLimitService.ensureChatAllowed(
+        estimatedTokens: estimatedPromptTokens,
+      );
 
       final callable = FirebaseFunctions.instance.httpsCallable('chatProxy');
       final response = await callable.call({
         'messages': messages,
-        'temperature': 0.3
+        'temperature': 0.3,
       });
 
       final raw = response.data['content'].toString().trim();
       final usageData = response.data is Map ? response.data as Map : const {};
       final actualTokens = AnalyticsService.readIntValue(usageData, [
-        'totalTokens', 'total_tokens', 'tokens', 'usage.totalTokens', 'usage.total_tokens',
+        'totalTokens',
+        'total_tokens',
+        'tokens',
+        'usage.totalTokens',
+        'usage.total_tokens',
       ]);
       final actualCostWon = AnalyticsService.readIntValue(usageData, [
-        'costWon', 'cost_won', 'estimatedCostWon', 'estimated_cost_won', 'usage.costWon',
+        'costWon',
+        'cost_won',
+        'estimatedCostWon',
+        'estimated_cost_won',
+        'usage.costWon',
       ]);
-      final estimatedTokens = AnalyticsService.estimateChatTokens(messages, raw);
+      final estimatedTokens = AnalyticsService.estimateChatTokens(
+        messages,
+        raw,
+      );
 
       AnalyticsService.logApiUsage(
         coachId: 'system',
@@ -359,8 +442,9 @@ ${jsonEncode(masterProfile)}
       final clean = raw.replaceAll('```json', '').replaceAll('```', '').trim();
       final Map<String, dynamic> update = jsonDecode(clean);
 
-      masterProfile['high_change'] = update['high_change'] ?? masterProfile['high_change'];
-      
+      masterProfile['high_change'] =
+          update['high_change'] ?? masterProfile['high_change'];
+
       final midUpdates = update['mid_change_updates'];
       if (midUpdates != null) {
         final addOrUpdate = midUpdates['add_or_update'] as List?;
@@ -368,8 +452,10 @@ ${jsonEncode(masterProfile)}
           for (var item in addOrUpdate) {
             final type = item['type'];
             final val = item['value'];
-            List list = (type == 'keywords_axis') ? masterProfile['mid_change']['keywords_axis'] : masterProfile['mid_change']['focus_projects'];
-            
+            List list = (type == 'keywords_axis')
+                ? masterProfile['mid_change']['keywords_axis']
+                : masterProfile['mid_change']['focus_projects'];
+
             final existingIdx = list.indexWhere((e) {
               if (e is String) return e == val;
               if (e is Map) return e['value'] == val;
@@ -377,7 +463,11 @@ ${jsonEncode(masterProfile)}
             });
 
             if (existingIdx == -1) {
-              list.add({'value': val, 'first_seen': todayStr, 'last_seen': todayStr});
+              list.add({
+                'value': val,
+                'first_seen': todayStr,
+                'last_seen': todayStr,
+              });
             } else {
               if (list[existingIdx] is Map) {
                 list[existingIdx]['last_seen'] = todayStr;
@@ -389,8 +479,12 @@ ${jsonEncode(masterProfile)}
         final removeList = midUpdates['remove'] as List?;
         if (removeList != null) {
           for (var val in removeList) {
-            masterProfile['mid_change']['keywords_axis'].removeWhere((k) => k is String ? k == val : (k as Map)['value'] == val);
-            masterProfile['mid_change']['focus_projects'].removeWhere((p) => p is String ? p == val : (p as Map)['value'] == val);
+            masterProfile['mid_change']['keywords_axis'].removeWhere(
+              (k) => k is String ? k == val : (k as Map)['value'] == val,
+            );
+            masterProfile['mid_change']['focus_projects'].removeWhere(
+              (p) => p is String ? p == val : (p as Map)['value'] == val,
+            );
           }
         }
       }
@@ -402,7 +496,6 @@ ${jsonEncode(masterProfile)}
 
       masterProfile['meta']['last_batch_run'] = todayStr;
       await saveMemoryData();
-
     } catch (e) {
       print('Life Operation Memory error: $e');
     }
