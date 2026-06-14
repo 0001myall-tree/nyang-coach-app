@@ -31,8 +31,6 @@ class TasksSyncService {
   static Future<void> syncToCloud() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
-    final userData = await UserDataService.load();
-    if (!userData.isPlanActive) return;
 
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -73,11 +71,21 @@ class TasksSyncService {
     }
   }
 
-  /// Firestore에 백업된 앱 데이터를 불러와서 SharedPreferences에 덮어씁니다.
-  /// 앱 재설치 후 첫 로그인 시 호출됩니다.
-  static Future<void> syncFromCloud() async {
+  static Future<Map<String, dynamic>> syncFromCloud() async {
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
+    if (user == null) {
+      return {
+        'status': 'ERROR',
+        'message': 'NOT_LOGGED_IN',
+      };
+    }
+
+    final diag = <String, dynamic>{
+      'uid': user.uid,
+      'email': user.email ?? 'no-email',
+      'doc_count': 0,
+      'keys_found': <String>[],
+    };
 
     try {
       await UserDataService.syncFromCloud();
@@ -89,14 +97,20 @@ class TasksSyncService {
 
       if (snapshot.docs.isEmpty) {
         debugPrint('ℹ️ TasksSyncService: 클라우드에 백업된 데이터가 없습니다.');
-        return;
+        diag['status'] = 'EMPTY';
+        diag['message'] = 'EMPTY_CLOUD_DATA';
+        return diag;
       }
+
+      diag['doc_count'] = snapshot.docs.length;
+      final foundKeys = <String>[];
 
       final prefs = await SharedPreferences.getInstance();
 
       for (final doc in snapshot.docs) {
         final key = doc.id;
         final data = doc.data();
+        foundKeys.add(key);
 
         if (data.containsKey('value')) {
           final value = data['value'];
@@ -117,10 +131,17 @@ class TasksSyncService {
         }
       }
 
+      diag['keys_found'] = foundKeys;
       await WidgetSyncService.syncFromStoredTasks();
       debugPrint('✅ TasksSyncService: 클라우드 데이터를 로컬에 성공적으로 복원했습니다.');
+      diag['status'] = 'SUCCESS';
+      diag['message'] = 'OK';
+      return diag;
     } catch (e) {
       debugPrint('❌ TasksSyncService syncFromCloud 오류: $e');
+      diag['status'] = 'ERROR';
+      diag['message'] = e.toString();
+      return diag;
     }
   }
 

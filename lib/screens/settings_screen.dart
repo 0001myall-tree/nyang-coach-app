@@ -1624,6 +1624,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final couponController = TextEditingController();
     String? errorText;
     bool isApplying = false;
+    bool isRestoring = false;
 
     showModalBottomSheet(
       context: context,
@@ -1696,210 +1697,353 @@ class _SettingsScreenState extends State<SettingsScreen> {
               );
             }
 
+            Future<void> restoreCloudData() async {
+              final shouldRestore = await showDialog<bool>(
+                context: context,
+                builder: (dialogContext) {
+                  return AlertDialog(
+                    title: Text(
+                      '클라우드 데이터 복원',
+                      style: GoogleFonts.notoSansKr(
+                        fontWeight: FontWeight.w900,
+                        color: const Color(0xFF1A1A2E),
+                      ),
+                    ),
+                    content: Text(
+                      '계정에 저장된 할 일, 일정, 목표, 기록을 이 기기로 다시 불러옵니다.\n\n현재 기기의 데이터는 클라우드 백업 내용으로 덮어써질 수 있어요.',
+                      style: GoogleFonts.notoSansKr(
+                        fontSize: 14,
+                        height: 1.5,
+                        color: const Color(0xFF3D3A4E),
+                      ),
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(dialogContext, false),
+                        child: Text(
+                          '취소',
+                          style: GoogleFonts.notoSansKr(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.pop(dialogContext, true),
+                        child: Text(
+                          '복원하기',
+                          style: GoogleFonts.notoSansKr(
+                            color: const Color(0xFF8B7CFF),
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              );
+
+              if (shouldRestore != true) return;
+
+              setSheetState(() => isRestoring = true);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    '클라우드 데이터를 불러오는 중입니다...',
+                    style: GoogleFonts.notoSansKr(fontWeight: FontWeight.w700),
+                  ),
+                  behavior: SnackBarBehavior.floating,
+                  backgroundColor: const Color(0xFF1A1A2E),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              );
+
+              final diag = await TasksSyncService.syncFromCloud();
+              if (!mounted) return;
+              
+              if (diag['status'] != 'SUCCESS') {
+                setSheetState(() => isRestoring = false);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      '복원 실패: ${diag['message']}',
+                      style: GoogleFonts.notoSansKr(fontWeight: FontWeight.w700),
+                    ),
+                    backgroundColor: Colors.redAccent,
+                  ),
+                );
+                return;
+              }
+
+              Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
+                MaterialPageRoute(builder: (_) => const LandingScreen()),
+                (_) => false,
+              );
+            }
+
             return Padding(
               padding: EdgeInsets.only(
                 bottom: MediaQuery.of(context).viewInsets.bottom,
               ),
-              child: Container(
-                padding: const EdgeInsets.fromLTRB(24, 12, 24, 28),
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(context).size.height * 0.88,
                 ),
-                child: SafeArea(
-                  top: false,
-                  child: SingleChildScrollView(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Center(
-                          child: Container(
-                            width: 48,
-                            height: 4,
-                            margin: const EdgeInsets.only(bottom: 22),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFE5E7EB),
-                              borderRadius: BorderRadius.circular(2),
-                            ),
-                          ),
-                        ),
-                        Row(
+                child: Container(
+                  padding: const EdgeInsets.fromLTRB(24, 12, 24, 28),
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.vertical(
+                      top: Radius.circular(30),
+                    ),
+                  ),
+                  child: SafeArea(
+                    top: false,
+                    child: Scrollbar(
+                      thumbVisibility: true,
+                      child: SingleChildScrollView(
+                        primary: true,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Container(
-                              width: 38,
-                              height: 38,
-                              decoration: const BoxDecoration(
-                                color: Color(0xFFB6A4FF),
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(
-                                Icons.person_rounded,
-                                color: Colors.white,
-                                size: 22,
+                            Center(
+                              child: Container(
+                                width: 48,
+                                height: 4,
+                                margin: const EdgeInsets.only(bottom: 22),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFE5E7EB),
+                                  borderRadius: BorderRadius.circular(2),
+                                ),
                               ),
                             ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    '내 프로필',
-                                    style: GoogleFonts.notoSansKr(
-                                      fontSize: 22,
-                                      fontWeight: FontWeight.w900,
-                                      color: const Color(0xFF1A1A2E),
-                                    ),
+                            Row(
+                              children: [
+                                Container(
+                                  width: 38,
+                                  height: 38,
+                                  decoration: const BoxDecoration(
+                                    color: Color(0xFFB6A4FF),
+                                    shape: BoxShape.circle,
                                   ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    '구독, 포인트, 쿠폰을 확인해요.',
-                                    style: GoogleFonts.notoSansKr(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w600,
-                                      color: const Color(0xFF8A8798),
-                                    ),
+                                  child: const Icon(
+                                    Icons.person_rounded,
+                                    color: Colors.white,
+                                    size: 22,
                                   ),
-                                ],
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        '내 프로필',
+                                        style: GoogleFonts.notoSansKr(
+                                          fontSize: 22,
+                                          fontWeight: FontWeight.w900,
+                                          color: const Color(0xFF1A1A2E),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        '구독, 포인트, 쿠폰을 확인해요.',
+                                        style: GoogleFonts.notoSansKr(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w600,
+                                          color: const Color(0xFF8A8798),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                IconButton(
+                                  onPressed: () =>
+                                      Navigator.of(sheetContext).pop(),
+                                  icon: const Icon(Icons.close_rounded),
+                                  tooltip: '닫기',
+                                  style: IconButton.styleFrom(
+                                    foregroundColor: const Color(0xFF8A8798),
+                                    backgroundColor: const Color(0xFFF8F7FF),
+                                    shape: const CircleBorder(),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 22),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: _buildProfileInfoCard(
+                                    label: '구독 상태',
+                                    value: _planStatusLabel,
+                                    icon: Icons.workspace_premium_rounded,
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: _buildProfileInfoCard(
+                                    label: '포인트',
+                                    value: '${_userData?.points ?? 0}P',
+                                    icon: Icons.toll_rounded,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 10),
+                            _buildProfileInfoCard(
+                              label: '구독 남은 기간',
+                              value: _planRemainingLabel,
+                              icon: Icons.event_available_rounded,
+                              isWide: true,
+                            ),
+                            const SizedBox(height: 18),
+                            _buildPurchasedCoachSection(),
+                            const SizedBox(height: 18),
+                            Text(
+                              '쿠폰 입력',
+                              style: GoogleFonts.notoSansKr(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w900,
+                                color: const Color(0xFF1A1A2E),
                               ),
                             ),
-                            const SizedBox(width: 8),
-                            IconButton(
-                              onPressed: () => Navigator.of(sheetContext).pop(),
-                              icon: const Icon(Icons.close_rounded),
-                              tooltip: '닫기',
-                              style: IconButton.styleFrom(
-                                foregroundColor: const Color(0xFF8A8798),
-                                backgroundColor: const Color(0xFFF8F7FF),
-                                shape: const CircleBorder(),
+                            const SizedBox(height: 10),
+                            TextField(
+                              controller: couponController,
+                              textCapitalization: TextCapitalization.characters,
+                              decoration: InputDecoration(
+                                hintText: '쿠폰 또는 구독권 코드',
+                                errorText: errorText,
+                                hintStyle: GoogleFonts.notoSansKr(
+                                  color: const Color(0xFFB8B5C6),
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                filled: true,
+                                fillColor: const Color(0xFFF8F7FF),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                  borderSide: const BorderSide(
+                                    color: Color(0xFFE8E3F8),
+                                  ),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                  borderSide: const BorderSide(
+                                    color: Color(0xFFE8E3F8),
+                                  ),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                  borderSide: const BorderSide(
+                                    color: Color(0xFFB6A4FF),
+                                    width: 1.5,
+                                  ),
+                                ),
                               ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 22),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: _buildProfileInfoCard(
-                                label: '구독 상태',
-                                value: _planStatusLabel,
-                                icon: Icons.workspace_premium_rounded,
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: _buildProfileInfoCard(
-                                label: '포인트',
-                                value: '${_userData?.points ?? 0}P',
-                                icon: Icons.toll_rounded,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 10),
-                        _buildProfileInfoCard(
-                          label: '구독 남은 기간',
-                          value: _planRemainingLabel,
-                          icon: Icons.event_available_rounded,
-                          isWide: true,
-                        ),
-                        const SizedBox(height: 18),
-                        _buildPurchasedCoachSection(),
-                        const SizedBox(height: 18),
-                        Text(
-                          '쿠폰 입력',
-                          style: GoogleFonts.notoSansKr(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w900,
-                            color: const Color(0xFF1A1A2E),
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        TextField(
-                          controller: couponController,
-                          textCapitalization: TextCapitalization.characters,
-                          decoration: InputDecoration(
-                            hintText: '쿠폰 또는 구독권 코드',
-                            errorText: errorText,
-                            hintStyle: GoogleFonts.notoSansKr(
-                              color: const Color(0xFFB8B5C6),
-                              fontWeight: FontWeight.w600,
-                            ),
-                            filled: true,
-                            fillColor: const Color(0xFFF8F7FF),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(16),
-                              borderSide: const BorderSide(
-                                color: Color(0xFFE8E3F8),
-                              ),
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(16),
-                              borderSide: const BorderSide(
-                                color: Color(0xFFE8E3F8),
-                              ),
-                            ),
-                            focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(16),
-                              borderSide: const BorderSide(
-                                color: Color(0xFFB6A4FF),
-                                width: 1.5,
-                              ),
-                            ),
-                          ),
-                          style: GoogleFonts.notoSansKr(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w800,
-                            color: const Color(0xFF1A1A2E),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        SizedBox(
-                          width: double.infinity,
-                          height: 54,
-                          child: ElevatedButton(
-                            onPressed: isApplying ? null : applyCoupon,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF1A1A2E),
-                              disabledBackgroundColor: const Color(0xFFE5E7EB),
-                              elevation: 0,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
-                              ),
-                            ),
-                            child: Text(
-                              isApplying ? '확인 중...' : '쿠폰 적용하기',
                               style: GoogleFonts.notoSansKr(
                                 fontSize: 15,
-                                fontWeight: FontWeight.w900,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        SizedBox(
-                          width: double.infinity,
-                          child: TextButton(
-                            onPressed: () {
-                              Navigator.pop(context);
-                              Future.delayed(Duration.zero, _showLogoutDialog);
-                            },
-                            style: TextButton.styleFrom(
-                              foregroundColor: const Color(0xFF9A96A8),
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                            ),
-                            child: Text(
-                              '다른 계정으로 로그인하기',
-                              style: GoogleFonts.notoSansKr(
-                                fontSize: 13,
                                 fontWeight: FontWeight.w800,
+                                color: const Color(0xFF1A1A2E),
                               ),
                             ),
-                          ),
+                            const SizedBox(height: 12),
+                            SizedBox(
+                              width: double.infinity,
+                              height: 54,
+                              child: ElevatedButton(
+                                onPressed: isApplying ? null : applyCoupon,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF1A1A2E),
+                                  disabledBackgroundColor: const Color(
+                                    0xFFE5E7EB,
+                                  ),
+                                  elevation: 0,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                ),
+                                child: Text(
+                                  isApplying ? '확인 중...' : '쿠폰 적용하기',
+                                  style: GoogleFonts.notoSansKr(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w900,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            SizedBox(
+                              width: double.infinity,
+                              height: 52,
+                              child: OutlinedButton.icon(
+                                onPressed: isRestoring
+                                    ? null
+                                    : restoreCloudData,
+                                icon: isRestoring
+                                    ? const SizedBox(
+                                        width: 17,
+                                        height: 17,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: Color(0xFF8B7CFF),
+                                        ),
+                                      )
+                                    : const Icon(Icons.cloud_download_rounded),
+                                label: Text(
+                                  isRestoring ? '복원 중...' : '클라우드 데이터 복원',
+                                  style: GoogleFonts.notoSansKr(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: const Color(0xFF8B7CFF),
+                                  side: const BorderSide(
+                                    color: Color(0xFFD8CEFF),
+                                    width: 1.2,
+                                  ),
+                                  backgroundColor: Colors.white,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            SizedBox(
+                              width: double.infinity,
+                              child: TextButton(
+                                onPressed: () {
+                                  Navigator.pop(context);
+                                  Future.delayed(
+                                    Duration.zero,
+                                    _showLogoutDialog,
+                                  );
+                                },
+                                style: TextButton.styleFrom(
+                                  foregroundColor: const Color(0xFF9A96A8),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 12,
+                                  ),
+                                ),
+                                child: Text(
+                                  '다른 계정으로 로그인하기',
+                                  style: GoogleFonts.notoSansKr(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
+                      ),
                     ),
                   ),
                 ),
