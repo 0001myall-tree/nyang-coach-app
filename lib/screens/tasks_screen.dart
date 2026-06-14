@@ -10512,6 +10512,28 @@ class _MilestoneMemoDialogState extends State<MilestoneMemoDialog> {
     });
   }
 
+  void _onReorderSections(int oldIndex, int newIndex) {
+    setState(() {
+      if (oldIndex < newIndex) {
+        newIndex -= 1;
+      }
+      final section = _sections.removeAt(oldIndex);
+      _sections.insert(newIndex, section);
+
+      final titleCtrl = _titleCtrls.removeAt(oldIndex);
+      _titleCtrls.insert(newIndex, titleCtrl);
+
+      final contentCtrl = _contentCtrls.removeAt(oldIndex);
+      _contentCtrls.insert(newIndex, contentCtrl);
+
+      final titleFocus = _titleFocusNodes.removeAt(oldIndex);
+      _titleFocusNodes.insert(newIndex, titleFocus);
+
+      final contentFocus = _contentFocusNodes.removeAt(oldIndex);
+      _contentFocusNodes.insert(newIndex, contentFocus);
+    });
+  }
+
   void _addNewAction() {
     setState(() {
       _actions.add(
@@ -10958,15 +10980,23 @@ $content
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // --- Sections ---
-                  ...List.generate(
-                    _sections.length,
-                    (index) => _buildSectionCard(index),
+                  ReorderableListView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: _sections.length,
+                    onReorder: _onReorderSections,
+                    itemBuilder: (context, index) {
+                      return Container(
+                        key: ObjectKey(_sections[index]),
+                        child: _buildSectionCard(index),
+                      );
+                    },
                   ),
 
                   GestureDetector(
                     onTap: _addNewSection,
                     child: Container(
-                      margin: const EdgeInsets.only(top: 8, bottom: 24),
+                      margin: const EdgeInsets.only(top: 8, bottom: 8),
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       decoration: BoxDecoration(
                         color: const Color(0xFFF7F5FF),
@@ -10997,6 +11027,25 @@ $content
                       ),
                     ),
                   ),
+                  if (_sections.length > 1)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 24),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            '✨ 섹션 순서를 변경하려면 길게 눌러 이동하세요',
+                            style: GoogleFonts.notoSansKr(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500,
+                              color: const Color(0xFFA0A0B0),
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  else
+                    const SizedBox(height: 16),
 
                   const Divider(
                     color: Color(0xFFE5E7EB),
@@ -11241,7 +11290,7 @@ $content
               height: 1.5,
             ),
             decoration: InputDecoration(
-              hintText: '내용을 입력하세요(최대 3000자)...',
+              hintText: '실행에 필요한 핵심 위주로 적어보세요(최대 3000자)...',
               hintStyle: GoogleFonts.notoSansKr(color: const Color(0xFFA0A0B0)),
               border: InputBorder.none,
               isDense: true,
