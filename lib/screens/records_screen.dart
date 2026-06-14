@@ -176,34 +176,16 @@ class _RecordsScreenState extends State<RecordsScreen> {
       if (feedbackText.isEmpty) return;
 
       // API 사용 기록 (주간 리포트 생성에 따른 토큰/비용 집계)
-      int? readIntValue(Map data, List<String> keys) {
-        for (final key in keys) {
-          dynamic value = data;
-          for (final segment in key.split('.')) {
-            if (value is Map && value.containsKey(segment)) {
-              value = value[segment];
-            } else {
-              value = null;
-              break;
-            }
-          }
-          if (value is int) return value;
-          if (value is num) return value.round();
-          if (value is String) return int.tryParse(value);
-        }
-        return null;
-      }
-
-      final estimatedTokens = ((prompt.length + feedbackText.length) / 3.2).ceil();
+      final estimatedTokens = AnalyticsService.estimateChatTokens([{'content': prompt}], feedbackText);
       final usageData = response.data is Map ? response.data as Map : const {};
-      final actualTokens = readIntValue(usageData, [
+      final actualTokens = AnalyticsService.readIntValue(usageData, [
         'totalTokens',
         'total_tokens',
         'tokens',
         'usage.totalTokens',
         'usage.total_tokens',
       ]);
-      final actualCostWon = readIntValue(usageData, [
+      final actualCostWon = AnalyticsService.readIntValue(usageData, [
         'costWon',
         'cost_won',
         'estimatedCostWon',

@@ -236,16 +236,34 @@ $textLogs
   "emotion": "문자열"
 }''';
 
+      final messages = [
+        {'role': 'system', 'content': '당신은 일일 요약을 생성하는 백그라운드 분석 AI입니다.'},
+        {'role': 'user', 'content': prompt}
+      ];
+
       final callable = FirebaseFunctions.instance.httpsCallable('chatProxy');
       final response = await callable.call({
-        'messages': [
-          {'role': 'system', 'content': '당신은 일일 요약을 생성하는 백그라운드 분석 AI입니다.'},
-          {'role': 'user', 'content': prompt}
-        ],
+        'messages': messages,
         'temperature': 0.2
       });
 
       final raw = response.data['content'].toString().trim();
+      final usageData = response.data is Map ? response.data as Map : const {};
+      final actualTokens = AnalyticsService.readIntValue(usageData, [
+        'totalTokens', 'total_tokens', 'tokens', 'usage.totalTokens', 'usage.total_tokens',
+      ]);
+      final actualCostWon = AnalyticsService.readIntValue(usageData, [
+        'costWon', 'cost_won', 'estimatedCostWon', 'estimated_cost_won', 'usage.costWon',
+      ]);
+      final estimatedTokens = AnalyticsService.estimateChatTokens(messages, raw);
+
+      AnalyticsService.logApiUsage(
+        coachId: 'system',
+        estimatedTokens: estimatedTokens,
+        actualTokens: actualTokens,
+        actualCostWon: actualCostWon,
+      );
+
       final clean = raw.replaceAll('```json', '').replaceAll('```', '').trim();
       final Map<String, dynamic> summary = jsonDecode(clean);
       summary['date'] = date;
@@ -310,16 +328,34 @@ ${jsonEncode(masterProfile)}
   "low_change_candidates": [{"field": "identity|decision_pattern|formula", "value": "...", "reason": "..."}]
 }''';
 
+      final messages = [
+        {'role': 'system', 'content': '당신은 정밀한 데이터 승급 및 망각 알고리즘을 수행하는 분석 비서입니다.'},
+        {'role': 'user', 'content': prompt}
+      ];
+
       final callable = FirebaseFunctions.instance.httpsCallable('chatProxy');
       final response = await callable.call({
-        'messages': [
-          {'role': 'system', 'content': '당신은 정밀한 데이터 승급 및 망각 알고리즘을 수행하는 분석 비서입니다.'},
-          {'role': 'user', 'content': prompt}
-        ],
+        'messages': messages,
         'temperature': 0.3
       });
 
       final raw = response.data['content'].toString().trim();
+      final usageData = response.data is Map ? response.data as Map : const {};
+      final actualTokens = AnalyticsService.readIntValue(usageData, [
+        'totalTokens', 'total_tokens', 'tokens', 'usage.totalTokens', 'usage.total_tokens',
+      ]);
+      final actualCostWon = AnalyticsService.readIntValue(usageData, [
+        'costWon', 'cost_won', 'estimatedCostWon', 'estimated_cost_won', 'usage.costWon',
+      ]);
+      final estimatedTokens = AnalyticsService.estimateChatTokens(messages, raw);
+
+      AnalyticsService.logApiUsage(
+        coachId: 'system',
+        estimatedTokens: estimatedTokens,
+        actualTokens: actualTokens,
+        actualCostWon: actualCostWon,
+      );
+
       final clean = raw.replaceAll('```json', '').replaceAll('```', '').trim();
       final Map<String, dynamic> update = jsonDecode(clean);
 

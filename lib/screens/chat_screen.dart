@@ -3951,16 +3951,16 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
     final content = result.data['content'] as String? ?? '';
     if (content.isEmpty) throw Exception('Empty response from chatProxy');
 
-    final estimatedTokens = _estimateChatTokens(messages, content);
+    final estimatedTokens = AnalyticsService.estimateChatTokens(messages, content);
     final usageData = result.data is Map ? result.data as Map : const {};
-    final actualTokens = _readIntValue(usageData, [
+    final actualTokens = AnalyticsService.readIntValue(usageData, [
       'totalTokens',
       'total_tokens',
       'tokens',
       'usage.totalTokens',
       'usage.total_tokens',
     ]);
-    final actualCostWon = _readIntValue(usageData, [
+    final actualCostWon = AnalyticsService.readIntValue(usageData, [
       'costWon',
       'cost_won',
       'estimatedCostWon',
@@ -3980,34 +3980,6 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
         .replaceAllMapped(RegExp(r'\*(.*?)\*'), (m) => m.group(1) ?? '')
         .replaceAll(RegExp(r'^#{1,6}\s+', multiLine: true), '')
         .trim();
-  }
-
-  int _estimateChatTokens(List<Map<String, String>> messages, String reply) {
-    final totalChars =
-        messages.fold<int>(
-          0,
-          (sum, item) => sum + (item['content'] ?? '').length,
-        ) +
-        reply.length;
-    return (totalChars / 3.2).ceil();
-  }
-
-  int? _readIntValue(Map data, List<String> keys) {
-    for (final key in keys) {
-      dynamic value = data;
-      for (final segment in key.split('.')) {
-        if (value is Map && value.containsKey(segment)) {
-          value = value[segment];
-        } else {
-          value = null;
-          break;
-        }
-      }
-      if (value is int) return value;
-      if (value is num) return value.round();
-      if (value is String) return int.tryParse(value);
-    }
-    return null;
   }
 
   void _scrollToBottom() {

@@ -10589,6 +10589,8 @@ class _MilestoneMemoDialogState extends State<MilestoneMemoDialog> {
       final title = _titleCtrls[index].text.trim();
       final summary = await _requestMemoSummary(title: title, content: content);
 
+      AnalyticsService.logFeatureUsage('milestone_memo_organize');
+
       if (!mounted) return;
       await _showSummaryPreviewSheet(
         sectionIndex: index,
@@ -10632,19 +10634,37 @@ $content
 - 마크다운 헤딩(#)은 쓰지 마세요.
 - 결과 본문만 출력하세요.''';
 
+    final messages = [
+      {
+        'role': 'system',
+        'content':
+            '당신은 장기 목표 플래너의 메모를 정리하는 편집 AI입니다. 원문 의도와 링크를 보존하면서 중복을 줄이고 핵심과 실행 문장을 명확히 정리합니다.',
+      },
+      {'role': 'user', 'content': prompt},
+    ];
+
     final response = await _memoSummaryProxy.call({
-      'messages': [
-        {
-          'role': 'system',
-          'content':
-              '당신은 장기 목표 플래너의 메모를 정리하는 편집 AI입니다. 원문 의도와 링크를 보존하면서 중복을 줄이고 핵심과 실행 문장을 명확히 정리합니다.',
-        },
-        {'role': 'user', 'content': prompt},
-      ],
+      'messages': messages,
       'temperature': 0.2,
     });
 
     final raw = response.data['content'].toString().trim();
+    final usageData = response.data is Map ? response.data as Map : const {};
+    final actualTokens = AnalyticsService.readIntValue(usageData, [
+      'totalTokens', 'total_tokens', 'tokens', 'usage.totalTokens', 'usage.total_tokens',
+    ]);
+    final actualCostWon = AnalyticsService.readIntValue(usageData, [
+      'costWon', 'cost_won', 'estimatedCostWon', 'estimated_cost_won', 'usage.costWon',
+    ]);
+    final estimatedTokens = AnalyticsService.estimateChatTokens(messages, raw);
+
+    AnalyticsService.logApiUsage(
+      coachId: 'system',
+      estimatedTokens: estimatedTokens,
+      actualTokens: actualTokens,
+      actualCostWon: actualCostWon,
+    );
+
     return raw.replaceAll('```', '').trim();
   }
 

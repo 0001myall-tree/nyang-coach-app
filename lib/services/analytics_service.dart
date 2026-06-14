@@ -40,6 +40,34 @@ class AnalyticsService {
     return (usdCost * _krwPerUsd).round();
   }
 
+  static int? readIntValue(Map data, List<String> keys) {
+    for (final key in keys) {
+      dynamic value = data;
+      for (final segment in key.split('.')) {
+        if (value is Map && value.containsKey(segment)) {
+          value = value[segment];
+        } else {
+          value = null;
+          break;
+        }
+      }
+      if (value is int) return value;
+      if (value is num) return value.round();
+      if (value is String) return int.tryParse(value);
+    }
+    return null;
+  }
+
+  static int estimateChatTokens(List<Map<String, String>> messages, String reply) {
+    final totalChars =
+        messages.fold<int>(
+          0,
+          (sum, item) => sum + (item['content'] ?? '').length,
+        ) +
+        reply.length;
+    return (totalChars / 3.2).ceil();
+  }
+
   /// 매일 최초 접속 시 DAU(일간 활성 사용자) 및 접속 기록 저장
   static Future<void> logAppOpen() async {
     final user = _auth.currentUser;
