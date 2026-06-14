@@ -18,7 +18,8 @@ class LandingScreen extends StatefulWidget {
   _LandingScreenState createState() => _LandingScreenState();
 }
 
-class _LandingScreenState extends State<LandingScreen> with TickerProviderStateMixin {
+class _LandingScreenState extends State<LandingScreen>
+    with TickerProviderStateMixin {
   late AnimationController _introController;
   late AnimationController _controller;
   late Animation<double> _floatAnimation;
@@ -26,7 +27,7 @@ class _LandingScreenState extends State<LandingScreen> with TickerProviderStateM
   @override
   void initState() {
     super.initState();
-    
+
     // 코치 팝업 애니메이션 설정
     _introController = AnimationController(
       vsync: this,
@@ -39,9 +40,10 @@ class _LandingScreenState extends State<LandingScreen> with TickerProviderStateM
       duration: const Duration(seconds: 3),
     )..repeat(reverse: true);
 
-    _floatAnimation = Tween<double>(begin: 0, end: -15).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
+    _floatAnimation = Tween<double>(
+      begin: 0,
+      end: -15,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
 
     _checkAutoLogin();
   }
@@ -49,26 +51,34 @@ class _LandingScreenState extends State<LandingScreen> with TickerProviderStateM
   Future<void> _checkAutoLogin() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
+      await UserDataService.syncFromCloud();
       final data = await UserDataService.load();
       await TasksSyncService.syncFromCloud(); // 자동 로그인 시 클라우드 데이터 복원
-      
+
       final prefs = await SharedPreferences.getInstance();
       await prefs.reload();
       final widgetRoute = prefs.getString('widget_route');
       final widgetCoachId = prefs.getString('widget_coach_id');
-      
+
       if (widgetRoute != null) prefs.remove('widget_route');
       if (widgetCoachId != null) prefs.remove('widget_coach_id');
-      
+
       String targetCoachId = widgetCoachId ?? data.selectedCoachId ?? 'cat';
 
       if (data.selectedCoachId != null && mounted) {
         if (widgetCoachId != null && widgetCoachId != data.selectedCoachId) {
           await UserDataService.setSelectedCoach(widgetCoachId);
         }
-        
-        final initialDrawerIdx = (widgetRoute == 'tasks' || widgetRoute == 'tasks_done_bottom_sheet' || widgetRoute == 'tasks_remaining_bottom_sheet') ? 1 : 0;
-        final initBottomSheet = widgetRoute == 'tasks_done_bottom_sheet' ? 'done' : null;
+
+        final initialDrawerIdx =
+            (widgetRoute == 'tasks' ||
+                widgetRoute == 'tasks_done_bottom_sheet' ||
+                widgetRoute == 'tasks_remaining_bottom_sheet')
+            ? 1
+            : 0;
+        final initBottomSheet = widgetRoute == 'tasks_done_bottom_sheet'
+            ? 'done'
+            : null;
 
         final nav = Navigator.of(context);
         final landingRoute = ModalRoute.of(context);
@@ -77,9 +87,9 @@ class _LandingScreenState extends State<LandingScreen> with TickerProviderStateM
             coachId: targetCoachId,
             initialDrawerIndex: initialDrawerIdx,
             initialBottomSheet: initBottomSheet,
-          )
+          ),
         );
-        
+
         if (landingRoute != null && landingRoute.isActive && nav.canPop()) {
           // LandingScreen 위에 모닝콜 등 다른 화면이 덮여있는 경우
           nav.replace(oldRoute: landingRoute, newRoute: mainRoute);
@@ -91,8 +101,6 @@ class _LandingScreenState extends State<LandingScreen> with TickerProviderStateM
     }
   }
 
-
-
   @override
   void dispose() {
     _introController.dispose();
@@ -101,16 +109,14 @@ class _LandingScreenState extends State<LandingScreen> with TickerProviderStateM
   }
 
   Widget _buildPopCoach(
-    String imagePath, 
-    Offset finalOffset, 
-    double phaseOffset, 
-    double size, 
-    {
-      ColorFilter? colorFilter,
-      double imageScale = 1.0, // 원 내부 이미지 확대 비율
-      Offset imageOffset = Offset.zero, // 원 내부 이미지 세부 조정(이동)
-    }
-  ) {
+    String imagePath,
+    Offset finalOffset,
+    double phaseOffset,
+    double size, {
+    ColorFilter? colorFilter,
+    double imageScale = 1.0, // 원 내부 이미지 확대 비율
+    Offset imageOffset = Offset.zero, // 원 내부 이미지 세부 조정(이동)
+  }) {
     return AnimatedBuilder(
       animation: _introController,
       builder: (context, child) {
@@ -119,21 +125,19 @@ class _LandingScreenState extends State<LandingScreen> with TickerProviderStateM
           // 냥냥이와 거의 동시에(살짝 뒤에) 팝! 하고 나타나는 효과
           curve: const Interval(0.2, 1.0, curve: Curves.easeOutBack),
         );
-        
+
         return Transform.scale(
           scale: curve.value, // 0에서 100%로 커지면서 등장
-          child: Opacity(
-            opacity: curve.value.clamp(0.0, 1.0),
-            child: child,
-          ),
+          child: Opacity(opacity: curve.value.clamp(0.0, 1.0), child: child),
         );
       },
       child: AnimatedBuilder(
         animation: _controller,
         builder: (context, child) {
           // 속도를 기존의 절반으로 늦추고(2 * pi -> 1 * pi), 움직이는 폭도 살짝(6.0 -> 3.5) 줄임
-          final floatY = math.sin(_controller.value * math.pi + phaseOffset) * 3.5;
-          
+          final floatY =
+              math.sin(_controller.value * math.pi + phaseOffset) * 3.5;
+
           return Transform.translate(
             offset: Offset(finalOffset.dx, finalOffset.dy + floatY),
             child: Container(
@@ -167,9 +171,17 @@ class _LandingScreenState extends State<LandingScreen> with TickerProviderStateM
                     child: colorFilter != null
                         ? ColorFiltered(
                             colorFilter: colorFilter,
-                            child: Image.asset(imagePath, fit: BoxFit.cover, alignment: Alignment.topCenter),
+                            child: Image.asset(
+                              imagePath,
+                              fit: BoxFit.cover,
+                              alignment: Alignment.topCenter,
+                            ),
                           )
-                        : Image.asset(imagePath, fit: BoxFit.cover, alignment: Alignment.topCenter),
+                        : Image.asset(
+                            imagePath,
+                            fit: BoxFit.cover,
+                            alignment: Alignment.topCenter,
+                          ),
                   ),
                 ),
               ),
@@ -195,51 +207,51 @@ class _LandingScreenState extends State<LandingScreen> with TickerProviderStateM
         child: Column(
           children: [
             Container(
-            width: size,
-            height: size,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: Colors.white,
-              border: Border.all(color: Colors.white, width: 4),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.12),
-                  blurRadius: 24,
-                  offset: const Offset(0, 8),
+              width: size,
+              height: size,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white,
+                border: Border.all(color: Colors.white, width: 4),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.12),
+                    blurRadius: 24,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
+                image: DecorationImage(
+                  image: AssetImage(imagePath),
+                  fit: BoxFit.cover,
+                  alignment: Alignment.topCenter,
                 ),
-              ],
-              image: DecorationImage(
-                image: AssetImage(imagePath),
-                fit: BoxFit.cover,
-                alignment: Alignment.topCenter,
               ),
             ),
-          ),
-          const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.08),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.08),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Text(
+                name,
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF3D3A4E),
                 ),
-              ],
-            ),
-            child: Text(
-              name,
-              style: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w800,
-                color: Color(0xFF3D3A4E),
               ),
             ),
-          ),
-        ],
-      ),
+          ],
+        ),
       ),
     );
   }
@@ -270,7 +282,7 @@ class _LandingScreenState extends State<LandingScreen> with TickerProviderStateM
                 ),
               ),
               const SizedBox(height: 32),
-              
+
               // 프로필 아이콘
               Container(
                 width: 64,
@@ -286,7 +298,7 @@ class _LandingScreenState extends State<LandingScreen> with TickerProviderStateM
                 ),
               ),
               const SizedBox(height: 24),
-              
+
               // 텍스트
               Text(
                 '계정 연결하고\n더 편하게 사용해요',
@@ -299,7 +311,7 @@ class _LandingScreenState extends State<LandingScreen> with TickerProviderStateM
                 ),
               ),
               const SizedBox(height: 32),
-              
+
               // 구글 로그인 버튼
               _buildLoginButton(
                 text: '구글로 계속',
@@ -315,27 +327,32 @@ class _LandingScreenState extends State<LandingScreen> with TickerProviderStateM
                 ),
                 onPressed: () async {
                   Navigator.pop(sheetContext); // 바텀시트 닫기
-                  
+
                   final authService = AuthService();
                   final userCred = await authService.signInWithGoogle();
-                  
+
                   if (!outerContext.mounted) return;
-                  
+
                   if (userCred != null) {
                     print('로그인 성공: ${userCred.user?.displayName}');
-                    final data = await UserDataService.load();
                     await TasksSyncService.syncFromCloud(); // 로그인 시 클라우드 데이터 복원
+                    final data = await UserDataService.load();
                     if (!outerContext.mounted) return;
-                    
+
                     if (data.selectedCoachId != null) {
                       Navigator.pushReplacement(
                         outerContext,
-                        MaterialPageRoute(builder: (context) => MainTabScreen(coachId: data.selectedCoachId!)),
+                        MaterialPageRoute(
+                          builder: (context) =>
+                              MainTabScreen(coachId: data.selectedCoachId!),
+                        ),
                       );
                     } else {
                       Navigator.pushReplacement(
                         outerContext,
-                        MaterialPageRoute(builder: (context) => const CoachSelectionScreen()),
+                        MaterialPageRoute(
+                          builder: (context) => const CoachSelectionScreen(),
+                        ),
                       );
                     }
                   } else {
@@ -350,7 +367,7 @@ class _LandingScreenState extends State<LandingScreen> with TickerProviderStateM
                 },
               ),
               const SizedBox(height: 12),
-              
+
               // 네이버 로그인 버튼
               _buildLoginButton(
                 text: '네이버로 계속',
@@ -366,12 +383,14 @@ class _LandingScreenState extends State<LandingScreen> with TickerProviderStateM
                   // 개발용 프리패스 (바로 코치 선택 화면으로)
                   Navigator.pushReplacement(
                     outerContext,
-                    MaterialPageRoute(builder: (context) => const CoachSelectionScreen()),
+                    MaterialPageRoute(
+                      builder: (context) => const CoachSelectionScreen(),
+                    ),
                   );
                 },
               ),
               const SizedBox(height: 12),
-              
+
               // 카카오 로그인 버튼
               _buildLoginButton(
                 text: '카카오로 계속',
@@ -458,7 +477,10 @@ class _LandingScreenState extends State<LandingScreen> with TickerProviderStateM
                 children: [
                   // 상단 텍스트
                   Padding(
-                    padding: const EdgeInsets.only(top: 36.0, bottom: 20.0), // 8px 내림 (기존 28.0)
+                    padding: const EdgeInsets.only(
+                      top: 36.0,
+                      bottom: 20.0,
+                    ), // 8px 내림 (기존 28.0)
                     child: Center(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.center,
@@ -479,7 +501,11 @@ class _LandingScreenState extends State<LandingScreen> with TickerProviderStateM
                               Positioned(
                                 right: -76,
                                 top: -28,
-                                child: Image.asset('assets/images/logo.png', width: 84, height: 84),
+                                child: Image.asset(
+                                  'assets/images/logo.png',
+                                  width: 84,
+                                  height: 84,
+                                ),
                               ),
                             ],
                           ),
@@ -489,83 +515,106 @@ class _LandingScreenState extends State<LandingScreen> with TickerProviderStateM
                               fontSize: 36,
                               fontWeight: FontWeight.w900,
                               color: const Color(0xFF7B61FF),
-                              letterSpacing: 0, 
+                              letterSpacing: 0,
                             ),
                           ),
                         ],
                       ),
                     ),
                   ),
-                  
+
                   // 중앙 일러스트 & 캐릭터
-                      Expanded(
-                        child: Stack(
-                          alignment: Alignment.center,
-                          clipBehavior: Clip.none,
-                          children: [
-                            // 팀을 하나로 묶어주는 거대한 연보라색 배경 원 (크기 10% 축소)
-                            Center(
-                              child: Container(
-                                width: width * 0.81,
-                                height: width * 0.81,
-                                decoration: const BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  // 위쪽은 연보라색, 아래쪽은 바탕 화면(흰색)으로 맑게 녹아드는 그라데이션
-                                  gradient: LinearGradient(
-                                    begin: Alignment.topCenter,
-                                    end: Alignment.bottomCenter,
-                                    colors: [
-                                      Color(0xFFF3EDFF), // 옅은 배경 연보라색
-                                      Colors.white, // 바탕 화면색(흰색)으로 자연스럽게 페이드아웃 (탁한 투명화 방지)
-                                    ],
-                                    stops: [0.2, 0.8], // 부드럽게 스며드는 구간 설정
-                                  ),
-                                ),
+                  Expanded(
+                    child: Stack(
+                      alignment: Alignment.center,
+                      clipBehavior: Clip.none,
+                      children: [
+                        // 팀을 하나로 묶어주는 거대한 연보라색 배경 원 (크기 10% 축소)
+                        Center(
+                          child: Container(
+                            width: width * 0.81,
+                            height: width * 0.81,
+                            decoration: const BoxDecoration(
+                              shape: BoxShape.circle,
+                              // 위쪽은 연보라색, 아래쪽은 바탕 화면(흰색)으로 맑게 녹아드는 그라데이션
+                              gradient: LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: [
+                                  Color(0xFFF3EDFF), // 옅은 배경 연보라색
+                                  Colors
+                                      .white, // 바탕 화면색(흰색)으로 자연스럽게 페이드아웃 (탁한 투명화 방지)
+                                ],
+                                stops: [0.2, 0.8], // 부드럽게 스며드는 구간 설정
                               ),
                             ),
-                            
-                            // 플래너 및 고양이 (중앙 애니메이션)
+                          ),
+                        ),
+
+                        // 플래너 및 고양이 (중앙 애니메이션)
                         // 플래너 및 고양이 (중앙 고정 + 냥이만 애니메이션)
-                        
+
                         // 코치들 동시 등장 및 숨쉬는(둥둥 떠있는) 애니메이션 (원형 프로필 형태)
                         // 좌상단: 남비서
                         _buildPopCoach(
-                          'assets/images/coach_sec_male_nobg.png', 
+                          'assets/images/coach_sec_male_nobg.png',
                           const Offset(-100, -120), // 원래 위치로 복구 (기존 -104)
-                          0.0, 
+                          0.0,
                           width * 0.24, // 크기 10% 축소
                           imageScale: 1.4, // 추가 10% 확대 (총 1.4배)
-                          imageOffset: const Offset(8, 0), // 원 안에서 얼굴 다시 왼쪽으로 8px 이동 (총 +8px)
+                          imageOffset: const Offset(
+                            8,
+                            0,
+                          ), // 원 안에서 얼굴 다시 왼쪽으로 8px 이동 (총 +8px)
                         ),
                         // 우상단: 여비서
                         _buildPopCoach(
-                          'assets/images/coach_sec_female_nobg.png', 
+                          'assets/images/coach_sec_female_nobg.png',
                           const Offset(100, -120), // 원래 위치로 복구 (기존 -104)
-                          math.pi / 2, 
+                          math.pi / 2,
                           width * 0.24, // 크기 10% 축소
                           imageScale: 1.4, // 추가 10% 확대 (총 1.4배)
                         ),
                         // 좌하단: 형 코치
                         _buildPopCoach(
-                          'assets/images/coach_bro_nobg.png', 
-                          const Offset(-134, 15), 
-                          math.pi, 
+                          'assets/images/coach_bro_nobg.png',
+                          const Offset(-134, 15),
+                          math.pi,
                           width * 0.24, // 크기 10% 축소
                           imageScale: 1.2, // 형 코치 얼굴 20% 확대
-                          imageOffset: const Offset(8, 0), // 원 안에서 얼굴 오른쪽으로 8px 이동
+                          imageOffset: const Offset(
+                            8,
+                            0,
+                          ), // 원 안에서 얼굴 오른쪽으로 8px 이동
                           // 형 코치 명도 증가
                           colorFilter: const ColorFilter.matrix([
-                            1.15, 0, 0, 0, 15,
-                            0, 1.15, 0, 0, 15,
-                            0, 0, 1.15, 0, 15,
-                            0, 0, 0, 1.0, 0,
+                            1.15,
+                            0,
+                            0,
+                            0,
+                            15,
+                            0,
+                            1.15,
+                            0,
+                            0,
+                            15,
+                            0,
+                            0,
+                            1.15,
+                            0,
+                            15,
+                            0,
+                            0,
+                            0,
+                            1.0,
+                            0,
                           ]),
                         ),
                         // 우하단: 할머니 코치
                         _buildPopCoach(
-                          'assets/images/coach_halmae_nobg.png', 
-                          const Offset(134, 15), 
-                          math.pi * 1.5, 
+                          'assets/images/coach_halmae_nobg.png',
+                          const Offset(134, 15),
+                          math.pi * 1.5,
                           width * 0.24, // 크기 10% 축소
                           imageScale: 1.1, // 얼굴 10% 확대
                           // 할머니 붉은기 조절 + 전체 명도 증가 (기존보다 살짝 낮춤)
@@ -584,21 +633,29 @@ class _LandingScreenState extends State<LandingScreen> with TickerProviderStateM
                             child: AnimatedBuilder(
                               animation: _floatAnimation,
                               builder: (context, child) {
-                                final scale = 1.0 + (_floatAnimation.value / -15) * 0.02; 
+                                final scale =
+                                    1.0 + (_floatAnimation.value / -15) * 0.02;
                                 return Transform.scale(
                                   scale: scale,
                                   child: Transform.translate(
-                                    offset: Offset(0, _floatAnimation.value * 0.4),
+                                    offset: Offset(
+                                      0,
+                                      _floatAnimation.value * 0.4,
+                                    ),
                                     child: child,
                                   ),
                                 );
                               },
                               child: ColorFiltered(
                                 colorFilter: const ColorFilter.matrix([
-                                  0.9025, 0.0, 0.0, 0.0, 0.0, // R: 0.95(어둡게) * 0.95(붉은기 감소)
-                                  0.0, 0.95, 0.0, 0.0, 0.0,   // G: 0.95(어둡게)
-                                  0.0, 0.0, 0.95, 0.0, 0.0,   // B: 0.95(어둡게)
-                                  0.0, 0.0, 0.0, 1.0, 0.0,    // A: 1.0 (투명도 유지)
+                                  0.9025,
+                                  0.0,
+                                  0.0,
+                                  0.0,
+                                  0.0, // R: 0.95(어둡게) * 0.95(붉은기 감소)
+                                  0.0, 0.95, 0.0, 0.0, 0.0, // G: 0.95(어둡게)
+                                  0.0, 0.0, 0.95, 0.0, 0.0, // B: 0.95(어둡게)
+                                  0.0, 0.0, 0.0, 1.0, 0.0, // A: 1.0 (투명도 유지)
                                 ]),
                                 child: Image.asset(
                                   'assets/images/cat_planner.png',
@@ -620,7 +677,12 @@ class _LandingScreenState extends State<LandingScreen> with TickerProviderStateM
 
                   // 하단 버튼 영역
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(40, 0, 40, 72), // 좌우 패딩을 늘려 버튼 폭 약 10% 축소
+                    padding: const EdgeInsets.fromLTRB(
+                      40,
+                      0,
+                      40,
+                      72,
+                    ), // 좌우 패딩을 늘려 버튼 폭 약 10% 축소
                     child: Column(
                       children: [
                         // 로그인 / 가입 버튼 (프리미엄 다이어리 콘셉트)
@@ -637,14 +699,18 @@ class _LandingScreenState extends State<LandingScreen> with TickerProviderStateM
                                 child: Container(
                                   width: 16,
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFF6A52E0), // 버튼보다 살짝 어두운 톤
+                                    color: const Color(
+                                      0xFF6A52E0,
+                                    ), // 버튼보다 살짝 어두운 톤
                                     borderRadius: const BorderRadius.only(
                                       topRight: Radius.circular(4),
                                       bottomRight: Radius.circular(4),
                                     ),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: Colors.black.withValues(alpha: 0.1),
+                                        color: Colors.black.withValues(
+                                          alpha: 0.1,
+                                        ),
                                         blurRadius: 2,
                                         offset: const Offset(2, 0),
                                       ),
@@ -652,24 +718,31 @@ class _LandingScreenState extends State<LandingScreen> with TickerProviderStateM
                                   ),
                                 ),
                               ),
-                              
+
                               // 2. 다이어리 표지 본체
                               Container(
                                 width: double.infinity,
                                 height: 64,
                                 decoration: BoxDecoration(
                                   color: const Color(0xFF7B61FF), // 기존 색상 유지
-                                  borderRadius: BorderRadius.circular(24), // 둘러보기 버튼과 통일
+                                  borderRadius: BorderRadius.circular(
+                                    24,
+                                  ), // 둘러보기 버튼과 통일
                                   boxShadow: [
                                     BoxShadow(
-                                      color: Colors.black.withValues(alpha: 0.15),
+                                      color: Colors.black.withValues(
+                                        alpha: 0.15,
+                                      ),
                                       blurRadius: 10,
                                       offset: const Offset(0, 4),
                                     ),
                                     BoxShadow(
                                       color: const Color(0xFF5A45C0),
                                       blurRadius: 0,
-                                      offset: const Offset(0, 4), // 책의 두께감(하단 엣지)
+                                      offset: const Offset(
+                                        0,
+                                        4,
+                                      ), // 책의 두께감(하단 엣지)
                                     ),
                                   ],
                                 ),
@@ -683,9 +756,13 @@ class _LandingScreenState extends State<LandingScreen> with TickerProviderStateM
                                           begin: Alignment.topLeft,
                                           end: Alignment.bottomRight,
                                           colors: [
-                                            Colors.white.withValues(alpha: 0.25),
+                                            Colors.white.withValues(
+                                              alpha: 0.25,
+                                            ),
                                             Colors.transparent,
-                                            Colors.black.withValues(alpha: 0.15),
+                                            Colors.black.withValues(
+                                              alpha: 0.15,
+                                            ),
                                           ],
                                           stops: const [0.0, 0.5, 1.0],
                                         ),
@@ -696,9 +773,13 @@ class _LandingScreenState extends State<LandingScreen> with TickerProviderStateM
                                       padding: const EdgeInsets.all(4.0),
                                       child: Container(
                                         decoration: BoxDecoration(
-                                          borderRadius: BorderRadius.circular(20),
+                                          borderRadius: BorderRadius.circular(
+                                            20,
+                                          ),
                                           border: Border.all(
-                                            color: Colors.white.withValues(alpha: 0.15),
+                                            color: Colors.white.withValues(
+                                              alpha: 0.15,
+                                            ),
                                             width: 1,
                                           ),
                                         ),
@@ -707,7 +788,8 @@ class _LandingScreenState extends State<LandingScreen> with TickerProviderStateM
                                     // 텍스트 & 아이콘
                                     const Center(
                                       child: Row(
-                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
                                         children: [
                                           Text(
                                             '로그인 / 가입',
@@ -715,11 +797,16 @@ class _LandingScreenState extends State<LandingScreen> with TickerProviderStateM
                                               fontSize: 18,
                                               fontWeight: FontWeight.bold,
                                               color: Colors.white,
-                                              letterSpacing: 1.0, // 고급감을 위한 자간 추가
+                                              letterSpacing:
+                                                  1.0, // 고급감을 위한 자간 추가
                                             ),
                                           ),
                                           SizedBox(width: 8),
-                                          Icon(Icons.arrow_forward_ios, size: 16, color: Colors.white), // 미니멀한 애플 스타일 화살표
+                                          Icon(
+                                            Icons.arrow_forward_ios,
+                                            size: 16,
+                                            color: Colors.white,
+                                          ), // 미니멀한 애플 스타일 화살표
                                         ],
                                       ),
                                     ),
@@ -741,7 +828,10 @@ class _LandingScreenState extends State<LandingScreen> with TickerProviderStateM
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(24),
                             ),
-                            side: const BorderSide(color: Color(0xFFE5E0FF), width: 1.5),
+                            side: const BorderSide(
+                              color: Color(0xFFE5E0FF),
+                              width: 1.5,
+                            ),
                             elevation: 0,
                           ),
                           child: const Row(
@@ -771,4 +861,3 @@ class _LandingScreenState extends State<LandingScreen> with TickerProviderStateM
     );
   }
 }
-

@@ -8,6 +8,13 @@ import 'widget_sync_service.dart';
 
 class TasksSyncService {
   static Timer? _syncTimer;
+  static const _criticalDataKeys = {
+    'nyang_tasks',
+    'nyang_core_tasks',
+    'nyang_schedules',
+    'nyang_history',
+    'nyang_visions',
+  };
 
   static void scheduleSyncToCloud({
     Duration delay = const Duration(seconds: 4),
@@ -44,6 +51,16 @@ class TasksSyncService {
               .collection('appData')
               .doc(key);
 
+          if (value is String &&
+              _criticalDataKeys.contains(key) &&
+              _isEmptyEncodedValue(value) &&
+              await _hasNonEmptyCloudValue(docRef)) {
+            debugPrint(
+              '⚠️ TasksSyncService: 빈 로컬 데이터가 기존 클라우드 $key 값을 덮어쓰지 않도록 건너뜁니다.',
+            );
+            continue;
+          }
+
           // String, bool, int, double, StringList 등 기본 타입 지원
           batch.set(docRef, {'value': value}, SetOptions(merge: true));
         }
@@ -61,10 +78,9 @@ class TasksSyncService {
   static Future<void> syncFromCloud() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
-    final userData = await UserDataService.load();
-    if (!userData.isPlanActive) return;
 
     try {
+      await UserDataService.syncFromCloud();
       final snapshot = await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
@@ -106,5 +122,26 @@ class TasksSyncService {
     } catch (e) {
       debugPrint('❌ TasksSyncService syncFromCloud 오류: $e');
     }
+  }
+
+  static bool _isEmptyEncodedValue(String value) {
+    final trimmed = value.trim();
+    return trimmed.isEmpty || trimmed == '[]' || trimmed == '{}';
+  }
+
+  static Future<bool> _hasNonEmptyCloudValue(
+    DocumentReference<Map<String, dynamic>> docRef,
+  ) async {
+    final snapshot = await docRef.get();
+    if (!snapshot.exists) return false;
+
+    final value = snapshot.data()?['value'];
+    if (value is String) {
+      return !_isEmptyEncodedValue(value);
+    }
+    if (value is List) {
+      return value.isNotEmpty;
+    }
+    return value != null;
   }
 }
