@@ -3336,6 +3336,8 @@ class _ChatScreenState extends State<ChatScreen>
     try {
       final raw = await _callOpenAI(trimmed);
       if (!mounted || widget.coachId != currentId) return;
+      final usageNotice = await ApiUsageLimitService.takeChatUsageNotice();
+      if (!mounted || widget.coachId != currentId) return;
       final parsed = _parseReply(raw);
       setState(() {
         _messages.add(
@@ -3355,6 +3357,9 @@ class _ChatScreenState extends State<ChatScreen>
         coachId: widget.coachId,
         usedApi: true,
       );
+      if (usageNotice != null) {
+        _showUsageNotice(usageNotice);
+      }
     } catch (e) {
       if (!mounted || widget.coachId != currentId) return;
       setState(() => _isLoading = false);
@@ -3983,7 +3988,7 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
       'estimated_cost_won',
       'usage.costWon',
     ]);
-    AnalyticsService.logApiUsage(
+    await AnalyticsService.logApiUsage(
       coachId: widget.coachId,
       estimatedTokens: estimatedTokens,
       actualTokens: actualTokens,
@@ -4102,6 +4107,16 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
   void _showError(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(msg), backgroundColor: Colors.red[400]),
+    );
+  }
+
+  void _showUsageNotice(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg),
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: const Color(0xFF6F5BFF),
+      ),
     );
   }
 

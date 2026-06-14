@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/user_data.dart';
 
@@ -72,7 +73,7 @@ class ApiUsageLimitService {
     if (dailyUsed >= limits.daily || nextDaily > limits.daily) {
       return ApiUsageLimitResult(
         allowed: false,
-        message: '오늘의 AI 대화 사용량을 모두 사용했어요. 내일 다시 이어가요.',
+        message: '오늘은 정말 많이 이야기했네요.\n내일 다시 이어서 이야기해요.',
         dailyUsed: dailyUsed,
         dailyLimit: limits.daily,
         weeklyUsed: weeklyUsed,
@@ -83,7 +84,9 @@ class ApiUsageLimitService {
     if (weeklyUsed >= limits.weekly || nextWeekly > limits.weekly) {
       return ApiUsageLimitResult(
         allowed: false,
-        message: '이번 주 AI 대화 사용량을 모두 사용했어요. 다음 주에 다시 이어가요.',
+        message: userData.planType == 'friends'
+            ? '이번 주 AI 대화 사용량을 모두 썼어요.\n마스터 플랜에서는 더 많이 대화할 수 있어요.'
+            : '이번 주는 정말 많이 이야기했어요.\n다음 주에 다시 이어서 이야기해요.',
         dailyUsed: dailyUsed,
         dailyLimit: limits.daily,
         weeklyUsed: weeklyUsed,
@@ -147,6 +150,38 @@ class ApiUsageLimitService {
     }
   }
 
+  static Future<String?> takeChatUsageNotice() async {
+    final user = _auth.currentUser;
+    if (user == null) return null;
+
+    final userData = await UserDataService.load();
+    final limits = _tokenLimitsFor(userData);
+    if (limits == null) return null;
+
+    final today = DateTime.now();
+    final dailyUsed = await _dailyTokenUsage(user.uid, today);
+    final weeklyUsed = await _weeklyTokenUsage(user.uid, today);
+    final dailyStage = _usageNoticeStage(dailyUsed, limits.daily);
+    final weeklyStage = _usageNoticeStage(weeklyUsed, limits.weekly);
+
+    if (dailyStage == 0 && weeklyStage == 0) return null;
+
+    final useDailyNotice = dailyStage >= weeklyStage;
+    final stage = useDailyNotice ? dailyStage : weeklyStage;
+    final scope = useDailyNotice ? 'daily' : 'weekly';
+    final scopeKey = useDailyNotice ? _dateKey(today) : _weekKey(today);
+
+    final prefs = await SharedPreferences.getInstance();
+    final noticeKey =
+        'nyang_api_usage_notice_${user.uid}_${scope}_${scopeKey}_$stage';
+    if (prefs.getBool(noticeKey) == true) return null;
+    await prefs.setBool(noticeKey, true);
+
+    return useDailyNotice
+        ? _dailyUsageNotice(stage)
+        : _weeklyUsageNotice(stage, userData.planType);
+  }
+
   static _TokenLimits? _tokenLimitsFor(UserData userData) {
     if (!userData.isPlanActive) return null;
     if (userData.planType == 'friends') {
@@ -202,6 +237,46 @@ class ApiUsageLimitService {
 
   static String _dateKey(DateTime date) {
     return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+  }
+
+  static String _weekKey(DateTime date) {
+    final monday = DateTime(
+      date.year,
+      date.month,
+      date.day,
+    ).subtract(Duration(days: date.weekday - 1));
+    return _dateKey(monday);
+  }
+
+  static int _usageNoticeStage(int used, int limit) {
+    if (limit <= 0) return 0;
+    final ratio = used / limit;
+    if (ratio >= 1) return 100;
+    if (ratio >= 0.95) return 95;
+    if (ratio >= 0.8) return 80;
+    return 0;
+  }
+
+  static String _dailyUsageNotice(int stage) {
+    if (stage >= 100) {
+      return '오늘은 정말 많이 이야기했네요.\n내일 다시 이어서 이야기해요.';
+    }
+    if (stage >= 95) {
+      return '오늘의 대화가 거의 끝나가고 있어요.\n조금만 더 이야기할 수 있어요.';
+    }
+    return '오늘은 코치와 이야기를 많이 나눴네요.\n남은 대화가 얼마 남지 않았어요.';
+  }
+
+  static String _weeklyUsageNotice(int stage, String planType) {
+    if (stage >= 100) {
+      return planType == 'friends'
+          ? '이번 주 AI 대화 사용량을 모두 썼어요.\n마스터 플랜에서는 더 많이 대화할 수 있어요.'
+          : '이번 주는 정말 많이 이야기했어요.\n다음 주에 다시 이어서 이야기해요.';
+    }
+    if (stage >= 95) {
+      return '이번 주 대화가 거의 끝나가고 있어요.\n조금만 더 이야기할 수 있어요.';
+    }
+    return '이번 주 코치와 이야기를 많이 나눴네요.\n남은 대화가 얼마 남지 않았어요.';
   }
 
   static int _readInt(dynamic value) {
