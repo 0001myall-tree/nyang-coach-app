@@ -5302,7 +5302,7 @@ class _TasksScreenState extends State<TasksScreen>
                             Text(
                               v.name,
                               style: GoogleFonts.notoSansKr(
-                                fontSize: 18,
+                                fontSize: 16,
                                 fontWeight: FontWeight.w900,
                                 color: const Color(0xFF3D3A4E),
                               ),
