@@ -340,6 +340,7 @@ class _ChatScreenState extends State<ChatScreen>
   List<_SuggestedTask> _suggestedTasks = [];
   // 활성 타이머
   int? _timerActiveMinutes;
+  String? _usageLimitBanner;
 
   // 냥냥코치 비구독자 무료체험 단계 (0=시작 전, 1=인트로 완료, 2=업셀 완료)
   int _catFreeTrialStep = 0;
@@ -3349,6 +3350,11 @@ class _ChatScreenState extends State<ChatScreen>
         if (parsed.suggestedTasks.isNotEmpty) {
           _suggestedTasks = parsed.suggestedTasks;
         }
+        if (usageNotice != null &&
+            usageNotice.stage >= 95 &&
+            usageNotice.stage < 100) {
+          _usageLimitBanner = usageNotice.message;
+        }
         _isLoading = false;
       });
       _scrollToBottom();
@@ -3358,13 +3364,23 @@ class _ChatScreenState extends State<ChatScreen>
         usedApi: true,
       );
       if (usageNotice != null) {
-        _showUsageNotice(usageNotice);
+        if (usageNotice.stage >= 100) {
+          _showUsageLimitSheet(
+            usageNotice.message,
+            showUpgrade: usageNotice.suggestsUpgrade,
+          );
+        } else if (usageNotice.stage < 95) {
+          _showUsageNotice(usageNotice.message);
+        }
       }
     } catch (e) {
       if (!mounted || widget.coachId != currentId) return;
       setState(() => _isLoading = false);
       if (e is ApiUsageLimitException) {
-        _showError(e.message);
+        _showUsageLimitSheet(
+          e.message,
+          showUpgrade: e.message.contains('마스터 플랜'),
+        );
       } else {
         _showError('메시지 전송 실패. 잠시 후 다시 시도해주세요.');
       }
@@ -4116,7 +4132,133 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
         content: Text(msg),
         behavior: SnackBarBehavior.floating,
         backgroundColor: const Color(0xFF6F5BFF),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       ),
+    );
+  }
+
+  void _showUsageLimitSheet(String msg, {bool showUpgrade = false}) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withOpacity(0.38),
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        return Container(
+          margin: const EdgeInsets.all(12),
+          padding: EdgeInsets.fromLTRB(
+            22,
+            22,
+            22,
+            MediaQuery.of(sheetContext).padding.bottom + 18,
+          ),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(26),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.14),
+                blurRadius: 24,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF4F0FF),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Icon(
+                      Icons.nights_stay_rounded,
+                      color: _coach.accentColor,
+                      size: 22,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      showUpgrade ? '이번 주 대화를 모두 썼어요' : '오늘은 여기까지 쉬어가요',
+                      style: GoogleFonts.notoSansKr(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                        color: const Color(0xFF1A1A2E),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Text(
+                msg,
+                style: GoogleFonts.notoSansKr(
+                  fontSize: 14,
+                  height: 1.5,
+                  fontWeight: FontWeight.w700,
+                  color: const Color(0xFF5F5A70),
+                ),
+              ),
+              const SizedBox(height: 20),
+              if (showUpgrade) ...[
+                SizedBox(
+                  width: double.infinity,
+                  height: 52,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      Navigator.pop(sheetContext);
+                      Future.delayed(Duration.zero, _showPlanGuideBottomSheet);
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _coach.accentColor,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
+                    child: Text(
+                      '마스터 플랜 보기',
+                      style: GoogleFonts.notoSansKr(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+              ],
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: TextButton(
+                  onPressed: () => Navigator.pop(sheetContext),
+                  style: TextButton.styleFrom(
+                    foregroundColor: const Color(0xFF7B758C),
+                    backgroundColor: const Color(0xFFF7F5FB),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                  child: Text(
+                    '알겠어요',
+                    style: GoogleFonts.notoSansKr(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -5303,154 +5445,233 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
             ? null
             : const Border(top: BorderSide(color: Color(0xFFF0EEF8))),
       ),
-      child: Row(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          // 마이크 버튼
-          GestureDetector(
-            onTap: () {
-              if (!_speechEnabled) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('기기에서 음성 인식을 지원하지 않거나 권한이 없습니다.'),
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 220),
+            child: _usageLimitBanner == null
+                ? const SizedBox.shrink()
+                : _buildUsageLimitBanner(),
+          ),
+          Row(
+            children: [
+              // 마이크 버튼
+              GestureDetector(
+                onTap: () {
+                  if (!_speechEnabled) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('기기에서 음성 인식을 지원하지 않거나 권한이 없습니다.'),
+                      ),
+                    );
+                    return;
+                  }
+                  if (_isListening) {
+                    _stopListening();
+                  } else {
+                    _startListening();
+                  }
+                },
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: _isListening
+                        ? Colors.redAccent.withOpacity(0.15)
+                        : (isNyang
+                              ? Colors.white.withOpacity(0.3)
+                              : (isFriends
+                                    ? Colors.white.withOpacity(0.2)
+                                    : Colors.white)),
+                    borderRadius: BorderRadius.circular(22),
+                    border: Border.all(
+                      color: _isListening
+                          ? Colors.redAccent
+                          : (isNyang
+                                ? _coach.accentColor.withOpacity(0.6)
+                                : (isFriends
+                                      ? Colors.white.withOpacity(0.3)
+                                      : const Color(0xFFF3E5AB))),
+                      width: _isListening ? 2.0 : 1.2,
+                    ),
+                    boxShadow: isFriends
+                        ? null
+                        : [
+                            BoxShadow(
+                              color: const Color(0xFFB8860B).withOpacity(0.05),
+                              blurRadius: 10,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
                   ),
-                );
-                return;
-              }
-              if (_isListening) {
-                _stopListening();
-              } else {
-                _startListening();
-              }
-            },
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: _isListening
-                    ? Colors.redAccent.withOpacity(0.15)
-                    : (isNyang
-                          ? Colors.white.withOpacity(0.3)
-                          : (isFriends
-                                ? Colors.white.withOpacity(0.2)
-                                : Colors.white)),
-                borderRadius: BorderRadius.circular(22),
-                border: Border.all(
-                  color: _isListening
-                      ? Colors.redAccent
-                      : (isNyang
-                            ? _coach.accentColor.withOpacity(0.6)
-                            : (isFriends
-                                  ? Colors.white.withOpacity(0.3)
-                                  : const Color(0xFFF3E5AB))),
-                  width: _isListening ? 2.0 : 1.2,
+                  child: Icon(
+                    _isListening ? Icons.stop_rounded : Icons.mic_none_rounded,
+                    color: _isListening
+                        ? Colors.redAccent
+                        : (isNyang
+                              ? _coach.accentColor
+                              : (isFriends
+                                    ? Colors.white
+                                    : const Color(0xFFB8860B))),
+                    size: 20,
+                  ),
                 ),
-                boxShadow: isFriends
-                    ? null
-                    : [
-                        BoxShadow(
-                          color: const Color(0xFFB8860B).withOpacity(0.05),
-                          blurRadius: 10,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
               ),
-              child: Icon(
-                _isListening ? Icons.stop_rounded : Icons.mic_none_rounded,
-                color: _isListening
-                    ? Colors.redAccent
-                    : (isNyang
-                          ? _coach.accentColor
+              const SizedBox(width: 10),
+              // 텍스트 필드
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  decoration: BoxDecoration(
+                    color: isFriends
+                        ? Colors.white.withOpacity(0.25)
+                        : Colors.white,
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(
+                      color: isNyang
+                          ? _coach.accentColor.withOpacity(0.5)
+                          : (isFriends
+                                ? Colors.white.withOpacity(0.3)
+                                : const Color(0xFFDBC07A)),
+                      width: 1.2,
+                    ),
+                  ),
+                  child: TextField(
+                    controller: _ctrl,
+                    maxLines: null,
+                    textInputAction: TextInputAction.send,
+                    onSubmitted: _send,
+                    style: GoogleFonts.notoSansKr(
+                      fontSize: 14,
+                      color: isNyang
+                          ? const Color(0xFF1A1A2E)
                           : (isFriends
                                 ? Colors.white
-                                : const Color(0xFFB8860B))),
-                size: 20,
-              ),
-            ),
-          ),
-          const SizedBox(width: 10),
-          // 텍스트 필드
-          Expanded(
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              decoration: BoxDecoration(
-                color: isFriends
-                    ? Colors.white.withOpacity(0.25)
-                    : Colors.white,
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(
-                  color: isNyang
-                      ? _coach.accentColor.withOpacity(0.5)
-                      : (isFriends
-                            ? Colors.white.withOpacity(0.3)
-                            : const Color(0xFFDBC07A)),
-                  width: 1.2,
-                ),
-              ),
-              child: TextField(
-                controller: _ctrl,
-                maxLines: null,
-                textInputAction: TextInputAction.send,
-                onSubmitted: _send,
-                style: GoogleFonts.notoSansKr(
-                  fontSize: 14,
-                  color: isNyang
-                      ? const Color(0xFF1A1A2E)
-                      : (isFriends ? Colors.white : const Color(0xFF1A1A2E)),
-                ),
-                decoration: InputDecoration(
-                  hintText: '메시지를 입력하세요...',
-                  hintStyle: GoogleFonts.notoSansKr(
-                    fontSize: 14,
-                    color: isNyang
-                        ? const Color(0xFF4B445F).withOpacity(0.62)
-                        : (isFriends
-                              ? Colors.white.withOpacity(0.6)
-                              : const Color(0xFFBBBBCC)),
-                  ),
-                  border: InputBorder.none,
-                  contentPadding: const EdgeInsets.symmetric(vertical: 12),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 10),
-          // 전송 버튼
-          GestureDetector(
-            onTap: () => _send(_ctrl.text),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                gradient: isFriends
-                    ? null
-                    : const LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [Color(0xFF1A1A1A), Color(0xFF050505)],
+                                : const Color(0xFF1A1A2E)),
+                    ),
+                    decoration: InputDecoration(
+                      hintText: '메시지를 입력하세요...',
+                      hintStyle: GoogleFonts.notoSansKr(
+                        fontSize: 14,
+                        color: isNyang
+                            ? const Color(0xFF4B445F).withOpacity(0.62)
+                            : (isFriends
+                                  ? Colors.white.withOpacity(0.6)
+                                  : const Color(0xFFBBBBCC)),
                       ),
-                color: isFriends ? _coach.accentColor : null,
-                borderRadius: BorderRadius.circular(22),
-                border: isFriends
-                    ? null
-                    : Border.all(color: const Color(0xFFDBC07A), width: 1.2),
-                boxShadow: [
-                  BoxShadow(
-                    color: isFriends
-                        ? _coach.accentColor.withOpacity(0.35)
-                        : Colors.black.withOpacity(0.18),
-                    blurRadius: isFriends ? 10 : 15,
-                    offset: const Offset(0, 4),
+                      border: InputBorder.none,
+                      contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
                   ),
-                ],
+                ),
               ),
-              child: Icon(
-                Icons.send_rounded,
-                color: isFriends ? Colors.white : const Color(0xFFFDE68A),
-                size: 20,
+              const SizedBox(width: 10),
+              // 전송 버튼
+              GestureDetector(
+                onTap: () => _send(_ctrl.text),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    gradient: isFriends
+                        ? null
+                        : const LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [Color(0xFF1A1A1A), Color(0xFF050505)],
+                          ),
+                    color: isFriends ? _coach.accentColor : null,
+                    borderRadius: BorderRadius.circular(22),
+                    border: isFriends
+                        ? null
+                        : Border.all(
+                            color: const Color(0xFFDBC07A),
+                            width: 1.2,
+                          ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: isFriends
+                            ? _coach.accentColor.withOpacity(0.35)
+                            : Colors.black.withOpacity(0.18),
+                        blurRadius: isFriends ? 10 : 15,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Icon(
+                    Icons.send_rounded,
+                    color: isFriends ? Colors.white : const Color(0xFFFDE68A),
+                    size: 20,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildUsageLimitBanner() {
+    final isFriends = !_coach.isMaster;
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
+      decoration: BoxDecoration(
+        color: isFriends
+            ? Colors.white.withOpacity(0.88)
+            : const Color(0xFFF6F2FF),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isFriends
+              ? Colors.white.withOpacity(0.42)
+              : const Color(0xFFE6DEFF),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 28,
+            height: 28,
+            decoration: BoxDecoration(
+              color: _coach.accentColor.withOpacity(0.12),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.chat_bubble_outline_rounded,
+              size: 15,
+              color: _coach.accentColor,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              _usageLimitBanner!,
+              style: GoogleFonts.notoSansKr(
+                fontSize: 12,
+                height: 1.35,
+                fontWeight: FontWeight.w800,
+                color: const Color(0xFF3D3A4E),
               ),
             ),
+          ),
+          IconButton(
+            visualDensity: VisualDensity.compact,
+            onPressed: () => setState(() => _usageLimitBanner = null),
+            icon: const Icon(Icons.close_rounded, size: 18),
+            color: const Color(0xFF9A96A8),
+            tooltip: '닫기',
           ),
         ],
       ),

@@ -34,6 +34,20 @@ class ApiUsageLimitException implements Exception {
   String toString() => message;
 }
 
+class ApiUsageNotice {
+  final String message;
+  final int stage;
+  final bool isWeekly;
+  final bool suggestsUpgrade;
+
+  const ApiUsageNotice({
+    required this.message,
+    required this.stage,
+    required this.isWeekly,
+    this.suggestsUpgrade = false,
+  });
+}
+
 class ApiUsageLimitService {
   static const int friendsDailyTokenLimit = 100000;
   static const int friendsWeeklyTokenLimit = 500000;
@@ -150,7 +164,7 @@ class ApiUsageLimitService {
     }
   }
 
-  static Future<String?> takeChatUsageNotice() async {
+  static Future<ApiUsageNotice?> takeChatUsageNotice() async {
     final user = _auth.currentUser;
     if (user == null) return null;
 
@@ -177,9 +191,14 @@ class ApiUsageLimitService {
     if (prefs.getBool(noticeKey) == true) return null;
     await prefs.setBool(noticeKey, true);
 
-    return useDailyNotice
-        ? _dailyUsageNotice(stage)
-        : _weeklyUsageNotice(stage, userData.planType);
+    return ApiUsageNotice(
+      message: useDailyNotice
+          ? _dailyUsageNotice(stage)
+          : _weeklyUsageNotice(stage, userData.planType),
+      stage: stage,
+      isWeekly: !useDailyNotice,
+      suggestsUpgrade: !useDailyNotice && userData.planType == 'friends',
+    );
   }
 
   static _TokenLimits? _tokenLimitsFor(UserData userData) {
