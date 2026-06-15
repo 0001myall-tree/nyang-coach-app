@@ -185,13 +185,17 @@ class ApiUsageLimitService {
   }
 
   static Future<int> _dailyTokenUsage(String uid, DateTime date) async {
-    final doc = await _firestore
-        .collection('users')
-        .doc(uid)
-        .collection('analytics_daily')
-        .doc(_dateKey(date))
-        .get();
-    return _readInt(doc.data()?['tokens']);
+    try {
+      final doc = await _firestore
+          .collection('users')
+          .doc(uid)
+          .collection('analytics_daily')
+          .doc(_dateKey(date))
+          .get();
+      return _readInt(doc.data()?['totalTokens']);
+    } catch (e) {
+      return 0;
+    }
   }
 
   static Future<int> _dailyFeatureUsage(
@@ -199,17 +203,17 @@ class ApiUsageLimitService {
     DateTime date,
     String featureName,
   ) async {
-    final doc = await _firestore
-        .collection('users')
-        .doc(uid)
-        .collection('analytics_daily')
-        .doc(_dateKey(date))
-        .get();
-    final features = doc.data()?['features'];
-    if (features is Map) {
-      return _readInt(features[featureName]);
+    try {
+      final doc = await _firestore
+          .collection('users')
+          .doc(uid)
+          .collection('analytics_daily')
+          .doc(_dateKey(date))
+          .get();
+      return _readInt(doc.data()?['features']?[featureName]);
+    } catch (e) {
+      return 0;
     }
-    return 0;
   }
 
   static String _dateKey(DateTime date) {
