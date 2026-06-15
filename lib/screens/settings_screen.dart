@@ -426,7 +426,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           },
                         ),
                         _buildWidgetToggle(
-                          title: '남비서 위젯',
+                          title: '$_secMaleWidgetName 위젯',
                           imagePath: 'assets/images/sec_male.png',
                           value: tempSecMale,
                           isLocked: !isMasterPlan,
@@ -442,7 +442,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           },
                         ),
                         _buildWidgetToggle(
-                          title: '여비서 위젯',
+                          title: '$_secFemaleWidgetName 위젯',
                           imagePath: 'assets/images/sec_female.png',
                           value: tempSecFemale,
                           isLocked: !isMasterPlan,
