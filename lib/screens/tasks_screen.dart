@@ -10423,6 +10423,7 @@ class _MilestoneMemoDialogState extends State<MilestoneMemoDialog> {
   final List<TextEditingController> _contentCtrls = [];
   final List<FocusNode> _titleFocusNodes = [];
   final List<FocusNode> _contentFocusNodes = [];
+  final Set<int> _editingSectionIndexes = {};
 
   // --- Phase 2: 실행 아이템 데이터 및 컨트롤러 ---
   List<ActionCandidate> _actions = [];
@@ -10509,6 +10510,7 @@ class _MilestoneMemoDialogState extends State<MilestoneMemoDialog> {
     setState(() {
       _sections.add(MemoSection(title: '', content: ''));
       _addSectionControllers('', '');
+      _editingSectionIndexes.add(_sections.length - 1);
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _titleFocusNodes.last.requestFocus();
@@ -10526,6 +10528,16 @@ class _MilestoneMemoDialogState extends State<MilestoneMemoDialog> {
       _contentCtrls.removeAt(index);
       _titleFocusNodes.removeAt(index);
       _contentFocusNodes.removeAt(index);
+      final updatedEditingIndexes = _editingSectionIndexes
+          .where((editingIndex) => editingIndex != index)
+          .map(
+            (editingIndex) =>
+                editingIndex > index ? editingIndex - 1 : editingIndex,
+          )
+          .toSet();
+      _editingSectionIndexes
+        ..clear()
+        ..addAll(updatedEditingIndexes);
 
       if (_sections.isEmpty) {
         _addNewSection();
@@ -10552,7 +10564,39 @@ class _MilestoneMemoDialogState extends State<MilestoneMemoDialog> {
 
       final contentFocus = _contentFocusNodes.removeAt(oldIndex);
       _contentFocusNodes.insert(newIndex, contentFocus);
+
+      final wasEditing = _editingSectionIndexes.remove(oldIndex);
+      final updatedEditingIndexes = _editingSectionIndexes.map((editingIndex) {
+        if (oldIndex < newIndex) {
+          if (editingIndex > oldIndex && editingIndex <= newIndex) {
+            return editingIndex - 1;
+          }
+        } else if (newIndex < oldIndex) {
+          if (editingIndex >= newIndex && editingIndex < oldIndex) {
+            return editingIndex + 1;
+          }
+        }
+        return editingIndex;
+      }).toSet();
+      _editingSectionIndexes
+        ..clear()
+        ..addAll(updatedEditingIndexes);
+      if (wasEditing) {
+        _editingSectionIndexes.add(newIndex);
+      }
     });
+  }
+
+  void _startEditingSection(int index, {bool focusContent = true}) {
+    setState(() {
+      _editingSectionIndexes.add(index);
+    });
+    if (focusContent) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _contentFocusNodes[index].requestFocus();
+      });
+    }
   }
 
   void _addNewAction() {
@@ -10891,6 +10935,8 @@ $content
     }
     if (_focusedCtrl == null) {
       if (_contentFocusNodes.isNotEmpty) {
+        _editingSectionIndexes.add(0);
+        if (mounted) setState(() {});
         _contentFocusNodes.first.requestFocus();
         _focusedCtrl = _contentCtrls.first;
       } else {
@@ -11271,6 +11317,9 @@ $content
 
   Widget _buildSectionCard(int index) {
     final isSummarizing = _summarizingSectionIndex == index;
+    final isEditingContent =
+        _editingSectionIndexes.contains(index) ||
+        _contentCtrls[index].text.trim().isEmpty;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -11306,6 +11355,16 @@ $content
                 ),
               ),
               const SizedBox(width: 8),
+              if (!isEditingContent)
+                GestureDetector(
+                  onTap: () => _startEditingSection(index),
+                  child: const Icon(
+                    Icons.edit_outlined,
+                    size: 16,
+                    color: Color(0xFF8B7CFF),
+                  ),
+                ),
+              if (!isEditingContent) const SizedBox(width: 8),
               GestureDetector(
                 onTap: isSummarizing ? null : () => _summarizeSection(index),
                 child: Container(
@@ -11350,27 +11409,48 @@ $content
             ],
           ),
           const Divider(color: Color(0xFFE5E7EB), height: 20),
-          TextField(
-            controller: _contentCtrls[index],
-            focusNode: _contentFocusNodes[index],
-            maxLines: null,
-            maxLength: _sectionContentMaxLength,
-            maxLengthEnforcement: MaxLengthEnforcement.enforced,
-            keyboardType: TextInputType.multiline,
-            style: GoogleFonts.notoSansKr(
-              fontSize: 14,
-              color: const Color(0xFF3D3A4E),
-              height: 1.5,
+          if (isEditingContent)
+            TextField(
+              controller: _contentCtrls[index],
+              focusNode: _contentFocusNodes[index],
+              maxLines: null,
+              maxLength: _sectionContentMaxLength,
+              maxLengthEnforcement: MaxLengthEnforcement.enforced,
+              keyboardType: TextInputType.multiline,
+              style: GoogleFonts.notoSansKr(
+                fontSize: 14,
+                color: const Color(0xFF3D3A4E),
+                height: 1.5,
+              ),
+              decoration: InputDecoration(
+                hintText: '실행에 필요한 핵심 위주로 적어보세요(최대 3000자)...',
+                hintStyle: GoogleFonts.notoSansKr(
+                  color: const Color(0xFFA0A0B0),
+                ),
+                border: InputBorder.none,
+                isDense: true,
+                contentPadding: EdgeInsets.zero,
+                counterText: '',
+              ),
+            )
+          else
+            GestureDetector(
+              behavior: HitTestBehavior.translucent,
+              onTap: () => _startEditingSection(index),
+              child: Container(
+                width: double.infinity,
+                constraints: const BoxConstraints(minHeight: 48),
+                padding: const EdgeInsets.symmetric(vertical: 2),
+                child: MemoDisplayWidget(
+                  text: _contentCtrls[index].text,
+                  style: GoogleFonts.notoSansKr(
+                    fontSize: 14,
+                    color: const Color(0xFF3D3A4E),
+                    height: 1.5,
+                  ),
+                ),
+              ),
             ),
-            decoration: InputDecoration(
-              hintText: '실행에 필요한 핵심 위주로 적어보세요(최대 3000자)...',
-              hintStyle: GoogleFonts.notoSansKr(color: const Color(0xFFA0A0B0)),
-              border: InputBorder.none,
-              isDense: true,
-              contentPadding: EdgeInsets.zero,
-              counterText: '',
-            ),
-          ),
         ],
       ),
     );
