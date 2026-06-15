@@ -6,7 +6,7 @@ class AnalyticsService {
   static final _firestore = FirebaseFirestore.instance;
   static final _auth = FirebaseAuth.instance;
   static const double _krwPerUsd = 1400;
-  static const double _gpt4oOutputUsdPerMillionTokens = 15.0;
+  static const double _gpt4oMiniOutputUsdPerMillionTokens = 0.60;
 
   static String _dateKey(DateTime date) {
     return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
@@ -36,7 +36,7 @@ class AnalyticsService {
   static int _estimateCostWonFromTokens(int tokenCount) {
     if (tokenCount <= 0) return 0;
     final usdCost =
-        tokenCount / 1000000 * _gpt4oOutputUsdPerMillionTokens;
+        tokenCount / 1000000 * _gpt4oMiniOutputUsdPerMillionTokens;
     return (usdCost * _krwPerUsd).round();
   }
 
@@ -205,7 +205,7 @@ class AnalyticsService {
     try {
       final dateKey = _dateKey(DateTime.now());
       final tokenCount = actualTokens ?? estimatedTokens;
-      // 서버에서 실제 비용을 내려주지 않으면 GPT-4o 출력 단가 기준으로 보수적으로 추정합니다.
+      // 서버에서 실제 비용을 내려주지 않으면 GPT-4o-mini 출력 단가 기준으로 보수적으로 추정합니다.
       final costWon = actualCostWon ?? _estimateCostWonFromTokens(tokenCount);
 
       // 사용자 타임라인 이벤트 추가
