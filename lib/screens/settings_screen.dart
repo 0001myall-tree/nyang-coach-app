@@ -38,7 +38,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _coreReminderEnabled = false;
   String _coreReminderCoachId = 'cat';
   int _coreReminderAdvanceMinutes = 10;
-  bool _homeWidgetEnabled = false;
+  String? _homeWidgetStatus;
+  String _secMaleWidgetName = '남비서';
+  String _secFemaleWidgetName = '여비서';
   UserData? _userData;
 
   bool get _isMaster =>
@@ -82,8 +84,38 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _coreReminderAdvanceMinutes =
           prefs.getInt('nyang_core_reminder_advance') ?? 10;
       _resetHour = prefs.getDouble('nyang_reset_hour') ?? 3.0;
-      _homeWidgetEnabled = prefs.getBool('nyang_home_widget_enabled') ?? false;
+      _secMaleWidgetName = _secretaryWidgetName(
+        prefs.getString('nyang_coach_name_sec_male'),
+        '남비서',
+      );
+      _secFemaleWidgetName = _secretaryWidgetName(
+        prefs.getString('nyang_coach_name_sec_female'),
+        '여비서',
+      );
+      _homeWidgetStatus = _buildHomeWidgetStatus(
+        nyang: prefs.getBool('widget_nyang_enabled') ?? false,
+        secMale: prefs.getBool('widget_sec_male_enabled') ?? false,
+        secFemale: prefs.getBool('widget_sec_female_enabled') ?? false,
+      );
     });
+  }
+
+  String _secretaryWidgetName(String? value, String fallback) {
+    final trimmed = value?.trim() ?? '';
+    return trimmed.isEmpty ? fallback : trimmed;
+  }
+
+  String? _buildHomeWidgetStatus({
+    required bool nyang,
+    required bool secMale,
+    required bool secFemale,
+  }) {
+    final labels = <String>[
+      if (nyang) '냥냥',
+      if (secMale) _secMaleWidgetName,
+      if (secFemale) _secFemaleWidgetName,
+    ];
+    return labels.isEmpty ? null : labels.join(' / ');
   }
 
   Future<void> _showLogoutDialog() async {
@@ -442,6 +474,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           'widget_sec_female_enabled',
                           tempSecFemale,
                         );
+                        await prefs.setBool(
+                          'nyang_home_widget_enabled',
+                          tempNyang || tempSecMale || tempSecFemale,
+                        );
+
+                        if (mounted) {
+                          setState(() {
+                            _homeWidgetStatus = _buildHomeWidgetStatus(
+                              nyang: tempNyang,
+                              secMale: tempSecMale,
+                              secFemale: tempSecFemale,
+                            );
+                          });
+                        }
 
                         final selectedProviderId = tempNyang
                             ? 'cat'
@@ -1305,7 +1351,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       _buildActionButton(
                         icon: Icons.widgets_rounded,
                         label: '홈 화면 위젯',
-                        status: '설정',
+                        status: _homeWidgetStatus,
                         onTap: _showHomeWidgetSettingsModal,
                       ),
                       const SizedBox(height: 16),
@@ -3608,7 +3654,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         CoachConfigs.customSecFemaleName = femaleName.isEmpty
                             ? null
                             : femaleName;
-                        this.setState(() {});
+                        this.setState(() {
+                          _secMaleWidgetName = _secretaryWidgetName(
+                            maleName,
+                            '남비서',
+                          );
+                          _secFemaleWidgetName = _secretaryWidgetName(
+                            femaleName,
+                            '여비서',
+                          );
+                          _homeWidgetStatus = _buildHomeWidgetStatus(
+                            nyang:
+                                prefs.getBool('widget_nyang_enabled') ?? false,
+                            secMale:
+                                prefs.getBool('widget_sec_male_enabled') ??
+                                false,
+                            secFemale:
+                                prefs.getBool('widget_sec_female_enabled') ??
+                                false,
+                          );
+                        });
                         await prefs.setBool(
                           'nyang_night_call_enabled',
                           isNightCallEnabled || isDailyNightCallEnabled,
