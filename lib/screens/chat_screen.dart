@@ -3350,11 +3350,7 @@ class _ChatScreenState extends State<ChatScreen>
         if (parsed.suggestedTasks.isNotEmpty) {
           _suggestedTasks = parsed.suggestedTasks;
         }
-        if (usageNotice != null &&
-            usageNotice.stage >= 95 &&
-            usageNotice.stage < 100) {
-          _usageLimitBanner = usageNotice.message;
-        }
+        // 배너 로직 삭제 (팝업으로 대체)
         _isLoading = false;
       });
       _scrollToBottom();
@@ -3369,8 +3365,12 @@ class _ChatScreenState extends State<ChatScreen>
             usageNotice.message,
             showUpgrade: usageNotice.suggestsUpgrade,
           );
-        } else if (usageNotice.stage < 95) {
-          _showUsageNotice(usageNotice.message);
+        } else {
+          _showUsageLimitSheet(
+            usageNotice.message,
+            showUpgrade: usageNotice.suggestsUpgrade,
+            customTitle: '대화 한도 안내',
+          );
         }
       }
     } catch (e) {
@@ -3382,7 +3382,7 @@ class _ChatScreenState extends State<ChatScreen>
           showUpgrade: e.message.contains('마스터 플랜'),
         );
       } else {
-        _showError('메시지 전송 실패. 잠시 후 다시 시도해주세요.');
+        _showError('실패: $e');
       }
     }
   }
@@ -4137,7 +4137,7 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
     );
   }
 
-  void _showUsageLimitSheet(String msg, {bool showUpgrade = false}) {
+  void _showUsageLimitSheet(String msg, {bool showUpgrade = false, String? customTitle}) {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -4185,7 +4185,7 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      showUpgrade ? '이번 주 대화를 모두 썼어요' : '오늘은 여기까지 쉬어가요',
+                      customTitle ?? (showUpgrade ? '이번 주 대화를 모두 썼어요' : (msg.contains('로그인') ? '로그인이 필요해요' : '오늘 대화는 여기까지 해요')),
                       style: GoogleFonts.notoSansKr(
                         fontSize: 18,
                         fontWeight: FontWeight.w900,

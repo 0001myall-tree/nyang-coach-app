@@ -9,8 +9,6 @@ class ApiUsageLimitResult {
   final String message;
   final int dailyUsed;
   final int dailyLimit;
-  final int weeklyUsed;
-  final int weeklyLimit;
   final int organizeUsed;
   final int organizeLimit;
 
@@ -19,8 +17,6 @@ class ApiUsageLimitResult {
     required this.message,
     this.dailyUsed = 0,
     this.dailyLimit = 0,
-    this.weeklyUsed = 0,
-    this.weeklyLimit = 0,
     this.organizeUsed = 0,
     this.organizeLimit = 0,
   });
@@ -37,22 +33,18 @@ class ApiUsageLimitException implements Exception {
 class ApiUsageNotice {
   final String message;
   final int stage;
-  final bool isWeekly;
   final bool suggestsUpgrade;
 
   const ApiUsageNotice({
     required this.message,
     required this.stage,
-    required this.isWeekly,
     this.suggestsUpgrade = false,
   });
 }
 
 class ApiUsageLimitService {
-  static const int friendsDailyTokenLimit = 100000;
-  static const int friendsWeeklyTokenLimit = 500000;
-  static const int masterDailyTokenLimit = 300000;
-  static const int masterWeeklyTokenLimit = 1500000;
+  static const int friendsDailyTokenLimit = 50000;
+  static const int masterDailyTokenLimit = 100000;
   static const int masterDailyOrganizeLimit = 7;
 
   static final _firestore = FirebaseFirestore.instance;
@@ -80,31 +72,16 @@ class ApiUsageLimitService {
 
     final today = DateTime.now();
     final dailyUsed = await _dailyTokenUsage(user.uid, today);
-    final weeklyUsed = await _weeklyTokenUsage(user.uid, today);
     final nextDaily = dailyUsed + estimatedTokens;
-    final nextWeekly = weeklyUsed + estimatedTokens;
 
     if (dailyUsed >= limits.daily || nextDaily > limits.daily) {
       return ApiUsageLimitResult(
         allowed: false,
-        message: '오늘은 정말 많이 이야기했네요.\n내일 다시 이어서 이야기해요.',
-        dailyUsed: dailyUsed,
-        dailyLimit: limits.daily,
-        weeklyUsed: weeklyUsed,
-        weeklyLimit: limits.weekly,
-      );
-    }
-
-    if (weeklyUsed >= limits.weekly || nextWeekly > limits.weekly) {
-      return ApiUsageLimitResult(
-        allowed: false,
         message: userData.planType == 'friends'
-            ? '이번 주 AI 대화 사용량을 모두 썼어요.\n마스터 플랜에서는 더 많이 대화할 수 있어요.'
-            : '이번 주는 정말 많이 이야기했어요.\n다음 주에 다시 이어서 이야기해요.',
+            ? '오늘 AI 대화 사용량을 모두 썼어요.\n마스터 플랜에서는 더 많이 대화할 수 있어요.'
+            : '오늘은 정말 많이 이야기했네요.\n내일 다시 이어서 이야기해요.',
         dailyUsed: dailyUsed,
         dailyLimit: limits.daily,
-        weeklyUsed: weeklyUsed,
-        weeklyLimit: limits.weekly,
       );
     }
 
@@ -113,8 +90,6 @@ class ApiUsageLimitService {
       message: '',
       dailyUsed: dailyUsed,
       dailyLimit: limits.daily,
-      weeklyUsed: weeklyUsed,
-      weeklyLimit: limits.weekly,
     );
   }
 
@@ -174,30 +149,23 @@ class ApiUsageLimitService {
 
     final today = DateTime.now();
     final dailyUsed = await _dailyTokenUsage(user.uid, today);
-    final weeklyUsed = await _weeklyTokenUsage(user.uid, today);
     final dailyStage = _usageNoticeStage(dailyUsed, limits.daily);
-    final weeklyStage = _usageNoticeStage(weeklyUsed, limits.weekly);
 
-    if (dailyStage == 0 && weeklyStage == 0) return null;
+    if (dailyStage == 0) return null;
 
-    final useDailyNotice = dailyStage >= weeklyStage;
-    final stage = useDailyNotice ? dailyStage : weeklyStage;
-    final scope = useDailyNotice ? 'daily' : 'weekly';
-    final scopeKey = useDailyNotice ? _dateKey(today) : _weekKey(today);
+    final scopeKey = _dateKey(today);
 
     final prefs = await SharedPreferences.getInstance();
     final noticeKey =
-        'nyang_api_usage_notice_${user.uid}_${scope}_${scopeKey}_$stage';
-    if (prefs.getBool(noticeKey) == true) return null;
-    await prefs.setBool(noticeKey, true);
+        'nyang_api_usage_notice_${user.uid}_daily_${scopeKey}_$dailyStage';
+    // 반복 테스트를 위해 임시로 캐시 무시 (주석 처리)
+    // if (prefs.getBool(noticeKey) == true) return null;
+    // await prefs.setBool(noticeKey, true);
 
     return ApiUsageNotice(
-      message: useDailyNotice
-          ? _dailyUsageNotice(stage)
-          : _weeklyUsageNotice(stage, userData.planType),
-      stage: stage,
-      isWeekly: !useDailyNotice,
-      suggestsUpgrade: !useDailyNotice && userData.planType == 'friends',
+      message: _dailyUsageNotice(dailyStage, userData.planType),
+      stage: dailyStage,
+      suggestsUpgrade: userData.planType == 'friends',
     );
   }
 
@@ -206,13 +174,11 @@ class ApiUsageLimitService {
     if (userData.planType == 'friends') {
       return const _TokenLimits(
         daily: friendsDailyTokenLimit,
-        weekly: friendsWeeklyTokenLimit,
       );
     }
     if (userData.planType == 'master') {
       return const _TokenLimits(
         daily: masterDailyTokenLimit,
-        weekly: masterWeeklyTokenLimit,
       );
     }
     return null;
@@ -225,15 +191,7 @@ class ApiUsageLimitService {
         .collection('analytics_daily')
         .doc(_dateKey(date))
         .get();
-    return _readInt(doc.data()?['totalTokens']);
-  }
-
-  static Future<int> _weeklyTokenUsage(String uid, DateTime today) async {
-    var total = 0;
-    for (var i = 0; i < 7; i += 1) {
-      total += await _dailyTokenUsage(uid, today.subtract(Duration(days: i)));
-    }
-    return total;
+    return _readInt(doc.data()?['tokens']);
   }
 
   static Future<int> _dailyFeatureUsage(
@@ -276,26 +234,16 @@ class ApiUsageLimitService {
     return 0;
   }
 
-  static String _dailyUsageNotice(int stage) {
+  static String _dailyUsageNotice(int stage, String planType) {
     if (stage >= 100) {
-      return '오늘은 정말 많이 이야기했네요.\n내일 다시 이어서 이야기해요.';
+      return planType == 'friends'
+          ? '오늘 AI 대화 사용량을 모두 썼어요.\n마스터 플랜에서는 더 많이 대화할 수 있어요.'
+          : '오늘은 정말 많이 이야기했네요.\n내일 다시 이어서 이야기해요.';
     }
     if (stage >= 95) {
       return '오늘의 대화가 거의 끝나가고 있어요.\n조금만 더 이야기할 수 있어요.';
     }
     return '오늘은 코치와 이야기를 많이 나눴네요.\n남은 대화가 얼마 남지 않았어요.';
-  }
-
-  static String _weeklyUsageNotice(int stage, String planType) {
-    if (stage >= 100) {
-      return planType == 'friends'
-          ? '이번 주 AI 대화 사용량을 모두 썼어요.\n마스터 플랜에서는 더 많이 대화할 수 있어요.'
-          : '이번 주는 정말 많이 이야기했어요.\n다음 주에 다시 이어서 이야기해요.';
-    }
-    if (stage >= 95) {
-      return '이번 주 대화가 거의 끝나가고 있어요.\n조금만 더 이야기할 수 있어요.';
-    }
-    return '이번 주 코치와 이야기를 많이 나눴네요.\n남은 대화가 얼마 남지 않았어요.';
   }
 
   static int _readInt(dynamic value) {
@@ -308,7 +256,6 @@ class ApiUsageLimitService {
 
 class _TokenLimits {
   final int daily;
-  final int weekly;
 
-  const _TokenLimits({required this.daily, required this.weekly});
+  const _TokenLimits({required this.daily});
 }
