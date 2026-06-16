@@ -63,5 +63,6 @@ class AuthService {
     await _auth.signOut();
     UserDataService.clearCache();
     MemoryService().clearCache();
+    await TasksSyncService.clearCache();
   }
 }

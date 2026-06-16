@@ -37,6 +37,7 @@ class TasksSyncService {
       final batch = FirebaseFirestore.instance.batch();
 
       final keys = prefs.getKeys().where((k) => k.startsWith('nyang_'));
+      final hasSyncedFromCloud = prefs.getBool('nyang_has_synced_from_cloud') ?? false;
 
       for (final key in keys) {
         if (key == 'nyang_user_data') continue; // UserDataService에서 별도 관리
@@ -49,12 +50,13 @@ class TasksSyncService {
               .collection('appData')
               .doc(key);
 
-          if (value is String &&
+          if (!hasSyncedFromCloud &&
+              value is String &&
               _criticalDataKeys.contains(key) &&
               _isEmptyEncodedValue(value) &&
               await _hasNonEmptyCloudValue(docRef)) {
             debugPrint(
-              '⚠️ TasksSyncService: 빈 로컬 데이터가 기존 클라우드 $key 값을 덮어쓰지 않도록 건너뜁니다.',
+              '⚠️ TasksSyncService: 첫 동기화 완료 전 빈 로컬 데이터가 기존 클라우드 $key 값을 덮어쓰지 않도록 건너뜁니다.',
             );
             continue;
           }
@@ -88,6 +90,7 @@ class TasksSyncService {
     };
 
     try {
+      final prefs = await SharedPreferences.getInstance();
       await UserDataService.syncFromCloud();
       final snapshot = await FirebaseFirestore.instance
           .collection('users')
@@ -99,13 +102,12 @@ class TasksSyncService {
         debugPrint('ℹ️ TasksSyncService: 클라우드에 백업된 데이터가 없습니다.');
         diag['status'] = 'EMPTY';
         diag['message'] = 'EMPTY_CLOUD_DATA';
+        await prefs.setBool('nyang_has_synced_from_cloud', true);
         return diag;
       }
 
       diag['doc_count'] = snapshot.docs.length;
       final foundKeys = <String>[];
-
-      final prefs = await SharedPreferences.getInstance();
 
       for (final doc in snapshot.docs) {
         final key = doc.id;
@@ -136,6 +138,7 @@ class TasksSyncService {
       debugPrint('✅ TasksSyncService: 클라우드 데이터를 로컬에 성공적으로 복원했습니다.');
       diag['status'] = 'SUCCESS';
       diag['message'] = 'OK';
+      await prefs.setBool('nyang_has_synced_from_cloud', true);
       return diag;
     } catch (e) {
       debugPrint('❌ TasksSyncService syncFromCloud 오류: $e');
@@ -143,6 +146,13 @@ class TasksSyncService {
       diag['message'] = e.toString();
       return diag;
     }
+  }
+
+  static Future<void> clearCache() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('nyang_has_synced_from_cloud');
+    await prefs.remove('nyang_tasks');
+    await prefs.remove('nyang_core_tasks');
   }
 
   static bool _isEmptyEncodedValue(String value) {
