@@ -935,9 +935,15 @@ $recordBuffer
             } catch (_) {}
 
             DateTime periodEnd = DateTime(now.year, now.month, now.day);
-            DateTime periodStart = createdAtDate ?? periodEnd;
-            if (periodStart.isAfter(periodEnd)) {
-              periodStart = periodEnd;
+            DateTime periodStart = now.subtract(Duration(days: days - 1));
+            periodStart = DateTime(
+              periodStart.year,
+              periodStart.month,
+              periodStart.day,
+            );
+
+            if (createdAtDate != null && periodStart.isBefore(createdAtDate)) {
+              periodStart = createdAtDate;
             }
 
             String formatYYMMDD(DateTime d) {
