@@ -3983,6 +3983,72 @@ class _TasksScreenState extends State<TasksScreen>
                       color: const Color(0xFF3D3A4E),
                     ),
                   ),
+                  if (item != null) ...[
+                    Builder(
+                      builder: (context) {
+                        final mInfo = _getMilestoneInfoForTask(item);
+                        if (mInfo != null) {
+                          return GestureDetector(
+                            onTap: () {
+                              Navigator.pop(ctx); // Close edit modal
+                              _showVisionModal(mInfo.vision); // Open vision details modal
+                            },
+                            child: Container(
+                              margin: const EdgeInsets.only(top: 8, bottom: 8),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 10,
+                              ),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF0EFFF),
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(
+                                  color: const Color(0xFFD8D0FA),
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(
+                                    Icons.flag,
+                                    color: Color(0xFF8B7CFF),
+                                    size: 16,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: RichText(
+                                      text: TextSpan(
+                                        style: GoogleFonts.notoSansKr(
+                                          fontSize: 12,
+                                          color: const Color(0xFF5A50E6),
+                                        ),
+                                        children: [
+                                          const TextSpan(
+                                            text: '연동된 마일스톤: ',
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                          TextSpan(
+                                            text: '${mInfo.visionName} > ${mInfo.milestoneText}',
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                  const Icon(
+                                    Icons.chevron_right,
+                                    color: Color(0xFF8B7CFF),
+                                    size: 16,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        }
+                        return const SizedBox.shrink();
+                      },
+                    ),
+                  ],
                   const SizedBox(height: 16),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 14),
@@ -8110,8 +8176,9 @@ class _TasksScreenState extends State<TasksScreen>
     return list;
   }
 
-  MilestoneInfo? _getMilestoneInfoForTask(TaskItem t) {
-    final tIdStr = t.id.toString();
+  MilestoneInfo? _getMilestoneInfoForTask(dynamic item) {
+    if (item == null) return null;
+    final tIdStr = item.id.toString();
 
     // Check if it is a virtual milestone task itself
     if (tIdStr.startsWith('milestone_')) {
@@ -8142,7 +8209,9 @@ class _TasksScreenState extends State<TasksScreen>
             final actTaskIdStr = action.convertedTaskId?.toString();
             if (actTaskIdStr != null) {
               if (actTaskIdStr == tIdStr ||
-                  (schedIdStr != null && actTaskIdStr == schedIdStr)) {
+                  actTaskIdStr == schedIdStr ||
+                  (schedIdStr != null && actTaskIdStr == schedIdStr) ||
+                  (item is ScheduleItem && actTaskIdStr == item.id.toString())) {
                 return MilestoneInfo(
                   visionName: v.name,
                   milestoneText: m.text,
