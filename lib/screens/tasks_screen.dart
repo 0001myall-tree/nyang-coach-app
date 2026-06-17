@@ -7200,6 +7200,9 @@ class _TasksScreenState extends State<TasksScreen>
     });
 
     await _speechToText.listen(
+      listenMode: ListenMode.dictation,
+      pauseFor: const Duration(seconds: 4),
+      listenFor: const Duration(minutes: 1),
       onResult: (result) {
         if (mounted) {
           setState(() {
@@ -10410,7 +10413,7 @@ class MilestoneMemoDialog extends StatefulWidget {
 }
 
 class _MilestoneMemoDialogState extends State<MilestoneMemoDialog> {
-  static const int _sectionContentMaxLength = 3000;
+  static const int _sectionContentMaxLength = 1000;
   static final _memoSummaryProxy =
       FirebaseFunctions.instanceFor(region: 'asia-northeast3').httpsCallable(
         'chatProxy',
@@ -10947,6 +10950,9 @@ $content
     _baseText = _focusedCtrl!.text;
     _baseSelection = _focusedCtrl!.selection;
     await _speechToText.listen(
+      listenMode: ListenMode.dictation,
+      pauseFor: const Duration(seconds: 4),
+      listenFor: const Duration(minutes: 1),
       onResult: (result) {
         if (mounted && _focusedCtrl != null) {
           setState(() {
@@ -11423,7 +11429,7 @@ $content
                 height: 1.5,
               ),
               decoration: InputDecoration(
-                hintText: '실행에 필요한 핵심 위주로 적어보세요(최대 3000자)...',
+                hintText: '실행에 필요한 핵심 위주로 글이나 링크를 적어두세요(최대 1000자)',
                 hintStyle: GoogleFonts.notoSansKr(
                   color: const Color(0xFFA0A0B0),
                 ),
