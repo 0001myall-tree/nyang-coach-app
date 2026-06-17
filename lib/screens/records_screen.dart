@@ -934,6 +934,34 @@ $recordBuffer
               createdAtDate = DateTime(parsed.year, parsed.month, parsed.day);
             } catch (_) {}
 
+            DateTime periodEnd = DateTime(now.year, now.month, now.day);
+            DateTime periodStart = now.subtract(Duration(days: days - 1));
+            periodStart = DateTime(
+              periodStart.year,
+              periodStart.month,
+              periodStart.day,
+            );
+
+            if (createdAtDate != null && periodStart.isBefore(createdAtDate)) {
+              periodStart = createdAtDate;
+            }
+
+            String formatYYMMDD(DateTime d) {
+              return '${d.year.toString().substring(2)}.${d.month.toString().padLeft(2, '0')}.${d.day.toString().padLeft(2, '0')}';
+            }
+
+            String formatMMDD(DateTime d) {
+              return '${d.month.toString().padLeft(2, '0')}.${d.day.toString().padLeft(2, '0')}';
+            }
+
+            String periodText;
+            if (periodStart.year == periodEnd.year) {
+              periodText = '${formatYYMMDD(periodStart)}~${formatMMDD(periodEnd)}';
+            } else {
+              periodText =
+                  '${formatYYMMDD(periodStart)}~${formatYYMMDD(periodEnd)}';
+            }
+
             for (int i = 0; i < days; i++) {
               final d = now.subtract(Duration(days: i));
               final dNormalized = DateTime(d.year, d.month, d.day);
@@ -1026,6 +1054,20 @@ $recordBuffer
                       backgroundColor: const Color(0xFFF3F4F6),
                       valueColor: AlwaysStoppedAnimation(_coach.accentColor),
                     ),
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      Text(
+                        '(트래킹 기간 : $periodText)',
+                        style: GoogleFonts.notoSansKr(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: const Color(0xFFA0A0B0),
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 12),
                   _buildHabitPattern(h),
