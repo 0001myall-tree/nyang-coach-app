@@ -477,11 +477,13 @@ class MilestoneInfo {
   final String milestoneText;
   final bool isMilestoneSelf;
   final VisionItem vision;
+  final MilestoneItem milestone;
   MilestoneInfo({
     required this.visionName,
     required this.milestoneText,
     required this.isMilestoneSelf,
     required this.vision,
+    required this.milestone,
   });
 }
 
@@ -3991,7 +3993,11 @@ class _TasksScreenState extends State<TasksScreen>
                           return GestureDetector(
                             onTap: () {
                               Navigator.pop(ctx); // Close edit modal
-                              _showVisionModal(mInfo.vision); // Open vision details modal
+                              if (mInfo.isMilestoneSelf) {
+                                _showVisionModal(mInfo.vision);
+                              } else {
+                                _showMemoDialog(context, mInfo.milestone, (fn) => setState(fn));
+                              }
                             },
                             child: Container(
                               margin: const EdgeInsets.only(top: 8, bottom: 8),
@@ -4022,9 +4028,9 @@ class _TasksScreenState extends State<TasksScreen>
                                           color: const Color(0xFF5A50E6),
                                         ),
                                         children: [
-                                          const TextSpan(
-                                            text: '연동된 마일스톤: ',
-                                            style: TextStyle(
+                                          TextSpan(
+                                            text: mInfo.isMilestoneSelf ? '연동된 마일스톤: ' : '메모장의 실행 목록: ',
+                                            style: const TextStyle(
                                               fontWeight: FontWeight.bold,
                                             ),
                                           ),
@@ -4513,8 +4519,12 @@ class _TasksScreenState extends State<TasksScreen>
             child: GestureDetector(
               onTap: () {
                 if (t.done) return;
-                if (isMilestone && milestoneInfo.isMilestoneSelf) {
-                  _showVisionModal(milestoneInfo.vision);
+                if (isMilestone) {
+                  if (milestoneInfo.isMilestoneSelf) {
+                    _showVisionModal(milestoneInfo.vision);
+                  } else {
+                    _showMemoDialog(context, milestoneInfo.milestone, (fn) => setState(fn));
+                  }
                   return;
                 }
                 _showEditItemModal(t, () {
@@ -4553,7 +4563,7 @@ class _TasksScreenState extends State<TasksScreen>
                               borderRadius: BorderRadius.circular(4),
                             ),
                             child: Text(
-                              '마일스톤',
+                              milestoneInfo.isMilestoneSelf ? '마일스톤' : '메모장의 실행 목록',
                               style: GoogleFonts.notoSansKr(
                                 fontSize: 9,
                                 fontWeight: FontWeight.bold,
@@ -8191,6 +8201,7 @@ class _TasksScreenState extends State<TasksScreen>
               milestoneText: m.text,
               isMilestoneSelf: true,
               vision: v,
+              milestone: m,
             );
           }
         }
@@ -8217,6 +8228,7 @@ class _TasksScreenState extends State<TasksScreen>
                   milestoneText: m.text,
                   isMilestoneSelf: false,
                   vision: v,
+                  milestone: m,
                 );
               }
             }
@@ -8710,6 +8722,8 @@ class _TasksScreenState extends State<TasksScreen>
             itemCount: daySch.length,
             itemBuilder: (ctx, i) {
               final s = daySch[i];
+              final milestoneInfo = _getMilestoneInfoForTask(s);
+              final isMilestone = milestoneInfo != null;
               return Container(
                 margin: const EdgeInsets.only(bottom: 8),
                 padding: const EdgeInsets.all(12),
@@ -8721,15 +8735,55 @@ class _TasksScreenState extends State<TasksScreen>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    if (isMilestone) ...[
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFE0E0FF),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              milestoneInfo.isMilestoneSelf ? '마일스톤' : '메모장의 실행 목록',
+                              style: GoogleFonts.notoSansKr(
+                                fontSize: 9,
+                                fontWeight: FontWeight.bold,
+                                color: const Color(0xFF5A50E6),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              milestoneInfo.visionName,
+                              overflow: TextOverflow.ellipsis,
+                              style: GoogleFonts.notoSansKr(
+                                fontSize: 11,
+                                color: const Color(0xFF7C6EFA),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                    ],
                     Row(
                       children: [
                         Expanded(
                           child: GestureDetector(
                             onTap: () {
-                              _showEditItemModal(s, () {
-                                setState(() {});
-                                _saveSchedules();
-                              });
+                              if (isMilestone) {
+                                _showMemoDialog(context, milestoneInfo.milestone, (fn) => setState(fn));
+                              } else {
+                                _showEditItemModal(s, () {
+                                  setState(() {});
+                                  _saveSchedules();
+                                });
+                              }
                             },
                             child: Container(
                               color: Colors.transparent,
@@ -8775,10 +8829,14 @@ class _TasksScreenState extends State<TasksScreen>
                     const SizedBox(height: 4),
                     GestureDetector(
                       onTap: () {
-                        _showEditItemModal(s, () {
-                          setState(() {});
-                          _saveSchedules();
-                        });
+                        if (isMilestone) {
+                          _showMemoDialog(context, milestoneInfo.milestone, (fn) => setState(fn));
+                        } else {
+                          _showEditItemModal(s, () {
+                            setState(() {});
+                            _saveSchedules();
+                          });
+                        }
                       },
                       child:
                           (s.time != null ||
