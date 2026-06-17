@@ -136,6 +136,9 @@ class _MilestoneMemoDialogState extends State<MilestoneMemoDialog> {
     _baseText = _focusedCtrl!.text;
     _baseSelection = _focusedCtrl!.selection;
     await _speechToText.listen(
+      listenMode: ListenMode.dictation,
+      pauseFor: const Duration(seconds: 4),
+      listenFor: const Duration(minutes: 1),
       onResult: (result) {
         if (mounted && _focusedCtrl != null) {
           setState(() {

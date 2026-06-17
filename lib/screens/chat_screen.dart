@@ -622,6 +622,9 @@ class _ChatScreenState extends State<ChatScreen>
     // 혹시라도 이미 입력된 텍스트가 있다면 지우고 새로 녹음 시작
     _ctrl.clear();
     await _speechToText.listen(
+      listenMode: ListenMode.dictation,
+      pauseFor: const Duration(seconds: 4),
+      listenFor: const Duration(minutes: 1),
       onResult: _onSpeechResult,
       localeId: 'ko_KR',
       cancelOnError: false,
