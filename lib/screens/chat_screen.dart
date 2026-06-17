@@ -2460,6 +2460,7 @@ class _ChatScreenState extends State<ChatScreen>
         'isHabit': false,
       });
       await prefs.setString('nyang_tasks', jsonEncode(tasks));
+      await _updateTodayRecord(prefs);
     }
 
     TasksSyncService.scheduleSyncToCloud();
@@ -4401,6 +4402,7 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
     };
     list.add(newTask);
     await prefs.setString('nyang_tasks', jsonEncode(list));
+    await _updateTodayRecord(prefs);
     TasksSyncService.scheduleSyncToCloud();
 
     final timeLabel = task.time != null
@@ -5679,6 +5681,91 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
         ],
       ),
     );
+  }
+
+  String _getTodayStrWithReset(SharedPreferences prefs) {
+    final resetHour = prefs.getDouble('nyang_reset_hour') ?? 3.0;
+    final now = DateTime.now();
+    var base = DateTime(now.year, now.month, now.day);
+    if (now.hour < resetHour) {
+      base = base.subtract(const Duration(days: 1));
+    }
+    return _dateKey(base);
+  }
+
+  Future<void> _updateTodayRecord(SharedPreferences prefs) async {
+    final rawHistory = prefs.getString('nyang_history');
+    List<Map<String, dynamic>> history = [];
+    if (rawHistory != null) {
+      try {
+        final List decoded = jsonDecode(rawHistory);
+        history = decoded.cast<Map<String, dynamic>>();
+      } catch (_) {}
+    }
+
+    final todayStr = _getTodayStrWithReset(prefs);
+
+    final rawTasks = prefs.getString('nyang_tasks');
+    List<dynamic> tasksList = [];
+    if (rawTasks != null) {
+      try {
+        tasksList = jsonDecode(rawTasks);
+      } catch (_) {}
+    }
+
+    final doneTasks = tasksList.where((t) => t['done'] == true).toList();
+
+    // 밤 9시 이후 이월된 일정 로드
+    final rawDeferred = prefs.getString('nyang_deferred_tasks_today');
+    List<dynamic> deferredList = [];
+    if (rawDeferred != null) {
+      try {
+        deferredList = jsonDecode(rawDeferred);
+      } catch (_) {}
+    }
+
+    final mergedTasks = [
+      ...tasksList.map(
+        (t) => {
+          'text': t['text'],
+          'done': t['done'] ?? false,
+          'category': t['category'] ?? 'today',
+          'deferred': false,
+        },
+      ),
+      ...deferredList.map(
+        (t) => {
+          'text': t['text'],
+          'done': t['done'] ?? false,
+          'category': t['category'] ?? 'today',
+          'deferred': true,
+        },
+      ),
+    ];
+
+    final rawVacation = prefs.getString('nyang_vacation');
+    final record = {
+      'date': todayStr,
+      'totalCount': tasksList.length + deferredList.length,
+      'doneCount': doneTasks.length,
+      'success': doneTasks.isNotEmpty,
+      'isVacation': rawVacation != null,
+      'updatedAt': DateTime.now().toIso8601String(),
+      'tasks': mergedTasks,
+    };
+
+    final idx = history.indexWhere((h) => h['date'] == todayStr);
+    if (idx >= 0) {
+      history[idx] = record;
+    } else {
+      history.add(record);
+    }
+
+    // Keep last 90 days
+    history.sort((a, b) => a['date']!.compareTo(b['date']!));
+    if (history.length > 90) history = history.sublist(history.length - 90);
+
+    await prefs.setString('nyang_history', jsonEncode(history));
   }
 }
 
