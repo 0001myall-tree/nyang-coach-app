@@ -910,7 +910,7 @@ $recordBuffer
                 ],
               ),
               Text(
-                '전체 기간',
+                _isMaster ? '최근 30일' : '최근 7일',
                 style: GoogleFonts.notoSansKr(
                   fontSize: 11,
                   fontWeight: FontWeight.w700,
@@ -921,22 +921,29 @@ $recordBuffer
           ),
           const SizedBox(height: 16),
           ...trackingHabits.map((h) {
+            // 임시로 달성률 계산 (habitLogs 사용)
+            final days = _isMaster ? 30 : 7;
             int hSuccess = 0;
             int hTotal = 0;
             final logs = _habitLogs[h.id.toString()] ?? {};
 
             final now = DateTime.now();
-            DateTime periodEnd = DateTime(now.year, now.month, now.day);
-
             DateTime? createdAtDate;
             try {
               final parsed = DateTime.parse(h.createdAt);
               createdAtDate = DateTime(parsed.year, parsed.month, parsed.day);
             } catch (_) {}
 
-            DateTime periodStart = createdAtDate ?? periodEnd;
-            if (periodStart.isAfter(periodEnd)) {
-              periodStart = periodEnd;
+            DateTime periodEnd = DateTime(now.year, now.month, now.day);
+            DateTime periodStart = now.subtract(Duration(days: days - 1));
+            periodStart = DateTime(
+              periodStart.year,
+              periodStart.month,
+              periodStart.day,
+            );
+
+            if (createdAtDate != null && periodStart.isBefore(createdAtDate)) {
+              periodStart = createdAtDate;
             }
 
             String formatYYMMDD(DateTime d) {
@@ -955,9 +962,15 @@ $recordBuffer
                   '${formatYYMMDD(periodStart)}~${formatYYMMDD(periodEnd)}';
             }
 
-            final totalDays = periodEnd.difference(periodStart).inDays + 1;
-            for (int i = 0; i < totalDays; i++) {
-              final d = periodEnd.subtract(Duration(days: i));
+            for (int i = 0; i < days; i++) {
+              final d = now.subtract(Duration(days: i));
+              final dNormalized = DateTime(d.year, d.month, d.day);
+
+              // 생성일 이전은 카운트 제외
+              if (createdAtDate != null &&
+                  dNormalized.isBefore(createdAtDate)) {
+                continue;
+              }
 
               // 요일 체크 (주간 반복일 경우 지정된 요일만 카운트)
               if (h.freq == 'weekly' && h.days.isNotEmpty) {
