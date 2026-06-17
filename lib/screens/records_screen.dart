@@ -323,6 +323,21 @@ class _RecordsScreenState extends State<RecordsScreen> {
 
     final isMale = widget.coachId == 'sec_male' || _isMaster;
     final title = _userTitle;
+
+    final trackingHabits = _habits.where((h) => h.tracking == true).toList();
+    final habitFreqBuffer = StringBuffer();
+    if (trackingHabits.isEmpty) {
+      habitFreqBuffer.writeln('설정된 습관 없음');
+    } else {
+      const dayNames = ['월', '화', '수', '목', '금', '토', '일'];
+      for (final h in trackingHabits) {
+        final freqLabel = h.freq == 'daily'
+            ? '매일'
+            : h.days.map((d) => dayNames[d]).join(', ');
+        habitFreqBuffer.writeln('- ${h.name}: $freqLabel');
+      }
+    }
+
     return '''당신은 사용자의 한 주간 성과를 분석하는 수석 비서이자 전문 코치입니다.
 사용자의 지난 7일간의 실제 할 일 완료 내역과 현재 설정된 목표/비전을 바탕으로, $title께 드리는 주간 코칭 한마디를 격식 있게 작성해 주세요.
 
@@ -338,13 +353,17 @@ $recordBuffer
 - 월간 목표: $monthGoalText
 - 장기 비전: $visibleVisions
 
+[현재 설정된 습관 트래킹 빈도]
+${habitFreqBuffer.toString().trim()}
+
 [작성 지침]
 1. 어투: ${isMale ? '남비서로서 차분하고 신뢰감 있는 "$title" 호칭의 격식체 (~했습니다, ~하십시오).' : '여비서로서 지적이고 부드러운 "$title" 호칭의 격식체 (~했어요, ~어떨까요).'}
 2. 분석 내용 (구체적으로):
    - 휴무일(회복일)은 미완료나 실패로 해석하지 말고, 필요한 회복을 일정에 포함한 것으로 자연스럽게 존중해 주세요.
+   - [현재 설정된 습관 트래킹 빈도]를 반드시 참고하세요. 매일 하는 습관이 아니라 특정 요일(예: 주 2회)에만 하기로 한 습관이라면, 그 빈도에 맞게 잘 실천했을 때 충분히 칭찬해 주고, 안 하는 날이라고 해서 지적하지 마세요.
    - 이번 주에 실제로 완료한 일들 중에서 사용자의 주간 목표, 월간 목표 또는 장기 비전과 밀접하게 연결되는 중요한 활동(최소 1~2개)을 콕 집어서 구체적으로 언급하고 칭찬해 주세요. (추상적이거나 일반적인 칭찬은 금지)
    - 만약 며칠간(3일 이상) 미루다가 다시 시작하거나 꾸준히 해낸 항목이 있다면, "미루던 걸 포기하지 않고 다시 해냈다"는 점을 캐치해서 특별히 칭찬해 주세요.
-   - 만약 반복적으로 미완료되었거나 밀린 중요한 일(예: 운동, 독서 등)이 있다면, 부드럽게 지적하며 다음 주에 우선적으로 챙길 수 있도록 권유해 주세요.
+   - 만약 설정된 빈도나 일정에 비해 반복적으로 미완료되었거나 밀린 중요한 일(예: 운동, 독서 등)이 있다면, 부드럽게 지적하며 다음 주에 우선적으로 챙길 수 있도록 권유해 주세요.
 3. 분량: 3~4문장 정도로 간결하지만 대화 느낌이 나는 글이어야 합니다. JSON이나 마크다운 없이 순수 텍스트로만 답변해 주세요.''';
   }
 
