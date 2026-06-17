@@ -472,6 +472,19 @@ class TasksScreenController {
   }
 }
 
+class MilestoneInfo {
+  final String visionName;
+  final String milestoneText;
+  final bool isMilestoneSelf;
+  final VisionItem vision;
+  MilestoneInfo({
+    required this.visionName,
+    required this.milestoneText,
+    required this.isMilestoneSelf,
+    required this.vision,
+  });
+}
+
 class _TasksScreenState extends State<TasksScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabCtrl;
@@ -1554,6 +1567,30 @@ class _TasksScreenState extends State<TasksScreen>
 
   // ── toggleTask (웹앱 그대로) ──────────────────────────────
   Future<void> _toggleTask(dynamic id) async {
+    if (id.toString().startsWith('milestone_')) {
+      final idStr = id.toString();
+      for (final v in visions) {
+        for (final m in v.milestones) {
+          final mId = 'milestone_${v.name}_${m.text}';
+          if (mId == idStr) {
+            setState(() {
+              m.done = !m.done;
+              if (m.done) {
+                final now = DateTime.now();
+                m.achievedDate =
+                    "${now.year}.${now.month.toString().padLeft(2, '0')}.${now.day.toString().padLeft(2, '0')}";
+              } else {
+                m.achievedDate = null;
+              }
+            });
+            _saveVisions();
+            break;
+          }
+        }
+      }
+      return;
+    }
+
     final t = tasks.firstWhere(
       (t) => t.id.toString() == id.toString(),
       orElse: () => tasks.first,
@@ -2368,8 +2405,17 @@ class _TasksScreenState extends State<TasksScreen>
   }
 
   // ── 진행률 계산 ───────────────────────────────────────────
-  int get _doneTasks => tasks.where((t) => t.done).length;
-  int get _totalTasks => tasks.length;
+  int get _doneTasks {
+    final regularDone = tasks.where((t) => t.done).length;
+    final todayMilestones = _getMilestonesForDay(DateTime.now());
+    final milestoneDone = todayMilestones.where((mv) => mv.milestone.done).length;
+    return regularDone + milestoneDone;
+  }
+  int get _totalTasks {
+    final regularTotal = tasks.length;
+    final todayMilestones = _getMilestonesForDay(DateTime.now());
+    return regularTotal + todayMilestones.length;
+  }
   double get _progressPct => _totalTasks > 0 ? _doneTasks / _totalTasks : 0.0;
 
   @override
@@ -3813,7 +3859,23 @@ class _TasksScreenState extends State<TasksScreen>
   }
 
   Widget _buildTaskList() {
-    if (tasks.isEmpty) {
+    final todayMilestones = _getMilestonesForDay(DateTime.now());
+    final milestoneTasks = todayMilestones.map((mv) {
+      final m = mv.milestone;
+      final v = mv.vision;
+      final id = 'milestone_${v.name}_${m.text}';
+      return TaskItem(
+        id: id,
+        text: m.text,
+        category: 'today',
+        done: m.done,
+        createdAt: m.date ?? DateTime.now().toIso8601String(),
+      );
+    }).toList();
+
+    final combinedTasks = [...tasks, ...milestoneTasks];
+
+    if (combinedTasks.isEmpty) {
       return Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -3834,7 +3896,7 @@ class _TasksScreenState extends State<TasksScreen>
       );
     }
 
-    final sortedTasks = List<TaskItem>.from(tasks)
+    final sortedTasks = List<TaskItem>.from(combinedTasks)
       ..sort((a, b) {
         if (a.done && !b.done) return 1;
         if (!a.done && b.done) return -1;
@@ -4327,6 +4389,9 @@ class _TasksScreenState extends State<TasksScreen>
   }
 
   Widget _buildTaskItem(TaskItem t) {
+    final milestoneInfo = _getMilestoneInfoForTask(t);
+    final isMilestone = milestoneInfo != null;
+
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
@@ -4358,18 +4423,22 @@ class _TasksScreenState extends State<TasksScreen>
                 width: 22,
                 height: 22,
                 decoration: BoxDecoration(
-                  color: t.done ? _coach.accentColor : Colors.transparent,
+                  color: t.done
+                      ? (isMilestone ? const Color(0xFF5AD7B0) : _coach.accentColor)
+                      : Colors.transparent,
                   border: Border.all(
                     color: t.done
-                        ? _coach.accentColor
-                        : const Color(0xFFD1D5DB),
+                        ? (isMilestone ? const Color(0xFF5AD7B0) : _coach.accentColor)
+                        : (isMilestone ? const Color(0xFF8B7CFF) : const Color(0xFFD1D5DB)),
                     width: 2,
                   ),
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: t.done
                     ? const Icon(Icons.check, color: Colors.white, size: 14)
-                    : null,
+                    : (isMilestone
+                        ? const Icon(Icons.flag, color: Color(0xFF8B7CFF), size: 12)
+                        : null),
               ),
             ),
           ),
@@ -4378,6 +4447,10 @@ class _TasksScreenState extends State<TasksScreen>
             child: GestureDetector(
               onTap: () {
                 if (t.done) return;
+                if (isMilestone && milestoneInfo.isMilestoneSelf) {
+                  _showVisionModal(milestoneInfo.vision);
+                  return;
+                }
                 _showEditItemModal(t, () {
                   setState(() {
                     final cIdx = coreTasks.indexWhere((ct) => ct.id == t.id);
@@ -4400,6 +4473,43 @@ class _TasksScreenState extends State<TasksScreen>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    // 마일스톤 태그 및 비전명 표시
+                    if (isMilestone) ...[
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFE0E0FF),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              '마일스톤',
+                              style: GoogleFonts.notoSansKr(
+                                fontSize: 9,
+                                fontWeight: FontWeight.bold,
+                                color: const Color(0xFF5A50E6),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              milestoneInfo.visionName,
+                              overflow: TextOverflow.ellipsis,
+                              style: GoogleFonts.notoSansKr(
+                                fontSize: 11,
+                                color: const Color(0xFF7C6EFA),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                    ],
                     // 할 일 텍스트
                     Text(
                       t.text,
@@ -4488,7 +4598,20 @@ class _TasksScreenState extends State<TasksScreen>
           ),
           // 삭제 버튼
           GestureDetector(
-            onTap: () => _showTaskDeleteOptions(t),
+            onTap: () {
+              if (isMilestone && milestoneInfo.isMilestoneSelf) {
+                ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text(
+                      '마일스톤 일정은 목표 탭의 비전 관리에서 관리할 수 있습니다.',
+                    ),
+                  ),
+                );
+                return;
+              }
+              _showTaskDeleteOptions(t);
+            },
             child: Container(
               width: 40,
               height: 52,
@@ -7985,6 +8108,54 @@ class _TasksScreenState extends State<TasksScreen>
       }
     }
     return list;
+  }
+
+  MilestoneInfo? _getMilestoneInfoForTask(TaskItem t) {
+    final tIdStr = t.id.toString();
+
+    // Check if it is a virtual milestone task itself
+    if (tIdStr.startsWith('milestone_')) {
+      for (final v in visions) {
+        for (final m in v.milestones) {
+          final mId = 'milestone_${v.name}_${m.text}';
+          if (mId == tIdStr) {
+            return MilestoneInfo(
+              visionName: v.name,
+              milestoneText: m.text,
+              isMilestoneSelf: true,
+              vision: v,
+            );
+          }
+        }
+      }
+    }
+
+    // Check if it is a converted action candidate task
+    final schedIdStr = tIdStr.startsWith('schedule_')
+        ? tIdStr.replaceAll('schedule_', '')
+        : null;
+
+    for (final v in visions) {
+      for (final m in v.milestones) {
+        if (m.actionCandidates != null) {
+          for (final action in m.actionCandidates!) {
+            final actTaskIdStr = action.convertedTaskId?.toString();
+            if (actTaskIdStr != null) {
+              if (actTaskIdStr == tIdStr ||
+                  (schedIdStr != null && actTaskIdStr == schedIdStr)) {
+                return MilestoneInfo(
+                  visionName: v.name,
+                  milestoneText: m.text,
+                  isMilestoneSelf: false,
+                  vision: v,
+                );
+              }
+            }
+          }
+        }
+      }
+    }
+    return null;
   }
 
   Widget _buildCalendarCell(
