@@ -128,7 +128,7 @@ class _RecordsScreenState extends State<RecordsScreen> {
     if (_isGeneratingWeeklyFeedback) return;
     final prefs = await SharedPreferences.getInstance();
     final weekMonday = _getWeekMondayStr();
-    final cacheKey = 'nyang_coach_weekly_feedback_${widget.coachId}';
+    final cacheKey = 'nyang_coach_weekly_feedback_sec_male';
     final cachedData = prefs.getString(cacheKey);
 
     try {
@@ -321,7 +321,7 @@ class _RecordsScreenState extends State<RecordsScreen> {
       );
     }
 
-    final isMale = widget.coachId == 'sec_male';
+    final isMale = widget.coachId == 'sec_male' || _isMaster;
     final title = _userTitle;
     return '''당신은 사용자의 한 주간 성과를 분석하는 수석 비서이자 전문 코치입니다.
 사용자의 지난 7일간의 실제 할 일 완료 내역과 현재 설정된 목표/비전을 바탕으로, $title께 드리는 주간 코칭 한마디를 격식 있게 작성해 주세요.
@@ -668,7 +668,7 @@ $recordBuffer
   }
 
   String _getMasterPatternFeedback(List<Map<String, dynamic>> records) {
-    final bool isMale = widget.coachId == 'sec_male';
+    final bool isMale = widget.coachId == 'sec_male' || _isMaster;
     final activeRecords = records
         .where((r) => r['isVacation'] != true)
         .toList();
@@ -737,7 +737,11 @@ $recordBuffer
         children: [
           CircleAvatar(
             radius: 28,
-            backgroundImage: AssetImage('assets/images/${widget.coachId}.png'),
+            backgroundImage: AssetImage(
+              _isMaster
+                  ? 'assets/images/sec_male.png'
+                  : 'assets/images/${widget.coachId}.png',
+            ),
             backgroundColor: const Color(0xFFF3F0FF),
           ),
           const SizedBox(width: 14),
@@ -746,20 +750,20 @@ $recordBuffer
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '코치의 한마디',
+                  _isMaster ? '지난주를 돌아본 코치의 한마디' : '코치의 한마디',
                   style: GoogleFonts.notoSansKr(
                     fontSize: 13,
                     fontWeight: FontWeight.w800,
-                    color: _coach.accentColor,
+                    color: _isMaster
+                        ? CoachConfigs.get('sec_male').accentColor
+                        : _coach.accentColor,
                   ),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   _isMaster
                       ? (_weeklyFeedbackText ??
-                            (widget.coachId == 'sec_male'
-                                ? '이번 주 활동과 목표를 분석하여 $_userTitle께 드릴 한마디를 작성하고 있습니다. 약 5초 정도만 잠시 기다려주십시오...'
-                                : '이번 주 활동과 목표를 분석하여 $_userTitle께 드릴 한마디를 작성하고 있어요. 약 5초 정도만 잠시 기다려주세요...'))
+                            '이번 주 활동과 목표를 분석하여 $_userTitle께 드릴 한마디를 작성하고 있습니다. 약 5초 정도만 잠시 기다려주십시오...')
                       : _getPatternFeedback(records),
                   style: GoogleFonts.notoSansKr(
                     fontSize: 14,
