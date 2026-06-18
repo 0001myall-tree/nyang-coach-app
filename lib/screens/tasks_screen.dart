@@ -4603,14 +4603,16 @@ class _TasksScreenState extends State<TasksScreen>
                         t.duration != null ||
                         t.isHabit ||
                         (t.isReminderEnabled &&
-                            _isCoreReminderEnabledGlobally)) ...[
+                            _isCoreReminderEnabledGlobally &&
+                            t.time != null)) ...[
                       const SizedBox(height: 4),
                       Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           // 깨끗한 보라색 종 아이콘
                           if (t.isReminderEnabled &&
-                              _isCoreReminderEnabledGlobally)
+                              _isCoreReminderEnabledGlobally &&
+                              t.time != null)
                             const Padding(
                               padding: EdgeInsets.only(right: 6),
                               child: Icon(
