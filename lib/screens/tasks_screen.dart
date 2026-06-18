@@ -2408,15 +2408,10 @@ class _TasksScreenState extends State<TasksScreen>
 
   // ── 진행률 계산 ───────────────────────────────────────────
   int get _doneTasks {
-    final regularDone = tasks.where((t) => t.done).length;
-    final todayMilestones = _getMilestonesForDay(DateTime.now());
-    final milestoneDone = todayMilestones.where((mv) => mv.milestone.done).length;
-    return regularDone + milestoneDone;
+    return tasks.where((t) => t.done).length;
   }
   int get _totalTasks {
-    final regularTotal = tasks.length;
-    final todayMilestones = _getMilestonesForDay(DateTime.now());
-    return regularTotal + todayMilestones.length;
+    return tasks.length;
   }
   double get _progressPct => _totalTasks > 0 ? _doneTasks / _totalTasks : 0.0;
 
