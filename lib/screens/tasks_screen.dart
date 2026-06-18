@@ -3902,6 +3902,12 @@ class _TasksScreenState extends State<TasksScreen>
       ..sort((a, b) {
         if (a.done && !b.done) return 1;
         if (!a.done && b.done) return -1;
+        
+        final aIsMilestone = a.id.toString().startsWith('milestone_');
+        final bIsMilestone = b.id.toString().startsWith('milestone_');
+        if (aIsMilestone && !bIsMilestone) return -1;
+        if (!aIsMilestone && bIsMilestone) return 1;
+        
         return 0;
       });
 
