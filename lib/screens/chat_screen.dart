@@ -2169,12 +2169,40 @@ class _ChatScreenState extends State<ChatScreen>
     final chipRegex = RegExp(r'\[CHIPS:\s*(.+?)\]');
     final timerConfirmRegex = RegExp(r'\[TIMER_CONFIRM:(\d+)(?::([^\]]+))?\]');
     final taskRegex = RegExp(r'\[TASK:\s*(.+?)\]');
+    // CORE_REC 태그 파싱: [CORE_REC:{...}]
+    final coreRecRegex = RegExp(r'\[CORE_REC:(\{.*?\})\]');
     List<String> chips = [];
     int? timerConfirmMinutes;
     String? timerConfirmTaskName;
     List<_SuggestedTask> suggestedTasks = [];
     bool nightCallOffer = false;
     String text = raw;
+
+    // ── CORE_REC 태그를 읽기 좋은 텍스트로 변환 ──
+    final coreRecMatches = coreRecRegex.allMatches(text).toList();
+    if (coreRecMatches.isNotEmpty) {
+      final rankEmoji = ['🥇', '🥈', '🥉'];
+      final recLines = <String>[];
+      for (final m in coreRecMatches) {
+        try {
+          final jsonStr = m.group(1)!;
+          final Map<String, dynamic> data = jsonDecode(jsonStr);
+          final int rank = (data['rank'] as num?)?.toInt() ?? recLines.length + 1;
+          final String taskText = data['text'] ?? '';
+          final String reason = data['reason'] ?? '';
+          final emoji = rank >= 1 && rank <= 3 ? rankEmoji[rank - 1] : '✅';
+          recLines.add('$emoji $taskText\n   $reason');
+        } catch (_) {
+          // JSON 파싱 실패 시 태그만 제거
+        }
+        text = text.replaceAll(m.group(0)!, '');
+      }
+      if (recLines.isNotEmpty) {
+        // 앞의 캐릭터 멘트(태그 제거 후 남은 텍스트) + 추천 목록 합치기
+        final preText = text.trim();
+        text = (preText.isNotEmpty ? '$preText\n\n' : '') + recLines.join('\n\n');
+      }
+    }
 
     // [NIGHT_CALL_OFFER] 파싱
     if (text.contains('[NIGHT_CALL_OFFER]')) {
