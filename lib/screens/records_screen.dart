@@ -26,6 +26,7 @@ class _RecordsScreenState extends State<RecordsScreen> {
   String _userTitle = UserTitleService.defaultTitle;
   String? _weeklyFeedbackText;
   bool _isGeneratingWeeklyFeedback = false;
+  String _lastDate = '';
   final HttpsCallable _chatProxy = FirebaseFunctions.instanceFor(
     region: 'asia-northeast3',
   ).httpsCallable('chatProxy');
@@ -72,6 +73,15 @@ class _RecordsScreenState extends State<RecordsScreen> {
     }
 
     _userTitle = await UserTitleService.getTitle();
+    _lastDate = prefs.getString('nyang_last_date') ?? '';
+    if (_lastDate.isEmpty) {
+      final n = DateTime.now();
+      var base = DateTime(n.year, n.month, n.day);
+      if (n.hour < 3) {
+        base = base.subtract(const Duration(days: 1));
+      }
+      _lastDate = '${base.year}-${base.month.toString().padLeft(2, '0')}-${base.day.toString().padLeft(2, '0')}';
+    }
 
     setState(() => _isLoading = false);
     if (_isMaster) {
@@ -85,11 +95,24 @@ class _RecordsScreenState extends State<RecordsScreen> {
 
   // ── 최근 7일(또는 30일) 데이터 계산 ─────────────────────
   List<Map<String, dynamic>> _getLast7Records() {
-    // 오늘 기준 7일 날짜 문자열 생성
-    final now = DateTime.now();
+    final baseDateParts = _lastDate.split('-');
+    DateTime baseDate;
+    if (baseDateParts.length >= 3) {
+      final y = int.tryParse(baseDateParts[0]) ?? DateTime.now().year;
+      final m = int.tryParse(baseDateParts[1]) ?? DateTime.now().month;
+      final d = int.tryParse(baseDateParts[2]) ?? DateTime.now().day;
+      baseDate = DateTime(y, m, d);
+    } else {
+      final n = DateTime.now();
+      baseDate = DateTime(n.year, n.month, n.day);
+      if (n.hour < 3) {
+        baseDate = baseDate.subtract(const Duration(days: 1));
+      }
+    }
+
     final List<Map<String, dynamic>> last7 = [];
     for (int i = 6; i >= 0; i--) {
-      final d = now.subtract(Duration(days: i));
+      final d = baseDate.subtract(Duration(days: i));
       final dateStr =
           "${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}";
 
@@ -115,12 +138,21 @@ class _RecordsScreenState extends State<RecordsScreen> {
   }
 
   String _getWeekMondayStr() {
-    final now = DateTime.now();
-    final monday = DateTime(
-      now.year,
-      now.month,
-      now.day,
-    ).subtract(Duration(days: now.weekday - 1));
+    final baseDateParts = _lastDate.split('-');
+    DateTime baseDate;
+    if (baseDateParts.length >= 3) {
+      final y = int.tryParse(baseDateParts[0]) ?? DateTime.now().year;
+      final m = int.tryParse(baseDateParts[1]) ?? DateTime.now().month;
+      final d = int.tryParse(baseDateParts[2]) ?? DateTime.now().day;
+      baseDate = DateTime(y, m, d);
+    } else {
+      final n = DateTime.now();
+      baseDate = DateTime(n.year, n.month, n.day);
+      if (n.hour < 3) {
+        baseDate = baseDate.subtract(const Duration(days: 1));
+      }
+    }
+    final monday = baseDate.subtract(Duration(days: baseDate.weekday - 1));
     return '${monday.year}-${monday.month.toString().padLeft(2, '0')}-${monday.day.toString().padLeft(2, '0')}';
   }
 

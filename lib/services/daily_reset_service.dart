@@ -14,10 +14,17 @@ class DailyResetService {
     return DateFormat('yyyy-MM-dd').format(base);
   }
 
-  static String _getWeekMondayStr() {
-    final now = DateTime.now();
-    final dayOfWeek = now.weekday; // 1=Mon ~ 7=Sun
-    final monday = now.subtract(Duration(days: dayOfWeek - 1));
+  static String _getWeekMondayStr(String today) {
+    final parts = today.split('-');
+    DateTime baseDate;
+    if (parts.length >= 3) {
+      baseDate = DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
+    } else {
+      final now = DateTime.now();
+      baseDate = DateTime(now.year, now.month, now.day);
+    }
+    final dayOfWeek = baseDate.weekday; // 1=Mon ~ 7=Sun
+    final monday = baseDate.subtract(Duration(days: dayOfWeek - 1));
     return DateFormat('yyyy-MM-dd').format(monday);
   }
 
@@ -110,7 +117,7 @@ class DailyResetService {
     }
 
     // Weekly/Monthly Reset Check
-    final thisWeek = _getWeekMondayStr();
+    final thisWeek = _getWeekMondayStr(today);
     final now = DateTime.now();
     final thisMonth = '${now.year}-${now.month.toString().padLeft(2, '0')}';
 
@@ -132,7 +139,14 @@ class DailyResetService {
   }
 
   static Future<void> _injectTodayHabitsAndSchedulesDirectly(SharedPreferences prefs, String today) async {
-    final todayDow = DateTime.now().weekday; // 1=Mon ~ 7=Sun
+    final parts = today.split('-');
+    int todayDow = DateTime.now().weekday;
+    if (parts.length >= 3) {
+      final y = int.tryParse(parts[0]) ?? DateTime.now().year;
+      final m = int.tryParse(parts[1]) ?? DateTime.now().month;
+      final d = int.tryParse(parts[2]) ?? DateTime.now().day;
+      todayDow = DateTime(y, m, d).weekday;
+    }
     final dbDow = todayDow - 1; // 0=Mon ~ 6=Sun
 
     // 1. habits load

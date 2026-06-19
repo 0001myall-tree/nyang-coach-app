@@ -900,6 +900,54 @@ class _TasksScreenState extends State<TasksScreen>
     });
   }
 
+  Future<bool> _showConfirmDeleteDialog(String title, String message) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text(
+            title,
+            style: GoogleFonts.notoSansKr(
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
+              color: const Color(0xFF3D3A4E),
+            ),
+          ),
+          content: Text(
+            message,
+            style: GoogleFonts.notoSansKr(
+              fontSize: 14,
+              color: const Color(0xFF6B7280),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text(
+                '취소',
+                style: GoogleFonts.notoSansKr(
+                  color: const Color(0xFF9593A5),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: Text(
+                '삭제',
+                style: GoogleFonts.notoSansKr(
+                  color: Colors.red,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+    return result ?? false;
+  }
+
   // ── _showHabitCompletionDialog (습관 입력 팝업) ────────────────
   Future<Map<String, int>?> _showHabitCompletionDialog(
     TaskItem t,
@@ -1122,12 +1170,14 @@ class _TasksScreenState extends State<TasksScreen>
   }
 
   String _getWeekMondayStr() {
-    final now = DateTime.now();
-    final monday = DateTime(
-      now.year,
-      now.month,
-      now.day,
-    ).subtract(Duration(days: now.weekday - 1));
+    final todayStr = _getTodayStr();
+    final parts = todayStr.split('-');
+    if (parts.length < 3) return todayStr;
+    final year = int.tryParse(parts[0]) ?? DateTime.now().year;
+    final month = int.tryParse(parts[1]) ?? DateTime.now().month;
+    final day = int.tryParse(parts[2]) ?? DateTime.now().day;
+    final baseDate = DateTime(year, month, day);
+    final monday = baseDate.subtract(Duration(days: baseDate.weekday - 1));
     return '${monday.year}-${monday.month.toString().padLeft(2, '0')}-${monday.day.toString().padLeft(2, '0')}';
   }
 

@@ -3657,7 +3657,15 @@ class _ChatScreenState extends State<ChatScreen>
           final dismissalsRaw =
               prefs.getString('nyang_habit_dismissals') ?? '{}';
           final dismissals = jsonDecode(dismissalsRaw) as Map<String, dynamic>;
-          final now = DateTime.now();
+          final todayStr = await _getEffectiveTodayStr();
+          final parts = todayStr.split('-');
+          DateTime baseDate;
+          if (parts.length >= 3) {
+            baseDate = DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
+          } else {
+            final n = DateTime.now();
+            baseDate = DateTime(n.year, n.month, n.day);
+          }
           final longAbsent = <Map<String, dynamic>>[];
           for (final h in habits) {
             final hId = h['id'].toString();
@@ -3673,7 +3681,7 @@ class _ChatScreenState extends State<ChatScreen>
 
             int miss = 0;
             for (int i = 1; i <= 7; i++) {
-              final d = now.subtract(Duration(days: i));
+              final d = baseDate.subtract(Duration(days: i));
 
               if (createdAtDate != null) {
                 final dDate = DateTime(d.year, d.month, d.day);
@@ -3696,7 +3704,7 @@ class _ChatScreenState extends State<ChatScreen>
               if ((di['count'] as int? ?? 0) >= 2) continue;
               final lastAsked = di['lastAsked'] as String?;
               if (lastAsked != null) {
-                if (now.difference(DateTime.parse(lastAsked)).inDays < 7)
+                if (baseDate.difference(DateTime.parse(lastAsked)).inDays < 7)
                   continue;
               }
               longAbsent.add({'name': h['name'], 'days': miss});
@@ -3718,12 +3726,22 @@ class _ChatScreenState extends State<ChatScreen>
     final now = DateTime.now();
     final dayNames = ['일', '월', '화', '수', '목', '금', '토'];
     if (_coach.isMaster || _coach.id == 'halmae') {
+      final todayStr = await _getEffectiveTodayStr();
+      final parts = todayStr.split('-');
+      String activeDayOfWeek = '';
+      if (parts.length >= 3) {
+        final activeDate = DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
+        activeDayOfWeek = dayNames[activeDate.weekday % 7];
+      }
+
       final tod = now.hour < 12
           ? '오전'
           : now.hour < 18
           ? '오후'
           : '저녁';
-      sb.writeln('\n[현재 날짜 및 시간]');
+      sb.writeln('\n[오늘 기준 날짜 (하루 리셋 기준)]');
+      sb.writeln('$todayStr ($activeDayOfWeek요일)');
+      sb.writeln('\n[현재 실제 날짜 및 시간]');
       sb.writeln(
         '${now.year}년 ${now.month}월 ${now.day}일 (${dayNames[now.weekday % 7]}요일) $tod ${now.hour}시 ${now.minute}분',
       );
