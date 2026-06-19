@@ -4989,28 +4989,37 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
   }
 
   Widget _buildCheatKeyButton() {
+    // 버튼 최대 너비를 화면의 32%로 제한 → 영어/일어 등 긴 텍스트도 안전하게 처리
+    final maxBtnWidth = MediaQuery.of(context).size.width * 0.32;
     return GestureDetector(
       onTap: () => setState(() => _cheatKeyOpen = !_cheatKeyOpen),
-      child: Container(
-        height: 44,
-        padding: const EdgeInsets.symmetric(horizontal: 14),
-        decoration: BoxDecoration(
-          color: const Color(0xFFFFFBEB),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFFFDE68A), width: 1.2),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              '빠른 실행',
-              style: GoogleFonts.notoSansKr(
-                fontSize: 13,
-                fontWeight: FontWeight.w900,
-                color: _masterGold,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: maxBtnWidth),
+        child: Container(
+          height: 44,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFFFBEB),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFFFDE68A), width: 1.2),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(
+                child: Text(
+                  '빠른 실행',
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                  style: GoogleFonts.notoSansKr(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w900,
+                    color: _masterGold,
+                  ),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
