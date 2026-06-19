@@ -3912,6 +3912,13 @@ class _ChatScreenState extends State<ChatScreen>
         sb.writeln('자정이 지났습니다. 하지만 아직 새로운 하루의 시작이 아니라 어제 일과의 연장선(늦은 밤/새벽)일 수 있습니다. 단정 짓지 말고 "자정이 넘었네요. 오늘 하루를 마무리 중이신가요, 아니면 지금부터 무언가 집중할 시간이신가요?" 처럼 중립적으로 질문하여 사용자의 현재 맥락을 먼저 파악하세요.');
       }
     }
+    
+    // 15. 프렌즈 코치용 타이머 동의(Opt-in) 로직
+    if (!_coach.isMaster) {
+      sb.writeln('\n[타이머 제공 규칙]');
+      sb.writeln('- 사용자가 행동을 시작하기 귀찮아하거나 코치의 행동 제안(예: "5분만 해보자")에 동의할 경우, "오케이 파이팅! 혹시 타이머 필요하면 말해 켜줄게"라고 자연스럽게 말하며 절대 먼저 타이머 태그를 출력하지 마세요.');
+      sb.writeln('- 오직 사용자가 명시적으로 "타이머 띄워줘", "응 타이머 줘" 등 타이머를 요청했을 때만 답변 끝에 [TIMER_CONFIRM:5] (또는 10 등 적절한 시간) 태그를 출력하세요.');
+    }
 
     return sb.toString();
   }
@@ -4406,8 +4413,8 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
           ),
           Positioned(top: 76, left: 28, child: _buildCheatKeyMenu()),
         ],
-        // 타이머 확인 버튼 (마스터 전용)
-        if (_coach.isMaster && _timerConfirmMinutes != null)
+        // 타이머 확인 버튼
+        if (_timerConfirmMinutes != null)
           _buildTimerConfirmCard(),
         if (_coach.isMaster && _suggestedTasks.isNotEmpty)
           _buildTaskSuggestCard(),
@@ -4623,18 +4630,25 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
   // ── 타이머 확인 버튼 카드 (마스터 전용) ─────────────────
   Widget _buildTimerConfirmCard() {
     final leadMessage = _timerConfirmLeadMessage();
+    final isMaster = _coach.isMaster;
+    
+    // 친구 코치용 연보라색 테마 (냥냥코치 톤)
+    final cardBgColor = isMaster ? Colors.white : const Color(0xFFF9F5FF);
+    final cardBorderColor = isMaster ? const Color(0xFFE8E4F0) : const Color(0xFFD8B4FE);
+    final buttonBgColor = isMaster ? _coach.accentColor : const Color(0xFFA855F7); // 연보라/보라톤 메인
+
     return Positioned(
       bottom: 80,
       left: 16,
       right: 16,
       child: Container(
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: cardBgColor,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFFE8E4F0)),
+          border: Border.all(color: cardBorderColor),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.08),
+              color: isMaster ? Colors.black.withOpacity(0.08) : const Color(0xFFA855F7).withOpacity(0.15),
               blurRadius: 16,
               offset: const Offset(0, 4),
             ),
@@ -4674,7 +4688,7 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 decoration: BoxDecoration(
-                  color: _coach.accentColor,
+                  color: buttonBgColor,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Center(
@@ -4731,7 +4745,7 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFFE5E7EB)),
+                  border: Border.all(color: isMaster ? const Color(0xFFE5E7EB) : const Color(0xFFD8B4FE)),
                 ),
                 child: Center(
                   child: Text(
@@ -4774,7 +4788,7 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFFE5E7EB)),
+                  border: Border.all(color: isMaster ? const Color(0xFFE5E7EB) : const Color(0xFFD8B4FE)),
                 ),
                 child: Center(
                   child: Text(
