@@ -3731,7 +3731,7 @@ class _ChatScreenState extends State<ChatScreen>
 
     // 11. 취침 시간 (master only)
     if (_coach.isMaster) {
-      final bedtime = prefs.getString('nyang_premium_bedtime');
+      final bedtime = prefs.getString('nyang_premium_min_sleep_time');
       if (bedtime != null) {
         final parts = bedtime.split(':');
         final bh = int.tryParse(parts[0]) ?? 0;
@@ -3766,6 +3766,39 @@ class _ChatScreenState extends State<ChatScreen>
             }
           }
         } catch (_) {}
+      }
+
+      bool isListEmpty(String? raw) {
+        if (raw == null) return true;
+        try {
+          final list = jsonDecode(raw) as List;
+          return list.isEmpty;
+        } catch (_) {
+          return true;
+        }
+      }
+
+      final bedtime = prefs.getString('nyang_premium_min_sleep_time');
+      final visionsRaw = prefs.getString('nyang_visions');
+      final monthGoalsRaw = prefs.getString('nyang_goals_month');
+      final weekGoalsRaw = prefs.getString('nyang_goals_week');
+      final secMaleName = prefs.getString('nyang_coach_name_sec_male');
+      final secFemaleName = prefs.getString('nyang_coach_name_sec_female');
+
+      final bool isAllEmpty = (bedtime == null || bedtime.isEmpty) &&
+          isListEmpty(routinesRaw) &&
+          isListEmpty(visionsRaw) &&
+          isListEmpty(monthGoalsRaw) &&
+          isListEmpty(weekGoalsRaw) &&
+          (secMaleName == null || secMaleName.trim().isEmpty) &&
+          (secFemaleName == null || secFemaleName.trim().isEmpty);
+
+      if (isAllEmpty) {
+        sb.writeln('\n[비서 학습 설정 미완료 상태]');
+        sb.writeln('- 현재 사용자의 취침 예정 시간, 고정 루틴, 애칭, 장기 비전, 목표 등이 전혀 설정되어 있지 않습니다.');
+        sb.writeln('- 사용자가 "일정을 짜달라", "오늘 뭐부터 할까" 등 일정 관리와 관련된 대화를 시작할 때 한하여 자연스럽게 다음 내용을 덧붙여 유도하세요.');
+        sb.writeln('- "설정 탭에서 [비서 학습 설정]을 입력해 주시면, 제가 대표님의 생활 패턴에 맞춰 더 완벽하고 세밀하게 일정을 관리해 드릴 수 있습니다."');
+        sb.writeln('- 단, 무맥락으로 매번 반복해서 묻지 말고, 적절한 일정 조율 대화 중 한 번만 가볍게 제안하세요.');
       }
     }
 
