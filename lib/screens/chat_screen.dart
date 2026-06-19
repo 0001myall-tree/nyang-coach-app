@@ -5003,7 +5003,7 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              '비서의 치트키',
+              '빠른 실행',
               style: GoogleFonts.notoSansKr(
                 fontSize: 13,
                 fontWeight: FontWeight.w900,
@@ -5087,7 +5087,7 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
       child: Row(
         children: [
           _buildCheatKeyButton(),
-          const SizedBox(width: 20),
+          const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
