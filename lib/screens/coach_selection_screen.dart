@@ -194,7 +194,7 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
                                         ('🐱', '냥냥 코치 이용'),
                                         ('💼', '비서 코치 이용'),
                                         ('🌱', '일상 대화 및 플래너 기능'),
-                                        ('📋', '일정 에스코트'),
+                                        ('⚡', '지금 뭐하지?'),
                                         ('⭐', '주간 회고 & 우선순위 추천'),
                                       ],
                                       isMaster: true,
