@@ -527,7 +527,21 @@ class NotificationService {
   }) async {
     if (kIsWeb) return;
 
-    final isMale = coachId == 'sec_male';
+    String bodyMsg = '수고하셨습니다. 집중 시간이 완료되었습니다.';
+    switch (coachId) {
+      case 'sec_male':
+        bodyMsg = '수고하셨습니다. 오늘 집중 시간, 제가 기억해두겠습니다.';
+        break;
+      case 'sec_female':
+        bodyMsg = '정말 수고하셨어요. 오늘 집중 시간이 참 뿌듯하네요. 🌸';
+        break;
+      case 'halmae':
+        bodyMsg = '아이고 고생 많았재! 우리 똥강아지 이제 좀 쉬어라잉~';
+        break;
+      case 'bro':
+        bodyMsg = '오케이! 수고했어. 역시 넌 한다면 하는구나!';
+        break;
+    }
 
     final AndroidNotificationDetails androidDetails =
         AndroidNotificationDetails(
@@ -537,7 +551,6 @@ class NotificationService {
           importance: Importance.max,
           priority: Priority.high,
           playSound: true,
-          // 시스템 기본 알림음 사용
           audioAttributesUsage: AudioAttributesUsage.notification,
         );
 
@@ -545,7 +558,6 @@ class NotificationService {
       presentSound: true,
       presentAlert: true,
       presentBadge: true,
-      // 시스템 기본 알림음 사용
     );
 
     final NotificationDetails details = NotificationDetails(
@@ -558,9 +570,7 @@ class NotificationService {
     await _plugin.zonedSchedule(
       id: 888,
       title: '⏱ FOCUS TIMER 완료',
-      body: isMale
-          ? '수고하셨습니다. 오늘 집중 시간, 제가 기억해두겠습니다.'
-          : '정말 수고하셨어요. 오늘 집중 시간이 참 뿌듯하네요. 🌸',
+      body: bodyMsg,
       scheduledDate: scheduledDate,
       notificationDetails: details,
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,

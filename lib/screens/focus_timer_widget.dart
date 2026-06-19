@@ -78,11 +78,10 @@ class FocusTimerManager {
     pausedRemainSec = null;
     startTime = DateTime.now();
     await saveState();
-    // 알림을 띄우지 않도록 주석/삭제 처리
-    // await NotificationService().scheduleFocusTimerNotification(
-    //   seconds: duration,
-    //   coachId: coachId,
-    // );
+    await NotificationService().scheduleFocusTimerNotification(
+      seconds: duration,
+      coachId: coachId,
+    );
   }
 
   /// 일시정지 후 재개 — 남은 시간 기준으로 startTime 역산
@@ -93,11 +92,10 @@ class FocusTimerManager {
     pausedRemainSec = null;
     startTime = DateTime.now().subtract(Duration(seconds: duration - remain));
     await saveState();
-    // 알림을 띄우지 않도록 주석/삭제 처리
-    // await NotificationService().scheduleFocusTimerNotification(
-    //   seconds: remain,
-    //   coachId: coachId ?? 'sec_male',
-    // );
+    await NotificationService().scheduleFocusTimerNotification(
+      seconds: remain,
+      coachId: coachId ?? 'sec_male',
+    );
   }
 
   Future<void> pause() async {
