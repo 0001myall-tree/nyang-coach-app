@@ -5507,6 +5507,10 @@ class _TasksScreenState extends State<TasksScreen>
                   _showMasterOnlyDialog();
                   return;
                 }
+                if (visions.length >= 3) {
+                  _showVisionLimitDialog();
+                  return;
+                }
                 _showVisionModal();
               },
                 child: Container(
@@ -5706,6 +5710,81 @@ class _TasksScreenState extends State<TasksScreen>
                   fontSize: 14,
                   color: const Color(0xFF8E8A9E),
                   height: 1.6,
+                ),
+              ),
+              const SizedBox(height: 28),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF8B7CFF),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    elevation: 0,
+                  ),
+                  child: Text(
+                    '확인',
+                    style: GoogleFonts.notoSansKr(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── 장기 비전 개수 제한 팝업 ─────────────────────────────
+  void _showVisionLimitDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(28, 32, 28, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 64,
+                height: 64,
+                decoration: const BoxDecoration(
+                  color: Color(0xFFFFF8E1),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.star_rounded,
+                  color: Color(0xFFF59E0B),
+                  size: 32,
+                ),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                '장기 비전은 최대 3개까지\n생성 가능합니다.',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.notoSansKr(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w900,
+                  color: const Color(0xFF3D3A4E),
+                  height: 1.4,
+                ),
+              ),
+              const SizedBox(height: 14),
+              Text(
+                '정말 중요한 목표에 집중할 수 있도록\n개수를 제한하고 있습니다.\n\n새로운 비전을 추가하려면\n기존 비전 중 하나를 삭제해주세요.',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.notoSansKr(
+                  fontSize: 14,
+                  color: const Color(0xFF8E8A9E),
+                  height: 1.7,
                 ),
               ),
               const SizedBox(height: 28),
