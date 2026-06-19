@@ -96,7 +96,9 @@ class _MilestoneMemoDialogState extends State<MilestoneMemoDialog> {
     });
   }
 
-  void _removeSection(int index) {
+  void _removeSection(int index) async {
+    final confirm = await _showConfirmDeleteDialog('메모 삭제', '이 메모를 정말 삭제하시겠습니까?');
+    if (!confirm) return;
     setState(() {
       _sections.removeAt(index);
       _titleCtrls[index].dispose();
@@ -124,7 +126,9 @@ class _MilestoneMemoDialogState extends State<MilestoneMemoDialog> {
     });
   }
 
-  void _removeAction(int index) {
+  void _removeAction(int index) async {
+    final confirm = await _showConfirmDeleteDialog('실행 아이템 삭제', '이 실행 아이템을 정말 삭제하시겠습니까?');
+    if (!confirm) return;
     setState(() {
       _actions.removeAt(index);
       _actionCtrls[index].dispose();
@@ -648,5 +652,55 @@ class _MilestoneMemoDialogState extends State<MilestoneMemoDialog> {
         ],
       ),
     );
+  }
+
+  // --- CONFIRM DELETE DIALOG ---
+  Future<bool> _showConfirmDeleteDialog(String title, String message) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          title,
+          style: GoogleFonts.notoSansKr(
+            fontSize: 18,
+            fontWeight: FontWeight.w700,
+            color: const Color(0xFF3D3A4E),
+          ),
+        ),
+        content: Text(
+          message,
+          style: GoogleFonts.notoSansKr(
+            fontSize: 14,
+            color: const Color(0xFF4B4A5D),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(
+              '취소',
+              style: GoogleFonts.notoSansKr(
+                fontSize: 15,
+                fontWeight: FontWeight.w500,
+                color: const Color(0xFFA0A0B0),
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(
+              '삭제',
+              style: GoogleFonts.notoSansKr(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: const Color(0xFFE53E3E),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    return result == true;
   }
 }

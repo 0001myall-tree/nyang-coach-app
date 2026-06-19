@@ -6201,7 +6201,9 @@ class _TasksScreenState extends State<TasksScreen>
                                                   ),
                                                 ),
                                                 GestureDetector(
-                                                  onTap: () {
+                                                  onTap: () async {
+                                                    final confirm = await _showConfirmDeleteDialog('마일스톤 삭제', '이 마일스톤을 정말 삭제하시겠습니까?\n삭제된 내용은 복구할 수 없습니다.');
+                                                    if (!confirm) return;
                                                     setModalState(() {
                                                       milestones.removeAt(i);
                                                     });
@@ -6580,14 +6582,16 @@ class _TasksScreenState extends State<TasksScreen>
                             Expanded(
                               flex: 1,
                               child: GestureDetector(
-                                onTap: () {
+                                onTap: () async {
+                                  final confirm = await _showConfirmDeleteDialog('장기 비전 삭제', '이 비전을 정말 삭제하시겠습니까?\\n하위 마일스톤들도 모두 함께 삭제됩니다.');
+                                  if (!confirm) return;
                                   setState(() {
                                     visions.removeWhere(
                                       (v) => v.id == vision.id,
                                     );
                                   });
                                   _saveVisions();
-                                  Navigator.pop(ctx);
+                                  if (context.mounted) Navigator.pop(ctx);
                                 },
                                 child: Container(
                                   padding: const EdgeInsets.symmetric(
@@ -9970,7 +9974,9 @@ class _TasksScreenState extends State<TasksScreen>
     );
   }
 
-  void _deleteHabit(dynamic id) {
+  Future<void> _deleteHabit(dynamic id) async {
+    final confirm = await _showConfirmDeleteDialog('습관 항목 삭제', '이 습관을 정말 삭제하시겠습니까?\\n연결된 오늘의 할 일도 함께 삭제됩니다.');
+    if (!confirm) return;
     setState(() => habits.removeWhere((h) => h.id.toString() == id.toString()));
     _saveHabits();
     _injectTodayHabits();
