@@ -5548,14 +5548,23 @@ class _TasksScreenState extends State<TasksScreen>
             ),
           )
         else
-          ListView.builder(
+        ReorderableListView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             padding: const EdgeInsets.symmetric(horizontal: 16),
             itemCount: visions.length,
+            onReorder: (oldIndex, newIndex) {
+              setState(() {
+                if (newIndex > oldIndex) newIndex--;
+                final item = visions.removeAt(oldIndex);
+                visions.insert(newIndex, item);
+              });
+              _saveVisions();
+            },
             itemBuilder: (ctx, i) {
               final v = visions[i];
               return GestureDetector(
+                key: ValueKey(v.id),
                 onTap: () => _showVisionModal(v),
                 child: Container(
                   margin: const EdgeInsets.only(bottom: 12),
@@ -5617,7 +5626,18 @@ class _TasksScreenState extends State<TasksScreen>
                           ],
                         ),
                       ),
-                      const Icon(Icons.more_vert, color: Color(0xFFA0A0B0)),
+                      // 드래그 핸들
+                      ReorderableDragStartListener(
+                        index: i,
+                        child: const Padding(
+                          padding: EdgeInsets.only(left: 8),
+                          child: Icon(
+                            Icons.drag_handle,
+                            color: Color(0xFFD1D5DB),
+                            size: 22,
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                 ),
