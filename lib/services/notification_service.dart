@@ -530,7 +530,7 @@ class NotificationService {
     String bodyMsg = '수고하셨습니다. 집중 시간이 완료되었습니다.';
     switch (coachId) {
       case 'sec_male':
-        bodyMsg = '수고하셨습니다. 오늘 집중 시간, 제가 기억해두겠습니다.';
+        bodyMsg = '정말 고생하셨습니다! 끝까지 해내신 대표님이 자랑스럽습니다. 최고예요! 🎉';
         break;
       case 'sec_female':
         bodyMsg = '정말 수고하셨어요. 오늘 집중 시간이 참 뿌듯하네요. 🌸';
