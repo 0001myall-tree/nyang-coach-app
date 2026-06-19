@@ -1421,7 +1421,11 @@ class _TasksScreenState extends State<TasksScreen>
       if (existingIndex >= 0) {
         final existingTask = tasks[existingIndex];
         existingTask.text = s.text;
-        existingTask.time = s.time;
+        existingTask.time = _displayTimeFromStored(
+          time: s.time,
+          timeStart: s.timeStart,
+          timeEnd: s.timeEnd,
+        );
         existingTask.timeStart = s.timeStart;
         existingTask.timeEnd = s.timeEnd;
         existingTask.duration = s.duration;
@@ -1452,7 +1456,11 @@ class _TasksScreenState extends State<TasksScreen>
           );
           if (coreIndex >= 0) {
             coreTasks[coreIndex].text = s.text;
-            coreTasks[coreIndex].time = s.time;
+            coreTasks[coreIndex].time = _displayTimeFromStored(
+              time: s.time,
+              timeStart: s.timeStart,
+              timeEnd: s.timeEnd,
+            );
             coreTasks[coreIndex].timeStart = s.timeStart;
             coreTasks[coreIndex].timeEnd = s.timeEnd;
             coreTasks[coreIndex].duration = s.duration;
@@ -1467,7 +1475,11 @@ class _TasksScreenState extends State<TasksScreen>
           text: s.text,
           category: 'schedule',
           done: s.done,
-          time: s.time,
+          time: _displayTimeFromStored(
+            time: s.time,
+            timeStart: s.timeStart,
+            timeEnd: s.timeEnd,
+          ),
           duration: s.duration,
           timeStart: s.timeStart,
           timeEnd: s.timeEnd,
@@ -3947,12 +3959,12 @@ class _TasksScreenState extends State<TasksScreen>
       ..sort((a, b) {
         if (a.done && !b.done) return 1;
         if (!a.done && b.done) return -1;
-        
+
         final aIsMilestone = a.id.toString().startsWith('milestone_');
         final bIsMilestone = b.id.toString().startsWith('milestone_');
         if (aIsMilestone && !bIsMilestone) return -1;
         if (!aIsMilestone && bIsMilestone) return 1;
-        
+
         return 0;
       });
 
@@ -4514,6 +4526,11 @@ class _TasksScreenState extends State<TasksScreen>
   Widget _buildTaskItem(TaskItem t) {
     final milestoneInfo = _getMilestoneInfoForTask(t);
     final isMilestone = milestoneInfo != null;
+    final displayTime = _displayTimeFromStored(
+      time: t.time,
+      timeStart: t.timeStart,
+      timeEnd: t.timeEnd,
+    );
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -4650,12 +4667,12 @@ class _TasksScreenState extends State<TasksScreen>
                       ),
                     ),
                     // 알림 종 아이콘, 시간/소요시간 뱃지, 습관 뱃지 표시
-                    if (t.time != null ||
+                    if (displayTime != null ||
                         t.duration != null ||
                         t.isHabit ||
                         (t.isReminderEnabled &&
                             _isCoreReminderEnabledGlobally &&
-                            t.time != null)) ...[
+                            displayTime != null)) ...[
                       const SizedBox(height: 4),
                       Row(
                         mainAxisSize: MainAxisSize.min,
@@ -4663,7 +4680,7 @@ class _TasksScreenState extends State<TasksScreen>
                           // 깨끗한 보라색 종 아이콘
                           if (t.isReminderEnabled &&
                               _isCoreReminderEnabledGlobally &&
-                              t.time != null)
+                              displayTime != null)
                             const Padding(
                               padding: EdgeInsets.only(right: 6),
                               child: Icon(
@@ -4673,7 +4690,7 @@ class _TasksScreenState extends State<TasksScreen>
                               ),
                             ),
                           // 시간/소요시간 뱃지
-                          if (t.time != null || t.duration != null)
+                          if (displayTime != null || t.duration != null)
                             Container(
                               margin: const EdgeInsets.only(right: 6),
                               padding: const EdgeInsets.symmetric(
@@ -4681,17 +4698,17 @@ class _TasksScreenState extends State<TasksScreen>
                                 vertical: 2,
                               ),
                               decoration: BoxDecoration(
-                                color: t.time != null
+                                color: displayTime != null
                                     ? const Color(0xFFF5F3FF)
                                     : const Color(0xFFFDF2F8),
                                 borderRadius: BorderRadius.circular(6),
                               ),
                               child: Text(
-                                t.time != null ? t.time! : '⏱ ${t.duration}',
+                                displayTime ?? '⏱ ${t.duration}',
                                 style: GoogleFonts.notoSansKr(
                                   fontSize: 10,
                                   fontWeight: FontWeight.w700,
-                                  color: t.time != null
+                                  color: displayTime != null
                                       ? const Color(0xFF8B7CFF)
                                       : const Color(0xFFDB2777),
                                 ),
@@ -6930,6 +6947,22 @@ class _TasksScreenState extends State<TasksScreen>
     final h = t.hour == 0 ? 12 : (t.hour > 12 ? t.hour - 12 : t.hour);
     final m = t.minute.toString().padLeft(2, '0');
     return "$ap $h:$m";
+  }
+
+  String? _displayTimeFromStored({
+    String? time,
+    String? timeStart,
+    String? timeEnd,
+  }) {
+    if (time != null && time.trim().isNotEmpty) return time;
+
+    final start = _parseStoredTime(timeStart);
+    if (start == null) return null;
+
+    final end = _parseStoredTime(timeEnd);
+    if (end == null) return _formatTime(start);
+
+    return '${_formatTime(start)} ~ ${_formatTime(end)}';
   }
 
   TimeOfDay? _parseStoredTime(String? value) {
