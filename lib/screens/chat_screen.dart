@@ -3868,6 +3868,51 @@ class _ChatScreenState extends State<ChatScreen>
       }
     }
 
+    // 14. 자정 이후 ~ 새벽 시간대 및 100% 완료 상태에 대한 특별 지침 (하이브리드 로직)
+    if (_coach.isMaster) {
+      bool allTasksDone = false;
+      if (allTasks.isNotEmpty) {
+        allTasksDone = allTasks.every((t) => t['done'] == true);
+      }
+      
+      final currentTotalMinutes = now.hour * 60 + now.minute;
+      final minSleepTimeStr = prefs.getString('nyang_premium_min_sleep_time');
+      bool isSleepWindow = false;
+      bool isUnsetLateNight = false;
+
+      if (minSleepTimeStr != null) {
+        try {
+          final parts = minSleepTimeStr.split(':');
+          final bedH = int.tryParse(parts[0]) ?? 1;
+          final bedM = int.tryParse(parts.length > 1 ? parts[1] : '0') ?? 0;
+          final bedTotalMinutes = bedH * 60 + bedM;
+          final wakeTotalMinutes = (bedTotalMinutes + 4 * 60) % (24 * 60);
+
+          if (bedTotalMinutes < wakeTotalMinutes) {
+            isSleepWindow = currentTotalMinutes >= bedTotalMinutes && currentTotalMinutes < wakeTotalMinutes;
+          } else {
+            isSleepWindow = currentTotalMinutes >= bedTotalMinutes || currentTotalMinutes < wakeTotalMinutes;
+          }
+        } catch (_) {}
+      } else {
+        // 미설정 시 자정 ~ 새벽 4시 사이를 모호한 시간대로 간주
+        if (now.hour >= 0 && now.hour < 4) {
+          isUnsetLateNight = true;
+        }
+      }
+
+      if (allTasksDone && allTasks.isNotEmpty) {
+        sb.writeln('\n[특별 지침: 모든 할 일 100% 완료 상태]');
+        sb.writeln('사용자가 오늘 계획한 모든 할 일을 100% 완료했습니다. 절대로 다른 일을 더 하라고 재촉하거나 묻지 마세요. 시간대와 상관없이 완벽한 하루를 보낸 것을 축하하며, 푹 쉬라고 강하게 권장하세요.');
+      } else if (isSleepWindow) {
+        sb.writeln('\n[특별 지침: 사용자 설정 취침 시간 초과]');
+        sb.writeln('현재 시간은 사용자가 설정한 최소 취침 시간을 넘긴 심야 시간대입니다. 가볍게 휴식을 권유하거나 현재 일과를 마무리 중인지 먼저 부드럽게 물어보세요. 단, 무조건 자라고 강요하지 마세요. 만약 사용자가 "아직 할 일이 남았다"거나 "더 일해야 한다"고 답변한다면, "늦은 시간까지 정말 고생이 많으십니다. 무리하지 마시고 파이팅입니다!" 라며 따뜻하게 응원하고 일에 집중할 수 있도록 든든하게 지지해 주세요.');
+      } else if (isUnsetLateNight) {
+        sb.writeln('\n[특별 지침: 심야 시간대 접속]');
+        sb.writeln('자정이 지났습니다. 하지만 아직 새로운 하루의 시작이 아니라 어제 일과의 연장선(늦은 밤/새벽)일 수 있습니다. 단정 짓지 말고 "자정이 넘었네요. 오늘 하루를 마무리 중이신가요, 아니면 지금부터 무언가 집중할 시간이신가요?" 처럼 중립적으로 질문하여 사용자의 현재 맥락을 먼저 파악하세요.');
+      }
+    }
+
     return sb.toString();
   }
 
