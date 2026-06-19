@@ -2237,16 +2237,7 @@ class _ChatScreenState extends State<ChatScreen>
       if (!mounted || widget.coachId != currentId) return;
       final parsed = _parseReply(raw);
 
-      // 비서 코치 + 커스텀 애칭 설정 시 로컬에서 이름 앞에 붙이기
       String greetingText = parsed.text;
-      if (widget.coachId == 'sec_male' || widget.coachId == 'sec_female') {
-        final customName = widget.coachId == 'sec_male'
-            ? CoachConfigs.customSecMaleName
-            : CoachConfigs.customSecFemaleName;
-        if (customName != null && customName.trim().isNotEmpty) {
-          greetingText = '${customName.trim()}입니다. $greetingText';
-        }
-      }
 
       setState(() {
         _messages.add(
