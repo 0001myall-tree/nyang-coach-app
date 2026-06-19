@@ -501,6 +501,7 @@ class _TasksScreenState extends State<TasksScreen>
   List<GoalItem> monthGoals = [];
   List<HabitItem> habits = [];
   List<VisionItem> visions = [];
+  String _planType = 'none'; // 'none' | 'friends' | 'master'
   Map<String, Map<String, dynamic>> habitLogs = {};
   Map<String, List<ScheduleItem>> schedules = {};
   Map<String, dynamic>? vacationInfo;
@@ -548,6 +549,10 @@ class _TasksScreenState extends State<TasksScreen>
     widget.controller?._attach(this);
     _loadAll();
     _initSpeech();
+    // 플랜 타입 로드
+    UserDataService.load().then((d) {
+      if (mounted) setState(() => _planType = d.planType);
+    });
   }
 
   @override
@@ -5497,7 +5502,13 @@ class _TasksScreenState extends State<TasksScreen>
                 ],
               ),
               GestureDetector(
-                onTap: () => _showVisionModal(),
+                onTap: () {
+                if (_planType != 'master') {
+                  _showMasterOnlyDialog();
+                  return;
+                }
+                _showVisionModal();
+              },
                 child: Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 12,
@@ -5565,7 +5576,13 @@ class _TasksScreenState extends State<TasksScreen>
               final v = visions[i];
               return GestureDetector(
                 key: ValueKey(v.id),
-                onTap: () => _showVisionModal(v),
+                onTap: () {
+                if (_planType != 'master') {
+                  _showMasterOnlyDialog();
+                  return;
+                }
+                _showVisionModal(v);
+              },
                 child: Container(
                   margin: const EdgeInsets.only(bottom: 12),
                   padding: const EdgeInsets.all(20),
@@ -5645,6 +5662,79 @@ class _TasksScreenState extends State<TasksScreen>
             },
           ),
       ],
+    );
+  }
+
+  // ── 마스터 전용 기능 잠금 팝업 ───────────────────────────────
+  void _showMasterOnlyDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(28, 32, 28, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF5F3FF),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.lock_outline_rounded,
+                  color: Color(0xFF8B7CFF),
+                  size: 32,
+                ),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                '마스터 플랜 전용 기능',
+                style: GoogleFonts.notoSansKr(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                  color: const Color(0xFF3D3A4E),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                '장기 비전 기능은 마스터 플랜\n구독자만 이용할 수 있어요.\n마스터 플랜으로 업그레이드하면\n장기 비전·마일스톤 기능을 모두 활용할 수 있습니다.',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.notoSansKr(
+                  fontSize: 14,
+                  color: const Color(0xFF8E8A9E),
+                  height: 1.6,
+                ),
+              ),
+              const SizedBox(height: 28),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF8B7CFF),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    elevation: 0,
+                  ),
+                  child: Text(
+                    '확인',
+                    style: GoogleFonts.notoSansKr(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
