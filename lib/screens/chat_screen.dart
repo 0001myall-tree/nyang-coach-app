@@ -457,13 +457,13 @@ class _ChatScreenState extends State<ChatScreen>
       case 'cat':
         return '같이 가자냥';
       case 'boyfriend':
-        return '같이 하자';
+        return '내가 있잖아~^^';
       case 'girlfriend':
-        return '같이 해보자';
+        return '내가 응원할게~^^';
       case 'halmae':
-        return '차근차근';
+        return '우리 새끼 잘한다!!!';
       case 'bro':
-        return '가보자고';
+        return '일단 가보자고!!!';
       default:
         return '함께 가자';
     }
