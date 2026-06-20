@@ -2930,6 +2930,70 @@ class _ChatScreenState extends State<ChatScreen>
     ]);
   }
 
+  String? _broTargetedWorkoutAreas(String normalized) {
+    final areas = <String>[];
+    if (_containsAny(normalized, ['복부', '복근', '뱃살', '배살', '코어'])) {
+      areas.add('복부/코어');
+    }
+    if (_containsAny(normalized, ['하체', '다리', '엉덩이', '허벅지', '종아리'])) {
+      areas.add('하체');
+    }
+    if (_containsAny(normalized, ['상체', '팔', '이두', '삼두'])) {
+      areas.add('상체/팔');
+    }
+    if (_containsAny(normalized, ['어깨', '승모'])) {
+      areas.add('어깨');
+    }
+    if (_containsAny(normalized, ['등', '등운동', '광배'])) {
+      areas.add('등');
+    }
+    if (_containsAny(normalized, ['가슴', '흉근', '푸쉬업', '팔굽혀'])) {
+      areas.add('가슴');
+    }
+    if (_containsAny(normalized, ['전신', '온몸', '몸전체', '전체'])) {
+      areas.add('전신');
+    }
+    if (_containsAny(normalized, ['다이어트', '살빼', '체지방', '유산소'])) {
+      areas.add('다이어트/유산소');
+    }
+    if (_containsAny(normalized, ['스트레칭', '유연성', '풀어', '뻐근'])) {
+      areas.add('스트레칭');
+    }
+    if (areas.isEmpty) return null;
+    return areas.join(', ');
+  }
+
+  String? _buildBroTargetedWorkoutApiInput(String input) {
+    final normalized = _workoutNormalized(input);
+    final hasWorkoutIntent = _containsAny(normalized, [
+      '운동',
+      '루틴',
+      '추천',
+      '짜줘',
+      '해줘',
+      '뭐하지',
+      '뭐해야',
+      '뭘해야',
+      '할거',
+      '할것',
+      '스트레칭',
+      '다이어트',
+    ]);
+    if (!hasWorkoutIntent) return null;
+
+    final areas = _broTargetedWorkoutAreas(normalized);
+    if (areas == null) return null;
+
+    return '사용자가 부위별 또는 목적별 운동 추천을 요청했다. '
+        '사용자 원문: "$input". '
+        '중심 부위/목적: $areas. '
+        '사용자의 장소, 난이도, 시간, 소음 제약이 원문에 있으면 반드시 반영해줘. '
+        '조건이 부족하면 초보자도 바로 할 수 있는 짧은 루틴으로 추천하고, '
+        '세트/횟수/쉬는 시간을 간단히 포함해줘. '
+        '통증을 유발할 수 있는 동작은 피하고 대체 동작을 짧게 제시해줘. '
+        '말투는 갓생 형 코치답게 짧고 힘 있게 해줘.';
+  }
+
   Future<_BroWorkoutLink> _selectBroWarmupLink(String normalized) {
     if (_containsAny(normalized, ['하체', '다리', '스쿼트', '런지'])) {
       return _pickBroWorkoutLink([
@@ -3399,6 +3463,12 @@ class _ChatScreenState extends State<ChatScreen>
             '말투는 갓생 형 코치답게 짧고 힘 있게 해줘.';
         skipBroWorkoutLocalReply = true;
         _awaitingBroWorkoutPreference = false;
+      }
+
+      final targetedWorkoutApiInput = _buildBroTargetedWorkoutApiInput(trimmed);
+      if (targetedWorkoutApiInput != null) {
+        apiInput = targetedWorkoutApiInput;
+        skipBroWorkoutLocalReply = true;
       }
     }
 
