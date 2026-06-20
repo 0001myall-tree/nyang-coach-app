@@ -341,7 +341,7 @@ class _ChatScreenState extends State<ChatScreen>
   // 활성 타이머
   int? _timerActiveMinutes;
   String? _usageLimitBanner;
-  bool _awaitingBroWorkoutPlace = false;
+  bool _awaitingBroWorkoutPreference = false;
 
   // 냥냥코치 비구독자 무료체험 단계 (0=시작 전, 1=인트로 완료, 2=업셀 완료)
   int _catFreeTrialStep = 0;
@@ -2930,22 +2930,6 @@ class _ChatScreenState extends State<ChatScreen>
     ]);
   }
 
-  bool _isBroWorkoutPlaceChoice(String input) {
-    return const ['집', '헬스장', '밖'].contains(input);
-  }
-
-  String _broWorkoutPlaceReply(String place) {
-    switch (place) {
-      case '집':
-        return '좋아. 집이면 층간소음 없이 간다.\n스쿼트 15개, 런지 10개씩, 플랭크 30초.\n이거 2라운드만 해. 일단 시작.';
-      case '헬스장':
-        return '헬스장이면 방황 금지.\n러닝 5분, 레그프레스 3세트, 랫풀다운 3세트.\n마무리로 천천히 걷기 5분. 오늘은 이걸로 간다.';
-      case '밖':
-        return '밖이면 바로 걷기부터.\n빠른 걸음 10분, 계단 있으면 2번만 오르기.\n마지막 3분은 천천히 걸어. 가자.';
-    }
-    return '';
-  }
-
   Future<_BroWorkoutLink> _selectBroWarmupLink(String normalized) {
     if (_containsAny(normalized, ['하체', '다리', '스쿼트', '런지'])) {
       return _pickBroWorkoutLink([
@@ -3378,6 +3362,9 @@ class _ChatScreenState extends State<ChatScreen>
       }
     }
 
+    var apiInput = trimmed;
+    var skipBroWorkoutLocalReply = false;
+
     if (widget.coachId == 'bro') {
       if (trimmed == '지금 할 운동') {
         setState(() {
@@ -3386,13 +3373,13 @@ class _ChatScreenState extends State<ChatScreen>
           );
           _messages.add(
             ChatMessage(
-              text: '좋아. 지금 할 거면 장소부터 정하자.\n어디서 할 건데?',
+              text: '좋아. 장소랑 강도만 말해.\n예: 집에서 쉽게, 사무실 의자에서 조용히, 밖에서 빡세게.',
               isUser: false,
               time: DateTime.now(),
             ),
           );
-          _dynamicChips = ['집', '헬스장', '밖'];
-          _awaitingBroWorkoutPlace = true;
+          _dynamicChips = ['집에서 쉽게', '사무실 의자', '밖에서 빡세게'];
+          _awaitingBroWorkoutPreference = true;
         });
         _scrollToBottom();
         await _saveHistory();
@@ -3403,31 +3390,21 @@ class _ChatScreenState extends State<ChatScreen>
         return;
       }
 
-      if (_awaitingBroWorkoutPlace && _isBroWorkoutPlaceChoice(trimmed)) {
-        final placeReply = _broWorkoutPlaceReply(trimmed);
-        setState(() {
-          _messages.add(
-            ChatMessage(text: trimmed, isUser: true, time: DateTime.now()),
-          );
-          _messages.add(
-            ChatMessage(text: placeReply, isUser: false, time: DateTime.now()),
-          );
-          _dynamicChips = _coach.chips;
-          _awaitingBroWorkoutPlace = false;
-        });
-        _scrollToBottom();
-        await _saveHistory();
-        await AnalyticsService.logConversationMessage(
-          coachId: widget.coachId,
-          usedApi: false,
-        );
-        return;
+      if (_awaitingBroWorkoutPreference) {
+        apiInput =
+            '사용자가 지금 바로 할 운동을 추천받고 싶어 한다. '
+            '사용자가 말한 장소/환경/강도: "$trimmed". '
+            '이 조건에 맞춰 바로 시작할 수 있는 짧은 운동 루틴을 추천해줘. '
+            '장소가 좁거나 조용해야 할 수 있으니 층간소음과 안전을 고려하고, '
+            '말투는 갓생 형 코치답게 짧고 힘 있게 해줘.';
+        skipBroWorkoutLocalReply = true;
+        _awaitingBroWorkoutPreference = false;
       }
-
-      _awaitingBroWorkoutPlace = false;
     }
 
-    final broWorkoutReply = await _tryBuildBroWorkoutReply(trimmed);
+    final broWorkoutReply = skipBroWorkoutLocalReply
+        ? null
+        : await _tryBuildBroWorkoutReply(trimmed);
     if (broWorkoutReply != null) {
       setState(() {
         _messages.add(
@@ -3490,7 +3467,7 @@ class _ChatScreenState extends State<ChatScreen>
     }
 
     try {
-      final raw = await _callOpenAI(trimmed);
+      final raw = await _callOpenAI(apiInput);
       if (!mounted || widget.coachId != currentId) return;
       final usageNotice = await ApiUsageLimitService.takeChatUsageNotice();
       if (!mounted || widget.coachId != currentId) return;
