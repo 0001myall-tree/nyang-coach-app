@@ -134,7 +134,7 @@ class CoachConfigs {
       tier: 'friends',
       accentColor: Color(0xFF4B7BF5),
       accentLight: Color(0xFFEEF2FF),
-      chips: ['오늘 뭐부터 할까', '하기 싫다', '같이 생각해줘'],
+      chips: ['오늘 뭐부터 할까', '하기 싫다', '관리 좀 하고싶어'],
       voiceCount: 5, // 목소리 파일 5개
       backFlirts: [
         '야 나 진짜 기다렸어... 매일 생각했는데. 다시 왔지? 그걸로 됐어 🥺💙',
@@ -224,7 +224,7 @@ class CoachConfigs {
       tier: 'friends',
       accentColor: Color(0xFFF472B6),
       accentLight: Color(0xFFFDF2F8),
-      chips: ['오늘 뭐부터 할까', '하기 싫다', '같이 생각해줘'],
+      chips: ['오늘 뭐부터 할까', '하기 싫다', '관리 좀 하고싶어'],
       voiceCount: 5, // 목소리 파일 5개
       backFlirts: [
         '오빠!!!! 어디 갔다 왔어ㅠㅠ 보고싶었어!!!! 🩷',
