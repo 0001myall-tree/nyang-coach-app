@@ -298,7 +298,7 @@ class CoachConfigs {
       tier: 'friends',
       accentColor: Color(0xFF10B981),
       accentLight: Color(0xFFECFDF5),
-      chips: ['오늘 뭐부터 해?', '하기 싫어 할매ㅠㅠ', '할매가 골라줘'],
+      chips: ['방 치우기 싫어', '오늘 뭐부터 해?', '오늘 뭐 먹지?'],
       voiceCount: 5, // 목소리 파일 5개
       backFlirts: [
         '이놈아!! 어디 갔다 이제 오냐! ㅠㅠ 👵',
@@ -392,7 +392,7 @@ class CoachConfigs {
       tier: 'friends',
       accentColor: Color(0xFF6366F1),
       accentLight: Color(0xFFEEF2FF),
-      chips: ['오늘 뭐부터 할까', '하기 싫다', '나 좀 채찍질해줘'],
+      chips: ['집인데 운동 뭐하지?', '복부 운동 짜줘', '지금 할 운동'],
       voiceCount: 5, // 목소리 파일 5개
       backFlirts: [
         '왔네. 다시 형이랑 조져보자 🔥',

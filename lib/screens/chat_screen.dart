@@ -341,6 +341,7 @@ class _ChatScreenState extends State<ChatScreen>
   // 활성 타이머
   int? _timerActiveMinutes;
   String? _usageLimitBanner;
+  bool _awaitingBroWorkoutPlace = false;
 
   // 냥냥코치 비구독자 무료체험 단계 (0=시작 전, 1=인트로 완료, 2=업셀 완료)
   int _catFreeTrialStep = 0;
@@ -2929,6 +2930,22 @@ class _ChatScreenState extends State<ChatScreen>
     ]);
   }
 
+  bool _isBroWorkoutPlaceChoice(String input) {
+    return const ['집', '헬스장', '밖'].contains(input);
+  }
+
+  String _broWorkoutPlaceReply(String place) {
+    switch (place) {
+      case '집':
+        return '좋아. 집이면 층간소음 없이 간다.\n스쿼트 15개, 런지 10개씩, 플랭크 30초.\n이거 2라운드만 해. 일단 시작.';
+      case '헬스장':
+        return '헬스장이면 방황 금지.\n러닝 5분, 레그프레스 3세트, 랫풀다운 3세트.\n마무리로 천천히 걷기 5분. 오늘은 이걸로 간다.';
+      case '밖':
+        return '밖이면 바로 걷기부터.\n빠른 걸음 10분, 계단 있으면 2번만 오르기.\n마지막 3분은 천천히 걸어. 가자.';
+    }
+    return '';
+  }
+
   Future<_BroWorkoutLink> _selectBroWarmupLink(String normalized) {
     if (_containsAny(normalized, ['하체', '다리', '스쿼트', '런지'])) {
       return _pickBroWorkoutLink([
@@ -3359,6 +3376,55 @@ class _ChatScreenState extends State<ChatScreen>
         );
         return;
       }
+    }
+
+    if (widget.coachId == 'bro') {
+      if (trimmed == '지금 할 운동') {
+        setState(() {
+          _messages.add(
+            ChatMessage(text: trimmed, isUser: true, time: DateTime.now()),
+          );
+          _messages.add(
+            ChatMessage(
+              text: '좋아. 지금 할 거면 장소부터 정하자.\n어디서 할 건데?',
+              isUser: false,
+              time: DateTime.now(),
+            ),
+          );
+          _dynamicChips = ['집', '헬스장', '밖'];
+          _awaitingBroWorkoutPlace = true;
+        });
+        _scrollToBottom();
+        await _saveHistory();
+        await AnalyticsService.logConversationMessage(
+          coachId: widget.coachId,
+          usedApi: false,
+        );
+        return;
+      }
+
+      if (_awaitingBroWorkoutPlace && _isBroWorkoutPlaceChoice(trimmed)) {
+        final placeReply = _broWorkoutPlaceReply(trimmed);
+        setState(() {
+          _messages.add(
+            ChatMessage(text: trimmed, isUser: true, time: DateTime.now()),
+          );
+          _messages.add(
+            ChatMessage(text: placeReply, isUser: false, time: DateTime.now()),
+          );
+          _dynamicChips = _coach.chips;
+          _awaitingBroWorkoutPlace = false;
+        });
+        _scrollToBottom();
+        await _saveHistory();
+        await AnalyticsService.logConversationMessage(
+          coachId: widget.coachId,
+          usedApi: false,
+        );
+        return;
+      }
+
+      _awaitingBroWorkoutPlace = false;
     }
 
     final broWorkoutReply = await _tryBuildBroWorkoutReply(trimmed);
