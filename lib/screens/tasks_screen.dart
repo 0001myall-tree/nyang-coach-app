@@ -501,7 +501,6 @@ class _TasksScreenState extends State<TasksScreen>
   List<GoalItem> monthGoals = [];
   List<HabitItem> habits = [];
   List<VisionItem> visions = [];
-  String _planType = 'none'; // 'none' | 'friends' | 'master'
   Map<String, Map<String, dynamic>> habitLogs = {};
   Map<String, List<ScheduleItem>> schedules = {};
   Map<String, dynamic>? vacationInfo;
@@ -549,10 +548,6 @@ class _TasksScreenState extends State<TasksScreen>
     widget.controller?._attach(this);
     _loadAll();
     _initSpeech();
-    // 플랜 타입 로드
-    UserDataService.load().then((d) {
-      if (mounted) setState(() => _planType = d.planType);
-    });
   }
 
   @override
@@ -2477,9 +2472,11 @@ class _TasksScreenState extends State<TasksScreen>
   int get _doneTasks {
     return tasks.where((t) => t.done).length;
   }
+
   int get _totalTasks {
     return tasks.length;
   }
+
   double get _progressPct => _totalTasks > 0 ? _doneTasks / _totalTasks : 0.0;
 
   @override
@@ -4064,7 +4061,11 @@ class _TasksScreenState extends State<TasksScreen>
                               if (mInfo.isMilestoneSelf) {
                                 _showVisionModal(mInfo.vision);
                               } else {
-                                _showMemoDialog(context, mInfo.milestone, (fn) => setState(fn));
+                                _showMemoDialog(
+                                  context,
+                                  mInfo.milestone,
+                                  (fn) => setState(fn),
+                                );
                               }
                             },
                             child: Container(
@@ -4097,13 +4098,16 @@ class _TasksScreenState extends State<TasksScreen>
                                         ),
                                         children: [
                                           TextSpan(
-                                            text: mInfo.isMilestoneSelf ? '연동된 마일스톤: ' : '메모장의 실행 목록: ',
+                                            text: mInfo.isMilestoneSelf
+                                                ? '연동된 마일스톤: '
+                                                : '메모장의 실행 목록: ',
                                             style: const TextStyle(
                                               fontWeight: FontWeight.bold,
                                             ),
                                           ),
                                           TextSpan(
-                                            text: '${mInfo.visionName} > ${mInfo.milestoneText}',
+                                            text:
+                                                '${mInfo.visionName} > ${mInfo.milestoneText}',
                                           ),
                                         ],
                                       ),
@@ -4569,12 +4573,18 @@ class _TasksScreenState extends State<TasksScreen>
                 height: 22,
                 decoration: BoxDecoration(
                   color: t.done
-                      ? (isMilestone ? const Color(0xFF5AD7B0) : _coach.accentColor)
+                      ? (isMilestone
+                            ? const Color(0xFF5AD7B0)
+                            : _coach.accentColor)
                       : Colors.transparent,
                   border: Border.all(
                     color: t.done
-                        ? (isMilestone ? const Color(0xFF5AD7B0) : _coach.accentColor)
-                        : (isMilestone ? const Color(0xFF8B7CFF) : const Color(0xFFD1D5DB)),
+                        ? (isMilestone
+                              ? const Color(0xFF5AD7B0)
+                              : _coach.accentColor)
+                        : (isMilestone
+                              ? const Color(0xFF8B7CFF)
+                              : const Color(0xFFD1D5DB)),
                     width: 2,
                   ),
                   borderRadius: BorderRadius.circular(6),
@@ -4582,8 +4592,12 @@ class _TasksScreenState extends State<TasksScreen>
                 child: t.done
                     ? const Icon(Icons.check, color: Colors.white, size: 14)
                     : (isMilestone
-                        ? const Icon(Icons.flag, color: Color(0xFF8B7CFF), size: 12)
-                        : null),
+                          ? const Icon(
+                              Icons.flag,
+                              color: Color(0xFF8B7CFF),
+                              size: 12,
+                            )
+                          : null),
               ),
             ),
           ),
@@ -4596,7 +4610,11 @@ class _TasksScreenState extends State<TasksScreen>
                   if (milestoneInfo.isMilestoneSelf) {
                     _showVisionModal(milestoneInfo.vision);
                   } else {
-                    _showMemoDialog(context, milestoneInfo.milestone, (fn) => setState(fn));
+                    _showMemoDialog(
+                      context,
+                      milestoneInfo.milestone,
+                      (fn) => setState(fn),
+                    );
                   }
                   return;
                 }
@@ -4636,7 +4654,9 @@ class _TasksScreenState extends State<TasksScreen>
                               borderRadius: BorderRadius.circular(4),
                             ),
                             child: Text(
-                              milestoneInfo.isMilestoneSelf ? '마일스톤' : '메모장의 실행 목록',
+                              milestoneInfo.isMilestoneSelf
+                                  ? '마일스톤'
+                                  : '메모장의 실행 목록',
                               style: GoogleFonts.notoSansKr(
                                 fontSize: 9,
                                 fontWeight: FontWeight.bold,
@@ -4754,9 +4774,7 @@ class _TasksScreenState extends State<TasksScreen>
                 ScaffoldMessenger.of(context).hideCurrentSnackBar();
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
-                    content: Text(
-                      '마일스톤 일정은 목표 탭의 비전 관리에서 관리할 수 있습니다.',
-                    ),
+                    content: Text('마일스톤 일정은 목표 탭의 비전 관리에서 관리할 수 있습니다.'),
                   ),
                 );
                 return;
@@ -5503,16 +5521,12 @@ class _TasksScreenState extends State<TasksScreen>
               ),
               GestureDetector(
                 onTap: () {
-                if (_planType != 'master') {
-                  _showMasterOnlyDialog();
-                  return;
-                }
-                if (visions.length >= 3) {
-                  _showVisionLimitDialog();
-                  return;
-                }
-                _showVisionModal();
-              },
+                  if (visions.length >= 3) {
+                    _showVisionLimitDialog();
+                    return;
+                  }
+                  _showVisionModal();
+                },
                 child: Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 12,
@@ -5563,7 +5577,7 @@ class _TasksScreenState extends State<TasksScreen>
             ),
           )
         else
-        ReorderableListView.builder(
+          ReorderableListView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -5581,12 +5595,8 @@ class _TasksScreenState extends State<TasksScreen>
               return GestureDetector(
                 key: ValueKey(v.id),
                 onTap: () {
-                if (_planType != 'master') {
-                  _showMasterOnlyDialog();
-                  return;
-                }
-                _showVisionModal(v);
-              },
+                  _showVisionModal(v);
+                },
                 child: Container(
                   margin: const EdgeInsets.only(bottom: 12),
                   padding: const EdgeInsets.all(20),
@@ -5666,79 +5676,6 @@ class _TasksScreenState extends State<TasksScreen>
             },
           ),
       ],
-    );
-  }
-
-  // ── 마스터 전용 기능 잠금 팝업 ───────────────────────────────
-  void _showMasterOnlyDialog() {
-    showDialog(
-      context: context,
-      builder: (ctx) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(28, 32, 28, 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 64,
-                height: 64,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF5F3FF),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.lock_outline_rounded,
-                  color: Color(0xFF8B7CFF),
-                  size: 32,
-                ),
-              ),
-              const SizedBox(height: 20),
-              Text(
-                '마스터 플랜 전용 기능',
-                style: GoogleFonts.notoSansKr(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w900,
-                  color: const Color(0xFF3D3A4E),
-                ),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                '장기 비전 기능은 마스터 플랜\n구독자만 이용할 수 있어요.\n마스터 플랜으로 업그레이드하면\n장기 비전·마일스톤 기능을 모두 활용할 수 있습니다.',
-                textAlign: TextAlign.center,
-                style: GoogleFonts.notoSansKr(
-                  fontSize: 14,
-                  color: const Color(0xFF8E8A9E),
-                  height: 1.6,
-                ),
-              ),
-              const SizedBox(height: 28),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF8B7CFF),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    elevation: 0,
-                  ),
-                  child: Text(
-                    '확인',
-                    style: GoogleFonts.notoSansKr(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w800,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 
@@ -5915,7 +5852,6 @@ class _TasksScreenState extends State<TasksScreen>
   void _showVisionModal([VisionItem? vision]) {
     final isNew = vision == null;
     final nameCtrl = TextEditingController(text: vision?.name ?? '');
-    final descCtrl = TextEditingController(text: vision?.desc ?? '');
     String selectedYear = vision?.deadline.year ?? '${DateTime.now().year + 1}';
     String selectedMonth = vision?.deadline.month ?? '1';
     String selectedPeriod = vision?.deadline.period ?? '말';
@@ -5939,6 +5875,7 @@ class _TasksScreenState extends State<TasksScreen>
       builder: (ctx) {
         return StatefulBuilder(
           builder: (ctx, setModalState) {
+            final safeBottom = MediaQuery.of(ctx).viewPadding.bottom;
             return Padding(
               padding: EdgeInsets.only(
                 bottom: MediaQuery.of(ctx).viewInsets.bottom,
@@ -6011,7 +5948,7 @@ class _TasksScreenState extends State<TasksScreen>
                     Expanded(
                       child: SingleChildScrollView(
                         controller: scrollCtrl,
-                        padding: const EdgeInsets.all(24),
+                        padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -6063,36 +6000,7 @@ class _TasksScreenState extends State<TasksScreen>
                                 ),
                               ),
                             ),
-                            const SizedBox(height: 12),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 6,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(
-                                  color: const Color(0xFFE8E3F8),
-                                ),
-                              ),
-                              child: TextField(
-                                controller: descCtrl,
-                                maxLines: 2,
-                                style: GoogleFonts.notoSansKr(
-                                  fontSize: 14,
-                                  color: const Color(0xFF3D3A4E),
-                                ),
-                                decoration: InputDecoration(
-                                  hintText: '비전에 대한 짧은 설명을 적어주세요.',
-                                  hintStyle: GoogleFonts.notoSansKr(
-                                    color: const Color(0xFFA0A0B0),
-                                  ),
-                                  border: InputBorder.none,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 32),
+                            const SizedBox(height: 28),
                             // 목표 기한
                             Row(
                               children: [
@@ -6458,7 +6366,11 @@ class _TasksScreenState extends State<TasksScreen>
                                                 ),
                                                 GestureDetector(
                                                   onTap: () async {
-                                                    final confirm = await _showConfirmDeleteDialog('마일스톤 삭제', '이 마일스톤을 정말 삭제하시겠습니까?\n삭제된 내용은 복구할 수 없습니다.');
+                                                    final confirm =
+                                                        await _showConfirmDeleteDialog(
+                                                          '마일스톤 삭제',
+                                                          '이 마일스톤을 정말 삭제하시겠습니까?\n삭제된 내용은 복구할 수 없습니다.',
+                                                        );
                                                     if (!confirm) return;
                                                     setModalState(() {
                                                       milestones.removeAt(i);
@@ -6821,7 +6733,7 @@ class _TasksScreenState extends State<TasksScreen>
                     ),
                     // 하단 버튼
                     Container(
-                      padding: const EdgeInsets.all(24),
+                      padding: EdgeInsets.fromLTRB(24, 20, 24, 20 + safeBottom),
                       decoration: BoxDecoration(
                         color: Colors.white,
                         boxShadow: [
@@ -6839,7 +6751,10 @@ class _TasksScreenState extends State<TasksScreen>
                               flex: 1,
                               child: GestureDetector(
                                 onTap: () async {
-                                  final confirm = await _showConfirmDeleteDialog('장기 비전 삭제', '이 비전을 정말 삭제하시겠습니까?\\n하위 마일스톤들도 모두 함께 삭제됩니다.');
+                                  final confirm = await _showConfirmDeleteDialog(
+                                    '장기 비전 삭제',
+                                    '이 비전을 정말 삭제하시겠습니까?\\n하위 마일스톤들도 모두 함께 삭제됩니다.',
+                                  );
                                   if (!confirm) return;
                                   setState(() {
                                     visions.removeWhere(
@@ -6897,7 +6812,7 @@ class _TasksScreenState extends State<TasksScreen>
                                             .millisecondsSinceEpoch
                                             .toString(),
                                         name: nameCtrl.text.trim(),
-                                        desc: descCtrl.text.trim(),
+                                        desc: '',
                                         coachId: _coach.id,
                                         deadline: VisionDeadline(
                                           year: selectedYear,
@@ -6917,7 +6832,7 @@ class _TasksScreenState extends State<TasksScreen>
                                       visions[idx] = VisionItem(
                                         id: vision.id,
                                         name: nameCtrl.text.trim(),
-                                        desc: descCtrl.text.trim(),
+                                        desc: '',
                                         coachId: vision.coachId,
                                         deadline: VisionDeadline(
                                           year: selectedYear,
@@ -8501,7 +8416,8 @@ class _TasksScreenState extends State<TasksScreen>
               if (actTaskIdStr == tIdStr ||
                   actTaskIdStr == schedIdStr ||
                   (schedIdStr != null && actTaskIdStr == schedIdStr) ||
-                  (item is ScheduleItem && actTaskIdStr == item.id.toString())) {
+                  (item is ScheduleItem &&
+                      actTaskIdStr == item.id.toString())) {
                 return MilestoneInfo(
                   visionName: v.name,
                   milestoneText: m.text,
@@ -9027,7 +8943,9 @@ class _TasksScreenState extends State<TasksScreen>
                               borderRadius: BorderRadius.circular(4),
                             ),
                             child: Text(
-                              milestoneInfo.isMilestoneSelf ? '마일스톤' : '메모장의 실행 목록',
+                              milestoneInfo.isMilestoneSelf
+                                  ? '마일스톤'
+                                  : '메모장의 실행 목록',
                               style: GoogleFonts.notoSansKr(
                                 fontSize: 9,
                                 fontWeight: FontWeight.bold,
@@ -9056,7 +8974,11 @@ class _TasksScreenState extends State<TasksScreen>
                           child: GestureDetector(
                             onTap: () {
                               if (isMilestone) {
-                                _showMemoDialog(context, milestoneInfo.milestone, (fn) => setState(fn));
+                                _showMemoDialog(
+                                  context,
+                                  milestoneInfo.milestone,
+                                  (fn) => setState(fn),
+                                );
                               } else {
                                 _showEditItemModal(s, () {
                                   setState(() {});
@@ -9109,7 +9031,11 @@ class _TasksScreenState extends State<TasksScreen>
                     GestureDetector(
                       onTap: () {
                         if (isMilestone) {
-                          _showMemoDialog(context, milestoneInfo.milestone, (fn) => setState(fn));
+                          _showMemoDialog(
+                            context,
+                            milestoneInfo.milestone,
+                            (fn) => setState(fn),
+                          );
                         } else {
                           _showEditItemModal(s, () {
                             setState(() {});
@@ -10247,7 +10173,10 @@ class _TasksScreenState extends State<TasksScreen>
   }
 
   Future<void> _deleteHabit(dynamic id) async {
-    final confirm = await _showConfirmDeleteDialog('습관 항목 삭제', '이 습관을 정말 삭제하시겠습니까?\\n연결된 오늘의 할 일도 함께 삭제됩니다.');
+    final confirm = await _showConfirmDeleteDialog(
+      '습관 항목 삭제',
+      '이 습관을 정말 삭제하시겠습니까?\\n연결된 오늘의 할 일도 함께 삭제됩니다.',
+    );
     if (!confirm) return;
     setState(() => habits.removeWhere((h) => h.id.toString() == id.toString()));
     _saveHabits();
@@ -11181,6 +11110,50 @@ class _MilestoneMemoDialogState extends State<MilestoneMemoDialog> {
     }
   }
 
+  void _showInlineNoticeDialog(String message) {
+    if (!mounted) return;
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        titlePadding: const EdgeInsets.fromLTRB(24, 22, 24, 0),
+        contentPadding: const EdgeInsets.fromLTRB(24, 12, 24, 4),
+        actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+        title: Text(
+          '알림',
+          style: GoogleFonts.notoSansKr(
+            fontSize: 18,
+            fontWeight: FontWeight.w800,
+            color: const Color(0xFF2E2A3D),
+          ),
+        ),
+        content: Text(
+          message,
+          style: GoogleFonts.notoSansKr(
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+            color: const Color(0xFF4F4A60),
+            height: 1.45,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            style: TextButton.styleFrom(
+              foregroundColor: const Color(0xFF8B6CFF),
+              textStyle: GoogleFonts.notoSansKr(
+                fontSize: 14,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            child: const Text('확인'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _addNewAction() {
     setState(() {
       _actions.add(
@@ -11209,18 +11182,14 @@ class _MilestoneMemoDialogState extends State<MilestoneMemoDialog> {
   Future<void> _summarizeSection(int index) async {
     final content = _contentCtrls[index].text.trim();
     if (content.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('정리할 내용을 먼저 입력해 주세요.')));
+      _showInlineNoticeDialog('정리할 내용을 먼저 입력해 주세요.');
       return;
     }
 
     final limit = await ApiUsageLimitService.checkOrganizeAllowance();
     if (!limit.allowed) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(limit.message)));
+      _showInlineNoticeDialog(limit.message);
       return;
     }
 
@@ -11244,14 +11213,10 @@ class _MilestoneMemoDialogState extends State<MilestoneMemoDialog> {
       debugPrint('Memo summary error: $e');
       if (!mounted) return;
       if (e is ApiUsageLimitException) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(e.message)));
+        _showInlineNoticeDialog(e.message);
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('정리 중 오류가 발생했어요. 잠시 후 다시 시도해 주세요.')),
-      );
+      _showInlineNoticeDialog('정리 중 오류가 발생했어요. 잠시 후 다시 시도해 주세요.');
     } finally {
       if (mounted) {
         setState(() => _summarizingSectionIndex = null);

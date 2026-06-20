@@ -35,8 +35,7 @@ class AnalyticsService {
 
   static int _estimateCostWonFromTokens(int tokenCount) {
     if (tokenCount <= 0) return 0;
-    final usdCost =
-        tokenCount / 1000000 * _gpt4oMiniOutputUsdPerMillionTokens;
+    final usdCost = tokenCount / 1000000 * _gpt4oMiniOutputUsdPerMillionTokens;
     return (usdCost * _krwPerUsd).round();
   }
 
@@ -58,14 +57,41 @@ class AnalyticsService {
     return null;
   }
 
-  static int estimateChatTokens(List<Map<String, String>> messages, String reply) {
+  static int estimateChatTokens(
+    List<Map<String, String>> messages,
+    String reply,
+  ) {
     final totalChars =
         messages.fold<int>(
           0,
-          (sum, item) => sum + (item['content'] ?? '').length,
+          (total, item) => total + (item['content'] ?? '').length,
         ) +
         reply.length;
     return (totalChars / 3.2).ceil();
+  }
+
+  static Future<void> _safeSet(
+    DocumentReference<Map<String, dynamic>> ref,
+    Map<String, dynamic> data,
+    String label,
+  ) async {
+    try {
+      await ref.set(data, SetOptions(merge: true));
+    } catch (e) {
+      debugPrint('Analytics $label logging failed: $e');
+    }
+  }
+
+  static Future<void> _safeTimelineEvent(
+    String uid,
+    String eventType,
+    String description,
+  ) async {
+    try {
+      await _logTimelineEvent(uid, eventType, description);
+    } catch (e) {
+      debugPrint('Analytics timeline wrapper failed: $e');
+    }
   }
 
   /// 매일 최초 접속 시 DAU(일간 활성 사용자) 및 접속 기록 저장
@@ -73,21 +99,11 @@ class AnalyticsService {
     final user = _auth.currentUser;
     if (user == null) return;
 
+    final now = DateTime.now();
+    final dateKey = _dateKey(now);
+    final summaryRef = _userAnalyticsSummaryRef(user.uid);
+
     try {
-      final now = DateTime.now();
-      final dateKey = _dateKey(now);
-
-      // 사용자별 타임라인 이벤트 추가
-      await _logTimelineEvent(user.uid, 'app_open', '앱 접속');
-
-      // 날짜별 DAU 기록 (Set을 이용하여 중복 방지)
-      await _firestore.collection('analytics').doc('dau_$dateKey').set({
-        'date': dateKey,
-        'activeUsers': FieldValue.arrayUnion([user.uid]),
-        'totalVisits': FieldValue.increment(1),
-      }, SetOptions(merge: true));
-
-      final summaryRef = _userAnalyticsSummaryRef(user.uid);
       final summaryDoc = await summaryRef.get();
       final summaryData = summaryDoc.data();
       if (summaryData == null || summaryData['joinedAt'] == null) {
@@ -95,26 +111,34 @@ class AnalyticsService {
           'joinedAt': FieldValue.serverTimestamp(),
         }, SetOptions(merge: true));
       }
-
-      await summaryRef.set({
-        'uid': user.uid,
-        'email': user.email,
-        'lastActiveAt': FieldValue.serverTimestamp(),
-        'activeDates': FieldValue.arrayUnion([dateKey]),
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
-
-      await _userAnalyticsDailyRef(user.uid, dateKey).set({
-        'date': dateKey,
-        'uid': user.uid,
-        'email': user.email,
-        'openedAt': FieldValue.serverTimestamp(),
-        'appOpenCount': FieldValue.increment(1),
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
     } catch (e) {
-      debugPrint('Analytics app open logging failed: $e');
+      debugPrint('Analytics joinedAt logging failed: $e');
     }
+
+    await _safeSet(summaryRef, {
+      'uid': user.uid,
+      'email': user.email,
+      'lastActiveAt': FieldValue.serverTimestamp(),
+      'activeDates': FieldValue.arrayUnion([dateKey]),
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, 'user app open summary');
+
+    await _safeSet(_userAnalyticsDailyRef(user.uid, dateKey), {
+      'date': dateKey,
+      'uid': user.uid,
+      'email': user.email,
+      'openedAt': FieldValue.serverTimestamp(),
+      'appOpenCount': FieldValue.increment(1),
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, 'user app open daily');
+
+    await _safeTimelineEvent(user.uid, 'app_open', '앱 접속');
+
+    await _safeSet(_firestore.collection('analytics').doc('dau_$dateKey'), {
+      'date': dateKey,
+      'activeUsers': FieldValue.arrayUnion([user.uid]),
+      'totalVisits': FieldValue.increment(1),
+    }, 'global dau');
   }
 
   /// 특정 코치와 대화한 횟수 및 비용 로깅
@@ -126,70 +150,76 @@ class AnalyticsService {
     final user = _auth.currentUser;
     if (user == null) return;
 
-    try {
-      final dateKey = _dateKey(DateTime.now());
-      await _firestore.collection('analytics').doc('conversation_usage').set({
+    final dateKey = _dateKey(DateTime.now());
+    final conversationPayload = {
+      'uid': user.uid,
+      'email': user.email,
+      'totalUserMessages': FieldValue.increment(1),
+      'totalCoachReplies': FieldValue.increment(coachReplied ? 1 : 0),
+      'apiReplies': FieldValue.increment(usedApi && coachReplied ? 1 : 0),
+      'localReplies': FieldValue.increment(!usedApi && coachReplied ? 1 : 0),
+      'coachUsage': {coachId: FieldValue.increment(1)},
+      'lastActiveAt': FieldValue.serverTimestamp(),
+      'activeDates': FieldValue.arrayUnion([dateKey]),
+      'updatedAt': FieldValue.serverTimestamp(),
+    };
+
+    await _safeSet(
+      _userAnalyticsSummaryRef(user.uid),
+      conversationPayload,
+      'user conversation summary',
+    );
+
+    await _safeSet(_userAnalyticsDailyRef(user.uid, dateKey), {
+      'date': dateKey,
+      ...conversationPayload,
+    }, 'user conversation daily');
+
+    await _safeSet(
+      _firestore.collection('analytics').doc('conversation_usage'),
+      {
         'totalUserMessages': FieldValue.increment(1),
         'totalCoachReplies': FieldValue.increment(coachReplied ? 1 : 0),
         'apiReplies': FieldValue.increment(usedApi && coachReplied ? 1 : 0),
         'localReplies': FieldValue.increment(!usedApi && coachReplied ? 1 : 0),
         'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+      },
+      'global conversation',
+    );
 
-      await _firestore
+    await _safeSet(
+      _firestore.collection('analytics').doc('conversation_usage_by_coach'),
+      {
+        '$coachId.totalUserMessages': FieldValue.increment(1),
+        '$coachId.totalCoachReplies': FieldValue.increment(
+          coachReplied ? 1 : 0,
+        ),
+        '$coachId.apiReplies': FieldValue.increment(
+          usedApi && coachReplied ? 1 : 0,
+        ),
+        '$coachId.localReplies': FieldValue.increment(
+          !usedApi && coachReplied ? 1 : 0,
+        ),
+        '$coachId.updatedAt': FieldValue.serverTimestamp(),
+      },
+      'global conversation by coach',
+    );
+
+    await _safeSet(
+      _firestore
           .collection('analytics')
-          .doc('conversation_usage_by_coach')
-          .set({
-            '$coachId.totalUserMessages': FieldValue.increment(1),
-            '$coachId.totalCoachReplies': FieldValue.increment(
-              coachReplied ? 1 : 0,
-            ),
-            '$coachId.apiReplies': FieldValue.increment(
-              usedApi && coachReplied ? 1 : 0,
-            ),
-            '$coachId.localReplies': FieldValue.increment(
-              !usedApi && coachReplied ? 1 : 0,
-            ),
-            '$coachId.updatedAt': FieldValue.serverTimestamp(),
-          }, SetOptions(merge: true));
-
-      await _firestore
-          .collection('analytics')
-          .doc('conversation_usage_daily_$dateKey')
-          .set({
-            'date': dateKey,
-            'activeUsers': FieldValue.arrayUnion([user.uid]),
-            'totalUserMessages': FieldValue.increment(1),
-            'totalCoachReplies': FieldValue.increment(coachReplied ? 1 : 0),
-            'apiReplies': FieldValue.increment(usedApi && coachReplied ? 1 : 0),
-            'localReplies': FieldValue.increment(
-              !usedApi && coachReplied ? 1 : 0,
-            ),
-            'updatedAt': FieldValue.serverTimestamp(),
-          }, SetOptions(merge: true));
-
-      final conversationPayload = {
+          .doc('conversation_usage_daily_$dateKey'),
+      {
+        'date': dateKey,
+        'activeUsers': FieldValue.arrayUnion([user.uid]),
         'totalUserMessages': FieldValue.increment(1),
         'totalCoachReplies': FieldValue.increment(coachReplied ? 1 : 0),
         'apiReplies': FieldValue.increment(usedApi && coachReplied ? 1 : 0),
         'localReplies': FieldValue.increment(!usedApi && coachReplied ? 1 : 0),
-        'coachUsage': {
-          coachId: FieldValue.increment(1),
-        },
         'updatedAt': FieldValue.serverTimestamp(),
-      };
-
-      await _userAnalyticsSummaryRef(
-        user.uid,
-      ).set(conversationPayload, SetOptions(merge: true));
-
-      await _userAnalyticsDailyRef(
-        user.uid,
-        dateKey,
-      ).set({'date': dateKey, ...conversationPayload}, SetOptions(merge: true));
-    } catch (e) {
-      debugPrint('Analytics conversation logging failed: $e');
-    }
+      },
+      'global conversation daily',
+    );
   }
 
   /// 특정 코치의 API 사용량 및 비용 로깅
@@ -202,59 +232,58 @@ class AnalyticsService {
     final user = _auth.currentUser;
     if (user == null) return;
 
-    try {
-      final dateKey = _dateKey(DateTime.now());
-      final tokenCount = actualTokens ?? estimatedTokens;
-      // 서버에서 실제 비용을 내려주지 않으면 GPT-4o-mini 출력 단가 기준으로 보수적으로 추정합니다.
-      final costWon = actualCostWon ?? _estimateCostWonFromTokens(tokenCount);
+    final dateKey = _dateKey(DateTime.now());
+    final tokenCount = actualTokens ?? estimatedTokens;
+    // 서버에서 실제 비용을 내려주지 않으면 GPT-4o-mini 출력 단가 기준으로 보수적으로 추정합니다.
+    final costWon = actualCostWon ?? _estimateCostWonFromTokens(tokenCount);
+    final apiPayload = {
+      'uid': user.uid,
+      'email': user.email,
+      'totalTokens': FieldValue.increment(tokenCount),
+      'totalCostWon': FieldValue.increment(costWon),
+      'apiCallCount': FieldValue.increment(1),
+      'lastActiveAt': FieldValue.serverTimestamp(),
+      'activeDates': FieldValue.arrayUnion([dateKey]),
+      'updatedAt': FieldValue.serverTimestamp(),
+    };
 
-      // 사용자 타임라인 이벤트 추가
-      await _logTimelineEvent(user.uid, 'chat', '코치($coachId)와 대화 진행');
+    await _safeSet(
+      _userAnalyticsSummaryRef(user.uid),
+      apiPayload,
+      'user api summary',
+    );
 
-      // 1. 코치별 사용량 누적
-      await _firestore.collection('analytics').doc('coach_usage').set({
-        coachId: FieldValue.increment(1),
-        'totalChats': FieldValue.increment(1),
-      }, SetOptions(merge: true));
+    await _safeSet(_userAnalyticsDailyRef(user.uid, dateKey), {
+      'date': dateKey,
+      ...apiPayload,
+    }, 'user api daily');
 
-      // 2. 전체 토큰 및 예상 비용 누적
-      await _firestore.collection('analytics').doc('api_costs').set({
+    await _safeTimelineEvent(user.uid, 'chat', '코치($coachId)와 대화 진행');
+
+    await _safeSet(_firestore.collection('analytics').doc('coach_usage'), {
+      coachId: FieldValue.increment(1),
+      'totalChats': FieldValue.increment(1),
+    }, 'global coach usage');
+
+    await _safeSet(_firestore.collection('analytics').doc('api_costs'), {
+      'totalTokens': FieldValue.increment(tokenCount),
+      'totalCostWon': FieldValue.increment(costWon),
+      'apiCallCount': FieldValue.increment(1),
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, 'global api costs');
+
+    await _safeSet(
+      _firestore.collection('analytics').doc('api_costs_daily_$dateKey'),
+      {
+        'date': dateKey,
+        'activeUsers': FieldValue.arrayUnion([user.uid]),
         'totalTokens': FieldValue.increment(tokenCount),
         'totalCostWon': FieldValue.increment(costWon),
         'apiCallCount': FieldValue.increment(1),
         'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
-
-      await _firestore
-          .collection('analytics')
-          .doc('api_costs_daily_$dateKey')
-          .set({
-            'date': dateKey,
-            'activeUsers': FieldValue.arrayUnion([user.uid]),
-            'totalTokens': FieldValue.increment(tokenCount),
-            'totalCostWon': FieldValue.increment(costWon),
-            'apiCallCount': FieldValue.increment(1),
-            'updatedAt': FieldValue.serverTimestamp(),
-          }, SetOptions(merge: true));
-
-      final apiPayload = {
-        'totalTokens': FieldValue.increment(tokenCount),
-        'totalCostWon': FieldValue.increment(costWon),
-        'apiCallCount': FieldValue.increment(1),
-        'updatedAt': FieldValue.serverTimestamp(),
-      };
-
-      await _userAnalyticsSummaryRef(
-        user.uid,
-      ).set(apiPayload, SetOptions(merge: true));
-
-      await _userAnalyticsDailyRef(
-        user.uid,
-        dateKey,
-      ).set({'date': dateKey, ...apiPayload}, SetOptions(merge: true));
-    } catch (e) {
-      debugPrint('Analytics api usage logging failed: $e');
-    }
+      },
+      'global api costs daily',
+    );
   }
 
   /// 기능 사용 로깅 (모닝콜, 명상, 나이트콜 등)
@@ -262,37 +291,34 @@ class AnalyticsService {
     final user = _auth.currentUser;
     if (user == null) return;
 
-    try {
-      final now = DateTime.now();
-      final dateKey = _dateKey(now);
+    final dateKey = _dateKey(DateTime.now());
+    final featurePayload = {
+      'uid': user.uid,
+      'email': user.email,
+      'features': {featureName: FieldValue.increment(1)},
+      'lastActiveAt': FieldValue.serverTimestamp(),
+      'activeDates': FieldValue.arrayUnion([dateKey]),
+      'updatedAt': FieldValue.serverTimestamp(),
+    };
 
-      await _logTimelineEvent(user.uid, 'feature', '기능 사용: $featureName');
+    await _safeSet(
+      _userAnalyticsSummaryRef(user.uid),
+      featurePayload,
+      'user feature summary',
+    );
 
-      await _firestore.collection('analytics').doc('feature_usage').set({
-        featureName: FieldValue.increment(1),
-      }, SetOptions(merge: true));
+    await _safeSet(_userAnalyticsDailyRef(user.uid, dateKey), {
+      'date': dateKey,
+      ...featurePayload,
+    }, 'user feature daily');
 
-      await _userAnalyticsSummaryRef(user.uid).set({
-        'uid': user.uid,
-        'email': user.email,
-        'features': {
-          featureName: FieldValue.increment(1),
-        },
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+    await _safeTimelineEvent(user.uid, 'feature', '기능 사용: $featureName');
 
-      await _userAnalyticsDailyRef(user.uid, dateKey).set({
-        'date': dateKey,
-        'uid': user.uid,
-        'email': user.email,
-        'features': {
-          featureName: FieldValue.increment(1),
-        },
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
-    } catch (e) {
-      debugPrint('Analytics feature logging failed: $e');
-    }
+    await _safeSet(
+      _firestore.collection('analytics').doc('feature_usage'),
+      {featureName: FieldValue.increment(1)},
+      'global feature usage',
+    );
   }
 
   /// 에러 발생 시 로깅

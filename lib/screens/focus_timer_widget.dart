@@ -168,7 +168,6 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
   bool _loaded = false;
   _TimerView _view = _TimerView.timer;
   int _completedStage = 25;
-  int _todayCount = 0;
 
   // 집중 소리
   final AudioPlayer _audioPlayer = AudioPlayer();
@@ -197,11 +196,13 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
   };
 
   bool get _isMale => widget.coachId == 'sec_male';
+  bool get _isMasterTimer =>
+      widget.coachId == 'sec_male' || widget.coachId == 'sec_female';
 
   List<Color> get _cardGradient => [const Color(0xFF1A1A2E), const Color(0xFF2D2A4E)];
 
   Color get _ringColor  => const Color(0xFFA78BFA);
-  Color get _ringTrack  => Colors.white.withOpacity(0.1);
+  Color get _ringTrack  => Colors.white.withValues(alpha: 0.1);
   Color get _labelColor => const Color(0xFFC4B5FD);
   Color get _soundActiveColor => const Color(0xFF7C3AED);
 
@@ -248,7 +249,6 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
 
   Future<void> _initManager() async {
     await _manager.loadState();
-    _todayCount = await _manager.getTodayCompletedCount();
 
     if (_manager.coachId == null) {
       _manager.coachId = widget.coachId;
@@ -269,11 +269,6 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
     }
 
     if (mounted) setState(() { _loaded = true; });
-  }
-
-  String _getStartMsg() {
-    final m = _msgs[widget.coachId] ?? _msgs['sec_male']!;
-    return m[_manager.stage]?['start'] ?? '';
   }
 
   String _getDoneMsg() {
@@ -313,7 +308,6 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
     await _stopSound();
     await _manager.incrementTodayCount();
     await AnalyticsService.logFeatureUsage('timer');
-    _todayCount = await _manager.getTodayCompletedCount();
 
     if (showMsg) {
       final msg = _getDoneMsg();
@@ -336,10 +330,6 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
         final isFirst = (_manager.pausedRemainSec == null);
         if (isFirst) {
           await _manager.start(_manager.stage, widget.coachId);
-          final msg = _getStartMsg();
-          Future.delayed(const Duration(milliseconds: 300), () {
-            if (mounted) widget.onMessage(msg);
-          });
         } else {
           await _manager.resume();
         }
@@ -430,10 +420,272 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
       transitionBuilder: (child, anim) =>
           FadeTransition(opacity: anim, child: child),
       child: switch (_view) {
-        _TimerView.timer    => _buildTimerView(),
-        _TimerView.done     => _buildDoneView(),
+        _TimerView.timer    => _isMasterTimer ? _buildTimerView() : _buildFriendTimerView(),
+        _TimerView.done     => _isMasterTimer ? _buildDoneView() : _buildFriendDoneView(),
         _TimerView.soundOnly => _buildSoundOnlyView(),
       },
+    );
+  }
+
+  Widget _buildFriendTimerView() {
+    final stageLabels = {5: '총 5분 집중 중', 15: '총 15분 집중 중', 25: '총 25분 집중 중'};
+    final remain = _manager.getRemainSeconds();
+    final isDone = remain <= 0;
+    const mainPurple = Color(0xFF7C6BEA);
+    const softPurple = Color(0xFFF7F3FF);
+    const borderPurple = Color(0xFFE7DDFC);
+
+    return Align(
+      alignment: Alignment.center,
+      child: FractionallySizedBox(
+        widthFactor: 0.88,
+        child: Container(
+          key: const ValueKey('friendTimer'),
+          margin: const EdgeInsets.only(top: 10, bottom: 2),
+          padding: const EdgeInsets.fromLTRB(18, 18, 18, 14),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: borderPurple, width: 1),
+            boxShadow: [
+              BoxShadow(
+                color: mainPurple.withValues(alpha: 0.10),
+                blurRadius: 18,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                '집중 시간',
+                style: GoogleFonts.notoSansKr(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                  color: const Color(0xFF7E73C8),
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                _timeDisplay,
+                style: GoogleFonts.notoSansKr(
+                  fontSize: 42,
+                  fontWeight: FontWeight.w900,
+                  height: 1.0,
+                  color: mainPurple,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                isDone
+                    ? '집중 완료'
+                    : _manager.running
+                        ? stageLabels[_manager.stage] ?? '집중 중'
+                        : '${_manager.stage}분 집중 준비',
+                style: GoogleFonts.notoSansKr(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: const Color(0xFF8B7DE0),
+                ),
+              ),
+              const SizedBox(height: 14),
+              Row(
+                children: [5, 15, 25].map((m) {
+                  final isActive = _manager.stage == m;
+                  return Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: GestureDetector(
+                        onTap: () => _setStage(m),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 180),
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          decoration: BoxDecoration(
+                            color: isActive ? mainPurple : Colors.white,
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: isActive ? mainPurple : borderPurple,
+                              width: 1,
+                            ),
+                          ),
+                          child: Center(
+                            child: Text(
+                              '$m분',
+                              style: GoogleFonts.notoSansKr(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w800,
+                                color: isActive ? Colors.white : mainPurple,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 14),
+              Container(height: 1, color: const Color(0xFFF0ECFA)),
+              const SizedBox(height: 12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  GestureDetector(
+                    onTap: isDone ? null : _toggle,
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 180),
+                      width: 116,
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      decoration: BoxDecoration(
+                        color: softPurple,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: borderPurple, width: 1),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            _manager.running
+                                ? Icons.pause_rounded
+                                : Icons.play_arrow_rounded,
+                            size: 18,
+                            color: mainPurple,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            _manager.running ? '일시정지' : '시작',
+                            style: GoogleFonts.notoSansKr(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w800,
+                              color: const Color(0xFF5F52C6),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  GestureDetector(
+                    onTap: _reset,
+                    child: Container(
+                      width: 58,
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: borderPurple, width: 1),
+                      ),
+                      child: const Icon(
+                        Icons.refresh_rounded,
+                        size: 20,
+                        color: mainPurple,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFriendDoneView() {
+    final stageMin = _completedStage;
+    const mainPurple = Color(0xFF7C6BEA);
+    const borderPurple = Color(0xFFE7DDFC);
+
+    return Align(
+      alignment: Alignment.center,
+      child: FractionallySizedBox(
+        widthFactor: 0.88,
+        child: Container(
+          key: const ValueKey('friendDone'),
+          margin: const EdgeInsets.only(top: 10, bottom: 2),
+          padding: const EdgeInsets.fromLTRB(20, 22, 20, 18),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: borderPurple, width: 1),
+            boxShadow: [
+              BoxShadow(
+                color: mainPurple.withValues(alpha: 0.10),
+                blurRadius: 18,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 52,
+                height: 52,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: const Color(0xFFF3EEFF),
+                  border: Border.all(color: borderPurple, width: 1),
+                ),
+                child: const Icon(
+                  Icons.check_rounded,
+                  size: 30,
+                  color: mainPurple,
+                ),
+              ),
+              const SizedBox(height: 14),
+              Text(
+                '집중 완료',
+                style: GoogleFonts.notoSansKr(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w900,
+                  color: const Color(0xFF4E438F),
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                '$stageMin분 집중을 마쳤어요.',
+                style: GoogleFonts.notoSansKr(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: const Color(0xFF8B7DE0),
+                ),
+              ),
+              const SizedBox(height: 18),
+              GestureDetector(
+                onTap: () async {
+                  await _manager.reset(_completedStage);
+                  if (mounted) setState(() { _view = _TimerView.timer; });
+                },
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  decoration: BoxDecoration(
+                    color: mainPurple,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 19),
+                      const SizedBox(width: 6),
+                      Text(
+                        '새 타이머 시작',
+                        style: GoogleFonts.notoSansKr(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w900,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -451,7 +703,7 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.18), blurRadius: 32, offset: const Offset(0, 8)),
+          BoxShadow(color: Colors.black.withValues(alpha: 0.18), blurRadius: 32, offset: const Offset(0, 8)),
         ],
       ),
       child: ClipRRect(
@@ -475,7 +727,7 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
                     '⏱ FOCUS TIMER',
                     style: GoogleFonts.notoSansKr(
                       fontSize: 10, fontWeight: FontWeight.w800,
-                      letterSpacing: 2, color: _labelColor.withOpacity(0.85),
+                      letterSpacing: 2, color: _labelColor.withValues(alpha: 0.85),
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -510,7 +762,7 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
                                       : stageLabels[_manager.stage] ?? '${_manager.stage}분',
                               style: GoogleFonts.notoSansKr(
                                 fontSize: 9, fontWeight: FontWeight.w700,
-                                color: _labelColor.withOpacity(0.85), letterSpacing: 1,
+                                color: _labelColor.withValues(alpha: 0.85), letterSpacing: 1,
                               ),
                             ),
                           ],
@@ -531,18 +783,18 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
                             duration: const Duration(milliseconds: 200),
                             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                             decoration: BoxDecoration(
-                              color: isActive ? Colors.white.withOpacity(0.2) : Colors.transparent,
+                              color: isActive ? Colors.white.withValues(alpha: 0.2) : Colors.transparent,
                               borderRadius: BorderRadius.circular(20),
                               border: Border.all(
-                                color: isActive ? Colors.white : Colors.white.withOpacity(0.3),
+                                color: isActive ? Colors.white : Colors.white.withValues(alpha: 0.3),
                                 width: 1.5,
                               ),
                             ),
                             child: Text(
-                              '${m}분',
+                              '$m분',
                               style: GoogleFonts.notoSansKr(
                                 fontSize: 11, fontWeight: FontWeight.w800,
-                                color: isActive ? Colors.white : Colors.white.withOpacity(0.5),
+                                color: isActive ? Colors.white : Colors.white.withValues(alpha: 0.5),
                               ),
                             ),
                           ),
@@ -575,7 +827,7 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
                                   colors: _cardGradient,
                                 ),
                           borderRadius: BorderRadius.circular(14),
-                          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 14, offset: const Offset(0, 4))],
+                          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.15), blurRadius: 14, offset: const Offset(0, 4))],
                         ),
                         child: Center(
                           child: Text(
@@ -606,7 +858,7 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
                           width: 1.5,
                         ),
                         boxShadow: _soundOn
-                            ? [BoxShadow(color: _soundActiveColor.withOpacity(0.35), blurRadius: 12, offset: const Offset(0, 4))]
+                            ? [BoxShadow(color: _soundActiveColor.withValues(alpha: 0.35), blurRadius: 12, offset: const Offset(0, 4))]
                             : [],
                       ),
                       child: Column(
@@ -620,7 +872,7 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
                               color: _soundOn ? Colors.white : const Color(0xFF9CA3AF))),
                           Text(_soundOn ? 'ON' : 'OFF', style: GoogleFonts.notoSansKr(
                               fontSize: 9, fontWeight: FontWeight.w900, letterSpacing: 1,
-                              color: _soundOn ? Colors.white.withOpacity(0.9) : const Color(0xFFD1D5DB))),
+                              color: _soundOn ? Colors.white.withValues(alpha: 0.9) : const Color(0xFFD1D5DB))),
                         ],
                       ),
                     ),
@@ -662,7 +914,7 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
       decoration: BoxDecoration(
         color: _darkBg,
         borderRadius: BorderRadius.circular(20),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.28), blurRadius: 32, offset: const Offset(0, 8))],
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.28), blurRadius: 32, offset: const Offset(0, 8))],
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(20),
@@ -696,7 +948,7 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
                       height: 200,
                       decoration: BoxDecoration(
                         gradient: RadialGradient(
-                          colors: [_purpleMain.withOpacity(0.22), Colors.transparent],
+                          colors: [_purpleMain.withValues(alpha: 0.22), Colors.transparent],
                           radius: 0.7,
                         ),
                       ),
@@ -748,10 +1000,10 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    '${stageMin}분 집중이 완료되었습니다.',
+                    '$stageMin분 집중이 완료되었습니다.',
                     style: GoogleFonts.notoSansKr(
                       fontSize: 13, fontWeight: FontWeight.w500,
-                      color: Colors.white.withOpacity(0.6),
+                      color: Colors.white.withValues(alpha: 0.6),
                     ),
                   ),
                   const SizedBox(height: 22),
@@ -772,7 +1024,7 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
                           end: Alignment.bottomRight,
                         ),
                         borderRadius: BorderRadius.circular(14),
-                        boxShadow: [BoxShadow(color: _purpleMain.withOpacity(0.4), blurRadius: 16, offset: const Offset(0, 4))],
+                        boxShadow: [BoxShadow(color: _purpleMain.withValues(alpha: 0.4), blurRadius: 16, offset: const Offset(0, 4))],
                       ),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -787,7 +1039,7 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
                                   fontSize: 15, fontWeight: FontWeight.w900, color: Colors.white)),
                               Text('다시 집중을 시작할게요', style: GoogleFonts.notoSansKr(
                                   fontSize: 10, fontWeight: FontWeight.w500,
-                                  color: Colors.white.withOpacity(0.75))),
+                                  color: Colors.white.withValues(alpha: 0.75))),
                             ],
                           ),
                         ],
@@ -806,9 +1058,9 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
                       width: double.infinity,
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.06),
+                        color: Colors.white.withValues(alpha: 0.06),
                         borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: Colors.white.withOpacity(0.15), width: 1.5),
+                        border: Border.all(color: Colors.white.withValues(alpha: 0.15), width: 1.5),
                       ),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -823,7 +1075,7 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
                                   fontSize: 15, fontWeight: FontWeight.w900, color: Colors.white)),
                               Text('타이머 없이 집중 소리를 계속 들을게요', style: GoogleFonts.notoSansKr(
                                   fontSize: 10, fontWeight: FontWeight.w500,
-                                  color: Colors.white.withOpacity(0.5))),
+                                  color: Colors.white.withValues(alpha: 0.5))),
                             ],
                           ),
                         ],
@@ -865,7 +1117,7 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
         top:   s[1],
         child: AnimatedBuilder(
           animation: _waveAnim,
-          builder: (_, __) {
+          builder: (_, _) {
             final pulse = 0.7 + 0.3 * _waveAnim.value;
             return Opacity(
               opacity: s[3] * pulse,
@@ -890,7 +1142,7 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
       decoration: BoxDecoration(
         color: _darkBg,
         borderRadius: BorderRadius.circular(20),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.25), blurRadius: 32, offset: const Offset(0, 8))],
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.25), blurRadius: 32, offset: const Offset(0, 8))],
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(20),
@@ -906,7 +1158,7 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
                 children: [
                   AnimatedBuilder(
                     animation: _waveAnim,
-                    builder: (_, __) => _buildWaveBars(mirror: true),
+                    builder: (_, _) => _buildWaveBars(mirror: true),
                   ),
                   const SizedBox(width: 16),
                   Container(
@@ -914,14 +1166,14 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       border: Border.all(color: _purpleLight, width: 2.5),
-                      color: _purpleMain.withOpacity(0.15),
+                      color: _purpleMain.withValues(alpha: 0.15),
                     ),
                     child: const Icon(Icons.headphones_rounded, color: _purpleLight, size: 36),
                   ),
                   const SizedBox(width: 16),
                   AnimatedBuilder(
                     animation: _waveAnim,
-                    builder: (_, __) => _buildWaveBars(mirror: false),
+                    builder: (_, _) => _buildWaveBars(mirror: false),
                   ),
                 ],
               ),
@@ -938,7 +1190,7 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
                 '타이머 없이 집중 소리를 계속 들을 수 있어요.\n원하실 때 중단해 주세요.',
                 textAlign: TextAlign.center,
                 style: GoogleFonts.notoSansKr(
-                  fontSize: 12, color: Colors.white.withOpacity(0.55), height: 1.6,
+                  fontSize: 12, color: Colors.white.withValues(alpha: 0.55), height: 1.6,
                 ),
               ),
               const SizedBox(height: 24),
@@ -958,7 +1210,7 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
                       begin: Alignment.topLeft, end: Alignment.bottomRight,
                     ),
                     borderRadius: BorderRadius.circular(14),
-                    boxShadow: [BoxShadow(color: _purpleMain.withOpacity(0.4), blurRadius: 16, offset: const Offset(0, 4))],
+                    boxShadow: [BoxShadow(color: _purpleMain.withValues(alpha: 0.4), blurRadius: 16, offset: const Offset(0, 4))],
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -980,9 +1232,9 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.05),
+                  color: Colors.white.withValues(alpha: 0.05),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.white.withOpacity(0.1), width: 1),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.1), width: 1),
                 ),
                 child: Row(
                   children: [
@@ -992,7 +1244,7 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
                       child: Text('집중 소리는 계속 재생 중이에요',
                           style: GoogleFonts.notoSansKr(
                               fontSize: 12, fontWeight: FontWeight.w600,
-                              color: Colors.white.withOpacity(0.7))),
+                              color: Colors.white.withValues(alpha: 0.7))),
                     ),
                     const Text('∞', style: TextStyle(fontSize: 18, color: _purpleLight, fontWeight: FontWeight.w900)),
                   ],
@@ -1016,7 +1268,7 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
         width: 3, height: h,
         margin: const EdgeInsets.symmetric(horizontal: 2),
         decoration: BoxDecoration(
-          color: _purpleLight.withOpacity(0.7),
+          color: _purpleLight.withValues(alpha: 0.7),
           borderRadius: BorderRadius.circular(2),
         ),
       );

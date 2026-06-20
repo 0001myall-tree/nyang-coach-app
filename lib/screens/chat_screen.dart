@@ -348,6 +348,7 @@ class _ChatScreenState extends State<ChatScreen>
 
   int _completedTasks = 0;
   int _totalTasks = 0;
+  int _attendanceStreak = 0;
 
   // 음성 인식 관련
   final SpeechToText _speechToText = SpeechToText();
@@ -405,9 +406,67 @@ class _ChatScreenState extends State<ChatScreen>
     _userData = await UserDataService.load();
     await _recordLatePlannerEntryIfNeeded();
     await _loadTaskProgress();
+    final prefs = await SharedPreferences.getInstance();
+    await _updateTodayRecord(prefs);
+    await _refreshAttendanceStreak(prefs);
     await _loadHistoryAndGreet();
     await _checkBedtimeMoveOffer();
     _initSpeech();
+  }
+
+  Future<void> _refreshAttendanceStreak([SharedPreferences? prefs]) async {
+    prefs ??= await SharedPreferences.getInstance();
+    final rawHistory = prefs.getString('nyang_history');
+    List<Map<String, dynamic>> history = [];
+    if (rawHistory != null) {
+      try {
+        final List decoded = jsonDecode(rawHistory);
+        history = decoded
+            .whereType<Map>()
+            .map((item) => Map<String, dynamic>.from(item))
+            .toList();
+      } catch (_) {}
+    }
+
+    final todayStr = _getTodayStrWithReset(prefs);
+    final today = DateTime.tryParse(todayStr) ?? DateTime.now();
+    final records = List.generate(7, (index) {
+      final date = today.subtract(Duration(days: 6 - index));
+      final dateStr = _dateKey(date);
+      return history.lastWhere(
+        (record) => record['date'] == dateStr,
+        orElse: () => {'date': dateStr, 'doneCount': 0, 'isVacation': false},
+      );
+    });
+
+    // 기록 탭의 "연속 출석"과 동일하게 최근 7일 기준으로 계산합니다.
+    // 휴무일은 연속 기록을 끊지 않고 건너뜁니다.
+    var streak = 0;
+    for (var i = records.length - 1; i >= 0; i--) {
+      if (records[i]['isVacation'] == true) continue;
+      if ((records[i]['doneCount'] ?? 0) <= 0) break;
+      streak++;
+    }
+
+    if (!mounted) return;
+    setState(() => _attendanceStreak = streak);
+  }
+
+  String _friendStatusMessage() {
+    switch (_coach.id) {
+      case 'cat':
+        return '같이 가자냥';
+      case 'boyfriend':
+        return '같이 하자';
+      case 'girlfriend':
+        return '같이 해보자';
+      case 'halmae':
+        return '차근차근';
+      case 'bro':
+        return '가보자고';
+      default:
+        return '함께 가자';
+    }
   }
 
   String _dateKey(DateTime date) {
@@ -2187,7 +2246,8 @@ class _ChatScreenState extends State<ChatScreen>
         try {
           final jsonStr = m.group(1)!;
           final Map<String, dynamic> data = jsonDecode(jsonStr);
-          final int rank = (data['rank'] as num?)?.toInt() ?? recLines.length + 1;
+          final int rank =
+              (data['rank'] as num?)?.toInt() ?? recLines.length + 1;
           final String taskText = data['text'] ?? '';
           final String reason = data['reason'] ?? '';
           final emoji = rank >= 1 && rank <= 3 ? rankEmoji[rank - 1] : '✅';
@@ -2200,7 +2260,8 @@ class _ChatScreenState extends State<ChatScreen>
       if (recLines.isNotEmpty) {
         // 앞의 캐릭터 멘트(태그 제거 후 남은 텍스트) + 추천 목록 합치기
         final preText = text.trim();
-        text = (preText.isNotEmpty ? '$preText\n\n' : '') + recLines.join('\n\n');
+        text =
+            (preText.isNotEmpty ? '$preText\n\n' : '') + recLines.join('\n\n');
       }
     }
 
@@ -2480,6 +2541,7 @@ class _ChatScreenState extends State<ChatScreen>
       });
       await prefs.setString('nyang_tasks', jsonEncode(tasks));
       await _updateTodayRecord(prefs);
+      await _refreshAttendanceStreak(prefs);
     }
 
     TasksSyncService.scheduleSyncToCloud();
@@ -3228,7 +3290,7 @@ class _ChatScreenState extends State<ChatScreen>
         });
         _scrollToBottom();
         await _saveHistory();
-        AnalyticsService.logConversationMessage(
+        await AnalyticsService.logConversationMessage(
           coachId: widget.coachId,
           usedApi: false,
         );
@@ -3245,7 +3307,7 @@ class _ChatScreenState extends State<ChatScreen>
       });
       _scrollToBottom();
       await _saveHistory();
-      AnalyticsService.logConversationMessage(
+      await AnalyticsService.logConversationMessage(
         coachId: widget.coachId,
         usedApi: false,
         coachReplied: false,
@@ -3280,7 +3342,7 @@ class _ChatScreenState extends State<ChatScreen>
         });
         await _saveHistory();
         _scrollToBottom();
-        AnalyticsService.logConversationMessage(
+        await AnalyticsService.logConversationMessage(
           coachId: widget.coachId,
           usedApi: false,
         );
@@ -3290,7 +3352,7 @@ class _ChatScreenState extends State<ChatScreen>
       } else if (_catFreeTrialStep >= 2) {
         // 이미 업셀 완료 → 팝업만 다시 표시
         _showCatUpsellBottomSheet();
-        AnalyticsService.logConversationMessage(
+        await AnalyticsService.logConversationMessage(
           coachId: widget.coachId,
           usedApi: false,
           coachReplied: false,
@@ -3316,7 +3378,7 @@ class _ChatScreenState extends State<ChatScreen>
       });
       _scrollToBottom();
       await _saveHistory();
-      AnalyticsService.logConversationMessage(
+      await AnalyticsService.logConversationMessage(
         coachId: widget.coachId,
         usedApi: false,
       );
@@ -3354,6 +3416,10 @@ class _ChatScreenState extends State<ChatScreen>
       });
       _scrollToBottom();
       await _saveHistory();
+      await AnalyticsService.logConversationMessage(
+        coachId: widget.coachId,
+        usedApi: false,
+      );
       return;
     }
 
@@ -3368,8 +3434,16 @@ class _ChatScreenState extends State<ChatScreen>
           ChatMessage(text: parsed.text, isUser: false, time: DateTime.now()),
         );
         _dynamicChips = parsed.chips.isNotEmpty ? parsed.chips : _coach.chips;
-        _timerConfirmMinutes = parsed.timerConfirmMinutes;
-        _timerConfirmTaskName = parsed.timerConfirmTaskName;
+        if (_coach.isMaster) {
+          _timerConfirmMinutes = parsed.timerConfirmMinutes;
+          _timerConfirmTaskName = parsed.timerConfirmTaskName;
+        } else {
+          _timerConfirmMinutes = null;
+          _timerConfirmTaskName = null;
+          if (parsed.timerConfirmMinutes != null) {
+            _timerActiveMinutes = parsed.timerConfirmMinutes;
+          }
+        }
         if (parsed.suggestedTasks.isNotEmpty) {
           _suggestedTasks = parsed.suggestedTasks;
         }
@@ -3378,7 +3452,7 @@ class _ChatScreenState extends State<ChatScreen>
       });
       _scrollToBottom();
       await _saveHistory();
-      AnalyticsService.logConversationMessage(
+      await AnalyticsService.logConversationMessage(
         coachId: widget.coachId,
         usedApi: true,
       );
@@ -3689,7 +3763,11 @@ class _ChatScreenState extends State<ChatScreen>
           final parts = todayStr.split('-');
           DateTime baseDate;
           if (parts.length >= 3) {
-            baseDate = DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
+            baseDate = DateTime(
+              int.parse(parts[0]),
+              int.parse(parts[1]),
+              int.parse(parts[2]),
+            );
           } else {
             final n = DateTime.now();
             baseDate = DateTime(n.year, n.month, n.day);
@@ -3758,7 +3836,11 @@ class _ChatScreenState extends State<ChatScreen>
       final parts = todayStr.split('-');
       String activeDayOfWeek = '';
       if (parts.length >= 3) {
-        final activeDate = DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
+        final activeDate = DateTime(
+          int.parse(parts[0]),
+          int.parse(parts[1]),
+          int.parse(parts[2]),
+        );
         activeDayOfWeek = dayNames[activeDate.weekday % 7];
       }
 
@@ -3831,7 +3913,8 @@ class _ChatScreenState extends State<ChatScreen>
       final secMaleName = prefs.getString('nyang_coach_name_sec_male');
       final secFemaleName = prefs.getString('nyang_coach_name_sec_female');
 
-      final bool isAllEmpty = (bedtime == null || bedtime.isEmpty) &&
+      final bool isAllEmpty =
+          (bedtime == null || bedtime.isEmpty) &&
           isListEmpty(routinesRaw) &&
           isListEmpty(visionsRaw) &&
           isListEmpty(monthGoalsRaw) &&
@@ -3841,9 +3924,15 @@ class _ChatScreenState extends State<ChatScreen>
 
       if (isAllEmpty) {
         sb.writeln('\n[비서 학습 설정 미완료 상태]');
-        sb.writeln('- 현재 사용자의 취침 예정 시간, 고정 루틴, 애칭, 장기 비전, 목표 등이 전혀 설정되어 있지 않습니다.');
-        sb.writeln('- 사용자가 "일정을 짜달라", "오늘 뭐부터 할까" 등 일정 관리와 관련된 대화를 시작할 때 한하여 자연스럽게 다음 내용을 덧붙여 유도하세요.');
-        sb.writeln('- "설정 탭에서 [비서 학습 설정]을 입력해 주시면, 제가 대표님의 생활 패턴에 맞춰 더 완벽하고 세밀하게 일정을 관리해 드릴 수 있습니다."');
+        sb.writeln(
+          '- 현재 사용자의 취침 예정 시간, 고정 루틴, 애칭, 장기 비전, 목표 등이 전혀 설정되어 있지 않습니다.',
+        );
+        sb.writeln(
+          '- 사용자가 "일정을 짜달라", "오늘 뭐부터 할까" 등 일정 관리와 관련된 대화를 시작할 때 한하여 자연스럽게 다음 내용을 덧붙여 유도하세요.',
+        );
+        sb.writeln(
+          '- "설정 탭에서 [비서 학습 설정]을 입력해 주시면, 제가 대표님의 생활 패턴에 맞춰 더 완벽하고 세밀하게 일정을 관리해 드릴 수 있습니다."',
+        );
         sb.writeln('- 단, 무맥락으로 매번 반복해서 묻지 말고, 적절한 일정 조율 대화 중 한 번만 가볍게 제안하세요.');
       }
     }
@@ -3953,7 +4042,7 @@ class _ChatScreenState extends State<ChatScreen>
       if (allTasks.isNotEmpty) {
         allTasksDone = allTasks.every((t) => t['done'] == true);
       }
-      
+
       final currentTotalMinutes = now.hour * 60 + now.minute;
       final minSleepTimeStr = prefs.getString('nyang_premium_min_sleep_time');
       bool isSleepWindow = false;
@@ -3968,9 +4057,13 @@ class _ChatScreenState extends State<ChatScreen>
           final wakeTotalMinutes = (bedTotalMinutes + 4 * 60) % (24 * 60);
 
           if (bedTotalMinutes < wakeTotalMinutes) {
-            isSleepWindow = currentTotalMinutes >= bedTotalMinutes && currentTotalMinutes < wakeTotalMinutes;
+            isSleepWindow =
+                currentTotalMinutes >= bedTotalMinutes &&
+                currentTotalMinutes < wakeTotalMinutes;
           } else {
-            isSleepWindow = currentTotalMinutes >= bedTotalMinutes || currentTotalMinutes < wakeTotalMinutes;
+            isSleepWindow =
+                currentTotalMinutes >= bedTotalMinutes ||
+                currentTotalMinutes < wakeTotalMinutes;
           }
         } catch (_) {}
       } else {
@@ -3982,21 +4075,31 @@ class _ChatScreenState extends State<ChatScreen>
 
       if (allTasksDone && allTasks.isNotEmpty) {
         sb.writeln('\n[특별 지침: 모든 할 일 100% 완료 상태]');
-        sb.writeln('사용자가 오늘 계획한 모든 할 일을 100% 완료했습니다. 절대로 다른 일을 더 하라고 재촉하거나 묻지 마세요. 시간대와 상관없이 완벽한 하루를 보낸 것을 축하하며, 푹 쉬라고 강하게 권장하세요.');
+        sb.writeln(
+          '사용자가 오늘 계획한 모든 할 일을 100% 완료했습니다. 절대로 다른 일을 더 하라고 재촉하거나 묻지 마세요. 시간대와 상관없이 완벽한 하루를 보낸 것을 축하하며, 푹 쉬라고 강하게 권장하세요.',
+        );
       } else if (isSleepWindow) {
         sb.writeln('\n[특별 지침: 사용자 설정 취침 시간 초과]');
-        sb.writeln('현재 시간은 사용자가 설정한 최소 취침 시간을 넘긴 심야 시간대입니다. 가볍게 휴식을 권유하거나 현재 일과를 마무리 중인지 먼저 부드럽게 물어보세요. 단, 무조건 자라고 강요하지 마세요. 만약 사용자가 "아직 할 일이 남았다"거나 "더 일해야 한다"고 답변한다면, "늦은 시간까지 정말 고생이 많으십니다. 무리하지 마시고 파이팅입니다!" 라며 따뜻하게 응원하고 일에 집중할 수 있도록 든든하게 지지해 주세요.');
+        sb.writeln(
+          '현재 시간은 사용자가 설정한 최소 취침 시간을 넘긴 심야 시간대입니다. 가볍게 휴식을 권유하거나 현재 일과를 마무리 중인지 먼저 부드럽게 물어보세요. 단, 무조건 자라고 강요하지 마세요. 만약 사용자가 "아직 할 일이 남았다"거나 "더 일해야 한다"고 답변한다면, "늦은 시간까지 정말 고생이 많으십니다. 무리하지 마시고 파이팅입니다!" 라며 따뜻하게 응원하고 일에 집중할 수 있도록 든든하게 지지해 주세요.',
+        );
       } else if (isUnsetLateNight) {
         sb.writeln('\n[특별 지침: 심야 시간대 접속]');
-        sb.writeln('자정이 지났습니다. 하지만 아직 새로운 하루의 시작이 아니라 어제 일과의 연장선(늦은 밤/새벽)일 수 있습니다. 단정 짓지 말고 "자정이 넘었네요. 오늘 하루를 마무리 중이신가요, 아니면 지금부터 무언가 집중할 시간이신가요?" 처럼 중립적으로 질문하여 사용자의 현재 맥락을 먼저 파악하세요.');
+        sb.writeln(
+          '자정이 지났습니다. 하지만 아직 새로운 하루의 시작이 아니라 어제 일과의 연장선(늦은 밤/새벽)일 수 있습니다. 단정 짓지 말고 "자정이 넘었네요. 오늘 하루를 마무리 중이신가요, 아니면 지금부터 무언가 집중할 시간이신가요?" 처럼 중립적으로 질문하여 사용자의 현재 맥락을 먼저 파악하세요.',
+        );
       }
     }
-    
+
     // 15. 프렌즈 코치용 타이머 동의(Opt-in) 로직
     if (!_coach.isMaster) {
       sb.writeln('\n[타이머 제공 규칙]');
-      sb.writeln('- 사용자가 행동을 시작하기 귀찮아하거나 코치의 행동 제안(예: "5분만 해보자")에 동의할 경우, "오케이 파이팅! 혹시 타이머 필요하면 말해 켜줄게"라고 자연스럽게 말하며 절대 먼저 타이머 태그를 출력하지 마세요.');
-      sb.writeln('- 오직 사용자가 명시적으로 "타이머 띄워줘", "응 타이머 줘" 등 타이머를 요청했을 때만 답변 끝에 [TIMER_CONFIRM:5] (또는 10 등 적절한 시간) 태그를 출력하세요.');
+      sb.writeln(
+        '- 사용자가 행동을 시작하기 귀찮아하거나 코치의 행동 제안(예: "5분만 해보자")에 동의할 경우, "오케이 파이팅! 혹시 타이머 필요하면 말해 켜줄게"라고 자연스럽게 말하며 절대 먼저 타이머 태그를 출력하지 마세요.',
+      );
+      sb.writeln(
+        '- 오직 사용자가 명시적으로 "타이머 띄워줘", "응 타이머 줘" 등 타이머를 요청했을 때만 답변 끝에 [TIMER_CONFIRM:5] (또는 10 등 적절한 시간) 태그를 출력하세요.',
+      );
     }
 
     return sb.toString();
@@ -4039,13 +4142,19 @@ class _ChatScreenState extends State<ChatScreen>
         '''$baseSystemPrompt
 ${contextString.isNotEmpty ? '\n$contextString' : ''}
 
+[감정 토로 응답 원칙]
+- 사용자가 속상함, 피로, 불안, 답답함 등 감정을 토로하면 먼저 충분히 공감하고 달래주세요.
+- 감정 속에 해결 가능한 문제가 함께 드러나면, 긴 전략 조언은 하지 말고 지금 할 수 있는 작은 행동 하나만 조용히 제안하세요.
+- 전략 분석, 원인 진단, 자세한 조언은 사용자가 "왜", "어떻게", "분석해줘", "조언해줘"처럼 명시적으로 요청했을 때만 길게 제공하세요.
+- 감정 토로 상황에서는 답변을 짧게 유지하고, 공감의 온기가 행동 제안에 묻히지 않게 하세요.
+
 [출력 규칙]
 1. 지정된 캐릭터의 성격, 호칭, 말투 규칙을 철저히 준수하세요.
 2. 마크다운 문법(**, *, # 등) 절대 사용하지 말 것.
 3. 답변 끝에 자연스러운 빠른 답장 버튼 3개를 [CHIPS: 버튼1|버튼2|버튼3] 형식으로 추가하세요.
    예시: [CHIPS: 오늘 할 일 정하기|기분 이야기하기|그냥 얘기하자]
 4. [TIMER_START] 태그는 절대 사용 금지. 사용자가 같은 할 일을 2회 이상 반복 회피할 때만 [TIMER_CONFIRM:분:할일이름] 태그로 선택지를 제시할 수 있습니다. 예: [TIMER_CONFIRM:5:보고서 작성]. 처음 귀찮다거나 한 번만 언급한 경우에는 절대 사용하지 않습니다.
-5. 사용자가 특정 할 일을 언급하고 그걸 오늘 할 일로 등록할 만한 상황이라면 답변에 [TASK: 할일명] 태그를 포함하세요. 예: "5시에 청소해야지" → [TASK: 5시에 청소], "오후 3시에 회의가 있어" → [TASK: 오후 3시 회의]. 억지로 추가하지 말고 사용자가 명확히 할 일을 언급할 때만 사용하세요.$halmaeHint''';
+5. 사용자가 특정 할 일을 언급하거나 해결 가능한 문제가 드러나고, 그걸 오늘 할 일로 등록할 만한 상황이라면 답변에 [TASK: 할일명] 태그를 포함하세요. 예: "5시에 청소해야지" → [TASK: 5시에 청소], "오후 3시에 회의가 있어" → [TASK: 오후 3시 회의], "SNS 반응이 안 좋아" → [TASK: SNS 콘텐츠 분석하기]. 억지로 추가하지 말고 사용자의 감정이나 문제 상황에서 자연스럽게 이어지는 작은 행동일 때만 사용하세요.$halmaeHint''';
 
     String effectiveUserText = userText;
     if (userText == '지금 뭐하지?') {
@@ -4296,7 +4405,11 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
     );
   }
 
-  void _showUsageLimitSheet(String msg, {bool showUpgrade = false, String? customTitle}) {
+  void _showUsageLimitSheet(
+    String msg, {
+    bool showUpgrade = false,
+    String? customTitle,
+  }) {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -4344,7 +4457,12 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      customTitle ?? (showUpgrade ? '이번 주 대화를 모두 썼어요' : (msg.contains('로그인') ? '로그인이 필요해요' : '오늘 대화는 여기까지 해요')),
+                      customTitle ??
+                          (showUpgrade
+                              ? '이번 주 대화를 모두 썼어요'
+                              : (msg.contains('로그인')
+                                    ? '로그인이 필요해요'
+                                    : '오늘 대화는 여기까지 해요')),
                       style: GoogleFonts.notoSansKr(
                         fontSize: 18,
                         fontWeight: FontWeight.w900,
@@ -4526,7 +4644,7 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
           Positioned(top: 76, left: 28, child: _buildCheatKeyMenu()),
         ],
         // 타이머 확인 버튼
-        if (_timerConfirmMinutes != null)
+        if (_coach.isMaster && _timerConfirmMinutes != null)
           _buildTimerConfirmCard(),
         if (_coach.isMaster && _suggestedTasks.isNotEmpty)
           _buildTaskSuggestCard(),
@@ -4558,6 +4676,7 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
     list.add(newTask);
     await prefs.setString('nyang_tasks', jsonEncode(list));
     await _updateTodayRecord(prefs);
+    await _refreshAttendanceStreak(prefs);
     TasksSyncService.scheduleSyncToCloud();
 
     final timeLabel = task.time != null
@@ -4743,11 +4862,15 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
   Widget _buildTimerConfirmCard() {
     final leadMessage = _timerConfirmLeadMessage();
     final isMaster = _coach.isMaster;
-    
+
     // 친구 코치용 연보라색 테마 (냥냥코치 톤)
     final cardBgColor = isMaster ? Colors.white : const Color(0xFFF9F5FF);
-    final cardBorderColor = isMaster ? const Color(0xFFE8E4F0) : const Color(0xFFD8B4FE);
-    final buttonBgColor = isMaster ? _coach.accentColor : const Color(0xFFA855F7); // 연보라/보라톤 메인
+    final cardBorderColor = isMaster
+        ? const Color(0xFFE8E4F0)
+        : const Color(0xFFD8B4FE);
+    final buttonBgColor = isMaster
+        ? _coach.accentColor
+        : const Color(0xFFA855F7); // 연보라/보라톤 메인
 
     return Positioned(
       bottom: 80,
@@ -4760,7 +4883,9 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
           border: Border.all(color: cardBorderColor),
           boxShadow: [
             BoxShadow(
-              color: isMaster ? Colors.black.withOpacity(0.08) : const Color(0xFFA855F7).withOpacity(0.15),
+              color: isMaster
+                  ? Colors.black.withOpacity(0.08)
+                  : const Color(0xFFA855F7).withOpacity(0.15),
               blurRadius: 16,
               offset: const Offset(0, 4),
             ),
@@ -4857,7 +4982,11 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: isMaster ? const Color(0xFFE5E7EB) : const Color(0xFFD8B4FE)),
+                  border: Border.all(
+                    color: isMaster
+                        ? const Color(0xFFE5E7EB)
+                        : const Color(0xFFD8B4FE),
+                  ),
                 ),
                 child: Center(
                   child: Text(
@@ -4900,7 +5029,11 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: isMaster ? const Color(0xFFE5E7EB) : const Color(0xFFD8B4FE)),
+                  border: Border.all(
+                    color: isMaster
+                        ? const Color(0xFFE5E7EB)
+                        : const Color(0xFFD8B4FE),
+                  ),
                 ),
                 child: Center(
                   child: Text(
@@ -5174,12 +5307,11 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
       return _buildMasterSummaryCard();
     }
 
-    // 마스터: blur 반투명 / 프렌즈: lavender-soft
     final bgColor = isFriends
-        ? const Color(0xFFF5F3FF) // --lavender-soft
+        ? Colors.white.withValues(alpha: 0.88)
         : Colors.white.withOpacity(0.6);
     final borderColor = isFriends
-        ? const Color(0xFFDDD6FE) // --lavender-mid
+        ? Colors.white.withValues(alpha: 0.70)
         : Colors.white.withOpacity(0.5);
 
     Widget card = Container(
@@ -5194,6 +5326,15 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
         color: isFriends ? bgColor : const Color(0xFFFDF8F2),
         borderRadius: BorderRadius.circular(24),
         border: Border.all(color: borderColor),
+        boxShadow: isFriends
+            ? [
+                BoxShadow(
+                  color: const Color(0xFF6B5EA8).withValues(alpha: 0.10),
+                  blurRadius: 18,
+                  offset: const Offset(0, 8),
+                ),
+              ]
+            : null,
       ),
       child: Row(
         children: [
@@ -5223,7 +5364,7 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        '연속',
+                        '이번 주 연속',
                         style: GoogleFonts.notoSansKr(
                           fontSize: 10,
                           fontWeight: FontWeight.w700,
@@ -5231,9 +5372,9 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
                         ),
                       ),
                       Text(
-                        '0일 달성!',
+                        '$_attendanceStreak일 출석',
                         style: GoogleFonts.notoSansKr(
-                          fontSize: 13,
+                          fontSize: 12,
                           fontWeight: FontWeight.w900,
                           color: const Color(0xFF3D3A4E),
                         ),
@@ -5301,7 +5442,7 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
                 if (!_coach.isMaster) ...[
                   const SizedBox(height: 4),
                   Text(
-                    '오늘도 함께 가보자냥! 🐾',
+                    _friendStatusMessage(),
                     style: GoogleFonts.notoSansKr(
                       fontSize: 11,
                       fontWeight: FontWeight.w500,
