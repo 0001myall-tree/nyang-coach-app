@@ -418,8 +418,23 @@ class _ChatScreenState extends State<ChatScreen>
     await _updateTodayRecord(prefs);
     await _refreshAttendanceStreak(prefs);
     await _loadHistoryAndGreet();
+    await _restoreActiveFocusTimer();
     await _checkBedtimeMoveOffer();
     _initSpeech();
+  }
+
+  Future<void> _restoreActiveFocusTimer() async {
+    final manager = FocusTimerManager();
+    await manager.loadState();
+    if (!mounted) return;
+    if (manager.coachId != widget.coachId) return;
+    if (manager.duration <= 0) return;
+
+    setState(() {
+      _timerActiveMinutes = manager.stage;
+      _timerActiveInsertIndex = _messages.length;
+    });
+    _scrollToBottom();
   }
 
   Future<void> _refreshAttendanceStreak([SharedPreferences? prefs]) async {
