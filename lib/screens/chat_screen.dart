@@ -3313,6 +3313,56 @@ class _ChatScreenState extends State<ChatScreen>
     ]);
   }
 
+  int? _directTimerRequestMinutes(String text) {
+    final normalized = text.toLowerCase().replaceAll(RegExp(r'\s+'), '');
+    final hasTimerWord =
+        normalized.contains('타이머') ||
+        normalized.contains('timer') ||
+        normalized.contains('포커스') ||
+        normalized.contains('집중모드');
+    if (!hasTimerWord) return null;
+
+    final hasRequestIntent = [
+      '띄워',
+      '켜',
+      '시작',
+      '설정',
+      '맞춰',
+      '틀어',
+      '열어',
+      '줘',
+      '해줘',
+      '돌려',
+      '실행',
+    ].any(normalized.contains);
+    if (!hasRequestIntent) return null;
+
+    final minuteMatch = RegExp(
+      r'(\d{1,3})\s*(?:분|min|mins|minute|minutes)',
+      caseSensitive: false,
+    ).firstMatch(text);
+    if (minuteMatch != null) {
+      return (int.tryParse(minuteMatch.group(1)!) ?? 15).clamp(1, 180);
+    }
+
+    final hourMatch = RegExp(r'(\d{1,2})\s*시간').firstMatch(text);
+    if (hourMatch != null) {
+      return ((int.tryParse(hourMatch.group(1)!) ?? 1) * 60).clamp(1, 180);
+    }
+
+    return 15;
+  }
+
+  String _directTimerStartMessage(int minutes) {
+    if (_coach.id == 'sec_male') {
+      return '$minutes분 타이머 바로 띄워드리겠습니다. 지금은 시작만 하시면 됩니다.';
+    }
+    if (_coach.id == 'sec_female') {
+      return '$minutes분 타이머 바로 띄워드릴게요. 지금은 가볍게 시작해봐요.';
+    }
+    return '$minutes분 타이머 바로 켜줄게. 일단 시작해보자.';
+  }
+
   // ── 메시지 전송 (웹앱 sendMessage 이식) ─────────────────
   Future<void> _send(String text) async {
     final trimmed = text.trim();
@@ -3432,6 +3482,31 @@ class _ChatScreenState extends State<ChatScreen>
         );
         return;
       }
+    }
+
+    final directTimerMinutes = _directTimerRequestMinutes(trimmed);
+    if (directTimerMinutes != null) {
+      final reply = _directTimerStartMessage(directTimerMinutes);
+      setState(() {
+        _messages.add(
+          ChatMessage(text: trimmed, isUser: true, time: DateTime.now()),
+        );
+        _messages.add(
+          ChatMessage(text: reply, isUser: false, time: DateTime.now()),
+        );
+        _timerConfirmMinutes = null;
+        _timerConfirmTaskName = null;
+        _timerActiveMinutes = directTimerMinutes;
+        _timerActiveInsertIndex = _messages.length;
+        _dynamicChips = _coach.chips;
+      });
+      _scrollToBottom();
+      await _saveHistory();
+      await AnalyticsService.logConversationMessage(
+        coachId: widget.coachId,
+        usedApi: false,
+      );
+      return;
     }
 
     var apiInput = trimmed;
@@ -4280,7 +4355,7 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
 2. 마크다운 문법(**, *, # 등) 절대 사용하지 말 것.
 3. 답변 끝에 자연스러운 빠른 답장 버튼 3개를 [CHIPS: 버튼1|버튼2|버튼3] 형식으로 추가하세요.
    예시: [CHIPS: 오늘 할 일 정하기|기분 이야기하기|그냥 얘기하자]
-4. [TIMER_START] 태그는 절대 사용 금지. 사용자가 같은 할 일을 2회 이상 반복 회피할 때만 [TIMER_CONFIRM:분:할일이름] 태그로 선택지를 제시할 수 있습니다. 예: [TIMER_CONFIRM:5:보고서 작성]. 처음 귀찮다거나 한 번만 언급한 경우에는 절대 사용하지 않습니다.
+4. [TIMER_START] 태그는 절대 사용 금지. 사용자가 직접 "타이머 띄워줘", "15분 타이머 켜줘"처럼 명시적으로 요청한 경우에는 목적, 컨디션, 일정, 시간을 캐묻지 말고 짧게 응답한 뒤 [TIMER_CONFIRM:분] 태그만 붙입니다. 시간이 없으면 15분을 기본값으로 사용합니다. 그 외에 코치가 먼저 타이머를 제안하는 경우에는 사용자가 같은 할 일을 2회 이상 반복 회피할 때만 [TIMER_CONFIRM:분:할일이름] 태그로 선택지를 제시할 수 있습니다. 예: [TIMER_CONFIRM:5:보고서 작성]. 처음 귀찮다거나 한 번만 언급한 경우에는 절대 먼저 제안하지 않습니다.
 5. 사용자가 특정 할 일을 언급하거나 해결 가능한 문제가 드러나고, 그걸 오늘 할 일로 등록할 만한 상황이라면 답변에 [TASK: 할일명] 태그를 포함하세요. 예: "5시에 청소해야지" → [TASK: 5시에 청소], "오후 3시에 회의가 있어" → [TASK: 오후 3시 회의], "SNS 반응이 안 좋아" → [TASK: SNS 콘텐츠 분석하기]. 억지로 추가하지 말고 사용자의 감정이나 문제 상황에서 자연스럽게 이어지는 작은 행동일 때만 사용하세요.$halmaeHint''';
 
     String effectiveUserText = userText;
