@@ -22,8 +22,6 @@ import 'coach_config.dart';
 import 'focus_timer_widget.dart';
 import '../models/user_data.dart';
 
-const _masterGold = Color(0xFFE5B94A);
-
 // ─────────────────────────────────────────────────────────────
 // 데이터 모델
 // ─────────────────────────────────────────────────────────────
@@ -5350,9 +5348,9 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
           height: 44,
           padding: const EdgeInsets.symmetric(horizontal: 14),
           decoration: BoxDecoration(
-            color: const Color(0xFFFFFBEB),
+            color: const Color(0xFFF4F0FF),
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: const Color(0xFFFDE68A), width: 1.2),
+            border: Border.all(color: const Color(0xFFDED6FF), width: 1.2),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -5365,7 +5363,7 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
                   style: GoogleFonts.notoSansKr(
                     fontSize: 13,
                     fontWeight: FontWeight.w900,
-                    color: _masterGold,
+                    color: const Color(0xFF8B7CCC),
                   ),
                 ),
               ),
