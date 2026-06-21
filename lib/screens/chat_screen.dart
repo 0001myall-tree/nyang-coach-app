@@ -3707,30 +3707,34 @@ class _ChatScreenState extends State<ChatScreen>
       } catch (_) {}
     }
 
-    // 4. 최근 7일 완료/미완료 할 일
-    final histRaw = prefs.getString('nyang_history');
-    if (histRaw != null) {
-      try {
-        final hist = jsonDecode(histRaw) as List;
-        if (hist.isNotEmpty) {
-          final last7 = hist.length > 7 ? hist.sublist(hist.length - 7) : hist;
-          sb.writeln('\n[최근 7일간 실제 완료/미완료 할 일 목록]');
-          for (final record in last7) {
-            final rTasks = (record['tasks'] as List?) ?? [];
-            final done = rTasks
-                .where((t) => t['done'] == true)
-                .map((t) => t['text'])
-                .join(', ');
-            final undone = rTasks
-                .where((t) => t['done'] != true)
-                .map((t) => t['text'])
-                .join(', ');
-            sb.writeln(
-              '- ${record['date']}: 완료 [${done.isEmpty ? '없음' : done}], 미완료 [${undone.isEmpty ? '없음' : undone}]',
-            );
+    // 4. 최근 7일 완료/미완료 할 일 (master only)
+    if (_coach.isMaster) {
+      final histRaw = prefs.getString('nyang_history');
+      if (histRaw != null) {
+        try {
+          final hist = jsonDecode(histRaw) as List;
+          if (hist.isNotEmpty) {
+            final last7 = hist.length > 7
+                ? hist.sublist(hist.length - 7)
+                : hist;
+            sb.writeln('\n[최근 7일간 실제 완료/미완료 할 일 목록]');
+            for (final record in last7) {
+              final rTasks = (record['tasks'] as List?) ?? [];
+              final done = rTasks
+                  .where((t) => t['done'] == true)
+                  .map((t) => t['text'])
+                  .join(', ');
+              final undone = rTasks
+                  .where((t) => t['done'] != true)
+                  .map((t) => t['text'])
+                  .join(', ');
+              sb.writeln(
+                '- ${record['date']}: 완료 [${done.isEmpty ? '없음' : done}], 미완료 [${undone.isEmpty ? '없음' : undone}]',
+              );
+            }
           }
-        }
-      } catch (_) {}
+        } catch (_) {}
+      }
     }
 
     // 5. 오늘 할 일 현황
@@ -4225,8 +4229,9 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   Future<String> _callOpenAI(String userText, {bool isGreeting = false}) async {
-    final history = _messages.length > 10
-        ? _messages.sublist(_messages.length - 10)
+    final historyLimit = _coach.isMaster ? 10 : 6;
+    final history = _messages.length > historyLimit
+        ? _messages.sublist(_messages.length - historyLimit)
         : _messages;
 
     // 할매 코치 전용: 랜덤 애정 표현 주입
