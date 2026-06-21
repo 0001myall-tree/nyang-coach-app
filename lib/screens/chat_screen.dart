@@ -5789,6 +5789,19 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
   Widget _buildBubble(ChatMessage msg) {
     final isUser = msg.isUser;
     final time = DateFormat('a h:mm', 'ko').format(msg.time);
+    final isMasterUserBubble = isUser && _coach.isMaster;
+    final bubbleColor = isUser
+        ? (isMasterUserBubble ? const Color(0xFFF4F0FF) : _coach.accentColor)
+        : Colors.white;
+    final bubbleTextColor = isUser
+        ? (isMasterUserBubble ? const Color(0xFF111827) : Colors.white)
+        : const Color(0xFF1A1A2E);
+    final bubbleBorderColor = isMasterUserBubble
+        ? const Color(0xFFE6DCFF)
+        : Colors.transparent;
+    final bubbleShadowColor = isMasterUserBubble
+        ? const Color(0xFF9B8AF0).withValues(alpha: 0.10)
+        : Colors.black.withValues(alpha: 0.06);
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
@@ -5842,17 +5855,18 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
               ),
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
-                color: isUser ? _coach.accentColor : Colors.white,
+                color: bubbleColor,
                 borderRadius: BorderRadius.only(
                   topLeft: const Radius.circular(20),
                   topRight: const Radius.circular(20),
                   bottomLeft: Radius.circular(isUser ? 20 : 4),
                   bottomRight: Radius.circular(isUser ? 4 : 20),
                 ),
+                border: Border.all(color: bubbleBorderColor),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.06),
-                    blurRadius: 8,
+                    color: bubbleShadowColor,
+                    blurRadius: isMasterUserBubble ? 12 : 8,
                     offset: const Offset(0, 2),
                   ),
                 ],
@@ -5863,7 +5877,7 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
                   fontSize: 14,
                   height: 1.6,
                   fontWeight: FontWeight.w500,
-                  color: isUser ? Colors.white : const Color(0xFF1A1A2E),
+                  color: bubbleTextColor,
                 ),
               ),
             ),
