@@ -6135,21 +6135,21 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
                         : const LinearGradient(
                             begin: Alignment.topLeft,
                             end: Alignment.bottomRight,
-                            colors: [Color(0xFF1A1A1A), Color(0xFF050505)],
+                            colors: [Color(0xFF9B8AF0), Color(0xFFA99AE8)],
                           ),
                     color: isFriends ? _coach.accentColor : null,
                     borderRadius: BorderRadius.circular(22),
                     border: isFriends
                         ? null
                         : Border.all(
-                            color: const Color(0xFFDBC07A),
+                            color: const Color(0xFFE6DCFF),
                             width: 1.2,
                           ),
                     boxShadow: [
                       BoxShadow(
                         color: isFriends
                             ? _coach.accentColor.withOpacity(0.35)
-                            : Colors.black.withOpacity(0.18),
+                            : const Color(0xFF9B8AF0).withValues(alpha: 0.28),
                         blurRadius: isFriends ? 10 : 15,
                         offset: const Offset(0, 4),
                       ),
@@ -6157,7 +6157,7 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
                   ),
                   child: Icon(
                     Icons.send_rounded,
-                    color: isFriends ? Colors.white : const Color(0xFFFDE68A),
+                    color: Colors.white,
                     size: 20,
                   ),
                 ),
