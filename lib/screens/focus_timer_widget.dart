@@ -370,6 +370,14 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
       });
     }
     if (mounted) {
+      if (_isMasterTimer) {
+        await _manager.reset(_completedStage);
+        if (!mounted) return;
+        setState(() {
+          _view = _TimerView.timer;
+        });
+        return;
+      }
       setState(() {
         _view = _TimerView.done;
       });
