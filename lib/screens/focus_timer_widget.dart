@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -244,9 +243,6 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
     const Color(0xFF2D2A4E),
   ];
 
-  Color get _ringColor => const Color(0xFFA78BFA);
-  Color get _ringTrack => Colors.white.withValues(alpha: 0.1);
-  Color get _labelColor => const Color(0xFFC4B5FD);
   Color get _soundActiveColor => const Color(0xFF7C3AED);
 
   static const _darkBg = Color(0xFF1A1A2E);
@@ -470,11 +466,6 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
     final m = (remain ~/ 60).toString().padLeft(2, '0');
     final s = (remain % 60).toString().padLeft(2, '0');
     return '$m:$s';
-  }
-
-  double get _progress {
-    if (_manager.duration <= 0) return 0.0;
-    return _manager.getRemainSeconds() / _manager.duration;
   }
 
   // ── 빌드 ─────────────────────────────────────────────────
@@ -774,287 +765,247 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
     final remain = _manager.getRemainSeconds();
     final isDone = remain <= 0;
 
-    return Container(
+    return Align(
       key: const ValueKey('timer'),
-      margin: const EdgeInsets.only(top: 14),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.18),
-            blurRadius: 32,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // 헤더
-            Container(
-              padding: const EdgeInsets.fromLTRB(20, 18, 20, 14),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: _cardGradient,
+      alignment: Alignment.centerLeft,
+      child: FractionallySizedBox(
+        widthFactor: 0.78,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 420),
+          child: Container(
+            margin: const EdgeInsets.only(top: 10, bottom: 4),
+            padding: const EdgeInsets.fromLTRB(18, 16, 18, 14),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: const Color(0xFFE9E1E2), width: 1.2),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.08),
+                  blurRadius: 18,
+                  offset: const Offset(0, 8),
                 ),
-              ),
-              child: Column(
-                children: [
-                  Text(
-                    '⏱ FOCUS TIMER',
-                    style: GoogleFonts.notoSansKr(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 2,
-                      color: _labelColor.withValues(alpha: 0.85),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.timer_rounded,
+                      size: 15,
+                      color: const Color(0xFF6B5361).withValues(alpha: 0.9),
                     ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'FOCUS TIMER',
+                      style: GoogleFonts.notoSansKr(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 1.6,
+                        color: const Color(0xFF6B5361),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  _timeDisplay,
+                  style: GoogleFonts.notoSansKr(
+                    fontSize: 42,
+                    fontWeight: FontWeight.w900,
+                    color: const Color(0xFF242027),
                   ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    width: 140,
-                    height: 140,
-                    child: Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        CustomPaint(
-                          size: const Size(140, 140),
-                          painter: _TimerRingPainter(
-                            progress: _progress,
-                            ringColor: _ringColor,
-                            trackColor: _ringTrack,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  isDone
+                      ? '완료'
+                      : _manager.running
+                      ? '${_manager.stage}분 집중 중'
+                      : stageLabels[_manager.stage] ?? '${_manager.stage}분 집중',
+                  style: GoogleFonts.notoSansKr(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFF7C6873),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [5, 15, 25].map((m) {
+                    final isActive = _manager.stage == m;
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: GestureDetector(
+                        onTap: () => _setStage(m),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 180),
+                          constraints: const BoxConstraints(minWidth: 58),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 13,
+                            vertical: 7,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(
+                              color: isActive
+                                  ? const Color(0xFF242027)
+                                  : const Color(0xFFE9E1E2),
+                              width: isActive ? 1.8 : 1.2,
+                            ),
+                          ),
+                          child: Text(
+                            '$m분',
+                            textAlign: TextAlign.center,
+                            style: GoogleFonts.notoSansKr(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w800,
+                              color: isActive
+                                  ? const Color(0xFF242027)
+                                  : const Color(0xFF7C6873),
+                            ),
                           ),
                         ),
-                        Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              _timeDisplay,
-                              style: GoogleFonts.notoSansKr(
-                                fontSize: 30,
-                                fontWeight: FontWeight.w900,
-                                color: Colors.white,
-                                letterSpacing: -1,
-                              ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 14),
+                GestureDetector(
+                  onTap: isDone ? null : _toggle,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    width: 136,
+                    height: 50,
+                    decoration: BoxDecoration(
+                      gradient: isDone
+                          ? const LinearGradient(
+                              colors: [Color(0xFF9CA3AF), Color(0xFFD1D5DB)],
+                            )
+                          : LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: _cardGradient,
                             ),
-                            Text(
-                              isDone
-                                  ? '완료!'
-                                  : _manager.running
-                                  ? '${_manager.stage}분 집중 중'
-                                  : stageLabels[_manager.stage] ??
-                                        '${_manager.stage}분',
-                              style: GoogleFonts.notoSansKr(
-                                fontSize: 9,
-                                fontWeight: FontWeight.w700,
-                                color: _labelColor.withValues(alpha: 0.85),
-                                letterSpacing: 1,
-                              ),
-                            ),
-                          ],
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(
+                            0xFF2D2A4E,
+                          ).withValues(alpha: 0.18),
+                          blurRadius: 12,
+                          offset: const Offset(0, 5),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          isDone
+                              ? Icons.check_rounded
+                              : _manager.running
+                              ? Icons.pause_rounded
+                              : Icons.play_arrow_rounded,
+                          size: 21,
+                          color: Colors.white,
+                        ),
+                        const SizedBox(width: 5),
+                        Text(
+                          isDone
+                              ? '완료'
+                              : _manager.running
+                              ? '일시정지'
+                              : '집중 시작',
+                          style: GoogleFonts.notoSansKr(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w900,
+                            color: Colors.white,
+                          ),
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(height: 12),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [5, 15, 25].map((m) {
-                      final isActive = _manager.stage == m;
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 3),
-                        child: GestureDetector(
-                          onTap: () => _setStage(m),
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 200),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 5,
-                            ),
-                            decoration: BoxDecoration(
-                              color: isActive
-                                  ? Colors.white.withValues(alpha: 0.2)
-                                  : Colors.transparent,
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(
-                                color: isActive
-                                    ? Colors.white
-                                    : Colors.white.withValues(alpha: 0.3),
-                                width: 1.5,
-                              ),
-                            ),
-                            child: Text(
-                              '$m분',
-                              style: GoogleFonts.notoSansKr(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w800,
-                                color: isActive
-                                    ? Colors.white
-                                    : Colors.white.withValues(alpha: 0.5),
-                              ),
-                            ),
-                          ),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    GestureDetector(
+                      onTap: _reset,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 4,
                         ),
-                      );
-                    }).toList(),
-                  ),
-                ],
-              ),
-            ),
-
-            // 컨트롤 영역
-            Container(
-              color: Colors.white,
-              padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: isDone ? null : _toggle,
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 200),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        decoration: BoxDecoration(
-                          gradient: isDone
-                              ? const LinearGradient(
-                                  colors: [
-                                    Color(0xFF9CA3AF),
-                                    Color(0xFFD1D5DB),
-                                  ],
-                                )
-                              : LinearGradient(
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                  colors: _cardGradient,
-                                ),
-                          borderRadius: BorderRadius.circular(14),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.15),
-                              blurRadius: 14,
-                              offset: const Offset(0, 4),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.replay_rounded,
+                              size: 17,
+                              color: Color(0xFF6B5361),
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              '되돌리기',
+                              style: GoogleFonts.notoSansKr(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w800,
+                                color: const Color(0xFF6B5361),
+                              ),
                             ),
                           ],
                         ),
-                        child: Center(
-                          child: Text(
-                            isDone
-                                ? '완료 🎉'
-                                : _manager.running
-                                ? '⏸ 일시정지'
-                                : '▶ 시작',
-                            style: GoogleFonts.notoSansKr(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w900,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-
-                  // 집중 소리 버튼
-                  GestureDetector(
-                    onTap: isDone ? null : _toggleSound,
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 220),
-                      curve: Curves.easeInOut,
-                      width: 90,
-                      padding: const EdgeInsets.symmetric(vertical: 10),
-                      decoration: BoxDecoration(
-                        color: _soundOn ? _soundActiveColor : Colors.white,
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(
-                          color: _soundOn
-                              ? _soundActiveColor
-                              : const Color(0xFFE5E7EB),
-                          width: 1.5,
+                    Container(
+                      width: 1,
+                      height: 14,
+                      margin: const EdgeInsets.symmetric(horizontal: 10),
+                      color: const Color(0xFFE9E1E2),
+                    ),
+                    GestureDetector(
+                      onTap: isDone ? null : _toggleSound,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 4,
                         ),
-                        boxShadow: _soundOn
-                            ? [
-                                BoxShadow(
-                                  color: _soundActiveColor.withValues(
-                                    alpha: 0.35,
-                                  ),
-                                  blurRadius: 12,
-                                  offset: const Offset(0, 4),
-                                ),
-                              ]
-                            : [],
-                      ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.headphones_rounded,
-                            size: 20,
-                            color: _soundOn
-                                ? Colors.white
-                                : const Color(0xFF9CA3AF),
-                          ),
-                          const SizedBox(height: 3),
-                          Text(
-                            '집중 소리',
-                            style: GoogleFonts.notoSansKr(
-                              fontSize: 9,
-                              fontWeight: FontWeight.w700,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.headphones_rounded,
+                              size: 17,
                               color: _soundOn
-                                  ? Colors.white
-                                  : const Color(0xFF9CA3AF),
+                                  ? _soundActiveColor
+                                  : const Color(0xFF6B5361),
                             ),
-                          ),
-                          Text(
-                            _soundOn ? 'ON' : 'OFF',
-                            style: GoogleFonts.notoSansKr(
-                              fontSize: 9,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: 1,
-                              color: _soundOn
-                                  ? Colors.white.withValues(alpha: 0.9)
-                                  : const Color(0xFFD1D5DB),
+                            const SizedBox(width: 4),
+                            Text(
+                              _soundOn ? 'ON' : 'OFF',
+                              style: GoogleFonts.notoSansKr(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w900,
+                                color: _soundOn
+                                    ? _soundActiveColor
+                                    : const Color(0xFF6B5361),
+                              ),
                             ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-
-                  // 리셋 버튼
-                  GestureDetector(
-                    onTap: _reset,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 12,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(
-                          color: const Color(0xFFE5E7EB),
-                          width: 1.5,
-                        ),
-                      ),
-                      child: Text(
-                        '↺',
-                        style: GoogleFonts.notoSansKr(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w800,
-                          color: const Color(0xFF9CA3AF),
+                          ],
                         ),
                       ),
                     ),
-                  ),
-                ],
-              ),
+                  ],
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -1564,52 +1515,4 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
       children: mirror ? bars.reversed.toList() : bars,
     );
   }
-}
-
-// ── 원형 링 페인터 ───────────────────────────────────────────
-class _TimerRingPainter extends CustomPainter {
-  final double progress;
-  final Color ringColor;
-  final Color trackColor;
-
-  const _TimerRingPainter({
-    required this.progress,
-    required this.ringColor,
-    required this.trackColor,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final radius = size.width / 2 - 7;
-    const strokeWidth = 7.0;
-
-    canvas.drawCircle(
-      center,
-      radius,
-      Paint()
-        ..color = trackColor
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = strokeWidth,
-    );
-
-    final sweepAngle = 2 * pi * progress;
-    canvas.drawArc(
-      Rect.fromCircle(center: center, radius: radius),
-      -pi / 2,
-      sweepAngle,
-      false,
-      Paint()
-        ..color = ringColor
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = strokeWidth
-        ..strokeCap = StrokeCap.round,
-    );
-  }
-
-  @override
-  bool shouldRepaint(_TimerRingPainter old) =>
-      old.progress != progress ||
-      old.ringColor != ringColor ||
-      old.trackColor != trackColor;
 }
