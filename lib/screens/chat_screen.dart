@@ -346,6 +346,7 @@ class _ChatScreenState extends State<ChatScreen>
   List<_SuggestedTask> _suggestedTasks = [];
   // 활성 타이머
   int? _timerActiveMinutes;
+  int? _timerActiveInsertIndex;
   String? _usageLimitBanner;
   bool _awaitingBroWorkoutPreference = false;
 
@@ -725,6 +726,7 @@ class _ChatScreenState extends State<ChatScreen>
         _timerConfirmMinutes = null;
         _timerConfirmTaskName = null;
         _timerActiveMinutes = null;
+        _timerActiveInsertIndex = null;
         _suggestedTasks = [];
         _drawerOpen = false;
         _flirtVisible = false;
@@ -3561,6 +3563,7 @@ class _ChatScreenState extends State<ChatScreen>
           _timerConfirmTaskName = null;
           if (parsed.timerConfirmMinutes != null) {
             _timerActiveMinutes = parsed.timerConfirmMinutes;
+            _timerActiveInsertIndex = _messages.length;
           }
         }
         if (parsed.suggestedTasks.isNotEmpty) {
@@ -5042,6 +5045,7 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
                   _timerConfirmMinutes = null;
                   _timerConfirmTaskName = null;
                   _timerActiveMinutes = mins;
+                  _timerActiveInsertIndex = _messages.length;
                 });
                 _scrollToBottom();
               },
@@ -5644,6 +5648,12 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
 
   // ── 메시지 목록 ────────────────────────────────────────────
   Widget _buildMessageList() {
+    final timerIndex = _timerActiveMinutes == null
+        ? null
+        : (_timerActiveInsertIndex ?? _messages.length).clamp(
+            0,
+            _messages.length,
+          );
     final list = ListView.builder(
       controller: _scrollCtrl,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -5652,9 +5662,7 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
           (_isLoading ? 1 : 0) +
           (_timerActiveMinutes != null ? 1 : 0),
       itemBuilder: (ctx, i) {
-        // 타이머 위젯은 메시지 목록 맨 끝에
-        if (_timerActiveMinutes != null &&
-            i == _messages.length + (_isLoading ? 1 : 0)) {
+        if (_timerActiveMinutes != null && i == timerIndex) {
           return Padding(
             padding: const EdgeInsets.only(bottom: 12),
             child: FocusTimerWidget(
@@ -5671,8 +5679,11 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
             ),
           );
         }
-        if (_isLoading && i == _messages.length) return _buildTypingIndicator();
-        return _buildBubble(_messages[i]);
+        final messageIndex = timerIndex != null && i > timerIndex ? i - 1 : i;
+        if (_isLoading && messageIndex == _messages.length) {
+          return _buildTypingIndicator();
+        }
+        return _buildBubble(_messages[messageIndex]);
       },
     );
 
