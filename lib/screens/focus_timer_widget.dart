@@ -238,11 +238,6 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
   bool get _isMasterTimer =>
       widget.coachId == 'sec_male' || widget.coachId == 'sec_female';
 
-  List<Color> get _cardGradient => [
-    const Color(0xFF1A1A2E),
-    const Color(0xFF2D2A4E),
-  ];
-
   Color get _soundActiveColor => const Color(0xFF7C3AED);
 
   static const _darkBg = Color(0xFF1A1A2E);
@@ -764,6 +759,10 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
     final stageLabels = {5: '5분 집중', 15: '15분 집중', 25: '25분 집중'};
     final remain = _manager.getRemainSeconds();
     final isDone = remain <= 0;
+    const timerMain = Color(0xFF9B8AF0);
+    const timerAccent = Color(0xFFA99AE8);
+    const timerInk = Color(0xFF2F266C);
+    const timerBorder = Color(0xFFE7E0FA);
 
     return Align(
       key: const ValueKey('timer'),
@@ -778,10 +777,10 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: const Color(0xFFE9E1E2), width: 1.2),
+              border: Border.all(color: timerBorder, width: 1.2),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.08),
+                  color: timerMain.withValues(alpha: 0.10),
                   blurRadius: 18,
                   offset: const Offset(0, 8),
                 ),
@@ -793,11 +792,7 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(
-                      Icons.timer_rounded,
-                      size: 15,
-                      color: const Color(0xFF6B5361).withValues(alpha: 0.9),
-                    ),
+                    Icon(Icons.timer_rounded, size: 15, color: timerAccent),
                     const SizedBox(width: 6),
                     Text(
                       'FOCUS TIMER',
@@ -805,7 +800,7 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
                         fontSize: 12,
                         fontWeight: FontWeight.w900,
                         letterSpacing: 1.6,
-                        color: const Color(0xFF6B5361),
+                        color: timerAccent,
                       ),
                     ),
                   ],
@@ -816,7 +811,7 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
                   style: GoogleFonts.notoSansKr(
                     fontSize: 42,
                     fontWeight: FontWeight.w900,
-                    color: const Color(0xFF242027),
+                    color: timerInk,
                   ),
                 ),
                 const SizedBox(height: 2),
@@ -829,7 +824,7 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
                   style: GoogleFonts.notoSansKr(
                     fontSize: 13,
                     fontWeight: FontWeight.w700,
-                    color: const Color(0xFF7C6873),
+                    color: timerAccent,
                   ),
                 ),
                 const SizedBox(height: 14),
@@ -852,9 +847,7 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
                             color: Colors.white,
                             borderRadius: BorderRadius.circular(18),
                             border: Border.all(
-                              color: isActive
-                                  ? const Color(0xFF242027)
-                                  : const Color(0xFFE9E1E2),
+                              color: isActive ? timerMain : timerBorder,
                               width: isActive ? 1.8 : 1.2,
                             ),
                           ),
@@ -864,9 +857,7 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
                             style: GoogleFonts.notoSansKr(
                               fontSize: 12,
                               fontWeight: FontWeight.w800,
-                              color: isActive
-                                  ? const Color(0xFF242027)
-                                  : const Color(0xFF7C6873),
+                              color: isActive ? timerInk : timerAccent,
                             ),
                           ),
                         ),
@@ -886,19 +877,17 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
                           ? const LinearGradient(
                               colors: [Color(0xFF9CA3AF), Color(0xFFD1D5DB)],
                             )
-                          : LinearGradient(
+                          : const LinearGradient(
                               begin: Alignment.topLeft,
                               end: Alignment.bottomRight,
-                              colors: _cardGradient,
+                              colors: [timerMain, timerAccent],
                             ),
                       borderRadius: BorderRadius.circular(16),
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(
-                            0xFF2D2A4E,
-                          ).withValues(alpha: 0.18),
-                          blurRadius: 12,
-                          offset: const Offset(0, 5),
+                          color: timerMain.withValues(alpha: 0.28),
+                          blurRadius: 14,
+                          offset: const Offset(0, 6),
                         ),
                       ],
                     ),
@@ -948,7 +937,7 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
                             const Icon(
                               Icons.replay_rounded,
                               size: 17,
-                              color: Color(0xFF6B5361),
+                              color: timerAccent,
                             ),
                             const SizedBox(width: 4),
                             Text(
@@ -956,7 +945,7 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
                               style: GoogleFonts.notoSansKr(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w800,
-                                color: const Color(0xFF6B5361),
+                                color: timerAccent,
                               ),
                             ),
                           ],
@@ -967,7 +956,7 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
                       width: 1,
                       height: 14,
                       margin: const EdgeInsets.symmetric(horizontal: 10),
-                      color: const Color(0xFFE9E1E2),
+                      color: timerBorder,
                     ),
                     GestureDetector(
                       onTap: isDone ? null : _toggleSound,
@@ -982,9 +971,7 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
                             Icon(
                               Icons.headphones_rounded,
                               size: 17,
-                              color: _soundOn
-                                  ? _soundActiveColor
-                                  : const Color(0xFF6B5361),
+                              color: _soundOn ? _soundActiveColor : timerAccent,
                             ),
                             const SizedBox(width: 4),
                             Text(
@@ -994,7 +981,7 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
                                 fontWeight: FontWeight.w900,
                                 color: _soundOn
                                     ? _soundActiveColor
-                                    : const Color(0xFF6B5361),
+                                    : timerAccent,
                               ),
                             ),
                           ],
