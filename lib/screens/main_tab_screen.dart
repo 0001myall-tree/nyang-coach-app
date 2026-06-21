@@ -19,8 +19,6 @@ import 'tasks_screen.dart';
 import 'records_screen.dart';
 import 'settings_screen.dart';
 
-const _masterGold = Color(0xFFE5B94A);
-
 // 각 탭 화면 플레이스홀더
 class ChatPlaceholderScreen extends StatelessWidget {
   const ChatPlaceholderScreen({super.key});
@@ -1150,29 +1148,6 @@ class _MainTabScreenState extends State<MainTabScreen>
                                 ),
                               ),
                             ),
-                            const SizedBox(width: 6),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 6,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFFFFBEB),
-                                borderRadius: BorderRadius.circular(5),
-                                border: Border.all(
-                                  color: const Color(0xFFFDE68A),
-                                ),
-                              ),
-                              child: Text(
-                                'MASTER',
-                                style: GoogleFonts.notoSansKr(
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.w900,
-                                  color: _masterGold,
-                                  letterSpacing: 0.5,
-                                ),
-                              ),
-                            ),
                           ],
                         ),
                       ],
@@ -1332,25 +1307,6 @@ class _MainTabScreenState extends State<MainTabScreen>
             ),
           ),
         ),
-        if (_isMaster) ...[
-          const SizedBox(width: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-            decoration: BoxDecoration(
-              color: const Color(0xFFE4A11B),
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Text(
-              'MASTER',
-              style: GoogleFonts.notoSansKr(
-                fontSize: 9,
-                fontWeight: FontWeight.w900,
-                color: Colors.white,
-                letterSpacing: 0.5,
-              ),
-            ),
-          ),
-        ],
       ],
     );
   }
