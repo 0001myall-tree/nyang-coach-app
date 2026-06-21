@@ -767,7 +767,7 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
 
     return Align(
       key: const ValueKey('timer'),
-      alignment: Alignment.centerLeft,
+      alignment: Alignment.center,
       child: FractionallySizedBox(
         widthFactor: 0.78,
         child: ConstrainedBox(
