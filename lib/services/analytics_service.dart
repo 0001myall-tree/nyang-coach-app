@@ -220,6 +220,15 @@ class AnalyticsService {
       },
       'global conversation daily',
     );
+
+    final replyLabel = coachReplied
+        ? (usedApi ? 'API 응답' : '로컬 응답')
+        : '사용자 입력만';
+    await _safeTimelineEvent(
+      user.uid,
+      'chat',
+      '대화 메시지 전송: $coachId ($replyLabel)',
+    );
   }
 
   /// 특정 코치의 API 사용량 및 비용 로깅
