@@ -5347,12 +5347,12 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
     return Container(
       padding: const EdgeInsets.all(6),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFFDF8),
+        color: const Color(0xFFFFFCFF),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFD4A017)),
+        border: Border.all(color: const Color(0xFFDED6FF)),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFFD4A017).withOpacity(0.25),
+            color: const Color(0xFF9B8AF0).withOpacity(0.14),
             blurRadius: 25,
             offset: const Offset(0, 10),
           ),
@@ -5390,7 +5390,7 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
                     style: GoogleFonts.notoSansKr(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
-                      color: const Color(0xFF5B4E2A),
+                      color: const Color(0xFF6B5EA8),
                     ),
                   ),
                 ],
@@ -5498,10 +5498,10 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.96),
         borderRadius: BorderRadius.circular(26),
-        border: Border.all(color: const Color(0xFFFDE68A)),
+        border: Border.all(color: const Color(0xFFDED6FF)),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFFD4A017).withOpacity(0.08),
+            color: const Color(0xFF9B8AF0).withOpacity(0.10),
             blurRadius: 18,
             offset: const Offset(0, 8),
           ),
@@ -6056,6 +6056,9 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
   Widget _buildInputArea() {
     final isFriends = !_coach.isMaster;
     final isNyang = widget.coachId == 'cat';
+    const masterLavenderBorder = Color(0xFFDED6FF);
+    const masterLavenderIcon = Color(0xFF8B7CCC);
+    const masterLavenderShadow = Color(0xFF9B8AF0);
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
       decoration: BoxDecoration(
@@ -6112,14 +6115,14 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
                                 ? _coach.accentColor.withOpacity(0.6)
                                 : (isFriends
                                       ? Colors.white.withOpacity(0.3)
-                                      : const Color(0xFFF3E5AB))),
+                                      : masterLavenderBorder)),
                       width: _isListening ? 2.0 : 1.2,
                     ),
                     boxShadow: isFriends
                         ? null
                         : [
                             BoxShadow(
-                              color: const Color(0xFFB8860B).withOpacity(0.05),
+                              color: masterLavenderShadow.withOpacity(0.08),
                               blurRadius: 10,
                               offset: const Offset(0, 2),
                             ),
@@ -6133,7 +6136,7 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
                               ? _coach.accentColor
                               : (isFriends
                                     ? Colors.white
-                                    : const Color(0xFFB8860B))),
+                                    : masterLavenderIcon)),
                     size: 20,
                   ),
                 ),
@@ -6153,7 +6156,7 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
                           ? _coach.accentColor.withOpacity(0.5)
                           : (isFriends
                                 ? Colors.white.withOpacity(0.3)
-                                : const Color(0xFFDBC07A)),
+                                : masterLavenderBorder),
                       width: 1.2,
                     ),
                   ),
