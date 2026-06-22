@@ -6178,7 +6178,9 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
                       color: isNyang
                           ? const Color(0xFF1A1A2E)
                           : (isFriends
-                                ? (isGirlfriend ? girlfriendPink : Colors.white)
+                                ? (isGirlfriend
+                                      ? const Color(0xFF1A1A2E)
+                                      : Colors.white)
                                 : const Color(0xFF1A1A2E)),
                     ),
                     decoration: InputDecoration(
@@ -6189,7 +6191,7 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
                             ? const Color(0xFF4B445F).withOpacity(0.62)
                             : (isFriends
                                   ? (isGirlfriend
-                                        ? girlfriendPink.withOpacity(0.72)
+                                        ? const Color(0xFF1A1A2E).withOpacity(0.45)
                                         : Colors.white.withOpacity(0.6))
                                   : const Color(0xFFBBBBCC)),
                       ),
