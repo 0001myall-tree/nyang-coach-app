@@ -6056,6 +6056,8 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
   Widget _buildInputArea() {
     final isFriends = !_coach.isMaster;
     final isNyang = widget.coachId == 'cat';
+    final isGirlfriend = widget.coachId == 'girlfriend';
+    final girlfriendPink = _coach.accentColor;
     const masterLavenderBorder = Color(0xFFDED6FF);
     const masterLavenderIcon = Color(0xFF8B7CCC);
     const masterLavenderShadow = Color(0xFF9B8AF0);
@@ -6114,7 +6116,9 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
                           : (isNyang
                                 ? _coach.accentColor.withOpacity(0.6)
                                 : (isFriends
-                                      ? Colors.white.withOpacity(0.3)
+                                      ? (isGirlfriend
+                                            ? girlfriendPink.withOpacity(0.45)
+                                            : Colors.white.withOpacity(0.3))
                                       : masterLavenderBorder)),
                       width: _isListening ? 2.0 : 1.2,
                     ),
@@ -6135,7 +6139,9 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
                         : (isNyang
                               ? _coach.accentColor
                               : (isFriends
-                                    ? Colors.white
+                                    ? (isGirlfriend
+                                          ? girlfriendPink
+                                          : Colors.white)
                                     : masterLavenderIcon)),
                     size: 20,
                   ),
@@ -6155,7 +6161,9 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
                       color: isNyang
                           ? _coach.accentColor.withOpacity(0.5)
                           : (isFriends
-                                ? Colors.white.withOpacity(0.3)
+                                ? (isGirlfriend
+                                      ? girlfriendPink.withOpacity(0.45)
+                                      : Colors.white.withOpacity(0.3))
                                 : masterLavenderBorder),
                       width: 1.2,
                     ),
@@ -6170,7 +6178,7 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
                       color: isNyang
                           ? const Color(0xFF1A1A2E)
                           : (isFriends
-                                ? Colors.white
+                                ? (isGirlfriend ? girlfriendPink : Colors.white)
                                 : const Color(0xFF1A1A2E)),
                     ),
                     decoration: InputDecoration(
@@ -6180,7 +6188,9 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
                         color: isNyang
                             ? const Color(0xFF4B445F).withOpacity(0.62)
                             : (isFriends
-                                  ? Colors.white.withOpacity(0.6)
+                                  ? (isGirlfriend
+                                        ? girlfriendPink.withOpacity(0.72)
+                                        : Colors.white.withOpacity(0.6))
                                   : const Color(0xFFBBBBCC)),
                       ),
                       border: InputBorder.none,
