@@ -428,11 +428,39 @@ class _ChatScreenState extends State<ChatScreen>
     if (manager.coachId != widget.coachId) return;
     if (manager.duration <= 0) return;
 
+    final today = await FocusTimerManager.todayKey();
+    if (manager.sessionDate != today) {
+      manager.running = false;
+      manager.coachId = null;
+      manager.pausedRemainSec = null;
+      manager.startTime = null;
+      manager.sessionDate = null;
+      manager.insertIndex = null;
+      await manager.saveState();
+      return;
+    }
+
+    final savedIndex = manager.insertIndex ?? _messages.length;
+    final insertIndex = savedIndex.clamp(0, _messages.length).toInt();
+
     setState(() {
       _timerActiveMinutes = manager.stage;
-      _timerActiveInsertIndex = _messages.length;
+      _timerActiveInsertIndex = insertIndex;
     });
-    _scrollToBottom();
+  }
+
+  Future<void> _saveFocusTimerAnchor(int minutes, int insertIndex) async {
+    final manager = FocusTimerManager();
+    await manager.loadState();
+    manager.coachId = widget.coachId;
+    manager.stage = minutes;
+    manager.duration = minutes * 60;
+    manager.running = false;
+    manager.pausedRemainSec = null;
+    manager.startTime = null;
+    manager.sessionDate = await FocusTimerManager.todayKey();
+    manager.insertIndex = insertIndex;
+    await manager.saveState();
   }
 
   Future<void> _refreshAttendanceStreak([SharedPreferences? prefs]) async {
@@ -3500,6 +3528,7 @@ class _ChatScreenState extends State<ChatScreen>
     final directTimerMinutes = _directTimerRequestMinutes(trimmed);
     if (directTimerMinutes != null) {
       final reply = _directTimerStartMessage(directTimerMinutes);
+      int timerInsertIndex = 0;
       setState(() {
         _messages.add(
           ChatMessage(text: trimmed, isUser: true, time: DateTime.now()),
@@ -3511,8 +3540,10 @@ class _ChatScreenState extends State<ChatScreen>
         _timerConfirmTaskName = null;
         _timerActiveMinutes = directTimerMinutes;
         _timerActiveInsertIndex = _messages.length;
+        timerInsertIndex = _timerActiveInsertIndex!;
         _dynamicChips = _coach.chips;
       });
+      await _saveFocusTimerAnchor(directTimerMinutes, timerInsertIndex);
       _scrollToBottom();
       await _saveHistory();
       await AnalyticsService.logConversationMessage(
@@ -3660,6 +3691,12 @@ class _ChatScreenState extends State<ChatScreen>
         // 배너 로직 삭제 (팝업으로 대체)
         _isLoading = false;
       });
+      if (!_coach.isMaster && parsed.timerConfirmMinutes != null) {
+        await _saveFocusTimerAnchor(
+          parsed.timerConfirmMinutes!,
+          _timerActiveInsertIndex ?? _messages.length,
+        );
+      }
       _scrollToBottom();
       await _saveHistory();
       await AnalyticsService.logConversationMessage(
@@ -3787,8 +3824,18 @@ class _ChatScreenState extends State<ChatScreen>
       try {
         final ds = jsonDecode(dsRaw) as List;
         if (ds.isNotEmpty) {
-          final recent = ds.length > 7 ? ds.sublist(ds.length - 7) : ds;
-          sb.writeln('\n[최근 7일 요약]');
+          final todayKey = _getTodayStrWithReset(prefs);
+          final recentUntilYesterday = ds.where((summary) {
+            final date = summary['date']?.toString() ?? '';
+            return date.isNotEmpty && date.compareTo(todayKey) < 0;
+          }).toList();
+          final recent = recentUntilYesterday.length > 7
+              ? recentUntilYesterday.sublist(recentUntilYesterday.length - 7)
+              : recentUntilYesterday;
+          sb.writeln('\n[최근 7일 요약 - 오늘 제외, 어제까지]');
+          if (recent.isEmpty) {
+            sb.writeln('- 어제까지의 일일 요약이 아직 충분하지 않음');
+          }
           for (final s in recent) {
             sb.writeln(
               '${s['date']}: 달성(${s['achieved']}) / 못함(${s['missed']}) / 컨디션(${s['condition']}) / 고민(${s['concern']})',
@@ -3805,10 +3852,18 @@ class _ChatScreenState extends State<ChatScreen>
         try {
           final hist = jsonDecode(histRaw) as List;
           if (hist.isNotEmpty) {
-            final last7 = hist.length > 7
-                ? hist.sublist(hist.length - 7)
-                : hist;
-            sb.writeln('\n[최근 7일간 실제 완료/미완료 할 일 목록]');
+            final todayKey = _getTodayStrWithReset(prefs);
+            final last7UntilYesterday = hist.where((record) {
+              final date = record['date']?.toString() ?? '';
+              return date.isNotEmpty && date.compareTo(todayKey) < 0;
+            }).toList();
+            final last7 = last7UntilYesterday.length > 7
+                ? last7UntilYesterday.sublist(last7UntilYesterday.length - 7)
+                : last7UntilYesterday;
+            sb.writeln('\n[최근 7일간 실제 완료/미완료 할 일 목록 - 오늘 제외, 어제까지]');
+            if (last7.isEmpty) {
+              sb.writeln('- 어제까지의 완료/미완료 기록이 아직 충분하지 않음');
+            }
             for (final record in last7) {
               final rTasks = (record['tasks'] as List?) ?? [];
               final done = rTasks
@@ -3823,6 +3878,9 @@ class _ChatScreenState extends State<ChatScreen>
                 '- ${record['date']}: 완료 [${done.isEmpty ? '없음' : done}], 미완료 [${undone.isEmpty ? '없음' : undone}]',
               );
             }
+            sb.writeln(
+              '*비전을 위한 오늘 요청에서는 이 섹션을 사용자의 최근 일주일 흐름 평가 근거로 삼고, 오늘 할 일의 미완료 상태는 아직 진행 중인 계획으로만 봅니다.',
+            );
           }
         } catch (_) {}
       }
@@ -4410,23 +4468,27 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
 4) 마크다운 ** 나 * 등은 절대 쓰지 마십시오. [TASK] 태그도 포함하지 마십시오.]''';
     } else if (userText == '비전을 위한 오늘') {
       effectiveUserText = '''비전을 위한 오늘
-[System: 사용자가 방금 현재 시간 기준으로 "비전을 위한 오늘"을 다시 요청했습니다. 반드시 이전 대화 맥락에 얽매이지 말고 시스템 프롬프트 상의 **최신 시간**과 **최신 할 일 현황(추가/완료 상태 등)**을 바탕으로 완전히 새롭게 분석을 진행하세요. 절대 단순 일정 생성이나 시간 배치를 제안하지 마세요. 대신 다음의 **비전 추적 및 점검** 역할을 수행해야 합니다.
+[System: 사용자가 방금 현재 시간 기준으로 "비전을 위한 오늘"을 요청했습니다. 이전 대화 맥락에 얽매이지 말고 최신 목표/비전 정보, 어제까지의 최근 7일 기록, 오늘 할 일 현황을 바탕으로 완전히 새롭게 판단하세요. 절대 오늘 미완료 항목을 근거로 "비전을 위해 하지 않았다", "안 했다", "부족했다"처럼 평가하지 마세요. 오늘 계획은 아직 진행 중인 계획이며, 오늘 안에 끝내면 되는 항목으로 다뤄야 합니다.
 
-*데이터 분석 범위 및 연관성 판단 규칙 (1차 판단 원칙):*
-반드시 대화 및 분석(조언)을 작성하기 전에, 오늘 등록된 할 일/일정/습관이 장기 비전, 마일스톤, 월목표, 주목표와 어떻게 연결되는지 아래 판단 원칙에 따라 1차적으로 먼저 판단하십시오:
-1. [키워드 겹침 판단]: 오늘 할 일 이름과 비전, 마일스톤, 월목표, 주목표 이름 사이에 겹치는 핵심 키워드(예: 'sns', 'ai', '공부', '영어', '코딩' 등)가 단 하나라도 존재한다면, 이 일정은 최우선적으로 '관련된 일정'으로 판단하고 분류합니다.
-2. [연관 키워드 및 맥락적 연관성 판단]: 텍스트의 어휘가 정확히 일치하지 않더라도, 개념적으로 서로 깊게 연관되어 있다면 '관련된 일정'으로 판단합니다. (예시: 장기 비전에 "시나리오 쓰기"가 있고 오늘의 할 일에 "영화 '헤어질 결심' 보기"가 있다면, '시나리오'와 '영화'는 맥락상 밀접하므로 연관된 일정으로 간주합니다.)
-3. [불확실/비연관 일정 처리 (침묵 원칙)]: 위 1, 2단계를 거쳤음에도 비전, 마일스톤, 월/주 목표와 연관성이 명확하지 않거나 아예 없는 일정(예: 설거지, 방 청소 등 단순 가사노동이나 무관한 일반 업무)은 **이번 비전 분석 대화에서 절대로 먼저 언급하지 말고 아예 제외(생략)하십시오.**
-   - 또한, 억지로 "비전 진행과는 관계가 없다고 볼 수 있습니다"라거나 "분석에서 제외했습니다" 등 부정적이거나 기운을 빠지게 하는 단정적인 결론을 지어 설명에 포함해서는 절대 안 됩니다.
-   - 만약 사용자가 직접 질문하여 그러한 무관한 일정을 언급해야 하는 특수한 상황이 생기더라도, "관계가 없다"고 결론 내리지 말고 "간접적인 연결점은 있을 수 있으나, 지금은 비전에 직결되는 핵심 행동에 더 집중해 보자"는 식으로 부드럽고 유연한 열린 태도로 답변하십시오.
+*분석 순서:*
+1. 먼저 [최근 7일간 실제 완료/미완료 할 일 목록 - 오늘 제외, 어제까지]와 [최근 7일 요약 - 오늘 제외, 어제까지]를 근거로, 사용자가 어제까지 장기 비전, 마일스톤, 이번 달 목표, 이번 주 목표를 향해 잘 나아갔는지 판단하세요.
+   - 잘 이어온 흐름이 있으면 구체적인 완료 항목을 짚어 칭찬하세요.
+   - 반복적으로 미뤄진 목표 관련 항목이 있으면 비난하지 말고, "흐름이 끊기기 쉬운 지점" 정도로 부드럽게 언급하세요.
+   - 기록이 부족하면 단정 평가하지 말고, 오늘부터 추적할 수 있는 작은 기준을 잡아주세요.
+2. 그다음 [오늘 할 일 현황]에서 장기 비전, 마일스톤, 월목표, 주목표와 관련 있는 항목을 찾으세요. 오늘 미완료인 관련 항목은 실패가 아니라 "오늘 챙기면 좋은 비전 연결 행동"으로 소개하세요.
+3. 오늘 할 일 목록에 관련 항목이 이미 있다면 새 일정을 만들지 말고, 그 항목을 1~2개 콕 집어 "오늘은 이걸 챙겨주셨으면 좋겠습니다"라고 말하세요.
+4. 오늘 할 일 목록에 관련 항목이 없다면, 장기 비전/월목표/주목표 중 하나를 직접 언급하면서 그와 연결되는 작은 활용 행동 1개를 제안하세요. 이때 [TASK: ...] 태그로 오늘 할 일에 추가될 수 있게 하세요. 예: [TASK: 월 목표 점검 15분], [TASK: 비전 관련 자료 1개 정리하기]
 
-*6대 점검 규칙 (조건에 맞는 상황을 분석해 코치의 톤으로 자연스럽게 대화체로 조언할 것):*
-1. 비전 진행 점검: 장기 비전, 마일스톤, 월목표, 주목표와 연관된 오늘의 일정 완료율을 파악합니다. (비전/목표와 무관하여 3번 침묵 원칙에 따라 생략된 일정은 분석 및 완료율 계산 대상에서 완전히 배제해야 합니다.)
-2. 반복 미룸 탐지: 최근 계속 미뤄지고 있는 비전/목표 관련 일정이 있다면, "이번 주에 계속 미뤄지고 있는 목표가 있습니다. 오늘 시간이 괜찮으시다면 조금이라도 진행해보시는 건 어떨까요?" 식으로 부드럽게 제안합니다.
-3. 중복 제안 금지: 이미 오늘 계획에 비전/목표 관련 일정이 있다면 새 일정 추가 없이 "오늘 계획에 이미 포함되어 있는 만큼 이 일정은 꼭 챙겨보셨으면 좋겠습니다."라고 강조합니다.
-4. 마일스톤 지연: 마일스톤이나 장기 비전의 진척이 늦어지고 있다면 "원래 예상보다 조금 늦어지고 있는 것 같습니다. 오늘 조금만 진행해도 흐름을 이어갈 수 있을 것 같아요."라고 조언합니다.
-5. 긍정적 흐름: 비전/목표 관련 일정 완료율이 높다면 "최근 목표 관련 일정 완료율이 높습니다. 지금의 흐름을 유지하면 마일스톤에 더 가까워질 수 있을 것 같아요."라고 칭찬합니다.
-6. 구조 부족: 장기 비전은 있으나 마일스톤/기한이 없다면 "마일스톤 기한을 추가해주시거나 월목표, 주목표를 정해주시면 목표 진행 상황을 더 정확하게 도와드릴 수 있습니다."라고 제안합니다.]''';
+*연관성 판단 규칙:*
+1. 오늘 할 일 이름과 비전, 마일스톤, 월목표, 주목표 이름 사이에 핵심 키워드가 겹치면 관련 항목으로 봅니다.
+2. 표현이 정확히 같지 않아도 개념적으로 연결되면 관련 항목으로 봅니다. 예: "시나리오 쓰기"와 "영화 보기", "일본 진출"과 "일본어/시장조사".
+3. 가사, 잡무, 단순 행정처럼 관련성이 명확하지 않은 항목은 굳이 언급하지 마세요. "비전과 무관하다"는 식의 부정적 단정도 하지 마세요.
+
+*답변 방식:*
+1. 답변은 짧게 2~4문장으로 작성하세요.
+2. 구조는 "어제까지의 흐름 평가 1문장 + 오늘 챙길 관련 할 일 또는 새 제안 1~2문장"으로 만드세요.
+3. 오늘 완료율, 오늘 미완료율, 오늘 아직 안 했다는 식의 평가 표현은 금지합니다.
+4. 단순 시간표나 전체 일정 배치는 하지 마세요.]''';
     }
 
     final now = DateTime.now();
@@ -5127,14 +5189,17 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
             ],
             // 지금 잠깐이라도 해볼게
             GestureDetector(
-              onTap: () {
+              onTap: () async {
                 final mins = _timerConfirmMinutes ?? 5;
+                int timerInsertIndex = 0;
                 setState(() {
                   _timerConfirmMinutes = null;
                   _timerConfirmTaskName = null;
                   _timerActiveMinutes = mins;
                   _timerActiveInsertIndex = _messages.length;
+                  timerInsertIndex = _timerActiveInsertIndex!;
                 });
+                await _saveFocusTimerAnchor(mins, timerInsertIndex);
                 _scrollToBottom();
               },
               child: Container(

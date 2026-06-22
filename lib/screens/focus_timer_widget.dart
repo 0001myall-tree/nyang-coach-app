@@ -25,6 +25,23 @@ class FocusTimerManager {
   bool running = false;
   String? coachId;
   int stage = 25;
+  String? sessionDate;
+  int? insertIndex;
+
+  static String _dateKey(DateTime date) {
+    return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+  }
+
+  static Future<String> todayKey() async {
+    final prefs = await SharedPreferences.getInstance();
+    final resetHour = prefs.getDouble('nyang_reset_hour') ?? 3.0;
+    final now = DateTime.now();
+    var baseToday = DateTime(now.year, now.month, now.day);
+    if (now.hour < resetHour) {
+      baseToday = baseToday.subtract(const Duration(days: 1));
+    }
+    return _dateKey(baseToday);
+  }
 
   Future<void> loadState() async {
     final prefs = await SharedPreferences.getInstance();
@@ -35,6 +52,8 @@ class FocusTimerManager {
     final startStr = prefs.getString('focus_timer_start_time');
     startTime = startStr != null ? DateTime.tryParse(startStr) : null;
     pausedRemainSec = prefs.getInt('focus_timer_paused_remain');
+    sessionDate = prefs.getString('focus_timer_session_date');
+    insertIndex = prefs.getInt('focus_timer_insert_index');
   }
 
   Future<void> saveState() async {
@@ -60,6 +79,16 @@ class FocusTimerManager {
     } else {
       await prefs.remove('focus_timer_paused_remain');
     }
+    if (sessionDate != null) {
+      await prefs.setString('focus_timer_session_date', sessionDate!);
+    } else {
+      await prefs.remove('focus_timer_session_date');
+    }
+    if (insertIndex != null) {
+      await prefs.setInt('focus_timer_insert_index', insertIndex!);
+    } else {
+      await prefs.remove('focus_timer_insert_index');
+    }
   }
 
   int getRemainSeconds() {
@@ -77,6 +106,7 @@ class FocusTimerManager {
     this.coachId = coachId;
     pausedRemainSec = null;
     startTime = DateTime.now();
+    sessionDate ??= await todayKey();
     await saveState();
     await NotificationService().scheduleFocusTimerNotification(
       seconds: duration,
