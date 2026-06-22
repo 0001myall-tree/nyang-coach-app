@@ -3992,6 +3992,12 @@ class _TasksScreenState extends State<TasksScreen>
             ? item.isReminderEnabled
             : false);
     final bool isScheduleItem = item is ScheduleItem;
+    bool mRepeatEnabled = isScheduleItem && item.isRecurring;
+    Map<String, dynamic>? mRepeatRule = isScheduleItem
+        ? (item.recurrenceRule == null
+              ? null
+              : Map<String, dynamic>.from(item.recurrenceRule!))
+        : null;
 
     if (item.timeStart != null && item.timeEnd != null) {
       mTimeType = 'range';
@@ -4148,55 +4154,105 @@ class _TasksScreenState extends State<TasksScreen>
                     ),
                   ),
                   const SizedBox(height: 16),
-                  Row(
-                    children: ['single', 'range', 'duration'].map((t) {
-                      final labels = {
+                  Builder(
+                    builder: (context) {
+                      final modeTypes = isScheduleItem
+                          ? ['single', 'range', 'duration', 'repeat']
+                          : ['single', 'range', 'duration'];
+                      const labels = {
                         'single': '특정 시간',
                         'range': '시간 범위',
                         'duration': '소요 시간',
+                        'repeat': '반복',
                       };
-                      final isActive = mTimeType == t;
-                      return Expanded(
-                        child: GestureDetector(
-                          onTap: () => setModalState(() {
-                            mTimeType = mTimeType == t ? 'none' : t;
-                            mReminderEnabled = false;
-                            mStartTime = null;
-                            mEndTime = null;
-                            if (t != 'duration') mDuration = null;
-                          }),
-                          child: Container(
-                            margin: EdgeInsets.only(
-                              right: t == 'duration' ? 0 : 6,
-                            ),
-                            padding: const EdgeInsets.symmetric(vertical: 9),
-                            decoration: BoxDecoration(
-                              color: isActive
-                                  ? _coach.accentColor.withOpacity(0.08)
-                                  : Colors.white,
-                              border: Border.all(
-                                color: isActive
-                                    ? _coach.accentColor
-                                    : const Color(0xFFE5E7EB),
-                                width: 2,
+
+                      return Row(
+                        children: modeTypes.map((t) {
+                          final isRepeat = t == 'repeat';
+                          final isActive = isRepeat
+                              ? mRepeatEnabled
+                              : mTimeType == t;
+                          final isLast = t == modeTypes.last;
+
+                          return Expanded(
+                            child: GestureDetector(
+                              onTap: () async {
+                                if (isRepeat) {
+                                  final rule = await _showScheduleRepeatDialog(
+                                    initialRule: mRepeatRule,
+                                    baseDate: _calSelectedDay,
+                                  );
+                                  if (rule != null) {
+                                    setModalState(() {
+                                      mRepeatEnabled = true;
+                                      mRepeatRule = rule;
+                                    });
+                                  }
+                                  return;
+                                }
+
+                                setModalState(() {
+                                  mTimeType = mTimeType == t ? 'none' : t;
+                                  mReminderEnabled = false;
+                                  mStartTime = null;
+                                  mEndTime = null;
+                                  if (t != 'duration') mDuration = null;
+                                });
+                              },
+                              child: Container(
+                                margin: EdgeInsets.only(right: isLast ? 0 : 6),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 9,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: isActive
+                                      ? _coach.accentColor.withOpacity(0.08)
+                                      : Colors.white,
+                                  border: Border.all(
+                                    color: isActive
+                                        ? _coach.accentColor
+                                        : const Color(0xFFE5E7EB),
+                                    width: 2,
+                                  ),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    if (isRepeat) ...[
+                                      Icon(
+                                        Icons.repeat_rounded,
+                                        size: 16,
+                                        color: isActive
+                                            ? _coach.accentColor
+                                            : const Color(0xFF9CA3AF),
+                                      ),
+                                      const SizedBox(width: 3),
+                                    ],
+                                    Flexible(
+                                      child: Text(
+                                        labels[t]!,
+                                        textAlign: TextAlign.center,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: GoogleFonts.notoSansKr(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w700,
+                                          color: isActive
+                                              ? _coach.accentColor
+                                              : const Color(0xFF9CA3AF),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
-                              borderRadius: BorderRadius.circular(12),
                             ),
-                            child: Text(
-                              labels[t]!,
-                              textAlign: TextAlign.center,
-                              style: GoogleFonts.notoSansKr(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
-                                color: isActive
-                                    ? _coach.accentColor
-                                    : const Color(0xFF9CA3AF),
-                              ),
-                            ),
-                          ),
-                        ),
+                          );
+                        }).toList(),
                       );
-                    }).toList(),
+                    },
                   ),
                   if (mTimeType == 'single' || mTimeType == 'range')
                     Padding(
@@ -4494,6 +4550,16 @@ class _TasksScreenState extends State<TasksScreen>
                           mStartTime,
                           mReminderEnabled,
                         );
+                        item.isRecurring = mRepeatEnabled;
+                        item.recurrenceRule = mRepeatEnabled
+                            ? (mRepeatRule ?? item.recurrenceRule)
+                            : null;
+                        if (item.isRecurring && item.recurrenceRule != null) {
+                          _replaceFutureRecurringSchedules(
+                            item,
+                            item.recurrenceRule!,
+                          );
+                        }
                       } else if (item is TaskItem) {
                         item.isReminderEnabled = _resolvedTimeReminderEnabled(
                           mTimeType,
@@ -7420,6 +7486,67 @@ class _TasksScreenState extends State<TasksScreen>
     return [normalizedStart];
   }
 
+  void _replaceFutureRecurringSchedules(
+    ScheduleItem source,
+    Map<String, dynamic> rule,
+  ) {
+    String? currentDateKey;
+    schedules.forEach((dateKey, items) {
+      if (currentDateKey != null) return;
+      if (items.any((item) => item.id == source.id)) {
+        currentDateKey = dateKey;
+      }
+    });
+    if (currentDateKey == null) return;
+
+    final currentDate = DateTime.tryParse(currentDateKey!);
+    if (currentDate == null) return;
+
+    final recurrenceGroupId =
+        source.recurrenceGroupId ??
+        'repeat_${DateTime.now().millisecondsSinceEpoch}';
+    final repeatRule = {...rule, 'startDate': currentDateKey};
+
+    final emptyDateKeys = <String>[];
+    schedules.forEach((dateKey, items) {
+      if (dateKey.compareTo(currentDateKey!) < 0) return;
+      items.removeWhere(
+        (item) =>
+            item.id == source.id ||
+            (item.recurrenceGroupId != null &&
+                item.recurrenceGroupId == recurrenceGroupId),
+      );
+      if (items.isEmpty) emptyDateKeys.add(dateKey);
+    });
+    for (final dateKey in emptyDateKeys) {
+      schedules.remove(dateKey);
+    }
+
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    final repeatDates = _datesForScheduleRepeat(currentDate, rule);
+    for (var i = 0; i < repeatDates.length; i++) {
+      final dateKey = _dateKey(repeatDates[i]);
+      schedules.putIfAbsent(dateKey, () => []);
+      schedules[dateKey]!.add(
+        ScheduleItem(
+          id: i == 0 ? source.id : '${nowMs}_edit_$i',
+          text: source.text,
+          time: source.time,
+          timeStart: source.timeStart,
+          timeEnd: source.timeEnd,
+          duration: source.duration,
+          done: i == 0 ? source.done : false,
+          createdAt: source.createdAt,
+          isReminderEnabled: source.isReminderEnabled,
+          deferredCount: i == 0 ? source.deferredCount : 0,
+          isRecurring: true,
+          recurrenceGroupId: recurrenceGroupId,
+          recurrenceRule: repeatRule,
+        ),
+      );
+    }
+  }
+
   DateTime? _nthWeekdayOfMonth(int year, int month, int nth, int weekday) {
     final matches = <DateTime>[];
     final lastDay = DateTime(year, month + 1, 0).day;
@@ -9145,28 +9272,34 @@ class _TasksScreenState extends State<TasksScreen>
     );
   }
 
-  Future<void> _showScheduleRepeatDialog() async {
-    String repeatType = _schRepeatRule?['type']?.toString() ?? 'weekly';
-    String monthlyMode = _schRepeatRule?['monthlyMode']?.toString() ?? 'date';
+  Future<Map<String, dynamic>?> _showScheduleRepeatDialog({
+    Map<String, dynamic>? initialRule,
+    DateTime? baseDate,
+  }) async {
+    final sourceRule = initialRule ?? _schRepeatRule;
+    final repeatBaseDate = baseDate ?? _calSelectedDay;
+    Map<String, dynamic>? appliedRule;
+    String repeatType = sourceRule?['type']?.toString() ?? 'weekly';
+    String monthlyMode = sourceRule?['monthlyMode']?.toString() ?? 'date';
     final selectedWeekdays =
-        ((_schRepeatRule?['weekdays'] as List?)
+        ((sourceRule?['weekdays'] as List?)
             ?.map((e) => int.tryParse(e.toString()))
             .whereType<int>()
             .toSet() ??
-        {_calSelectedDay.weekday});
+        {repeatBaseDate.weekday});
     int dayOfMonth =
-        int.tryParse(_schRepeatRule?['dayOfMonth']?.toString() ?? '') ??
-        _calSelectedDay.day;
-    int nth = int.tryParse(_schRepeatRule?['nth']?.toString() ?? '') ?? 1;
+        int.tryParse(sourceRule?['dayOfMonth']?.toString() ?? '') ??
+        repeatBaseDate.day;
+    int nth = int.tryParse(sourceRule?['nth']?.toString() ?? '') ?? 1;
     int monthlyWeekday =
-        int.tryParse(_schRepeatRule?['weekday']?.toString() ?? '') ??
-        _calSelectedDay.weekday;
-    String endType = _schRepeatRule?['endType']?.toString() ?? 'never';
+        int.tryParse(sourceRule?['weekday']?.toString() ?? '') ??
+        repeatBaseDate.weekday;
+    String endType = sourceRule?['endType']?.toString() ?? 'never';
     DateTime? endDate = DateTime.tryParse(
-      _schRepeatRule?['endDate']?.toString() ?? '',
+      sourceRule?['endDate']?.toString() ?? '',
     );
     final countCtrl = TextEditingController(
-      text: _schRepeatRule?['count']?.toString() ?? '10',
+      text: sourceRule?['count']?.toString() ?? '10',
     );
     final dayCtrl = TextEditingController(text: dayOfMonth.toString());
 
@@ -9482,9 +9615,9 @@ class _TasksScreenState extends State<TasksScreen>
                               context: context,
                               initialDate:
                                   endDate ??
-                                  _calSelectedDay.add(const Duration(days: 30)),
-                              firstDate: _calSelectedDay,
-                              lastDate: DateTime(_calSelectedDay.year + 5),
+                                  repeatBaseDate.add(const Duration(days: 30)),
+                              firstDate: repeatBaseDate,
+                              lastDate: DateTime(repeatBaseDate.year + 5),
                             );
                             if (picked != null) {
                               setDialogState(() {
@@ -9558,7 +9691,7 @@ class _TasksScreenState extends State<TasksScreen>
                               if (monthlyMode == 'date') {
                                 rule['dayOfMonth'] =
                                     int.tryParse(dayCtrl.text) ??
-                                    _calSelectedDay.day;
+                                    repeatBaseDate.day;
                               } else {
                                 rule['nth'] = nth;
                                 rule['weekday'] = monthlyWeekday;
@@ -9571,10 +9704,7 @@ class _TasksScreenState extends State<TasksScreen>
                               rule['count'] =
                                   int.tryParse(countCtrl.text) ?? 10;
                             }
-                            setState(() {
-                              _schRepeatEnabled = true;
-                              _schRepeatRule = rule;
-                            });
+                            appliedRule = rule;
                             Navigator.pop(dialogContext);
                           },
                           style: ElevatedButton.styleFrom(
@@ -9605,6 +9735,7 @@ class _TasksScreenState extends State<TasksScreen>
 
     countCtrl.dispose();
     dayCtrl.dispose();
+    return appliedRule;
   }
 
   Widget _buildScheduleInputArea() {
@@ -9631,7 +9762,13 @@ class _TasksScreenState extends State<TasksScreen>
         child: GestureDetector(
           onTap: () async {
             if (isRepeat) {
-              await _showScheduleRepeatDialog();
+              final rule = await _showScheduleRepeatDialog();
+              if (rule != null) {
+                setState(() {
+                  _schRepeatEnabled = true;
+                  _schRepeatRule = rule;
+                });
+              }
               return;
             }
             setState(() {
