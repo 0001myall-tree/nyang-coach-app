@@ -29,19 +29,27 @@ class ChatMessage {
   final String text;
   final bool isUser;
   final DateTime time;
+  final String? kind;
 
-  ChatMessage({required this.text, required this.isUser, required this.time});
+  ChatMessage({
+    required this.text,
+    required this.isUser,
+    required this.time,
+    this.kind,
+  });
 
   Map<String, dynamic> toJson() => {
     'text': text,
     'isUser': isUser,
     'time': time.toIso8601String(),
+    if (kind != null) 'kind': kind,
   };
 
   factory ChatMessage.fromJson(Map<String, dynamic> j) => ChatMessage(
     text: j['text'],
     isUser: j['isUser'],
     time: DateTime.parse(j['time']),
+    kind: j['kind'],
   );
 }
 
@@ -89,6 +97,22 @@ class _BroWorkoutLink {
     required this.id,
     required this.title,
     required this.url,
+  });
+}
+
+class _VisionMilestoneContext {
+  final String visionName;
+  final int index;
+  final Map<String, dynamic> milestone;
+  final DateTime? date;
+  final List<String> actionTitles;
+
+  const _VisionMilestoneContext({
+    required this.visionName,
+    required this.index,
+    required this.milestone,
+    required this.date,
+    required this.actionTitles,
   });
 }
 
@@ -3503,7 +3527,7 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   // ── 메시지 전송 (웹앱 sendMessage 이식) ─────────────────
-  Future<void> _send(String text) async {
+  Future<void> _send(String text, {String? apiInputOverride}) async {
     final trimmed = text.trim();
     if (trimmed.isEmpty || _isLoading) return;
     if (!_coach.isMaster && _isListening) {
@@ -3512,6 +3536,30 @@ class _ChatScreenState extends State<ChatScreen>
     }
     _ctrl.clear();
     HapticFeedback.lightImpact();
+
+    if (trimmed == '비전을 위한 오늘' && apiInputOverride == null) {
+      setState(() {
+        _messages.add(
+          ChatMessage(text: trimmed, isUser: true, time: DateTime.now()),
+        );
+        _messages.add(
+          ChatMessage(
+            text: '오늘 비전을 어떻게 이어갈까요?',
+            isUser: false,
+            time: DateTime.now(),
+            kind: 'vision_choice',
+          ),
+        );
+        _dynamicChips = _coach.chips;
+      });
+      _scrollToBottom();
+      await _saveHistory();
+      await AnalyticsService.logConversationMessage(
+        coachId: widget.coachId,
+        usedApi: false,
+      );
+      return;
+    }
 
     // ── 나이트콜 설정 버튼 인터셉트 ──────────────────────
     if (trimmed == '🌙 나이트콜 설정하기') {
@@ -3651,7 +3699,7 @@ class _ChatScreenState extends State<ChatScreen>
       return;
     }
 
-    var apiInput = trimmed;
+    var apiInput = apiInputOverride ?? trimmed;
     var skipBroWorkoutLocalReply = false;
 
     if (widget.coachId == 'bro') {
@@ -4131,14 +4179,41 @@ class _ChatScreenState extends State<ChatScreen>
               sb.writeln(
                 '- 비전명: ${v['name']} (${dl['year']}년 ${dl['month']}월 ${dl['period']}까지)',
               );
-              if (v['coachId'] == _coach.id)
-                sb.writeln('  (★ 이 비전은 현재 내가 전담 관리하는 목표임)');
               sb.writeln('  상태: 총 ${milestones.length}단계 중 ${doneCount}단계 완료');
               for (int i = 0; i < milestones.length; i++) {
                 final m = milestones[i];
                 sb.writeln(
                   '    [${m['done'] == true ? 'V' : ' '}] ${i + 1}. ${m['text']}',
                 );
+                final actionCandidates = (m['actionCandidates'] as List?) ?? [];
+                final actionTitles = actionCandidates
+                    .whereType<Map>()
+                    .map(
+                      (action) => (action['title'] ?? action['text'] ?? '')
+                          .toString()
+                          .trim(),
+                    )
+                    .where((title) => title.isNotEmpty)
+                    .toList();
+                if (actionTitles.isNotEmpty) {
+                  sb.writeln('      실행 아이템: ${actionTitles.join(', ')}');
+                } else {
+                  final memo = (m['memo'] ?? '').toString().trim();
+                  if (memo.isNotEmpty) {
+                    sb.writeln('      메모: $memo');
+                  }
+                  final memoSections = (m['memoSections'] as List?) ?? [];
+                  for (final section in memoSections) {
+                    if (section is! Map) continue;
+                    final title = (section['title'] ?? '').toString().trim();
+                    final content = (section['content'] ?? '')
+                        .toString()
+                        .trim();
+                    if (title.isEmpty && content.isEmpty) continue;
+                    final sectionLabel = title.isNotEmpty ? title : '메모';
+                    sb.writeln('      $sectionLabel: $content');
+                  }
+                }
               }
             }
             sb.writeln('\n비전과 마일스톤의 진행 상황을 대화 중에 자연스럽게 확인하거나 응원해주세요.');
@@ -4505,6 +4580,272 @@ class _ChatScreenState extends State<ChatScreen>
     return sb.toString();
   }
 
+  Future<String> _buildVisionNewActionContextString() async {
+    final prefs = await SharedPreferences.getInstance();
+    final sb = StringBuffer();
+
+    String clip(String value, int maxLength) {
+      final normalized = value.replaceAll(RegExp(r'\s+'), ' ').trim();
+      if (normalized.length <= maxLength) return normalized;
+      return '${normalized.substring(0, maxLength)}...';
+    }
+
+    DateTime? parseDate(dynamic raw) {
+      final text = raw?.toString().trim() ?? '';
+      if (text.isEmpty) return null;
+      final parsed = DateTime.tryParse(text);
+      if (parsed == null) return null;
+      return DateTime(parsed.year, parsed.month, parsed.day);
+    }
+
+    String dateLabel(DateTime? date) {
+      if (date == null) return '기한 없음';
+      return _dateKey(date);
+    }
+
+    List<String> extractActionTitles(Map<String, dynamic> milestone) {
+      final actionCandidates = (milestone['actionCandidates'] as List?) ?? [];
+      return actionCandidates
+          .whereType<Map>()
+          .map(
+            (action) =>
+                (action['title'] ?? action['text'] ?? '').toString().trim(),
+          )
+          .where((title) => title.isNotEmpty)
+          .toList();
+    }
+
+    String milestoneMemoText(Map<String, dynamic> milestone) {
+      final parts = <String>[];
+      final memo = (milestone['memo'] ?? '').toString().trim();
+      if (memo.isNotEmpty) parts.add(memo);
+
+      final memoSections = (milestone['memoSections'] as List?) ?? [];
+      for (final section in memoSections) {
+        if (section is! Map) continue;
+        final title = (section['title'] ?? '').toString().trim();
+        final content = (section['content'] ?? '').toString().trim();
+        if (title.isEmpty && content.isEmpty) continue;
+        parts.add(title.isNotEmpty ? '$title: $content' : content);
+      }
+      return parts.join(' / ');
+    }
+
+    int compareMilestones(
+      _VisionMilestoneContext a,
+      _VisionMilestoneContext b,
+    ) {
+      final aDate = a.date ?? DateTime(9999, 12, 31);
+      final bDate = b.date ?? DateTime(9999, 12, 31);
+      final byDate = aDate.compareTo(bDate);
+      if (byDate != 0) return byDate;
+      final byVision = a.visionName.compareTo(b.visionName);
+      if (byVision != 0) return byVision;
+      return a.index.compareTo(b.index);
+    }
+
+    sb.writeln('[새 행동 추천용 압축 컨텍스트]');
+    sb.writeln('- 목적: 오늘 할 일 목록 밖에서 비전 기준의 새 행동 1개를 추천하기');
+    sb.writeln('- 원칙: 담당 비전 개념은 없음. 마스터 코치는 모든 비전/마일스톤을 같은 기준으로 조회함.');
+
+    final now = DateTime.now();
+    final todayStr = _getTodayStrWithReset(prefs);
+    final dayNames = ['일', '월', '화', '수', '목', '금', '토'];
+    sb.writeln('\n[오늘 기준]');
+    sb.writeln(
+      '$todayStr / 실제 ${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')} (${dayNames[now.weekday % 7]}) ${now.hour}:${now.minute.toString().padLeft(2, '0')}',
+    );
+
+    final tasksRaw = prefs.getString('nyang_tasks');
+    final todayTaskNames = <String>{};
+    if (tasksRaw != null) {
+      try {
+        final tasks = jsonDecode(tasksRaw) as List;
+        if (tasks.isNotEmpty) {
+          sb.writeln('\n[오늘 할 일 - 중복 제안 방지용]');
+          for (final t in tasks) {
+            final text = (t['text'] ?? '').toString().trim();
+            if (text.isEmpty) continue;
+            todayTaskNames.add(text);
+            sb.writeln('- [${t['done'] == true ? 'V' : ' '}] $text');
+          }
+        }
+      } catch (_) {}
+    }
+
+    final dsRaw = prefs.getString('nyang_daily_summaries');
+    if (dsRaw != null) {
+      try {
+        final ds = jsonDecode(dsRaw) as List;
+        final recentUntilYesterday = ds.where((summary) {
+          final date = summary['date']?.toString() ?? '';
+          return date.isNotEmpty && date.compareTo(todayStr) < 0;
+        }).toList();
+        final recent = recentUntilYesterday.length > 5
+            ? recentUntilYesterday.sublist(recentUntilYesterday.length - 5)
+            : recentUntilYesterday;
+        if (recent.isNotEmpty) {
+          sb.writeln('\n[최근 흐름 요약 - 최대 5일, 오늘 제외]');
+          for (final s in recent) {
+            sb.writeln(
+              '- ${s['date']}: 달성(${clip((s['achieved'] ?? '').toString(), 80)}) / 못함(${clip((s['missed'] ?? '').toString(), 80)}) / 컨디션(${clip((s['condition'] ?? '').toString(), 50)})',
+            );
+          }
+        }
+      } catch (_) {}
+    }
+
+    final histRaw = prefs.getString('nyang_history');
+    if (histRaw != null) {
+      try {
+        final hist = jsonDecode(histRaw) as List;
+        final last7UntilYesterday = hist.where((record) {
+          final date = record['date']?.toString() ?? '';
+          return date.isNotEmpty && date.compareTo(todayStr) < 0;
+        }).toList();
+        final last7 = last7UntilYesterday.length > 7
+            ? last7UntilYesterday.sublist(last7UntilYesterday.length - 7)
+            : last7UntilYesterday;
+        if (last7.isNotEmpty) {
+          sb.writeln('\n[최근 7일 완료/미완료 패턴 - 압축]');
+          for (final record in last7) {
+            final rTasks = (record['tasks'] as List?) ?? [];
+            final done = rTasks
+                .where((t) => t['done'] == true)
+                .map((t) => (t['text'] ?? '').toString().trim())
+                .where((text) => text.isNotEmpty)
+                .take(4)
+                .join(', ');
+            final undone = rTasks
+                .where((t) => t['done'] != true)
+                .map((t) => (t['text'] ?? '').toString().trim())
+                .where((text) => text.isNotEmpty)
+                .take(4)
+                .join(', ');
+            sb.writeln(
+              '- ${record['date']}: 완료[${done.isEmpty ? '없음' : done}] / 미완료[${undone.isEmpty ? '없음' : undone}]',
+            );
+          }
+        }
+      } catch (_) {}
+    }
+
+    final wgRaw = prefs.getString('nyang_week_goals');
+    if (wgRaw != null) {
+      try {
+        final goals = jsonDecode(wgRaw) as List;
+        final activeGoals = goals
+            .where((g) => g['done'] != true)
+            .map((g) => (g['text'] ?? '').toString().trim())
+            .where((text) => text.isNotEmpty)
+            .take(5)
+            .toList();
+        if (activeGoals.isNotEmpty) {
+          sb.writeln('\n[이번 주 미완료 목표]');
+          for (final goal in activeGoals) {
+            sb.writeln('- $goal');
+          }
+        }
+      } catch (_) {}
+    }
+
+    final mgRaw = prefs.getString('nyang_month_goals');
+    if (mgRaw != null) {
+      try {
+        final goals = jsonDecode(mgRaw) as List;
+        final activeGoals = goals
+            .where((g) => g['done'] != true)
+            .map((g) => (g['text'] ?? '').toString().trim())
+            .where((text) => text.isNotEmpty)
+            .take(5)
+            .toList();
+        if (activeGoals.isNotEmpty) {
+          sb.writeln('\n[이번 달 미완료 목표]');
+          for (final goal in activeGoals) {
+            sb.writeln('- $goal');
+          }
+        }
+      } catch (_) {}
+    }
+
+    final visRaw = prefs.getString('nyang_visions');
+    if (visRaw != null) {
+      try {
+        final visions = jsonDecode(visRaw) as List;
+        final withActions = <_VisionMilestoneContext>[];
+        final memoCandidates = <_VisionMilestoneContext>[];
+
+        for (final vision in visions) {
+          if (vision is! Map) continue;
+          final visionName = (vision['name'] ?? '이름 없는 비전').toString().trim();
+          final milestones = (vision['milestones'] as List?) ?? [];
+          for (int i = 0; i < milestones.length; i++) {
+            final rawMilestone = milestones[i];
+            if (rawMilestone is! Map) continue;
+            final milestone = Map<String, dynamic>.from(rawMilestone);
+            final text = (milestone['text'] ?? '').toString().trim();
+            if (text.isEmpty || milestone['done'] == true) continue;
+
+            final context = _VisionMilestoneContext(
+              visionName: visionName,
+              index: i,
+              milestone: milestone,
+              date: parseDate(milestone['date']),
+              actionTitles: extractActionTitles(milestone),
+            );
+
+            if (context.actionTitles.isNotEmpty) {
+              withActions.add(context);
+            } else if (milestoneMemoText(milestone).isNotEmpty) {
+              memoCandidates.add(context);
+            }
+          }
+        }
+
+        withActions.sort(compareMilestones);
+        memoCandidates.sort(compareMilestones);
+
+        final selectedActions = withActions.take(6).toList();
+        if (selectedActions.isNotEmpty) {
+          sb.writeln('\n[실행 아이템이 있는 미완료 마일스톤 - 메모 제외, 제목만]');
+          for (final item in selectedActions) {
+            final milestoneText = (item.milestone['text'] ?? '').toString();
+            sb.writeln(
+              '- ${item.visionName} > $milestoneText (${dateLabel(item.date)}): ${item.actionTitles.take(5).join(', ')}',
+            );
+          }
+        }
+
+        final selectedMemos = memoCandidates.take(3).toList();
+        if (selectedMemos.isNotEmpty) {
+          sb.writeln('\n[메모 참고 대상 - 실행 아이템 없는 미완료 마일스톤 중 날짜 가까운 3개]');
+          for (final item in selectedMemos) {
+            final milestoneText = (item.milestone['text'] ?? '').toString();
+            sb.writeln(
+              '- ${item.visionName} > $milestoneText (${dateLabel(item.date)}): ${clip(milestoneMemoText(item.milestone), 420)}',
+            );
+          }
+        }
+
+        if (selectedActions.isEmpty && selectedMemos.isEmpty) {
+          sb.writeln('\n[비전/마일스톤 참고]');
+          sb.writeln(
+            '- 새 행동으로 바로 바꿀 실행 아이템이나 메모가 충분하지 않음. 주/월 목표와 오늘 할 일 중복 여부를 기준으로 작게 제안할 것.',
+          );
+        }
+      } catch (_) {}
+    }
+
+    sb.writeln('\n[새 행동 추천 규칙]');
+    sb.writeln(
+      '- 오늘 할 일과 같거나 거의 같은 행동은 제안하지 말 것: ${todayTaskNames.take(12).join(', ')}',
+    );
+    sb.writeln('- 마일스톤 메모는 위 3개만 참고하고, 그 밖의 메모 내용을 추측하지 말 것.');
+    sb.writeln('- 실행 아이템이 있는 마일스톤은 메모가 아니라 실행 아이템 제목만 행동 후보로 볼 것.');
+
+    return sb.toString();
+  }
+
   Future<String> _callOpenAI(String userText, {bool isGreeting = false}) async {
     final historyLimit = _coach.isMaster ? 10 : 6;
     final history = _messages.length > historyLimit
@@ -4537,7 +4878,10 @@ class _ChatScreenState extends State<ChatScreen>
           )
         : _coach.systemPrompt;
 
-    final contextString = await _buildContextString();
+    final useVisionNewActionContext = userText == '비전을 위한 오늘 - 새 행동 추천받기';
+    final contextString = useVisionNewActionContext
+        ? await _buildVisionNewActionContextString()
+        : await _buildContextString();
 
     final systemPromptWithChips =
         '''$baseSystemPrompt
@@ -4594,9 +4938,9 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
 2) 할 일에 배정된 "예상 소요시간"을 철저하게 지키고 소요시간 계산(덧셈)을 틀리지 마세요.
 3) 사용자가 별도로 할 일이나 습관으로 지정해 둔 식사 시간이 없다면, 기본적으로 점심식사(대략 12시~13시)와 저녁식사(대략 18시~19시) 시간을 반드시 휴식 및 식사 시간으로 비워두고 스케줄을 짜세요.
 4) 마크다운 ** 나 * 등은 절대 쓰지 마십시오. [TASK] 태그도 포함하지 마십시오.]''';
-    } else if (userText == '비전을 위한 오늘') {
-      effectiveUserText = '''비전을 위한 오늘
-[System: 사용자가 방금 현재 시간 기준으로 "비전을 위한 오늘"을 요청했습니다. 이전 대화 맥락에 얽매이지 말고 최신 목표/비전 정보, 어제까지의 최근 7일 기록, 오늘 할 일 현황을 바탕으로 완전히 새롭게 판단하세요. 절대 오늘 미완료 항목을 근거로 "비전을 위해 하지 않았다", "안 했다", "부족했다"처럼 평가하지 마세요. 오늘 계획은 아직 진행 중인 계획이며, 오늘 안에 끝내면 되는 항목으로 다뤄야 합니다.
+    } else if (userText == '비전을 위한 오늘 - 남은 할 일 중 추천') {
+      effectiveUserText = '''비전을 위한 오늘 - 남은 할 일 중 추천
+[System: 사용자가 방금 "비전을 위한 오늘" 카드에서 "남은 할 일 중 추천"을 선택했습니다. 이전 대화 맥락에 얽매이지 말고 최신 목표/비전 정보, 어제까지의 최근 7일 기록, 오늘 할 일 현황을 바탕으로 완전히 새롭게 판단하세요. 절대 오늘 미완료 항목을 근거로 "비전을 위해 하지 않았다", "안 했다", "부족했다"처럼 평가하지 마세요. 오늘 계획은 아직 진행 중인 계획이며, 오늘 안에 끝내면 되는 항목으로 다뤄야 합니다.
 
 *분석 순서:*
 1. 먼저 [오늘 할 일 현황]의 미완료 항목 중에서 오늘의 비전에 가장 큰 영향을 줄 단 하나의 행동을 고르세요. 여러 개를 나열하지 마세요.
@@ -4611,15 +4955,10 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
    - 반복적으로 미뤄진 목표 관련 항목이 있으면 비난하지 말고, "조금 끊기기 쉬운 지점" 정도로 부드럽게 해석하세요.
    - 기록이 부족하면 단정 평가하지 말고, "오늘부터 기준을 잡아보자"는 식으로 말하세요.
    - 이 회고는 코치의 한마디처럼 긴 주간 평가가 아니라, 오늘의 선택으로 이어지는 짧은 흐름 해석이어야 합니다.
-4. 오늘 할 일 목록에 비전과 연결되는 미완료 항목이 이미 있다면 새 일정을 만들지 말고, 그중 오늘 가장 효과적인 1개만 고르세요.
-   - 오늘 할 일 현황에 이미 존재하는 항목명과 같거나 거의 같은 행동은 절대 [TASK: ...] 태그로 출력하지 마세요. 기존 항목을 언급할 때는 일반 문장으로만 말하세요.
-5. 오늘 할 일이 아예 없거나, 오늘 할 일 목록에 비전과 연결되는 미완료 항목이 전혀 없다면, 장기 비전/월목표/주목표에서 역산한 작은 새 활동 1개만 제안하세요. 이때만 [TASK: ...] 태그로 오늘 할 일에 추가될 수 있게 하세요.
-   - 새 활동은 10~20분 안에 시작할 수 있는 작은 행동이어야 합니다.
-   - 공부는 책이나 강의만 뜻하지 않습니다. 잘 된 사례 보기, 레퍼런스 분석하기, 경쟁 서비스/콘텐츠 뜯어보기, 좋은 글 구조 따라 써보기, 예시 코드 읽기, 포트폴리오/앱 화면 분석하기처럼 "잘 된 것을 보고 분석하는 행동"도 공부이자 비전 행동으로 적극 고려하세요.
-   - 목표 작업이 비어 있으면 직접 진전 행동(공부, 제작, 글쓰기, 자료 정리, 레퍼런스 분석)을 우선 고려하세요.
-   - 최근 목표 작업은 이어졌지만 체력/컨디션 축이 약하면 기반 강화 행동(가벼운 운동, 스트레칭, 산책, 수면 준비)을 고려하세요.
-   - 목표/비전 정보 자체가 부족하면 새 활동을 억지로 만들지 말고, 비전 기준을 한 줄로 정하는 행동을 제안하세요.
-   - 예: [TASK: 잘 된 앱 화면 1개 분석하기 15분], [TASK: 경제 개념 하나 정리하기 15분], [TASK: 가벼운 운동 10분], [TASK: 내일 첫 행동 하나 정하기 5분]
+4. 반드시 오늘 할 일 현황에 이미 존재하는 미완료 항목 안에서만 고르세요. 새 행동을 만들거나 오늘 목록 밖의 일을 제안하지 마세요.
+   - [TASK: ...] 태그는 절대 출력하지 마세요.
+   - 오늘 할 일에 비전과 직접 연결되는 항목이 약하더라도, 목록 안에서 가장 도움이 되는 항목을 고르고 그 이유를 부드럽게 설명하세요.
+   - 오늘 미완료 항목이 전혀 없다면 새 일을 만들지 말고, "오늘 남은 할 일은 없습니다. 새 행동 추천받기를 선택하시면 비전 기준으로 하나 뽑아드리겠습니다."라고 안내하세요.
 
 *연관성 판단 규칙:*
 1. 오늘 할 일 이름과 비전, 마일스톤, 월목표, 주목표 이름 사이에 핵심 키워드가 겹치면 관련 항목으로 봅니다.
@@ -4635,6 +4974,35 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
 3. 오늘 완료율, 오늘 미완료율, 오늘 아직 안 했다는 식의 평가 표현은 금지합니다.
 4. 사용자가 이미 알 법한 "이 항목이 남아 있습니다" 수준에서 멈추지 말고, 왜 지금 그 행동이 비전상 가장 효율적인지 설명하세요.
 5. 단순 시간표나 전체 일정 배치는 하지 마세요.]''';
+    } else if (userText == '비전을 위한 오늘 - 새 행동 추천받기') {
+      effectiveUserText = '''비전을 위한 오늘 - 새 행동 추천받기
+[System: 사용자가 방금 "비전을 위한 오늘" 카드에서 "새 행동 추천받기"를 선택했습니다. 이전 대화 맥락에 얽매이지 말고 [새 행동 추천용 압축 컨텍스트]를 바탕으로 완전히 새롭게 판단하세요. 사용자는 오늘 목록 안에서 고르기보다 비전 기준으로 새 행동을 추천받고 싶어 합니다.
+
+*분석 순서:*
+1. 먼저 [최근 7일간 실제 완료/미완료 할 일 목록 - 오늘 제외, 어제까지]와 [최근 7일 요약 - 오늘 제외, 어제까지]를 바탕으로, 어제까지 비전 흐름이 어땠는지 첫 문장에서 짧게 해석하세요. 단, 회고가 길어지면 안 됩니다.
+   - 잘 이어온 흐름이 있으면 "이미 잘하고 있는 축"으로 짧게 인정하세요.
+   - 반복적으로 미뤄진 목표 관련 항목이 있으면 비난하지 말고, "조금 끊기기 쉬운 지점" 정도로 부드럽게 해석하세요.
+   - 기록이 부족하면 단정 평가하지 말고, "오늘부터 기준을 잡아보자"는 식으로 말하세요.
+2. 그다음 장기 비전, 주간/월간 목표, 미완료 마일스톤, 압축 제공된 마일스톤 메모에서 오늘 새로 시작하면 좋은 행동 1개를 뽑으세요.
+   - 오늘 할 일 현황에 이미 있는 항목과 같거나 거의 같은 행동은 새 행동으로 제안하지 마세요.
+   - 마일스톤에 "실행 아이템"이 있으면 해당 마일스톤의 메모 내용은 참고하지 말고 실행 아이템만 행동 후보로 보세요.
+   - 마일스톤 메모는 [메모 참고 대상 - 실행 아이템 없는 미완료 마일스톤 중 날짜 가까운 3개]에 제공된 것만 참고하세요.
+   - 메모 참고 대상에 실행 목록, 참고할 것, 분석할 것, 만들어볼 것, 정리할 것이 있으면 우선 참고하세요.
+   - 담당 비전/전담 코치 개념은 없습니다. 제공된 비전과 마일스톤을 날짜와 맥락 기준으로만 판단하세요.
+   - 공부는 책이나 강의만 뜻하지 않습니다. 잘 된 사례 보기, 레퍼런스 분석하기, 경쟁 서비스/콘텐츠 뜯어보기, 좋은 글 구조 따라 써보기, 예시 코드 읽기, 포트폴리오/앱 화면 분석하기처럼 "잘 된 것을 보고 분석하는 행동"도 공부이자 비전 행동으로 적극 고려하세요.
+   - 목표 작업이 비어 있으면 직접 진전 행동(공부, 제작, 글쓰기, 자료 정리, 레퍼런스 분석)을 우선 고려하세요.
+   - 최근 목표 작업은 이어졌지만 체력/컨디션 축이 약하면 기반 강화 행동(가벼운 운동, 스트레칭, 산책, 수면 준비)을 고려하세요.
+   - 목표/비전 정보 자체가 부족하면 새 활동을 억지로 만들지 말고, 비전 기준을 한 줄로 정하는 행동을 제안하세요.
+3. 새 행동은 오늘 바로 시작할 수 있는 크기로 제안하세요. 너무 큰 작업이면 첫 단계로 쪼개세요. 시간 표현은 자연스러울 때만 사용하고, 억지로 짧은 시간 숫자를 붙이지 마세요.
+4. 새 행동을 오늘 할 일에 추가할 수 있도록 [TASK: ...] 태그를 포함하세요. 단, 답변 본문에는 태그를 설명하지 마세요.
+
+*답변 방식:*
+1. 답변은 짧게 3문장으로 작성하세요. 선택된 비서의 톤에 맞춰 차분하되 보고서처럼 딱딱하게 쓰지 마세요.
+2. 구조는 반드시 "어제까지의 비전 흐름을 짧게 해석하는 1문장 + 오늘은 OO를 새로 잡아보자는 자연스러운 제안과 이유 1문장 + 지금 시작할 첫 행동과 기대 효과 1문장"으로 만드세요.
+   - "오늘의 비전 행동은", "비전상 가장 효율적입니다", "기대 효과가 발생합니다" 같은 제목형/보고서형 표현은 피하세요.
+   - "오늘은 'OO'를 새로 잡아보시죠", "이게 제일 이득입니다", "일단 OO부터 하시죠", "그 정도면 오늘 흐름은 놓치지 않은 겁니다"처럼 생활어로 말하세요.
+3. 오늘 완료율, 오늘 미완료율, 오늘 아직 안 했다는 식의 평가 표현은 금지합니다.
+4. 단순 시간표나 전체 일정 배치는 하지 마세요.]''';
     }
 
     final now = DateTime.now();
@@ -4648,14 +5016,16 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
           ]
         : [
             {'role': 'system', 'content': systemPromptWithChips},
-            ...history.map(
-              (m) => {
-                'role': m.isUser ? 'user' : 'assistant',
-                'content': m.isUser
-                    ? '[${m.time.hour}:${m.time.minute.toString().padLeft(2, '0')}] ${m.text}'
-                    : m.text,
-              },
-            ),
+            ...history
+                .where((m) => m.kind != 'vision_choice')
+                .map(
+                  (m) => {
+                    'role': m.isUser ? 'user' : 'assistant',
+                    'content': m.isUser
+                        ? '[${m.time.hour}:${m.time.minute.toString().padLeft(2, '0')}] ${m.text}'
+                        : m.text,
+                  },
+                ),
             {'role': 'user', 'content': '$timePrefix$effectiveUserText'},
           ];
 
@@ -5996,6 +6366,10 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
   }
 
   Widget _buildBubble(ChatMessage msg) {
+    if (msg.kind == 'vision_choice') {
+      return _buildVisionChoiceCard(msg);
+    }
+
     final isUser = msg.isUser;
     final time = DateFormat('a h:mm', 'ko').format(msg.time);
     final isMasterUserBubble = isUser && _coach.isMaster;
@@ -6102,6 +6476,115 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
                 ),
               ),
             ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildVisionChoiceCard(ChatMessage msg) {
+    final time = DateFormat('a h:mm', 'ko').format(msg.time);
+    final accent = _coach.accentColor;
+
+    Widget choiceButton(String label, String apiInput) {
+      return GestureDetector(
+        onTap: _isLoading
+            ? null
+            : () => _send(label, apiInputOverride: apiInput),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF8F5FF),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFE5DEFF)),
+          ),
+          child: Text(
+            label,
+            textAlign: TextAlign.center,
+            style: GoogleFonts.notoSansKr(
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+              color: accent,
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(18),
+            child: Image.asset(
+              _coach.imagePath,
+              width: 36,
+              height: 36,
+              fit: BoxFit.cover,
+              alignment: Alignment.topCenter,
+              errorBuilder: (_, __, ___) => Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: _coach.accentLight,
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: Icon(Icons.person, color: _coach.accentColor, size: 20),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Container(
+              constraints: BoxConstraints(
+                maxWidth: MediaQuery.of(context).size.width * 0.72,
+              ),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: const Color(0xFFE8E1F4)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.06),
+                    blurRadius: 12,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    msg.text,
+                    style: GoogleFonts.notoSansKr(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                      height: 1.45,
+                      color: const Color(0xFF1A1A2E),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  choiceButton('남은 할 일 중 추천', '비전을 위한 오늘 - 남은 할 일 중 추천'),
+                  const SizedBox(height: 8),
+                  choiceButton('새 행동 추천받기', '비전을 위한 오늘 - 새 행동 추천받기'),
+                ],
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(left: 6, bottom: 2),
+            child: Text(
+              time,
+              style: GoogleFonts.notoSansKr(
+                fontSize: 10,
+                color: const Color(0xFFBBBBCC),
+              ),
+            ),
+          ),
         ],
       ),
     );
