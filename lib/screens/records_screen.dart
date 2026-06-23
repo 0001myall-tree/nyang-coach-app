@@ -878,7 +878,7 @@ ${feedbackType == 0 ? '''   [실행 회고형]
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  _isMaster ? '지난주를 돌아본 코치의 한마디' : '코치의 한마디',
+                  _isMaster ? '코치의 한마디' : '코치의 한마디',
                   style: GoogleFonts.notoSansKr(
                     fontSize: 13,
                     fontWeight: FontWeight.w800,
