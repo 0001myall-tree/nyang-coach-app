@@ -2367,6 +2367,104 @@ class _ChatScreenState extends State<ChatScreen>
     );
   }
 
+  String _normalizeTaskSuggestionText(String value) {
+    return value
+        .replaceAll(RegExp(r'\s+'), '')
+        .replaceAll(RegExp(r'[.。!！?？~〜]'), '')
+        .trim()
+        .toLowerCase();
+  }
+
+  Future<List<_SuggestedTask>> _filterDuplicateSuggestedTasks(
+    List<_SuggestedTask> suggestions,
+  ) async {
+    if (suggestions.isEmpty) return suggestions;
+
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString('nyang_tasks') ?? '[]';
+    final List<dynamic> tasks = jsonDecode(raw);
+    final existingTaskTexts = tasks
+        .map((t) => _normalizeTaskSuggestionText((t['text'] ?? '').toString()))
+        .where((text) => text.isNotEmpty)
+        .toSet();
+
+    return suggestions.where((suggestion) {
+      final suggestedText = _normalizeTaskSuggestionText(suggestion.text);
+      return suggestedText.isNotEmpty &&
+          !existingTaskTexts.contains(suggestedText);
+    }).toList();
+  }
+
+  bool _isYesterdayIncompleteQuery(String input) {
+    final compact = input.replaceAll(RegExp(r'\s+'), '');
+    return compact.contains('어제') &&
+        (compact.contains('미완료') ||
+            compact.contains('못한') ||
+            compact.contains('안한')) &&
+        (compact.contains('뭐') ||
+            compact.contains('목록') ||
+            compact.contains('남았') ||
+            compact.contains('남은'));
+  }
+
+  String _getDateStrWithResetOffset(SharedPreferences prefs, int daysAgo) {
+    final resetHour = prefs.getDouble('nyang_reset_hour') ?? 3.0;
+    final now = DateTime.now();
+    var base = DateTime(now.year, now.month, now.day);
+    if (now.hour < resetHour) {
+      base = base.subtract(const Duration(days: 1));
+    }
+    return _dateKey(base.subtract(Duration(days: daysAgo)));
+  }
+
+  Future<String?> _tryBuildYesterdayIncompleteReply(String input) async {
+    if (!_isYesterdayIncompleteQuery(input)) return null;
+
+    final prefs = await SharedPreferences.getInstance();
+    final yesterdayStr = _getDateStrWithResetOffset(prefs, 1);
+    final rawHistory = prefs.getString('nyang_history');
+    final title = await UserTitleService.getTitle();
+
+    if (rawHistory == null) {
+      return '$title, 아직 어제 기록이 충분히 남아 있지 않습니다.';
+    }
+
+    try {
+      final List<dynamic> history = jsonDecode(rawHistory);
+      final record = history.cast<Map<String, dynamic>>().firstWhere(
+        (item) => item['date'] == yesterdayStr,
+        orElse: () => <String, dynamic>{},
+      );
+
+      if (record.isEmpty) {
+        return '$title, 어제($yesterdayStr) 기록을 찾지 못했습니다.';
+      }
+      if (record['isVacation'] == true) {
+        return '$title, 어제($yesterdayStr)는 휴무일로 기록되어 있어서 미완료 평가에서 제외되어 있습니다.';
+      }
+
+      final tasks = (record['tasks'] as List?) ?? [];
+      final incomplete = tasks
+          .where((task) => (task as Map?)?['done'] != true)
+          .map((task) {
+            final map = task as Map;
+            final text = (map['text'] ?? '').toString().trim();
+            if (text.isEmpty) return '';
+            return map['deferred'] == true ? '$text (이월됨)' : text;
+          })
+          .where((text) => text.isNotEmpty)
+          .toList();
+
+      if (incomplete.isEmpty) {
+        return '$title, 어제($yesterdayStr) 미완료로 남은 항목은 없었습니다.';
+      }
+
+      return '$title, 어제($yesterdayStr) 미완료로 남은 항목은 ${incomplete.join(', ')}였습니다.';
+    } catch (_) {
+      return '$title, 어제 기록을 확인하는 중에 문제가 생겼습니다.';
+    }
+  }
+
   // ── 복귀/첫방문 인사 전송 ────────────────────────────────
   Future<void> _sendGreeting(String prompt) async {
     final currentId = widget.coachId;
@@ -3625,6 +3723,32 @@ class _ChatScreenState extends State<ChatScreen>
       return;
     }
 
+    final yesterdayIncompleteReply = await _tryBuildYesterdayIncompleteReply(
+      trimmed,
+    );
+    if (yesterdayIncompleteReply != null) {
+      setState(() {
+        _messages.add(
+          ChatMessage(text: trimmed, isUser: true, time: DateTime.now()),
+        );
+        _messages.add(
+          ChatMessage(
+            text: yesterdayIncompleteReply,
+            isUser: false,
+            time: DateTime.now(),
+          ),
+        );
+        _dynamicChips = _coach.chips;
+      });
+      _scrollToBottom();
+      await _saveHistory();
+      await AnalyticsService.logConversationMessage(
+        coachId: widget.coachId,
+        usedApi: false,
+      );
+      return;
+    }
+
     final currentId = widget.coachId;
     final userMsg = ChatMessage(
       text: trimmed,
@@ -3669,6 +3793,10 @@ class _ChatScreenState extends State<ChatScreen>
       final usageNotice = await ApiUsageLimitService.takeChatUsageNotice();
       if (!mounted || widget.coachId != currentId) return;
       final parsed = _parseReply(raw);
+      final suggestedTasks = await _filterDuplicateSuggestedTasks(
+        parsed.suggestedTasks,
+      );
+      if (!mounted || widget.coachId != currentId) return;
       setState(() {
         _messages.add(
           ChatMessage(text: parsed.text, isUser: false, time: DateTime.now()),
@@ -3686,7 +3814,7 @@ class _ChatScreenState extends State<ChatScreen>
           }
         }
         if (parsed.suggestedTasks.isNotEmpty) {
-          _suggestedTasks = parsed.suggestedTasks;
+          _suggestedTasks = suggestedTasks;
         }
         // 배너 로직 삭제 (팝업으로 대체)
         _isLoading = false;
@@ -4477,6 +4605,7 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
    - 기록이 부족하면 단정 평가하지 말고, 오늘부터 추적할 수 있는 작은 기준을 잡아주세요.
 2. 그다음 [오늘 할 일 현황]에서 장기 비전, 마일스톤, 월목표, 주목표와 관련 있는 항목을 찾으세요. 오늘 미완료인 관련 항목은 실패가 아니라 "오늘 챙기면 좋은 비전 연결 행동"으로 소개하세요.
 3. 오늘 할 일 목록에 관련 항목이 이미 있다면 새 일정을 만들지 말고, 그 항목을 1~2개 콕 집어 "오늘은 이걸 챙겨주셨으면 좋겠습니다"라고 말하세요.
+   - 오늘 할 일 현황에 이미 존재하는 항목명과 같거나 거의 같은 행동은 절대 [TASK: ...] 태그로 출력하지 마세요. 기존 항목을 언급할 때는 일반 문장으로만 말하세요.
 4. 오늘 할 일 목록에 관련 항목이 없다면, 장기 비전/월목표/주목표 중 하나를 직접 언급하면서 그와 연결되는 작은 활용 행동 1개를 제안하세요. 이때 [TASK: ...] 태그로 오늘 할 일에 추가될 수 있게 하세요. 예: [TASK: 월 목표 점검 15분], [TASK: 비전 관련 자료 1개 정리하기]
 
 *연관성 판단 규칙:*
@@ -6191,7 +6320,9 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
                             ? const Color(0xFF4B445F).withOpacity(0.62)
                             : (isFriends
                                   ? (isGirlfriend
-                                        ? const Color(0xFF1A1A2E).withOpacity(0.45)
+                                        ? const Color(
+                                            0xFF1A1A2E,
+                                          ).withOpacity(0.45)
                                         : Colors.white.withOpacity(0.6))
                                   : const Color(0xFFBBBBCC)),
                       ),
