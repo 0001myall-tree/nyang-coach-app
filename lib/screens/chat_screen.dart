@@ -7024,7 +7024,7 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
     final rawVacation = prefs.getString('nyang_vacation');
     final record = {
       'date': todayStr,
-      'totalCount': tasksList.length + deferredList.length,
+      'totalCount': tasksList.length,
       'doneCount': doneTasks.length,
       'success': doneTasks.isNotEmpty,
       'isVacation': rawVacation != null,

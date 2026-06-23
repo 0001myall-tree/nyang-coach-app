@@ -1234,7 +1234,7 @@ class _TasksScreenState extends State<TasksScreen>
 
     final record = {
       'date': todayStr,
-      'totalCount': tasks.length + deferredList.length,
+      'totalCount': tasks.length,
       'doneCount': doneTasks.length,
       'success': doneTasks.isNotEmpty,
       'isVacation': vacationInfo != null,

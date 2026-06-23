@@ -156,6 +156,29 @@ class _RecordsScreenState extends State<RecordsScreen> {
     return '${monday.year}-${monday.month.toString().padLeft(2, '0')}-${monday.day.toString().padLeft(2, '0')}';
   }
 
+  List<Map<String, dynamic>> _visibleRecordTasks(Map<String, dynamic> record) {
+    final rawTasks = (record['tasks'] as List?) ?? [];
+    return rawTasks
+        .whereType<Map>()
+        .map((task) => Map<String, dynamic>.from(task))
+        .where((task) => task['deferred'] != true)
+        .toList();
+  }
+
+  int _recordTotalCount(Map<String, dynamic> record) {
+    final visibleTasks = _visibleRecordTasks(record);
+    if (visibleTasks.isNotEmpty) return visibleTasks.length;
+    return (record['totalCount'] as num?)?.toInt() ?? 0;
+  }
+
+  int _recordDoneCount(Map<String, dynamic> record) {
+    final visibleTasks = _visibleRecordTasks(record);
+    if (visibleTasks.isNotEmpty) {
+      return visibleTasks.where((task) => task['done'] == true).length;
+    }
+    return (record['doneCount'] as num?)?.toInt() ?? 0;
+  }
+
   Future<void> _loadOrGenerateWeeklyFeedback() async {
     if (_isGeneratingWeeklyFeedback) return;
     final prefs = await SharedPreferences.getInstance();
@@ -488,15 +511,18 @@ ${habitFreqBuffer.toString().trim()}
     final trackableDays = records.length - vacationDays;
     for (final r in records) {
       if (r['isVacation'] == true) continue;
-      if ((r['doneCount'] ?? 0) > 0) successDays++;
+      if (_recordDoneCount(r) > 0) {
+        successDays++;
+      }
     }
     // 휴무일은 연속 기록을 끊지 않고 건너뜁니다.
     for (int i = records.length - 1; i >= 0; i--) {
       if (records[i]['isVacation'] == true) continue;
-      if ((records[i]['doneCount'] ?? 0) > 0)
+      if (_recordDoneCount(records[i]) > 0) {
         streak++;
-      else
+      } else {
         break;
+      }
     }
     final flowPct = trackableDays == 0
         ? 100
@@ -692,11 +718,11 @@ ${habitFreqBuffer.toString().trim()}
     Map<String, dynamic> best = activeRecords[0];
 
     for (var r in activeRecords) {
-      final int count = r['doneCount'] ?? 0;
+      final int count = _recordDoneCount(r);
       total += count;
       if (count > 0) successDays++;
       if (count == 0) zeros++;
-      if (count > (best['doneCount'] ?? 0)) {
+      if (count > _recordDoneCount(best)) {
         best = r;
       }
     }
@@ -728,8 +754,8 @@ ${habitFreqBuffer.toString().trim()}
     int successDays = 0;
     int totalTaskCount = 0;
     for (var r in activeRecords) {
-      final int doneCount = r['doneCount'] ?? 0;
-      final int totCount = r['totalCount'] ?? 0;
+      final int doneCount = _recordDoneCount(r);
+      final int totCount = _recordTotalCount(r);
       total += doneCount;
       totalTaskCount += totCount;
       if (doneCount > 0) successDays++;
@@ -866,8 +892,10 @@ ${habitFreqBuffer.toString().trim()}
             crossAxisAlignment: CrossAxisAlignment.end,
             children: records.map((r) {
               final isVacation = r['isVacation'] == true;
-              final pct = r['totalCount'] > 0
-                  ? ((r['doneCount'] / r['totalCount']) * 100).round()
+              final doneCount = _recordDoneCount(r);
+              final totalCount = _recordTotalCount(r);
+              final pct = totalCount > 0
+                  ? ((doneCount / totalCount) * 100).round()
                   : 0;
               final isToday =
                   r['date'] ==
