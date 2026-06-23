@@ -4731,6 +4731,7 @@ class _ChatScreenState extends State<ChatScreen>
     }
 
     final wgRaw = prefs.getString('nyang_week_goals');
+    var hasWeekGoals = false;
     if (wgRaw != null) {
       try {
         final goals = jsonDecode(wgRaw) as List;
@@ -4741,6 +4742,7 @@ class _ChatScreenState extends State<ChatScreen>
             .take(5)
             .toList();
         if (activeGoals.isNotEmpty) {
+          hasWeekGoals = true;
           sb.writeln('\n[이번 주 미완료 목표]');
           for (final goal in activeGoals) {
             sb.writeln('- $goal');
@@ -4750,6 +4752,7 @@ class _ChatScreenState extends State<ChatScreen>
     }
 
     final mgRaw = prefs.getString('nyang_month_goals');
+    var hasMonthGoals = false;
     if (mgRaw != null) {
       try {
         final goals = jsonDecode(mgRaw) as List;
@@ -4760,6 +4763,7 @@ class _ChatScreenState extends State<ChatScreen>
             .take(5)
             .toList();
         if (activeGoals.isNotEmpty) {
+          hasMonthGoals = true;
           sb.writeln('\n[이번 달 미완료 목표]');
           for (final goal in activeGoals) {
             sb.writeln('- $goal');
@@ -4769,16 +4773,23 @@ class _ChatScreenState extends State<ChatScreen>
     }
 
     final visRaw = prefs.getString('nyang_visions');
+    var hasVision = false;
+    var hasMilestone = false;
     if (visRaw != null) {
       try {
         final visions = jsonDecode(visRaw) as List;
-        final withActions = <_VisionMilestoneContext>[];
-        final memoCandidates = <_VisionMilestoneContext>[];
+        final visionNames = <String>[];
+        final milestoneCandidates = <_VisionMilestoneContext>[];
 
         for (final vision in visions) {
           if (vision is! Map) continue;
           final visionName = (vision['name'] ?? '이름 없는 비전').toString().trim();
+          if (visionName.isNotEmpty) {
+            hasVision = true;
+            visionNames.add(visionName);
+          }
           final milestones = (vision['milestones'] as List?) ?? [];
+          if (milestones.isNotEmpty) hasMilestone = true;
           for (int i = 0; i < milestones.length; i++) {
             final rawMilestone = milestones[i];
             if (rawMilestone is! Map) continue;
@@ -4794,54 +4805,58 @@ class _ChatScreenState extends State<ChatScreen>
               actionTitles: extractActionTitles(milestone),
             );
 
-            if (context.actionTitles.isNotEmpty) {
-              withActions.add(context);
-            } else if (milestoneMemoText(milestone).isNotEmpty) {
-              memoCandidates.add(context);
+            if (context.actionTitles.isEmpty) {
+              milestoneCandidates.add(context);
             }
           }
         }
 
-        withActions.sort(compareMilestones);
-        memoCandidates.sort(compareMilestones);
+        if (visionNames.isNotEmpty) {
+          sb.writeln('\n[장기 비전 이름 - 메모가 약할 때 직접 행동 생성용]');
+          for (final name in visionNames.take(5)) {
+            sb.writeln('- $name');
+          }
+        }
 
-        final selectedActions = withActions.take(6).toList();
-        if (selectedActions.isNotEmpty) {
-          sb.writeln('\n[실행 아이템이 있는 미완료 마일스톤 - 메모 제외, 제목만]');
-          for (final item in selectedActions) {
+        milestoneCandidates.sort(compareMilestones);
+
+        final selectedMilestones = milestoneCandidates.take(3).toList();
+        if (selectedMilestones.isNotEmpty) {
+          sb.writeln('\n[새 행동 후보 마일스톤 - 실행 아이템 없는 미완료 마일스톤 중 날짜 가까운 3개]');
+          for (final item in selectedMilestones) {
             final milestoneText = (item.milestone['text'] ?? '').toString();
+            final memoText = milestoneMemoText(item.milestone);
             sb.writeln(
-              '- ${item.visionName} > $milestoneText (${dateLabel(item.date)}): ${item.actionTitles.take(5).join(', ')}',
+              '- ${item.visionName} > $milestoneText (${dateLabel(item.date)}): ${memoText.isEmpty ? '메모 없음. 제목에서 직접 작은 행동을 만들 것.' : clip(memoText, 420)}',
             );
           }
         }
 
-        final selectedMemos = memoCandidates.take(3).toList();
-        if (selectedMemos.isNotEmpty) {
-          sb.writeln('\n[메모 참고 대상 - 실행 아이템 없는 미완료 마일스톤 중 날짜 가까운 3개]');
-          for (final item in selectedMemos) {
-            final milestoneText = (item.milestone['text'] ?? '').toString();
-            sb.writeln(
-              '- ${item.visionName} > $milestoneText (${dateLabel(item.date)}): ${clip(milestoneMemoText(item.milestone), 420)}',
-            );
-          }
-        }
-
-        if (selectedActions.isEmpty && selectedMemos.isEmpty) {
+        if (selectedMilestones.isEmpty && visionNames.isNotEmpty) {
           sb.writeln('\n[비전/마일스톤 참고]');
           sb.writeln(
-            '- 새 행동으로 바로 바꿀 실행 아이템이나 메모가 충분하지 않음. 주/월 목표와 오늘 할 일 중복 여부를 기준으로 작게 제안할 것.',
+            '- 실행 아이템 없는 미완료 마일스톤이 없거나 참고할 마일스톤이 부족함. 장기 비전 이름 자체에서 오늘 바로 할 수 있는 작은 행동을 직접 만들 것.',
           );
         }
       } catch (_) {}
+    }
+
+    if (!hasVision && !hasMilestone && !hasMonthGoals && !hasWeekGoals) {
+      sb.writeln('\n[비전/목표 미설정 상태]');
+      sb.writeln(
+        '- 장기 비전, 마일스톤, 월목표, 주목표가 모두 없음. [TASK]를 만들지 말고 목표 탭에서 장기 비전 1개 입력을 유도할 것.',
+      );
     }
 
     sb.writeln('\n[새 행동 추천 규칙]');
     sb.writeln(
       '- 오늘 할 일과 같거나 거의 같은 행동은 제안하지 말 것: ${todayTaskNames.take(12).join(', ')}',
     );
-    sb.writeln('- 마일스톤 메모는 위 3개만 참고하고, 그 밖의 메모 내용을 추측하지 말 것.');
-    sb.writeln('- 실행 아이템이 있는 마일스톤은 메모가 아니라 실행 아이템 제목만 행동 후보로 볼 것.');
+    sb.writeln('- 실행 아이템이 있는 마일스톤은 이미 행동으로 전환된 것으로 보고 새 행동 추천 후보에서 완전히 제외할 것.');
+    sb.writeln('- 새 행동 후보 마일스톤은 위 3개만 참고하고, 그 밖의 마일스톤 메모 내용을 추측하지 말 것.');
+    sb.writeln(
+      '- 메모가 없거나 약하면 장기 비전 이름에서 작은 행동을 직접 만들고, 그것도 애매하면 위 3개 마일스톤 제목에서 작은 행동을 직접 만들 것.',
+    );
 
     return sb.toString();
   }
@@ -4983,18 +4998,21 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
    - 잘 이어온 흐름이 있으면 "이미 잘하고 있는 축"으로 짧게 인정하세요.
    - 반복적으로 미뤄진 목표 관련 항목이 있으면 비난하지 말고, "조금 끊기기 쉬운 지점" 정도로 부드럽게 해석하세요.
    - 기록이 부족하면 단정 평가하지 말고, "오늘부터 기준을 잡아보자"는 식으로 말하세요.
-2. 그다음 장기 비전, 주간/월간 목표, 미완료 마일스톤, 압축 제공된 마일스톤 메모에서 오늘 새로 시작하면 좋은 행동 1개를 뽑으세요.
+2. 그다음 아래 우선순위로 오늘 새로 시작하면 좋은 행동 1개를 뽑으세요.
    - 오늘 할 일 현황에 이미 있는 항목과 같거나 거의 같은 행동은 새 행동으로 제안하지 마세요.
-   - 마일스톤에 "실행 아이템"이 있으면 해당 마일스톤의 메모 내용은 참고하지 말고 실행 아이템만 행동 후보로 보세요.
-   - 마일스톤 메모는 [메모 참고 대상 - 실행 아이템 없는 미완료 마일스톤 중 날짜 가까운 3개]에 제공된 것만 참고하세요.
-   - 메모 참고 대상에 실행 목록, 참고할 것, 분석할 것, 만들어볼 것, 정리할 것이 있으면 우선 참고하세요.
+   - 실행 아이템이 있는 마일스톤은 이미 사용자가 행동으로 전환한 것으로 보고 새 행동 추천 후보에서 완전히 제외하세요. 해당 실행 아이템 제목도 말하지 마세요.
+   - [새 행동 후보 마일스톤 - 실행 아이템 없는 미완료 마일스톤 중 날짜 가까운 3개]에 제공된 제목과 메모만 마일스톤 근거로 참고하세요.
+   - 그 3개의 메모에 실행 목록, 참고할 것, 분석할 것, 만들어볼 것, 정리할 것이 있으면 우선 참고하세요.
+   - 메모가 없거나 약하면 [장기 비전 이름 - 메모가 약할 때 직접 행동 생성용]에서 비전 이름 자체에 바로 이어지는 작은 행동을 직접 만드세요.
+   - 장기 비전 이름에서도 행동이 애매하면 위 3개 마일스톤 제목 자체에서 가장 자연스러운 작은 첫 행동을 직접 만드세요.
+   - 장기 비전, 마일스톤, 월목표, 주목표가 전부 없으면 [TASK: ...]를 만들지 말고 목표 탭에서 장기 비전 1개를 입력하도록 짧게 유도하세요.
+   - 비전/목표가 하나라도 있으면 사용자에게 되묻지 말고 반드시 행동 하나를 추천하세요.
    - 담당 비전/전담 코치 개념은 없습니다. 제공된 비전과 마일스톤을 날짜와 맥락 기준으로만 판단하세요.
    - 공부는 책이나 강의만 뜻하지 않습니다. 잘 된 사례 보기, 레퍼런스 분석하기, 경쟁 서비스/콘텐츠 뜯어보기, 좋은 글 구조 따라 써보기, 예시 코드 읽기, 포트폴리오/앱 화면 분석하기처럼 "잘 된 것을 보고 분석하는 행동"도 공부이자 비전 행동으로 적극 고려하세요.
    - 목표 작업이 비어 있으면 직접 진전 행동(공부, 제작, 글쓰기, 자료 정리, 레퍼런스 분석)을 우선 고려하세요.
    - 최근 목표 작업은 이어졌지만 체력/컨디션 축이 약하면 기반 강화 행동(가벼운 운동, 스트레칭, 산책, 수면 준비)을 고려하세요.
-   - 목표/비전 정보 자체가 부족하면 새 활동을 억지로 만들지 말고, 비전 기준을 한 줄로 정하는 행동을 제안하세요.
 3. 새 행동은 오늘 바로 시작할 수 있는 크기로 제안하세요. 너무 큰 작업이면 첫 단계로 쪼개세요. 시간 표현은 자연스러울 때만 사용하고, 억지로 짧은 시간 숫자를 붙이지 마세요.
-4. 새 행동을 오늘 할 일에 추가할 수 있도록 [TASK: ...] 태그를 포함하세요. 단, 답변 본문에는 태그를 설명하지 마세요.
+4. 새 행동을 오늘 할 일에 추가할 수 있도록 [TASK: ...] 태그를 포함하세요. 단, 목표/비전 정보가 전부 없는 경우에는 [TASK]를 포함하지 마세요. 답변 본문에는 태그를 설명하지 마세요.
 
 *답변 방식:*
 1. 답변은 짧게 3문장으로 작성하세요. 선택된 비서의 톤에 맞춰 차분하되 보고서처럼 딱딱하게 쓰지 마세요.
