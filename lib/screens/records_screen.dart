@@ -179,6 +179,37 @@ class _RecordsScreenState extends State<RecordsScreen> {
     return (record['doneCount'] as num?)?.toInt() ?? 0;
   }
 
+  int _selectFeedbackType(SharedPreferences prefs, String weekMonday) {
+    final thisMonday = DateTime.parse(weekMonday);
+    final lastWeekMonday = thisMonday.subtract(const Duration(days: 7));
+    final twoWeeksAgoMonday = thisMonday.subtract(const Duration(days: 14));
+
+    String fmt(DateTime d) =>
+        "${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}";
+
+    final usedTypes = <int>{};
+    try {
+      final d1 = prefs.getString('nyang_coach_weekly_feedback_sec_male');
+      if (d1 != null) {
+        final m = jsonDecode(d1) as Map<String, dynamic>;
+        if (m['weekMonday'] == fmt(lastWeekMonday) && m['type'] != null) {
+          usedTypes.add(m['type'] as int);
+        }
+      }
+      final d2 = prefs.getString('nyang_feedback_prev_week');
+      if (d2 != null) {
+        final m = jsonDecode(d2) as Map<String, dynamic>;
+        if (m['weekMonday'] == fmt(twoWeeksAgoMonday) && m['type'] != null) {
+          usedTypes.add(m['type'] as int);
+        }
+      }
+    } catch (_) {}
+
+    final available = [0, 1, 2].where((t) => !usedTypes.contains(t)).toList()
+      ..shuffle();
+    return available.first;
+  }
+
   Future<void> _loadOrGenerateWeeklyFeedback() async {
     if (_isGeneratingWeeklyFeedback) return;
     final prefs = await SharedPreferences.getInstance();
@@ -200,12 +231,14 @@ class _RecordsScreenState extends State<RecordsScreen> {
       }
     } catch (_) {}
 
-    await _triggerWeeklyFeedback(weekMonday, cacheKey);
+    final feedbackType = _selectFeedbackType(prefs, weekMonday);
+    await _triggerWeeklyFeedback(weekMonday, cacheKey, feedbackType);
   }
 
   Future<void> _triggerWeeklyFeedback(
     String weekMonday,
     String cacheKey,
+    int feedbackType,
   ) async {
     if (_isGeneratingWeeklyFeedback) return;
     _isGeneratingWeeklyFeedback = true;
@@ -216,7 +249,7 @@ class _RecordsScreenState extends State<RecordsScreen> {
     }
 
     try {
-      final prompt = await _buildWeeklyFeedbackPrompt();
+      final prompt = await _buildWeeklyFeedbackPrompt(feedbackType);
       final estimatedPromptTokens = AnalyticsService.estimateChatTokens([
         {'content': prompt},
       ], '');
@@ -276,7 +309,11 @@ class _RecordsScreenState extends State<RecordsScreen> {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(
         cacheKey,
-        jsonEncode({'weekMonday': weekMonday, 'text': feedbackText}),
+        jsonEncode({'weekMonday': weekMonday, 'text': feedbackText, 'type': feedbackType}),
+      );
+      await prefs.setString(
+        'nyang_feedback_prev_week',
+        jsonEncode({'weekMonday': weekMonday, 'type': feedbackType}),
       );
 
       if (!mounted) return;
@@ -294,7 +331,7 @@ class _RecordsScreenState extends State<RecordsScreen> {
     }
   }
 
-  Future<String> _buildWeeklyFeedbackPrompt() async {
+  Future<String> _buildWeeklyFeedbackPrompt(int feedbackType) async {
     final prefs = await SharedPreferences.getInstance();
     final records = _getLast7Records();
     final visibleVisions = _formatVisionText(prefs.getString('nyang_visions'));
@@ -411,15 +448,29 @@ $recordBuffer
 [현재 설정된 습관 트래킹 빈도]
 ${habitFreqBuffer.toString().trim()}
 
+[회고 유형: ${feedbackType == 0 ? '실행 회고형' : feedbackType == 1 ? '성장 해석형' : '컨디션 회고형'}]
+
 [작성 지침]
 1. 어투: ${isMale ? '남비서로서 차분하고 신뢰감 있는 "$title" 호칭의 격식체 (~했습니다, ~하십시오).' : '여비서로서 지적이고 부드러운 "$title" 호칭의 격식체 (~했어요, ~어떨까요).'}
-2. 분석 내용 (구체적으로):
+2. 공통 원칙:
    - 휴무일(회복일)은 미완료나 실패로 해석하지 말고, 필요한 회복을 일정에 포함한 것으로 자연스럽게 존중해 주세요.
-   - [현재 설정된 습관 트래킹 빈도]를 반드시 참고하세요. 매일 하는 습관이 아니라 특정 요일(예: 주 2회)에만 하기로 한 습관이라면, 그 빈도에 맞게 잘 실천했을 때 충분히 칭찬해 주고, 안 하는 날이라고 해서 지적하지 마세요.
-   - 이번 주에 실제로 완료한 일들 중에서 사용자의 주간 목표, 월간 목표 또는 장기 비전과 밀접하게 연결되는 중요한 활동(최소 1~2개)을 콕 집어서 구체적으로 언급하고 칭찬해 주세요. (추상적이거나 일반적인 칭찬은 금지)
-   - 만약 며칠간(3일 이상) 미루다가 다시 시작하거나 꾸준히 해낸 항목이 있다면, "미루던 걸 포기하지 않고 다시 해냈다"는 점을 캐치해서 특별히 칭찬해 주세요.
-   - 만약 설정된 빈도나 일정에 비해 반복적으로 미완료되었거나 밀린 중요한 일(예: 운동, 독서 등)이 있다면, 부드럽게 지적하며 다음 주에 우선적으로 챙길 수 있도록 권유해 주세요.
-3. 분량: 3~4문장 정도로 간결하지만 대화 느낌이 나는 글이어야 합니다. JSON이나 마크다운 없이 순수 텍스트로만 답변해 주세요.''';
+   - [현재 설정된 습관 트래킹 빈도]를 반드시 참고하세요. 특정 요일에만 하기로 한 습관이라면 그 빈도에 맞게 평가해 주세요.
+3. 유형별 작성 방식:
+${feedbackType == 0 ? '''   [실행 회고형]
+   - 사용자가 실제로 무엇을 했고, 무엇을 미뤘으며, 무엇이 개선되었는지를 중심으로 회고합니다.
+   - 완료한 일들 중 목표/비전과 연결되는 중요한 활동 1~2개를 콕 집어 구체적으로 칭찬하세요. (추상적 칭찬 금지)
+   - 3일 이상 미루다 다시 시작한 항목이 있다면 특별히 언급해 주세요.
+   - 반복적으로 밀린 중요한 일이 있다면 부드럽게 지적하고 다음 주 우선순위로 권유하세요.''' : feedbackType == 1 ? '''   [성장 해석형]
+   - 사용자가 무엇을 했는지는 이미 알고 있으므로, 그 활동이 어떤 변화로 이어지고 있는지를 해석해서 전달합니다.
+   - 능력치 평가, 게임 스탯형 표현, 근거 없는 칭찬은 절대 사용하지 마세요.
+   - 실제 행동 기반으로 변화를 해석하세요. 예: "최근에는 막힌 일을 뒤로 미루기보다 직접 해결하려는 시간이 늘어나고 있는 것 같아요."
+   - 그 해석을 통해 앞으로 어떤 변화가 생길지 예측해 주세요.''' : '''   [컨디션 회고형]
+   - 실행이나 성장보다 이번 주의 컨디션 흐름에 초점을 맞춥니다.
+   - 완료율, 휴무일 패턴, 할 일 밀도 등을 바탕으로 체력/휴식/회복 측면을 분석하세요.
+   - 무리한 주였는지, 잘 쉰 주였는지, 회복이 더 필요한지를 부드럽게 짚어주세요.
+   - 꾸준히 해낸 일이 있다면 컨디션 속에서도 놓치지 않았다는 점을 자연스럽게 언급해 주세요.
+   - 다음 주 컨디션 관리를 위한 한 가지 제안으로 마무리하세요.'''}
+4. 분량: 3~4문장으로 간결하게. JSON이나 마크다운 없이 순수 텍스트로만 답변해 주세요.''';
   }
 
   String _formatGoalText(String? raw) {
