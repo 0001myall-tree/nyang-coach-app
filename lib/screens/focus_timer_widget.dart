@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/analytics_service.dart';
 import '../services/notification_service.dart';
+import '../services/user_title_service.dart';
 
 // ─────────────────────────────────────────────────────────────
 // 타이머 화면 상태
@@ -352,9 +353,10 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
     }
   }
 
-  String _getDoneMsg() {
+  Future<String> _getDoneMsg() async {
     final m = _msgs[widget.coachId] ?? _msgs['sec_male']!;
-    return m[_manager.stage]?['done'] ?? '';
+    final message = m[_manager.stage]?['done'] ?? '';
+    return UserTitleService.applyForCoach(message, widget.coachId);
   }
 
   @override
@@ -394,7 +396,7 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
     await AnalyticsService.logFeatureUsage('timer');
 
     if (showMsg) {
-      final msg = _getDoneMsg();
+      final msg = await _getDoneMsg();
       Future.delayed(const Duration(milliseconds: 400), () {
         if (mounted) widget.onMessage(msg);
       });

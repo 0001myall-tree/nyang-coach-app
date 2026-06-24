@@ -14,6 +14,7 @@ import '../screens/coach_config.dart';
 import '../models/user_data.dart';
 import 'analytics_service.dart';
 import 'morning_call_alarm_session.dart';
+import 'user_title_service.dart';
 
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
@@ -545,6 +546,7 @@ class NotificationService {
         bodyMsg = '오케이! 수고했어. 역시 넌 한다면 하는구나!';
         break;
     }
+    bodyMsg = await UserTitleService.applyForCoach(bodyMsg, coachId);
 
     final AndroidNotificationDetails androidDetails =
         AndroidNotificationDetails(
