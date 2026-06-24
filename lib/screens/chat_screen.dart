@@ -285,6 +285,10 @@ class _LocalResponses {
   };
 
   static String? get(String coachId, String msg) {
+    // 비서 코치는 일정·상태 관련 단어가 감정이나 일반 대화 안에서도 자주
+    // 등장하므로, 키워드만으로 문맥을 가로채지 않고 항상 AI가 전체 대화를 본다.
+    if (coachId == 'sec_male' || coachId == 'sec_female') return null;
+
     // 70% 확률로만 가로채기 (30%는 AI가 대답해 생동감 유지)
     if (Random().nextDouble() > 0.7) return null;
 
