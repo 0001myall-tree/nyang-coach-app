@@ -2578,6 +2578,89 @@ class _ChatScreenState extends State<ChatScreen>
     ].any(normalized.contains);
   }
 
+  bool _needsMasterGoalContext(String userText) {
+    if (!_coach.isMaster) return false;
+
+    final recentUserTexts = _messages.reversed
+        .where((message) => message.isUser)
+        .take(2)
+        .map((message) => message.text);
+    final normalized = ([
+      userText,
+      ...recentUserTexts,
+    ].join(' ')).replaceAll(RegExp(r'\s+'), '').toLowerCase();
+
+    return [
+      '비전',
+      '마일스톤',
+      '장기목표',
+      '주간목표',
+      '월간목표',
+      '이번주목표',
+      '이번달목표',
+      '목표',
+      '우선순위',
+      '뭐부터',
+      '무엇부터',
+      '뭘먼저',
+      '뭐먼저',
+      '어디서부터',
+      '먼저해야',
+      '뭘해야',
+      '뭐해야',
+      '해야할지',
+      '어떻게해야',
+      '뭐하지',
+      '추천해',
+      '추천받',
+      '에스코트',
+      '일정짜',
+      '스케줄짜',
+      '계획짜',
+      '정리해줘',
+      '방향잡',
+      '잘하고있',
+      '잘하고있는',
+      '제대로하고',
+      '잘해내고',
+      '가고있는',
+      '맞게가고',
+      '맞는방향',
+      '제자리',
+      '진행상황',
+      '성과',
+      '평가해',
+      '분석해',
+      '돌아봐',
+      '흐름어때',
+      '뒤처',
+      '감이안',
+    ].any(normalized.contains);
+  }
+
+  bool _needsMasterTaskContext(String userText, bool needsGoalContext) {
+    if (!_coach.isMaster) return true;
+    if (needsGoalContext ||
+        _isAvoidanceMessage(userText) ||
+        _isMasterTimerAuthorizationResponse(userText)) {
+      return true;
+    }
+
+    final normalized = userText.replaceAll(RegExp(r'\s+'), '').toLowerCase();
+    return [
+      '할일',
+      '일정',
+      '스케줄',
+      '습관',
+      '타이머',
+      '미완료',
+      '완료했',
+      '끝냈',
+      '해야돼',
+      '해야해',
+    ].any(normalized.contains);
+  }
+
   int _conversationAvoidanceCountForTask(
     String taskName, {
     required bool allowGeneric,
@@ -4143,14 +4226,21 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   // ── 웹앱 buildMemoryContext() 이식 (전 코치 등급) ───────
-  Future<String> _buildContextString() async {
+  Future<String> _buildContextString(String userText) async {
     final tier = _coach.tier; // 'friends' | 'master'
     final prefs = await SharedPreferences.getInstance();
     final sb = StringBuffer();
+    final needsGoalContext = _needsMasterGoalContext(userText);
+    final needsTaskContext = _needsMasterTaskContext(
+      userText,
+      needsGoalContext,
+    );
 
     // 1. 마스터 프로필 (tier별 분기)
     final mpRaw = prefs.getString('nyang_master_profile');
-    if (mpRaw != null && mpRaw != 'null') {
+    if (mpRaw != null &&
+        mpRaw != 'null' &&
+        (!_coach.isMaster || needsGoalContext)) {
       try {
         final mp = jsonDecode(mpRaw) as Map<String, dynamic>;
         final hc = (mp['high_change'] as Map<String, dynamic>?) ?? {};
@@ -4210,16 +4300,18 @@ class _ChatScreenState extends State<ChatScreen>
     }
 
     // 코칭 개입 규칙
-    sb.writeln('''
+    if (!_coach.isMaster || needsGoalContext) {
+      sb.writeln('''
 [코칭 개입 규칙 (매우 중요)]
 1. 언어적 동기화: [사용자 고유 표현]을 문장 속에 자연스럽게 섞어 사용하세요. (주 1~2회 빈도 제한)
 2. 맥락 기반 제언: [중변화]의 [관심 축]을 활용해 현재 상황의 원인을 짚어주세요.
 3. 패턴 브레이킹: [저변화]의 [성공/실패 공식] 감지 시, 상황 묘사형으로 부드럽게 개입하세요.
 4. 실시간 Lite 모드: 프로필을 읽기 전용으로만 참조하며, 직접 수정을 언급하지 마세요.''');
+    }
 
     // 2. 장기 패턴
     final ltRaw = prefs.getString('nyang_long_term');
-    if (ltRaw != null) {
+    if (ltRaw != null && (!_coach.isMaster || needsGoalContext)) {
       try {
         final lt = jsonDecode(ltRaw) as List;
         if (lt.isNotEmpty) {
@@ -4231,7 +4323,7 @@ class _ChatScreenState extends State<ChatScreen>
 
     // 3. 최근 7일 요약
     final dsRaw = prefs.getString('nyang_daily_summaries');
-    if (dsRaw != null) {
+    if (dsRaw != null && (!_coach.isMaster || needsGoalContext)) {
       try {
         final ds = jsonDecode(dsRaw) as List;
         if (ds.isNotEmpty) {
@@ -4257,7 +4349,7 @@ class _ChatScreenState extends State<ChatScreen>
     }
 
     // 4. 최근 7일 완료/미완료 할 일 (master only)
-    if (_coach.isMaster) {
+    if (_coach.isMaster && needsGoalContext) {
       final histRaw = prefs.getString('nyang_history');
       if (histRaw != null) {
         try {
@@ -4300,7 +4392,7 @@ class _ChatScreenState extends State<ChatScreen>
     // 5. 오늘 할 일 현황
     final tasksRaw = prefs.getString('nyang_tasks');
     List<dynamic> allTasks = [];
-    if (tasksRaw != null) {
+    if (tasksRaw != null && needsTaskContext) {
       try {
         allTasks = jsonDecode(tasksRaw) as List;
         if (allTasks.isNotEmpty) {
@@ -4366,7 +4458,7 @@ class _ChatScreenState extends State<ChatScreen>
     }
 
     // 6. 오늘의 핵심 (master only)
-    if (_coach.isMaster) {
+    if (_coach.isMaster && needsGoalContext) {
       final coreRaw = prefs.getString('nyang_core_tasks');
       if (coreRaw != null) {
         try {
@@ -4392,7 +4484,7 @@ class _ChatScreenState extends State<ChatScreen>
     }
 
     // 7. 이번 주/달 목표 (pro + master)
-    if (_coach.isMaster) {
+    if (_coach.isMaster && needsGoalContext) {
       final wgRaw = prefs.getString('nyang_week_goals');
       if (wgRaw != null) {
         try {
@@ -4418,7 +4510,7 @@ class _ChatScreenState extends State<ChatScreen>
     }
 
     // 8. 장기 비전 + 마일스톤 (pro + master)
-    if (_coach.isMaster) {
+    if (_coach.isMaster && needsGoalContext) {
       final visRaw = prefs.getString('nyang_visions');
       if (visRaw != null) {
         try {
@@ -4463,7 +4555,7 @@ class _ChatScreenState extends State<ChatScreen>
     }
 
     // 9. 7일 이상 연속 미완료 습관 (master only)
-    if (_coach.isMaster) {
+    if (_coach.isMaster && needsGoalContext) {
       final habitsRaw = prefs.getString('nyang_habits');
       final habitLogsRaw = prefs.getString('nyang_habit_logs');
       if (habitsRaw != null && habitLogsRaw != null) {
@@ -4572,7 +4664,7 @@ class _ChatScreenState extends State<ChatScreen>
     }
 
     // 11. 취침 시간 (master only)
-    if (_coach.isMaster) {
+    if (_coach.isMaster && needsGoalContext) {
       final bedtime = prefs.getString('nyang_premium_min_sleep_time');
       if (bedtime != null) {
         final parts = bedtime.split(':');
@@ -4585,7 +4677,7 @@ class _ChatScreenState extends State<ChatScreen>
     }
 
     // 12. 오늘 고정 루틴 (master only)
-    if (_coach.isMaster) {
+    if (_coach.isMaster && needsGoalContext) {
       final routinesRaw = prefs.getString('nyang_premium_routines');
       if (routinesRaw != null) {
         try {
@@ -5193,7 +5285,7 @@ class _ChatScreenState extends State<ChatScreen>
     final useVisionNewActionContext = userText == '비전을 위한 오늘 - 새 행동 추천받기';
     final contextString = useVisionNewActionContext
         ? await _buildVisionNewActionContextString()
-        : await _buildContextString();
+        : await _buildContextString(userText);
     final timerOutputRule = _coach.isMaster
         ? '''4. [TIMER_START] 태그는 절대 사용 금지.
    - 사용자가 직접 "타이머 띄워줘", "15분 타이머 켜줘"처럼 명시적으로 요청한 경우에는 짧게 응답한 뒤 [TIMER_CONFIRM:분] 태그를 붙입니다. 시간이 없으면 15분을 기본값으로 사용합니다.
