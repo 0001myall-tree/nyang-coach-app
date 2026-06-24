@@ -376,6 +376,7 @@ class _ChatScreenState extends State<ChatScreen>
   String? _usageLimitBanner;
   bool _awaitingBroWorkoutPreference = false;
   bool _isCheckingVisionRecommendationAllowance = false;
+  bool _isCheckingNextActionAllowance = false;
 
   // 냥냥코치 비구독자 무료체험 단계 (0=시작 전, 1=인트로 완료, 2=업셀 완료)
   int _catFreeTrialStep = 0;
@@ -2433,59 +2434,115 @@ class _ChatScreenState extends State<ChatScreen>
     await prefs.setString(key, jsonEncode(trimmed));
   }
 
-  Future<String?> _visionRecommendationLimitMessage() async {
-    final prefs = await SharedPreferences.getInstance();
-    const key = 'nyang_vision_recommendation_history';
-    final raw = prefs.getString(key);
-    if (raw == null) return null;
+  String _effectiveUsageDateKey(DateTime date, double resetHour) {
+    var base = DateTime(date.year, date.month, date.day);
+    final resetMinutes = (resetHour * 60).round();
+    final currentMinutes = date.hour * 60 + date.minute;
+    if (currentMinutes < resetMinutes) {
+      base = base.subtract(const Duration(days: 1));
+    }
+    return _dateKey(base);
+  }
+
+  Future<List<Map<String, dynamic>>> _loadFeatureUsageHistory({
+    required SharedPreferences prefs,
+    required String key,
+    String? fallbackKey,
+  }) async {
+    final raw =
+        prefs.getString(key) ??
+        (fallbackKey == null ? null : prefs.getString(fallbackKey));
+    if (raw == null) return [];
 
     try {
-      final resetHour = prefs.getDouble('nyang_reset_hour') ?? 3.0;
-      final now = DateTime.now();
-
-      String effectiveDateKey(DateTime date) {
-        var base = DateTime(date.year, date.month, date.day);
-        if (date.hour < resetHour) {
-          base = base.subtract(const Duration(days: 1));
-        }
-        return _dateKey(base);
-      }
-
-      final todayKey = effectiveDateKey(now);
-      final todayRecommendations = (jsonDecode(raw) as List)
+      return (jsonDecode(raw) as List)
           .whereType<Map>()
           .map((item) => Map<String, dynamic>.from(item))
-          .where((item) {
-            final createdAt = DateTime.tryParse(
-              (item['createdAt'] ?? '').toString(),
-            );
-            final text = (item['text'] ?? '').toString().trim();
-            return createdAt != null &&
-                text.isNotEmpty &&
-                effectiveDateKey(createdAt) == todayKey;
-          })
+          .where(
+            (item) =>
+                DateTime.tryParse((item['createdAt'] ?? '').toString()) != null,
+          )
           .toList();
+    } catch (_) {
+      return [];
+    }
+  }
 
-      if (todayRecommendations.length >= 3) {
-        return '오늘의 새 행동 추천 3회를 모두 사용했어요.\n내일 다시 추천해드릴게요.';
-      }
+  Future<String?> _featureUsageLimitMessage({
+    required String key,
+    required int dailyLimit,
+    required String limitMessage,
+    required String cooldownLabel,
+    String? fallbackKey,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+    final resetHour = prefs.getDouble('nyang_reset_hour') ?? 3.0;
+    final now = DateTime.now();
+    final todayKey = _effectiveUsageDateKey(now, resetHour);
+    final history = await _loadFeatureUsageHistory(
+      prefs: prefs,
+      key: key,
+      fallbackKey: fallbackKey,
+    );
+    final todayUsage = history.where((item) {
+      final createdAt = DateTime.tryParse((item['createdAt'] ?? '').toString());
+      return createdAt != null &&
+          _effectiveUsageDateKey(createdAt, resetHour) == todayKey;
+    }).toList();
 
-      if (todayRecommendations.isNotEmpty) {
-        final lastCreatedAt = DateTime.tryParse(
-          (todayRecommendations.last['createdAt'] ?? '').toString(),
-        );
-        if (lastCreatedAt != null) {
-          final availableAt = lastCreatedAt.add(const Duration(minutes: 10));
-          if (now.isBefore(availableAt)) {
-            final remainingMinutes = availableAt.difference(now).inSeconds;
-            final roundedMinutes = (remainingMinutes / 60).ceil().clamp(1, 10);
-            return '새 행동 추천은 10분마다 받을 수 있어요.\n$roundedMinutes분 후에 다시 확인해 주세요.';
-          }
+    if (todayUsage.length >= dailyLimit) return limitMessage;
+
+    if (todayUsage.isNotEmpty) {
+      final lastCreatedAt = DateTime.tryParse(
+        (todayUsage.last['createdAt'] ?? '').toString(),
+      );
+      if (lastCreatedAt != null) {
+        final availableAt = lastCreatedAt.add(const Duration(minutes: 10));
+        if (now.isBefore(availableAt)) {
+          final remainingSeconds = availableAt.difference(now).inSeconds;
+          final roundedMinutes = (remainingSeconds / 60).ceil().clamp(1, 10);
+          return '$cooldownLabel은 10분마다 이용할 수 있어요.\n$roundedMinutes분 후에 다시 확인해 주세요.';
         }
       }
-    } catch (_) {}
+    }
 
     return null;
+  }
+
+  Future<void> _recordFeatureUsage({
+    required String key,
+    String? fallbackKey,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+    final history = await _loadFeatureUsageHistory(
+      prefs: prefs,
+      key: key,
+      fallbackKey: fallbackKey,
+    );
+    history.add({'createdAt': DateTime.now().toIso8601String()});
+    final trimmed = history.length > 40
+        ? history.sublist(history.length - 40)
+        : history;
+    await prefs.setString(key, jsonEncode(trimmed));
+  }
+
+  Future<String?> _visionRecommendationLimitMessage() {
+    return _featureUsageLimitMessage(
+      key: 'nyang_vision_new_action_usage_history',
+      fallbackKey: 'nyang_vision_recommendation_history',
+      dailyLimit: 3,
+      limitMessage: '오늘의 새 행동 추천 3회를 모두 사용했어요.\n내일 다시 추천해드릴게요.',
+      cooldownLabel: '새 행동 추천',
+    );
+  }
+
+  Future<String?> _nextActionLimitMessage() {
+    return _featureUsageLimitMessage(
+      key: 'nyang_next_action_usage_history',
+      dailyLimit: 7,
+      limitMessage: '오늘의 지금 뭐하지? 추천 7회를 모두 사용했어요.\n내일 다시 이용해 주세요.',
+      cooldownLabel: '지금 뭐하지?',
+    );
   }
 
   String _normalizeTaskSuggestionText(String value) {
@@ -3823,6 +3880,8 @@ class _ChatScreenState extends State<ChatScreen>
         trimmed == '비전을 위한 오늘' ||
         (apiInputOverride?.startsWith('비전을 위한 오늘 - ') ?? false);
     final isVisionNewActionFlow = apiInputOverride == '비전을 위한 오늘 - 새 행동 추천받기';
+    final isNextActionFlow =
+        trimmed == '지금 뭐하지?' || apiInputOverride == '지금 뭐하지?';
     if (!_coach.isMaster && _isListening) {
       await _stopListening();
       if (!mounted) return;
@@ -4105,6 +4164,20 @@ class _ChatScreenState extends State<ChatScreen>
         return;
       }
     }
+    if (isNextActionFlow) {
+      if (_isCheckingNextActionAllowance) return;
+      _isCheckingNextActionAllowance = true;
+      final limitMessage = await _nextActionLimitMessage();
+      if (!mounted) {
+        _isCheckingNextActionAllowance = false;
+        return;
+      }
+      if (limitMessage != null) {
+        _isCheckingNextActionAllowance = false;
+        _showUsageNotice(limitMessage);
+        return;
+      }
+    }
 
     final currentId = widget.coachId;
     final userMsg = ChatMessage(
@@ -4144,11 +4217,23 @@ class _ChatScreenState extends State<ChatScreen>
       if (isVisionNewActionFlow) {
         _isCheckingVisionRecommendationAllowance = false;
       }
+      if (isNextActionFlow) {
+        _isCheckingNextActionAllowance = false;
+      }
       return;
     }
 
     try {
       final raw = await _callOpenAI(apiInput);
+      if (isVisionNewActionFlow) {
+        await _recordFeatureUsage(
+          key: 'nyang_vision_new_action_usage_history',
+          fallbackKey: 'nyang_vision_recommendation_history',
+        );
+      }
+      if (isNextActionFlow) {
+        await _recordFeatureUsage(key: 'nyang_next_action_usage_history');
+      }
       if (!mounted || widget.coachId != currentId) return;
       final usageNotice = await ApiUsageLimitService.takeChatUsageNotice();
       if (!mounted || widget.coachId != currentId) return;
@@ -4231,6 +4316,9 @@ class _ChatScreenState extends State<ChatScreen>
     } finally {
       if (isVisionNewActionFlow) {
         _isCheckingVisionRecommendationAllowance = false;
+      }
+      if (isNextActionFlow) {
+        _isCheckingNextActionAllowance = false;
       }
     }
   }
