@@ -150,6 +150,7 @@ class ApiUsageLimitService {
     final today = DateTime.now();
     final dailyUsed = await _dailyTokenUsage(user.uid, today);
     final dailyStage = _usageNoticeStage(dailyUsed, limits.daily);
+    final dailyPercent = _usagePercent(dailyUsed, limits.daily);
 
     if (dailyStage == 0) return null;
 
@@ -163,7 +164,7 @@ class ApiUsageLimitService {
     // await prefs.setBool(noticeKey, true);
 
     return ApiUsageNotice(
-      message: _dailyUsageNotice(dailyStage, userData.planType),
+      message: _dailyUsageNotice(dailyStage, dailyPercent, userData.planType),
       stage: dailyStage,
       suggestsUpgrade: userData.planType == 'friends',
     );
@@ -172,14 +173,10 @@ class ApiUsageLimitService {
   static _TokenLimits? _tokenLimitsFor(UserData userData) {
     if (!userData.isPlanActive) return null;
     if (userData.planType == 'friends') {
-      return const _TokenLimits(
-        daily: friendsDailyTokenLimit,
-      );
+      return const _TokenLimits(daily: friendsDailyTokenLimit);
     }
     if (userData.planType == 'master') {
-      return const _TokenLimits(
-        daily: masterDailyTokenLimit,
-      );
+      return const _TokenLimits(daily: masterDailyTokenLimit);
     }
     return null;
   }
@@ -238,16 +235,21 @@ class ApiUsageLimitService {
     return 0;
   }
 
-  static String _dailyUsageNotice(int stage, String planType) {
+  static int _usagePercent(int used, int limit) {
+    if (limit <= 0 || used <= 0) return 0;
+    return ((used / limit) * 100).floor().clamp(0, 100);
+  }
+
+  static String _dailyUsageNotice(int stage, int percent, String planType) {
     if (stage >= 100) {
       return planType == 'friends'
-          ? '오늘의 플래너 토큰을 모두 사용했어요.\n마스터 플랜에서는 더 많은 토큰을 사용할 수 있어요.'
-          : '오늘의 플래너 토큰을 모두 사용했어요.\n내일 다시 이용해 주세요.';
+          ? '오늘의 플래너 토큰 사용량이 $percent%예요.\n마스터 플랜에서는 더 많은 토큰을 사용할 수 있어요.'
+          : '오늘의 플래너 토큰 사용량이 $percent%예요.\n내일 다시 이용해 주세요.';
     }
     if (stage >= 95) {
-      return '오늘의 플래너 토큰을 거의 사용했어요.\n남은 사용량이 많지 않아요.';
+      return '오늘의 플래너 토큰 사용량이 $percent%예요.\n남은 사용량이 많지 않아요.';
     }
-    return '오늘은 플래너 토큰 사용량이 많아요.\n남은 사용량을 확인해 주세요.';
+    return '오늘의 플래너 토큰 사용량이 $percent%예요.\n남은 사용량을 확인해 주세요.';
   }
 
   static int _readInt(dynamic value) {
