@@ -2033,12 +2033,6 @@ class _ChatScreenState extends State<ChatScreen>
     final rawTasks = prefs.getString('nyang_tasks');
     List<dynamic> tasksList = rawTasks != null ? jsonDecode(rawTasks) : [];
 
-    final rawCore = prefs.getString('nyang_core_tasks');
-    List<dynamic> coreList = rawCore != null ? jsonDecode(rawCore) : [];
-
-    final rawLogs = prefs.getString('nyang_habit_logs');
-    Map<String, dynamic> habitLogs = rawLogs != null ? jsonDecode(rawLogs) : {};
-
     final todayTasks = tasksList
         .where(
           (t) =>
@@ -2050,75 +2044,32 @@ class _ChatScreenState extends State<ChatScreen>
     final incompleteTasks = todayTasks.where((t) => t['done'] != true).toList();
     final completedTasks = todayTasks.where((t) => t['done'] == true).toList();
 
-    final hasCoreTasks = coreList.isNotEmpty;
     final hasTasks = todayTasks.isNotEmpty;
-    final hasTime = incompleteTasks.any(
-      (t) => t['time'] != null || t['duration'] != null,
-    );
-
-    final frequentlyDelayed = incompleteTasks.where((t) {
-      final habitId = t['habitId'];
-      if (habitId == null) return false;
-      final logs = habitLogs[habitId.toString()] as Map<String, dynamic>? ?? {};
-      int missCount = 0;
-      for (int i = 1; i <= 7; i++) {
-        final d = now.subtract(Duration(days: i));
-        final ds = d.toIso8601String().substring(0, 10);
-        if (logs[ds] == null || logs[ds]['done'] != true) missCount++;
-      }
-      return missCount >= 3;
-    }).toList();
-
-    final delayedNames = frequentlyDelayed
-        .map((t) => "'${t['text']}'")
-        .join(', ');
-    final timeSlot = hour < 12
+    final total = todayTasks.length;
+    final done = completedTasks.length;
+    final left = incompleteTasks.length;
+    final currentTime =
+        '${hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+    final timeSlot = hour < 5
+        ? '늦은 밤 또는 새벽'
+        : hour < 12
         ? '오전'
         : hour < 18
         ? '오후'
         : '저녁';
-    String prompt = '';
+    final taskContext = hasTasks
+        ? '오늘 할 일은 총 $total개이고, $done개 완료, $left개 남아 있다.'
+        : '현재 등록된 오늘 할 일은 없다.';
+    final prompt =
+        '''[남비서 첫 인사]
+현재 시각은 $currentTime이고 시간대는 "$timeSlot"이다. $taskContext
 
-    if (timeSlot == '오전') {
-      if (!hasTasks) {
-        prompt =
-            '[비서 첫 인사 - 오전, 할 일 없음] 오전이고 오늘 할 일이 아직 없다. 간단히 오전 인사를 하고, 오늘 할 일부터 같이 잡아보자고 자연스럽게 제안해라. 1~2문장으로 짧게.';
-      } else if (!hasCoreTasks) {
-        prompt =
-            '[비서 첫 인사 - 오전, 핵심 없음] 오전이고 할 일은 있지만 핵심이 아직 안 잡혀있다. 오전 인사 후 핵심부터 정하자고 단호하게 제안해라. 1~2문장으로 짧게.';
-      } else if (!hasTime) {
-        prompt =
-            '[비서 첫 인사 - 오전, 시간 미설정] 오전이고 핵심도 있다. 지금 바로 실행하기 좋은 행동을 추천해 드릴 수 있는데 소요시간이 안 적혀있다. 인사 후 소요시간을 적어두면 더 최적의 다음 행동을 제안해 드릴 수 있다고 한 줄 언급하고 "지금 뭐하지?" 버튼을 권해라. 2문장으로 짧게.';
-      } else {
-        final delayedMentionAM = frequentlyDelayed.isNotEmpty
-            ? ' 그리고 $delayedNames이(가) 며칠째 밀리고 있으니 오늘 "지금 뭐하지?" 치트키로 챙겨보시라고 한 줄 덧붙여라.'
-            : '';
-        prompt =
-            '[비서 첫 인사 - 오전, 준비완료] 오전이고 핵심도 있고 시간도 설정돼있다. 짧게 인사하고 "지금 뭐하지?" 버튼을 통해 지금 바로 시작하기 좋은 행동을 추천받어 보시라고 제안해라.$delayedMentionAM 1~2문장.';
-      }
-    } else if (timeSlot == '오후') {
-      if (!hasTasks) {
-        prompt =
-            '[비서 첫 인사 - 오후, 할 일 없음] 벌써 오후인데 오늘 할 일이 없다. 인사 후 지금이라도 제일 중요한 것 하나만 바로 잡자고 단호하게 제안해라. 1~2문장.';
-      } else {
-        final total = todayTasks.length;
-        final done = completedTasks.length;
-        final left = incompleteTasks.length;
-        final delayedMention = frequentlyDelayed.isNotEmpty
-            ? '그리고 $delayedNames이(가) 며칠째 밀리고 있다는 것도 자연스럽게 한 줄 짚고 "오늘은 어떻게 하실 생각이십니까?" 로만 끝내라. "필요한 거 있으시면" 같은 말 덧붙이지 말 것.'
-            : '';
-        final endingMale = frequentlyDelayed.isNotEmpty
-            ? ''
-            : '"잘 되고 계십니까? 필요한 거 있으시면 말씀해주세요." 로 끝내라.';
-        prompt =
-            '[비서 첫 인사 - 오후, 진행중] 오후다. 오늘 할 일 $total개 중 $done개 완료, $left개 남았다. 한 문장으로 진행 상황 짧게 언급하고 $endingMale $delayedMention 절대 더 이어가지 말 것.';
-      }
-    } else {
-      final done = completedTasks.length;
-      final total = todayTasks.length;
-      prompt =
-          '[비서 첫 인사 - 저녁] 저녁이다. 오늘 $total개 중 $done개 했다. 오늘 마무리 코멘트를 짧게 하고 내일 준비도 언급해라. 2문장.';
-    }
+- 현재 시각과 맞지 않는 인사를 절대 하지 않는다. 특히 정오 이후나 새벽에는 "좋은 아침", "좋은 오전"이라고 말하지 않는다.
+- 새벽에는 "늦은 시간이네요"처럼 현재 시간만 자연스럽게 반영하고, 아침처럼 하루 계획을 세우라고 하지 않는다.
+- 첫 인사는 사용자를 반기는 1~2문장으로 끝낸다.
+- 사용자가 요청하지 않았는데 오늘 할 일 정리, 핵심 선정, 소요시간 입력, 업무 보고, 우선순위 설정, "지금 뭐하지?" 사용을 먼저 권하지 않는다.
+- 할 일 현황은 필요할 때 한 문장으로 가볍게 참고할 수 있지만, 미완료 항목을 압박하거나 평가하지 않는다.
+- 마지막은 "필요하신 게 있으면 말씀해 주세요"처럼 대화의 자유도를 열어둔다.''';
 
     await _sendGreeting(prompt);
   }
