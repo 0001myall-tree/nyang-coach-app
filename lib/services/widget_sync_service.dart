@@ -10,6 +10,39 @@ class WidgetSyncService {
 
   static const String iOSWidgetName = 'NyangWidget';
 
+  /// 마스터 플랜이 아니면 저장된 비서 위젯 선택을 해제하고
+  /// 냥냥코치 위젯으로 설정을 전환합니다.
+  static Future<bool> enforcePlanAccess({required bool hasMasterPlan}) async {
+    final prefs = await SharedPreferences.getInstance();
+    final previousAccess = prefs.getBool('widget_master_access_granted');
+    await prefs.setBool('widget_master_access_granted', hasMasterPlan);
+    await HomeWidget.saveWidgetData<bool>(
+      'master_widget_access',
+      hasMasterPlan,
+    );
+    if (hasMasterPlan) {
+      if (previousAccess != true) {
+        await syncFromStoredTasks();
+        return true;
+      }
+      return false;
+    }
+
+    final hadMasterWidget =
+        (prefs.getBool('widget_sec_male_enabled') ?? false) ||
+        (prefs.getBool('widget_sec_female_enabled') ?? false);
+    if (!hadMasterWidget && previousAccess == false) return false;
+
+    if (hadMasterWidget) {
+      await prefs.setBool('widget_sec_male_enabled', false);
+      await prefs.setBool('widget_sec_female_enabled', false);
+      await prefs.setBool('widget_nyang_enabled', true);
+      await prefs.setBool('nyang_home_widget_enabled', true);
+    }
+    await syncFromStoredTasks();
+    return true;
+  }
+
   static Future<void> syncFromStoredTasks() async {
     final prefs = await SharedPreferences.getInstance();
     final rawTasks = prefs.getString('nyang_tasks');

@@ -14,13 +14,29 @@ class SecFemaleWidgetProvider : HomeWidgetProvider() {
     override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray, widgetData: SharedPreferences) {
         appWidgetIds.forEach { widgetId ->
             val views = RemoteViews(context.packageName, R.layout.sec_female_widget_layout).apply {
+                val rawMasterAccess = widgetData.all["master_widget_access"]
+                val hasMasterAccess = (rawMasterAccess as? Boolean)
+                    ?: rawMasterAccess?.toString()?.toBooleanStrictOrNull()
+                    ?: false
                 val rawProgress = widgetData.all["progress"]
-                val progress = (rawProgress as? Number)?.toInt() ?: (rawProgress as? String)?.toIntOrNull() ?: 0
+                val progress = if (hasMasterAccess) {
+                    (rawProgress as? Number)?.toInt() ?: (rawProgress as? String)?.toIntOrNull() ?: 0
+                } else {
+                    0
+                }
                 
-                val coachMessage = widgetData.getString("coach_message_sec_female", "오늘 하루도 응원합니다.") ?: "오늘 하루도 응원합니다."
+                val coachMessage = if (hasMasterAccess) {
+                    widgetData.getString("coach_message_sec_female", "오늘 하루도 응원합니다.") ?: "오늘 하루도 응원합니다."
+                } else {
+                    "마스터 플랜 전용 위젯이에요."
+                }
                 
                 val rawRemaining = widgetData.all["remaining_count"]
-                val remainingCount = (rawRemaining as? Number)?.toInt() ?: (rawRemaining as? String)?.toIntOrNull() ?: 0
+                val remainingCount = if (hasMasterAccess) {
+                    (rawRemaining as? Number)?.toInt() ?: (rawRemaining as? String)?.toIntOrNull() ?: 0
+                } else {
+                    0
+                }
 
                 setProgressBar(R.id.progress_bar, 100, progress, false)
                 setTextViewText(R.id.coach_message, WidgetTextFormatter.formatCoachMessage(coachMessage))

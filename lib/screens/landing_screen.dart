@@ -7,6 +7,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../services/auth_service.dart';
 import '../models/user_data.dart';
 import '../services/tasks_sync_service.dart';
+import '../services/widget_sync_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'coach_selection_screen.dart';
 import 'main_tab_screen.dart';
@@ -53,6 +54,9 @@ class _LandingScreenState extends State<LandingScreen>
     if (user != null) {
       await UserDataService.syncFromCloud();
       final data = await UserDataService.load();
+      await WidgetSyncService.enforcePlanAccess(
+        hasMasterPlan: data.isPlanActive && data.planType == 'master',
+      );
       await TasksSyncService.syncFromCloud(); // 자동 로그인 시 클라우드 데이터 복원
 
       final prefs = await SharedPreferences.getInstance();

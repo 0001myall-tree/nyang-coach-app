@@ -12,6 +12,7 @@ import '../services/notification_service.dart';
 import '../services/analytics_service.dart';
 import '../services/morning_call_alarm_session.dart';
 import '../services/daily_reset_service.dart';
+import '../services/widget_sync_service.dart';
 import 'chat_screen.dart';
 import 'coach_config.dart';
 import 'coach_selection_screen.dart';
@@ -462,6 +463,9 @@ class _MainTabScreenState extends State<MainTabScreen>
       await UserDataService.syncFromCloud();
     }
     final data = await UserDataService.load();
+    await WidgetSyncService.enforcePlanAccess(
+      hasMasterPlan: data.isPlanActive && data.planType == 'master',
+    );
     final canAccess = data.canAccessCoach(widget.coachId);
 
     if (canAccess) {

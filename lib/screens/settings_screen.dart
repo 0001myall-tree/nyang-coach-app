@@ -63,6 +63,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
     final userData = await UserDataService.load();
+    await WidgetSyncService.enforcePlanAccess(
+      hasMasterPlan: userData.isPlanActive && userData.planType == 'master',
+    );
     setState(() {
       _userData = userData;
       _morningCallEnabled =
@@ -172,13 +175,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   void _showHomeWidgetSettingsModal() async {
     final prefs = await SharedPreferences.getInstance();
+    final latestUserData = await UserDataService.load();
+    final isMasterPlan =
+        latestUserData.isPlanActive && latestUserData.planType == 'master';
+    await WidgetSyncService.enforcePlanAccess(hasMasterPlan: isMasterPlan);
+
     bool tempNyang = prefs.getBool('widget_nyang_enabled') ?? false;
     bool tempSecMale = prefs.getBool('widget_sec_male_enabled') ?? false;
     bool tempSecFemale = prefs.getBool('widget_sec_female_enabled') ?? false;
-
-    // 플랜 확인
-    final isMasterPlan =
-        _userData?.isPlanActive == true && _userData?.planType == 'master';
 
     if (!mounted) return;
 
@@ -465,6 +469,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     height: 56,
                     child: ElevatedButton(
                       onPressed: () async {
+                        final currentUserData = await UserDataService.load();
+                        final canUseMasterWidget =
+                            currentUserData.isPlanActive &&
+                            currentUserData.planType == 'master';
+                        if (!canUseMasterWidget &&
+                            (tempSecMale || tempSecFemale)) {
+                          tempNyang = true;
+                          tempSecMale = false;
+                          tempSecFemale = false;
+                        }
+
                         await prefs.setBool('widget_nyang_enabled', tempNyang);
                         await prefs.setBool(
                           'widget_sec_male_enabled',
