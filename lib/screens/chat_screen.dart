@@ -3530,6 +3530,9 @@ class _ChatScreenState extends State<ChatScreen>
   Future<void> _send(String text, {String? apiInputOverride}) async {
     final trimmed = text.trim();
     if (trimmed.isEmpty || _isLoading) return;
+    final isTodayVisionFlow =
+        trimmed == '비전을 위한 오늘' ||
+        (apiInputOverride?.startsWith('비전을 위한 오늘 - ') ?? false);
     if (!_coach.isMaster && _isListening) {
       await _stopListening();
       if (!mounted) return;
@@ -3550,6 +3553,7 @@ class _ChatScreenState extends State<ChatScreen>
             kind: 'vision_choice',
           ),
         );
+        _suggestedTasks = [];
         _dynamicChips = _coach.chips;
       });
       _scrollToBottom();
@@ -3861,7 +3865,7 @@ class _ChatScreenState extends State<ChatScreen>
             _timerActiveInsertIndex = _messages.length;
           }
         }
-        if (parsed.suggestedTasks.isNotEmpty) {
+        if (!isTodayVisionFlow && parsed.suggestedTasks.isNotEmpty) {
           _suggestedTasks = suggestedTasks;
         }
         // 배너 로직 삭제 (팝업으로 대체)
