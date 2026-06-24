@@ -78,8 +78,8 @@ class ApiUsageLimitService {
       return ApiUsageLimitResult(
         allowed: false,
         message: userData.planType == 'friends'
-            ? '오늘 AI 대화 사용량을 모두 썼어요.\n마스터 플랜에서는 더 많이 대화할 수 있어요.'
-            : '오늘은 정말 많이 이야기했네요.\n내일 다시 이어서 이야기해요.',
+            ? '오늘의 플래너 토큰을 모두 사용했어요.\n마스터 플랜에서는 더 많은 토큰을 사용할 수 있어요.'
+            : '오늘의 플래너 토큰을 모두 사용했어요.\n내일 다시 이용해 주세요.',
         dailyUsed: dailyUsed,
         dailyLimit: limits.daily,
       );
@@ -241,13 +241,13 @@ class ApiUsageLimitService {
   static String _dailyUsageNotice(int stage, String planType) {
     if (stage >= 100) {
       return planType == 'friends'
-          ? '오늘 AI 대화 사용량을 모두 썼어요.\n마스터 플랜에서는 더 많이 대화할 수 있어요.'
-          : '오늘은 정말 많이 이야기했네요.\n내일 다시 이어서 이야기해요.';
+          ? '오늘의 플래너 토큰을 모두 사용했어요.\n마스터 플랜에서는 더 많은 토큰을 사용할 수 있어요.'
+          : '오늘의 플래너 토큰을 모두 사용했어요.\n내일 다시 이용해 주세요.';
     }
     if (stage >= 95) {
-      return '오늘의 대화가 거의 끝나가고 있어요.\n조금만 더 이야기할 수 있어요.';
+      return '오늘의 플래너 토큰을 거의 사용했어요.\n남은 사용량이 많지 않아요.';
     }
-    return '오늘은 코치와 이야기를 많이 나눴네요.\n남은 대화가 얼마 남지 않았어요.';
+    return '오늘은 플래너 토큰 사용량이 많아요.\n남은 사용량을 확인해 주세요.';
   }
 
   static int _readInt(dynamic value) {
