@@ -43,8 +43,8 @@ class ApiUsageNotice {
 }
 
 class ApiUsageLimitService {
-  static const int friendsDailyTokenLimit = 150000;
-  static const int masterDailyTokenLimit = 400000;
+  static const int friendsDailyTokenLimit = 100000;
+  static const int masterDailyTokenLimit = 200000;
   static const int masterDailyOrganizeLimit = 7;
 
   static final _firestore = FirebaseFirestore.instance;
