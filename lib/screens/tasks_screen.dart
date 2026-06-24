@@ -489,6 +489,8 @@ class MilestoneInfo {
 
 class _TasksScreenState extends State<TasksScreen>
     with SingleTickerProviderStateMixin {
+  static const int _maxMilestonesPerVision = 10;
+
   late TabController _tabCtrl;
   late CoachConfig _coach;
 
@@ -5820,6 +5822,43 @@ class _TasksScreenState extends State<TasksScreen>
     );
   }
 
+  void _showMilestoneLimitDialog() {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(
+          '마일스톤이 10개에 도달했습니다.',
+          style: GoogleFonts.notoSansKr(
+            fontSize: 17,
+            fontWeight: FontWeight.w900,
+            color: const Color(0xFF3D3A4E),
+          ),
+        ),
+        content: Text(
+          '새로운 마일스톤을 추가하려면 사용하지 않는 마일스톤을 정리해 주세요.',
+          style: GoogleFonts.notoSansKr(
+            fontSize: 14,
+            height: 1.55,
+            color: const Color(0xFF6B7280),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(
+              '확인',
+              style: GoogleFonts.notoSansKr(
+                fontWeight: FontWeight.w800,
+                color: const Color(0xFF8B7CFF),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _showMemoDialog(
     BuildContext context,
     MilestoneItem milestone,
@@ -6254,6 +6293,11 @@ class _TasksScreenState extends State<TasksScreen>
                                 ),
                                 GestureDetector(
                                   onTap: () {
+                                    if (milestones.length >=
+                                        _maxMilestonesPerVision) {
+                                      _showMilestoneLimitDialog();
+                                      return;
+                                    }
                                     setModalState(() {
                                       milestones.add(MilestoneItem(text: ''));
                                     });
@@ -6899,6 +6943,11 @@ class _TasksScreenState extends State<TasksScreen>
                                       content: Text('비전 목표를 입력해주세요.'),
                                     ),
                                   );
+                                  return;
+                                }
+                                if (milestones.length >
+                                    _maxMilestonesPerVision) {
+                                  _showMilestoneLimitDialog();
                                   return;
                                 }
                                 final newMilestones = milestones
@@ -11093,7 +11142,8 @@ class MilestoneMemoDialog extends StatefulWidget {
 }
 
 class _MilestoneMemoDialogState extends State<MilestoneMemoDialog> {
-  static const int _sectionContentMaxLength = 1000;
+  static const int _maxMemoSections = 3;
+  static const int _sectionContentMaxLength = 500;
   static final _memoSummaryProxy =
       FirebaseFunctions.instanceFor(region: 'asia-northeast3').httpsCallable(
         'chatProxy',
@@ -11166,7 +11216,7 @@ class _MilestoneMemoDialogState extends State<MilestoneMemoDialog> {
 
   void _addSectionControllers(String title, String content) {
     final tCtrl = TextEditingController(text: title);
-    final cCtrl = TextEditingController(text: content);
+    final cCtrl = TextEditingController(text: _limitSectionContent(content));
     final tNode = FocusNode();
     final cNode = FocusNode();
 
@@ -11190,6 +11240,13 @@ class _MilestoneMemoDialogState extends State<MilestoneMemoDialog> {
   }
 
   void _addNewSection() {
+    if (_sections.length >= _maxMemoSections) {
+      _showInlineNoticeDialog(
+        '메모 묶음이 3개에 도달했습니다.\n\n새로운 메모 묶음을 추가하려면 사용하지 않는 메모 묶음을 정리해 주세요.',
+      );
+      return;
+    }
+
     setState(() {
       _sections.add(MemoSection(title: '', content: ''));
       _addSectionControllers('', '');
@@ -11686,9 +11743,18 @@ $content
                     ? ' '
                     : '') +
                 spoken;
-            _focusedCtrl!.text = _baseText.replaceRange(start, end, insertText);
+            final replacedText = _baseText.replaceRange(start, end, insertText);
+            final isMemoContentController = _contentCtrls.contains(
+              _focusedCtrl,
+            );
+            _focusedCtrl!.text = isMemoContentController
+                ? _limitSectionContent(replacedText)
+                : replacedText;
             _focusedCtrl!.selection = TextSelection.collapsed(
-              offset: start + insertText.length,
+              offset: (start + insertText.length).clamp(
+                0,
+                _focusedCtrl!.text.length,
+              ),
             );
           });
         }
@@ -11710,7 +11776,7 @@ $content
     // 1. Sections
     for (int i = 0; i < _sections.length; i++) {
       _sections[i].title = _titleCtrls[i].text.trim();
-      _sections[i].content = _contentCtrls[i].text.trim();
+      _sections[i].content = _limitSectionContent(_contentCtrls[i].text.trim());
     }
     _sections.removeWhere((s) => s.title.isEmpty && s.content.isEmpty);
     widget.milestone.memoSections = _sections;
@@ -11857,7 +11923,7 @@ $content
                           ),
                           const SizedBox(width: 4),
                           Text(
-                            '섹션 추가',
+                            '메모 묶음 추가',
                             style: GoogleFonts.notoSansKr(
                               fontSize: 13,
                               fontWeight: FontWeight.w700,
@@ -12145,7 +12211,7 @@ $content
                 height: 1.5,
               ),
               decoration: InputDecoration(
-                hintText: '실행에 필요한 핵심 위주로 글이나 링크를 적어두세요(최대 1000자)',
+                hintText: '실행에 필요한 핵심 위주로 글이나 링크를 적어두세요(최대 500자)',
                 hintStyle: GoogleFonts.notoSansKr(
                   color: const Color(0xFFA0A0B0),
                 ),
