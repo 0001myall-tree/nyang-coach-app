@@ -377,7 +377,6 @@ class _ChatScreenState extends State<ChatScreen>
   bool _awaitingBroWorkoutPreference = false;
   bool _isCheckingVisionRecommendationAllowance = false;
   bool _isCheckingNextActionAllowance = false;
-  bool _isCheckingScheduleEscortAllowance = false;
 
   // 냥냥코치 비구독자 무료체험 단계 (0=시작 전, 1=인트로 완료, 2=업셀 완료)
   int _catFreeTrialStep = 0;
@@ -2546,15 +2545,6 @@ class _ChatScreenState extends State<ChatScreen>
     );
   }
 
-  Future<String?> _scheduleEscortLimitMessage() {
-    return _featureUsageLimitMessage(
-      key: 'nyang_schedule_escort_usage_history',
-      dailyLimit: 3,
-      limitMessage: '오늘의 일정 에스코트 3회를 모두 사용했어요.\n내일 다시 이용해 주세요.',
-      cooldownLabel: '일정 에스코트',
-    );
-  }
-
   String _normalizeTaskSuggestionText(String value) {
     return value
         .replaceAll(RegExp(r'\s+'), '')
@@ -2680,7 +2670,6 @@ class _ChatScreenState extends State<ChatScreen>
       '뭐하지',
       '추천해',
       '추천받',
-      '에스코트',
       '일정짜',
       '스케줄짜',
       '계획짜',
@@ -3903,14 +3892,12 @@ class _ChatScreenState extends State<ChatScreen>
     if (trimmed.isEmpty || _isLoading) return;
     if (!await _ensureMasterCoachAccess()) return;
 
-    final isTodayVisionFlow =
-        trimmed == '비전을 위한 오늘' ||
-        (apiInputOverride?.startsWith('비전을 위한 오늘 - ') ?? false);
-    final isVisionNewActionFlow = apiInputOverride == '비전을 위한 오늘 - 새 행동 추천받기';
+    final isFutureTodayFlow =
+        trimmed == '미래를 위한 오늘' ||
+        (apiInputOverride?.startsWith('미래를 위한 오늘 - ') ?? false);
+    final isVisionNewActionFlow = apiInputOverride == '미래를 위한 오늘 - 새 행동 추천받기';
     final isNextActionFlow =
         trimmed == '지금 뭐하지?' || apiInputOverride == '지금 뭐하지?';
-    final isScheduleEscortFlow =
-        trimmed == '일정 에스코트' || apiInputOverride == '일정 에스코트';
     if (!_coach.isMaster && _isListening) {
       await _stopListening();
       if (!mounted) return;
@@ -3918,14 +3905,14 @@ class _ChatScreenState extends State<ChatScreen>
     _ctrl.clear();
     HapticFeedback.lightImpact();
 
-    if (trimmed == '비전을 위한 오늘' && apiInputOverride == null) {
+    if (trimmed == '미래를 위한 오늘' && apiInputOverride == null) {
       setState(() {
         _messages.add(
           ChatMessage(text: trimmed, isUser: true, time: DateTime.now()),
         );
         _messages.add(
           ChatMessage(
-            text: '오늘 비전을 어떻게 이어갈까요?',
+            text: '오늘, 미래를 어떻게 이어갈까요?',
             isUser: false,
             time: DateTime.now(),
             kind: 'vision_choice',
@@ -4207,21 +4194,6 @@ class _ChatScreenState extends State<ChatScreen>
         return;
       }
     }
-    if (isScheduleEscortFlow) {
-      if (_isCheckingScheduleEscortAllowance) return;
-      _isCheckingScheduleEscortAllowance = true;
-      final limitMessage = await _scheduleEscortLimitMessage();
-      if (!mounted) {
-        _isCheckingScheduleEscortAllowance = false;
-        return;
-      }
-      if (limitMessage != null) {
-        _isCheckingScheduleEscortAllowance = false;
-        _showUsageNotice(limitMessage);
-        return;
-      }
-    }
-
     final currentId = widget.coachId;
     final userMsg = ChatMessage(
       text: trimmed,
@@ -4263,9 +4235,6 @@ class _ChatScreenState extends State<ChatScreen>
       if (isNextActionFlow) {
         _isCheckingNextActionAllowance = false;
       }
-      if (isScheduleEscortFlow) {
-        _isCheckingScheduleEscortAllowance = false;
-      }
       return;
     }
 
@@ -4279,9 +4248,6 @@ class _ChatScreenState extends State<ChatScreen>
       }
       if (isNextActionFlow) {
         await _recordFeatureUsage(key: 'nyang_next_action_usage_history');
-      }
-      if (isScheduleEscortFlow) {
-        await _recordFeatureUsage(key: 'nyang_schedule_escort_usage_history');
       }
       if (!mounted || widget.coachId != currentId) return;
       final usageNotice = await ApiUsageLimitService.takeChatUsageNotice();
@@ -4319,7 +4285,7 @@ class _ChatScreenState extends State<ChatScreen>
             _timerActiveInsertIndex = _messages.length;
           }
         }
-        if (!isTodayVisionFlow && parsed.suggestedTasks.isNotEmpty) {
+        if (!isFutureTodayFlow && parsed.suggestedTasks.isNotEmpty) {
           _suggestedTasks = suggestedTasks;
         }
         // 배너 로직 삭제 (팝업으로 대체)
@@ -4368,9 +4334,6 @@ class _ChatScreenState extends State<ChatScreen>
       }
       if (isNextActionFlow) {
         _isCheckingNextActionAllowance = false;
-      }
-      if (isScheduleEscortFlow) {
-        _isCheckingScheduleEscortAllowance = false;
       }
     }
   }
@@ -4534,7 +4497,7 @@ class _ChatScreenState extends State<ChatScreen>
               );
             }
             sb.writeln(
-              '*비전을 위한 오늘 요청에서는 이 섹션을 사용자의 최근 일주일 흐름 평가 근거로 삼고, 오늘 할 일의 미완료 상태는 아직 진행 중인 계획으로만 봅니다.',
+              '*미래를 위한 오늘 요청에서는 이 섹션을 사용자의 최근 일주일 흐름 평가 근거로 삼고, 오늘 할 일의 미완료 상태는 아직 진행 중인 계획으로만 봅니다.',
             );
           }
         } catch (_) {}
@@ -5462,7 +5425,7 @@ class _ChatScreenState extends State<ChatScreen>
           )
         : _coach.systemPrompt;
 
-    final useVisionNewActionContext = userText == '비전을 위한 오늘 - 새 행동 추천받기';
+    final useVisionNewActionContext = userText == '미래를 위한 오늘 - 새 행동 추천받기';
     final contextString = useVisionNewActionContext
         ? await _buildVisionNewActionContextString()
         : await _buildContextString(userText);
@@ -5512,25 +5475,9 @@ $timerOutputRule
    - 예시: "지금은 경제 공부 30분을 추천드립니다. 최근 계속 미뤄진 중요한 일정이고, 지금 시간대에 부담 없이 끝내기 좋습니다."
 2. [피드백에 따른 재조정]: 만약 사용자가 이 추천을 받고 "곧 외출해요", "너무 피곤해요", "시간이 1시간밖에 없어요" 같은 상황/제한사항을 입력하면, 사용자의 피드백을 즉시 수렴하여 그 조건에 맞게 '실행 가능한 다른 다음 행동 1개'로 즉시 재조정하여 다시 추천하십시오.
 3. [부정적 종결 금지]: 관련 일정이 부족하더라도 절대 "할 일이 없다"거나 "비전과 무관하다"며 단정적으로 대화를 끝내지 마십시오. 할 일이 아예 없을 때는 가볍게 비전 관련 15분 독서나 스트레칭 등 가벼운 생산적 행동을 제안하십시오.]''';
-    } else if (userText == '일정 에스코트') {
-      effectiveUserText = '''일정 에스코트
-[System: 사용자가 방금 현재 시간 기준으로 일정 에스코트를 다시 요청했습니다. 반드시 시스템 프롬프트 상의 **최신 시간**과 **최신 할 일 현황(완료/미완료 상태 등)**을 확인하여, 이전 대화 맥락에 얽매이지 말고 지금 당장 할 수 있는 미완료 일정을 새롭게 추천하고 하루 스케줄(타임라인)을 배정해 주세요.
-
-*일정 연관성 및 우선순위 판단 규칙 (1차 판단 원칙):*
-오늘 미완료된 일정들을 에스코트(스케줄링)할 때, 각 일정이 사용자의 장기 비전, 마일스톤, 월목표, 주목표와 어떻게 연결되는지 아래 판단 원칙을 반드시 준수하십시오:
-1. [키워드 겹침 및 맥락적 연관성 판단]: 오늘 할 일 이름과 비전, 마일스톤, 월목표, 주목표 이름 사이에 겹치는 핵심 키워드가 있거나, 텍스트의 어휘가 다소 다르더라도 개념상 서로 깊게 연관(예: '시나리오 쓰기' ↔ '영화 감상')되어 있다면 이를 비전/목표 관련 핵심 일정으로 분류합니다. 해당 일정들은 오늘 집중력이 높은 골든 타임(예: 오전 시간 등)에 최우선적으로 배치하십시오.
-2. [비연관/불확실 일정 처리 (침묵 원칙)]: 비전/목표/마일스톤과 연관성이 모호하거나 전혀 없는 일정(예: 설거지, 빨래, 청소 등 단순 가사나 잡무)을 스케줄에 배치할 때는, 굳이 "비전과 상관없는 일정"이라거나 "목표 진행과 관계가 없다"는 식의 부정적이고 단정적인 언급을 대화 피드백에 절대 덧붙이지 마십시오. 아무런 언급 없이 조용히 스케줄표상에 빈 시간대(또는 덜 중요한 시간대)로 배치하기만 하십시오.
-   - 또한, 억지로 "비전 진행과는 관계가 없다고 볼 수 있습니다"라거나 "분석에서 제외했습니다" 등 부정적이거나 기운을 빠지게 하는 단정적인 결론을 지어 설명에 포함해서는 절대 안 됩니다.
-   - 만약 사용자가 직접 질문하여 그러한 무관한 일정을 언급해야 하는 상황이 생기더라도, "관계가 없다"고 결론 내리지 말고 "간접적인 연결점은 있을 수 있으나, 지금은 비전에 직결되는 핵심 행동에 더 집중해 보자"는 식으로 부드럽고 유연한 열린 태도로 답변하십시오.
-
-*주의사항:*
-1) 미완료된 일정이 여러 개라면 단 하나도 누락하지 말고 모두 포함하여 스케줄을 짜세요.
-2) 할 일에 배정된 "예상 소요시간"을 철저하게 지키고 소요시간 계산(덧셈)을 틀리지 마세요.
-3) 사용자가 별도로 할 일이나 습관으로 지정해 둔 식사 시간이 없다면, 기본적으로 점심식사(대략 12시~13시)와 저녁식사(대략 18시~19시) 시간을 반드시 휴식 및 식사 시간으로 비워두고 스케줄을 짜세요.
-4) 마크다운 ** 나 * 등은 절대 쓰지 마십시오. [TASK] 태그도 포함하지 마십시오.]''';
-    } else if (userText == '비전을 위한 오늘 - 남은 할 일 중 추천') {
-      effectiveUserText = '''비전을 위한 오늘 - 남은 할 일 중 추천
-[System: 사용자가 방금 "비전을 위한 오늘" 카드에서 "남은 할 일 중 추천"을 선택했습니다. 이전 대화 맥락에 얽매이지 말고 최신 목표/비전 정보, 어제까지의 최근 7일 기록, 오늘 할 일 현황을 바탕으로 완전히 새롭게 판단하세요. 절대 오늘 미완료 항목을 근거로 "비전을 위해 하지 않았다", "안 했다", "부족했다"처럼 평가하지 마세요. 오늘 계획은 아직 진행 중인 계획이며, 오늘 안에 끝내면 되는 항목으로 다뤄야 합니다.
+    } else if (userText == '미래를 위한 오늘 - 남은 할 일 중 추천') {
+      effectiveUserText = '''미래를 위한 오늘 - 남은 할 일 중 추천
+[System: 사용자가 방금 "미래를 위한 오늘" 카드에서 "남은 할 일 중 추천"을 선택했습니다. 이전 대화 맥락에 얽매이지 말고 최신 목표/비전 정보, 어제까지의 최근 7일 기록, 오늘 할 일 현황을 바탕으로 완전히 새롭게 판단하세요. 절대 오늘 미완료 항목을 근거로 "비전을 위해 하지 않았다", "안 했다", "부족했다"처럼 평가하지 마세요. 오늘 계획은 아직 진행 중인 계획이며, 오늘 안에 끝내면 되는 항목으로 다뤄야 합니다.
 
 *분석 순서:*
 1. 먼저 [오늘 할 일 현황]의 미완료 항목 중에서 오늘의 비전에 가장 큰 영향을 줄 단 하나의 행동을 고르세요. 여러 개를 나열하지 마세요.
@@ -5564,9 +5511,9 @@ $timerOutputRule
 3. 오늘 완료율, 오늘 미완료율, 오늘 아직 안 했다는 식의 평가 표현은 금지합니다.
 4. 사용자가 이미 알 법한 "이 항목이 남아 있습니다" 수준에서 멈추지 말고, 왜 지금 그 행동이 비전상 가장 효율적인지 설명하세요.
 5. 단순 시간표나 전체 일정 배치는 하지 마세요.]''';
-    } else if (userText == '비전을 위한 오늘 - 새 행동 추천받기') {
-      effectiveUserText = '''비전을 위한 오늘 - 새 행동 추천받기
-[System: 사용자가 방금 "비전을 위한 오늘" 카드에서 "새 행동 추천받기"를 선택했습니다. 이전 대화 맥락에 얽매이지 말고 [새 행동 추천용 압축 컨텍스트]를 바탕으로 완전히 새롭게 판단하세요. 사용자는 오늘 목록 안에서 고르기보다 비전 기준으로 새 행동을 추천받고 싶어 합니다.
+    } else if (userText == '미래를 위한 오늘 - 새 행동 추천받기') {
+      effectiveUserText = '''미래를 위한 오늘 - 새 행동 추천받기
+[System: 사용자가 방금 "미래를 위한 오늘" 카드에서 "새 행동 추천받기"를 선택했습니다. 이전 대화 맥락에 얽매이지 말고 [새 행동 추천용 압축 컨텍스트]를 바탕으로 완전히 새롭게 판단하세요. 사용자는 오늘 목록 안에서 고르기보다 비전 기준으로 새 행동을 추천받고 싶어 합니다.
 
 *분석 순서:*
 1. 먼저 [최근 7일간 실제 완료/미완료 할 일 목록 - 오늘 제외, 어제까지]와 [최근 7일 요약 - 오늘 제외, 어제까지]를 바탕으로, 어제까지 비전 흐름이 어땠는지 첫 문장에서 짧게 해석하세요. 단, 회고가 길어지면 안 됩니다.
@@ -6461,9 +6408,8 @@ $timerOutputRule
   bool _cheatKeyOpen = false;
 
   List<Map<String, String>> get _cheatKeyItems => [
-    {'icon': '🗺️', 'label': '일정 에스코트'},
     {'icon': '⚡', 'label': '지금 뭐하지?'},
-    {'icon': '🧭', 'label': '비전을 위한 오늘'},
+    {'icon': '🧭', 'label': '미래를 위한 오늘'},
   ];
 
   Widget _buildCheatKeyMenu() {
@@ -6488,12 +6434,10 @@ $timerOutputRule
             onTap: () {
               setState(() => _cheatKeyOpen = false);
 
-              if (item['label'] == '일정 에스코트') {
-                AnalyticsService.logFeatureUsage('cheat_schedule_escort');
-              } else if (item['label'] == '지금 뭐하지?') {
+              if (item['label'] == '지금 뭐하지?') {
                 AnalyticsService.logFeatureUsage('cheat_next_action');
-              } else if (item['label'] == '비전을 위한 오늘') {
-                AnalyticsService.logFeatureUsage('cheat_today_vision');
+              } else if (item['label'] == '미래를 위한 오늘') {
+                AnalyticsService.logFeatureUsage('cheat_future_today');
               }
 
               _send(item['label']!);
@@ -7175,9 +7119,9 @@ $timerOutputRule
                     ),
                   ),
                   const SizedBox(height: 12),
-                  choiceButton('남은 할 일 중 추천', '비전을 위한 오늘 - 남은 할 일 중 추천'),
+                  choiceButton('남은 할 일 중 추천', '미래를 위한 오늘 - 남은 할 일 중 추천'),
                   const SizedBox(height: 8),
-                  choiceButton('새 행동 추천받기', '비전을 위한 오늘 - 새 행동 추천받기'),
+                  choiceButton('새 행동 추천받기', '미래를 위한 오늘 - 새 행동 추천받기'),
                 ],
               ),
             ),
