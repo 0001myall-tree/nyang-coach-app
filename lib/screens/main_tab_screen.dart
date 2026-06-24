@@ -140,6 +140,8 @@ class _MainTabScreenState extends State<MainTabScreen>
   late TabController _tabCtrl;
   final ChatScreenController _chatController = ChatScreenController();
   final TasksScreenController _tasksController = TasksScreenController();
+  bool _coachAccessChecked = false;
+  bool _redirectingForCoachAccess = false;
 
   int _logoTapCount = 0;
   Timer? _logoTapTimer;
@@ -424,6 +426,7 @@ class _MainTabScreenState extends State<MainTabScreen>
     _startMorningCallEngine();
     _startCoreReminderEngine();
     AnalyticsService.logAppOpen();
+    _ensureCurrentCoachAccess();
   }
 
   @override
@@ -441,8 +444,41 @@ class _MainTabScreenState extends State<MainTabScreen>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       AnalyticsService.logAppOpen();
-      _checkWidgetIntent();
+      _handleAppResumed();
     }
+  }
+
+  Future<void> _handleAppResumed() async {
+    final canContinue = await _ensureCurrentCoachAccess(syncCloud: _isMaster);
+    if (canContinue) {
+      await _checkWidgetIntent();
+    }
+  }
+
+  Future<bool> _ensureCurrentCoachAccess({bool syncCloud = false}) async {
+    if (_redirectingForCoachAccess) return false;
+
+    if (syncCloud) {
+      await UserDataService.syncFromCloud();
+    }
+    final data = await UserDataService.load();
+    final canAccess = data.canAccessCoach(widget.coachId);
+
+    if (canAccess) {
+      if (mounted && !_coachAccessChecked) {
+        setState(() => _coachAccessChecked = true);
+      }
+      return true;
+    }
+
+    _redirectingForCoachAccess = true;
+    await UserDataService.setSelectedCoach('cat');
+    if (!mounted) return false;
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const CoachSelectionScreen()),
+      (route) => false,
+    );
+    return false;
   }
 
   Future<void> _checkWidgetIntent() async {
@@ -463,6 +499,17 @@ class _MainTabScreenState extends State<MainTabScreen>
           : 0;
       String targetCoachId = widgetCoachId ?? widget.coachId;
       final type = widgetRoute == 'tasks_done_bottom_sheet' ? 'done' : null;
+      final data = await UserDataService.load();
+
+      if (!data.canAccessCoach(targetCoachId)) {
+        await UserDataService.setSelectedCoach('cat');
+        if (!mounted) return;
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const CoachSelectionScreen()),
+          (route) => false,
+        );
+        return;
+      }
 
       if (targetCoachId != widget.coachId) {
         await UserDataService.setSelectedCoach(targetCoachId);
@@ -985,6 +1032,13 @@ class _MainTabScreenState extends State<MainTabScreen>
 
   @override
   Widget build(BuildContext context) {
+    if (!_coachAccessChecked) {
+      return const Scaffold(
+        backgroundColor: Colors.white,
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
     // 마스터는 배경 없이 기존 스타일
     if (_isMaster) {
       return _buildMasterLayout();

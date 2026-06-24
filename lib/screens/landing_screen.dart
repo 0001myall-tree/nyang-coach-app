@@ -66,6 +66,17 @@ class _LandingScreenState extends State<LandingScreen>
       String targetCoachId = widgetCoachId ?? data.selectedCoachId ?? 'cat';
 
       if (data.selectedCoachId != null && mounted) {
+        if (!data.canAccessCoach(targetCoachId)) {
+          await UserDataService.setSelectedCoach('cat');
+          if (!mounted) return;
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(
+              builder: (context) => const CoachSelectionScreen(),
+            ),
+          );
+          return;
+        }
+
         if (widgetCoachId != null && widgetCoachId != data.selectedCoachId) {
           await UserDataService.setSelectedCoach(widgetCoachId);
         }
@@ -339,7 +350,8 @@ class _LandingScreenState extends State<LandingScreen>
                     final data = await UserDataService.load();
                     if (!outerContext.mounted) return;
 
-                    if (data.selectedCoachId != null) {
+                    if (data.selectedCoachId != null &&
+                        data.canAccessCoach(data.selectedCoachId!)) {
                       Navigator.pushReplacement(
                         outerContext,
                         MaterialPageRoute(
@@ -348,6 +360,10 @@ class _LandingScreenState extends State<LandingScreen>
                         ),
                       );
                     } else {
+                      if (data.selectedCoachId != null) {
+                        await UserDataService.setSelectedCoach('cat');
+                      }
+                      if (!outerContext.mounted) return;
                       Navigator.pushReplacement(
                         outerContext,
                         MaterialPageRoute(

@@ -3882,10 +3882,27 @@ class _ChatScreenState extends State<ChatScreen>
     return '$minutes분 타이머 바로 켜줄게. 일단 시작해보자.';
   }
 
+  Future<bool> _ensureMasterCoachAccess() async {
+    if (!_coach.isMaster) return true;
+
+    final data = await UserDataService.load();
+    if (data.canAccessCoach(widget.coachId)) return true;
+
+    await UserDataService.setSelectedCoach('cat');
+    if (!mounted) return false;
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const CoachSelectionScreen()),
+      (route) => false,
+    );
+    return false;
+  }
+
   // ── 메시지 전송 (웹앱 sendMessage 이식) ─────────────────
   Future<void> _send(String text, {String? apiInputOverride}) async {
     final trimmed = text.trim();
     if (trimmed.isEmpty || _isLoading) return;
+    if (!await _ensureMasterCoachAccess()) return;
+
     final isTodayVisionFlow =
         trimmed == '비전을 위한 오늘' ||
         (apiInputOverride?.startsWith('비전을 위한 오늘 - ') ?? false);
