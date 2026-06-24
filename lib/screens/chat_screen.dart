@@ -18,6 +18,7 @@ import 'package:nyang_coach/services/analytics_service.dart';
 import 'package:nyang_coach/services/api_usage_limit_service.dart';
 import 'package:nyang_coach/services/tasks_sync_service.dart';
 import 'package:nyang_coach/services/user_title_service.dart';
+import 'package:nyang_coach/services/daily_reset_service.dart';
 import 'coach_config.dart';
 import 'focus_timer_widget.dart';
 import '../models/user_data.dart';
@@ -616,8 +617,49 @@ class _ChatScreenState extends State<ChatScreen>
     return DateFormat('yyyy-MM-dd').format(base);
   }
 
+  bool _isNewActivityDayPendingStart(
+    SharedPreferences prefs, {
+    String userText = '',
+    List<dynamic>? tasks,
+  }) {
+    final now = DateTime.now();
+    final effectiveToday = _getTodayStrWithReset(prefs);
+    final resetAt = DateTime.tryParse(
+      prefs.getString(DailyResetService.lastResetAtKey) ?? '',
+    );
+    final resetToDate = prefs.getString(DailyResetService.lastResetToDateKey);
+    final resetHour = prefs.getDouble('nyang_reset_hour') ?? 3.0;
+    final preStartEndHour = (resetHour.ceil() + 5).clamp(6, 10);
+    final recentlyReset =
+        resetAt != null &&
+        !now.isBefore(resetAt) &&
+        now.difference(resetAt) <= const Duration(hours: 12);
+    final currentTasks =
+        tasks ??
+        (() {
+          try {
+            return jsonDecode(prefs.getString('nyang_tasks') ?? '[]') as List;
+          } catch (_) {
+            return <dynamic>[];
+          }
+        })();
+    final hasCompletedNewDayTask = currentTasks.any(
+      (task) => task is Map && task['done'] == true,
+    );
+    final explicitStartIntent = RegExp(
+      r'(뭐부터|뭐\s*해야|무엇부터|추천해|시작할|시작해|할게|해볼게|지금\s*하|오늘\s*뭐)',
+    ).hasMatch(userText);
+
+    return resetToDate == effectiveToday &&
+        recentlyReset &&
+        now.hour < preStartEndHour &&
+        !hasCompletedNewDayTask &&
+        !explicitStartIntent;
+  }
+
   Future<bool> _hasMovableIncompleteTasks() async {
     final prefs = await SharedPreferences.getInstance();
+    if (_isNewActivityDayPendingStart(prefs)) return false;
     final today = await _getEffectiveTodayStr();
     final lastDate = prefs.getString('nyang_last_date');
 
@@ -4298,6 +4340,7 @@ class _ChatScreenState extends State<ChatScreen>
     final tier = _coach.tier; // 'friends' | 'master'
     final prefs = await SharedPreferences.getInstance();
     final sb = StringBuffer();
+    final now = DateTime.now();
     final needsGoalContext = _needsMasterGoalContext(userText);
     final needsTaskContext = _needsMasterTaskContext(
       userText,
@@ -4462,11 +4505,22 @@ class _ChatScreenState extends State<ChatScreen>
     // 5. 오늘 할 일 현황
     final tasksRaw = prefs.getString('nyang_tasks');
     List<dynamic> allTasks = [];
+    bool newActivityDayNotStarted = false;
     if (tasksRaw != null && needsTaskContext) {
       try {
         allTasks = jsonDecode(tasksRaw) as List;
         if (allTasks.isNotEmpty) {
-          sb.writeln('\n[오늘 할 일 현황]');
+          newActivityDayNotStarted = _isNewActivityDayPendingStart(
+            prefs,
+            userText: userText,
+            tasks: allTasks,
+          );
+
+          sb.writeln(
+            newActivityDayNotStarted
+                ? '\n[새 활동일용 할 일 - 리셋 후 아직 시작 전]'
+                : '\n[오늘 할 일 현황]',
+          );
           final incompleteTasks = allTasks
               .where((task) => task['done'] != true)
               .toList();
@@ -4515,14 +4569,35 @@ class _ChatScreenState extends State<ChatScreen>
                 ? '일정'
                 : '일반 할 일';
             sb.writeln(
-              '- [${done ? 'V' : ' '}] [$typeLabel] ${t['text']}$timeInfo$deferredInfo$conversationAvoidanceInfo',
+              newActivityDayNotStarted
+                  ? '- [예정] [$typeLabel] ${t['text']}$timeInfo'
+                  : '- [${done ? 'V' : ' '}] [$typeLabel] ${t['text']}$timeInfo$deferredInfo$conversationAvoidanceInfo',
             );
           }
-          sb.writeln('*[V] 표시된 항목은 완료됨. 완료 항목은 절대 다시 실행 유도하지 말 것.');
-          sb.writeln('*타이머 확인 카드는 "앱 기록상 미루기 2회 이상"으로 표시된 미완료 할 일에만 제안할 수 있음.');
-          sb.writeln(
-            '*"최근 대화상 귀찮음 표현 2회 이상"이지만 앱 기록상 미루기 2회 미만인 경우에는 카드를 띄우지 말고, 먼저 달랜 뒤 "필요하면 타이머라도 띄워드릴까요?"라고 말로만 물을 것. 이 경우 [TIMER_CONFIRM] 태그는 절대 출력하지 말 것.',
-          );
+          if (newActivityDayNotStarted) {
+            final previousDayAllDone =
+                prefs.getBool(DailyResetService.previousDayAllDoneKey) ?? false;
+            sb.writeln(
+              '*이 목록은 하루 리셋 후 새 활동일을 위해 생성된 예정 목록이다. 사용자가 방금까지 하다 남긴 일이나 현재 마무리해야 할 일이 아니다.',
+            );
+            if (previousDayAllDone) {
+              sb.writeln(
+                '*사용자는 리셋 직전 활동일의 할 일을 모두 완료했다. 이전 날에 남은 일이 있다고 말하지 말 것.',
+              );
+            }
+            sb.writeln(
+              '*사용자가 새 하루의 실행을 명시적으로 요청하기 전에는 이 목록을 "남은 일", "미완료 일정", "밀린 일"이라고 부르거나 다음 날로 이월하라고 제안하지 말 것.',
+            );
+            sb.writeln('*감정 토로 중에는 이 예정 목록을 근거로 압박하거나 일정 조정을 제안하지 말 것.');
+          } else {
+            sb.writeln('*[V] 표시된 항목은 완료됨. 완료 항목은 절대 다시 실행 유도하지 말 것.');
+            sb.writeln(
+              '*타이머 확인 카드는 "앱 기록상 미루기 2회 이상"으로 표시된 미완료 할 일에만 제안할 수 있음.',
+            );
+            sb.writeln(
+              '*"최근 대화상 귀찮음 표현 2회 이상"이지만 앱 기록상 미루기 2회 미만인 경우에는 카드를 띄우지 말고, 먼저 달랜 뒤 "필요하면 타이머라도 띄워드릴까요?"라고 말로만 물을 것. 이 경우 [TIMER_CONFIRM] 태그는 절대 출력하지 말 것.',
+            );
+          }
         }
       } catch (_) {}
     }
@@ -4542,7 +4617,12 @@ class _ChatScreenState extends State<ChatScreen>
                 orElse: () => null,
               );
               final isDone = orig != null ? orig['done'] == true : false;
-              sb.writeln('${i + 1}위: [${isDone ? '완료' : '미완료'}] ${c['text']}');
+              final statusLabel = newActivityDayNotStarted
+                  ? '새 활동일 예정'
+                  : isDone
+                  ? '완료'
+                  : '미완료';
+              sb.writeln('${i + 1}위: [$statusLabel] ${c['text']}');
             }
             sb.writeln(
               '*위 핵심 할 일은 사용자가 오늘 가장 중요하게 생각하는 우선순위입니다. 비서로서 우선순위에 집중할 수 있도록 가이드해주세요.',
@@ -4733,7 +4813,6 @@ class _ChatScreenState extends State<ChatScreen>
     }
 
     // 10. 현재 날짜/시간 (master + halmae)
-    final now = DateTime.now();
     final dayNames = ['일', '월', '화', '수', '목', '금', '토'];
     if (_coach.isMaster || _coach.id == 'halmae') {
       final todayStr = await _getEffectiveTodayStr();
@@ -4977,7 +5056,15 @@ class _ChatScreenState extends State<ChatScreen>
         }
       }
 
-      if (allTasksDone && allTasks.isNotEmpty) {
+      if (newActivityDayNotStarted) {
+        sb.writeln('\n[특별 지침: 리셋 직후 새 활동일 시작 전 - 최우선]');
+        sb.writeln(
+          '현재 목록은 방금 리셋되어 생성된 새 활동일용 예정 목록입니다. 사용자가 지금 마무리하지 못한 일이 아니므로 "남아 있는 일", "미완료 일정", "오늘 못 한 일"이라고 표현하지 마세요.',
+        );
+        sb.writeln(
+          '사용자의 감정 토로에 이 목록을 연결해 이월, 정리, 우선순위 설정, 실행을 권하지 마세요. 사용자가 새 하루를 시작하겠다는 의지를 명시할 때만 예정 목록으로 참고하세요.',
+        );
+      } else if (allTasksDone && allTasks.isNotEmpty) {
         sb.writeln('\n[특별 지침: 모든 할 일 100% 완료 상태]');
         sb.writeln(
           '사용자가 오늘 계획한 모든 할 일을 100% 완료했습니다. 절대로 다른 일을 더 하라고 재촉하거나 묻지 마세요. 시간대와 상관없이 완벽한 하루를 보낸 것을 축하하며, 푹 쉬라고 강하게 권장하세요.',

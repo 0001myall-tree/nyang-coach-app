@@ -5,6 +5,27 @@ import 'memory_service.dart';
 import 'tasks_sync_service.dart';
 
 class DailyResetService {
+  static const String lastResetAtKey = 'nyang_last_daily_reset_at';
+  static const String lastResetFromDateKey = 'nyang_last_daily_reset_from_date';
+  static const String lastResetToDateKey = 'nyang_last_daily_reset_to_date';
+  static const String previousDayHadTasksKey = 'nyang_previous_day_had_tasks';
+  static const String previousDayAllDoneKey =
+      'nyang_previous_day_all_tasks_done';
+
+  static Future<void> recordDayTransition({
+    required SharedPreferences prefs,
+    required String fromDate,
+    required String toDate,
+    required bool previousDayHadTasks,
+    required bool previousDayAllDone,
+  }) async {
+    await prefs.setString(lastResetAtKey, DateTime.now().toIso8601String());
+    await prefs.setString(lastResetFromDateKey, fromDate);
+    await prefs.setString(lastResetToDateKey, toDate);
+    await prefs.setBool(previousDayHadTasksKey, previousDayHadTasks);
+    await prefs.setBool(previousDayAllDoneKey, previousDayAllDone);
+  }
+
   static String _getTodayStr(double resetHour) {
     final now = DateTime.now();
     var base = DateTime(now.year, now.month, now.day);
@@ -18,7 +39,11 @@ class DailyResetService {
     final parts = today.split('-');
     DateTime baseDate;
     if (parts.length >= 3) {
-      baseDate = DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
+      baseDate = DateTime(
+        int.parse(parts[0]),
+        int.parse(parts[1]),
+        int.parse(parts[2]),
+      );
     } else {
       final now = DateTime.now();
       baseDate = DateTime(now.year, now.month, now.day);
@@ -40,6 +65,23 @@ class DailyResetService {
     }
 
     if (lastDate != today) {
+      final previousTasksRaw = prefs.getString('nyang_tasks') ?? '[]';
+      List<dynamic> previousTasks = [];
+      try {
+        previousTasks = jsonDecode(previousTasksRaw) as List;
+      } catch (_) {}
+      final previousDayHadTasks = previousTasks.isNotEmpty;
+      final previousDayAllDone =
+          previousDayHadTasks &&
+          previousTasks.every((task) => task is Map && task['done'] == true);
+      await recordDayTransition(
+        prefs: prefs,
+        fromDate: lastDate,
+        toDate: today,
+        previousDayHadTasks: previousDayHadTasks,
+        previousDayAllDone: previousDayAllDone,
+      );
+
       // 1. Calculate streak
       final rawHistory = prefs.getString('nyang_history');
       List<dynamic> history = [];
@@ -53,7 +95,11 @@ class DailyResetService {
       );
 
       final n = DateTime.now();
-      var yesterday = DateTime(n.year, n.month, n.day).subtract(const Duration(days: 1));
+      var yesterday = DateTime(
+        n.year,
+        n.month,
+        n.day,
+      ).subtract(const Duration(days: 1));
       if (n.hour < resetHour) {
         yesterday = yesterday.subtract(const Duration(days: 1));
       }
@@ -97,14 +143,25 @@ class DailyResetService {
             final List<dynamic> oldChatHistory = jsonDecode(historyStr);
             if (oldChatHistory.isNotEmpty) {
               await MemoryService().loadMemoryData();
-              await MemoryService().generateDailySummary(lastDate, oldChatHistory);
+              await MemoryService().generateDailySummary(
+                lastDate,
+                oldChatHistory,
+              );
             }
           } catch (_) {}
         }
       }
 
       // 4. Clear all chat histories
-      final coachIds = ['cat', 'boyfriend', 'girlfriend', 'halmae', 'bro', 'sec_male', 'sec_female'];
+      final coachIds = [
+        'cat',
+        'boyfriend',
+        'girlfriend',
+        'halmae',
+        'bro',
+        'sec_male',
+        'sec_female',
+      ];
       for (final id in coachIds) {
         await prefs.setString('nyang_chat_history_$id', '[]');
       }
@@ -138,7 +195,10 @@ class DailyResetService {
     }
   }
 
-  static Future<void> _injectTodayHabitsAndSchedulesDirectly(SharedPreferences prefs, String today) async {
+  static Future<void> _injectTodayHabitsAndSchedulesDirectly(
+    SharedPreferences prefs,
+    String today,
+  ) async {
     final parts = today.split('-');
     int todayDow = DateTime.now().weekday;
     if (parts.length >= 3) {
@@ -174,9 +234,12 @@ class DailyResetService {
         final isDone = log != null && log['done'] == true;
         final taskId = 'habit_${habitId.replaceAll('.', '_')}_$today';
         String? tTime;
-        if (h['timeType'] == 'single' && h['timeStart'] != null) tTime = h['timeStart'];
+        if (h['timeType'] == 'single' && h['timeStart'] != null)
+          tTime = h['timeStart'];
         if (h['timeType'] == 'range' && h['timeStart'] != null) {
-          tTime = h['timeEnd'] != null ? "${h['timeStart']} ~ ${h['timeEnd']}" : h['timeStart'];
+          tTime = h['timeEnd'] != null
+              ? "${h['timeStart']} ~ ${h['timeEnd']}"
+              : h['timeStart'];
         }
 
         injectedTasks.add({

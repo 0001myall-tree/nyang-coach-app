@@ -22,6 +22,7 @@ import '../services/user_title_service.dart';
 import '../services/analytics_service.dart';
 import '../services/api_usage_limit_service.dart';
 import '../services/widget_sync_service.dart';
+import '../services/daily_reset_service.dart';
 
 // ─────────────────────────────────────────────────────────────
 // 데이터 모델 (웹앱 그대로)
@@ -767,6 +768,17 @@ class _TasksScreenState extends State<TasksScreen>
     }
 
     if (lastDate != today) {
+      final previousDayHadTasks = tasks.isNotEmpty;
+      final previousDayAllDone =
+          previousDayHadTasks && tasks.every((task) => task.done);
+      await DailyResetService.recordDayTransition(
+        prefs: prefs,
+        fromDate: lastDate,
+        toDate: today,
+        previousDayHadTasks: previousDayHadTasks,
+        previousDayAllDone: previousDayAllDone,
+      );
+
       // 1. Calculate streak
       final rawHistory = prefs.getString('nyang_history');
       List<dynamic> history = [];
