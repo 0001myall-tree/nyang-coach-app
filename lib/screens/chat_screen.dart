@@ -2661,6 +2661,16 @@ class _ChatScreenState extends State<ChatScreen>
     ].any(normalized.contains);
   }
 
+  bool _needsMasterLightGoalContext(String userText) {
+    if (!_coach.isMaster) return false;
+    if (_isAvoidanceMessage(userText)) return true;
+
+    return _messages.reversed
+        .where((message) => message.isUser)
+        .take(2)
+        .any((message) => _isAvoidanceMessage(message.text));
+  }
+
   int _conversationAvoidanceCountForTask(
     String taskName, {
     required bool allowGeneric,
@@ -4235,6 +4245,8 @@ class _ChatScreenState extends State<ChatScreen>
       userText,
       needsGoalContext,
     );
+    final needsLightGoalContext =
+        !needsGoalContext && _needsMasterLightGoalContext(userText);
 
     // 1. 마스터 프로필 (tier별 분기)
     final mpRaw = prefs.getString('nyang_master_profile');
@@ -4484,15 +4496,20 @@ class _ChatScreenState extends State<ChatScreen>
     }
 
     // 7. 이번 주/달 목표 (pro + master)
-    if (_coach.isMaster && needsGoalContext) {
+    if (_coach.isMaster && (needsGoalContext || needsLightGoalContext)) {
       final wgRaw = prefs.getString('nyang_week_goals');
       if (wgRaw != null) {
         try {
           final wg = jsonDecode(wgRaw) as List;
           if (wg.isNotEmpty) {
             sb.writeln('\n[이번 주 목표]');
-            for (final g in wg)
-              sb.writeln('- [${g['done'] == true ? 'V' : ' '}] ${g['text']}');
+            for (final g in wg) {
+              if (needsLightGoalContext) {
+                sb.writeln('- ${g['text']}');
+              } else {
+                sb.writeln('- [${g['done'] == true ? 'V' : ' '}] ${g['text']}');
+              }
+            }
           }
         } catch (_) {}
       }
@@ -4502,15 +4519,20 @@ class _ChatScreenState extends State<ChatScreen>
           final mg = jsonDecode(mgRaw) as List;
           if (mg.isNotEmpty) {
             sb.writeln('\n[이번 달 목표]');
-            for (final g in mg)
-              sb.writeln('- [${g['done'] == true ? 'V' : ' '}] ${g['text']}');
+            for (final g in mg) {
+              if (needsLightGoalContext) {
+                sb.writeln('- ${g['text']}');
+              } else {
+                sb.writeln('- [${g['done'] == true ? 'V' : ' '}] ${g['text']}');
+              }
+            }
           }
         } catch (_) {}
       }
     }
 
     // 8. 장기 비전 + 마일스톤 (pro + master)
-    if (_coach.isMaster && needsGoalContext) {
+    if (_coach.isMaster && (needsGoalContext || needsLightGoalContext)) {
       final visRaw = prefs.getString('nyang_visions');
       if (visRaw != null) {
         try {
@@ -4523,15 +4545,26 @@ class _ChatScreenState extends State<ChatScreen>
                   .where((m) => m['done'] == true)
                   .length;
               final dl = (v['deadline'] as Map<String, dynamic>?) ?? {};
-              sb.writeln(
-                '- 비전명: ${v['name']} (${dl['year']}년 ${dl['month']}월 ${dl['period']}까지)',
-              );
-              sb.writeln('  상태: 총 ${milestones.length}단계 중 ${doneCount}단계 완료');
+              if (needsLightGoalContext) {
+                sb.writeln('- 비전명: ${v['name']}');
+              } else {
+                sb.writeln(
+                  '- 비전명: ${v['name']} (${dl['year']}년 ${dl['month']}월 ${dl['period']}까지)',
+                );
+                sb.writeln(
+                  '  상태: 총 ${milestones.length}단계 중 ${doneCount}단계 완료',
+                );
+              }
               for (int i = 0; i < milestones.length; i++) {
                 final m = milestones[i];
-                sb.writeln(
-                  '    [${m['done'] == true ? 'V' : ' '}] ${i + 1}. ${m['text']}',
-                );
+                if (needsLightGoalContext) {
+                  sb.writeln('    - ${m['text']}');
+                } else {
+                  sb.writeln(
+                    '    [${m['done'] == true ? 'V' : ' '}] ${i + 1}. ${m['text']}',
+                  );
+                }
+                if (needsLightGoalContext) continue;
                 final actionCandidates = (m['actionCandidates'] as List?) ?? [];
                 final actionTitles = actionCandidates
                     .whereType<Map>()
@@ -4547,8 +4580,15 @@ class _ChatScreenState extends State<ChatScreen>
                 }
               }
             }
-            sb.writeln('\n비전과 마일스톤의 진행 상황을 대화 중에 자연스럽게 확인하거나 응원해주세요.');
-            sb.writeln('*[V] 표시된 마일스톤은 완료됨. 미완료([ ]) 항목만 언급할 것.');
+            if (needsLightGoalContext) {
+              sb.writeln('\n[귀찮음 상황의 목표 연결 규칙]');
+              sb.writeln(
+                '*사용자가 귀찮아하는 일이 위 목표와 자연스럽게 연결될 때만 그 의미를 짧게 짚어주세요. 억지로 연결하거나 길게 분석하지 마세요.',
+              );
+            } else {
+              sb.writeln('\n비전과 마일스톤의 진행 상황을 대화 중에 자연스럽게 확인하거나 응원해주세요.');
+              sb.writeln('*[V] 표시된 마일스톤은 완료됨. 미완료([ ]) 항목만 언급할 것.');
+            }
           }
         } catch (_) {}
       }
