@@ -375,6 +375,7 @@ class _ChatScreenState extends State<ChatScreen>
   int? _timerActiveInsertIndex;
   String? _usageLimitBanner;
   bool _awaitingBroWorkoutPreference = false;
+  bool _isCheckingVisionRecommendationAllowance = false;
 
   // 냥냥코치 비구독자 무료체험 단계 (0=시작 전, 1=인트로 완료, 2=업셀 완료)
   int _catFreeTrialStep = 0;
@@ -2432,6 +2433,61 @@ class _ChatScreenState extends State<ChatScreen>
     await prefs.setString(key, jsonEncode(trimmed));
   }
 
+  Future<String?> _visionRecommendationLimitMessage() async {
+    final prefs = await SharedPreferences.getInstance();
+    const key = 'nyang_vision_recommendation_history';
+    final raw = prefs.getString(key);
+    if (raw == null) return null;
+
+    try {
+      final resetHour = prefs.getDouble('nyang_reset_hour') ?? 3.0;
+      final now = DateTime.now();
+
+      String effectiveDateKey(DateTime date) {
+        var base = DateTime(date.year, date.month, date.day);
+        if (date.hour < resetHour) {
+          base = base.subtract(const Duration(days: 1));
+        }
+        return _dateKey(base);
+      }
+
+      final todayKey = effectiveDateKey(now);
+      final todayRecommendations = (jsonDecode(raw) as List)
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .where((item) {
+            final createdAt = DateTime.tryParse(
+              (item['createdAt'] ?? '').toString(),
+            );
+            final text = (item['text'] ?? '').toString().trim();
+            return createdAt != null &&
+                text.isNotEmpty &&
+                effectiveDateKey(createdAt) == todayKey;
+          })
+          .toList();
+
+      if (todayRecommendations.length >= 3) {
+        return '오늘의 새 행동 추천 3회를 모두 사용했어요.\n내일 다시 추천해드릴게요.';
+      }
+
+      if (todayRecommendations.isNotEmpty) {
+        final lastCreatedAt = DateTime.tryParse(
+          (todayRecommendations.last['createdAt'] ?? '').toString(),
+        );
+        if (lastCreatedAt != null) {
+          final availableAt = lastCreatedAt.add(const Duration(minutes: 10));
+          if (now.isBefore(availableAt)) {
+            final remainingMinutes = availableAt.difference(now).inSeconds;
+            final roundedMinutes = (remainingMinutes / 60).ceil().clamp(1, 10);
+            return '새 행동 추천은 10분마다 받을 수 있어요.\n$roundedMinutes분 후에 다시 확인해 주세요.';
+          }
+        }
+      }
+    } catch (_) {}
+
+    return null;
+  }
+
   String _normalizeTaskSuggestionText(String value) {
     return value
         .replaceAll(RegExp(r'\s+'), '')
@@ -3942,6 +3998,21 @@ class _ChatScreenState extends State<ChatScreen>
       return;
     }
 
+    if (isVisionNewActionFlow) {
+      if (_isCheckingVisionRecommendationAllowance) return;
+      _isCheckingVisionRecommendationAllowance = true;
+      final limitMessage = await _visionRecommendationLimitMessage();
+      if (!mounted) {
+        _isCheckingVisionRecommendationAllowance = false;
+        return;
+      }
+      if (limitMessage != null) {
+        _isCheckingVisionRecommendationAllowance = false;
+        _showUsageNotice(limitMessage);
+        return;
+      }
+    }
+
     final currentId = widget.coachId;
     final userMsg = ChatMessage(
       text: trimmed,
@@ -3977,6 +4048,9 @@ class _ChatScreenState extends State<ChatScreen>
         coachId: widget.coachId,
         usedApi: false,
       );
+      if (isVisionNewActionFlow) {
+        _isCheckingVisionRecommendationAllowance = false;
+      }
       return;
     }
 
@@ -4060,6 +4134,10 @@ class _ChatScreenState extends State<ChatScreen>
         );
       } else {
         _showError('실패: $e');
+      }
+    } finally {
+      if (isVisionNewActionFlow) {
+        _isCheckingVisionRecommendationAllowance = false;
       }
     }
   }
