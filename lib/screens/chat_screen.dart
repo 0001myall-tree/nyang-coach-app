@@ -76,6 +76,7 @@ class _ParsedReply {
   final List<String> chips;
   final int? timerConfirmMinutes;
   final String? timerConfirmTaskName;
+  final String? visionSourceId;
   final List<_SuggestedTask> suggestedTasks;
   final bool nightCallOffer;
   _ParsedReply({
@@ -83,6 +84,7 @@ class _ParsedReply {
     required this.chips,
     this.timerConfirmMinutes,
     this.timerConfirmTaskName,
+    this.visionSourceId,
     List<_SuggestedTask>? suggestedTasks,
     this.nightCallOffer = false,
   }) : suggestedTasks = suggestedTasks ?? [];
@@ -101,6 +103,7 @@ class _BroWorkoutLink {
 }
 
 class _VisionMilestoneContext {
+  final String sourceId;
   final String visionName;
   final int index;
   final Map<String, dynamic> milestone;
@@ -108,6 +111,7 @@ class _VisionMilestoneContext {
   final List<String> actionTitles;
 
   const _VisionMilestoneContext({
+    required this.sourceId,
     required this.visionName,
     required this.index,
     required this.milestone,
@@ -2302,11 +2306,13 @@ class _ChatScreenState extends State<ChatScreen>
     final chipRegex = RegExp(r'\[CHIPS:\s*(.+?)\]');
     final timerConfirmRegex = RegExp(r'\[TIMER_CONFIRM:(\d+)(?::([^\]]+))?\]');
     final taskRegex = RegExp(r'\[TASK:\s*(.+?)\]');
+    final visionSourceRegex = RegExp(r'\[VISION_SOURCE:\s*([^\]]+)\]');
     // CORE_REC 태그 파싱: [CORE_REC:{...}]
     final coreRecRegex = RegExp(r'\[CORE_REC:(\{.*?\})\]');
     List<String> chips = [];
     int? timerConfirmMinutes;
     String? timerConfirmTaskName;
+    String? visionSourceId;
     List<_SuggestedTask> suggestedTasks = [];
     bool nightCallOffer = false;
     String text = raw;
@@ -2368,6 +2374,12 @@ class _ChatScreenState extends State<ChatScreen>
       text = text.replaceAll(timerMatch.group(0)!, '').trim();
     }
 
+    final visionSourceMatch = visionSourceRegex.firstMatch(text);
+    if (visionSourceMatch != null) {
+      visionSourceId = visionSourceMatch.group(1)?.trim();
+      text = text.replaceAll(visionSourceMatch.group(0)!, '').trim();
+    }
+
     // [TASK: 할일명] 파싱 — 시간 표현 자동 분리
     for (final m in taskRegex.allMatches(raw)) {
       final rawTaskText = m.group(1)!.trim();
@@ -2386,9 +2398,38 @@ class _ChatScreenState extends State<ChatScreen>
       chips: chips,
       timerConfirmMinutes: timerConfirmMinutes,
       timerConfirmTaskName: timerConfirmTaskName,
+      visionSourceId: visionSourceId,
       suggestedTasks: suggestedTasks,
       nightCallOffer: nightCallOffer,
     );
+  }
+
+  Future<void> _saveVisionRecommendation(_ParsedReply parsed) async {
+    if (parsed.suggestedTasks.isEmpty) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    const key = 'nyang_vision_recommendation_history';
+    final history = <Map<String, dynamic>>[];
+    final raw = prefs.getString(key);
+    if (raw != null) {
+      try {
+        history.addAll(
+          (jsonDecode(raw) as List).whereType<Map>().map(
+            (item) => Map<String, dynamic>.from(item),
+          ),
+        );
+      } catch (_) {}
+    }
+
+    history.add({
+      'text': parsed.suggestedTasks.first.text,
+      'sourceId': parsed.visionSourceId ?? '',
+      'createdAt': DateTime.now().toIso8601String(),
+    });
+    final trimmed = history.length > 30
+        ? history.sublist(history.length - 30)
+        : history;
+    await prefs.setString(key, jsonEncode(trimmed));
   }
 
   String _normalizeTaskSuggestionText(String value) {
@@ -3533,6 +3574,7 @@ class _ChatScreenState extends State<ChatScreen>
     final isTodayVisionFlow =
         trimmed == '비전을 위한 오늘' ||
         (apiInputOverride?.startsWith('비전을 위한 오늘 - ') ?? false);
+    final isVisionNewActionFlow = apiInputOverride == '비전을 위한 오늘 - 새 행동 추천받기';
     if (!_coach.isMaster && _isListening) {
       await _stopListening();
       if (!mounted) return;
@@ -3848,6 +3890,10 @@ class _ChatScreenState extends State<ChatScreen>
       final suggestedTasks = await _filterDuplicateSuggestedTasks(
         parsed.suggestedTasks,
       );
+      if (!mounted || widget.coachId != currentId) return;
+      if (isVisionNewActionFlow) {
+        await _saveVisionRecommendation(parsed);
+      }
       if (!mounted || widget.coachId != currentId) return;
       setState(() {
         _messages.add(
@@ -4660,6 +4706,46 @@ class _ChatScreenState extends State<ChatScreen>
       '$todayStr / 실제 ${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')} (${dayNames[now.weekday % 7]}) ${now.hour}:${now.minute.toString().padLeft(2, '0')}',
     );
 
+    final recentRecommendationTexts = <String>[];
+    final recentSourceIds = <String>[];
+    final todayRecommendationTexts = <String>[];
+    final recommendationRaw = prefs.getString(
+      'nyang_vision_recommendation_history',
+    );
+    if (recommendationRaw != null) {
+      try {
+        final recommendations = (jsonDecode(recommendationRaw) as List)
+            .whereType<Map>()
+            .map((item) => Map<String, dynamic>.from(item))
+            .toList();
+        final recent = recommendations.length > 5
+            ? recommendations.sublist(recommendations.length - 5)
+            : recommendations;
+
+        for (final item in recent) {
+          final text = (item['text'] ?? '').toString().trim();
+          final sourceId = (item['sourceId'] ?? '').toString().trim();
+          final createdAt = DateTime.tryParse(
+            (item['createdAt'] ?? '').toString(),
+          );
+          if (text.isNotEmpty) {
+            recentRecommendationTexts.add(text);
+            if (createdAt != null && _dateKey(createdAt) == todayStr) {
+              todayRecommendationTexts.add(text);
+            }
+          }
+          if (sourceId.isNotEmpty) recentSourceIds.add(sourceId);
+        }
+
+        if (recentRecommendationTexts.isNotEmpty) {
+          sb.writeln('\n[최근 새 행동 추천 이력 - 오래된 순]');
+          for (final text in recentRecommendationTexts) {
+            sb.writeln('- ${clip(text, 90)}');
+          }
+        }
+      } catch (_) {}
+    }
+
     final tasksRaw = prefs.getString('nyang_tasks');
     final todayTaskNames = <String>{};
     if (tasksRaw != null) {
@@ -4782,15 +4868,16 @@ class _ChatScreenState extends State<ChatScreen>
     if (visRaw != null) {
       try {
         final visions = jsonDecode(visRaw) as List;
-        final visionNames = <String>[];
+        final visionNames = <MapEntry<String, String>>[];
         final milestoneCandidates = <_VisionMilestoneContext>[];
 
-        for (final vision in visions) {
+        for (int visionIndex = 0; visionIndex < visions.length; visionIndex++) {
+          final vision = visions[visionIndex];
           if (vision is! Map) continue;
           final visionName = (vision['name'] ?? '이름 없는 비전').toString().trim();
           if (visionName.isNotEmpty) {
             hasVision = true;
-            visionNames.add(visionName);
+            visionNames.add(MapEntry('vision_$visionIndex', visionName));
           }
           final milestones = (vision['milestones'] as List?) ?? [];
           if (milestones.isNotEmpty) hasMilestone = true;
@@ -4802,6 +4889,7 @@ class _ChatScreenState extends State<ChatScreen>
             if (text.isEmpty || milestone['done'] == true) continue;
 
             final context = _VisionMilestoneContext(
+              sourceId: 'vision_${visionIndex}_milestone_$i',
               visionName: visionName,
               index: i,
               milestone: milestone,
@@ -4817,21 +4905,33 @@ class _ChatScreenState extends State<ChatScreen>
 
         if (visionNames.isNotEmpty) {
           sb.writeln('\n[장기 비전 이름 - 메모가 약할 때 직접 행동 생성용]');
-          for (final name in visionNames.take(5)) {
-            sb.writeln('- $name');
+          for (final vision in visionNames.take(5)) {
+            sb.writeln('- [후보 ID: ${vision.key}] ${vision.value}');
           }
         }
 
-        milestoneCandidates.sort(compareMilestones);
+        final sourceRecency = recentSourceIds.reversed.toList();
+        int sourcePenalty(String sourceId) {
+          final index = sourceRecency.indexOf(sourceId);
+          return index < 0 ? 0 : sourceRecency.length - index;
+        }
+
+        milestoneCandidates.sort((a, b) {
+          final byRecentUse = sourcePenalty(
+            a.sourceId,
+          ).compareTo(sourcePenalty(b.sourceId));
+          if (byRecentUse != 0) return byRecentUse;
+          return compareMilestones(a, b);
+        });
 
         final selectedMilestones = milestoneCandidates.take(3).toList();
         if (selectedMilestones.isNotEmpty) {
-          sb.writeln('\n[새 행동 후보 마일스톤 - 실행 아이템 없는 미완료 마일스톤 중 날짜 가까운 3개]');
+          sb.writeln('\n[새 행동 후보 마일스톤 - 최근 추천 출처를 뒤로 돌린 최대 3개]');
           for (final item in selectedMilestones) {
             final milestoneText = (item.milestone['text'] ?? '').toString();
             final memoText = milestoneMemoText(item.milestone);
             sb.writeln(
-              '- ${item.visionName} > $milestoneText (${dateLabel(item.date)}): ${memoText.isEmpty ? '메모 없음. 제목에서 직접 작은 행동을 만들 것.' : clip(memoText, 420)}',
+              '- [후보 ID: ${item.sourceId}] ${item.visionName} > $milestoneText (${dateLabel(item.date)}) / 메모: ${memoText.isEmpty ? '없음. 제목에서 직접 작은 행동을 만들 것.' : clip(memoText, 420)}',
             );
           }
         }
@@ -4856,10 +4956,14 @@ class _ChatScreenState extends State<ChatScreen>
     sb.writeln(
       '- 오늘 할 일과 같거나 거의 같은 행동은 제안하지 말 것: ${todayTaskNames.take(12).join(', ')}',
     );
-    sb.writeln('- 실행 아이템이 있는 마일스톤은 이미 행동으로 전환된 것으로 보고 새 행동 추천 후보에서 완전히 제외할 것.');
-    sb.writeln('- 새 행동 후보 마일스톤은 위 3개만 참고하고, 그 밖의 마일스톤 메모 내용을 추측하지 말 것.');
     sb.writeln(
-      '- 메모가 없거나 약하면 장기 비전 이름에서 작은 행동을 직접 만들고, 그것도 애매하면 위 3개 마일스톤 제목에서 작은 행동을 직접 만들 것.',
+      '- 오늘 이미 추천한 행동과 표현만 바꾼 유사 행동도 다시 제안하지 말 것: ${todayRecommendationTexts.map((text) => clip(text, 70)).join(', ')}',
+    );
+    sb.writeln('- 위 최근 추천 이력과 유사한 행동은 가능한 한 피하고 다른 비전, 마일스톤, 행동 유형을 우선할 것.');
+    sb.writeln('- 실행 아이템이 있는 마일스톤은 이미 행동으로 전환된 것으로 보고 새 행동 추천 후보에서 완전히 제외할 것.');
+    sb.writeln('- 새 행동 후보 마일스톤은 위 후보만 참고하고, 그 밖의 마일스톤 메모 내용을 추측하지 말 것.');
+    sb.writeln(
+      '- 메모가 없거나 약하면 장기 비전 이름에서 작은 행동을 직접 만들고, 그것도 애매하면 위 마일스톤 제목에서 작은 행동을 직접 만들 것.',
     );
 
     return sb.toString();
@@ -5005,10 +5109,12 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
 2. 그다음 아래 우선순위로 오늘 새로 시작하면 좋은 행동 1개를 뽑으세요.
    - 오늘 할 일 현황에 이미 있는 항목과 같거나 거의 같은 행동은 새 행동으로 제안하지 마세요.
    - 실행 아이템이 있는 마일스톤은 이미 사용자가 행동으로 전환한 것으로 보고 새 행동 추천 후보에서 완전히 제외하세요. 해당 실행 아이템 제목도 말하지 마세요.
-   - [새 행동 후보 마일스톤 - 실행 아이템 없는 미완료 마일스톤 중 날짜 가까운 3개]에 제공된 제목과 메모만 마일스톤 근거로 참고하세요.
-   - 그 3개의 메모에 실행 목록, 참고할 것, 분석할 것, 만들어볼 것, 정리할 것이 있으면 우선 참고하세요.
+   - [새 행동 후보 마일스톤]에 제공된 제목과 메모만 마일스톤 근거로 참고하세요.
+   - 후보 메모에 실행 목록, 참고할 것, 분석할 것, 만들어볼 것, 정리할 것이 있으면 우선 참고하세요.
+   - [최근 새 행동 추천 이력]과 오늘 이미 추천한 행동을 확인하고, 표현만 바꾼 유사 행동이나 같은 행동 유형을 연속으로 추천하지 마세요.
+   - 같은 날 다시 요청했다면 직전과 다른 후보 ID를 우선 선택하세요. 다른 유효 후보가 전혀 없을 때만 같은 출처를 다시 사용할 수 있습니다.
    - 메모가 없거나 약하면 [장기 비전 이름 - 메모가 약할 때 직접 행동 생성용]에서 비전 이름 자체에 바로 이어지는 작은 행동을 직접 만드세요.
-   - 장기 비전 이름에서도 행동이 애매하면 위 3개 마일스톤 제목 자체에서 가장 자연스러운 작은 첫 행동을 직접 만드세요.
+   - 장기 비전 이름에서도 행동이 애매하면 위 후보 마일스톤 제목 자체에서 가장 자연스러운 작은 첫 행동을 직접 만드세요.
    - 장기 비전, 마일스톤, 월목표, 주목표가 전부 없으면 [TASK: ...]를 만들지 말고 목표 탭에서 장기 비전 1개를 입력하도록 짧게 유도하세요.
    - 비전/목표가 하나라도 있으면 사용자에게 되묻지 말고 반드시 행동 하나를 추천하세요.
    - 담당 비전/전담 코치 개념은 없습니다. 제공된 비전과 마일스톤을 날짜와 맥락 기준으로만 판단하세요.
@@ -5023,13 +5129,17 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
    - 플랫폼이나 도구를 임의로 찍지 마세요. 기록/비전/메모에 명확히 나온 경우에만 사용하고, 없으면 맥락에 맞는 구체 대상명을 고르세요. 예: 경쟁 계정, 비슷한 앱, 인기 글, 예제, 작업물, 루틴, 리뷰.
    - [TASK: ...] 안의 할 일명은 사용자가 다시 생각하지 않아도 바로 움직일 수 있게 "대상 + 수량 + 행동/분석 기준 + 결과물"을 포함하세요. 예: [TASK: 경쟁 계정 3곳 콘텐츠 특징 5가지 분석하기]
 4. 새 행동을 오늘 할 일에 추가할 수 있도록 [TASK: ...] 태그를 포함하세요. 단, 목표/비전 정보가 전부 없는 경우에는 [TASK]를 포함하지 마세요. 답변 본문에는 태그를 설명하지 마세요.
+5. 선택한 후보의 ID를 답변 끝에 [VISION_SOURCE: 후보ID] 형식으로 반드시 포함하세요. 이 태그는 앱에서 숨겨지므로 본문에서 태그 자체를 설명하지 마세요.
 
 *답변 방식:*
-1. 답변은 2문장으로만 작성하세요. 선택된 비서의 톤에 맞춰 차분하되 보고서처럼 딱딱하게 쓰지 마세요.
-2. 구조는 반드시 "최근 흐름을 짧게 짚는 1문장 + 오늘 할 구체 행동을 바로 제안하는 1문장"으로 만드세요.
+1. 답변은 2~3문장으로 작성하세요. 선택된 비서의 톤에 맞춰 차분하되 보고서처럼 딱딱하게 쓰지 마세요.
+2. 구조는 "최근 흐름을 짧게 짚는 1문장 + 근거와 함께 오늘 할 구체 행동을 제안하는 1~2문장"으로 만드세요.
+   - 마일스톤 메모에서 행동을 도출했다면 어느 비전의 어느 마일스톤 메모를 참고했는지 반드시 자연스럽게 밝히세요.
+   - 메모의 핵심 내용과 제안 행동이 어떻게 이어졌는지 짧게 설명하세요. 예: "'앱 출시' 마일스톤 메모에 적어둔 온보딩 참고 항목을 보고, 오늘은 비슷한 앱 2개의 첫 화면 흐름을 비교해보시죠."
+   - 메모가 없는 후보라면 메모를 봤다고 말하지 말고, 비전 또는 마일스톤 제목에서 첫 행동을 만들었다고 짧게 설명하세요.
    - "오늘의 비전 행동은", "비전상 가장 효율적입니다", "기대 효과가 발생합니다" 같은 제목형/보고서형 표현은 피하세요.
    - 판단 과정을 길게 설명하지 말고 선택지를 줄여주는 비서처럼 말하세요.
-   - "최근 OO 흐름은 잘 이어지고 있습니다. 오늘은 경쟁 계정 3곳의 콘텐츠 특징 5가지만 분석해보시죠."처럼 짧게 말하세요.
+   - "최근 OO 흐름은 잘 이어지고 있습니다. '앱 출시' 마일스톤 메모의 온보딩 참고 항목을 바탕으로, 오늘은 비슷한 앱 2개의 첫 화면 흐름을 비교해보시죠."처럼 짧게 말하세요.
    - 추천 행동 한 줄이 묻히지 않게, 본문에는 행동 후보를 여러 개 나열하지 마세요.
 3. 오늘 완료율, 오늘 미완료율, 오늘 아직 안 했다는 식의 평가 표현은 금지합니다.
 4. 단순 시간표나 전체 일정 배치는 하지 마세요.]''';
