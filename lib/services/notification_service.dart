@@ -114,7 +114,7 @@ class NotificationService {
     if (parts.length >= 4) {
       final coachId = parts[1];
       final soundName = parts[2].isEmpty ? null : parts[2];
-      
+
       String fireKey = '';
       String taskText = '';
       if (parts.length >= 5 && parts[3].startsWith('reminder_')) {
@@ -126,7 +126,8 @@ class NotificationService {
 
       if (fireKey.isNotEmpty) {
         final prefs = await SharedPreferences.getInstance();
-        final firedList = prefs.getStringList('nyang_fired_core_reminders') ?? [];
+        final firedList =
+            prefs.getStringList('nyang_fired_core_reminders') ?? [];
         if (!firedList.contains(fireKey)) {
           firedList.add(fireKey);
           await prefs.setStringList('nyang_fired_core_reminders', firedList);
@@ -174,7 +175,9 @@ class NotificationService {
           _openCoreReminder(payload);
           return;
         }
-        await _openMorningCall(payload);
+        if (payload.startsWith('morning:')) {
+          await _openMorningCall(payload);
+        }
       },
     );
 
@@ -203,7 +206,7 @@ class NotificationService {
         _openNightCall(payload);
       } else if (payload.startsWith('core:')) {
         _openCoreReminder(payload);
-      } else {
+      } else if (payload.startsWith('morning:')) {
         _openMorningCall(payload);
       }
     });
@@ -283,7 +286,7 @@ class NotificationService {
     if (scheduled.isBefore(now)) {
       scheduled = scheduled.add(const Duration(days: 1));
     }
-    
+
     // 1분 간격으로 3번 연속 울리도록 스케줄링 (id: 0, 1, 2)
     for (int i = 0; i < 3; i++) {
       final targetTime = scheduled.add(Duration(minutes: i));
@@ -565,7 +568,9 @@ class NotificationService {
       iOS: iosDetails,
     );
 
-    final scheduledDate = tz.TZDateTime.now(tz.local).add(Duration(seconds: seconds));
+    final scheduledDate = tz.TZDateTime.now(
+      tz.local,
+    ).add(Duration(seconds: seconds));
 
     await _plugin.zonedSchedule(
       id: 888,
@@ -649,7 +654,8 @@ class NotificationService {
     if (now.hour < resetHour) {
       baseToday = baseToday.subtract(const Duration(days: 1));
     }
-    final todayStr = '${baseToday.year}-${baseToday.month.toString().padLeft(2, '0')}-${baseToday.day.toString().padLeft(2, '0')}';
+    final todayStr =
+        '${baseToday.year}-${baseToday.month.toString().padLeft(2, '0')}-${baseToday.day.toString().padLeft(2, '0')}';
 
     // Helper list for alarms to schedule
     final List<Map<String, dynamic>> alarms = [];
@@ -743,7 +749,9 @@ class NotificationService {
     }
 
     // Sort alarms chronologically (ascending)
-    alarms.sort((a, b) => (a['time'] as DateTime).compareTo(b['time'] as DateTime));
+    alarms.sort(
+      (a, b) => (a['time'] as DateTime).compareTo(b['time'] as DateTime),
+    );
 
     // Schedule up to 100 alarms
     int notificationId = 1000;
@@ -754,7 +762,8 @@ class NotificationService {
       final dateKey = alarm['dateKey'] as String;
       final tzScheduled = tz.TZDateTime.from(targetDate, tz.local);
 
-      final fireKey = 'reminder_${alarmId}_${targetDate.toIso8601String()}_$dateKey';
+      final fireKey =
+          'reminder_${alarmId}_${targetDate.toIso8601String()}_$dateKey';
 
       await _plugin.zonedSchedule(
         id: notificationId,
