@@ -5823,8 +5823,9 @@ class _TasksScreenState extends State<TasksScreen>
   void _showMemoDialog(
     BuildContext context,
     MilestoneItem milestone,
-    StateSetter setModalState,
-  ) {
+    StateSetter setModalState, {
+    VoidCallback? onPersist,
+  }) {
     final coach = CoachConfigs.get(widget.coachId);
 
     showDialog(
@@ -5833,11 +5834,13 @@ class _TasksScreenState extends State<TasksScreen>
         return MilestoneMemoDialog(
           milestone: milestone,
           coach: coach,
-          onSave: (newMemo) {
-            setModalState(() {
-              milestone.memo = newMemo;
-            });
-            _saveVisions();
+          onSave: (_) {
+            setModalState(() {});
+            if (onPersist != null) {
+              onPersist();
+            } else {
+              _saveVisions();
+            }
           },
           onConvertAction: (action, type) {
             if (type == 'task_today') {
@@ -5908,7 +5911,11 @@ class _TasksScreenState extends State<TasksScreen>
                 'yyyy.MM.dd',
               ).format(DateTime.now());
             }
-            _saveVisions(); // Save the updated milestone actions
+            if (onPersist != null) {
+              onPersist();
+            } else {
+              _saveVisions(); // Save the updated milestone actions
+            }
           },
         );
       },
@@ -5921,15 +5928,37 @@ class _TasksScreenState extends State<TasksScreen>
     String selectedYear = vision?.deadline.year ?? '${DateTime.now().year + 1}';
     String selectedMonth = vision?.deadline.month ?? '1';
     String selectedPeriod = vision?.deadline.period ?? '말';
-    List<MilestoneItem> milestones =
-        vision?.milestones
-            .map((e) => MilestoneItem.fromJson(e.toJson()))
-            .toList() ??
-        [
-          MilestoneItem(text: ''),
-          MilestoneItem(text: ''),
-          MilestoneItem(text: ''),
-        ];
+    final draftToPersistedMilestone = <MilestoneItem, MilestoneItem>{};
+    final List<MilestoneItem> milestones;
+    if (vision != null) {
+      milestones = vision.milestones.map((persistedMilestone) {
+        final draft = MilestoneItem.fromJson(persistedMilestone.toJson());
+        draftToPersistedMilestone[draft] = persistedMilestone;
+        return draft;
+      }).toList();
+    } else {
+      milestones = [
+        MilestoneItem(text: ''),
+        MilestoneItem(text: ''),
+        MilestoneItem(text: ''),
+      ];
+    }
+
+    void persistMilestoneMemo(MilestoneItem draft) {
+      final persisted = draftToPersistedMilestone[draft];
+      if (persisted == null) return;
+      setState(() {
+        persisted.memo = draft.memo;
+        persisted.memoSections = draft.memoSections
+            ?.map((section) => MemoSection.fromJson(section.toJson()))
+            .toList();
+        persisted.actionCandidates = draft.actionCandidates
+            ?.map((action) => ActionCandidate.fromJson(action.toJson()))
+            .toList();
+        vision!.updatedAt = DateTime.now().toIso8601String();
+      });
+      _saveVisions();
+    }
 
     showModalBottomSheet(
       context: context,
@@ -6416,6 +6445,10 @@ class _TasksScreenState extends State<TasksScreen>
                                                       context,
                                                       m,
                                                       setModalState,
+                                                      onPersist: () =>
+                                                          persistMilestoneMemo(
+                                                            m,
+                                                          ),
                                                     );
                                                   },
                                                   child: const Padding(
@@ -6608,6 +6641,8 @@ class _TasksScreenState extends State<TasksScreen>
                                                     context,
                                                     m,
                                                     setModalState,
+                                                    onPersist: () =>
+                                                        persistMilestoneMemo(m),
                                                   );
                                                 },
                                                 child: Container(
