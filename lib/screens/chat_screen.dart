@@ -377,6 +377,7 @@ class _ChatScreenState extends State<ChatScreen>
   bool _awaitingBroWorkoutPreference = false;
   bool _isCheckingVisionRecommendationAllowance = false;
   bool _isCheckingNextActionAllowance = false;
+  bool _isCheckingScheduleEscortAllowance = false;
 
   // 냥냥코치 비구독자 무료체험 단계 (0=시작 전, 1=인트로 완료, 2=업셀 완료)
   int _catFreeTrialStep = 0;
@@ -2545,6 +2546,15 @@ class _ChatScreenState extends State<ChatScreen>
     );
   }
 
+  Future<String?> _scheduleEscortLimitMessage() {
+    return _featureUsageLimitMessage(
+      key: 'nyang_schedule_escort_usage_history',
+      dailyLimit: 3,
+      limitMessage: '오늘의 일정 에스코트 3회를 모두 사용했어요.\n내일 다시 이용해 주세요.',
+      cooldownLabel: '일정 에스코트',
+    );
+  }
+
   String _normalizeTaskSuggestionText(String value) {
     return value
         .replaceAll(RegExp(r'\s+'), '')
@@ -3882,6 +3892,8 @@ class _ChatScreenState extends State<ChatScreen>
     final isVisionNewActionFlow = apiInputOverride == '비전을 위한 오늘 - 새 행동 추천받기';
     final isNextActionFlow =
         trimmed == '지금 뭐하지?' || apiInputOverride == '지금 뭐하지?';
+    final isScheduleEscortFlow =
+        trimmed == '일정 에스코트' || apiInputOverride == '일정 에스코트';
     if (!_coach.isMaster && _isListening) {
       await _stopListening();
       if (!mounted) return;
@@ -4178,6 +4190,20 @@ class _ChatScreenState extends State<ChatScreen>
         return;
       }
     }
+    if (isScheduleEscortFlow) {
+      if (_isCheckingScheduleEscortAllowance) return;
+      _isCheckingScheduleEscortAllowance = true;
+      final limitMessage = await _scheduleEscortLimitMessage();
+      if (!mounted) {
+        _isCheckingScheduleEscortAllowance = false;
+        return;
+      }
+      if (limitMessage != null) {
+        _isCheckingScheduleEscortAllowance = false;
+        _showUsageNotice(limitMessage);
+        return;
+      }
+    }
 
     final currentId = widget.coachId;
     final userMsg = ChatMessage(
@@ -4220,6 +4246,9 @@ class _ChatScreenState extends State<ChatScreen>
       if (isNextActionFlow) {
         _isCheckingNextActionAllowance = false;
       }
+      if (isScheduleEscortFlow) {
+        _isCheckingScheduleEscortAllowance = false;
+      }
       return;
     }
 
@@ -4233,6 +4262,9 @@ class _ChatScreenState extends State<ChatScreen>
       }
       if (isNextActionFlow) {
         await _recordFeatureUsage(key: 'nyang_next_action_usage_history');
+      }
+      if (isScheduleEscortFlow) {
+        await _recordFeatureUsage(key: 'nyang_schedule_escort_usage_history');
       }
       if (!mounted || widget.coachId != currentId) return;
       final usageNotice = await ApiUsageLimitService.takeChatUsageNotice();
@@ -4319,6 +4351,9 @@ class _ChatScreenState extends State<ChatScreen>
       }
       if (isNextActionFlow) {
         _isCheckingNextActionAllowance = false;
+      }
+      if (isScheduleEscortFlow) {
+        _isCheckingScheduleEscortAllowance = false;
       }
     }
   }
