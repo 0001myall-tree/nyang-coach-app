@@ -2460,6 +2460,105 @@ class _ChatScreenState extends State<ChatScreen>
     }).toList();
   }
 
+  Future<bool> _isMasterTimerSuggestionEligible(
+    String? taskName, {
+    required bool userAuthorized,
+  }) async {
+    if (!_coach.isMaster) return true;
+    if (userAuthorized) return true;
+    final normalizedTaskName = _normalizeTaskSuggestionText(taskName ?? '');
+    if (normalizedTaskName.isEmpty) return false;
+
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString('nyang_tasks') ?? '[]';
+    try {
+      final tasks = jsonDecode(raw) as List;
+      return tasks.whereType<Map>().any((task) {
+        if (task['done'] == true) return false;
+        final deferredCount = (task['deferredCount'] as num?)?.toInt() ?? 0;
+        if (deferredCount < 2) return false;
+        final taskText = _normalizeTaskSuggestionText(
+          (task['text'] ?? '').toString(),
+        );
+        return taskText.isNotEmpty &&
+            (taskText == normalizedTaskName ||
+                taskText.contains(normalizedTaskName) ||
+                normalizedTaskName.contains(taskText));
+      });
+    } catch (_) {
+      return false;
+    }
+  }
+
+  bool _isMasterTimerAuthorizationResponse(String userText) {
+    if (!_coach.isMaster || _messages.length < 2) return false;
+    final previous = _messages[_messages.length - 2];
+    if (previous.isUser || !previous.text.contains('필요하면 타이머라도 띄워드릴까요?')) {
+      return false;
+    }
+    final normalized = userText.replaceAll(RegExp(r'\s+'), '').toLowerCase();
+    return [
+      '응',
+      '네',
+      '그래',
+      '좋아',
+      '띄워줘',
+      '켜줘',
+      '해줘',
+      '부탁해',
+    ].any(normalized.contains);
+  }
+
+  bool _isAvoidanceMessage(String text) {
+    final normalized = text.replaceAll(RegExp(r'\s+'), '').toLowerCase();
+    return [
+      '귀찮',
+      '하기싫',
+      '못하겠',
+      '미루고싶',
+      '나중에할',
+      '손이안가',
+      '시작하기싫',
+    ].any(normalized.contains);
+  }
+
+  int _conversationAvoidanceCountForTask(
+    String taskName, {
+    required bool allowGeneric,
+  }) {
+    final normalizedTask = _normalizeTaskSuggestionText(taskName);
+    final keywords = taskName
+        .split(RegExp(r'[\s/(),]+'))
+        .map(_normalizeTaskSuggestionText)
+        .map((word) => word.replaceFirst(RegExp(r'(하기|하다|해보기|하기로|할일)$'), ''))
+        .where((word) => word.length >= 2)
+        .toSet();
+
+    var count = 0;
+    final recentMessages = _messages.length > 30
+        ? _messages.sublist(_messages.length - 30)
+        : _messages;
+    for (int i = 0; i < recentMessages.length; i++) {
+      final message = recentMessages[i];
+      if (!message.isUser || !_isAvoidanceMessage(message.text)) continue;
+      final normalizedMessage = _normalizeTaskSuggestionText(message.text);
+      final explicitlyMatches =
+          normalizedTask.isNotEmpty &&
+          (normalizedMessage.contains(normalizedTask) ||
+              keywords.any(normalizedMessage.contains));
+      final previousCoachMentionedTask =
+          i > 0 &&
+          !recentMessages[i - 1].isUser &&
+          keywords.any(
+            _normalizeTaskSuggestionText(recentMessages[i - 1].text).contains,
+          );
+      if (explicitlyMatches || previousCoachMentionedTask || allowGeneric) {
+        count++;
+      }
+    }
+    return count;
+  }
+
   bool _isYesterdayIncompleteQuery(String input) {
     final compact = input.replaceAll(RegExp(r'\s+'), '');
     return compact.contains('어제') &&
@@ -3890,6 +3989,10 @@ class _ChatScreenState extends State<ChatScreen>
       final suggestedTasks = await _filterDuplicateSuggestedTasks(
         parsed.suggestedTasks,
       );
+      final masterTimerEligible = await _isMasterTimerSuggestionEligible(
+        parsed.timerConfirmTaskName,
+        userAuthorized: _isMasterTimerAuthorizationResponse(trimmed),
+      );
       if (!mounted || widget.coachId != currentId) return;
       if (isVisionNewActionFlow) {
         await _saveVisionRecommendation(parsed);
@@ -3901,8 +4004,12 @@ class _ChatScreenState extends State<ChatScreen>
         );
         _dynamicChips = parsed.chips.isNotEmpty ? parsed.chips : _coach.chips;
         if (_coach.isMaster) {
-          _timerConfirmMinutes = parsed.timerConfirmMinutes;
-          _timerConfirmTaskName = parsed.timerConfirmTaskName;
+          _timerConfirmMinutes = masterTimerEligible
+              ? parsed.timerConfirmMinutes
+              : null;
+          _timerConfirmTaskName = masterTimerEligible
+              ? parsed.timerConfirmTaskName
+              : null;
         } else {
           _timerConfirmMinutes = null;
           _timerConfirmTaskName = null;
@@ -4120,6 +4227,9 @@ class _ChatScreenState extends State<ChatScreen>
         allTasks = jsonDecode(tasksRaw) as List;
         if (allTasks.isNotEmpty) {
           sb.writeln('\n[오늘 할 일 현황]');
+          final incompleteTasks = allTasks
+              .where((task) => task['done'] != true)
+              .toList();
           for (final t in allTasks) {
             final done = t['done'] == true;
             final timeStr = t['time'] != null ? '${t['time']}' : '';
@@ -4146,16 +4256,33 @@ class _ChatScreenState extends State<ChatScreen>
                 : '';
             final isHabit = t['isHabit'] == true || t['category'] == 'habit';
             final isSchedule = t['category'] == 'schedule';
+            final deferredCount = (t['deferredCount'] as num?)?.toInt() ?? 0;
+            final deferredInfo = deferredCount > 0
+                ? ' / 앱 기록상 미루기 ${deferredCount}회'
+                : '';
+            final conversationAvoidanceCount = done
+                ? 0
+                : _conversationAvoidanceCountForTask(
+                    (t['text'] ?? '').toString(),
+                    allowGeneric: incompleteTasks.length == 1,
+                  );
+            final conversationAvoidanceInfo = conversationAvoidanceCount > 0
+                ? ' / 최근 대화상 귀찮음 표현 ${conversationAvoidanceCount}회'
+                : '';
             final typeLabel = isHabit
                 ? '습관'
                 : isSchedule
                 ? '일정'
                 : '일반 할 일';
             sb.writeln(
-              '- [${done ? 'V' : ' '}] [$typeLabel] ${t['text']}$timeInfo',
+              '- [${done ? 'V' : ' '}] [$typeLabel] ${t['text']}$timeInfo$deferredInfo$conversationAvoidanceInfo',
             );
           }
           sb.writeln('*[V] 표시된 항목은 완료됨. 완료 항목은 절대 다시 실행 유도하지 말 것.');
+          sb.writeln('*타이머 확인 카드는 "앱 기록상 미루기 2회 이상"으로 표시된 미완료 할 일에만 제안할 수 있음.');
+          sb.writeln(
+            '*"최근 대화상 귀찮음 표현 2회 이상"이지만 앱 기록상 미루기 2회 미만인 경우에는 카드를 띄우지 말고, 먼저 달랜 뒤 "필요하면 타이머라도 띄워드릴까요?"라고 말로만 물을 것. 이 경우 [TIMER_CONFIRM] 태그는 절대 출력하지 말 것.',
+          );
         }
       } catch (_) {}
     }
@@ -5005,6 +5132,13 @@ class _ChatScreenState extends State<ChatScreen>
     final contextString = useVisionNewActionContext
         ? await _buildVisionNewActionContextString()
         : await _buildContextString();
+    final timerOutputRule = _coach.isMaster
+        ? '''4. [TIMER_START] 태그는 절대 사용 금지.
+   - 사용자가 직접 "타이머 띄워줘", "15분 타이머 켜줘"처럼 명시적으로 요청한 경우에는 짧게 응답한 뒤 [TIMER_CONFIRM:분] 태그를 붙입니다. 시간이 없으면 15분을 기본값으로 사용합니다.
+   - 직전 답변에서 "필요하면 타이머라도 띄워드릴까요?"라고 물었고 사용자가 동의했다면 [TIMER_CONFIRM:분:할일이름]을 출력합니다.
+   - 코치가 먼저 [TIMER_CONFIRM:분:할일이름]을 출력할 수 있는 경우는 [오늘 할 일 현황]에 "앱 기록상 미루기 2회 이상"으로 표시된 동일한 미완료 할 일뿐입니다.
+   - 대화에서 같은 일을 귀찮다고 2회 이상 반복했더라도 앱 기록상 미루기 2회 미만이면 태그나 확인 카드를 제안하지 마세요. 먼저 짧게 달랜 뒤 "필요하면 타이머라도 띄워드릴까요?"라고 말로만 물으세요.'''
+        : '''4. [TIMER_START] 태그는 절대 사용 금지. 사용자가 직접 "타이머 띄워줘", "15분 타이머 켜줘"처럼 명시적으로 요청한 경우에는 목적, 컨디션, 일정, 시간을 캐묻지 말고 짧게 응답한 뒤 [TIMER_CONFIRM:분] 태그만 붙입니다. 시간이 없으면 15분을 기본값으로 사용합니다. 코치가 먼저 타이머 태그를 출력하지 마세요.''';
 
     final systemPromptWithChips =
         '''$baseSystemPrompt
@@ -5021,7 +5155,7 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
 2. 마크다운 문법(**, *, # 등) 절대 사용하지 말 것.
 3. 답변 끝에 자연스러운 빠른 답장 버튼 3개를 [CHIPS: 버튼1|버튼2|버튼3] 형식으로 추가하세요.
    예시: [CHIPS: 오늘 할 일 정하기|기분 이야기하기|그냥 얘기하자]
-4. [TIMER_START] 태그는 절대 사용 금지. 사용자가 직접 "타이머 띄워줘", "15분 타이머 켜줘"처럼 명시적으로 요청한 경우에는 목적, 컨디션, 일정, 시간을 캐묻지 말고 짧게 응답한 뒤 [TIMER_CONFIRM:분] 태그만 붙입니다. 시간이 없으면 15분을 기본값으로 사용합니다. 그 외에 코치가 먼저 타이머를 제안하는 경우에는 사용자가 같은 할 일을 2회 이상 반복 회피할 때만 [TIMER_CONFIRM:분:할일이름] 태그로 선택지를 제시할 수 있습니다. 예: [TIMER_CONFIRM:5:보고서 작성]. 처음 귀찮다거나 한 번만 언급한 경우에는 절대 먼저 제안하지 않습니다.
+$timerOutputRule
 5. 사용자가 특정 할 일을 언급하거나 해결 가능한 문제가 드러나고, 그걸 오늘 할 일로 등록할 만한 상황이라면 답변에 [TASK: 할일명] 태그를 포함하세요. 예: "5시에 청소해야지" → [TASK: 5시에 청소], "오후 3시에 회의가 있어" → [TASK: 오후 3시 회의], "SNS 반응이 안 좋아" → [TASK: SNS 콘텐츠 분석하기]. 억지로 추가하지 말고 사용자의 감정이나 문제 상황에서 자연스럽게 이어지는 작은 행동일 때만 사용하세요.$halmaeHint''';
 
     String effectiveUserText = userText;
