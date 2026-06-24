@@ -4374,22 +4374,6 @@ class _ChatScreenState extends State<ChatScreen>
                     .toList();
                 if (actionTitles.isNotEmpty) {
                   sb.writeln('      실행 아이템: ${actionTitles.join(', ')}');
-                } else {
-                  final memo = (m['memo'] ?? '').toString().trim();
-                  if (memo.isNotEmpty) {
-                    sb.writeln('      메모: $memo');
-                  }
-                  final memoSections = (m['memoSections'] as List?) ?? [];
-                  for (final section in memoSections) {
-                    if (section is! Map) continue;
-                    final title = (section['title'] ?? '').toString().trim();
-                    final content = (section['content'] ?? '')
-                        .toString()
-                        .trim();
-                    if (title.isEmpty && content.isEmpty) continue;
-                    final sectionLabel = title.isNotEmpty ? title : '메모';
-                    sb.writeln('      $sectionLabel: $content');
-                  }
                 }
               }
             }
