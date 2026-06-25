@@ -3310,7 +3310,6 @@ class _TasksScreenState extends State<TasksScreen>
   // ── 휴무 설정 (Vacation) 모달 ──────────────────────────────
   void _showVacationModal() {
     String currentScreen = 'selection';
-    String selectedStyle = vacationInfo?['restType'] ?? 'quiet';
 
     // Range State
     DateTime? startDate;
@@ -3459,7 +3458,6 @@ class _TasksScreenState extends State<TasksScreen>
                       }
                       setState(() {
                         vacationInfo = {
-                          'restType': selectedStyle,
                           'type': 'range',
                           'start': startDate!.toIso8601String(),
                           'end': endDate!.toIso8601String(),
@@ -3576,7 +3574,6 @@ class _TasksScreenState extends State<TasksScreen>
                       }
                       setState(() {
                         vacationInfo = {
-                          'restType': selectedStyle,
                           'type': 'regular',
                           'days': selectedDays,
                         };
@@ -3645,112 +3642,6 @@ class _TasksScreenState extends State<TasksScreen>
                     ],
                   ),
                   const SizedBox(height: 24),
-                  // 스타일 선택
-                  Text(
-                    '✨ 쉬는 스타일 선택',
-                    style: GoogleFonts.notoSansKr(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w800,
-                      color: const Color(0xFF3D3A4E),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: GestureDetector(
-                          onTap: () =>
-                              setModalState(() => selectedStyle = 'quiet'),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(vertical: 20),
-                            decoration: BoxDecoration(
-                              color: selectedStyle == 'quiet'
-                                  ? const Color(0xFFF5F3FF)
-                                  : Colors.white,
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(
-                                color: selectedStyle == 'quiet'
-                                    ? const Color(0xFF8B7CFF)
-                                    : const Color(0xFFE8E3F8),
-                              ),
-                            ),
-                            child: Column(
-                              children: [
-                                Image.asset(
-                                  'assets/images/rest_quiet.png',
-                                  width: 48,
-                                  height: 48,
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  '조용히 쉬기',
-                                  style: GoogleFonts.notoSansKr(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w800,
-                                    color: const Color(0xFF3D3A4E),
-                                  ),
-                                ),
-                                Text(
-                                  '방해 없이 푹 쉬어요',
-                                  style: GoogleFonts.notoSansKr(
-                                    fontSize: 11,
-                                    color: const Color(0xFFA0A0B0),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: GestureDetector(
-                          onTap: () =>
-                              setModalState(() => selectedStyle = 'helper'),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(vertical: 20),
-                            decoration: BoxDecoration(
-                              color: selectedStyle == 'helper'
-                                  ? const Color(0xFFF5F3FF)
-                                  : Colors.white,
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(
-                                color: selectedStyle == 'helper'
-                                    ? const Color(0xFF8B7CFF)
-                                    : const Color(0xFFE8E3F8),
-                              ),
-                            ),
-                            child: Column(
-                              children: [
-                                Image.asset(
-                                  'assets/images/rest_helper.png',
-                                  width: 48,
-                                  height: 48,
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  '회복 도우미',
-                                  style: GoogleFonts.notoSansKr(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w800,
-                                    color: const Color(0xFF3D3A4E),
-                                  ),
-                                ),
-                                Text(
-                                  '가벼운 힐링 케어',
-                                  style: GoogleFonts.notoSansKr(
-                                    fontSize: 11,
-                                    color: const Color(0xFFA0A0B0),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 28),
                   // 휴식 기간 선택
                   Text(
                     '휴식 기간 선택',
@@ -3769,7 +3660,6 @@ class _TasksScreenState extends State<TasksScreen>
                     onTap: () {
                       setState(() {
                         vacationInfo = {
-                          'restType': selectedStyle,
                           'type': 'today',
                           'date': _getTodayStr(),
                         };

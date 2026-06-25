@@ -846,7 +846,6 @@ class _ChatScreenState extends State<ChatScreen>
     await prefs.setString(
       'nyang_vacation',
       jsonEncode({
-        'restType': 'quiet',
         'type': 'today',
         'date': todayStr,
         'source': '${widget.coachId}_rest_offer',
@@ -7965,6 +7964,8 @@ $timerOutputRule
   // ── 입력창 ───────────────────────────────────────────────
   Widget _buildInputArea() {
     final isFriends = !_coach.isMaster;
+    final isMasterVacation = _coach.isMaster && widget.vacationInfo != null;
+    final isImmersiveInput = isFriends || isMasterVacation;
     final isNyang = widget.coachId == 'cat';
     final isGirlfriend = widget.coachId == 'girlfriend';
     final girlfriendPink = _coach.accentColor;
@@ -7974,8 +7975,8 @@ $timerOutputRule
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
       decoration: BoxDecoration(
-        color: isFriends ? Colors.transparent : Colors.white,
-        border: isFriends
+        color: isImmersiveInput ? Colors.transparent : Colors.white,
+        border: isImmersiveInput
             ? null
             : const Border(top: BorderSide(color: Color(0xFFF0EEF8))),
       ),
@@ -8016,7 +8017,7 @@ $timerOutputRule
                         ? Colors.redAccent.withOpacity(0.15)
                         : (isNyang
                               ? Colors.white.withOpacity(0.3)
-                              : (isFriends
+                              : (isImmersiveInput
                                     ? Colors.white.withOpacity(0.2)
                                     : Colors.white)),
                     borderRadius: BorderRadius.circular(22),
@@ -8025,14 +8026,16 @@ $timerOutputRule
                           ? Colors.redAccent
                           : (isNyang
                                 ? _coach.accentColor.withOpacity(0.6)
-                                : (isFriends
+                                : (isImmersiveInput
                                       ? (isGirlfriend
                                             ? girlfriendPink.withOpacity(0.45)
-                                            : Colors.white.withOpacity(0.3))
+                                            : Colors.white.withOpacity(
+                                                isMasterVacation ? 0.6 : 0.3,
+                                              ))
                                       : masterLavenderBorder)),
                       width: _isListening ? 2.0 : 1.2,
                     ),
-                    boxShadow: isFriends
+                    boxShadow: isImmersiveInput
                         ? null
                         : [
                             BoxShadow(
@@ -8065,7 +8068,9 @@ $timerOutputRule
                   decoration: BoxDecoration(
                     color: isFriends
                         ? Colors.white.withOpacity(0.25)
-                        : Colors.white,
+                        : (isMasterVacation
+                              ? Colors.white.withOpacity(0.58)
+                              : Colors.white),
                     borderRadius: BorderRadius.circular(24),
                     border: Border.all(
                       color: isNyang
@@ -8074,7 +8079,9 @@ $timerOutputRule
                                 ? (isGirlfriend
                                       ? girlfriendPink.withOpacity(0.45)
                                       : Colors.white.withOpacity(0.3))
-                                : masterLavenderBorder),
+                                : (isMasterVacation
+                                      ? Colors.white.withOpacity(0.68)
+                                      : masterLavenderBorder)),
                       width: 1.2,
                     ),
                   ),
