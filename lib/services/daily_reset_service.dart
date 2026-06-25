@@ -126,6 +126,17 @@ class DailyResetService {
       }
       await prefs.setInt('nyang_streak', streak);
 
+      // '오늘만 쉬기'는 이전 활동일의 기록과 연속 출석을 보호한 뒤 자동 종료합니다.
+      if (rawVacation != null) {
+        try {
+          final vacation = jsonDecode(rawVacation) as Map<String, dynamic>;
+          if (vacation['type'] == 'today' &&
+              vacation['date']?.toString() != today) {
+            await prefs.remove('nyang_vacation');
+          }
+        } catch (_) {}
+      }
+
       // 2. Clear tasks in preferences
       await prefs.setString('nyang_tasks', '[]');
       await prefs.setString('nyang_core_tasks', '[]');

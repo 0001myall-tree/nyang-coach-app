@@ -2794,10 +2794,8 @@ class _ChatScreenState extends State<ChatScreen>
     if (coachSwitchMatch != null) {
       coachSwitchTarget = coachSwitchMatch.group(1)?.trim();
       text = text.replaceAll(coachSwitchMatch.group(0)!, '').trim();
-      if (coachSwitchTarget == 'cat') {
-        suppressDefaultChips = false;
-        chips = ['🐱 냥냥코치와 이야기하기'];
-      }
+      suppressDefaultChips = true;
+      chips = [];
     }
 
     // 나이트콜 제안 시 전용 버튼 강제 주입
@@ -6508,7 +6506,7 @@ $timerOutputRule
 
     final isVacation = widget.vacationInfo != null;
     final chatBackgroundColor = (_coach.isMaster && !isVacation)
-        ? const Color(0xFFFAF5EF)
+        ? const Color(0xFFEDF7F4)
         : Colors.transparent;
 
     return Stack(
@@ -6554,13 +6552,9 @@ $timerOutputRule
                         !((_dynamicChips.contains('🌙 오늘은 쉬어가기') &&
                             _dynamicChips.contains('🐾 오늘은 조금만 하기') &&
                             _dynamicChips.length == 2)) &&
-                        !(_coachSwitchTarget != null &&
-                            _dynamicChips.length == 1 &&
-                            _dynamicChips.contains('🐱 낥낥코치와 이야기하기')) &&
+                        _coachSwitchTarget == null &&
                         ((_dynamicChips.contains('🌙 오늘은 쉬어가기') &&
                                 _dynamicChips.contains('🐾 오늘은 조금만 하기')) ||
-                            (_coachSwitchTarget != null &&
-                                _dynamicChips.isNotEmpty) ||
                             (!_coach.isMaster &&
                                 (_dynamicChips.isNotEmpty ||
                                     _coach.chips.isNotEmpty))))
@@ -7502,10 +7496,13 @@ $timerOutputRule
       },
     );
 
-    // 마스터 비서는 은은한 크림톤 배경
+    // 마스터 비서는 은은한 민트톤 배경
     if (_coach.isMaster) {
       final isVacationBg = widget.vacationInfo != null;
-      return ColoredBox(color: isVacationBg ? Colors.transparent : const Color(0xFFFAF5EF), child: list);
+      return ColoredBox(
+        color: isVacationBg ? Colors.transparent : const Color(0xFFEDF7F4),
+        child: list,
+      );
     }
 
     // 프렌즈는 배경 투명 (main_tab_screen에서 전체 배경 처리)
@@ -7783,50 +7780,46 @@ $timerOutputRule
 
   // ── 빠른 답장 칩 (동적) ──────────────────────────────────
 
-
-  // 낥낥코치 연결 말풍선 (switchTarget 있을 때)
+  // 냥냥코치 연결 말풍선 (switchTarget 있을 때)
   Widget _buildNyangSwitchBubble() {
     final switchTarget = _coachSwitchTarget;
     if (switchTarget == null) return const SizedBox.shrink();
-    final accent = _coach.accentColor;
+    const lavender = Color(0xFF8B7CF6);
+    const lavenderLight = Color(0xFFF0ECFF);
+    const lavenderBorder = Color(0xFFCFC5FF);
     return Align(
       alignment: Alignment.centerLeft,
       child: Container(
         margin: const EdgeInsets.fromLTRB(16, 4, 60, 8),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.95),
-          borderRadius: const BorderRadius.only(
-            topLeft: Radius.circular(4),
-            topRight: Radius.circular(20),
-            bottomLeft: Radius.circular(20),
-            bottomRight: Radius.circular(20),
-          ),
-          border: Border.all(color: accent.withOpacity(0.15)),
+          color: lavenderLight,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: lavenderBorder, width: 1.2),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.06),
-              blurRadius: 12,
-              offset: const Offset(0, 3),
+              color: lavender.withOpacity(0.16),
+              blurRadius: 14,
+              offset: const Offset(0, 4),
             ),
           ],
         ),
         child: GestureDetector(
           onTap: () => widget.onSwitchCoach?.call(switchTarget),
           child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 11),
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
             decoration: BoxDecoration(
-              color: accent.withOpacity(0.06),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: accent.withOpacity(0.18)),
+              color: lavender,
+              borderRadius: BorderRadius.circular(15),
             ),
             child: Text(
-              '🐱 낥낥코치와 이야기하기',
+              '🐱 냥냥코치와 이야기하기',
               textAlign: TextAlign.center,
               style: GoogleFonts.notoSansKr(
                 fontSize: 14,
-                fontWeight: FontWeight.w700,
-                color: accent,
+                fontWeight: FontWeight.w800,
+                color: Colors.white,
               ),
             ),
           ),
@@ -7930,11 +7923,6 @@ $timerOutputRule
           final chipText = _coach.accentColor;
           return GestureDetector(
             onTap: () {
-              final switchTarget = _coachSwitchTarget;
-              if (switchTarget != null && chip == '🐱 냥냥코치와 이야기하기') {
-                widget.onSwitchCoach?.call(switchTarget);
-                return;
-              }
               if (chip == '🌙 오늘은 쉬어가기') {
                 _activateRestDay();
                 return;

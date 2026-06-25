@@ -1268,10 +1268,10 @@ class _MainTabScreenState extends State<MainTabScreen>
         if (isVacation)
           Positioned.fill(
             child: Image.asset(
-              'assets/images/vacation_bg.jpg',
+              'assets/images/vacationmaste_bg.jpg',
               fit: BoxFit.cover,
               errorBuilder: (_, __, ___) =>
-                  Container(color: const Color(0xFF1B2140)),
+                  Container(color: const Color(0xFFDFEEDF)),
             ),
           ),
         if (!isVacation) ...[
