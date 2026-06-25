@@ -6551,7 +6551,6 @@ $timerOutputRule
                               _coachSwitchTarget != null &&
                               _dynamicChips.length == 1 &&
                               _dynamicChips.contains('🐱 낥낥코치와 이야기하기'))
-                            _buildNyangSwitchBubble(),
                         ],
                       ),
                     ),
@@ -7476,7 +7475,8 @@ $timerOutputRule
       itemCount:
           _messages.length +
           (_isLoading ? 1 : 0) +
-          (_timerActiveMinutes != null ? 1 : 0),
+          (_timerActiveMinutes != null ? 1 : 0) +
+          (_coachSwitchTarget != null ? 1 : 0),
       itemBuilder: (ctx, i) {
         if (_timerActiveMinutes != null && i == timerIndex) {
           return Padding(
@@ -7499,13 +7499,17 @@ $timerOutputRule
         if (_isLoading && messageIndex == _messages.length) {
           return _buildTypingIndicator();
         }
+        if (_coachSwitchTarget != null && messageIndex == _messages.length) {
+          return _buildNyangSwitchBubble();
+        }
         return _buildBubble(_messages[messageIndex]);
       },
     );
 
     // 마스터 비서는 은은한 크림톤 배경
     if (_coach.isMaster) {
-      return ColoredBox(color: const Color(0xFFFAF5EF), child: list);
+      final isVacationBg = widget.vacationInfo != null;
+      return ColoredBox(color: isVacationBg ? Colors.transparent : const Color(0xFFFAF5EF), child: list);
     }
 
     // 프렌즈는 배경 투명 (main_tab_screen에서 전체 배경 처리)
