@@ -6547,10 +6547,6 @@ $timerOutputRule
                               _dynamicChips.contains('🐾 오늘은 조금만 하기') &&
                               _dynamicChips.length == 2)
                             _buildVacationSuggestBubble(),
-                          if (!_suppressDefaultChips &&
-                              _coachSwitchTarget != null &&
-                              _dynamicChips.length == 1 &&
-                              _dynamicChips.contains('🐱 낥낥코치와 이야기하기'))
                         ],
                       ),
                     ),
