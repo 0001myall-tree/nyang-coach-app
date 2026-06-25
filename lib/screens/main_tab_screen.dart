@@ -123,11 +123,13 @@ class MainTabScreen extends StatefulWidget {
   final String coachId;
   final int initialDrawerIndex;
   final String? initialBottomSheet;
+  final String? handoffFromCoachId;
   const MainTabScreen({
     super.key,
     required this.coachId,
     this.initialDrawerIndex = 0,
     this.initialBottomSheet,
+    this.handoffFromCoachId,
   });
 
   @override
@@ -233,6 +235,25 @@ class _MainTabScreenState extends State<MainTabScreen>
       _logoTapTimer?.cancel();
       _showDebugPlanSelector();
     }
+  }
+
+  Future<void> _switchCoachFromChat(String coachId) async {
+    final userData = await UserDataService.load();
+    if (!userData.canAccessCoach(coachId)) return;
+
+    await UserDataService.setSelectedCoach(coachId);
+    if (!mounted) return;
+    final handoffFromCoachId = widget.coachId == 'sec_male' && coachId == 'cat'
+        ? widget.coachId
+        : null;
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (_) => MainTabScreen(
+          coachId: coachId,
+          handoffFromCoachId: handoffFromCoachId,
+        ),
+      ),
+    );
   }
 
   void _showOwnedCoachesDropdown() async {
@@ -968,6 +989,11 @@ class _MainTabScreenState extends State<MainTabScreen>
       vacationInfo: _vacationInfo,
       controller: _chatController,
       onOpenDrawer: () => setState(() => _openDrawerIndex = 1),
+      onSwitchCoach: _switchCoachFromChat,
+      onVacationChanged: () {
+        _loadVacation();
+      },
+      handoffFromCoachId: widget.handoffFromCoachId,
     ),
     const TasksPlaceholderScreen(),
     RecordsScreen(coachId: widget.coachId),
@@ -1108,7 +1134,7 @@ class _MainTabScreenState extends State<MainTabScreen>
         child: Stack(
           children: [
             if (isVacation)
-              Positioned.fill(child: Container(color: const Color(0xFF1B2140))),
+              Positioned.fill(child: Container(color: Colors.transparent)),
             // 오버레이 제거됨 (원본 이미지 선명도 유지)
             // 앱바 내용
             SafeArea(

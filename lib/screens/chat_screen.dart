@@ -75,6 +75,8 @@ class _ParsedScheduleRegistration {
 class _ParsedReply {
   final String text;
   final List<String> chips;
+  final bool suppressDefaultChips;
+  final String? coachSwitchTarget;
   final int? timerConfirmMinutes;
   final String? timerConfirmTaskName;
   final String? visionSourceId;
@@ -83,6 +85,8 @@ class _ParsedReply {
   _ParsedReply({
     required this.text,
     required this.chips,
+    this.suppressDefaultChips = false,
+    this.coachSwitchTarget,
     this.timerConfirmMinutes,
     this.timerConfirmTaskName,
     this.visionSourceId,
@@ -314,12 +318,18 @@ class _LocalResponses {
 class ChatScreen extends StatefulWidget {
   final String coachId;
   final VoidCallback? onOpenDrawer;
+  final ValueChanged<String>? onSwitchCoach;
+  final VoidCallback? onVacationChanged;
+  final String? handoffFromCoachId;
   final dynamic vacationInfo;
   final ChatScreenController? controller;
   const ChatScreen({
     super.key,
     required this.coachId,
     this.onOpenDrawer,
+    this.onSwitchCoach,
+    this.onVacationChanged,
+    this.handoffFromCoachId,
     this.vacationInfo,
     this.controller,
   });
@@ -360,6 +370,8 @@ class _ChatScreenState extends State<ChatScreen>
   final _scrollCtrl = ScrollController();
   final List<ChatMessage> _messages = [];
   List<String> _dynamicChips = [];
+  bool _suppressDefaultChips = false;
+  String? _coachSwitchTarget;
   bool _isLoading = false;
   late CoachConfig _coach;
 
@@ -551,6 +563,379 @@ class _ChatScreenState extends State<ChatScreen>
       default:
         return '함께 가자';
     }
+  }
+
+  String _normalizeRestText(String text) {
+    return text.replaceAll(RegExp(r'\s+'), '').toLowerCase();
+  }
+
+  bool _containsStrongRestSignal(String text) {
+    final normalized = _normalizeRestText(text);
+    const signals = [
+      '우울',
+      '무기력',
+      '지쳤',
+      '지쳐',
+      '번아웃',
+      '아무것도하기싫',
+      '기운없',
+      '힘이없',
+      '완전방전',
+    ];
+    return signals.any(normalized.contains);
+  }
+
+  bool _containsAnyRestSignal(String text) {
+    final normalized = text.replaceAll(RegExp(r'\s+'), '').toLowerCase();
+    const signals = [
+      '우울',
+      '무기력',
+      '지쳤',
+      '지쳐',
+      '피곤',
+      '힘들',
+      '벅차',
+      '지침',
+      '너무피곤',
+      '번아웃',
+      '아무것도하기싫',
+      '기운없',
+      '힘이없',
+      '완전방전',
+    ];
+    return signals.any(normalized.contains);
+  }
+
+  bool _containsExecutionIntent(String text) {
+    final normalized = _normalizeRestText(text);
+    if (normalized.contains('아무것도하기싫')) return false;
+    const signals = [
+      '그래도할',
+      '그래도하고싶',
+      '그래도해야',
+      '해야해',
+      '해야돼',
+      '해야겠',
+      '해야하는데',
+      '할래',
+      '할거야',
+      '해볼래',
+      '해볼게',
+      '시작할게',
+      '시작하고싶',
+      '끝내고싶',
+      '마무리하고싶',
+      '이것만은',
+      '조금이라도할',
+      '5분만',
+      '오분만',
+      '뭐부터할',
+      '도와주면할',
+    ];
+    return signals.any(normalized.contains);
+  }
+
+  bool _hasRepeatedRecentRestSignals(String currentText) {
+    if (!_containsAnyRestSignal(currentText)) return false;
+    final recentUserMessages = _messages
+        .where((message) => message.isUser)
+        .toList()
+        .reversed
+        .take(6);
+    return recentUserMessages.any(
+      (message) => _containsAnyRestSignal(message.text),
+    );
+  }
+
+  bool get _canProactivelyOfferRest => const {
+    'cat',
+    'boyfriend',
+    'girlfriend',
+    'halmae',
+    'bro',
+    'sec_female',
+  }.contains(widget.coachId);
+
+  String _restOfferMessage() {
+    return switch (widget.coachId) {
+      'boyfriend' => '요 며칠 진짜 열심히 한 거 내가 다 봤어.\n계속 달리면 나도 걱정돼.',
+      'girlfriend' => '오빠 요 며칠 정말 열심히 한 거 내가 다 봤어.\n계속 달리면 나도 걱정돼.',
+      'halmae' => '우리 새끼 요 며칠 애쓴 거 할미가 다 봤다.\n계속 그러다 몸 상할까 걱정이다.',
+      'bro' => '야, 요 며칠 빡세게 달린 거 내가 다 봤다.\n계속 밀어붙이면 퍼진다.',
+      'sec_female' => '대표님, 요 며칠 꾸준히 달려오신 것 제가 확인했어요.\n계속 무리하시면 컨디션이 걱정됩니다.',
+      _ => '요 며칠 열심히 한 거 냥이가 다 봤다냥.\n계속 달리면 냥이도 걱정된다냥.',
+    };
+  }
+
+  String _vacationActivatedMessage() {
+    return switch (widget.coachId) {
+      'boyfriend' => '오늘은 휴무로 하자. 오늘은 할 일 체크 안 할 테니까 아무 걱정하지 말고 푹 쉬어.',
+      'girlfriend' => '오빠, 오늘은 휴무로 하자. 오늘은 할 일 체크 안 할 테니까 아무 걱정하지 말고 푹 쉬어 🩷',
+      'halmae' => '오늘은 휴무로 하자, 우리 새끼. 오늘은 할 일 체크 안 할 테니 아무 걱정 말고 푹 쉬어라.',
+      'bro' => '오늘은 휴무다. 할 일 체크 안 들어가니까 걱정 말고 제대로 쉬어.',
+      'sec_male' => '오늘은 휴무로 처리하겠습니다, 대표님. 오늘은 할 일 체크에서 제외되니 아무 걱정 없이 푹 쉬십시오.',
+      'sec_female' => '오늘은 휴무로 할게요, 대표님. 오늘은 할 일 체크에서 제외되니까 아무 걱정 말고 푹 쉬세요.',
+      _ => '오늘은 휴무로 하자냥. 오늘은 할 일 체크 안 할 테니까 아무 걱정하지 말고 푹 쉬어도 된다냥.',
+    };
+  }
+
+  String _lightDayMessage() {
+    return switch (widget.coachId) {
+      'boyfriend' => '알겠어. 오늘은 욕심내지 말고 할 수 있는 만큼만 같이 가자.',
+      'girlfriend' => '알겠어 오빠. 오늘은 욕심내지 말고 할 수 있는 만큼만 같이 가자 🩷',
+      'halmae' => '그래, 우리 새끼. 오늘은 욕심내지 말고 할 수 있는 만큼만 하자.',
+      'bro' => '오케이. 오늘은 욕심내지 말고 딱 할 수 있는 만큼만 가자.',
+      'sec_female' => '알겠습니다, 대표님. 오늘은 범위를 줄이고 할 수 있는 만큼만 진행해요.',
+      _ => '알겠다냥. 오늘은 욕심내지 말고 할 수 있는 만큼만 같이 가자냥.',
+    };
+  }
+
+  String _vacationCancelledMessage() {
+    return switch (widget.coachId) {
+      'boyfriend' =>
+        '알겠어. 휴무는 취소했어. 다시 해보고 싶은 마음이 들었으면 처음부터 다 하려고 하지 말고 천천히 돌아가자.',
+      'girlfriend' => '알겠어 오빠. 휴무는 취소했어. 처음부터 다 하려고 하지 말고 천천히 돌아가자 🩷',
+      'halmae' => '알았다, 우리 새끼. 휴무는 취소했으니 처음부터 무리하지 말고 천천히 돌아가자.',
+      'bro' => '오케이, 휴무 취소했다. 처음부터 풀파워로 가지 말고 천천히 복귀하자.',
+      'sec_male' => '휴무를 해제했습니다, 대표님. 처음부터 모든 일정을 처리하려 하지 마시고 천천히 복귀하시죠.',
+      'sec_female' => '휴무를 해제했어요, 대표님. 처음부터 다 하려고 하지 말고 천천히 돌아가요.',
+      _ => '알겠다냥. 휴무는 취소했다냥. 다시 해보고 싶은 마음이 들었으면 처음부터 다 하려고 하지 말고 천천히 돌아가자냥.',
+    };
+  }
+
+  bool _containsSelfHarmRiskSignal(String text) {
+    final normalized = text.replaceAll(RegExp(r'\s+'), '').toLowerCase();
+    return normalized.contains('자살') || normalized.contains('자해');
+  }
+
+  Future<bool> _maybeOfferRest(String userText) async {
+    final hasExecutionIntent = _containsExecutionIntent(userText);
+    final isPureStrongRest =
+        _containsStrongRestSignal(userText) && !hasExecutionIntent;
+    final isRepeatedRest =
+        _hasRepeatedRecentRestSignals(userText) && !hasExecutionIntent;
+
+    if (!_canProactivelyOfferRest ||
+        widget.vacationInfo != null ||
+        (!isPureStrongRest && !isRepeatedRest) ||
+        _containsSelfHarmRiskSignal(userText)) {
+      return false;
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.getString('nyang_vacation') != null) return false;
+
+    final todayStr = _getTodayStrWithReset(prefs);
+    final today = DateTime.tryParse(todayStr) ?? DateTime.now();
+    final lastOfferDate = DateTime.tryParse(
+      prefs.getString('nyang_rest_offer_date') ??
+          prefs.getString('nyang_cat_rest_offer_date') ??
+          '',
+    );
+    if (lastOfferDate != null) {
+      final daysSinceOffer = DateTime(today.year, today.month, today.day)
+          .difference(
+            DateTime(
+              lastOfferDate.year,
+              lastOfferDate.month,
+              lastOfferDate.day,
+            ),
+          )
+          .inDays;
+      if (daysSinceOffer >= 0 && daysSinceOffer < 7) return false;
+    }
+
+    List<Map<String, dynamic>> history = [];
+    try {
+      final decoded = jsonDecode(prefs.getString('nyang_history') ?? '[]');
+      history = (decoded as List)
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .toList();
+    } catch (_) {}
+
+    final byDate = <String, Map<String, dynamic>>{
+      for (final record in history)
+        if (record['date'] is String) record['date'] as String: record,
+    };
+
+    var streak = 0;
+    for (var offset = 0; offset < 14; offset++) {
+      final date = today.subtract(Duration(days: offset));
+      final record = byDate[_dateKey(date)];
+      if (record == null) {
+        if (offset == 0) continue;
+        break;
+      }
+      if (record['isVacation'] == true) continue;
+      final doneCount = (record['doneCount'] as num?)?.toInt() ?? 0;
+      if (doneCount <= 0) {
+        if (offset == 0) continue;
+        break;
+      }
+      streak++;
+    }
+    if (streak < 5) return false;
+
+    var totalCount = 0;
+    var doneCount = 0;
+    for (var offset = 1; offset <= 7; offset++) {
+      final record = byDate[_dateKey(today.subtract(Duration(days: offset)))];
+      if (record == null || record['isVacation'] == true) continue;
+      totalCount += (record['totalCount'] as num?)?.toInt() ?? 0;
+      doneCount += (record['doneCount'] as num?)?.toInt() ?? 0;
+    }
+    if (totalCount <= 0 || doneCount / totalCount < 0.6) return false;
+
+    await prefs.setString('nyang_rest_offer_date', todayStr);
+    if (!mounted) return true;
+    setState(() {
+      _messages.add(
+        ChatMessage(text: userText, isUser: true, time: DateTime.now()),
+      );
+      _messages.add(
+        ChatMessage(
+          text: _restOfferMessage(),
+          isUser: false,
+          time: DateTime.now(),
+        ),
+      );
+      _dynamicChips = ['🌙 오늘은 쉬어가기', '🐾 오늘은 조금만 하기'];
+      _suppressDefaultChips = false;
+      _isLoading = false;
+    });
+    await _saveHistory();
+    _scrollToBottom();
+    await AnalyticsService.logConversationMessage(
+      coachId: widget.coachId,
+      usedApi: false,
+    );
+    return true;
+  }
+
+  bool _isVacationActivationRequest(String text) {
+    final normalized = text.replaceAll(RegExp(r'\s+'), '').toLowerCase();
+    const requests = [
+      '오늘휴무하고싶',
+      '오늘휴무할래',
+      '오늘휴무로해줘',
+      '휴무켜줘',
+      '휴무설정해줘',
+      '오늘쉬고싶',
+      '오늘쉴래',
+      '오늘은쉴래',
+      '오늘쉬게해줘',
+    ];
+    return requests.any(normalized.contains);
+  }
+
+  Future<bool> _tryActivateRequestedVacation(String userText) async {
+    if (!_isVacationActivationRequest(userText) ||
+        _containsSelfHarmRiskSignal(userText)) {
+      return false;
+    }
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.getString('nyang_vacation') != null) return false;
+    await _activateRestDay(userMessage: userText);
+    return true;
+  }
+
+  Future<void> _activateRestDay({String? userMessage}) async {
+    final prefs = await SharedPreferences.getInstance();
+    final todayStr = _getTodayStrWithReset(prefs);
+    await prefs.setString(
+      'nyang_vacation',
+      jsonEncode({
+        'restType': 'quiet',
+        'type': 'today',
+        'date': todayStr,
+        'source': '${widget.coachId}_rest_offer',
+      }),
+    );
+    await _updateTodayRecord(prefs);
+    TasksSyncService.scheduleSyncToCloud();
+    if (!mounted) return;
+    setState(() {
+      _messages.add(
+        ChatMessage(
+          text: userMessage ?? '🌙 오늘은 쉬어가기',
+          isUser: true,
+          time: DateTime.now(),
+        ),
+      );
+      _messages.add(
+        ChatMessage(
+          text: _vacationActivatedMessage(),
+          isUser: false,
+          time: DateTime.now(),
+        ),
+      );
+      _dynamicChips = [];
+      _suppressDefaultChips = true;
+    });
+    await _saveHistory();
+    widget.onVacationChanged?.call();
+    _scrollToBottom();
+  }
+
+  Future<void> _chooseLightDay() async {
+    if (!mounted) return;
+    setState(() {
+      _messages.add(
+        ChatMessage(text: '🐾 오늘은 조금만 하기', isUser: true, time: DateTime.now()),
+      );
+      _messages.add(
+        ChatMessage(
+          text: _lightDayMessage(),
+          isUser: false,
+          time: DateTime.now(),
+        ),
+      );
+      _dynamicChips = [];
+      _suppressDefaultChips = true;
+    });
+    await _saveHistory();
+    _scrollToBottom();
+  }
+
+  bool _isVacationCancelRequest(String text) {
+    final normalized = text.replaceAll(RegExp(r'\s+'), '').toLowerCase();
+    return normalized.contains('휴무취소') ||
+        normalized.contains('휴무해제') ||
+        normalized.contains('쉬는거취소') ||
+        normalized == '다시할래' ||
+        normalized.contains('다시시작할래');
+  }
+
+  Future<bool> _tryCancelVacation(String userText) async {
+    if (!_isVacationCancelRequest(userText)) {
+      return false;
+    }
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.getString('nyang_vacation') == null) return false;
+
+    await prefs.remove('nyang_vacation');
+    await _updateTodayRecord(prefs);
+    TasksSyncService.scheduleSyncToCloud();
+    if (!mounted) return true;
+    setState(() {
+      _messages.add(
+        ChatMessage(text: userText, isUser: true, time: DateTime.now()),
+      );
+      _messages.add(
+        ChatMessage(
+          text: _vacationCancelledMessage(),
+          isUser: false,
+          time: DateTime.now(),
+        ),
+      );
+      _dynamicChips = [];
+      _suppressDefaultChips = true;
+    });
+    await _saveHistory();
+    widget.onVacationChanged?.call();
+    _scrollToBottom();
+    return true;
   }
 
   String _dateKey(DateTime date) {
@@ -2133,6 +2518,40 @@ class _ChatScreenState extends State<ChatScreen>
       }
     }
 
+    // 남비서의 정서적 동행 연결로 소환된 경우에만 냥냥이가 먼저 인사한다.
+    // 일반 진입에서는 기존 프렌즈 코치 정책대로 사용자의 첫 말을 기다린다.
+    if (widget.coachId == 'cat' && widget.handoffFromCoachId == 'sec_male') {
+      const handoffGreets = [
+        '왔다냥. 오늘은 그냥 냥이랑 같이 있어도 된다냥.',
+        '냥이가 왔다냥. 지금은 아무것도 해결하지 않아도 된다냥.',
+        '여기 있다냥. 말하고 싶을 때만 말해도 되고, 그냥 있어도 괜찮다냥.',
+        '냥이가 옆에 붙어 있겠다냥. 오늘은 천천히 있어도 된다냥.',
+        '잘 왔다냥. 지금은 마음 가는 만큼만 이야기해도 된다냥.',
+        '오늘은 냥이가 조용히 곁에 있어주겠다냥. 아무 말 안 해도 괜찮다냥.',
+        '일단 여기서 같이 쉬자냥. 서두르지 않아도 된다냥.',
+        '냥이한테 잠깐 기대도 된다냥. 오늘은 편하게 있어라냥.',
+        '어서 오라냥. 지금은 잘하려고 애쓰지 않아도 된다냥.',
+        '냥냥이가 기다리고 있었다냥. 오늘 마음은 천천히 꺼내놔도 된다냥.',
+      ];
+      final greet = handoffGreets[Random().nextInt(handoffGreets.length)];
+      await Future.delayed(const Duration(milliseconds: 450));
+      if (!mounted) return;
+      setState(() {
+        _messages.add(
+          ChatMessage(text: greet, isUser: false, time: DateTime.now()),
+        );
+        _dynamicChips = [];
+        _suppressDefaultChips = true;
+      });
+      await _saveHistory();
+      await prefs.setString(
+        'last_visit_${widget.coachId}',
+        now.toIso8601String(),
+      );
+      _scrollToBottom();
+      return;
+    }
+
     // 히스토리가 비어있거나 없는 경우에만 새롭게 인사 처리
     if (_messages.isEmpty) {
       // 냥냥코치 비구독자: 로컬 무료체험 플로우 (API 호출 없음)
@@ -2300,15 +2719,19 @@ class _ChatScreenState extends State<ChatScreen>
     return '$prefix $hour12:$mStr';
   }
 
-  // ── AI 응답 파싱 ([CHIPS], [TIMER_CONFIRM], [TASK: N], [NIGHT_CALL_OFFER]) ────
+  // ── AI 응답 파싱 ([CHIPS], [NO_CHIPS], [COACH_SWITCH], [TIMER_CONFIRM]) ────
   _ParsedReply _parseReply(String raw) {
     final chipRegex = RegExp(r'\[CHIPS:\s*(.+?)\]');
+    final noChipsRegex = RegExp(r'\[NO_CHIPS\]');
+    final coachSwitchRegex = RegExp(r'\[COACH_SWITCH:\s*([a-z_]+)\s*\]');
     final timerConfirmRegex = RegExp(r'\[TIMER_CONFIRM:(\d+)(?::([^\]]+))?\]');
     final taskRegex = RegExp(r'\[TASK:\s*(.+?)\]');
     final visionSourceRegex = RegExp(r'\[VISION_SOURCE:\s*([^\]]+)\]');
     // CORE_REC 태그 파싱: [CORE_REC:{...}]
     final coreRecRegex = RegExp(r'\[CORE_REC:(\{.*?\})\]');
     List<String> chips = [];
+    bool suppressDefaultChips = false;
+    String? coachSwitchTarget;
     int? timerConfirmMinutes;
     String? timerConfirmTaskName;
     String? visionSourceId;
@@ -2361,6 +2784,22 @@ class _ChatScreenState extends State<ChatScreen>
       text = text.replaceAll(chipMatch.group(0)!, '').trim();
     }
 
+    if (noChipsRegex.hasMatch(text)) {
+      suppressDefaultChips = true;
+      chips = [];
+      text = text.replaceAll(noChipsRegex, '').trim();
+    }
+
+    final coachSwitchMatch = coachSwitchRegex.firstMatch(text);
+    if (coachSwitchMatch != null) {
+      coachSwitchTarget = coachSwitchMatch.group(1)?.trim();
+      text = text.replaceAll(coachSwitchMatch.group(0)!, '').trim();
+      if (coachSwitchTarget == 'cat') {
+        suppressDefaultChips = false;
+        chips = ['🐱 냥냥코치와 이야기하기'];
+      }
+    }
+
     // 나이트콜 제안 시 전용 버튼 강제 주입
     if (nightCallOffer) {
       chips = ['🌙 나이트콜 설정하기', '아니요, 괜찮아요'];
@@ -2392,9 +2831,18 @@ class _ChatScreenState extends State<ChatScreen>
       text = text.replaceAll(m.group(0)!, '').trim();
     }
 
+    // 감정 보호·위기 응답에서는 모델이 실수로 행동 태그를 섞어도 UI에 노출하지 않는다.
+    if (suppressDefaultChips) {
+      timerConfirmMinutes = null;
+      timerConfirmTaskName = null;
+      suggestedTasks = [];
+    }
+
     return _ParsedReply(
       text: text,
       chips: chips,
+      suppressDefaultChips: suppressDefaultChips,
+      coachSwitchTarget: coachSwitchTarget,
       timerConfirmMinutes: timerConfirmMinutes,
       timerConfirmTaskName: timerConfirmTaskName,
       visionSourceId: visionSourceId,
@@ -2846,7 +3294,11 @@ class _ChatScreenState extends State<ChatScreen>
         _messages.add(
           ChatMessage(text: greetingText, isUser: false, time: DateTime.now()),
         );
-        _dynamicChips = parsed.chips.isNotEmpty ? parsed.chips : _coach.chips;
+        _suppressDefaultChips = parsed.suppressDefaultChips;
+        _dynamicChips = parsed.chips.isNotEmpty
+            ? parsed.chips
+            : (_suppressDefaultChips ? [] : _coach.chips);
+        _coachSwitchTarget = parsed.coachSwitchTarget;
         _isLoading = false;
       });
       _scrollToBottom();
@@ -4037,6 +4489,10 @@ class _ChatScreenState extends State<ChatScreen>
       }
     }
 
+    if (await _tryCancelVacation(trimmed)) return;
+    if (await _tryActivateRequestedVacation(trimmed)) return;
+    if (await _maybeOfferRest(trimmed)) return;
+
     final directTimerMinutes = _directTimerRequestMinutes(trimmed);
     if (directTimerMinutes != null) {
       final reply = _directTimerStartMessage(directTimerMinutes);
@@ -4200,6 +4656,8 @@ class _ChatScreenState extends State<ChatScreen>
     setState(() {
       _messages.add(userMsg);
       _dynamicChips = [];
+      _suppressDefaultChips = false;
+      _coachSwitchTarget = null;
       _isLoading = true;
     });
     _scrollToBottom();
@@ -4266,7 +4724,11 @@ class _ChatScreenState extends State<ChatScreen>
         _messages.add(
           ChatMessage(text: parsed.text, isUser: false, time: DateTime.now()),
         );
-        _dynamicChips = parsed.chips.isNotEmpty ? parsed.chips : _coach.chips;
+        _suppressDefaultChips = parsed.suppressDefaultChips;
+        _dynamicChips = parsed.chips.isNotEmpty
+            ? parsed.chips
+            : (_suppressDefaultChips ? [] : _coach.chips);
+        _coachSwitchTarget = parsed.coachSwitchTarget;
         if (_coach.isMaster) {
           _timerConfirmMinutes = masterTimerEligible
               ? parsed.timerConfirmMinutes
@@ -5458,7 +5920,6 @@ class _ChatScreenState extends State<ChatScreen>
           '\n[이번 대화 지침] 답변 어딘가에 "$picked" 이 표현을 자연스럽게 한 번 녹여 써라. 끝에 억지로 붙이지 말고 문장 흐름 안에 자연스럽게 넣어라.';
     }
 
-    final prefs = await SharedPreferences.getInstance();
     final customTitle = await UserTitleService.getTitle();
     final baseSystemPrompt = _coach.isMaster
         ? _coach.systemPrompt.replaceAll(
@@ -5482,9 +5943,58 @@ class _ChatScreenState extends State<ChatScreen>
         '''$baseSystemPrompt
 ${contextString.isNotEmpty ? '\n$contextString' : ''}
 
+[앱 공통 자해·자살 위험 대응 - 캐릭터별 규칙보다 최우선]
+- 이 규칙은 모든 코치에게 동일하게 적용한다. 일반적인 우울·무기력 대응과 분리하며, 안전이 의심될 때는 캐릭터 설정, 일정, 생산성, 실행, 타이머, 할 일, 성취 평가, 다른 코치 연결보다 먼저 적용한다.
+- 사용자를 진단하거나 표현의 진위를 시험하지 않는다. 과장이라고 단정하거나 죄책감을 주거나 삶의 이유를 설교하거나 "그런 생각은 하지 마세요"라고 막지 않는다.
+- 위기 대응은 사용자가 자기 자신에 관해 "자살" 또는 "자해"라는 단어를 명시적으로 사용해 생각·의도·계획을 표현한 경우에만 시작한다.
+- "죽고 싶다", "죽을 것 같다", "사라지고 싶다", "끝내고 싶다", "내가 없어지는 게 낫다"처럼 자살·자해 단어가 없는 표현만으로는 위기 문진을 시작하지 않는다. 이런 말은 먼저 일반 감정 토로로 받아준다.
+- 뉴스, 작품, 타인의 사건, 예방 교육처럼 정보 맥락에서 "자살"이나 "자해"를 언급한 경우에도 위기 대응을 시작하지 않는다.
+- 위기 대응이 한 번 시작된 뒤에는 사용자의 후속 답변에 자살·자해 단어가 반복되지 않아도 안전 확인 흐름을 이어간다.
+- 첫 안전 확인은 캐릭터의 평소 호칭과 말투를 유지하되 짧고 분명하게 한 가지만 묻는다:
+  "지금 스스로를 해치거나 목숨을 끊을 생각이 있나요?"
+- 직접 묻는 것을 피하려고 완곡하게 돌려 말하거나 한 번에 여러 질문을 쏟아내지 않는다.
+
+[위험 단계별 공통 응답]
+1. 현재 생각이나 의도가 없다고 명확히 답한 경우:
+   - 솔직히 알려준 것을 짧게 고맙다고 말하고 표현된 고통을 가볍게 여기지 않는다.
+   - 원인 분석이나 행동 과제를 붙이지 않고 현재 코치와 계속 이야기할 수 있음을 알린다.
+   - 이런 생각이 반복되거나 혼자 감당하기 어렵다면 대한민국 자살예방상담전화 109에 연락할 수 있다고 선택지로 안내한다. 전화를 강요하지 않는다.
+2. 현재 생각이 있다고 답했거나, 잘 모르겠거나, 답을 피하는 경우:
+   - 안전이 가장 중요하다고 짧게 말한다.
+   - 다음 한 질문으로 현재의 급박함만 확인한다:
+     "지금 당장 실행할 가능성이 있거나, 구체적인 계획이나 준비해 둔 수단이 있나요?"
+   - 자세한 방법, 치명성, 성공 가능성 등 실행에 도움이 될 정보를 묻거나 제공하지 않는다.
+3. 구체적인 계획·시간·준비한 수단이 있거나, 곧 실행할 수 있거나, 이미 자해·복용·시도를 한 경우:
+   - 즉각적인 위험으로 본다. 긴 설명 없이 대한민국에서는 119 또는 112에 지금 전화하도록 분명하게 안내한다.
+   - 이미 다쳤거나 약물·물질을 복용했다면 119를 가장 먼저 안내한다.
+   - 가능하다면 자신을 해칠 수 있는 물건이나 장소에서 잠시 거리를 두고, 문을 열 수 있는 곳이나 다른 사람이 있는 비교적 안전한 장소로 이동하도록 한 단계만 제안한다. 사용자가 혼자라는 이유로 비난하거나 특정 지인에게 연락하라고 강요하지 않는다.
+   - 한 번에 여러 과제를 주지 말고 "지금 119에 전화할 수 있나요?"처럼 가장 시급한 행동 하나만 확인한다.
+4. 사용자가 대한민국 밖에 있다고 밝힌 경우:
+   - 109·119·112를 그대로 적용하지 말고 현재 지역의 응급전화 또는 자살 위기 상담 서비스에 즉시 연락하도록 안내한다.
+
+[위기 대응 공통 표현 원칙]
+- 캐릭터의 호칭과 온기는 유지하되 안전 안내의 의미를 장난스럽게 바꾸지 않는다. 답변은 따뜻하지만 모호하지 않게 2~4문장으로 유지한다.
+- 긴 위로나 일반론으로 안전 확인과 긴급 안내를 묻히게 하지 않는다.
+- 앱이 신고했거나 구조를 요청했다고 말하지 않는다. 앱이나 코치가 사용자의 위치를 알거나 계속 지켜볼 수 있다고 암시하지 않는다.
+- 연락처 접근, 위치 공유, 특정 가족·친구·직장 동료의 존재를 가정하지 않는다.
+- 사용자가 원할 경우 믿을 수 있는 사람에게 직접 연락하는 선택지를 말로 안내할 수 있지만 특정 관계를 지목하거나 연락을 강요하지 않는다.
+- 위기 상황에서는 [CHIPS], [TASK], [TIMER_CONFIRM], [COACH_SWITCH] 태그를 출력하지 않고, 답변 끝에 [NO_CHIPS]를 붙인다.
+- 사용자가 위험 여부에 답할 때까지 생산성 대화나 일반 코칭으로 돌아가지 않는다.
+- 자해나 자살의 방법, 도구 사용법, 위험 비교, 은폐 방법을 절대 제공하지 않는다.
+
+[위기 대응 공통 예시]
+- "힘들어서 죽을 것 같아" → 일반 감정 토로로 받아주며 위기 문진을 시작하지 않는다.
+- "죽고 싶어" → 일반 감정 토로로 받아주며 위기 문진을 시작하지 않는다.
+- "자살하고 싶어" → "그만큼 견디기 어려운 상태라는 뜻으로 들을게요. 지금 당장 실행할 가능성이 있거나, 구체적인 계획이나 준비해 둔 수단이 있나요?"
+- "자해할 것 같아" → "지금 안전이 가장 중요해요. 지금 당장 자신을 다치게 할 가능성이 있나요?"
+- "생각은 들지만 지금 할 건 아니야" → "솔직히 말해줘서 고마워요. 지금 당장 실행할 생각은 없더라도 혼자 감당하기 벅차다면 자살예방상담전화 109에 연락할 수 있어요. 저는 여기서 계속 들을게요."
+- "방법도 정했고 지금 하려고 해" → "지금은 즉시 안전을 확보해야 하는 상황이에요. 대한민국에 있다면 지금 119나 112에 전화해 주세요. 지금 119에 전화할 수 있나요?"
+- "이미 약을 먹었어" → "지금 바로 119에 전화해야 해요. 증상을 기다리거나 혼자 해결하려 하지 말고 지금 119에 전화할 수 있나요?"
+
 [감정 토로 응답 원칙]
 - 사용자가 속상함, 피로, 불안, 답답함 등 감정을 토로하면 먼저 충분히 공감하고 달래주세요.
-- 감정 속에 해결 가능한 문제가 함께 드러나면, 긴 전략 조언은 하지 말고 지금 할 수 있는 작은 행동 하나만 조용히 제안하세요.
+- 정서적 여유가 낮아 보이거나 사용자가 단순히 감정을 표현한 상황에서는, 해결 가능한 문제가 보여도 행동 제안을 자동으로 붙이지 마세요.
+- 행동 제안은 사용자가 행동을 원한다는 의사를 분명히 밝혔을 때만 하나 제안하세요.
 - 전략 분석, 원인 진단, 자세한 조언은 사용자가 "왜", "어떻게", "분석해줘", "조언해줘"처럼 명시적으로 요청했을 때만 길게 제공하세요.
 - 감정 토로 상황에서는 답변을 짧게 유지하고, 공감의 온기가 행동 제안에 묻히지 않게 하세요.
 
@@ -5493,8 +6003,11 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
 2. 마크다운 문법(**, *, # 등) 절대 사용하지 말 것.
 3. 답변 끝에 자연스러운 빠른 답장 버튼 3개를 [CHIPS: 버튼1|버튼2|버튼3] 형식으로 추가하세요.
    예시: [CHIPS: 오늘 할 일 정하기|기분 이야기하기|그냥 얘기하자]
+   단, 정서적 여유가 낮은 사용자의 순수 감정 토로에는 [CHIPS]를 쓰지 말고 답변 끝에 [NO_CHIPS]를 붙이세요.
+   사용자가 우울함, 무기력함, 감정적 고통을 토로하고 그 감정이 2회 이상 반복되거나 깊어지고 있다면, 냥냥코치가 사용자를 걱정하고 있다는 뉘앙스로 자연스럽게 연결하세요. 예: "방금 냥냥코치한테서 연락이 왔는데, 지금 대표님 걱정하고 있대요. 같이 얘기해보시겠어요?" 또는 "냥냥코치가 대표님 기다리고 있을 것 같은데, 잠깐 얘기 나눠보시는 건 어떨까요?" 처럼 팀으로서 함께 챙기는 느낌을 주세요. 답변 끝에 [COACH_SWITCH:cat]만 붙이세요. 단 한 번의 가벼운 감정 표현에는 붙이지 마세요.
+   자해·자살 위험을 확인하거나 긴급 도움을 안내하는 상황에서는 [CHIPS]와 [COACH_SWITCH]를 붙이지 말고 [NO_CHIPS]만 붙이세요.
 $timerOutputRule
-5. 사용자가 특정 할 일을 언급하거나 해결 가능한 문제가 드러나고, 그걸 오늘 할 일로 등록할 만한 상황이라면 답변에 [TASK: 할일명] 태그를 포함하세요. 예: "5시에 청소해야지" → [TASK: 5시에 청소], "오후 3시에 회의가 있어" → [TASK: 오후 3시 회의], "SNS 반응이 안 좋아" → [TASK: SNS 콘텐츠 분석하기]. 억지로 추가하지 말고 사용자의 감정이나 문제 상황에서 자연스럽게 이어지는 작은 행동일 때만 사용하세요.$halmaeHint''';
+5. 사용자가 특정 할 일을 언급하거나 해결 가능한 문제가 드러나고, 그걸 오늘 할 일로 등록할 만한 상황이라면 답변에 [TASK: 할일명] 태그를 포함하세요. 예: "5시에 청소해야지" → [TASK: 5시에 청소], "오후 3시에 회의가 있어" → [TASK: 오후 3시 회의], "SNS 반응이 안 좋아" → [TASK: SNS 콘텐츠 분석하기]. 억지로 추가하지 마세요. 정서적 여유가 낮거나 순수 감정 토로인 상황에는 사용자가 행동 지원을 명시적으로 요청하지 않는 한 [TASK]와 [TIMER_CONFIRM]을 출력하지 마세요. 자해·자살 위험 상황에서는 두 태그를 절대 출력하지 마세요.$halmaeHint''';
 
     String effectiveUserText = userText;
     if (userText == '지금 뭐하지?') {
@@ -5993,7 +6506,8 @@ $timerOutputRule
       });
     }
 
-    final chatBackgroundColor = _coach.isMaster
+    final isVacation = widget.vacationInfo != null;
+    final chatBackgroundColor = (_coach.isMaster && !isVacation)
         ? const Color(0xFFFAF5EF)
         : Colors.transparent;
 
@@ -6001,7 +6515,19 @@ $timerOutputRule
       children: [
         Column(
           children: [
-            _buildSummaryCard(),
+            if (widget.vacationInfo == null) _buildSummaryCard(),
+            if (widget.vacationInfo != null)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
+                child: Text(
+                  '🌙 오늘은 컨디션이 먼저입니다.',
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.85),
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
             Expanded(
               child: Container(
                 color: chatBackgroundColor,
@@ -6009,12 +6535,40 @@ $timerOutputRule
                 child: Column(
                   children: [
                     Expanded(
-                      child: _messages.isEmpty
-                          ? _buildEmptyState()
-                          : _buildMessageList(),
+                      child: Column(
+                        children: [
+                          Expanded(
+                            child: _messages.isEmpty
+                                ? _buildEmptyState()
+                                : _buildMessageList(),
+                          ),
+                          if (!_suppressDefaultChips &&
+                              _dynamicChips.contains('🌙 오늘은 쉬어가기') &&
+                              _dynamicChips.contains('🐾 오늘은 조금만 하기') &&
+                              _dynamicChips.length == 2)
+                            _buildVacationSuggestBubble(),
+                          if (!_suppressDefaultChips &&
+                              _coachSwitchTarget != null &&
+                              _dynamicChips.length == 1 &&
+                              _dynamicChips.contains('🐱 낥낥코치와 이야기하기'))
+                            _buildNyangSwitchBubble(),
+                        ],
+                      ),
                     ),
-                    if (!_coach.isMaster &&
-                        (_dynamicChips.isNotEmpty || _coach.chips.isNotEmpty))
+                    if (!_suppressDefaultChips &&
+                        !((_dynamicChips.contains('🌙 오늘은 쉬어가기') &&
+                            _dynamicChips.contains('🐾 오늘은 조금만 하기') &&
+                            _dynamicChips.length == 2)) &&
+                        !(_coachSwitchTarget != null &&
+                            _dynamicChips.length == 1 &&
+                            _dynamicChips.contains('🐱 낥낥코치와 이야기하기')) &&
+                        ((_dynamicChips.contains('🌙 오늘은 쉬어가기') &&
+                                _dynamicChips.contains('🐾 오늘은 조금만 하기')) ||
+                            (_coachSwitchTarget != null &&
+                                _dynamicChips.isNotEmpty) ||
+                            (!_coach.isMaster &&
+                                (_dynamicChips.isNotEmpty ||
+                                    _coach.chips.isNotEmpty))))
                       _buildChips(),
                   ],
                 ),
@@ -7228,8 +7782,139 @@ $timerOutputRule
   }
 
   // ── 빠른 답장 칩 (동적) ──────────────────────────────────
+
+
+  // 낥낥코치 연결 말풍선 (switchTarget 있을 때)
+  Widget _buildNyangSwitchBubble() {
+    final switchTarget = _coachSwitchTarget;
+    if (switchTarget == null) return const SizedBox.shrink();
+    final accent = _coach.accentColor;
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(16, 4, 60, 8),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.95),
+          borderRadius: const BorderRadius.only(
+            topLeft: Radius.circular(4),
+            topRight: Radius.circular(20),
+            bottomLeft: Radius.circular(20),
+            bottomRight: Radius.circular(20),
+          ),
+          border: Border.all(color: accent.withOpacity(0.15)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.06),
+              blurRadius: 12,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: GestureDetector(
+          onTap: () => widget.onSwitchCoach?.call(switchTarget),
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 11),
+            decoration: BoxDecoration(
+              color: accent.withOpacity(0.06),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: accent.withOpacity(0.18)),
+            ),
+            child: Text(
+              '🐱 낥낥코치와 이야기하기',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.notoSansKr(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: accent,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // 휴무 제안 말풍선 카드 (새로 추가)
+  Widget _buildVacationSuggestBubble() {
+    final accent = _coach.accentColor;
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(16, 4, 60, 8),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.95),
+          borderRadius: const BorderRadius.only(
+            topLeft: Radius.circular(4),
+            topRight: Radius.circular(20),
+            bottomLeft: Radius.circular(20),
+            bottomRight: Radius.circular(20),
+          ),
+          border: Border.all(color: accent.withOpacity(0.15)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.06),
+              blurRadius: 12,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            GestureDetector(
+              onTap: _activateRestDay,
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 11),
+                decoration: BoxDecoration(
+                  color: accent.withOpacity(0.06),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: accent.withOpacity(0.18)),
+                ),
+                child: Text(
+                  '🌙 오늘은 쉬어가기',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.notoSansKr(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: accent,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            GestureDetector(
+              onTap: _chooseLightDay,
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 11),
+                decoration: BoxDecoration(
+                  color: accent.withOpacity(0.06),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: accent.withOpacity(0.18)),
+                ),
+                child: Text(
+                  '🐾 오늘은 조금만 하기',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.notoSansKr(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: accent,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildChips() {
-    final chips = _dynamicChips.isNotEmpty ? _dynamicChips : _coach.chips;
+    final chips = _suppressDefaultChips
+        ? const <String>[]
+        : (_dynamicChips.isNotEmpty ? _dynamicChips : _coach.chips);
     return Container(
       height: 44,
       margin: const EdgeInsets.only(top: 8),
@@ -7244,7 +7929,22 @@ $timerOutputRule
           final chipBorder = _coach.accentColor.withOpacity(0.3);
           final chipText = _coach.accentColor;
           return GestureDetector(
-            onTap: () => _send(chip),
+            onTap: () {
+              final switchTarget = _coachSwitchTarget;
+              if (switchTarget != null && chip == '🐱 냥냥코치와 이야기하기') {
+                widget.onSwitchCoach?.call(switchTarget);
+                return;
+              }
+              if (chip == '🌙 오늘은 쉬어가기') {
+                _activateRestDay();
+                return;
+              }
+              if (chip == '🐾 오늘은 조금만 하기') {
+                _chooseLightDay();
+                return;
+              }
+              _send(chip);
+            },
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               decoration: BoxDecoration(
