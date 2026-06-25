@@ -23,6 +23,7 @@ import '../services/analytics_service.dart';
 import '../services/api_usage_limit_service.dart';
 import '../services/widget_sync_service.dart';
 import '../services/daily_reset_service.dart';
+import '../theme/app_design_tokens.dart';
 
 // ─────────────────────────────────────────────────────────────
 // 데이터 모델 (웹앱 그대로)
@@ -3618,16 +3619,17 @@ class _TasksScreenState extends State<TasksScreen>
                           Text(
                             '🌙 휴무 설정',
                             style: GoogleFonts.notoSansKr(
-                              fontSize: 18,
+                              fontSize: AppDesignTokens.textTitle,
                               fontWeight: FontWeight.w900,
+                              color: AppDesignTokens.textPrimary,
                             ),
                           ),
                           const SizedBox(height: 4),
                           Text(
                             '오늘, 나를 위한 휴식을 선택해보세요.',
                             style: GoogleFonts.notoSansKr(
-                              fontSize: 12,
-                              color: const Color(0xFFA0A0B0),
+                              fontSize: AppDesignTokens.textCaption,
+                              color: AppDesignTokens.textMuted,
                             ),
                           ),
                         ],
@@ -3636,7 +3638,7 @@ class _TasksScreenState extends State<TasksScreen>
                         onTap: () => Navigator.pop(ctx),
                         child: const Icon(
                           Icons.close,
-                          color: Color(0xFFA0A0B0),
+                          color: AppDesignTokens.textMuted,
                         ),
                       ),
                     ],
@@ -3646,9 +3648,9 @@ class _TasksScreenState extends State<TasksScreen>
                   Text(
                     '휴식 기간 선택',
                     style: GoogleFonts.notoSansKr(
-                      fontSize: 14,
+                      fontSize: AppDesignTokens.textBody,
                       fontWeight: FontWeight.w800,
-                      color: const Color(0xFF3D3A4E),
+                      color: AppDesignTokens.textPrimary,
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -3711,12 +3713,14 @@ class _TasksScreenState extends State<TasksScreen>
                           border: Border.all(
                             color: Colors.redAccent.withOpacity(0.5),
                           ),
-                          borderRadius: BorderRadius.circular(14),
+                          borderRadius: BorderRadius.circular(
+                            AppDesignTokens.radiusMedium,
+                          ),
                         ),
                         child: Text(
                           '휴무 설정 해제',
                           style: GoogleFonts.notoSansKr(
-                            fontSize: 16,
+                            fontSize: AppDesignTokens.textAction,
                             fontWeight: FontWeight.w700,
                             color: Colors.redAccent,
                           ),
@@ -3732,15 +3736,17 @@ class _TasksScreenState extends State<TasksScreen>
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
-                        color: const Color(0xFFF9FAFB),
-                        borderRadius: BorderRadius.circular(14),
+                        color: AppDesignTokens.surfaceSubtle,
+                        borderRadius: BorderRadius.circular(
+                          AppDesignTokens.radiusMedium,
+                        ),
                       ),
                       child: Text(
                         '취소',
                         style: GoogleFonts.notoSansKr(
-                          fontSize: 16,
+                          fontSize: AppDesignTokens.textAction,
                           fontWeight: FontWeight.w700,
-                          color: const Color(0xFFA0A0B0),
+                          color: AppDesignTokens.textMuted,
                         ),
                       ),
                     ),
@@ -3778,15 +3784,18 @@ class _TasksScreenState extends State<TasksScreen>
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: isPrimary ? const Color(0xFF8B7CFF) : Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: isPrimary ? null : Border.all(color: const Color(0xFFE8E3F8)),
+          color: isPrimary ? AppDesignTokens.brand : AppDesignTokens.surface,
+          borderRadius: BorderRadius.circular(AppDesignTokens.radiusMedium),
+          border: isPrimary
+              ? null
+              : Border.all(color: AppDesignTokens.brandBorder),
+          boxShadow: isPrimary ? null : AppDesignTokens.cardShadow,
         ),
         child: Row(
           children: [
             Icon(
               icon,
-              color: isPrimary ? Colors.white : const Color(0xFFA0A0B0),
+              color: isPrimary ? Colors.white : AppDesignTokens.textMuted,
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -3796,18 +3805,20 @@ class _TasksScreenState extends State<TasksScreen>
                   Text(
                     title,
                     style: GoogleFonts.notoSansKr(
-                      fontSize: 14,
+                      fontSize: AppDesignTokens.textBody,
                       fontWeight: FontWeight.w800,
-                      color: isPrimary ? Colors.white : const Color(0xFF3D3A4E),
+                      color: isPrimary
+                          ? Colors.white
+                          : AppDesignTokens.textPrimary,
                     ),
                   ),
                   Text(
                     desc,
                     style: GoogleFonts.notoSansKr(
-                      fontSize: 11,
+                      fontSize: AppDesignTokens.textCaption,
                       color: isPrimary
                           ? Colors.white.withOpacity(0.8)
-                          : const Color(0xFFA0A0B0),
+                          : AppDesignTokens.textMuted,
                     ),
                   ),
                 ],

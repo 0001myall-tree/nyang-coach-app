@@ -19,6 +19,7 @@ import 'coach_selection_screen.dart';
 import 'tasks_screen.dart';
 import 'records_screen.dart';
 import 'settings_screen.dart';
+import '../theme/app_design_tokens.dart';
 
 // 각 탭 화면 플레이스홀더
 class ChatPlaceholderScreen extends StatelessWidget {
@@ -1255,11 +1256,11 @@ class _MainTabScreenState extends State<MainTabScreen>
         labels: _tabLabels,
         inactiveIcons: _inactiveIcons,
         activeIcons: _activeIcons,
-        activeColor: const Color(0xFF8B7CFF), // 마스터도 활성은 연보라
+        activeColor: AppDesignTokens.brand, // 마스터도 활성은 연보라
         bgColor: isVacation ? Colors.black.withOpacity(0.35) : Colors.white,
         inactiveColor: isVacation
             ? Colors.white.withOpacity(0.6)
-            : const Color(0xFFBBBBCC),
+            : AppDesignTokens.textDisabled,
         isImmersive: isVacation,
       ),
     );
@@ -1599,7 +1600,7 @@ class _NyangBottomTabBar extends StatelessWidget {
       decoration: BoxDecoration(
         color: bgColor,
         border: bgColor == Colors.white
-            ? const Border(top: BorderSide(color: Color(0xFFF0EEF8)))
+            ? const Border(top: BorderSide(color: AppDesignTokens.divider))
             : null,
       ),
       child: tabContent,
@@ -1703,7 +1704,7 @@ class _TabItemState extends State<_TabItem>
                 Text(
                   widget.label,
                   style: GoogleFonts.notoSansKr(
-                    fontSize: 10,
+                    fontSize: AppDesignTokens.textMeta,
                     fontWeight: widget.isActive
                         ? FontWeight.w800
                         : FontWeight.w500,

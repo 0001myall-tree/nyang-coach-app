@@ -10,6 +10,7 @@ import 'screens/coach_config.dart';
 import 'services/notification_service.dart';
 import 'services/tasks_sync_service.dart';
 import 'services/widget_sync_service.dart';
+import 'theme/app_design_tokens.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
@@ -19,12 +20,16 @@ void main() async {
   await initializeDateFormatting('ko', null);
   await NotificationService().init();
   await NotificationService().syncDailyNightCall();
-  
+
   final prefs = await SharedPreferences.getInstance();
   final _secMaleName = prefs.getString('nyang_coach_name_sec_male');
   final _secFemaleName = prefs.getString('nyang_coach_name_sec_female');
-  CoachConfigs.customSecMaleName = (_secMaleName != null && _secMaleName.isNotEmpty) ? _secMaleName : null;
-  CoachConfigs.customSecFemaleName = (_secFemaleName != null && _secFemaleName.isNotEmpty) ? _secFemaleName : null;
+  CoachConfigs.customSecMaleName =
+      (_secMaleName != null && _secMaleName.isNotEmpty) ? _secMaleName : null;
+  CoachConfigs.customSecFemaleName =
+      (_secFemaleName != null && _secFemaleName.isNotEmpty)
+      ? _secFemaleName
+      : null;
 
   await WidgetSyncService.syncFromStoredTasks();
 
@@ -67,13 +72,17 @@ class _NyangCoachAppState extends State<NyangCoachApp>
       title: '냥냥 코치',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF8B7CCC),
-          surface: Colors.white,
-          background: Colors.white,
+          seedColor: AppDesignTokens.brand,
+          surface: AppDesignTokens.surface,
         ),
-        scaffoldBackgroundColor: Colors.white,
+        scaffoldBackgroundColor: AppDesignTokens.surface,
+        dividerColor: AppDesignTokens.divider,
         useMaterial3: true,
-        textTheme: GoogleFonts.notoSansKrTextTheme(Theme.of(context).textTheme),
+        textTheme: GoogleFonts.notoSansKrTextTheme(Theme.of(context).textTheme)
+            .apply(
+              bodyColor: AppDesignTokens.textPrimary,
+              displayColor: AppDesignTokens.textPrimary,
+            ),
       ),
       navigatorKey: navigatorKey,
       home: const LandingScreen(),

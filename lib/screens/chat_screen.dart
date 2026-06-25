@@ -22,6 +22,7 @@ import 'package:nyang_coach/services/daily_reset_service.dart';
 import 'coach_config.dart';
 import 'focus_timer_widget.dart';
 import '../models/user_data.dart';
+import '../theme/app_design_tokens.dart';
 
 // ─────────────────────────────────────────────────────────────
 // 데이터 모델
@@ -7521,13 +7522,10 @@ $timerOutputRule
         : Colors.white;
     final bubbleTextColor = isUser
         ? (isMasterUserBubble ? const Color(0xFF111827) : Colors.white)
-        : const Color(0xFF1A1A2E);
+        : AppDesignTokens.textPrimary;
     final bubbleBorderColor = isMasterUserBubble
         ? const Color(0xFFE6DCFF)
         : Colors.transparent;
-    final bubbleShadowColor = isMasterUserBubble
-        ? const Color(0xFF9B8AF0).withValues(alpha: 0.10)
-        : Colors.black.withValues(alpha: 0.06);
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
@@ -7569,8 +7567,8 @@ $timerOutputRule
               child: Text(
                 time,
                 style: GoogleFonts.notoSansKr(
-                  fontSize: 10,
-                  color: const Color(0xFFBBBBCC),
+                  fontSize: AppDesignTokens.textMeta,
+                  color: AppDesignTokens.textDisabled,
                 ),
               ),
             ),
@@ -7583,24 +7581,22 @@ $timerOutputRule
               decoration: BoxDecoration(
                 color: bubbleColor,
                 borderRadius: BorderRadius.only(
-                  topLeft: const Radius.circular(20),
-                  topRight: const Radius.circular(20),
-                  bottomLeft: Radius.circular(isUser ? 20 : 4),
-                  bottomRight: Radius.circular(isUser ? 4 : 20),
+                  topLeft: const Radius.circular(AppDesignTokens.radiusLarge),
+                  topRight: const Radius.circular(AppDesignTokens.radiusLarge),
+                  bottomLeft: Radius.circular(
+                    isUser ? AppDesignTokens.radiusLarge : 4,
+                  ),
+                  bottomRight: Radius.circular(
+                    isUser ? 4 : AppDesignTokens.radiusLarge,
+                  ),
                 ),
                 border: Border.all(color: bubbleBorderColor),
-                boxShadow: [
-                  BoxShadow(
-                    color: bubbleShadowColor,
-                    blurRadius: isMasterUserBubble ? 12 : 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
+                boxShadow: AppDesignTokens.bubbleShadow,
               ),
               child: _buildMessageText(
                 msg,
                 GoogleFonts.notoSansKr(
-                  fontSize: 14,
+                  fontSize: AppDesignTokens.textBody,
                   height: 1.6,
                   fontWeight: FontWeight.w500,
                   color: bubbleTextColor,
@@ -7614,8 +7610,8 @@ $timerOutputRule
               child: Text(
                 time,
                 style: GoogleFonts.notoSansKr(
-                  fontSize: 10,
-                  color: const Color(0xFFBBBBCC),
+                  fontSize: AppDesignTokens.textMeta,
+                  color: AppDesignTokens.textDisabled,
                 ),
               ),
             ),
@@ -7723,8 +7719,8 @@ $timerOutputRule
             child: Text(
               time,
               style: GoogleFonts.notoSansKr(
-                fontSize: 10,
-                color: const Color(0xFFBBBBCC),
+                fontSize: AppDesignTokens.textMeta,
+                color: AppDesignTokens.textDisabled,
               ),
             ),
           ),
@@ -7978,7 +7974,7 @@ $timerOutputRule
         color: isImmersiveInput ? Colors.transparent : Colors.white,
         border: isImmersiveInput
             ? null
-            : const Border(top: BorderSide(color: Color(0xFFF0EEF8))),
+            : const Border(top: BorderSide(color: AppDesignTokens.divider)),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -8020,7 +8016,9 @@ $timerOutputRule
                               : (isImmersiveInput
                                     ? Colors.white.withOpacity(0.2)
                                     : Colors.white)),
-                    borderRadius: BorderRadius.circular(22),
+                    borderRadius: BorderRadius.circular(
+                      AppDesignTokens.radiusPill,
+                    ),
                     border: Border.all(
                       color: _isListening
                           ? Colors.redAccent
@@ -8069,9 +8067,13 @@ $timerOutputRule
                     color: isFriends
                         ? Colors.white.withOpacity(0.25)
                         : (isMasterVacation
-                              ? Colors.white.withOpacity(0.58)
+                              ? Colors.white.withOpacity(
+                                  AppDesignTokens.lightGlassOpacity,
+                                )
                               : Colors.white),
-                    borderRadius: BorderRadius.circular(24),
+                    borderRadius: BorderRadius.circular(
+                      AppDesignTokens.radiusPill,
+                    ),
                     border: Border.all(
                       color: isNyang
                           ? _coach.accentColor.withOpacity(0.5)
@@ -8080,7 +8082,10 @@ $timerOutputRule
                                       ? girlfriendPink.withOpacity(0.45)
                                       : Colors.white.withOpacity(0.3))
                                 : (isMasterVacation
-                                      ? Colors.white.withOpacity(0.68)
+                                      ? Colors.white.withOpacity(
+                                          AppDesignTokens
+                                              .lightGlassBorderOpacity,
+                                        )
                                       : masterLavenderBorder)),
                       width: 1.2,
                     ),
@@ -8091,7 +8096,7 @@ $timerOutputRule
                     textInputAction: TextInputAction.send,
                     onSubmitted: _send,
                     style: GoogleFonts.notoSansKr(
-                      fontSize: 14,
+                      fontSize: AppDesignTokens.textBody,
                       color: isNyang
                           ? const Color(0xFF1A1A2E)
                           : (isFriends
@@ -8103,7 +8108,7 @@ $timerOutputRule
                     decoration: InputDecoration(
                       hintText: '메시지를 입력하세요...',
                       hintStyle: GoogleFonts.notoSansKr(
-                        fontSize: 14,
+                        fontSize: AppDesignTokens.textBody,
                         color: isNyang
                             ? const Color(0xFF4B445F).withOpacity(0.62)
                             : (isFriends
@@ -8112,7 +8117,7 @@ $timerOutputRule
                                             0xFF1A1A2E,
                                           ).withOpacity(0.45)
                                         : Colors.white.withOpacity(0.6))
-                                  : const Color(0xFFBBBBCC)),
+                                  : AppDesignTokens.textDisabled),
                       ),
                       border: InputBorder.none,
                       contentPadding: const EdgeInsets.symmetric(vertical: 12),
@@ -8137,7 +8142,9 @@ $timerOutputRule
                             colors: [Color(0xFF9B8AF0), Color(0xFFA99AE8)],
                           ),
                     color: isFriends ? _coach.accentColor : null,
-                    borderRadius: BorderRadius.circular(22),
+                    borderRadius: BorderRadius.circular(
+                      AppDesignTokens.radiusPill,
+                    ),
                     border: isFriends
                         ? null
                         : Border.all(
