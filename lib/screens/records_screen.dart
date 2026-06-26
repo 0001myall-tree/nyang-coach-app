@@ -137,6 +137,173 @@ class _RecordsScreenState extends State<RecordsScreen> {
     return last7;
   }
 
+  Map<String, dynamic>? _calculateRestProductivityCorrelation() {
+    final allRecords = List<Map<String, dynamic>>.from(_history);
+    allRecords.sort((a, b) => a['date'].toString().compareTo(b['date'].toString()));
+
+    if (allRecords.isEmpty) return null;
+
+    double totalDeltaSum = 0.0;
+    int validVacationCount = 0;
+
+    for (int i = 0; i < allRecords.length; i++) {
+      final current = allRecords[i];
+      final isVacation = current['isVacation'] == true;
+      if (!isVacation) continue;
+
+      double preSum = 0.0;
+      int preCount = 0;
+      for (int offset = 1; offset <= 3; offset++) {
+        final idx = i - offset;
+        if (idx < 0) break;
+        final r = allRecords[idx];
+        if (r['isVacation'] == true) continue;
+        final tot = (r['totalCount'] as num?)?.toDouble() ?? 0.0;
+        final done = (r['doneCount'] as num?)?.toDouble() ?? 0.0;
+        if (tot > 0) {
+          preSum += done / tot;
+          preCount++;
+        }
+      }
+
+      double postSum = 0.0;
+      int postCount = 0;
+      for (int offset = 1; offset <= 3; offset++) {
+        final idx = i + offset;
+        if (idx >= allRecords.length) break;
+        final r = allRecords[idx];
+        if (r['isVacation'] == true) continue;
+        final tot = (r['totalCount'] as num?)?.toDouble() ?? 0.0;
+        final done = (r['doneCount'] as num?)?.toDouble() ?? 0.0;
+        if (tot > 0) {
+          postSum += done / tot;
+          postCount++;
+        }
+      }
+
+      if (preCount > 0 && postCount > 0) {
+        final preAvg = preSum / preCount;
+        final postAvg = postSum / postCount;
+        final delta = postAvg - preAvg;
+        totalDeltaSum += delta;
+        validVacationCount++;
+      }
+    }
+
+    if (validVacationCount == 0) return null;
+
+    final averageDelta = totalDeltaSum / validVacationCount;
+    final averageDeltaPct = (averageDelta * 100).round();
+
+    return {
+      'vacationCount': validVacationCount,
+      'averageDeltaPct': averageDeltaPct,
+    };
+  }
+
+  Widget _buildRestProductivityCorrelationCard() {
+    final corr = _calculateRestProductivityCorrelation();
+
+    String titleText = '';
+    String descText = '';
+    Color valueColor = const Color(0xFF3D3A4E);
+
+    if (corr != null) {
+      final int pct = corr['averageDeltaPct'] as int;
+      if (pct > 0) {
+        titleText = '휴식일 이후 3일간 완료율이 이전보다 $pct% 높았습니다.';
+        descText = '회복이 실행 리듬에 도움이 되었을 수 있어요.';
+        valueColor = const Color(0xFFE05638);
+      } else if (pct < 0) {
+        titleText = '휴식일 이후 3일간 완료율이 이전보다 낮았습니다.';
+        descText = '아직 피로가 남아 있었을 수 있어요. 다음 휴식일에는 기본 루틴만 더 가볍게 챙겨볼게요.';
+        valueColor = const Color(0xFF3182CE);
+      } else {
+        titleText = '휴식일 이후에도 실행 리듬이 비슷하게 유지됐습니다.';
+        descText = '쉬면서도 흐름은 크게 무너지지 않았어요.';
+        valueColor = const Color(0xFF6EBF8B);
+      }
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE8E3F8)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.insights_rounded,
+                size: 18,
+                color: _coach.accentColor,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                '휴식과 생산성 상관관계',
+                style: GoogleFonts.notoSansKr(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
+                  color: const Color(0xFF3D3A4E),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          if (corr != null) ...[
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    titleText,
+                    style: GoogleFonts.notoSansKr(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w900,
+                      color: valueColor,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              descText,
+              style: GoogleFonts.notoSansKr(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: const Color(0xFF6B7280),
+                height: 1.5,
+              ),
+            ),
+          ] else ...[
+            Text(
+              '아직 휴식 모드 이력이 부족해 상관관계를 분석하는 중입니다.',
+              style: GoogleFonts.notoSansKr(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: const Color(0xFF8B8B9B),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              '최소 1회 이상의 휴식 모드 전후 활동 기록이 누적되면, 휴식 이후 생산성 변화율을 정량적으로 추적하여 여기에 보여 드립니다.',
+              style: GoogleFonts.notoSansKr(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: const Color(0xFF9CA3AF),
+                height: 1.5,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   String _getWeekMondayStr() {
     final baseDateParts = _lastDate.split('-');
     DateTime baseDate;
@@ -645,6 +812,10 @@ ${feedbackType == 0 ? '''   [실행 회고형]
 
                     // 이번 주 기록 (차트)
                     _buildWeeklyChartCard(records),
+                    const SizedBox(height: 20),
+
+                    // 휴식과 생산성 상관관계 리포트
+                    _buildRestProductivityCorrelationCard(),
                     const SizedBox(height: 20),
 
                     // 습관 트래킹

@@ -3175,7 +3175,7 @@ class _TasksScreenState extends State<TasksScreen>
                     const Text('🌙', style: TextStyle(fontSize: 40)),
                     const SizedBox(height: 12),
                     Text(
-                      '오늘은 휴무 중이에요.\n푹 쉬고 재충전하세요!',
+                      '오늘은 휴식 모드 작동 중이에요.\n푹 쉬고 재충전하세요!',
                       textAlign: TextAlign.center,
                       style: GoogleFonts.notoSansKr(
                         fontSize: 14,
@@ -3266,7 +3266,7 @@ class _TasksScreenState extends State<TasksScreen>
                     border: Border.all(color: const Color(0xFFE8E3F8)),
                   ),
                   child: Text(
-                    '휴무 설정',
+                    '휴식 모드 설정',
                     style: GoogleFonts.notoSansKr(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
@@ -3308,7 +3308,7 @@ class _TasksScreenState extends State<TasksScreen>
     );
   }
 
-  // ── 휴무 설정 (Vacation) 모달 ──────────────────────────────
+  // ── 휴식 모드 설정 (Vacation) 모달 ──────────────────────────────
   void _showVacationModal() {
     String currentScreen = 'selection';
 
@@ -3322,17 +3322,19 @@ class _TasksScreenState extends State<TasksScreen>
       selectedDays = List<int>.from(vacationInfo!['days'] ?? []);
     }
 
-    showModalBottomSheet(
+    showDialog(
       context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      isScrollControlled: true,
+      barrierDismissible: true,
       builder: (ctx) {
-        return StatefulBuilder(
-          builder: (ctx, setModalState) {
-            Widget content;
+        return Dialog(
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+          child: StatefulBuilder(
+            builder: (ctx, setModalState) {
+              Widget content;
 
             if (currentScreen == 'range') {
               content = Column(
@@ -3358,7 +3360,7 @@ class _TasksScreenState extends State<TasksScreen>
                   ),
                   const SizedBox(height: 24),
                   Text(
-                    '휴무 기간을 선택해주세요.',
+                    '휴식 기간을 선택해주세요.',
                     style: GoogleFonts.notoSansKr(
                       fontSize: 13,
                       fontWeight: FontWeight.w700,
@@ -3467,7 +3469,7 @@ class _TasksScreenState extends State<TasksScreen>
                       _saveVacation();
                       Navigator.pop(ctx);
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('휴무 설정이 완료되었습니다.')),
+                        const SnackBar(content: Text('휴식 모드 설정이 완료되었습니다.')),
                       );
                     },
                     child: Container(
@@ -3505,7 +3507,7 @@ class _TasksScreenState extends State<TasksScreen>
                       ),
                       const SizedBox(width: 8),
                       Text(
-                        '정기 휴무 설정',
+                        '정기 휴식 모드 설정',
                         style: GoogleFonts.notoSansKr(
                           fontSize: 18,
                           fontWeight: FontWeight.w900,
@@ -3582,7 +3584,7 @@ class _TasksScreenState extends State<TasksScreen>
                       _saveVacation();
                       Navigator.pop(ctx);
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('휴무 설정이 완료되었습니다.')),
+                        const SnackBar(content: Text('휴식 모드 설정이 완료되었습니다.')),
                       );
                     },
                     child: Container(
@@ -3594,7 +3596,7 @@ class _TasksScreenState extends State<TasksScreen>
                         borderRadius: BorderRadius.circular(14),
                       ),
                       child: Text(
-                        '정기 휴무 설정 완료',
+                        '정기 휴식 모드 설정 완료',
                         style: GoogleFonts.notoSansKr(
                           fontSize: 16,
                           fontWeight: FontWeight.w800,
@@ -3617,7 +3619,7 @@ class _TasksScreenState extends State<TasksScreen>
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            '🌙 휴무 설정',
+                            '🌙 휴식 모드 설정',
                             style: GoogleFonts.notoSansKr(
                               fontSize: AppDesignTokens.textTitle,
                               fontWeight: FontWeight.w900,
@@ -3669,7 +3671,7 @@ class _TasksScreenState extends State<TasksScreen>
                       _saveVacation();
                       Navigator.pop(ctx);
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('오늘 휴무가 설정되었습니다.')),
+                        const SnackBar(content: Text('오늘 휴식 모드가 설정되었습니다.')),
                       );
                     },
                   ),
@@ -3677,7 +3679,7 @@ class _TasksScreenState extends State<TasksScreen>
                   _buildVacationOption(
                     icon: Icons.calendar_today_outlined,
                     title: '며칠 동안 쉬기',
-                    desc: '연속으로 며칠간 휴무를 설정해요',
+                    desc: '연속으로 며칠간 휴식을 설정해요',
                     isPrimary: false,
                     onTap: () {
                       setModalState(() => currentScreen = 'range');
@@ -3686,7 +3688,7 @@ class _TasksScreenState extends State<TasksScreen>
                   const SizedBox(height: 8),
                   _buildVacationOption(
                     icon: Icons.autorenew_outlined,
-                    title: '정기 휴무 (특정 요일마다)',
+                    title: '정기 휴식 (특정 요일마다)',
                     desc: '매주 정해진 요일에 자동으로 쉬어요',
                     isPrimary: false,
                     onTap: () {
@@ -3701,7 +3703,7 @@ class _TasksScreenState extends State<TasksScreen>
                         _saveVacation();
                         Navigator.pop(ctx);
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('휴무 설정이 해제되었습니다.')),
+                          const SnackBar(content: Text('휴식 모드 설정이 해제되었습니다.')),
                         );
                       },
                       child: Container(
@@ -3718,7 +3720,7 @@ class _TasksScreenState extends State<TasksScreen>
                           ),
                         ),
                         child: Text(
-                          '휴무 설정 해제',
+                          '휴식 모드 설정 해제',
                           style: GoogleFonts.notoSansKr(
                             fontSize: AppDesignTokens.textAction,
                             fontWeight: FontWeight.w700,
@@ -3755,18 +3757,19 @@ class _TasksScreenState extends State<TasksScreen>
               );
             }
 
-            return Padding(
-              padding: EdgeInsets.only(
-                bottom: MediaQuery.of(ctx).viewInsets.bottom,
-              ),
-              child: SingleChildScrollView(
-                child: Container(
-                  padding: const EdgeInsets.all(20),
-                  child: content,
+              return Padding(
+                padding: EdgeInsets.only(
+                  bottom: MediaQuery.of(ctx).viewInsets.bottom,
                 ),
-              ),
-            );
-          },
+                child: SingleChildScrollView(
+                  child: Container(
+                    padding: const EdgeInsets.all(20),
+                    child: content,
+                  ),
+                ),
+              );
+            },
+          ),
         );
       },
     );
@@ -5284,23 +5287,12 @@ class _TasksScreenState extends State<TasksScreen>
 
   Widget _buildGoalList(String type) {
     final goals = type == 'week' ? weekGoals : monthGoals;
-    final title = type == 'week' ? '이번 주 목표' : '이번 달 목표';
     final emptyEmoji = type == 'week' ? '📅' : '🎯';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-          child: Text(
-            title,
-            style: GoogleFonts.notoSansKr(
-              fontSize: 16,
-              fontWeight: FontWeight.w900,
-              color: const Color(0xFF3D3A4E),
-            ),
-          ),
-        ),
+        const SizedBox(height: 16),
         if (goals.isEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 32),

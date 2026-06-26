@@ -537,7 +537,7 @@ class _ChatScreenState extends State<ChatScreen>
     });
 
     // 기록 탭의 "연속 출석"과 동일하게 최근 7일 기준으로 계산합니다.
-    // 휴무일은 연속 기록을 끊지 않고 건너뜁니다.
+    // 휴식 모드일은 연속 기록을 끊지 않고 건너뜁니다.
     var streak = 0;
     for (var i = records.length - 1; i >= 0; i--) {
       if (records[i]['isVacation'] == true) continue;
@@ -670,13 +670,13 @@ class _ChatScreenState extends State<ChatScreen>
 
   String _vacationActivatedMessage() {
     return switch (widget.coachId) {
-      'boyfriend' => '오늘은 휴무로 하자. 오늘은 할 일 체크 안 할 테니까 아무 걱정하지 말고 푹 쉬어.',
-      'girlfriend' => '오빠, 오늘은 휴무로 하자. 오늘은 할 일 체크 안 할 테니까 아무 걱정하지 말고 푹 쉬어 🩷',
-      'halmae' => '오늘은 휴무로 하자, 우리 새끼. 오늘은 할 일 체크 안 할 테니 아무 걱정 말고 푹 쉬어라.',
-      'bro' => '오늘은 휴무다. 할 일 체크 안 들어가니까 걱정 말고 제대로 쉬어.',
-      'sec_male' => '오늘은 휴무로 처리하겠습니다, 대표님. 오늘은 할 일 체크에서 제외되니 아무 걱정 없이 푹 쉬십시오.',
-      'sec_female' => '오늘은 휴무로 할게요, 대표님. 오늘은 할 일 체크에서 제외되니까 아무 걱정 말고 푹 쉬세요.',
-      _ => '오늘은 휴무로 하자냥. 오늘은 할 일 체크 안 할 테니까 아무 걱정하지 말고 푹 쉬어도 된다냥.',
+      'boyfriend' => '오늘은 휴식 모드로 하자. 오늘은 할 일 체크 안 할 테니까 아무 걱정하지 말고 푹 쉬어.',
+      'girlfriend' => '오빠, 오늘은 휴식 모드로 하자. 오늘은 할 일 체크 안 할 테니까 아무 걱정하지 말고 푹 쉬어 🩷',
+      'halmae' => '오늘은 휴식 모드로 하자, 우리 새끼. 오늘은 할 일 체크 안 할 테니 아무 걱정 말고 푹 쉬어라.',
+      'bro' => '오늘은 휴식 모드다. 할 일 체크 안 들어가니까 걱정 말고 제대로 쉬어.',
+      'sec_male' => '오늘은 휴식 모드로 처리하겠습니다, 대표님. 오늘은 할 일 체크에서 제외되니 아무 걱정 없이 푹 쉬십시오.',
+      'sec_female' => '오늘은 휴식 모드로 할게요, 대표님. 오늘은 할 일 체크에서 제외되니까 아무 걱정 말고 푹 쉬세요.',
+      _ => '오늘은 휴식 모드로 하자냥. 오늘은 할 일 체크 안 할 테니까 아무 걱정하지 말고 푹 쉬어도 된다냥.',
     };
   }
 
@@ -694,13 +694,13 @@ class _ChatScreenState extends State<ChatScreen>
   String _vacationCancelledMessage() {
     return switch (widget.coachId) {
       'boyfriend' =>
-        '알겠어. 휴무는 취소했어. 다시 해보고 싶은 마음이 들었으면 처음부터 다 하려고 하지 말고 천천히 돌아가자.',
-      'girlfriend' => '알겠어 오빠. 휴무는 취소했어. 처음부터 다 하려고 하지 말고 천천히 돌아가자 🩷',
-      'halmae' => '알았다, 우리 새끼. 휴무는 취소했으니 처음부터 무리하지 말고 천천히 돌아가자.',
-      'bro' => '오케이, 휴무 취소했다. 처음부터 풀파워로 가지 말고 천천히 복귀하자.',
-      'sec_male' => '휴무를 해제했습니다, 대표님. 처음부터 모든 일정을 처리하려 하지 마시고 천천히 복귀하시죠.',
-      'sec_female' => '휴무를 해제했어요, 대표님. 처음부터 다 하려고 하지 말고 천천히 돌아가요.',
-      _ => '알겠다냥. 휴무는 취소했다냥. 다시 해보고 싶은 마음이 들었으면 처음부터 다 하려고 하지 말고 천천히 돌아가자냥.',
+        '알겠어. 휴식 모드는 취소했어. 다시 해보고 싶은 마음이 들었으면 처음부터 다 하려고 하지 말고 천천히 돌아가자.',
+      'girlfriend' => '알겠어 오빠. 휴식 모드는 취소했어. 처음부터 다 하려고 하지 말고 천천히 돌아가자 🩷',
+      'halmae' => '알았다, 우리 새끼. 휴식 모드는 취소했으니 처음부터 무리하지 말고 천천히 돌아가자.',
+      'bro' => '오케이, 휴식 모드 취소했다. 처음부터 풀파워로 가지 말고 천천히 복귀하자.',
+      'sec_male' => '휴식 모드를 해제했습니다, 대표님. 처음부터 모든 일정을 처리하려 하지 마시고 천천히 복귀하시죠.',
+      'sec_female' => '휴식 모드를 해제했어요, 대표님. 처음부터 다 하려고 하지 말고 천천히 돌아가요.',
+      _ => '알겠다냥. 휴식 모드는 취소했다냥. 다시 해보고 싶은 마음이 들었으면 처음부터 다 하려고 하지 말고 천천히 돌아가자냥.',
     };
   }
 
@@ -817,11 +817,11 @@ class _ChatScreenState extends State<ChatScreen>
   bool _isVacationActivationRequest(String text) {
     final normalized = text.replaceAll(RegExp(r'\s+'), '').toLowerCase();
     const requests = [
-      '오늘휴무하고싶',
-      '오늘휴무할래',
-      '오늘휴무로해줘',
-      '휴무켜줘',
-      '휴무설정해줘',
+      '오늘휴식하고싶',
+      '오늘휴식할래',
+      '오늘휴식으로해줘',
+      '휴식켜줘',
+      '휴식설정해줘',
       '오늘쉬고싶',
       '오늘쉴래',
       '오늘은쉴래',
@@ -900,8 +900,8 @@ class _ChatScreenState extends State<ChatScreen>
 
   bool _isVacationCancelRequest(String text) {
     final normalized = text.replaceAll(RegExp(r'\s+'), '').toLowerCase();
-    return normalized.contains('휴무취소') ||
-        normalized.contains('휴무해제') ||
+    return normalized.contains('휴식취소') ||
+        normalized.contains('휴식해제') ||
         normalized.contains('쉬는거취소') ||
         normalized == '다시할래' ||
         normalized.contains('다시시작할래');
@@ -3252,7 +3252,7 @@ class _ChatScreenState extends State<ChatScreen>
         return '$title, 어제($yesterdayStr) 기록을 찾지 못했습니다.';
       }
       if (record['isVacation'] == true) {
-        return '$title, 어제($yesterdayStr)는 휴무일로 기록되어 있어서 미완료 평가에서 제외되어 있습니다.';
+        return '$title, 어제($yesterdayStr)는 휴식 모드로 기록되어 있어서 미완료 평가에서 제외되어 있습니다.';
       }
 
       final tasks = (record['tasks'] as List?) ?? [];
@@ -4882,6 +4882,19 @@ class _ChatScreenState extends State<ChatScreen>
 4. 실시간 Lite 모드: 프로필을 읽기 전용으로만 참조하며, 직접 수정을 언급하지 마세요.''');
     }
 
+    // 16. 휴식 모드 시 특별 코칭 지침
+    final isVacation = widget.vacationInfo != null || prefs.getString('nyang_vacation') != null;
+    if (isVacation) {
+      sb.writeln('\n[특별 지침: 번아웃 방지 및 충전을 위한 휴식 모드 (최우선 지침)]');
+      sb.writeln(
+        '현재 사용자는 번아웃을 방지하고 충전하기 위한 휴식 모드 상태입니다. 다음 규칙을 철저히 준수하여 대응하십시오:',
+      );
+      sb.writeln('- 할 일 완료 여부를 묻거나, 압박하거나, 계획을 수정하라고 제안하지 마십시오.');
+      sb.writeln('- 할 일창의 미완료 항목을 언급하며 실행을 권유하는 모든 행동을 금지합니다.');
+      sb.writeln('- 오직 사용자의 마음을 달래고, 충분한 휴식이 필요함을 공감하고 지지하십시오.');
+      sb.writeln('- 사용자가 먼저 할 일을 하겠다고 말하기 전까지는 휴식 모드 지침을 최우선으로 하십시오.');
+    }
+
     // 2. 장기 패턴
     final ltRaw = prefs.getString('nyang_long_term');
     if (ltRaw != null && (!_coach.isMaster || needsGoalContext)) {
@@ -5553,12 +5566,12 @@ class _ChatScreenState extends State<ChatScreen>
       );
     }
 
-    // 16. 휴무/휴식 모드 시 특별 코칭 지침
+    // 16. 휴식 모드 시 특별 코칭 지침
     final isVacation = widget.vacationInfo != null || prefs.getString('nyang_vacation') != null;
     if (isVacation) {
       sb.writeln('\n[특별 지침: 번아웃 방지 및 충전을 위한 휴식 모드 (최우선 지침)]');
       sb.writeln(
-        '현재 사용자는 번아웃을 방지하고 충전하기 위한 휴식(휴무) 모드 상태입니다. 다음 규칙을 철저히 준수하여 대응하십시오:',
+        '현재 사용자는 번아웃을 방지하고 충전하기 위한 휴식 모드 상태입니다. 다음 규칙을 철저히 준수하여 대응하십시오:',
       );
       sb.writeln(
         '1. **마음의 부담 완화**: 사용자가 오늘 계획한 일이나 할 일을 하지 못하는 것에 대해 느끼는 죄책감이나 심리적 부담감을 대화를 통해 덜어주세요. "쉬어도 괜찮다", "충전도 하루의 중요한 일부이다"라는 점을 강조하며 따뜻하게 공감해 주고 마음의 부담을 낮춰주어야 합니다.',
