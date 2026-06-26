@@ -11,6 +11,10 @@ import '../services/widget_sync_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'coach_selection_screen.dart';
 import 'main_tab_screen.dart';
+import '../theme/app_design_tokens.dart';
+import '../widgets/app_bottom_sheet.dart';
+import '../widgets/app_button.dart';
+import '../widgets/app_card.dart';
 
 class LandingScreen extends StatefulWidget {
   const LandingScreen({super.key});
@@ -162,7 +166,7 @@ class _LandingScreenState extends State<LandingScreen>
                 shape: BoxShape.circle,
                 // 원 내부는 중앙 화이트 -> 외곽 옅은 보라색 그라데이션
                 gradient: const RadialGradient(
-                  colors: [Colors.white, Color(0xFFF8F5FF)],
+                  colors: [AppDesignTokens.surface, AppDesignTokens.brandSoft],
                   stops: [0.6, 1.0],
                 ),
                 // 하얀색 테두리
@@ -170,7 +174,7 @@ class _LandingScreenState extends State<LandingScreen>
                 // 테두리 바깥으로 퍼지는 연보라색 그라데이션 빛(그림자) 효과
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFFD6C4FF).withValues(alpha: 0.8),
+                    color: AppDesignTokens.brandDisabled.withValues(alpha: 0.8),
                     blurRadius: 18.0,
                     spreadRadius: 2.0,
                   ),
@@ -261,7 +265,7 @@ class _LandingScreenState extends State<LandingScreen>
                 style: const TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w800,
-                  color: Color(0xFF3D3A4E),
+                  color: AppDesignTokens.textPrimary,
                 ),
               ),
             ),
@@ -273,158 +277,152 @@ class _LandingScreenState extends State<LandingScreen>
 
   void _showLoginBottomSheet() {
     final outerContext = context; // 상위 화면(LandingScreen)의 context 저장
-    showModalBottomSheet(
+    showAppBottomSheet(
       context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
       builder: (sheetContext) {
-        return Container(
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+        return AppBottomSheetScaffold(
+          contentPadding: const EdgeInsets.fromLTRB(
+            24,
+            0,
+            24,
+            AppDesignTokens.sheetContentBottomPadding,
           ),
-          padding: const EdgeInsets.fromLTRB(24, 12, 24, 40),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // 드래그 핸들
-              Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade300,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              const SizedBox(height: 32),
+          body: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(height: 18),
 
-              // 프로필 아이콘
-              Container(
-                width: 64,
-                height: 64,
-                decoration: const BoxDecoration(
-                  color: Color(0xFFF3EFFF),
-                  shape: BoxShape.circle,
+                // 프로필 아이콘
+                Container(
+                  width: 64,
+                  height: 64,
+                  decoration: const BoxDecoration(
+                    color: AppDesignTokens.brandSoft,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.person_outline,
+                    color: AppDesignTokens.brand,
+                    size: 32,
+                  ),
                 ),
-                child: const Icon(
-                  Icons.person_outline,
-                  color: Color(0xFF7B61FF),
-                  size: 32,
-                ),
-              ),
-              const SizedBox(height: 24),
+                const SizedBox(height: 24),
 
-              // 텍스트
-              Text(
-                '계정 연결하고\n더 편하게 사용해요',
-                textAlign: TextAlign.center,
-                style: GoogleFonts.notoSansKr(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w900,
-                  color: const Color(0xFF1A1A2E),
-                  height: 1.4,
+                // 텍스트
+                Text(
+                  '계정 연결하고\n더 편하게 사용해요',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.notoSansKr(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w900,
+                    color: AppDesignTokens.textPrimary,
+                    height: 1.4,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 32),
+                const SizedBox(height: 32),
 
-              // 구글 로그인 버튼
-              _buildLoginButton(
-                text: '구글로 계속',
-                icon: SvgPicture.string(
-                  '''<svg width="22" height="22" viewBox="0 0 24 24">
+                // 구글 로그인 버튼
+                _buildLoginButton(
+                  text: '구글로 계속',
+                  icon: SvgPicture.string(
+                    '''<svg width="22" height="22" viewBox="0 0 24 24">
   <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
   <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
   <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05" />
   <path d="M12 5.38c1.62 0 3.06.56 4.21 1.66l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
 </svg>''',
-                  width: 24,
-                  height: 24,
-                ),
-                onPressed: () async {
-                  Navigator.pop(sheetContext); // 바텀시트 닫기
+                    width: 24,
+                    height: 24,
+                  ),
+                  onPressed: () async {
+                    Navigator.pop(sheetContext); // 바텀시트 닫기
 
-                  final authService = AuthService();
-                  final userCred = await authService.signInWithGoogle();
+                    final authService = AuthService();
+                    final userCred = await authService.signInWithGoogle();
 
-                  if (!outerContext.mounted) return;
-
-                  if (userCred != null) {
-                    print('로그인 성공: ${userCred.user?.displayName}');
-                    await TasksSyncService.syncFromCloud(); // 로그인 시 클라우드 데이터 복원
-                    final data = await UserDataService.load();
                     if (!outerContext.mounted) return;
 
-                    if (data.selectedCoachId != null &&
-                        data.canAccessCoach(data.selectedCoachId!)) {
-                      Navigator.pushReplacement(
-                        outerContext,
-                        MaterialPageRoute(
-                          builder: (context) =>
-                              MainTabScreen(coachId: data.selectedCoachId!),
-                        ),
-                      );
-                    } else {
-                      if (data.selectedCoachId != null) {
-                        await UserDataService.setSelectedCoach('cat');
-                      }
+                    if (userCred != null) {
+                      print('로그인 성공: ${userCred.user?.displayName}');
+                      await TasksSyncService.syncFromCloud(); // 로그인 시 클라우드 데이터 복원
+                      final data = await UserDataService.load();
                       if (!outerContext.mounted) return;
-                      Navigator.pushReplacement(
-                        outerContext,
-                        MaterialPageRoute(
-                          builder: (context) => const CoachSelectionScreen(),
+
+                      if (data.selectedCoachId != null &&
+                          data.canAccessCoach(data.selectedCoachId!)) {
+                        Navigator.pushReplacement(
+                          outerContext,
+                          MaterialPageRoute(
+                            builder: (context) =>
+                                MainTabScreen(coachId: data.selectedCoachId!),
+                          ),
+                        );
+                      } else {
+                        if (data.selectedCoachId != null) {
+                          await UserDataService.setSelectedCoach('cat');
+                        }
+                        if (!outerContext.mounted) return;
+                        Navigator.pushReplacement(
+                          outerContext,
+                          MaterialPageRoute(
+                            builder: (context) => const CoachSelectionScreen(),
+                          ),
+                        );
+                      }
+                    } else {
+                      print('로그인 취소 또는 실패');
+                      ScaffoldMessenger.of(outerContext).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            '구글 로그인에 실패했습니다. (파이어베이스 SHA-1 설정 누락 등)',
+                          ),
+                          backgroundColor: Colors.redAccent,
                         ),
                       );
                     }
-                  } else {
-                    print('로그인 취소 또는 실패');
-                    ScaffoldMessenger.of(outerContext).showSnackBar(
-                      const SnackBar(
-                        content: Text('구글 로그인에 실패했습니다. (파이어베이스 SHA-1 설정 누락 등)'),
-                        backgroundColor: Colors.redAccent,
-                      ),
-                    );
-                  }
-                },
-              ),
-              const SizedBox(height: 12),
+                  },
+                ),
+                const SizedBox(height: 12),
 
-              // 네이버 로그인 버튼
-              _buildLoginButton(
-                text: '네이버로 계속',
-                icon: SvgPicture.string(
-                  '''<svg width="20" height="20" viewBox="0 0 24 24" fill="#03C75A">
+                // 네이버 로그인 버튼
+                _buildLoginButton(
+                  text: '네이버로 계속',
+                  icon: SvgPicture.string(
+                    '''<svg width="20" height="20" viewBox="0 0 24 24" fill="#03C75A">
   <path d="M16.273 12.845L7.376 0H0v24h7.727V11.155L16.624 24H24V0h-7.727v12.845z" />
 </svg>''',
-                  width: 20,
-                  height: 20,
+                    width: 20,
+                    height: 20,
+                  ),
+                  onPressed: () {
+                    Navigator.pop(sheetContext); // 바텀시트 닫기
+                    // 개발용 프리패스 (바로 코치 선택 화면으로)
+                    Navigator.pushReplacement(
+                      outerContext,
+                      MaterialPageRoute(
+                        builder: (context) => const CoachSelectionScreen(),
+                      ),
+                    );
+                  },
                 ),
-                onPressed: () {
-                  Navigator.pop(sheetContext); // 바텀시트 닫기
-                  // 개발용 프리패스 (바로 코치 선택 화면으로)
-                  Navigator.pushReplacement(
-                    outerContext,
-                    MaterialPageRoute(
-                      builder: (context) => const CoachSelectionScreen(),
-                    ),
-                  );
-                },
-              ),
-              const SizedBox(height: 12),
+                const SizedBox(height: 12),
 
-              // 카카오 로그인 버튼
-              _buildLoginButton(
-                text: '카카오로 계속',
-                icon: SvgPicture.string(
-                  '''<svg width="22" height="22" viewBox="0 0 24 24" fill="#3c1e1e">
+                // 카카오 로그인 버튼
+                _buildLoginButton(
+                  text: '카카오로 계속',
+                  icon: SvgPicture.string(
+                    '''<svg width="22" height="22" viewBox="0 0 24 24" fill="#3c1e1e">
   <path d="M12 3c-4.97 0-9 3.185-9 7.115 0 2.558 1.707 4.8 4.33 6.091l-.865 3.162c-.048.178.058.353.232.384.053.01.107.01.16-.003l3.704-2.45c.46.046.938.07 1.439.07 4.97 0 9-3.185 9-7.115S16.97 3 12 3z" />
 </svg>''',
-                  width: 24,
-                  height: 24,
+                    width: 24,
+                    height: 24,
+                  ),
+                  onPressed: () {},
                 ),
-                onPressed: () {},
-              ),
-              const SizedBox(height: 16),
-            ],
+                const SizedBox(height: 16),
+              ],
+            ),
           ),
         );
       },
@@ -436,17 +434,13 @@ class _LandingScreenState extends State<LandingScreen>
     required Widget icon,
     required VoidCallback onPressed,
   }) {
-    return InkWell(
+    return AppCard(
       onTap: onPressed,
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        width: double.infinity,
-        height: 56,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.grey.shade200),
-        ),
+      padding: EdgeInsets.zero,
+      radius: AppDesignTokens.radiusMedium,
+      borderColor: AppDesignTokens.divider,
+      child: SizedBox(
+        height: AppDesignTokens.buttonHeight,
         child: Row(
           children: [
             const SizedBox(width: 20),
@@ -456,9 +450,9 @@ class _LandingScreenState extends State<LandingScreen>
                 child: Text(
                   text,
                   style: GoogleFonts.notoSansKr(
-                    fontSize: 16,
+                    fontSize: AppDesignTokens.textAction,
                     fontWeight: FontWeight.w700,
-                    color: const Color(0xFF333333),
+                    color: AppDesignTokens.textPrimary,
                   ),
                 ),
               ),
@@ -477,7 +471,7 @@ class _LandingScreenState extends State<LandingScreen>
     final width = screenWidth > 430 ? 430.0 : screenWidth;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF9F8FF),
+      backgroundColor: AppDesignTokens.brandSoftAlt,
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 430),
@@ -487,7 +481,7 @@ class _LandingScreenState extends State<LandingScreen>
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
-                colors: [Color(0xFFF9F8FF), Colors.white],
+                colors: [AppDesignTokens.brandSoftAlt, AppDesignTokens.surface],
                 stops: [0.0, 0.5],
               ),
             ),
@@ -514,7 +508,7 @@ class _LandingScreenState extends State<LandingScreen>
                                 style: GoogleFonts.nanumGothic(
                                   fontSize: 24,
                                   fontWeight: FontWeight.w800,
-                                  color: const Color(0xFF1A1A2E),
+                                  color: AppDesignTokens.textPrimary,
                                   letterSpacing: 0,
                                 ),
                               ),
@@ -534,7 +528,7 @@ class _LandingScreenState extends State<LandingScreen>
                             style: GoogleFonts.nanumGothic(
                               fontSize: 36,
                               fontWeight: FontWeight.w900,
-                              color: const Color(0xFF7B61FF),
+                              color: AppDesignTokens.brand,
                               letterSpacing: 0,
                             ),
                           ),
@@ -561,7 +555,7 @@ class _LandingScreenState extends State<LandingScreen>
                                 begin: Alignment.topCenter,
                                 end: Alignment.bottomCenter,
                                 colors: [
-                                  Color(0xFFF3EDFF), // 옅은 배경 연보라색
+                                  AppDesignTokens.brandSoft, // 옅은 배경 연보라색
                                   Colors
                                       .white, // 바탕 화면색(흰색)으로 자연스럽게 페이드아웃 (탁한 투명화 방지)
                                 ],
@@ -719,9 +713,8 @@ class _LandingScreenState extends State<LandingScreen>
                                 child: Container(
                                   width: 16,
                                   decoration: BoxDecoration(
-                                    color: const Color(
-                                      0xFF6A52E0,
-                                    ), // 버튼보다 살짝 어두운 톤
+                                    color: AppDesignTokens
+                                        .brandPressed, // 버튼보다 살짝 어두운 톤
                                     borderRadius: const BorderRadius.only(
                                       topRight: Radius.circular(4),
                                       bottomRight: Radius.circular(4),
@@ -744,7 +737,7 @@ class _LandingScreenState extends State<LandingScreen>
                                 width: double.infinity,
                                 height: 64,
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFF7B61FF), // 기존 색상 유지
+                                  color: AppDesignTokens.brand,
                                   borderRadius: BorderRadius.circular(
                                     24,
                                   ), // 둘러보기 버튼과 통일
@@ -757,7 +750,7 @@ class _LandingScreenState extends State<LandingScreen>
                                       offset: const Offset(0, 4),
                                     ),
                                     BoxShadow(
-                                      color: const Color(0xFF5A45C0),
+                                      color: AppDesignTokens.brandStrong,
                                       blurRadius: 0,
                                       offset: const Offset(
                                         0,
@@ -838,36 +831,15 @@ class _LandingScreenState extends State<LandingScreen>
                         ),
                         const SizedBox(height: 16),
                         // 로그인 없이 둘러보기 버튼
-                        OutlinedButton(
+                        AppButton(
+                          label: '로그인 없이 둘러보기',
+                          icon: const Icon(Icons.visibility_outlined),
                           onPressed: () {},
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: const Color(0xFF7B61FF),
-                            backgroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 20),
-                            minimumSize: const Size(double.infinity, 64),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(24),
-                            ),
-                            side: const BorderSide(
-                              color: Color(0xFFE5E0FF),
-                              width: 1.5,
-                            ),
-                            elevation: 0,
-                          ),
-                          child: const Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.visibility_outlined, size: 20),
-                              SizedBox(width: 8),
-                              Text(
-                                '로그인 없이 둘러보기',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ],
-                          ),
+                          variant: AppButtonVariant.outline,
+                          backgroundColor: AppDesignTokens.surface,
+                          foregroundColor: AppDesignTokens.brandPressed,
+                          borderColor: AppDesignTokens.brandBorder,
+                          height: 64,
                         ),
                       ],
                     ),

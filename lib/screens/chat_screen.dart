@@ -23,6 +23,7 @@ import 'coach_config.dart';
 import 'focus_timer_widget.dart';
 import '../models/user_data.dart';
 import '../theme/app_design_tokens.dart';
+import '../widgets/app_chip.dart';
 import '../widgets/plan_guide_bottom_sheet.dart';
 
 // ─────────────────────────────────────────────────────────────
@@ -6606,12 +6607,12 @@ $timerOutputRule
       margin: const EdgeInsets.fromLTRB(14, 2, 14, 4),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.96),
+        color: AppDesignTokens.surface.withValues(alpha: 0.96),
         borderRadius: BorderRadius.circular(26),
-        border: Border.all(color: const Color(0xFFDED6FF)),
+        border: Border.all(color: AppDesignTokens.brandCardBorder),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF9B8AF0).withOpacity(0.10),
+            color: AppDesignTokens.brand.withValues(alpha: 0.10),
             blurRadius: 18,
             offset: const Offset(0, 8),
           ),
@@ -6635,7 +6636,7 @@ $timerOutputRule
                       style: GoogleFonts.notoSansKr(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
-                        color: const Color(0xFF8E8A9E),
+                        color: AppDesignTokens.textMuted,
                       ),
                     ),
                     Text(
@@ -6643,7 +6644,7 @@ $timerOutputRule
                       style: GoogleFonts.notoSansKr(
                         fontSize: 13,
                         fontWeight: FontWeight.w800,
-                        color: const Color(0xFF6B5EA8),
+                        color: AppDesignTokens.brandPressed,
                       ),
                     ),
                   ],
@@ -6654,14 +6655,17 @@ $timerOutputRule
                   child: Container(
                     width: double.infinity,
                     height: 7,
-                    color: const Color(0xFFE8E3F8),
+                    color: AppDesignTokens.brandBorder,
                     child: FractionallySizedBox(
                       widthFactor: progress,
                       alignment: Alignment.centerLeft,
                       child: Container(
                         decoration: const BoxDecoration(
                           gradient: LinearGradient(
-                            colors: [Color(0xFFC4B5FD), Color(0xFF8B7CCC)],
+                            colors: [
+                              AppDesignTokens.brandAccent,
+                              AppDesignTokens.brandMuted,
+                            ],
                           ),
                         ),
                       ),
@@ -6681,7 +6685,7 @@ $timerOutputRule
             child: const Icon(
               Icons.chevron_right_rounded,
               size: 28,
-              color: Color(0xFF6B5EA8),
+              color: AppDesignTokens.brandPressed,
             ),
           ),
         ],
@@ -6720,7 +6724,7 @@ $timerOutputRule
         boxShadow: isFriends
             ? [
                 BoxShadow(
-                  color: const Color(0xFF6B5EA8).withValues(alpha: 0.10),
+                  color: AppDesignTokens.brandPressed.withValues(alpha: 0.10),
                   blurRadius: 18,
                   offset: const Offset(0, 8),
                 ),
@@ -6738,7 +6742,7 @@ $timerOutputRule
                 borderRadius: BorderRadius.circular(14),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFF8B7CCC).withOpacity(0.10),
+                    color: AppDesignTokens.brandMuted.withValues(alpha: 0.10),
                     blurRadius: 8,
                     offset: const Offset(0, 2),
                   ),
@@ -6759,7 +6763,7 @@ $timerOutputRule
                         style: GoogleFonts.notoSansKr(
                           fontSize: 10,
                           fontWeight: FontWeight.w700,
-                          color: const Color(0xFF7C5CFC),
+                          color: AppDesignTokens.brand,
                         ),
                       ),
                       Text(
@@ -6767,7 +6771,7 @@ $timerOutputRule
                         style: GoogleFonts.notoSansKr(
                           fontSize: 12,
                           fontWeight: FontWeight.w900,
-                          color: const Color(0xFF3D3A4E),
+                          color: AppDesignTokens.textPrimary,
                         ),
                       ),
                     ],
@@ -6790,7 +6794,7 @@ $timerOutputRule
                       style: GoogleFonts.notoSansKr(
                         fontSize: 11,
                         fontWeight: FontWeight.w700,
-                        color: const Color(0xFFA0A0B0),
+                        color: AppDesignTokens.textMuted,
                       ),
                     ),
                     Text(
@@ -6798,7 +6802,7 @@ $timerOutputRule
                       style: GoogleFonts.notoSansKr(
                         fontSize: 12,
                         fontWeight: FontWeight.w800,
-                        color: const Color(0xFF6B5EA8),
+                        color: AppDesignTokens.brandPressed,
                       ),
                     ),
                   ],
@@ -6811,7 +6815,7 @@ $timerOutputRule
                     decoration: BoxDecoration(
                       color: _coach.isMaster
                           ? Colors.black.withOpacity(0.1)
-                          : const Color(0xFFE8E3F8),
+                          : AppDesignTokens.brandBorder,
                       borderRadius: const BorderRadius.all(Radius.circular(8)),
                     ),
                     child: FractionallySizedBox(
@@ -6822,7 +6826,10 @@ $timerOutputRule
                       child: Container(
                         decoration: const BoxDecoration(
                           gradient: LinearGradient(
-                            colors: [Color(0xFFC4B5FD), Color(0xFF8B7CCC)],
+                            colors: [
+                              AppDesignTokens.brandAccent,
+                              AppDesignTokens.brandMuted,
+                            ],
                           ),
                           borderRadius: BorderRadius.all(Radius.circular(8)),
                         ),
@@ -6837,7 +6844,7 @@ $timerOutputRule
                     style: GoogleFonts.notoSansKr(
                       fontSize: 11,
                       fontWeight: FontWeight.w500,
-                      color: const Color(0xFF9B8FC8),
+                      color: AppDesignTokens.brandTextMuted,
                     ),
                   ),
                 ],
@@ -6857,14 +6864,17 @@ $timerOutputRule
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFFDDD6FE), width: 1.5),
+                border: Border.all(
+                  color: AppDesignTokens.brandCardBorder,
+                  width: 1.5,
+                ),
               ),
               child: Text(
                 '보기 ›',
                 style: GoogleFonts.notoSansKr(
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
-                  color: const Color(0xFF6B5EA8),
+                  color: AppDesignTokens.brandPressed,
                 ),
               ),
             ),
@@ -7362,7 +7372,7 @@ $timerOutputRule
         ? const <String>[]
         : (_dynamicChips.isNotEmpty ? _dynamicChips : _coach.chips);
     return Container(
-      height: 44,
+      height: 52,
       margin: const EdgeInsets.only(top: 8),
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
@@ -7371,10 +7381,11 @@ $timerOutputRule
         separatorBuilder: (_, __) => const SizedBox(width: 8),
         itemBuilder: (ctx, i) {
           final chip = chips[i];
-          final chipBg = Colors.white;
-          final chipBorder = _coach.accentColor.withOpacity(0.3);
-          final chipText = _coach.accentColor;
-          return GestureDetector(
+          return AppChip(
+            label: chip,
+            backgroundColor: AppDesignTokens.surface,
+            foregroundColor: _coach.accentColor,
+            borderColor: _coach.accentColor.withValues(alpha: 0.30),
             onTap: () {
               if (chip == '🌙 오늘은 쉬어가기') {
                 _activateRestDay();
@@ -7386,29 +7397,6 @@ $timerOutputRule
               }
               _send(chip);
             },
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              decoration: BoxDecoration(
-                color: chipBg,
-                borderRadius: BorderRadius.circular(22),
-                border: Border.all(color: chipBorder, width: 1.5),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.04),
-                    blurRadius: 6,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: Text(
-                chip,
-                style: GoogleFonts.notoSansKr(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  color: chipText,
-                ),
-              ),
-            ),
           );
         },
       ),
@@ -7423,9 +7411,9 @@ $timerOutputRule
     final isNyang = widget.coachId == 'cat';
     final isGirlfriend = widget.coachId == 'girlfriend';
     final girlfriendPink = _coach.accentColor;
-    const masterLavenderBorder = Color(0xFFDED6FF);
-    const masterLavenderIcon = Color(0xFF8B7CCC);
-    const masterLavenderShadow = Color(0xFF9B8AF0);
+    const masterLavenderBorder = AppDesignTokens.brandCardBorder;
+    const masterLavenderIcon = AppDesignTokens.brandMuted;
+    const masterLavenderShadow = AppDesignTokens.brand;
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
       decoration: BoxDecoration(
@@ -7556,24 +7544,25 @@ $timerOutputRule
                     style: GoogleFonts.notoSansKr(
                       fontSize: AppDesignTokens.textBody,
                       color: isNyang
-                          ? const Color(0xFF1A1A2E)
+                          ? AppDesignTokens.textPrimary
                           : (isFriends
                                 ? (isGirlfriend
-                                      ? const Color(0xFF1A1A2E)
+                                      ? AppDesignTokens.textPrimary
                                       : Colors.white)
-                                : const Color(0xFF1A1A2E)),
+                                : AppDesignTokens.textPrimary),
                     ),
                     decoration: InputDecoration(
                       hintText: '메시지를 입력하세요...',
                       hintStyle: GoogleFonts.notoSansKr(
                         fontSize: AppDesignTokens.textBody,
                         color: isNyang
-                            ? const Color(0xFF4B445F).withOpacity(0.62)
+                            ? AppDesignTokens.textPrimary.withValues(
+                                alpha: 0.62,
+                              )
                             : (isFriends
                                   ? (isGirlfriend
-                                        ? const Color(
-                                            0xFF1A1A2E,
-                                          ).withOpacity(0.45)
+                                        ? AppDesignTokens.textPrimary
+                                              .withValues(alpha: 0.45)
                                         : Colors.white.withOpacity(0.6))
                                   : AppDesignTokens.textDisabled),
                       ),
@@ -7597,7 +7586,10 @@ $timerOutputRule
                         : const LinearGradient(
                             begin: Alignment.topLeft,
                             end: Alignment.bottomRight,
-                            colors: [Color(0xFF9B8AF0), Color(0xFFA99AE8)],
+                            colors: [
+                              AppDesignTokens.brand,
+                              AppDesignTokens.brandMuted,
+                            ],
                           ),
                     color: isFriends ? _coach.accentColor : null,
                     borderRadius: BorderRadius.circular(
@@ -7613,7 +7605,7 @@ $timerOutputRule
                       BoxShadow(
                         color: isFriends
                             ? _coach.accentColor.withOpacity(0.35)
-                            : const Color(0xFF9B8AF0).withValues(alpha: 0.28),
+                            : AppDesignTokens.brand.withValues(alpha: 0.28),
                         blurRadius: isFriends ? 10 : 15,
                         offset: const Offset(0, 4),
                       ),
