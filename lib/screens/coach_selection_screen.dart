@@ -6,6 +6,11 @@ import 'landing_screen.dart';
 import 'coach_config.dart';
 import '../models/user_data.dart';
 import '../services/auth_service.dart';
+import '../theme/app_design_tokens.dart';
+import '../widgets/app_button.dart';
+import '../widgets/app_bottom_sheet.dart';
+import '../widgets/app_card.dart';
+import '../widgets/app_chip.dart';
 import '../widgets/plan_guide_bottom_sheet.dart';
 
 class CoachSelectionScreen extends StatefulWidget {
@@ -351,10 +356,8 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
     String? errorText;
     bool isApplying = false;
 
-    showModalBottomSheet(
+    showAppBottomSheet(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
       builder: (sheetContext) {
         return StatefulBuilder(
           builder: (context, setSheetState) {
@@ -422,203 +425,162 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
               );
             }
 
-            return Padding(
-              padding: EdgeInsets.only(
-                bottom: MediaQuery.of(context).viewInsets.bottom,
+            final inputBorder = OutlineInputBorder(
+              borderRadius: BorderRadius.circular(AppDesignTokens.radiusMedium),
+              borderSide: const BorderSide(color: AppDesignTokens.brandBorder),
+            );
+
+            return AppBottomSheetScaffold(
+              contentPadding: const EdgeInsets.fromLTRB(
+                24,
+                0,
+                24,
+                AppDesignTokens.sheetContentBottomPadding,
               ),
-              child: Container(
-                padding: const EdgeInsets.fromLTRB(24, 12, 24, 28),
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
-                ),
-                child: SafeArea(
-                  top: false,
-                  child: SingleChildScrollView(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
+              body: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
                       children: [
-                        Center(
-                          child: Container(
-                            width: 48,
-                            height: 4,
-                            margin: const EdgeInsets.only(bottom: 22),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFE5E7EB),
-                              borderRadius: BorderRadius.circular(2),
-                            ),
+                        const LockedCoachIcon(size: 36),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '내 구독 상태',
+                                style: GoogleFonts.notoSansKr(
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.w900,
+                                  color: AppDesignTokens.textPrimary,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                '구독, 포인트, 쿠폰을 확인해요.',
+                                style: GoogleFonts.notoSansKr(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppDesignTokens.textMuted,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                        Row(
-                          children: [
-                            const LockedCoachIcon(size: 36),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    '내 구독 상태',
-                                    style: GoogleFonts.notoSansKr(
-                                      fontSize: 22,
-                                      fontWeight: FontWeight.w900,
-                                      color: const Color(0xFF1A1A2E),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    '구독, 포인트, 쿠폰을 확인해요.',
-                                    style: GoogleFonts.notoSansKr(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w600,
-                                      color: const Color(0xFF8A8798),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            IconButton(
-                              onPressed: () => Navigator.of(sheetContext).pop(),
-                              icon: const Icon(Icons.close_rounded),
-                              tooltip: '닫기',
-                              style: IconButton.styleFrom(
-                                foregroundColor: const Color(0xFF8A8798),
-                                backgroundColor: const Color(0xFFF8F7FF),
-                                shape: const CircleBorder(),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 22),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: _buildSubscriptionStatusCard(
-                                label: '구독 상태',
-                                value: _planStatusLabel,
-                                icon: Icons.workspace_premium_rounded,
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: _buildSubscriptionStatusCard(
-                                label: '포인트',
-                                value: '${_userData.points}P',
-                                icon: Icons.toll_rounded,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 10),
-                        _buildSubscriptionStatusCard(
-                          label: '구독 남은 기간',
-                          value: _planRemainingLabel,
-                          icon: Icons.event_available_rounded,
-                          isWide: true,
-                        ),
-                        const SizedBox(height: 18),
-                        _buildPurchasedCoachSection(),
-                        const SizedBox(height: 18),
-                        Text(
-                          '쿠폰 입력',
-                          style: GoogleFonts.notoSansKr(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w900,
-                            color: const Color(0xFF1A1A2E),
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        TextField(
-                          controller: couponController,
-                          textCapitalization: TextCapitalization.characters,
-                          decoration: InputDecoration(
-                            hintText: '쿠폰 또는 구독권 코드',
-                            errorText: errorText,
-                            hintStyle: GoogleFonts.notoSansKr(
-                              color: const Color(0xFFB8B5C6),
-                              fontWeight: FontWeight.w600,
-                            ),
-                            filled: true,
-                            fillColor: const Color(0xFFF8F7FF),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(16),
-                              borderSide: const BorderSide(
-                                color: Color(0xFFE8E3F8),
-                              ),
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(16),
-                              borderSide: const BorderSide(
-                                color: Color(0xFFE8E3F8),
-                              ),
-                            ),
-                            focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(16),
-                              borderSide: const BorderSide(
-                                color: Color(0xFFB6A4FF),
-                                width: 1.5,
-                              ),
-                            ),
-                          ),
-                          style: GoogleFonts.notoSansKr(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w800,
-                            color: const Color(0xFF1A1A2E),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        SizedBox(
-                          width: double.infinity,
-                          height: 54,
-                          child: ElevatedButton(
-                            onPressed: isApplying ? null : applyCoupon,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF1A1A2E),
-                              disabledBackgroundColor: const Color(0xFFE5E7EB),
-                              elevation: 0,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
-                              ),
-                            ),
-                            child: Text(
-                              isApplying ? '확인 중...' : '쿠폰 적용하기',
-                              style: GoogleFonts.notoSansKr(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w900,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        SizedBox(
-                          width: double.infinity,
-                          child: TextButton(
-                            onPressed: () {
-                              Navigator.pop(context);
-                              Future.delayed(
-                                Duration.zero,
-                                _showAccountSwitchDialog,
-                              );
-                            },
-                            style: TextButton.styleFrom(
-                              foregroundColor: const Color(0xFF9A96A8),
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                            ),
-                            child: Text(
-                              '다른 계정으로 로그인하기',
-                              style: GoogleFonts.notoSansKr(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
+                        const SizedBox(width: 8),
+                        IconButton(
+                          onPressed: () => Navigator.of(sheetContext).pop(),
+                          icon: const Icon(Icons.close_rounded),
+                          tooltip: '닫기',
+                          style: IconButton.styleFrom(
+                            foregroundColor: AppDesignTokens.textMuted,
+                            backgroundColor: AppDesignTokens.brandSoftAlt,
+                            shape: const CircleBorder(),
                           ),
                         ),
                       ],
                     ),
-                  ),
+                    const SizedBox(height: 22),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _buildSubscriptionStatusCard(
+                            label: '구독 상태',
+                            value: _planStatusLabel,
+                            icon: Icons.workspace_premium_rounded,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: _buildSubscriptionStatusCard(
+                            label: '포인트',
+                            value: '${_userData.points}P',
+                            icon: Icons.toll_rounded,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    _buildSubscriptionStatusCard(
+                      label: '구독 남은 기간',
+                      value: _planRemainingLabel,
+                      icon: Icons.event_available_rounded,
+                      isWide: true,
+                    ),
+                    const SizedBox(height: 18),
+                    _buildPurchasedCoachSection(),
+                    const SizedBox(height: 18),
+                    Text(
+                      '쿠폰 입력',
+                      style: GoogleFonts.notoSansKr(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w900,
+                        color: AppDesignTokens.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: couponController,
+                      textCapitalization: TextCapitalization.characters,
+                      decoration: InputDecoration(
+                        hintText: '쿠폰 또는 구독권 코드',
+                        errorText: errorText,
+                        hintStyle: GoogleFonts.notoSansKr(
+                          color: AppDesignTokens.textDisabled,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        filled: true,
+                        fillColor: AppDesignTokens.brandSoftAlt,
+                        border: inputBorder,
+                        enabledBorder: inputBorder,
+                        focusedBorder: inputBorder.copyWith(
+                          borderSide: const BorderSide(
+                            color: AppDesignTokens.brandAccent,
+                            width: 1.5,
+                          ),
+                        ),
+                      ),
+                      style: GoogleFonts.notoSansKr(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        color: AppDesignTokens.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    AppButton(
+                      label: isApplying ? '확인 중...' : '쿠폰 적용하기',
+                      onPressed: isApplying ? null : applyCoupon,
+                      backgroundColor: AppDesignTokens.textPrimary,
+                      disabledBackgroundColor: AppDesignTokens.divider,
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: TextButton(
+                        onPressed: () {
+                          Navigator.pop(context);
+                          Future.delayed(
+                            Duration.zero,
+                            _showAccountSwitchDialog,
+                          );
+                        },
+                        style: TextButton.styleFrom(
+                          foregroundColor: AppDesignTokens.textMuted,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                        child: Text(
+                          '다른 계정으로 로그인하기',
+                          style: GoogleFonts.notoSansKr(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             );
@@ -650,16 +612,14 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
     required IconData icon,
     bool isWide = false,
   }) {
-    return Container(
+    return AppCard(
       padding: EdgeInsets.symmetric(horizontal: 14, vertical: isWide ? 14 : 12),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8F7FF),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE8E3F8)),
-      ),
+      backgroundColor: AppDesignTokens.brandSoftAlt,
+      borderColor: AppDesignTokens.brandBorder,
+      radius: AppDesignTokens.radiusMedium,
       child: Row(
         children: [
-          Icon(icon, size: 18, color: const Color(0xFFB6A4FF)),
+          Icon(icon, size: 18, color: AppDesignTokens.brandAccent),
           const SizedBox(width: 8),
           Expanded(
             child: Column(
@@ -670,7 +630,7 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
                   style: GoogleFonts.notoSansKr(
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
-                    color: const Color(0xFF9A96A8),
+                    color: AppDesignTokens.textMuted,
                   ),
                 ),
                 const SizedBox(height: 2),
@@ -681,7 +641,7 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
                   style: GoogleFonts.notoSansKr(
                     fontSize: 14,
                     fontWeight: FontWeight.w900,
-                    color: const Color(0xFF1A1A2E),
+                    color: AppDesignTokens.textPrimary,
                   ),
                 ),
               ],
@@ -705,25 +665,22 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
           style: GoogleFonts.notoSansKr(
             fontSize: 14,
             fontWeight: FontWeight.w900,
-            color: const Color(0xFF1A1A2E),
+            color: AppDesignTokens.textPrimary,
           ),
         ),
         const SizedBox(height: 10),
         if (purchasedCoachIds.isEmpty)
-          Container(
-            width: double.infinity,
+          AppCard(
             padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF9FAFB),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: const Color(0xFFE5E7EB)),
-            ),
+            backgroundColor: AppDesignTokens.surfaceSubtle,
+            borderColor: AppDesignTokens.divider,
+            radius: AppDesignTokens.radiusMedium,
             child: Text(
               '구매한 코치가 아직 없어요.',
               style: GoogleFonts.notoSansKr(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
-                color: const Color(0xFF8A8798),
+                color: AppDesignTokens.textMuted,
               ),
             ),
           )
@@ -751,48 +708,47 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
     final remaining = _userData.ownedCoachRemainingLabel(coachId);
     final isExpired = remaining == '만료됨';
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE8E3F8)),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            Icons.person_rounded,
-            size: 18,
-            color: isExpired
-                ? const Color(0xFFB8B5C6)
-                : const Color(0xFFB6A4FF),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              '$name · 1년 이용권',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: GoogleFonts.notoSansKr(
-                fontSize: 12,
-                fontWeight: FontWeight.w800,
-                color: const Color(0xFF3D3A4E),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: AppCard(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        borderColor: AppDesignTokens.brandBorder,
+        radius: AppDesignTokens.radiusMedium,
+        child: Row(
+          children: [
+            Icon(
+              Icons.person_rounded,
+              size: 18,
+              color: isExpired
+                  ? AppDesignTokens.textDisabled
+                  : AppDesignTokens.brandAccent,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                '$name · 1년 이용권',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.notoSansKr(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                  color: AppDesignTokens.textPrimary,
+                ),
               ),
             ),
-          ),
-          const SizedBox(width: 8),
-          Text(
-            remaining,
-            style: GoogleFonts.notoSansKr(
-              fontSize: 12,
-              fontWeight: FontWeight.w900,
-              color: isExpired
-                  ? const Color(0xFFB8B5C6)
-                  : const Color(0xFF8B7CFF),
+            const SizedBox(width: 8),
+            Text(
+              remaining,
+              style: GoogleFonts.notoSansKr(
+                fontSize: 12,
+                fontWeight: FontWeight.w900,
+                color: isExpired
+                    ? AppDesignTokens.textDisabled
+                    : AppDesignTokens.brand,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -1070,205 +1026,165 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
     final showsPlanRequiredNotice =
         isFriendsCoach && !alreadyOwned && !planActive;
 
-    showModalBottomSheet(
+    showAppBottomSheet(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
       builder: (context) {
-        return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+        return AppBottomSheetScaffold(
+          contentPadding: const EdgeInsets.fromLTRB(
+            24,
+            0,
+            24,
+            AppDesignTokens.sheetContentBottomPadding,
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 48,
-                height: 4,
-                margin: const EdgeInsets.only(bottom: 24),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE5E7EB),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(24),
-                child: Image.asset(
-                  coach['image'],
-                  width: 120,
-                  height: 120,
-                  fit: BoxFit.cover,
-                  alignment: Alignment.topCenter,
-                ),
-              ),
-              const SizedBox(height: 20),
-              Text(
-                coach['name'],
-                style: GoogleFonts.notoSansKr(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w900,
-                  color: const Color(0xFF1A1A2E),
-                ),
-              ),
-              if (description.isNotEmpty) ...[
-                const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 20,
-                    vertical: 12,
+          body: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(24),
+                  child: Image.asset(
+                    coach['image'],
+                    width: 120,
+                    height: 120,
+                    fit: BoxFit.cover,
+                    alignment: Alignment.topCenter,
                   ),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF9FAFB),
-                    borderRadius: BorderRadius.circular(16),
+                ),
+                const SizedBox(height: 20),
+                Text(
+                  coach['name'],
+                  style: GoogleFonts.notoSansKr(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w900,
+                    color: AppDesignTokens.textPrimary,
                   ),
-                  child: Text(
-                    description,
-                    textAlign: TextAlign.center,
-                    style: GoogleFonts.notoSansKr(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                      color: const Color(0xFF4B5563),
+                ),
+                if (description.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 12,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppDesignTokens.surfaceSubtle,
+                      borderRadius: BorderRadius.circular(
+                        AppDesignTokens.radiusMedium,
+                      ),
+                    ),
+                    child: Text(
+                      description,
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.notoSansKr(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: AppDesignTokens.textSecondary,
+                      ),
                     ),
                   ),
-                ),
-              ],
-              if (features != null) const SizedBox(height: 24),
-              // 특징 리스트 렌더링
-              if (features != null)
-                Column(
-                  children: features.map((feat) {
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 16),
+                ],
+                if (features != null) const SizedBox(height: 24),
+                // 특징 리스트 렌더링
+                if (features != null)
+                  Column(
+                    children: features.map((feat) {
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 40,
+                              height: 40,
+                              decoration: BoxDecoration(
+                                color: AppDesignTokens.brandSoft,
+                                borderRadius: BorderRadius.circular(
+                                  AppDesignTokens.radiusSmall,
+                                ),
+                              ),
+                              alignment: Alignment.center,
+                              child: Text(
+                                feat['icon'],
+                                style: const TextStyle(fontSize: 18),
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    feat['title'],
+                                    style: GoogleFonts.notoSansKr(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w800,
+                                      color: AppDesignTokens.textPrimary,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    feat['sub'],
+                                    style: GoogleFonts.notoSansKr(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w500,
+                                      color: AppDesignTokens.textSecondary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                SizedBox(height: showsPlanRequiredNotice ? 16 : 32),
+                // 구매 버튼 영역 (friends 코치 + 미보유 시만 표시)
+                if (isFriendsCoach && !alreadyOwned) ...[
+                  if (!planActive)
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(14),
+                      margin: const EdgeInsets.only(bottom: 12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFF7ED),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFFED7AA)),
+                      ),
                       child: Row(
                         children: [
-                          Container(
-                            width: 40,
-                            height: 40,
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFF3F0FF),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            alignment: Alignment.center,
-                            child: Text(
-                              feat['icon'],
-                              style: const TextStyle(fontSize: 18),
-                            ),
-                          ),
-                          const SizedBox(width: 16),
+                          const Text('⚠️', style: TextStyle(fontSize: 16)),
+                          const SizedBox(width: 10),
                           Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  feat['title'],
-                                  style: GoogleFonts.notoSansKr(
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w800,
-                                    color: const Color(0xFF1A1A2E),
-                                  ),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  feat['sub'],
-                                  style: GoogleFonts.notoSansKr(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w500,
-                                    color: const Color(0xFF6B7280),
-                                  ),
-                                ),
-                              ],
+                            child: Text(
+                              'friends 또는 master 플랜 구독 후 구매할 수 있어요.',
+                              style: GoogleFonts.notoSansKr(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: const Color(0xFF92400E),
+                              ),
                             ),
                           ),
                         ],
                       ),
-                    );
-                  }).toList(),
-                ),
-              SizedBox(height: showsPlanRequiredNotice ? 16 : 32),
-              // 구매 버튼 영역 (friends 코치 + 미보유 시만 표시)
-              if (isFriendsCoach && !alreadyOwned) ...[
-                if (!planActive)
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(14),
-                    margin: const EdgeInsets.only(bottom: 12),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFFF7ED),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xFFFED7AA)),
                     ),
-                    child: Row(
-                      children: [
-                        const Text('⚠️', style: TextStyle(fontSize: 16)),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            'friends 또는 master 플랜 구독 후 구매할 수 있어요.',
-                            style: GoogleFonts.notoSansKr(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: const Color(0xFF92400E),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                SizedBox(
-                  width: double.infinity,
-                  height: 56,
-                  child: ElevatedButton(
+                  AppButton(
+                    label: planActive ? '구매하기  ₩3,900 / 1년' : '구독 후 구매 가능',
                     onPressed: planActive
                         ? () => _purchaseCoach(context, coach)
                         : null,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: _coachMintText,
-                      disabledBackgroundColor: const Color(0xFFE5E7EB),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      elevation: 0,
-                    ),
-                    child: Text(
-                      planActive ? '구매하기  ₩3,900 / 1년' : '구독 후 구매 가능',
-                      style: GoogleFonts.notoSansKr(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w800,
-                        color: planActive
-                            ? Colors.white
-                            : const Color(0xFF9CA3AF),
-                      ),
-                    ),
+                    backgroundColor: _coachMintText,
+                    disabledBackgroundColor: AppDesignTokens.divider,
                   ),
-                ),
-                const SizedBox(height: 10),
-              ],
-              SizedBox(
-                width: double.infinity,
-                height: 56,
-                child: ElevatedButton(
+                  const SizedBox(height: 10),
+                ],
+                AppButton(
+                  label: '닫기',
                   onPressed: () => Navigator.pop(context),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF1A1A2E),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    elevation: 0,
-                  ),
-                  child: Text(
-                    '닫기',
-                    style: GoogleFonts.notoSansKr(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                      color: Colors.white,
-                    ),
-                  ),
+                  backgroundColor: AppDesignTokens.textPrimary,
                 ),
-              ),
-              const SizedBox(height: 20),
-            ],
+                const SizedBox(height: 20),
+              ],
+            ),
           ),
         );
       },
@@ -1288,7 +1204,7 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
         _goBack();
       },
       child: Scaffold(
-        backgroundColor: const Color(0xFFF5F3FF),
+        backgroundColor: AppDesignTokens.brandSoft,
         body: SafeArea(
           child: Column(
             children: [
@@ -1312,7 +1228,7 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
                         ),
                         child: const Icon(
                           Icons.arrow_back,
-                          color: Color(0xFF1A1A2E),
+                          color: AppDesignTokens.textPrimary,
                         ),
                       ),
                     ),
@@ -1322,14 +1238,14 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
                       style: GoogleFonts.notoSansKr(
                         fontSize: 22,
                         fontWeight: FontWeight.w900,
-                        color: const Color(0xFF1A1A2E),
+                        color: AppDesignTokens.textPrimary,
                       ),
                     ),
                     const Spacer(),
                     TextButton(
                       onPressed: _showSubscriptionStatusSheet,
                       style: TextButton.styleFrom(
-                        foregroundColor: const Color(0xFFB6A4FF),
+                        foregroundColor: AppDesignTokens.brandAccent,
                         padding: const EdgeInsets.symmetric(
                           horizontal: 8,
                           vertical: 6,
@@ -1358,8 +1274,10 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
                 child: Container(
                   padding: const EdgeInsets.all(4),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFEBE5FF),
-                    borderRadius: BorderRadius.circular(24),
+                    color: AppDesignTokens.brandBorder,
+                    borderRadius: BorderRadius.circular(
+                      AppDesignTokens.radiusPill,
+                    ),
                   ),
                   child: Row(
                     children: [
@@ -1411,180 +1329,136 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
                     final hasFullAccess = coach['id'] == 'cat'
                         ? _userData.isPlanActive
                         : !isLocked;
+                    final coachAccent = _currentTab == CoachTab.friends
+                        ? _coachMint
+                        : coach['color'] as Color;
 
-                    return GestureDetector(
+                    return AppCard(
                       onTap: () => _handleCoachTap(coach, isLocked),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 300),
-                        curve: Curves.easeOutCubic,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(24),
-                          border: Border.all(
-                            color: isSelected
-                                ? (_currentTab == CoachTab.friends
-                                      ? _coachMint
-                                      : coach['color'])
-                                : Colors.transparent,
-                            width: 3.5,
+                      padding: EdgeInsets.zero,
+                      selected: isSelected,
+                      borderColor: AppDesignTokens.brandBorder,
+                      selectedBorderColor: coachAccent,
+                      selectedBorderWidth: 3,
+                      radius: AppDesignTokens.cardRadius,
+                      shadows: [
+                        if (isSelected)
+                          BoxShadow(
+                            color: coachAccent.withValues(alpha: 0.28),
+                            blurRadius: 16,
+                            offset: const Offset(0, 8),
+                          )
+                        else
+                          ...AppDesignTokens.cardShadow,
+                      ],
+                      child: Column(
+                        children: [
+                          // 상단 이미지
+                          Expanded(
+                            flex: 50,
+                            child: ClipRRect(
+                              borderRadius: const BorderRadius.vertical(
+                                top: Radius.circular(22),
+                              ),
+                              child: Stack(
+                                fit: StackFit.expand,
+                                children: [
+                                  Image.asset(
+                                    coach['image'],
+                                    fit: BoxFit.cover,
+                                    alignment: Alignment.topCenter,
+                                    color: isLocked
+                                        ? Colors.black.withValues(alpha: 0.3)
+                                        : null,
+                                    colorBlendMode: isLocked
+                                        ? BlendMode.darken
+                                        : null,
+                                  ),
+                                  if (isSelected && !isLocked)
+                                    Container(
+                                      color: coachAccent.withValues(
+                                        alpha: 0.10,
+                                      ),
+                                    ),
+                                  if (isLocked)
+                                    const Positioned(
+                                      top: 10,
+                                      right: 10,
+                                      child: Icon(
+                                        Icons.lock,
+                                        color: Colors.white,
+                                        size: 20,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
                           ),
-                          boxShadow: [
-                            if (isSelected)
-                              BoxShadow(
-                                color:
-                                    (_currentTab == CoachTab.friends
-                                            ? _coachMint
-                                            : coach['color'])
-                                        .withOpacity(0.3),
-                                blurRadius: 16,
-                                offset: const Offset(0, 8),
-                              )
-                            else
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.04),
-                                blurRadius: 10,
-                                offset: const Offset(0, 4),
+                          // 하단 텍스트 및 버튼
+                          Expanded(
+                            flex: 50,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 7,
                               ),
-                          ],
-                        ),
-                        child: Column(
-                          children: [
-                            // 상단 이미지
-                            Expanded(
-                              flex: 50,
-                              child: ClipRRect(
-                                borderRadius: const BorderRadius.vertical(
-                                  top: Radius.circular(22),
-                                ),
-                                child: Stack(
-                                  fit: StackFit.expand,
-                                  children: [
-                                    Image.asset(
-                                      coach['image'],
-                                      fit: BoxFit.cover,
-                                      alignment: Alignment.topCenter,
-                                      color: isLocked
-                                          ? Colors.black.withOpacity(0.3)
-                                          : null,
-                                      colorBlendMode: isLocked
-                                          ? BlendMode.darken
-                                          : null,
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.max,
+                                children: [
+                                  Text(
+                                    coach['name'],
+                                    style: GoogleFonts.notoSansKr(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w900,
+                                      color: AppDesignTokens.textPrimary,
                                     ),
-                                    if (isSelected && !isLocked)
-                                      Container(
-                                        color: coach['color'].withOpacity(0.1),
-                                      ),
-                                    if (isLocked)
-                                      const Positioned(
-                                        top: 10,
-                                        right: 10,
-                                        child: Icon(
-                                          Icons.lock,
-                                          color: Colors.white,
-                                          size: 20,
-                                        ),
-                                      ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    coach['subtitle'],
+                                    textAlign: TextAlign.center,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: GoogleFonts.notoSansKr(
+                                      fontSize: 12,
+                                      height: 1.3,
+                                      fontWeight: FontWeight.w600,
+                                      color: AppDesignTokens.textSecondary,
+                                    ),
+                                  ),
+                                  const Spacer(), // 버튼을 맨 아래로 밀어줌
+                                  if (_currentTab == CoachTab.friends)
+                                    AppChip(
+                                      label: hasFullAccess
+                                          ? '보유 중 ✓'
+                                          : coach['price'],
+                                      backgroundColor: hasFullAccess
+                                          ? _coachMintSoft
+                                          : (coach['priceBg'] ??
+                                                _coachMintSoft),
+                                      foregroundColor: hasFullAccess
+                                          ? _coachMintText
+                                          : (coach['priceColor'] ??
+                                                _coachMintText),
+                                      borderColor: Colors.transparent,
+                                    )
+                                  else ...[
+                                    AppChip(
+                                      label: '더보기',
+                                      onTap: () =>
+                                          _showCoachDetails(context, coach),
+                                      backgroundColor: const Color(0xFFFFFBEB),
+                                      foregroundColor: _masterGold,
+                                      borderColor: Colors.transparent,
+                                    ),
+                                    const SizedBox(height: 8),
                                   ],
-                                ),
+                                ],
                               ),
                             ),
-                            // 하단 텍스트 및 버튼
-                            Expanded(
-                              flex: 50,
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 7,
-                                ),
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.start,
-                                  mainAxisSize: MainAxisSize.max,
-                                  children: [
-                                    Text(
-                                      coach['name'],
-                                      style: GoogleFonts.notoSansKr(
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.w900,
-                                        color: const Color(0xFF1A1A2E),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      coach['subtitle'],
-                                      textAlign: TextAlign.center,
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: GoogleFonts.notoSansKr(
-                                        fontSize: 12,
-                                        height: 1.3,
-                                        fontWeight: FontWeight.w600,
-                                        color: const Color(0xFF6B7280),
-                                      ),
-                                    ),
-                                    const Spacer(), // 버튼을 맨 아래로 밀어줌
-                                    if (_currentTab == CoachTab.friends)
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 8,
-                                          vertical: 4,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: hasFullAccess
-                                              ? _coachMintSoft
-                                              : (coach['priceBg'] ??
-                                                    _coachMintSoft),
-                                          borderRadius: BorderRadius.circular(
-                                            6,
-                                          ),
-                                        ),
-                                        child: Text(
-                                          hasFullAccess
-                                              ? '보유 중 ✓'
-                                              : coach['price'],
-                                          style: GoogleFonts.notoSansKr(
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.w800,
-                                            color: hasFullAccess
-                                                ? _coachMintText
-                                                : (coach['priceColor'] ??
-                                                      _coachMintText),
-                                          ),
-                                        ),
-                                      )
-                                    else ...[
-                                      InkWell(
-                                        onTap: () =>
-                                            _showCoachDetails(context, coach),
-                                        borderRadius: BorderRadius.circular(10),
-                                        child: Container(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 20,
-                                            vertical: 8,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: const Color(0xFFFFFBEB),
-                                            borderRadius: BorderRadius.circular(
-                                              10,
-                                            ),
-                                          ),
-                                          child: Text(
-                                            '더보기',
-                                            style: GoogleFonts.notoSansKr(
-                                              fontSize: 13,
-                                              fontWeight: FontWeight.w800,
-                                              color: _masterGold,
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                      const SizedBox(height: 8),
-                                    ],
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
                     );
                   },
@@ -1593,8 +1467,11 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
               // 하단 선택하기 버튼
               Container(
                 padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
-                decoration: BoxDecoration(color: const Color(0xFFF5F3FF)),
-                child: ElevatedButton(
+                decoration: const BoxDecoration(
+                  color: AppDesignTokens.brandSoft,
+                ),
+                child: AppButton(
+                  label: '선택하기',
                   onPressed: _userData.canAccessCoach(_selectedCoachId)
                       ? () async {
                           await UserDataService.setSelectedCoach(
@@ -1619,27 +1496,11 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
                           );
                         }
                       : null,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    foregroundColor: const Color(0xFF7B61FF),
-                    padding: const EdgeInsets.symmetric(vertical: 20),
-                    minimumSize: const Size(double.infinity, 60),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      side: const BorderSide(
-                        color: Color(0xFF7B61FF),
-                        width: 1.5,
-                      ),
-                    ),
-                    elevation: 0,
-                  ),
-                  child: Text(
-                    '선택하기',
-                    style: GoogleFonts.notoSansKr(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
+                  variant: AppButtonVariant.outline,
+                  backgroundColor: AppDesignTokens.surface,
+                  foregroundColor: AppDesignTokens.brandPressed,
+                  borderColor: AppDesignTokens.brand,
+                  height: 60,
                 ),
               ),
             ],
@@ -1650,48 +1511,42 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
   }
 
   Widget _buildSubscriptionGuideButton() {
-    return InkWell(
+    return AppCard(
       onTap: _showPlanGuidePlaceholder,
-      borderRadius: BorderRadius.circular(14),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.88),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: const Color(0xFFE8E3F8), width: 1.2),
-        ),
-        child: Row(
-          children: [
-            const LockedCoachIcon(size: 28),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                '잠긴 코치들이 궁금하신가요?',
-                style: GoogleFonts.notoSansKr(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: const Color(0xFF3D3A4E),
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Text(
-              '구독 안내 보기',
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      radius: AppDesignTokens.radiusMedium,
+      backgroundColor: AppDesignTokens.surface.withValues(alpha: 0.88),
+      borderColor: AppDesignTokens.brandBorder,
+      child: Row(
+        children: [
+          const LockedCoachIcon(size: 28),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              '잠긴 코치들이 궁금하신가요?',
               style: GoogleFonts.notoSansKr(
-                fontSize: 12,
-                fontWeight: FontWeight.w900,
-                color: const Color(0xFFB6A4FF),
+                fontSize: AppDesignTokens.textCaption,
+                fontWeight: FontWeight.w700,
+                color: AppDesignTokens.textPrimary,
               ),
             ),
-            const SizedBox(width: 2),
-            const Icon(
-              Icons.chevron_right_rounded,
-              size: 18,
-              color: Color(0xFFB6A4FF),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            '구독 안내 보기',
+            style: GoogleFonts.notoSansKr(
+              fontSize: AppDesignTokens.textCaption,
+              fontWeight: FontWeight.w900,
+              color: AppDesignTokens.brandAccent,
             ),
-          ],
-        ),
+          ),
+          const SizedBox(width: 2),
+          const Icon(
+            Icons.chevron_right_rounded,
+            size: 18,
+            color: AppDesignTokens.brandAccent,
+          ),
+        ],
       ),
     );
   }
@@ -1720,16 +1575,9 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
           vertical: 16,
         ), // 세로 여백 다시 늘려서 넉넉하게 변경
         decoration: BoxDecoration(
-          color: isSelected ? Colors.white : Colors.transparent,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            if (isSelected)
-              BoxShadow(
-                color: Colors.black.withOpacity(0.04),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-          ],
+          color: isSelected ? AppDesignTokens.surface : Colors.transparent,
+          borderRadius: BorderRadius.circular(AppDesignTokens.radiusLarge),
+          boxShadow: [if (isSelected) ...AppDesignTokens.bubbleShadow],
         ),
         child: Column(
           children: [
@@ -1740,7 +1588,7 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
               style: GoogleFonts.notoSansKr(
                 fontSize: 15,
                 fontWeight: FontWeight.w900,
-                color: isSelected ? color : const Color(0xFF6B7280),
+                color: isSelected ? color : AppDesignTokens.textSecondary,
                 height: 1.2,
               ),
             ),
@@ -1753,7 +1601,7 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
               style: GoogleFonts.notoSansKr(
                 fontSize: 11,
                 fontWeight: FontWeight.w600,
-                color: const Color(0xFF9CA3AF),
+                color: AppDesignTokens.textMuted,
                 height: 1.2,
               ),
             ),
@@ -1774,11 +1622,11 @@ class LockedCoachIcon extends StatelessWidget {
       width: size,
       height: size,
       decoration: BoxDecoration(
-        color: const Color(0xFFB6A4FF),
+        color: AppDesignTokens.brandAccent,
         shape: BoxShape.circle,
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF8B7CFF).withOpacity(0.18),
+            color: AppDesignTokens.brand.withValues(alpha: 0.18),
             blurRadius: 8,
             offset: const Offset(0, 3),
           ),
