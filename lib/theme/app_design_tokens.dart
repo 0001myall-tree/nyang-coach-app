@@ -30,6 +30,21 @@ abstract final class AppDesignTokens {
   static const double radiusMedium = 16;
   static const double radiusLarge = 20;
   static const double radiusPill = 24;
+  static const double radiusSheet = 30;
+
+  // Bottom sheets
+  static const double sheetMaxWidth = 640;
+  static const double sheetTopMargin = 24;
+  static const double sheetHorizontalPadding = 20;
+  static const double sheetContentBottomPadding = 20;
+  static const double sheetFooterHorizontalPadding = 20;
+  static const double sheetFooterTopPadding = 12;
+  static const double sheetFooterBottomPadding = 20;
+  static const double sheetHandleWidth = 48;
+  static const double sheetHandleHeight = 4;
+  static const double sheetHandleRadius = 2;
+  static const double sheetBarrierAlpha = 0.38;
+  static const double sheetMaxHeightFactor = 0.92;
 
   // Immersive backgrounds
   static const double darkGlassOpacity = 0.25;
