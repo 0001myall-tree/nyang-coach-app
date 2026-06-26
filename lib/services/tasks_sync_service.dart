@@ -36,9 +36,18 @@ class TasksSyncService {
       final prefs = await SharedPreferences.getInstance();
       final batch = FirebaseFirestore.instance.batch();
 
-      final keys = prefs.getKeys().where((k) => k.startsWith('nyang_'));
+      final keys = prefs.getKeys().where((k) => k.startsWith('nyang_')).toSet();
       final hasSyncedFromCloud = prefs.getBool('nyang_has_synced_from_cloud') ?? false;
 
+      // Firestore의 현재 백업된 데이터 목록 가져오기
+      final snapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('appData')
+          .get();
+      final cloudKeys = snapshot.docs.map((doc) => doc.id).toSet();
+
+      // 1. 로컬에 존재하는 데이터 업로드 및 업데이트
       for (final key in keys) {
         if (key == 'nyang_user_data') continue; // UserDataService에서 별도 관리
 
@@ -50,19 +59,49 @@ class TasksSyncService {
               .collection('appData')
               .doc(key);
 
+          // 첫 동기화 완료 전 기존 클라우드 값을 빈 값으로 덮어쓰지 않도록 보호
           if (!hasSyncedFromCloud &&
               value is String &&
               _criticalDataKeys.contains(key) &&
               _isEmptyEncodedValue(value) &&
-              await _hasNonEmptyCloudValue(docRef)) {
-            debugPrint(
-              '⚠️ TasksSyncService: 첫 동기화 완료 전 빈 로컬 데이터가 기존 클라우드 $key 값을 덮어쓰지 않도록 건너뜁니다.',
-            );
-            continue;
+              cloudKeys.contains(key)) {
+            
+            final doc = snapshot.docs.firstWhere((d) => d.id == key);
+            final cloudVal = doc.data()['value'];
+            bool cloudIsEmpty = true;
+            if (cloudVal is String) {
+              cloudIsEmpty = _isEmptyEncodedValue(cloudVal);
+            } else if (cloudVal is List) {
+              cloudIsEmpty = cloudVal.isEmpty;
+            } else {
+              cloudIsEmpty = cloudVal == null;
+            }
+
+            if (!cloudIsEmpty) {
+              debugPrint(
+                '⚠️ TasksSyncService: 첫 동기화 완료 전 빈 로컬 데이터가 기존 클라우드 $key 값을 덮어쓰지 않도록 건너뜁니다.',
+              );
+              continue;
+            }
           }
 
           // String, bool, int, double, StringList 등 기본 타입 지원
           batch.set(docRef, {'value': value}, SetOptions(merge: true));
+        }
+      }
+
+      // 2. 로컬에서 삭제된 데이터를 클라우드에서도 삭제 (첫 동기화가 완료된 상태에서만 안전하게 실행)
+      if (hasSyncedFromCloud) {
+        for (final key in cloudKeys) {
+          if (key.startsWith('nyang_') && key != 'nyang_user_data' && !keys.contains(key)) {
+            final docRef = FirebaseFirestore.instance
+                .collection('users')
+                .doc(user.uid)
+                .collection('appData')
+                .doc(key);
+            batch.delete(docRef);
+            debugPrint('🗑️ TasksSyncService: 로컬에서 삭제된 $key 키를 클라우드에서도 삭제합니다.');
+          }
         }
       }
 
@@ -158,21 +197,5 @@ class TasksSyncService {
   static bool _isEmptyEncodedValue(String value) {
     final trimmed = value.trim();
     return trimmed.isEmpty || trimmed == '[]' || trimmed == '{}';
-  }
-
-  static Future<bool> _hasNonEmptyCloudValue(
-    DocumentReference<Map<String, dynamic>> docRef,
-  ) async {
-    final snapshot = await docRef.get();
-    if (!snapshot.exists) return false;
-
-    final value = snapshot.data()?['value'];
-    if (value is String) {
-      return !_isEmptyEncodedValue(value);
-    }
-    if (value is List) {
-      return value.isNotEmpty;
-    }
-    return value != null;
   }
 }
