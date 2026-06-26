@@ -220,7 +220,7 @@ class _PlanPeriodTabs extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: const Color(0xFFF2ECFF),
+        color: AppDesignTokens.brandChip,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: AppDesignTokens.brandBorder),
       ),
@@ -279,7 +279,7 @@ class _PlanPeriodTab extends StatelessWidget {
               style: GoogleFonts.notoSansKr(
                 fontSize: AppDesignTokens.textBody,
                 fontWeight: FontWeight.w900,
-                color: isSelected ? Colors.white : const Color(0xFF5B4DB8),
+                color: isSelected ? Colors.white : AppDesignTokens.brandPressed,
               ),
             ),
             const SizedBox(height: 2),
@@ -292,7 +292,7 @@ class _PlanPeriodTab extends StatelessWidget {
                 fontWeight: FontWeight.w700,
                 color: isSelected
                     ? Colors.white.withValues(alpha: 0.85)
-                    : const Color(0xFF8A7FE0),
+                    : AppDesignTokens.brandMuted,
               ),
             ),
           ],
@@ -333,9 +333,9 @@ class _PlanGroup extends StatelessWidget {
       onTap: onTap,
       selected: isSelected,
       backgroundColor: isSelected
-          ? const Color(0xFFF7F3FF)
+          ? AppDesignTokens.brandSoftAlt
           : Colors.white.withValues(alpha: 0.9),
-      borderColor: const Color(0xFFE4DDF8),
+      borderColor: AppDesignTokens.brandCardBorder,
       shadows: [
         BoxShadow(
           color: AppDesignTokens.brand.withValues(
@@ -353,7 +353,7 @@ class _PlanGroup extends StatelessWidget {
               if (isMaster)
                 const Icon(
                   Icons.workspace_premium_rounded,
-                  color: Color(0xFFD4A017),
+                  color: AppDesignTokens.premium,
                   size: 28,
                 )
               else
@@ -370,7 +370,7 @@ class _PlanGroup extends StatelessWidget {
                   style: GoogleFonts.notoSansKr(
                     fontSize: 20,
                     fontWeight: FontWeight.w900,
-                    color: const Color(0xFF4D3CC8),
+                    color: AppDesignTokens.brandStrong,
                   ),
                 ),
               ),
@@ -399,7 +399,7 @@ class _PlanGroup extends StatelessWidget {
             style: GoogleFonts.notoSansKr(
               fontSize: AppDesignTokens.textCaption,
               fontWeight: FontWeight.w600,
-              color: const Color(0xFF6E6794),
+              color: AppDesignTokens.brandTextMuted,
             ),
           ),
           const SizedBox(height: 14),
@@ -436,7 +436,7 @@ class _PlanPriceBox extends StatelessWidget {
     return AppCard(
       padding: const EdgeInsets.all(14),
       radius: AppDesignTokens.cardInnerRadius,
-      backgroundColor: const Color(0xFFFFFCFF),
+      backgroundColor: AppDesignTokens.brandSurface,
       borderColor: AppDesignTokens.brandBorder,
       shadows: const [],
       child: Column(
@@ -454,9 +454,9 @@ class _PlanPriceBox extends StatelessWidget {
               style: GoogleFonts.notoSansKr(
                 fontSize: AppDesignTokens.textCaption + 1,
                 fontWeight: FontWeight.w800,
-                color: const Color(0xFFAAA3C4),
+                color: AppDesignTokens.brandPriceMuted,
                 decoration: TextDecoration.lineThrough,
-                decorationColor: const Color(0xFFAAA3C4),
+                decorationColor: AppDesignTokens.brandPriceMuted,
                 decorationThickness: 2,
               ),
             ),
@@ -475,7 +475,7 @@ class _PlanPriceBox extends StatelessWidget {
                     style: GoogleFonts.notoSansKr(
                       fontSize: 26,
                       fontWeight: FontWeight.w900,
-                      color: const Color(0xFF4D3CC8),
+                      color: AppDesignTokens.brandStrong,
                     ),
                   ),
                 ),
@@ -490,7 +490,7 @@ class _PlanPriceBox extends StatelessWidget {
                     style: GoogleFonts.notoSansKr(
                       fontSize: AppDesignTokens.textCaption,
                       fontWeight: FontWeight.w800,
-                      color: const Color(0xFF6E6794),
+                      color: AppDesignTokens.brandTextMuted,
                     ),
                   ),
                 ),
@@ -536,7 +536,7 @@ class _IndividualCoachGuide extends StatelessWidget {
   Widget build(BuildContext context) {
     return AppCard(
       backgroundColor: Colors.white.withValues(alpha: 0.9),
-      borderColor: const Color(0xFFE4DDF8),
+      borderColor: AppDesignTokens.brandCardBorder,
       shadows: const [],
       child: Row(
         children: [
@@ -544,7 +544,7 @@ class _IndividualCoachGuide extends StatelessWidget {
             width: 42,
             height: 42,
             decoration: BoxDecoration(
-              color: const Color(0xFFF2ECFF),
+              color: AppDesignTokens.brandChip,
               borderRadius: BorderRadius.circular(14),
             ),
             alignment: Alignment.center,
@@ -563,7 +563,7 @@ class _IndividualCoachGuide extends StatelessWidget {
                   style: GoogleFonts.notoSansKr(
                     fontSize: 15,
                     fontWeight: FontWeight.w900,
-                    color: const Color(0xFF4D3CC8),
+                    color: AppDesignTokens.brandStrong,
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -572,7 +572,7 @@ class _IndividualCoachGuide extends StatelessWidget {
                   style: GoogleFonts.notoSansKr(
                     fontSize: AppDesignTokens.textCaption,
                     fontWeight: FontWeight.w600,
-                    color: const Color(0xFF6E6794),
+                    color: AppDesignTokens.brandTextMuted,
                     height: 1.4,
                   ),
                 ),
@@ -587,7 +587,7 @@ class _IndividualCoachGuide extends StatelessWidget {
               style: GoogleFonts.notoSansKr(
                 fontSize: AppDesignTokens.textAction,
                 fontWeight: FontWeight.w900,
-                color: const Color(0xFF4D3CC8),
+                color: AppDesignTokens.brandStrong,
               ),
             ),
           ),
@@ -629,8 +629,8 @@ class _PlanCheckoutBar extends StatelessWidget {
     return AppButton(
       label: selectedPlanId == null ? '플랜을 선택해주세요' : checkoutLabel,
       icon: const Icon(Icons.pets),
-      backgroundColor: const Color(0xFFB6A4FF),
-      disabledBackgroundColor: const Color(0xFFD8CEF8),
+      backgroundColor: AppDesignTokens.brandAccent,
+      disabledBackgroundColor: AppDesignTokens.brandDisabled,
       onPressed: selectedPlanId == null
           ? null
           : () {

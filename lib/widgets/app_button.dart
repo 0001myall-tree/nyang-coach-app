@@ -128,19 +128,20 @@ class _AppButtonColors {
       AppButtonVariant.primary => _AppButtonColors(
         background: backgroundColor ?? AppDesignTokens.brand,
         foreground: foregroundColor ?? Colors.white,
-        disabledBackground: disabledBackgroundColor ?? const Color(0xFFD8CEF8),
+        disabledBackground:
+            disabledBackgroundColor ?? AppDesignTokens.brandDisabled,
         border: borderColor ?? Colors.transparent,
       ),
       AppButtonVariant.secondary => _AppButtonColors(
         background: backgroundColor ?? AppDesignTokens.surface,
-        foreground: foregroundColor ?? AppDesignTokens.brandDark,
+        foreground: foregroundColor ?? AppDesignTokens.brandPressed,
         disabledBackground:
             disabledBackgroundColor ?? AppDesignTokens.surfaceSubtle,
         border: borderColor ?? AppDesignTokens.brandBorder,
       ),
       AppButtonVariant.outline => _AppButtonColors(
         background: backgroundColor ?? Colors.transparent,
-        foreground: foregroundColor ?? AppDesignTokens.brandDark,
+        foreground: foregroundColor ?? AppDesignTokens.brandPressed,
         disabledBackground:
             disabledBackgroundColor ?? AppDesignTokens.surfaceSubtle,
         border: borderColor ?? AppDesignTokens.brandBorder,

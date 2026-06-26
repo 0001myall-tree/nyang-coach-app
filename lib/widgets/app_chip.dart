@@ -36,7 +36,7 @@ class AppChip extends StatelessWidget {
         : backgroundColor ?? AppDesignTokens.brandSoft;
     final effectiveForeground = selected
         ? selectedForegroundColor ?? Colors.white
-        : foregroundColor ?? AppDesignTokens.brandDark;
+        : foregroundColor ?? AppDesignTokens.brandPressed;
     final effectiveBorder = borderColor ?? AppDesignTokens.brandBorder;
 
     final chip = ConstrainedBox(

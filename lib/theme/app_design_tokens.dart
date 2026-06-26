@@ -3,9 +3,23 @@ import 'package:flutter/material.dart';
 abstract final class AppDesignTokens {
   // Brand
   static const Color brand = Color(0xFF8B7CFF);
-  static const Color brandDark = Color(0xFF6B5EA8);
+  static const Color brandPressed = Color(0xFF6B5EA8);
+  static const Color brandStrong = Color(0xFF4D3CC8);
+  static const Color brandMuted = Color(0xFF8A7FE0);
+  static const Color brandTextMuted = Color(0xFF6E6794);
+  static const Color brandAccent = Color(0xFFB6A4FF);
+  static const Color brandDisabled = Color(0xFFD8CEF8);
   static const Color brandSoft = Color(0xFFF5F3FF);
+  static const Color brandSoftAlt = Color(0xFFF7F3FF);
+  static const Color brandChip = Color(0xFFF2ECFF);
+  static const Color brandSurface = Color(0xFFFFFCFF);
+  static const Color brandCardBorder = Color(0xFFE4DDF8);
   static const Color brandBorder = Color(0xFFE8E3F8);
+  static const Color brandPriceMuted = Color(0xFFAAA3C4);
+  static const Color premium = Color(0xFFD4A017);
+
+  // Backward-compatible brand aliases
+  static const Color brandDark = brandPressed;
 
   // Neutral text
   static const Color textPrimary = Color(0xFF3D3A4E);
