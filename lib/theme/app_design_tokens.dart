@@ -46,6 +46,20 @@ abstract final class AppDesignTokens {
   static const double sheetBarrierAlpha = 0.38;
   static const double sheetMaxHeightFactor = 0.92;
 
+  // Components
+  static const double minTouchTarget = 48;
+  static const double buttonHeight = 56;
+  static const double buttonRadius = 18;
+  static const double buttonHorizontalPadding = 18;
+  static const double buttonIconGap = 8;
+  static const double cardRadius = 22;
+  static const double cardInnerRadius = 18;
+  static const double cardPadding = 16;
+  static const double chipMinHeight = 28;
+  static const double chipRadius = 9;
+  static const double chipHorizontalPadding = 10;
+  static const double chipVerticalPadding = 5;
+
   // Immersive backgrounds
   static const double darkGlassOpacity = 0.25;
   static const double lightGlassOpacity = 0.58;

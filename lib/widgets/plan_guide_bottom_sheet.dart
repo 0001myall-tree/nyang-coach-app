@@ -3,6 +3,9 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../theme/app_design_tokens.dart';
 import 'app_bottom_sheet.dart';
+import 'app_button.dart';
+import 'app_card.dart';
+import 'app_chip.dart';
 
 Future<void> showPlanGuideBottomSheet(
   BuildContext context, {
@@ -326,98 +329,88 @@ class _PlanGroup extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return AppCard(
       onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        curve: Curves.easeOutCubic,
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? const Color(0xFFF7F3FF)
-              : Colors.white.withValues(alpha: 0.9),
-          borderRadius: BorderRadius.circular(22),
-          border: Border.all(
-            color: isSelected ? AppDesignTokens.brand : const Color(0xFFE4DDF8),
-            width: isSelected ? 2.2 : 1.2,
+      selected: isSelected,
+      backgroundColor: isSelected
+          ? const Color(0xFFF7F3FF)
+          : Colors.white.withValues(alpha: 0.9),
+      borderColor: const Color(0xFFE4DDF8),
+      shadows: [
+        BoxShadow(
+          color: AppDesignTokens.brand.withValues(
+            alpha: isSelected ? 0.18 : 0.08,
           ),
-          boxShadow: [
-            BoxShadow(
-              color: AppDesignTokens.brand.withValues(
-                alpha: isSelected ? 0.18 : 0.08,
-              ),
-              blurRadius: isSelected ? 18 : 16,
-              offset: const Offset(0, 8),
-            ),
-          ],
+          blurRadius: isSelected ? 18 : 16,
+          offset: const Offset(0, 8),
         ),
-        child: Column(
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                if (isMaster)
-                  const Icon(
-                    Icons.workspace_premium_rounded,
-                    color: Color(0xFFD4A017),
-                    size: 28,
-                  )
-                else
-                  const Icon(
-                    Icons.eco_rounded,
-                    color: AppDesignTokens.brand,
-                    size: 28,
-                  ),
-                const SizedBox(width: 10),
-                Flexible(
-                  child: Text(
-                    title,
-                    textAlign: TextAlign.center,
-                    style: GoogleFonts.notoSansKr(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w900,
-                      color: const Color(0xFF4D3CC8),
-                    ),
+      ],
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              if (isMaster)
+                const Icon(
+                  Icons.workspace_premium_rounded,
+                  color: Color(0xFFD4A017),
+                  size: 28,
+                )
+              else
+                const Icon(
+                  Icons.eco_rounded,
+                  color: AppDesignTokens.brand,
+                  size: 28,
+                ),
+              const SizedBox(width: 10),
+              Flexible(
+                child: Text(
+                  title,
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.notoSansKr(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w900,
+                    color: const Color(0xFF4D3CC8),
                   ),
                 ),
-                if (isSelected) ...[
-                  const SizedBox(width: 8),
-                  Container(
-                    width: 22,
-                    height: 22,
-                    decoration: const BoxDecoration(
-                      color: AppDesignTokens.brand,
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.check_rounded,
-                      color: Colors.white,
-                      size: 16,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-            const SizedBox(height: 4),
-            Text(
-              subtitle,
-              textAlign: TextAlign.center,
-              style: GoogleFonts.notoSansKr(
-                fontSize: AppDesignTokens.textCaption,
-                fontWeight: FontWeight.w600,
-                color: const Color(0xFF6E6794),
               ),
+              if (isSelected) ...[
+                const SizedBox(width: 8),
+                Container(
+                  width: 22,
+                  height: 22,
+                  decoration: const BoxDecoration(
+                    color: AppDesignTokens.brand,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.check_rounded,
+                    color: Colors.white,
+                    size: 16,
+                  ),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            subtitle,
+            textAlign: TextAlign.center,
+            style: GoogleFonts.notoSansKr(
+              fontSize: AppDesignTokens.textCaption,
+              fontWeight: FontWeight.w600,
+              color: const Color(0xFF6E6794),
             ),
-            const SizedBox(height: 14),
-            _PlanPriceBox(
-              badge: badge,
-              price: price,
-              originalPrice: originalPrice,
-              subPrice: subPrice,
-              features: features,
-            ),
-          ],
-        ),
+          ),
+          const SizedBox(height: 14),
+          _PlanPriceBox(
+            badge: badge,
+            price: price,
+            originalPrice: originalPrice,
+            subPrice: subPrice,
+            features: features,
+          ),
+        ],
       ),
     );
   }
@@ -440,31 +433,19 @@ class _PlanPriceBox extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
+    return AppCard(
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFFFCFF),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppDesignTokens.brandBorder),
-      ),
+      radius: AppDesignTokens.cardInnerRadius,
+      backgroundColor: const Color(0xFFFFFCFF),
+      borderColor: AppDesignTokens.brandBorder,
+      shadows: const [],
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-            decoration: BoxDecoration(
-              color: AppDesignTokens.brand,
-              borderRadius: BorderRadius.circular(9),
-            ),
-            child: Text(
-              badge,
-              style: GoogleFonts.notoSansKr(
-                fontSize: AppDesignTokens.textMeta,
-                fontWeight: FontWeight.w900,
-                color: Colors.white,
-              ),
-            ),
+          AppChip(
+            label: badge,
+            selected: true,
+            borderColor: Colors.transparent,
           ),
           const SizedBox(height: 12),
           if (originalPrice != null) ...[
@@ -485,24 +466,35 @@ class _PlanPriceBox extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Expanded(
-                child: Text(
-                  price,
-                  style: GoogleFonts.notoSansKr(
-                    fontSize: 26,
-                    fontWeight: FontWeight.w900,
-                    color: const Color(0xFF4D3CC8),
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    price,
+                    maxLines: 1,
+                    style: GoogleFonts.notoSansKr(
+                      fontSize: 26,
+                      fontWeight: FontWeight.w900,
+                      color: const Color(0xFF4D3CC8),
+                    ),
                   ),
                 ),
               ),
-              if (subPrice != null)
-                Text(
-                  subPrice!,
-                  style: GoogleFonts.notoSansKr(
-                    fontSize: AppDesignTokens.textCaption,
-                    fontWeight: FontWeight.w800,
-                    color: const Color(0xFF6E6794),
+              if (subPrice != null) ...[
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    subPrice!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.notoSansKr(
+                      fontSize: AppDesignTokens.textCaption,
+                      fontWeight: FontWeight.w800,
+                      color: const Color(0xFF6E6794),
+                    ),
                   ),
                 ),
+              ],
             ],
           ),
           const SizedBox(height: 12),
@@ -542,13 +534,10 @@ class _IndividualCoachGuide extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.9),
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: const Color(0xFFE4DDF8), width: 1.2),
-      ),
+    return AppCard(
+      backgroundColor: Colors.white.withValues(alpha: 0.9),
+      borderColor: const Color(0xFFE4DDF8),
+      shadows: const [],
       child: Row(
         children: [
           Container(
@@ -591,12 +580,15 @@ class _IndividualCoachGuide extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 10),
-          Text(
-            '3,900원',
-            style: GoogleFonts.notoSansKr(
-              fontSize: AppDesignTokens.textAction,
-              fontWeight: FontWeight.w900,
-              color: const Color(0xFF4D3CC8),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              '3,900원',
+              style: GoogleFonts.notoSansKr(
+                fontSize: AppDesignTokens.textAction,
+                fontWeight: FontWeight.w900,
+                color: const Color(0xFF4D3CC8),
+              ),
             ),
           ),
         ],
@@ -612,36 +604,13 @@ class _NyangCoachLearnMoreButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () {
+    return AppButton(
+      label: '냥냥코치 더 알아보기',
+      variant: AppButtonVariant.secondary,
+      onPressed: () {
         Navigator.pop(context);
         onTap();
       },
-      child: Container(
-        width: double.infinity,
-        height: 56,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: AppDesignTokens.brandBorder, width: 1.2),
-          boxShadow: [
-            BoxShadow(
-              color: AppDesignTokens.brand.withValues(alpha: 0.04),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Text(
-          '냥냥코치 더 알아보기',
-          style: GoogleFonts.notoSansKr(
-            fontSize: 15,
-            fontWeight: FontWeight.w900,
-            color: const Color(0xFF7D68DE),
-          ),
-        ),
-      ),
     );
   }
 }
@@ -657,55 +626,30 @@ class _PlanCheckoutBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: double.infinity,
-      height: 56,
-      child: ElevatedButton(
-        onPressed: selectedPlanId == null
-            ? null
-            : () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      '결제 화면은 곧 연결할게요.',
-                      style: GoogleFonts.notoSansKr(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    behavior: SnackBarBehavior.floating,
-                    backgroundColor: const Color(0xFF1A1A2E),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(
-                        AppDesignTokens.radiusMedium,
-                      ),
+    return AppButton(
+      label: selectedPlanId == null ? '플랜을 선택해주세요' : checkoutLabel,
+      icon: const Icon(Icons.pets),
+      backgroundColor: const Color(0xFFB6A4FF),
+      disabledBackgroundColor: const Color(0xFFD8CEF8),
+      onPressed: selectedPlanId == null
+          ? null
+          : () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    '결제 화면은 곧 연결할게요.',
+                    style: GoogleFonts.notoSansKr(fontWeight: FontWeight.w700),
+                  ),
+                  behavior: SnackBarBehavior.floating,
+                  backgroundColor: const Color(0xFF1A1A2E),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(
+                      AppDesignTokens.radiusMedium,
                     ),
                   ),
-                );
-              },
-        style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFFB6A4FF),
-          disabledBackgroundColor: const Color(0xFFD8CEF8),
-          foregroundColor: Colors.white,
-          elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(18),
-          ),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.pets, size: 20),
-            const SizedBox(width: 8),
-            Text(
-              selectedPlanId == null ? '플랜을 선택해주세요' : checkoutLabel,
-              style: GoogleFonts.notoSansKr(
-                fontSize: AppDesignTokens.textAction,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-          ],
-        ),
-      ),
+                ),
+              );
+            },
     );
   }
 }
