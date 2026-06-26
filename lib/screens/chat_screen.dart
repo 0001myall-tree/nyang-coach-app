@@ -780,7 +780,7 @@ class _ChatScreenState extends State<ChatScreen>
 
     var totalCount = 0;
     var doneCount = 0;
-    for (var offset = 1; offset <= 7; offset++) {
+    for (var offset = 1; offset <= 5; offset++) {
       final record = byDate[_dateKey(today.subtract(Duration(days: offset)))];
       if (record == null || record['isVacation'] == true) continue;
       totalCount += (record['totalCount'] as num?)?.toInt() ?? 0;
