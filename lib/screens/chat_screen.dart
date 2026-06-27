@@ -5360,22 +5360,8 @@ class _ChatScreenState extends State<ChatScreen>
         ? _messages.sublist(_messages.length - historyLimit)
         : _messages;
 
-    // 할매 코치 전용: 랜덤 애정 표현 주입
+    // 할매 코치 전용: 랜덤 애정 표현 주입 (비활성화)
     String halmaeHint = '';
-    if (_coach.id == 'halmae') {
-      const halmaePool = [
-        '에이구 기특해라.',
-        '잘했다. 우리 새끼.',
-        '할미가 응원한다.',
-        '우리 새끼가 최고지.',
-        '아이고 예뻐라 우리 새끼.',
-        '내 새끼니까 당연히 잘했겠지.',
-        '할미가 믿는다.',
-      ];
-      final picked = halmaePool[Random().nextInt(halmaePool.length)];
-      halmaeHint =
-          '\n[이번 대화 지침] 답변 어딘가에 "$picked" 이 표현을 자연스럽게 한 번 녹여 써라. 끝에 억지로 붙이지 말고 문장 흐름 안에 자연스럽게 넣어라.';
-    }
 
     final customTitle = await UserTitleService.getTitle();
     final baseSystemPrompt = _coach.isMaster
