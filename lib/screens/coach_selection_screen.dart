@@ -894,7 +894,7 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
     {
       'id': 'cat',
       'name': '냥냥 코치',
-      'subtitle': '"딱 5분만 해보자냥."',
+      'subtitle': '가벼운 실행 도우미',
       'image': 'assets/images/cat.png',
       'color': _coachMint,
       'price': _userData.isPlanActive ? '플랜 포함' : '무료 입장 가능',
@@ -904,7 +904,7 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
     {
       'id': 'boyfriend',
       'name': '남친 코치',
-      'subtitle': '"괜찮아. 토닥토닥"',
+      'subtitle': '자상한 챙김',
       'image': 'assets/images/boyfriend.png',
       'color': _coachMint,
       'price': '₩3,900 / 1년 이용',
@@ -912,7 +912,7 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
     {
       'id': 'halmae',
       'name': '할매 코치',
-      'subtitle': '"내 새끼는 잘할겨"',
+      'subtitle': '생활 리듬 돌봄형',
       'image': 'assets/images/halmae.png',
       'color': _coachMint,
       'price': '₩3,900 / 1년 이용',
@@ -920,7 +920,7 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
     {
       'id': 'girlfriend',
       'name': '여친 코치',
-      'subtitle': '"오빠는 할 줄 알았어"',
+      'subtitle': '칭찬 응원형',
       'image': 'assets/images/girlfriend.jpg',
       'color': _coachMint,
       'price': '₩3,900 / 1년 이용',
@@ -928,7 +928,7 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
     {
       'id': 'bro',
       'name': '갓생 형 코치',
-      'subtitle': '"형이랑 시작해보자"',
+      'subtitle': '자기관리형',
       'image': 'assets/images/bro.png',
       'color': _coachMint,
       'price': '₩3,900 / 1년 이용',
@@ -1234,7 +1234,7 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
                     ),
                     const SizedBox(width: 16),
                     Text(
-                      '코치 선택',
+                      '실행 코치',
                       style: GoogleFonts.notoSansKr(
                         fontSize: 22,
                         fontWeight: FontWeight.w900,
