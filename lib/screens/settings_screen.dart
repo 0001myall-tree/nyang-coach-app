@@ -1404,8 +1404,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: const Color(0xFFE8E3F8), width: 1.2),
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
@@ -1421,12 +1421,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ],
           ),
+          const SizedBox(height: 12),
           Row(
-            mainAxisSize: MainAxisSize.min,
             children: [
-              _bgStyleButton('emotional', '감성 버전'),
-              const SizedBox(width: 8),
-              _bgStyleButton('simple', '심플 버전'),
+              Expanded(child: _bgStyleButton('emotional', '감성 버전')),
+              const SizedBox(width: 12),
+              Expanded(child: _bgStyleButton('simple', '심플 버전')),
             ],
           ),
         ],
@@ -1444,20 +1444,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
       },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        padding: const EdgeInsets.symmetric(vertical: 12),
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: isActive ? const Color(0xFFEDE7FF) : Colors.white,
           border: Border.all(
-            color: isActive ? Colors.transparent : const Color(0xFFE5E7EB),
+            color: isActive ? const Color(0xFF8B7CFF) : const Color(0xFFE5E7EB),
             width: 1.2,
           ),
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(12),
         ),
         child: Text(
           label,
           style: GoogleFonts.notoSansKr(
-            fontSize: 12,
+            fontSize: 13,
             fontWeight: FontWeight.w800,
             color: isActive ? const Color(0xFF8B7CFF) : const Color(0xFF6B7280),
           ),
