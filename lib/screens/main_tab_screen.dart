@@ -13,6 +13,8 @@ import '../services/analytics_service.dart';
 import '../services/morning_call_alarm_session.dart';
 import '../services/daily_reset_service.dart';
 import '../services/widget_sync_service.dart';
+import '../services/tasks_sync_service.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'chat_screen.dart';
 import 'coach_config.dart';
 import 'coach_selection_screen.dart';
@@ -425,6 +427,7 @@ class _MainTabScreenState extends State<MainTabScreen>
   StreamSubscription? _reminderAudioSub;
   int _reminderPlayCount = 0;
   String _chatBgStyle = 'emotional';
+  StreamSubscription<User?>? _authSubscription;
 
   Future<void> _loadBgStyle() async {
     final prefs = await SharedPreferences.getInstance();
@@ -461,10 +464,27 @@ class _MainTabScreenState extends State<MainTabScreen>
     _startCoreReminderEngine();
     AnalyticsService.logAppOpen();
     _ensureCurrentCoachAccess();
+
+    // 냥냥코치 웹 앱(Nyang Insight) 연동 등을 통해 실시간으로 Firebase에 추가된 할 일 동기화
+    _authSubscription = FirebaseAuth.instance.authStateChanges().listen((user) {
+      if (user != null) {
+        TasksSyncService.startRealTimeSync(user.uid, () {
+          if (mounted) {
+            _tasksController.refresh();
+            _chatController.refreshTaskProgress();
+            setState(() {});
+          }
+        });
+      } else {
+        TasksSyncService.stopRealTimeSync();
+      }
+    });
   }
 
   @override
   void dispose() {
+    _authSubscription?.cancel();
+    TasksSyncService.stopRealTimeSync();
     WidgetsBinding.instance.removeObserver(this);
     _tabCtrl.dispose();
     _morningCallTimer?.cancel();

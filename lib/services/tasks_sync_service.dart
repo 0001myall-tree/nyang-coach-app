@@ -194,6 +194,62 @@ class TasksSyncService {
     await prefs.remove('nyang_core_tasks');
   }
 
+  static StreamSubscription<QuerySnapshot>? _realTimeSubscription;
+
+  static void startRealTimeSync(String uid, VoidCallback onDataChanged) {
+    _realTimeSubscription?.cancel();
+    _realTimeSubscription = FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .collection('appData')
+        .snapshots()
+        .listen((snapshot) async {
+      final prefs = await SharedPreferences.getInstance();
+      bool changed = false;
+
+      for (final doc in snapshot.docs) {
+        final key = doc.id;
+        final data = doc.data();
+
+        if (data.containsKey('value')) {
+          final value = data['value'];
+          final localValue = prefs.get(key);
+
+          if (localValue != value) {
+            changed = true;
+            if (value is String) {
+              await prefs.setString(key, value);
+            } else if (value is bool) {
+              await prefs.setBool(key, value);
+            } else if (value is int) {
+              await prefs.setInt(key, value);
+            } else if (value is double) {
+              await prefs.setDouble(key, value);
+            } else if (value is List) {
+              await prefs.setStringList(
+                key,
+                value.map((item) => item.toString()).toList(),
+              );
+            }
+          }
+        }
+      }
+
+      if (changed) {
+        debugPrint('🔔 TasksSyncService: Firestore 변경 감지되어 로컬 데이터 동기화 완료!');
+        await WidgetSyncService.syncFromStoredTasks();
+        onDataChanged();
+      }
+    }, onError: (e) {
+      debugPrint('❌ TasksSyncService realTimeSync 오류: $e');
+    });
+  }
+
+  static void stopRealTimeSync() {
+    _realTimeSubscription?.cancel();
+    _realTimeSubscription = null;
+  }
+
   static bool _isEmptyEncodedValue(String value) {
     final trimmed = value.trim();
     return trimmed.isEmpty || trimmed == '[]' || trimmed == '{}';

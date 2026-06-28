@@ -472,6 +472,10 @@ class TasksScreenController {
   void openBottomSheet(String type) {
     _state?._openBottomSheet(type);
   }
+
+  void refresh() {
+    _state?._loadAll();
+  }
 }
 
 class MilestoneInfo {
