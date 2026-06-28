@@ -29,7 +29,7 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  int _fontSize = 15; // 14, 15, 17
+  String _chatBgStyle = 'emotional'; // 'emotional' or 'simple'
   double _resetHour = 3.0; // 0 ~ 6
 
   bool _morningCallEnabled = true;
@@ -87,6 +87,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _coreReminderAdvanceMinutes =
           prefs.getInt('nyang_core_reminder_advance') ?? 10;
       _resetHour = prefs.getDouble('nyang_reset_hour') ?? 3.0;
+      _chatBgStyle = prefs.getString('nyang_chat_bg_style') ?? 'emotional';
       _secMaleWidgetName = _secretaryWidgetName(
         prefs.getString('nyang_coach_name_sec_male'),
         '남비서',
@@ -1340,9 +1341,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       _buildProfileCard(),
                       const SizedBox(height: 16),
 
-                      // 글씨 크기 설정
-                      _buildFontSizeCard(),
-                      const SizedBox(height: 16),
+                      if (!_isMaster) ...[
+                        // 채팅 배경 설정
+                        _buildBgStyleCard(),
+                        const SizedBox(height: 16),
+                      ],
 
                       // 알람 설정 버튼
                       _buildActionButton(
@@ -1393,7 +1396,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _buildFontSizeCard() {
+  Widget _buildBgStyleCard() {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -1406,10 +1409,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
         children: [
           Row(
             children: [
-              const Icon(Icons.format_size, color: Color(0xFF8B7CFF), size: 18),
+              const Icon(Icons.wallpaper_rounded, color: Color(0xFF8B7CFF), size: 18),
               const SizedBox(width: 8),
               Text(
-                '글씨 크기',
+                '채팅 배경 설정',
                 style: GoogleFonts.notoSansKr(
                   fontSize: 14,
                   fontWeight: FontWeight.w700,
@@ -1421,11 +1424,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              _fontSizeButton(14, 'A'),
+              _bgStyleButton('emotional', '감성 버전'),
               const SizedBox(width: 8),
-              _fontSizeButton(15, 'A'),
-              const SizedBox(width: 8),
-              _fontSizeButton(17, 'A'),
+              _bgStyleButton('simple', '심플 버전'),
             ],
           ),
         ],
@@ -1433,14 +1434,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _fontSizeButton(int size, String label) {
-    final bool isActive = _fontSize == size;
+  Widget _bgStyleButton(String style, String label) {
+    final bool isActive = _chatBgStyle == style;
     return GestureDetector(
-      onTap: () => setState(() => _fontSize = size),
+      onTap: () async {
+        setState(() => _chatBgStyle = style);
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('nyang_chat_bg_style', style);
+      },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        width: 32,
-        height: 32,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: isActive ? const Color(0xFFEDE7FF) : Colors.white,
@@ -1453,7 +1457,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         child: Text(
           label,
           style: GoogleFonts.notoSansKr(
-            fontSize: size.toDouble() - 1, // 약간 작게
+            fontSize: 12,
             fontWeight: FontWeight.w800,
             color: isActive ? const Color(0xFF8B7CFF) : const Color(0xFF6B7280),
           ),

@@ -424,10 +424,21 @@ class _MainTabScreenState extends State<MainTabScreen>
   final Set<String> _firedCoreReminders = {};
   StreamSubscription? _reminderAudioSub;
   int _reminderPlayCount = 0;
+  String _chatBgStyle = 'emotional';
+
+  Future<void> _loadBgStyle() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (mounted) {
+      setState(() {
+        _chatBgStyle = prefs.getString('nyang_chat_bg_style') ?? 'emotional';
+      });
+    }
+  }
 
   @override
   void initState() {
     super.initState();
+    _loadBgStyle();
     _openDrawerIndex = widget.initialDrawerIndex;
     WidgetsBinding.instance.addObserver(this);
     DailyResetService.checkAndExecuteReset();
@@ -1026,6 +1037,7 @@ class _MainTabScreenState extends State<MainTabScreen>
   static const Color _inactiveColor = Color(0xFF888899);
 
   void _onTabTapped(int index) {
+    _loadBgStyle();
     if (index == 0) {
       if (_openDrawerIndex != 0) {
         HapticFeedback.lightImpact();
@@ -1058,6 +1070,9 @@ class _MainTabScreenState extends State<MainTabScreen>
   // 배경 이미지 경로
   String get _bgImagePath {
     if (_vacationInfo != null) return 'assets/images/vacation_bg.jpg';
+    if (_chatBgStyle == 'simple') {
+      return 'assets/images/bg_${widget.coachId}_simple.png';
+    }
     return 'assets/images/bg_${widget.coachId}.png';
   }
 
