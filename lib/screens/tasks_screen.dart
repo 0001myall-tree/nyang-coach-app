@@ -9163,98 +9163,104 @@ class _TasksScreenState extends State<TasksScreen>
                           });
                         }
                       },
-                      child:
-                          (s.time != null ||
-                              s.duration != null ||
-                              s.isRecurring)
-                          ? Row(
-                              children: [
-                                if (s.time != null)
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 6,
-                                      vertical: 2,
-                                    ),
-                                    margin: const EdgeInsets.only(right: 6),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFFF5F3FF),
-                                      borderRadius: BorderRadius.circular(6),
-                                    ),
-                                    child: Text(
-                                      s.time!,
-                                      style: GoogleFonts.notoSansKr(
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w700,
-                                        color: const Color(0xFF8B7CFF),
+                      child: () {
+                        final displayTime = _displayTimeFromStored(
+                          time: s.time,
+                          timeStart: s.timeStart,
+                          timeEnd: s.timeEnd,
+                        );
+                        return (displayTime != null ||
+                                s.duration != null ||
+                                s.isRecurring)
+                            ? Row(
+                                children: [
+                                  if (displayTime != null)
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 6,
+                                        vertical: 2,
                                       ),
-                                    ),
-                                  ),
-                                if (s.duration != null)
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 6,
-                                      vertical: 2,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFFFDF2F8),
-                                      borderRadius: BorderRadius.circular(6),
-                                    ),
-                                    child: Text(
-                                      '⏱ ${s.duration}',
-                                      style: GoogleFonts.notoSansKr(
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w700,
-                                        color: const Color(0xFFDB2777),
+                                      margin: const EdgeInsets.only(right: 6),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFF5F3FF),
+                                        borderRadius: BorderRadius.circular(6),
                                       ),
-                                    ),
-                                  ),
-                                if (s.isRecurring)
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 6,
-                                      vertical: 2,
-                                    ),
-                                    margin: const EdgeInsets.only(left: 6),
-                                    decoration: BoxDecoration(
-                                      color: _coach.accentColor.withOpacity(
-                                        0.08,
-                                      ),
-                                      borderRadius: BorderRadius.circular(6),
-                                    ),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Icon(
-                                          Icons.repeat_rounded,
-                                          size: 12,
-                                          color: _coach.accentColor,
+                                      child: Text(
+                                        displayTime,
+                                        style: GoogleFonts.notoSansKr(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w700,
+                                          color: const Color(0xFF8B7CFF),
                                         ),
-                                        const SizedBox(width: 3),
-                                        Text(
-                                          _repeatRuleLabel(s.recurrenceRule),
-                                          style: GoogleFonts.notoSansKr(
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                  if (s.duration != null)
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 6,
+                                        vertical: 2,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFFDF2F8),
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: Text(
+                                        '⏱ ${s.duration}',
+                                        style: GoogleFonts.notoSansKr(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w700,
+                                          color: const Color(0xFFDB2777),
+                                        ),
+                                      ),
+                                    ),
+                                  if (s.isRecurring)
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 6,
+                                        vertical: 2,
+                                      ),
+                                      margin: const EdgeInsets.only(left: 6),
+                                      decoration: BoxDecoration(
+                                        color: _coach.accentColor.withOpacity(
+                                          0.08,
+                                        ),
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            Icons.repeat_rounded,
+                                            size: 12,
                                             color: _coach.accentColor,
                                           ),
-                                        ),
-                                      ],
+                                          const SizedBox(width: 3),
+                                          Text(
+                                            _repeatRuleLabel(s.recurrenceRule),
+                                            style: GoogleFonts.notoSansKr(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w800,
+                                              color: _coach.accentColor,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                ],
+                              )
+                            : Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(4),
+                                    child: const Icon(
+                                      Icons.access_time,
+                                      size: 16,
+                                      color: Color(0xFFD1D5DB),
                                     ),
                                   ),
-                              ],
-                            )
-                          : Row(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.all(4),
-                                  child: const Icon(
-                                    Icons.access_time,
-                                    size: 16,
-                                    color: Color(0xFFD1D5DB),
-                                  ),
-                                ),
-                              ],
-                            ),
+                                ],
+                              );
+                      }(),
                     ),
                   ],
                 ),
