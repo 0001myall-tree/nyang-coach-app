@@ -1006,6 +1006,7 @@ class _MainTabScreenState extends State<MainTabScreen>
         _loadVacation();
       },
       handoffFromCoachId: widget.handoffFromCoachId,
+      chatBgStyle: _chatBgStyle,
     ),
     const TasksPlaceholderScreen(),
     RecordsScreen(coachId: widget.coachId),
@@ -1316,7 +1317,7 @@ class _MainTabScreenState extends State<MainTabScreen>
     final isVacation = _vacationInfo != null;
     final nameColor = isVacation
         ? Colors.white
-        : (isImmersive ? Colors.white : const Color(0xFF1A1A2E));
+        : (_chatBgStyle == 'simple' ? const Color(0xFF3A3652) : (isImmersive ? Colors.white : const Color(0xFF1A1A2E)));
 
     return Row(
       children: [

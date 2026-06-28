@@ -326,6 +326,7 @@ class ChatScreen extends StatefulWidget {
   final String? handoffFromCoachId;
   final dynamic vacationInfo;
   final ChatScreenController? controller;
+  final String chatBgStyle;
   const ChatScreen({
     super.key,
     required this.coachId,
@@ -335,6 +336,7 @@ class ChatScreen extends StatefulWidget {
     this.handoffFromCoachId,
     this.vacationInfo,
     this.controller,
+    this.chatBgStyle = 'emotional',
   });
 
   @override
@@ -7040,7 +7042,9 @@ $timerOutputRule
                 time,
                 style: GoogleFonts.notoSansKr(
                   fontSize: AppDesignTokens.textMeta,
-                  color: AppDesignTokens.textDisabled,
+                  color: widget.chatBgStyle == 'simple'
+                      ? AppDesignTokens.brand
+                      : AppDesignTokens.textDisabled,
                 ),
               ),
             ),
@@ -7083,7 +7087,9 @@ $timerOutputRule
                 time,
                 style: GoogleFonts.notoSansKr(
                   fontSize: AppDesignTokens.textMeta,
-                  color: AppDesignTokens.textDisabled,
+                  color: widget.chatBgStyle == 'simple'
+                      ? AppDesignTokens.brand
+                      : AppDesignTokens.textDisabled,
                 ),
               ),
             ),
@@ -7461,26 +7467,30 @@ $timerOutputRule
                   decoration: BoxDecoration(
                     color: _isListening
                         ? Colors.redAccent.withOpacity(0.15)
-                        : (isNyang
-                              ? Colors.white.withOpacity(0.3)
-                              : (isImmersiveInput
-                                    ? Colors.white.withOpacity(0.2)
-                                    : Colors.white)),
+                        : (widget.chatBgStyle == 'simple'
+                              ? const Color(0xFFF5F3FF)
+                              : (isNyang
+                                    ? Colors.white.withOpacity(0.3)
+                                    : (isImmersiveInput
+                                          ? Colors.white.withOpacity(0.2)
+                                          : Colors.white))),
                     borderRadius: BorderRadius.circular(
                       AppDesignTokens.radiusPill,
                     ),
                     border: Border.all(
                       color: _isListening
                           ? Colors.redAccent
-                          : (isNyang
-                                ? _coach.accentColor.withOpacity(0.6)
-                                : (isImmersiveInput
-                                      ? (isGirlfriend
-                                            ? girlfriendPink.withOpacity(0.45)
-                                            : Colors.white.withOpacity(
-                                                isMasterVacation ? 0.6 : 0.3,
-                                              ))
-                                      : masterLavenderBorder)),
+                          : (widget.chatBgStyle == 'simple'
+                                ? _coach.accentColor.withOpacity(0.4)
+                                : (isNyang
+                                      ? _coach.accentColor.withOpacity(0.6)
+                                      : (isImmersiveInput
+                                            ? (isGirlfriend
+                                                  ? girlfriendPink.withOpacity(0.45)
+                                                  : Colors.white.withOpacity(
+                                                      isMasterVacation ? 0.6 : 0.3,
+                                                    ))
+                                            : masterLavenderBorder))),
                       width: _isListening ? 2.0 : 1.2,
                     ),
                     boxShadow: isImmersiveInput
@@ -7497,13 +7507,15 @@ $timerOutputRule
                     _isListening ? Icons.stop_rounded : Icons.mic_none_rounded,
                     color: _isListening
                         ? Colors.redAccent
-                        : (isNyang
+                        : (widget.chatBgStyle == 'simple'
                               ? _coach.accentColor
-                              : (isFriends
-                                    ? (isGirlfriend
-                                          ? girlfriendPink
-                                          : Colors.white)
-                                    : masterLavenderIcon)),
+                              : (isNyang
+                                    ? _coach.accentColor
+                                    : (isFriends
+                                          ? (isGirlfriend
+                                                ? girlfriendPink
+                                                : Colors.white)
+                                          : masterLavenderIcon))),
                     size: 20,
                   ),
                 ),
@@ -7514,29 +7526,33 @@ $timerOutputRule
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   decoration: BoxDecoration(
-                    color: isFriends
-                        ? Colors.white.withOpacity(0.25)
-                        : (isMasterVacation
-                              ? Colors.white.withOpacity(
-                                  AppDesignTokens.lightGlassOpacity,
-                                )
-                              : Colors.white),
+                    color: widget.chatBgStyle == 'simple'
+                        ? Colors.white
+                        : (isFriends
+                              ? Colors.white.withOpacity(0.25)
+                              : (isMasterVacation
+                                    ? Colors.white.withOpacity(
+                                        AppDesignTokens.lightGlassOpacity,
+                                      )
+                                    : Colors.white)),
                     borderRadius: BorderRadius.circular(
                       AppDesignTokens.radiusPill,
                     ),
                     border: Border.all(
-                      color: isNyang
-                          ? _coach.accentColor.withOpacity(0.5)
-                          : (isFriends
-                                ? (isGirlfriend
-                                      ? girlfriendPink.withOpacity(0.45)
-                                      : Colors.white.withOpacity(0.3))
-                                : (isMasterVacation
-                                      ? Colors.white.withOpacity(
-                                          AppDesignTokens
-                                              .lightGlassBorderOpacity,
-                                        )
-                                      : masterLavenderBorder)),
+                      color: widget.chatBgStyle == 'simple'
+                          ? _coach.accentColor.withOpacity(0.4)
+                          : (isNyang
+                                ? _coach.accentColor.withOpacity(0.5)
+                                : (isFriends
+                                      ? (isGirlfriend
+                                            ? girlfriendPink.withOpacity(0.45)
+                                            : Colors.white.withOpacity(0.3))
+                                      : (isMasterVacation
+                                            ? Colors.white.withOpacity(
+                                                AppDesignTokens
+                                                    .lightGlassBorderOpacity,
+                                              )
+                                            : masterLavenderBorder))),
                       width: 1.2,
                     ),
                   ),
@@ -7547,28 +7563,32 @@ $timerOutputRule
                     onSubmitted: _send,
                     style: GoogleFonts.notoSansKr(
                       fontSize: AppDesignTokens.textBody,
-                      color: isNyang
-                          ? AppDesignTokens.textPrimary
-                          : (isFriends
-                                ? (isGirlfriend
-                                      ? AppDesignTokens.textPrimary
-                                      : Colors.white)
-                                : AppDesignTokens.textPrimary),
+                      color: widget.chatBgStyle == 'simple'
+                          ? const Color(0xFF3D3A4E)
+                          : (isNyang
+                                ? AppDesignTokens.textPrimary
+                                : (isFriends
+                                      ? (isGirlfriend
+                                            ? AppDesignTokens.textPrimary
+                                            : Colors.white)
+                                      : AppDesignTokens.textPrimary)),
                     ),
                     decoration: InputDecoration(
                       hintText: '메시지를 입력하세요...',
                       hintStyle: GoogleFonts.notoSansKr(
                         fontSize: AppDesignTokens.textBody,
-                        color: isNyang
-                            ? AppDesignTokens.textPrimary.withValues(
-                                alpha: 0.62,
-                              )
-                            : (isFriends
-                                  ? (isGirlfriend
-                                        ? AppDesignTokens.textPrimary
-                                              .withValues(alpha: 0.45)
-                                        : Colors.white.withOpacity(0.6))
-                                  : AppDesignTokens.textDisabled),
+                        color: widget.chatBgStyle == 'simple'
+                            ? const Color(0xFF9A96A8)
+                            : (isNyang
+                                  ? AppDesignTokens.textPrimary.withValues(
+                                      alpha: 0.62,
+                                    )
+                                  : (isFriends
+                                        ? (isGirlfriend
+                                              ? AppDesignTokens.textPrimary
+                                                    .withValues(alpha: 0.45)
+                                              : Colors.white.withOpacity(0.6))
+                                        : AppDesignTokens.textDisabled)),
                       ),
                       border: InputBorder.none,
                       contentPadding: const EdgeInsets.symmetric(vertical: 12),
