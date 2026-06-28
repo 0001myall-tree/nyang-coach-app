@@ -1035,18 +1035,31 @@ class _MainTabScreenState extends State<MainTabScreen>
 
   static const _tabLabels = ['채팅', '할 일', '기록', '설정'];
 
-  static final _inactiveIcons = [
-    _chatBubbleIcon(active: false),
-    _clipboardIcon(active: false),
-    _barChartIcon(active: false),
-    _gearIcon(active: false),
+  Color get _tabActiveColor => _activeColor;
+
+  Color get _tabInactiveColor {
+    if (_chatBgStyle == 'simple') {
+      // 심플 버전 선택되지 않은 탭: 짙은 보라회색
+      return const Color(0xFF3A3652);
+    }
+    if (_isMaster) {
+      return const Color(0xFF888899);
+    }
+    return Colors.white.withOpacity(0.6);
+  }
+
+  List<Widget> get _inactiveIcons => [
+    _chatBubbleIcon(active: false, color: _tabInactiveColor),
+    _clipboardIcon(color: _tabInactiveColor),
+    _barChartIcon(color: _tabInactiveColor),
+    _gearIcon(active: false, color: _tabInactiveColor),
   ];
 
-  static final _activeIcons = [
-    _chatBubbleIcon(active: true),
-    _clipboardIcon(active: true),
-    _barChartIcon(active: true),
-    _gearIcon(active: true),
+  List<Widget> get _activeIcons => [
+    _chatBubbleIcon(active: true, color: _tabActiveColor),
+    _clipboardIcon(color: _tabActiveColor),
+    _barChartIcon(color: _tabActiveColor),
+    _gearIcon(active: true, color: _tabActiveColor),
   ];
 
   bool get _isMaster => _isMasterCoach(widget.coachId);
@@ -1116,47 +1129,68 @@ class _MainTabScreenState extends State<MainTabScreen>
 
   // ── 프렌즈: 전체 배경 이미지 (헤더/탭바 투명) ────────────
   Widget _buildFriendsLayout() {
-    return Stack(
-      children: [
-        // 배경 이미지 전체에 깔기
-        Positioned.fill(
-          child: Image.asset(
-            _bgImagePath,
-            fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) => Container(color: Colors.white),
+    final isSimple = _chatBgStyle == 'simple';
+    
+    // 심플 모드일 때는 밝은 배경이므로 검은색 상태바 아이콘 적용
+    final systemUiStyle = isSimple
+        ? SystemUiOverlayStyle.dark.copyWith(
+            statusBarColor: Colors.transparent,
+            systemNavigationBarColor: const Color(0xFFFFFCFF),
+            systemNavigationBarIconBrightness: Brightness.dark,
+          )
+        : SystemUiOverlayStyle.light.copyWith(
+            statusBarColor: Colors.transparent,
+            systemNavigationBarColor: Colors.transparent,
+            systemNavigationBarIconBrightness: Brightness.light,
+          );
+
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: systemUiStyle,
+      child: Stack(
+        children: [
+          // 배경 이미지 전체에 깔기
+          Positioned.fill(
+            child: Image.asset(
+              _bgImagePath,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => Container(color: Colors.white),
+            ),
           ),
-        ),
-        Scaffold(
-          backgroundColor: Colors.transparent,
-          appBar: AppBar(
+          Scaffold(
             backgroundColor: Colors.transparent,
-            elevation: 0,
-            centerTitle: false,
-            titleSpacing: 20,
-            title: _buildAppBarTitle(isImmersive: true),
-            actions: [_buildAvatarAction()],
+            appBar: AppBar(
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              centerTitle: false,
+              titleSpacing: 20,
+              title: _buildAppBarTitle(isImmersive: true),
+              actions: [_buildAvatarAction()],
+            ),
+            body: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 180),
+              transitionBuilder: (child, anim) =>
+                  FadeTransition(opacity: anim, child: child),
+              child: KeyedSubtree(key: const ValueKey(0), child: _screens[0]),
+            ),
+            bottomNavigationBar: _NyangBottomTabBar(
+              currentIndex: _openDrawerIndex,
+              onTap: _onTabTapped,
+              labels: _tabLabels,
+              inactiveIcons: _inactiveIcons,
+              activeIcons: _activeIcons,
+              activeColor: _activeColor,
+              bgColor: isSimple ? const Color(0xFFFFFCFF) : Colors.black.withOpacity(0.35),
+              inactiveColor: _tabInactiveColor,
+              isImmersive: !isSimple,
+              border: isSimple
+                  ? const Border(top: BorderSide(color: Color(0xFFE8E3F8), width: 1.0))
+                  : null,
+            ),
           ),
-          body: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 180),
-            transitionBuilder: (child, anim) =>
-                FadeTransition(opacity: anim, child: child),
-            child: KeyedSubtree(key: const ValueKey(0), child: _screens[0]),
-          ),
-          bottomNavigationBar: _NyangBottomTabBar(
-            currentIndex: _openDrawerIndex,
-            onTap: _onTabTapped,
-            labels: _tabLabels,
-            inactiveIcons: _inactiveIcons,
-            activeIcons: _activeIcons,
-            activeColor: _activeColor,
-            bgColor: Colors.black.withOpacity(0.35),
-            inactiveColor: Colors.white.withOpacity(0.6),
-            isImmersive: true,
-          ),
-        ),
-        // 서랍 오버레이 + 패널
-        if (_openDrawerIndex != 0) _buildSideDrawer(),
-      ],
+          // 서랍 오버레이 + 패널
+          if (_openDrawerIndex != 0) _buildSideDrawer(),
+        ],
+      ),
     );
   }
 
@@ -1298,6 +1332,7 @@ class _MainTabScreenState extends State<MainTabScreen>
             ? Colors.white.withOpacity(0.6)
             : AppDesignTokens.textDisabled,
         isImmersive: isVacation,
+        border: isVacation ? null : const Border(top: BorderSide(color: AppDesignTokens.divider)),
       ),
     );
     return Stack(
@@ -1536,35 +1571,35 @@ class _MainTabScreenState extends State<MainTabScreen>
     );
   }
 
-  static Widget _chatBubbleIcon({required bool active}) {
+  Widget _chatBubbleIcon({required bool active, required Color color}) {
     return SizedBox(
       width: 26,
       height: 26,
-      child: CustomPaint(painter: _ChatBubblePainter(active: active)),
+      child: CustomPaint(painter: _ChatBubblePainter(active: active, color: color)),
     );
   }
 
-  static Widget _clipboardIcon({required bool active}) {
+  Widget _clipboardIcon({required Color color}) {
     return SizedBox(
       width: 24,
       height: 26,
-      child: CustomPaint(painter: _ClipboardPainter(active: active)),
+      child: CustomPaint(painter: _ClipboardPainter(color: color)),
     );
   }
 
-  static Widget _barChartIcon({required bool active}) {
+  Widget _barChartIcon({required Color color}) {
     return SizedBox(
       width: 26,
       height: 26,
-      child: CustomPaint(painter: _BarChartPainter(active: active)),
+      child: CustomPaint(painter: _BarChartPainter(color: color)),
     );
   }
 
-  static Widget _gearIcon({required bool active}) {
+  Widget _gearIcon({required bool active, required Color color}) {
     return Icon(
       active ? Icons.settings_rounded : Icons.settings_outlined,
       size: 24,
-      color: active ? null : const Color(0xFF888899),
+      color: color,
     );
   }
 }
@@ -1582,6 +1617,7 @@ class _NyangBottomTabBar extends StatelessWidget {
   final Color bgColor;
   final Color inactiveColor;
   final bool isImmersive;
+  final Border? border;
 
   const _NyangBottomTabBar({
     required this.currentIndex,
@@ -1593,6 +1629,7 @@ class _NyangBottomTabBar extends StatelessWidget {
     required this.bgColor,
     required this.inactiveColor,
     this.isImmersive = false,
+    this.border,
   });
 
   @override
@@ -1608,13 +1645,13 @@ class _NyangBottomTabBar extends StatelessWidget {
               final isActive = currentIndex == i;
               return Expanded(
                 child: _TabItem(
-                  label: labels[i],
-                  inactiveIcon: inactiveIcons[i],
-                  activeIcon: activeIcons[i],
-                  isActive: isActive,
-                  activeColor: activeColor,
-                  inactiveColor: inactiveColor,
-                  onTap: () => onTap(i),
+                   label: labels[i],
+                   inactiveIcon: inactiveIcons[i],
+                   activeIcon: activeIcons[i],
+                   isActive: isActive,
+                   activeColor: activeColor,
+                   inactiveColor: inactiveColor,
+                   onTap: () => onTap(i),
                 ),
               );
             }),
@@ -1635,9 +1672,7 @@ class _NyangBottomTabBar extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: bgColor,
-        border: bgColor == Colors.white
-            ? const Border(top: BorderSide(color: AppDesignTokens.divider))
-            : null,
+        border: border,
       ),
       child: tabContent,
     );
@@ -1761,12 +1796,13 @@ class _TabItemState extends State<_TabItem>
 // ─────────────────────────────────────────────────────────────
 class _ChatBubblePainter extends CustomPainter {
   final bool active;
-  _ChatBubblePainter({required this.active});
+  final Color color;
+  _ChatBubblePainter({required this.active, required this.color});
 
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = active ? Colors.white : const Color(0xFF888899)
+      ..color = color
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2.0
       ..strokeCap = StrokeCap.round
@@ -1793,7 +1829,7 @@ class _ChatBubblePainter extends CustomPainter {
       canvas.drawPath(
         path,
         Paint()
-          ..color = Colors.white
+          ..color = color
           ..style = PaintingStyle.fill,
       );
     } else {
@@ -1802,16 +1838,15 @@ class _ChatBubblePainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_ChatBubblePainter old) => old.active != active;
+  bool shouldRepaint(_ChatBubblePainter old) => old.active != active || old.color != color;
 }
 
 class _ClipboardPainter extends CustomPainter {
-  final bool active;
-  _ClipboardPainter({required this.active});
+  final Color color;
+  _ClipboardPainter({required this.color});
 
   @override
   void paint(Canvas canvas, Size size) {
-    final color = active ? Colors.white : const Color(0xFF888899);
     final paint = Paint()
       ..color = color
       ..style = PaintingStyle.stroke
@@ -1856,16 +1891,15 @@ class _ClipboardPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_ClipboardPainter old) => old.active != active;
+  bool shouldRepaint(_ClipboardPainter old) => old.color != color;
 }
 
 class _BarChartPainter extends CustomPainter {
-  final bool active;
-  _BarChartPainter({required this.active});
+  final Color color;
+  _BarChartPainter({required this.color});
 
   @override
   void paint(Canvas canvas, Size size) {
-    final color = active ? Colors.white : const Color(0xFF888899);
     final paint = Paint()
       ..color = color
       ..style = PaintingStyle.stroke
@@ -1893,5 +1927,5 @@ class _BarChartPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_BarChartPainter old) => old.active != active;
+  bool shouldRepaint(_BarChartPainter old) => old.color != color;
 }
