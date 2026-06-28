@@ -9,7 +9,7 @@ import '../models/user_data.dart';
 import '../services/tasks_sync_service.dart';
 import '../services/widget_sync_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'coach_selection_screen.dart';
+import 'philosophy_intro_screen.dart';
 import 'main_tab_screen.dart';
 import '../theme/app_design_tokens.dart';
 import '../widgets/app_bottom_sheet.dart';
@@ -79,7 +79,7 @@ class _LandingScreenState extends State<LandingScreen>
           if (!mounted) return;
           Navigator.of(context).pushReplacement(
             MaterialPageRoute(
-              builder: (context) => const CoachSelectionScreen(),
+              builder: (context) => const PhilosophyIntroScreen(),
             ),
           );
           return;
@@ -366,7 +366,7 @@ class _LandingScreenState extends State<LandingScreen>
                         Navigator.pushReplacement(
                           outerContext,
                           MaterialPageRoute(
-                            builder: (context) => const CoachSelectionScreen(),
+                            builder: (context) => const PhilosophyIntroScreen(),
                           ),
                         );
                       }
@@ -401,7 +401,7 @@ class _LandingScreenState extends State<LandingScreen>
                     Navigator.pushReplacement(
                       outerContext,
                       MaterialPageRoute(
-                        builder: (context) => const CoachSelectionScreen(),
+                        builder: (context) => const PhilosophyIntroScreen(),
                       ),
                     );
                   },
