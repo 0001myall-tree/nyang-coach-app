@@ -1397,21 +1397,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Widget _buildBgStyleCard() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE8E3F8), width: 1.2),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.wallpaper_rounded, color: Color(0xFF8B7CFF), size: 18),
-              const SizedBox(width: 8),
-              Text(
+    return GestureDetector(
+      onTap: _showBgStylePicker,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFE8E3F8), width: 1.2),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.wallpaper_rounded, color: Color(0xFF8B7CFF), size: 18),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
                 '채팅 배경 설정',
                 style: GoogleFonts.notoSansKr(
                   fontSize: 14,
@@ -1419,50 +1419,128 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   color: const Color(0xFF3D3A4E),
                 ),
               ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(child: _bgStyleButton('emotional', '감성 버전')),
-              const SizedBox(width: 12),
-              Expanded(child: _bgStyleButton('simple', '심플 버전')),
-            ],
-          ),
-        ],
+            ),
+            const SizedBox(width: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+              decoration: BoxDecoration(
+                color: const Color(0xFFEDE7FF),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    _chatBgStyle == 'emotional' ? '감성 버전' : '심플 버전',
+                    style: GoogleFonts.notoSansKr(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w900,
+                      color: const Color(0xFF8B7CFF),
+                    ),
+                  ),
+                  const SizedBox(width: 2),
+                  const Icon(
+                    Icons.chevron_right_rounded,
+                    size: 18,
+                    color: Color(0xFF8B7CFF),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _bgStyleButton(String style, String label) {
-    final bool isActive = _chatBgStyle == style;
-    return GestureDetector(
-      onTap: () async {
-        setState(() => _chatBgStyle = style);
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('nyang_chat_bg_style', style);
-      },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: isActive ? const Color(0xFFEDE7FF) : Colors.white,
-          border: Border.all(
-            color: isActive ? const Color(0xFF8B7CFF) : const Color(0xFFE5E7EB),
-            width: 1.2,
-          ),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Text(
-          label,
-          style: GoogleFonts.notoSansKr(
-            fontSize: 13,
-            fontWeight: FontWeight.w800,
-            color: isActive ? const Color(0xFF8B7CFF) : const Color(0xFF6B7280),
-          ),
-        ),
+  Future<void> _showBgStylePicker() async {
+    final styles = ['emotional', 'simple'];
+    final labels = ['감성 버전', '심플 버전'];
+    int selectedIndex = styles.indexOf(_chatBgStyle);
+    if (selectedIndex == -1) selectedIndex = 0;
+
+    final controller = FixedExtentScrollController(initialItem: selectedIndex);
+
+    await showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
+      builder: (context) {
+        return SafeArea(
+          top: false,
+          child: SizedBox(
+            height: 280,
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 12, 8),
+                  child: Row(
+                    children: [
+                      Text(
+                        '채팅 배경 선택',
+                        style: GoogleFonts.notoSansKr(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w900,
+                          color: const Color(0xFF3D3A4E),
+                        ),
+                      ),
+                      const Spacer(),
+                      TextButton(
+                        onPressed: () async {
+                          final selectedStyle = styles[selectedIndex];
+                          setState(() => _chatBgStyle = selectedStyle);
+                          final prefs = await SharedPreferences.getInstance();
+                          await prefs.setString('nyang_chat_bg_style', selectedStyle);
+                          if (context.mounted) Navigator.pop(context);
+                        },
+                        child: Text(
+                          '완료',
+                          style: GoogleFonts.notoSansKr(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w900,
+                            color: const Color(0xFF8B7CFF),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: CupertinoPicker(
+                    scrollController: controller,
+                    itemExtent: 44,
+                    magnification: 1.08,
+                    useMagnifier: true,
+                    selectionOverlay: Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 36),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF3F0FF).withValues(alpha: 0.72),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    onSelectedItemChanged: (index) => selectedIndex = index,
+                    children: List.generate(labels.length, (index) {
+                      return Center(
+                        child: Text(
+                          labels[index],
+                          style: GoogleFonts.notoSansKr(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                            color: const Color(0xFF3D3A4E),
+                          ),
+                        ),
+                      );
+                    }),
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 

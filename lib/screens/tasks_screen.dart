@@ -12801,9 +12801,10 @@ class MemoDisplayWidget extends StatelessWidget {
         );
       }
       final String url = match.group(0)!;
+      final bool isLocalNote = url.startsWith('http://localhost:8000/?id=');
       spans.add(
         TextSpan(
-          text: url,
+          text: isLocalNote ? ' 🔗지식노트 ' : url,
           style: style.copyWith(
             color: const Color(0xFF3B82F6),
             decoration: TextDecoration.underline,
