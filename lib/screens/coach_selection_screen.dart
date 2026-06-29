@@ -351,284 +351,6 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
     );
   }
 
-  void _showSubscriptionStatusSheet() {
-    final couponController = TextEditingController();
-    String? errorText;
-    bool isApplying = false;
-
-    showAppBottomSheet(
-      context: context,
-      builder: (sheetContext) {
-        return StatefulBuilder(
-          builder: (context, setSheetState) {
-            Future<void> applyCoupon() async {
-              final code = couponController.text.trim().toUpperCase();
-              if (code.isEmpty) {
-                setSheetState(() => errorText = '쿠폰 코드를 입력해주세요.');
-                return;
-              }
-
-              setSheetState(() {
-                isApplying = true;
-                errorText = null;
-              });
-
-              var appliedMessage = '';
-              if (code == 'FRIENDS' || code == 'FRIENDS5900') {
-                await UserDataService.setPlan(
-                  'friends',
-                  expiresAt: DateTime.now().add(const Duration(days: 30)),
-                );
-                appliedMessage = 'FRIENDS 플랜 30일이 적용됐어요.';
-              } else if (code == 'MASTER' || code == 'MASTER8900') {
-                await UserDataService.setPlan(
-                  'master',
-                  expiresAt: DateTime.now().add(const Duration(days: 30)),
-                );
-                appliedMessage = 'MASTER 플랜 30일이 적용됐어요.';
-              } else if (code.startsWith('POINT')) {
-                final points = int.tryParse(code.replaceAll('POINT', ''));
-                if (points == null || points <= 0) {
-                  setSheetState(() {
-                    isApplying = false;
-                    errorText = '포인트 쿠폰 형식을 확인해주세요.';
-                  });
-                  return;
-                }
-                await UserDataService.addPoints(points.clamp(0, 50000));
-                appliedMessage = '$points포인트가 충전됐어요.';
-              } else {
-                setSheetState(() {
-                  isApplying = false;
-                  errorText = '사용할 수 없는 쿠폰 코드예요.';
-                });
-                return;
-              }
-
-              final updated = await UserDataService.load();
-              if (!mounted) return;
-              setState(() => _userData = updated);
-              setSheetState(() => isApplying = false);
-              couponController.clear();
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    appliedMessage,
-                    style: GoogleFonts.notoSansKr(fontWeight: FontWeight.w700),
-                  ),
-                  behavior: SnackBarBehavior.floating,
-                  backgroundColor: const Color(0xFF1A1A2E),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-              );
-            }
-
-            final inputBorder = OutlineInputBorder(
-              borderRadius: BorderRadius.circular(AppDesignTokens.radiusMedium),
-              borderSide: const BorderSide(color: AppDesignTokens.brandBorder),
-            );
-
-            return AppBottomSheetScaffold(
-              contentPadding: const EdgeInsets.fromLTRB(
-                24,
-                0,
-                24,
-                AppDesignTokens.sheetContentBottomPadding,
-              ),
-              body: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        const LockedCoachIcon(size: 36),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                '내 구독 상태',
-                                style: GoogleFonts.notoSansKr(
-                                  fontSize: 22,
-                                  fontWeight: FontWeight.w900,
-                                  color: AppDesignTokens.textPrimary,
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                '구독, 포인트, 쿠폰을 확인해요.',
-                                style: GoogleFonts.notoSansKr(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppDesignTokens.textMuted,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        IconButton(
-                          onPressed: () => Navigator.of(sheetContext).pop(),
-                          icon: const Icon(Icons.close_rounded),
-                          tooltip: '닫기',
-                          style: IconButton.styleFrom(
-                            foregroundColor: AppDesignTokens.textMuted,
-                            backgroundColor: AppDesignTokens.brandSoftAlt,
-                            shape: const CircleBorder(),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 22),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _buildSubscriptionStatusCard(
-                            label: '구독 상태',
-                            value: _planStatusLabel,
-                            icon: Icons.workspace_premium_rounded,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: _buildSubscriptionStatusCard(
-                            label: '포인트',
-                            value: '${_userData.points}P',
-                            icon: Icons.toll_rounded,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    _buildSubscriptionStatusCard(
-                      label: '구독 남은 기간',
-                      value: _planRemainingLabel,
-                      icon: Icons.event_available_rounded,
-                      isWide: true,
-                    ),
-                    const SizedBox(height: 18),
-                    _buildPurchasedCoachSection(),
-                    const SizedBox(height: 18),
-                    Text(
-                      '쿠폰 입력',
-                      style: GoogleFonts.notoSansKr(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w900,
-                        color: AppDesignTokens.textPrimary,
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    TextField(
-                      controller: couponController,
-                      textCapitalization: TextCapitalization.characters,
-                      decoration: InputDecoration(
-                        hintText: '쿠폰 또는 구독권 코드',
-                        errorText: errorText,
-                        hintStyle: GoogleFonts.notoSansKr(
-                          color: AppDesignTokens.textDisabled,
-                          fontWeight: FontWeight.w600,
-                        ),
-                        filled: true,
-                        fillColor: AppDesignTokens.brandSoftAlt,
-                        border: inputBorder,
-                        enabledBorder: inputBorder,
-                        focusedBorder: inputBorder.copyWith(
-                          borderSide: const BorderSide(
-                            color: AppDesignTokens.brandAccent,
-                            width: 1.5,
-                          ),
-                        ),
-                      ),
-                      style: GoogleFonts.notoSansKr(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w800,
-                        color: AppDesignTokens.textPrimary,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    AppButton(
-                      label: isApplying ? '확인 중...' : '쿠폰 적용하기',
-                      onPressed: isApplying ? null : applyCoupon,
-                      backgroundColor: AppDesignTokens.textPrimary,
-                      disabledBackgroundColor: AppDesignTokens.divider,
-                    ),
-                    const SizedBox(height: 12),
-                    SizedBox(
-                      width: double.infinity,
-                      child: TextButton(
-                        onPressed: () {
-                          Navigator.pop(context);
-                          Future.delayed(
-                            Duration.zero,
-                            _showAccountSwitchDialog,
-                          );
-                        },
-                        style: TextButton.styleFrom(
-                          foregroundColor: AppDesignTokens.textMuted,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                        ),
-                        child: Text(
-                          '다른 계정으로 로그인하기',
-                          style: GoogleFonts.notoSansKr(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
-    ).whenComplete(couponController.dispose);
-  }
-
-  String get _planStatusLabel {
-    if (!_userData.isPlanActive) return '미구독';
-    if (_userData.planType == 'master') return 'MASTER';
-    if (_userData.planType == 'friends') return 'FRIENDS';
-    return '미구독';
-  }
-
-  String get _planRemainingLabel {
-    if (!_userData.isPlanActive) return '구독권 없음';
-    final expiresAt = _userData.planExpiresAt;
-    if (expiresAt == null) return '기간 제한 없음';
-    final remaining = expiresAt.difference(DateTime.now()).inDays + 1;
-    if (remaining <= 0) return '만료 예정';
-    return '$remaining일 남음';
-  }
-
-  Widget _buildSubscriptionStatusCard({
-    required String label,
-    required String value,
-    required IconData icon,
-    bool isWide = false,
-  }) {
-    return AppCard(
-      padding: EdgeInsets.symmetric(horizontal: 14, vertical: isWide ? 14 : 12),
-      backgroundColor: AppDesignTokens.brandSoftAlt,
-      borderColor: AppDesignTokens.brandBorder,
-      radius: AppDesignTokens.radiusMedium,
-      child: Row(
-        children: [
-          Icon(icon, size: 18, color: AppDesignTokens.brandAccent),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: GoogleFonts.notoSansKr(
-                    fontSize: 11,
                     fontWeight: FontWeight.w700,
                     color: AppDesignTokens.textMuted,
                   ),
@@ -1210,38 +932,43 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
             children: [
               // 상단 앱바
               Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 16,
-                ),
-                child: Row(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Expanded(
-                      child: Text(
-                        '당신의 하루를 함께 할 실행 코치를 선택하세요',
-                        style: GoogleFonts.notoSansKr(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w800,
-                          color: AppDesignTokens.textPrimary,
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton(
+                        onPressed: _showPlanGuidePlaceholder,
+                        style: TextButton.styleFrom(
+                          foregroundColor: AppDesignTokens.brandAccent,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 6,
+                          ),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        child: Text(
+                          '구독 안내 >',
+                          style: GoogleFonts.notoSansKr(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w800,
+                          ),
                         ),
                       ),
                     ),
-                    TextButton(
-                      onPressed: _showSubscriptionStatusSheet,
-                      style: TextButton.styleFrom(
-                        foregroundColor: AppDesignTokens.brandAccent,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 6,
-                        ),
-                        minimumSize: Size.zero,
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      ),
+                    const SizedBox(height: 8),
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
                       child: Text(
-                        '내 구독 상태',
+                        '하루를 함께 할 실행 코치를 선택하세요',
                         style: GoogleFonts.notoSansKr(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w800,
+                          fontSize: 22,
+                          fontWeight: FontWeight.w900,
+                          color: AppDesignTokens.textPrimary,
+                          letterSpacing: -0.5,
                         ),
                       ),
                     ),
@@ -1276,10 +1003,7 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
                 ),
               ),
 
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
-                child: _buildSubscriptionGuideButton(),
-              ),
+
 
               // 카드 그리드 영역
               Expanded(
@@ -1491,46 +1215,6 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
     );
   }
 
-  Widget _buildSubscriptionGuideButton() {
-    return AppCard(
-      onTap: _showPlanGuidePlaceholder,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      radius: AppDesignTokens.radiusMedium,
-      backgroundColor: AppDesignTokens.surface.withValues(alpha: 0.88),
-      borderColor: AppDesignTokens.brandBorder,
-      child: Row(
-        children: [
-          const LockedCoachIcon(size: 28),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              '잠긴 코치들이 궁금하신가요?',
-              style: GoogleFonts.notoSansKr(
-                fontSize: AppDesignTokens.textCaption,
-                fontWeight: FontWeight.w700,
-                color: AppDesignTokens.textPrimary,
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Text(
-            '구독 안내 보기',
-            style: GoogleFonts.notoSansKr(
-              fontSize: AppDesignTokens.textCaption,
-              fontWeight: FontWeight.w900,
-              color: AppDesignTokens.brandAccent,
-            ),
-          ),
-          const SizedBox(width: 2),
-          const Icon(
-            Icons.chevron_right_rounded,
-            size: 18,
-            color: AppDesignTokens.brandAccent,
-          ),
-        ],
-      ),
-    );
-  }
 
   Widget _buildTabButton({
     required CoachTab tab,
