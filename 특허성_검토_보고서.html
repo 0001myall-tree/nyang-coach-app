@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>특허성 검토 보고서 - 냥냥코치</title>
+  <!-- Google Fonts for premium typography -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=Outfit:wght@400;600;800&display=swap" rel="stylesheet">
+  
+  <style>
+    :root {
+      --primary-color: #2b5c54;
+      --secondary-color: #eaf4f1;
+      --text-color: #2d3748;
+      --bg-color: #f7fafc;
+      --card-bg: #ffffff;
+      --border-color: #e2e8f0;
+      --accent-color: #319795;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      font-family: 'Noto Sans KR', sans-serif;
+      margin: 0;
+      padding: 0;
+      line-height: 1.8;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .wrapper {
+      max-width: 900px;
+      margin: 50px auto;
+      padding: 0 20px;
+    }
+
+    /* Edit helper notice */
+    .edit-notice {
+      background-color: #ebf8ff;
+      border: 1px solid #bee3f8;
+      color: #2b6cb0;
+      padding: 15px 20px;
+      border-radius: 8px;
+      margin-bottom: 25px;
+      font-size: 0.95rem;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+    }
+
+    .edit-notice-icon {
+      font-size: 1.5rem;
+    }
+
+    .report-card {
+      background: var(--card-bg);
+      border-radius: 16px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.04);
+      border: 1px solid var(--border-color);
+      padding: 50px 60px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .report-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 6px;
+      background: linear-gradient(90deg, var(--primary-color), var(--accent-color));
+    }
+
+    header {
+      margin-bottom: 40px;
+      border-bottom: 2px solid var(--secondary-color);
+      padding-bottom: 25px;
+    }
+
+    .meta-tag {
+      display: inline-block;
+      background-color: var(--secondary-color);
+      color: var(--primary-color);
+      font-weight: 700;
+      padding: 6px 16px;
+      border-radius: 50px;
+      font-size: 0.85rem;
+      margin-bottom: 15px;
+      letter-spacing: 0.5px;
+    }
+
+    h1 {
+      font-family: 'Outfit', 'Noto Sans KR', sans-serif;
+      color: var(--primary-color);
+      font-size: 2.2rem;
+      margin: 0 0 10px 0;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+    }
+
+    .subtitle {
+      font-size: 1.1rem;
+      color: #718096;
+      margin: 0;
+    }
+
+    h2 {
+      color: var(--primary-color);
+      font-size: 1.5rem;
+      margin-top: 40px;
+      margin-bottom: 20px;
+      border-left: 4px solid var(--accent-color);
+      padding-left: 12px;
+      font-weight: 700;
+    }
+
+    h3 {
+      color: var(--text-color);
+      font-size: 1.2rem;
+      margin-top: 30px;
+      margin-bottom: 15px;
+      font-weight: 600;
+    }
+
+    p, li {
+      font-size: 1.05rem;
+      font-weight: 400;
+      color: #4a5568;
+    }
+
+    ul, ol {
+      padding-left: 20px;
+    }
+
+    li {
+      margin-bottom: 10px;
+    }
+
+    code {
+      font-family: 'Consolas', 'Courier New', monospace;
+      background-color: #f1f5f9;
+      color: #c53030;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 0.9em;
+    }
+
+    /* Table Styling */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 25px 0;
+      font-size: 0.95rem;
+    }
+
+    th, td {
+      border: 1px solid var(--border-color);
+      padding: 12px 16px;
+      text-align: left;
+    }
+
+    th {
+      background-color: #f8fafc;
+      color: var(--primary-color);
+      font-weight: 700;
+    }
+
+    tr:nth-child(even) td {
+      background-color: #fcfdfd;
+    }
+
+    /* Mermaid Graph Area */
+    .diagram-container {
+      background-color: #f8fafc;
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 25px;
+      margin: 30px 0;
+      display: flex;
+      justify-content: center;
+      box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);
+    }
+
+    .action-badge {
+      background-color: #fffaf0;
+      border: 1px solid #feebc8;
+      color: #dd6b20;
+      padding: 15px 20px;
+      border-radius: 8px;
+      margin-top: 15px;
+    }
+
+    .action-badge strong {
+      color: #c05621;
+    }
+
+    /* Print Styles */
+    @media print {
+      body {
+        background-color: #ffffff;
+        color: #000000;
+      }
+      .wrapper {
+        margin: 0;
+        padding: 0;
+        max-width: 100%;
+      }
+      .edit-notice {
+        display: none !important;
+      }
+      .report-card {
+        border: none;
+        box-shadow: none;
+        padding: 0;
+      }
+      .report-card::before {
+        display: none;
+      }
+      h2 {
+        page-break-after: avoid;
+      }
+      table, .diagram-container {
+        page-break-inside: avoid;
+      }
+    }
+  </style>
+
+  <!-- Load Mermaid JS for rendering -->
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'neutral',
+      securityLevel: 'loose',
+      flowchart: { useMaxWidth: true, htmlLabels: true }
+    });
+  </script>
+</head>
+<body>
+
+  <div class="wrapper">
+    <div class="edit-notice">
+      <span class="edit-notice-icon">💡</span>
+      <span>
+        <strong>실시간 편집 기능이 활성화되었습니다:</strong> 본 문서는 브라우저 상에서 글자를 클릭하여 직접 내용을 자유롭게 수정하고 편집할 수 있습니다. 편집이 완료되면 단축키 <strong>Cmd+P (윈도우는 Ctrl+P)</strong>를 눌러 인쇄하거나 PDF로 저장하세요. (이 안내 상자는 인쇄 시 보이지 않습니다.)
+      </span>
+    </div>
+
+    <article class="report-card" contenteditable="true">
+      <header>
+        <span class="meta-tag">PATENTABILITY ASSESSMENT REPORT</span>
+        <h1>특허성 검토 보고서</h1>
+        <p class="subtitle">번아웃 방지를 위한 코치 능동 개입 및 플래너 제어 시스템</p>
+      </header>
+
+      <h2>1. 개요 (Overview)</h2>
+      <p>
+        본 보고서는 <strong>냥냥코치 플래너</strong> 내의 핵심 기능인 <strong>'번아웃 방지를 위한 코치 능동 개입 알고리즘(회복 제안)'</strong> 및 <strong>'플래너 상태 전이 제어(휴식 모드 UI/데이터 처리)'</strong> 시스템에 관한 특허성(신규성, 진보성, BM 특허 요건)을 검토하고, 이를 바탕으로 한 특허권 확보 전략을 제공합니다.
+      </p>
+
+      <h2>2. 특허 대상 핵심 기술 요소 (Key Technical Elements)</h2>
+      <p>
+        본 시스템의 소스 코드 구조 분석을 바탕으로 도출된 특허 가능한 핵심 기술 구조는 다음과 같이 도식화할 수 있습니다.
+      </p>
+
+      <!-- Note: Diagrams are rendered dynamically and are not editable as text -->
+      <div class="diagram-container" contenteditable="false">
+        <div class="mermaid">
+          graph TD
+              A[사용자 입력 텍스트 감지] --> B{피로/휴식 요청 시그널 분석}
+              B -- 예 --> C{조건 검증: 소정 기간 연속 활동 & 당일 제외 소정 기간 달성률 이상}
+              C -- 예 --> D[코치 능동 회복 제안 발송 & 쿨다운 작동]
+              D --> E{사용자 응답 선택}
+              E -- 오늘만 쉬기 수락 --> F[플래너 상태 'isVacation=true' 전이]
+              F --> G[오늘 할일/습관 UI 제약 & 충전 화면 전환]
+              F --> H[연속 출석 Streak 보호 & 성과 완료율 분모에서 제외]
+              F --> I[AI 코치 대화 정책 전환]
+              F --> J[회복 효과 측정 및 차기 임계치 피드백 제어]
+        </div>
+      </div>
+
+      <h3>[요소 A] 번아웃 방지를 위한 코치 능동 개입 알고리즘</h3>
+      <ul>
+        <li><strong>시그널 분석:</strong> 단순 키워드가 아닌 사용자의 텍스트에서 '피로/휴식 요청 시그널'(<code>StrongRestSignal</code>)과 '실행 의지 시그널'(<code>ExecutionIntent</code>)을 교차 검증하여 휴식 제안의 타이밍을 판단.</li>
+        <li><strong>이력 데이터 검증:</strong> 과거 소정 기간 동안의 연속 활동 일수(Streak)와 <strong>당일을 제외한 직전 소정 기간</strong> 동안의 계획 달성률을 데이터베이스와 실시간 연동해 객관적인 과몰입(번아웃 위험) 상태를 정량적으로 계산. (당일은 계획이 완료되지 않은 미완성 상태이므로 완료율 산정의 왜곡 방지를 위해 대상에서 배제)</li>
+        <li><strong>쿨다운 제어:</strong> 미리 설정된 기준 주기의 개입 제한 플래그를 두어 자동 노티 알림의 피로도를 방지하는 메커니즘.</li>
+      </ul>
+
+      <h3>[요소 B] 플래너 상태 제어 및 동적 UI 제약 (휴식 모드 전환)</h3>
+      <ul>
+        <li>사용자가 회복 제안을 수락할 경우 플래너 인스턴스의 상태를 <code>isVacation = true</code>로 전이.</li>
+        <li><strong>동적 UI 제약:</strong> 오늘 탭에서 할 일 작성 창, 핵심 할 일 목록, 일반 할 일 리스트의 상호작용을 비활성화(Lock)하고, 이를 '휴식 모드 안내 뷰'로 실시간 동적 변환하는 UI 제어 기술.</li>
+      </ul>
+
+      <h3>[요소 C] 스트리크 보호 및 완료율 데이터 처리 기술</h3>
+      <ul>
+        <li>회복(휴식)일로 처리된 날에 대해, 기존의 연속 출석일(Streak) 카운트를 깨지 않고 '보존(Keep)'하는 이력 복원 데이터 알고리즘.</li>
+        <li>회복일을 성과 완료율 산정 대상 기간에서 제외하거나, 별도 상태값으로 처리하는 단계.</li>
+      </ul>
+
+      <h3>[요소 D] 회복 모드 대응 AI 대화 정책 전환 (보강/종속 요소)</h3>
+      <ul>
+        <li><strong>대화 정책 전환:</strong> 회복 모드 진입(플래너 상태값 <code>isVacation = true</code>) 시 AI 코치의 대화 정책을 목표 달성 중심에서 회복 지원 중심으로 전환.</li>
+        <li><strong>압박 표현 억제:</strong> 사용자의 심리적 부담감을 낮추기 위해 업무/성과 압박 표현을 억제하고 죄책감을 해소해 주는 대화 톤 유지.</li>
+        <li><strong>기본 루틴 중심 안내:</strong> 플래너 상태값에 따라 AI 응답 가이드가 동적으로 변경되어, 생산적 행동을 촉구하는 대신 식사, 수분 섭취, 스트레칭 등 건강과 충전을 위한 최소한의 기본 루틴을 유지하도록 유도 및 가이드.</li>
+        <li><em>(참고: 본 요소는 단독 독립항으로 구성하기보다는 요소 B의 상태 전이에 따른 부가적/종속적 에이전트 제어 보강 요소로 설계하여 종속항에 매핑하는 것이 권리화 관점에서 유리합니다.)</em></li>
+      </ul>
+
+      <h3>[요소 E] 회복 효과 측정을 통한 동적 피드백 제어 시스템 (보강/종속 요소)</h3>
+      <ul>
+        <li><strong>시계열 데이터 세그멘테이션:</strong> 회복 모드(<code>isVacation = true</code>) 활성 시점을 기준점으로 정의하여, 회복 모드 진입 전의 '사전 관찰 윈도우(Pre-vacation Window)'와 회복 모드 해제 후의 '사후 관찰 윈도우(Post-vacation Window)'로 데이터를 분류.</li>
+        <li><strong>생산성 델타 연산:</strong> 두 윈도우 간의 완료 계획 수 및 시간 밀도를 비교 분석하여 회복 기간이 이후 계획 수행력에 미친 정량적 기여도(Productivity Delta)를 산출.</li>
+        <li><strong>동적 임계치 피드백 루프:</strong> 산출된 기여도에 대응하여, 차기 회복 제안 알고리즘(요소 A)의 판별 기준치(임계값)를 동적으로 자율 조정하는 폐루프 제어(Feedback Loop) 기술.</li>
+      </ul>
+
+      <h2>3. 특허성 평가 (Patentability Evaluation)</h2>
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 25%;">평가 항목</th>
+            <th style="width: 20%;">평가 결과</th>
+            <th>세부 판단 근거</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>신규성 (Novelty)</strong></td>
+            <td><strong style="color: var(--accent-color);">검토 가치 있음</strong></td>
+            <td>기존의 플래너(To-Do App)는 사용자가 등록한 시간에 단순 푸시 알림을 보내거나 일방적으로 입력을 기록하는 정적 시스템에 머물러 있음. 반면, 본 발명은 <strong>사용자의 다이어리 사용 패턴에 근거해 플래너 시스템이 능동적으로 사용자의 계획 수행 여정을 가이드하여 번아웃 방지를 위한 능동적 휴식 모드를 제공</strong>하는 동적 피드백 시스템이라는 점에서 전 세계 선행기술과의 차별성이 존재하여 검토 가치가 충분함.</td>
+          </tr>
+          <tr>
+            <td><strong>진보성 (Inventive Step)</strong></td>
+            <td><strong style="color: var(--accent-color);">보통~우수</strong></td>
+            <td>텍스트 대화에서 피곤하다는 말을 감지해 쉬라고 권장하는 단순 챗봇 기능은 진보성이 부정될 수 있음. 하지만 본 기술은 <strong>사용자의 할 일 완료 이력 DB 연동 + 임계치(Threshold) 검증 + 플래너 상태 전이(<code>isVacation</code>) + 통계식 데이터 보정(분모 차감) + 동적 AI 대화 정책 전환 + 회복 효과 피드백 제어 루프</strong>가 하나의 시스템 안에서 유기적이고 밀접하게 동작하여 기술적 난이도를 구성하므로 진보성이 우수함.</td>
+          </tr>
+          <tr>
+            <td><strong>기술적 구현성 (BM 특허 요건)</strong></td>
+            <td><strong style="color: var(--accent-color);">구체적 소프트웨어 처리 존재</strong></td>
+            <td>단순히 "인간의 추상적 아이디어(잘 쉬어라)"를 컴퓨터로 모방한 것이 아니라, 데이터베이스(SharedPreferences, Firestore)를 읽어와 수치 알고리즘을 수행하고, 단말기의 특정 뷰(UI Container) 렌더링을 차단 및 전환하며 AI 응답 로직과 통계 피드백 루프를 동적으로 제어하는 구체적인 소프트웨어 처리가 명시되어 있어 특허 적격성(BM 특허 요건)을 충족함.</td>
+          </tr>
+          <tr>
+            <td><strong>리스크 (Risk)</strong></td>
+            <td><strong style="color: #dd6b20;">휴식 제안 자체는 공지기술 가능성 있음</strong></td>
+            <td>과거 행동 데이터를 분석해 휴식을 제안하는 단순 로직 자체는 기공개된 특허나 학술지 등 공지기술로 파악될 가능성이 있음. 따라서 출원 시 단순히 '휴식을 권유하는 기능'에 머무르지 않고, 본 발명의 유기적인 <strong>'회복 제안 - 상태 전이 - UI 동적 잠금/전환 - 통계 보정 - 에이전트 대화 가이드 전환 - 데이터 피드백 루프'</strong>의 복합 시스템 청구 구조로 권리범위를 구성하여 리스크를 방어해야 함.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h2>4. 특허 청구항(Claims) 구성 전략</h2>
+      <p>
+        권리 범위를 극대화하고 타사 회피를 막기 위해 다음과 같은 다각적인 청구 구조로 출원하는 것을 권장합니다.
+      </p>
+      <ol>
+        <li><strong>독립항 1 (시스템 청구항):</strong>
+          <br>사용자의 할 일 완료 이력이 저장된 데이터베이스; 사용자의 피로도 관련 대화 시그널을 수신하는 입력 인터페이스; 상기 완료 이력으로부터 연속 활동일 및 당일을 제외한 직전 소정 기간 동안의 계획 달성률을 연산하고, 미리 설정된 기준값을 만족하고 상기 대화 시그널이 감지된 경우 능동적으로 휴식 모드 전환 버튼을 인앱 칩(Quick Chip) 형태로 표시하는 프로세서;를 포함하는 플래너 시스템.
+        </li>
+        <li><strong>독립항 2 (방법 청구항):</strong>
+          <br>플래너 단말기가 사용자 입력 및 이력을 기초로 번아웃 방지 회복을 권고하는 방법.
+        </li>
+        <li><strong>종속항 (세부 권리 범위 확보):</strong>
+          <ul>
+            <li>상기 완료율 연산 시, 당일의 계획 데이터는 완료율 연산 범위에서 원천 제외하는 단계.</li>
+            <li>사용자가 회복 버튼을 클릭한 것에 대응하여 오늘 할 일 인터페이스를 비활성 상태로 변경하고 휴식 모드 그래픽 뷰를 출력하는 단계.</li>
+            <li>연속 출석일 계산 시 상기 회복일은 리셋하지 않고 보존하며, 회복일을 성과 완료율 산정 대상 기간에서 제외하거나 별도 상태값으로 처리하는 단계.</li>
+            <li>미리 설정된 기준 주기의 회복 제안 제한 쿨다운 타이머를 작동시켜 과도한 알림을 제어하는 단계.</li>
+            <li>플래너의 휴식 모드 상태값에 대응하여 상기 코치 캐릭터(페르소나)의 대화 정책을 목표 달성 가이드에서 회복 지원 가이드(업무/성과 압박 억제 및 기본 웰니스 루틴 유도)로 동적 전환하는 단계.</li>
+            <li>상기 휴식 모드의 해제 후 소정 기간 동안의 계획 완료율 데이터를 분석하여 회복 효과 기여도를 연산하고, 상기 기여도에 대응하여 차기 휴식 모드 제안의 판별 기준값을 동적으로 조정하는 단계.</li>
+          </ul>
+        </li>
+      </ol>
+
+      <h2>5. 결론 및 실무 권고사항 (Conclusion & Actions)</h2>
+      <p>
+        <strong>본 기술은 충분히 특허 출원 검토 가치가 있는 기술 구성입니다.</strong>
+      </p>
+      <p>
+        가장 권리 확보에 유리한 강한 핵심 축은 여전히 <strong>회복 제안 &rarr; 상태 전이 &rarr; UI 제약 &rarr; 리포트/스트리크 별도 처리</strong>의 유기적 흐름입니다. 여기에 <strong>AI 대화 정책 전환</strong> 및 <strong>회복 효과 피드백 제어</strong>를 종속/보강 요소로 활용하여 구체적으로 청구항을 보강함으로써 한층 더 제품 형태에 특화되고 권리 범위 확보 가능성을 높일 수 있습니다.
+      </p>
+      <div class="action-badge" contenteditable="true">
+        <strong>성공적인 출원을 위한 Action Item:</strong>
+        <ol style="margin-top: 5px; margin-bottom: 0;">
+          <li><strong>시퀀스 다이어그램 보강:</strong> <code>ChatScreen</code> &rarr; <code>SharedPreferences</code> &rarr; <code>DailyResetService</code> &rarr; <code>TasksScreen(UI)</code> 간의 물리적 신호 흐름도를 특허 도면용으로 완성.</li>
+          <li><strong>자연어 처리 알고리즘 명세화:</strong> <code>_isVacationActivationRequest</code> 내부의 다중 정규식 매칭 및 필터링 메커니즘을 '텍스트 전처리 및 키워드 가중치 기반 시그널 매핑 모듈'로 명세서상 구체적인 처리 모듈로 정리하여 명시합니다.</li>
+          <li><strong>비즈니스 가치:</strong> 사용자 멘탈 케어와 목표 관리의 결합이라는 차별점을 전면에 내세워 경쟁사 복제 방지 및 기업 기술성 평가 가치 확보.</li>
+        </ol>
+      </div>
+    </article>
+  </div>
+
+</body>
+</html>

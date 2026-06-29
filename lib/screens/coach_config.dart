@@ -141,7 +141,7 @@ class CoachConfigs {
       id: 'boyfriend',
       name: '남친 코치',
       tier: 'friends',
-      accentColor: Color(0xFF4B7BF5),
+      accentColor: Color(0xFF8BB5F5),
       accentLight: Color(0xFFEEF2FF),
       chips: ['오늘 뭐부터 할까', '하기 싫다', '관리 좀 하고싶어'],
       voiceCount: 5, // 목소리 파일 5개
@@ -252,7 +252,7 @@ class CoachConfigs {
       id: 'girlfriend',
       name: '여친 코치',
       tier: 'friends',
-      accentColor: Color(0xFFF472B6),
+      accentColor: Color(0xFFF8A8C9),
       accentLight: Color(0xFFFDF2F8),
       chips: ['오늘 뭐부터 할까', '하기 싫다', '관리 좀 하고싶어'],
       voiceCount: 5, // 목소리 파일 5개
@@ -359,7 +359,7 @@ class CoachConfigs {
       id: 'halmae',
       name: '할매 코치',
       tier: 'friends',
-      accentColor: Color(0xFF10B981),
+      accentColor: Color(0xFF5EC39A),
       accentLight: Color(0xFFECFDF5),
       chips: ['방 치우기 싫어', '오늘 뭐부터 해?', '오늘 뭐 먹지?'],
       voiceCount: 5, // 목소리 파일 5개
@@ -483,7 +483,7 @@ class CoachConfigs {
       id: 'bro',
       name: '갓생 형 코치',
       tier: 'friends',
-      accentColor: Color(0xFF6366F1),
+      accentColor: Color(0xFF91B4F2),
       accentLight: Color(0xFFEEF2FF),
       chips: ['집인데 운동 뭐하지?', '복부 운동 짜줘', '지금 할 운동'],
       voiceCount: 5, // 목소리 파일 5개
@@ -572,7 +572,7 @@ class CoachConfigs {
       id: 'sec_male',
       name: '남비서 코치',
       tier: 'master',
-      accentColor: Color(0xFF1A1A2E),
+      accentColor: Color(0xFFA5A6D6),
       accentLight: Color(0xFFF0EEFF),
       chips: ['오늘 브리핑해줘', '우선순위 정리해줘', '일정 알람 설정해줘'],
       voiceCount: 5, // 목소리 파일 5개
@@ -784,8 +784,8 @@ class CoachConfigs {
       id: 'sec_female',
       name: '여비서 코치',
       tier: 'master',
-      accentColor: Color(0xFFD4A017),
-      accentLight: Color(0xFFFFF8E8),
+      accentColor: Color(0xFFC4A8E6),
+      accentLight: Color(0xFFF3E8FB),
       chips: ['컨디션 체크해줘', '루틴 밸런스 봐줘', '부드러운 알람 설정'],
       voiceCount: 5, // 목소리 파일 5개
       backFlirts: [
