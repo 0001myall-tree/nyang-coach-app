@@ -828,20 +828,34 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
                         ),
                       ),
                     ),
-                    const SizedBox(height: 8),
-                    FittedBox(
-                      fit: BoxFit.scaleDown,
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        '하루를 함께 할 실행 코치를 선택하세요',
-                        style: GoogleFonts.notoSansKr(
-                          fontSize: 22,
-                          fontWeight: FontWeight.w900,
-                          color: AppDesignTokens.textPrimary,
-                          letterSpacing: -0.5,
+                    const SizedBox(height: 32),
+                    Center(
+                      child: RichText(
+                        textAlign: TextAlign.center,
+                        text: TextSpan(
+                          style: GoogleFonts.notoSansKr(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w600,
+                            color: AppDesignTokens.textPrimary,
+                            letterSpacing: -0.5,
+                            height: 1.4,
+                          ),
+                          children: [
+                            const TextSpan(text: '오늘을 함께할\n'),
+                            TextSpan(
+                              text: '실행 코치',
+                              style: TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.w700,
+                                color: AppDesignTokens.brandAccent,
+                              ),
+                            ),
+                            const TextSpan(text: '를 선택해 보세요'),
+                          ],
                         ),
                       ),
                     ),
+                    const SizedBox(height: 32),
                   ],
                 ),
               ),
