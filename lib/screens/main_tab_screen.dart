@@ -1148,7 +1148,62 @@ class _MainTabScreenState extends State<MainTabScreen>
       value: systemUiStyle,
       child: Stack(
         children: [
-          // 배경 이미지 전체에 깔기
+          // 배경 전체 (심플 모드 시 단색+물결/원 무늬)
+          if (isSimple)
+            Positioned.fill(
+              child: Container(
+                decoration: const BoxDecoration(
+                  color: AppDesignTokens.brandSurface,
+                ),
+                child: Stack(
+                  children: [
+                    // 은은한 원 모양 무늬 1
+                    Positioned(
+                      top: -80,
+                      right: -80,
+                      child: Container(
+                        width: 320,
+                        height: 320,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: AppDesignTokens.brand.withValues(alpha: 0.03),
+                        ),
+                      ),
+                    ),
+                    // 은은한 원 모양 무늬 2
+                    Positioned(
+                      top: 150,
+                      right: -30,
+                      child: Container(
+                        width: 240,
+                        height: 240,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: AppDesignTokens.brand.withValues(alpha: 0.04),
+                            width: 2,
+                          ),
+                        ),
+                      ),
+                    ),
+                    // 은은한 원 모양 무늬 3
+                    Positioned(
+                      bottom: 100,
+                      left: -100,
+                      child: Container(
+                        width: 400,
+                        height: 400,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: AppDesignTokens.brandAccent.withValues(alpha: 0.02),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          // 배경 이미지 전체에 깔기 (심플 모드는 캐릭터만 있는 투명 배경)
           Positioned.fill(
             child: Image.asset(
               _bgImagePath,
@@ -1422,7 +1477,7 @@ class _MainTabScreenState extends State<MainTabScreen>
           height: 36,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: const Color(0xFFF3F0FF),
+            color: Colors.white,
             border: Border.all(color: _activeColor.withOpacity(0.4), width: 2),
           ),
           child: ClipOval(
