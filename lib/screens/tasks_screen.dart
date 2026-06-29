@@ -883,8 +883,11 @@ class _TasksScreenState extends State<TasksScreen>
   // ── checkWeekMonthReset ───────────────────────────────────
   Future<void> _checkWeekMonthReset(SharedPreferences prefs) async {
     final thisWeek = _getWeekMondayStr();
-    final now = DateTime.now();
-    final thisMonth = '${now.year}-${now.month.toString().padLeft(2, '0')}';
+    final todayStr = _getTodayStr();
+    final parts = todayStr.split('-');
+    final y = parts.length > 0 ? parts[0] : DateTime.now().year.toString();
+    final m = parts.length > 1 ? parts[1].padLeft(2, '0') : DateTime.now().month.toString().padLeft(2, '0');
+    final thisMonth = '$y-$m';
 
     // 주 목표 리셋 (매주 월요일 기준)
     final lastWeek = prefs.getString('nyang_last_week');
@@ -1355,7 +1358,14 @@ class _TasksScreenState extends State<TasksScreen>
   // ── injectTodayHabits (웹앱 그대로) ──────────────────────
   void _injectTodayHabits() {
     final today = _getTodayStr();
-    final todayDow = DateTime.now().weekday; // 1=월~7=일
+    final parts = today.split('-');
+    int todayDow = DateTime.now().weekday;
+    if (parts.length >= 3) {
+      final y = int.tryParse(parts[0]) ?? DateTime.now().year;
+      final m = int.tryParse(parts[1]) ?? DateTime.now().month;
+      final d = int.tryParse(parts[2]) ?? DateTime.now().day;
+      todayDow = DateTime(y, m, d).weekday;
+    }
     // 웹앱 dbDow: 0=월~6=일
     final dbDow = todayDow - 1;
 
@@ -1735,7 +1745,7 @@ class _TasksScreenState extends State<TasksScreen>
         t.done = true;
         t.completedAt = DateTime.now().toIso8601String();
         if (t.habitId != null) {
-          habitLogs[t.habitId!] ??= {};
+          habitLogs[t.habitId!] ??= <String, dynamic>{};
           final logMap = <String, dynamic>{
             'done': true,
             'status': 'done',
@@ -2102,7 +2112,7 @@ class _TasksScreenState extends State<TasksScreen>
 
     final today = _getTodayStr();
     setState(() {
-      habitLogs[task.habitId!] ??= {};
+      habitLogs[task.habitId!] ??= <String, dynamic>{};
       habitLogs[task.habitId!]![today] = {
         'done': false,
         'status': 'skipped',
@@ -3205,7 +3215,17 @@ class _TasksScreenState extends State<TasksScreen>
   }
 
   Widget _buildTodayHeader() {
-    final now = DateTime.now();
+    final todayStr = _getTodayStr();
+    final parts = todayStr.split('-');
+    int y = DateTime.now().year;
+    int m = DateTime.now().month;
+    int d = DateTime.now().day;
+    if (parts.length >= 3) {
+      y = int.tryParse(parts[0]) ?? y;
+      m = int.tryParse(parts[1]) ?? m;
+      d = int.tryParse(parts[2]) ?? d;
+    }
+    final targetDate = DateTime(y, m, d);
     final months = [
       '1월',
       '2월',
@@ -3222,7 +3242,7 @@ class _TasksScreenState extends State<TasksScreen>
     ];
     final days = ['일', '월', '화', '수', '목', '금', '토'];
     final dateStr =
-        '${now.year}년 ${months[now.month - 1]} ${now.day}일 (${days[now.weekday % 7]})';
+        '${targetDate.year}년 ${months[targetDate.month - 1]} ${targetDate.day}일 (${days[targetDate.weekday % 7]})';
 
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
@@ -3842,7 +3862,18 @@ class _TasksScreenState extends State<TasksScreen>
   }
 
   Widget _buildTaskList() {
-    final todayMilestones = _getMilestonesForDay(DateTime.now());
+    final todayStr = _getTodayStr();
+    final parts = todayStr.split('-');
+    int y = DateTime.now().year;
+    int m = DateTime.now().month;
+    int d = DateTime.now().day;
+    if (parts.length >= 3) {
+      y = int.tryParse(parts[0]) ?? y;
+      m = int.tryParse(parts[1]) ?? m;
+      d = int.tryParse(parts[2]) ?? d;
+    }
+    final targetDate = DateTime(y, m, d);
+    final todayMilestones = _getMilestonesForDay(targetDate);
     final milestoneTasks = todayMilestones.map((mv) {
       final m = mv.milestone;
       final v = mv.vision;
