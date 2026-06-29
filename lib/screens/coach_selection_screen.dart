@@ -1441,10 +1441,11 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
                         ],
                       ),
                     ),
-                  );
-                },
-                ),
-              ),
+                  ),
+                );
+              },
+            ),
+          ),
               // 하단 선택하기 버튼
               Container(
                 padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
