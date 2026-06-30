@@ -1341,12 +1341,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       _buildProfileCard(),
                       const SizedBox(height: 16),
 
-                      if (!_isMaster) ...[
-                        // 채팅 배경 설정
-                        _buildBgStyleCard(),
-                        const SizedBox(height: 16),
-                      ],
-
                       // 알람 설정 버튼
                       _buildActionButton(
                         icon: Icons.alarm,
@@ -1373,6 +1367,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         onTap: _showHomeWidgetSettingsModal,
                       ),
                       const SizedBox(height: 16),
+
+                      if (!_isMaster) ...[
+                        // 채팅 배경 설정
+                        _buildBgStyleCard(),
+                        const SizedBox(height: 16),
+                      ],
 
                       // 할 일 리셋 시간 설정
                       _buildResetHourCard(),
@@ -1412,7 +1412,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const SizedBox(width: 8),
             Expanded(
               child: Text(
-                '채팅 배경 설정',
+                '채팅 배경',
                 style: GoogleFonts.notoSansKr(
                   fontSize: 14,
                   fontWeight: FontWeight.w700,

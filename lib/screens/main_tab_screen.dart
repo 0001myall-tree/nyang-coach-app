@@ -503,6 +503,12 @@ class _MainTabScreenState extends State<MainTabScreen>
   }
 
   Future<void> _handleAppResumed() async {
+    await DailyResetService.checkAndExecuteReset();
+    if (mounted) {
+      _tasksController.refresh();
+      _chatController.refreshTaskProgress();
+      setState(() {});
+    }
     final canContinue = await _ensureCurrentCoachAccess(syncCloud: _isMaster);
     if (canContinue) {
       await _checkWidgetIntent();
