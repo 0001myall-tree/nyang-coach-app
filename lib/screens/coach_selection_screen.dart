@@ -641,10 +641,11 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
       barrierColor: Colors.black.withOpacity(0.4),
       transitionDuration: const Duration(milliseconds: 300),
       pageBuilder: (context, animation, secondaryAnimation) {
+        final pageController = PageController(initialPage: combinedIndex, viewportFraction: 0.85);
+        int currentPage = combinedIndex;
+
         return StatefulBuilder(
           builder: (context, setModalState) {
-            final pageController = PageController(initialPage: combinedIndex, viewportFraction: 0.85);
-            int currentPage = combinedIndex;
 
             return Material(
               color: Colors.transparent,
