@@ -17,7 +17,7 @@ class _PhilosophyIntroScreenState extends State<PhilosophyIntroScreen> {
   @override
   void initState() {
     super.initState();
-    _transitionTimer = Timer(const Duration(seconds: 2), () {
+    _transitionTimer = Timer(const Duration(seconds: 3), () {
       if (mounted) {
         Navigator.of(context).pushReplacement(
           PageRouteBuilder(
