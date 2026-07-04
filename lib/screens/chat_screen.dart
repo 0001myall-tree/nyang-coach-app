@@ -4,6 +4,7 @@ import 'dart:ui';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:cloud_functions/cloud_functions.dart';
@@ -6464,8 +6465,8 @@ $timerOutputRule
   bool _cheatKeyOpen = false;
 
   List<Map<String, String>> get _cheatKeyItems => [
-    {'icon': '⚡', 'label': '지금 뭐하지?'},
-    {'icon': '🧭', 'label': '미래를 위한 오늘'},
+    {'icon': 'assets/icons/bolt.svg', 'label': '지금 뭐하지?'},
+    {'icon': 'assets/icons/compass.svg', 'label': '미래를 위한 오늘'},
   ];
 
   Widget _buildCheatKeyMenu() {
@@ -6506,7 +6507,12 @@ $timerOutputRule
               ),
               child: Row(
                 children: [
-                  Text(item['icon']!, style: const TextStyle(fontSize: 14)),
+                  SvgPicture.asset(
+                    item['icon']!,
+                    width: 14,
+                    height: 14,
+                    colorFilter: const ColorFilter.mode(Color(0xFF8B7CCC), BlendMode.srcIn),
+                  ),
                   const SizedBox(width: 8),
                   Text(
                     item['label']!,
