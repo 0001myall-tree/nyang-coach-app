@@ -886,7 +886,9 @@ class _TasksScreenState extends State<TasksScreen>
     final todayStr = _getTodayStr();
     final parts = todayStr.split('-');
     final y = parts.length > 0 ? parts[0] : DateTime.now().year.toString();
-    final m = parts.length > 1 ? parts[1].padLeft(2, '0') : DateTime.now().month.toString().padLeft(2, '0');
+    final m = parts.length > 1
+        ? parts[1].padLeft(2, '0')
+        : DateTime.now().month.toString().padLeft(2, '0');
     final thisMonth = '$y-$m';
 
     // 주 목표 리셋 (매주 월요일 기준)
@@ -1225,6 +1227,8 @@ class _TasksScreenState extends State<TasksScreen>
 
     final todayStr = _getTodayStr();
     final doneTasks = tasks.where((t) => t.done).toList();
+    final todayMilestones = _todayMilestoneItems;
+    final doneMilestones = todayMilestones.where((m) => m.done).toList();
 
     // 밤 9시 이후 이월된 일정 로드
     final rawDeferred = prefs.getString('nyang_deferred_tasks_today');
@@ -1244,6 +1248,14 @@ class _TasksScreenState extends State<TasksScreen>
           'deferred': false,
         },
       ),
+      ...todayMilestones.map(
+        (m) => {
+          'text': m.text,
+          'done': m.done,
+          'category': 'milestone',
+          'deferred': false,
+        },
+      ),
       ...deferredList.map(
         (t) => {
           'text': t['text'],
@@ -1256,9 +1268,9 @@ class _TasksScreenState extends State<TasksScreen>
 
     final record = {
       'date': todayStr,
-      'totalCount': tasks.length,
-      'doneCount': doneTasks.length,
-      'success': doneTasks.isNotEmpty,
+      'totalCount': tasks.length + todayMilestones.length,
+      'doneCount': doneTasks.length + doneMilestones.length,
+      'success': doneTasks.isNotEmpty || doneMilestones.isNotEmpty,
       'isVacation': vacationInfo != null,
       'updatedAt': DateTime.now().toIso8601String(),
       'tasks': mergedTasks,
@@ -1324,6 +1336,22 @@ class _TasksScreenState extends State<TasksScreen>
       jsonEncode(visions.map((v) => v.toJson()).toList()),
     );
     TasksSyncService.scheduleSyncToCloud();
+  }
+
+  String _formatAchievedDate([DateTime? value]) {
+    final date = value ?? DateTime.now();
+    return "${date.year}.${date.month.toString().padLeft(2, '0')}.${date.day.toString().padLeft(2, '0')}";
+  }
+
+  bool _setMilestoneCompletion(
+    MilestoneItem milestone,
+    bool isDone, {
+    DateTime? completedAt,
+  }) {
+    final changed = milestone.done != isDone;
+    milestone.done = isDone;
+    milestone.achievedDate = isDone ? _formatAchievedDate(completedAt) : null;
+    return changed;
   }
 
   Future<void> _saveSchedules() async {
@@ -1436,6 +1464,7 @@ class _TasksScreenState extends State<TasksScreen>
     // 오늘 날짜가 아니게 된 (혹은 삭제된) 일정 태스크 제거
     tasks.removeWhere((t) {
       if (t.category != 'schedule') return false;
+      if (!t.id.toString().startsWith('schedule_')) return false;
       return !todayScheduleIds.contains(
         t.id.toString().replaceAll('schedule_', ''),
       );
@@ -1667,16 +1696,10 @@ class _TasksScreenState extends State<TasksScreen>
           final mId = 'milestone_${v.name}_${m.text}';
           if (mId == idStr) {
             setState(() {
-              m.done = !m.done;
-              if (m.done) {
-                final now = DateTime.now();
-                m.achievedDate =
-                    "${now.year}.${now.month.toString().padLeft(2, '0')}.${now.day.toString().padLeft(2, '0')}";
-              } else {
-                m.achievedDate = null;
-              }
+              _setMilestoneCompletion(m, !m.done);
             });
             _saveVisions();
+            _saveTasks();
             break;
           }
         }
@@ -1688,6 +1711,7 @@ class _TasksScreenState extends State<TasksScreen>
       (t) => t.id.toString() == id.toString(),
       orElse: () => tasks.first,
     );
+    final milestoneInfo = _getMilestoneInfoForTask(t);
     if (t.done) {
       // 완료 취소
       setState(() {
@@ -1709,6 +1733,9 @@ class _TasksScreenState extends State<TasksScreen>
             if (sItem.id == sId) sItem.done = false;
           }
         }
+        if (milestoneInfo != null && milestoneInfo.isMilestoneSelf) {
+          _setMilestoneCompletion(milestoneInfo.milestone, false);
+        }
         final coreIdx = coreTasks.indexWhere(
           (ct) => ct.id.toString() == t.id.toString(),
         );
@@ -1721,6 +1748,9 @@ class _TasksScreenState extends State<TasksScreen>
       _saveHabitLogs();
       _saveCoreTasks();
       if (t.category == 'schedule') _saveSchedules();
+      if (milestoneInfo != null && milestoneInfo.isMilestoneSelf) {
+        _saveVisions();
+      }
     } else {
       HabitItem? habitInfo;
       if (t.habitId != null) {
@@ -1744,6 +1774,7 @@ class _TasksScreenState extends State<TasksScreen>
       setState(() {
         t.done = true;
         t.completedAt = DateTime.now().toIso8601String();
+        final completedAt = DateTime.tryParse(t.completedAt!);
         if (t.habitId != null) {
           habitLogs[t.habitId!] ??= <String, dynamic>{};
           final logMap = <String, dynamic>{
@@ -1779,6 +1810,13 @@ class _TasksScreenState extends State<TasksScreen>
             if (sItem.id == sId) sItem.done = true;
           }
         }
+        if (milestoneInfo != null && milestoneInfo.isMilestoneSelf) {
+          _setMilestoneCompletion(
+            milestoneInfo.milestone,
+            true,
+            completedAt: completedAt,
+          );
+        }
         final coreIdx = coreTasks.indexWhere(
           (ct) => ct.id.toString() == t.id.toString(),
         );
@@ -1791,6 +1829,9 @@ class _TasksScreenState extends State<TasksScreen>
       _saveHabitLogs();
       _saveCoreTasks();
       if (t.category == 'schedule') _saveSchedules();
+      if (milestoneInfo != null && milestoneInfo.isMilestoneSelf) {
+        _saveVisions();
+      }
       // 미뤄둔 할일 리마인드 체크 (완료했는지 여부 반환)
       final bool isDeferredResolved = await _checkAndStoreDeferReminder(t.text);
       final bool isCoreTask = coreTasks.any(
@@ -2498,12 +2539,26 @@ class _TasksScreenState extends State<TasksScreen>
   }
 
   // ── 진행률 계산 ───────────────────────────────────────────
+  List<MilestoneItem> get _todayMilestoneItems {
+    final todayStr = _getTodayStr();
+    final parts = todayStr.split('-');
+    if (parts.length < 3) return [];
+
+    final year = int.tryParse(parts[0]) ?? DateTime.now().year;
+    final month = int.tryParse(parts[1]) ?? DateTime.now().month;
+    final day = int.tryParse(parts[2]) ?? DateTime.now().day;
+    return _getMilestonesForDay(
+      DateTime(year, month, day),
+    ).map((mv) => mv.milestone).toList();
+  }
+
   int get _doneTasks {
-    return tasks.where((t) => t.done).length;
+    return tasks.where((t) => t.done).length +
+        _todayMilestoneItems.where((m) => m.done).length;
   }
 
   int get _totalTasks {
-    return tasks.length;
+    return tasks.length + _todayMilestoneItems.length;
   }
 
   double get _progressPct => _totalTasks > 0 ? _doneTasks / _totalTasks : 0.0;
@@ -3355,379 +3410,150 @@ class _TasksScreenState extends State<TasksScreen>
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20),
           ),
-          insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+          insetPadding: const EdgeInsets.symmetric(
+            horizontal: 20,
+            vertical: 24,
+          ),
           child: StatefulBuilder(
             builder: (ctx, setModalState) {
               Widget content;
 
-            if (currentScreen == 'range') {
-              content = Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      GestureDetector(
-                        onTap: () =>
-                            setModalState(() => currentScreen = 'selection'),
-                        child: const Icon(Icons.arrow_back_ios, size: 18),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        '며칠 동안 쉬기',
-                        style: GoogleFonts.notoSansKr(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w900,
+              if (currentScreen == 'range') {
+                content = Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        GestureDetector(
+                          onTap: () =>
+                              setModalState(() => currentScreen = 'selection'),
+                          child: const Icon(Icons.arrow_back_ios, size: 18),
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-                  Text(
-                    '휴식 기간을 선택해주세요.',
-                    style: GoogleFonts.notoSansKr(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
+                        const SizedBox(width: 8),
+                        Text(
+                          '며칠 동안 쉬기',
+                          style: GoogleFonts.notoSansKr(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: GestureDetector(
-                          onTap: () async {
-                            final date = await showDatePicker(
-                              context: context,
-                              initialDate: startDate ?? DateTime.now(),
-                              firstDate: DateTime.now(),
-                              lastDate: DateTime.now().add(
-                                const Duration(days: 365),
+                    const SizedBox(height: 24),
+                    Text(
+                      '휴식 기간을 선택해주세요.',
+                      style: GoogleFonts.notoSansKr(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () async {
+                              final date = await showDatePicker(
+                                context: context,
+                                initialDate: startDate ?? DateTime.now(),
+                                firstDate: DateTime.now(),
+                                lastDate: DateTime.now().add(
+                                  const Duration(days: 365),
+                                ),
+                              );
+                              if (date != null)
+                                setModalState(() => startDate = date);
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                vertical: 12,
+                                horizontal: 16,
                               ),
-                            );
-                            if (date != null)
-                              setModalState(() => startDate = date);
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              vertical: 12,
-                              horizontal: 16,
-                            ),
-                            decoration: BoxDecoration(
-                              border: Border.all(
-                                color: const Color(0xFFE8E3F8),
+                              decoration: BoxDecoration(
+                                border: Border.all(
+                                  color: const Color(0xFFE8E3F8),
+                                ),
+                                borderRadius: BorderRadius.circular(8),
                               ),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              startDate != null
-                                  ? '${startDate!.year}-${startDate!.month.toString().padLeft(2, '0')}-${startDate!.day.toString().padLeft(2, '0')}'
-                                  : '시작일',
-                              style: GoogleFonts.notoSansKr(fontSize: 14),
-                            ),
-                          ),
-                        ),
-                      ),
-                      const Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 8),
-                        child: Text('~'),
-                      ),
-                      Expanded(
-                        child: GestureDetector(
-                          onTap: () async {
-                            final date = await showDatePicker(
-                              context: context,
-                              initialDate:
-                                  endDate ?? startDate ?? DateTime.now(),
-                              firstDate: startDate ?? DateTime.now(),
-                              lastDate: DateTime.now().add(
-                                const Duration(days: 365),
+                              child: Text(
+                                startDate != null
+                                    ? '${startDate!.year}-${startDate!.month.toString().padLeft(2, '0')}-${startDate!.day.toString().padLeft(2, '0')}'
+                                    : '시작일',
+                                style: GoogleFonts.notoSansKr(fontSize: 14),
                               ),
-                            );
-                            if (date != null)
-                              setModalState(() => endDate = date);
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              vertical: 12,
-                              horizontal: 16,
                             ),
-                            decoration: BoxDecoration(
-                              border: Border.all(
-                                color: const Color(0xFFE8E3F8),
+                          ),
+                        ),
+                        const Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 8),
+                          child: Text('~'),
+                        ),
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () async {
+                              final date = await showDatePicker(
+                                context: context,
+                                initialDate:
+                                    endDate ?? startDate ?? DateTime.now(),
+                                firstDate: startDate ?? DateTime.now(),
+                                lastDate: DateTime.now().add(
+                                  const Duration(days: 365),
+                                ),
+                              );
+                              if (date != null)
+                                setModalState(() => endDate = date);
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                vertical: 12,
+                                horizontal: 16,
                               ),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              endDate != null
-                                  ? '${endDate!.year}-${endDate!.month.toString().padLeft(2, '0')}-${endDate!.day.toString().padLeft(2, '0')}'
-                                  : '종료일',
-                              style: GoogleFonts.notoSansKr(fontSize: 14),
+                              decoration: BoxDecoration(
+                                border: Border.all(
+                                  color: const Color(0xFFE8E3F8),
+                                ),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                endDate != null
+                                    ? '${endDate!.year}-${endDate!.month.toString().padLeft(2, '0')}-${endDate!.day.toString().padLeft(2, '0')}'
+                                    : '종료일',
+                                style: GoogleFonts.notoSansKr(fontSize: 14),
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-                  GestureDetector(
-                    onTap: () {
-                      if (startDate == null || endDate == null) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('시작일과 종료일을 선택해주세요.')),
-                        );
-                        return;
-                      }
-                      if (startDate!.isAfter(endDate!)) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('시작일이 종료일보다 늦을 수 없어요.')),
-                        );
-                        return;
-                      }
-                      setState(() {
-                        vacationInfo = {
-                          'type': 'range',
-                          'start': startDate!.toIso8601String(),
-                          'end': endDate!.toIso8601String(),
-                        };
-                      });
-                      _saveVacation();
-                      Navigator.pop(ctx);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('휴식 모드 설정이 완료되었습니다.')),
-                      );
-                    },
-                    child: Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: _coach.accentColor,
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: Text(
-                        '기간 설정 완료',
-                        style: GoogleFonts.notoSansKr(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w800,
-                          color: Colors.white,
-                        ),
-                      ),
+                      ],
                     ),
-                  ),
-                ],
-              );
-            } else if (currentScreen == 'regular') {
-              final days = ['일', '월', '화', '수', '목', '금', '토'];
-              content = Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      GestureDetector(
-                        onTap: () =>
-                            setModalState(() => currentScreen = 'selection'),
-                        child: const Icon(Icons.arrow_back_ios, size: 18),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        '정기 휴식 모드 설정',
-                        style: GoogleFonts.notoSansKr(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-                  Text(
-                    '매주 쉴 요일을 선택해주세요.',
-                    style: GoogleFonts.notoSansKr(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: List.generate(7, (i) {
-                      final isSel = selectedDays.contains(i);
-                      return GestureDetector(
-                        onTap: () {
-                          setModalState(() {
-                            if (isSel)
-                              selectedDays.remove(i);
-                            else
-                              selectedDays.add(i);
-                          });
-                        },
-                        child: Container(
-                          width: 40,
-                          height: 40,
-                          alignment: Alignment.center,
-                          decoration: BoxDecoration(
-                            color: isSel ? _coach.accentColor : Colors.white,
-                            border: Border.all(
-                              color: isSel
-                                  ? _coach.accentColor
-                                  : const Color(0xFFE8E3F8),
-                            ),
-                            shape: BoxShape.circle,
-                          ),
-                          child: Text(
-                            days[i],
-                            style: TextStyle(
-                              color: isSel
-                                  ? Colors.white
-                                  : const Color(0xFFA0A0B0),
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      );
-                    }),
-                  ),
-                  const SizedBox(height: 24),
-                  GestureDetector(
-                    onTap: () {
-                      if (selectedDays.isEmpty) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('최소 하루 이상의 요일을 선택해주세요.'),
-                          ),
-                        );
-                        return;
-                      }
-                      setState(() {
-                        vacationInfo = {
-                          'type': 'regular',
-                          'days': selectedDays,
-                        };
-                      });
-                      _saveVacation();
-                      Navigator.pop(ctx);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('휴식 모드 설정이 완료되었습니다.')),
-                      );
-                    },
-                    child: Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: _coach.accentColor,
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: Text(
-                        '정기 휴식 모드 설정 완료',
-                        style: GoogleFonts.notoSansKr(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w800,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              );
-            } else {
-              content = Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            '🌙 휴식 모드 설정',
-                            style: GoogleFonts.notoSansKr(
-                              fontSize: AppDesignTokens.textTitle,
-                              fontWeight: FontWeight.w900,
-                              color: AppDesignTokens.textPrimary,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            '오늘, 나를 위한 휴식을 선택해보세요.',
-                            style: GoogleFonts.notoSansKr(
-                              fontSize: AppDesignTokens.textCaption,
-                              color: AppDesignTokens.textMuted,
-                            ),
-                          ),
-                        ],
-                      ),
-                      GestureDetector(
-                        onTap: () => Navigator.pop(ctx),
-                        child: const Icon(
-                          Icons.close,
-                          color: AppDesignTokens.textMuted,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-                  // 휴식 기간 선택
-                  Text(
-                    '휴식 기간 선택',
-                    style: GoogleFonts.notoSansKr(
-                      fontSize: AppDesignTokens.textBody,
-                      fontWeight: FontWeight.w800,
-                      color: AppDesignTokens.textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  _buildVacationOption(
-                    icon: Icons.nightlight_round,
-                    title: '오늘만 쉬기',
-                    desc: '하루 동안 모든 알림을 잠시 멈춰요',
-                    isPrimary: true,
-                    onTap: () {
-                      setState(() {
-                        vacationInfo = {
-                          'type': 'today',
-                          'date': _getTodayStr(),
-                        };
-                      });
-                      _saveVacation();
-                      Navigator.pop(ctx);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('오늘 휴식 모드가 설정되었습니다.')),
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 8),
-                  _buildVacationOption(
-                    icon: Icons.calendar_today_outlined,
-                    title: '며칠 동안 쉬기',
-                    desc: '연속으로 며칠간 휴식을 설정해요',
-                    isPrimary: false,
-                    onTap: () {
-                      setModalState(() => currentScreen = 'range');
-                    },
-                  ),
-                  const SizedBox(height: 8),
-                  _buildVacationOption(
-                    icon: Icons.autorenew_outlined,
-                    title: '정기 휴식 (특정 요일마다)',
-                    desc: '매주 정해진 요일에 자동으로 쉬어요',
-                    isPrimary: false,
-                    onTap: () {
-                      setModalState(() => currentScreen = 'regular');
-                    },
-                  ),
-                  const SizedBox(height: 24),
-                  if (vacationInfo != null) ...[
+                    const SizedBox(height: 24),
                     GestureDetector(
                       onTap: () {
-                        setState(() => vacationInfo = null);
+                        if (startDate == null || endDate == null) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('시작일과 종료일을 선택해주세요.')),
+                          );
+                          return;
+                        }
+                        if (startDate!.isAfter(endDate!)) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('시작일이 종료일보다 늦을 수 없어요.'),
+                            ),
+                          );
+                          return;
+                        }
+                        setState(() {
+                          vacationInfo = {
+                            'type': 'range',
+                            'start': startDate!.toIso8601String(),
+                            'end': endDate!.toIso8601String(),
+                          };
+                        });
                         _saveVacation();
                         Navigator.pop(ctx);
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('휴식 모드 설정이 해제되었습니다.')),
+                          const SnackBar(content: Text('휴식 모드 설정이 완료되었습니다.')),
                         );
                       },
                       child: Container(
@@ -3735,51 +3561,285 @@ class _TasksScreenState extends State<TasksScreen>
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         alignment: Alignment.center,
                         decoration: BoxDecoration(
-                          color: Colors.white,
-                          border: Border.all(
-                            color: Colors.redAccent.withOpacity(0.5),
+                          color: _coach.accentColor,
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: Text(
+                          '기간 설정 완료',
+                          style: GoogleFonts.notoSansKr(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white,
                           ),
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              } else if (currentScreen == 'regular') {
+                final days = ['일', '월', '화', '수', '목', '금', '토'];
+                content = Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        GestureDetector(
+                          onTap: () =>
+                              setModalState(() => currentScreen = 'selection'),
+                          child: const Icon(Icons.arrow_back_ios, size: 18),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          '정기 휴식 모드 설정',
+                          style: GoogleFonts.notoSansKr(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
+                    Text(
+                      '매주 쉴 요일을 선택해주세요.',
+                      style: GoogleFonts.notoSansKr(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: List.generate(7, (i) {
+                        final isSel = selectedDays.contains(i);
+                        return GestureDetector(
+                          onTap: () {
+                            setModalState(() {
+                              if (isSel)
+                                selectedDays.remove(i);
+                              else
+                                selectedDays.add(i);
+                            });
+                          },
+                          child: Container(
+                            width: 40,
+                            height: 40,
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              color: isSel ? _coach.accentColor : Colors.white,
+                              border: Border.all(
+                                color: isSel
+                                    ? _coach.accentColor
+                                    : const Color(0xFFE8E3F8),
+                              ),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Text(
+                              days[i],
+                              style: TextStyle(
+                                color: isSel
+                                    ? Colors.white
+                                    : const Color(0xFFA0A0B0),
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        );
+                      }),
+                    ),
+                    const SizedBox(height: 24),
+                    GestureDetector(
+                      onTap: () {
+                        if (selectedDays.isEmpty) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('최소 하루 이상의 요일을 선택해주세요.'),
+                            ),
+                          );
+                          return;
+                        }
+                        setState(() {
+                          vacationInfo = {
+                            'type': 'regular',
+                            'days': selectedDays,
+                          };
+                        });
+                        _saveVacation();
+                        Navigator.pop(ctx);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('휴식 모드 설정이 완료되었습니다.')),
+                        );
+                      },
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: _coach.accentColor,
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: Text(
+                          '정기 휴식 모드 설정 완료',
+                          style: GoogleFonts.notoSansKr(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              } else {
+                content = Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '🌙 휴식 모드 설정',
+                              style: GoogleFonts.notoSansKr(
+                                fontSize: AppDesignTokens.textTitle,
+                                fontWeight: FontWeight.w900,
+                                color: AppDesignTokens.textPrimary,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '오늘, 나를 위한 휴식을 선택해보세요.',
+                              style: GoogleFonts.notoSansKr(
+                                fontSize: AppDesignTokens.textCaption,
+                                color: AppDesignTokens.textMuted,
+                              ),
+                            ),
+                          ],
+                        ),
+                        GestureDetector(
+                          onTap: () => Navigator.pop(ctx),
+                          child: const Icon(
+                            Icons.close,
+                            color: AppDesignTokens.textMuted,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
+                    // 휴식 기간 선택
+                    Text(
+                      '휴식 기간 선택',
+                      style: GoogleFonts.notoSansKr(
+                        fontSize: AppDesignTokens.textBody,
+                        fontWeight: FontWeight.w800,
+                        color: AppDesignTokens.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    _buildVacationOption(
+                      icon: Icons.nightlight_round,
+                      title: '오늘만 쉬기',
+                      desc: '하루 동안 모든 알림을 잠시 멈춰요',
+                      isPrimary: true,
+                      onTap: () {
+                        setState(() {
+                          vacationInfo = {
+                            'type': 'today',
+                            'date': _getTodayStr(),
+                          };
+                        });
+                        _saveVacation();
+                        Navigator.pop(ctx);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('오늘 휴식 모드가 설정되었습니다.')),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    _buildVacationOption(
+                      icon: Icons.calendar_today_outlined,
+                      title: '며칠 동안 쉬기',
+                      desc: '연속으로 며칠간 휴식을 설정해요',
+                      isPrimary: false,
+                      onTap: () {
+                        setModalState(() => currentScreen = 'range');
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    _buildVacationOption(
+                      icon: Icons.autorenew_outlined,
+                      title: '정기 휴식 (특정 요일마다)',
+                      desc: '매주 정해진 요일에 자동으로 쉬어요',
+                      isPrimary: false,
+                      onTap: () {
+                        setModalState(() => currentScreen = 'regular');
+                      },
+                    ),
+                    const SizedBox(height: 24),
+                    if (vacationInfo != null) ...[
+                      GestureDetector(
+                        onTap: () {
+                          setState(() => vacationInfo = null);
+                          _saveVacation();
+                          Navigator.pop(ctx);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('휴식 모드 설정이 해제되었습니다.')),
+                          );
+                        },
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            border: Border.all(
+                              color: Colors.redAccent.withOpacity(0.5),
+                            ),
+                            borderRadius: BorderRadius.circular(
+                              AppDesignTokens.radiusMedium,
+                            ),
+                          ),
+                          child: Text(
+                            '휴식 모드 설정 해제',
+                            style: GoogleFonts.notoSansKr(
+                              fontSize: AppDesignTokens.textAction,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.redAccent,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                    ],
+                    GestureDetector(
+                      onTap: () => Navigator.pop(ctx),
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: AppDesignTokens.surfaceSubtle,
                           borderRadius: BorderRadius.circular(
                             AppDesignTokens.radiusMedium,
                           ),
                         ),
                         child: Text(
-                          '휴식 모드 설정 해제',
+                          '취소',
                           style: GoogleFonts.notoSansKr(
                             fontSize: AppDesignTokens.textAction,
                             fontWeight: FontWeight.w700,
-                            color: Colors.redAccent,
+                            color: AppDesignTokens.textMuted,
                           ),
                         ),
                       ),
                     ),
-                    const SizedBox(height: 8),
                   ],
-                  GestureDetector(
-                    onTap: () => Navigator.pop(ctx),
-                    child: Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: AppDesignTokens.surfaceSubtle,
-                        borderRadius: BorderRadius.circular(
-                          AppDesignTokens.radiusMedium,
-                        ),
-                      ),
-                      child: Text(
-                        '취소',
-                        style: GoogleFonts.notoSansKr(
-                          fontSize: AppDesignTokens.textAction,
-                          fontWeight: FontWeight.w700,
-                          color: AppDesignTokens.textMuted,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              );
-            }
+                );
+              }
 
               return Padding(
                 padding: EdgeInsets.only(
@@ -4610,13 +4670,7 @@ class _TasksScreenState extends State<TasksScreen>
                 ),
                 child: t.done
                     ? const Icon(Icons.check, color: Colors.white, size: 14)
-                    : (isMilestone
-                          ? const Icon(
-                              Icons.flag,
-                              color: Color(0xFF8B7CFF),
-                              size: 12,
-                            )
-                          : null),
+                    : null,
               ),
             ),
           ),
@@ -5829,7 +5883,7 @@ class _TasksScreenState extends State<TasksScreen>
               final newTask = TaskItem(
                 id: DateTime.now().millisecondsSinceEpoch.toString(),
                 text: action.title,
-                category: 'schedule',
+                category: 'today',
                 done: false,
                 createdAt: todayStr,
               );

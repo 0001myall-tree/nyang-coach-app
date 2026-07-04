@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'main_tab_screen.dart';
 import 'landing_screen.dart';
@@ -447,11 +449,11 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
     );
   }
 
-  void _handleCoachTap(Map<String, dynamic> coach, bool isLocked) {
-    if (_lastTappedCoachId != coach['id']) {
-      _logoTapCount = 0;
-      _lastTappedCoachId = coach['id'];
-    }
+  void _handleCoachTap(Map<String, dynamic> coach, bool isLocked, int index) {
+    _showCoachCarouselModal(index);
+  }
+
+  void _handleTitleTap() {
     _logoTapCount++;
     _logoTapTimer?.cancel();
     _logoTapTimer = Timer(const Duration(seconds: 2), () {
@@ -462,16 +464,7 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
       _logoTapCount = 0;
       _logoTapTimer?.cancel();
       _showDebugPlanSelector();
-      return;
     }
-
-    if (isLocked) {
-      _showCoachDetails(context, coach);
-      return;
-    }
-    setState(() {
-      _selectedCoachId = coach['id'];
-    });
   }
 
   @override
@@ -492,6 +485,11 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
       'price': _userData.isPlanActive ? '플랜 포함' : '무료 입장 가능',
       'priceColor': _coachMintText,
       'priceBg': _coachMintSoft,
+      'tags': [
+        {'icon': Icons.extension, 'text': '할 일 쪼개기'},
+        {'icon': Icons.track_changes_rounded, 'text': '실행 습관'},
+        {'icon': Icons.access_time_rounded, 'text': '5분 시작'},
+      ],
     },
     {
       'id': 'boyfriend',
@@ -499,7 +497,12 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
       'subtitle': '자상한 챙김',
       'image': 'assets/images/boyfriend.png',
       'color': _coachMint,
-      'price': '₩3,900 / 1년 이용',
+      'price': '₩2,900 / 1년 이용',
+      'tags': [
+        {'icon': Icons.favorite, 'text': '자기돌봄'},
+        {'icon': Icons.local_cafe, 'text': '생활관리'},
+        {'icon': Icons.eco, 'text': '여유'},
+      ],
     },
     {
       'id': 'halmae',
@@ -507,15 +510,25 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
       'subtitle': '생활의 달인',
       'image': 'assets/images/halmae.png',
       'color': _coachMint,
-      'price': '₩3,900 / 1년 이용',
+      'price': '₩2,900 / 1년 이용',
+      'tags': [
+        {'icon': Icons.favorite, 'text': '하루 돌봄'},
+        {'icon': Icons.cleaning_services, 'text': '청소 습관'},
+        {'icon': Icons.volunteer_activism, 'text': '포근한 위로'},
+      ],
     },
     {
       'id': 'girlfriend',
       'name': '여친 코치',
       'subtitle': '따뜻한 응원',
-      'image': 'assets/images/girlfriend.jpg',
+      'image': 'assets/images/girlfriend.png',
       'color': _coachMint,
-      'price': '₩3,900 / 1년 이용',
+      'price': '₩2,900 / 1년 이용',
+      'tags': [
+        {'icon': Icons.auto_awesome, 'text': '칭찬 요정'},
+        {'icon': Icons.favorite, 'text': '자기돌봄'},
+        {'icon': Icons.bolt, 'text': '기운 충전'},
+      ],
     },
     {
       'id': 'bro',
@@ -523,7 +536,12 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
       'subtitle': '자기관리',
       'image': 'assets/images/bro.png',
       'color': _coachMint,
-      'price': '₩3,900 / 1년 이용',
+      'price': '₩2,900 / 1년 이용',
+      'tags': [
+        {'icon': Icons.fitness_center, 'text': '운동 습관'},
+        {'icon': Icons.bolt, 'text': '활력 충전'},
+        {'icon': Icons.rocket_launch, 'text': '일단 시작'},
+      ],
     },
   ];
 
@@ -536,6 +554,11 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
       'color': _masterGold,
       'price': 'MASTER 플랜 전용',
       'description': '복잡한 일정과 우선순위를 논리적으로 분석해 최적의 경로를 제안합니다.',
+      'tags': [
+        {'svgPath': 'assets/icons/bullseye.svg', 'text': '장기목표 관리'},
+        {'svgPath': 'assets/icons/thumbtack.svg', 'text': '미루는 항목 관리'},
+        {'svgPath': 'assets/icons/route.svg', 'text': '최적 경로 제안'},
+      ],
       'features': [
         {
           'icon': '🗺️',
@@ -562,6 +585,11 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
       'color': _masterGold,
       'price': 'MASTER 플랜 전용',
       'description': '바쁜 하루 속에서도 무리하지 않도록, 하지만 야무지게 챙겨드려요.',
+      'tags': [
+        {'svgPath': 'assets/icons/bullseye.svg', 'text': '장기목표 관리'},
+        {'svgPath': 'assets/icons/thumbtack.svg', 'text': '미루는 항목 관리'},
+        {'svgPath': 'assets/icons/heart-pulse.svg', 'text': '컨디션 케어'},
+      ],
       'features': [
         {
           'icon': '🗺️',
@@ -609,175 +637,325 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
     }
   }
 
-  void _showCoachDetails(BuildContext context, Map<String, dynamic> coach) {
-    final isFriendsCoach = !['sec_male', 'sec_female'].contains(coach['id']);
-    final alreadyOwned = _userData.canAccessCoach(coach['id']);
-    final planActive = _userData.isPlanActive;
-    final description = (coach['description'] as String?)?.trim() ?? '';
-    final features = coach['features'] as List?;
-    final showsPlanRequiredNotice =
-        isFriendsCoach && !alreadyOwned && !planActive;
+  void _showCoachCarouselModal(int initialIndex) {
+    final activeCoaches = [..._friendsCoaches, ..._masterCoaches];
+    final combinedIndex = _currentTab == CoachTab.master ? _friendsCoaches.length + initialIndex : initialIndex;
 
-    showAppBottomSheet(
+    showGeneralDialog(
       context: context,
-      builder: (context) {
-        return AppBottomSheetScaffold(
-          contentPadding: const EdgeInsets.fromLTRB(
-            24,
-            0,
-            24,
-            AppDesignTokens.sheetContentBottomPadding,
-          ),
-          body: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(24),
-                  child: Image.asset(
-                    coach['image'],
-                    width: 120,
-                    height: 120,
-                    fit: BoxFit.cover,
-                    alignment: Alignment.topCenter,
-                  ),
-                ),
-                const SizedBox(height: 20),
-                Text(
-                  coach['name'],
-                  style: GoogleFonts.notoSansKr(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w900,
-                    color: AppDesignTokens.textPrimary,
-                  ),
-                ),
-                if (description.isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 12,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppDesignTokens.surfaceSubtle,
-                      borderRadius: BorderRadius.circular(
-                        AppDesignTokens.radiusMedium,
-                      ),
-                    ),
-                    child: Text(
-                      description,
-                      textAlign: TextAlign.center,
-                      style: GoogleFonts.notoSansKr(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                        color: AppDesignTokens.textSecondary,
-                      ),
-                    ),
-                  ),
-                ],
-                if (features != null) const SizedBox(height: 24),
-                // 특징 리스트 렌더링
-                if (features != null)
-                  Column(
-                    children: features.map((feat) {
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 16),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 40,
-                              height: 40,
-                              decoration: BoxDecoration(
-                                color: AppDesignTokens.brandSoft,
-                                borderRadius: BorderRadius.circular(
-                                  AppDesignTokens.radiusSmall,
-                                ),
-                              ),
-                              alignment: Alignment.center,
-                              child: Text(
-                                feat['icon'],
-                                style: const TextStyle(fontSize: 18),
-                              ),
-                            ),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    feat['title'],
-                                    style: GoogleFonts.notoSansKr(
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.w800,
-                                      color: AppDesignTokens.textPrimary,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    feat['sub'],
-                                    style: GoogleFonts.notoSansKr(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w500,
-                                      color: AppDesignTokens.textSecondary,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
+      barrierDismissible: true,
+      barrierLabel: 'Close',
+      barrierColor: Colors.black.withOpacity(0.4),
+      transitionDuration: const Duration(milliseconds: 300),
+      pageBuilder: (context, animation, secondaryAnimation) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            final pageController = PageController(initialPage: combinedIndex, viewportFraction: 0.85);
+            int currentPage = combinedIndex;
+
+            return Material(
+              color: Colors.transparent,
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+                child: SafeArea(
+                  child: Stack(
+                    children: [
+                      // Close button
+                      Positioned(
+                        top: 16,
+                        right: 16,
+                        child: IconButton(
+                          icon: const Icon(Icons.close_rounded, color: Colors.white, size: 32),
+                          onPressed: () => Navigator.pop(context),
                         ),
-                      );
-                    }).toList(),
-                  ),
-                SizedBox(height: showsPlanRequiredNotice ? 16 : 32),
-                // 구매 버튼 영역 (friends 코치 + 미보유 시만 표시)
-                if (isFriendsCoach && !alreadyOwned) ...[
-                  if (!planActive)
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(14),
-                      margin: const EdgeInsets.only(bottom: 12),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFFF7ED),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFFFED7AA)),
                       ),
-                      child: Row(
-                        children: [
-                          const Text('⚠️', style: TextStyle(fontSize: 16)),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              'friends 또는 master 플랜 구독 후 구매할 수 있어요.',
-                              style: GoogleFonts.notoSansKr(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: const Color(0xFF92400E),
-                              ),
-                            ),
+                      
+                      // Carousel
+                      Center(
+                        child: SizedBox(
+                          height: MediaQuery.of(context).size.height * 0.7,
+                          child: PageView.builder(
+                            controller: pageController,
+                            onPageChanged: (idx) {
+                              setModalState(() {
+                                currentPage = idx;
+                              });
+                            },
+                            itemCount: activeCoaches.length,
+                            itemBuilder: (context, index) {
+                              final coach = activeCoaches[index];
+                              final isLocked = !_userData.canAccessCoach(coach['id']);
+                              final planActive = _userData.isPlanActive;
+                              final isFriendsCoach = !['sec_male', 'sec_female'].contains(coach['id']);
+                              final alreadyOwned = !isLocked;
+                              final description = (coach['description'] as String?)?.trim() ?? '';
+
+                              // Scale animation for non-focused pages
+                              return AnimatedBuilder(
+                                animation: pageController,
+                                builder: (context, child) {
+                                  double value = 1.0;
+                                  if (pageController.position.haveDimensions) {
+                                    value = pageController.page! - index;
+                                    value = (1 - (value.abs() * 0.15)).clamp(0.85, 1.0);
+                                  } else if (index != currentPage) {
+                                    value = 0.85;
+                                  }
+                                  return Transform.scale(
+                                    scale: value,
+                                    child: child,
+                                  );
+                                },
+                                child: Container(
+                                  margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 20),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(24),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withOpacity(0.15),
+                                        blurRadius: 20,
+                                        offset: const Offset(0, 10),
+                                      ),
+                                    ],
+                                  ),
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(24),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                                      children: [
+                                        // Image section
+                                        Expanded(
+                                          flex: 5,
+                                          child: Stack(
+                                            fit: StackFit.expand,
+                                            children: [
+                                              Image.asset(
+                                                coach['image'],
+                                                fit: BoxFit.cover,
+                                                alignment: Alignment.topCenter,
+                                              ),
+                                              if (isLocked)
+                                                Positioned(
+                                                  top: 16,
+                                                  right: 16,
+                                                  child: Container(
+                                                    padding: const EdgeInsets.all(8),
+                                                    decoration: BoxDecoration(
+                                                      color: Colors.white.withOpacity(0.8),
+                                                      shape: BoxShape.circle,
+                                                    ),
+                                                    child: const Icon(Icons.lock, color: AppDesignTokens.textPrimary, size: 20),
+                                                  ),
+                                                ),
+                                              if (alreadyOwned && coach['id'] != 'cat')
+                                                Positioned(
+                                                  top: 16,
+                                                  right: 16,
+                                                  child: Container(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                                    decoration: BoxDecoration(
+                                                      color: Colors.white.withOpacity(0.95),
+                                                      borderRadius: BorderRadius.circular(12),
+                                                    ),
+                                                    child: Row(
+                                                      mainAxisSize: MainAxisSize.min,
+                                                      children: [
+                                                        const Icon(Icons.check, size: 14, color: _coachMintText),
+                                                        const SizedBox(width: 4),
+                                                        Text('보유', style: GoogleFonts.notoSansKr(fontSize: 12, fontWeight: FontWeight.w800, color: _coachMintText)),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                ),
+                                            ],
+                                          ),
+                                        ),
+                                        
+                                        // Info section
+                                        Expanded(
+                                          flex: 4,
+                                          child: Padding(
+                                            padding: const EdgeInsets.all(20),
+                                            child: Column(
+                                              mainAxisAlignment: MainAxisAlignment.center,
+                                              children: [
+                                                Text(
+                                                  coach['name'],
+                                                  style: GoogleFonts.notoSansKr(fontSize: 24, fontWeight: FontWeight.w900, color: AppDesignTokens.textPrimary),
+                                                ),
+                                                const SizedBox(height: 4),
+                                                Text(
+                                                  coach['subtitle'],
+                                                  style: GoogleFonts.notoSansKr(fontSize: 14, fontWeight: FontWeight.w600, color: const Color(0xFF8B7CFF)),
+                                                ),
+                                                const SizedBox(height: 16),
+                                                if (coach.containsKey('tags') && coach['tags'] != null)
+                                                  Wrap(
+                                                    alignment: WrapAlignment.center,
+                                                    spacing: 8,
+                                                    runSpacing: 8,
+                                                    children: (coach['tags'] as List<Map<String, dynamic>>).map((tag) {
+                                                      return Container(
+                                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                                        decoration: BoxDecoration(
+                                                          color: Colors.white,
+                                                          borderRadius: BorderRadius.circular(20),
+                                                          border: Border.all(color: const Color(0xFFE2D8FF)),
+                                                        ),
+                                                        child: Row(
+                                                          mainAxisSize: MainAxisSize.min,
+                                                          children: [
+                                                            if (tag.containsKey('svgPath'))
+                                                              SvgPicture.asset(
+                                                                tag['svgPath'] as String,
+                                                                width: 14,
+                                                                height: 14,
+                                                                colorFilter: const ColorFilter.mode(Color(0xFF8B7CFF), BlendMode.srcIn),
+                                                              )
+                                                            else
+                                                              Icon(tag['icon'] as IconData, size: 14, color: const Color(0xFF8B7CFF)),
+                                                            const SizedBox(width: 4),
+                                                            Text(
+                                                              tag['text'] as String,
+                                                              style: GoogleFonts.notoSansKr(
+                                                                fontSize: 12,
+                                                                fontWeight: FontWeight.w600,
+                                                                color: const Color(0xFF8B7CFF),
+                                                              ),
+                                                            ),
+                                                          ],
+                                                        ),
+                                                      );
+                                                    }).toList(),
+                                                  )
+                                                else if (description.isNotEmpty)
+                                                  Text(
+                                                    description,
+                                                    textAlign: TextAlign.center,
+                                                    style: GoogleFonts.notoSansKr(fontSize: 14, fontWeight: FontWeight.w500, color: AppDesignTokens.textSecondary, height: 1.5),
+                                                  )
+                                                else if (isLocked && isFriendsCoach && !planActive)
+                                                  Text(
+                                                    '따뜻하게 다가오는 코치에요.\n지친 하루 끝에, 당신을 다정하게 챙겨줍니다.',
+                                                    textAlign: TextAlign.center,
+                                                    style: GoogleFonts.notoSansKr(fontSize: 14, fontWeight: FontWeight.w500, color: AppDesignTokens.textSecondary, height: 1.5),
+                                                  ),
+                                                
+                                                const Spacer(),
+                                                
+                                                if (isLocked)
+                                                  AppButton(
+                                                    label: planActive ? '1년 이용 / 2,900원' : '구독 안내 보기',
+                                                    onPressed: () {
+                                                      Navigator.pop(context);
+                                                      if (planActive) {
+                                                        ScaffoldMessenger.of(context).showSnackBar(
+                                                          SnackBar(
+                                                            content: Text('${coach['name']} 개별 결제 기능은 준비 중입니다.'),
+                                                            backgroundColor: const Color(0xFF1A1A2E),
+                                                            behavior: SnackBarBehavior.floating,
+                                                          ),
+                                                        );
+                                                      } else {
+                                                        _showPlanGuidePlaceholder();
+                                                      }
+                                                    },
+                                                    backgroundColor: AppDesignTokens.brandAccent,
+                                                  )
+                                                else
+                                                  AppButton(
+                                                    label: '이 코치 선택하기',
+                                                    onPressed: () async {
+                                                      await UserDataService.setSelectedCoach(coach['id']);
+                                                      if (!mounted) return;
+                                                      setState(() {
+                                                        _selectedCoachId = coach['id'];
+                                                      });
+                                                      Navigator.pop(context);
+                                                      Navigator.pushReplacement(
+                                                        context,
+                                                        PageRouteBuilder(
+                                                          pageBuilder: (_, __, ___) => MainTabScreen(coachId: coach['id']),
+                                                          transitionsBuilder: (_, animation, __, child) {
+                                                            return FadeTransition(opacity: animation, child: child);
+                                                          },
+                                                          transitionDuration: const Duration(milliseconds: 300),
+                                                        ),
+                                                      );
+                                                    },
+                                                    backgroundColor: const Color(0xFF8B7CFF),
+                                                    foregroundColor: Colors.white,
+                                                  ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
                           ),
-                        ],
+                        ),
                       ),
-                    ),
-                  AppButton(
-                    label: planActive ? '구매하기  ₩3,900 / 1년' : '구독 후 구매 가능',
-                    onPressed: planActive
-                        ? () => _purchaseCoach(context, coach)
-                        : null,
-                    backgroundColor: _coachMintText,
-                    disabledBackgroundColor: AppDesignTokens.divider,
+                      
+                      // Left arrow
+                      Positioned(
+                        left: 10,
+                        top: MediaQuery.of(context).size.height * 0.35,
+                        child: IconButton(
+                          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 28),
+                          onPressed: () {
+                            if (currentPage > 0) {
+                              pageController.previousPage(duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
+                            }
+                          },
+                        ),
+                      ),
+                      
+                      // Right arrow
+                      Positioned(
+                        right: 10,
+                        top: MediaQuery.of(context).size.height * 0.35,
+                        child: IconButton(
+                          icon: const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white, size: 28),
+                          onPressed: () {
+                            if (currentPage < activeCoaches.length - 1) {
+                              pageController.nextPage(duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
+                            }
+                          },
+                        ),
+                      ),
+                      
+                      // Page indicators
+                      Positioned(
+                        bottom: MediaQuery.of(context).size.height * 0.1,
+                        left: 0,
+                        right: 0,
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: List.generate(activeCoaches.length, (index) {
+                            return AnimatedContainer(
+                              duration: const Duration(milliseconds: 200),
+                              margin: const EdgeInsets.symmetric(horizontal: 4),
+                              width: currentPage == index ? 10 : 8,
+                              height: currentPage == index ? 10 : 8,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: currentPage == index ? Colors.white : Colors.white.withOpacity(0.4),
+                              ),
+                            );
+                          }),
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 10),
-                ],
-                AppButton(
-                  label: '닫기',
-                  onPressed: () => Navigator.pop(context),
-                  backgroundColor: AppDesignTokens.textPrimary,
                 ),
-                const SizedBox(height: 20),
-              ],
-            ),
-          ),
+              ),
+            );
+          },
         );
       },
     );
@@ -830,28 +1008,32 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
                     ),
                     const SizedBox(height: 32),
                     Center(
-                      child: RichText(
-                        textAlign: TextAlign.center,
-                        text: TextSpan(
-                          style: GoogleFonts.notoSansKr(
-                            fontSize: 22,
-                            fontWeight: FontWeight.w600,
-                            color: AppDesignTokens.textPrimary,
-                            letterSpacing: -0.5,
-                            height: 1.4,
-                          ),
-                          children: [
-                            const TextSpan(text: '오늘을 함께할\n'),
-                            TextSpan(
-                              text: '실행 코치',
-                              style: TextStyle(
-                                fontSize: 24,
-                                fontWeight: FontWeight.w700,
-                                color: AppDesignTokens.brandAccent,
-                              ),
+                      child: GestureDetector(
+                        onTap: _handleTitleTap,
+                        behavior: HitTestBehavior.opaque,
+                        child: RichText(
+                          textAlign: TextAlign.center,
+                          text: TextSpan(
+                            style: GoogleFonts.notoSansKr(
+                              fontSize: 22,
+                              fontWeight: FontWeight.w600,
+                              color: AppDesignTokens.textPrimary,
+                              letterSpacing: -0.5,
+                              height: 1.4,
                             ),
-                            const TextSpan(text: '를 선택해 보세요'),
-                          ],
+                            children: [
+                              const TextSpan(text: '오늘을 함께할\n'),
+                              TextSpan(
+                                text: '실행 코치',
+                                style: TextStyle(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppDesignTokens.brandAccent,
+                                ),
+                              ),
+                              const TextSpan(text: '를 선택해 보세요'),
+                            ],
+                          ),
                         ),
                       ),
                     ),
@@ -912,14 +1094,14 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
                         : coach['color'] as Color;
 
                     return AnimatedScale(
-                      scale: isSelected ? 1.03 : 0.95,
+                      scale: isSelected ? 1.03 : 1.0,
                       duration: const Duration(milliseconds: 300),
                       curve: Curves.easeOutCubic,
                       child: AnimatedOpacity(
-                        opacity: isSelected ? 1.0 : 0.4,
+                        opacity: 1.0,
                         duration: const Duration(milliseconds: 300),
                         child: AppCard(
-                          onTap: () => _handleCoachTap(coach, isLocked),
+                          onTap: () => _handleCoachTap(coach, isLocked, index),
                           padding: EdgeInsets.zero,
                           selected: false,
                           borderColor: Colors.transparent,
@@ -1054,44 +1236,6 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
               },
             ),
           ),
-              // 하단 선택하기 버튼
-              Container(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
-                decoration: const BoxDecoration(
-                  color: AppDesignTokens.brandSoft,
-                ),
-                child: AppButton(
-                  label: '선택하기',
-                  onPressed: _userData.canAccessCoach(_selectedCoachId)
-                      ? () async {
-                          await UserDataService.setSelectedCoach(
-                            _selectedCoachId,
-                          );
-                          if (!context.mounted) return;
-                          Navigator.pushReplacement(
-                            context,
-                            PageRouteBuilder(
-                              pageBuilder: (_, __, ___) =>
-                                  MainTabScreen(coachId: _selectedCoachId),
-                              transitionsBuilder: (_, animation, __, child) {
-                                return FadeTransition(
-                                  opacity: animation,
-                                  child: child,
-                                );
-                              },
-                              transitionDuration: const Duration(
-                                milliseconds: 300,
-                              ),
-                            ),
-                          );
-                        }
-                      : null,
-                  backgroundColor: const Color(0xFF8B7CFF),
-                  foregroundColor: Colors.white,
-                  borderColor: const Color(0xFF8B7CFF),
-                  height: 60,
-                ),
-              ),
             ],
           ),
         ),
