@@ -488,7 +488,6 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
       'tags': [
         {'icon': Icons.extension, 'text': '할 일 쪼개기'},
         {'icon': Icons.track_changes_rounded, 'text': '실행 습관'},
-        {'icon': Icons.access_time_rounded, 'text': '5분 시작'},
       ],
     },
     {
@@ -501,7 +500,6 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
       'tags': [
         {'icon': Icons.favorite, 'text': '자기돌봄'},
         {'icon': Icons.local_cafe, 'text': '생활관리'},
-        {'icon': Icons.eco, 'text': '여유'},
       ],
     },
     {
@@ -514,7 +512,6 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
       'tags': [
         {'icon': Icons.favorite, 'text': '하루 돌봄'},
         {'icon': Icons.cleaning_services, 'text': '청소 습관'},
-        {'icon': Icons.volunteer_activism, 'text': '포근한 위로'},
       ],
     },
     {
@@ -527,7 +524,6 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
       'tags': [
         {'icon': Icons.auto_awesome, 'text': '칭찬 요정'},
         {'icon': Icons.favorite, 'text': '자기돌봄'},
-        {'icon': Icons.bolt, 'text': '기운 충전'},
       ],
     },
     {
@@ -539,7 +535,6 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
       'price': '₩2,900 / 1년 이용',
       'tags': [
         {'icon': Icons.fitness_center, 'text': '운동 습관'},
-        {'icon': Icons.bolt, 'text': '활력 충전'},
         {'icon': Icons.rocket_launch, 'text': '일단 시작'},
       ],
     },
@@ -555,8 +550,7 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
       'price': 'MASTER 플랜 전용',
       'description': '복잡한 일정과 우선순위를 논리적으로 분석해 최적의 경로를 제안합니다.',
       'tags': [
-        {'svgPath': 'assets/icons/bullseye.svg', 'text': '장기목표 관리'},
-        {'svgPath': 'assets/icons/thumbtack.svg', 'text': '미루는 항목 관리'},
+        {'svgPath': 'assets/icons/bullseye.svg', 'text': '장기목표 조력'},
         {'svgPath': 'assets/icons/route.svg', 'text': '최적 경로 제안'},
       ],
       'features': [
@@ -586,9 +580,8 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
       'price': 'MASTER 플랜 전용',
       'description': '바쁜 하루 속에서도 무리하지 않도록, 하지만 야무지게 챙겨드려요.',
       'tags': [
-        {'svgPath': 'assets/icons/bullseye.svg', 'text': '장기목표 관리'},
+        {'svgPath': 'assets/icons/bullseye.svg', 'text': '장기목표 조력'},
         {'svgPath': 'assets/icons/thumbtack.svg', 'text': '미루는 항목 관리'},
-        {'svgPath': 'assets/icons/heart-pulse.svg', 'text': '컨디션 케어'},
       ],
       'features': [
         {
