@@ -732,13 +732,34 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
                                                 Positioned(
                                                   top: 16,
                                                   right: 16,
-                                                  child: Container(
-                                                    padding: const EdgeInsets.all(8),
-                                                    decoration: BoxDecoration(
-                                                      color: Colors.white.withOpacity(0.8),
-                                                      shape: BoxShape.circle,
-                                                    ),
-                                                    child: const Icon(Icons.lock, color: AppDesignTokens.textPrimary, size: 20),
+                                                  child: Row(
+                                                    mainAxisSize: MainAxisSize.min,
+                                                    children: [
+                                                      if (!isFriendsCoach)
+                                                        const Padding(
+                                                          padding: EdgeInsets.only(right: 6),
+                                                          child: Text(
+                                                            'MASTER',
+                                                            style: TextStyle(
+                                                              color: Colors.white,
+                                                              fontWeight: FontWeight.w700,
+                                                              fontSize: 12,
+                                                              letterSpacing: 1.2,
+                                                              shadows: [
+                                                                Shadow(color: Colors.black54, blurRadius: 4, offset: Offset(0, 1)),
+                                                              ],
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      Container(
+                                                        padding: const EdgeInsets.all(8),
+                                                        decoration: BoxDecoration(
+                                                          color: Colors.white.withOpacity(0.8),
+                                                          shape: BoxShape.circle,
+                                                        ),
+                                                        child: const Icon(Icons.lock, color: AppDesignTokens.textPrimary, size: 20),
+                                                      ),
+                                                    ],
                                                   ),
                                                 ),
                                               if (alreadyOwned && coach['id'] != 'cat')
@@ -839,10 +860,12 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
                                                 
                                                 if (isLocked)
                                                   AppButton(
-                                                    label: planActive ? '1년 이용 / 2,900원' : '구독 안내 보기',
+                                                    label: !planActive ? '구독 안내 보기' : (isFriendsCoach ? '1년 이용 / 2,900원' : '플랜 업그레이드'),
                                                     onPressed: () {
                                                       Navigator.pop(context);
-                                                      if (planActive) {
+                                                      if (!planActive || !isFriendsCoach) {
+                                                        _showPlanGuidePlaceholder();
+                                                      } else {
                                                         ScaffoldMessenger.of(context).showSnackBar(
                                                           SnackBar(
                                                             content: Text('${coach['name']} 개별 결제 기능은 준비 중입니다.'),
@@ -850,8 +873,6 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
                                                             behavior: SnackBarBehavior.floating,
                                                           ),
                                                         );
-                                                      } else {
-                                                        _showPlanGuidePlaceholder();
                                                       }
                                                     },
                                                     backgroundColor: AppDesignTokens.brandAccent,
