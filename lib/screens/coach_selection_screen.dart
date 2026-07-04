@@ -1139,13 +1139,31 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
                                   ),
 
                                   if (isLocked)
-                                    const Positioned(
+                                    Positioned(
                                       top: 10,
                                       right: 10,
-                                      child: Icon(
-                                        Icons.lock,
-                                        color: Colors.white,
-                                        size: 20,
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          if (_currentTab == CoachTab.master)
+                                            const Padding(
+                                              padding: EdgeInsets.only(right: 4),
+                                              child: Text(
+                                                'MASTER',
+                                                style: TextStyle(
+                                                  color: Colors.white,
+                                                  fontWeight: FontWeight.w700,
+                                                  fontSize: 11,
+                                                  letterSpacing: 1.2,
+                                                ),
+                                              ),
+                                            ),
+                                          const Icon(
+                                            Icons.lock,
+                                            color: Colors.white,
+                                            size: 20,
+                                          ),
+                                        ],
                                       ),
                                     ),
                                   if (hasFullAccess)
