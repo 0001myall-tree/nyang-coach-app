@@ -70,7 +70,7 @@ class _PlanGuideBottomSheetState extends State<_PlanGuideBottomSheet> {
                     _PlanGroup(
                       isMaster: false,
                       title: '프렌즈 플랜',
-                      subtitle: '실행 코치와 대화 및 플래너 기능',
+                      subtitle: '실행코치와 동기부여 대화 및 플래너',
                       price: _isSixMonth ? '29,400원' : '5,900원 / 월',
                       originalPrice: _isSixMonth ? '35,400원' : null,
                       badge: _isSixMonth ? '6개월 총액' : '매월 자동 결제',
@@ -80,7 +80,7 @@ class _PlanGuideBottomSheetState extends State<_PlanGuideBottomSheet> {
                         setState(() => _selectedPlanId = 'friends');
                       },
                       features: const [
-                        (Icons.check_circle_rounded, '실행 코치와 대화 및 플래너 기능'),
+                        (Icons.check_circle_rounded, '실행코치와 동기부여 대화 및 플래너'),
                       ],
                     ),
                     const SizedBox(height: 14),
@@ -98,7 +98,7 @@ class _PlanGuideBottomSheetState extends State<_PlanGuideBottomSheet> {
                       },
                       features: const [
                         (Icons.check_circle_rounded, '비서 코치 이용'),
-                        (Icons.check_circle_rounded, '실행 코치와 대화 및 플래너 기능'),
+                        (Icons.check_circle_rounded, '실행코치와 동기부여 대화 및 플래너'),
                         (Icons.check_circle_rounded, '지금 뭐하지?'),
                         (Icons.check_circle_rounded, '주간 회고 & 우선순위 추천'),
                       ],
