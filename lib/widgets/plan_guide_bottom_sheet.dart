@@ -198,7 +198,7 @@ class _PlanGuideHeader extends StatelessWidget {
             ),
           ),
           Positioned(
-            top: 72,
+            top: 92,
             left: AppDesignTokens.sheetHorizontalPadding,
             right: AppDesignTokens.sheetHorizontalPadding,
             child: RichText(
@@ -382,13 +382,13 @@ class _PlanGroup extends StatelessWidget {
               if (isMaster)
                 const _PlanCoachAvatars(
                   imagePaths: [
+                    'assets/images/cat_nobg.png',
                     'assets/images/coach_sec_male_nobg.png',
-                    'assets/images/cat.png',
                   ],
                 )
               else
                 const _PlanCoachAvatar(
-                  imagePath: 'assets/images/cat.png',
+                  imagePath: 'assets/images/cat_nobg.png',
                   size: 32,
                 ),
               const SizedBox(width: 10),
@@ -444,7 +444,10 @@ class _PlanCoachAvatars extends StatelessWidget {
           for (var index = 0; index < imagePaths.length; index++)
             Positioned(
               left: index * 20,
-              child: _PlanCoachAvatar(imagePath: imagePaths[index], size: 34),
+              child: _PlanCoachAvatar(
+                imagePath: imagePaths[index],
+                size: index == imagePaths.length - 1 ? 36 : 32,
+              ),
             ),
         ],
       ),
@@ -547,6 +550,8 @@ class _PlanPriceBox extends StatelessWidget {
           const Divider(color: AppDesignTokens.brandBorder, height: 1),
           const SizedBox(height: 12),
           ...features.map((feature) {
+            final isSignatureFeature =
+                feature.$2 == '미루는 항목 집중 관리' || feature.$2 == '장기 목표 조력';
             return Padding(
               padding: const EdgeInsets.only(bottom: 8),
               child: Row(
@@ -567,8 +572,12 @@ class _PlanPriceBox extends StatelessWidget {
                       feature.$2,
                       style: GoogleFonts.notoSansKr(
                         fontSize: AppDesignTokens.textCaption + 1,
-                        fontWeight: FontWeight.w700,
-                        color: AppDesignTokens.textPrimary,
+                        fontWeight: isSignatureFeature
+                            ? FontWeight.w900
+                            : FontWeight.w700,
+                        color: isSignatureFeature
+                            ? AppDesignTokens.brandStrong
+                            : AppDesignTokens.textPrimary,
                         height: 1.35,
                       ),
                     ),
@@ -679,7 +688,7 @@ class _IndividualCoachGuide extends StatelessWidget {
           FittedBox(
             fit: BoxFit.scaleDown,
             child: Text(
-              '3,900원',
+              '2,900원',
               style: GoogleFonts.notoSansKr(
                 fontSize: AppDesignTokens.textAction,
                 fontWeight: FontWeight.w900,
