@@ -1478,13 +1478,13 @@ class _ChatScreenState extends State<ChatScreen>
                       Row(
                         children: [
                           const Icon(
-                            Icons.pets,
+                            Icons.rocket_launch_rounded,
                             color: Color(0xFFD8D2FF),
                             size: 24,
                           ),
                           const SizedBox(width: 8),
                           const Text(
-                            '냥냥코치 팀 소개',
+                            '실행코치 소개',
                             style: TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
@@ -1693,7 +1693,7 @@ class _ChatScreenState extends State<ChatScreen>
                                       horizontal: 16,
                                     ),
                                     child: Icon(
-                                      Icons.pets,
+                                      Icons.rocket_launch_rounded,
                                       color: Color(0xFFD8D2FF),
                                       size: 16,
                                     ),
@@ -1742,7 +1742,7 @@ class _ChatScreenState extends State<ChatScreen>
                         Navigator.pop(ctx);
                         // TODO: 구독/결제 화면 연결
                       },
-                      icon: const Icon(Icons.pets, size: 20),
+                      icon: const Icon(Icons.rocket_launch_rounded, size: 20),
                       label: const Text(
                         '함께 시작하기',
                         style: TextStyle(

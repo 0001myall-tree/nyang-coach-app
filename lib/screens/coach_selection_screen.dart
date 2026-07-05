@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:ui';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -140,10 +141,10 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
                   padding: const EdgeInsets.fromLTRB(20, 20, 16, 12),
                   child: Row(
                     children: [
-                      const Text('🐾', style: TextStyle(fontSize: 22)),
+                      const Icon(Icons.rocket_launch_rounded, color: Color(0xFFD8D2FF), size: 22),
                       const SizedBox(width: 8),
                       Text(
-                        '냥냥코치 팀 소개',
+                        '실행코치 소개',
                         style: GoogleFonts.notoSansKr(
                           fontSize: 18,
                           fontWeight: FontWeight.w900,
@@ -864,7 +865,9 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
                                                     label: !planActive ? '구독 안내 보기' : (isFriendsCoach ? '1년 이용 / 2,900원' : '플랜 업그레이드'),
                                                     onPressed: () {
                                                       Navigator.pop(context);
-                                                      if (!planActive || !isFriendsCoach) {
+                                                      if (kDebugMode) {
+                                                        _purchaseCoach(context, coach);
+                                                      } else if (!planActive || !isFriendsCoach) {
                                                         _showPlanGuidePlaceholder();
                                                       } else {
                                                         ScaffoldMessenger.of(context).showSnackBar(
