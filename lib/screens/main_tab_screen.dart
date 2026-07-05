@@ -246,7 +246,9 @@ class _MainTabScreenState extends State<MainTabScreen>
 
     await UserDataService.setSelectedCoach(coachId);
     if (!mounted) return;
-    final handoffFromCoachId = widget.coachId == 'sec_male' && coachId == 'cat'
+    final isFromSecretary =
+        widget.coachId == 'sec_male' || widget.coachId == 'sec_female';
+    final handoffFromCoachId = isFromSecretary && coachId == 'cat'
         ? widget.coachId
         : null;
     Navigator.of(context).pushReplacement(

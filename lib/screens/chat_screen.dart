@@ -587,6 +587,14 @@ class _ChatScreenState extends State<ChatScreen>
       '기운없',
       '힘이없',
       '완전방전',
+      '현타',
+      '소진',
+      '탈진',
+      '녹초',
+      '멘붕',
+      '진빠',
+      '못버티겠',
+      '더는못하겠',
     ];
     return signals.any(normalized.contains);
   }
@@ -608,6 +616,18 @@ class _ChatScreenState extends State<ChatScreen>
       '기운없',
       '힘이없',
       '완전방전',
+      '현타',
+      '소진',
+      '탈진',
+      '녹초',
+      '멘붕',
+      '진빠',
+      '못버티겠',
+      '더는못하겠',
+      '방전',
+      '한계다',
+      '한계인것같',
+      '기빨',
     ];
     return signals.any(normalized.contains);
   }
@@ -659,6 +679,7 @@ class _ChatScreenState extends State<ChatScreen>
     'girlfriend',
     'halmae',
     'bro',
+    'sec_male',
     'sec_female',
   }.contains(widget.coachId);
 
@@ -668,6 +689,7 @@ class _ChatScreenState extends State<ChatScreen>
       'girlfriend' => '오빠 요 며칠 정말 열심히 한 거 내가 다 봤어.\n계속 달리면 나도 걱정돼.',
       'halmae' => '우리 새끼 요 며칠 애쓴 거 할미가 다 봤다.\n계속 그러다 몸 상할까 걱정이다.',
       'bro' => '야, 요 며칠 빡세게 달린 거 내가 다 봤다.\n계속 밀어붙이면 퍼진다.',
+      'sec_male' => '요 며칠 꾸준히 달려오신 걸 확인했습니다.\n계속 무리하시면 컨디션이 걱정됩니다.',
       'sec_female' => '대표님, 요 며칠 꾸준히 달려오신 것 제가 확인했어요.\n계속 무리하시면 컨디션이 걱정됩니다.',
       _ => '요 며칠 열심히 한 거 냥이가 다 봤다냥.\n계속 달리면 냥이도 걱정된다냥.',
     };
@@ -693,6 +715,7 @@ class _ChatScreenState extends State<ChatScreen>
       'girlfriend' => '알겠어 오빠. 오늘은 욕심내지 말고 할 수 있는 만큼만 같이 가자 🩷',
       'halmae' => '그래, 우리 새끼. 오늘은 욕심내지 말고 할 수 있는 만큼만 하자.',
       'bro' => '오케이. 오늘은 욕심내지 말고 딱 할 수 있는 만큼만 가자.',
+      'sec_male' => '알겠습니다. 오늘은 범위를 줄이고 할 수 있는 만큼만 진행하시죠.',
       'sec_female' => '알겠습니다, 대표님. 오늘은 범위를 줄이고 할 수 있는 만큼만 진행해요.',
       _ => '알겠다냥. 오늘은 욕심내지 말고 할 수 있는 만큼만 같이 가자냥.',
     };
@@ -796,17 +819,17 @@ class _ChatScreenState extends State<ChatScreen>
     if (totalCount <= 0 || doneCount / totalCount < 0.6) return false;
 
     await prefs.setString('nyang_rest_offer_date', todayStr);
+    final restOfferMsg = await UserTitleService.applyForCoach(
+      _restOfferMessage(),
+      widget.coachId,
+    );
     if (!mounted) return true;
     setState(() {
       _messages.add(
         ChatMessage(text: userText, isUser: true, time: DateTime.now()),
       );
       _messages.add(
-        ChatMessage(
-          text: _restOfferMessage(),
-          isUser: false,
-          time: DateTime.now(),
-        ),
+        ChatMessage(text: restOfferMsg, isUser: false, time: DateTime.now()),
       );
       _dynamicChips = ['🌙 오늘은 쉬어가기', '🐾 오늘은 조금만 하기'];
       _suppressDefaultChips = false;
@@ -861,6 +884,10 @@ class _ChatScreenState extends State<ChatScreen>
     );
     await _updateTodayRecord(prefs);
     TasksSyncService.scheduleSyncToCloud();
+    final vacationActivatedMsg = await UserTitleService.applyForCoach(
+      _vacationActivatedMessage(),
+      widget.coachId,
+    );
     if (!mounted) return;
     setState(() {
       _messages.add(
@@ -872,7 +899,7 @@ class _ChatScreenState extends State<ChatScreen>
       );
       _messages.add(
         ChatMessage(
-          text: _vacationActivatedMessage(),
+          text: vacationActivatedMsg,
           isUser: false,
           time: DateTime.now(),
         ),
@@ -886,17 +913,17 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   Future<void> _chooseLightDay() async {
+    final lightDayMsg = await UserTitleService.applyForCoach(
+      _lightDayMessage(),
+      widget.coachId,
+    );
     if (!mounted) return;
     setState(() {
       _messages.add(
         ChatMessage(text: '🐾 오늘은 조금만 하기', isUser: true, time: DateTime.now()),
       );
       _messages.add(
-        ChatMessage(
-          text: _lightDayMessage(),
-          isUser: false,
-          time: DateTime.now(),
-        ),
+        ChatMessage(text: lightDayMsg, isUser: false, time: DateTime.now()),
       );
       _dynamicChips = [];
       _suppressDefaultChips = true;
@@ -924,6 +951,10 @@ class _ChatScreenState extends State<ChatScreen>
     await prefs.remove('nyang_vacation');
     await _updateTodayRecord(prefs);
     TasksSyncService.scheduleSyncToCloud();
+    final vacationCancelledMsg = await UserTitleService.applyForCoach(
+      _vacationCancelledMessage(),
+      widget.coachId,
+    );
     if (!mounted) return true;
     setState(() {
       _messages.add(
@@ -931,7 +962,7 @@ class _ChatScreenState extends State<ChatScreen>
       );
       _messages.add(
         ChatMessage(
-          text: _vacationCancelledMessage(),
+          text: vacationCancelledMsg,
           isUser: false,
           time: DateTime.now(),
         ),
@@ -1942,20 +1973,23 @@ class _ChatScreenState extends State<ChatScreen>
       }
     }
 
-    // 남비서의 정서적 동행 연결로 소환된 경우에만 냥냥이가 먼저 인사한다.
+    // 남비서/여비서의 정서적 동행 연결로 소환된 경우에만 냥냥이가 먼저 인사한다.
+    // 이때 왜 여기로 왔는지(오늘 하루만 생각하기) 이유도 살짝 짚어준다.
     // 일반 진입에서는 기존 프렌즈 코치 정책대로 사용자의 첫 말을 기다린다.
-    if (widget.coachId == 'cat' && widget.handoffFromCoachId == 'sec_male') {
+    if (widget.coachId == 'cat' &&
+        (widget.handoffFromCoachId == 'sec_male' ||
+            widget.handoffFromCoachId == 'sec_female')) {
       const handoffGreets = [
-        '왔다냥. 오늘은 그냥 냥이랑 같이 있어도 된다냥.',
-        '냥이가 왔다냥. 지금은 아무것도 해결하지 않아도 된다냥.',
-        '여기 있다냥. 말하고 싶을 때만 말해도 되고, 그냥 있어도 괜찮다냥.',
-        '냥이가 옆에 붙어 있겠다냥. 오늘은 천천히 있어도 된다냥.',
-        '잘 왔다냥. 지금은 마음 가는 만큼만 이야기해도 된다냥.',
-        '오늘은 냥이가 조용히 곁에 있어주겠다냥. 아무 말 안 해도 괜찮다냥.',
-        '일단 여기서 같이 쉬자냥. 서두르지 않아도 된다냥.',
-        '냥이한테 잠깐 기대도 된다냥. 오늘은 편하게 있어라냥.',
-        '어서 오라냥. 지금은 잘하려고 애쓰지 않아도 된다냥.',
-        '냥냥이가 기다리고 있었다냥. 오늘 마음은 천천히 꺼내놔도 된다냥.',
+        '왔다냥. 생각 많을 땐 오늘 하루만 생각하는 게 최고다냥.',
+        '냥이가 왔다냥. 먼 계획은 잠깐 내려놓고 오늘만 생각해도 된다냥.',
+        '여기 있다냥. 복잡한 건 잠깐 잊고 오늘 하루만 챙기자냥.',
+        '냥이가 옆에 붙어 있겠다냥. 오늘 하루만 잘 넘기면 그걸로 충분하다냥.',
+        '잘 왔다냥. 큰 그림은 잠깐 냥이한테 맡기고 오늘만 생각하자냥.',
+        '오늘은 냥이가 곁에 있어주겠다냥. 계획 생각은 잠깐 내려놔도 된다냥.',
+        '일단 여기서 같이 쉬자냥. 오늘 하루만 잘 버티면 충분하다냥. 나머지는 프렌즈 코치들이 있다냥.',
+        '냥이한테 잠깐 기대도 된다냥. 먼 얘기 말고 오늘 얘기만 하자냥.',
+        '어서 오라냥. 머리 복잡할 땐 오늘 하루만 생각하는 게 제일 낫다냥. 그런 건 또 우리 프렌즈 코치들이 잘 챙겨주지.',
+        '냥냥이가 기다리고 있었다냥. 오늘만 생각해도 된다냥. 나머지는 또 다른 프렌즈 코치들이 챙겨줄 거다냥.',
       ];
       final greet = handoffGreets[Random().nextInt(handoffGreets.length)];
       await Future.delayed(const Duration(milliseconds: 450));
@@ -5385,6 +5419,12 @@ class _ChatScreenState extends State<ChatScreen>
    - 코치가 먼저 [TIMER_CONFIRM:분:할일이름]을 출력할 수 있는 경우는 [오늘 할 일 현황]에 "앱 기록상 미루기 2회 이상"으로 표시된 동일한 미완료 할 일뿐입니다.
    - 대화에서 같은 일을 귀찮다고 2회 이상 반복했더라도 앱 기록상 미루기 2회 미만이면 태그나 확인 카드를 제안하지 마세요. 먼저 짧게 달랜 뒤 "필요하면 타이머라도 띄워드릴까요?"라고 말로만 물으세요.'''
         : '''4. [TIMER_START] 태그는 절대 사용 금지. 사용자가 직접 "타이머 띄워줘", "15분 타이머 켜줘"처럼 명시적으로 요청한 경우에는 목적, 컨디션, 일정, 시간을 캐묻지 말고 짧게 응답한 뒤 [TIMER_CONFIRM:분] 태그만 붙입니다. 시간이 없으면 15분을 기본값으로 사용합니다. 코치가 먼저 타이머 태그를 출력하지 마세요.''';
+    // 냥냥이 연결(COACH_SWITCH)은 장기 목표 압박을 주는 마스터 코치(남비서/여비서) 전용 탈출구다.
+    // 프렌즈 코치는 이미 압박 없는 오늘 하루 중심이라 서로 스위치될 이유가 없다.
+    final coachSwitchRule = _coach.isMaster
+        ? '''
+   사용자가 우울함, 무기력함, 감정적 고통을 토로하고 그 감정이 2회 이상 반복되거나 깊어지고 있다면, 냥냥코치가 사용자를 걱정하고 있다는 뉘앙스로 자연스럽게 연결하세요. 예: "방금 냥냥코치한테서 연락이 왔는데, 지금 대표님 걱정하고 있대요. 같이 얘기해보시겠어요?" 또는 "냥냥코치가 대표님 기다리고 있을 것 같은데, 잠깐 얘기 나눠보시는 건 어떨까요?" 처럼 팀으로서 함께 챙기는 느낌을 주세요. 답변 끝에 [COACH_SWITCH:cat]만 붙이세요. 단 한 번의 가벼운 감정 표현에는 붙이지 마세요.'''
+        : '';
     final systemPromptWithChips =
         '''$baseSystemPrompt
 ${contextString.isNotEmpty ? '\n$contextString' : ''}
@@ -5473,8 +5513,7 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
 2. 마크다운 문법(**, *, # 등) 절대 사용하지 말 것.
 3. 답변 끝에 자연스러운 빠른 답장 버튼 3개를 [CHIPS: 버튼1|버튼2|버튼3] 형식으로 추가하세요.
    예시: [CHIPS: 오늘 할 일 정하기|기분 이야기하기|그냥 얘기하자]
-   단, 정서적 여유가 낮은 사용자의 순수 감정 토로에는 [CHIPS]를 쓰지 말고 답변 끝에 [NO_CHIPS]를 붙이세요.
-   사용자가 우울함, 무기력함, 감정적 고통을 토로하고 그 감정이 2회 이상 반복되거나 깊어지고 있다면, 냥냥코치가 사용자를 걱정하고 있다는 뉘앙스로 자연스럽게 연결하세요. 예: "방금 냥냥코치한테서 연락이 왔는데, 지금 대표님 걱정하고 있대요. 같이 얘기해보시겠어요?" 또는 "냥냥코치가 대표님 기다리고 있을 것 같은데, 잠깐 얘기 나눠보시는 건 어떨까요?" 처럼 팀으로서 함께 챙기는 느낌을 주세요. 답변 끝에 [COACH_SWITCH:cat]만 붙이세요. 단 한 번의 가벼운 감정 표현에는 붙이지 마세요.
+   단, 정서적 여유가 낮은 사용자의 순수 감정 토로에는 [CHIPS]를 쓰지 말고 답변 끝에 [NO_CHIPS]를 붙이세요.$coachSwitchRule
    자해·자살 위험을 확인하거나 긴급 도움을 안내하는 상황에서는 [CHIPS]와 [COACH_SWITCH]를 붙이지 말고 [NO_CHIPS]만 붙이세요.
 $timerOutputRule
 5. 사용자가 특정 할 일을 언급하거나 해결 가능한 문제가 드러나고, 그걸 오늘 할 일로 등록할 만한 상황이라면 답변에 [TASK: 할일명] 태그를 포함하세요. 예: "5시에 청소해야지" → [TASK: 5시에 청소], "오후 3시에 회의가 있어" → [TASK: 오후 3시 회의], "SNS 반응이 안 좋아" → [TASK: SNS 콘텐츠 분석하기]. 억지로 추가하지 마세요. 정서적 여유가 낮거나 순수 감정 토로인 상황에는 사용자가 행동 지원을 명시적으로 요청하지 않는 한 [TASK]와 [TIMER_CONFIRM]을 출력하지 마세요. 자해·자살 위험 상황에서는 두 태그를 절대 출력하지 마세요.$halmaeHint''';
