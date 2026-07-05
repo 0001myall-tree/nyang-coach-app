@@ -81,6 +81,7 @@ class _PlanGuideBottomSheetState extends State<_PlanGuideBottomSheet> {
                         setState(() => _selectedPlanId = 'friends');
                       },
                       features: const [
+                        ('assets/icons/circle-check.svg', '냥냥코치 이용 가능'),
                         (
                           'assets/icons/circle-check.svg',
                           '실행코치와 동기부여 대화 및 플래너',
@@ -105,7 +106,7 @@ class _PlanGuideBottomSheetState extends State<_PlanGuideBottomSheet> {
                         setState(() => _selectedPlanId = 'master');
                       },
                       features: const [
-                        ('assets/icons/circle-check.svg', '비서 코치 이용'),
+                        ('assets/icons/circle-check.svg', '비서 코치, 냥냥코치 이용 가능'),
                         (
                           'assets/icons/circle-check.svg',
                           '실행코치와 동기부여 대화 및 플래너',
@@ -177,6 +178,21 @@ class _PlanGuideHeader extends StatelessWidget {
             child: Center(
               child: AppBottomSheetHandle(
                 color: Colors.white.withValues(alpha: 0.72),
+              ),
+            ),
+          ),
+          Positioned(
+            top: 44,
+            left: 88,
+            right: 88,
+            child: Center(
+              child: Text(
+                '구독 플랜',
+                style: GoogleFonts.notoSansKr(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w900,
+                  color: AppDesignTokens.brandStrong,
+                ),
               ),
             ),
           ),
@@ -357,10 +373,14 @@ class _PlanGroup extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               if (isMaster)
-                const Icon(
-                  Icons.workspace_premium_rounded,
-                  color: AppDesignTokens.premium,
-                  size: 28,
+                SvgPicture.asset(
+                  'assets/icons/crown.svg',
+                  width: 28,
+                  height: 28,
+                  colorFilter: const ColorFilter.mode(
+                    Color(0xFFD8D2FF),
+                    BlendMode.srcIn,
+                  ),
                 )
               else
                 const Icon(
@@ -380,22 +400,6 @@ class _PlanGroup extends StatelessWidget {
                   ),
                 ),
               ),
-              if (isSelected) ...[
-                const SizedBox(width: 8),
-                Container(
-                  width: 22,
-                  height: 22,
-                  decoration: const BoxDecoration(
-                    color: AppDesignTokens.brand,
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.check_rounded,
-                    color: Colors.white,
-                    size: 16,
-                  ),
-                ),
-              ],
             ],
           ),
           const SizedBox(height: 4),
