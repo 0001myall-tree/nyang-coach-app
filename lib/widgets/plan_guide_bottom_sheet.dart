@@ -40,7 +40,7 @@ class _PlanGuideBottomSheetState extends State<_PlanGuideBottomSheet> {
   @override
   Widget build(BuildContext context) {
     return AppBottomSheetScaffold(
-      backgroundColor: const Color(0xFFFFFBFF),
+      backgroundColor: AppDesignTokens.brandSurface,
       showHandle: false,
       contentPadding: EdgeInsets.zero,
       body: SingleChildScrollView(
@@ -183,7 +183,7 @@ class _PlanGuideHeader extends StatelessWidget {
             child: TextButton(
               onPressed: onClose,
               style: TextButton.styleFrom(
-                foregroundColor: const Color(0xFF8E8A9E),
+                foregroundColor: AppDesignTokens.brandTextMuted,
                 padding: EdgeInsets.zero,
                 minimumSize: Size.zero,
                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -207,14 +207,14 @@ class _PlanGuideHeader extends StatelessWidget {
                 style: GoogleFonts.notoSansKr(
                   fontSize: 24,
                   fontWeight: FontWeight.w900,
-                  color: const Color(0xFF2F2A44),
+                  color: AppDesignTokens.textPrimary,
                   height: 1.35,
                 ),
                 children: const [
                   TextSpan(text: '나에게 맞는\n'),
                   TextSpan(
                     text: '구독 플랜',
-                    style: TextStyle(color: Color(0xFF8B7CFF)),
+                    style: TextStyle(color: AppDesignTokens.brand),
                   ),
                   TextSpan(text: '을 선택하세요'),
                 ],
@@ -381,7 +381,7 @@ class _PlanGroup extends StatelessWidget {
                   width: 28,
                   height: 28,
                   colorFilter: const ColorFilter.mode(
-                    Color(0xFFD8D2FF),
+                    AppDesignTokens.brandAccent,
                     BlendMode.srcIn,
                   ),
                 )
@@ -515,7 +515,7 @@ class _PlanPriceBox extends StatelessWidget {
                     width: 16,
                     height: 16,
                     colorFilter: const ColorFilter.mode(
-                      Color(0xFFD8D2FF),
+                      AppDesignTokens.brandDisabled,
                       BlendMode.srcIn,
                     ),
                   ),
@@ -526,7 +526,7 @@ class _PlanPriceBox extends StatelessWidget {
                       style: GoogleFonts.notoSansKr(
                         fontSize: AppDesignTokens.textCaption + 1,
                         fontWeight: FontWeight.w700,
-                        color: const Color(0xFF2F2A44),
+                        color: AppDesignTokens.textPrimary,
                         height: 1.35,
                       ),
                     ),
