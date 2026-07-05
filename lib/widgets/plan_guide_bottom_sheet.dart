@@ -56,7 +56,7 @@ class _PlanGuideBottomSheetState extends State<_PlanGuideBottomSheet> {
               onClose: () => Navigator.pop(context),
             ),
             Transform.translate(
-              offset: const Offset(0, -70),
+              offset: const Offset(0, -54),
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(
                   AppDesignTokens.sheetHorizontalPadding,
@@ -70,7 +70,7 @@ class _PlanGuideBottomSheetState extends State<_PlanGuideBottomSheet> {
                     _PlanGroup(
                       isMaster: false,
                       title: '프렌즈 플랜',
-                      subtitle: '실행코치와 동기부여 대화 및 플래너',
+                      subtitle: '가볍게 루틴 잡기',
                       price: _isSixMonth ? '29,400원' : '5,900원 / 월',
                       originalPrice: _isSixMonth ? '35,400원' : null,
                       subPrice: _isSixMonth ? '월 4,900원' : null,
@@ -163,7 +163,7 @@ class _PlanGuideHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 300,
+      height: 340,
       child: Stack(
         clipBehavior: Clip.none,
         children: [
@@ -205,8 +205,8 @@ class _PlanGuideHeader extends StatelessWidget {
               textAlign: TextAlign.left,
               text: TextSpan(
                 style: GoogleFonts.notoSansKr(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w900,
+                  fontSize: 22,
+                  fontWeight: FontWeight.w700,
                   color: AppDesignTokens.textPrimary,
                   height: 1.35,
                 ),
@@ -214,7 +214,11 @@ class _PlanGuideHeader extends StatelessWidget {
                   TextSpan(text: '나에게 맞는\n'),
                   TextSpan(
                     text: '구독 플랜',
-                    style: TextStyle(color: AppDesignTokens.brand),
+                    style: TextStyle(
+                      color: AppDesignTokens.brand,
+                      fontSize: 24,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                   TextSpan(text: '을 선택하세요'),
                 ],
@@ -224,7 +228,7 @@ class _PlanGuideHeader extends StatelessWidget {
           Positioned(
             left: 20,
             right: 20,
-            bottom: 82,
+            bottom: 54,
             child: _PlanPeriodTabs(
               isSixMonth: isSixMonth,
               onChanged: onChanged,
@@ -376,20 +380,16 @@ class _PlanGroup extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               if (isMaster)
-                SvgPicture.asset(
-                  'assets/icons/crown.svg',
-                  width: 28,
-                  height: 28,
-                  colorFilter: const ColorFilter.mode(
-                    AppDesignTokens.brandAccent,
-                    BlendMode.srcIn,
-                  ),
+                const _PlanCoachAvatars(
+                  imagePaths: [
+                    'assets/images/coach_sec_male_nobg.png',
+                    'assets/images/cat.png',
+                  ],
                 )
               else
-                const Icon(
-                  Icons.eco_rounded,
-                  color: AppDesignTokens.brand,
-                  size: 28,
+                const _PlanCoachAvatar(
+                  imagePath: 'assets/images/cat.png',
+                  size: 32,
                 ),
               const SizedBox(width: 10),
               Flexible(
@@ -423,6 +423,56 @@ class _PlanGroup extends StatelessWidget {
             features: features,
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _PlanCoachAvatars extends StatelessWidget {
+  const _PlanCoachAvatars({required this.imagePaths});
+
+  final List<String> imagePaths;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 54,
+      height: 34,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          for (var index = 0; index < imagePaths.length; index++)
+            Positioned(
+              left: index * 20,
+              child: _PlanCoachAvatar(imagePath: imagePaths[index], size: 34),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PlanCoachAvatar extends StatelessWidget {
+  const _PlanCoachAvatar({required this.imagePath, required this.size});
+
+  final String imagePath;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        shape: BoxShape.circle,
+        border: Border.all(color: AppDesignTokens.brandBorder),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Image.asset(
+        imagePath,
+        fit: BoxFit.cover,
+        alignment: Alignment.topCenter,
       ),
     );
   }
@@ -473,15 +523,7 @@ class _PlanPriceBox extends StatelessWidget {
                 child: FittedBox(
                   fit: BoxFit.scaleDown,
                   alignment: Alignment.centerLeft,
-                  child: Text(
-                    price,
-                    maxLines: 1,
-                    style: GoogleFonts.notoSansKr(
-                      fontSize: 26,
-                      fontWeight: FontWeight.w900,
-                      color: AppDesignTokens.brandStrong,
-                    ),
-                  ),
+                  child: _PlanPriceText(price),
                 ),
               ),
               if (subPrice != null) ...[
@@ -535,6 +577,48 @@ class _PlanPriceBox extends StatelessWidget {
               ),
             );
           }),
+        ],
+      ),
+    );
+  }
+}
+
+class _PlanPriceText extends StatelessWidget {
+  const _PlanPriceText(this.price);
+
+  final String price;
+
+  @override
+  Widget build(BuildContext context) {
+    final unitStart = price.indexOf('원');
+    if (unitStart < 0) {
+      return Text(
+        price,
+        maxLines: 1,
+        style: GoogleFonts.notoSansKr(
+          fontSize: 30,
+          fontWeight: FontWeight.w900,
+          color: AppDesignTokens.brandStrong,
+        ),
+      );
+    }
+
+    return RichText(
+      maxLines: 1,
+      text: TextSpan(
+        style: GoogleFonts.notoSansKr(
+          color: AppDesignTokens.brandStrong,
+          fontWeight: FontWeight.w900,
+        ),
+        children: [
+          TextSpan(
+            text: price.substring(0, unitStart),
+            style: const TextStyle(fontSize: 30),
+          ),
+          TextSpan(
+            text: price.substring(unitStart),
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+          ),
         ],
       ),
     );
