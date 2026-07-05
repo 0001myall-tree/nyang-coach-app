@@ -6,7 +6,6 @@ import '../theme/app_design_tokens.dart';
 import 'app_bottom_sheet.dart';
 import 'app_button.dart';
 import 'app_card.dart';
-import 'app_chip.dart';
 
 Future<void> showPlanGuideBottomSheet(
   BuildContext context, {
@@ -57,7 +56,7 @@ class _PlanGuideBottomSheetState extends State<_PlanGuideBottomSheet> {
               onClose: () => Navigator.pop(context),
             ),
             Transform.translate(
-              offset: const Offset(0, -104),
+              offset: const Offset(0, -70),
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(
                   AppDesignTokens.sheetHorizontalPadding,
@@ -74,7 +73,6 @@ class _PlanGuideBottomSheetState extends State<_PlanGuideBottomSheet> {
                       subtitle: '실행코치와 동기부여 대화 및 플래너',
                       price: _isSixMonth ? '29,400원' : '5,900원 / 월',
                       originalPrice: _isSixMonth ? '35,400원' : null,
-                      badge: _isSixMonth ? '6개월 총액' : '매월 자동 결제',
                       subPrice: _isSixMonth ? '월 4,900원' : null,
                       isSelected: _selectedPlanId == 'friends',
                       onTap: () {
@@ -99,7 +97,6 @@ class _PlanGuideBottomSheetState extends State<_PlanGuideBottomSheet> {
                       subtitle: '비서 코치와 목표 달성을 더 촘촘하게 관리',
                       price: _isSixMonth ? '47,400원' : '8,900원 / 월',
                       originalPrice: _isSixMonth ? '53,400원' : null,
-                      badge: _isSixMonth ? '6개월 총액' : '매월 자동 결제',
                       subPrice: _isSixMonth ? '월 7,900원' : null,
                       isSelected: _selectedPlanId == 'master',
                       onTap: () {
@@ -170,7 +167,6 @@ class _PlanGuideHeader extends StatelessWidget {
       child: Stack(
         clipBehavior: Clip.none,
         children: [
-          // 고양이 배경 이미지 제거됨
           Positioned(
             top: 22,
             left: 0,
@@ -178,21 +174,6 @@ class _PlanGuideHeader extends StatelessWidget {
             child: Center(
               child: AppBottomSheetHandle(
                 color: Colors.white.withValues(alpha: 0.72),
-              ),
-            ),
-          ),
-          Positioned(
-            top: 44,
-            left: 88,
-            right: 88,
-            child: Center(
-              child: Text(
-                '구독 플랜',
-                style: GoogleFonts.notoSansKr(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w900,
-                  color: AppDesignTokens.brandStrong,
-                ),
               ),
             ),
           ),
@@ -217,9 +198,33 @@ class _PlanGuideHeader extends StatelessWidget {
             ),
           ),
           Positioned(
+            top: 72,
+            left: AppDesignTokens.sheetHorizontalPadding,
+            right: AppDesignTokens.sheetHorizontalPadding,
+            child: RichText(
+              textAlign: TextAlign.left,
+              text: TextSpan(
+                style: GoogleFonts.notoSansKr(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w900,
+                  color: const Color(0xFF2F2A44),
+                  height: 1.35,
+                ),
+                children: const [
+                  TextSpan(text: '나에게 맞는\n'),
+                  TextSpan(
+                    text: '구독 플랜',
+                    style: TextStyle(color: Color(0xFF8B7CFF)),
+                  ),
+                  TextSpan(text: '을 선택하세요'),
+                ],
+              ),
+            ),
+          ),
+          Positioned(
             left: 20,
             right: 20,
-            bottom: 104,
+            bottom: 82,
             child: _PlanPeriodTabs(
               isSixMonth: isSixMonth,
               onChanged: onChanged,
@@ -329,7 +334,6 @@ class _PlanGroup extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.price,
-    required this.badge,
     required this.features,
     required this.isSelected,
     required this.onTap,
@@ -341,7 +345,6 @@ class _PlanGroup extends StatelessWidget {
   final String title;
   final String subtitle;
   final String price;
-  final String badge;
   final List<(String, String)> features;
   final bool isSelected;
   final VoidCallback onTap;
@@ -414,7 +417,6 @@ class _PlanGroup extends StatelessWidget {
           ),
           const SizedBox(height: 14),
           _PlanPriceBox(
-            badge: badge,
             price: price,
             originalPrice: originalPrice,
             subPrice: subPrice,
@@ -428,14 +430,12 @@ class _PlanGroup extends StatelessWidget {
 
 class _PlanPriceBox extends StatelessWidget {
   const _PlanPriceBox({
-    required this.badge,
     required this.price,
     required this.features,
     this.originalPrice,
     this.subPrice,
   });
 
-  final String badge;
   final String price;
   final List<(String, String)> features;
   final String? originalPrice;
@@ -452,14 +452,6 @@ class _PlanPriceBox extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          AppChip(
-            label: badge,
-            selected: true,
-            borderColor: Colors.transparent,
-            selectedBackgroundColor: const Color(0xFFF3F0FF),
-            selectedForegroundColor: const Color(0xFF6D28D9),
-          ),
-          const SizedBox(height: 12),
           if (originalPrice != null) ...[
             Text(
               '정가 $originalPrice',
