@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../theme/app_design_tokens.dart';
@@ -80,8 +81,8 @@ class _PlanGuideBottomSheetState extends State<_PlanGuideBottomSheet> {
                         setState(() => _selectedPlanId = 'friends');
                       },
                       features: const [
-                        (Icons.check_circle_rounded, '실행코치와 동기부여 대화 및 플래너'),
-                        (Icons.auto_awesome_rounded, '말 한마디로 일정 추가'),
+                        ('assets/icons/circle-check.svg', '실행코치와 동기부여 대화 및 플래너'),
+                        ('assets/icons/wand-magic-sparkles.svg', '말 한마디로 일정 추가'),
                       ],
                     ),
                     const SizedBox(height: 14),
@@ -98,11 +99,11 @@ class _PlanGuideBottomSheetState extends State<_PlanGuideBottomSheet> {
                         setState(() => _selectedPlanId = 'master');
                       },
                       features: const [
-                        (Icons.check_circle_rounded, '비서 코치 이용'),
-                        (Icons.check_circle_rounded, '실행코치와 동기부여 대화 및 플래너'),
-                        (Icons.auto_awesome_rounded, '말 한마디로 일정 추가'),
-                        (Icons.check_circle_rounded, '지금 뭐하지?'),
-                        (Icons.check_circle_rounded, '주간 회고 & 우선순위 추천'),
+                        ('assets/icons/circle-check.svg', '비서 코치 이용'),
+                        ('assets/icons/circle-check.svg', '실행코치와 동기부여 대화 및 플래너'),
+                        ('assets/icons/wand-magic-sparkles.svg', '말 한마디로 일정 추가'),
+                        ('assets/icons/circle-check.svg', '지금 뭐하지?'),
+                        ('assets/icons/circle-check.svg', '주간 회고 & 우선순위 추천'),
                       ],
                     ),
                     const SizedBox(height: 14),
@@ -313,7 +314,7 @@ class _PlanGroup extends StatelessWidget {
   final String subtitle;
   final String price;
   final String badge;
-  final List<(IconData, String)> features;
+  final List<(String, String)> features;
   final bool isSelected;
   final VoidCallback onTap;
   final bool isMaster;
@@ -420,7 +421,7 @@ class _PlanPriceBox extends StatelessWidget {
 
   final String badge;
   final String price;
-  final List<(IconData, String)> features;
+  final List<(String, String)> features;
   final String? originalPrice;
   final String? subPrice;
 
@@ -501,7 +502,12 @@ class _PlanPriceBox extends StatelessWidget {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(feature.$1, size: 18, color: const Color(0xFFD8D2FF)),
+                  SvgPicture.asset(
+                    feature.$1,
+                    width: 16,
+                    height: 16,
+                    colorFilter: const ColorFilter.mode(Color(0xFFD8D2FF), BlendMode.srcIn),
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
