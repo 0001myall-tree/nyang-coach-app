@@ -989,6 +989,7 @@ class _TasksScreenState extends State<TasksScreen>
 
     return showDialog<Map<String, int>>(
       context: context,
+      barrierDismissible: false,
       builder: (ctx) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
