@@ -81,8 +81,14 @@ class _PlanGuideBottomSheetState extends State<_PlanGuideBottomSheet> {
                         setState(() => _selectedPlanId = 'friends');
                       },
                       features: const [
-                        ('assets/icons/circle-check.svg', '실행코치와 동기부여 대화 및 플래너'),
-                        ('assets/icons/wand-magic-sparkles.svg', '말 한마디로 일정 추가'),
+                        (
+                          'assets/icons/circle-check.svg',
+                          '실행코치와 동기부여 대화 및 플래너',
+                        ),
+                        (
+                          'assets/icons/wand-magic-sparkles.svg',
+                          '말 한마디로 일정 추가',
+                        ),
                       ],
                     ),
                     const SizedBox(height: 14),
@@ -100,10 +106,16 @@ class _PlanGuideBottomSheetState extends State<_PlanGuideBottomSheet> {
                       },
                       features: const [
                         ('assets/icons/circle-check.svg', '비서 코치 이용'),
-                        ('assets/icons/circle-check.svg', '실행코치와 동기부여 대화 및 플래너'),
-                        ('assets/icons/wand-magic-sparkles.svg', '말 한마디로 일정 추가'),
-                        ('assets/icons/circle-check.svg', '지금 뭐하지?'),
-                        ('assets/icons/circle-check.svg', '주간 회고 & 우선순위 추천'),
+                        (
+                          'assets/icons/circle-check.svg',
+                          '실행코치와 동기부여 대화 및 플래너',
+                        ),
+                        (
+                          'assets/icons/wand-magic-sparkles.svg',
+                          '말 한마디로 일정 추가',
+                        ),
+                        ('assets/icons/thumbtack.svg', '미루는 항목 집중 관리'),
+                        ('assets/icons/route.svg', '장기 목표 조력'),
                       ],
                     ),
                     const SizedBox(height: 14),
@@ -506,7 +518,10 @@ class _PlanPriceBox extends StatelessWidget {
                     feature.$1,
                     width: 16,
                     height: 16,
-                    colorFilter: const ColorFilter.mode(Color(0xFFD8D2FF), BlendMode.srcIn),
+                    colorFilter: const ColorFilter.mode(
+                      Color(0xFFD8D2FF),
+                      BlendMode.srcIn,
+                    ),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
