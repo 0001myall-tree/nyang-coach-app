@@ -81,7 +81,7 @@ class _PlanGuideBottomSheetState extends State<_PlanGuideBottomSheet> {
                       },
                       features: const [
                         (Icons.check_circle_rounded, '실행코치와 동기부여 대화 및 플래너'),
-                        (Icons.check_circle_rounded, '말 한마디로 일정 추가'),
+                        (Icons.auto_awesome_rounded, '말 한마디로 일정 추가'),
                       ],
                     ),
                     const SizedBox(height: 14),
@@ -100,7 +100,7 @@ class _PlanGuideBottomSheetState extends State<_PlanGuideBottomSheet> {
                       features: const [
                         (Icons.check_circle_rounded, '비서 코치 이용'),
                         (Icons.check_circle_rounded, '실행코치와 동기부여 대화 및 플래너'),
-                        (Icons.check_circle_rounded, '말 한마디로 일정 추가'),
+                        (Icons.auto_awesome_rounded, '말 한마디로 일정 추가'),
                         (Icons.check_circle_rounded, '지금 뭐하지?'),
                         (Icons.check_circle_rounded, '주간 회고 & 우선순위 추천'),
                       ],
