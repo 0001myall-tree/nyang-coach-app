@@ -1617,7 +1617,7 @@ class _ChatScreenState extends State<ChatScreen>
                             _buildAboutSpeaker(
                               'cat',
                               '냥냥코치',
-                              '그래서 냥냥코치가 태어났다냥!\n\n우리는 여러분이 다시 움직일 수 있도록 함께하는 코치들이다냥.\n특히 우리 프렌즈 코치들은...',
+                              '그래서 냥냥코치가 왔다냥!\n\n우리는 여러분이 다시 움직일 수 있도록 함께하는 코치들이다냥.\n특히 우리 프렌즈 코치들은...',
                             ),
                             _buildAboutSpeaker(
                               'boyfriend',
