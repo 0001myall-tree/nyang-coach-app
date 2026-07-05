@@ -141,7 +141,11 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
                   padding: const EdgeInsets.fromLTRB(20, 20, 16, 12),
                   child: Row(
                     children: [
-                      const Icon(Icons.rocket_launch_rounded, color: Color(0xFFD8D2FF), size: 22),
+                      const Icon(
+                        Icons.rocket_launch_rounded,
+                        color: Color(0xFFD8D2FF),
+                        size: 22,
+                      ),
                       const SizedBox(width: 8),
                       Text(
                         '실행코치 소개',
@@ -353,7 +357,6 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
       ),
     );
   }
-
 
   void _showDebugPlanSelector() {
     showDialog(
@@ -633,7 +636,9 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
 
   void _showCoachCarouselModal(int initialIndex) {
     final activeCoaches = [..._friendsCoaches, ..._masterCoaches];
-    final combinedIndex = _currentTab == CoachTab.master ? _friendsCoaches.length + initialIndex : initialIndex;
+    final combinedIndex = _currentTab == CoachTab.master
+        ? _friendsCoaches.length + initialIndex
+        : initialIndex;
 
     showGeneralDialog(
       context: context,
@@ -642,12 +647,14 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
       barrierColor: Colors.black.withOpacity(0.4),
       transitionDuration: const Duration(milliseconds: 300),
       pageBuilder: (context, animation, secondaryAnimation) {
-        final pageController = PageController(initialPage: combinedIndex, viewportFraction: 0.85);
+        final pageController = PageController(
+          initialPage: combinedIndex,
+          viewportFraction: 0.85,
+        );
         int currentPage = combinedIndex;
 
         return StatefulBuilder(
           builder: (context, setModalState) {
-
             return Material(
               color: Colors.transparent,
               child: BackdropFilter(
@@ -660,11 +667,15 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
                         top: 16,
                         right: 16,
                         child: IconButton(
-                          icon: const Icon(Icons.close_rounded, color: Colors.white, size: 32),
+                          icon: const Icon(
+                            Icons.close_rounded,
+                            color: Colors.white,
+                            size: 32,
+                          ),
                           onPressed: () => Navigator.pop(context),
                         ),
                       ),
-                      
+
                       // Carousel
                       Center(
                         child: SizedBox(
@@ -679,11 +690,18 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
                             itemCount: activeCoaches.length,
                             itemBuilder: (context, index) {
                               final coach = activeCoaches[index];
-                              final isLocked = !_userData.canAccessCoach(coach['id']);
+                              final isLocked = !_userData.canAccessCoach(
+                                coach['id'],
+                              );
                               final planActive = _userData.isPlanActive;
-                              final isFriendsCoach = !['sec_male', 'sec_female'].contains(coach['id']);
+                              final isFriendsCoach = ![
+                                'sec_male',
+                                'sec_female',
+                              ].contains(coach['id']);
                               final alreadyOwned = !isLocked;
-                              final description = (coach['description'] as String?)?.trim() ?? '';
+                              final description =
+                                  (coach['description'] as String?)?.trim() ??
+                                  '';
 
                               // Scale animation for non-focused pages
                               return AnimatedBuilder(
@@ -692,7 +710,10 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
                                   double value = 1.0;
                                   if (pageController.position.haveDimensions) {
                                     value = pageController.page! - index;
-                                    value = (1 - (value.abs() * 0.15)).clamp(0.85, 1.0);
+                                    value = (1 - (value.abs() * 0.15)).clamp(
+                                      0.85,
+                                      1.0,
+                                    );
                                   } else if (index != currentPage) {
                                     value = 0.85;
                                   }
@@ -702,7 +723,10 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
                                   );
                                 },
                                 child: Container(
-                                  margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 20),
+                                  margin: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 20,
+                                  ),
                                   decoration: BoxDecoration(
                                     color: Colors.white,
                                     borderRadius: BorderRadius.circular(24),
@@ -717,7 +741,8 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
                                   child: ClipRRect(
                                     borderRadius: BorderRadius.circular(24),
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.stretch,
                                       children: [
                                         // Image section
                                         Expanded(
@@ -735,51 +760,107 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
                                                   top: 16,
                                                   right: 16,
                                                   child: Row(
-                                                    mainAxisSize: MainAxisSize.min,
+                                                    mainAxisSize:
+                                                        MainAxisSize.min,
                                                     children: [
                                                       if (!isFriendsCoach)
                                                         const Padding(
-                                                          padding: EdgeInsets.only(right: 6),
+                                                          padding:
+                                                              EdgeInsets.only(
+                                                                right: 6,
+                                                              ),
                                                           child: Text(
                                                             'MASTER',
                                                             style: TextStyle(
-                                                              color: Colors.white,
-                                                              fontWeight: FontWeight.w700,
+                                                              color:
+                                                                  Colors.white,
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .w700,
                                                               fontSize: 12,
-                                                              letterSpacing: 1.2,
+                                                              letterSpacing:
+                                                                  1.2,
                                                               shadows: [
-                                                                Shadow(color: Colors.black54, blurRadius: 4, offset: Offset(0, 1)),
+                                                                Shadow(
+                                                                  color: Colors
+                                                                      .black54,
+                                                                  blurRadius: 4,
+                                                                  offset:
+                                                                      Offset(
+                                                                        0,
+                                                                        1,
+                                                                      ),
+                                                                ),
                                                               ],
                                                             ),
                                                           ),
                                                         ),
                                                       Container(
-                                                        padding: const EdgeInsets.all(8),
-                                                        decoration: BoxDecoration(
-                                                          color: Colors.white.withOpacity(0.8),
-                                                          shape: BoxShape.circle,
+                                                        padding:
+                                                            const EdgeInsets.all(
+                                                              8,
+                                                            ),
+                                                        decoration:
+                                                            BoxDecoration(
+                                                              color: Colors
+                                                                  .white
+                                                                  .withOpacity(
+                                                                    0.8,
+                                                                  ),
+                                                              shape: BoxShape
+                                                                  .circle,
+                                                            ),
+                                                        child: const Icon(
+                                                          Icons.lock,
+                                                          color: AppDesignTokens
+                                                              .textPrimary,
+                                                          size: 20,
                                                         ),
-                                                        child: const Icon(Icons.lock, color: AppDesignTokens.textPrimary, size: 20),
                                                       ),
                                                     ],
                                                   ),
                                                 ),
-                                              if (alreadyOwned && coach['id'] != 'cat')
+                                              if (alreadyOwned &&
+                                                  coach['id'] != 'cat')
                                                 Positioned(
                                                   top: 16,
                                                   right: 16,
                                                   child: Container(
-                                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                                    padding:
+                                                        const EdgeInsets.symmetric(
+                                                          horizontal: 10,
+                                                          vertical: 6,
+                                                        ),
                                                     decoration: BoxDecoration(
-                                                      color: Colors.white.withOpacity(0.95),
-                                                      borderRadius: BorderRadius.circular(12),
+                                                      color: Colors.white
+                                                          .withOpacity(0.95),
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            12,
+                                                          ),
                                                     ),
                                                     child: Row(
-                                                      mainAxisSize: MainAxisSize.min,
+                                                      mainAxisSize:
+                                                          MainAxisSize.min,
                                                       children: [
-                                                        const Icon(Icons.check, size: 14, color: _coachMintText),
-                                                        const SizedBox(width: 4),
-                                                        Text('보유', style: GoogleFonts.notoSansKr(fontSize: 12, fontWeight: FontWeight.w800, color: _coachMintText)),
+                                                        const Icon(
+                                                          Icons.check,
+                                                          size: 14,
+                                                          color: _coachMintText,
+                                                        ),
+                                                        const SizedBox(
+                                                          width: 4,
+                                                        ),
+                                                        Text(
+                                                          '보유',
+                                                          style: GoogleFonts.notoSansKr(
+                                                            fontSize: 12,
+                                                            fontWeight:
+                                                                FontWeight.w800,
+                                                            color:
+                                                                _coachMintText,
+                                                          ),
+                                                        ),
                                                       ],
                                                     ),
                                                   ),
@@ -787,123 +868,235 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
                                             ],
                                           ),
                                         ),
-                                        
+
                                         // Info section
                                         Expanded(
                                           flex: 4,
                                           child: Padding(
                                             padding: const EdgeInsets.all(20),
                                             child: Column(
-                                              mainAxisAlignment: MainAxisAlignment.center,
+                                              mainAxisAlignment:
+                                                  MainAxisAlignment.center,
                                               children: [
                                                 Text(
                                                   coach['name'],
-                                                  style: GoogleFonts.notoSansKr(fontSize: 24, fontWeight: FontWeight.w900, color: AppDesignTokens.textPrimary),
+                                                  style: GoogleFonts.notoSansKr(
+                                                    fontSize: 24,
+                                                    fontWeight: FontWeight.w900,
+                                                    color: AppDesignTokens
+                                                        .textPrimary,
+                                                  ),
                                                 ),
                                                 const SizedBox(height: 4),
                                                 Text(
                                                   coach['subtitle'],
-                                                  style: GoogleFonts.notoSansKr(fontSize: 14, fontWeight: FontWeight.w600, color: const Color(0xFF8B7CFF)),
+                                                  style: GoogleFonts.notoSansKr(
+                                                    fontSize: 14,
+                                                    fontWeight: FontWeight.w600,
+                                                    color: const Color(
+                                                      0xFF8B7CFF,
+                                                    ),
+                                                  ),
                                                 ),
                                                 const SizedBox(height: 16),
-                                                if (coach.containsKey('tags') && coach['tags'] != null)
+                                                if (coach.containsKey('tags') &&
+                                                    coach['tags'] != null)
                                                   Wrap(
-                                                    alignment: WrapAlignment.center,
+                                                    alignment:
+                                                        WrapAlignment.center,
                                                     spacing: 8,
                                                     runSpacing: 8,
-                                                    children: (coach['tags'] as List<Map<String, dynamic>>).map((tag) {
-                                                      return Container(
-                                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                                        decoration: BoxDecoration(
-                                                          color: Colors.white,
-                                                          borderRadius: BorderRadius.circular(20),
-                                                          border: Border.all(color: const Color(0xFFE2D8FF)),
-                                                        ),
-                                                        child: Row(
-                                                          mainAxisSize: MainAxisSize.min,
-                                                          children: [
-                                                            if (tag.containsKey('svgPath'))
-                                                              SvgPicture.asset(
-                                                                tag['svgPath'] as String,
-                                                                width: 14,
-                                                                height: 14,
-                                                                colorFilter: const ColorFilter.mode(Color(0xFF8B7CFF), BlendMode.srcIn),
-                                                              )
-                                                            else
-                                                              Icon(tag['icon'] as IconData, size: 14, color: const Color(0xFF8B7CFF)),
-                                                            const SizedBox(width: 4),
-                                                            Text(
-                                                              tag['text'] as String,
-                                                              style: GoogleFonts.notoSansKr(
-                                                                fontSize: 12,
-                                                                fontWeight: FontWeight.w600,
-                                                                color: const Color(0xFF8B7CFF),
-                                                              ),
-                                                            ),
-                                                          ],
-                                                        ),
-                                                      );
-                                                    }).toList(),
+                                                    children:
+                                                        (coach['tags']
+                                                                as List<
+                                                                  Map<
+                                                                    String,
+                                                                    dynamic
+                                                                  >
+                                                                >)
+                                                            .map((tag) {
+                                                              return Container(
+                                                                padding:
+                                                                    const EdgeInsets.symmetric(
+                                                                      horizontal:
+                                                                          10,
+                                                                      vertical:
+                                                                          6,
+                                                                    ),
+                                                                decoration: BoxDecoration(
+                                                                  color: Colors
+                                                                      .white,
+                                                                  borderRadius:
+                                                                      BorderRadius.circular(
+                                                                        20,
+                                                                      ),
+                                                                  border: Border.all(
+                                                                    color: const Color(
+                                                                      0xFFE2D8FF,
+                                                                    ),
+                                                                  ),
+                                                                ),
+                                                                child: Row(
+                                                                  mainAxisSize:
+                                                                      MainAxisSize
+                                                                          .min,
+                                                                  children: [
+                                                                    if (tag.containsKey(
+                                                                      'svgPath',
+                                                                    ))
+                                                                      SvgPicture.asset(
+                                                                        tag['svgPath']
+                                                                            as String,
+                                                                        width:
+                                                                            14,
+                                                                        height:
+                                                                            14,
+                                                                        colorFilter: const ColorFilter.mode(
+                                                                          Color(
+                                                                            0xFF8B7CFF,
+                                                                          ),
+                                                                          BlendMode
+                                                                              .srcIn,
+                                                                        ),
+                                                                      )
+                                                                    else
+                                                                      Icon(
+                                                                        tag['icon']
+                                                                            as IconData,
+                                                                        size:
+                                                                            14,
+                                                                        color: const Color(
+                                                                          0xFF8B7CFF,
+                                                                        ),
+                                                                      ),
+                                                                    const SizedBox(
+                                                                      width: 4,
+                                                                    ),
+                                                                    Text(
+                                                                      tag['text']
+                                                                          as String,
+                                                                      style: GoogleFonts.notoSansKr(
+                                                                        fontSize:
+                                                                            12,
+                                                                        fontWeight:
+                                                                            FontWeight.w600,
+                                                                        color: const Color(
+                                                                          0xFF8B7CFF,
+                                                                        ),
+                                                                      ),
+                                                                    ),
+                                                                  ],
+                                                                ),
+                                                              );
+                                                            })
+                                                            .toList(),
                                                   )
                                                 else if (description.isNotEmpty)
                                                   Text(
                                                     description,
                                                     textAlign: TextAlign.center,
-                                                    style: GoogleFonts.notoSansKr(fontSize: 14, fontWeight: FontWeight.w500, color: AppDesignTokens.textSecondary, height: 1.5),
+                                                    style:
+                                                        GoogleFonts.notoSansKr(
+                                                          fontSize: 14,
+                                                          fontWeight:
+                                                              FontWeight.w500,
+                                                          color: AppDesignTokens
+                                                              .textSecondary,
+                                                          height: 1.5,
+                                                        ),
                                                   )
-                                                else if (isLocked && isFriendsCoach && !planActive)
+                                                else if (isLocked &&
+                                                    isFriendsCoach &&
+                                                    !planActive)
                                                   Text(
                                                     '따뜻하게 다가오는 코치에요.\n지친 하루 끝에, 당신을 다정하게 챙겨줍니다.',
                                                     textAlign: TextAlign.center,
-                                                    style: GoogleFonts.notoSansKr(fontSize: 14, fontWeight: FontWeight.w500, color: AppDesignTokens.textSecondary, height: 1.5),
+                                                    style:
+                                                        GoogleFonts.notoSansKr(
+                                                          fontSize: 14,
+                                                          fontWeight:
+                                                              FontWeight.w500,
+                                                          color: AppDesignTokens
+                                                              .textSecondary,
+                                                          height: 1.5,
+                                                        ),
                                                   ),
-                                                
+
                                                 const Spacer(),
-                                                
+
                                                 if (isLocked)
                                                   AppButton(
-                                                    label: !planActive ? '구독 안내 보기' : (isFriendsCoach ? '1년 이용 / 2,900원' : '플랜 업그레이드'),
+                                                    label: !planActive
+                                                        ? '구독 안내 보기'
+                                                        : (isFriendsCoach
+                                                              ? '1년 이용 / 2,900원'
+                                                              : '플랜 업그레이드'),
                                                     onPressed: () {
-                                                      Navigator.pop(context);
-                                                      if (kDebugMode) {
-                                                        _purchaseCoach(context, coach);
-                                                      } else if (!planActive || !isFriendsCoach) {
+                                                      if (!planActive ||
+                                                          !isFriendsCoach) {
+                                                        Navigator.pop(context);
                                                         _showPlanGuidePlaceholder();
                                                       } else {
-                                                        ScaffoldMessenger.of(context).showSnackBar(
-                                                          SnackBar(
-                                                            content: Text('${coach['name']} 개별 결제 기능은 준비 중입니다.'),
-                                                            backgroundColor: const Color(0xFF1A1A2E),
-                                                            behavior: SnackBarBehavior.floating,
-                                                          ),
+                                                        _purchaseCoach(
+                                                          context,
+                                                          coach,
                                                         );
                                                       }
                                                     },
-                                                    backgroundColor: AppDesignTokens.brandAccent,
+                                                    backgroundColor:
+                                                        AppDesignTokens
+                                                            .brandAccent,
                                                   )
                                                 else
                                                   AppButton(
                                                     label: '이 코치 선택하기',
                                                     onPressed: () async {
-                                                      await UserDataService.setSelectedCoach(coach['id']);
+                                                      await UserDataService.setSelectedCoach(
+                                                        coach['id'],
+                                                      );
                                                       if (!mounted) return;
                                                       setState(() {
-                                                        _selectedCoachId = coach['id'];
+                                                        _selectedCoachId =
+                                                            coach['id'];
                                                       });
                                                       Navigator.pop(context);
                                                       Navigator.pushReplacement(
                                                         context,
                                                         PageRouteBuilder(
-                                                          pageBuilder: (_, __, ___) => MainTabScreen(coachId: coach['id']),
-                                                          transitionsBuilder: (_, animation, __, child) {
-                                                            return FadeTransition(opacity: animation, child: child);
-                                                          },
-                                                          transitionDuration: const Duration(milliseconds: 300),
+                                                          pageBuilder:
+                                                              (
+                                                                _,
+                                                                __,
+                                                                ___,
+                                                              ) => MainTabScreen(
+                                                                coachId:
+                                                                    coach['id'],
+                                                              ),
+                                                          transitionsBuilder:
+                                                              (
+                                                                _,
+                                                                animation,
+                                                                __,
+                                                                child,
+                                                              ) {
+                                                                return FadeTransition(
+                                                                  opacity:
+                                                                      animation,
+                                                                  child: child,
+                                                                );
+                                                              },
+                                                          transitionDuration:
+                                                              const Duration(
+                                                                milliseconds:
+                                                                    300,
+                                                              ),
                                                         ),
                                                       );
                                                     },
-                                                    backgroundColor: const Color(0xFF8B7CFF),
-                                                    foregroundColor: Colors.white,
+                                                    backgroundColor:
+                                                        const Color(0xFF8B7CFF),
+                                                    foregroundColor:
+                                                        Colors.white,
                                                   ),
                                               ],
                                             ),
@@ -918,35 +1111,49 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
                           ),
                         ),
                       ),
-                      
+
                       // Left arrow
                       Positioned(
                         left: 10,
                         top: MediaQuery.of(context).size.height * 0.35,
                         child: IconButton(
-                          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 28),
+                          icon: const Icon(
+                            Icons.arrow_back_ios_new_rounded,
+                            color: Colors.white,
+                            size: 28,
+                          ),
                           onPressed: () {
                             if (currentPage > 0) {
-                              pageController.previousPage(duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
+                              pageController.previousPage(
+                                duration: const Duration(milliseconds: 300),
+                                curve: Curves.easeInOut,
+                              );
                             }
                           },
                         ),
                       ),
-                      
+
                       // Right arrow
                       Positioned(
                         right: 10,
                         top: MediaQuery.of(context).size.height * 0.35,
                         child: IconButton(
-                          icon: const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white, size: 28),
+                          icon: const Icon(
+                            Icons.arrow_forward_ios_rounded,
+                            color: Colors.white,
+                            size: 28,
+                          ),
                           onPressed: () {
                             if (currentPage < activeCoaches.length - 1) {
-                              pageController.nextPage(duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
+                              pageController.nextPage(
+                                duration: const Duration(milliseconds: 300),
+                                curve: Curves.easeInOut,
+                              );
                             }
                           },
                         ),
                       ),
-                      
+
                       // Page indicators
                       Positioned(
                         bottom: MediaQuery.of(context).size.height * 0.1,
@@ -954,7 +1161,9 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
                         right: 0,
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
-                          children: List.generate(activeCoaches.length, (index) {
+                          children: List.generate(activeCoaches.length, (
+                            index,
+                          ) {
                             return AnimatedContainer(
                               duration: const Duration(milliseconds: 200),
                               margin: const EdgeInsets.symmetric(horizontal: 4),
@@ -962,7 +1171,9 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
                               height: currentPage == index ? 10 : 8,
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
-                                color: currentPage == index ? Colors.white : Colors.white.withOpacity(0.4),
+                                color: currentPage == index
+                                    ? Colors.white
+                                    : Colors.white.withOpacity(0.4),
                               ),
                             );
                           }),
@@ -1087,8 +1298,6 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
                 ),
               ),
 
-
-
               // 카드 그리드 영역
               Expanded(
                 child: GridView.builder(
@@ -1139,146 +1348,154 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
                               ),
                           ],
                           child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          // 상단 이미지
-                          Expanded(
-                            flex: 65,
-                            child: ClipRRect(
-                              borderRadius: const BorderRadius.vertical(
-                                top: Radius.circular(22),
-                              ),
-                              child: Stack(
-                                fit: StackFit.expand,
-                                children: [
-                                  Image.asset(
-                                    coach['image'],
-                                    fit: BoxFit.cover,
-                                    alignment: Alignment.topCenter,
-                                    color: isLocked
-                                        ? Colors.black.withValues(alpha: 0.3)
-                                        : null,
-                                    colorBlendMode: isLocked
-                                        ? BlendMode.darken
-                                        : null,
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              // 상단 이미지
+                              Expanded(
+                                flex: 65,
+                                child: ClipRRect(
+                                  borderRadius: const BorderRadius.vertical(
+                                    top: Radius.circular(22),
                                   ),
+                                  child: Stack(
+                                    fit: StackFit.expand,
+                                    children: [
+                                      Image.asset(
+                                        coach['image'],
+                                        fit: BoxFit.cover,
+                                        alignment: Alignment.topCenter,
+                                        color: isLocked
+                                            ? Colors.black.withValues(
+                                                alpha: 0.3,
+                                              )
+                                            : null,
+                                        colorBlendMode: isLocked
+                                            ? BlendMode.darken
+                                            : null,
+                                      ),
 
-                                  if (isLocked)
-                                    Positioned(
-                                      top: 10,
-                                      right: 10,
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          if (_currentTab == CoachTab.master)
-                                            const Padding(
-                                              padding: EdgeInsets.only(right: 4),
-                                              child: Text(
-                                                'MASTER',
-                                                style: TextStyle(
-                                                  color: Colors.white,
-                                                  fontWeight: FontWeight.w700,
-                                                  fontSize: 11,
-                                                  letterSpacing: 1.2,
+                                      if (isLocked)
+                                        Positioned(
+                                          top: 10,
+                                          right: 10,
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              if (_currentTab ==
+                                                  CoachTab.master)
+                                                const Padding(
+                                                  padding: EdgeInsets.only(
+                                                    right: 4,
+                                                  ),
+                                                  child: Text(
+                                                    'MASTER',
+                                                    style: TextStyle(
+                                                      color: Colors.white,
+                                                      fontWeight:
+                                                          FontWeight.w700,
+                                                      fontSize: 11,
+                                                      letterSpacing: 1.2,
+                                                    ),
+                                                  ),
                                                 ),
+                                              const Icon(
+                                                Icons.lock,
+                                                color: Colors.white,
+                                                size: 20,
                                               ),
-                                            ),
-                                          const Icon(
-                                            Icons.lock,
-                                            color: Colors.white,
-                                            size: 20,
+                                            ],
                                           ),
-                                        ],
-                                      ),
-                                    ),
-                                  if (hasFullAccess)
-                                    Positioned(
-                                      top: 10,
-                                      right: 10,
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 6,
-                                          vertical: 3,
                                         ),
-                                        decoration: BoxDecoration(
-                                          color: Colors.white.withValues(alpha: 0.95),
-                                          borderRadius: BorderRadius.circular(8),
-                                        ),
-                                        child: Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            const Icon(
-                                              Icons.check,
-                                              size: 11,
-                                              color: _coachMintText,
+                                      if (hasFullAccess)
+                                        Positioned(
+                                          top: 10,
+                                          right: 10,
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 6,
+                                              vertical: 3,
                                             ),
-                                            const SizedBox(width: 2),
-                                            Text(
-                                              '보유',
-                                              style: GoogleFonts.notoSansKr(
-                                                fontSize: 10,
-                                                fontWeight: FontWeight.w800,
-                                                color: _coachMintText,
+                                            decoration: BoxDecoration(
+                                              color: Colors.white.withValues(
+                                                alpha: 0.95,
                                               ),
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
                                             ),
-                                          ],
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                const Icon(
+                                                  Icons.check,
+                                                  size: 11,
+                                                  color: _coachMintText,
+                                                ),
+                                                const SizedBox(width: 2),
+                                                Text(
+                                                  '보유',
+                                                  style: GoogleFonts.notoSansKr(
+                                                    fontSize: 10,
+                                                    fontWeight: FontWeight.w800,
+                                                    color: _coachMintText,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              // 하단 텍스트
+                              Expanded(
+                                flex: 35,
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 12,
+                                  ),
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Text(
+                                        coach['name'],
+                                        style: GoogleFonts.notoSansKr(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w900,
+                                          color: AppDesignTokens.textPrimary,
                                         ),
                                       ),
-                                    ),
-                                ],
-                              ),
-                            ),
-                          ),
-                          // 하단 텍스트
-                          Expanded(
-                            flex: 35,
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 12,
-                              ),
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Text(
-                                    coach['name'],
-                                    style: GoogleFonts.notoSansKr(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w900,
-                                      color: AppDesignTokens.textPrimary,
-                                    ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        coach['subtitle'],
+                                        textAlign: TextAlign.center,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: GoogleFonts.notoSansKr(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w500,
+                                          color: AppDesignTokens.textSecondary,
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    coach['subtitle'],
-                                    textAlign: TextAlign.center,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: GoogleFonts.notoSansKr(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w500,
-                                      color: AppDesignTokens.textSecondary,
-                                    ),
-                                  ),
-                                ],
+                                ),
                               ),
-                            ),
+                            ],
                           ),
-                        ],
+                        ),
                       ),
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
+                    );
+                  },
+                ),
+              ),
             ],
           ),
         ),
       ),
     );
   }
-
 
   Widget _buildTabButton({
     required CoachTab tab,
@@ -1313,7 +1530,9 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
           style: GoogleFonts.notoSansKr(
             fontSize: 14,
             fontWeight: FontWeight.w800,
-            color: isSelected ? const Color(0xFF8B7CFF) : AppDesignTokens.textDisabled,
+            color: isSelected
+                ? const Color(0xFF8B7CFF)
+                : AppDesignTokens.textDisabled,
           ),
         ),
       ),
