@@ -70,7 +70,7 @@ class _PlanGuideBottomSheetState extends State<_PlanGuideBottomSheet> {
                     _PlanGroup(
                       isMaster: false,
                       title: '프렌즈 플랜',
-                      subtitle: '냥냥 코치와 함께하는 일상 대화와 플래너',
+                      subtitle: '실행 코치와 대화 및 플래너 기능',
                       price: _isSixMonth ? '29,400원' : '5,900원 / 월',
                       originalPrice: _isSixMonth ? '35,400원' : null,
                       badge: _isSixMonth ? '6개월 총액' : '매월 자동 결제',
@@ -80,8 +80,7 @@ class _PlanGuideBottomSheetState extends State<_PlanGuideBottomSheet> {
                         setState(() => _selectedPlanId = 'friends');
                       },
                       features: const [
-                        ('🐱', '냥냥 코치 이용'),
-                        ('🌱', '일상 대화 및 플래너 기능'),
+                        (Icons.check_circle_rounded, '실행 코치와 대화 및 플래너 기능'),
                       ],
                     ),
                     const SizedBox(height: 14),
@@ -98,11 +97,10 @@ class _PlanGuideBottomSheetState extends State<_PlanGuideBottomSheet> {
                         setState(() => _selectedPlanId = 'master');
                       },
                       features: const [
-                        ('🐱', '냥냥 코치 이용'),
-                        ('💼', '비서 코치 이용'),
-                        ('🌱', '일상 대화 및 플래너 기능'),
-                        ('⚡', '지금 뭐하지?'),
-                        ('⭐', '주간 회고 & 우선순위 추천'),
+                        (Icons.check_circle_rounded, '비서 코치 이용'),
+                        (Icons.check_circle_rounded, '실행 코치와 대화 및 플래너 기능'),
+                        (Icons.check_circle_rounded, '지금 뭐하지?'),
+                        (Icons.check_circle_rounded, '주간 회고 & 우선순위 추천'),
                       ],
                     ),
                     const SizedBox(height: 14),
@@ -156,14 +154,7 @@ class _PlanGuideHeader extends StatelessWidget {
       child: Stack(
         clipBehavior: Clip.none,
         children: [
-          Positioned.fill(
-            bottom: 48,
-            child: Image.asset(
-              'assets/images/subscription_plan_header.png',
-              fit: BoxFit.cover,
-              alignment: Alignment.topCenter,
-            ),
-          ),
+          // 고양이 배경 이미지 제거됨
           Positioned(
             top: 22,
             left: 0,
@@ -320,7 +311,7 @@ class _PlanGroup extends StatelessWidget {
   final String subtitle;
   final String price;
   final String badge;
-  final List<(String, String)> features;
+  final List<(IconData, String)> features;
   final bool isSelected;
   final VoidCallback onTap;
   final bool isMaster;
@@ -427,7 +418,7 @@ class _PlanPriceBox extends StatelessWidget {
 
   final String badge;
   final String price;
-  final List<(String, String)> features;
+  final List<(IconData, String)> features;
   final String? originalPrice;
   final String? subPrice;
 
@@ -446,6 +437,8 @@ class _PlanPriceBox extends StatelessWidget {
             label: badge,
             selected: true,
             borderColor: Colors.transparent,
+            selectedBackgroundColor: const Color(0xFFF3F0FF),
+            selectedForegroundColor: const Color(0xFF6D28D9),
           ),
           const SizedBox(height: 12),
           if (originalPrice != null) ...[
@@ -506,7 +499,7 @@ class _PlanPriceBox extends StatelessWidget {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(feature.$1, style: const TextStyle(fontSize: 16)),
+                  Icon(feature.$1, size: 18, color: const Color(0xFFD8D2FF)),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
