@@ -20,6 +20,7 @@ import 'package:nyang_coach/services/api_usage_limit_service.dart';
 import 'package:nyang_coach/services/tasks_sync_service.dart';
 import 'package:nyang_coach/services/user_title_service.dart';
 import 'package:nyang_coach/services/daily_reset_service.dart';
+import 'package:nyang_coach/services/cognitive_optimize_service.dart';
 import 'coach_config.dart';
 import 'focus_timer_widget.dart';
 import '../models/user_data.dart';
@@ -364,6 +365,10 @@ class ChatScreenController {
     _state?._checkBedtimeMoveOffer();
   }
 
+  void checkCognitiveOptimizeOffer() {
+    _state?._checkCognitiveOptimizeOffer();
+  }
+
   /// 채팅 상단의 오늘 목표 진행률을 최신 할 일 데이터로 갱신합니다.
   void refreshTaskProgress() {
     _state?._loadTaskProgress();
@@ -471,6 +476,9 @@ class _ChatScreenState extends State<ChatScreen>
     await _loadHistoryAndGreet();
     await _restoreActiveFocusTimer();
     await _checkBedtimeMoveOffer();
+    // 앱을 완전히 종료했다가 새로 켠 경우(콜드 스타트)는 main_tab_screen.dart의
+    // didChangeAppLifecycleState(resumed)가 아예 안 불리므로, 여기서 한 번 더 체크한다.
+    await _checkCognitiveOptimizeOffer();
     _initSpeech();
   }
 
@@ -1200,6 +1208,62 @@ class _ChatScreenState extends State<ChatScreen>
       _messages.add(
         ChatMessage(text: msg, isUser: false, time: DateTime.now()),
       );
+    });
+    await _saveHistory();
+    _scrollToBottom();
+  }
+
+  // ── 인지 에너지 최적화 제안 (마스터 코치 전용) ──────────────
+  // 할일 서랍을 닫을 때(카드를 탭했든 그냥 닫았든) 또는 앱 재개 시 호출된다.
+  // tasks_screen.dart의 발동 조건(_cognitiveOptimizeAvailable)과 동일한 판정식을
+  // nyang_tasks(raw JSON)를 직접 읽어 재구현한다 — 서랍이 닫히면 TasksScreen과
+  // 그 State는 이미 dispose된 뒤라 그쪽 상태에 접근할 수 없기 때문이다.
+  Future<void> _checkCognitiveOptimizeOffer() async {
+    if (!_coach.isMaster) return;
+
+    final prefs = await SharedPreferences.getInstance();
+
+    // 카드의 "나중에 할게요"와 같은 키를 공유해서, 한쪽에서 닫으면 양쪽 다 조용해진다.
+    final dismissUntilStr = prefs.getString(
+      'nyang_cognitive_optimize_dismiss_until',
+    );
+    if (dismissUntilStr != null) {
+      final dismissUntil = DateTime.tryParse(dismissUntilStr);
+      if (dismissUntil != null && DateTime.now().isBefore(dismissUntil)) {
+        return;
+      }
+    }
+
+    final tasksRaw = prefs.getString('nyang_tasks');
+    if (!CognitiveOptimizeService.isEligible(tasksRaw)) return;
+
+    // 남비서는 정중한 "-습니다" 톤(여성적 말투/"~해볼까요" 금지), 여비서는 다정한
+    // "-어요" 톤 — coach_config.dart의 각 페르소나 systemPrompt 지침과 맞춘다.
+    final templates = widget.coachId == 'sec_male'
+        ? [
+            '대표님, 드릴 말씀이 있습니다. 오늘 일정을 뇌 에너지 기준으로 정리해 드릴까요?',
+            '대표님, 오늘 할 일이 꽤 있으신 것 같습니다. 뇌 에너지 기준으로 순서를 한번 봐 드릴까요?',
+          ]
+        : [
+            '대표님, 저.. 드릴 말씀이 있어요. 오늘 일정을 뇌 에너지 기준으로 최적화해볼까요?',
+            '대표님, 잠깐 드릴 말씀이 있는데요. 오늘 할 일이 꽤 있으신 것 같은데, 뇌 에너지 기준으로 순서를 한번 정리해볼까요?',
+          ];
+    final rawMsg = templates[Random().nextInt(templates.length)];
+    final msg = await UserTitleService.applyForCoach(rawMsg, widget.coachId);
+
+    // 같은 날 반복 제안되지 않도록 카드와 동일한 쿨다운을 기록해둔다.
+    await prefs.setString(
+      'nyang_cognitive_optimize_dismiss_until',
+      DateTime.now().add(const Duration(hours: 3)).toIso8601String(),
+    );
+
+    if (!mounted) return;
+    setState(() {
+      _messages.add(
+        ChatMessage(text: msg, isUser: false, time: DateTime.now()),
+      );
+      _dynamicChips = ['네, 좋아요', '다음에 할게요'];
+      _suppressDefaultChips = false;
     });
     await _saveHistory();
     _scrollToBottom();
@@ -4514,10 +4578,15 @@ class _ChatScreenState extends State<ChatScreen>
                 : isSchedule
                 ? '일정'
                 : '일반 할 일';
+            final cogMode = t['cognitiveMode'];
+            final cogLoad = t['cognitiveLoad'];
+            final cogInfo = (cogMode != null || cogLoad != null)
+                ? ' (mode: ${cogMode ?? '미분류'}, load: ${cogLoad ?? '미분류'}${t['timeStart'] != null ? ', fixed: true' : ''})'
+                : '';
             sb.writeln(
               newActivityDayNotStarted
                   ? '- [예정] [$typeLabel] ${t['text']}$timeInfo'
-                  : '- [${done ? 'V' : ' '}] [$typeLabel] ${t['text']}$timeInfo$deferredInfo$conversationAvoidanceInfo',
+                  : '- [${done ? 'V' : ' '}] [$typeLabel] ${t['text']}$timeInfo$deferredInfo$conversationAvoidanceInfo$cogInfo',
             );
           }
           if (newActivityDayNotStarted) {
@@ -4546,6 +4615,25 @@ class _ChatScreenState extends State<ChatScreen>
           }
         }
       } catch (_) {}
+    }
+
+    // 5-1. 인지 에너지 최적화 안내 (마스터 코치 전용, 사용자가 동의했을 때만 사용)
+    if (_coach.isMaster && needsTaskContext) {
+      sb.writeln('\n[인지 에너지 최적화 안내 — 사용자가 이 주제에 동의했을 때만 사용]');
+      sb.writeln(
+        '사용자가 "오늘 일정을 뇌 에너지 기준으로 최적화"하는 데 방금 동의했다면(대화 기록 확인):',
+      );
+      sb.writeln(
+        '- 아직 오늘 컨디션을 안 물어봤다면 먼저 "오늘 컨디션은 어떠세요?"를 묻고 [CHIPS: 좋음|보통|피곤함]을 붙이세요.',
+      );
+      sb.writeln(
+        '- 컨디션을 이미 안다면, 위 [오늘 할 일 현황]의 mode/load/fixed 태그를 참고해 순서를 제안하세요: fixed: true인 항목은 순서를 유지하고, 비슷한 mode끼리 묶고, 컨디션이 "피곤함"이면 load가 "높음"인 항목은 1~2개로 줄이거나 범위를 줄이자고 제안하세요.',
+      );
+      sb.writeln(
+        '- 위 [오늘 할 일 현황]에서 [V](완료) 표시된 항목 중 load가 "높음"인 게 있다면, 그건 오늘 이미 쓴 에너지로 보세요. 컨디션이 "좋음"이더라도 안 끝난 load "높음" 항목이 남아 있다면 전부 밀어붙이지 말고, 일부는 쪼개서 하거나 다른 날로 미루자고 제안하세요.',
+      );
+      sb.writeln('- 사용자가 "다음에 할게요"를 선택했다면 가볍게 알겠다고만 답하세요.');
+      sb.writeln('- 이 주제와 무관한 대화에서는 이 안내를 절대 먼저 꺼내지 마세요.');
     }
 
     // 6. 오늘의 핵심 (master only)
