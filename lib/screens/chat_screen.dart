@@ -1245,10 +1245,10 @@ class _ChatScreenState extends State<ChatScreen>
         : '대표님, 🧠 고인지 작업이 $highLoadCount개 감지됐어요. 컨디션이 좋으시면 그대로 진행하셔도 좋아요. 그렇지 않으시다면 일부 작업은 더 작은 단위로 나눠보는 걸 권장드려요.';
     final msg = await UserTitleService.applyForCoach(rawMsg, widget.coachId);
 
-    // 권고성 알림이라 매일 뜨면 피로감을 줄 수 있어 카드와 동일하게 일주일 쿨다운을 둔다.
+    // 권고성 알림이라 매일 뜨면 피로감을 줄 수 있어 카드와 동일하게 며칠 쿨다운을 둔다.
     await prefs.setString(
       'nyang_cognitive_optimize_dismiss_until',
-      DateTime.now().add(const Duration(days: 7)).toIso8601String(),
+      DateTime.now().add(const Duration(days: 3)).toIso8601String(),
     );
 
     if (!mounted) return;

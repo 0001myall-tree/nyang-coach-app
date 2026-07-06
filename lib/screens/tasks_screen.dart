@@ -3469,8 +3469,8 @@ load: 높음 | 보통 | 낮음 중 하나
   }
 
   Future<void> _dismissCognitiveOptimizeCard({bool focusInput = false}) async {
-    // 권고성 알림이라 매일 뜨면 피로감을 줄 수 있어 일주일 간격으로 쿨다운을 둔다.
-    final until = DateTime.now().add(const Duration(days: 7));
+    // 권고성 알림이라 매일 뜨면 피로감을 줄 수 있어 며칠 간격으로 쿨다운을 둔다.
+    final until = DateTime.now().add(const Duration(days: 3));
     setState(() => _cognitiveCardDismissedUntil = until);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(
