@@ -1616,10 +1616,26 @@ load: 높음 | 보통 | 낮음 중 하나
 
     // 오늘 습관 주입
     for (final h in todayHabits) {
-      final existing = tasks.any(
+      String? tTime;
+      if (h.timeType == 'single' && h.timeStart != null) tTime = h.timeStart;
+      if (h.timeType == 'range' && h.timeStart != null) {
+        tTime = h.timeEnd != null
+            ? "${h.timeStart} ~ ${h.timeEnd}"
+            : h.timeStart;
+      }
+
+      final existingIndex = tasks.indexWhere(
         (t) => t.habitId?.toString() == h.id.toString(),
       );
-      if (existing) continue;
+      if (existingIndex != -1) {
+        // 습관 이름/시간이 수정됐을 수 있으니 오늘 이미 주입된 항목에도 반영한다.
+        tasks[existingIndex].text = h.name;
+        tasks[existingIndex].time = tTime;
+        tasks[existingIndex].duration = h.habitDuration;
+        tasks[existingIndex].timeStart = h.timeStart;
+        tasks[existingIndex].timeEnd = h.timeEnd;
+        continue;
+      }
 
       final log = (habitLogs[h.id.toString()] ?? {})[today];
       final isSkipped = log != null && log['status'] == 'skipped';
@@ -1628,13 +1644,6 @@ load: 높음 | 보통 | 낮음 중 하나
       final isDone = log != null && log['done'] == true;
 
       final taskId = 'habit_${h.id.toString().replaceAll('.', '_')}_$today';
-      String? tTime;
-      if (h.timeType == 'single' && h.timeStart != null) tTime = h.timeStart;
-      if (h.timeType == 'range' && h.timeStart != null) {
-        tTime = h.timeEnd != null
-            ? "${h.timeStart} ~ ${h.timeEnd}"
-            : h.timeStart;
-      }
 
       tasks.add(
         TaskItem(
@@ -5067,10 +5076,29 @@ load: 높음 | 보통 | 낮음 중 하나
                             t.isReminderEnabled;
                       }
                     }
+
+                    // 오늘 탭에 주입된 습관 카드를 수정한 경우도 마찬가지로 원본
+                    // HabitItem에 반영해야 _injectTodayHabits()가 다시 실행될 때
+                    // 수정 내용이 덮어써지지 않는다.
+                    if (t.category == 'habit' && t.habitId != null) {
+                      final hIdx = habits.indexWhere(
+                        (h) => h.id.toString() == t.habitId.toString(),
+                      );
+                      if (hIdx != -1) {
+                        habits[hIdx].name = t.text;
+                        habits[hIdx].timeStart = t.timeStart;
+                        habits[hIdx].timeEnd = t.timeEnd;
+                        habits[hIdx].habitDuration = t.duration;
+                        habits[hIdx].timeType = t.timeStart != null
+                            ? (t.timeEnd != null ? 'range' : 'single')
+                            : (t.duration != null ? 'duration' : 'none');
+                      }
+                    }
                   });
                   _saveTasks();
                   _saveCoreTasks();
                   if (t.category == 'schedule') _saveSchedules();
+                  if (t.category == 'habit') _saveHabits();
                 });
               },
               child: Container(
