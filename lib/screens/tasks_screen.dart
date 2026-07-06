@@ -2459,7 +2459,9 @@ load: 높음 | 보통 | 낮음 중 하나
                   20,
                   22,
                   20,
-                  MediaQuery.of(ctx).viewInsets.bottom + 24,
+                  MediaQuery.of(ctx).viewInsets.bottom +
+                      MediaQuery.of(ctx).viewPadding.bottom +
+                      24,
                 ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -4174,7 +4176,9 @@ load: 높음 | 보통 | 낮음 중 하나
 
               return Padding(
                 padding: EdgeInsets.only(
-                  bottom: MediaQuery.of(ctx).viewInsets.bottom,
+                  bottom:
+                      MediaQuery.of(ctx).viewInsets.bottom +
+                      MediaQuery.of(ctx).viewPadding.bottom,
                 ),
                 child: SingleChildScrollView(
                   child: Container(
@@ -4382,7 +4386,13 @@ load: 높음 | 보통 | 낮음 중 하나
                 left: 20,
                 right: 20,
                 top: 24,
-                bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
+                // 키보드(viewInsets)뿐 아니라 기기별 하단 안전영역(제스처바/내비게이션
+                // 버튼, viewPadding)까지 더해야 "저장하기" 버튼이 기종과 무관하게
+                // 항상 화면 안에 안정적으로 보인다.
+                bottom:
+                    MediaQuery.of(ctx).viewInsets.bottom +
+                    MediaQuery.of(ctx).viewPadding.bottom +
+                    24,
               ),
               decoration: const BoxDecoration(
                 color: Colors.white,
@@ -6364,7 +6374,7 @@ load: 높음 | 보통 | 낮음 중 하나
             final safeBottom = MediaQuery.of(ctx).viewPadding.bottom;
             return Padding(
               padding: EdgeInsets.only(
-                bottom: MediaQuery.of(ctx).viewInsets.bottom,
+                bottom: MediaQuery.of(ctx).viewInsets.bottom + safeBottom,
               ),
               child: DraggableScrollableSheet(
                 initialChildSize: 0.9,
@@ -10809,7 +10819,9 @@ load: 높음 | 보통 | 낮음 중 하나
         builder: (ctx, setModalState) => Container(
           height: MediaQuery.of(context).size.height * 0.85,
           padding: EdgeInsets.only(
-            bottom: MediaQuery.of(context).viewInsets.bottom,
+            bottom:
+                MediaQuery.of(context).viewInsets.bottom +
+                MediaQuery.of(context).viewPadding.bottom,
           ),
           decoration: const BoxDecoration(
             color: Colors.white,
