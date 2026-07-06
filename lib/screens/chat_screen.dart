@@ -87,6 +87,7 @@ class _ParsedReply {
   final String? visionSourceId;
   final List<_SuggestedTask> suggestedTasks;
   final bool nightCallOffer;
+  final bool cognitiveOptimizeDone;
   _ParsedReply({
     required this.text,
     required this.chips,
@@ -97,6 +98,7 @@ class _ParsedReply {
     this.visionSourceId,
     List<_SuggestedTask>? suggestedTasks,
     this.nightCallOffer = false,
+    this.cognitiveOptimizeDone = false,
   }) : suggestedTasks = suggestedTasks ?? [];
 }
 
@@ -1256,6 +1258,12 @@ class _ChatScreenState extends State<ChatScreen>
       'nyang_cognitive_optimize_dismiss_until',
       DateTime.now().add(const Duration(hours: 3)).toIso8601String(),
     );
+    // 대화 세션을 켠다 — 이후 턴에서 코치가 흐름을 잃지 않도록 [오늘 할 일 현황]과
+    // 안내 블록을 계속 유지시킨다. [COGNITIVE_DONE] 또는 30분 경과 시 꺼진다.
+    await prefs.setString(
+      'nyang_cognitive_optimize_session_started_at',
+      DateTime.now().toIso8601String(),
+    );
 
     if (!mounted) return;
     setState(() {
@@ -2295,6 +2303,13 @@ class _ChatScreenState extends State<ChatScreen>
       text = text.replaceAll('[NIGHT_CALL_OFFER]', '').trim();
     }
 
+    // [COGNITIVE_DONE] 파싱 — 인지 에너지 최적화 대화가 끝났다는 신호
+    bool cognitiveOptimizeDone = false;
+    if (text.contains('[COGNITIVE_DONE]')) {
+      cognitiveOptimizeDone = true;
+      text = text.replaceAll('[COGNITIVE_DONE]', '').trim();
+    }
+
     final chipMatch = chipRegex.firstMatch(text);
     if (chipMatch != null) {
       chips = chipMatch
@@ -2368,6 +2383,7 @@ class _ChatScreenState extends State<ChatScreen>
       visionSourceId: visionSourceId,
       suggestedTasks: suggestedTasks,
       nightCallOffer: nightCallOffer,
+      cognitiveOptimizeDone: cognitiveOptimizeDone,
     );
   }
 
@@ -2659,11 +2675,16 @@ class _ChatScreenState extends State<ChatScreen>
     ].any(normalized.contains);
   }
 
-  bool _needsMasterTaskContext(String userText, bool needsGoalContext) {
+  bool _needsMasterTaskContext(
+    String userText,
+    bool needsGoalContext,
+    SharedPreferences prefs,
+  ) {
     if (!_coach.isMaster) return true;
     if (needsGoalContext ||
         _isAvoidanceMessage(userText) ||
-        _isMasterTimerAuthorizationResponse(userText)) {
+        _isMasterTimerAuthorizationResponse(userText) ||
+        _isCognitiveOptimizeSessionActive(prefs)) {
       return true;
     }
 
@@ -2680,6 +2701,21 @@ class _ChatScreenState extends State<ChatScreen>
       '해야돼',
       '해야해',
     ].any(normalized.contains);
+  }
+
+  // 인지 에너지 최적화 대화 진행 여부를 명시적인 on/off로 판단한다.
+  // 켜짐: _checkCognitiveOptimizeOffer()가 제안 메시지를 넣을 때 시작 시각을 기록.
+  // 꺼짐: AI가 [COGNITIVE_DONE]을 출력했을 때(정상 종료), 또는 30분이 지났을 때(안전장치).
+  // 이 값이 켜져 있는 동안은 needsTaskContext가 강제로 true가 되어 [오늘 할 일 현황]과
+  // [인지 에너지 최적화 안내] 블록이 대화 내내 유지된다.
+  bool _isCognitiveOptimizeSessionActive(SharedPreferences prefs) {
+    final startedAtStr = prefs.getString(
+      'nyang_cognitive_optimize_session_started_at',
+    );
+    if (startedAtStr == null) return false;
+    final startedAt = DateTime.tryParse(startedAtStr);
+    if (startedAt == null) return false;
+    return DateTime.now().difference(startedAt) < const Duration(minutes: 30);
   }
 
   bool _needsMasterLightGoalContext(String userText) {
@@ -4228,6 +4264,10 @@ class _ChatScreenState extends State<ChatScreen>
       final usageNotice = await ApiUsageLimitService.takeChatUsageNotice();
       if (!mounted || widget.coachId != currentId) return;
       final parsed = _parseReply(raw);
+      if (parsed.cognitiveOptimizeDone) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.remove('nyang_cognitive_optimize_session_started_at');
+      }
       final suggestedTasks = await _filterDuplicateSuggestedTasks(
         parsed.suggestedTasks,
       );
@@ -4327,6 +4367,7 @@ class _ChatScreenState extends State<ChatScreen>
     final needsTaskContext = _needsMasterTaskContext(
       userText,
       needsGoalContext,
+      prefs,
     );
     final needsLightGoalContext =
         !needsGoalContext && _needsMasterLightGoalContext(userText);
@@ -4627,17 +4668,26 @@ class _ChatScreenState extends State<ChatScreen>
         '- 아직 오늘 컨디션을 안 물어봤다면 먼저 "오늘 컨디션은 어떠세요?"를 묻고 [CHIPS: 좋음|보통|피곤함]을 붙이세요.',
       );
       sb.writeln(
-        '- 컨디션을 이미 안다면, 위 [오늘 할 일 현황]의 mode/load/fixed 태그를 참고해 순서를 제안하세요: fixed: true인 항목은 순서를 유지하고, 비슷한 mode끼리 묶고, 컨디션이 "피곤함"이면 load가 "높음"인 항목은 1~2개로 줄이거나 범위를 줄이자고 제안하세요.',
+        '- [오늘의 핵심] 섹션이 위에 있다면 그 항목들을 오늘 꼭 챙겨야 할 우선순위로 보고 순서 제안의 기준으로 삼으세요. [오늘의 핵심] 섹션이 없다면(아직 지정 안 함), "오늘 꼭 끝내야 하는 일이 뭐예요?"처럼 말로 직접 묻지 말고, "혹시 특별히 중요한 일이 있으면 오늘의 핵심으로 지정해주시면 그걸 기준으로 챙겨드릴게요"처럼 앱의 오늘의 핵심 기능으로 안내하세요. 지정 여부와 상관없이 순서 제안 자체는 계속 진행하세요.',
+      );
+      sb.writeln(
+        '- 컨디션을 이미 안다면, 위 [오늘 할 일 현황]의 mode/load/fixed 태그와(있다면) [오늘의 핵심]을 참고해 순서를 제안하세요: fixed: true인 항목은 순서를 유지하고, 비슷한 mode끼리 묶고, 컨디션이 "피곤함"이면 load가 "높음"인 항목은 1~2개로 줄이거나 범위를 줄이자고 제안하세요.',
       );
       sb.writeln(
         '- 위 [오늘 할 일 현황]에서 [V](완료) 표시된 항목 중 load가 "높음"인 게 있다면, 그건 오늘 이미 쓴 에너지로 보세요. 컨디션이 "좋음"이더라도 안 끝난 load "높음" 항목이 남아 있다면 전부 밀어붙이지 말고, 일부는 쪼개서 하거나 다른 날로 미루자고 제안하세요.',
       );
       sb.writeln('- 사용자가 "다음에 할게요"를 선택했다면 가볍게 알겠다고만 답하세요.');
       sb.writeln('- 이 주제와 무관한 대화에서는 이 안내를 절대 먼저 꺼내지 마세요.');
+      sb.writeln(
+        '- 컨디션을 묻는 중간 단계에서는 절대 출력하지 말고, 최종 순서/범위 제안까지 마쳤거나 사용자가 "다음에 할게요"를 선택해 대화를 끝낼 때만 답변 맨 끝에 [COGNITIVE_DONE] 태그를 붙이세요. 이 태그는 대화 텍스트에 절대 노출되어선 안 됩니다.',
+      );
     }
 
     // 6. 오늘의 핵심 (master only)
-    if (_coach.isMaster && needsGoalContext) {
+    // 인지 에너지 최적화 대화 중에는 needsGoalContext와 무관하게 항상 포함시켜서,
+    // 코치가 사용자가 지정한 핵심 우선순위를 보고 판단할 수 있게 한다.
+    if (_coach.isMaster &&
+        (needsGoalContext || _isCognitiveOptimizeSessionActive(prefs))) {
       final coreRaw = prefs.getString('nyang_core_tasks');
       if (coreRaw != null) {
         try {
