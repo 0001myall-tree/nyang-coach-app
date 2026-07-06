@@ -1448,6 +1448,8 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
                                 ),
                               ),
                               // 하단 텍스트
+                              // FittedBox로 감싸서 기종/폰트 설정에 따라 텍스트 블록이
+                              // 살짝 축소되더라도 절대 오버플로우가 나지 않게 한다.
                               Expanded(
                                 flex: 35,
                                 child: Padding(
@@ -1455,30 +1457,33 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
                                     horizontal: 10,
                                     vertical: 12,
                                   ),
-                                  child: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Text(
-                                        coach['name'],
-                                        style: GoogleFonts.notoSansKr(
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.w900,
-                                          color: AppDesignTokens.textPrimary,
+                                  child: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          coach['name'],
+                                          style: GoogleFonts.notoSansKr(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w900,
+                                            color: AppDesignTokens.textPrimary,
+                                          ),
                                         ),
-                                      ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        coach['subtitle'],
-                                        textAlign: TextAlign.center,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: GoogleFonts.notoSansKr(
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w500,
-                                          color: AppDesignTokens.textSecondary,
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          coach['subtitle'],
+                                          textAlign: TextAlign.center,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: GoogleFonts.notoSansKr(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w500,
+                                            color: AppDesignTokens.textSecondary,
+                                          ),
                                         ),
-                                      ),
-                                    ],
+                                      ],
+                                    ),
                                   ),
                                 ),
                               ),
