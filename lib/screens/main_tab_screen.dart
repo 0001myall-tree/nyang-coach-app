@@ -540,10 +540,12 @@ class _MainTabScreenState extends State<MainTabScreen>
 
     final tasksRaw = prefs.getString('nyang_tasks');
     if (!CognitiveOptimizeService.isEligible(tasksRaw)) return;
+    final highLoadCount = CognitiveOptimizeService.highLoadCount(tasksRaw);
+    final body = '🧠 고인지 작업 $highLoadCount개 감지됐어요';
 
     await NotificationService().showImmediateNotification(
       title: CoachConfigs.get(widget.coachId).name,
-      body: widget.coachId == 'sec_male' ? '드릴 말씀이 있습니다' : '저.. 드릴 말씀이 있어요',
+      body: body,
     );
   }
 

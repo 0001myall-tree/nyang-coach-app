@@ -4,29 +4,30 @@ import 'dart:convert';
 /// main_tab_screen.dart(백그라운드 알림 체크)와 chat_screen.dart(채팅 제안 체크)가
 /// 각자 TasksScreen의 State에 접근할 수 없는 시점에 동일한 로직을 공유하기 위한 헬퍼.
 class CognitiveOptimizeService {
-  static bool isEligible(String? tasksRaw) {
-    if (tasksRaw == null) return false;
-    List<dynamic> notDone;
+  static List<dynamic>? _notDoneTasks(String? tasksRaw) {
+    if (tasksRaw == null) return null;
     try {
-      notDone = (jsonDecode(tasksRaw) as List)
+      return (jsonDecode(tasksRaw) as List)
           .where((t) => t['done'] != true)
           .toList();
     } catch (_) {
-      return false;
+      return null;
     }
+  }
 
-    if (notDone.length >= 5) return true;
+  static bool isEligible(String? tasksRaw) {
+    final notDone = _notDoneTasks(tasksRaw);
+    if (notDone == null) return false;
+    return _highLoadCount(notDone) >= 3;
+  }
 
-    final highLoadCount = notDone
-        .where((t) => t['cognitiveLoad'] == '높음')
-        .length;
-    if (highLoadCount >= 2) return true;
+  static int _highLoadCount(List<dynamic> notDone) =>
+      notDone.where((t) => t['cognitiveLoad'] == '높음').length;
 
-    final modeCount = notDone
-        .map((t) => t['cognitiveMode'])
-        .whereType<String>()
-        .toSet()
-        .length;
-    return modeCount >= 3;
+  /// "🧠 고인지 작업이 n개 감지됐어요" 안내 문구에 쓸 개수.
+  static int highLoadCount(String? tasksRaw) {
+    final notDone = _notDoneTasks(tasksRaw);
+    if (notDone == null) return 0;
+    return _highLoadCount(notDone);
   }
 }

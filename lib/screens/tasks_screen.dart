@@ -46,8 +46,7 @@ class TaskItem {
   int? achievedCount;
   int? achievedDuration;
   int deferredCount;
-  // 인지 에너지 최적화 기능용 백그라운드 태깅 결과 (창작|학습|생활|신체|커뮤니케이션|기타 / 높음|보통|낮음)
-  String? cognitiveMode;
+  // 인지 에너지 최적화 기능용 백그라운드 태깅 결과 (높음|보통|낮음)
   String? cognitiveLoad;
 
   TaskItem({
@@ -65,7 +64,6 @@ class TaskItem {
     this.isReminderEnabled = true,
     this.completedAt,
     this.deferredCount = 0,
-    this.cognitiveMode,
     this.cognitiveLoad,
   });
 
@@ -86,7 +84,6 @@ class TaskItem {
     if (achievedCount != null) 'achievedCount': achievedCount,
     if (achievedDuration != null) 'achievedDuration': achievedDuration,
     'deferredCount': deferredCount,
-    if (cognitiveMode != null) 'cognitiveMode': cognitiveMode,
     if (cognitiveLoad != null) 'cognitiveLoad': cognitiveLoad,
   };
 
@@ -105,7 +102,6 @@ class TaskItem {
     isReminderEnabled: j['isReminderEnabled'] ?? true,
     completedAt: j['completedAt'],
     deferredCount: j['deferredCount'] ?? 0,
-    cognitiveMode: j['cognitiveMode'],
     cognitiveLoad: j['cognitiveLoad'],
   );
 }
@@ -656,9 +652,12 @@ class _TasksScreenState extends State<TasksScreen>
       }
       if (rawCognitiveTagCache != null) {
         final decoded = jsonDecode(rawCognitiveTagCache) as Map<String, dynamic>;
-        _cognitiveTagCache = decoded.map(
-          (k, v) => MapEntry(k, Map<String, String>.from(v)),
-        );
+        // 예전 버전은 캐시 값이 {mode, load} 맵이었다 — 그때 저장된 데이터도
+        // 그냥 버려지지 않게 load만 뽑아서 새 형식(문자열)으로 읽어들인다.
+        _cognitiveTagCache = decoded.map((k, v) {
+          final load = v is Map ? v['load']?.toString() : v?.toString();
+          return MapEntry(k, load ?? '보통');
+        });
       }
       if (rawCognitiveDismissUntil != null) {
         _cognitiveCardDismissedUntil = DateTime.tryParse(
@@ -1312,11 +1311,11 @@ class _TasksScreenState extends State<TasksScreen>
   }
 
   // ── 인지 에너지 최적화: 백그라운드 태깅 ───────────────────
-  // 오늘 할 일 중 아직 mode/load 태그가 없는 항목만 모아 배치로 분류한다.
-  // 텍스트 → {mode,load} 캐시를 먼저 확인해서, 이미 분류한 적 있는 텍스트(반복되는
+  // 오늘 할 일 중 아직 load 태그가 없는 항목만 모아 배치로 분류한다.
+  // 텍스트 → load 캐시를 먼저 확인해서, 이미 분류한 적 있는 텍스트(반복되는
   // 습관/일정 등)는 AI를 다시 부르지 않고 캐시를 재사용한다.
   Timer? _cognitiveTagTimer;
-  Map<String, Map<String, String>> _cognitiveTagCache = {};
+  Map<String, String> _cognitiveTagCache = {};
   // 반복되는 습관/일정은 대개 정해진 몇십 가지 안에서 벗어나지 않으므로,
   // 캐시는 LRU(최근에 안 쓰인 것부터 제거) 방식으로 50개까지만 유지한다.
   static const int _cognitiveTagCacheLimit = 50;
@@ -1324,9 +1323,9 @@ class _TasksScreenState extends State<TasksScreen>
   // 캐시 항목을 쓰거나(히트) 새로 추가할 때 호출. Map은 삽입 순서를 그대로
   // 유지하므로, 항목을 지웠다가 다시 넣는 것만으로 "최근 사용" 위치(맨 뒤)로
   // 옮길 수 있다 — 별도의 타임스탬프/카운터를 저장할 필요가 없다.
-  void _touchCognitiveCacheEntry(String text, Map<String, String> tag) {
+  void _touchCognitiveCacheEntry(String text, String load) {
     _cognitiveTagCache.remove(text);
-    _cognitiveTagCache[text] = tag;
+    _cognitiveTagCache[text] = load;
     while (_cognitiveTagCache.length > _cognitiveTagCacheLimit) {
       _cognitiveTagCache.remove(_cognitiveTagCache.keys.first);
     }
@@ -1342,10 +1341,18 @@ class _TasksScreenState extends State<TasksScreen>
 
   void _scheduleCognitiveTagging() {
     if (!_coach.isMaster) return;
+    // 발동 조건이 "고인지 3개 이상"이므로 할 일이 최소 3개는 있어야 애초에 성립
+    // 가능하다. 그 미만이면 판단해봤자 트리거될 수 없으므로 태깅 자체를 건너뛴다.
+    if (tasks.where((t) => !t.done).length < 3) return;
+    // 이미 오늘 안내를 띄운 직후(쿨다운 중)라면 더 셀 필요가 없으므로 태깅도 쉰다.
+    final dismissedUntil = _cognitiveCardDismissedUntil;
+    if (dismissedUntil != null && DateTime.now().isBefore(dismissedUntil)) {
+      return;
+    }
     // done 여부와 무관하게 태그가 없는 항목은 전부 대상으로 삼는다 — 태깅 디바운스(3초)가
     // 돌기 전에 후딱 완료해버린 할 일도 나중에 한 번은 분류되어야, "오늘 이미 완료한
     // 고인지 작업"을 코치가 참고할 수 있다.
-    final untagged = tasks.where((t) => t.cognitiveMode == null).toList();
+    final untagged = tasks.where((t) => t.cognitiveLoad == null).toList();
     if (untagged.isEmpty) return;
 
     // 캐시에 있는 텍스트는 AI 호출 없이 즉시 적용
@@ -1354,8 +1361,7 @@ class _TasksScreenState extends State<TasksScreen>
     for (final t in untagged) {
       final cached = _cognitiveTagCache[t.text];
       if (cached != null) {
-        t.cognitiveMode = cached['mode'];
-        t.cognitiveLoad = cached['load'];
+        t.cognitiveLoad = cached;
         _touchCognitiveCacheEntry(t.text, cached); // 최근 사용으로 갱신
         cacheHit = true;
       } else {
@@ -1380,12 +1386,11 @@ class _TasksScreenState extends State<TasksScreen>
   Future<void> _runCognitiveTagging(List<TaskItem> items) async {
     try {
       const systemPrompt =
-          '''당신은 할 일 목록에 태그만 붙이는 분류기입니다. 각 항목에 대해 딱 두 가지만 판단하세요.
-1. mode: 창작 | 학습 | 생활 | 신체 | 커뮤니케이션 | 기타 중 하나
-2. load: 높음 | 보통 | 낮음 중 하나 (인지적 부담 수준)
+          '''당신은 할 일 목록에 태그만 붙이는 분류기입니다. 각 항목의 인지적 부담 수준을 판단하세요.
+load: 높음 | 보통 | 낮음 중 하나
 
 설명 없이 아래 형식의 JSON 배열만 출력하세요.
-[{"id":"항목id","mode":"...","load":"..."}]''';
+[{"id":"항목id","load":"..."}]''';
       final userPrompt = jsonEncode(
         items.map((t) => {'id': t.id.toString(), 'text': t.text}).toList(),
       );
@@ -1399,15 +1404,10 @@ class _TasksScreenState extends State<TasksScreen>
             (t) => t.id.toString() == entry['id'].toString(),
           );
           if (idx != -1) {
-            final mode = entry['mode'] as String?;
             final load = entry['load'] as String?;
-            tasks[idx].cognitiveMode = mode;
             tasks[idx].cognitiveLoad = load;
-            if (mode != null && load != null) {
-              _touchCognitiveCacheEntry(tasks[idx].text, {
-                'mode': mode,
-                'load': load,
-              });
+            if (load != null) {
+              _touchCognitiveCacheEntry(tasks[idx].text, load);
             }
           }
         }
@@ -3435,15 +3435,7 @@ class _TasksScreenState extends State<TasksScreen>
   bool get _cognitiveOptimizeAvailable {
     if (!_coach.isMaster) return false;
     final notDone = tasks.where((t) => !t.done).toList();
-    if (notDone.length >= 5) return true;
-    if (notDone.where((t) => t.cognitiveLoad == '높음').length >= 2) {
-      return true;
-    }
-    if (notDone.map((t) => t.cognitiveMode).whereType<String>().toSet().length >=
-        3) {
-      return true;
-    }
-    return false;
+    return notDone.where((t) => t.cognitiveLoad == '높음').length >= 3;
   }
 
   // 할 일이 방금 추가/수정된 직후엔 카드를 바로 띄우지 않고, 잠깐(3초) 조용해진
@@ -3477,7 +3469,8 @@ class _TasksScreenState extends State<TasksScreen>
   }
 
   Future<void> _dismissCognitiveOptimizeCard({bool focusInput = false}) async {
-    final until = DateTime.now().add(const Duration(hours: 3));
+    // 권고성 알림이라 매일 뜨면 피로감을 줄 수 있어 일주일 간격으로 쿨다운을 둔다.
+    final until = DateTime.now().add(const Duration(days: 7));
     setState(() => _cognitiveCardDismissedUntil = until);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(
@@ -3490,6 +3483,10 @@ class _TasksScreenState extends State<TasksScreen>
   }
 
   Widget _buildCognitiveOptimizeCard() {
+    final highLoadCount = tasks
+        .where((t) => !t.done && t.cognitiveLoad == '높음')
+        .length;
+    final cardText = '🧠 고인지 작업 $highLoadCount개 감지됐어요';
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
@@ -3514,7 +3511,7 @@ class _TasksScreenState extends State<TasksScreen>
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
-                    _coach.id == 'sec_male' ? '드릴 말씀이 있습니다' : '저.. 드릴 말씀이 있어요',
+                    cardText,
                     style: GoogleFonts.notoSansKr(
                       fontSize: 13,
                       fontWeight: FontWeight.w700,
