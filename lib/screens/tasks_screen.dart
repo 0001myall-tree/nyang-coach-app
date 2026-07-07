@@ -651,7 +651,8 @@ class _TasksScreenState extends State<TasksScreen>
         vacationInfo = jsonDecode(rawVacation) as Map<String, dynamic>;
       }
       if (rawCognitiveTagCache != null) {
-        final decoded = jsonDecode(rawCognitiveTagCache) as Map<String, dynamic>;
+        final decoded =
+            jsonDecode(rawCognitiveTagCache) as Map<String, dynamic>;
         // 예전 버전은 캐시 값이 {mode, load} 맵이었다 — 그때 저장된 데이터도
         // 그냥 버려지지 않게 load만 뽑아서 새 형식(문자열)으로 읽어들인다.
         _cognitiveTagCache = decoded.map((k, v) {
@@ -1394,7 +1395,11 @@ load: 높음 | 보통 | 낮음 중 하나
       final userPrompt = jsonEncode(
         items.map((t) => {'id': t.id.toString(), 'text': t.text}).toList(),
       );
-      final raw = await _callLlmJson(systemPrompt, userPrompt, temperature: 0.1);
+      final raw = await _callLlmJson(
+        systemPrompt,
+        userPrompt,
+        temperature: 0.1,
+      );
       final List parsed = jsonDecode(raw);
       if (!mounted) return;
       setState(() {
@@ -1568,6 +1573,7 @@ load: 높음 | 보통 | 낮음 중 하나
 
     // 일정 변경 시 오늘의 할 일 탭에도 즉시 반영
     _injectTodaySchedules();
+    await NotificationService().syncCoreReminders();
   }
 
   Future<void> _saveHabitLogs() async {
@@ -4636,10 +4642,11 @@ load: 높음 | 보통 | 낮음 중 하나
                                 initialTime: mStartTime ?? TimeOfDay.now(),
                               );
                               if (t != null) {
+                                final enabled =
+                                    await _checkCoreReminderEnabledGlobally();
                                 setModalState(() {
                                   mStartTime = t;
-                                  mReminderEnabled =
-                                      _isCoreReminderEnabledGlobally;
+                                  mReminderEnabled = enabled;
                                 });
                               }
                             },
@@ -4875,7 +4882,8 @@ load: 높음 | 보통 | 낮음 중 하나
                     ),
                   const SizedBox(height: 24),
                   GestureDetector(
-                    onTap: () {
+                    onTap: () async {
+                      await _checkCoreReminderEnabledGlobally();
                       final text = textCtrl.text.trim();
                       if (text.isEmpty) {
                         ScaffoldMessenger.of(context).showSnackBar(
@@ -5062,9 +5070,7 @@ load: 높음 | 보통 | 낮음 중 하나
                       );
                       final daySchedules = schedules[_getTodayStr()];
                       final sIdx =
-                          daySchedules?.indexWhere(
-                            (s) => s.id == scheduleId,
-                          ) ??
+                          daySchedules?.indexWhere((s) => s.id == scheduleId) ??
                           -1;
                       if (daySchedules != null && sIdx != -1) {
                         daySchedules[sIdx].text = t.text;
@@ -8073,7 +8079,7 @@ load: 높음 | 보통 | 낮음 중 하나
     return '반복';
   }
 
-  void _addSchedule() {
+  Future<void> _addSchedule() async {
     final text = _schInputCtrl.text.trim();
     if (text.isEmpty) return;
     final cleaned = text.replaceAll(RegExp(r'[.\s]+$'), '');
@@ -8082,6 +8088,13 @@ load: 높음 | 보통 | 낮음 중 하나
       _showVoiceRegistrationConfirmDialog(text, isToday: false);
       return;
     }
+
+    final reminderGloballyEnabled = await _checkCoreReminderEnabledGlobally();
+    final shouldEnableReminder =
+        reminderGloballyEnabled &&
+        (_schTimeType == 'single' || _schTimeType == 'range') &&
+        _schStartTime != null &&
+        _schReminderEnabled;
 
     final nowMs = DateTime.now().millisecondsSinceEpoch;
     final createdAt = DateTime.now().toIso8601String();
@@ -8096,11 +8109,7 @@ load: 높음 | 보통 | 낮음 중 하나
         id: repeatRule == null ? nowMs.toString() : '${nowMs}_$index',
         text: text,
         createdAt: createdAt,
-        isReminderEnabled: _resolvedTimeReminderEnabled(
-          _schTimeType,
-          _schStartTime,
-          _schReminderEnabled,
-        ),
+        isReminderEnabled: shouldEnableReminder,
         isRecurring: repeatRule != null,
         recurrenceGroupId: recurrenceGroupId,
         recurrenceRule: repeatRule == null
@@ -8664,10 +8673,11 @@ load: 높음 | 보통 | 낮음 중 하나
                               initialTime: confirmedTime ?? TimeOfDay.now(),
                             );
                             if (t != null) {
+                              final enabled =
+                                  await _checkCoreReminderEnabledGlobally();
                               setDialogState(() {
                                 confirmedTime = t;
-                                isReminderEnabled =
-                                    _isCoreReminderEnabledGlobally;
+                                isReminderEnabled = enabled;
                               });
                             }
                           },
@@ -8823,7 +8833,9 @@ load: 높음 | 보통 | 낮음 중 하나
                               ),
                               elevation: 0,
                             ),
-                            onPressed: () {
+                            onPressed: () async {
+                              final reminderGloballyEnabled =
+                                  await _checkCoreReminderEnabledGlobally();
                               final finalTitle = titleCtrl.text.trim();
                               if (finalTitle.isEmpty) return;
 
@@ -8853,7 +8865,7 @@ load: 높음 | 보통 | 낮음 중 하나
                                     createdAt: createdAt,
                                     isReminderEnabled:
                                         isReminderEnabled &&
-                                        _isCoreReminderEnabledGlobally &&
+                                        reminderGloballyEnabled &&
                                         confirmedTime != null,
                                     isRecurring: repeatRule != null,
                                     recurrenceGroupId: recurrenceGroupId,
@@ -9520,6 +9532,11 @@ load: 높음 | 보통 | 낮음 중 하나
               final s = daySch[i];
               final milestoneInfo = _getMilestoneInfoForTask(s);
               final isMilestone = milestoneInfo != null;
+              final displayTime = _displayTimeFromStored(
+                time: s.time,
+                timeStart: s.timeStart,
+                timeEnd: s.timeEnd,
+              );
               return Container(
                 margin: const EdgeInsets.only(bottom: 8),
                 padding: const EdgeInsets.all(12),
@@ -9592,6 +9609,8 @@ load: 높음 | 보통 | 낮음 중 하나
                               padding: const EdgeInsets.symmetric(vertical: 4),
                               child: Text(
                                 s.text,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                                 style: GoogleFonts.notoSansKr(
                                   fontSize: 14,
                                   fontWeight: FontWeight.w600,
@@ -9601,6 +9620,28 @@ load: 높음 | 보통 | 낮음 중 하나
                             ),
                           ),
                         ),
+                        if (displayTime != null)
+                          Padding(
+                            padding: const EdgeInsets.only(right: 6),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 7,
+                                vertical: 3,
+                              ),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF5F3FF),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                displayTime,
+                                style: GoogleFonts.notoSansKr(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w800,
+                                  color: const Color(0xFF8B7CFF),
+                                ),
+                              ),
+                            ),
+                          ),
                         if (s.isReminderEnabled)
                           Padding(
                             padding: const EdgeInsets.only(right: 4),
@@ -9645,36 +9686,9 @@ load: 높음 | 보통 | 낮음 중 하나
                         }
                       },
                       child: () {
-                        final displayTime = _displayTimeFromStored(
-                          time: s.time,
-                          timeStart: s.timeStart,
-                          timeEnd: s.timeEnd,
-                        );
-                        return (displayTime != null ||
-                                s.duration != null ||
-                                s.isRecurring)
+                        return (s.duration != null || s.isRecurring)
                             ? Row(
                                 children: [
-                                  if (displayTime != null)
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 6,
-                                        vertical: 2,
-                                      ),
-                                      margin: const EdgeInsets.only(right: 6),
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFFF5F3FF),
-                                        borderRadius: BorderRadius.circular(6),
-                                      ),
-                                      child: Text(
-                                        displayTime,
-                                        style: GoogleFonts.notoSansKr(
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.w700,
-                                          color: const Color(0xFF8B7CFF),
-                                        ),
-                                      ),
-                                    ),
                                   if (s.duration != null)
                                     Container(
                                       padding: const EdgeInsets.symmetric(
@@ -10352,9 +10366,11 @@ load: 높음 | 보통 | 낮음 중 하나
                         initialTime: _schStartTime ?? TimeOfDay.now(),
                       );
                       if (t != null) {
+                        final enabled =
+                            await _checkCoreReminderEnabledGlobally();
                         setState(() {
                           _schStartTime = t;
-                          _schReminderEnabled = _isCoreReminderEnabledGlobally;
+                          _schReminderEnabled = enabled;
                         });
                       }
                     },

@@ -49,20 +49,18 @@ class _NightCallScreenState extends State<NightCallScreen> {
     try {
       await _audioPlayer.setAudioContext(
         AudioContext(
-          android: AudioContextAndroid(
-            usageType: AndroidUsageType.media,
+          android: const AudioContextAndroid(
+            usageType: AndroidUsageType.alarm,
             contentType: AndroidContentType.music,
-            audioFocus: AndroidAudioFocus.none,
+            audioFocus: AndroidAudioFocus.gainTransientExclusive,
           ),
           iOS: AudioContextIOS(
             category: AVAudioSessionCategory.playback,
-            options: {
-              AVAudioSessionOptions.mixWithOthers,
-              AVAudioSessionOptions.defaultToSpeaker,
-            },
+            options: {AVAudioSessionOptions.defaultToSpeaker},
           ),
         ),
       );
+      await _audioPlayer.setVolume(1.0);
       await _audioPlayer.setReleaseMode(ReleaseMode.stop);
       await _audioPlayer.play(AssetSource(soundPath));
     } catch (e) {

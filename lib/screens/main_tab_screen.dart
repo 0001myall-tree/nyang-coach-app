@@ -457,7 +457,7 @@ class _MainTabScreenState extends State<MainTabScreen>
         ),
         iOS: AudioContextIOS(
           category: AVAudioSessionCategory.playback,
-          options: {AVAudioSessionOptions.mixWithOthers},
+          options: {AVAudioSessionOptions.defaultToSpeaker},
         ),
       ),
     );
@@ -935,6 +935,7 @@ class _MainTabScreenState extends State<MainTabScreen>
     final coach = CoachConfigs.get(targetCoachId);
 
     _audioPlayer.setReleaseMode(ReleaseMode.stop);
+    await _audioPlayer.setVolume(1.0);
     _reminderAudioSub?.cancel();
 
     try {

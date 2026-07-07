@@ -20,6 +20,7 @@ void main() async {
   await initializeDateFormatting('ko', null);
   await NotificationService().init();
   await NotificationService().syncDailyNightCall();
+  await NotificationService().syncCoreReminders();
 
   final prefs = await SharedPreferences.getInstance();
   final _secMaleName = prefs.getString('nyang_coach_name_sec_male');

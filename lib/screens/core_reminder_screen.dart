@@ -1,18 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:audioplayers/audioplayers.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'coach_config.dart';
-import 'dart:math';
 
 class CoreReminderScreen extends StatefulWidget {
   final String coachId;
   final String? soundName;
   final String taskText;
-  
+
   const CoreReminderScreen({
-    super.key, 
-    required this.coachId, 
+    super.key,
+    required this.coachId,
     this.soundName,
     required this.taskText,
   });
@@ -37,17 +35,14 @@ class _CoreReminderScreenState extends State<CoreReminderScreen> {
       try {
         await _audioPlayer.setAudioContext(
           AudioContext(
-            android: AudioContextAndroid(
+            android: const AudioContextAndroid(
               usageType: AndroidUsageType.alarm,
               contentType: AndroidContentType.music,
-              audioFocus: AndroidAudioFocus.none,
+              audioFocus: AndroidAudioFocus.gainTransientExclusive,
             ),
             iOS: AudioContextIOS(
               category: AVAudioSessionCategory.playback,
-              options: {
-                AVAudioSessionOptions.mixWithOthers,
-                AVAudioSessionOptions.defaultToSpeaker,
-              },
+              options: {AVAudioSessionOptions.defaultToSpeaker},
             ),
           ),
         );

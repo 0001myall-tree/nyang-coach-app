@@ -669,6 +669,7 @@ class NotificationService {
         final taskList = jsonDecode(rawTasks) as List;
         for (var item in taskList) {
           if (item is! Map) continue;
+          if (item['category'] == 'schedule') continue;
           if (item['isReminderEnabled'] == false) continue;
           final tTimeStart = item['timeStart'];
           if (tTimeStart != null && tTimeStart is String) {
@@ -706,7 +707,7 @@ class NotificationService {
       try {
         final Map<String, dynamic> schedulesMap = jsonDecode(rawSchedules);
         schedulesMap.forEach((dateKey, list) {
-          if (dateKey.compareTo(todayStr) <= 0) return; // skip today and past
+          if (dateKey.compareTo(todayStr) < 0) return; // skip past dates only
           if (list is! List) return;
 
           final dateParts = dateKey.split('-');
