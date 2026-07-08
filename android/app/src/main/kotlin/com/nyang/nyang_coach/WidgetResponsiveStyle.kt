@@ -19,7 +19,7 @@ object WidgetResponsiveStyle {
 
         val horizontalPadding = lerp(18f, 22f, scale).roundToInt()
         val topPadding = lerp(18f, 24f, scale).roundToInt()
-        val bottomPadding = lerp(20f, 24f, scale).roundToInt()
+        val bottomPadding = lerp(22f, 28f, scale).roundToInt()
         val cardHorizontalPadding = lerp(12f, 14f, scale).roundToInt()
         val chatHorizontalPadding = lerp(8f, 10f, scale).roundToInt()
         val chatVerticalPadding = lerp(4f, 6f, scale).roundToInt()
