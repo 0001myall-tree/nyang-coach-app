@@ -40,7 +40,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     'https://example.com/nyang-coach/subscription',
   );
 
-  String _chatBgStyle = 'emotional'; // 'emotional' or 'simple'
+  String _chatBgStyle = 'simple'; // 'simple' or 'emotional'
   double _resetHour = 3.0; // 0 ~ 6
 
   bool _morningCallEnabled = true;
@@ -102,7 +102,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _coreReminderAdvanceMinutes =
           prefs.getInt('nyang_core_reminder_advance') ?? 10;
       _resetHour = prefs.getDouble('nyang_reset_hour') ?? 3.0;
-      _chatBgStyle = prefs.getString('nyang_chat_bg_style') ?? 'emotional';
+      _chatBgStyle = prefs.getString('nyang_chat_bg_style') ?? 'simple';
       _secMaleWidgetName = _secretaryWidgetName(
         prefs.getString('nyang_coach_name_sec_male'),
         '남비서',
@@ -1427,7 +1427,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       _buildActionButton(
                         icon: Icons.policy_outlined,
                         label: '약관 및 개인정보',
-                        subtitle: '이용약관, 개인정보처리방침, 구독 안내를 확인해요.',
                         onTap: _showLegalLinksSheet,
                       ),
                       const SizedBox(height: 24),
@@ -1508,8 +1507,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _showBgStylePicker() async {
-    final styles = ['emotional', 'simple'];
-    final labels = ['감성 버전', '심플 버전'];
+    final styles = ['simple', 'emotional'];
+    final labels = ['심플 버전', '감성 버전'];
     int selectedIndex = styles.indexOf(_chatBgStyle);
     if (selectedIndex == -1) selectedIndex = 0;
 

@@ -338,7 +338,7 @@ class ChatScreen extends StatefulWidget {
     this.handoffFromCoachId,
     this.vacationInfo,
     this.controller,
-    this.chatBgStyle = 'emotional',
+    this.chatBgStyle = 'simple',
   });
 
   @override
@@ -5095,7 +5095,6 @@ class _ChatScreenState extends State<ChatScreen>
       );
     }
 
-
     return sb.toString();
   }
 
@@ -6597,7 +6596,10 @@ $timerOutputRule
                     item['icon']!,
                     width: 14,
                     height: 14,
-                    colorFilter: const ColorFilter.mode(Color(0xFF8B7CCC), BlendMode.srcIn),
+                    colorFilter: const ColorFilter.mode(
+                      Color(0xFF8B7CCC),
+                      BlendMode.srcIn,
+                    ),
                   ),
                   const SizedBox(width: 8),
                   Text(
@@ -7584,9 +7586,13 @@ $timerOutputRule
                                       ? _coach.accentColor.withOpacity(0.6)
                                       : (isImmersiveInput
                                             ? (isGirlfriend
-                                                  ? girlfriendPink.withOpacity(0.45)
+                                                  ? girlfriendPink.withOpacity(
+                                                      0.45,
+                                                    )
                                                   : Colors.white.withOpacity(
-                                                      isMasterVacation ? 0.6 : 0.3,
+                                                      isMasterVacation
+                                                          ? 0.6
+                                                          : 0.3,
                                                     ))
                                             : masterLavenderBorder))),
                       width: _isListening ? 2.0 : 1.2,

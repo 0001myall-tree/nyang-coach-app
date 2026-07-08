@@ -4,6 +4,7 @@ import 'dart:math';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:audioplayers/audioplayers.dart';
@@ -429,14 +430,14 @@ class _MainTabScreenState extends State<MainTabScreen>
   final Set<String> _firedCoreReminders = {};
   StreamSubscription? _reminderAudioSub;
   int _reminderPlayCount = 0;
-  String _chatBgStyle = 'emotional';
+  String _chatBgStyle = 'simple';
   StreamSubscription<User?>? _authSubscription;
 
   Future<void> _loadBgStyle() async {
     final prefs = await SharedPreferences.getInstance();
     if (mounted) {
       setState(() {
-        _chatBgStyle = prefs.getString('nyang_chat_bg_style') ?? 'emotional';
+        _chatBgStyle = prefs.getString('nyang_chat_bg_style') ?? 'simple';
       });
     }
   }
@@ -1271,11 +1272,14 @@ class _MainTabScreenState extends State<MainTabScreen>
             backgroundColor: Colors.transparent,
             appBar: AppBar(
               backgroundColor: Colors.transparent,
+              surfaceTintColor: Colors.transparent,
+              shadowColor: Colors.transparent,
+              scrolledUnderElevation: 0,
               elevation: 0,
               centerTitle: false,
               titleSpacing: 20,
               title: _buildAppBarTitle(isImmersive: true),
-              actions: [_buildAvatarAction()],
+              actions: [_buildPlannerHelpAction()],
             ),
             body: AnimatedSwitcher(
               duration: const Duration(milliseconds: 180),
@@ -1422,6 +1426,8 @@ class _MainTabScreenState extends State<MainTabScreen>
                         ),
                       ],
                     ),
+                    const Spacer(),
+                    _buildPlannerHelpAction(isVacation: isVacation),
                   ],
                 ),
               ),
@@ -1586,8 +1592,235 @@ class _MainTabScreenState extends State<MainTabScreen>
     );
   }
 
-  Widget _buildAvatarAction() {
-    return const SizedBox.shrink();
+  Widget _buildPlannerHelpAction({bool isVacation = false}) {
+    final foreground = isVacation ? Colors.white : AppDesignTokens.brandMuted;
+    final background = isVacation
+        ? AppDesignTokens.brand.withOpacity(0.26)
+        : AppDesignTokens.brandSoft;
+    final border = isVacation
+        ? Colors.white.withOpacity(0.30)
+        : AppDesignTokens.brandCardBorder;
+
+    return Padding(
+      padding: const EdgeInsets.only(right: 18),
+      child: Tooltip(
+        message: '플래너 활용법',
+        child: InkWell(
+          onTap: _showPlannerHelpDialog,
+          borderRadius: BorderRadius.circular(26),
+          child: SizedBox(
+            width: 50,
+            height: 50,
+            child: Center(
+              child: Container(
+                width: 35,
+                height: 35,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: background,
+                  border: Border.all(color: border, width: 1.1),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppDesignTokens.brand.withOpacity(0.09),
+                      blurRadius: 12,
+                      offset: const Offset(0, 5),
+                    ),
+                  ],
+                ),
+                child: Icon(
+                  Icons.question_mark_rounded,
+                  color: foreground,
+                  size: 18,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showPlannerHelpDialog() {
+    showDialog(
+      context: context,
+      barrierColor: Colors.black.withOpacity(0.34),
+      builder: (dialogContext) {
+        final maxHeight = MediaQuery.of(dialogContext).size.height * 0.72;
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Container(
+            constraints: BoxConstraints(maxWidth: 420, maxHeight: maxHeight),
+            padding: const EdgeInsets.fromLTRB(22, 22, 22, 18),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(28),
+              border: Border.all(color: AppDesignTokens.brandCardBorder),
+              boxShadow: [
+                BoxShadow(
+                  color: AppDesignTokens.brand.withOpacity(0.16),
+                  blurRadius: 28,
+                  offset: const Offset(0, 14),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: const BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: AppDesignTokens.brandSoft,
+                      ),
+                      child: const Icon(
+                        Icons.question_mark_rounded,
+                        color: AppDesignTokens.brandMuted,
+                        size: 22,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        '플래너 활용법',
+                        style: GoogleFonts.notoSansKr(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w900,
+                          color: AppDesignTokens.textPrimary,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Flexible(
+                  child: SingleChildScrollView(
+                    physics: const BouncingScrollPhysics(),
+                    child: Column(
+                      children: [
+                        _buildPlannerHelpSection(
+                          iconPath: 'assets/icons/planner-microphone.svg',
+                          title: '음성으로 일정 등록하기',
+                          body:
+                              '마이크를 누르고\n'
+                              '"내일 오후 3시 회의 추가해줘"\n'
+                              '"저녁 7시에 운동 등록해줘"\n'
+                              '처럼 \'추가해줘\' 또는 \'등록해줘\'를 붙여 말하면 바로 일정을 등록할 수 있어요.',
+                        ),
+                        const SizedBox(height: 18),
+                        _buildPlannerHelpSection(
+                          iconPath: 'assets/icons/planner-comments.svg',
+                          title: '하기 싫을 땐 코치에게 말하기',
+                          body:
+                              '오늘 할 일을 하기 싫거나 미루고 싶을 때 솔직하게 말해보세요.\n'
+                              '코치가 상황에 맞게 동기를 북돋우고 실행할 수 있도록 리드해줘요.',
+                        ),
+                        const SizedBox(height: 18),
+                        _buildPlannerHelpSection(
+                          iconPath: 'assets/icons/planner-clock.svg',
+                          title: '집중 타이머 시작하기',
+                          body: '"타이머 좀 띄워줘" 라고 하면 바로 타이머가 튀어나와요.',
+                        ),
+                        const SizedBox(height: 18),
+                        _buildPlannerHelpSection(
+                          iconPath: 'assets/icons/planner-calendar-days.svg',
+                          title: '오늘 뭐부터 할지 모르겠다면',
+                          body: '혼자 고민하지 말고, 무엇부터 시작하면 좋을지 코치와 이야기하세요.',
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: TextButton(
+                    onPressed: () => Navigator.pop(dialogContext),
+                    style: TextButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      backgroundColor: AppDesignTokens.brand,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
+                    child: Text(
+                      '확인',
+                      style: GoogleFonts.notoSansKr(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildPlannerHelpSection({
+    required String iconPath,
+    required String title,
+    required String body,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 34,
+          height: 34,
+          decoration: const BoxDecoration(
+            shape: BoxShape.circle,
+            color: AppDesignTokens.brandSoft,
+          ),
+          child: Center(
+            child: SvgPicture.asset(
+              iconPath,
+              width: 16,
+              height: 16,
+              colorFilter: const ColorFilter.mode(
+                AppDesignTokens.brandMuted,
+                BlendMode.srcIn,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: GoogleFonts.notoSansKr(
+                  fontSize: 15,
+                  height: 1.35,
+                  fontWeight: FontWeight.w900,
+                  color: AppDesignTokens.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 7),
+              Text(
+                body,
+                style: GoogleFonts.notoSansKr(
+                  fontSize: 13,
+                  height: 1.55,
+                  fontWeight: FontWeight.w600,
+                  color: AppDesignTokens.brandTextMuted,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
   }
 
   // ── 서랍 (모든 탭 공통) ────────────────────────
