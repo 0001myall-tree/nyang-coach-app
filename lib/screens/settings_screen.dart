@@ -3942,8 +3942,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 const SizedBox(height: 10),
                 _buildLegalLinkTile(
                   icon: Icons.workspace_premium_outlined,
-                  title: '구독 및 환불 안내',
-                  subtitle: '플랜 결제와 환불 기준을 확인해요.',
+                  title: '환불 안내',
+                  subtitle: '환불 기준을 확인하세요.',
                   url: _subscriptionUrl,
                 ),
               ],
