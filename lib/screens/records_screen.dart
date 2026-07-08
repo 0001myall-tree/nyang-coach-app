@@ -814,9 +814,11 @@ ${feedbackType == 0 ? '''   [실행 회고형]
                     _buildWeeklyChartCard(records),
                     const SizedBox(height: 20),
 
-                    // 휴식과 생산성 상관관계 리포트
-                    _buildRestProductivityCorrelationCard(),
-                    const SizedBox(height: 20),
+                    // 휴식과 생산성 상관관계 리포트 (마스터 코치 전용)
+                    if (_isMaster) ...[
+                      _buildRestProductivityCorrelationCard(),
+                      const SizedBox(height: 20),
+                    ],
 
                     // 습관 트래킹
                     _buildHabitTrackingCard(),
@@ -1370,8 +1372,10 @@ ${feedbackType == 0 ? '''   [실행 회고형]
                       ),
                     ],
                   ),
-                  const SizedBox(height: 12),
-                  _buildHabitPattern(h),
+                  if (_isMaster) ...[
+                    const SizedBox(height: 12),
+                    _buildHabitPattern(h),
+                  ],
                 ],
               ),
             );
