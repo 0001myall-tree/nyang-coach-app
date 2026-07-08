@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:ui';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -316,6 +317,9 @@ class _LandingScreenState extends State<LandingScreen>
 
   void _showLoginBottomSheet() {
     final outerContext = context; // 상위 화면(LandingScreen)의 context 저장
+    final showAppleLogin = defaultTargetPlatform == TargetPlatform.iOS;
+    final loginButtonTopGap = showAppleLogin ? 28.0 : 24.0;
+    final loginButtonBottomGap = showAppleLogin ? 16.0 : 20.0;
     showAppBottomSheet(
       context: context,
       builder: (sheetContext) {
@@ -359,11 +363,24 @@ class _LandingScreenState extends State<LandingScreen>
                     height: 1.4,
                   ),
                 ),
-                const SizedBox(height: 32),
+                SizedBox(height: loginButtonTopGap),
 
-                // 구글 로그인 버튼
+                if (showAppleLogin) ...[
+                  _buildLoginButton(
+                    text: 'Apple로 계속',
+                    icon: const Icon(
+                      Icons.apple,
+                      size: 25,
+                      color: Color(0xFF111827),
+                    ),
+                    onPressed: () =>
+                        _handleSocialLogin(sheetContext, outerContext, 'apple'),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+
                 _buildLoginButton(
-                  text: '구글로 계속',
+                  text: 'Google로 계속',
                   icon: SvgPicture.string(
                     '''<svg width="22" height="22" viewBox="0 0 24 24">
   <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
@@ -374,97 +391,68 @@ class _LandingScreenState extends State<LandingScreen>
                     width: 24,
                     height: 24,
                   ),
-                  onPressed: () async {
-                    Navigator.pop(sheetContext); // 바텀시트 닫기
-
-                    final authService = AuthService();
-                    final userCred = await authService.signInWithGoogle();
-
-                    if (!outerContext.mounted) return;
-
-                    if (userCred != null) {
-                      print('로그인 성공: ${userCred.user?.displayName}');
-                      await TasksSyncService.syncFromCloud(); // 로그인 시 클라우드 데이터 복원
-                      final data = await UserDataService.load();
-                      if (!outerContext.mounted) return;
-
-                      if (data.selectedCoachId != null &&
-                          data.canAccessCoach(data.selectedCoachId!)) {
-                        Navigator.pushReplacement(
-                          outerContext,
-                          MaterialPageRoute(
-                            builder: (context) =>
-                                MainTabScreen(coachId: data.selectedCoachId!),
-                          ),
-                        );
-                      } else {
-                        if (data.selectedCoachId != null) {
-                          await UserDataService.setSelectedCoach('cat');
-                        }
-                        if (!outerContext.mounted) return;
-                        Navigator.pushReplacement(
-                          outerContext,
-                          MaterialPageRoute(
-                            builder: (context) => const PhilosophyIntroScreen(),
-                          ),
-                        );
-                      }
-                    } else {
-                      print('로그인 취소 또는 실패');
-                      ScaffoldMessenger.of(outerContext).showSnackBar(
-                        const SnackBar(
-                          content: Text(
-                            '구글 로그인에 실패했습니다. (파이어베이스 SHA-1 설정 누락 등)',
-                          ),
-                          backgroundColor: Colors.redAccent,
-                        ),
-                      );
-                    }
-                  },
+                  onPressed: () =>
+                      _handleSocialLogin(sheetContext, outerContext, 'google'),
                 ),
-                const SizedBox(height: 12),
-
-                // 네이버 로그인 버튼
-                _buildLoginButton(
-                  text: '네이버로 계속',
-                  icon: SvgPicture.string(
-                    '''<svg width="20" height="20" viewBox="0 0 24 24" fill="#03C75A">
-  <path d="M16.273 12.845L7.376 0H0v24h7.727V11.155L16.624 24H24V0h-7.727v12.845z" />
-</svg>''',
-                    width: 20,
-                    height: 20,
-                  ),
-                  onPressed: () {
-                    Navigator.pop(sheetContext); // 바텀시트 닫기
-                    // 개발용 프리패스 (바로 코치 선택 화면으로)
-                    Navigator.pushReplacement(
-                      outerContext,
-                      MaterialPageRoute(
-                        builder: (context) => const PhilosophyIntroScreen(),
-                      ),
-                    );
-                  },
-                ),
-                const SizedBox(height: 12),
-
-                // 카카오 로그인 버튼
-                _buildLoginButton(
-                  text: '카카오로 계속',
-                  icon: SvgPicture.string(
-                    '''<svg width="22" height="22" viewBox="0 0 24 24" fill="#3c1e1e">
-  <path d="M12 3c-4.97 0-9 3.185-9 7.115 0 2.558 1.707 4.8 4.33 6.091l-.865 3.162c-.048.178.058.353.232.384.053.01.107.01.16-.003l3.704-2.45c.46.046.938.07 1.439.07 4.97 0 9-3.185 9-7.115S16.97 3 12 3z" />
-</svg>''',
-                    width: 24,
-                    height: 24,
-                  ),
-                  onPressed: () {},
-                ),
-                const SizedBox(height: 16),
+                SizedBox(height: loginButtonBottomGap),
               ],
             ),
           ),
         );
       },
+    );
+  }
+
+  Future<void> _handleSocialLogin(
+    BuildContext sheetContext,
+    BuildContext outerContext,
+    String provider,
+  ) async {
+    Navigator.pop(sheetContext);
+
+    final authService = AuthService();
+    final userCred = provider == 'apple'
+        ? await authService.signInWithApple()
+        : await authService.signInWithGoogle();
+
+    if (!outerContext.mounted) return;
+
+    if (userCred != null) {
+      print('로그인 성공: ${userCred.user?.displayName}');
+      await TasksSyncService.syncFromCloud();
+      final data = await UserDataService.load();
+      if (!outerContext.mounted) return;
+
+      if (data.selectedCoachId != null &&
+          data.canAccessCoach(data.selectedCoachId!)) {
+        Navigator.pushReplacement(
+          outerContext,
+          MaterialPageRoute(
+            builder: (context) => MainTabScreen(coachId: data.selectedCoachId!),
+          ),
+        );
+      } else {
+        if (data.selectedCoachId != null) {
+          await UserDataService.setSelectedCoach('cat');
+        }
+        if (!outerContext.mounted) return;
+        Navigator.pushReplacement(
+          outerContext,
+          MaterialPageRoute(
+            builder: (context) => const PhilosophyIntroScreen(),
+          ),
+        );
+      }
+      return;
+    }
+
+    print('로그인 취소 또는 실패');
+    final providerName = provider == 'apple' ? 'Apple' : 'Google';
+    ScaffoldMessenger.of(outerContext).showSnackBar(
+      SnackBar(
+        content: Text('$providerName 로그인에 실패했습니다.'),
+        backgroundColor: Colors.redAccent,
+      ),
     );
   }
 

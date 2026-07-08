@@ -7,11 +7,7 @@ import '../services/tasks_sync_service.dart';
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
-  final GoogleSignIn _googleSignIn = GoogleSignIn(
-    scopes: [
-      'email',
-    ],
-  );
+  final GoogleSignIn _googleSignIn = GoogleSignIn(scopes: ['email']);
 
   // 유저 상태 스트림 (로그인/로그아웃 상태 변화 감지)
   Stream<User?> get authStateChanges => _auth.authStateChanges();
@@ -44,17 +40,35 @@ class AuthService {
       }
 
       // Cloud Data Sync
-      if (cred.user != null) {
-        await UserDataService.syncFromCloud();
-        await MemoryService().syncFromCloud();
-        await TasksSyncService.syncFromCloud();
-      }
+      await _syncAfterSignIn(cred);
 
       return cred;
     } catch (e) {
       debugPrint("Google Sign-In Error: $e");
       return null;
     }
+  }
+
+  Future<UserCredential?> signInWithApple() async {
+    try {
+      final appleProvider = AppleAuthProvider()..addScope('email');
+      final cred = kIsWeb
+          ? await _auth.signInWithPopup(appleProvider)
+          : await _auth.signInWithProvider(appleProvider);
+
+      await _syncAfterSignIn(cred);
+      return cred;
+    } catch (e) {
+      debugPrint("Apple Sign-In Error: $e");
+      return null;
+    }
+  }
+
+  Future<void> _syncAfterSignIn(UserCredential? cred) async {
+    if (cred?.user == null) return;
+    await UserDataService.syncFromCloud();
+    await MemoryService().syncFromCloud();
+    await TasksSyncService.syncFromCloud();
   }
 
   // 로그아웃

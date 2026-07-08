@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'coach_config.dart';
 import 'main_tab_screen.dart';
 import 'landing_screen.dart';
@@ -29,6 +30,16 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
+  static final Uri _termsUrl = Uri.parse(
+    'https://example.com/nyang-coach/terms',
+  );
+  static final Uri _privacyUrl = Uri.parse(
+    'https://example.com/nyang-coach/privacy',
+  );
+  static final Uri _subscriptionUrl = Uri.parse(
+    'https://example.com/nyang-coach/subscription',
+  );
+
   String _chatBgStyle = 'emotional'; // 'emotional' or 'simple'
   double _resetHour = 3.0; // 0 ~ 6
 
@@ -1411,6 +1422,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
                       // MASTER 전용 비서 학습 설정
                       _buildPremiumLearnCard(),
+                      const SizedBox(height: 16),
+
+                      _buildActionButton(
+                        icon: Icons.policy_outlined,
+                        label: '약관 및 개인정보',
+                        subtitle: '이용약관, 개인정보처리방침, 구독 안내를 확인해요.',
+                        onTap: _showLegalLinksSheet,
+                      ),
                       const SizedBox(height: 24),
 
                       _buildLogoutButton(),
@@ -3879,6 +3898,123 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  void _showLegalLinksSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        return SafeArea(
+          top: false,
+          child: Container(
+            margin: const EdgeInsets.all(12),
+            padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(24),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 42,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 18),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE5E0F6),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                _buildLegalLinkTile(
+                  icon: Icons.description_outlined,
+                  title: '이용약관',
+                  subtitle: '서비스 이용 규칙을 확인해요.',
+                  url: _termsUrl,
+                ),
+                const SizedBox(height: 10),
+                _buildLegalLinkTile(
+                  icon: Icons.privacy_tip_outlined,
+                  title: '개인정보처리방침',
+                  subtitle: '데이터 수집과 보관 방식을 확인해요.',
+                  url: _privacyUrl,
+                ),
+                const SizedBox(height: 10),
+                _buildLegalLinkTile(
+                  icon: Icons.workspace_premium_outlined,
+                  title: '구독 및 환불 안내',
+                  subtitle: '플랜 결제와 환불 기준을 확인해요.',
+                  url: _subscriptionUrl,
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildLegalLinkTile({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required Uri url,
+  }) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: () => _openLegalLink(url),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF8F6FF),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFE8E3F8), width: 1),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: const Color(0xFF8B7CFF), size: 20),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: GoogleFonts.notoSansKr(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                      color: const Color(0xFF3D3A4E),
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    subtitle,
+                    style: GoogleFonts.notoSansKr(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                      color: const Color(0xFF8A8798),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(
+              Icons.open_in_new_rounded,
+              size: 18,
+              color: Color(0xFFA0A0B0),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openLegalLink(Uri url) async {
+    final opened = await launchUrl(url, mode: LaunchMode.externalApplication);
+    if (opened || !mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('링크를 열 수 없어요. 잠시 후 다시 시도해주세요.')),
     );
   }
 
