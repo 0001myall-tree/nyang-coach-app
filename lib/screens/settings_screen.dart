@@ -725,7 +725,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           _buildMorningCallCoachItem(
                             id: 'random',
                             name: '랜덤 코치 모닝콜',
-                            subtitle: '보유한 코치 중 한 명이 랜덤으로 깨워줘요',
+                            subtitle: '모든 코치 중 한 명이 랜덤으로 깨워줘요',
                             isSelected: tempCoachId == 'random',
                             onTap: () {
                               if (tempEnabled)
@@ -736,18 +736,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           ...CoachConfigs.all.values
                               .where((coach) => coach.tier == 'friends')
                               .map((coach) {
-                                final bool isOwned =
-                                    _userData?.canAccessCoach(coach.id) ??
-                                    false;
                                 return _buildMorningCallCoachItem(
                                   id: coach.id,
                                   name: coach.name,
                                   subtitle: '',
                                   isSelected: tempCoachId == coach.id,
-                                  isLocked: !isOwned,
                                   imagePath: coach.imagePath,
                                   onTap: () {
-                                    if (tempEnabled && isOwned) {
+                                    if (tempEnabled) {
                                       setModalState(
                                         () => tempCoachId = coach.id,
                                       );
@@ -767,18 +763,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           ...CoachConfigs.all.values
                               .where((coach) => coach.tier == 'master')
                               .map((coach) {
-                                final bool isOwned =
-                                    _userData?.canAccessCoach(coach.id) ??
-                                    false;
                                 return _buildMorningCallCoachItem(
                                   id: coach.id,
                                   name: coach.name,
                                   subtitle: '',
                                   isSelected: tempCoachId == coach.id,
-                                  isLocked: !isOwned,
                                   imagePath: coach.imagePath,
                                   onTap: () {
-                                    if (tempEnabled && isOwned) {
+                                    if (tempEnabled) {
                                       setModalState(
                                         () => tempCoachId = coach.id,
                                       );
@@ -1036,7 +1028,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           _buildMorningCallCoachItem(
                             id: 'random',
                             name: '랜덤 코치',
-                            subtitle: '보유한 코치 중 한 명이 랜덤으로 알람을 보내줘요',
+                            subtitle: '모든 코치 중 한 명이 랜덤으로 알람을 보내줘요',
                             isSelected: tempCoachId == 'random',
                             onTap: () {
                               if (tempEnabled)
@@ -1047,18 +1039,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           ...CoachConfigs.all.values
                               .where((coach) => coach.tier == 'friends')
                               .map((coach) {
-                                final bool isOwned =
-                                    _userData?.canAccessCoach(coach.id) ??
-                                    false;
                                 return _buildMorningCallCoachItem(
                                   id: coach.id,
                                   name: coach.name,
                                   subtitle: '',
                                   isSelected: tempCoachId == coach.id,
-                                  isLocked: !isOwned,
                                   imagePath: coach.imagePath,
                                   onTap: () {
-                                    if (tempEnabled && isOwned) {
+                                    if (tempEnabled) {
                                       setModalState(
                                         () => tempCoachId = coach.id,
                                       );
@@ -1078,18 +1066,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           ...CoachConfigs.all.values
                               .where((coach) => coach.tier == 'master')
                               .map((coach) {
-                                final bool isOwned =
-                                    _userData?.canAccessCoach(coach.id) ??
-                                    false;
                                 return _buildMorningCallCoachItem(
                                   id: coach.id,
                                   name: coach.name,
                                   subtitle: '',
                                   isSelected: tempCoachId == coach.id,
-                                  isLocked: !isOwned,
                                   imagePath: coach.imagePath,
                                   onTap: () {
-                                    if (tempEnabled && isOwned) {
+                                    if (tempEnabled) {
                                       setModalState(
                                         () => tempCoachId = coach.id,
                                       );

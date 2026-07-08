@@ -762,11 +762,10 @@ class _MainTabScreenState extends State<MainTabScreen>
     String targetCoachId =
         prefs.getString('nyang_morning_call_resolved_coach') ??
         configuredCoachId;
-    final userData = await UserDataService.load();
 
-    if (targetCoachId == 'random' || !userData.canAccessCoach(targetCoachId)) {
+    if (targetCoachId == 'random') {
       final availableCoaches = CoachConfigs.all.values
-          .where((coach) => userData.canAccessCoach(coach.id))
+          .where((coach) => coach.voiceCount > 0)
           .map((coach) => coach.id)
           .toList();
       if (availableCoaches.isNotEmpty) {
@@ -775,6 +774,8 @@ class _MainTabScreenState extends State<MainTabScreen>
       } else {
         targetCoachId = 'cat';
       }
+    } else if ((CoachConfigs.all[targetCoachId]?.voiceCount ?? 0) <= 0) {
+      targetCoachId = 'cat';
     }
 
     final coach = CoachConfigs.get(targetCoachId);
@@ -917,11 +918,9 @@ class _MainTabScreenState extends State<MainTabScreen>
       return;
     }
 
-    final userData = await UserDataService.load();
-
-    if (targetCoachId == 'random' || !userData.canAccessCoach(targetCoachId)) {
+    if (targetCoachId == 'random') {
       final availableCoaches = CoachConfigs.all.values
-          .where((coach) => userData.canAccessCoach(coach.id))
+          .where((coach) => coach.voiceCount > 0)
           .map((coach) => coach.id)
           .toList();
       if (availableCoaches.isNotEmpty) {
@@ -930,6 +929,8 @@ class _MainTabScreenState extends State<MainTabScreen>
       } else {
         targetCoachId = 'cat';
       }
+    } else if (!CoachConfigs.all.containsKey(targetCoachId)) {
+      targetCoachId = 'cat';
     }
 
     final coach = CoachConfigs.get(targetCoachId);

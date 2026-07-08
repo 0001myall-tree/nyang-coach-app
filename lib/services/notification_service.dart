@@ -11,7 +11,6 @@ import '../screens/morning_call_screen.dart';
 import '../screens/night_call_screen.dart';
 import '../screens/core_reminder_screen.dart';
 import '../screens/coach_config.dart';
-import '../models/user_data.dart';
 import 'analytics_service.dart';
 import 'morning_call_alarm_session.dart';
 import 'user_title_service.dart';
@@ -224,12 +223,9 @@ class NotificationService {
     }
     String targetCoachId = coachId;
 
-    // UserDataService 로드하여 보유 코치 체크
-    final userData = await UserDataService.load();
-
     if (targetCoachId == 'random') {
       final availableCoaches = CoachConfigs.all.values
-          .where((coach) => userData.canAccessCoach(coach.id))
+          .where((coach) => coach.voiceCount > 0)
           .map((coach) => coach.id)
           .toList();
       if (availableCoaches.isNotEmpty) {
@@ -238,6 +234,8 @@ class NotificationService {
       } else {
         targetCoachId = 'cat';
       }
+    } else if ((CoachConfigs.all[targetCoachId]?.voiceCount ?? 0) <= 0) {
+      targetCoachId = 'cat';
     }
     // Save the resolved coach ID to SharedPreferences so the in-app engine can align with it
     final prefs = await SharedPreferences.getInstance();
@@ -604,9 +602,8 @@ class NotificationService {
     final advanceMinutes = prefs.getInt('nyang_core_reminder_advance') ?? 10;
 
     if (targetCoachId == 'random') {
-      final userData = await UserDataService.load();
       final availableCoaches = CoachConfigs.all.values
-          .where((coach) => userData.canAccessCoach(coach.id))
+          .where((coach) => coach.voiceCount > 0)
           .map((coach) => coach.id)
           .toList();
       if (availableCoaches.isNotEmpty) {
@@ -615,6 +612,9 @@ class NotificationService {
       } else {
         targetCoachId = 'cat';
       }
+    } else if (targetCoachId != 'push' &&
+        !CoachConfigs.all.containsKey(targetCoachId)) {
+      targetCoachId = 'cat';
     }
     // Save the resolved core reminder coach ID to SharedPreferences
     await prefs.setString('nyang_core_reminder_resolved_coach', targetCoachId);
