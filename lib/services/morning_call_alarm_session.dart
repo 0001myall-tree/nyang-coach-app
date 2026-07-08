@@ -63,7 +63,6 @@ class MorningCallAlarmSession {
           ),
           iOS: AudioContextIOS(
             category: AVAudioSessionCategory.playback,
-            options: {AVAudioSessionOptions.defaultToSpeaker},
           ),
         ),
       );

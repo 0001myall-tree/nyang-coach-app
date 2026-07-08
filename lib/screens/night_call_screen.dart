@@ -56,7 +56,6 @@ class _NightCallScreenState extends State<NightCallScreen> {
           ),
           iOS: AudioContextIOS(
             category: AVAudioSessionCategory.playback,
-            options: {AVAudioSessionOptions.defaultToSpeaker},
           ),
         ),
       );

@@ -42,7 +42,6 @@ class _CoreReminderScreenState extends State<CoreReminderScreen> {
             ),
             iOS: AudioContextIOS(
               category: AVAudioSessionCategory.playback,
-              options: {AVAudioSessionOptions.defaultToSpeaker},
             ),
           ),
         );

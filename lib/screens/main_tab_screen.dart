@@ -458,7 +458,6 @@ class _MainTabScreenState extends State<MainTabScreen>
         ),
         iOS: AudioContextIOS(
           category: AVAudioSessionCategory.playback,
-          options: {AVAudioSessionOptions.defaultToSpeaker},
         ),
       ),
     );
@@ -1716,8 +1715,8 @@ class _MainTabScreenState extends State<MainTabScreen>
                           iconPath: 'assets/icons/planner-comments.svg',
                           title: '하기 싫을 땐 코치에게 말하기',
                           body:
-                              '오늘 할 일을 하기 싫거나 미루고 싶을 때 솔직하게 말해보세요.\n'
-                              '코치가 상황에 맞게 동기를 북돋우고 실행할 수 있도록 리드해줘요.',
+                              '하기 싫은 일이 있을 때 코치에게 언제든 솔직히 말하세요.\n'
+                              '코치가 때론 달래주고 동기부여도 해주면서 리드해줄 거예요.',
                         ),
                         const SizedBox(height: 18),
                         _buildPlannerHelpSection(
