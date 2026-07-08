@@ -39,7 +39,7 @@
                 android:autoSizeMinTextSize="12sp"
                 android:autoSizeMaxTextSize="18sp"
                 android:text="오늘도 함께, 차근차근 시작해요."
-                android:textColor="#2F2D3D"
+                android:textColor="#F5F1FF"
                 android:textSize="18sp"
                 android:textStyle="bold"
                 android:gravity="center"
@@ -99,7 +99,7 @@
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:text="0개 남음"
-                android:textColor="#2F2D3D"
+                android:textColor="#F5F1FF"
                 android:textSize="13sp"
                 android:textStyle="bold" />
 
@@ -107,7 +107,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="›"
-                android:textColor="#9E96C8"
+                android:textColor="#C1A8FF"
                 android:textSize="16sp"
                 android:textStyle="bold" />
         </LinearLayout>
@@ -142,7 +142,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="코치와 대화"
-                android:textColor="#8B7CFF"
+                android:textColor="#DDD2FF"
                 android:textSize="11sp"
                 android:textStyle="bold"
                 android:maxLines="1"
