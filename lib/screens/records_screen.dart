@@ -597,6 +597,86 @@ class _RecordsScreenState extends State<RecordsScreen> {
       }
     }
 
+    // 장기 비전형 작성을 위한 마일스톤 상세 데이터
+    List<VisionItem> visionItems = [];
+    try {
+      final visionsRaw = prefs.getString('nyang_visions');
+      if (visionsRaw != null) {
+        visionItems = (jsonDecode(visionsRaw) as List)
+            .map((e) => VisionItem.fromJson(e))
+            .toList();
+      }
+    } catch (_) {}
+
+    DateTime? parseDotDate(String? s) {
+      if (s == null || s.isEmpty) return null;
+      final parts = s.split('.');
+      if (parts.length != 3) return null;
+      final y = int.tryParse(parts[0]);
+      final m = int.tryParse(parts[1]);
+      final d = int.tryParse(parts[2]);
+      if (y == null || m == null || d == null) return null;
+      return DateTime(y, m, d);
+    }
+
+    final weekStart = DateTime.tryParse(records.first['date']) ?? DateTime.now();
+    final weekEnd = DateTime.tryParse(records.last['date']) ?? DateTime.now();
+    final todayNormalized = DateTime(
+      DateTime.now().year,
+      DateTime.now().month,
+      DateTime.now().day,
+    );
+
+    final completedThisWeekMilestones = <String>[];
+    final recentlyUpdatedVisionNotes = <String>[];
+    final overdueMilestones = <String>[];
+    String? nearestUpcomingLabel;
+    DateTime? nearestUpcomingDate;
+
+    for (final v in visionItems) {
+      final updatedAt = DateTime.tryParse(v.updatedAt);
+      if (updatedAt != null &&
+          !updatedAt.isBefore(weekStart) &&
+          !updatedAt.isAfter(weekEnd.add(const Duration(days: 1)))) {
+        final memoedMilestone = v.milestones.where(
+          (m) =>
+              (m.memo?.isNotEmpty ?? false) ||
+              (m.memoSections?.isNotEmpty ?? false),
+        );
+        if (memoedMilestone.isNotEmpty) {
+          recentlyUpdatedVisionNotes.add(
+            '${v.name} - "${memoedMilestone.first.text}" 관련 메모 추가/수정됨',
+          );
+        } else {
+          recentlyUpdatedVisionNotes.add('${v.name} 비전이 최근 업데이트됨');
+        }
+      }
+
+      for (final m in v.milestones) {
+        if (m.done) {
+          final achieved = parseDotDate(m.achievedDate);
+          if (achieved != null &&
+              !achieved.isBefore(weekStart) &&
+              !achieved.isAfter(weekEnd)) {
+            completedThisWeekMilestones.add('${v.name} - ${m.text}');
+          }
+        } else {
+          final deadline = (m.date?.isNotEmpty ?? false)
+              ? DateTime.tryParse(m.date!)
+              : null;
+          if (deadline != null) {
+            if (deadline.isBefore(todayNormalized)) {
+              overdueMilestones.add('${v.name} - ${m.text} (마감: ${m.date})');
+            } else if (nearestUpcomingDate == null ||
+                deadline.isBefore(nearestUpcomingDate)) {
+              nearestUpcomingDate = deadline;
+              nearestUpcomingLabel = '${v.name} - ${m.text} (마감: ${m.date})';
+            }
+          }
+        }
+      }
+    }
+
     return '''당신은 사용자의 한 주간 성과를 분석하는 수석 비서이자 전문 코치입니다.
 사용자의 지난 7일간의 실제 할 일 완료 내역과 현재 설정된 목표/비전을 바탕으로, $title께 드리는 주간 코칭 한마디를 격식 있게 작성해 주세요.
 
@@ -612,10 +692,16 @@ $recordBuffer
 - 월간 목표: $monthGoalText
 - 장기 비전: $visibleVisions
 
+[장기 비전 상세 데이터]
+- 이번 주 완료된 마일스톤: ${completedThisWeekMilestones.isEmpty ? '없음' : completedThisWeekMilestones.join(', ')}
+- 최근 새로 추가/수정된 장기비전 메모나 마일스톤: ${recentlyUpdatedVisionNotes.isEmpty ? '없음' : recentlyUpdatedVisionNotes.join(' / ')}
+- 가장 가까운 마감 예정 마일스톤: ${nearestUpcomingLabel ?? '없음'}
+- 마감일이 지난 미완료 마일스톤: ${overdueMilestones.isEmpty ? '없음' : overdueMilestones.join(', ')}
+
 [현재 설정된 습관 트래킹 빈도]
 ${habitFreqBuffer.toString().trim()}
 
-[회고 유형: ${feedbackType == 0 ? '실행 회고형' : feedbackType == 1 ? '성장 해석형' : '컨디션 회고형'}]
+[회고 유형: ${feedbackType == 0 ? '실행 회고형' : feedbackType == 1 ? '장기 비전형' : '컨디션 회고형'}]
 
 [작성 지침]
 1. 어투: ${isMale ? '남비서로서 차분하고 신뢰감 있는 "$title" 호칭의 격식체 (~했습니다, ~하십시오).' : '여비서로서 지적이고 부드러운 "$title" 호칭의 격식체 (~했어요, ~어떨까요).'}
@@ -627,11 +713,14 @@ ${feedbackType == 0 ? '''   [실행 회고형]
    - 사용자가 실제로 무엇을 했고, 무엇을 미뤘으며, 무엇이 개선되었는지를 중심으로 회고합니다.
    - 완료한 일들 중 목표/비전과 연결되는 중요한 활동 1~2개를 콕 집어 구체적으로 칭찬하세요. (추상적 칭찬 금지)
    - 3일 이상 미루다 다시 시작한 항목이 있다면 특별히 언급해 주세요.
-   - 반복적으로 밀린 중요한 일이 있다면 부드럽게 지적하고 다음 주 우선순위로 권유하세요.''' : feedbackType == 1 ? '''   [성장 해석형]
-   - 사용자가 무엇을 했는지는 이미 알고 있으므로, 그 활동이 어떤 변화로 이어지고 있는지를 해석해서 전달합니다.
-   - 능력치 평가, 게임 스탯형 표현, 근거 없는 칭찬은 절대 사용하지 마세요.
-   - 실제 행동 기반으로 변화를 해석하세요. 예: "최근에는 막힌 일을 뒤로 미루기보다 직접 해결하려는 시간이 늘어나고 있는 것 같아요."
-   - 그 해석을 통해 앞으로 어떤 변화가 생길지 예측해 주세요.''' : '''   [컨디션 회고형]
+   - 반복적으로 밀린 중요한 일이 있다면 부드럽게 지적하고 다음 주 우선순위로 권유하세요.''' : feedbackType == 1 ? '''   [장기 비전형]
+   - 현재 장기 비전과 마일스톤을 중심으로 회고합니다. [장기 비전 상세 데이터]를 반드시 참고하세요.
+   - 이번 주 완료된 마일스톤이 있다면 구체적으로 언급하며 칭찬하세요.
+   - 최근 새로 추가/수정된 장기비전 메모나 마일스톤이 있다면, 미래를 준비하고 있다는 점을 자연스럽게 언급하세요. (예: "최근에는 '앱 출시 준비' 관련 메모도 추가했네요. 실행뿐 아니라 방향까지 구상하시는 점이 인상적입니다.")
+   - 가장 가까운 마감 예정 마일스톤이 있다면 다음 준비 대상으로 안내하세요.
+   - 마감일이 지난 미완료 마일스톤이 있다면 부드럽게 확인을 권유하세요.
+   - 장기 비전이 비어 있다면, 장기 비전을 작성하면 매주 실행과 연결해 점검할 수 있다고 안내하세요.
+   - 마지막으로 미래를 응원하는 한마디로 마무리하세요.''' : '''   [컨디션 회고형]
    - 실행이나 성장보다 이번 주의 컨디션 흐름에 초점을 맞춥니다.
    - 완료율, 휴무일 패턴, 할 일 밀도 등을 바탕으로 체력/휴식/회복 측면을 분석하세요.
    - 무리한 주였는지, 잘 쉰 주였는지, 회복이 더 필요한지를 부드럽게 짚어주세요.
@@ -940,14 +1029,20 @@ ${feedbackType == 0 ? '''   [실행 회고형]
     int successDays = 0;
     int zeros = 0;
     Map<String, dynamic> best = activeRecords[0];
+    double bestRate = -1;
 
     for (var r in activeRecords) {
       final int count = _recordDoneCount(r);
+      final int recordTotal = _recordTotalCount(r);
       total += count;
       if (count > 0) successDays++;
       if (count == 0) zeros++;
-      if (count > _recordDoneCount(best)) {
-        best = r;
+      if (recordTotal > 0) {
+        final double rate = count / recordTotal;
+        if (rate > bestRate) {
+          bestRate = rate;
+          best = r;
+        }
       }
     }
 
