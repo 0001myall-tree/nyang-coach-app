@@ -24,7 +24,7 @@ class NyangWidgetProvider : HomeWidgetProvider() {
 
                 setProgressBar(R.id.progress_bar, 100, progress, false)
                 setTextViewText(R.id.coach_message, WidgetTextFormatter.formatCoachMessage(coachMessage))
-                setTextViewText(R.id.remaining_count_text, WidgetTextFormatter.formatRemainingCount(remainingCount, "#8B6BFF"))
+                setTextViewText(R.id.remaining_count_text, WidgetTextFormatter.formatRemainingCount(remainingCount, "#8B7CFF"))
                 WidgetResponsiveStyle.apply(context, appWidgetManager, widgetId, this)
 
                 val intentRemaining = Intent(context, MainActivity::class.java).apply {

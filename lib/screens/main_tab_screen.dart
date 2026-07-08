@@ -553,11 +553,20 @@ class _MainTabScreenState extends State<MainTabScreen>
     if (_redirectingForCoachAccess) return false;
 
     if (syncCloud) {
-      await UserDataService.syncFromCloud();
+      await UserDataService.syncFromCloud().timeout(
+        const Duration(seconds: 8),
+        onTimeout: () {},
+      );
     }
     final data = await UserDataService.load();
-    await WidgetSyncService.enforcePlanAccess(
-      hasMasterPlan: data.isPlanActive && data.planType == 'master',
+    unawaited(
+      WidgetSyncService.enforcePlanAccess(
+        hasMasterPlan: data.isPlanActive && data.planType == 'master',
+      ).catchError((Object e, StackTrace stackTrace) {
+        debugPrint('Widget access sync failed: $e');
+        debugPrintStack(stackTrace: stackTrace);
+        return false;
+      }),
     );
     final canAccess = data.canAccessCoach(widget.coachId);
 
@@ -588,13 +597,13 @@ class _MainTabScreenState extends State<MainTabScreen>
       if (widgetRoute != null) prefs.remove('widget_route');
       if (widgetCoachId != null) prefs.remove('widget_coach_id');
 
-      int targetIndex =
+      final targetIndex =
           (widgetRoute == 'tasks' ||
               widgetRoute == 'tasks_done_bottom_sheet' ||
               widgetRoute == 'tasks_remaining_bottom_sheet')
           ? 1
           : 0;
-      String targetCoachId = widgetCoachId ?? widget.coachId;
+      const targetCoachId = 'cat';
       final type = widgetRoute == 'tasks_done_bottom_sheet' ? 'done' : null;
       final data = await UserDataService.load();
 
@@ -1173,7 +1182,7 @@ class _MainTabScreenState extends State<MainTabScreen>
   // ── 프렌즈: 전체 배경 이미지 (헤더/탭바 투명) ────────────
   Widget _buildFriendsLayout() {
     final isSimple = _chatBgStyle == 'simple';
-    
+
     // 심플 모드일 때는 밝은 배경이므로 검은색 상태바 아이콘 적용
     final systemUiStyle = isSimple
         ? SystemUiOverlayStyle.dark.copyWith(
@@ -1223,7 +1232,9 @@ class _MainTabScreenState extends State<MainTabScreen>
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           border: Border.all(
-                            color: AppDesignTokens.brand.withValues(alpha: 0.04),
+                            color: AppDesignTokens.brand.withValues(
+                              alpha: 0.04,
+                            ),
                             width: 2,
                           ),
                         ),
@@ -1238,7 +1249,9 @@ class _MainTabScreenState extends State<MainTabScreen>
                         height: 400,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: AppDesignTokens.brandAccent.withValues(alpha: 0.02),
+                          color: AppDesignTokens.brandAccent.withValues(
+                            alpha: 0.02,
+                          ),
                         ),
                       ),
                     ),
@@ -1277,11 +1290,15 @@ class _MainTabScreenState extends State<MainTabScreen>
               inactiveIcons: _inactiveIcons,
               activeIcons: _activeIcons,
               activeColor: _activeColor,
-              bgColor: isSimple ? const Color(0xFFFFFCFF) : Colors.black.withOpacity(0.35),
+              bgColor: isSimple
+                  ? const Color(0xFFFFFCFF)
+                  : Colors.black.withOpacity(0.35),
               inactiveColor: _tabInactiveColor,
               isImmersive: !isSimple,
               border: isSimple
-                  ? const Border(top: BorderSide(color: Color(0xFFE8E3F8), width: 1.0))
+                  ? const Border(
+                      top: BorderSide(color: Color(0xFFE8E3F8), width: 1.0),
+                    )
                   : null,
             ),
           ),
@@ -1430,7 +1447,9 @@ class _MainTabScreenState extends State<MainTabScreen>
             ? Colors.white.withOpacity(0.6)
             : AppDesignTokens.textDisabled,
         isImmersive: isVacation,
-        border: isVacation ? null : const Border(top: BorderSide(color: AppDesignTokens.divider)),
+        border: isVacation
+            ? null
+            : const Border(top: BorderSide(color: AppDesignTokens.divider)),
       ),
     );
     return Stack(
@@ -1470,7 +1489,9 @@ class _MainTabScreenState extends State<MainTabScreen>
     final isVacation = _vacationInfo != null;
     final nameColor = isVacation
         ? Colors.white
-        : (_chatBgStyle == 'simple' ? const Color(0xFF3A3652) : (isImmersive ? Colors.white : const Color(0xFF1A1A2E)));
+        : (_chatBgStyle == 'simple'
+              ? const Color(0xFF3A3652)
+              : (isImmersive ? Colors.white : const Color(0xFF1A1A2E)));
 
     return Row(
       children: [
@@ -1674,7 +1695,9 @@ class _MainTabScreenState extends State<MainTabScreen>
     return SizedBox(
       width: 26,
       height: 26,
-      child: CustomPaint(painter: _ChatBubblePainter(active: active, color: color)),
+      child: CustomPaint(
+        painter: _ChatBubblePainter(active: active, color: color),
+      ),
     );
   }
 
@@ -1744,13 +1767,13 @@ class _NyangBottomTabBar extends StatelessWidget {
               final isActive = currentIndex == i;
               return Expanded(
                 child: _TabItem(
-                   label: labels[i],
-                   inactiveIcon: inactiveIcons[i],
-                   activeIcon: activeIcons[i],
-                   isActive: isActive,
-                   activeColor: activeColor,
-                   inactiveColor: inactiveColor,
-                   onTap: () => onTap(i),
+                  label: labels[i],
+                  inactiveIcon: inactiveIcons[i],
+                  activeIcon: activeIcons[i],
+                  isActive: isActive,
+                  activeColor: activeColor,
+                  inactiveColor: inactiveColor,
+                  onTap: () => onTap(i),
                 ),
               );
             }),
@@ -1769,10 +1792,7 @@ class _NyangBottomTabBar extends StatelessWidget {
     }
 
     return Container(
-      decoration: BoxDecoration(
-        color: bgColor,
-        border: border,
-      ),
+      decoration: BoxDecoration(color: bgColor, border: border),
       child: tabContent,
     );
   }
@@ -1937,7 +1957,8 @@ class _ChatBubblePainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_ChatBubblePainter old) => old.active != active || old.color != color;
+  bool shouldRepaint(_ChatBubblePainter old) =>
+      old.active != active || old.color != color;
 }
 
 class _ClipboardPainter extends CustomPainter {

@@ -17,10 +17,11 @@ object WidgetResponsiveStyle {
             ((minHeightDp - 110) / 70f).coerceIn(0f, 1f)
         )
 
-        val horizontalPadding = lerp(14f, 18f, scale).roundToInt()
-        val topPadding = lerp(20f, 26f, scale).roundToInt()
-        val bottomPadding = lerp(12f, 16f, scale).roundToInt()
-        val cardHorizontalPadding = lerp(10f, 13f, scale).roundToInt()
+        val horizontalPadding = lerp(18f, 22f, scale).roundToInt()
+        val topPadding = lerp(18f, 24f, scale).roundToInt()
+        val bottomPadding = lerp(20f, 24f, scale).roundToInt()
+        val cardHorizontalPadding = lerp(12f, 14f, scale).roundToInt()
+        val chatHorizontalPadding = lerp(8f, 10f, scale).roundToInt()
         val chatVerticalPadding = lerp(4f, 6f, scale).roundToInt()
 
         views.setViewPadding(
@@ -39,9 +40,9 @@ object WidgetResponsiveStyle {
         )
         views.setViewPadding(
             R.id.btn_open_chat,
-            0,
+            dp(context, chatHorizontalPadding),
             dp(context, chatVerticalPadding),
-            0,
+            dp(context, chatHorizontalPadding),
             dp(context, chatVerticalPadding)
         )
 

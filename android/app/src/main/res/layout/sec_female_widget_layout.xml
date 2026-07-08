@@ -5,10 +5,10 @@
     android:layout_height="match_parent"
     android:orientation="vertical"
     android:background="@drawable/widget_bg_sec_female"
-    android:paddingStart="16dp"
-    android:paddingEnd="16dp"
+    android:paddingStart="20dp"
+    android:paddingEnd="20dp"
     android:paddingTop="18dp"
-    android:paddingBottom="14dp">
+    android:paddingBottom="22dp">
 
     <!-- Top Group: Cheer Message & Progress Bar -->
     <LinearLayout
@@ -18,30 +18,41 @@
         android:orientation="vertical"
         android:gravity="center">
 
-        <RelativeLayout
+        <LinearLayout
             android:id="@+id/header_layout"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content">
+            android:layout_height="wrap_content"
+            android:baselineAligned="false"
+            android:gravity="center"
+            android:orientation="horizontal">
 
             <TextView
                 android:id="@+id/coach_message"
-                android:layout_width="match_parent"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_centerInParent="true"
                 android:layout_marginStart="4dp"
                 android:layout_marginEnd="4dp"
+                android:maxWidth="238dp"
                 android:ellipsize="end"
                 android:maxLines="1"
                 android:autoSizeTextType="uniform"
                 android:autoSizeMinTextSize="12sp"
                 android:autoSizeMaxTextSize="18sp"
                 android:text="오늘도 함께, 차근차근 시작해요."
-                android:textColor="#3A4660"
+                android:textColor="#5A4A73"
                 android:textSize="18sp"
                 android:textStyle="bold"
                 android:gravity="center"
                 android:includeFontPadding="false" />
-        </RelativeLayout>
+
+            <ImageView
+                android:id="@+id/message_icon"
+                android:layout_width="18dp"
+                android:layout_height="18dp"
+                android:layout_marginStart="4dp"
+                android:src="@drawable/ic_fa_heart"
+                android:tint="#C4A8E6" />
+        </LinearLayout>
 
         <!-- Center: Horizontal Progress Bar -->
         <ProgressBar
@@ -49,6 +60,8 @@
             style="?android:attr/progressBarStyleHorizontal"
             android:layout_width="match_parent"
             android:layout_height="8dp"
+            android:layout_marginStart="8dp"
+            android:layout_marginEnd="8dp"
             android:layout_marginTop="14dp"
             android:max="100"
             android:progress="0"
@@ -68,7 +81,7 @@
             android:id="@+id/remaining_row"
             android:layout_width="0dp"
             android:layout_height="match_parent"
-            android:layout_weight="1.2"
+            android:layout_weight="1"
             android:layout_marginEnd="6dp"
             android:background="@drawable/widget_card_left_bg_sec_female"
             android:orientation="horizontal"
@@ -84,7 +97,7 @@
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:text="0개 남음"
-                android:textColor="#C28A2E"
+                android:textColor="#5A4A73"
                 android:textSize="13sp"
                 android:textStyle="bold" />
 
@@ -92,7 +105,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="›"
-                android:textColor="#D8A547"
+                android:textColor="#C4A8E6"
                 android:textSize="16sp"
                 android:textStyle="bold" />
         </LinearLayout>
@@ -102,11 +115,13 @@
             android:id="@+id/btn_open_chat"
             android:layout_width="0dp"
             android:layout_height="match_parent"
-            android:layout_weight="0.8"
+            android:layout_weight="1"
             android:layout_marginStart="6dp"
             android:background="@drawable/widget_card_right_bg_sec_female"
-            android:orientation="vertical"
+            android:orientation="horizontal"
             android:gravity="center"
+            android:paddingStart="10dp"
+            android:paddingEnd="10dp"
             android:paddingTop="6dp"
             android:paddingBottom="6dp"
             android:clickable="true"
@@ -114,20 +129,22 @@
 
             <ImageView
                 android:id="@+id/chat_icon"
-                android:layout_width="24dp"
-                android:layout_height="24dp"
-                android:src="@drawable/ic_bookmark"
-                android:tint="#C28A2E"
-                android:layout_marginBottom="2dp" />
+                android:layout_width="18dp"
+                android:layout_height="18dp"
+                android:layout_marginEnd="6dp"
+                android:src="@drawable/ic_fa_comments"
+                android:tint="#C4A8E6" />
 
             <TextView
                 android:id="@+id/chat_label"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="코치와 대화"
-                android:textColor="#C28A2E"
+                android:textColor="#C4A8E6"
                 android:textSize="11sp"
-                android:textStyle="bold" />
+                android:textStyle="bold"
+                android:maxLines="1"
+                android:includeFontPadding="false" />
         </LinearLayout>
 
     </LinearLayout>

@@ -40,25 +40,25 @@ class SecFemaleWidgetProvider : HomeWidgetProvider() {
 
                 setProgressBar(R.id.progress_bar, 100, progress, false)
                 setTextViewText(R.id.coach_message, WidgetTextFormatter.formatCoachMessage(coachMessage))
-                setTextViewText(R.id.remaining_count_text, WidgetTextFormatter.formatRemainingCount(remainingCount, "#5C6B89"))
+                setTextViewText(R.id.remaining_count_text, WidgetTextFormatter.formatRemainingCount(remainingCount, "#C4A8E6"))
                 WidgetResponsiveStyle.apply(context, appWidgetManager, widgetId, this)
 
                 val intentRemaining = Intent(context, MainActivity::class.java).apply {
                     action = "sec_female_coach.OPEN_REMAINING_LIST"
-                    data = Uri.parse("nyangcoach://widget/sec_female/tasks_remaining_bottom_sheet")
+                    data = Uri.parse("nyangcoach://widget/cat/tasks_remaining_bottom_sheet")
                     flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
                     putExtra("route", "tasks_remaining_bottom_sheet")
-                    putExtra("coach_id", "sec_female")
+                    putExtra("coach_id", "cat")
                 }
                 val pendingRemaining = PendingIntent.getActivity(context, 3003, intentRemaining, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
                 setOnClickPendingIntent(R.id.remaining_row, pendingRemaining)
 
                 val intentChat = Intent(context, MainActivity::class.java).apply {
                     action = "sec_female_coach.OPEN_CHAT"
-                    data = Uri.parse("nyangcoach://widget/sec_female/chat")
+                    data = Uri.parse("nyangcoach://widget/cat/chat")
                     flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
                     putExtra("route", "chat")
-                    putExtra("coach_id", "sec_female")
+                    putExtra("coach_id", "cat")
                 }
                 val pendingChat = PendingIntent.getActivity(context, 3001, intentChat, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
                 setOnClickPendingIntent(R.id.btn_open_chat, pendingChat)

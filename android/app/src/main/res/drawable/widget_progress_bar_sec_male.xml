@@ -3,7 +3,7 @@
     <item android:id="@android:id/background">
         <shape>
             <corners android:radius="10dp" />
-            <solid android:color="#D6D6F0" />
+            <solid android:color="#E7E6F8" />
         </shape>
     </item>
     <item android:id="@android:id/progress">
@@ -12,8 +12,8 @@
                 <corners android:radius="10dp" />
                 <gradient
                     android:angle="0"
-                    android:startColor="#2C365E"
-                    android:endColor="#5A6BA8"
+                    android:startColor="#A5A6D6"
+                    android:endColor="#C6C7EA"
                     android:type="linear" />
             </shape>
         </scale>

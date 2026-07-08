@@ -13,7 +13,9 @@ import '../screens/core_reminder_screen.dart';
 import '../screens/coach_config.dart';
 import 'analytics_service.dart';
 import 'morning_call_alarm_session.dart';
+import 'tasks_sync_service.dart';
 import 'user_title_service.dart';
+import '../models/user_data.dart';
 
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
@@ -594,6 +596,13 @@ class NotificationService {
     await cancelCoreReminders();
 
     final prefs = await SharedPreferences.getInstance();
+    final userData = await UserDataService.load();
+    if (!userData.isPlanActive) {
+      await prefs.setBool('nyang_core_reminder_enabled', false);
+      await prefs.remove('nyang_core_reminder_resolved_coach');
+      await _clearStoredCoreReminderFlags(prefs);
+      return;
+    }
     final isEnabled = prefs.getBool('nyang_core_reminder_enabled') ?? false;
     if (!isEnabled) return;
 
@@ -778,6 +787,55 @@ class NotificationService {
         payload: 'core:$targetCoachId:${soundName ?? ''}:$fireKey:$taskText',
       );
       notificationId++;
+    }
+  }
+
+  Future<void> _clearStoredCoreReminderFlags(SharedPreferences prefs) async {
+    var changed = false;
+
+    final rawTasks = prefs.getString('nyang_tasks');
+    if (rawTasks != null && rawTasks.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(rawTasks);
+        if (decoded is List) {
+          for (final item in decoded) {
+            if (item is Map && item['isReminderEnabled'] == true) {
+              item['isReminderEnabled'] = false;
+              changed = true;
+            }
+          }
+          if (changed) {
+            await prefs.setString('nyang_tasks', jsonEncode(decoded));
+          }
+        }
+      } catch (_) {}
+    }
+
+    final rawSchedules = prefs.getString('nyang_schedules');
+    if (rawSchedules != null && rawSchedules.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(rawSchedules);
+        var scheduleChanged = false;
+        if (decoded is Map) {
+          for (final list in decoded.values) {
+            if (list is! List) continue;
+            for (final item in list) {
+              if (item is Map && item['isReminderEnabled'] == true) {
+                item['isReminderEnabled'] = false;
+                scheduleChanged = true;
+              }
+            }
+          }
+          if (scheduleChanged) {
+            await prefs.setString('nyang_schedules', jsonEncode(decoded));
+            changed = true;
+          }
+        }
+      } catch (_) {}
+    }
+
+    if (changed) {
+      TasksSyncService.scheduleSyncToCloud();
     }
   }
 }

@@ -18,8 +18,11 @@ class MainActivity : FlutterFragmentActivity() {
     }
 
     private fun handleIntent(intent: Intent) {
+        val isWidgetIntent = intent.data?.let {
+            it.scheme == "nyangcoach" && it.host == "widget"
+        } ?: false
         val route = intent.getStringExtra("route")
-        val coachId = intent.getStringExtra("coach_id")
+        val coachId = if (isWidgetIntent) "cat" else intent.getStringExtra("coach_id")
         
         android.util.Log.d("WidgetIntent", "handleIntent called with route: $route, coachId: $coachId")
         if (route != null || coachId != null) {

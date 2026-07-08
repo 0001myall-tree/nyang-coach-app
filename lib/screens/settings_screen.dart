@@ -47,6 +47,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       widget.coachId == 'sec_male' || widget.coachId == 'sec_female';
   bool get _hasMasterPlan =>
       _userData?.isPlanActive == true && _userData?.planType == 'master';
+  bool get _isFreeUser => _userData?.isPlanActive != true;
 
   @override
   void initState() {
@@ -66,6 +67,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await WidgetSyncService.enforcePlanAccess(
       hasMasterPlan: userData.isPlanActive && userData.planType == 'master',
     );
+    if (!userData.isPlanActive) {
+      await _disablePaidReminderSettings(prefs);
+    }
     setState(() {
       _userData = userData;
       _morningCallEnabled =
@@ -122,6 +126,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return labels.isEmpty ? null : labels.join(' / ');
   }
 
+  Future<void> _disablePaidReminderSettings(SharedPreferences prefs) async {
+    await prefs.setBool('nyang_core_reminder_enabled', false);
+    await prefs.remove('nyang_core_reminder_resolved_coach');
+    await NotificationService().syncCoreReminders();
+  }
+
+  void _showFreeSettingsLockedNotice() {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('무료 이용자는 모닝콜 설정만 이용할 수 있어요.')));
+  }
+
+  VoidCallback _paidSettingsTap(VoidCallback action) {
+    return () {
+      if (_isFreeUser) {
+        _showFreeSettingsLockedNotice();
+        return;
+      }
+      action();
+    };
+  }
+
   Future<void> _showLogoutDialog() async {
     final shouldLogout = await showDialog<bool>(
       context: context,
@@ -175,6 +201,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   void _showHomeWidgetSettingsModal() async {
+    if (_isFreeUser) {
+      _showFreeSettingsLockedNotice();
+      return;
+    }
     final prefs = await SharedPreferences.getInstance();
     final latestUserData = await UserDataService.load();
     final isMasterPlan =
@@ -827,7 +857,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
     String coachId,
     int advanceMinutes,
   ) async {
+    final userData = await UserDataService.load();
     final prefs = await SharedPreferences.getInstance();
+    if (!userData.isPlanActive) {
+      await _disablePaidReminderSettings(prefs);
+      if (mounted) {
+        setState(() {
+          _coreReminderEnabled = false;
+          _coreReminderCoachId = 'cat';
+          _coreReminderAdvanceMinutes = 10;
+        });
+        _showFreeSettingsLockedNotice();
+      }
+      return;
+    }
     await prefs.setBool('nyang_core_reminder_enabled', enabled);
     await prefs.setString('nyang_core_reminder_coach', coachId);
     await prefs.setInt('nyang_core_reminder_advance', advanceMinutes);
@@ -854,6 +897,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   void _showCoreReminderSettingsModal() {
+    if (_isFreeUser) {
+      _showFreeSettingsLockedNotice();
+      return;
+    }
     bool tempEnabled = _coreReminderEnabled;
     String tempCoachId = _coreReminderCoachId;
     int tempAdvance = _coreReminderAdvanceMinutes;
@@ -1339,7 +1386,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         icon: Icons.notifications_none,
                         label: '일정 알람',
                         status: _coreReminderStatus,
-                        onTap: _showCoreReminderSettingsModal,
+                        onTap: _paidSettingsTap(_showCoreReminderSettingsModal),
                       ),
                       const SizedBox(height: 16),
 
@@ -1348,7 +1395,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         icon: Icons.widgets_rounded,
                         label: '홈 화면 위젯',
                         status: _homeWidgetStatus,
-                        onTap: _showHomeWidgetSettingsModal,
+                        onTap: _paidSettingsTap(_showHomeWidgetSettingsModal),
                       ),
                       const SizedBox(height: 16),
 
@@ -1382,7 +1429,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Widget _buildBgStyleCard() {
     return GestureDetector(
-      onTap: _showBgStylePicker,
+      onTap: _paidSettingsTap(_showBgStylePicker),
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
@@ -1392,7 +1439,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
         child: Row(
           children: [
-            const Icon(Icons.wallpaper_rounded, color: Color(0xFF8B7CFF), size: 18),
+            const Icon(
+              Icons.wallpaper_rounded,
+              color: Color(0xFF8B7CFF),
+              size: 18,
+            ),
             const SizedBox(width: 8),
             Expanded(
               child: Text(
@@ -1476,7 +1527,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           final selectedStyle = styles[selectedIndex];
                           setState(() => _chatBgStyle = selectedStyle);
                           final prefs = await SharedPreferences.getInstance();
-                          await prefs.setString('nyang_chat_bg_style', selectedStyle);
+                          await prefs.setString(
+                            'nyang_chat_bg_style',
+                            selectedStyle,
+                          );
                           if (context.mounted) Navigator.pop(context);
                         },
                         child: Text(
@@ -1641,7 +1695,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Widget _buildProfileCard() {
     return GestureDetector(
-      onTap: _showProfileSheet,
+      onTap: _paidSettingsTap(_showProfileSheet),
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
@@ -1888,14 +1942,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
               final diag = await TasksSyncService.syncFromCloud();
               if (!mounted) return;
-              
+
               if (diag['status'] != 'SUCCESS') {
                 setSheetState(() => isRestoring = false);
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text(
                       '복원 실패: ${diag['message']}',
-                      style: GoogleFonts.notoSansKr(fontWeight: FontWeight.w700),
+                      style: GoogleFonts.notoSansKr(
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                     backgroundColor: Colors.redAccent,
                   ),
@@ -2344,7 +2400,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Widget _buildResetHourCard() {
     return GestureDetector(
-      onTap: _showResetHourPicker,
+      onTap: _paidSettingsTap(_showResetHourPicker),
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
@@ -3440,7 +3496,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             ],
                           ),
                         ),
-
 
                         Padding(
                           padding: const EdgeInsets.only(

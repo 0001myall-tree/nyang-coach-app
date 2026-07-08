@@ -171,25 +171,25 @@ class WidgetSyncService {
 
   static String _getCoachMessage(double progress, String coachId) {
     if (coachId == 'cat') {
-      if (progress >= 1.0) return "최고다냥! 다 끝냈다냥! 💜";
-      if (progress >= 0.80) return "거의 다 왔다냥! ✨";
-      if (progress >= 0.51) return "아주 잘하고 있다냥! 💜";
-      if (progress >= 0.21) return "차근차근 가고있다냥! ✨";
-      return "오늘도 시작해보자냥! 💜";
+      if (progress >= 1.0) return "최고다냥! 다 끝냈다냥!";
+      if (progress >= 0.80) return "거의 다 왔다냥!";
+      if (progress >= 0.51) return "아주 잘하고 있다냥!";
+      if (progress >= 0.21) return "차근차근 가고있다냥!";
+      return "오늘도 시작해보자냥!";
     } else if (coachId == 'sec_female') {
       // 여비서 코치
-      if (progress >= 1.0) return "오늘도 멋지게 해내셨네요. 🌸";
-      if (progress >= 0.80) return "끝까지 함께 응원할게요. 🌸";
-      if (progress >= 0.51) return "생각보다 훨씬 잘 해내고 계세요. 🌸";
-      if (progress >= 0.21) return "충분히 해낼 수 있어요. 🌸";
-      return "오늘도 응원하고 있을게요. 🌸";
+      if (progress >= 1.0) return "오늘도 멋지게 해내셨네요.";
+      if (progress >= 0.80) return "끝까지 함께 응원할게요.";
+      if (progress >= 0.51) return "생각보다 훨씬 잘 해내고 계세요.";
+      if (progress >= 0.21) return "충분히 해낼 수 있어요.";
+      return "오늘도 응원하고 있을게요.";
     } else {
       // 남비서 코치 (sec_male)
-      if (progress >= 1.0) return "오늘도 수고 많으셨습니다. ☕";
-      if (progress >= 0.80) return "마지막까지 함께하겠습니다. ☕";
-      if (progress >= 0.51) return "아주 잘 해내고 계십니다. ☕";
-      if (progress >= 0.21) return "차근차근 해내고 계시네요. ☕";
-      return "오늘도 함께 해보시죠. ☕";
+      if (progress >= 1.0) return "오늘도 수고 많으셨습니다.";
+      if (progress >= 0.80) return "마지막까지 함께하겠습니다.";
+      if (progress >= 0.51) return "아주 잘 해내고 계십니다.";
+      if (progress >= 0.21) return "차근차근 해내고 계시네요.";
+      return "오늘도 함께 해보시죠.";
     }
   }
 }

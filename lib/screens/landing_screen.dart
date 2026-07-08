@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
@@ -54,14 +55,19 @@ class _LandingScreenState extends State<LandingScreen>
   }
 
   Future<void> _checkAutoLogin() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user != null) {
-      await UserDataService.syncFromCloud();
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+
+      await UserDataService.syncFromCloud().timeout(
+        const Duration(seconds: 8),
+        onTimeout: () {},
+      );
       final data = await UserDataService.load();
-      await WidgetSyncService.enforcePlanAccess(
+      _enforceWidgetAccessInBackground(
         hasMasterPlan: data.isPlanActive && data.planType == 'master',
       );
-      await TasksSyncService.syncFromCloud(); // 자동 로그인 시 클라우드 데이터 복원
+      _syncTasksInBackground();
 
       final prefs = await SharedPreferences.getInstance();
       await prefs.reload();
@@ -71,7 +77,10 @@ class _LandingScreenState extends State<LandingScreen>
       if (widgetRoute != null) prefs.remove('widget_route');
       if (widgetCoachId != null) prefs.remove('widget_coach_id');
 
-      String targetCoachId = widgetCoachId ?? data.selectedCoachId ?? 'cat';
+      final hasWidgetIntent = widgetRoute != null || widgetCoachId != null;
+      final targetCoachId = hasWidgetIntent
+          ? 'cat'
+          : data.selectedCoachId ?? 'cat';
 
       if (data.selectedCoachId != null && mounted) {
         if (!data.canAccessCoach(targetCoachId)) {
@@ -85,7 +94,10 @@ class _LandingScreenState extends State<LandingScreen>
           return;
         }
 
-        if (widgetCoachId != null && widgetCoachId != data.selectedCoachId) {
+        if (hasWidgetIntent && data.selectedCoachId != 'cat') {
+          await UserDataService.setSelectedCoach('cat');
+        } else if (widgetCoachId != null &&
+            widgetCoachId != data.selectedCoachId) {
           await UserDataService.setSelectedCoach(widgetCoachId);
         }
 
@@ -117,7 +129,34 @@ class _LandingScreenState extends State<LandingScreen>
           nav.pushReplacement(mainRoute);
         }
       }
+    } catch (e, stackTrace) {
+      debugPrint('Auto login failed: $e');
+      debugPrintStack(stackTrace: stackTrace);
     }
+  }
+
+  void _enforceWidgetAccessInBackground({required bool hasMasterPlan}) {
+    unawaited(
+      WidgetSyncService.enforcePlanAccess(
+        hasMasterPlan: hasMasterPlan,
+      ).catchError((Object e, StackTrace stackTrace) {
+        debugPrint('Widget access sync failed: $e');
+        debugPrintStack(stackTrace: stackTrace);
+        return false;
+      }),
+    );
+  }
+
+  void _syncTasksInBackground() {
+    unawaited(
+      TasksSyncService.syncFromCloud().catchError((
+        Object e,
+        StackTrace stackTrace,
+      ) {
+        debugPrint('Task cloud sync failed: $e');
+        debugPrintStack(stackTrace: stackTrace);
+      }),
+    );
   }
 
   @override

@@ -597,7 +597,13 @@ class _TasksScreenState extends State<TasksScreen>
     final rawCognitiveDismissUntil = prefs.getString(
       'nyang_cognitive_optimize_dismiss_until',
     );
-    final coreEnabled = prefs.getBool('nyang_core_reminder_enabled') ?? false;
+    final hasActivePlan = await _hasActivePlan();
+    if (!hasActivePlan) {
+      await prefs.setBool('nyang_core_reminder_enabled', false);
+    }
+    final coreEnabled =
+        hasActivePlan &&
+        (prefs.getBool('nyang_core_reminder_enabled') ?? false);
 
     setState(() {
       _isCoreReminderEnabledGlobally = coreEnabled;
@@ -668,6 +674,38 @@ class _TasksScreenState extends State<TasksScreen>
       _resetHour = prefs.getDouble('nyang_reset_hour') ?? 3.0;
     });
 
+    if (!hasActivePlan) {
+      var changed = false;
+      for (final task in tasks) {
+        if (task.isReminderEnabled) {
+          task.isReminderEnabled = false;
+          changed = true;
+        }
+      }
+      schedules.forEach((_, items) {
+        for (final item in items) {
+          if (item.isReminderEnabled) {
+            item.isReminderEnabled = false;
+            changed = true;
+          }
+        }
+      });
+      if (changed) {
+        await prefs.setString(
+          'nyang_tasks',
+          jsonEncode(tasks.map((t) => t.toJson()).toList()),
+        );
+        final Map<String, dynamic> toEncode = {};
+        schedules.forEach((k, v) {
+          if (v.isNotEmpty) {
+            toEncode[k] = v.map((e) => e.toJson()).toList();
+          }
+        });
+        await prefs.setString('nyang_schedules', jsonEncode(toEncode));
+        TasksSyncService.scheduleSyncToCloud();
+      }
+    }
+
     await _checkReset(prefs);
     await _checkWeekMonthReset(prefs);
     _injectTodayHabits();
@@ -680,7 +718,13 @@ class _TasksScreenState extends State<TasksScreen>
 
   Future<bool> _checkCoreReminderEnabledGlobally() async {
     final prefs = await SharedPreferences.getInstance();
-    final enabled = prefs.getBool('nyang_core_reminder_enabled') ?? false;
+    final hasActivePlan = await _hasActivePlan();
+    if (!hasActivePlan) {
+      await prefs.setBool('nyang_core_reminder_enabled', false);
+    }
+    final enabled =
+        hasActivePlan &&
+        (prefs.getBool('nyang_core_reminder_enabled') ?? false);
     if (mounted && _isCoreReminderEnabledGlobally != enabled) {
       setState(() {
         _isCoreReminderEnabledGlobally = enabled;
@@ -1239,6 +1283,11 @@ class _TasksScreenState extends State<TasksScreen>
 
   // ── saveTasks (웹앱 그대로) ───────────────────────────────
   Future<void> _saveTasks() async {
+    if (!await _hasActivePlan()) {
+      for (final task in tasks) {
+        task.isReminderEnabled = false;
+      }
+    }
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(
       'nyang_tasks',
@@ -1529,6 +1578,7 @@ load: 높음 | 보통 | 낮음 중 하나
   }
 
   Future<void> _saveHabits() async {
+    if (!await _hasActivePlan()) return;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(
       'nyang_habits',
@@ -1563,6 +1613,16 @@ load: 높음 | 보통 | 낮음 중 하나
   }
 
   Future<void> _saveSchedules() async {
+    final hasActivePlan = await _hasActivePlan();
+    if (!hasActivePlan) {
+      schedules.forEach((_, items) {
+        for (final item in items) {
+          item.isReminderEnabled = false;
+        }
+      });
+      _schReminderEnabled = false;
+      _todayReminderEnabled = false;
+    }
     final prefs = await SharedPreferences.getInstance();
     final Map<String, dynamic> toEncode = {};
     schedules.forEach((k, v) {
@@ -1574,6 +1634,17 @@ load: 높음 | 보통 | 낮음 중 하나
     // 일정 변경 시 오늘의 할 일 탭에도 즉시 반영
     _injectTodaySchedules();
     await NotificationService().syncCoreReminders();
+  }
+
+  Future<bool> _hasActivePlan() async {
+    final userData = await UserDataService.load();
+    return userData.isPlanActive;
+  }
+
+  Future<bool> _ensurePlanForTaskInput() async {
+    if (await _hasActivePlan()) return true;
+    if (mounted) _showSubscriptionNotice(context);
+    return false;
   }
 
   Future<void> _saveHabitLogs() async {
@@ -1834,7 +1905,8 @@ load: 높음 | 보통 | 낮음 중 하나
   }
 
   // ── addTask (웹앱 그대로) ─────────────────────────────────
-  void _addTodayTask(String text) {
+  Future<void> _addTodayTask(String text) async {
+    if (!await _ensurePlanForTaskInput()) return;
     final trimmed = text.trim();
     if (trimmed.isEmpty) return;
 
@@ -2716,7 +2788,8 @@ load: 높음 | 보통 | 낮음 중 하나
   }
 
   // ── addGoal (웹앱 그대로) ─────────────────────────────────
-  void _addGoal(String type, String text) {
+  Future<void> _addGoal(String type, String text) async {
+    if (!await _ensurePlanForTaskInput()) return;
     final trimmed = text.trim();
     if (trimmed.isEmpty) return;
     final goal = GoalItem(
@@ -8080,6 +8153,7 @@ load: 높음 | 보통 | 낮음 중 하나
   }
 
   Future<void> _addSchedule() async {
+    if (!await _ensurePlanForTaskInput()) return;
     final text = _schInputCtrl.text.trim();
     if (text.isEmpty) return;
     final cleaned = text.replaceAll(RegExp(r'[.\s]+$'), '');
@@ -10817,7 +10891,11 @@ load: 높음 | 보통 | 낮음 중 하나
   }
 
   // ── 습관 추가 모달 (웹앱 openHabitModal 이식) ────────────
-  void _showHabitModal(BuildContext context, {HabitItem? editHabit}) {
+  Future<void> _showHabitModal(
+    BuildContext context, {
+    HabitItem? editHabit,
+  }) async {
+    if (!await _ensurePlanForTaskInput()) return;
     final nameCtrl = TextEditingController(text: editHabit?.name ?? '');
     String freq = editHabit?.freq ?? 'daily';
     List<int> days = List.from(editHabit?.days ?? []);
@@ -11412,7 +11490,7 @@ load: 높음 | 보통 | 낮음 중 하나
             ),
           ),
           content: Text(
-            '습관 등록 및 트래킹은 Friends 또는 Master 플랜 구독자만 이용할 수 있다냥!',
+            '할 일, 일정, 습관 등록은 Friends 또는 Master 플랜 구독자만 이용할 수 있다냥!',
             style: GoogleFonts.notoSansKr(
               fontSize: 14,
               fontWeight: FontWeight.w500,

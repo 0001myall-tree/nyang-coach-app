@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -19,8 +21,6 @@ void main() async {
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   await initializeDateFormatting('ko', null);
   await NotificationService().init();
-  await NotificationService().syncDailyNightCall();
-  await NotificationService().syncCoreReminders();
 
   final prefs = await SharedPreferences.getInstance();
   final _secMaleName = prefs.getString('nyang_coach_name_sec_male');
@@ -32,10 +32,38 @@ void main() async {
       ? _secFemaleName
       : null;
 
-  await WidgetSyncService.syncFromStoredTasks();
-
   runApp(const ProviderScope(child: NyangCoachApp()));
-  await NotificationService().handleLaunchNotification();
+  unawaited(_runStartupBackgroundJobs());
+}
+
+Future<void> _runStartupBackgroundJobs() async {
+  try {
+    await NotificationService().syncDailyNightCall();
+  } catch (e, stackTrace) {
+    debugPrint('Startup night call sync failed: $e');
+    debugPrintStack(stackTrace: stackTrace);
+  }
+
+  try {
+    await NotificationService().syncCoreReminders();
+  } catch (e, stackTrace) {
+    debugPrint('Startup core reminder sync failed: $e');
+    debugPrintStack(stackTrace: stackTrace);
+  }
+
+  try {
+    await WidgetSyncService.syncFromStoredTasks();
+  } catch (e, stackTrace) {
+    debugPrint('Startup widget sync failed: $e');
+    debugPrintStack(stackTrace: stackTrace);
+  }
+
+  try {
+    await NotificationService().handleLaunchNotification();
+  } catch (e, stackTrace) {
+    debugPrint('Launch notification handling failed: $e');
+    debugPrintStack(stackTrace: stackTrace);
+  }
 }
 
 class NyangCoachApp extends StatefulWidget {
