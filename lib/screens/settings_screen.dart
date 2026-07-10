@@ -159,6 +159,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
     };
   }
 
+  Future<TimeOfDay?> _showFocusedTimePicker({
+    required BuildContext context,
+    required TimeOfDay initialTime,
+  }) {
+    return showTimePicker(
+      context: context,
+      initialTime: initialTime,
+      barrierColor: Colors.black.withValues(alpha: 0.72),
+    );
+  }
+
   Future<void> _showLogoutDialog() async {
     final shouldLogout = await showDialog<bool>(
       context: context,
@@ -637,6 +648,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     bool tempEnabled = _morningCallEnabled;
     TimeOfDay tempTime = _morningCallTime;
     String tempCoachId = _morningCallCoachId;
+    bool isPickingTime = false;
 
     showModalBottomSheet(
       context: context,
@@ -703,12 +715,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     child: GestureDetector(
                       onTap: () async {
                         if (!tempEnabled) return;
-                        final picked = await showTimePicker(
-                          context: context,
-                          initialTime: tempTime,
-                        );
-                        if (picked != null) {
-                          setModalState(() => tempTime = picked);
+                        setModalState(() => isPickingTime = true);
+                        try {
+                          final picked = await _showFocusedTimePicker(
+                            context: context,
+                            initialTime: tempTime,
+                          );
+                          if (picked != null) {
+                            setModalState(() => tempTime = picked);
+                          }
+                        } finally {
+                          if (context.mounted) {
+                            setModalState(() => isPickingTime = false);
+                          }
                         }
                       },
                       child: Container(
@@ -825,34 +844,40 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
 
                   // 저장 버튼
-                  SizedBox(
-                    width: double.infinity,
-                    height: 56,
-                    child: ElevatedButton(
-                      onPressed: () {
-                        Navigator.pop(context);
-                        _saveMorningCallSettings(
-                          tempEnabled,
-                          tempTime,
-                          tempCoachId,
-                        );
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF1A1A2E),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        elevation: 0,
-                      ),
-                      child: Text(
-                        '저장하기',
-                        style: GoogleFonts.notoSansKr(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w800,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 140),
+                    child: isPickingTime
+                        ? const SizedBox(key: ValueKey('time-picker-open'))
+                        : SizedBox(
+                            key: const ValueKey('save-morning-call'),
+                            width: double.infinity,
+                            height: 56,
+                            child: ElevatedButton(
+                              onPressed: () {
+                                Navigator.pop(context);
+                                _saveMorningCallSettings(
+                                  tempEnabled,
+                                  tempTime,
+                                  tempCoachId,
+                                );
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF1A1A2E),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                elevation: 0,
+                              ),
+                              child: Text(
+                                '저장하기',
+                                style: GoogleFonts.notoSansKr(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w800,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          ),
                   ),
                 ],
               ),
@@ -3192,10 +3217,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                     const SizedBox(height: 8),
                                     GestureDetector(
                                       onTap: () async {
-                                        final time = await showTimePicker(
-                                          context: context,
-                                          initialTime: minSleepTime,
-                                        );
+                                        final time =
+                                            await _showFocusedTimePicker(
+                                              context: context,
+                                              initialTime: minSleepTime,
+                                            );
                                         if (time != null) {
                                           setState(() => minSleepTime = time);
                                         }
