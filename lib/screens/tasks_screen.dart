@@ -4909,8 +4909,6 @@ load: 높음 | 보통 | 낮음 중 하나
                           ? (isMilestone
                                 ? const Color(0xFF5AD7B0)
                                 : _coach.accentColor)
-                          : t.inProgress
-                          ? _coach.accentColor
                           : Colors.transparent,
                       border: Border.all(
                         color: t.done
