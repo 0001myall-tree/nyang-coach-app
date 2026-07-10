@@ -145,7 +145,7 @@ class CoachConfigs {
     ),
     'boyfriend': CoachConfig(
       id: 'boyfriend',
-      name: '남친 코치',
+      name: '자상한 코치',
       tier: 'friends',
       accentColor: Color(0xFF8BB5F5),
       accentLight: Color(0xFFEEF2FF),
@@ -256,7 +256,7 @@ class CoachConfigs {
     ),
     'girlfriend': CoachConfig(
       id: 'girlfriend',
-      name: '여친 코치',
+      name: '발랄한 코치',
       tier: 'friends',
       accentColor: Color(0xFFF8A8C9),
       accentLight: Color(0xFFFDF2F8),
