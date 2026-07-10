@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -80,7 +81,8 @@ class _RecordsScreenState extends State<RecordsScreen> {
       if (n.hour < 3) {
         base = base.subtract(const Duration(days: 1));
       }
-      _lastDate = '${base.year}-${base.month.toString().padLeft(2, '0')}-${base.day.toString().padLeft(2, '0')}';
+      _lastDate =
+          '${base.year}-${base.month.toString().padLeft(2, '0')}-${base.day.toString().padLeft(2, '0')}';
     }
 
     setState(() => _isLoading = false);
@@ -139,7 +141,9 @@ class _RecordsScreenState extends State<RecordsScreen> {
 
   Map<String, dynamic>? _calculateRestProductivityCorrelation() {
     final allRecords = List<Map<String, dynamic>>.from(_history);
-    allRecords.sort((a, b) => a['date'].toString().compareTo(b['date'].toString()));
+    allRecords.sort(
+      (a, b) => a['date'].toString().compareTo(b['date'].toString()),
+    );
 
     if (allRecords.isEmpty) return null;
 
@@ -237,11 +241,7 @@ class _RecordsScreenState extends State<RecordsScreen> {
         children: [
           Row(
             children: [
-              Icon(
-                Icons.insights_rounded,
-                size: 18,
-                color: _coach.accentColor,
-              ),
+              Icon(Icons.insights_rounded, size: 18, color: _coach.accentColor),
               const SizedBox(width: 8),
               Text(
                 '휴식과 생산성 상관관계',
@@ -476,7 +476,11 @@ class _RecordsScreenState extends State<RecordsScreen> {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(
         cacheKey,
-        jsonEncode({'weekMonday': weekMonday, 'text': feedbackText, 'type': feedbackType}),
+        jsonEncode({
+          'weekMonday': weekMonday,
+          'text': feedbackText,
+          'type': feedbackType,
+        }),
       );
       await prefs.setString(
         'nyang_feedback_prev_week',
@@ -619,7 +623,8 @@ class _RecordsScreenState extends State<RecordsScreen> {
       return DateTime(y, m, d);
     }
 
-    final weekStart = DateTime.tryParse(records.first['date']) ?? DateTime.now();
+    final weekStart =
+        DateTime.tryParse(records.first['date']) ?? DateTime.now();
     final weekEnd = DateTime.tryParse(records.last['date']) ?? DateTime.now();
     final todayNormalized = DateTime(
       DateTime.now().year,
@@ -701,7 +706,11 @@ $recordBuffer
 [현재 설정된 습관 트래킹 빈도]
 ${habitFreqBuffer.toString().trim()}
 
-[회고 유형: ${feedbackType == 0 ? '실행 회고형' : feedbackType == 1 ? '장기 비전형' : '컨디션 회고형'}]
+[회고 유형: ${feedbackType == 0
+        ? '실행 회고형'
+        : feedbackType == 1
+        ? '장기 비전형'
+        : '컨디션 회고형'}]
 
 [작성 지침]
 1. 어투: ${isMale ? '남비서로서 차분하고 신뢰감 있는 "$title" 호칭의 격식체 (~했습니다, ~하십시오).' : '여비서로서 지적이고 부드러운 "$title" 호칭의 격식체 (~했어요, ~어떨까요).'}
@@ -709,18 +718,22 @@ ${habitFreqBuffer.toString().trim()}
    - 휴무일(회복일)은 미완료나 실패로 해석하지 말고, 필요한 회복을 일정에 포함한 것으로 자연스럽게 존중해 주세요.
    - [현재 설정된 습관 트래킹 빈도]를 반드시 참고하세요. 특정 요일에만 하기로 한 습관이라면 그 빈도에 맞게 평가해 주세요.
 3. 유형별 작성 방식:
-${feedbackType == 0 ? '''   [실행 회고형]
+${feedbackType == 0
+        ? '''   [실행 회고형]
    - 사용자가 실제로 무엇을 했고, 무엇을 미뤘으며, 무엇이 개선되었는지를 중심으로 회고합니다.
    - 완료한 일들 중 목표/비전과 연결되는 중요한 활동 1~2개를 콕 집어 구체적으로 칭찬하세요. (추상적 칭찬 금지)
    - 3일 이상 미루다 다시 시작한 항목이 있다면 특별히 언급해 주세요.
-   - 반복적으로 밀린 중요한 일이 있다면 부드럽게 지적하고 다음 주 우선순위로 권유하세요.''' : feedbackType == 1 ? '''   [장기 비전형]
+   - 반복적으로 밀린 중요한 일이 있다면 부드럽게 지적하고 다음 주 우선순위로 권유하세요.'''
+        : feedbackType == 1
+        ? '''   [장기 비전형]
    - 현재 장기 비전과 마일스톤을 중심으로 회고합니다. [장기 비전 상세 데이터]를 반드시 참고하세요.
    - 이번 주 완료된 마일스톤이 있다면 구체적으로 언급하며 칭찬하세요.
    - 최근 새로 추가/수정된 장기비전 메모나 마일스톤이 있다면, 미래를 준비하고 있다는 점을 자연스럽게 언급하세요. (예: "최근에는 '앱 출시 준비' 관련 메모도 추가했네요. 실행뿐 아니라 방향까지 구상하시는 점이 인상적입니다.")
    - 가장 가까운 마감 예정 마일스톤이 있다면 다음 준비 대상으로 안내하세요.
    - 마감일이 지난 미완료 마일스톤이 있다면 부드럽게 확인을 권유하세요.
    - 장기 비전이 비어 있다면, 장기 비전을 작성하면 매주 실행과 연결해 점검할 수 있다고 안내하세요.
-   - 마지막으로 미래를 응원하는 한마디로 마무리하세요.''' : '''   [컨디션 회고형]
+   - 마지막으로 미래를 응원하는 한마디로 마무리하세요.'''
+        : '''   [컨디션 회고형]
    - 실행이나 성장보다 이번 주의 컨디션 흐름에 초점을 맞춥니다.
    - 완료율, 휴무일 패턴, 할 일 밀도 등을 바탕으로 체력/휴식/회복 측면을 분석하세요.
    - 무리한 주였는지, 잘 쉰 주였는지, 회복이 더 필요한지를 부드럽게 짚어주세요.
@@ -1354,7 +1367,8 @@ ${feedbackType == 0 ? '''   [실행 회고형]
 
             String periodText;
             if (periodStart.year == periodEnd.year) {
-              periodText = '${formatYYMMDD(periodStart)}~${formatMMDD(periodEnd)}';
+              periodText =
+                  '${formatYYMMDD(periodStart)}~${formatMMDD(periodEnd)}';
             } else {
               periodText =
                   '${formatYYMMDD(periodStart)}~${formatYYMMDD(periodEnd)}';
@@ -1475,6 +1489,34 @@ ${feedbackType == 0 ? '''   [실행 회고형]
               ),
             );
           }),
+          if (!_isMaster) ...[
+            const SizedBox(height: 4),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SvgPicture.asset(
+                  'assets/icons/crown.svg',
+                  width: 11,
+                  height: 11,
+                  colorFilter: const ColorFilter.mode(
+                    Color(0xFF8B7CFF),
+                    BlendMode.srcIn,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text(
+                    '마스터 코치 기록탭에서는 30일치 습관 달성률과 습관 달성 패턴까지 확인할 수 있습니다.',
+                    style: GoogleFonts.notoSansKr(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: const Color(0xFFA0A0B0),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );
@@ -1503,7 +1545,12 @@ ${feedbackType == 0 ? '''   [실행 회고형]
 
       final log = logs[dateStr];
       if (log != null && log['done'] == true && log['completedAt'] != null) {
-        validLogs.add({'dateStr': dateStr, 'completedAt': log['completedAt']});
+        validLogs.add({
+          'dateStr': dateStr,
+          'completedAt': log['completedAt'],
+          // 예전 기록은 진행중 시작 시각이 없으니 완료 시각으로 대체
+          'startedAt': log['startedAt'] ?? log['completedAt'],
+        });
       }
     }
 
@@ -1535,8 +1582,9 @@ ${feedbackType == 0 ? '''   [실행 회고형]
     for (final log in validLogs) {
       try {
         final dt = DateTime.parse(log['completedAt']);
-        // Time slot (2-hour windows)
-        final slot = dt.hour ~/ 2;
+        // Time slot (2-hour windows) - 완료로 이어진 "진행중 시작" 시각 기준
+        final startDt = DateTime.parse(log['startedAt']);
+        final slot = startDt.hour ~/ 2;
         timeCounts[slot] = (timeCounts[slot] ?? 0) + 1;
 
         // Weekday (1=Mon..7=Sun)
@@ -1667,7 +1715,7 @@ ${feedbackType == 0 ? '''   [실행 회고형]
             ],
           ),
           const SizedBox(height: 12),
-          _patternRow('🕒', '주로 완료한 시간', bestTimeStr),
+          _patternRow('🕒', '완료로 이어진 시작 시간', bestTimeStr),
           const SizedBox(height: 6),
           _patternRow('📅', '주로 완료한 요일', bestDayStr),
           if (bestPriorTask != null) ...[
@@ -1688,7 +1736,7 @@ ${feedbackType == 0 ? '''   [실행 회고형]
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    '최근에는 $bestDayStr $bestTimeStr에 가장 꾸준히 이어졌어요.\n안정적으로 이어가고 싶다면 비슷한 시간대를 활용해보세요.',
+                    '최근에는 $bestDayStr $bestTimeStr에 시작했을 때 완료로 가장 잘 이어졌어요.\n비슷한 시간에 시작해보세요.',
                     style: GoogleFonts.notoSansKr(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,

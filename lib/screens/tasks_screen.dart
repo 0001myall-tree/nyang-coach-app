@@ -34,6 +34,8 @@ class TaskItem {
   String text;
   String category; // 'today' | 'habit'
   bool done;
+  bool inProgress;
+  String? inProgressAt;
   String? habitId;
   bool isHabit;
   String? time;
@@ -54,6 +56,8 @@ class TaskItem {
     required this.text,
     required this.category,
     this.done = false,
+    this.inProgress = false,
+    this.inProgressAt,
     this.habitId,
     this.isHabit = false,
     this.time,
@@ -72,6 +76,10 @@ class TaskItem {
     'text': text,
     'category': category,
     'done': done,
+    if (inProgress) 'inProgress': inProgress,
+    if (inProgressAt != null &&
+        (isHabit || category == 'habit' || habitId != null))
+      'inProgressAt': inProgressAt,
     if (habitId != null) 'habitId': habitId,
     'isHabit': isHabit,
     if (time != null) 'time': time,
@@ -92,6 +100,13 @@ class TaskItem {
     text: j['text'],
     category: j['category'] ?? 'today',
     done: j['done'] ?? false,
+    inProgress: j['inProgress'] ?? false,
+    inProgressAt:
+        (j['isHabit'] == true ||
+            j['category'] == 'habit' ||
+            j['habitId'] != null)
+        ? j['inProgressAt']
+        : null,
     habitId: j['habitId']?.toString(),
     isHabit: j['isHabit'] ?? false,
     time: j['time'],
@@ -1047,228 +1062,6 @@ class _TasksScreenState extends State<TasksScreen>
     return result ?? false;
   }
 
-  // ── _showHabitCompletionDialog (습관 입력 팝업) ────────────────
-  Future<Map<String, int>?> _showHabitCompletionDialog(
-    TaskItem t,
-    HabitItem h,
-  ) async {
-    final countController = TextEditingController(text: '');
-    final durationController = TextEditingController(text: '');
-
-    // Percent calculation helper
-    String getPct(String valStr, int? goal) {
-      if (goal == null || goal <= 0) return '';
-      final v = int.tryParse(valStr) ?? 0;
-      return '${(v / goal * 100).round()}%';
-    }
-
-    return showDialog<Map<String, int>>(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return Dialog(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text(
-                      '🌱 ${h.name}',
-                      style: GoogleFonts.notoSansKr(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: const Color(0xFF3D3A4E),
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '오늘 얼마나 했는지 기록해요!',
-                      style: GoogleFonts.notoSansKr(
-                        fontSize: 14,
-                        color: const Color(0xFFA0A0B0),
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    if (h.checkType == 'count' || h.checkType == 'both') ...[
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            '🔢 오늘 ${h.unit ?? '수량'}',
-                            style: GoogleFonts.notoSansKr(
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                              color: const Color(0xFF3D3A4E),
-                            ),
-                          ),
-                          Text(
-                            '목표: ${h.countGoal ?? '-'}${h.unit ?? ''}',
-                            style: GoogleFonts.notoSansKr(
-                              fontSize: 12,
-                              color: const Color(0xFFA0A0B0),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: countController,
-                        keyboardType: TextInputType.number,
-                        onChanged: (val) => setDialogState(() {}),
-                        decoration: InputDecoration(
-                          suffixText: h.unit ?? '',
-                          suffixIcon: Padding(
-                            padding: const EdgeInsets.symmetric(
-                              vertical: 12,
-                              horizontal: 16,
-                            ),
-                            child: Text(
-                              getPct(countController.text, h.countGoal),
-                              style: GoogleFonts.notoSansKr(
-                                fontSize: 14,
-                                fontWeight: FontWeight.bold,
-                                color: _coach.accentColor,
-                              ),
-                            ),
-                          ),
-                          filled: true,
-                          fillColor: const Color(0xFFF9F9FB),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide.none,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                    ],
-                    if (h.checkType == 'duration' || h.checkType == 'both') ...[
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            '⏱ 소요 시간 (분)',
-                            style: GoogleFonts.notoSansKr(
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                              color: const Color(0xFF3D3A4E),
-                            ),
-                          ),
-                          Text(
-                            '목표: ${h.durationGoal ?? '-'}분',
-                            style: GoogleFonts.notoSansKr(
-                              fontSize: 12,
-                              color: const Color(0xFFA0A0B0),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: durationController,
-                        keyboardType: TextInputType.number,
-                        onChanged: (val) => setDialogState(() {}),
-                        decoration: InputDecoration(
-                          suffixText: '분',
-                          suffixIcon: Padding(
-                            padding: const EdgeInsets.symmetric(
-                              vertical: 12,
-                              horizontal: 16,
-                            ),
-                            child: Text(
-                              getPct(durationController.text, h.durationGoal),
-                              style: GoogleFonts.notoSansKr(
-                                fontSize: 14,
-                                fontWeight: FontWeight.bold,
-                                color: _coach.accentColor,
-                              ),
-                            ),
-                          ),
-                          filled: true,
-                          fillColor: const Color(0xFFF9F9FB),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide.none,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                    ],
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextButton(
-                            onPressed: () => Navigator.pop(ctx, null),
-                            style: TextButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                              backgroundColor: const Color(0xFFF9F9FB),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                            ),
-                            child: Text(
-                              '취소',
-                              style: GoogleFonts.notoSansKr(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w600,
-                                color: const Color(0xFF8E8D9B),
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: TextButton(
-                            onPressed: () {
-                              int? c;
-                              int? d;
-                              if (h.checkType == 'count' ||
-                                  h.checkType == 'both') {
-                                c = int.tryParse(countController.text) ?? 0;
-                              }
-                              if (h.checkType == 'duration' ||
-                                  h.checkType == 'both') {
-                                d = int.tryParse(durationController.text) ?? 0;
-                              }
-                              Navigator.pop(ctx, {
-                                'count': c ?? 0,
-                                'duration': d ?? 0,
-                              });
-                            },
-                            style: TextButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                              backgroundColor: _coach.accentColor,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                            ),
-                            child: Text(
-                              '완료',
-                              style: GoogleFonts.notoSansKr(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
   String _getWeekMondayStr() {
     final todayStr = _getTodayStr();
     final parts = todayStr.split('-');
@@ -1540,9 +1333,9 @@ load: 높음 | 보통 | 낮음 중 하나
       history.add(record);
     }
 
-    // Keep last 90 days
+    // Keep last 30 days of raw task history.
     history.sort((a, b) => a['date'].compareTo(b['date']));
-    if (history.length > 90) history = history.sublist(history.length - 90);
+    if (history.length > 30) history = history.sublist(history.length - 30);
 
     await prefs.setString('nyang_history', jsonEncode(history));
   }
@@ -2009,6 +1802,7 @@ load: 높음 | 보통 | 낮음 중 하나
         t.completedAt = null;
         t.achievedCount = null;
         t.achievedDuration = null;
+        t.inProgressAt = null;
         if (t.habitId != null && habitLogs[t.habitId!] != null) {
           habitLogs[t.habitId!]!.remove(_getTodayStr());
         }
@@ -2041,6 +1835,16 @@ load: 높음 | 보통 | 낮음 중 하나
       if (milestoneInfo != null && milestoneInfo.isMilestoneSelf) {
         _saveVisions();
       }
+    } else if (!t.inProgress) {
+      // 1단계: 진행 중으로 전환 (한 번 더 누르면 완료)
+      setState(() {
+        t.inProgress = true;
+        t.inProgressAt =
+            (t.isHabit || t.category == 'habit' || t.habitId != null)
+            ? DateTime.now().toIso8601String()
+            : null;
+      });
+      _saveTasks();
     } else {
       HabitItem? habitInfo;
       if (t.habitId != null) {
@@ -2049,13 +1853,13 @@ load: 높음 | 보통 | 낮음 중 하나
         );
         if (hIdx != -1) {
           habitInfo = habits[hIdx];
-          if (habitInfo.checkType == 'count' ||
-              habitInfo.checkType == 'duration' ||
+          // 팝업 없이 바로 완료 처리: 달성치는 목표치로 자동 기록
+          if (habitInfo.checkType == 'count' || habitInfo.checkType == 'both') {
+            t.achievedCount = habitInfo.countGoal ?? 0;
+          }
+          if (habitInfo.checkType == 'duration' ||
               habitInfo.checkType == 'both') {
-            final result = await _showHabitCompletionDialog(t, habitInfo);
-            if (result == null) return; // 사용자가 취소함
-            t.achievedCount = result['count'];
-            t.achievedDuration = result['duration'];
+            t.achievedDuration = habitInfo.durationGoal ?? 0;
           }
         }
       }
@@ -2063,6 +1867,7 @@ load: 높음 | 보통 | 낮음 중 하나
       // 완료 처리
       setState(() {
         t.done = true;
+        t.inProgress = false;
         t.completedAt = DateTime.now().toIso8601String();
         final completedAt = DateTime.tryParse(t.completedAt!);
         if (t.habitId != null) {
@@ -2071,6 +1876,7 @@ load: 높음 | 보통 | 낮음 중 하나
             'done': true,
             'status': 'done',
             'completedAt': t.completedAt,
+            if (t.inProgressAt != null) 'startedAt': t.inProgressAt,
           };
 
           if (habitInfo != null) {
@@ -5051,296 +4857,346 @@ load: 높음 | 보통 | 낮음 중 하나
       timeEnd: t.timeEnd,
     );
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: t.done ? Border.all(color: const Color(0xFFE8E3F8)) : null,
-        boxShadow: t.done
-            ? null
-            : [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.04),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          // 체크버튼
-          GestureDetector(
-            onTap: () => _toggleTask(t.id),
-            child: Container(
-              width: 48,
-              height: 52,
-              alignment: Alignment.center,
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                width: 22,
-                height: 22,
-                decoration: BoxDecoration(
-                  color: t.done
-                      ? (isMilestone
-                            ? const Color(0xFF5AD7B0)
-                            : _coach.accentColor)
-                      : Colors.transparent,
-                  border: Border.all(
-                    color: t.done
-                        ? (isMilestone
-                              ? const Color(0xFF5AD7B0)
-                              : _coach.accentColor)
-                        : (isMilestone
-                              ? const Color(0xFF8B7CFF)
-                              : const Color(0xFFD1D5DB)),
-                    width: 2,
-                  ),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: t.done
-                    ? const Icon(Icons.check, color: Colors.white, size: 14)
-                    : null,
-              ),
-            ),
-          ),
-          // 텍스트와 메타데이터 (Column으로 세로 배치)
-          Expanded(
-            child: GestureDetector(
-              onTap: () {
-                if (t.done) return;
-                if (isMilestone) {
-                  if (milestoneInfo.isMilestoneSelf) {
-                    _showVisionModal(milestoneInfo.vision);
-                  } else {
-                    _showMemoDialog(
-                      context,
-                      milestoneInfo.milestone,
-                      (fn) => setState(fn),
-                    );
-                  }
-                  return;
-                }
-                _showEditItemModal(t, () {
-                  setState(() {
-                    final cIdx = coreTasks.indexWhere((ct) => ct.id == t.id);
-                    if (cIdx != -1) {
-                      coreTasks[cIdx].time = t.time;
-                      coreTasks[cIdx].timeStart = t.timeStart;
-                      coreTasks[cIdx].timeEnd = t.timeEnd;
-                      coreTasks[cIdx].duration = t.duration;
-                      coreTasks[cIdx].text = t.text;
-                    }
-
-                    // 오늘 탭에 주입된 일정 카드를 수정한 경우, 원본 ScheduleItem에도
-                    // 반영해야 _injectTodaySchedules()가 다시 실행될 때 수정 내용이
-                    // 덮어써지지 않는다.
-                    if (t.category == 'schedule') {
-                      final scheduleId = t.id.toString().replaceAll(
-                        'schedule_',
-                        '',
-                      );
-                      final daySchedules = schedules[_getTodayStr()];
-                      final sIdx =
-                          daySchedules?.indexWhere((s) => s.id == scheduleId) ??
-                          -1;
-                      if (daySchedules != null && sIdx != -1) {
-                        daySchedules[sIdx].text = t.text;
-                        daySchedules[sIdx].time = t.time;
-                        daySchedules[sIdx].timeStart = t.timeStart;
-                        daySchedules[sIdx].timeEnd = t.timeEnd;
-                        daySchedules[sIdx].duration = t.duration;
-                        daySchedules[sIdx].isReminderEnabled =
-                            t.isReminderEnabled;
-                      }
-                    }
-
-                    // 오늘 탭에 주입된 습관 카드를 수정한 경우도 마찬가지로 원본
-                    // HabitItem에 반영해야 _injectTodayHabits()가 다시 실행될 때
-                    // 수정 내용이 덮어써지지 않는다.
-                    if (t.category == 'habit' && t.habitId != null) {
-                      final hIdx = habits.indexWhere(
-                        (h) => h.id.toString() == t.habitId.toString(),
-                      );
-                      if (hIdx != -1) {
-                        habits[hIdx].name = t.text;
-                        habits[hIdx].timeStart = t.timeStart;
-                        habits[hIdx].timeEnd = t.timeEnd;
-                        habits[hIdx].habitDuration = t.duration;
-                        habits[hIdx].timeType = t.timeStart != null
-                            ? (t.timeEnd != null ? 'range' : 'single')
-                            : (t.duration != null ? 'duration' : 'none');
-                      }
-                    }
-                  });
-                  _saveTasks();
-                  _saveCoreTasks();
-                  if (t.category == 'schedule') _saveSchedules();
-                  if (t.category == 'habit') _saveHabits();
-                });
-              },
-              child: Container(
-                color: Colors.transparent,
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // 마일스톤 태그 및 비전명 표시
-                    if (isMilestone) ...[
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFE0E0FF),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Text(
-                              milestoneInfo.isMilestoneSelf
-                                  ? '마일스톤'
-                                  : '메모장의 실행 목록',
-                              style: GoogleFonts.notoSansKr(
-                                fontSize: 9,
-                                fontWeight: FontWeight.bold,
-                                color: const Color(0xFF5A50E6),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                          Expanded(
-                            child: Text(
-                              milestoneInfo.visionName,
-                              overflow: TextOverflow.ellipsis,
-                              style: GoogleFonts.notoSansKr(
-                                fontSize: 11,
-                                color: const Color(0xFF7C6EFA),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-                    ],
-                    // 할 일 텍스트
-                    Text(
-                      t.text,
-                      style: GoogleFonts.notoSansKr(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: t.done
-                            ? const Color(0xFFA0A0B0)
-                            : const Color(0xFF3D3A4E),
-                        decoration: t.done ? TextDecoration.lineThrough : null,
-                      ),
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            border: (t.done || t.inProgress)
+                ? Border.all(
+                    color: t.inProgress
+                        ? _coach.accentColor.withOpacity(0.5)
+                        : const Color(0xFFE8E3F8),
+                  )
+                : null,
+            boxShadow: t.inProgress
+                ? [
+                    BoxShadow(
+                      color: _coach.accentColor.withOpacity(0.25),
+                      blurRadius: 8,
+                      spreadRadius: 1,
                     ),
-                    // 알림 종 아이콘, 시간/소요시간 뱃지, 습관 뱃지 표시
-                    if (displayTime != null ||
-                        t.duration != null ||
-                        t.isHabit ||
-                        (t.isReminderEnabled &&
-                            _isCoreReminderEnabledGlobally &&
-                            displayTime != null)) ...[
-                      const SizedBox(height: 4),
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          // 깨끗한 보라색 종 아이콘
-                          if (t.isReminderEnabled &&
-                              _isCoreReminderEnabledGlobally &&
-                              displayTime != null)
-                            const Padding(
-                              padding: EdgeInsets.only(right: 6),
-                              child: Icon(
-                                Icons.notifications_active,
-                                size: 14,
-                                color: Color(0xFF8B7CFF),
-                              ),
-                            ),
-                          // 시간/소요시간 뱃지
-                          if (displayTime != null || t.duration != null)
-                            Container(
-                              margin: const EdgeInsets.only(right: 6),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 6,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: displayTime != null
-                                    ? const Color(0xFFF5F3FF)
-                                    : const Color(0xFFFDF2F8),
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: Text(
-                                displayTime ?? '⏱ ${t.duration}',
-                                style: GoogleFonts.notoSansKr(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w700,
-                                  color: displayTime != null
-                                      ? const Color(0xFF8B7CFF)
-                                      : const Color(0xFFDB2777),
-                                ),
-                              ),
-                            ),
-                          // 습관 뱃지
-                          if (t.isHabit)
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 6,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: _coach.accentColor.withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: Text(
-                                '습관',
-                                style: GoogleFonts.notoSansKr(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w700,
-                                  color: _coach.accentColor,
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ],
+                  ]
+                : t.done
+                ? null
+                : [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.04),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
                   ],
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              // 체크버튼
+              GestureDetector(
+                onTap: () => _toggleTask(t.id),
+                child: Container(
+                  width: 48,
+                  height: 52,
+                  alignment: Alignment.center,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    width: 22,
+                    height: 22,
+                    decoration: BoxDecoration(
+                      color: t.done
+                          ? (isMilestone
+                                ? const Color(0xFF5AD7B0)
+                                : _coach.accentColor)
+                          : t.inProgress
+                          ? _coach.accentColor
+                          : Colors.transparent,
+                      border: Border.all(
+                        color: t.done
+                            ? (isMilestone
+                                  ? const Color(0xFF5AD7B0)
+                                  : _coach.accentColor)
+                            : t.inProgress
+                            ? _coach.accentColor
+                            : (isMilestone
+                                  ? const Color(0xFF8B7CFF)
+                                  : const Color(0xFFD1D5DB)),
+                        width: 2,
+                      ),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: t.done
+                        ? const Icon(Icons.check, color: Colors.white, size: 14)
+                        : null,
+                  ),
+                ),
+              ),
+              // 텍스트와 메타데이터 (Column으로 세로 배치)
+              Expanded(
+                child: GestureDetector(
+                  onTap: () {
+                    if (t.done) return;
+                    if (isMilestone) {
+                      if (milestoneInfo.isMilestoneSelf) {
+                        _showVisionModal(milestoneInfo.vision);
+                      } else {
+                        _showMemoDialog(
+                          context,
+                          milestoneInfo.milestone,
+                          (fn) => setState(fn),
+                        );
+                      }
+                      return;
+                    }
+                    _showEditItemModal(t, () {
+                      setState(() {
+                        final cIdx = coreTasks.indexWhere(
+                          (ct) => ct.id == t.id,
+                        );
+                        if (cIdx != -1) {
+                          coreTasks[cIdx].time = t.time;
+                          coreTasks[cIdx].timeStart = t.timeStart;
+                          coreTasks[cIdx].timeEnd = t.timeEnd;
+                          coreTasks[cIdx].duration = t.duration;
+                          coreTasks[cIdx].text = t.text;
+                        }
+
+                        // 오늘 탭에 주입된 일정 카드를 수정한 경우, 원본 ScheduleItem에도
+                        // 반영해야 _injectTodaySchedules()가 다시 실행될 때 수정 내용이
+                        // 덮어써지지 않는다.
+                        if (t.category == 'schedule') {
+                          final scheduleId = t.id.toString().replaceAll(
+                            'schedule_',
+                            '',
+                          );
+                          final daySchedules = schedules[_getTodayStr()];
+                          final sIdx =
+                              daySchedules?.indexWhere(
+                                (s) => s.id == scheduleId,
+                              ) ??
+                              -1;
+                          if (daySchedules != null && sIdx != -1) {
+                            daySchedules[sIdx].text = t.text;
+                            daySchedules[sIdx].time = t.time;
+                            daySchedules[sIdx].timeStart = t.timeStart;
+                            daySchedules[sIdx].timeEnd = t.timeEnd;
+                            daySchedules[sIdx].duration = t.duration;
+                            daySchedules[sIdx].isReminderEnabled =
+                                t.isReminderEnabled;
+                          }
+                        }
+
+                        // 오늘 탭에 주입된 습관 카드를 수정한 경우도 마찬가지로 원본
+                        // HabitItem에 반영해야 _injectTodayHabits()가 다시 실행될 때
+                        // 수정 내용이 덮어써지지 않는다.
+                        if (t.category == 'habit' && t.habitId != null) {
+                          final hIdx = habits.indexWhere(
+                            (h) => h.id.toString() == t.habitId.toString(),
+                          );
+                          if (hIdx != -1) {
+                            habits[hIdx].name = t.text;
+                            habits[hIdx].timeStart = t.timeStart;
+                            habits[hIdx].timeEnd = t.timeEnd;
+                            habits[hIdx].habitDuration = t.duration;
+                            habits[hIdx].timeType = t.timeStart != null
+                                ? (t.timeEnd != null ? 'range' : 'single')
+                                : (t.duration != null ? 'duration' : 'none');
+                          }
+                        }
+                      });
+                      _saveTasks();
+                      _saveCoreTasks();
+                      if (t.category == 'schedule') _saveSchedules();
+                      if (t.category == 'habit') _saveHabits();
+                    });
+                  },
+                  child: Container(
+                    color: Colors.transparent,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // 마일스톤 태그 및 비전명 표시
+                        if (isMilestone) ...[
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFE0E0FF),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  milestoneInfo.isMilestoneSelf
+                                      ? '마일스톤'
+                                      : '메모장의 실행 목록',
+                                  style: GoogleFonts.notoSansKr(
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.bold,
+                                    color: const Color(0xFF5A50E6),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Text(
+                                  milestoneInfo.visionName,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: GoogleFonts.notoSansKr(
+                                    fontSize: 11,
+                                    color: const Color(0xFF7C6EFA),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                        ],
+                        // 할 일 텍스트
+                        Text(
+                          t.text,
+                          style: GoogleFonts.notoSansKr(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: t.done
+                                ? const Color(0xFFA0A0B0)
+                                : const Color(0xFF3D3A4E),
+                            decoration: t.done
+                                ? TextDecoration.lineThrough
+                                : null,
+                          ),
+                        ),
+                        // 알림 종 아이콘, 시간/소요시간 뱃지, 습관 뱃지 표시
+                        if (displayTime != null ||
+                            t.duration != null ||
+                            t.isHabit ||
+                            (t.isReminderEnabled &&
+                                _isCoreReminderEnabledGlobally &&
+                                displayTime != null)) ...[
+                          const SizedBox(height: 4),
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              // 깨끗한 보라색 종 아이콘
+                              if (t.isReminderEnabled &&
+                                  _isCoreReminderEnabledGlobally &&
+                                  displayTime != null)
+                                const Padding(
+                                  padding: EdgeInsets.only(right: 6),
+                                  child: Icon(
+                                    Icons.notifications_active,
+                                    size: 14,
+                                    color: Color(0xFF8B7CFF),
+                                  ),
+                                ),
+                              // 시간/소요시간 뱃지
+                              if (displayTime != null || t.duration != null)
+                                Container(
+                                  margin: const EdgeInsets.only(right: 6),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 6,
+                                    vertical: 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: displayTime != null
+                                        ? const Color(0xFFF5F3FF)
+                                        : const Color(0xFFFDF2F8),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    displayTime ?? '⏱ ${t.duration}',
+                                    style: GoogleFonts.notoSansKr(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w700,
+                                      color: displayTime != null
+                                          ? const Color(0xFF8B7CFF)
+                                          : const Color(0xFFDB2777),
+                                    ),
+                                  ),
+                                ),
+                              // 습관 뱃지
+                              if (t.isHabit)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 6,
+                                    vertical: 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: _coach.accentColor.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    '습관',
+                                    style: GoogleFonts.notoSansKr(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w700,
+                                      color: _coach.accentColor,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              // 삭제 버튼
+              GestureDetector(
+                onTap: () {
+                  if (isMilestone && milestoneInfo.isMilestoneSelf) {
+                    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('마일스톤 일정은 목표 탭의 비전 관리에서 관리할 수 있습니다.'),
+                      ),
+                    );
+                    return;
+                  }
+                  _showTaskDeleteOptions(t);
+                },
+                child: Container(
+                  width: 40,
+                  height: 52,
+                  alignment: Alignment.center,
+                  child: const Icon(
+                    Icons.close,
+                    size: 16,
+                    color: Color(0xFFD1D5DB),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (t.inProgress)
+          Positioned(
+            top: -6,
+            right: 8,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: _coach.accentColor.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: _coach.accentColor.withOpacity(0.4)),
+              ),
+              child: Text(
+                '진행중',
+                style: GoogleFonts.notoSansKr(
+                  fontSize: 9,
+                  fontWeight: FontWeight.w800,
+                  color: _coach.accentColor,
                 ),
               ),
             ),
           ),
-          // 삭제 버튼
-          GestureDetector(
-            onTap: () {
-              if (isMilestone && milestoneInfo.isMilestoneSelf) {
-                ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('마일스톤 일정은 목표 탭의 비전 관리에서 관리할 수 있습니다.'),
-                  ),
-                );
-                return;
-              }
-              _showTaskDeleteOptions(t);
-            },
-            child: Container(
-              width: 40,
-              height: 52,
-              alignment: Alignment.center,
-              child: const Icon(
-                Icons.close,
-                size: 16,
-                color: Color(0xFFD1D5DB),
-              ),
-            ),
-          ),
-        ],
-      ),
+      ],
     );
   }
 

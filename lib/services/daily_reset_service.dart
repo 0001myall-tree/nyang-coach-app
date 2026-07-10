@@ -389,7 +389,7 @@ class DailyResetService {
     }
 
     history.sort((a, b) => a['date']!.compareTo(b['date']!));
-    if (history.length > 90) history = history.sublist(history.length - 90);
+    if (history.length > 30) history = history.sublist(history.length - 30);
 
     await prefs.setString('nyang_history', jsonEncode(history));
   }

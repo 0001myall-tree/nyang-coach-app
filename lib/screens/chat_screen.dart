@@ -4528,6 +4528,7 @@ class _ChatScreenState extends State<ChatScreen>
               .toList();
           for (final t in allTasks) {
             final done = t['done'] == true;
+            final inProgress = !done && t['inProgress'] == true;
             final timeStr = t['time'] != null ? '${t['time']}' : '';
             String durStr = '';
             if (t['duration'] != null) {
@@ -4565,6 +4566,7 @@ class _ChatScreenState extends State<ChatScreen>
             final conversationAvoidanceInfo = conversationAvoidanceCount > 0
                 ? ' / 최근 대화상 귀찮음 표현 ${conversationAvoidanceCount}회'
                 : '';
+            final inProgressInfo = inProgress ? ' / 진행중(시작만 하고 아직 완료 전)' : '';
             final typeLabel = isHabit
                 ? '습관'
                 : isSchedule
@@ -4573,7 +4575,11 @@ class _ChatScreenState extends State<ChatScreen>
             sb.writeln(
               newActivityDayNotStarted
                   ? '- [예정] [$typeLabel] ${t['text']}$timeInfo'
-                  : '- [${done ? 'V' : ' '}] [$typeLabel] ${t['text']}$timeInfo$deferredInfo$conversationAvoidanceInfo',
+                  : '- [${done
+                        ? 'V'
+                        : inProgress
+                        ? '~'
+                        : ' '}] [$typeLabel] ${t['text']}$timeInfo$deferredInfo$conversationAvoidanceInfo$inProgressInfo',
             );
           }
           if (newActivityDayNotStarted) {
@@ -4593,6 +4599,9 @@ class _ChatScreenState extends State<ChatScreen>
             sb.writeln('*감정 토로 중에는 이 예정 목록을 근거로 압박하거나 일정 조정을 제안하지 말 것.');
           } else {
             sb.writeln('*[V] 표시된 항목은 완료됨. 완료 항목은 절대 다시 실행 유도하지 말 것.');
+            sb.writeln(
+              '*[~] 표시된 항목은 사용자가 이미 시작했지만 아직 완료 전인 상태. "아직 안 했네요"처럼 아예 안 한 것으로 말하지 말고, 이미 시작한 것을 인정하며 마무리를 자연스럽게 격려할 것.',
+            );
             sb.writeln(
               '*타이머 확인 카드는 "앱 기록상 미루기 2회 이상"으로 표시된 미완료 할 일에만 제안할 수 있음.',
             );
@@ -7894,9 +7903,9 @@ $timerOutputRule
       history.add(record);
     }
 
-    // Keep last 90 days
+    // Keep last 30 days of raw task history.
     history.sort((a, b) => a['date']!.compareTo(b['date']!));
-    if (history.length > 90) history = history.sublist(history.length - 90);
+    if (history.length > 30) history = history.sublist(history.length - 30);
 
     await prefs.setString('nyang_history', jsonEncode(history));
   }
