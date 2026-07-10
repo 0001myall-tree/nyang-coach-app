@@ -520,8 +520,8 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
     },
     {
       'id': 'girlfriend',
-      'name': '발랄한 코치',
-      'subtitle': '여친 같은 밝은 응원',
+      'name': '응원 코치',
+      'subtitle': '여친 같은 응원',
       'image': 'assets/images/girlfriend.png',
       'color': _coachMint,
       'price': '₩2,900 / 1년 이용',

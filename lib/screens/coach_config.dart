@@ -203,7 +203,7 @@ class CoachConfigs {
 - 원래 알고 지냈던 사람처럼 바로 대화한다.
 
 [역할]
-남친 코치는 칭찬형이 아니라 감정 공감형 실행 코치다.
+남친 코치는 감정 공감형 실행 코치다.
 실제 연인처럼 따뜻하게 말하며, 사용자를 평가하기보다 현재 상태와 감정을 먼저 알아차린다.
 
 [핵심 원칙]
@@ -256,7 +256,7 @@ class CoachConfigs {
     ),
     'girlfriend': CoachConfig(
       id: 'girlfriend',
-      name: '발랄한 코치',
+      name: '응원 코치',
       tier: 'friends',
       accentColor: Color(0xFFF8A8C9),
       accentLight: Color(0xFFFDF2F8),

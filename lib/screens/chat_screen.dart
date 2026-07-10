@@ -1713,7 +1713,7 @@ class _ChatScreenState extends State<ChatScreen>
                             ),
                             _buildAboutSpeaker(
                               'girlfriend',
-                              '발랄한 코치',
+                              '응원 코치',
                               '지친 날엔 비타민이 돼드려요!',
                             ),
                             _buildAboutSpeaker(
