@@ -1494,13 +1494,16 @@ ${feedbackType == 0
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                SvgPicture.asset(
-                  'assets/icons/crown.svg',
-                  width: 11,
-                  height: 11,
-                  colorFilter: const ColorFilter.mode(
-                    Color(0xFF8B7CFF),
-                    BlendMode.srcIn,
+                Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: SvgPicture.asset(
+                    'assets/icons/crown.svg',
+                    width: 11,
+                    height: 11,
+                    colorFilter: const ColorFilter.mode(
+                      Color(0xFF8B7CFF),
+                      BlendMode.srcIn,
+                    ),
                   ),
                 ),
                 const SizedBox(width: 4),
@@ -1715,7 +1718,7 @@ ${feedbackType == 0
             ],
           ),
           const SizedBox(height: 12),
-          _patternRow('🕒', '완료로 이어진 시작 시간', bestTimeStr),
+          _patternRow('🕒', '성공 시작 시간', bestTimeStr),
           const SizedBox(height: 6),
           _patternRow('📅', '주로 완료한 요일', bestDayStr),
           if (bestPriorTask != null) ...[
