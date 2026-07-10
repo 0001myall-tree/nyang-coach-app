@@ -5180,17 +5180,31 @@ load: 높음 | 보통 | 낮음 중 하나
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
               decoration: BoxDecoration(
-                color: _coach.accentColor.withOpacity(0.15),
+                color: Colors.white,
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: _coach.accentColor.withOpacity(0.4)),
+                border: Border.all(color: _coach.accentColor.withOpacity(0.35)),
               ),
-              child: Text(
-                '진행중',
-                style: GoogleFonts.notoSansKr(
-                  fontSize: 9,
-                  fontWeight: FontWeight.w800,
-                  color: _coach.accentColor,
-                ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 5,
+                    height: 5,
+                    decoration: BoxDecoration(
+                      color: _coach.accentColor.withOpacity(0.45),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    '진행중',
+                    style: GoogleFonts.notoSansKr(
+                      fontSize: 9,
+                      fontWeight: FontWeight.w800,
+                      color: _coach.accentColor,
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
