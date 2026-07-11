@@ -237,6 +237,8 @@ class AnalyticsService {
     required int estimatedTokens,
     int? actualTokens,
     int? actualCostWon,
+    String usageSource = 'chat',
+    bool countAsUserUsage = true,
   }) async {
     final user = _auth.currentUser;
     if (user == null) return;
@@ -245,16 +247,37 @@ class AnalyticsService {
     final tokenCount = actualTokens ?? estimatedTokens;
     // 서버에서 실제 비용을 내려주지 않으면 GPT-4o-mini 출력 단가 기준으로 보수적으로 추정합니다.
     final costWon = actualCostWon ?? _estimateCostWonFromTokens(tokenCount);
-    final apiPayload = {
+    final commonCounters = {
+      'allApiTokens': FieldValue.increment(tokenCount),
+      'allEstimatedCostWon': FieldValue.increment(costWon),
+      'allApiCallCount': FieldValue.increment(1),
+      'updatedAt': FieldValue.serverTimestamp(),
+      'lastApiUsageSource': usageSource,
+    };
+    final userMetadata = {
       'uid': user.uid,
       'email': user.email,
-      'totalTokens': FieldValue.increment(tokenCount),
-      'totalCostWon': FieldValue.increment(costWon),
-      'apiCallCount': FieldValue.increment(1),
       'lastActiveAt': FieldValue.serverTimestamp(),
       'activeDates': FieldValue.arrayUnion([dateKey]),
-      'updatedAt': FieldValue.serverTimestamp(),
     };
+    final scopedPayload = countAsUserUsage
+        ? {
+            // 기존 admin/한도 로직과 호환되는 사용자-facing API 사용량.
+            'totalTokens': FieldValue.increment(tokenCount),
+            'totalCostWon': FieldValue.increment(costWon),
+            'apiCallCount': FieldValue.increment(1),
+            'userApiTokens': FieldValue.increment(tokenCount),
+            'userEstimatedCostWon': FieldValue.increment(costWon),
+            'userApiCallCount': FieldValue.increment(1),
+          }
+        : {
+            // 백그라운드/시스템 AI 작업은 실제 사용자 채팅 사용량과 분리합니다.
+            'systemApiTokens': FieldValue.increment(tokenCount),
+            'systemEstimatedCostWon': FieldValue.increment(costWon),
+            'systemApiCallCount': FieldValue.increment(1),
+          };
+    final apiPayload = {...userMetadata, ...commonCounters, ...scopedPayload};
+    final globalApiPayload = {...commonCounters, ...scopedPayload};
 
     await _safeSet(
       _userAnalyticsSummaryRef(user.uid),
@@ -267,29 +290,35 @@ class AnalyticsService {
       ...apiPayload,
     }, 'user api daily');
 
-    await _safeTimelineEvent(user.uid, 'chat', '코치($coachId)와 대화 진행');
+    await _safeTimelineEvent(
+      user.uid,
+      countAsUserUsage ? 'chat' : 'system_api',
+      countAsUserUsage ? '코치($coachId)와 대화 진행' : '시스템 AI 작업 진행: $usageSource',
+    );
 
-    await _safeSet(_firestore.collection('analytics').doc('coach_usage'), {
-      coachId: FieldValue.increment(1),
-      'totalChats': FieldValue.increment(1),
-    }, 'global coach usage');
+    if (countAsUserUsage) {
+      await _safeSet(
+        _firestore.collection('analytics').doc('coach_usage'),
+        {
+          coachId: FieldValue.increment(1),
+          'totalChats': FieldValue.increment(1),
+        },
+        'global coach usage',
+      );
+    }
 
-    await _safeSet(_firestore.collection('analytics').doc('api_costs'), {
-      'totalTokens': FieldValue.increment(tokenCount),
-      'totalCostWon': FieldValue.increment(costWon),
-      'apiCallCount': FieldValue.increment(1),
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, 'global api costs');
+    await _safeSet(
+      _firestore.collection('analytics').doc('api_costs'),
+      globalApiPayload,
+      'global api costs',
+    );
 
     await _safeSet(
       _firestore.collection('analytics').doc('api_costs_daily_$dateKey'),
       {
         'date': dateKey,
         'activeUsers': FieldValue.arrayUnion([user.uid]),
-        'totalTokens': FieldValue.increment(tokenCount),
-        'totalCostWon': FieldValue.increment(costWon),
-        'apiCallCount': FieldValue.increment(1),
-        'updatedAt': FieldValue.serverTimestamp(),
+        ...globalApiPayload,
       },
       'global api costs daily',
     );

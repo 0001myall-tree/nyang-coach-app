@@ -20,7 +20,6 @@ import 'package:nyang_coach/services/api_usage_limit_service.dart';
 import 'package:nyang_coach/services/tasks_sync_service.dart';
 import 'package:nyang_coach/services/user_title_service.dart';
 import 'package:nyang_coach/services/daily_reset_service.dart';
-import 'package:nyang_coach/services/cognitive_optimize_service.dart';
 import 'coach_config.dart';
 import 'focus_timer_widget.dart';
 import 'cat_preview/cat_preview_intro_dialog.dart';
@@ -367,10 +366,6 @@ class ChatScreenController {
     _state?._checkBedtimeMoveOffer();
   }
 
-  void checkCognitiveOptimizeOffer() {
-    _state?._checkCognitiveOptimizeOffer();
-  }
-
   /// 채팅 상단의 오늘 목표 진행률을 최신 할 일 데이터로 갱신합니다.
   void refreshTaskProgress() {
     _state?._loadTaskProgress();
@@ -478,9 +473,6 @@ class _ChatScreenState extends State<ChatScreen>
     await _loadHistoryAndGreet();
     await _restoreActiveFocusTimer();
     await _checkBedtimeMoveOffer();
-    // 앱을 완전히 종료했다가 새로 켠 경우(콜드 스타트)는 main_tab_screen.dart의
-    // didChangeAppLifecycleState(resumed)가 아예 안 불리므로, 여기서 한 번 더 체크한다.
-    await _checkCognitiveOptimizeOffer();
     _initSpeech();
   }
 
@@ -1204,54 +1196,6 @@ class _ChatScreenState extends State<ChatScreen>
     if (customName != null && customName.trim().isNotEmpty) {
       msg = '${customName.trim()}입니다. $msg';
     }
-
-    if (!mounted) return;
-    setState(() {
-      _messages.add(
-        ChatMessage(text: msg, isUser: false, time: DateTime.now()),
-      );
-    });
-    await _saveHistory();
-    _scrollToBottom();
-  }
-
-  // ── 인지 에너지 최적화 제안 (마스터 코치 전용) ──────────────
-  // 할일 서랍을 닫을 때(카드를 탭했든 그냥 닫았든) 또는 앱 재개 시 호출된다.
-  // 발동 조건 판정은 CognitiveOptimizeService(nyang_tasks raw JSON 기반)를 공유해서
-  // 쓴다 — 서랍이 닫히면 TasksScreen과 그 State는 이미 dispose된 뒤라
-  // tasks_screen.dart의 실시간 상태에는 접근할 수 없기 때문이다.
-  Future<void> _checkCognitiveOptimizeOffer() async {
-    if (!_coach.isMaster) return;
-
-    final prefs = await SharedPreferences.getInstance();
-
-    // 카드의 "나중에 할게요"와 같은 키를 공유해서, 한쪽에서 닫으면 양쪽 다 조용해진다.
-    final dismissUntilStr = prefs.getString(
-      'nyang_cognitive_optimize_dismiss_until',
-    );
-    if (dismissUntilStr != null) {
-      final dismissUntil = DateTime.tryParse(dismissUntilStr);
-      if (dismissUntil != null && DateTime.now().isBefore(dismissUntil)) {
-        return;
-      }
-    }
-
-    final tasksRaw = prefs.getString('nyang_tasks');
-    if (!CognitiveOptimizeService.isEligible(tasksRaw)) return;
-    final highLoadCount = CognitiveOptimizeService.highLoadCount(tasksRaw);
-
-    // AI 대화 없이 정해진 문구만 보여준다 — 순서 재배치를 AI 자유 대화에 맡겼더니
-    // 항목 누락/소요시간 지어내기 등으로 계속 어긋나서, 조건 감지 + 정적 안내로 단순화했다.
-    final rawMsg = widget.coachId == 'sec_male'
-        ? '대표님, 🧠 고인지 작업이 $highLoadCount개 감지됐습니다. 컨디션이 좋으시면 그대로 진행하셔도 됩니다. 그렇지 않으시다면 일부 작업은 더 작은 단위로 나눠보시는 것을 권장드립니다.'
-        : '대표님, 🧠 고인지 작업이 $highLoadCount개 감지됐어요. 컨디션이 좋으시면 그대로 진행하셔도 좋아요. 그렇지 않으시다면 일부 작업은 더 작은 단위로 나눠보는 걸 권장드려요.';
-    final msg = await UserTitleService.applyForCoach(rawMsg, widget.coachId);
-
-    // 권고성 알림이라 매일 뜨면 피로감을 줄 수 있어 카드와 동일하게 며칠 쿨다운을 둔다.
-    await prefs.setString(
-      'nyang_cognitive_optimize_dismiss_until',
-      DateTime.now().add(const Duration(days: 3)).toIso8601String(),
-    );
 
     if (!mounted) return;
     setState(() {
@@ -2172,16 +2116,43 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   // 냥냥코치 무료체험 미리보기 팝업 -> (시작 시) 시연 화면 -> CTA 결과에 따라 플랜 안내.
+  // 미리보기를 이미 한 번 본(또는 건너뛴) 비구독자는 바로 업셀 시트로 이동.
+  // SharedPreferences 키: 'cat_preview_seen' (bool)
+  static const _kCatPreviewSeen = 'cat_preview_seen';
+
   Future<void> _maybeShowCatPreview({required Duration initialDelay}) async {
     await Future.delayed(initialDelay);
     if (!mounted) return;
+
+    // ── 이미 미리보기를 본 적 있으면 시연 없이 바로 업셀 ──
+    final prefs = await SharedPreferences.getInstance();
+    final alreadySeen = prefs.getBool(_kCatPreviewSeen) ?? false;
+    if (alreadySeen) {
+      if (mounted) _showCatUpsellBottomSheet();
+      return;
+    }
+
+    // ── 첫 진입: 인트로 다이얼로그 표시 ──
+    if (!mounted) return;
     final startPreview = await showCatPreviewIntroDialog(context);
     if (!mounted) return;
-    if (!startPreview) return;
+
+    // 건너뛰기 선택 → "봤음"으로 표시하고 업셀
+    if (!startPreview) {
+      await prefs.setBool(_kCatPreviewSeen, true);
+      if (mounted) _showCatUpsellBottomSheet();
+      return;
+    }
+
+    // 시연 화면 실행
     final startPlan = await Navigator.of(context).push<bool>(
       MaterialPageRoute(builder: (_) => const CatOnboardingPreviewScreen()),
     );
     if (!mounted) return;
+
+    // 시연 완료(끝까지 보거나 내부 건너뛰기) → 플래그 저장
+    await prefs.setBool(_kCatPreviewSeen, true);
+
     if (startPlan == true) {
       Future.delayed(Duration.zero, _showPlanGuideBottomSheet);
     }

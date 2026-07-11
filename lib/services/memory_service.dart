@@ -315,6 +315,8 @@ $textLogs
         estimatedTokens: estimatedTokens,
         actualTokens: actualTokens,
         actualCostWon: actualCostWon,
+        usageSource: 'daily_summary',
+        countAsUserUsage: false,
       );
 
       final clean = raw.replaceAll('```json', '').replaceAll('```', '').trim();
@@ -437,6 +439,8 @@ ${jsonEncode(masterProfile)}
         estimatedTokens: estimatedTokens,
         actualTokens: actualTokens,
         actualCostWon: actualCostWon,
+        usageSource: 'life_memory_distill',
+        countAsUserUsage: false,
       );
 
       final clean = raw.replaceAll('```json', '').replaceAll('```', '').trim();

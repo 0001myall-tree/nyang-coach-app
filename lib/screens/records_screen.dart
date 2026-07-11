@@ -471,6 +471,8 @@ class _RecordsScreenState extends State<RecordsScreen> {
         estimatedTokens: estimatedTokens,
         actualTokens: actualTokens,
         actualCostWon: actualCostWon,
+        usageSource: 'weekly_feedback',
+        countAsUserUsage: false,
       );
 
       final prefs = await SharedPreferences.getInstance();

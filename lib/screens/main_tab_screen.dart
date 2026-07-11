@@ -10,7 +10,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:audioplayers/audioplayers.dart';
 import '../models/user_data.dart';
 import '../services/notification_service.dart';
-import '../services/cognitive_optimize_service.dart';
 import '../services/analytics_service.dart';
 import '../services/morning_call_alarm_session.dart';
 import '../services/daily_reset_service.dart';
@@ -456,9 +455,7 @@ class _MainTabScreenState extends State<MainTabScreen>
           contentType: AndroidContentType.music,
           audioFocus: AndroidAudioFocus.gainTransientExclusive,
         ),
-        iOS: AudioContextIOS(
-          category: AVAudioSessionCategory.playback,
-        ),
+        iOS: AudioContextIOS(category: AVAudioSessionCategory.playback),
       ),
     );
     _tabCtrl = TabController(length: _screens.length, vsync: this);
@@ -502,8 +499,6 @@ class _MainTabScreenState extends State<MainTabScreen>
     if (state == AppLifecycleState.resumed) {
       AnalyticsService.logAppOpen();
       _handleAppResumed();
-    } else if (state == AppLifecycleState.paused) {
-      _notifyCognitiveOptimizeIfEligibleInBackground();
     }
   }
 
@@ -512,41 +507,12 @@ class _MainTabScreenState extends State<MainTabScreen>
     if (mounted) {
       _tasksController.refresh();
       _chatController.refreshTaskProgress();
-      _chatController.checkCognitiveOptimizeOffer();
       setState(() {});
     }
     final canContinue = await _ensureCurrentCoachAccess(syncCloud: _isMaster);
     if (canContinue) {
       await _checkWidgetIntent();
     }
-  }
-
-  // 앱이 백그라운드로 내려갈 때, 할일 서랍을 닫는 이벤트 자체가 없어서
-  // _closeDrawerAndCheck()가 못 도는 경우를 위한 보완 — 조건이 맞으면 가볍게
-  // 푸시로만 알리고, 실제 메시지는 앱을 다시 열었을 때 _handleAppResumed()가 전달한다.
-  Future<void> _notifyCognitiveOptimizeIfEligibleInBackground() async {
-    if (!_isMasterCoach(widget.coachId)) return;
-    final prefs = await SharedPreferences.getInstance();
-
-    final dismissUntilStr = prefs.getString(
-      'nyang_cognitive_optimize_dismiss_until',
-    );
-    if (dismissUntilStr != null) {
-      final dismissUntil = DateTime.tryParse(dismissUntilStr);
-      if (dismissUntil != null && DateTime.now().isBefore(dismissUntil)) {
-        return;
-      }
-    }
-
-    final tasksRaw = prefs.getString('nyang_tasks');
-    if (!CognitiveOptimizeService.isEligible(tasksRaw)) return;
-    final highLoadCount = CognitiveOptimizeService.highLoadCount(tasksRaw);
-    final body = '🧠 고인지 작업 $highLoadCount개 감지됐어요';
-
-    await NotificationService().showImmediateNotification(
-      title: CoachConfigs.get(widget.coachId).name,
-      body: body,
-    );
   }
 
   Future<bool> _ensureCurrentCoachAccess({bool syncCloud = false}) async {
@@ -1149,7 +1115,6 @@ class _MainTabScreenState extends State<MainTabScreen>
     Future.delayed(const Duration(milliseconds: 400), () {
       _chatController.checkDeferredReminder();
       _chatController.checkBedtimeMoveOffer();
-      _chatController.checkCognitiveOptimizeOffer();
     });
   }
 
@@ -1839,7 +1804,6 @@ class _MainTabScreenState extends State<MainTabScreen>
             () => _chatController.injectAiMessage(msg),
           );
         },
-        onCognitiveOptimizeTap: () => _closeDrawerAndCheck(),
       );
     } else if (_openDrawerIndex == 2) {
       drawerContent = RecordsScreen(coachId: widget.coachId);

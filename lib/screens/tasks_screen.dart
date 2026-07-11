@@ -48,8 +48,6 @@ class TaskItem {
   int? achievedCount;
   int? achievedDuration;
   int deferredCount;
-  // 인지 에너지 최적화 기능용 백그라운드 태깅 결과 (높음|보통|낮음)
-  String? cognitiveLoad;
 
   TaskItem({
     required this.id,
@@ -68,7 +66,6 @@ class TaskItem {
     this.isReminderEnabled = true,
     this.completedAt,
     this.deferredCount = 0,
-    this.cognitiveLoad,
   });
 
   Map<String, dynamic> toJson() => {
@@ -92,7 +89,6 @@ class TaskItem {
     if (achievedCount != null) 'achievedCount': achievedCount,
     if (achievedDuration != null) 'achievedDuration': achievedDuration,
     'deferredCount': deferredCount,
-    if (cognitiveLoad != null) 'cognitiveLoad': cognitiveLoad,
   };
 
   factory TaskItem.fromJson(Map<String, dynamic> j) => TaskItem(
@@ -117,7 +113,6 @@ class TaskItem {
     isReminderEnabled: j['isReminderEnabled'] ?? true,
     completedAt: j['completedAt'],
     deferredCount: j['deferredCount'] ?? 0,
-    cognitiveLoad: j['cognitiveLoad'],
   );
 }
 
@@ -467,14 +462,12 @@ class VisionItem {
 class TasksScreen extends StatefulWidget {
   final String coachId;
   final void Function(String message)? onCoreTaskSet;
-  final VoidCallback? onCognitiveOptimizeTap;
   final TasksScreenController? controller;
   final String? initialBottomSheet;
   const TasksScreen({
     super.key,
     required this.coachId,
     this.onCoreTaskSet,
-    this.onCognitiveOptimizeTap,
     this.controller,
     this.initialBottomSheet,
   });
@@ -590,8 +583,6 @@ class _TasksScreenState extends State<TasksScreen>
     _todayInputFocusNode.dispose();
     _weekInputCtrl.dispose();
     _monthInputCtrl.dispose();
-    _cognitiveTagTimer?.cancel();
-    _cognitiveCardTimer?.cancel();
     super.dispose();
   }
 
@@ -608,10 +599,6 @@ class _TasksScreenState extends State<TasksScreen>
     final rawSchedules = prefs.getString('nyang_schedules');
     final rawLogs = prefs.getString('nyang_habit_logs');
     final rawVacation = prefs.getString('nyang_vacation');
-    final rawCognitiveTagCache = prefs.getString('nyang_cognitive_tag_cache');
-    final rawCognitiveDismissUntil = prefs.getString(
-      'nyang_cognitive_optimize_dismiss_until',
-    );
     final hasActivePlan = await _hasActivePlan();
     if (!hasActivePlan) {
       await prefs.setBool('nyang_core_reminder_enabled', false);
@@ -670,21 +657,6 @@ class _TasksScreenState extends State<TasksScreen>
       }
       if (rawVacation != null) {
         vacationInfo = jsonDecode(rawVacation) as Map<String, dynamic>;
-      }
-      if (rawCognitiveTagCache != null) {
-        final decoded =
-            jsonDecode(rawCognitiveTagCache) as Map<String, dynamic>;
-        // 예전 버전은 캐시 값이 {mode, load} 맵이었다 — 그때 저장된 데이터도
-        // 그냥 버려지지 않게 load만 뽑아서 새 형식(문자열)으로 읽어들인다.
-        _cognitiveTagCache = decoded.map((k, v) {
-          final load = v is Map ? v['load']?.toString() : v?.toString();
-          return MapEntry(k, load ?? '보통');
-        });
-      }
-      if (rawCognitiveDismissUntil != null) {
-        _cognitiveCardDismissedUntil = DateTime.tryParse(
-          rawCognitiveDismissUntil,
-        );
       }
       _resetHour = prefs.getDouble('nyang_reset_hour') ?? 3.0;
     });
@@ -1089,182 +1061,6 @@ class _TasksScreenState extends State<TasksScreen>
     await _saveTodayRecord();
     await WidgetSyncService.syncFromStoredTasks();
     TasksSyncService.scheduleSyncToCloud();
-    _scheduleCognitiveTagging();
-    _scheduleCognitiveCardCheck();
-  }
-
-  // ── 인지 에너지 최적화: LLM 호출 헬퍼 ────────────────────
-  // MilestoneMemoDialog의 _callLlmJson과 동일한 chatProxy 패턴이지만,
-  // 이 State 클래스(_TasksScreenState) 소속 위젯이 아니라 별도 인스턴스가 필요하다.
-  static final _cognitiveProxy =
-      FirebaseFunctions.instanceFor(region: 'asia-northeast3').httpsCallable(
-        'chatProxy',
-        options: HttpsCallableOptions(timeout: const Duration(seconds: 60)),
-      );
-
-  Future<String> _callLlmJson(
-    String systemPrompt,
-    String userPrompt, {
-    double temperature = 0.2,
-  }) async {
-    final messages = [
-      {'role': 'system', 'content': systemPrompt},
-      {'role': 'user', 'content': userPrompt},
-    ];
-
-    final estimatedPromptTokens = AnalyticsService.estimateChatTokens(
-      messages,
-      '',
-    );
-    await ApiUsageLimitService.ensureChatAllowed(
-      estimatedTokens: estimatedPromptTokens,
-    );
-
-    final response = await _cognitiveProxy.call({
-      'messages': messages,
-      'temperature': temperature,
-    });
-
-    final raw = response.data['content'].toString().trim();
-    final usageData = response.data is Map ? response.data as Map : const {};
-    final actualTokens = AnalyticsService.readIntValue(usageData, [
-      'totalTokens',
-      'total_tokens',
-      'tokens',
-      'usage.totalTokens',
-      'usage.total_tokens',
-    ]);
-    final actualCostWon = AnalyticsService.readIntValue(usageData, [
-      'costWon',
-      'cost_won',
-      'estimatedCostWon',
-      'estimated_cost_won',
-      'usage.costWon',
-    ]);
-    final estimatedTokens = AnalyticsService.estimateChatTokens(messages, raw);
-
-    AnalyticsService.logApiUsage(
-      coachId: 'system',
-      estimatedTokens: estimatedTokens,
-      actualTokens: actualTokens,
-      actualCostWon: actualCostWon,
-    );
-
-    return raw.replaceAll('```json', '').replaceAll('```', '').trim();
-  }
-
-  // ── 인지 에너지 최적화: 백그라운드 태깅 ───────────────────
-  // 오늘 할 일 중 아직 load 태그가 없는 항목만 모아 배치로 분류한다.
-  // 텍스트 → load 캐시를 먼저 확인해서, 이미 분류한 적 있는 텍스트(반복되는
-  // 습관/일정 등)는 AI를 다시 부르지 않고 캐시를 재사용한다.
-  Timer? _cognitiveTagTimer;
-  Map<String, String> _cognitiveTagCache = {};
-  // 반복되는 습관/일정은 대개 정해진 몇십 가지 안에서 벗어나지 않으므로,
-  // 캐시는 LRU(최근에 안 쓰인 것부터 제거) 방식으로 50개까지만 유지한다.
-  static const int _cognitiveTagCacheLimit = 50;
-
-  // 캐시 항목을 쓰거나(히트) 새로 추가할 때 호출. Map은 삽입 순서를 그대로
-  // 유지하므로, 항목을 지웠다가 다시 넣는 것만으로 "최근 사용" 위치(맨 뒤)로
-  // 옮길 수 있다 — 별도의 타임스탬프/카운터를 저장할 필요가 없다.
-  void _touchCognitiveCacheEntry(String text, String load) {
-    _cognitiveTagCache.remove(text);
-    _cognitiveTagCache[text] = load;
-    while (_cognitiveTagCache.length > _cognitiveTagCacheLimit) {
-      _cognitiveTagCache.remove(_cognitiveTagCache.keys.first);
-    }
-  }
-
-  Future<void> _saveCognitiveTagCache() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(
-      'nyang_cognitive_tag_cache',
-      jsonEncode(_cognitiveTagCache),
-    );
-  }
-
-  void _scheduleCognitiveTagging() {
-    if (!_coach.isMaster) return;
-    // 발동 조건이 "고인지 3개 이상"이므로 할 일이 최소 3개는 있어야 애초에 성립
-    // 가능하다. 그 미만이면 판단해봤자 트리거될 수 없으므로 태깅 자체를 건너뛴다.
-    if (tasks.where((t) => !t.done).length < 3) return;
-    // 이미 오늘 안내를 띄운 직후(쿨다운 중)라면 더 셀 필요가 없으므로 태깅도 쉰다.
-    final dismissedUntil = _cognitiveCardDismissedUntil;
-    if (dismissedUntil != null && DateTime.now().isBefore(dismissedUntil)) {
-      return;
-    }
-    // done 여부와 무관하게 태그가 없는 항목은 전부 대상으로 삼는다 — 태깅 디바운스(3초)가
-    // 돌기 전에 후딱 완료해버린 할 일도 나중에 한 번은 분류되어야, "오늘 이미 완료한
-    // 고인지 작업"을 코치가 참고할 수 있다.
-    final untagged = tasks.where((t) => t.cognitiveLoad == null).toList();
-    if (untagged.isEmpty) return;
-
-    // 캐시에 있는 텍스트는 AI 호출 없이 즉시 적용
-    final needsAi = <TaskItem>[];
-    var cacheHit = false;
-    for (final t in untagged) {
-      final cached = _cognitiveTagCache[t.text];
-      if (cached != null) {
-        t.cognitiveLoad = cached;
-        _touchCognitiveCacheEntry(t.text, cached); // 최근 사용으로 갱신
-        cacheHit = true;
-      } else {
-        needsAi.add(t);
-      }
-    }
-    if (cacheHit) setState(() {});
-
-    if (needsAi.isEmpty) {
-      // 캐시로만 다 채워졌으면(AI 호출 불필요) 바로 저장. untagged가 이제 없으므로
-      // _saveTasks() -> _scheduleCognitiveTagging() 재귀는 즉시 종료된다.
-      if (cacheHit) _saveTasks();
-      return;
-    }
-    _cognitiveTagTimer?.cancel();
-    _cognitiveTagTimer = Timer(
-      const Duration(seconds: 3),
-      () => _runCognitiveTagging(needsAi),
-    );
-  }
-
-  Future<void> _runCognitiveTagging(List<TaskItem> items) async {
-    try {
-      const systemPrompt =
-          '''당신은 할 일 목록에 태그만 붙이는 분류기입니다. 각 항목의 인지적 부담 수준을 판단하세요.
-load: 높음 | 보통 | 낮음 중 하나
-
-설명 없이 아래 형식의 JSON 배열만 출력하세요.
-[{"id":"항목id","load":"..."}]''';
-      final userPrompt = jsonEncode(
-        items.map((t) => {'id': t.id.toString(), 'text': t.text}).toList(),
-      );
-      final raw = await _callLlmJson(
-        systemPrompt,
-        userPrompt,
-        temperature: 0.1,
-      );
-      final List parsed = jsonDecode(raw);
-      if (!mounted) return;
-      setState(() {
-        for (final entry in parsed) {
-          if (entry is! Map) continue;
-          final idx = tasks.indexWhere(
-            (t) => t.id.toString() == entry['id'].toString(),
-          );
-          if (idx != -1) {
-            final load = entry['load'] as String?;
-            tasks[idx].cognitiveLoad = load;
-            if (load != null) {
-              _touchCognitiveCacheEntry(tasks[idx].text, load);
-            }
-          }
-        }
-      });
-      await _saveCognitiveTagCache();
-      await _saveTasks(); // 태그 없는 항목이 이제 없으므로 재귀 호출 없이 종료됨
-    } catch (e) {
-      // 백그라운드 작업이므로 실패해도 사용자에게 에러를 노출하지 않는다.
-      debugPrint('Cognitive tagging failed: $e');
-    }
   }
 
   Future<void> _saveTodayRecord() async {
@@ -3326,132 +3122,6 @@ load: 높음 | 보통 | 낮음 중 하나
   }
 
   // ── 오늘 탭 ──────────────────────────────────────────────
-  // ── 인지 에너지 최적화: 발동 조건 (AI 호출 없이 로컬에서만 판단) ──
-  // 마스터(비서) 코치 전용 기능 — 프렌즈 코치에서는 계산 자체를 하지 않는다.
-  bool get _cognitiveOptimizeAvailable {
-    if (!_coach.isMaster) return false;
-    final notDone = tasks.where((t) => !t.done).toList();
-    return notDone.where((t) => t.cognitiveLoad == '높음').length >= 3;
-  }
-
-  // 할 일이 방금 추가/수정된 직후엔 카드를 바로 띄우지 않고, 잠깐(3초) 조용해진
-  // 다음에만 띄운다 — 연속으로 몇 개 더 입력하려는 사용자를 방해하지 않기 위함.
-  Timer? _cognitiveCardTimer;
-  bool _cognitiveCardQuietElapsed = false;
-  DateTime? _cognitiveCardDismissedUntil;
-
-  void _scheduleCognitiveCardCheck() {
-    // 발동 조건(5개 이상 등)을 만족할 때만 타이머를 돌린다 — 조건 미달일 땐
-    // 어차피 카드가 뜨지 않으므로 매 변경마다 타이머를 리셋할 필요가 없다.
-    if (!_cognitiveOptimizeAvailable) {
-      _cognitiveCardTimer?.cancel();
-      _cognitiveCardQuietElapsed = false;
-      return;
-    }
-    _cognitiveCardQuietElapsed = false;
-    _cognitiveCardTimer?.cancel();
-    _cognitiveCardTimer = Timer(const Duration(seconds: 3), () {
-      if (!mounted) return;
-      setState(() => _cognitiveCardQuietElapsed = true);
-    });
-  }
-
-  bool get _shouldShowCognitiveOptimizeCard {
-    if (!_cognitiveCardQuietElapsed) return false;
-    if (!_cognitiveOptimizeAvailable) return false;
-    final until = _cognitiveCardDismissedUntil;
-    if (until != null && DateTime.now().isBefore(until)) return false;
-    return true;
-  }
-
-  Future<void> _dismissCognitiveOptimizeCard({bool focusInput = false}) async {
-    // 권고성 알림이라 매일 뜨면 피로감을 줄 수 있어 며칠 간격으로 쿨다운을 둔다.
-    final until = DateTime.now().add(const Duration(days: 3));
-    setState(() => _cognitiveCardDismissedUntil = until);
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(
-      'nyang_cognitive_optimize_dismiss_until',
-      until.toIso8601String(),
-    );
-    if (focusInput) {
-      _todayInputFocusNode.requestFocus();
-    }
-  }
-
-  Widget _buildCognitiveOptimizeCard() {
-    final highLoadCount = tasks
-        .where((t) => !t.done && t.cognitiveLoad == '높음')
-        .length;
-    final cardText = '🧠 고인지 작업 $highLoadCount개 감지됐어요';
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: _coach.accentColor.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _coach.accentColor.withOpacity(0.2)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          GestureDetector(
-            onTap: () => widget.onCognitiveOptimizeTap?.call(),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.psychology_outlined,
-                  color: _coach.accentColor,
-                  size: 22,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    cardText,
-                    style: GoogleFonts.notoSansKr(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: const Color(0xFF3D3A4E),
-                    ),
-                  ),
-                ),
-                Icon(Icons.chevron_right, color: _coach.accentColor, size: 20),
-              ],
-            ),
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              GestureDetector(
-                onTap: () => _dismissCognitiveOptimizeCard(focusInput: true),
-                child: Text(
-                  '할 일 더 추가할래요',
-                  style: GoogleFonts.notoSansKr(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: _coach.accentColor,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 16),
-              GestureDetector(
-                onTap: () => _dismissCognitiveOptimizeCard(),
-                child: Text(
-                  '나중에 할게요',
-                  style: GoogleFonts.notoSansKr(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: const Color(0xFFA0A0B0),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildTodayTab() {
     final isVacation = vacationInfo != null;
     return Container(
@@ -3482,8 +3152,6 @@ load: 높음 | 보통 | 낮음 중 하나
               ),
             )
           else ...[
-            // 인지 에너지 최적화 제안 카드
-            if (_shouldShowCognitiveOptimizeCard) _buildCognitiveOptimizeCard(),
             // 핵심 할 일 (Core Tasks)
             _buildCoreSection(),
             // 태스크 목록
@@ -11814,7 +11482,7 @@ class _MilestoneMemoDialogState extends State<MilestoneMemoDialog> {
   }
 
   // chatProxy 호출 + 사용량 체크 + 토큰/비용 로깅을 공용화한 헬퍼.
-  // 대화가 아닌 단발성 분석/정리 요청(메모 요약, 인지 에너지 태깅/최적화 등)에서 재사용한다.
+  // 대화가 아닌 단발성 분석/정리 요청(메모 요약 등)에서 재사용한다.
   Future<String> _callLlmJson(
     String systemPrompt,
     String userPrompt, {
@@ -11861,6 +11529,8 @@ class _MilestoneMemoDialogState extends State<MilestoneMemoDialog> {
       estimatedTokens: estimatedTokens,
       actualTokens: actualTokens,
       actualCostWon: actualCostWon,
+      usageSource: 'memo_summary',
+      countAsUserUsage: false,
     );
 
     return raw.replaceAll('```json', '').replaceAll('```', '').trim();
