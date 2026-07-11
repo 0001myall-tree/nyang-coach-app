@@ -203,16 +203,17 @@ class _CatOnboardingPreviewScreenState
                         ),
                         _timerCard(),
                       ],
-                      if (_showUserStretchDone) _userBubble('나 스트레칭 다 했어!'),
+                      if (_showUserStretchDone) _userBubble('덕분에 스트레칭 했어ㅎㅎ'),
                       if (_showCoachFeedback)
                         _coachBubble(
-                          '오~ 우리 집사 내가 해낼 줄 알았다냥\n냥이도 기분 좋아',
-                          iconAsset: 'assets/icons/heart.svg',
+                          '오~ 내가 해낼 줄 알았지.\n우리 집사 최고',
+                          trailingIconAsset: 'assets/icons/heart.svg',
                         ),
                       if (_showUser2) _userBubble(_userTypedFull),
                       if (_showCoachClosing)
                         _coachBubble(
-                          '지금처럼 하기 싫을 때나, 머릿속이 복잡해질 때\n언제든 나한테 말해.\n내가 도와줄게.',
+                          '지금처럼 하기 싫거나 머릿속이 복잡할 때\n언제든 말해. 내가 도와줄게',
+                          trailingIconAsset: 'assets/icons/paw.svg',
                         ),
                     ],
                   ),
@@ -328,7 +329,12 @@ class _CatOnboardingPreviewScreenState
     );
   }
 
-  Widget _coachBubble(String text, {String? iconAsset}) {
+  Widget _coachBubble(String text, {String? trailingIconAsset}) {
+    final textStyle = GoogleFonts.notoSansKr(
+      fontSize: AppDesignTokens.textBody,
+      color: AppDesignTokens.textPrimary,
+      height: 1.4,
+    );
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Row(
@@ -352,32 +358,28 @@ class _CatOnboardingPreviewScreenState
                 ),
                 boxShadow: AppDesignTokens.bubbleShadow,
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (iconAsset != null) ...[
-                    SvgPicture.asset(
-                      iconAsset,
-                      width: 18,
-                      height: 18,
-                      colorFilter: const ColorFilter.mode(
-                        AppDesignTokens.brand,
-                        BlendMode.srcIn,
+              child: trailingIconAsset == null
+                  ? Text(text, style: textStyle)
+                  : Text.rich(
+                      TextSpan(
+                        children: [
+                          TextSpan(text: text, style: textStyle),
+                          const WidgetSpan(child: SizedBox(width: 4)),
+                          WidgetSpan(
+                            alignment: PlaceholderAlignment.middle,
+                            child: SvgPicture.asset(
+                              trailingIconAsset,
+                              width: 16,
+                              height: 16,
+                              colorFilter: const ColorFilter.mode(
+                                AppDesignTokens.brand,
+                                BlendMode.srcIn,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    const SizedBox(height: 6),
-                  ],
-                  Text(
-                    text,
-                    style: GoogleFonts.notoSansKr(
-                      fontSize: AppDesignTokens.textBody,
-                      color: AppDesignTokens.textPrimary,
-                      height: 1.4,
-                    ),
-                  ),
-                ],
-              ),
             ),
           ),
         ],
