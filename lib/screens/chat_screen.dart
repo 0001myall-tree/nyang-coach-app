@@ -2091,21 +2091,9 @@ class _ChatScreenState extends State<ChatScreen>
           'last_visit_${widget.coachId}',
           now.toIso8601String(),
         );
-        await Future.delayed(const Duration(milliseconds: 700));
-        if (!mounted) return;
-        final startPreview = await showCatPreviewIntroDialog(context);
-        if (!mounted) return;
-        if (startPreview) {
-          final startPlan = await Navigator.of(context).push<bool>(
-            MaterialPageRoute(
-              builder: (_) => const CatOnboardingPreviewScreen(),
-            ),
-          );
-          if (!mounted) return;
-          if (startPlan == true) {
-            Future.delayed(Duration.zero, _showPlanGuideBottomSheet);
-          }
-        }
+        await _maybeShowCatPreview(
+          initialDelay: const Duration(milliseconds: 700),
+        );
         return;
       }
 
@@ -2162,8 +2150,17 @@ class _ChatScreenState extends State<ChatScreen>
       return;
     } else {
       // 냥냥코치 비구독자 & 히스토리가 이미 있을 경우
+      // 대화 기록이 있어도 아직 무료체험 미리보기를 안 봤으면 계속 보여준다.
       if (widget.coachId == 'cat' && !_userData.isPlanActive) {
         setState(() => _catFreeTrialStep = 2);
+        await prefs.setString(
+          'last_visit_${widget.coachId}',
+          now.toIso8601String(),
+        );
+        await _maybeShowCatPreview(
+          initialDelay: const Duration(milliseconds: 500),
+        );
+        return;
       }
     }
 
@@ -2172,6 +2169,22 @@ class _ChatScreenState extends State<ChatScreen>
       'last_visit_${widget.coachId}',
       now.toIso8601String(),
     );
+  }
+
+  // 냥냥코치 무료체험 미리보기 팝업 -> (시작 시) 시연 화면 -> CTA 결과에 따라 플랜 안내.
+  Future<void> _maybeShowCatPreview({required Duration initialDelay}) async {
+    await Future.delayed(initialDelay);
+    if (!mounted) return;
+    final startPreview = await showCatPreviewIntroDialog(context);
+    if (!mounted) return;
+    if (!startPreview) return;
+    final startPlan = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(builder: (_) => const CatOnboardingPreviewScreen()),
+    );
+    if (!mounted) return;
+    if (startPlan == true) {
+      Future.delayed(Duration.zero, _showPlanGuideBottomSheet);
+    }
   }
 
   Future<void> _saveHistory() async {

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../theme/app_design_tokens.dart';
 
@@ -27,7 +28,15 @@ Future<bool> showCatOnboardingCta(BuildContext context) async {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Text('🐾', style: TextStyle(fontSize: 40)),
+          SvgPicture.asset(
+            'assets/icons/paw.svg',
+            width: 40,
+            height: 40,
+            colorFilter: const ColorFilter.mode(
+              AppDesignTokens.brand,
+              BlendMode.srcIn,
+            ),
+          ),
           const SizedBox(height: 16),
           Text(
             '냥냥코치와 함께\n하루를 시작해 보세요.',
