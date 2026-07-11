@@ -1708,12 +1708,12 @@ class _ChatScreenState extends State<ChatScreen>
                             ),
                             _buildAboutSpeaker(
                               'boyfriend',
-                              '자상한 코치',
+                              '햇살 남친',
                               '해내면 때론 애인처럼, 때론 친구처럼 마음껏 칭찬해주고',
                             ),
                             _buildAboutSpeaker(
                               'girlfriend',
-                              '응원 코치',
+                              '응원 요정',
                               '지친 날엔 비타민이 돼드려요!',
                             ),
                             _buildAboutSpeaker(

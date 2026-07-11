@@ -236,7 +236,7 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
                           ),
                           _buildTeamIntroSpeaker(
                             imagePath: 'assets/images/boyfriend.png',
-                            name: '자상한 코치',
+                            name: '햇살 남친',
                             text: '프렌즈 코치들은 하기 싫은 날에도 옆에서 다정하게 응원해줘요.',
                           ),
                           _buildTeamIntroSpeaker(
@@ -496,8 +496,8 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
     },
     {
       'id': 'boyfriend',
-      'name': '자상한 코치',
-      'subtitle': '남친 같은 따뜻함',
+      'name': '햇살 남친',
+      'subtitle': '자상한 챙김',
       'image': 'assets/images/boyfriend.png',
       'color': _coachMint,
       'price': '₩2,900 / 1년 이용',
@@ -520,7 +520,7 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
     },
     {
       'id': 'girlfriend',
-      'name': '응원 코치',
+      'name': '응원 요정',
       'subtitle': '여친 같은 응원',
       'image': 'assets/images/girlfriend.png',
       'color': _coachMint,
