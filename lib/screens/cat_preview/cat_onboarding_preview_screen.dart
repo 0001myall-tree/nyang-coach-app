@@ -29,7 +29,8 @@ class _CatOnboardingPreviewScreenState
   static const _tTimerDone = _tTimerStart + 3200;
   static const _tUserStretchDone = _tTimerDone + 700;
   static const _tCoachFeedback = _tUserStretchDone + 1500;
-  static const _tMicActive = _tCoachFeedback + 2400;
+  static const _tUserFeelBetter = _tCoachFeedback + 1500;
+  static const _tMicActive = _tUserFeelBetter + 1800;
   // 마이크로 듣고 있는 구간(동심원 애니메이션 + '마이크로 말하는 중' 라벨).
   static const _tListeningDurationMs = 2200;
   static const _tTypingStart = _tMicActive + _tListeningDurationMs;
@@ -132,6 +133,7 @@ class _CatOnboardingPreviewScreenState
 
   bool get _showUserStretchDone => _elapsedMs >= _tUserStretchDone;
   bool get _showCoachFeedback => _elapsedMs >= _tCoachFeedback;
+  bool get _showUserFeelBetter => _elapsedMs >= _tUserFeelBetter;
   bool get _micActive => _elapsedMs >= _tMicActive && _elapsedMs < _tUser2Sent;
   bool get _listening =>
       _elapsedMs >= _tMicActive && _elapsedMs < _tTypingStart;
@@ -209,6 +211,8 @@ class _CatOnboardingPreviewScreenState
                           '오~ 내가 해낼 줄 알았지.\n우리 집사 최고',
                           trailingIconAsset: 'assets/icons/heart.svg',
                         ),
+                      if (_showUserFeelBetter)
+                        _userBubble('아까까지만 해도 무기력했는데 기분 괜찮아졌어ㅎ'),
                       if (_showUser2) _userBubble(_userTypedFull),
                       if (_showCoachClosing)
                         _coachBubble(
@@ -307,23 +311,23 @@ class _CatOnboardingPreviewScreenState
     );
   }
 
-  Widget _coachAvatar() {
+  Widget _coachAvatar({double size = 36}) {
     return ClipRRect(
-      borderRadius: BorderRadius.circular(18),
+      borderRadius: BorderRadius.circular(size / 2),
       child: Image.asset(
         _cat.imagePath,
-        width: 36,
-        height: 36,
+        width: size,
+        height: size,
         fit: BoxFit.cover,
         alignment: Alignment.topCenter,
         errorBuilder: (_, __, ___) => Container(
-          width: 36,
-          height: 36,
+          width: size,
+          height: size,
           decoration: BoxDecoration(
             color: _cat.accentLight,
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.circular(size / 2),
           ),
-          child: Icon(Icons.pets, color: _cat.accentColor, size: 20),
+          child: Icon(Icons.pets, color: _cat.accentColor, size: size * 0.55),
         ),
       ),
     );
@@ -591,28 +595,6 @@ class _CatOnboardingPreviewScreenState
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Expanded(
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(
-                color: AppDesignTokens.surfaceSubtle,
-                borderRadius: BorderRadius.circular(24),
-              ),
-              child: Text(
-                _listening
-                    ? '듣고 있어요...'
-                    : (_typedText.isEmpty ? ' ' : _typedText),
-                style: GoogleFonts.notoSansKr(
-                  fontSize: 14,
-                  fontStyle: _listening ? FontStyle.italic : FontStyle.normal,
-                  color: _listening
-                      ? AppDesignTokens.textMuted
-                      : AppDesignTokens.textPrimary,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
           SizedBox(
             width: 64,
             height: 64,
@@ -641,6 +623,28 @@ class _CatOnboardingPreviewScreenState
                 ),
                 if (_listening) Positioned(top: -34, child: _listeningLabel()),
               ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: AppDesignTokens.surfaceSubtle,
+                borderRadius: BorderRadius.circular(24),
+              ),
+              child: Text(
+                _listening
+                    ? '듣고 있어요...'
+                    : (_typedText.isEmpty ? ' ' : _typedText),
+                style: GoogleFonts.notoSansKr(
+                  fontSize: 14,
+                  fontStyle: _listening ? FontStyle.italic : FontStyle.normal,
+                  color: _listening
+                      ? AppDesignTokens.textMuted
+                      : AppDesignTokens.textPrimary,
+                ),
+              ),
             ),
           ),
         ],
@@ -974,7 +978,7 @@ class _CatOnboardingPreviewScreenState
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '일정 알림을 켜두면 회의 10분 전에\n미리 알려드려요.',
+                  '일정 알림을 켜두면 회의 10분 전에\n코치의 목소리로 미리 알려드려요.',
                   style: GoogleFonts.notoSansKr(
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
@@ -1002,6 +1006,12 @@ class _CatOnboardingPreviewScreenState
                             ? AppDesignTokens.brand
                             : AppDesignTokens.textMuted,
                       ),
+                    ),
+                    const Spacer(),
+                    AnimatedScale(
+                      duration: const Duration(milliseconds: 300),
+                      scale: _reminderOn ? 1.0 : 0.0,
+                      child: _coachAvatar(size: 26),
                     ),
                   ],
                 ),
