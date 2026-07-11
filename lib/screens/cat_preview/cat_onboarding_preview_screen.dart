@@ -190,13 +190,13 @@ class _CatOnboardingPreviewScreenState
                       if (_showUserStretchDone) _userBubble('나 스트레칭 다 했어!'),
                       if (_showCoachFeedback)
                         _coachBubble(
-                          '잘했어\n시작한 것만으로도 오늘은 충분히 잘하고 있어.\n오늘 하루도 천천히 같이 가보자.',
-                          iconAsset: 'assets/icons/wand-magic-sparkles.svg',
+                          '오~ 우리 집사 내가 해낼 줄 알았다냥\n냥이도 기분 좋아',
+                          iconAsset: 'assets/icons/heart.svg',
                         ),
                       if (_showUser2) _userBubble(_userTypedFull),
                       if (_showCoachClosing)
                         _coachBubble(
-                          '하기 싫을 때나, 머릿속이 복잡해질 때\n언제든 나한테 말해.\n내가 도와줄게.',
+                          '지금처럼 하기 싫을 때나, 머릿속이 복잡해질 때\n언제든 나한테 말해.\n내가 도와줄게.',
                         ),
                     ],
                   ),
