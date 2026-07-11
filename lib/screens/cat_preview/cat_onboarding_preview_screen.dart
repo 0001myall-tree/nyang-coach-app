@@ -30,8 +30,12 @@ class _CatOnboardingPreviewScreenState
   static const _tUserStretchDone = _tTimerDone + 700;
   static const _tCoachFeedback = _tUserStretchDone + 1500;
   static const _tMicActive = _tCoachFeedback + 2400;
-  static const _tTypingStart = _tMicActive + 700;
-  static const _tTypingDurationMs = 2400;
+  // 마이크로 듣고 있는 구간(동심원 애니메이션 + '마이크로 말하는 중' 라벨).
+  static const _tListeningDurationMs = 2200;
+  static const _tTypingStart = _tMicActive + _tListeningDurationMs;
+  // 듣기가 끝난 뒤 인식된 문장이 입력창에 나타나는 구간 (타이핑이 아니라
+  // 음성 인식 결과가 채워지는 느낌이라 짧게).
+  static const _tTypingDurationMs = 900;
   static const _tUser2Sent = _tTypingStart + _tTypingDurationMs;
   static const _tScheduleDialogShow = _tUser2Sent + 400;
   static const _tScheduleDialogConfirm = _tScheduleDialogShow + 1600;
@@ -129,6 +133,18 @@ class _CatOnboardingPreviewScreenState
   bool get _showUserStretchDone => _elapsedMs >= _tUserStretchDone;
   bool get _showCoachFeedback => _elapsedMs >= _tCoachFeedback;
   bool get _micActive => _elapsedMs >= _tMicActive && _elapsedMs < _tUser2Sent;
+  bool get _listening =>
+      _elapsedMs >= _tMicActive && _elapsedMs < _tTypingStart;
+
+  // 마이크 주변 동심원(리플) 애니메이션 진행률. 링마다 위상을 살짝 어긋나게 줘서
+  // 계속 퍼져나가는 것처럼 보이게 한다. 0(막 시작)~1(다 퍼져서 사라짐).
+  double _rippleProgress(int ringIndex) {
+    if (!_listening) return 0;
+    const cycleMs = 1000;
+    final sinceListenStart = _elapsedMs - _tMicActive;
+    final phase = (sinceListenStart + ringIndex * (cycleMs ~/ 3)) % cycleMs;
+    return phase / cycleMs;
+  }
 
   String get _typedText {
     if (_elapsedMs < _tTypingStart) return '';
@@ -571,6 +587,7 @@ class _CatOnboardingPreviewScreenState
         border: Border(top: BorderSide(color: AppDesignTokens.divider)),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Expanded(
             child: Container(
@@ -580,32 +597,93 @@ class _CatOnboardingPreviewScreenState
                 borderRadius: BorderRadius.circular(24),
               ),
               child: Text(
-                _typedText.isEmpty ? ' ' : _typedText,
+                _listening
+                    ? '듣고 있어요...'
+                    : (_typedText.isEmpty ? ' ' : _typedText),
                 style: GoogleFonts.notoSansKr(
                   fontSize: 14,
-                  color: AppDesignTokens.textPrimary,
+                  fontStyle: _listening ? FontStyle.italic : FontStyle.normal,
+                  color: _listening
+                      ? AppDesignTokens.textMuted
+                      : AppDesignTokens.textPrimary,
                 ),
               ),
             ),
           ),
           const SizedBox(width: 8),
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: _micActive
-                  ? AppDesignTokens.brand
-                  : AppDesignTokens.surfaceSubtle,
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              Icons.mic_none_rounded,
-              color: _micActive ? Colors.white : AppDesignTokens.textMuted,
-              size: 20,
+          SizedBox(
+            width: 64,
+            height: 64,
+            child: Stack(
+              clipBehavior: Clip.none,
+              alignment: Alignment.center,
+              children: [
+                if (_listening) ...List.generate(3, (i) => _micRipple(i)),
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: _micActive
+                        ? AppDesignTokens.brand
+                        : AppDesignTokens.surfaceSubtle,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.mic_none_rounded,
+                    color: _micActive
+                        ? Colors.white
+                        : AppDesignTokens.textMuted,
+                    size: 20,
+                  ),
+                ),
+                if (_listening) Positioned(top: -34, child: _listeningLabel()),
+              ],
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  // 마이크 주위로 퍼지는 동심원(리플) — 소리가 입력되고 있다는 걸 보여준다.
+  Widget _micRipple(int ringIndex) {
+    final progress = _rippleProgress(ringIndex);
+    final scale = 1.0 + progress * 0.9;
+    final opacity = (1.0 - progress) * 0.45;
+    return Transform.scale(
+      scale: scale,
+      child: Container(
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: AppDesignTokens.brand.withValues(alpha: opacity),
+            width: 2,
+          ),
+        ),
+      ),
+    );
+  }
+
+  // 마이크 위에 뜨는 "마이크로 말하는 중" 캡션.
+  Widget _listeningLabel() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: AppDesignTokens.brand,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: AppDesignTokens.bubbleShadow,
+      ),
+      child: Text(
+        '마이크로 말하는 중',
+        style: GoogleFonts.notoSansKr(
+          fontSize: 10,
+          fontStyle: FontStyle.italic,
+          fontWeight: FontWeight.w700,
+          color: Colors.white,
+        ),
       ),
     );
   }
