@@ -131,6 +131,18 @@ class _VisionMilestoneContext {
   });
 }
 
+class _MilestoneCheckResult {
+  final String message;
+  final bool hasIncompleteItems;
+  final bool needsDeadlineSetup;
+
+  const _MilestoneCheckResult({
+    required this.message,
+    this.hasIncompleteItems = false,
+    this.needsDeadlineSetup = false,
+  });
+}
+
 const _broWorkoutWarmupLinks = [
   _BroWorkoutLink(
     id: 'warmup_basic',
@@ -3848,6 +3860,153 @@ class _ChatScreenState extends State<ChatScreen>
     return false;
   }
 
+  DateTime? _parseMilestoneDate(dynamic rawDate) {
+    final text = rawDate?.toString().trim() ?? '';
+    if (text.isEmpty) return null;
+    final parsed = DateTime.tryParse(text);
+    if (parsed == null) return null;
+    return DateTime(parsed.year, parsed.month, parsed.day);
+  }
+
+  String _quotedMilestoneNames(List<String> names) {
+    final visible = names.take(2).map((name) => '‘$name’').join(', ');
+    final hiddenCount = names.length - 2;
+    if (hiddenCount > 0) return '$visible 외 $hiddenCount개';
+    return visible;
+  }
+
+  String _completedMilestonePraise(List<String> names) {
+    if (names.length == 1) {
+      return '최근 일정이었던 ‘${names.first}’을 잘 마무리하셨네요. 중요한 단계를 잘 넘기셨어요.';
+    }
+    return '최근 일정이었던 ${_quotedMilestoneNames(names)}를 잘 마무리하셨네요. 중요한 단계들을 잘 넘기셨어요.';
+  }
+
+  Future<_MilestoneCheckResult> _buildMilestoneCheckResult() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString('nyang_visions');
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final recentStart = today.subtract(const Duration(days: 3));
+    final recentEnd = today.add(const Duration(days: 3));
+    final upcomingEnd = today.add(const Duration(days: 7));
+
+    final completedRecent = <({String name, DateTime date})>[];
+    final overdue = <({String name, DateTime date})>[];
+    final upcoming = <({String name, DateTime date})>[];
+    var hasDatedMilestone = false;
+
+    if (raw != null && raw.trim().isNotEmpty) {
+      try {
+        final decoded = jsonDecode(raw);
+        if (decoded is List) {
+          for (final vision in decoded.whereType<Map>()) {
+            final milestones = vision['milestones'];
+            if (milestones is! List) continue;
+            for (final milestone in milestones.whereType<Map>()) {
+              final name = (milestone['text'] ?? '').toString().trim();
+              if (name.isEmpty) continue;
+              final date = _parseMilestoneDate(milestone['date']);
+              if (date == null) continue;
+              hasDatedMilestone = true;
+              final done = milestone['done'] == true;
+              if (done) {
+                if (!date.isBefore(recentStart) && !date.isAfter(recentEnd)) {
+                  completedRecent.add((name: name, date: date));
+                }
+              } else if (date.isBefore(today)) {
+                overdue.add((name: name, date: date));
+              } else if (!date.isAfter(upcomingEnd)) {
+                upcoming.add((name: name, date: date));
+              }
+            }
+          }
+        }
+      } catch (_) {}
+    }
+
+    if (!hasDatedMilestone) {
+      return const _MilestoneCheckResult(
+        message: '예정일이 설정된 마일스톤이 없네요. 목표 탭에서 중요한 마일스톤에 예정일을 정해두시면 제가 챙겨드리겠습니다.',
+        needsDeadlineSetup: true,
+      );
+    }
+
+    completedRecent.sort((a, b) => a.date.compareTo(b.date));
+    overdue.sort((a, b) => b.date.compareTo(a.date));
+    upcoming.sort((a, b) => a.date.compareTo(b.date));
+
+    final lines = <String>[];
+    if (completedRecent.isNotEmpty) {
+      lines.add(
+        _completedMilestonePraise(
+          completedRecent.map((item) => item.name).toList(),
+        ),
+      );
+    }
+
+    final overdueCount = overdue.length;
+    final upcomingCount = upcoming.length;
+    if (overdueCount > 0 && upcomingCount > 0) {
+      lines.add(
+        '예정일이 지난 마일스톤이 $overdueCount개, 일주일 안에 예정된 마일스톤이 $upcomingCount개 있어요. 목표 탭에서 확인해보시겠습니까?',
+      );
+    } else if (overdueCount > 0) {
+      lines.add(
+        '예정일이 지난 마일스톤이 $overdueCount개 있어요.\n${_quotedMilestoneNames(overdue.map((item) => item.name).toList())} 등을 목표 탭에서 확인해보시겠습니까?',
+      );
+    } else if (upcomingCount > 0) {
+      lines.add(
+        '일주일 안에 예정된 마일스톤이 $upcomingCount개 있어요.\n${_quotedMilestoneNames(upcoming.map((item) => item.name).toList())} 등을 목표 탭에서 확인해보시겠습니까?',
+      );
+    } else {
+      lines.add('지금 확인이 필요한 마일스톤은 없어요. 일정이 잘 정리되어 있습니다.');
+    }
+
+    return _MilestoneCheckResult(
+      message: lines.join('\n\n'),
+      hasIncompleteItems: overdueCount > 0 || upcomingCount > 0,
+    );
+  }
+
+  Future<void> _handleMilestoneCheck() async {
+    if (_isLoading) return;
+    if (!await _ensureMasterCoachAccess()) return;
+
+    HapticFeedback.lightImpact();
+    final result = await _buildMilestoneCheckResult();
+    if (!mounted) return;
+
+    final kind = result.needsDeadlineSetup
+        ? 'milestone_setup'
+        : result.hasIncompleteItems
+        ? 'milestone_check'
+        : 'milestone_notice';
+
+    setState(() {
+      _messages.add(
+        ChatMessage(text: '마일스톤 확인', isUser: true, time: DateTime.now()),
+      );
+      _messages.add(
+        ChatMessage(
+          text: result.message,
+          isUser: false,
+          time: DateTime.now(),
+          kind: kind,
+        ),
+      );
+      _suggestedTasks = [];
+      _dynamicChips = _coach.chips;
+    });
+    _scrollToBottom();
+    await _saveHistory();
+    await AnalyticsService.logFeatureUsage('cheat_milestone_check');
+    await AnalyticsService.logConversationMessage(
+      coachId: widget.coachId,
+      usedApi: false,
+    );
+  }
+
   // ── 메시지 전송 (웹앱 sendMessage 이식) ─────────────────
   Future<void> _send(String text, {String? apiInputOverride}) async {
     final trimmed = text.trim();
@@ -6562,6 +6721,7 @@ $timerOutputRule
   List<Map<String, String>> get _cheatKeyItems => [
     {'icon': 'assets/icons/bolt.svg', 'label': '지금 뭐하지?'},
     {'icon': 'assets/icons/compass.svg', 'label': '미래를 위한 오늘'},
+    {'icon': 'assets/icons/flag.svg', 'label': '마일스톤 확인'},
   ];
 
   Widget _buildCheatKeyMenu() {
@@ -6590,6 +6750,9 @@ $timerOutputRule
                 AnalyticsService.logFeatureUsage('cheat_next_action');
               } else if (item['label'] == '미래를 위한 오늘') {
                 AnalyticsService.logFeatureUsage('cheat_future_today');
+              } else if (item['label'] == '마일스톤 확인') {
+                _handleMilestoneCheck();
+                return;
               }
 
               _send(item['label']!);
@@ -7097,6 +7260,11 @@ $timerOutputRule
     if (msg.kind == 'vision_choice') {
       return _buildVisionChoiceCard(msg);
     }
+    if (msg.kind == 'milestone_check' ||
+        msg.kind == 'milestone_setup' ||
+        msg.kind == 'milestone_notice') {
+      return _buildMilestoneCheckCard(msg);
+    }
 
     final isUser = msg.isUser;
     final time = DateFormat('a h:mm', 'ko').format(msg.time);
@@ -7203,6 +7371,138 @@ $timerOutputRule
                 ),
               ),
             ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMilestoneCheckCard(ChatMessage msg) {
+    final time = DateFormat('a h:mm', 'ko').format(msg.time);
+    final accent = _coach.accentColor;
+    final showIncompleteActions = msg.kind == 'milestone_check';
+    final showSetupActions = msg.kind == 'milestone_setup';
+    final showActions = showIncompleteActions || showSetupActions;
+    final primaryLabel = showSetupActions ? '지금 설정하기' : '지금 확인하기';
+
+    Widget actionButton({
+      required String label,
+      required VoidCallback onTap,
+      required bool isPrimary,
+    }) {
+      return GestureDetector(
+        onTap: onTap,
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: isPrimary ? const Color(0xFFF8F5FF) : Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isPrimary
+                  ? const Color(0xFFE5DEFF)
+                  : const Color(0xFFE8E1F4),
+            ),
+          ),
+          child: Text(
+            label,
+            textAlign: TextAlign.center,
+            style: GoogleFonts.notoSansKr(
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+              color: isPrimary ? accent : AppDesignTokens.textMuted,
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(18),
+            child: Image.asset(
+              _coach.imagePath,
+              width: 36,
+              height: 36,
+              fit: BoxFit.cover,
+              alignment: Alignment.topCenter,
+              errorBuilder: (_, error, stackTrace) => Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: _coach.accentLight,
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: Icon(Icons.person, color: _coach.accentColor, size: 20),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Container(
+              constraints: BoxConstraints(
+                maxWidth: MediaQuery.of(context).size.width * 0.72,
+              ),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: const Color(0xFFE8E1F4)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.06),
+                    blurRadius: 12,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    msg.text,
+                    style: GoogleFonts.notoSansKr(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                      height: 1.55,
+                      color: const Color(0xFF1A1A2E),
+                    ),
+                  ),
+                  if (showActions) ...[
+                    const SizedBox(height: 12),
+                    actionButton(
+                      label: primaryLabel,
+                      isPrimary: true,
+                      onTap: () {
+                        HapticFeedback.lightImpact();
+                        widget.onOpenDrawer?.call();
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    actionButton(
+                      label: '나중에',
+                      isPrimary: false,
+                      onTap: () => HapticFeedback.selectionClick(),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(left: 6, bottom: 2),
+            child: Text(
+              time,
+              style: GoogleFonts.notoSansKr(
+                fontSize: AppDesignTokens.textMeta,
+                color: AppDesignTokens.textDisabled,
+              ),
+            ),
+          ),
         ],
       ),
     );
