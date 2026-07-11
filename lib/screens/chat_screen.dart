@@ -23,6 +23,8 @@ import 'package:nyang_coach/services/daily_reset_service.dart';
 import 'package:nyang_coach/services/cognitive_optimize_service.dart';
 import 'coach_config.dart';
 import 'focus_timer_widget.dart';
+import 'cat_preview/cat_preview_intro_dialog.dart';
+import 'cat_preview/cat_onboarding_preview_screen.dart';
 import '../models/user_data.dart';
 import '../theme/app_design_tokens.dart';
 import '../widgets/app_chip.dart';
@@ -2089,6 +2091,21 @@ class _ChatScreenState extends State<ChatScreen>
           'last_visit_${widget.coachId}',
           now.toIso8601String(),
         );
+        await Future.delayed(const Duration(milliseconds: 700));
+        if (!mounted) return;
+        final startPreview = await showCatPreviewIntroDialog(context);
+        if (!mounted) return;
+        if (startPreview) {
+          final startPlan = await Navigator.of(context).push<bool>(
+            MaterialPageRoute(
+              builder: (_) => const CatOnboardingPreviewScreen(),
+            ),
+          );
+          if (!mounted) return;
+          if (startPlan == true) {
+            Future.delayed(Duration.zero, _showPlanGuideBottomSheet);
+          }
+        }
         return;
       }
 
