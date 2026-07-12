@@ -49,8 +49,12 @@ class WidgetSyncService {
     final tasks = rawTasks == null
         ? <Map<String, dynamic>>[]
         : _decodeTasks(rawTasks);
-    final doneTasks = tasks.where((task) => task['done'] == true).toList();
-    final remainingTasks = tasks.where((task) => task['done'] != true).toList();
+
+    final allItems = [...tasks, ..._todayMilestoneTasks(prefs)];
+    final doneTasks = allItems.where((task) => task['done'] == true).toList();
+    final remainingTasks = allItems
+        .where((task) => task['done'] != true)
+        .toList();
     final doneCount = doneTasks.length;
     final remainingCount = remainingTasks.length;
     final totalCount = doneCount + remainingCount;
@@ -64,6 +68,44 @@ class WidgetSyncService {
       doneTasksText: _buildTaskPreview(doneTasks),
       remainingTasksText: _buildTaskPreview(remainingTasks),
     );
+  }
+
+  /// 오늘 날짜(설정된 리셋 시각 반영)에 걸린 마일스톤을 tasks_screen.dart의
+  /// _todayMilestoneItems 계산과 동일한 기준으로 뽑아 위젯 집계에 합산한다.
+  static List<Map<String, dynamic>> _todayMilestoneTasks(
+    SharedPreferences prefs,
+  ) {
+    final rawVisions = prefs.getString('nyang_visions');
+    if (rawVisions == null) return <Map<String, dynamic>>[];
+
+    final resetHour = prefs.getDouble('nyang_reset_hour') ?? 3.0;
+    final now = DateTime.now();
+    var base = DateTime(now.year, now.month, now.day);
+    if (now.hour < resetHour) {
+      base = base.subtract(const Duration(days: 1));
+    }
+    final todayStr =
+        '${base.year}-${base.month.toString().padLeft(2, '0')}-${base.day.toString().padLeft(2, '0')}';
+
+    try {
+      final decoded = jsonDecode(rawVisions);
+      if (decoded is! List) return <Map<String, dynamic>>[];
+      final result = <Map<String, dynamic>>[];
+      for (final vision in decoded) {
+        if (vision is! Map) continue;
+        final milestones = vision['milestones'];
+        if (milestones is! List) continue;
+        for (final m in milestones) {
+          if (m is! Map) continue;
+          if (m['date'] == todayStr) {
+            result.add({'text': m['text'], 'done': m['done'] == true});
+          }
+        }
+      }
+      return result;
+    } catch (_) {
+      return <Map<String, dynamic>>[];
+    }
   }
 
   static Future<void> syncData({

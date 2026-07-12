@@ -1265,6 +1265,7 @@ class _TasksScreenState extends State<TasksScreen>
       jsonEncode(visions.map((v) => v.toJson()).toList()),
     );
     TasksSyncService.scheduleSyncToCloud();
+    await WidgetSyncService.syncFromStoredTasks();
   }
 
   String _formatAchievedDate([DateTime? value]) {
