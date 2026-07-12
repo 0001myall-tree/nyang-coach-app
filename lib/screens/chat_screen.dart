@@ -461,8 +461,10 @@ class _ChatScreenState extends State<ChatScreen>
   Future<void> _loadTaskProgress() async {
     try {
       final prefs = await SharedPreferences.getInstance();
+      final todayStr = _getTodayStrWithReset(prefs);
       final raw = prefs.getString('nyang_tasks') ?? '[]';
       final List<dynamic> list = jsonDecode(raw);
+      final milestones = _todayMilestoneProgressItems(prefs, todayStr);
 
       int total = 0;
       int completed = 0;
@@ -470,6 +472,12 @@ class _ChatScreenState extends State<ChatScreen>
       for (var item in list) {
         total++;
         if (item['done'] == true) {
+          completed++;
+        }
+      }
+      for (final milestone in milestones) {
+        total++;
+        if (milestone['done'] == true) {
           completed++;
         }
       }
@@ -482,6 +490,36 @@ class _ChatScreenState extends State<ChatScreen>
       }
     } catch (e) {
       debugPrint('Error loading tasks: $e');
+    }
+  }
+
+  List<Map<String, dynamic>> _todayMilestoneProgressItems(
+    SharedPreferences prefs,
+    String todayStr,
+  ) {
+    final rawVisions = prefs.getString('nyang_visions');
+    if (rawVisions == null) return const <Map<String, dynamic>>[];
+
+    try {
+      final decoded = jsonDecode(rawVisions);
+      if (decoded is! List) return const <Map<String, dynamic>>[];
+
+      final result = <Map<String, dynamic>>[];
+      for (final vision in decoded) {
+        if (vision is! Map) continue;
+        final milestones = vision['milestones'];
+        if (milestones is! List) continue;
+
+        for (final milestone in milestones) {
+          if (milestone is! Map) continue;
+          if (milestone['date'] == todayStr) {
+            result.add(Map<String, dynamic>.from(milestone));
+          }
+        }
+      }
+      return result;
+    } catch (_) {
+      return const <Map<String, dynamic>>[];
     }
   }
 

@@ -462,12 +462,14 @@ class VisionItem {
 class TasksScreen extends StatefulWidget {
   final String coachId;
   final void Function(String message)? onCoreTaskSet;
+  final VoidCallback? onProgressChanged;
   final TasksScreenController? controller;
   final String? initialBottomSheet;
   const TasksScreen({
     super.key,
     required this.coachId,
     this.onCoreTaskSet,
+    this.onProgressChanged,
     this.controller,
     this.initialBottomSheet,
   });
@@ -1142,6 +1144,7 @@ class _TasksScreenState extends State<TasksScreen>
     );
     await _saveTodayRecord();
     await WidgetSyncService.syncFromStoredTasks();
+    widget.onProgressChanged?.call();
     TasksSyncService.scheduleSyncToCloud();
   }
 
@@ -1266,6 +1269,7 @@ class _TasksScreenState extends State<TasksScreen>
     );
     TasksSyncService.scheduleSyncToCloud();
     await WidgetSyncService.syncFromStoredTasks();
+    widget.onProgressChanged?.call();
   }
 
   String _formatAchievedDate([DateTime? value]) {
@@ -1306,6 +1310,7 @@ class _TasksScreenState extends State<TasksScreen>
     // 일정 변경 시 오늘의 할 일 탭에도 즉시 반영
     _injectTodaySchedules();
     await NotificationService().syncCoreReminders();
+    widget.onProgressChanged?.call();
   }
 
   Future<bool> _hasActivePlan() async {

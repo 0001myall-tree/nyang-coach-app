@@ -1569,12 +1569,12 @@ class _MainTabScreenState extends State<MainTabScreen>
 
   Widget _buildPlannerHelpAction({bool isVacation = false}) {
     final foreground = isVacation ? Colors.white : AppDesignTokens.brandMuted;
-    final background = isVacation
-        ? AppDesignTokens.brand.withOpacity(0.26)
-        : AppDesignTokens.brandSoft;
     final border = isVacation
         ? Colors.white.withOpacity(0.30)
         : AppDesignTokens.brandCardBorder;
+    final shadowColor = isVacation
+        ? Colors.black.withOpacity(0.16)
+        : AppDesignTokens.brand.withOpacity(0.16);
 
     return Padding(
       padding: const EdgeInsets.only(right: 18),
@@ -1592,20 +1592,60 @@ class _MainTabScreenState extends State<MainTabScreen>
                 height: 35,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: background,
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: isVacation
+                        ? [
+                            Colors.white.withOpacity(0.30),
+                            AppDesignTokens.brand.withOpacity(0.32),
+                            AppDesignTokens.brand.withOpacity(0.46),
+                          ]
+                        : const [
+                            Color(0xFFFFFEFF),
+                            Color(0xFFF5F0FF),
+                            Color(0xFFE9DFFF),
+                          ],
+                    stops: const [0.0, 0.55, 1.0],
+                  ),
                   border: Border.all(color: border, width: 1.1),
                   boxShadow: [
                     BoxShadow(
-                      color: AppDesignTokens.brand.withOpacity(0.09),
-                      blurRadius: 12,
-                      offset: const Offset(0, 5),
+                      color: shadowColor,
+                      blurRadius: 14,
+                      offset: const Offset(0, 6),
+                    ),
+                    BoxShadow(
+                      color: Colors.white.withOpacity(isVacation ? 0.14 : 0.70),
+                      blurRadius: 8,
+                      offset: const Offset(-3, -3),
                     ),
                   ],
                 ),
-                child: Icon(
-                  Icons.question_mark_rounded,
-                  color: foreground,
-                  size: 18,
+                child: Stack(
+                  children: [
+                    Positioned(
+                      top: 6,
+                      left: 8,
+                      child: Container(
+                        width: 12,
+                        height: 6,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(
+                            isVacation ? 0.20 : 0.74,
+                          ),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                      ),
+                    ),
+                    Center(
+                      child: Icon(
+                        Icons.question_mark_rounded,
+                        color: foreground,
+                        size: 18,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -1806,6 +1846,7 @@ class _MainTabScreenState extends State<MainTabScreen>
         coachId: widget.coachId,
         controller: _tasksController,
         initialBottomSheet: widget.initialBottomSheet,
+        onProgressChanged: _chatController.refreshTaskProgress,
         onCoreTaskSet: (msg) {
           // 핵심 설정 완료 시 채팅창에 비서 반응 메시지 주입
           setState(() => _openDrawerIndex = 0);
