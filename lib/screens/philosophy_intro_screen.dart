@@ -41,15 +41,11 @@ class _PhilosophyIntroScreenState extends State<PhilosophyIntroScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF7F4FF), // 연한 연보라 배경
+      backgroundColor: AppDesignTokens.brandSoftAlt,
       body: Stack(
         children: [
           // 하단 물결 데코레이션 (미니멀 그래픽)
-          Positioned.fill(
-            child: CustomPaint(
-              painter: BottomWavesPainter(),
-            ),
-          ),
+          Positioned.fill(child: CustomPaint(painter: BottomWavesPainter())),
           SafeArea(
             child: Center(
               child: ConstrainedBox(
@@ -57,7 +53,7 @@ class _PhilosophyIntroScreenState extends State<PhilosophyIntroScreen> {
                 child: Column(
                   children: [
                     const Spacer(flex: 3),
-                    
+
                     // 메인 철학 문구
                     Text(
                       '좋은 계획보다\n중요한 것은',
@@ -81,7 +77,7 @@ class _PhilosophyIntroScreenState extends State<PhilosophyIntroScreen> {
                         letterSpacing: -1.0,
                       ),
                     ),
-                    
+
                     // 구분선 (브랜드 연보라색 포인트)
                     const SizedBox(height: 28),
                     Container(
@@ -120,7 +116,7 @@ class _PhilosophyIntroScreenState extends State<PhilosophyIntroScreen> {
                     ),
 
                     const SizedBox(height: 52),
-                    
+
                     // 점 3개 로딩 애니메이션
                     const ThreeDotLoader(),
 
@@ -139,9 +135,7 @@ class _PhilosophyIntroScreenState extends State<PhilosophyIntroScreen> {
                                 color: AppDesignTokens.brand,
                                 letterSpacing: 0.8,
                               ),
-                              children: [
-                                const TextSpan(text: '냥냥코치'),
-                              ],
+                              children: [const TextSpan(text: '냥냥코치')],
                             ),
                           ),
                           const SizedBox(height: 4),
@@ -192,9 +186,10 @@ class _ThreeDotLoaderState extends State<ThreeDotLoader>
     });
 
     _animations = _controllers.map((controller) {
-      return Tween<double>(begin: 0.3, end: 1.0).animate(
-        CurvedAnimation(parent: controller, curve: Curves.easeInOut),
-      );
+      return Tween<double>(
+        begin: 0.3,
+        end: 1.0,
+      ).animate(CurvedAnimation(parent: controller, curve: Curves.easeInOut));
     }).toList();
 
     _startAnimations();
@@ -247,7 +242,7 @@ class BottomWavesPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     // 뒤쪽 옅은 연보라 물결
     final paint1 = Paint()
-      ..color = const Color(0xFFF1EEFC)
+      ..color = AppDesignTokens.brandChip
       ..style = PaintingStyle.fill;
 
     final path1 = Path();
@@ -267,7 +262,7 @@ class BottomWavesPainter extends CustomPainter {
 
     // 앞쪽 조금 더 선명한 연보라 물결
     final paint2 = Paint()
-      ..color = const Color(0xFFEBE3FF)
+      ..color = AppDesignTokens.brandBorder
       ..style = PaintingStyle.fill;
 
     final path2 = Path();
