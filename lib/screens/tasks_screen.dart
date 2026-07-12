@@ -6049,6 +6049,7 @@ class _TasksScreenState extends State<TasksScreen>
                 habits.add(newHabit);
               });
               _saveHabits();
+              _injectTodayHabits();
               action.convertedHabitId = newHabit.id;
               action.convertedType = 'habit';
               action.convertedDate = DateFormat(
