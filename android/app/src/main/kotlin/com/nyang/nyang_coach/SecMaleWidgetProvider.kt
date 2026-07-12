@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
 import android.net.Uri
+import android.view.View
 import android.widget.RemoteViews
 import es.antonborri.home_widget.HomeWidgetProvider
 
@@ -30,6 +31,9 @@ class SecMaleWidgetProvider : HomeWidgetProvider() {
                 } else {
                     "마스터 플랜 전용 위젯입니다."
                 }
+                val scheduleTime = widgetData.getString("widget_schedule_time", "")?.trim().orEmpty()
+                val scheduleTitle = widgetData.getString("widget_schedule_title", "")?.trim().orEmpty()
+                val hasTimedSchedule = hasMasterAccess && scheduleTime.isNotEmpty() && scheduleTitle.isNotEmpty()
                 
                 val rawRemaining = widgetData.all["remaining_count"]
                 val remainingCount = if (hasMasterAccess) {
@@ -39,7 +43,15 @@ class SecMaleWidgetProvider : HomeWidgetProvider() {
                 }
 
                 setProgressBar(R.id.progress_bar, 100, progress, false)
-                setTextViewText(R.id.coach_message, WidgetTextFormatter.formatCoachMessage(coachMessage))
+                setTextViewText(
+                    R.id.coach_message,
+                    if (hasTimedSchedule) {
+                        WidgetTextFormatter.formatScheduleMessage(scheduleTime, scheduleTitle, "#A5A6D6")
+                    } else {
+                        WidgetTextFormatter.formatCoachMessage(coachMessage)
+                    }
+                )
+                setViewVisibility(R.id.message_icon, if (hasTimedSchedule) View.GONE else View.VISIBLE)
                 setTextViewText(R.id.remaining_count_text, WidgetTextFormatter.formatRemainingCount(remainingCount, "#A5A6D6"))
                 WidgetResponsiveStyle.apply(context, appWidgetManager, widgetId, this)
 

@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
 import android.net.Uri
+import android.view.View
 import android.widget.RemoteViews
 import es.antonborri.home_widget.HomeWidgetProvider
 
@@ -18,12 +19,23 @@ class NyangWidgetProvider : HomeWidgetProvider() {
                 val progress = (rawProgress as? Number)?.toInt() ?: (rawProgress as? String)?.toIntOrNull() ?: 0
                 
                 val coachMessage = widgetData.getString("coach_message_cat", "오늘도 활기차게 시작해보자냥!") ?: "오늘도 활기차게 시작해보자냥!"
+                val scheduleTime = widgetData.getString("widget_schedule_time", "")?.trim().orEmpty()
+                val scheduleTitle = widgetData.getString("widget_schedule_title", "")?.trim().orEmpty()
+                val hasTimedSchedule = scheduleTime.isNotEmpty() && scheduleTitle.isNotEmpty()
                 
                 val rawRemaining = widgetData.all["remaining_count"]
                 val remainingCount = (rawRemaining as? Number)?.toInt() ?: (rawRemaining as? String)?.toIntOrNull() ?: 0
 
                 setProgressBar(R.id.progress_bar, 100, progress, false)
-                setTextViewText(R.id.coach_message, WidgetTextFormatter.formatCoachMessage(coachMessage))
+                setTextViewText(
+                    R.id.coach_message,
+                    if (hasTimedSchedule) {
+                        WidgetTextFormatter.formatScheduleMessage(scheduleTime, scheduleTitle, "#8B7CFF")
+                    } else {
+                        WidgetTextFormatter.formatCoachMessage(coachMessage)
+                    }
+                )
+                setViewVisibility(R.id.message_icon, if (hasTimedSchedule) View.GONE else View.VISIBLE)
                 setTextViewText(R.id.remaining_count_text, WidgetTextFormatter.formatRemainingCount(remainingCount, "#8B7CFF"))
                 WidgetResponsiveStyle.apply(context, appWidgetManager, widgetId, this)
 

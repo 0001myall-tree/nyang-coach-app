@@ -49,6 +49,7 @@ class WidgetSyncService {
     final tasks = rawTasks == null
         ? <Map<String, dynamic>>[]
         : _decodeTasks(rawTasks);
+    final timedSchedule = _todayWidgetSchedule(prefs, tasks);
 
     final allItems = [...tasks, ..._todayMilestoneTasks(prefs)];
     final doneTasks = allItems.where((task) => task['done'] == true).toList();
@@ -67,6 +68,8 @@ class WidgetSyncService {
       remainingCount: remainingCount,
       doneTasksText: _buildTaskPreview(doneTasks),
       remainingTasksText: _buildTaskPreview(remainingTasks),
+      widgetScheduleTime: timedSchedule?.time,
+      widgetScheduleTitle: timedSchedule?.title,
     );
   }
 
@@ -115,6 +118,8 @@ class WidgetSyncService {
     required int remainingCount,
     required String doneTasksText,
     required String remainingTasksText,
+    String? widgetScheduleTime,
+    String? widgetScheduleTitle,
   }) async {
     print(
       "WidgetSyncService.syncData called: pct=$progressPercentage, done=$doneCount, remaining=$remainingCount",
@@ -138,6 +143,14 @@ class WidgetSyncService {
     await HomeWidget.saveWidgetData<String>(
       'remaining_tasks_text',
       remainingTasksText,
+    );
+    await HomeWidget.saveWidgetData<String>(
+      'widget_schedule_time',
+      widgetScheduleTime ?? '',
+    );
+    await HomeWidget.saveWidgetData<String>(
+      'widget_schedule_title',
+      widgetScheduleTitle ?? '',
     );
 
     // Save coach-specific messages
@@ -200,6 +213,85 @@ class WidgetSyncService {
     }
   }
 
+  static _WidgetScheduleItem? _todayWidgetSchedule(
+    SharedPreferences prefs,
+    List<Map<String, dynamic>> tasks,
+  ) {
+    final todayStr = _localDateKey(DateTime.now());
+    final candidates = <_WidgetScheduleItem>[];
+
+    final rawSchedules = prefs.getString('nyang_schedules');
+    if (rawSchedules != null) {
+      try {
+        final decoded = jsonDecode(rawSchedules);
+        final todayItems = decoded is Map ? decoded[todayStr] : null;
+        if (todayItems is List) {
+          for (final item in todayItems) {
+            if (item is Map) {
+              final candidate = _scheduleCandidateFromMap(item);
+              if (candidate != null) candidates.add(candidate);
+            }
+          }
+        }
+      } catch (_) {
+        // Widget data should never block the main planner flow.
+      }
+    }
+
+    for (final task in tasks) {
+      if (task['category'] != 'schedule') continue;
+      final candidate = _scheduleCandidateFromMap(task);
+      if (candidate != null &&
+          !candidates.any(
+            (existing) =>
+                existing.timeMinutes == candidate.timeMinutes &&
+                existing.title == candidate.title,
+          )) {
+        candidates.add(candidate);
+      }
+    }
+
+    candidates.sort((a, b) => a.timeMinutes.compareTo(b.timeMinutes));
+    return candidates.isEmpty ? null : candidates.first;
+  }
+
+  static _WidgetScheduleItem? _scheduleCandidateFromMap(Map item) {
+    if (item['done'] == true) return null;
+
+    final title = item['text']?.toString().trim();
+    if (title == null || title.isEmpty) return null;
+
+    final parsedTime = _parseStoredTime(item['timeStart']?.toString());
+    if (parsedTime == null) return null;
+
+    return _WidgetScheduleItem(
+      time: parsedTime.label,
+      title: title,
+      timeMinutes: parsedTime.minutes,
+    );
+  }
+
+  static _ParsedWidgetTime? _parseStoredTime(String? raw) {
+    if (raw == null) return null;
+    final match = RegExp(r'^(\d{1,2}):(\d{1,2})$').firstMatch(raw.trim());
+    if (match == null) return null;
+
+    final hour = int.tryParse(match.group(1)!);
+    final minute = int.tryParse(match.group(2)!);
+    if (hour == null || minute == null) return null;
+    if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return null;
+
+    return _ParsedWidgetTime(
+      label:
+          '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}',
+      minutes: hour * 60 + minute,
+    );
+  }
+
+  static String _localDateKey(DateTime date) {
+    return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+  }
+
   static String _buildTaskPreview(List<Map<String, dynamic>> tasks) {
     final preview = tasks
         .take(5)
@@ -234,4 +326,23 @@ class WidgetSyncService {
       return "오늘도 함께 해보시죠.";
     }
   }
+}
+
+class _WidgetScheduleItem {
+  final String time;
+  final String title;
+  final int timeMinutes;
+
+  const _WidgetScheduleItem({
+    required this.time,
+    required this.title,
+    required this.timeMinutes,
+  });
+}
+
+class _ParsedWidgetTime {
+  final String label;
+  final int minutes;
+
+  const _ParsedWidgetTime({required this.label, required this.minutes});
 }
