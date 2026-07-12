@@ -1,14 +1,20 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:home_widget/home_widget.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class WidgetSyncService {
   static const String androidWidgetNyang = 'NyangWidgetProvider';
+  static const String androidWidgetCatCharacter = 'CatCharacterWidgetProvider';
   static const String androidWidgetSecMale = 'SecMaleWidgetProvider';
   static const String androidWidgetSecFemale = 'SecFemaleWidgetProvider';
 
-  static const String iOSWidgetName = 'NyangWidget';
+  static const String iOSAppGroupId = 'group.com.nyang.nyangCoach';
+  static const String iOSWidgetCharacter = 'NyangWidget';
+  static const String iOSWidgetNyang = 'NyangCompactWidget';
+  static const String iOSWidgetSecMale = 'SecMaleWidget';
+  static const String iOSWidgetSecFemale = 'SecFemaleWidget';
 
   /// 마스터 플랜이 아니면 저장된 비서 위젯 선택을 해제하고
   /// 냥냥코치 위젯으로 설정을 전환합니다.
@@ -121,6 +127,7 @@ class WidgetSyncService {
     String? widgetScheduleTime,
     String? widgetScheduleTitle,
   }) async {
+    await _configureIOSAppGroup();
     print(
       "WidgetSyncService.syncData called: pct=$progressPercentage, done=$doneCount, remaining=$remainingCount",
     );
@@ -168,26 +175,33 @@ class WidgetSyncService {
     await HomeWidget.updateWidget(
       name: androidWidgetNyang,
       androidName: androidWidgetNyang,
-      iOSName: iOSWidgetName,
+      iOSName: iOSWidgetNyang,
+    );
+    await HomeWidget.updateWidget(
+      name: androidWidgetCatCharacter,
+      androidName: androidWidgetCatCharacter,
+      iOSName: iOSWidgetCharacter,
     );
     await HomeWidget.updateWidget(
       name: androidWidgetSecMale,
       androidName: androidWidgetSecMale,
-      iOSName: iOSWidgetName,
+      iOSName: iOSWidgetSecMale,
     );
     await HomeWidget.updateWidget(
       name: androidWidgetSecFemale,
       androidName: androidWidgetSecFemale,
-      iOSName: iOSWidgetName,
+      iOSName: iOSWidgetSecFemale,
     );
   }
 
   static Future<bool> requestPinWidget(String widgetId) async {
+    await _configureIOSAppGroup();
     await syncFromStoredTasks();
 
     bool? isSupported = await HomeWidget.isRequestPinWidgetSupported();
     if (isSupported == true) {
       String providerName = androidWidgetNyang;
+      if (widgetId == 'cat_character') providerName = androidWidgetCatCharacter;
       if (widgetId == 'sec_male') providerName = androidWidgetSecMale;
       if (widgetId == 'sec_female') providerName = androidWidgetSecFemale;
 
@@ -198,6 +212,12 @@ class WidgetSyncService {
       return true;
     }
     return false;
+  }
+
+  static Future<void> _configureIOSAppGroup() async {
+    if (Platform.isIOS) {
+      await HomeWidget.setAppGroupId(iOSAppGroupId);
+    }
   }
 
   static List<Map<String, dynamic>> _decodeTasks(String rawTasks) {

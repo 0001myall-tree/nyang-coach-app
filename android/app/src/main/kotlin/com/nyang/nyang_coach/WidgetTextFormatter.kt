@@ -41,4 +41,22 @@ object WidgetTextFormatter {
             )
         }
     }
+
+    fun formatCharacterRemainingCount(count: Int, pointColor: String): SpannableString {
+        val countText = count.toString()
+        val text = "오늘 할 일 ${countText}개 남음"
+        val countStart = text.indexOf(countText)
+        return SpannableString(text).apply {
+            setSpan(
+                ForegroundColorSpan(Color.parseColor(pointColor)),
+                countStart,
+                countStart + countText.length,
+                Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+            )
+        }
+    }
+
+    fun formatCharacterEmptyPrompt(): String {
+        return "집사야 오늘 뭐할까?"
+    }
 }

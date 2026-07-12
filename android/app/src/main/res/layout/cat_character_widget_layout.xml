@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/cat_character_widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:clipChildren="false"
+    android:clipToPadding="false">
+
+    <LinearLayout
+        android:id="@+id/cat_character_card"
+        android:layout_width="match_parent"
+        android:layout_height="104dp"
+        android:layout_gravity="bottom"
+        android:layout_marginStart="8dp"
+        android:layout_marginEnd="8dp"
+        android:layout_marginBottom="8dp"
+        android:background="@drawable/widget_bg_cat_character"
+        android:clipChildren="false"
+        android:clipToPadding="false"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="26dp"
+        android:paddingEnd="164dp">
+
+        <TextView
+            android:id="@+id/cat_character_text"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:includeFontPadding="false"
+            android:maxLines="1"
+            android:text="오늘 할 일 0개 남음"
+            android:textColor="#F8F6FF"
+            android:textSize="25sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <ImageView
+        android:id="@+id/cat_character_image"
+        android:layout_width="178dp"
+        android:layout_height="132dp"
+        android:layout_gravity="end|bottom"
+        android:layout_marginEnd="2dp"
+        android:layout_marginBottom="0dp"
+        android:adjustViewBounds="true"
+        android:scaleType="fitCenter"
+        android:src="@drawable/cat_widget2" />
+
+</FrameLayout>
