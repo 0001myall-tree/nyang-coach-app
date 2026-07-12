@@ -206,8 +206,6 @@ struct NyangCharacterWidgetView: View {
 
             HStack {
                 widgetText
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.72)
                     .padding(.leading, 28)
                     .padding(.trailing, 145)
                     .padding(.top, 34)
@@ -228,18 +226,25 @@ struct NyangCharacterWidgetView: View {
     private var widgetText: some View {
         Group {
             if hasTimedSchedule {
-                (Text(entry.scheduleTime)
-                    .foregroundColor(Color(red: 0.55, green: 0.49, blue: 1.0))
-                 + Text(" ")
-                    .foregroundColor(.white)
-                 + Text(entry.scheduleTitle)
-                    .foregroundColor(.white))
-                    .font(.system(size: 25, weight: .bold, design: .rounded))
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(entry.scheduleTime)
+                        .foregroundColor(Color(red: 0.55, green: 0.49, blue: 1.0))
+                        .font(.system(size: 20, weight: .bold, design: .rounded))
+                        .lineLimit(1)
+
+                    Text(entry.scheduleTitle)
+                        .foregroundColor(.white)
+                        .font(.system(size: 18, weight: .bold, design: .rounded))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.82)
+                }
             } else {
                 if hasNoTodayItems {
                     Text("집사야 오늘 뭐할까?")
                         .foregroundColor(.white)
-                        .font(.system(size: 25, weight: .bold, design: .rounded))
+                        .font(.system(size: 18, weight: .bold, design: .rounded))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.82)
                 } else {
                     (Text("오늘 할 일 ")
                         .foregroundColor(.white)
@@ -247,7 +252,9 @@ struct NyangCharacterWidgetView: View {
                         .foregroundColor(Color(red: 0.55, green: 0.49, blue: 1.0))
                      + Text("개 남음")
                         .foregroundColor(.white))
-                        .font(.system(size: 25, weight: .bold, design: .rounded))
+                        .font(.system(size: 18, weight: .bold, design: .rounded))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.82)
                 }
             }
         }
