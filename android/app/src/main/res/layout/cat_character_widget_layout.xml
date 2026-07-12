@@ -9,18 +9,18 @@
     <LinearLayout
         android:id="@+id/cat_character_card"
         android:layout_width="match_parent"
-        android:layout_height="104dp"
+        android:layout_height="@dimen/cat_character_card_height"
         android:layout_gravity="bottom"
-        android:layout_marginStart="8dp"
-        android:layout_marginEnd="8dp"
-        android:layout_marginBottom="8dp"
+        android:layout_marginStart="@dimen/cat_character_card_margin_horizontal"
+        android:layout_marginEnd="@dimen/cat_character_card_margin_horizontal"
+        android:layout_marginBottom="@dimen/cat_character_card_margin_bottom"
         android:background="@drawable/widget_bg_cat_character"
         android:clipChildren="false"
         android:clipToPadding="false"
         android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:paddingStart="26dp"
-        android:paddingEnd="164dp">
+        android:paddingStart="@dimen/cat_character_text_padding_start"
+        android:paddingEnd="@dimen/cat_character_text_padding_end">
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -28,40 +28,48 @@
             android:gravity="center_vertical"
             android:orientation="vertical">
 
-        <TextView
-            android:id="@+id/cat_character_time"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:ellipsize="end"
-            android:includeFontPadding="false"
-            android:maxLines="1"
-            android:text="17:00"
-            android:textColor="#8B7CFF"
-            android:textSize="20sp"
-            android:textStyle="bold" />
+            <TextView
+                android:id="@+id/cat_character_time"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:autoSizeMaxTextSize="@dimen/cat_character_time_text_size"
+                android:autoSizeMinTextSize="14sp"
+                android:autoSizeStepGranularity="1sp"
+                android:autoSizeTextType="uniform"
+                android:ellipsize="end"
+                android:includeFontPadding="false"
+                android:maxLines="1"
+                android:text="17:00"
+                android:textColor="#8B7CFF"
+                android:textSize="@dimen/cat_character_time_text_size"
+                android:textStyle="bold" />
 
-        <TextView
-            android:id="@+id/cat_character_text"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:ellipsize="end"
-            android:includeFontPadding="false"
-            android:maxLines="1"
-            android:text="오늘 할 일 0개 남음"
-            android:textColor="#F8F6FF"
-            android:textSize="18sp"
-            android:textStyle="bold" />
+            <TextView
+                android:id="@+id/cat_character_text"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/cat_character_title_margin_top"
+                android:autoSizeMaxTextSize="@dimen/cat_character_title_text_size"
+                android:autoSizeMinTextSize="13sp"
+                android:autoSizeStepGranularity="1sp"
+                android:autoSizeTextType="uniform"
+                android:ellipsize="end"
+                android:includeFontPadding="false"
+                android:maxLines="1"
+                android:text="오늘 할 일 0개 남음"
+                android:textColor="#F8F6FF"
+                android:textSize="@dimen/cat_character_title_text_size"
+                android:textStyle="bold" />
         </LinearLayout>
     </LinearLayout>
 
     <ImageView
         android:id="@+id/cat_character_image"
-        android:layout_width="178dp"
-        android:layout_height="132dp"
+        android:layout_width="@dimen/cat_character_image_width"
+        android:layout_height="@dimen/cat_character_image_height"
         android:layout_gravity="end|bottom"
-        android:layout_marginEnd="2dp"
-        android:layout_marginBottom="0dp"
+        android:layout_marginEnd="@dimen/cat_character_image_margin_end"
+        android:layout_marginBottom="@dimen/cat_character_image_margin_bottom"
         android:adjustViewBounds="true"
         android:scaleType="fitCenter"
         android:src="@drawable/cat_widget2" />

@@ -162,6 +162,22 @@ enum CompactWidgetStyle {
 struct NyangCharacterWidgetView: View {
     let entry: NyangEntry
 
+    private struct Metrics {
+        let cardHorizontalPadding: CGFloat
+        let cardTopPadding: CGFloat
+        let cardBottomPadding: CGFloat
+        let textLeading: CGFloat
+        let textTrailing: CGFloat
+        let textTop: CGFloat
+        let textBottom: CGFloat
+        let imageWidth: CGFloat
+        let imageHeight: CGFloat
+        let imageOffsetX: CGFloat
+        let imageOffsetY: CGFloat
+        let timeFontSize: CGFloat
+        let titleFontSize: CGFloat
+    }
+
     private var hasTimedSchedule: Bool {
         !entry.scheduleTime.isEmpty && !entry.scheduleTitle.isEmpty
     }
@@ -181,60 +197,91 @@ struct NyangCharacterWidgetView: View {
         }
     }
 
+    private func makeMetrics(for size: CGSize) -> Metrics {
+        let clampedWidth = max(size.width, 280)
+        let isComplete = min(max(entry.progress, 0), 100) == 100
+        let baseImageWidth = min(max(clampedWidth * 0.40, 140), isComplete ? 178 : 166)
+        let imageWidth = clampedWidth < 330 ? min(baseImageWidth, 150) : baseImageWidth
+        let imageHeight = imageWidth * 0.73
+        let textTrailing = min(max(imageWidth - 20, 118), 152)
+        let compact = clampedWidth < 330
+
+        return Metrics(
+            cardHorizontalPadding: compact ? 6 : 8,
+            cardTopPadding: compact ? 28 : 30,
+            cardBottomPadding: 8,
+            textLeading: compact ? 22 : 28,
+            textTrailing: textTrailing,
+            textTop: compact ? 32 : 34,
+            textBottom: 12,
+            imageWidth: imageWidth,
+            imageHeight: imageHeight,
+            imageOffsetX: compact ? 0 : 2,
+            imageOffsetY: isComplete ? 0 : 2,
+            timeFontSize: compact ? 18 : 20,
+            titleFontSize: compact ? 16 : 18
+        )
+    }
+
     var body: some View {
-        ZStack(alignment: .bottomTrailing) {
-            RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            Color(red: 0.20, green: 0.15, blue: 0.36),
-                            Color(red: 0.14, green: 0.11, blue: 0.28),
-                            Color(red: 0.09, green: 0.08, blue: 0.19),
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
+        GeometryReader { proxy in
+            let metrics = makeMetrics(for: proxy.size)
+
+            ZStack(alignment: .bottomTrailing) {
+                RoundedRectangle(cornerRadius: 28, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                Color(red: 0.20, green: 0.15, blue: 0.36),
+                                Color(red: 0.14, green: 0.11, blue: 0.28),
+                                Color(red: 0.09, green: 0.08, blue: 0.19),
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
                     )
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 28, style: .continuous)
-                        .stroke(Color(red: 0.44, green: 0.33, blue: 0.78), lineWidth: 1.2)
-                )
-                .shadow(color: Color.black.opacity(0.30), radius: 10, x: 0, y: 6)
-                .padding(.horizontal, 8)
-                .padding(.top, 30)
-                .padding(.bottom, 8)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 28, style: .continuous)
+                            .stroke(Color(red: 0.44, green: 0.33, blue: 0.78), lineWidth: 1.2)
+                    )
+                    .shadow(color: Color.black.opacity(0.30), radius: 10, x: 0, y: 6)
+                    .padding(.horizontal, metrics.cardHorizontalPadding)
+                    .padding(.top, metrics.cardTopPadding)
+                    .padding(.bottom, metrics.cardBottomPadding)
 
-            HStack {
-                widgetText
-                    .padding(.leading, 28)
-                    .padding(.trailing, 145)
-                    .padding(.top, 34)
-                    .padding(.bottom, 12)
-                Spacer(minLength: 0)
+                HStack {
+                    widgetText(timeFontSize: metrics.timeFontSize, titleFontSize: metrics.titleFontSize)
+                        .padding(.leading, metrics.textLeading)
+                        .padding(.trailing, metrics.textTrailing)
+                        .padding(.top, metrics.textTop)
+                        .padding(.bottom, metrics.textBottom)
+                    Spacer(minLength: 0)
+                }
+
+                Image(catImageName)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: metrics.imageWidth, height: metrics.imageHeight)
+                    .offset(x: metrics.imageOffsetX, y: metrics.imageOffsetY)
+                    .accessibilityHidden(true)
             }
-
-            Image(catImageName)
-                .resizable()
-                .scaledToFit()
-                .frame(width: entry.progress >= 100 ? 178 : 162, height: entry.progress >= 100 ? 130 : 122)
-                .offset(x: 2, y: entry.progress >= 100 ? 0 : 2)
-                .accessibilityHidden(true)
         }
         .widgetClearBackground()
     }
 
-    private var widgetText: some View {
+    @ViewBuilder
+    private func widgetText(timeFontSize: CGFloat, titleFontSize: CGFloat) -> some View {
         Group {
             if hasTimedSchedule {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(entry.scheduleTime)
                         .foregroundColor(Color(red: 0.55, green: 0.49, blue: 1.0))
-                        .font(.system(size: 20, weight: .bold, design: .rounded))
+                        .font(.system(size: timeFontSize, weight: .bold, design: .rounded))
                         .lineLimit(1)
 
                     Text(entry.scheduleTitle)
                         .foregroundColor(.white)
-                        .font(.system(size: 18, weight: .bold, design: .rounded))
+                        .font(.system(size: titleFontSize, weight: .bold, design: .rounded))
                         .lineLimit(1)
                         .minimumScaleFactor(0.82)
                 }
@@ -242,7 +289,7 @@ struct NyangCharacterWidgetView: View {
                 if hasNoTodayItems {
                     Text("집사야 오늘 뭐할까?")
                         .foregroundColor(.white)
-                        .font(.system(size: 18, weight: .bold, design: .rounded))
+                        .font(.system(size: titleFontSize, weight: .bold, design: .rounded))
                         .lineLimit(1)
                         .minimumScaleFactor(0.82)
                 } else {
@@ -252,7 +299,7 @@ struct NyangCharacterWidgetView: View {
                         .foregroundColor(Color(red: 0.55, green: 0.49, blue: 1.0))
                      + Text("개 남음")
                         .foregroundColor(.white))
-                        .font(.system(size: 18, weight: .bold, design: .rounded))
+                        .font(.system(size: titleFontSize, weight: .bold, design: .rounded))
                         .lineLimit(1)
                         .minimumScaleFactor(0.82)
                 }

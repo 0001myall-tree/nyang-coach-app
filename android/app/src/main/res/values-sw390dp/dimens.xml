@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <dimen name="cat_character_card_height">104dp</dimen>
+    <dimen name="cat_character_card_margin_horizontal">8dp</dimen>
+    <dimen name="cat_character_card_margin_bottom">8dp</dimen>
+    <dimen name="cat_character_text_padding_start">26dp</dimen>
+    <dimen name="cat_character_text_padding_end">164dp</dimen>
+    <dimen name="cat_character_time_text_size">20sp</dimen>
+    <dimen name="cat_character_title_text_size">18sp</dimen>
+    <dimen name="cat_character_title_margin_top">4dp</dimen>
+    <dimen name="cat_character_image_width">178dp</dimen>
+    <dimen name="cat_character_image_height">132dp</dimen>
+    <dimen name="cat_character_image_margin_end">2dp</dimen>
+    <dimen name="cat_character_image_margin_bottom">0dp</dimen>
+</resources>
