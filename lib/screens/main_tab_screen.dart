@@ -553,6 +553,16 @@ class _MainTabScreenState extends State<MainTabScreen>
     return false;
   }
 
+  void _openTasksGoalVisionDrawer(List<String> highlightVisionIds) {
+    setState(() {
+      _openDrawerIndex = 1;
+    });
+    Future.delayed(const Duration(milliseconds: 300), () {
+      if (!mounted) return;
+      _tasksController.openGoalVision(highlightVisionIds: highlightVisionIds);
+    });
+  }
+
   Future<void> _checkWidgetIntent() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.reload();
@@ -1038,6 +1048,7 @@ class _MainTabScreenState extends State<MainTabScreen>
       vacationInfo: _vacationInfo,
       controller: _chatController,
       onOpenDrawer: () => setState(() => _openDrawerIndex = 1),
+      onOpenGoalVisionDrawer: _openTasksGoalVisionDrawer,
       onSwitchCoach: _switchCoachFromChat,
       onVacationChanged: () {
         _loadVacation();

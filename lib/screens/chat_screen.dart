@@ -37,12 +37,14 @@ class ChatMessage {
   final bool isUser;
   final DateTime time;
   final String? kind;
+  final List<String> highlightVisionIds;
 
   ChatMessage({
     required this.text,
     required this.isUser,
     required this.time,
     this.kind,
+    this.highlightVisionIds = const [],
   });
 
   Map<String, dynamic> toJson() => {
@@ -50,6 +52,7 @@ class ChatMessage {
     'isUser': isUser,
     'time': time.toIso8601String(),
     if (kind != null) 'kind': kind,
+    if (highlightVisionIds.isNotEmpty) 'highlightVisionIds': highlightVisionIds,
   };
 
   factory ChatMessage.fromJson(Map<String, dynamic> j) => ChatMessage(
@@ -57,6 +60,9 @@ class ChatMessage {
     isUser: j['isUser'],
     time: DateTime.parse(j['time']),
     kind: j['kind'],
+    highlightVisionIds:
+        (j['highlightVisionIds'] as List?)?.map((e) => e.toString()).toList() ??
+        const [],
   );
 }
 
@@ -135,11 +141,13 @@ class _MilestoneCheckResult {
   final String message;
   final bool hasIncompleteItems;
   final bool needsDeadlineSetup;
+  final List<String> highlightVisionIds;
 
   const _MilestoneCheckResult({
     required this.message,
     this.hasIncompleteItems = false,
     this.needsDeadlineSetup = false,
+    this.highlightVisionIds = const [],
   });
 }
 
@@ -336,6 +344,7 @@ class _LocalResponses {
 class ChatScreen extends StatefulWidget {
   final String coachId;
   final VoidCallback? onOpenDrawer;
+  final ValueChanged<List<String>>? onOpenGoalVisionDrawer;
   final ValueChanged<String>? onSwitchCoach;
   final VoidCallback? onVacationChanged;
   final String? handoffFromCoachId;
@@ -346,6 +355,7 @@ class ChatScreen extends StatefulWidget {
     super.key,
     required this.coachId,
     this.onOpenDrawer,
+    this.onOpenGoalVisionDrawer,
     this.onSwitchCoach,
     this.onVacationChanged,
     this.handoffFromCoachId,
@@ -3892,8 +3902,8 @@ class _ChatScreenState extends State<ChatScreen>
     final upcomingEnd = today.add(const Duration(days: 7));
 
     final completedRecent = <({String name, DateTime date})>[];
-    final overdue = <({String name, DateTime date})>[];
-    final upcoming = <({String name, DateTime date})>[];
+    final overdue = <({String name, DateTime date, String visionId})>[];
+    final upcoming = <({String name, DateTime date, String visionId})>[];
     var hasDatedMilestone = false;
 
     if (raw != null && raw.trim().isNotEmpty) {
@@ -3901,6 +3911,7 @@ class _ChatScreenState extends State<ChatScreen>
         final decoded = jsonDecode(raw);
         if (decoded is List) {
           for (final vision in decoded.whereType<Map>()) {
+            final visionId = (vision['id'] ?? '').toString();
             final milestones = vision['milestones'];
             if (milestones is! List) continue;
             for (final milestone in milestones.whereType<Map>()) {
@@ -3915,9 +3926,9 @@ class _ChatScreenState extends State<ChatScreen>
                   completedRecent.add((name: name, date: date));
                 }
               } else if (date.isBefore(today)) {
-                overdue.add((name: name, date: date));
+                overdue.add((name: name, date: date, visionId: visionId));
               } else if (!date.isAfter(upcomingEnd)) {
-                upcoming.add((name: name, date: date));
+                upcoming.add((name: name, date: date, visionId: visionId));
               }
             }
           }
@@ -3949,15 +3960,15 @@ class _ChatScreenState extends State<ChatScreen>
     final upcomingCount = upcoming.length;
     if (overdueCount > 0 && upcomingCount > 0) {
       lines.add(
-        '예정일이 지난 마일스톤이 $overdueCount개, 일주일 안에 예정된 마일스톤이 $upcomingCount개 있어요. 목표 탭에서 확인해보시겠습니까?',
+        '예정일이 지난 마일스톤 $overdueCount개,\n일주일 안에 예정된 마일스톤 $upcomingCount개가 있어요.\n\n목표 탭에서 확인해보시겠습니까?',
       );
     } else if (overdueCount > 0) {
       lines.add(
-        '예정일이 지난 마일스톤이 $overdueCount개 있어요.\n${_quotedMilestoneNames(overdue.map((item) => item.name).toList())} 등을 목표 탭에서 확인해보시겠습니까?',
+        '예정일이 지난 마일스톤이\n$overdueCount개 있어요.\n\n${_quotedMilestoneNames(overdue.map((item) => item.name).toList())} 등을\n목표 탭에서 확인해보시겠습니까?',
       );
     } else if (upcomingCount > 0) {
       lines.add(
-        '일주일 안에 예정된 마일스톤이 $upcomingCount개 있어요.\n${_quotedMilestoneNames(upcoming.map((item) => item.name).toList())} 등을 목표 탭에서 확인해보시겠습니까?',
+        '일주일 안에 예정된 마일스톤이\n$upcomingCount개 있어요.\n\n${_quotedMilestoneNames(upcoming.map((item) => item.name).toList())} 등을\n목표 탭에서 확인해보시겠습니까?',
       );
     } else {
       lines.add('지금 확인이 필요한 마일스톤은 없어요. 일정이 잘 정리되어 있습니다.');
@@ -3966,6 +3977,10 @@ class _ChatScreenState extends State<ChatScreen>
     return _MilestoneCheckResult(
       message: lines.join('\n\n'),
       hasIncompleteItems: overdueCount > 0 || upcomingCount > 0,
+      highlightVisionIds: {
+        ...overdue.map((item) => item.visionId).where((id) => id.isNotEmpty),
+        ...upcoming.map((item) => item.visionId).where((id) => id.isNotEmpty),
+      }.toList(),
     );
   }
 
@@ -3993,6 +4008,7 @@ class _ChatScreenState extends State<ChatScreen>
           isUser: false,
           time: DateTime.now(),
           kind: kind,
+          highlightVisionIds: result.highlightVisionIds,
         ),
       );
       _suggestedTasks = [];
@@ -7416,6 +7432,42 @@ $timerOutputRule
       );
     }
 
+    Widget highlightedText() {
+      final baseStyle = GoogleFonts.notoSansKr(
+        fontSize: 14,
+        fontWeight: FontWeight.w600,
+        height: 1.62,
+        color: const Color(0xFF252235),
+      );
+      final highlightStyle = baseStyle.copyWith(
+        fontWeight: FontWeight.w900,
+        color: accent,
+      );
+      final spans = <TextSpan>[];
+      final pattern = RegExp(r'(‘[^’]+’)|(\d+)(?=개)');
+      var cursor = 0;
+      for (final match in pattern.allMatches(msg.text)) {
+        if (match.start > cursor) {
+          spans.add(TextSpan(text: msg.text.substring(cursor, match.start)));
+        }
+        spans.add(
+          TextSpan(
+            text: msg.text.substring(match.start, match.end),
+            style: highlightStyle,
+          ),
+        );
+        cursor = match.end;
+      }
+      if (cursor < msg.text.length) {
+        spans.add(TextSpan(text: msg.text.substring(cursor)));
+      }
+
+      return Text.rich(
+        TextSpan(style: baseStyle, children: spans),
+        softWrap: true,
+      );
+    }
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Row(
@@ -7444,7 +7496,7 @@ $timerOutputRule
           Flexible(
             child: Container(
               constraints: BoxConstraints(
-                maxWidth: MediaQuery.of(context).size.width * 0.72,
+                maxWidth: MediaQuery.of(context).size.width * 0.76,
               ),
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
@@ -7463,15 +7515,7 @@ $timerOutputRule
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text(
-                    msg.text,
-                    style: GoogleFonts.notoSansKr(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w800,
-                      height: 1.55,
-                      color: const Color(0xFF1A1A2E),
-                    ),
-                  ),
+                  highlightedText(),
                   if (showActions) ...[
                     const SizedBox(height: 12),
                     actionButton(
@@ -7479,7 +7523,13 @@ $timerOutputRule
                       isPrimary: true,
                       onTap: () {
                         HapticFeedback.lightImpact();
-                        widget.onOpenDrawer?.call();
+                        if (widget.onOpenGoalVisionDrawer != null) {
+                          widget.onOpenGoalVisionDrawer!(
+                            msg.highlightVisionIds,
+                          );
+                        } else {
+                          widget.onOpenDrawer?.call();
+                        }
                       },
                     ),
                     const SizedBox(height: 8),

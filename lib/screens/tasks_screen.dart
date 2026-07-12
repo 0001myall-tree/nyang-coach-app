@@ -489,6 +489,10 @@ class TasksScreenController {
     _state?._openBottomSheet(type);
   }
 
+  void openGoalVision({List<String> highlightVisionIds = const []}) {
+    _state?._openGoalVision(highlightVisionIds: highlightVisionIds);
+  }
+
   void refresh() {
     _state?._loadAll();
   }
@@ -564,6 +568,11 @@ class _TasksScreenState extends State<TasksScreen>
 
   // 목표 서브탭
   String _goalTab = 'week'; // 'week' | 'month'
+  final _visionSectionKey = GlobalKey();
+  final Map<String, GlobalKey> _visionCardKeys = {};
+  Set<String> _highlightedVisionIds = {};
+  bool _highlightPulseOn = false;
+  Timer? _visionHighlightTimer;
 
   @override
   void initState() {
@@ -578,6 +587,7 @@ class _TasksScreenState extends State<TasksScreen>
   @override
   void dispose() {
     widget.controller?._detach();
+    _visionHighlightTimer?.cancel();
     _tabCtrl.dispose();
     _todayInputCtrl.dispose();
     _todayInputFocusNode.dispose();
@@ -730,6 +740,78 @@ class _TasksScreenState extends State<TasksScreen>
     } else if (type == 'remaining') {
       _showTasksBottomSheet(title: '오늘 남은 할 일', showDone: false);
     }
+  }
+
+  void _openGoalVision({List<String> highlightVisionIds = const []}) {
+    if (!mounted) return;
+    if (_tabCtrl.index != 1) {
+      _tabCtrl.animateTo(1);
+    }
+
+    Future.delayed(const Duration(milliseconds: 280), () async {
+      if (!mounted) return;
+      final visionContext = _visionSectionKey.currentContext;
+      if (visionContext == null) return;
+      await Scrollable.ensureVisible(
+        visionContext,
+        duration: const Duration(milliseconds: 360),
+        curve: Curves.easeOutCubic,
+        alignment: 0.08,
+      );
+      final targetVisionId = highlightVisionIds.firstWhere(
+        (id) => _visionCardKeys[id]?.currentContext != null,
+        orElse: () => '',
+      );
+      if (targetVisionId.isNotEmpty) {
+        final targetContext = _visionCardKeys[targetVisionId]?.currentContext;
+        if (targetContext != null) {
+          await Scrollable.ensureVisible(
+            targetContext,
+            duration: const Duration(milliseconds: 320),
+            curve: Curves.easeOutCubic,
+            alignment: 0.22,
+          );
+        }
+      }
+      _pulseVisionHighlights(highlightVisionIds);
+    });
+  }
+
+  void _pulseVisionHighlights(List<String> visionIds) {
+    final ids = visionIds.toSet()..removeWhere((id) => id.trim().isEmpty);
+    if (ids.isEmpty || !mounted) return;
+
+    _visionHighlightTimer?.cancel();
+    var tick = 0;
+    setState(() {
+      _highlightedVisionIds = ids;
+      _highlightPulseOn = true;
+    });
+
+    _visionHighlightTimer = Timer.periodic(const Duration(milliseconds: 420), (
+      timer,
+    ) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      tick += 1;
+      if (tick >= 6) {
+        timer.cancel();
+        setState(() {
+          _highlightedVisionIds = {};
+          _highlightPulseOn = false;
+        });
+        return;
+      }
+      setState(() {
+        _highlightPulseOn = !_highlightPulseOn;
+      });
+    });
+  }
+
+  GlobalKey _visionCardKey(String visionId) {
+    return _visionCardKeys.putIfAbsent(visionId, () => GlobalKey());
   }
 
   void _showTasksBottomSheet({required String title, required bool showDone}) {
@@ -5273,7 +5355,10 @@ class _TasksScreenState extends State<TasksScreen>
                   _buildGoalList(_goalTab),
                   _buildGoalInput(_goalTab),
                   const SizedBox(height: 24),
-                  _buildVisionSection(),
+                  KeyedSubtree(
+                    key: _visionSectionKey,
+                    child: _buildVisionSection(),
+                  ),
                 ],
               ),
             ),
@@ -5665,22 +5750,36 @@ class _TasksScreenState extends State<TasksScreen>
             },
             itemBuilder: (ctx, i) {
               final v = visions[i];
+              final isHighlighted =
+                  _highlightedVisionIds.contains(v.id) && _highlightPulseOn;
               return GestureDetector(
-                key: ValueKey(v.id),
+                key: _visionCardKey(v.id),
                 onTap: () {
                   _showVisionModal(v);
                 },
-                child: Container(
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 260),
+                  curve: Curves.easeOutCubic,
                   margin: const EdgeInsets.only(bottom: 12),
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: isHighlighted
+                        ? const Color(0xFFF5F3FF)
+                        : Colors.white,
                     borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: isHighlighted
+                          ? const Color(0xFF8B7CFF)
+                          : Colors.transparent,
+                      width: 1.6,
+                    ),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.03),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
+                        color: isHighlighted
+                            ? const Color(0xFF8B7CFF).withOpacity(0.26)
+                            : Colors.black.withOpacity(0.03),
+                        blurRadius: isHighlighted ? 18 : 10,
+                        offset: Offset(0, isHighlighted ? 6 : 4),
                       ),
                     ],
                   ),
