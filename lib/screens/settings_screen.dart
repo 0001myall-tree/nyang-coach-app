@@ -113,6 +113,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       );
       _homeWidgetStatus = _buildHomeWidgetStatus(
         nyang: prefs.getBool('widget_nyang_enabled') ?? false,
+        catCharacter: prefs.getBool('widget_cat_character_enabled') ?? false,
         secMale: prefs.getBool('widget_sec_male_enabled') ?? false,
         secFemale: prefs.getBool('widget_sec_female_enabled') ?? false,
       );
@@ -126,11 +127,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   String? _buildHomeWidgetStatus({
     required bool nyang,
+    required bool catCharacter,
     required bool secMale,
     required bool secFemale,
   }) {
     final labels = <String>[
       if (nyang) '냥냥',
+      if (catCharacter) '캐릭터',
       if (secMale) _secMaleWidgetName,
       if (secFemale) _secFemaleWidgetName,
     ];
@@ -234,6 +237,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await WidgetSyncService.enforcePlanAccess(hasMasterPlan: isMasterPlan);
 
     bool tempNyang = prefs.getBool('widget_nyang_enabled') ?? false;
+    bool tempCatCharacter =
+        prefs.getBool('widget_cat_character_enabled') ?? false;
     bool tempSecMale = prefs.getBool('widget_sec_male_enabled') ?? false;
     bool tempSecFemale = prefs.getBool('widget_sec_female_enabled') ?? false;
 
@@ -476,6 +481,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             setModalState(() {
                               tempNyang = val;
                               if (val) {
+                                tempCatCharacter = false;
+                                tempSecMale = false;
+                                tempSecFemale = false;
+                              }
+                            });
+                          },
+                        ),
+                        _buildWidgetToggle(
+                          title: '캐릭터 위젯',
+                          imagePath: 'assets/images/cat_widget2.png',
+                          value: tempCatCharacter,
+                          isLocked: false,
+                          providerId: 'cat_character',
+                          onChanged: (val) {
+                            setModalState(() {
+                              tempCatCharacter = val;
+                              if (val) {
+                                tempNyang = false;
                                 tempSecMale = false;
                                 tempSecFemale = false;
                               }
@@ -493,6 +516,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               tempSecMale = val;
                               if (val) {
                                 tempNyang = false;
+                                tempCatCharacter = false;
                                 tempSecFemale = false;
                               }
                             });
@@ -509,6 +533,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               tempSecFemale = val;
                               if (val) {
                                 tempNyang = false;
+                                tempCatCharacter = false;
                                 tempSecMale = false;
                               }
                             });
@@ -529,11 +554,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         if (!canUseMasterWidget &&
                             (tempSecMale || tempSecFemale)) {
                           tempNyang = true;
+                          tempCatCharacter = false;
                           tempSecMale = false;
                           tempSecFemale = false;
                         }
 
                         await prefs.setBool('widget_nyang_enabled', tempNyang);
+                        await prefs.setBool(
+                          'widget_cat_character_enabled',
+                          tempCatCharacter,
+                        );
                         await prefs.setBool(
                           'widget_sec_male_enabled',
                           tempSecMale,
@@ -544,13 +574,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         );
                         await prefs.setBool(
                           'nyang_home_widget_enabled',
-                          tempNyang || tempSecMale || tempSecFemale,
+                          tempNyang ||
+                              tempCatCharacter ||
+                              tempSecMale ||
+                              tempSecFemale,
                         );
 
                         if (mounted) {
                           setState(() {
                             _homeWidgetStatus = _buildHomeWidgetStatus(
                               nyang: tempNyang,
+                              catCharacter: tempCatCharacter,
                               secMale: tempSecMale,
                               secFemale: tempSecFemale,
                             );
@@ -559,6 +593,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
                         final selectedProviderId = tempNyang
                             ? 'cat'
+                            : tempCatCharacter
+                            ? 'cat_character'
                             : tempSecMale
                             ? 'sec_male'
                             : tempSecFemale
@@ -3641,6 +3677,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           _homeWidgetStatus = _buildHomeWidgetStatus(
                             nyang:
                                 prefs.getBool('widget_nyang_enabled') ?? false,
+                            catCharacter:
+                                prefs.getBool('widget_cat_character_enabled') ??
+                                false,
                             secMale:
                                 prefs.getBool('widget_sec_male_enabled') ??
                                 false,
