@@ -272,7 +272,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
               required bool value,
               required ValueChanged<bool> onChanged,
               required bool isLocked,
-              required String providerId,
             }) {
               return Container(
                 margin: const EdgeInsets.only(bottom: 16),
@@ -330,77 +329,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ],
                       ),
                     ),
-                    if (value)
-                      Flexible(
-                        flex: 0,
-                        child: GestureDetector(
-                          onTap: () async {
-                            if (isLocked) return;
-                            await requestWidgetPin(providerId);
-                          },
-                          child: Container(
-                            constraints: const BoxConstraints(maxWidth: 112),
-                            margin: const EdgeInsets.only(right: 8),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 6,
-                            ),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF8B7CFF),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: FittedBox(
-                              fit: BoxFit.scaleDown,
-                              child: Text(
-                                '바탕화면에 추가',
-                                maxLines: 1,
-                                style: GoogleFonts.notoSansKr(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    if (!value)
-                      Flexible(
-                        flex: 0,
-                        child: GestureDetector(
-                          onTap: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('먼저 위젯을 켠 뒤 저장하고 바탕화면에 추가해 주세요.'),
-                              ),
-                            );
-                          },
-                          child: Container(
-                            constraints: const BoxConstraints(maxWidth: 112),
-                            margin: const EdgeInsets.only(right: 8),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 6,
-                            ),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFE5E7EB),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: FittedBox(
-                              fit: BoxFit.scaleDown,
-                              child: Text(
-                                '바탕화면에 추가',
-                                maxLines: 1,
-                                style: GoogleFonts.notoSansKr(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                  color: const Color(0xFF9CA3AF),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
                     CupertinoSwitch(
                       value: value,
                       activeColor: const Color(0xFF8B7CFF),
@@ -460,7 +388,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    '바탕화면에 꺼내둘 위젯을 선택해 주세요.\n(한 번에 하나의 위젯만 활성화할 수 있습니다)',
+                    '바탕화면에 꺼내둘 위젯을 선택해 주세요.',
                     style: GoogleFonts.notoSansKr(
                       fontSize: 14,
                       color: const Color(0xFF8E8D9B),
@@ -476,7 +404,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           imagePath: 'assets/images/cat.png',
                           value: tempNyang,
                           isLocked: false,
-                          providerId: 'cat',
                           onChanged: (val) {
                             setModalState(() {
                               tempNyang = val;
@@ -493,7 +420,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           imagePath: 'assets/images/cat_widget2.png',
                           value: tempCatCharacter,
                           isLocked: false,
-                          providerId: 'cat_character',
                           onChanged: (val) {
                             setModalState(() {
                               tempCatCharacter = val;
@@ -510,7 +436,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           imagePath: 'assets/images/sec_male.png',
                           value: tempSecMale,
                           isLocked: !isMasterPlan,
-                          providerId: 'sec_male',
                           onChanged: (val) {
                             setModalState(() {
                               tempSecMale = val;
@@ -527,7 +452,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           imagePath: 'assets/images/sec_female.png',
                           value: tempSecFemale,
                           isLocked: !isMasterPlan,
-                          providerId: 'sec_female',
                           onChanged: (val) {
                             setModalState(() {
                               tempSecFemale = val;
