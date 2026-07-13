@@ -505,6 +505,7 @@ class _MainTabScreenState extends State<MainTabScreen>
   }
 
   Future<void> _handleAppResumed() async {
+    await NotificationService().handleNativeMorningAlarm();
     await DailyResetService.checkAndExecuteReset();
     if (mounted) {
       _tasksController.refresh();

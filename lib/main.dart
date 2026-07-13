@@ -71,6 +71,13 @@ Future<void> _runStartupBackgroundJobs() async {
     debugPrint('Launch notification handling failed: $e');
     debugPrintStack(stackTrace: stackTrace);
   }
+
+  try {
+    await NotificationService().handleNativeMorningAlarm();
+  } catch (e, stackTrace) {
+    debugPrint('Native morning alarm handling failed: $e');
+    debugPrintStack(stackTrace: stackTrace);
+  }
 }
 
 class NyangCoachApp extends StatefulWidget {
@@ -96,6 +103,9 @@ class _NyangCoachAppState extends State<NyangCoachApp>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      NotificationService().handleNativeMorningAlarm();
+    }
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached) {
       TasksSyncService.syncToCloud();

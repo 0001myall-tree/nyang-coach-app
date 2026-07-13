@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/data/latest_all.dart' as tz;
@@ -25,6 +26,9 @@ class NotificationService {
 
   final FlutterLocalNotificationsPlugin _plugin =
       FlutterLocalNotificationsPlugin();
+  static const MethodChannel _androidAlarmChannel = MethodChannel(
+    'nyang_coach/morning_alarm',
+  );
   String? _lastMorningPayload;
   DateTime? _lastMorningOpenedAt;
 
@@ -215,6 +219,20 @@ class NotificationService {
     });
   }
 
+  Future<void> handleNativeMorningAlarm() async {
+    if (kIsWeb) return;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.reload();
+    final payload = prefs.getString('native_morning_payload');
+    if (payload == null || !payload.startsWith('morning:')) return;
+    await prefs.remove('native_morning_payload');
+    await prefs.remove('native_morning_alarm_at');
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _openMorningCall(payload);
+    });
+  }
+
   Future<void> scheduleDailyMorningCall({
     required int hour,
     required int minute,
@@ -291,7 +309,16 @@ class NotificationService {
       scheduled = scheduled.add(const Duration(days: 1));
     }
 
-    // 1분 간격으로 3번 연속 울리도록 스케줄링 (id: 0, 1, 2)
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      await _androidAlarmChannel.invokeMethod('scheduleMorningAlarm', {
+        'triggerMillis': scheduled.millisecondsSinceEpoch,
+        'payload': 'morning:$targetCoachId:${soundName ?? ''}',
+      });
+    }
+
+    // 1분 간격으로 3번 연속 울리도록 스케줄링 (id: 0, 1, 2).
+    // Android also keeps these as a sound/vibration fallback in case a device
+    // delays showing the AlarmClock activity while the screen is off.
     for (int i = 0; i < 3; i++) {
       final targetTime = scheduled.add(Duration(minutes: i));
       await _plugin.zonedSchedule(
@@ -366,6 +393,9 @@ class NotificationService {
     if (kIsWeb) return;
     for (int i = 0; i < 3; i++) {
       await _plugin.cancel(id: i);
+    }
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      await _androidAlarmChannel.invokeMethod('cancelMorningAlarm');
     }
   }
 

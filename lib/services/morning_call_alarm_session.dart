@@ -3,6 +3,7 @@ import 'dart:math';
 
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 
 import '../screens/coach_config.dart';
 
@@ -12,6 +13,9 @@ class MorningCallAlarmSession {
 
   static final MorningCallAlarmSession _instance =
       MorningCallAlarmSession._internal();
+  static const MethodChannel _alarmChannel = MethodChannel(
+    'nyang_coach/morning_alarm',
+  );
 
   final AudioPlayer _player = AudioPlayer();
   Timer? _initialDelayTimer;
@@ -61,13 +65,12 @@ class MorningCallAlarmSession {
             contentType: AndroidContentType.music,
             audioFocus: AndroidAudioFocus.gainTransientExclusive,
           ),
-          iOS: AudioContextIOS(
-            category: AVAudioSessionCategory.playback,
-          ),
+          iOS: AudioContextIOS(category: AVAudioSessionCategory.playback),
         ),
       );
       await _player.setVolume(1.0);
       await _player.setReleaseMode(ReleaseMode.stop);
+      await _startVibration();
 
       if (initialDelay == Duration.zero) {
         await _play();
@@ -98,8 +101,27 @@ class MorningCallAlarmSession {
       _completeSub = null;
       _stateSub = null;
       await _player.stop();
+      await _stopVibration();
     } catch (e) {
       debugPrint('모닝콜 알람 세션 중지 실패: $e');
+    }
+  }
+
+  Future<void> _startVibration() async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+    try {
+      await _alarmChannel.invokeMethod('startMorningVibration');
+    } catch (e) {
+      debugPrint('모닝콜 진동 시작 실패: $e');
+    }
+  }
+
+  Future<void> _stopVibration() async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+    try {
+      await _alarmChannel.invokeMethod('stopMorningVibration');
+    } catch (e) {
+      debugPrint('모닝콜 진동 중지 실패: $e');
     }
   }
 

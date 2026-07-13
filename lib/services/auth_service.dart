@@ -67,14 +67,36 @@ class AuthService {
 
   Future<UserCredential?> signInWithNaverTest() async {
     try {
+      if (_auth.currentUser != null) return null;
+
       final cred = await _auth.signInAnonymously();
       await cred.user?.updateDisplayName('네이버 테스트');
-      await _syncAfterSignIn(cred);
+      await _createNaverTestProfile();
       return cred;
     } catch (e) {
       debugPrint("Naver Test Sign-In Error: $e");
       return null;
     }
+  }
+
+  Future<void> _createNaverTestProfile() async {
+    final testData = UserData(
+      planType: 'master',
+      selectedCoachId: 'cat',
+      ownedCoaches: const [
+        'cat',
+        'boyfriend',
+        'girlfriend',
+        'bro',
+        'halmae',
+        'sec_male',
+        'sec_female',
+      ],
+    );
+    await UserDataService.save(testData);
+    await NotificationService().syncDailyMorningCall();
+    await NotificationService().syncDailyNightCall();
+    await NotificationService().syncCoreReminders();
   }
 
   Future<void> _syncAfterSignIn(UserCredential? cred) async {

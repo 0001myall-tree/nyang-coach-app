@@ -520,6 +520,21 @@ class _LandingScreenState extends State<LandingScreen>
   ) async {
     Navigator.pop(sheetContext);
 
+    final isNaverTest = provider == 'naverTest';
+    if (isNaverTest) {
+      final blockMessage = await _naverTestBlockMessage();
+      if (blockMessage != null) {
+        if (!outerContext.mounted) return;
+        ScaffoldMessenger.of(outerContext).showSnackBar(
+          SnackBar(
+            content: Text(blockMessage),
+            backgroundColor: const Color(0xFF1A1A2E),
+          ),
+        );
+        return;
+      }
+    }
+
     final authService = AuthService();
     final userCred = provider == 'apple'
         ? await authService.signInWithApple()
@@ -529,22 +544,20 @@ class _LandingScreenState extends State<LandingScreen>
 
     if (!outerContext.mounted) return;
 
-    final isNaverTest = provider == 'naverTest';
-
-    if (userCred != null || isNaverTest) {
+    if (userCred != null) {
       print(
-        isNaverTest && userCred == null
-            ? '네이버 테스트 로컬 세션 시작'
-            : '로그인 성공: ${userCred?.user?.displayName}',
+        isNaverTest
+            ? '네이버 테스트 계정 로그인 성공: ${userCred.user?.uid}'
+            : '로그인 성공: ${userCred.user?.displayName}',
       );
-      if (userCred != null) {
+      if (!isNaverTest) {
         await TasksSyncService.syncFromCloud();
       }
       final data = await UserDataService.load();
       if (!outerContext.mounted) return;
 
       final testCoachId = data.selectedCoachId ?? 'cat';
-      if (isNaverTest && data.selectedCoachId == null) {
+      if (data.selectedCoachId == null) {
         await UserDataService.setSelectedCoach(testCoachId);
       }
 
@@ -582,6 +595,23 @@ class _LandingScreenState extends State<LandingScreen>
         backgroundColor: Colors.redAccent,
       ),
     );
+  }
+
+  Future<String?> _naverTestBlockMessage() async {
+    if (FirebaseAuth.instance.currentUser != null) {
+      return '현재 로그인된 계정이 있어요. 기존 계정과 데이터를 보호하기 위해 네이버 테스트 계정은 빈 상태에서만 시작할 수 있어요.';
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+    final hasLocalNyangData = prefs.getKeys().any((key) {
+      if (!key.startsWith('nyang_')) return false;
+      return key != 'nyang_has_synced_from_cloud';
+    });
+    if (hasLocalNyangData) {
+      return '기존 앱 데이터가 이 기기에 남아 있어요. 데이터를 보호하기 위해 네이버 테스트 계정은 새 설치 상태에서만 시작할 수 있어요.';
+    }
+
+    return null;
   }
 
   Widget _buildLoginButton({
