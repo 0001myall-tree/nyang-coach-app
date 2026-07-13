@@ -1,6 +1,5 @@
 import 'dart:math';
 import 'dart:convert';
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -164,6 +163,9 @@ class NotificationService {
           requestAlertPermission: true,
           requestBadgePermission: true,
           requestSoundPermission: true,
+          defaultPresentBanner: true,
+          defaultPresentList: true,
+          defaultPresentSound: true,
         );
     const InitializationSettings settings = InitializationSettings(
       android: androidSettings,
@@ -291,6 +293,9 @@ class NotificationService {
       presentSound: true,
       presentAlert: true,
       presentBadge: true,
+      presentBanner: true,
+      presentList: true,
+      interruptionLevel: InterruptionLevel.timeSensitive,
     );
     final NotificationDetails details = NotificationDetails(
       android: androidDetails,

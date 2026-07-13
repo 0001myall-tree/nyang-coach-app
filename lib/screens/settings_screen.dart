@@ -3342,7 +3342,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                           CrossAxisAlignment.start,
                                       children: [
                                         Text(
-                                          '매일 자동 나이트콜',
+                                          '취침 준비 알림',
                                           style: GoogleFonts.notoSansKr(
                                             fontSize: 13,
                                             fontWeight: FontWeight.w800,
@@ -3351,7 +3351,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                         ),
                                         const SizedBox(height: 4),
                                         Text(
-                                          '최소 취침 시간 2시간 전에 매일 나이트콜을 받습니다.',
+                                          '최소 취침 시간 2시간 전에 취침 준비 알림을 받습니다.',
                                           style: GoogleFonts.notoSansKr(
                                             fontSize: 11,
                                             fontWeight: FontWeight.w500,
@@ -3374,7 +3374,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               if (isDailyNightCallEnabled) ...[
                                 const SizedBox(height: 14),
                                 Text(
-                                  '나이트콜 담당 비서',
+                                  '담당 비서',
                                   style: GoogleFonts.notoSansKr(
                                     fontSize: 11,
                                     color: const Color(0xFF9593A5),
