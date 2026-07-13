@@ -48,7 +48,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   TimeOfDay _morningCallTime = const TimeOfDay(hour: 7, minute: 0);
   String _morningCallCoachId = 'cat';
   bool _coreReminderEnabled = false;
-  String _coreReminderCoachId = 'cat';
+  String _coreReminderCoachId = 'push';
   int _coreReminderAdvanceMinutes = 10;
   String? _homeWidgetStatus;
   String _secMaleWidgetName = '남비서';
@@ -98,8 +98,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
           prefs.getString('nyang_morning_call_coach') ?? 'cat';
       _coreReminderEnabled =
           prefs.getBool('nyang_core_reminder_enabled') ?? false;
-      _coreReminderCoachId =
-          prefs.getString('nyang_core_reminder_coach') ?? 'cat';
+      final savedCoreReminderCoach =
+          prefs.getString('nyang_core_reminder_coach') ?? 'push';
+      _coreReminderCoachId = savedCoreReminderCoach == 'random'
+          ? 'push'
+          : savedCoreReminderCoach;
       _coreReminderAdvanceMinutes =
           prefs.getInt('nyang_core_reminder_advance') ?? 10;
       _resetHour = prefs.getDouble('nyang_reset_hour') ?? 3.0;
@@ -724,7 +727,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 10),
+                  Opacity(
+                    opacity: tempEnabled ? 1.0 : 0.55,
+                    child: Text(
+                      '휴대폰 설정에 따라 무음/진동 모드나 방해금지 상태에서는 모닝콜 소리가 제한될 수 있어요. 소리로 깨고 싶다면 앱 알림 권한과 알람 볼륨을 미리 확인해주세요.',
+                      style: GoogleFonts.notoSansKr(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                        height: 1.45,
+                        color: const Color(0xFF8E8A9E),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 22),
 
                   // 코치 선택 리스트
                   Text(
@@ -861,7 +877,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (mounted) {
         setState(() {
           _coreReminderEnabled = false;
-          _coreReminderCoachId = 'cat';
+          _coreReminderCoachId = 'push';
           _coreReminderAdvanceMinutes = 10;
         });
         _showFreeSettingsLockedNotice();
@@ -881,10 +897,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     NotificationService().syncCoreReminders();
 
-    String coachName = '랜덤 코치';
-    if (coachId != 'random') {
-      coachName = CoachConfigs.get(coachId).name;
-    }
+    final coachName = coachId == 'push'
+        ? '기본 푸쉬 알람'
+        : CoachConfigs.get(coachId).name;
 
     if (mounted) {
       ScaffoldMessenger.of(
@@ -1066,17 +1081,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             onTap: () {
                               if (tempEnabled)
                                 setModalState(() => tempCoachId = 'push');
-                            },
-                          ),
-                          // 랜덤 코치
-                          _buildMorningCallCoachItem(
-                            id: 'random',
-                            name: '랜덤 코치',
-                            subtitle: '모든 코치 중 한 명이 랜덤으로 알람을 보내줘요',
-                            isSelected: tempCoachId == 'random',
-                            onTap: () {
-                              if (tempEnabled)
-                                setModalState(() => tempCoachId = 'random');
                             },
                           ),
                           _buildMorningCallCoachSectionHeader('FRIENDS 코치'),
@@ -1783,7 +1787,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _coreReminderStatusLabel.isEmpty ? null : _coreReminderStatusLabel;
 
   String _shortCoachName(String coachId) {
-    if (coachId == 'random') return '랜덤';
     if (coachId == 'push') return '푸쉬';
     return CoachConfigs.get(coachId).name.replaceAll(' 코치', '');
   }

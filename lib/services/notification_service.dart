@@ -1,5 +1,6 @@
 import 'dart:math';
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -28,7 +29,7 @@ class NotificationService {
   DateTime? _lastMorningOpenedAt;
 
   String _morningCallChannelId(String? soundName) {
-    return 'nyang_morning_call_${soundName ?? 'default'}_v5';
+    return 'nyang_morning_call_${soundName ?? 'default'}_v6';
   }
 
   String _coreReminderChannelId(String? soundName) {
@@ -261,6 +262,8 @@ class NotificationService {
               ? RawResourceAndroidNotificationSound(soundName)
               : null,
           playSound: true,
+          enableVibration: true,
+          vibrationPattern: Int64List.fromList([0, 450, 180, 450, 350, 900]),
           fullScreenIntent: true,
           category: AndroidNotificationCategory.alarm,
           audioAttributesUsage: AudioAttributesUsage.alarm,
@@ -642,23 +645,16 @@ class NotificationService {
     if (!isEnabled) return;
 
     String targetCoachId =
-        prefs.getString('nyang_core_reminder_coach') ?? 'cat';
+        prefs.getString('nyang_core_reminder_coach') ?? 'push';
     final advanceMinutes = prefs.getInt('nyang_core_reminder_advance') ?? 10;
 
     if (targetCoachId == 'random') {
-      final availableCoaches = CoachConfigs.all.values
-          .where((coach) => coach.voiceCount > 0)
-          .map((coach) => coach.id)
-          .toList();
-      if (availableCoaches.isNotEmpty) {
-        targetCoachId =
-            availableCoaches[Random().nextInt(availableCoaches.length)];
-      } else {
-        targetCoachId = 'cat';
-      }
+      targetCoachId = 'push';
+      await prefs.setString('nyang_core_reminder_coach', targetCoachId);
     } else if (targetCoachId != 'push' &&
         !CoachConfigs.all.containsKey(targetCoachId)) {
-      targetCoachId = 'cat';
+      targetCoachId = 'push';
+      await prefs.setString('nyang_core_reminder_coach', targetCoachId);
     }
     // Save the resolved core reminder coach ID to SharedPreferences
     await prefs.setString('nyang_core_reminder_resolved_coach', targetCoachId);

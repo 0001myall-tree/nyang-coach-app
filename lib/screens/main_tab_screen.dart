@@ -738,7 +738,7 @@ class _MainTabScreenState extends State<MainTabScreen>
       if (shouldFire) {
         // Do not overwrite the fireKey here; it already stores the unique reminder identifier
         final coachIdStr =
-            prefs.getString('nyang_core_reminder_coach') ?? 'cat';
+            prefs.getString('nyang_core_reminder_coach') ?? 'push';
         _fireCoreReminder(coachIdStr, advanceMinutes, fireTaskText);
       }
     });
@@ -889,9 +889,21 @@ class _MainTabScreenState extends State<MainTabScreen>
 
     // Use the resolved core reminder coach ID from SharedPreferences if it matches the configured setting,
     // which aligns the in-app engine with the background notification selection.
-    String targetCoachId =
-        prefs.getString('nyang_core_reminder_resolved_coach') ??
-        configuredCoachId;
+    String targetCoachId = configuredCoachId == 'random'
+        ? 'push'
+        : configuredCoachId;
+    final resolvedCoachId = prefs.getString(
+      'nyang_core_reminder_resolved_coach',
+    );
+    if (resolvedCoachId != null &&
+        resolvedCoachId.isNotEmpty &&
+        resolvedCoachId != 'random') {
+      targetCoachId = resolvedCoachId;
+    }
+    if (targetCoachId != 'push' &&
+        !CoachConfigs.all.containsKey(targetCoachId)) {
+      targetCoachId = 'push';
+    }
 
     if (targetCoachId == 'push') {
       NotificationService().showImmediateNotification(
@@ -912,21 +924,6 @@ class _MainTabScreenState extends State<MainTabScreen>
         );
       }
       return;
-    }
-
-    if (targetCoachId == 'random') {
-      final availableCoaches = CoachConfigs.all.values
-          .where((coach) => coach.voiceCount > 0)
-          .map((coach) => coach.id)
-          .toList();
-      if (availableCoaches.isNotEmpty) {
-        targetCoachId =
-            availableCoaches[Random().nextInt(availableCoaches.length)];
-      } else {
-        targetCoachId = 'cat';
-      }
-    } else if (!CoachConfigs.all.containsKey(targetCoachId)) {
-      targetCoachId = 'cat';
     }
 
     final coach = CoachConfigs.get(targetCoachId);
