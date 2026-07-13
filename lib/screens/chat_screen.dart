@@ -5160,10 +5160,8 @@ class _ChatScreenState extends State<ChatScreen>
       }
     }
 
-    // 13. 취침 기준 초과 앱 진입 개입 (master only, 나이트콜 켠 경우)
+    // 13. 취침 기준 초과 앱 진입 개입 (master only)
     if (_coach.isMaster) {
-      final isNightCallEnabled =
-          prefs.getBool('nyang_night_call_enabled') ?? false;
       final isDailyNightCallEnabled =
           prefs.getBool('nyang_night_call_daily_enabled') ?? false;
       final minSleepTimeStr = prefs.getString('nyang_premium_min_sleep_time');
@@ -5187,8 +5185,7 @@ class _ChatScreenState extends State<ChatScreen>
           hasRecentConsecutiveLateEntry &&
           lastInterventionNight != latestLateEntry;
 
-      if (isNightCallEnabled &&
-          !isDailyNightCallEnabled &&
+      if (!isDailyNightCallEnabled &&
           shouldInterveneByLateEntry &&
           minSleepTimeStr != null) {
         try {

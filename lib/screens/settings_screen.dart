@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -2568,7 +2569,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     List<Map<String, dynamic>> weekGoals = [];
     List<Map<String, dynamic>> monthGoals = [];
     List<Map<String, dynamic>> visions = [];
-    bool isNightCallEnabled = false;
     bool isDailyNightCallEnabled = false;
     String selectedNightCallCoach = 'sec_male';
     bool isLoaded = false;
@@ -2587,7 +2587,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 final rawVisions = prefs.getString('nyang_visions');
                 final rawRoutines = prefs.getString('nyang_premium_routines');
                 final title = prefs.getString('nyang_master_title');
-                final nightCall = prefs.getBool('nyang_night_call_enabled');
                 final dailyNightCall = prefs.getBool(
                   'nyang_night_call_daily_enabled',
                 );
@@ -2650,7 +2649,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       prefs.getString('nyang_coach_name_sec_male') ?? '';
                   femaleNameController.text =
                       prefs.getString('nyang_coach_name_sec_female') ?? '';
-                  if (nightCall != null) isNightCallEnabled = nightCall;
                   if (dailyNightCall != null)
                     isDailyNightCallEnabled = dailyNightCall;
                   if (nightCallCoach != null)
@@ -2887,7 +2885,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     children: [
                       Row(
                         children: [
-                          const Text('👑', style: TextStyle(fontSize: 22)),
+                          SvgPicture.asset(
+                            'assets/icons/user-gear.svg',
+                            width: 22,
+                            height: 22,
+                            colorFilter: const ColorFilter.mode(
+                              Color(0xFF8B7CFF),
+                              BlendMode.srcIn,
+                            ),
+                          ),
                           const SizedBox(width: 8),
                           Text(
                             '비서 학습 설정',
@@ -3161,196 +3167,168 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           icon: '🌙',
                           title: '컨디션 수면 기준',
                           subtitle: '다음 날 무리없는 수면 기준을 알려주세요.',
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      '최소 취침 시간',
-                                      style: GoogleFonts.notoSansKr(
-                                        fontSize: 11,
-                                        color: const Color(0xFF9593A5),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    GestureDetector(
-                                      onTap: () async {
-                                        final time =
-                                            await _showFocusedTimePicker(
-                                              context: context,
-                                              initialTime: minSleepTime,
-                                            );
-                                        if (time != null) {
-                                          setState(() => minSleepTime = time);
-                                        }
-                                      },
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          vertical: 6,
-                                          horizontal: 10,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFFF3F0FF),
-                                          borderRadius: BorderRadius.circular(
-                                            8,
-                                          ),
-                                        ),
-                                        child: Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            const Icon(
-                                              Icons.nightlight_round,
-                                              size: 14,
-                                              color: Color(0xFF8B7CFF),
-                                            ),
-                                            const SizedBox(width: 8),
-                                            Text(
-                                              '${minSleepTime.hour.toString().padLeft(2, '0')}:${minSleepTime.minute.toString().padLeft(2, '0')}',
-                                              style: GoogleFonts.notoSansKr(
-                                                fontSize: 14,
-                                                fontWeight: FontWeight.w700,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              Container(
-                                width: 1,
-                                height: 30,
-                                color: const Color(0xFFE5E7EB),
-                              ),
-                              const SizedBox(width: 16),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      '최소 수면 시간',
-                                      style: GoogleFonts.notoSansKr(
-                                        fontSize: 11,
-                                        color: const Color(0xFF9593A5),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        vertical: 2,
-                                        horizontal: 10,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFFF3F0FF),
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      child: DropdownButtonHideUnderline(
-                                        child: DropdownButton<int>(
-                                          value: sleepDuration,
-                                          icon: const Icon(
-                                            Icons.arrow_drop_down,
-                                            color: Color(0xFF8B7CFF),
-                                          ),
-                                          isDense: true,
-                                          menuMaxHeight: 250,
-                                          items:
-                                              List.generate(
-                                                10,
-                                                (index) => index + 3,
-                                              ).map((hour) {
-                                                return DropdownMenuItem<int>(
-                                                  value: hour,
-                                                  child: Row(
-                                                    mainAxisSize:
-                                                        MainAxisSize.min,
-                                                    children: [
-                                                      const Icon(
-                                                        Icons
-                                                            .hourglass_bottom_rounded,
-                                                        size: 14,
-                                                        color: Color(
-                                                          0xFF8B7CFF,
-                                                        ),
-                                                      ),
-                                                      const SizedBox(width: 8),
-                                                      Text(
-                                                        '$hour시간',
-                                                        style:
-                                                            GoogleFonts.notoSansKr(
-                                                              fontSize: 14,
-                                                              fontWeight:
-                                                                  FontWeight
-                                                                      .w700,
-                                                            ),
-                                                      ),
-                                                    ],
-                                                  ),
-                                                );
-                                              }).toList(),
-                                          onChanged: (value) {
-                                            if (value != null) {
-                                              setState(
-                                                () => sleepDuration = value,
-                                              );
-                                            }
-                                          },
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-
-                        // 1-2. 수면·컨디션 관리
-                        _buildLearnField(
-                          icon: const Icon(
-                            Icons.nights_stay,
-                            color: Color(0xFF8B7CFF),
-                            size: 18,
-                          ),
-                          title: '취침 기준 컨디션 케어',
-                          subtitle:
-                              '정한 취침 기준보다 1시간 이상 늦게 앱에 들어온 날이 이틀 연속이면, 비서가 하루 마무리와 나이트콜을 부드럽게 제안합니다.',
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
                                 children: [
                                   Expanded(
-                                    child: Text(
-                                      '비서가 눈치채서 제안하기',
-                                      style: GoogleFonts.notoSansKr(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w600,
-                                        color: const Color(0xFF3D3A4E),
-                                      ),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          '최소 취침 시간',
+                                          style: GoogleFonts.notoSansKr(
+                                            fontSize: 11,
+                                            color: const Color(0xFF9593A5),
+                                          ),
+                                        ),
+                                        const SizedBox(height: 8),
+                                        GestureDetector(
+                                          onTap: () async {
+                                            final time =
+                                                await _showFocusedTimePicker(
+                                                  context: context,
+                                                  initialTime: minSleepTime,
+                                                );
+                                            if (time != null) {
+                                              setState(
+                                                () => minSleepTime = time,
+                                              );
+                                            }
+                                          },
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              vertical: 6,
+                                              horizontal: 10,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFFF3F0FF),
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
+                                            ),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                const Icon(
+                                                  Icons.nightlight_round,
+                                                  size: 14,
+                                                  color: Color(0xFF8B7CFF),
+                                                ),
+                                                const SizedBox(width: 8),
+                                                Text(
+                                                  '${minSleepTime.hour.toString().padLeft(2, '0')}:${minSleepTime.minute.toString().padLeft(2, '0')}',
+                                                  style: GoogleFonts.notoSansKr(
+                                                    fontSize: 14,
+                                                    fontWeight: FontWeight.w700,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ),
-                                  Switch(
-                                    value: isNightCallEnabled,
-                                    onChanged: (val) async {
-                                      setState(() {
-                                        isNightCallEnabled = val;
-                                      });
-                                    },
-                                    activeColor: const Color(0xFF8B7CFF),
+                                  Container(
+                                    width: 1,
+                                    height: 30,
+                                    color: const Color(0xFFE5E7EB),
+                                  ),
+                                  const SizedBox(width: 16),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          '최소 수면 시간',
+                                          style: GoogleFonts.notoSansKr(
+                                            fontSize: 11,
+                                            color: const Color(0xFF9593A5),
+                                          ),
+                                        ),
+                                        const SizedBox(height: 8),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            vertical: 2,
+                                            horizontal: 10,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFFF3F0FF),
+                                            borderRadius: BorderRadius.circular(
+                                              8,
+                                            ),
+                                          ),
+                                          child: DropdownButtonHideUnderline(
+                                            child: DropdownButton<int>(
+                                              value: sleepDuration,
+                                              icon: const Icon(
+                                                Icons.arrow_drop_down,
+                                                color: Color(0xFF8B7CFF),
+                                              ),
+                                              isDense: true,
+                                              menuMaxHeight: 250,
+                                              items:
+                                                  List.generate(
+                                                    10,
+                                                    (index) => index + 3,
+                                                  ).map((hour) {
+                                                    return DropdownMenuItem<
+                                                      int
+                                                    >(
+                                                      value: hour,
+                                                      child: Row(
+                                                        mainAxisSize:
+                                                            MainAxisSize.min,
+                                                        children: [
+                                                          const Icon(
+                                                            Icons
+                                                                .hourglass_bottom_rounded,
+                                                            size: 14,
+                                                            color: Color(
+                                                              0xFF8B7CFF,
+                                                            ),
+                                                          ),
+                                                          const SizedBox(
+                                                            width: 8,
+                                                          ),
+                                                          Text(
+                                                            '$hour시간',
+                                                            style:
+                                                                GoogleFonts.notoSansKr(
+                                                                  fontSize: 14,
+                                                                  fontWeight:
+                                                                      FontWeight
+                                                                          .w700,
+                                                                ),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    );
+                                                  }).toList(),
+                                              onChanged: (value) {
+                                                if (value != null) {
+                                                  setState(
+                                                    () => sleepDuration = value,
+                                                  );
+                                                }
+                                              },
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
                                   ),
                                 ],
                               ),
-                              const SizedBox(height: 12),
+                              const SizedBox(height: 18),
                               Container(
                                 height: 1,
                                 color: const Color(0xFFF0EEF8),
                               ),
-                              const SizedBox(height: 12),
+                              const SizedBox(height: 14),
                               Row(
                                 mainAxisAlignment:
                                     MainAxisAlignment.spaceBetween,
@@ -3390,8 +3368,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                   ),
                                 ],
                               ),
-                              if (isNightCallEnabled ||
-                                  isDailyNightCallEnabled) ...[
+                              if (isDailyNightCallEnabled) ...[
                                 const SizedBox(height: 14),
                                 Text(
                                   '나이트콜 담당 비서',
@@ -3612,10 +3589,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 false,
                           );
                         });
-                        await prefs.setBool(
-                          'nyang_night_call_enabled',
-                          isNightCallEnabled || isDailyNightCallEnabled,
-                        );
+                        await prefs.setBool('nyang_night_call_enabled', true);
                         await prefs.setBool(
                           'nyang_night_call_daily_enabled',
                           isDailyNightCallEnabled,
