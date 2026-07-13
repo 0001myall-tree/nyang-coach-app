@@ -1059,9 +1059,13 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
                                                         _selectedCoachId =
                                                             coach['id'];
                                                       });
-                                                      Navigator.pop(context);
-                                                      Navigator.pushReplacement(
+                                                      Navigator.of(
                                                         context,
+                                                      ).pop();
+                                                      if (!mounted) return;
+                                                      Navigator.of(
+                                                        this.context,
+                                                      ).pushReplacement(
                                                         PageRouteBuilder(
                                                           pageBuilder:
                                                               (

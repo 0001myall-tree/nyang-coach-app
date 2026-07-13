@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
@@ -256,6 +257,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
         return StatefulBuilder(
           builder: (context, setModalState) {
             Future<void> requestWidgetPin(String providerId) async {
+              if (Platform.isIOS) {
+                if (!mounted) return;
+                ScaffoldMessenger.of(this.context).showSnackBar(
+                  const SnackBar(
+                    content: Text(
+                      '저장됐어요. 홈 화면을 길게 누른 뒤 + 버튼에서 냥냥코치 위젯을 직접 추가해 주세요.',
+                    ),
+                  ),
+                );
+                return;
+              }
+
               final didRequestPin = await WidgetSyncService.requestPinWidget(
                 providerId,
               );

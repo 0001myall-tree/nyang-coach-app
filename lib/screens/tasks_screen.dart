@@ -577,20 +577,12 @@ class _TasksScreenState extends State<TasksScreen>
   bool _highlightAddVisionButton = false;
   bool _highlightPulseOn = false;
   Timer? _visionHighlightTimer;
-  Timer? _remainingHighlightTimer;
-  bool _emphasizeRemainingTasks = false;
-  bool _remainingHighlightOn = false;
 
   @override
   void initState() {
     super.initState();
     _coach = CoachConfigs.get(widget.coachId);
     _tabCtrl = TabController(length: 4, vsync: this);
-    if (widget.initialBottomSheet == 'remaining') {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _pulseRemainingTasks();
-      });
-    }
     widget.controller?._attach(this);
     _loadAll();
     _initSpeech();
@@ -600,7 +592,6 @@ class _TasksScreenState extends State<TasksScreen>
   void dispose() {
     widget.controller?._detach();
     _visionHighlightTimer?.cancel();
-    _remainingHighlightTimer?.cancel();
     _tabCtrl.dispose();
     _todayInputCtrl.dispose();
     _todayInputFocusNode.dispose();
@@ -721,8 +712,7 @@ class _TasksScreenState extends State<TasksScreen>
     _injectTodayHabits();
     _injectTodaySchedules();
 
-    if (widget.initialBottomSheet != null &&
-        widget.initialBottomSheet != 'remaining') {
+    if (widget.initialBottomSheet != null) {
       _openBottomSheet(widget.initialBottomSheet!);
     }
   }
@@ -751,40 +741,13 @@ class _TasksScreenState extends State<TasksScreen>
   void _openBottomSheet(String type) {
     if (type == 'done') {
       _showTasksBottomSheet(title: '오늘 완료한 할 일', showDone: true);
+    } else if (type == 'remaining') {
+      _showTasksBottomSheet(
+        title: '오늘 남은 할 일',
+        showDone: false,
+        fullScreen: true,
+      );
     }
-  }
-
-  void _pulseRemainingTasks() {
-    if (!mounted) return;
-
-    _remainingHighlightTimer?.cancel();
-    var tick = 0;
-    setState(() {
-      _emphasizeRemainingTasks = true;
-      _remainingHighlightOn = true;
-    });
-
-    _remainingHighlightTimer = Timer.periodic(
-      const Duration(milliseconds: 420),
-      (timer) {
-        if (!mounted) {
-          timer.cancel();
-          return;
-        }
-        tick += 1;
-        if (tick >= 4) {
-          timer.cancel();
-          setState(() {
-            _emphasizeRemainingTasks = false;
-            _remainingHighlightOn = false;
-          });
-          return;
-        }
-        setState(() {
-          _remainingHighlightOn = !_remainingHighlightOn;
-        });
-      },
-    );
   }
 
   void _openGoalVision({List<String> highlightVisionIds = const []}) {
@@ -907,22 +870,42 @@ class _TasksScreenState extends State<TasksScreen>
     return _visionCardKeys.putIfAbsent(visionId, () => GlobalKey());
   }
 
-  void _showTasksBottomSheet({required String title, required bool showDone}) {
+  void _showTasksBottomSheet({
+    required String title,
+    required bool showDone,
+    bool fullScreen = false,
+  }) {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
+      isScrollControlled: fullScreen,
       builder: (ctx) {
         final filteredTasks = tasks.where((t) => t.done == showDone).toList();
+        final sheetHeight = MediaQuery.of(context).size.height * 0.9;
         return Container(
+          height: fullScreen ? sheetHeight : null,
           padding: const EdgeInsets.fromLTRB(20, 22, 20, 24),
           decoration: const BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
           ),
           child: Column(
-            mainAxisSize: MainAxisSize.min,
+            mainAxisSize: fullScreen ? MainAxisSize.max : MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              if (fullScreen) ...[
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE5E7EB),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 18),
+              ],
               Text(
                 title,
                 style: GoogleFonts.notoSansKr(
@@ -946,51 +929,57 @@ class _TasksScreenState extends State<TasksScreen>
                   ),
                 )
               else
-                ConstrainedBox(
-                  constraints: BoxConstraints(
-                    maxHeight: MediaQuery.of(context).size.height * 0.4,
-                  ),
-                  child: ListView.builder(
-                    shrinkWrap: true,
-                    itemCount: filteredTasks.length,
-                    itemBuilder: (ctx, i) {
-                      final t = filteredTasks[i];
-                      return Container(
-                        padding: const EdgeInsets.symmetric(vertical: 10),
-                        decoration: const BoxDecoration(
-                          border: Border(
-                            bottom: BorderSide(color: Color(0xFFF3F4F6)),
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              showDone
-                                  ? Icons.check_circle
-                                  : Icons.radio_button_unchecked,
-                              color: showDone
-                                  ? const Color(0xFF8B7CFF)
-                                  : const Color(0xFFD1D5DB),
-                              size: 20,
+                Flexible(
+                  fit: fullScreen ? FlexFit.tight : FlexFit.loose,
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxHeight: fullScreen
+                          ? sheetHeight
+                          : MediaQuery.of(context).size.height * 0.4,
+                    ),
+                    child: ListView.builder(
+                      shrinkWrap: !fullScreen,
+                      padding: EdgeInsets.zero,
+                      itemCount: filteredTasks.length,
+                      itemBuilder: (ctx, i) {
+                        final t = filteredTasks[i];
+                        return Container(
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          decoration: const BoxDecoration(
+                            border: Border(
+                              bottom: BorderSide(color: Color(0xFFF3F4F6)),
                             ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(
-                                t.text,
-                                style: GoogleFonts.notoSansKr(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w500,
-                                  color: const Color(0xFF3D3A4E),
-                                  decoration: showDone
-                                      ? TextDecoration.lineThrough
-                                      : null,
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                showDone
+                                    ? Icons.check_circle
+                                    : Icons.radio_button_unchecked,
+                                color: showDone
+                                    ? const Color(0xFF8B7CFF)
+                                    : const Color(0xFFD1D5DB),
+                                size: 20,
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  t.text,
+                                  style: GoogleFonts.notoSansKr(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w500,
+                                    color: const Color(0xFF3D3A4E),
+                                    decoration: showDone
+                                        ? TextDecoration.lineThrough
+                                        : null,
+                                  ),
                                 ),
                               ),
-                            ),
-                          ],
-                        ),
-                      );
-                    },
+                            ],
+                          ),
+                        );
+                      },
+                    ),
                   ),
                 ),
             ],
@@ -4075,19 +4064,9 @@ class _TasksScreenState extends State<TasksScreen>
   }
 
   Widget _buildRemainingTaskGroup(List<TaskItem> remainingTasks) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 260),
-      curve: Curves.easeOutCubic,
-      decoration: BoxDecoration(
-        color: _emphasizeRemainingTasks && _remainingHighlightOn
-            ? const Color(0xFFF5F3FF)
-            : const Color(0x00F5F3FF),
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: remainingTasks.map(_buildTaskItem).toList(),
-      ),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: remainingTasks.map(_buildTaskItem).toList(),
     );
   }
 

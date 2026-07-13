@@ -161,19 +161,19 @@ enum CompactWidgetStyle {
 
 struct NyangCharacterWidgetView: View {
     let entry: NyangEntry
+    private let backgroundColors = [
+        Color(red: 0.20, green: 0.15, blue: 0.36),
+        Color(red: 0.14, green: 0.11, blue: 0.28),
+        Color(red: 0.09, green: 0.08, blue: 0.19),
+    ]
 
     private struct Metrics {
-        let cardHorizontalPadding: CGFloat
-        let cardTopPadding: CGFloat
-        let cardBottomPadding: CGFloat
         let textLeading: CGFloat
         let textTrailing: CGFloat
-        let textTop: CGFloat
-        let textBottom: CGFloat
         let imageWidth: CGFloat
         let imageHeight: CGFloat
-        let imageOffsetX: CGFloat
-        let imageOffsetY: CGFloat
+        let imageTrailing: CGFloat
+        let imageBottom: CGFloat
         let timeFontSize: CGFloat
         let titleFontSize: CGFloat
     }
@@ -203,21 +203,16 @@ struct NyangCharacterWidgetView: View {
         let baseImageWidth = min(max(clampedWidth * 0.40, 140), isComplete ? 178 : 166)
         let imageWidth = clampedWidth < 330 ? min(baseImageWidth, 150) : baseImageWidth
         let imageHeight = imageWidth * 0.73
-        let textTrailing = min(max(imageWidth - 20, 118), 152)
+        let textTrailing = min(max(imageWidth * 0.72, 108), 140)
         let compact = clampedWidth < 330
 
         return Metrics(
-            cardHorizontalPadding: compact ? 6 : 8,
-            cardTopPadding: compact ? 28 : 30,
-            cardBottomPadding: 8,
-            textLeading: compact ? 22 : 28,
+            textLeading: compact ? 24 : 32,
             textTrailing: textTrailing,
-            textTop: compact ? 32 : 34,
-            textBottom: 12,
             imageWidth: imageWidth,
             imageHeight: imageHeight,
-            imageOffsetX: compact ? 0 : 2,
-            imageOffsetY: isComplete ? 0 : 2,
+            imageTrailing: compact ? 10 : 18,
+            imageBottom: isComplete ? 2 : 6,
             timeFontSize: compact ? 18 : 20,
             titleFontSize: compact ? 16 : 18
         )
@@ -231,11 +226,7 @@ struct NyangCharacterWidgetView: View {
                 RoundedRectangle(cornerRadius: 28, style: .continuous)
                     .fill(
                         LinearGradient(
-                            colors: [
-                                Color(red: 0.20, green: 0.15, blue: 0.36),
-                                Color(red: 0.14, green: 0.11, blue: 0.28),
-                                Color(red: 0.09, green: 0.08, blue: 0.19),
-                            ],
+                            colors: backgroundColors,
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
@@ -244,17 +235,12 @@ struct NyangCharacterWidgetView: View {
                         RoundedRectangle(cornerRadius: 28, style: .continuous)
                             .stroke(Color(red: 0.44, green: 0.33, blue: 0.78), lineWidth: 1.2)
                     )
-                    .shadow(color: Color.black.opacity(0.30), radius: 10, x: 0, y: 6)
-                    .padding(.horizontal, metrics.cardHorizontalPadding)
-                    .padding(.top, metrics.cardTopPadding)
-                    .padding(.bottom, metrics.cardBottomPadding)
 
                 HStack {
                     widgetText(timeFontSize: metrics.timeFontSize, titleFontSize: metrics.titleFontSize)
                         .padding(.leading, metrics.textLeading)
                         .padding(.trailing, metrics.textTrailing)
-                        .padding(.top, metrics.textTop)
-                        .padding(.bottom, metrics.textBottom)
+                        .frame(maxHeight: .infinity, alignment: .center)
                     Spacer(minLength: 0)
                 }
 
@@ -262,11 +248,13 @@ struct NyangCharacterWidgetView: View {
                     .resizable()
                     .scaledToFit()
                     .frame(width: metrics.imageWidth, height: metrics.imageHeight)
-                    .offset(x: metrics.imageOffsetX, y: metrics.imageOffsetY)
+                    .padding(.trailing, metrics.imageTrailing)
+                    .padding(.bottom, metrics.imageBottom)
                     .accessibilityHidden(true)
             }
         }
-        .widgetClearBackground()
+        .widgetBackground(backgroundColors)
+        .widgetURL(URL(string: "nyangcoach://widget/cat/tasks_remaining_bottom_sheet"))
     }
 
     @ViewBuilder
@@ -414,6 +402,7 @@ struct NyangCharacterWidget: Widget {
         .configurationDisplayName("캐릭터")
         .description("오늘 가장 가까운 일정이나 남은 할 일을 고양이 코치와 함께 보여줍니다.")
         .supportedFamilies([.systemMedium])
+        .contentMarginsDisabled()
     }
 }
 
@@ -426,7 +415,8 @@ struct NyangCompactWidget: Widget {
         }
         .configurationDisplayName(CompactWidgetStyle.cat.title)
         .description(CompactWidgetStyle.cat.description)
-        .supportedFamilies([.systemSmall, .systemMedium])
+        .supportedFamilies([.systemSmall])
+        .contentMarginsDisabled()
     }
 }
 
@@ -439,7 +429,8 @@ struct SecMaleCompactWidget: Widget {
         }
         .configurationDisplayName(CompactWidgetStyle.secMale.title)
         .description(CompactWidgetStyle.secMale.description)
-        .supportedFamilies([.systemSmall, .systemMedium])
+        .supportedFamilies([.systemSmall])
+        .contentMarginsDisabled()
     }
 }
 
@@ -452,11 +443,29 @@ struct SecFemaleCompactWidget: Widget {
         }
         .configurationDisplayName(CompactWidgetStyle.secFemale.title)
         .description(CompactWidgetStyle.secFemale.description)
-        .supportedFamilies([.systemSmall, .systemMedium])
+        .supportedFamilies([.systemSmall])
+        .contentMarginsDisabled()
     }
 }
 
 extension View {
+    @ViewBuilder
+    func widgetBackground(_ colors: [Color]) -> some View {
+        let fill = LinearGradient(
+            colors: colors,
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+
+        if #available(iOSApplicationExtension 17.0, *) {
+            containerBackground(for: .widget) {
+                fill
+            }
+        } else {
+            self.background(fill)
+        }
+    }
+
     @ViewBuilder
     func widgetClearBackground() -> some View {
         if #available(iOSApplicationExtension 17.0, *) {
@@ -473,8 +482,5 @@ extension View {
 struct NyangWidgetBundle: WidgetBundle {
     var body: some Widget {
         NyangCharacterWidget()
-        NyangCompactWidget()
-        SecMaleCompactWidget()
-        SecFemaleCompactWidget()
     }
 }
