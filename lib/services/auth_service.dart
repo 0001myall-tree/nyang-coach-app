@@ -64,6 +64,18 @@ class AuthService {
     }
   }
 
+  Future<UserCredential?> signInWithNaverTest() async {
+    try {
+      final cred = await _auth.signInAnonymously();
+      await cred.user?.updateDisplayName('네이버 테스트');
+      await _syncAfterSignIn(cred);
+      return cred;
+    } catch (e) {
+      debugPrint("Naver Test Sign-In Error: $e");
+      return null;
+    }
+  }
+
   Future<void> _syncAfterSignIn(UserCredential? cred) async {
     if (cred?.user == null) return;
     await UserDataService.syncFromCloud();

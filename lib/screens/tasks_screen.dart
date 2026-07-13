@@ -516,7 +516,7 @@ class MilestoneInfo {
 }
 
 class _TasksScreenState extends State<TasksScreen>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   static const int _maxMilestonesPerVision = 10;
 
   late TabController _tabCtrl;
@@ -571,16 +571,26 @@ class _TasksScreenState extends State<TasksScreen>
   // 목표 서브탭
   String _goalTab = 'week'; // 'week' | 'month'
   final _visionSectionKey = GlobalKey();
+  final _addVisionButtonKey = GlobalKey();
   final Map<String, GlobalKey> _visionCardKeys = {};
   Set<String> _highlightedVisionIds = {};
+  bool _highlightAddVisionButton = false;
   bool _highlightPulseOn = false;
   Timer? _visionHighlightTimer;
+  Timer? _remainingHighlightTimer;
+  bool _emphasizeRemainingTasks = false;
+  bool _remainingHighlightOn = false;
 
   @override
   void initState() {
     super.initState();
     _coach = CoachConfigs.get(widget.coachId);
     _tabCtrl = TabController(length: 4, vsync: this);
+    if (widget.initialBottomSheet == 'remaining') {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _pulseRemainingTasks();
+      });
+    }
     widget.controller?._attach(this);
     _loadAll();
     _initSpeech();
@@ -590,6 +600,7 @@ class _TasksScreenState extends State<TasksScreen>
   void dispose() {
     widget.controller?._detach();
     _visionHighlightTimer?.cancel();
+    _remainingHighlightTimer?.cancel();
     _tabCtrl.dispose();
     _todayInputCtrl.dispose();
     _todayInputFocusNode.dispose();
@@ -710,7 +721,8 @@ class _TasksScreenState extends State<TasksScreen>
     _injectTodayHabits();
     _injectTodaySchedules();
 
-    if (widget.initialBottomSheet != null) {
+    if (widget.initialBottomSheet != null &&
+        widget.initialBottomSheet != 'remaining') {
       _openBottomSheet(widget.initialBottomSheet!);
     }
   }
@@ -739,9 +751,40 @@ class _TasksScreenState extends State<TasksScreen>
   void _openBottomSheet(String type) {
     if (type == 'done') {
       _showTasksBottomSheet(title: '오늘 완료한 할 일', showDone: true);
-    } else if (type == 'remaining') {
-      _showTasksBottomSheet(title: '오늘 남은 할 일', showDone: false);
     }
+  }
+
+  void _pulseRemainingTasks() {
+    if (!mounted) return;
+
+    _remainingHighlightTimer?.cancel();
+    var tick = 0;
+    setState(() {
+      _emphasizeRemainingTasks = true;
+      _remainingHighlightOn = true;
+    });
+
+    _remainingHighlightTimer = Timer.periodic(
+      const Duration(milliseconds: 420),
+      (timer) {
+        if (!mounted) {
+          timer.cancel();
+          return;
+        }
+        tick += 1;
+        if (tick >= 4) {
+          timer.cancel();
+          setState(() {
+            _emphasizeRemainingTasks = false;
+            _remainingHighlightOn = false;
+          });
+          return;
+        }
+        setState(() {
+          _remainingHighlightOn = !_remainingHighlightOn;
+        });
+      },
+    );
   }
 
   void _openGoalVision({List<String> highlightVisionIds = const []}) {
@@ -775,6 +818,19 @@ class _TasksScreenState extends State<TasksScreen>
           );
         }
       }
+      if (highlightVisionIds.isEmpty) {
+        final addButtonContext = _addVisionButtonKey.currentContext;
+        if (addButtonContext != null) {
+          await Scrollable.ensureVisible(
+            addButtonContext,
+            duration: const Duration(milliseconds: 280),
+            curve: Curves.easeOutCubic,
+            alignment: 0.18,
+          );
+        }
+        _pulseAddVisionButton();
+        return;
+      }
       _pulseVisionHighlights(highlightVisionIds);
     });
   }
@@ -787,6 +843,7 @@ class _TasksScreenState extends State<TasksScreen>
     var tick = 0;
     setState(() {
       _highlightedVisionIds = ids;
+      _highlightAddVisionButton = false;
       _highlightPulseOn = true;
     });
 
@@ -798,10 +855,44 @@ class _TasksScreenState extends State<TasksScreen>
         return;
       }
       tick += 1;
-      if (tick >= 6) {
+      if (tick >= 4) {
         timer.cancel();
         setState(() {
           _highlightedVisionIds = {};
+          _highlightAddVisionButton = false;
+          _highlightPulseOn = false;
+        });
+        return;
+      }
+      setState(() {
+        _highlightPulseOn = !_highlightPulseOn;
+      });
+    });
+  }
+
+  void _pulseAddVisionButton() {
+    if (!mounted) return;
+
+    _visionHighlightTimer?.cancel();
+    var tick = 0;
+    setState(() {
+      _highlightedVisionIds = {};
+      _highlightAddVisionButton = true;
+      _highlightPulseOn = true;
+    });
+
+    _visionHighlightTimer = Timer.periodic(const Duration(milliseconds: 420), (
+      timer,
+    ) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      tick += 1;
+      if (tick >= 4) {
+        timer.cancel();
+        setState(() {
+          _highlightAddVisionButton = false;
           _highlightPulseOn = false;
         });
         return;
@@ -3968,10 +4059,35 @@ class _TasksScreenState extends State<TasksScreen>
         return 0;
       });
 
-    return ListView.builder(
+    final remainingTasks = sortedTasks.where((task) => !task.done).toList();
+    final doneTasks = sortedTasks.where((task) => task.done).toList();
+
+    return ListView(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-      itemCount: sortedTasks.length,
-      itemBuilder: (ctx, i) => _buildTaskItem(sortedTasks[i]),
+      children: [
+        if (remainingTasks.isNotEmpty)
+          _buildRemainingTaskGroup(remainingTasks)
+        else
+          ...doneTasks.map(_buildTaskItem),
+        if (remainingTasks.isNotEmpty) ...doneTasks.map(_buildTaskItem),
+      ],
+    );
+  }
+
+  Widget _buildRemainingTaskGroup(List<TaskItem> remainingTasks) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 260),
+      curve: Curves.easeOutCubic,
+      decoration: BoxDecoration(
+        color: _emphasizeRemainingTasks && _remainingHighlightOn
+            ? const Color(0xFFF5F3FF)
+            : const Color(0x00F5F3FF),
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: remainingTasks.map(_buildTaskItem).toList(),
+      ),
     );
   }
 
@@ -5657,6 +5773,8 @@ class _TasksScreenState extends State<TasksScreen>
 
   // ── 장기 비전 영역 ──────────────────────────────────────────
   Widget _buildVisionSection() {
+    final isAddVisionHighlighted =
+        _highlightAddVisionButton && _highlightPulseOn;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -5684,6 +5802,7 @@ class _TasksScreenState extends State<TasksScreen>
                 ],
               ),
               GestureDetector(
+                key: _addVisionButtonKey,
                 onTap: () {
                   if (visions.length >= 3) {
                     _showVisionLimitDialog();
@@ -5697,9 +5816,26 @@ class _TasksScreenState extends State<TasksScreen>
                     vertical: 6,
                   ),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: isAddVisionHighlighted
+                        ? const Color(0xFFF5F3FF)
+                        : Colors.white,
                     borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: const Color(0xFFE8E3F8)),
+                    border: Border.all(
+                      color: isAddVisionHighlighted
+                          ? const Color(0xFF8B7CFF)
+                          : const Color(0xFFE8E3F8),
+                      width: isAddVisionHighlighted ? 1.6 : 1,
+                    ),
+                    boxShadow: [
+                      if (isAddVisionHighlighted)
+                        BoxShadow(
+                          color: const Color(
+                            0xFF8B7CFF,
+                          ).withValues(alpha: 0.22),
+                          blurRadius: 14,
+                          offset: const Offset(0, 4),
+                        ),
+                    ],
                   ),
                   child: Text(
                     '+ 장기 비전 추가',

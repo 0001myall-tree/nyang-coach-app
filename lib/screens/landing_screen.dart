@@ -110,6 +110,8 @@ class _LandingScreenState extends State<LandingScreen>
             : 0;
         final initBottomSheet = widgetRoute == 'tasks_done_bottom_sheet'
             ? 'done'
+            : widgetRoute == 'tasks_remaining_bottom_sheet'
+            ? 'remaining'
             : null;
 
         final nav = Navigator.of(context);
@@ -394,7 +396,112 @@ class _LandingScreenState extends State<LandingScreen>
                   onPressed: () =>
                       _handleSocialLogin(sheetContext, outerContext, 'google'),
                 ),
+                if (kDebugMode) ...[
+                  const SizedBox(height: 12),
+                  _buildLoginButton(
+                    text: '네이버로 계속 (테스트)',
+                    icon: Container(
+                      width: 24,
+                      height: 24,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF03C75A),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        'N',
+                        style: GoogleFonts.notoSansKr(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w900,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                    onPressed: () =>
+                        _showNaverTestLoginDialog(sheetContext, outerContext),
+                  ),
+                ],
                 SizedBox(height: loginButtonBottomGap),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _showNaverTestLoginDialog(
+    BuildContext sheetContext,
+    BuildContext outerContext,
+  ) {
+    showDialog<void>(
+      context: sheetContext,
+      builder: (dialogContext) {
+        return Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppDesignTokens.radiusMedium),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(22, 22, 22, 18),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 52,
+                  height: 52,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF03C75A),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Text(
+                    'N',
+                    style: GoogleFonts.notoSansKr(
+                      fontSize: 26,
+                      fontWeight: FontWeight.w900,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  '네이버 테스트 로그인',
+                  style: GoogleFonts.notoSansKr(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                    color: AppDesignTokens.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  '실제 네이버 계정 연동 없이\n테스트 계정으로 앱을 시작합니다.',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.notoSansKr(
+                    fontSize: 13,
+                    height: 1.5,
+                    color: AppDesignTokens.textMuted,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                AppButton(
+                  label: '테스트 계정으로 시작',
+                  onPressed: () {
+                    Navigator.pop(dialogContext);
+                    _handleSocialLogin(sheetContext, outerContext, 'naverTest');
+                  },
+                  backgroundColor: const Color(0xFF03C75A),
+                  foregroundColor: Colors.white,
+                  height: 48,
+                ),
+                const SizedBox(height: 8),
+                AppButton(
+                  label: '취소',
+                  onPressed: () => Navigator.pop(dialogContext),
+                  variant: AppButtonVariant.outline,
+                  foregroundColor: AppDesignTokens.textMuted,
+                  borderColor: AppDesignTokens.divider,
+                  height: 44,
+                ),
               ],
             ),
           ),
@@ -413,22 +520,36 @@ class _LandingScreenState extends State<LandingScreen>
     final authService = AuthService();
     final userCred = provider == 'apple'
         ? await authService.signInWithApple()
+        : provider == 'naverTest'
+        ? await authService.signInWithNaverTest()
         : await authService.signInWithGoogle();
 
     if (!outerContext.mounted) return;
 
-    if (userCred != null) {
-      print('로그인 성공: ${userCred.user?.displayName}');
-      await TasksSyncService.syncFromCloud();
+    final isNaverTest = provider == 'naverTest';
+
+    if (userCred != null || isNaverTest) {
+      print(
+        isNaverTest && userCred == null
+            ? '네이버 테스트 로컬 세션 시작'
+            : '로그인 성공: ${userCred?.user?.displayName}',
+      );
+      if (userCred != null) {
+        await TasksSyncService.syncFromCloud();
+      }
       final data = await UserDataService.load();
       if (!outerContext.mounted) return;
 
-      if (data.selectedCoachId != null &&
-          data.canAccessCoach(data.selectedCoachId!)) {
+      final testCoachId = data.selectedCoachId ?? 'cat';
+      if (isNaverTest && data.selectedCoachId == null) {
+        await UserDataService.setSelectedCoach(testCoachId);
+      }
+
+      if (isNaverTest || data.canAccessCoach(testCoachId)) {
         Navigator.pushReplacement(
           outerContext,
           MaterialPageRoute(
-            builder: (context) => MainTabScreen(coachId: data.selectedCoachId!),
+            builder: (context) => MainTabScreen(coachId: testCoachId),
           ),
         );
       } else {
@@ -447,7 +568,11 @@ class _LandingScreenState extends State<LandingScreen>
     }
 
     print('로그인 취소 또는 실패');
-    final providerName = provider == 'apple' ? 'Apple' : 'Google';
+    final providerName = provider == 'apple'
+        ? 'Apple'
+        : provider == 'naverTest'
+        ? '네이버 테스트'
+        : 'Google';
     ScaffoldMessenger.of(outerContext).showSnackBar(
       SnackBar(
         content: Text('$providerName 로그인에 실패했습니다.'),

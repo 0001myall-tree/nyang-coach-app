@@ -148,6 +148,7 @@ class _MainTabScreenState extends State<MainTabScreen>
   final ChatScreenController _chatController = ChatScreenController();
   final TasksScreenController _tasksController = TasksScreenController();
   bool _coachAccessChecked = false;
+  bool _widgetIntentDrawerMode = false;
   bool _redirectingForCoachAccess = false;
 
   int _logoTapCount = 0;
@@ -446,6 +447,7 @@ class _MainTabScreenState extends State<MainTabScreen>
     super.initState();
     _loadBgStyle();
     _openDrawerIndex = widget.initialDrawerIndex;
+    _widgetIntentDrawerMode = widget.initialDrawerIndex != 0;
     WidgetsBinding.instance.addObserver(this);
     DailyResetService.checkAndExecuteReset();
     _audioPlayer.setAudioContext(
@@ -580,7 +582,11 @@ class _MainTabScreenState extends State<MainTabScreen>
           ? 1
           : 0;
       const targetCoachId = 'cat';
-      final type = widgetRoute == 'tasks_done_bottom_sheet' ? 'done' : null;
+      final type = widgetRoute == 'tasks_done_bottom_sheet'
+          ? 'done'
+          : widgetRoute == 'tasks_remaining_bottom_sheet'
+          ? 'remaining'
+          : null;
       final data = await UserDataService.load();
 
       if (!data.canAccessCoach(targetCoachId)) {
@@ -596,7 +602,7 @@ class _MainTabScreenState extends State<MainTabScreen>
       if (targetCoachId != widget.coachId) {
         await UserDataService.setSelectedCoach(targetCoachId);
         if (!mounted) return;
-        Navigator.of(context).pushReplacement(
+        Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
           MaterialPageRoute(
             builder: (_) => MainTabScreen(
               coachId: targetCoachId,
@@ -604,19 +610,20 @@ class _MainTabScreenState extends State<MainTabScreen>
               initialBottomSheet: type,
             ),
           ),
+          (route) => false,
         );
       } else {
-        if (_openDrawerIndex != targetIndex && mounted) {
-          setState(() {
-            _openDrawerIndex = targetIndex;
-          });
-        }
-        if (targetIndex == 1 && type != null && type != 'remaining') {
-          // Wait for drawer panel to build/slide in, then trigger opening of the bottom sheet
-          Future.delayed(const Duration(milliseconds: 300), () {
-            _tasksController.openBottomSheet(type);
-          });
-        }
+        if (!mounted) return;
+        Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
+          MaterialPageRoute(
+            builder: (_) => MainTabScreen(
+              coachId: targetCoachId,
+              initialDrawerIndex: targetIndex,
+              initialBottomSheet: type,
+            ),
+          ),
+          (route) => false,
+        );
       }
     }
   }
@@ -1103,7 +1110,10 @@ class _MainTabScreenState extends State<MainTabScreen>
     if (index == 0) {
       if (_openDrawerIndex != 0) {
         HapticFeedback.lightImpact();
-        setState(() => _openDrawerIndex = 0);
+        setState(() {
+          _openDrawerIndex = 0;
+          _widgetIntentDrawerMode = false;
+        });
         _chatController.refreshTaskProgress();
         // 채팅 탭으로 복귀 시 미뤄둔 할일 리마인드 확인 및 취침시간 이동 제안 확인
         Future.delayed(const Duration(milliseconds: 400), () {
@@ -1115,11 +1125,17 @@ class _MainTabScreenState extends State<MainTabScreen>
     }
     if (_openDrawerIndex == index) return;
     HapticFeedback.lightImpact();
-    setState(() => _openDrawerIndex = index);
+    setState(() {
+      _openDrawerIndex = index;
+      _widgetIntentDrawerMode = false;
+    });
   }
 
   Future<void> _closeDrawerAndCheck() async {
-    setState(() => _openDrawerIndex = 0);
+    setState(() {
+      _openDrawerIndex = 0;
+      _widgetIntentDrawerMode = false;
+    });
     _chatController.refreshTaskProgress();
     await _loadVacation();
     // 채팅 탭으로 복귀 시 미뤄둔 할일 리마인드 및 취침시간 이동 제안 확인
@@ -1840,6 +1856,8 @@ class _MainTabScreenState extends State<MainTabScreen>
 
   // ── 서랍 (모든 탭 공통) ────────────────────────
   Widget _buildSideDrawer() {
+    final useCleanDrawer = _widgetIntentDrawerMode && _openDrawerIndex == 1;
+    final screenWidth = MediaQuery.of(context).size.width;
     Widget drawerContent;
     if (_openDrawerIndex == 1) {
       drawerContent = TasksScreen(
@@ -1867,25 +1885,26 @@ class _MainTabScreenState extends State<MainTabScreen>
 
     return Stack(
       children: [
-        // 오버레이 (drawer-overlay)
-        GestureDetector(
-          onTap: () async {
-            await _closeDrawerAndCheck();
-          },
-          child: Container(color: Colors.black.withOpacity(0.5)),
-        ),
+        if (!useCleanDrawer)
+          // 오버레이 (drawer-overlay)
+          GestureDetector(
+            onTap: () async {
+              await _closeDrawerAndCheck();
+            },
+            child: Container(color: Colors.black.withValues(alpha: 0.5)),
+          ),
         // 서랍 패널 (오른쪽에서 슬라이드)
         Positioned(
           top: 0,
           bottom: 0,
           right: 0,
-          width: 320,
+          width: useCleanDrawer ? screenWidth : 320,
           child: Container(
             decoration: BoxDecoration(
               color: Colors.white,
               boxShadow: [
                 BoxShadow(
-                  color: const Color(0xFF7C5CFC).withOpacity(0.15),
+                  color: const Color(0xFF7C5CFC).withValues(alpha: 0.15),
                   blurRadius: 32,
                   offset: const Offset(-4, 0),
                 ),

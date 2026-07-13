@@ -3942,6 +3942,8 @@ class _ChatScreenState extends State<ChatScreen>
     final completedRecent = <({String name, DateTime date})>[];
     final overdue = <({String name, DateTime date, String visionId})>[];
     final upcoming = <({String name, DateTime date, String visionId})>[];
+    final visionIds = <String>[];
+    var hasVision = false;
     var hasDatedMilestone = false;
 
     if (raw != null && raw.trim().isNotEmpty) {
@@ -3950,6 +3952,10 @@ class _ChatScreenState extends State<ChatScreen>
         if (decoded is List) {
           for (final vision in decoded.whereType<Map>()) {
             final visionId = (vision['id'] ?? '').toString();
+            hasVision = true;
+            if (visionId.isNotEmpty) {
+              visionIds.add(visionId);
+            }
             final milestones = vision['milestones'];
             if (milestones is! List) continue;
             for (final milestone in milestones.whereType<Map>()) {
@@ -3974,10 +3980,19 @@ class _ChatScreenState extends State<ChatScreen>
       } catch (_) {}
     }
 
-    if (!hasDatedMilestone) {
+    if (!hasVision) {
       return const _MilestoneCheckResult(
-        message: '예정일이 설정된 마일스톤이 없네요. 목표 탭에서 중요한 마일스톤에 예정일을 정해두시면 제가 챙겨드리겠습니다.',
+        message: '작성된 장기 비전이 없네요. 목표 탭에서 장기 비전과 마일스톤 예정일을 정해두시면 제가 챙겨드리겠습니다.',
         needsDeadlineSetup: true,
+      );
+    }
+
+    if (!hasDatedMilestone) {
+      return _MilestoneCheckResult(
+        message:
+            '예정일이 설정된 마일스톤이 없네요. 목표 탭에서 중요한 장기 비전의 마일스톤 예정일을 정해두시면 제가 챙겨드리겠습니다.',
+        needsDeadlineSetup: true,
+        highlightVisionIds: visionIds,
       );
     }
 
@@ -7436,7 +7451,7 @@ $timerOutputRule
     final showIncompleteActions = msg.kind == 'milestone_check';
     final showSetupActions = msg.kind == 'milestone_setup';
     final showActions = showIncompleteActions || showSetupActions;
-    final primaryLabel = showSetupActions ? '지금 설정하기' : '지금 확인하기';
+    final primaryLabel = showSetupActions ? '지금 작성하기' : '지금 확인하기';
 
     Widget actionButton({
       required String label,
