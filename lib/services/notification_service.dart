@@ -28,7 +28,7 @@ class NotificationService {
   DateTime? _lastMorningOpenedAt;
 
   String _morningCallChannelId(String? soundName) {
-    return 'nyang_morning_call_${soundName ?? 'default'}_v4';
+    return 'nyang_morning_call_${soundName ?? 'default'}_v5';
   }
 
   String _coreReminderChannelId(String? soundName) {
@@ -36,7 +36,7 @@ class NotificationService {
   }
 
   String _nightCallChannelId(String? soundName) {
-    return 'nyang_night_call_${soundName ?? 'default'}_v2';
+    return 'nyang_night_call_${soundName ?? 'default'}_v3';
   }
 
   ({String coachId, String? soundName}) _parseMorningPayload(String payload) {
@@ -326,6 +326,39 @@ class NotificationService {
     }
   }
 
+  Future<void> syncDailyMorningCall() async {
+    if (kIsWeb) return;
+    final prefs = await SharedPreferences.getInstance();
+    final enabled = prefs.getBool('nyang_morning_call_enabled') ?? false;
+    if (!enabled) {
+      await cancelAllMorningCalls();
+      await prefs.remove('nyang_morning_call_resolved_coach');
+      return;
+    }
+
+    final timeStr = prefs.getString('nyang_morning_call_time');
+    if (timeStr == null || timeStr.isEmpty) {
+      await cancelAllMorningCalls();
+      await prefs.remove('nyang_morning_call_resolved_coach');
+      return;
+    }
+
+    final parts = timeStr.split(':');
+    final hour = int.tryParse(parts[0]);
+    final minute = (parts.length > 1 ? int.tryParse(parts[1]) : 0) ?? 0;
+    if (hour == null) {
+      await cancelAllMorningCalls();
+      await prefs.remove('nyang_morning_call_resolved_coach');
+      return;
+    }
+
+    await scheduleDailyMorningCall(
+      hour: hour,
+      minute: minute,
+      coachId: prefs.getString('nyang_morning_call_coach') ?? 'cat',
+    );
+  }
+
   Future<void> cancelAllMorningCalls() async {
     if (kIsWeb) return;
     for (int i = 0; i < 3; i++) {
@@ -346,6 +379,7 @@ class NotificationService {
     required String coachId,
   }) async {
     if (kIsWeb) return;
+    await _plugin.cancel(id: 999);
     final targetCoachId = coachId == 'sec_female' || coachId == 'sec_male'
         ? coachId
         : 'sec_male';
@@ -407,6 +441,7 @@ class NotificationService {
     required String coachId,
   }) async {
     if (kIsWeb) return;
+    await cancelDailyNightCall();
     final targetCoachId = coachId == 'sec_female' || coachId == 'sec_male'
         ? coachId
         : 'sec_male';

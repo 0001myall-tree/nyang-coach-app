@@ -749,11 +749,15 @@ class _MainTabScreenState extends State<MainTabScreen>
     AnalyticsService.logFeatureUsage('morning_call');
     final prefs = await SharedPreferences.getInstance();
 
-    // Use the resolved coach ID from SharedPreferences if it matches the configured setting,
-    // which aligns the in-app engine with the background notification selection.
-    String targetCoachId =
-        prefs.getString('nyang_morning_call_resolved_coach') ??
-        configuredCoachId;
+    var targetCoachId = configuredCoachId;
+    final resolvedCoachId = prefs.getString(
+      'nyang_morning_call_resolved_coach',
+    );
+    if (configuredCoachId == 'random' &&
+        resolvedCoachId != null &&
+        resolvedCoachId.isNotEmpty) {
+      targetCoachId = resolvedCoachId;
+    }
 
     if (targetCoachId == 'random') {
       final availableCoaches = CoachConfigs.all.values

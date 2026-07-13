@@ -10,6 +10,7 @@ import '../services/auth_service.dart';
 import '../models/user_data.dart';
 import '../services/tasks_sync_service.dart';
 import '../services/widget_sync_service.dart';
+import '../services/notification_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'philosophy_intro_screen.dart';
 import 'main_tab_screen.dart';
@@ -152,10 +153,12 @@ class _LandingScreenState extends State<LandingScreen>
 
   void _syncTasksInBackground() {
     unawaited(
-      TasksSyncService.syncFromCloud().catchError((
-        Object e,
-        StackTrace stackTrace,
-      ) {
+      (() async {
+        await TasksSyncService.syncFromCloud();
+        await NotificationService().syncDailyMorningCall();
+        await NotificationService().syncDailyNightCall();
+        await NotificationService().syncCoreReminders();
+      })().catchError((Object e, StackTrace stackTrace) {
         debugPrint('Task cloud sync failed: $e');
         debugPrintStack(stackTrace: stackTrace);
       }),

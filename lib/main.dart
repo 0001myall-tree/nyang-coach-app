@@ -38,6 +38,13 @@ void main() async {
 
 Future<void> _runStartupBackgroundJobs() async {
   try {
+    await NotificationService().syncDailyMorningCall();
+  } catch (e, stackTrace) {
+    debugPrint('Startup morning call sync failed: $e');
+    debugPrintStack(stackTrace: stackTrace);
+  }
+
+  try {
     await NotificationService().syncDailyNightCall();
   } catch (e, stackTrace) {
     debugPrint('Startup night call sync failed: $e');

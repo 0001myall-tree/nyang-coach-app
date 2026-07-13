@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import '../models/user_data.dart';
 import '../services/memory_service.dart';
+import '../services/notification_service.dart';
 import '../services/tasks_sync_service.dart';
 
 class AuthService {
@@ -81,6 +82,9 @@ class AuthService {
     await UserDataService.syncFromCloud();
     await MemoryService().syncFromCloud();
     await TasksSyncService.syncFromCloud();
+    await NotificationService().syncDailyMorningCall();
+    await NotificationService().syncDailyNightCall();
+    await NotificationService().syncCoreReminders();
   }
 
   // 로그아웃
