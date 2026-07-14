@@ -1350,6 +1350,7 @@ class _ChatScreenState extends State<ChatScreen>
     _ctrl.dispose();
     _scrollCtrl.dispose();
     _flirtAnim.dispose();
+    _memoSearchController.dispose();
     super.dispose();
   }
 
@@ -6422,6 +6423,7 @@ $timerOutputRule
           ),
           Positioned(top: 76, left: 28, child: _buildCheatKeyMenu()),
         ],
+        if (_coach.isMaster && _memoSearchOpen) _buildMemoSearchPanel(),
         // 타이머 확인 버튼
         if (_coach.isMaster && _timerConfirmMinutes != null)
           _buildTimerConfirmCard(),
@@ -6839,10 +6841,18 @@ $timerOutputRule
   // ── 치트키 버튼 (마스터 전용) ─────────────────────────────
   bool _cheatKeyOpen = false;
 
+  // ── 메모 검색 패널 (마스터 전용, 로컬 키워드 검색만, API/LLM 미사용) ──
+  bool _memoSearchOpen = false;
+  final TextEditingController _memoSearchController = TextEditingController();
+  String _memoSearchQuery = '';
+  Map<String, String>? _memoSearchSelectedResult;
+  List<dynamic> _memoSearchVisionsCache = [];
+
   List<Map<String, String>> get _cheatKeyItems => [
     {'icon': 'assets/icons/bolt.svg', 'label': '지금 뭐하지?'},
     {'icon': 'assets/icons/compass.svg', 'label': '미래를 위한 오늘'},
     {'icon': 'assets/icons/flag.svg', 'label': '마일스톤 확인'},
+    {'icon': 'assets/icons/magnifying-glass.svg', 'label': '메모 검색'},
   ];
 
   Widget _buildCheatKeyMenu() {
@@ -6873,6 +6883,10 @@ $timerOutputRule
                 AnalyticsService.logFeatureUsage('cheat_future_today');
               } else if (item['label'] == '마일스톤 확인') {
                 _handleMilestoneCheck();
+                return;
+              } else if (item['label'] == '메모 검색') {
+                AnalyticsService.logFeatureUsage('cheat_memo_search');
+                _openMemoSearch();
                 return;
               }
 
@@ -6946,6 +6960,359 @@ $timerOutputRule
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  // ── 메모 검색 (마스터 전용, 로컬 키워드 검색만, API/LLM 미사용) ──────
+  Future<void> _openMemoSearch() async {
+    if (!await _ensureMasterCoachAccess()) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString('nyang_visions');
+    List<dynamic> visions = [];
+    if (raw != null && raw.trim().isNotEmpty) {
+      try {
+        final decoded = jsonDecode(raw);
+        if (decoded is List) visions = decoded;
+      } catch (_) {}
+    }
+    if (!mounted) return;
+    setState(() {
+      _memoSearchVisionsCache = visions;
+      _memoSearchOpen = true;
+      _memoSearchSelectedResult = null;
+      _memoSearchQuery = '';
+    });
+    _memoSearchController.clear();
+  }
+
+  void _closeMemoSearch() {
+    setState(() {
+      _memoSearchOpen = false;
+      _memoSearchSelectedResult = null;
+      _memoSearchQuery = '';
+    });
+    _memoSearchController.clear();
+  }
+
+  /// 비전 → 마일스톤 → (레거시 memo 문자열 + memoSections) 를 검색 가능한 항목으로 평탄화.
+  /// milestoneMemoText()와 같은 소스(마일스톤의 memo/memoSections)를 다루되, 항목별로 쪼개서 반환.
+  List<Map<String, String>> _allMemoEntries() {
+    final entries = <Map<String, String>>[];
+    for (final v in _memoSearchVisionsCache.whereType<Map>()) {
+      final visionName = (v['name'] ?? '').toString();
+      final milestones = v['milestones'];
+      if (milestones is! List) continue;
+
+      for (final m in milestones.whereType<Map>()) {
+        final milestoneText = (m['text'] ?? '').toString().trim();
+        if (milestoneText.isEmpty) continue;
+
+        final legacyMemo = (m['memo'] ?? '').toString().trim();
+        if (legacyMemo.isNotEmpty) {
+          entries.add({
+            'visionName': visionName,
+            'milestoneText': milestoneText,
+            'memoTitle': '',
+            'memoContent': legacyMemo,
+          });
+        }
+
+        final sections = (m['memoSections'] as List?) ?? [];
+        for (final s in sections.whereType<Map>()) {
+          final title = (s['title'] ?? '').toString().trim();
+          final content = (s['content'] ?? '').toString().trim();
+          if (title.isEmpty && content.isEmpty) continue;
+          entries.add({
+            'visionName': visionName,
+            'milestoneText': milestoneText,
+            'memoTitle': title,
+            'memoContent': content,
+          });
+        }
+      }
+    }
+    return entries;
+  }
+
+  /// 대소문자 무시, 앞뒤 공백 제거, 단순 포함 검색 (AI 미사용).
+  List<Map<String, String>> _filteredMemoResults() {
+    final query = _memoSearchQuery.trim().toLowerCase();
+    if (query.isEmpty) return [];
+    return _allMemoEntries().where((e) {
+      return e['milestoneText']!.toLowerCase().contains(query) ||
+          e['memoTitle']!.toLowerCase().contains(query) ||
+          e['memoContent']!.toLowerCase().contains(query);
+    }).toList();
+  }
+
+  /// 검색어 주변 텍스트만 잘라 2~3줄 미리보기용 스니펫 생성.
+  String _memoSnippet(String content, String query, {int radius = 40}) {
+    if (content.length <= 90) return content;
+    final lowerContent = content.toLowerCase();
+    final idx = lowerContent.indexOf(query.toLowerCase());
+    if (idx == -1) return '${content.substring(0, 90)}…';
+
+    final start = (idx - radius).clamp(0, content.length);
+    final end = (idx + query.length + radius).clamp(0, content.length);
+    final prefix = start > 0 ? '…' : '';
+    final suffix = end < content.length ? '…' : '';
+    return '$prefix${content.substring(start, end)}$suffix';
+  }
+
+  List<TextSpan> _highlightedSpans(
+    String text,
+    String query,
+    TextStyle baseStyle,
+    TextStyle highlightStyle,
+  ) {
+    if (query.trim().isEmpty) return [TextSpan(text: text, style: baseStyle)];
+    final spans = <TextSpan>[];
+    final lowerText = text.toLowerCase();
+    final lowerQuery = query.trim().toLowerCase();
+    var start = 0;
+    while (true) {
+      final idx = lowerText.indexOf(lowerQuery, start);
+      if (idx == -1) {
+        spans.add(TextSpan(text: text.substring(start), style: baseStyle));
+        break;
+      }
+      if (idx > start) {
+        spans.add(TextSpan(text: text.substring(start, idx), style: baseStyle));
+      }
+      spans.add(
+        TextSpan(
+          text: text.substring(idx, idx + lowerQuery.length),
+          style: highlightStyle,
+        ),
+      );
+      start = idx + lowerQuery.length;
+    }
+    return spans;
+  }
+
+  Widget _buildMemoSearchPanel() {
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    return Positioned.fill(
+      child: Material(
+        color: Colors.white,
+        child: SafeArea(
+          child: AnimatedPadding(
+            duration: const Duration(milliseconds: 120),
+            padding: EdgeInsets.only(bottom: bottomInset),
+            child: Column(
+              children: [
+                _buildMemoSearchHeader(),
+                _buildMemoSearchInputField(),
+                const SizedBox(height: 4),
+                Expanded(
+                  child: _memoSearchSelectedResult != null
+                      ? _buildMemoDetailView(_memoSearchSelectedResult!)
+                      : _buildMemoResultsList(),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMemoSearchHeader() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 8, 12, 8),
+      child: Row(
+        children: [
+          if (_memoSearchSelectedResult != null)
+            IconButton(
+              icon: const Icon(Icons.arrow_back, color: Color(0xFF6B5EA8)),
+              onPressed: () => setState(() => _memoSearchSelectedResult = null),
+            )
+          else
+            const SizedBox(width: 48),
+          Expanded(
+            child: Text(
+              '메모 검색',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.notoSansKr(
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+                color: const Color(0xFF3D3560),
+              ),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.close, color: Color(0xFF6B5EA8)),
+            onPressed: _closeMemoSearch,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMemoSearchInputField() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: const Color(0xFFDED6FF), width: 1.2),
+        ),
+        child: TextField(
+          controller: _memoSearchController,
+          autofocus: true,
+          onChanged: (value) => setState(() => _memoSearchQuery = value),
+          style: GoogleFonts.notoSansKr(
+            fontSize: 14,
+            color: const Color(0xFF3D3560),
+          ),
+          decoration: InputDecoration(
+            hintText: '찾고 싶은 메모의 단어를 입력하세요',
+            hintStyle: GoogleFonts.notoSansKr(
+              fontSize: 14,
+              color: const Color(0xFFB4AAD6),
+            ),
+            border: InputBorder.none,
+            isDense: true,
+            contentPadding: const EdgeInsets.symmetric(vertical: 12),
+            prefixIcon: const Icon(
+              Icons.search,
+              color: Color(0xFF8B7CCC),
+              size: 20,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMemoSearchGuide(String text) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32),
+        child: Text(
+          text,
+          textAlign: TextAlign.center,
+          style: GoogleFonts.notoSansKr(
+            fontSize: 13,
+            color: const Color(0xFFB4AAD6),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMemoResultsList() {
+    final query = _memoSearchQuery.trim();
+    if (query.isEmpty) {
+      return _buildMemoSearchGuide('마일스톤에 적어둔 메모를 검색할 수 있습니다.');
+    }
+    final results = _filteredMemoResults();
+    if (results.isEmpty) {
+      return _buildMemoSearchGuide('해당 키워드가 포함된 메모가 없습니다.');
+    }
+    return ListView.separated(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+      itemCount: results.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 10),
+      itemBuilder: (context, index) =>
+          _buildMemoResultCard(results[index], query),
+    );
+  }
+
+  Widget _buildMemoResultCard(Map<String, String> entry, String query) {
+    final snippet = _memoSnippet(entry['memoContent']!, query);
+    final baseStyle = GoogleFonts.notoSansKr(
+      fontSize: 13,
+      color: const Color(0xFF6B5EA8),
+      height: 1.4,
+    );
+    final highlightStyle = baseStyle.copyWith(
+      color: const Color(0xFF6B4FD8),
+      fontWeight: FontWeight.w800,
+      backgroundColor: const Color(0xFFEFE9FF),
+    );
+
+    return GestureDetector(
+      onTap: () => setState(() => _memoSearchSelectedResult = entry),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFFFCFF),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0xFFDED6FF)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              entry['milestoneText']!,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.notoSansKr(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: const Color(0xFF3D3560),
+              ),
+            ),
+            const SizedBox(height: 6),
+            RichText(
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              text: TextSpan(
+                children: _highlightedSpans(
+                  snippet,
+                  query,
+                  baseStyle,
+                  highlightStyle,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMemoDetailView(Map<String, String> entry) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            entry['milestoneText']!,
+            style: GoogleFonts.notoSansKr(
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              color: const Color(0xFF3D3560),
+            ),
+          ),
+          if (entry['memoTitle']!.trim().isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Text(
+              entry['memoTitle']!,
+              style: GoogleFonts.notoSansKr(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: const Color(0xFF6B5EA8),
+              ),
+            ),
+          ],
+          const SizedBox(height: 12),
+          Text(
+            entry['memoContent']!,
+            style: GoogleFonts.notoSansKr(
+              fontSize: 14,
+              color: const Color(0xFF3D3560),
+              height: 1.6,
+            ),
+          ),
+        ],
       ),
     );
   }
