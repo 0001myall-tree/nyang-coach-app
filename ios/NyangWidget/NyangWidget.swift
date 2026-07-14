@@ -173,7 +173,10 @@ struct NyangCharacterWidgetView: View {
         let imageWidth: CGFloat
         let imageHeight: CGFloat
         let imageTrailing: CGFloat
-        let imageBottom: CGFloat
+        let imageCenterYRatio: CGFloat
+        let checkSize: CGFloat
+        let checkTrailing: CGFloat
+        let checkCenterYRatio: CGFloat
         let timeFontSize: CGFloat
         let titleFontSize: CGFloat
     }
@@ -211,49 +214,83 @@ struct NyangCharacterWidgetView: View {
             textTrailing: textTrailing,
             imageWidth: imageWidth,
             imageHeight: imageHeight,
-            imageTrailing: compact ? 10 : 18,
-            imageBottom: isComplete ? 2 : 6,
+            imageTrailing: compact ? 10 : 16,
+            imageCenterYRatio: 0.52,
+            checkSize: compact ? 34 : 40,
+            checkTrailing: compact ? 13 : 18,
+            checkCenterYRatio: 0.64,
             timeFontSize: compact ? 18 : 20,
             titleFontSize: compact ? 16 : 18
         )
     }
 
     var body: some View {
-        GeometryReader { proxy in
-            let metrics = makeMetrics(for: proxy.size)
+        ZStack(alignment: .bottomTrailing) {
+            RoundedRectangle(cornerRadius: 28, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: backgroundColors,
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 28, style: .continuous)
+                        .stroke(Color(red: 0.44, green: 0.33, blue: 0.78), lineWidth: 1.2)
+                )
 
-            ZStack(alignment: .bottomTrailing) {
-                RoundedRectangle(cornerRadius: 28, style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            colors: backgroundColors,
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
+            GeometryReader { proxy in
+                let metrics = makeMetrics(for: proxy.size)
+
+                ZStack(alignment: .bottomTrailing) {
+                    HStack {
+                        widgetText(timeFontSize: metrics.timeFontSize, titleFontSize: metrics.titleFontSize)
+                            .padding(.leading, metrics.textLeading)
+                            .padding(.trailing, metrics.textTrailing)
+                            .frame(maxHeight: .infinity, alignment: .center)
+                        Spacer(minLength: 0)
+                    }
+
+                    Image(catImageName)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: metrics.imageWidth, height: metrics.imageHeight)
+                        .position(
+                            x: proxy.size.width - metrics.imageTrailing - (metrics.imageWidth / 2),
+                            y: proxy.size.height * metrics.imageCenterYRatio
                         )
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 28, style: .continuous)
-                            .stroke(Color(red: 0.44, green: 0.33, blue: 0.78), lineWidth: 1.2)
-                    )
+                        .accessibilityHidden(true)
 
-                HStack {
-                    widgetText(timeFontSize: metrics.timeFontSize, titleFontSize: metrics.titleFontSize)
-                        .padding(.leading, metrics.textLeading)
-                        .padding(.trailing, metrics.textTrailing)
-                        .frame(maxHeight: .infinity, alignment: .center)
-                    Spacer(minLength: 0)
-                }
+                    ZStack {
+                        Text("✓")
+                            .font(.system(size: metrics.checkSize + 8, weight: .heavy, design: .rounded))
+                            .foregroundColor(.white)
+                            .shadow(color: Color.black.opacity(0.18), radius: 3, x: 0, y: 2)
 
-                Image(catImageName)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: metrics.imageWidth, height: metrics.imageHeight)
-                    .padding(.trailing, metrics.imageTrailing)
-                    .padding(.bottom, metrics.imageBottom)
+                        Text("✓")
+                            .font(.system(size: metrics.checkSize, weight: .heavy, design: .rounded))
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: [
+                                        Color(red: 0.64, green: 0.54, blue: 1.0),
+                                        Color(red: 0.47, green: 0.38, blue: 0.92),
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                    }
+                    .rotationEffect(.degrees(-3))
+                    .position(
+                        x: proxy.size.width - metrics.checkTrailing - (metrics.checkSize / 2),
+                        y: proxy.size.height * metrics.checkCenterYRatio
+                    )
                     .accessibilityHidden(true)
+                }
             }
         }
         .widgetBackground(backgroundColors)
+        .unredacted()
         .widgetURL(URL(string: "nyangcoach://widget/cat/tasks"))
     }
 
@@ -262,10 +299,19 @@ struct NyangCharacterWidgetView: View {
         Group {
             if hasTimedSchedule {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(entry.scheduleTime)
-                        .foregroundColor(Color(red: 0.55, green: 0.49, blue: 1.0))
-                        .font(.system(size: timeFontSize, weight: .bold, design: .rounded))
-                        .lineLimit(1)
+                    HStack(alignment: .center, spacing: 5) {
+                        Image("fa_clock_solid")
+                            .renderingMode(.template)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: timeFontSize * 0.78, height: timeFontSize * 0.78)
+                            .foregroundColor(Color(red: 0.63, green: 0.55, blue: 1.0))
+
+                        Text(entry.scheduleTime)
+                            .foregroundColor(Color(red: 0.55, green: 0.49, blue: 1.0))
+                            .font(.system(size: timeFontSize, weight: .bold, design: .rounded))
+                            .lineLimit(1)
+                    }
 
                     Text(entry.scheduleTitle)
                         .foregroundColor(.white)
@@ -316,15 +362,17 @@ struct NyangCompactWidgetView: View {
     }
 
     var body: some View {
-        GeometryReader { proxy in
-            let shortestSide = min(proxy.size.width, proxy.size.height)
-            let imageSize = min(max(shortestSide * 0.78, 132), 142)
-            let topPadding = min(max(proxy.size.height * 0.04, 6), 9)
-            let bottomPadding = min(max(proxy.size.height * 0.16, 24), 30)
-            let horizontalPadding = min(max(proxy.size.width * 0.08, 13), 16)
+        ZStack(alignment: .topLeading) {
+            Color.white
 
-            ZStack(alignment: .topLeading) {
-                Color.white
+            GeometryReader { proxy in
+                let textBlockHeight: CGFloat = 26
+                let spacerHeight: CGFloat = 8
+                let topPadding: CGFloat = 8
+                let bottomPadding: CGFloat = 10
+                let horizontalPadding = min(max(proxy.size.width * 0.08, 12), 16)
+                let reservedHeight = textBlockHeight + spacerHeight + topPadding + bottomPadding
+                let imageSize = min(max(proxy.size.height - reservedHeight, 60), 142)
 
                 VStack(alignment: .center, spacing: 0) {
                     Image(catImageName)
@@ -333,10 +381,11 @@ struct NyangCompactWidgetView: View {
                         .frame(width: imageSize, height: imageSize, alignment: .center)
                         .accessibilityHidden(true)
 
-                    Spacer(minLength: 10)
+                    Spacer(minLength: spacerHeight)
 
                     miniText
                         .frame(maxWidth: .infinity, alignment: .leading)
+                        .frame(height: textBlockHeight)
                 }
                 .padding(.top, topPadding)
                 .padding(.leading, horizontalPadding)
@@ -345,6 +394,7 @@ struct NyangCompactWidgetView: View {
             }
         }
         .widgetWhiteBackground()
+        .unredacted()
         .widgetURL(URL(string: "nyangcoach://widget/cat/tasks"))
     }
 
