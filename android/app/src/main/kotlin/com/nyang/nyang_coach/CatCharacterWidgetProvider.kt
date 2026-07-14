@@ -51,9 +51,9 @@ class CatCharacterWidgetProvider : HomeWidgetProvider() {
 
                 val intent = Intent(context, MainActivity::class.java).apply {
                     action = "nyang_coach.OPEN_CHARACTER_WIDGET"
-                    data = Uri.parse("nyangcoach://widget/cat/tasks_remaining_bottom_sheet")
+                    data = Uri.parse("nyangcoach://widget/cat/tasks")
                     flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
-                    putExtra("route", "tasks_remaining_bottom_sheet")
+                    putExtra("route", "tasks")
                     putExtra("coach_id", "cat")
                 }
                 val pendingIntent = PendingIntent.getActivity(

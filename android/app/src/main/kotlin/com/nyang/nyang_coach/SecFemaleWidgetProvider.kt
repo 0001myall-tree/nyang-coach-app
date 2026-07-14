@@ -56,10 +56,10 @@ class SecFemaleWidgetProvider : HomeWidgetProvider() {
                 WidgetResponsiveStyle.apply(context, appWidgetManager, widgetId, this)
 
                 val intentRemaining = Intent(context, MainActivity::class.java).apply {
-                    action = "sec_female_coach.OPEN_REMAINING_LIST"
-                    data = Uri.parse("nyangcoach://widget/cat/tasks_remaining_bottom_sheet")
+                    action = "sec_female_coach.OPEN_TASKS"
+                    data = Uri.parse("nyangcoach://widget/cat/tasks")
                     flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
-                    putExtra("route", "tasks_remaining_bottom_sheet")
+                    putExtra("route", "tasks")
                     putExtra("coach_id", "cat")
                 }
                 val pendingRemaining = PendingIntent.getActivity(context, 3003, intentRemaining, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
