@@ -319,11 +319,11 @@ struct NyangCompactWidgetView: View {
         ZStack(alignment: .topLeading) {
             Color.white
 
-            VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .center, spacing: 0) {
                 Image(catImageName)
                     .resizable()
                     .scaledToFit()
-                    .frame(width: 82, height: 82, alignment: .leading)
+                    .frame(width: 150, height: 150, alignment: .center)
                     .accessibilityHidden(true)
 
                 Spacer(minLength: 10)
@@ -331,10 +331,10 @@ struct NyangCompactWidgetView: View {
                 miniText
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(.top, 13)
+            .padding(.top, 8)
             .padding(.leading, 15)
             .padding(.trailing, 13)
-            .padding(.bottom, 17)
+            .padding(.bottom, 30)
         }
         .widgetWhiteBackground()
         .widgetURL(URL(string: "nyangcoach://widget/cat/tasks"))
