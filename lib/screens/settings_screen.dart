@@ -119,8 +119,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _homeWidgetStatus = _buildHomeWidgetStatus(
         nyang: prefs.getBool('widget_nyang_enabled') ?? false,
         catCharacter: prefs.getBool('widget_cat_character_enabled') ?? false,
-        secMale: prefs.getBool('widget_sec_male_enabled') ?? false,
-        secFemale: prefs.getBool('widget_sec_female_enabled') ?? false,
       );
     });
   }
@@ -133,15 +131,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String? _buildHomeWidgetStatus({
     required bool nyang,
     required bool catCharacter,
-    required bool secMale,
-    required bool secFemale,
   }) {
-    final labels = <String>[
-      if (nyang) '냥냥',
-      if (catCharacter) '캐릭터',
-      if (secMale) _secMaleWidgetName,
-      if (secFemale) _secFemaleWidgetName,
-    ];
+    final labels = <String>[if (nyang) '미니', if (catCharacter) '가로'];
     return labels.isEmpty ? null : labels.join(' / ');
   }
 
@@ -240,12 +231,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final isMasterPlan =
         latestUserData.isPlanActive && latestUserData.planType == 'master';
     await WidgetSyncService.enforcePlanAccess(hasMasterPlan: isMasterPlan);
+    await prefs.setBool('widget_sec_male_enabled', false);
+    await prefs.setBool('widget_sec_female_enabled', false);
 
     bool tempNyang = prefs.getBool('widget_nyang_enabled') ?? false;
     bool tempCatCharacter =
         prefs.getBool('widget_cat_character_enabled') ?? false;
-    bool tempSecMale = prefs.getBool('widget_sec_male_enabled') ?? false;
-    bool tempSecFemale = prefs.getBool('widget_sec_female_enabled') ?? false;
 
     if (!mounted) return;
 
@@ -417,8 +408,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       padding: EdgeInsets.zero,
                       children: [
                         _buildWidgetToggle(
-                          title: '냥냥코치 위젯',
-                          imagePath: 'assets/images/cat.png',
+                          title: '냥냥코치 미니 위젯',
+                          imagePath: 'assets/images/iphonecatwidget1.png',
                           value: tempNyang,
                           isLocked: false,
                           onChanged: (val) {
@@ -426,14 +417,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               tempNyang = val;
                               if (val) {
                                 tempCatCharacter = false;
-                                tempSecMale = false;
-                                tempSecFemale = false;
                               }
                             });
                           },
                         ),
                         _buildWidgetToggle(
-                          title: '캐릭터 위젯',
+                          title: '냥냥코치 가로 위젯',
                           imagePath: 'assets/images/cat_widget2.png',
                           value: tempCatCharacter,
                           isLocked: false,
@@ -442,40 +431,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               tempCatCharacter = val;
                               if (val) {
                                 tempNyang = false;
-                                tempSecMale = false;
-                                tempSecFemale = false;
-                              }
-                            });
-                          },
-                        ),
-                        _buildWidgetToggle(
-                          title: '$_secMaleWidgetName 위젯',
-                          imagePath: 'assets/images/sec_male.png',
-                          value: tempSecMale,
-                          isLocked: !isMasterPlan,
-                          onChanged: (val) {
-                            setModalState(() {
-                              tempSecMale = val;
-                              if (val) {
-                                tempNyang = false;
-                                tempCatCharacter = false;
-                                tempSecFemale = false;
-                              }
-                            });
-                          },
-                        ),
-                        _buildWidgetToggle(
-                          title: '$_secFemaleWidgetName 위젯',
-                          imagePath: 'assets/images/sec_female.png',
-                          value: tempSecFemale,
-                          isLocked: !isMasterPlan,
-                          onChanged: (val) {
-                            setModalState(() {
-                              tempSecFemale = val;
-                              if (val) {
-                                tempNyang = false;
-                                tempCatCharacter = false;
-                                tempSecMale = false;
                               }
                             });
                           },
@@ -488,37 +443,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     height: 56,
                     child: ElevatedButton(
                       onPressed: () async {
-                        final currentUserData = await UserDataService.load();
-                        final canUseMasterWidget =
-                            currentUserData.isPlanActive &&
-                            currentUserData.planType == 'master';
-                        if (!canUseMasterWidget &&
-                            (tempSecMale || tempSecFemale)) {
-                          tempNyang = true;
-                          tempCatCharacter = false;
-                          tempSecMale = false;
-                          tempSecFemale = false;
-                        }
-
                         await prefs.setBool('widget_nyang_enabled', tempNyang);
                         await prefs.setBool(
                           'widget_cat_character_enabled',
                           tempCatCharacter,
                         );
-                        await prefs.setBool(
-                          'widget_sec_male_enabled',
-                          tempSecMale,
-                        );
-                        await prefs.setBool(
-                          'widget_sec_female_enabled',
-                          tempSecFemale,
-                        );
+                        await prefs.setBool('widget_sec_male_enabled', false);
+                        await prefs.setBool('widget_sec_female_enabled', false);
                         await prefs.setBool(
                           'nyang_home_widget_enabled',
-                          tempNyang ||
-                              tempCatCharacter ||
-                              tempSecMale ||
-                              tempSecFemale,
+                          tempNyang || tempCatCharacter,
                         );
 
                         if (mounted) {
@@ -526,8 +460,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             _homeWidgetStatus = _buildHomeWidgetStatus(
                               nyang: tempNyang,
                               catCharacter: tempCatCharacter,
-                              secMale: tempSecMale,
-                              secFemale: tempSecFemale,
                             );
                           });
                         }
@@ -536,10 +468,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             ? 'cat'
                             : tempCatCharacter
                             ? 'cat_character'
-                            : tempSecMale
-                            ? 'sec_male'
-                            : tempSecFemale
-                            ? 'sec_female'
                             : null;
 
                         await WidgetSyncService.syncFromStoredTasks();
@@ -3596,12 +3524,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 prefs.getBool('widget_nyang_enabled') ?? false,
                             catCharacter:
                                 prefs.getBool('widget_cat_character_enabled') ??
-                                false,
-                            secMale:
-                                prefs.getBool('widget_sec_male_enabled') ??
-                                false,
-                            secFemale:
-                                prefs.getBool('widget_sec_female_enabled') ??
                                 false,
                           );
                         });

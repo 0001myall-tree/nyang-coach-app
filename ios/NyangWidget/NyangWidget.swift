@@ -72,7 +72,7 @@ enum CompactWidgetStyle {
 
     var title: String {
         switch self {
-        case .cat: return "냥냥코치 기본"
+        case .cat: return "냥냥코치 미니 위젯"
         case .secMale: return "남비서 코치"
         case .secFemale: return "여비서 코치"
         }
@@ -300,95 +300,75 @@ struct NyangCompactWidgetView: View {
     let entry: NyangEntry
     let style: CompactWidgetStyle
 
-    private var progressValue: Double {
-        min(max(Double(style.progress(from: entry)) / 100.0, 0.0), 1.0)
+    private var hasTimedSchedule: Bool {
+        !entry.scheduleTime.isEmpty && !entry.scheduleTitle.isEmpty
+    }
+
+    private var catImageName: String {
+        let progress = min(max(entry.progress, 0), 100)
+        if progress > 80 {
+            return "iphonecatwidget3"
+        }
+        if progress > 30 {
+            return "iphonecatwidget2"
+        }
+        return "iphonecatwidget1"
     }
 
     var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .fill(
-                    LinearGradient(
-                        colors: style.background,
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 28, style: .continuous)
-                        .stroke(style.accent.opacity(0.55), lineWidth: 1.1)
-                )
-                .shadow(color: style.accent.opacity(0.18), radius: 12, x: 0, y: 6)
+        ZStack(alignment: .topLeading) {
+            Color.white
 
-            VStack(spacing: 16) {
-                HStack(spacing: 8) {
-                    Text(style.message(from: entry))
-                        .font(.system(size: 17, weight: .bold, design: .rounded))
-                        .foregroundColor(style.textColor)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.72)
+            VStack(alignment: .leading, spacing: 0) {
+                Image(catImageName)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 82, height: 82, alignment: .leading)
+                    .accessibilityHidden(true)
 
-                    Image(systemName: style.messageIcon)
-                        .font(.system(size: 15, weight: .bold))
-                        .foregroundColor(style.accent)
-                }
+                Spacer(minLength: 10)
 
-                GeometryReader { proxy in
-                    ZStack(alignment: .leading) {
-                        Capsule()
-                            .fill(style.accent.opacity(style == .secFemale ? 0.20 : 0.28))
-                        Capsule()
-                            .fill(style.accent)
-                            .frame(width: max(8, proxy.size.width * progressValue))
-                    }
-                }
-                .frame(height: 8)
-
-                HStack(spacing: 12) {
-                    compactPill(
-                        text: "\(style.remainingCount(from: entry))개 남음",
-                        systemImage: "chevron.right",
-                        outlined: true
-                    )
-                    compactPill(
-                        text: "코치와 대화",
-                        systemImage: "ellipsis.message.fill",
-                        outlined: false
-                    )
-                }
+                miniText
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(.horizontal, 22)
-            .padding(.vertical, 20)
+            .padding(.top, 13)
+            .padding(.leading, 15)
+            .padding(.trailing, 13)
+            .padding(.bottom, 17)
         }
-        .widgetClearBackground()
+        .widgetWhiteBackground()
+        .widgetURL(URL(string: "nyangcoach://widget/cat/tasks_remaining_bottom_sheet"))
     }
 
-    private func compactPill(text: String, systemImage: String, outlined: Bool) -> some View {
-        HStack(spacing: 7) {
-            if !outlined {
-                Image(systemName: systemImage)
-                    .font(.system(size: 13, weight: .bold))
-            }
-            Text(text)
-                .font(.system(size: 14, weight: .bold, design: .rounded))
-                .lineLimit(1)
-                .minimumScaleFactor(0.78)
-            if outlined {
-                Image(systemName: systemImage)
-                    .font(.system(size: 12, weight: .bold))
+    private var miniText: some View {
+        Group {
+            if hasTimedSchedule {
+                HStack(alignment: .firstTextBaseline, spacing: 7) {
+                    Text(entry.scheduleTime)
+                        .foregroundColor(style.accent)
+                        .font(.system(size: 20, weight: .bold, design: .rounded))
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
+
+                    Text(entry.scheduleTitle)
+                        .foregroundColor(Color(red: 0.15, green: 0.14, blue: 0.16))
+                        .font(.system(size: 18, weight: .semibold, design: .rounded))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .minimumScaleFactor(0.78)
+                }
+            } else {
+                (Text("남은 일정 ")
+                    .foregroundColor(Color(red: 0.15, green: 0.14, blue: 0.16))
+                 + Text("\(style.remainingCount(from: entry))")
+                    .foregroundColor(style.accent)
+                 + Text("개")
+                    .foregroundColor(Color(red: 0.15, green: 0.14, blue: 0.16)))
+                    .font(.system(size: 20, weight: .semibold, design: .rounded))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.78)
             }
         }
-        .foregroundColor(outlined ? style.textColor : Color.white)
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 12)
-        .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(outlined ? Color.clear : style.accent.opacity(0.35))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(style.accent.opacity(outlined ? 0.78 : 0.0), lineWidth: 1.1)
-        )
     }
 }
 
@@ -399,7 +379,7 @@ struct NyangCharacterWidget: Widget {
         StaticConfiguration(kind: kind, provider: NyangProvider()) { entry in
             NyangCharacterWidgetView(entry: entry)
         }
-        .configurationDisplayName("캐릭터")
+        .configurationDisplayName("냥냥코치 가로 위젯")
         .description("오늘 가장 가까운 일정이나 남은 할 일을 고양이 코치와 함께 보여줍니다.")
         .supportedFamilies([.systemMedium])
         .contentMarginsDisabled()
@@ -476,11 +456,23 @@ extension View {
             background(Color.clear)
         }
     }
+
+    @ViewBuilder
+    func widgetWhiteBackground() -> some View {
+        if #available(iOSApplicationExtension 17.0, *) {
+            containerBackground(for: .widget) {
+                Color.white
+            }
+        } else {
+            background(Color.white)
+        }
+    }
 }
 
 @main
 struct NyangWidgetBundle: WidgetBundle {
     var body: some Widget {
         NyangCharacterWidget()
+        NyangCompactWidget()
     }
 }

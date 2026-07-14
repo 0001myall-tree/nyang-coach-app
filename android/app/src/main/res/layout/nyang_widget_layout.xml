@@ -1,154 +1,51 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:background="@drawable/widget_bg"
-    android:paddingStart="20dp"
-    android:paddingEnd="20dp"
-    android:paddingTop="18dp"
-    android:paddingBottom="24dp">
+    android:background="@drawable/widget_bg_nyang_mini"
+    android:clickable="true"
+    android:focusable="true"
+    android:paddingStart="15dp"
+    android:paddingTop="13dp"
+    android:paddingEnd="13dp"
+    android:paddingBottom="17dp">
 
-    <!-- Top Group: Cheer Message & Progress Bar -->
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
-        android:orientation="vertical"
-        android:gravity="center">
+        android:layout_height="match_parent"
+        android:gravity="start"
+        android:orientation="vertical">
 
-        <LinearLayout
-            android:id="@+id/header_layout"
+        <ImageView
+            android:id="@+id/mini_cat_image"
+            android:layout_width="82dp"
+            android:layout_height="82dp"
+            android:adjustViewBounds="true"
+            android:contentDescription="@null"
+            android:scaleType="fitCenter"
+            android:src="@drawable/iphonecatwidget1" />
+
+        <Space
+            android:layout_width="1dp"
+            android:layout_height="0dp"
+            android:layout_weight="1" />
+
+        <TextView
+            android:id="@+id/mini_info_text"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:baselineAligned="false"
-            android:gravity="center"
-            android:orientation="horizontal">
-
-            <TextView
-                android:id="@+id/coach_message"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="4dp"
-                android:layout_marginEnd="4dp"
-                android:maxWidth="238dp"
-                android:ellipsize="end"
-                android:maxLines="1"
-                android:autoSizeTextType="uniform"
-                android:autoSizeMinTextSize="12sp"
-                android:autoSizeMaxTextSize="18sp"
-                android:text="오늘도 함께, 차근차근 시작해요."
-                android:textColor="#F5F1FF"
-                android:textSize="18sp"
-                android:textStyle="bold"
-                android:gravity="center"
-                android:includeFontPadding="false" />
-
-            <ImageView
-                android:id="@+id/message_icon"
-                android:layout_width="18dp"
-                android:layout_height="18dp"
-                android:layout_marginStart="4dp"
-                android:src="@drawable/ic_fa_wand_magic_sparkles"
-                android:tint="#8B7CFF" />
-        </LinearLayout>
-
-        <!-- Center: Horizontal Progress Bar -->
-        <ProgressBar
-            android:id="@+id/progress_bar"
-            style="?android:attr/progressBarStyleHorizontal"
-            android:layout_width="match_parent"
-            android:layout_height="8dp"
-            android:layout_marginStart="8dp"
-            android:layout_marginEnd="8dp"
-            android:layout_marginTop="14dp"
-            android:max="100"
-            android:progress="0"
-            android:progressDrawable="@drawable/widget_progress_bar_nyang" />
+            android:autoSizeMaxTextSize="20sp"
+            android:autoSizeMinTextSize="13sp"
+            android:autoSizeStepGranularity="1sp"
+            android:autoSizeTextType="uniform"
+            android:ellipsize="end"
+            android:fontFamily="sans"
+            android:includeFontPadding="false"
+            android:maxLines="1"
+            android:text="남은 일정 0개"
+            android:textColor="#262429"
+            android:textSize="20sp"
+            android:textStyle="bold" />
     </LinearLayout>
-
-    <!-- Bottom: 2-Split Cards -->
-    <LinearLayout
-        android:id="@+id/bottom_actions"
-        android:layout_width="match_parent"
-        android:layout_height="48dp"
-        android:layout_marginStart="8dp"
-        android:layout_marginEnd="8dp"
-        android:orientation="horizontal"
-        android:gravity="center_vertical">
-
-        <!-- Left Column: Remaining tasks card -->
-        <LinearLayout
-            android:id="@+id/remaining_row"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:layout_marginEnd="6dp"
-            android:background="@drawable/widget_card_left_bg"
-            android:orientation="horizontal"
-            android:gravity="center_vertical"
-            android:paddingStart="12dp"
-            android:paddingEnd="12dp"
-            android:clickable="true"
-            android:focusable="true">
-
-            <TextView
-                android:id="@+id/remaining_count_text"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="0개 남음"
-                android:textColor="#F5F1FF"
-                android:textSize="13sp"
-                android:textStyle="bold" />
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="›"
-                android:textColor="#C1A8FF"
-                android:textSize="16sp"
-                android:textStyle="bold" />
-        </LinearLayout>
-
-        <!-- Right Column: Talk to Coach button -->
-        <LinearLayout
-            android:id="@+id/btn_open_chat"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:layout_marginStart="6dp"
-            android:background="@drawable/widget_card_right_bg"
-            android:orientation="horizontal"
-            android:gravity="center"
-            android:paddingStart="10dp"
-            android:paddingEnd="10dp"
-            android:paddingTop="6dp"
-            android:paddingBottom="6dp"
-            android:clickable="true"
-            android:focusable="true">
-
-            <ImageView
-                android:id="@+id/chat_icon"
-                android:layout_width="18dp"
-                android:layout_height="18dp"
-                android:layout_marginEnd="6dp"
-                android:src="@drawable/ic_fa_comment_dots"
-                android:tint="#8B7CFF" />
-
-            <TextView
-                android:id="@+id/chat_label"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="코치와 대화"
-                android:textColor="#DDD2FF"
-                android:textSize="11sp"
-                android:textStyle="bold"
-                android:maxLines="1"
-                android:includeFontPadding="false" />
-        </LinearLayout>
-
-    </LinearLayout>
-
-</LinearLayout>
+</FrameLayout>

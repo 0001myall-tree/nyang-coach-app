@@ -7,14 +7,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 class WidgetSyncService {
   static const String androidWidgetNyang = 'NyangWidgetProvider';
   static const String androidWidgetCatCharacter = 'CatCharacterWidgetProvider';
-  static const String androidWidgetSecMale = 'SecMaleWidgetProvider';
-  static const String androidWidgetSecFemale = 'SecFemaleWidgetProvider';
 
   static const String iOSAppGroupId = 'group.com.nyang.nyangCoach';
   static const String iOSWidgetCharacter = 'NyangWidget';
   static const String iOSWidgetNyang = 'NyangCompactWidget';
-  static const String iOSWidgetSecMale = 'SecMaleWidget';
-  static const String iOSWidgetSecFemale = 'SecFemaleWidget';
 
   /// 마스터 플랜이 아니면 저장된 비서 위젯 선택을 해제하고
   /// 냥냥코치 위젯으로 설정을 전환합니다.
@@ -171,7 +167,8 @@ class WidgetSyncService {
       messageSecFemale,
     );
 
-    // Update all 3 widgets always to ensure real-time synchronization
+    // Update the two public widgets: the 2x2 mini widget and the horizontal
+    // character widget. Coach-specific Android widgets are no longer exposed.
     await HomeWidget.updateWidget(
       name: androidWidgetNyang,
       androidName: androidWidgetNyang,
@@ -181,16 +178,6 @@ class WidgetSyncService {
       name: androidWidgetCatCharacter,
       androidName: androidWidgetCatCharacter,
       iOSName: iOSWidgetCharacter,
-    );
-    await HomeWidget.updateWidget(
-      name: androidWidgetSecMale,
-      androidName: androidWidgetSecMale,
-      iOSName: iOSWidgetSecMale,
-    );
-    await HomeWidget.updateWidget(
-      name: androidWidgetSecFemale,
-      androidName: androidWidgetSecFemale,
-      iOSName: iOSWidgetSecFemale,
     );
   }
 
@@ -202,8 +189,6 @@ class WidgetSyncService {
     if (isSupported == true) {
       String providerName = androidWidgetNyang;
       if (widgetId == 'cat_character') providerName = androidWidgetCatCharacter;
-      if (widgetId == 'sec_male') providerName = androidWidgetSecMale;
-      if (widgetId == 'sec_female') providerName = androidWidgetSecFemale;
 
       await HomeWidget.requestPinWidget(
         name: providerName,
@@ -237,7 +222,7 @@ class WidgetSyncService {
     SharedPreferences prefs,
     List<Map<String, dynamic>> tasks,
   ) {
-    final todayStr = _localDateKey(DateTime.now());
+    final todayStr = _effectiveTodayKey(prefs);
     final candidates = <_WidgetScheduleItem>[];
 
     final rawSchedules = prefs.getString('nyang_schedules');
@@ -310,6 +295,16 @@ class WidgetSyncService {
 
   static String _localDateKey(DateTime date) {
     return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+  }
+
+  static String _effectiveTodayKey(SharedPreferences prefs) {
+    final resetHour = prefs.getDouble('nyang_reset_hour') ?? 3.0;
+    final now = DateTime.now();
+    var base = DateTime(now.year, now.month, now.day);
+    if (now.hour < resetHour) {
+      base = base.subtract(const Duration(days: 1));
+    }
+    return _localDateKey(base);
   }
 
   static String _buildTaskPreview(List<Map<String, dynamic>> tasks) {

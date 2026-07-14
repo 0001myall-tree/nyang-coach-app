@@ -6,7 +6,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
 import android.net.Uri
-import android.view.View
 import android.widget.RemoteViews
 import es.antonborri.home_widget.HomeWidgetProvider
 
@@ -16,28 +15,31 @@ class NyangWidgetProvider : HomeWidgetProvider() {
         appWidgetIds.forEach { widgetId ->
             val views = RemoteViews(context.packageName, R.layout.nyang_widget_layout).apply {
                 val rawProgress = widgetData.all["progress"]
-                val progress = (rawProgress as? Number)?.toInt() ?: (rawProgress as? String)?.toIntOrNull() ?: 0
-                
-                val coachMessage = widgetData.getString("coach_message_cat", "오늘도 활기차게 시작해보자냥!") ?: "오늘도 활기차게 시작해보자냥!"
+                val progress = ((rawProgress as? Number)?.toInt() ?: (rawProgress as? String)?.toIntOrNull() ?: 0).coerceIn(0, 100)
+
                 val scheduleTime = widgetData.getString("widget_schedule_time", "")?.trim().orEmpty()
                 val scheduleTitle = widgetData.getString("widget_schedule_title", "")?.trim().orEmpty()
                 val hasTimedSchedule = scheduleTime.isNotEmpty() && scheduleTitle.isNotEmpty()
-                
+
                 val rawRemaining = widgetData.all["remaining_count"]
                 val remainingCount = (rawRemaining as? Number)?.toInt() ?: (rawRemaining as? String)?.toIntOrNull() ?: 0
 
-                setProgressBar(R.id.progress_bar, 100, progress, false)
-                setTextViewText(
-                    R.id.coach_message,
-                    if (hasTimedSchedule) {
-                        WidgetTextFormatter.formatScheduleMessage(scheduleTime, scheduleTitle, "#8B7CFF")
-                    } else {
-                        WidgetTextFormatter.formatCoachMessage(coachMessage)
+                setImageViewResource(
+                    R.id.mini_cat_image,
+                    when {
+                        progress > 80 -> R.drawable.iphonecatwidget3
+                        progress > 30 -> R.drawable.iphonecatwidget2
+                        else -> R.drawable.iphonecatwidget1
                     }
                 )
-                setViewVisibility(R.id.message_icon, if (hasTimedSchedule) View.GONE else View.VISIBLE)
-                setTextViewText(R.id.remaining_count_text, WidgetTextFormatter.formatRemainingCount(remainingCount, "#8B7CFF"))
-                WidgetResponsiveStyle.apply(context, appWidgetManager, widgetId, this)
+                setTextViewText(
+                    R.id.mini_info_text,
+                    if (hasTimedSchedule) {
+                        WidgetTextFormatter.formatMiniScheduleMessage(scheduleTime, scheduleTitle, "#8B7CFF")
+                    } else {
+                        WidgetTextFormatter.formatMiniRemainingCount(remainingCount, "#8B7CFF")
+                    }
+                )
 
                 val intentRemaining = Intent(context, MainActivity::class.java).apply {
                     action = "nyang_coach.OPEN_REMAINING_LIST"
@@ -47,17 +49,7 @@ class NyangWidgetProvider : HomeWidgetProvider() {
                     putExtra("coach_id", "cat")
                 }
                 val pendingRemaining = PendingIntent.getActivity(context, 1003, intentRemaining, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-                setOnClickPendingIntent(R.id.remaining_row, pendingRemaining)
-
-                val intentChat = Intent(context, MainActivity::class.java).apply {
-                    action = "nyang_coach.OPEN_CHAT"
-                    data = Uri.parse("nyangcoach://widget/cat/chat")
-                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
-                    putExtra("route", "chat")
-                    putExtra("coach_id", "cat")
-                }
-                val pendingChat = PendingIntent.getActivity(context, 1001, intentChat, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-                setOnClickPendingIntent(R.id.btn_open_chat, pendingChat)
+                setOnClickPendingIntent(R.id.widget_root, pendingRemaining)
             }
             appWidgetManager.updateAppWidget(widgetId, views)
         }

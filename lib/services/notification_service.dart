@@ -28,6 +28,9 @@ class NotificationService {
   static const MethodChannel _androidAlarmChannel = MethodChannel(
     'nyang_coach/morning_alarm',
   );
+  static const int _morningCallRepeatCount = 3;
+  static const int _maxScheduledCoreReminders = 50;
+  static const Set<int> _coreReminderSoundMinutes = {10, 30};
   String? _lastMorningPayload;
   DateTime? _lastMorningOpenedAt;
 
@@ -41,6 +44,12 @@ class NotificationService {
 
   String _nightCallChannelId(String? soundName) {
     return 'nyang_night_call_${soundName ?? 'default'}_v3';
+  }
+
+  String? _coreReminderSoundName(String coachId, int advanceMinutes) {
+    if (coachId == 'push') return null;
+    if (!_coreReminderSoundMinutes.contains(advanceMinutes)) return null;
+    return '${coachId}_reminder_$advanceMinutes';
   }
 
   ({String coachId, String? soundName}) _parseMorningPayload(String payload) {
@@ -201,6 +210,11 @@ class NotificationService {
           AndroidFlutterLocalNotificationsPlugin
         >()
         ?.requestExactAlarmsPermission();
+    await _plugin
+        .resolvePlatformSpecificImplementation<
+          IOSFlutterLocalNotificationsPlugin
+        >()
+        ?.requestPermissions(alert: true, badge: true, sound: true);
   }
 
   Future<void> handleLaunchNotification() async {
@@ -241,7 +255,7 @@ class NotificationService {
     required String coachId,
   }) async {
     if (kIsWeb) return;
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < _morningCallRepeatCount; i++) {
       await _plugin.cancel(id: i);
     }
     String targetCoachId = coachId;
@@ -321,10 +335,10 @@ class NotificationService {
       });
     }
 
-    // 1분 간격으로 3번 연속 울리도록 스케줄링 (id: 0, 1, 2).
-    // Android also keeps these as a sound/vibration fallback in case a device
-    // delays showing the AlarmClock activity while the screen is off.
-    for (int i = 0; i < 3; i++) {
+    // iOS cannot start the in-app audio loop from a killed/background state
+    // without user interaction, so the system notification itself is the alarm.
+    // Schedule a short burst so a locked phone behaves closer to a clock alarm.
+    for (int i = 0; i < _morningCallRepeatCount; i++) {
       final targetTime = scheduled.add(Duration(minutes: i));
       await _plugin.zonedSchedule(
         id: i,
@@ -396,7 +410,7 @@ class NotificationService {
 
   Future<void> cancelAllMorningCalls() async {
     if (kIsWeb) return;
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < _morningCallRepeatCount; i++) {
       await _plugin.cancel(id: i);
     }
     if (defaultTargetPlatform == TargetPlatform.android) {
@@ -441,6 +455,9 @@ class NotificationService {
       presentSound: true,
       presentAlert: true,
       presentBadge: true,
+      presentBanner: true,
+      presentList: true,
+      interruptionLevel: InterruptionLevel.timeSensitive,
     );
 
     final NotificationDetails details = NotificationDetails(
@@ -503,6 +520,9 @@ class NotificationService {
       presentSound: true,
       presentAlert: true,
       presentBadge: true,
+      presentBanner: true,
+      presentList: true,
+      interruptionLevel: InterruptionLevel.timeSensitive,
     );
 
     final NotificationDetails details = NotificationDetails(
@@ -636,6 +656,9 @@ class NotificationService {
       presentSound: true,
       presentAlert: true,
       presentBadge: true,
+      presentBanner: true,
+      presentList: true,
+      interruptionLevel: InterruptionLevel.timeSensitive,
     );
 
     final NotificationDetails details = NotificationDetails(
@@ -694,10 +717,7 @@ class NotificationService {
     // Save the resolved core reminder coach ID to SharedPreferences
     await prefs.setString('nyang_core_reminder_resolved_coach', targetCoachId);
 
-    String? soundName;
-    if (targetCoachId != 'push') {
-      soundName = '${targetCoachId}_reminder_$advanceMinutes';
-    }
+    final soundName = _coreReminderSoundName(targetCoachId, advanceMinutes);
 
     final AndroidNotificationDetails androidDetails =
         AndroidNotificationDetails(
@@ -718,6 +738,9 @@ class NotificationService {
       presentSound: true,
       presentAlert: true,
       presentBadge: true,
+      presentBanner: true,
+      presentList: true,
+      interruptionLevel: InterruptionLevel.timeSensitive,
     );
     final NotificationDetails details = NotificationDetails(
       android: androidDetails,
@@ -831,9 +854,10 @@ class NotificationService {
       (a, b) => (a['time'] as DateTime).compareTo(b['time'] as DateTime),
     );
 
-    // Schedule up to 100 alarms
+    // iOS keeps a limited number of pending local notifications per app.
+    // Leave room for recurring morning/night calls and other timers.
     int notificationId = 1000;
-    for (var alarm in alarms.take(100)) {
+    for (var alarm in alarms.take(_maxScheduledCoreReminders)) {
       final targetDate = alarm['time'] as DateTime;
       final taskText = alarm['text'] as String;
       final alarmId = alarm['id'];
