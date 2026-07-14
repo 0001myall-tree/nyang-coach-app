@@ -14,6 +14,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "912621917226-kf2hsgi2i948j2f829iohtt391aki22p.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.nyang.nyang_coach",
+            "certificate_hash": "3e7ebfb7e88a94ce7344e1d63e1434dfdf63faa5"
+          }
+        },
+        {
           "client_id": "912621917226-7i963r1k8mjkf4llrlda93pelj6tpkro.apps.googleusercontent.com",
           "client_type": 3
         }
