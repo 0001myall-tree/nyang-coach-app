@@ -2,12 +2,40 @@ package com.nyang.nyang_coach
 
 import android.appwidget.AppWidgetManager
 import android.content.Context
+import android.os.Build
 import android.util.TypedValue
 import android.widget.RemoteViews
 import kotlin.math.min
 import kotlin.math.roundToInt
 
 object WidgetResponsiveStyle {
+    fun applyMini(context: Context, appWidgetManager: AppWidgetManager, widgetId: Int, views: RemoteViews) {
+        val options = appWidgetManager.getAppWidgetOptions(widgetId)
+        val minWidthDp = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 120)
+        val minHeightDp = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 120)
+        val shortestSide = min(minWidthDp, minHeightDp)
+        val scale = ((shortestSide - 110) / 55f).coerceIn(0f, 1f)
+
+        val horizontalPadding = lerp(13f, 16f, scale).roundToInt()
+        val topPadding = lerp(6f, 9f, scale).roundToInt()
+        val bottomPadding = lerp(24f, 30f, scale).roundToInt()
+        val imageSize = lerp(132f, 142f, scale)
+
+        views.setViewPadding(
+            R.id.widget_root,
+            dp(context, horizontalPadding),
+            dp(context, topPadding),
+            dp(context, horizontalPadding),
+            dp(context, bottomPadding)
+        )
+        views.setTextViewTextSize(R.id.mini_info_text, TypedValue.COMPLEX_UNIT_SP, lerp(18f, 20f, scale))
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            views.setViewLayoutWidth(R.id.mini_cat_image, imageSize, TypedValue.COMPLEX_UNIT_DIP)
+            views.setViewLayoutHeight(R.id.mini_cat_image, imageSize, TypedValue.COMPLEX_UNIT_DIP)
+        }
+    }
+
     fun apply(context: Context, appWidgetManager: AppWidgetManager, widgetId: Int, views: RemoteViews) {
         val options = appWidgetManager.getAppWidgetOptions(widgetId)
         val minWidthDp = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 260)

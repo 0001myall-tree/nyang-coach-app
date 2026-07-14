@@ -316,25 +316,33 @@ struct NyangCompactWidgetView: View {
     }
 
     var body: some View {
-        ZStack(alignment: .topLeading) {
-            Color.white
+        GeometryReader { proxy in
+            let shortestSide = min(proxy.size.width, proxy.size.height)
+            let imageSize = min(max(shortestSide * 0.78, 132), 142)
+            let topPadding = min(max(proxy.size.height * 0.04, 6), 9)
+            let bottomPadding = min(max(proxy.size.height * 0.16, 24), 30)
+            let horizontalPadding = min(max(proxy.size.width * 0.08, 13), 16)
 
-            VStack(alignment: .center, spacing: 0) {
-                Image(catImageName)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 150, height: 150, alignment: .center)
-                    .accessibilityHidden(true)
+            ZStack(alignment: .topLeading) {
+                Color.white
 
-                Spacer(minLength: 10)
+                VStack(alignment: .center, spacing: 0) {
+                    Image(catImageName)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: imageSize, height: imageSize, alignment: .center)
+                        .accessibilityHidden(true)
 
-                miniText
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    Spacer(minLength: 10)
+
+                    miniText
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .padding(.top, topPadding)
+                .padding(.leading, horizontalPadding)
+                .padding(.trailing, horizontalPadding)
+                .padding(.bottom, bottomPadding)
             }
-            .padding(.top, 8)
-            .padding(.leading, 15)
-            .padding(.trailing, 13)
-            .padding(.bottom, 30)
         }
         .widgetWhiteBackground()
         .widgetURL(URL(string: "nyangcoach://widget/cat/tasks"))
@@ -343,7 +351,7 @@ struct NyangCompactWidgetView: View {
     private var miniText: some View {
         Group {
             if hasTimedSchedule {
-                HStack(alignment: .firstTextBaseline, spacing: 7) {
+                HStack(alignment: .firstTextBaseline, spacing: 13) {
                     Text(entry.scheduleTime)
                         .foregroundColor(style.accent)
                         .font(.system(size: 20, weight: .bold, design: .rounded))

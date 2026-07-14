@@ -40,6 +40,7 @@ class NyangWidgetProvider : HomeWidgetProvider() {
                         WidgetTextFormatter.formatMiniRemainingCount(remainingCount, "#8B7CFF")
                     }
                 )
+                WidgetResponsiveStyle.applyMini(context, appWidgetManager, widgetId, this)
 
                 val intentRemaining = Intent(context, MainActivity::class.java).apply {
                     action = "nyang_coach.OPEN_TASKS"

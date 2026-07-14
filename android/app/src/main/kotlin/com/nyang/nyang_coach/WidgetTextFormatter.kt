@@ -31,7 +31,8 @@ object WidgetTextFormatter {
 
     fun formatMiniScheduleMessage(time: String, title: String, pointColor: String): SpannableString {
         val normalizedTime = time.trim()
-        val text = "${normalizedTime} ${title.trim().replace(Regex("\\s+"), " ")}"
+        val gap = "  "
+        val text = "${normalizedTime}${gap}${title.trim().replace(Regex("\\s+"), " ")}"
         return SpannableString(text).apply {
             setSpan(
                 ForegroundColorSpan(Color.parseColor(pointColor)),
@@ -41,7 +42,7 @@ object WidgetTextFormatter {
             )
             setSpan(
                 ForegroundColorSpan(Color.parseColor("#262429")),
-                normalizedTime.length + 1,
+                normalizedTime.length + gap.length,
                 text.length,
                 Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
             )
