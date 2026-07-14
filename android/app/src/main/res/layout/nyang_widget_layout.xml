@@ -7,15 +7,15 @@
     android:clickable="true"
     android:focusable="true"
     android:paddingStart="15dp"
-    android:paddingTop="13dp"
+    android:paddingTop="8dp"
     android:paddingEnd="13dp"
-    android:paddingBottom="17dp">
+    android:paddingBottom="30dp">
 
     <ImageView
         android:id="@+id/mini_cat_image"
-        android:layout_width="82dp"
-        android:layout_height="82dp"
-        android:layout_gravity="top|start"
+        android:layout_width="150dp"
+        android:layout_height="150dp"
+        android:layout_gravity="top|center_horizontal"
         android:adjustViewBounds="true"
         android:contentDescription="@null"
         android:scaleType="fitCenter"
