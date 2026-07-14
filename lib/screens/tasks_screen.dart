@@ -16,6 +16,7 @@ import 'package:speech_to_text/speech_recognition_result.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'coach_config.dart';
 import '../services/memory_service.dart';
+import '../services/task_resistance_service.dart';
 import '../models/user_data.dart';
 import '../services/notification_service.dart';
 import '../services/tasks_sync_service.dart';
@@ -1901,6 +1902,15 @@ class _TasksScreenState extends State<TasksScreen>
       // 로컬 칭찬 팝업 (Flirt)
       final doneCount = tasks.where((ts) => ts.done).length;
       final totalCount = tasks.length;
+
+      // 선제개입 저항예측 4일차: 완료 결과를 이벤트/상태머신에 반영 (6장 폐루프)
+      TaskResistanceService.onTaskCompleted(
+        taskId: t.id.toString(),
+        date: _getTodayStr(),
+        completionOrder: doneCount,
+        totalTasksThatDay: totalCount,
+      );
+
       final remainingCount = totalCount - doneCount;
       final progressPct = totalCount > 0 ? doneCount / totalCount : 0.0;
 

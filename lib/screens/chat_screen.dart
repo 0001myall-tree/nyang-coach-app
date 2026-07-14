@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 import 'dart:ui';
@@ -20,6 +21,7 @@ import 'package:nyang_coach/services/api_usage_limit_service.dart';
 import 'package:nyang_coach/services/tasks_sync_service.dart';
 import 'package:nyang_coach/services/user_title_service.dart';
 import 'package:nyang_coach/services/daily_reset_service.dart';
+import 'package:nyang_coach/services/task_resistance_service.dart';
 import 'coach_config.dart';
 import 'focus_timer_widget.dart';
 import 'cat_preview/cat_preview_intro_dialog.dart';
@@ -437,6 +439,9 @@ class _ChatScreenState extends State<ChatScreen>
   final SpeechToText _speechToText = SpeechToText();
   bool _speechEnabled = false;
   bool _isListening = false;
+
+  // 선제개입 저항예측: 이번 턴에 프롬프트에 주입한 선제개입 대상 (응답 확인 후 소진 여부 판정용)
+  PreemptiveInterventionResult? _pendingPreemptiveTarget;
 
   // Firebase Cloud Functions chatProxy (웹앱과 동일한 서버 사용)
   static final _chatProxy =
@@ -2862,6 +2867,7 @@ class _ChatScreenState extends State<ChatScreen>
       final parsed = _parseReply(raw);
 
       String greetingText = parsed.text;
+      unawaited(_confirmPreemptiveIfMentioned(greetingText));
 
       setState(() {
         _messages.add(
@@ -4234,6 +4240,12 @@ class _ChatScreenState extends State<ChatScreen>
     if (await _tryActivateRequestedVacation(trimmed)) return;
     if (await _maybeOfferRest(trimmed)) return;
 
+    // 선제개입 저항예측 시스템 1일차: 오늘 미완료 태스크 언급 + 저항신호를 태스크 단위로 기록.
+    // 대화 흐름을 막지 않는 배경 기록이라 결과를 기다리지 않는다.
+    if (_containsAnyRestSignal(trimmed)) {
+      TaskResistanceService.detectAndRecordFromMessage(trimmed);
+    }
+
     final directTimerMinutes = _directTimerRequestMinutes(trimmed);
     if (directTimerMinutes != null) {
       final reply = _directTimerStartMessage(directTimerMinutes);
@@ -4449,6 +4461,7 @@ class _ChatScreenState extends State<ChatScreen>
       final usageNotice = await ApiUsageLimitService.takeChatUsageNotice();
       if (!mounted || widget.coachId != currentId) return;
       final parsed = _parseReply(raw);
+      unawaited(_confirmPreemptiveIfMentioned(parsed.text));
       final suggestedTasks = await _filterDuplicateSuggestedTasks(
         parsed.suggestedTasks,
       );
@@ -4650,6 +4663,36 @@ class _ChatScreenState extends State<ChatScreen>
         sb.writeln(
           '5. **프렌즈 코치 안내(최초 1회, 강요 금지)**: 대화 기록에서 이미 프렌즈 코치(냥냥이 등)를 언급한 적이 없다면, 이번 응답에서 딱 한 번만 "오늘은 편하게 계셔도 되고, 혹시 가벼운 대화 상대가 필요하시면 프렌즈 코치들도 있습니다" 정도로 지나가듯 안내하세요. 이미 언급했었다면 반복하지 말고, 사용자가 계속 대화하고 싶어하는 기색이면 언급하지 마세요.',
         );
+      }
+    }
+
+    // 선제개입 저항예측: 자주 저항했던 일정을 자연스러운 타이밍에 화제로 제시 (강요 아님, 휴식모드와 중복 방지)
+    // 이번 턴에 실제로 화제를 꺼냈는지는 응답을 받은 뒤 확인한다 (_confirmPreemptiveIfMentioned 참고).
+    _pendingPreemptiveTarget = null;
+    if (!isVacation) {
+      final preemptive =
+          await TaskResistanceService.findPreemptiveInterventionTarget(
+            coachId: widget.coachId,
+          );
+      if (preemptive != null) {
+        _pendingPreemptiveTarget = preemptive;
+        sb.writeln('\n[특별 지침: 선제 화제 제시 (자연스러운 타이밍에만, 강요 금지)]');
+        sb.writeln(
+          '사용자가 평소 자주 부담스러워했던 "${preemptive.taskText}" 일정이 오늘 아직 남아있습니다. 다음 규칙을 지키며 대화 흐름에 맞을 때만 화제로 꺼내보세요:',
+        );
+        sb.writeln(
+          '1. **질문으로 시작**: 반드시 질문 형태로 제안하세요. 예: "그러고 보니 오늘 ${preemptive.taskText} 일정도 있으셨죠. 오늘은 어떠세요?", "지금 여유 있으시다면 ${preemptive.taskText}부터 해보시는 건 어떠세요?"',
+        );
+        sb.writeln(
+          '2. **명령·추궁 금지**: "${preemptive.taskText} 하세요" 같은 명령형이나 "왜 아직 안 하셨어요?" 같은 추궁형은 절대 쓰지 마세요.',
+        );
+        sb.writeln(
+          '3. **대화 맥락에 연결**: 사용자가 지금 다른 감정이나 급한 일을 이야기하고 있다면, 먼저 충분히 공감한 뒤 자연스럽게 이어서 화제를 꺼내세요. 예: 사용자가 "너무 피곤하다"고 하면 "오늘 하루 쉽지 않으셨군요. 그러고 보니 오늘 ${preemptive.taskText} 일정도 있으셨죠. 오늘은 어떠세요?"처럼 연결하세요.',
+        );
+        sb.writeln(
+          '4. **타이밍이 안 맞으면 생략**: 지금 이 화제를 꺼내는 게 어색하다고 판단되면 이번 턴엔 언급하지 않아도 됩니다.',
+        );
+        sb.writeln('5. 이 지침은 이번 응답에서 한 번만 적용하고, 같은 응답 안에서 반복하지 마세요.');
       }
     }
 
@@ -5670,6 +5713,18 @@ class _ChatScreenState extends State<ChatScreen>
     );
 
     return sb.toString();
+  }
+
+  /// 이번 턴에 선제개입 지침을 주입했다면, 실제 응답에 그 태스크가 언급됐는지 확인하고
+  /// 언급됐을 때만 그날의 기회를 소진 처리한다. 언급 안 됐으면 다음 턴에 다시 시도될 수 있다.
+  Future<void> _confirmPreemptiveIfMentioned(String responseText) async {
+    final target = _pendingPreemptiveTarget;
+    _pendingPreemptiveTarget = null;
+    if (target == null) return;
+    await TaskResistanceService.confirmPreemptiveIntervention(
+      target: target,
+      responseText: responseText,
+    );
   }
 
   Future<String> _callOpenAI(String userText, {bool isGreeting = false}) async {
