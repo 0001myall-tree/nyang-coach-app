@@ -254,7 +254,7 @@ struct NyangCharacterWidgetView: View {
             }
         }
         .widgetBackground(backgroundColors)
-        .widgetURL(URL(string: "nyangcoach://widget/cat/tasks_remaining_bottom_sheet"))
+        .widgetURL(URL(string: "nyangcoach://widget/cat/tasks"))
     }
 
     @ViewBuilder
@@ -337,7 +337,7 @@ struct NyangCompactWidgetView: View {
             .padding(.bottom, 17)
         }
         .widgetWhiteBackground()
-        .widgetURL(URL(string: "nyangcoach://widget/cat/tasks_remaining_bottom_sheet"))
+        .widgetURL(URL(string: "nyangcoach://widget/cat/tasks"))
     }
 
     private var miniText: some View {

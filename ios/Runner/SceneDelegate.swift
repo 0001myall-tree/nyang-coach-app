@@ -7,7 +7,7 @@ class SceneDelegate: FlutterSceneDelegate {
 
     let parts = url.pathComponents.filter { $0 != "/" }
     let coachId = parts.first ?? "cat"
-    let route = parts.dropFirst().first ?? "tasks_remaining_bottom_sheet"
+    let route = parts.dropFirst().first ?? "tasks"
     let defaults = UserDefaults.standard
     defaults.set(route, forKey: "flutter.widget_route")
     defaults.set(coachId, forKey: "flutter.widget_coach_id")
