@@ -506,7 +506,7 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
     final coachId = await TaskResistanceService.consumeUnreadScheduledCheckIn();
     if (mounted) setState(() => _hasUnreadScheduledCheckIn = false);
     if (coachId == null || !mounted) return;
-    Navigator.of(context).push(
+    Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
       PageRouteBuilder(
         pageBuilder: (_, __, ___) => MainTabScreen(coachId: coachId),
         transitionsBuilder: (_, animation, __, child) {
@@ -514,6 +514,7 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
         },
         transitionDuration: const Duration(milliseconds: 300),
       ),
+      (route) => false,
     );
   }
 

@@ -582,12 +582,10 @@ class _MainTabScreenState extends State<MainTabScreen>
       if (widgetRoute != null) prefs.remove('widget_route');
       if (widgetCoachId != null) prefs.remove('widget_coach_id');
 
-      final targetIndex =
-          (widgetRoute == 'tasks' ||
-              widgetRoute == 'tasks_done_bottom_sheet' ||
-              widgetRoute == 'tasks_remaining_bottom_sheet')
-          ? 1
-          : 0;
+      final isTasksRoute =
+          widgetRoute == 'tasks' ||
+          widgetRoute == 'tasks_done_bottom_sheet' ||
+          widgetRoute == 'tasks_remaining_bottom_sheet';
       const targetCoachId = 'cat';
       final type = widgetRoute == 'tasks_done_bottom_sheet'
           ? 'done'
@@ -606,30 +604,26 @@ class _MainTabScreenState extends State<MainTabScreen>
         return;
       }
 
+      if (isTasksRoute) {
+        // 위젯을 누르기 전에 있던 화면은 그대로 두고, 할 일 창을 그 위에
+        // 겹쳐서 띄운다. 닫으면 원래 있던 화면이 그대로 다시 보인다.
+        if (!mounted) return;
+        Navigator.of(context, rootNavigator: true).push(
+          MaterialPageRoute(
+            builder: (_) => _WidgetTasksOverlayScreen(initialBottomSheet: type),
+          ),
+        );
+        return;
+      }
+
+      // 채팅 관련 위젯(비서 코치 위젯의 '채팅' 버튼 등)은 해당 코치 화면으로 이동
       if (targetCoachId != widget.coachId) {
         await UserDataService.setSelectedCoach(targetCoachId);
         if (!mounted) return;
-        Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
+        Navigator.of(context, rootNavigator: true).pushReplacement(
           MaterialPageRoute(
-            builder: (_) => MainTabScreen(
-              coachId: targetCoachId,
-              initialDrawerIndex: targetIndex,
-              initialBottomSheet: type,
-            ),
+            builder: (_) => MainTabScreen(coachId: targetCoachId),
           ),
-          (route) => false,
-        );
-      } else {
-        if (!mounted) return;
-        Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
-          MaterialPageRoute(
-            builder: (_) => MainTabScreen(
-              coachId: targetCoachId,
-              initialDrawerIndex: targetIndex,
-              initialBottomSheet: type,
-            ),
-          ),
-          (route) => false,
         );
       }
     }
@@ -775,7 +769,7 @@ class _MainTabScreenState extends State<MainTabScreen>
     final coachId = await TaskResistanceService.consumeUnreadScheduledCheckIn();
     if (mounted) setState(() => hasUnreadScheduledCheckIn = false);
     if (coachId == null || !mounted) return;
-    Navigator.of(context).push(
+    Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
       PageRouteBuilder(
         pageBuilder: (_, __, ___) => MainTabScreen(coachId: coachId),
         transitionsBuilder: (_, animation, __, child) {
@@ -783,6 +777,7 @@ class _MainTabScreenState extends State<MainTabScreen>
         },
         transitionDuration: const Duration(milliseconds: 300),
       ),
+      (route) => false,
     );
   }
 
@@ -2364,4 +2359,52 @@ class _BarChartPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_BarChartPainter old) => old.color != color;
+}
+
+// 위젯(홈 화면)에서 '할 일'을 눌렀을 때, 그 전 화면 위에 얹어서 보여주는
+// 독립된 할 일 창. 닫으면 원래 있던 화면이 그대로 다시 보인다.
+class _WidgetTasksOverlayScreen extends StatelessWidget {
+  final String? initialBottomSheet;
+  const _WidgetTasksOverlayScreen({this.initialBottomSheet});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      body: SafeArea(
+        bottom: false,
+        child: Column(
+          children: [
+            Align(
+              alignment: Alignment.centerRight,
+              child: GestureDetector(
+                onTap: () => Navigator.of(context).pop(),
+                child: Container(
+                  margin: const EdgeInsets.fromLTRB(0, 2, 10, 0),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                  child: Text(
+                    '✕ 닫기',
+                    style: GoogleFonts.notoSansKr(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: const Color(0xFFA0A0B0),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            Expanded(
+              child: TasksScreen(
+                coachId: 'cat',
+                initialBottomSheet: initialBottomSheet,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
