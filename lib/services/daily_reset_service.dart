@@ -356,6 +356,9 @@ class DailyResetService {
         (t) => {
           'text': t['text'],
           'done': t['done'] ?? false,
+          'inProgress': t['inProgress'] ?? false,
+          if (t['inProgressAt'] != null) 'startedAt': t['inProgressAt'],
+          if (t['completedAt'] != null) 'completedAt': t['completedAt'],
           'category': t['category'] ?? 'today',
           'deferred': false,
         },

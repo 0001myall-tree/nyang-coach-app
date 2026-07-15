@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/task_resistance_event.dart';
 import '../models/resistance_group_profile.dart';
 import '../models/preemptive_intervention_log.dart';
+import 'recovery_insight_service.dart';
 
 class PreemptiveInterventionResult {
   final String taskId;
@@ -39,7 +40,8 @@ class PreemptiveInterventionResult {
 //  감수할 실익이 낮다고 판단. 대신 미리 정한 소수 카테고리는 키워드 사전으로 공짜에 정확하게 처리.)
 class TaskResistanceService {
   static const String _eventsKey = 'nyang_resistance_events';
-  static const int retentionDays = 60; // 3.4-1: λ=0.1 감쇠 기준 46일 이후 기여 거의 0, 여유있게 60일
+  static const int retentionDays =
+      60; // 3.4-1: λ=0.1 감쇠 기준 46일 이후 기여 거의 0, 여유있게 60일
   static const int maxEventsPerGroup = 12; // 3.4-2: 그룹당 최근 12건까지만 유지
 
   /// 사전 정의 카테고리 키워드 (LLM 없이, 대화에서 실제 논의된 것만 시드로 등록).
@@ -55,7 +57,9 @@ class TaskResistanceService {
   static String? _matchCategory(String taskText) {
     final lowerText = taskText.toLowerCase();
     for (final entry in _categoryKeywords.entries) {
-      if (entry.value.any((keyword) => lowerText.contains(keyword.toLowerCase()))) {
+      if (entry.value.any(
+        (keyword) => lowerText.contains(keyword.toLowerCase()),
+      )) {
         return entry.key;
       }
     }
@@ -379,9 +383,8 @@ class TaskResistanceService {
       return decoded
           .whereType<Map>()
           .map(
-            (e) => ResistanceGroupProfile.fromJson(
-              Map<String, dynamic>.from(e),
-            ),
+            (e) =>
+                ResistanceGroupProfile.fromJson(Map<String, dynamic>.from(e)),
           )
           .toList();
     } catch (_) {
@@ -496,10 +499,10 @@ class TaskResistanceService {
   /// 오늘 선제개입할 그룹+태스크가 있는지 판단만 한다 (로그 기록 없음, 순수 조회).
   /// 하루 안에서 여러 턴에 걸쳐 반복 호출될 수 있으므로, 실제로 코치가 화제를 꺼낸 게
   /// 확인됐을 때만 [confirmPreemptiveIntervention]을 별도로 호출해 그날의 기회를 소진시킨다.
-  static Future<PreemptiveInterventionResult?> findPreemptiveInterventionTarget({
-    required String coachId,
-  }) async {
+  static Future<PreemptiveInterventionResult?>
+  findPreemptiveInterventionTarget({required String coachId}) async {
     if (await _isVacationMode()) return null; // 번아웃 휴식모드와 충돌 방지 (5장)
+    if (await RecoveryInsightService.isRecoveryStrategyActive()) return null;
     if (await _hasAnyPreemptiveLogToday()) return null; // 하루 최대 1회 (전역, 그룹 무관)
 
     final prefs = await SharedPreferences.getInstance();
@@ -507,14 +510,19 @@ class TaskResistanceService {
 
     // 5.1: 바닥값 + 신뢰도를 넘는 후보 중 최고점 하나만
     final candidates = profiles
-        .where((g) => g.resistanceScore >= _floor && g.confidence >= _minConfidence)
+        .where(
+          (g) => g.resistanceScore >= _floor && g.confidence >= _minConfidence,
+        )
         .toList();
     if (candidates.isEmpty) return null;
     candidates.sort((a, b) => b.resistanceScore.compareTo(a.resistanceScore));
     final target = candidates.first;
 
     final cooldownDays = _cooldownDaysFor(target.interventionMode);
-    if (await _hasRecentPreemptiveLog(target.groupId, withinDays: cooldownDays)) {
+    if (await _hasRecentPreemptiveLog(
+      target.groupId,
+      withinDays: cooldownDays,
+    )) {
       return null;
     }
 
@@ -774,6 +782,7 @@ class TaskResistanceService {
     required String masterCoachId,
   }) async {
     if (await _isVacationMode()) return;
+    if (await RecoveryInsightService.isRecoveryStrategyActive()) return;
 
     final prefs = await SharedPreferences.getInstance();
     final profiles = await _loadGroupProfiles(prefs);

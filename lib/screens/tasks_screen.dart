@@ -17,6 +17,7 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'coach_config.dart';
 import '../services/memory_service.dart';
 import '../services/task_resistance_service.dart';
+import '../services/recovery_insight_service.dart';
 import '../models/user_data.dart';
 import '../services/notification_service.dart';
 import '../services/tasks_sync_service.dart';
@@ -1256,6 +1257,9 @@ class _TasksScreenState extends State<TasksScreen>
         (t) => {
           'text': t.text,
           'done': t.done,
+          'inProgress': t.inProgress,
+          if (t.inProgressAt != null) 'startedAt': t.inProgressAt,
+          if (t.completedAt != null) 'completedAt': t.completedAt,
           'category': t.category,
           'deferred': false,
         },
@@ -1810,6 +1814,7 @@ class _TasksScreenState extends State<TasksScreen>
             : null;
       });
       _saveTasks();
+      _showRecoveryStartPraiseIfNeeded();
     } else {
       HabitItem? habitInfo;
       if (t.habitId != null) {
@@ -1971,6 +1976,17 @@ class _TasksScreenState extends State<TasksScreen>
       }
     }
     HapticFeedback.lightImpact();
+  }
+
+  Future<void> _showRecoveryStartPraiseIfNeeded() async {
+    final message = await RecoveryInsightService.localInProgressPraise(
+      isMasterCoach: _coach.isMaster,
+      coachId: widget.coachId,
+    );
+    if (!mounted || message == null) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), duration: const Duration(seconds: 3)),
+    );
   }
 
   Future<bool> _checkAndStoreDeferReminder(String completedTaskText) async {
@@ -3621,6 +3637,7 @@ class _TasksScreenState extends State<TasksScreen>
                             'type': 'range',
                             'start': startDate!.toIso8601String(),
                             'end': endDate!.toIso8601String(),
+                            'startedAt': DateTime.now().toIso8601String(),
                           };
                         });
                         _saveVacation();
@@ -3736,6 +3753,7 @@ class _TasksScreenState extends State<TasksScreen>
                           vacationInfo = {
                             'type': 'regular',
                             'days': selectedDays,
+                            'startedAt': DateTime.now().toIso8601String(),
                           };
                         });
                         _saveVacation();
@@ -3823,6 +3841,7 @@ class _TasksScreenState extends State<TasksScreen>
                           vacationInfo = {
                             'type': 'today',
                             'date': _getTodayStr(),
+                            'startedAt': DateTime.now().toIso8601String(),
                           };
                         });
                         _saveVacation();
@@ -3855,9 +3874,10 @@ class _TasksScreenState extends State<TasksScreen>
                     const SizedBox(height: 24),
                     if (vacationInfo != null) ...[
                       GestureDetector(
-                        onTap: () {
+                        onTap: () async {
                           setState(() => vacationInfo = null);
-                          _saveVacation();
+                          await _saveVacation();
+                          if (!mounted) return;
                           Navigator.pop(ctx);
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(content: Text('휴식 모드 설정이 해제되었습니다.')),

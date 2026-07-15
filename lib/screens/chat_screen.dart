@@ -22,6 +22,7 @@ import 'package:nyang_coach/services/tasks_sync_service.dart';
 import 'package:nyang_coach/services/user_title_service.dart';
 import 'package:nyang_coach/services/daily_reset_service.dart';
 import 'package:nyang_coach/services/task_resistance_service.dart';
+import 'package:nyang_coach/services/recovery_insight_service.dart';
 import 'coach_config.dart';
 import 'focus_timer_widget.dart';
 import 'cat_preview/cat_preview_intro_dialog.dart';
@@ -531,12 +532,33 @@ class _ChatScreenState extends State<ChatScreen>
     await _recordLatePlannerEntryIfNeeded();
     await _loadTaskProgress();
     final prefs = await SharedPreferences.getInstance();
+    final todayStr = _getTodayStrWithReset(prefs);
+    final plannerAwayDays = _plannerAwayDays(prefs, todayStr);
+    if (prefs.getString('nyang_vacation') == null) {
+      await RecoveryInsightService.startMasterLowActivationRestartIfEligible(
+        isMasterCoach: _coach.isMaster,
+        plannerAwayDays: plannerAwayDays,
+      );
+    }
+    await prefs.setString('nyang_last_planner_visit_date', todayStr);
     await _updateTodayRecord(prefs);
     await _refreshAttendanceStreak(prefs);
     await _loadHistoryAndGreet();
     await _restoreActiveFocusTimer();
     await _checkBedtimeMoveOffer();
     _initSpeech();
+  }
+
+  int? _plannerAwayDays(SharedPreferences prefs, String todayStr) {
+    final lastVisit = DateTime.tryParse(
+      prefs.getString('nyang_last_planner_visit_date') ?? '',
+    );
+    final today = DateTime.tryParse(todayStr);
+    if (lastVisit == null || today == null) return null;
+    final days = DateTime(today.year, today.month, today.day)
+        .difference(DateTime(lastVisit.year, lastVisit.month, lastVisit.day))
+        .inDays;
+    return days > 0 ? days : 0;
   }
 
   Future<void> _restoreActiveFocusTimer() async {
@@ -642,25 +664,7 @@ class _ChatScreenState extends State<ChatScreen>
 
   bool _containsStrongRestSignal(String text) {
     final normalized = _normalizeRestText(text);
-    const signals = [
-      '우울',
-      '무기력',
-      '지쳤',
-      '지쳐',
-      '번아웃',
-      '아무것도하기싫',
-      '기운없',
-      '힘이없',
-      '완전방전',
-      '현타',
-      '소진',
-      '탈진',
-      '녹초',
-      '멘붕',
-      '진빠',
-      '못버티겠',
-      '더는못하겠',
-    ];
+    const signals = ['번아웃', '소진', '탈진'];
     return signals.any(normalized.contains);
   }
 
@@ -726,16 +730,9 @@ class _ChatScreenState extends State<ChatScreen>
     return signals.any(normalized.contains);
   }
 
-  bool _hasRepeatedRecentRestSignals(String currentText) {
+  Future<bool> _hasRepeatedRecentRestSignals(String currentText) async {
     if (!_containsAnyRestSignal(currentText)) return false;
-    final recentUserMessages = _messages
-        .where((message) => message.isUser)
-        .toList()
-        .reversed
-        .take(6);
-    return recentUserMessages.any(
-      (message) => _containsAnyRestSignal(message.text),
-    );
+    return RecoveryInsightService.hasRecentFatigueSignalBurst();
   }
 
   bool get _canProactivelyOfferRest => const {
@@ -809,7 +806,7 @@ class _ChatScreenState extends State<ChatScreen>
     final isPureStrongRest =
         _containsStrongRestSignal(userText) && !hasExecutionIntent;
     final isRepeatedRest =
-        _hasRepeatedRecentRestSignals(userText) && !hasExecutionIntent;
+        await _hasRepeatedRecentRestSignals(userText) && !hasExecutionIntent;
 
     if (!_canProactivelyOfferRest ||
         widget.vacationInfo != null ||
@@ -871,7 +868,6 @@ class _ChatScreenState extends State<ChatScreen>
       }
       streak++;
     }
-    if (streak < 5) return false;
 
     var totalCount = 0;
     var doneCount = 0;
@@ -881,7 +877,14 @@ class _ChatScreenState extends State<ChatScreen>
       totalCount += (record['totalCount'] as num?)?.toInt() ?? 0;
       doneCount += (record['doneCount'] as num?)?.toInt() ?? 0;
     }
-    if (totalCount <= 0 || doneCount / totalCount < 0.6) return false;
+    final hasSustainedEffort =
+        streak >= 5 && totalCount > 0 && doneCount / totalCount >= 0.6;
+    final hasRecentPerformanceDrop =
+        RecoveryInsightService.hasRecentPerformanceDrop(
+          history,
+          referenceDate: today,
+        );
+    if (!hasSustainedEffort && !hasRecentPerformanceDrop) return false;
 
     await prefs.setString('nyang_rest_offer_date', todayStr);
     final restOfferMsg = await UserTitleService.applyForCoach(
@@ -944,6 +947,7 @@ class _ChatScreenState extends State<ChatScreen>
       jsonEncode({
         'type': 'today',
         'date': todayStr,
+        'startedAt': DateTime.now().toIso8601String(),
         'source': '${widget.coachId}_rest_offer',
       }),
     );
@@ -978,6 +982,9 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   Future<void> _chooseLightDay() async {
+    await RecoveryInsightService.startMasterRestDeclineRiskControlIfEligible(
+      isMasterCoach: _coach.isMaster,
+    );
     final lightDayMsg = await UserTitleService.applyForCoach(
       _lightDayMessage(),
       widget.coachId,
@@ -997,6 +1004,19 @@ class _ChatScreenState extends State<ChatScreen>
     _scrollToBottom();
   }
 
+  bool get _hasPendingRestOffer {
+    return _dynamicChips.contains('🌙 오늘은 쉬어가기') &&
+        _dynamicChips.contains('🐾 오늘은 조금만 하기');
+  }
+
+  Future<void> _maybeStartRestDeclineRiskControl(String userText) async {
+    if (!_hasPendingRestOffer) return;
+    if (_containsSelfHarmRiskSignal(userText)) return;
+    await RecoveryInsightService.startMasterRestDeclineRiskControlIfEligible(
+      isMasterCoach: _coach.isMaster,
+    );
+  }
+
   bool _isVacationCancelRequest(String text) {
     final normalized = text.replaceAll(RegExp(r'\s+'), '').toLowerCase();
     return normalized.contains('휴식취소') ||
@@ -1011,7 +1031,8 @@ class _ChatScreenState extends State<ChatScreen>
       return false;
     }
     final prefs = await SharedPreferences.getInstance();
-    if (prefs.getString('nyang_vacation') == null) return false;
+    final rawVacation = prefs.getString('nyang_vacation');
+    if (rawVacation == null) return false;
 
     await prefs.remove('nyang_vacation');
     await _updateTodayRecord(prefs);
@@ -1045,7 +1066,11 @@ class _ChatScreenState extends State<ChatScreen>
     return DateFormat('yyyy-MM-dd').format(date);
   }
 
-  DateTime? _latePlannerNightDate(DateTime now, String minSleepTime) {
+  DateTime? _latePlannerNightDate(
+    DateTime now,
+    String minSleepTime, {
+    int thresholdHours = 1,
+  }) {
     final parts = minSleepTime.split(':');
     if (parts.length < 2) return null;
     final hour = int.tryParse(parts[0]);
@@ -1059,7 +1084,7 @@ class _ChatScreenState extends State<ChatScreen>
     ];
 
     for (final bedtime in candidates) {
-      final lateThreshold = bedtime.add(const Duration(hours: 1));
+      final lateThreshold = bedtime.add(Duration(hours: thresholdHours));
       final diff = now.difference(lateThreshold);
       if (diff.isNegative || diff > const Duration(hours: 6)) continue;
       final nightDate = bedtime.hour >= 18
@@ -1091,6 +1116,27 @@ class _ChatScreenState extends State<ChatScreen>
         ? updated.sublist(updated.length - 14)
         : updated;
     await prefs.setStringList('nyang_late_planner_entry_dates', trimmed);
+
+    final severeNightDate = _latePlannerNightDate(
+      DateTime.now(),
+      minSleepTime,
+      thresholdHours: 2,
+    );
+    if (severeNightDate != null) {
+      final severeKey = _dateKey(severeNightDate);
+      final severeEntries =
+          prefs.getStringList('nyang_physical_fatigue_late_entry_dates') ?? [];
+      if (!severeEntries.contains(severeKey)) {
+        final updatedSevere = {...severeEntries, severeKey}.toList()..sort();
+        final trimmedSevere = updatedSevere.length > 14
+            ? updatedSevere.sublist(updatedSevere.length - 14)
+            : updatedSevere;
+        await prefs.setStringList(
+          'nyang_physical_fatigue_late_entry_dates',
+          trimmedSevere,
+        );
+      }
+    }
     TasksSyncService.scheduleSyncToCloud();
   }
 
@@ -4175,8 +4221,13 @@ class _ChatScreenState extends State<ChatScreen>
       }
     }
 
+    if (_containsAnyRestSignal(trimmed)) {
+      RecoveryInsightService.recordFatigueSignalToday();
+    }
+
     if (await _tryCancelVacation(trimmed)) return;
     if (await _tryActivateRequestedVacation(trimmed)) return;
+    await _maybeStartRestDeclineRiskControl(trimmed);
     if (await _maybeOfferRest(trimmed)) return;
 
     // 선제개입 저항예측 시스템 1일차: 오늘 미완료 태스크 언급 + 저항신호를 태스크 단위로 기록.
@@ -4605,11 +4656,18 @@ class _ChatScreenState extends State<ChatScreen>
       }
     }
 
+    final recoveryPrompt = _coach.isMaster
+        ? await RecoveryInsightService.buildMasterRecoveryPromptGuidance()
+        : null;
+    if (!isVacation && recoveryPrompt != null) {
+      sb.writeln(recoveryPrompt);
+    }
+
     // 선제개입 저항예측: 자주 저항했던 일정을 자연스러운 타이밍에 화제로 제시 (강요 아님, 휴식모드와 중복 방지)
     // 이번 턴에 실제로 화제를 꺼냈는지는 응답을 받은 뒤 확인한다 (_confirmPreemptiveIfMentioned 참고).
     // 마스터 코치 전용 — 프렌즈 코치는 "압박 없는 오늘 하루" 컨셉이라 목표/태스크 체크인을 하지 않음.
     _pendingPreemptiveTarget = null;
-    if (_coach.isMaster && !isVacation) {
+    if (_coach.isMaster && !isVacation && recoveryPrompt == null) {
       final preemptive =
           await TaskResistanceService.findPreemptiveInterventionTarget(
             coachId: widget.coachId,
@@ -4975,7 +5033,6 @@ class _ChatScreenState extends State<ChatScreen>
         } catch (_) {}
       }
     }
-
 
     // 10. 현재 날짜/시간 (master + halmae)
     final dayNames = ['일', '월', '화', '수', '목', '금', '토'];

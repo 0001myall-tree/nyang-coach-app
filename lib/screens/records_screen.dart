@@ -4,6 +4,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:nyang_coach/services/recovery_insight_service.dart';
 import 'package:nyang_coach/services/user_title_service.dart';
 import 'package:nyang_coach/services/analytics_service.dart';
 import 'package:nyang_coach/services/api_usage_limit_service.dart';
@@ -207,6 +208,9 @@ class _RecordsScreenState extends State<RecordsScreen> {
 
   Widget _buildRestProductivityCorrelationCard() {
     final corr = _calculateRestProductivityCorrelation();
+    final lowActivation = _isMaster
+        ? RecoveryInsightService.calculateLowActivationSummary(_history)
+        : null;
 
     String titleText = '';
     String descText = '';
@@ -296,6 +300,37 @@ class _RecordsScreenState extends State<RecordsScreen> {
                 fontWeight: FontWeight.w500,
                 color: const Color(0xFF9CA3AF),
                 height: 1.5,
+              ),
+            ),
+          ],
+          if (lowActivation != null && lowActivation.evaluatedDays > 0) ...[
+            const SizedBox(height: 14),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: lowActivation.hasStrongSignal
+                    ? const Color(0xFFFFF7ED)
+                    : const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: lowActivation.hasStrongSignal
+                      ? const Color(0xFFFED7AA)
+                      : const Color(0xFFE5E7EB),
+                ),
+              ),
+              child: Text(
+                lowActivation.hasStrongSignal
+                    ? '최근 7일 중 ${lowActivation.lowActivationDays}일은 시작한 항목이 1개 이하이고 완료율이 20% 이하였어요. 의욕 저하형 회복 신호로 참고할게요.'
+                    : '최근 7일의 시작률은 아직 의욕 저하형 강한 신호로 보이지 않습니다.',
+                style: GoogleFonts.notoSansKr(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w700,
+                  color: lowActivation.hasStrongSignal
+                      ? const Color(0xFF9A3412)
+                      : const Color(0xFF64748B),
+                  height: 1.45,
+                ),
               ),
             ),
           ],
