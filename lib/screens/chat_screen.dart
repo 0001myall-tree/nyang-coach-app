@@ -95,7 +95,6 @@ class _ParsedReply {
   final String? timerConfirmTaskName;
   final String? visionSourceId;
   final List<_SuggestedTask> suggestedTasks;
-  final bool nightCallOffer;
   _ParsedReply({
     required this.text,
     required this.chips,
@@ -105,7 +104,6 @@ class _ParsedReply {
     this.timerConfirmTaskName,
     this.visionSourceId,
     List<_SuggestedTask>? suggestedTasks,
-    this.nightCallOffer = false,
   }) : suggestedTasks = suggestedTasks ?? [];
 }
 
@@ -2317,7 +2315,6 @@ class _ChatScreenState extends State<ChatScreen>
     String? timerConfirmTaskName;
     String? visionSourceId;
     List<_SuggestedTask> suggestedTasks = [];
-    bool nightCallOffer = false;
     String text = raw;
 
     // ── CORE_REC 태그를 읽기 좋은 텍스트로 변환 ──
@@ -2348,12 +2345,6 @@ class _ChatScreenState extends State<ChatScreen>
       }
     }
 
-    // [NIGHT_CALL_OFFER] 파싱
-    if (text.contains('[NIGHT_CALL_OFFER]')) {
-      nightCallOffer = true;
-      text = text.replaceAll('[NIGHT_CALL_OFFER]', '').trim();
-    }
-
     final chipMatch = chipRegex.firstMatch(text);
     if (chipMatch != null) {
       chips = chipMatch
@@ -2377,11 +2368,6 @@ class _ChatScreenState extends State<ChatScreen>
       text = text.replaceAll(coachSwitchMatch.group(0)!, '').trim();
       suppressDefaultChips = true;
       chips = [];
-    }
-
-    // 나이트콜 제안 시 전용 버튼 강제 주입
-    if (nightCallOffer) {
-      chips = ['🌙 나이트콜 설정하기', '아니요, 괜찮아요'];
     }
 
     final timerMatch = timerConfirmRegex.firstMatch(text);
@@ -2426,7 +2412,6 @@ class _ChatScreenState extends State<ChatScreen>
       timerConfirmTaskName: timerConfirmTaskName,
       visionSourceId: visionSourceId,
       suggestedTasks: suggestedTasks,
-      nightCallOffer: nightCallOffer,
     );
   }
 
@@ -4127,53 +4112,6 @@ class _ChatScreenState extends State<ChatScreen>
       return;
     }
 
-    // ── 나이트콜 설정 버튼 인터셉트 ──────────────────────
-    if (trimmed == '🌙 나이트콜 설정하기') {
-      final prefs = await SharedPreferences.getInstance();
-      final minSleepTimeStr = prefs.getString('nyang_premium_min_sleep_time');
-      final nightCallCoach =
-          prefs.getString('nyang_night_call_coach') ?? 'sec_male';
-
-      if (minSleepTimeStr != null) {
-        final parts = minSleepTimeStr.split(':');
-        final bedH = int.tryParse(parts[0]) ?? 1;
-        final bedM = int.tryParse(parts.length > 1 ? parts[1] : '0') ?? 0;
-        int nightCallH = bedH - 2;
-        if (nightCallH < 0) nightCallH += 24;
-        final displayH = _formatTime12(
-          '${nightCallH.toString().padLeft(2, '0')}:${bedM.toString().padLeft(2, '0')}',
-        );
-
-        await NotificationService().scheduleNightCall(
-          hour: nightCallH,
-          minute: bedM,
-          coachId: nightCallCoach,
-        );
-
-        setState(() {
-          _messages.add(
-            ChatMessage(text: trimmed, isUser: true, time: DateTime.now()),
-          );
-          _messages.add(
-            ChatMessage(
-              text:
-                  '알겠습니다. 오늘 $displayH시에 나이트콜이 설정되었습니다. 남은 시간 동안 잘 마무리하시길 바랍니다.',
-              isUser: false,
-              time: DateTime.now(),
-            ),
-          );
-          _dynamicChips = _coach.chips;
-        });
-        _scrollToBottom();
-        await _saveHistory();
-        await AnalyticsService.logConversationMessage(
-          coachId: widget.coachId,
-          usedApi: false,
-        );
-        return;
-      }
-    }
-
     if (_userData.isPlanActive && _isScheduleRegistrationCommand(trimmed)) {
       setState(() {
         _messages.add(
@@ -5255,30 +5193,14 @@ class _ChatScreenState extends State<ChatScreen>
           shouldInterveneByLateEntry &&
           minSleepTimeStr != null) {
         try {
-          final parts = minSleepTimeStr.split(':');
-          final bedH = int.tryParse(parts[0]) ?? 1;
-          final bedM = int.tryParse(parts.length > 1 ? parts[1] : '0') ?? 0;
-          // 나이트콜 시간 = 최소 취침 시간 - 2시간
-          int nightCallH = bedH - 2;
-          if (nightCallH < 0) nightCallH += 24;
-          final nightCallTime =
-              '${nightCallH.toString().padLeft(2, '0')}:${bedM.toString().padLeft(2, '0')}';
-          final displayH = _formatTime12(nightCallTime);
-
-          // 개입 시간 조건: 저녁 6시(18시) ~ 나이트콜 시간 사이에 앱을 열었을 때만 개입
-          final currentTotalMinutes =
-              DateTime.now().hour * 60 + DateTime.now().minute;
-          final nightCallTotalMinutes = nightCallH * 60 + bedM;
+          // 취침시간 기준 늦은 시간대(취침+1h~+7h)에 실제로 들어왔을 때만 개입.
+          // (예전엔 저녁 6시~취침 2시간전 구간에도 선제적으로 나이트콜 제안을 했으나,
+          // 나이트콜은 이제 사용자 설정으로 자동 발동되므로 그 제안 로직은 제거함 — 실제로
+          // 무리하고 있을 때(늦게까지 깨어있을 때)만 개입하는 게 목적에 맞음)
           final isLateNightEntry =
               _latePlannerNightDate(DateTime.now(), minSleepTimeStr) != null;
-          final isInterventionWindow =
-              isLateNightEntry ||
-              (currentTotalMinutes >= 18 * 60 &&
-                  (nightCallTotalMinutes >= 18 * 60
-                      ? currentTotalMinutes < nightCallTotalMinutes
-                      : currentTotalMinutes < 24 * 60));
 
-          if (isInterventionWindow) {
+          if (isLateNightEntry) {
             if (latestLateEntry != null) {
               await prefs.setString(
                 'nyang_late_planner_intervention_night',
@@ -5293,29 +5215,14 @@ class _ChatScreenState extends State<ChatScreen>
             sb.writeln(
               '1. 실제 수면 데이터가 아니라 앱 진입 패턴 기반 추정임을 절대 단정하지 말고, 아래 문장처럼 부드럽게 말하세요:',
             );
-            if (isLateNightEntry) {
-              sb.writeln(
-                '   "오늘도 늦게 깨어 있으시네요. 피곤하지 않으세요? 혹시 꼭 끝내야 하는 일이라도 있으신가요?"',
-              );
-            } else {
-              sb.writeln(
-                '   "최근 이틀 연속으로 취침 기준 시간을 넘긴 늦은 시간에 들어오셔서, 컨디션이 조금 밀릴까 걱정됩니다. 오늘은 $displayH시부터 취침 준비에 들어가시면 좋을 것 같은데, 혹시 $displayH시 넘어서라도 꼭 끝내야 할 중요한 일정이 있으세요?"',
-              );
-            }
             sb.writeln(
-              '2. 사용자가 "있다" / "응" / "맞아" 등 긍정하면: 간략히 공감하고 "힘드시겠지만 파이팅 하십시오." 로 마무리. 더 이상 나이트콜 제안 안 함.',
+              '   "오늘도 늦게 깨어 있으시네요. 피곤하지 않으세요? 혹시 꼭 끝내야 하는 일이라도 있으신가요?"',
             );
-            if (isLateNightEntry) {
-              sb.writeln(
-                '3. 사용자가 "없다" / "아니" / "딱히" 등 부정하면: 강요하지 말고 걱정과 제안의 톤으로 말하세요. 예: "요즘 체력이 떨어지실까 봐 걱정돼요. 오늘은 조금 일찍 눈 붙이는 거 어떠세요?" 죄책감을 주지 말고, 사용자가 편하게 내려놓을 수 있게 짧고 부드럽게 마무리하세요. [NIGHT_CALL_OFFER] 태그는 출력하지 마세요.',
-              );
-            } else {
-              sb.writeln(
-                '3. 사용자가 "없다" / "아니" 등 부정하면: "그럼 오늘 $displayH시에 나이트콜을 해드릴까요?" 라고 묻고 답변 끝에 반드시 [NIGHT_CALL_OFFER] 태그를 출력하세요. 이 태그는 대화 텍스트에 절대 노출되어선 안 됩니다.',
-              );
-            }
             sb.writeln(
-              '* 나이트콜 시간: $nightCallTime (최소 취침 시간 $minSleepTimeStr 기준 2시간 전)',
+              '2. 사용자가 "있다" / "응" / "맞아" 등 긍정하면: 간략히 공감하고 "힘드시겠지만 파이팅 하십시오." 로 마무리.',
+            );
+            sb.writeln(
+              '3. 사용자가 "없다" / "아니" / "딱히" 등 부정하면: 강요하지 말고 걱정과 제안의 톤으로 말하세요. 예: "요즘 체력이 떨어지실까 봐 걱정돼요. 오늘은 조금 일찍 눈 붙이는 거 어떠세요?" 죄책감을 주지 말고, 사용자가 편하게 내려놓을 수 있게 짧고 부드럽게 마무리하세요.',
             );
           }
         } catch (_) {}

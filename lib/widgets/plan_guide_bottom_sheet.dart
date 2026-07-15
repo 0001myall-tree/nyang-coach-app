@@ -112,7 +112,7 @@ class _PlanGuideBottomSheetState extends State<_PlanGuideBottomSheet> {
                           'assets/icons/wand-magic-sparkles.svg',
                           '말 한마디로 일정 추가',
                         ),
-                        ('assets/icons/thumbtack.svg', '미루는 항목 집중 관리'),
+                        ('assets/icons/thumbtack.svg', '미루는 항목, 습관이 될 때까지 관리'),
                         ('assets/icons/route.svg', '장기 목표 조력'),
                       ],
                     ),
@@ -551,7 +551,7 @@ class _PlanPriceBox extends StatelessWidget {
           const SizedBox(height: 12),
           ...features.map((feature) {
             final isSignatureFeature =
-                feature.$2 == '미루는 항목 집중 관리' || feature.$2 == '장기 목표 조력';
+                feature.$2 == '미루는 항목, 습관이 될 때까지 관리' || feature.$2 == '장기 목표 조력';
             return Padding(
               padding: const EdgeInsets.only(bottom: 8),
               child: Row(
