@@ -4669,31 +4669,53 @@ class _ChatScreenState extends State<ChatScreen>
 
     // 선제개입 저항예측: 자주 저항했던 일정을 자연스러운 타이밍에 화제로 제시 (강요 아님, 휴식모드와 중복 방지)
     // 이번 턴에 실제로 화제를 꺼냈는지는 응답을 받은 뒤 확인한다 (_confirmPreemptiveIfMentioned 참고).
+    // 마스터 코치 전용 — 프렌즈 코치는 "압박 없는 오늘 하루" 컨셉이라 목표/태스크 체크인을 하지 않음.
     _pendingPreemptiveTarget = null;
-    if (!isVacation) {
+    if (_coach.isMaster && !isVacation) {
       final preemptive =
           await TaskResistanceService.findPreemptiveInterventionTarget(
             coachId: widget.coachId,
           );
       if (preemptive != null) {
         _pendingPreemptiveTarget = preemptive;
-        sb.writeln('\n[특별 지침: 선제 화제 제시 (자연스러운 타이밍에만, 강요 금지)]');
-        sb.writeln(
-          '사용자가 평소 자주 부담스러워했던 "${preemptive.taskText}" 일정이 오늘 아직 남아있습니다. 다음 규칙을 지키며 대화 흐름에 맞을 때만 화제로 꺼내보세요:',
-        );
-        sb.writeln(
-          '1. **질문으로 시작**: 반드시 질문 형태로 제안하세요. 예: "그러고 보니 오늘 ${preemptive.taskText} 일정도 있으셨죠. 오늘은 어떠세요?", "지금 여유 있으시다면 ${preemptive.taskText}부터 해보시는 건 어떠세요?"',
-        );
-        sb.writeln(
-          '2. **명령·추궁 금지**: "${preemptive.taskText} 하세요" 같은 명령형이나 "왜 아직 안 하셨어요?" 같은 추궁형은 절대 쓰지 마세요.',
-        );
-        sb.writeln(
-          '3. **대화 맥락에 연결**: 사용자가 지금 다른 감정이나 급한 일을 이야기하고 있다면, 먼저 충분히 공감한 뒤 자연스럽게 이어서 화제를 꺼내세요. 예: 사용자가 "너무 피곤하다"고 하면 "오늘 하루 쉽지 않으셨군요. 그러고 보니 오늘 ${preemptive.taskText} 일정도 있으셨죠. 오늘은 어떠세요?"처럼 연결하세요.',
-        );
-        sb.writeln(
-          '4. **타이밍이 안 맞으면 생략**: 지금 이 화제를 꺼내는 게 어색하다고 판단되면 이번 턴엔 언급하지 않아도 됩니다.',
-        );
-        sb.writeln('5. 이 지침은 이번 응답에서 한 번만 적용하고, 같은 응답 안에서 반복하지 마세요.');
+        if (preemptive.isTimeSpecific) {
+          // 시간 지정형: "지금 여유되면" 톤이 아니라 일정정리/컨디션/시간확보 확인 톤으로.
+          sb.writeln('\n[특별 지침: 시간 지정 일정 체크인 (자연스러운 타이밍에만, 강요 금지)]');
+          sb.writeln(
+            '사용자가 평소 자주 부담스러워했던 "${preemptive.taskText}" 일정이 곧 시작됩니다(정해진 시간 있음). 다음 규칙을 지키며 대화 흐름에 맞을 때만 화제로 꺼내보세요:',
+          );
+          sb.writeln(
+            '1. **일정/컨디션/시간 확보를 묻는 질문으로**: "${preemptive.taskText}"를 지금 당장 하라고 권하지 말고, 이미 정해둔 시간을 존중하며 가볍게 확인하세요. 예: "이따 ${preemptive.taskText} 있으신데 다른 일정은 정리되고 계세요?", "${preemptive.taskText} 앞두고 계신데 컨디션은 괜찮으세요?", "이따 시간 확보는 괜찮으신가요?"',
+          );
+          sb.writeln(
+            '2. **"마음의 준비" 같은 표현 금지**: 감정을 직접 짚어주는 표현("마음의 준비 되셨어요?" 등)은 쓰지 말고, 상황·논리 위주로 가볍게 확인하세요.',
+          );
+          sb.writeln(
+            '3. **명령·추궁 금지**: "${preemptive.taskText} 하세요" 같은 명령형이나 "왜 아직 안 하셨어요?" 같은 추궁형은 절대 쓰지 마세요.',
+          );
+          sb.writeln(
+            '4. **타이밍이 안 맞으면 생략**: 지금 이 화제를 꺼내는 게 어색하다고 판단되면 이번 턴엔 언급하지 않아도 됩니다.',
+          );
+          sb.writeln('5. 이 지침은 이번 응답에서 한 번만 적용하고, 같은 응답 안에서 반복하지 마세요.');
+        } else {
+          sb.writeln('\n[특별 지침: 선제 화제 제시 (자연스러운 타이밍에만, 강요 금지)]');
+          sb.writeln(
+            '사용자가 평소 자주 부담스러워했던 "${preemptive.taskText}" 일정이 오늘 아직 남아있습니다. 다음 규칙을 지키며 대화 흐름에 맞을 때만 화제로 꺼내보세요:',
+          );
+          sb.writeln(
+            '1. **질문으로 시작**: 반드시 질문 형태로 제안하세요. 예: "그러고 보니 오늘 ${preemptive.taskText} 일정도 있으셨죠. 오늘은 어떠세요?", "지금 여유 있으시다면 ${preemptive.taskText}부터 해보시는 건 어떠세요?"',
+          );
+          sb.writeln(
+            '2. **명령·추궁 금지**: "${preemptive.taskText} 하세요" 같은 명령형이나 "왜 아직 안 하셨어요?" 같은 추궁형은 절대 쓰지 마세요.',
+          );
+          sb.writeln(
+            '3. **대화 맥락에 연결**: 사용자가 지금 다른 감정이나 급한 일을 이야기하고 있다면, 먼저 충분히 공감한 뒤 자연스럽게 이어서 화제를 꺼내세요. 예: 사용자가 "너무 피곤하다"고 하면 "오늘 하루 쉽지 않으셨군요. 그러고 보니 오늘 ${preemptive.taskText} 일정도 있으셨죠. 오늘은 어떠세요?"처럼 연결하세요.',
+          );
+          sb.writeln(
+            '4. **타이밍이 안 맞으면 생략**: 지금 이 화제를 꺼내는 게 어색하다고 판단되면 이번 턴엔 언급하지 않아도 됩니다.',
+          );
+          sb.writeln('5. 이 지침은 이번 응답에서 한 번만 적용하고, 같은 응답 안에서 반복하지 마세요.');
+        }
       }
     }
 

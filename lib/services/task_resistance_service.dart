@@ -13,12 +13,17 @@ class PreemptiveInterventionResult {
   final String message;
   final String coachId;
 
+  /// 태스크에 시간(timeStart/time)이 지정돼 있었는지. true면 채팅 화면에서
+  /// "지금 여유되면" 톤 대신 "일정 정리/컨디션/시간 확보" 톤 지침을 써야 한다.
+  final bool isTimeSpecific;
+
   PreemptiveInterventionResult({
     required this.taskId,
     required this.taskText,
     required this.groupId,
     required this.message,
     required this.coachId,
+    this.isTimeSpecific = false,
   });
 }
 
@@ -48,8 +53,9 @@ class TaskResistanceService {
   };
 
   static String? _matchCategory(String taskText) {
+    final lowerText = taskText.toLowerCase();
     for (final entry in _categoryKeywords.entries) {
-      if (entry.value.any((keyword) => taskText.contains(keyword))) {
+      if (entry.value.any((keyword) => lowerText.contains(keyword.toLowerCase()))) {
         return entry.key;
       }
     }
@@ -507,10 +513,7 @@ class TaskResistanceService {
     candidates.sort((a, b) => b.resistanceScore.compareTo(a.resistanceScore));
     final target = candidates.first;
 
-    final cooldownDays = switch (target.interventionMode) {
-      'faded' => 14, // 6.2 상태머신: 줄어든 상태
-      _ => 3, // active / tapering_test 기본
-    };
+    final cooldownDays = _cooldownDaysFor(target.interventionMode);
     if (await _hasRecentPreemptiveLog(target.groupId, withinDays: cooldownDays)) {
       return null;
     }
@@ -527,7 +530,25 @@ class TaskResistanceService {
 
     final taskText = matchedTask['text'] as String;
     final taskId = matchedTask['id'].toString();
-    final message = _generatePreemptiveMessage(coachId, taskText);
+
+    // 시간 지정형이면, 대화 중 자연스러운 체크인도 시간 지정형 체크인과 동일한 창(시작
+    // 30분 전~5분 후)에서만 발동하고 톤도 다르게 쓴다. 창 밖이면 이번 턴엔 발동 안 함.
+    final scheduledTime = _parseTaskTime(matchedTask);
+    final isTimeSpecific = scheduledTime != null;
+    if (isTimeSpecific) {
+      final now = DateTime.now();
+      final windowStart = scheduledTime.subtract(
+        const Duration(minutes: _scheduledCheckInLeadMinutes),
+      );
+      final windowEnd = scheduledTime.add(
+        const Duration(minutes: _scheduledCheckInGraceMinutes),
+      );
+      if (now.isBefore(windowStart) || now.isAfter(windowEnd)) return null;
+    }
+
+    final message = isTimeSpecific
+        ? _generateScheduledCheckInMessage(taskText)
+        : _generatePreemptiveMessage(coachId, taskText);
 
     return PreemptiveInterventionResult(
       taskId: taskId,
@@ -535,7 +556,22 @@ class TaskResistanceService {
       groupId: target.groupId,
       message: message,
       coachId: coachId,
+      isTimeSpecific: isTimeSpecific,
     );
+  }
+
+  /// 태스크의 timeStart(우선)/time 필드를 오늘 날짜 기준 DateTime으로 파싱. 없거나 "HH:mm" 형식이
+  /// 아니면 null (시간 미정형으로 취급).
+  static DateTime? _parseTaskTime(Map task) {
+    final timeStr = (task['timeStart'] as String?) ?? (task['time'] as String?);
+    if (timeStr == null) return null;
+    final parts = timeStr.split(':');
+    if (parts.length != 2) return null;
+    final hour = int.tryParse(parts[0]);
+    final minute = int.tryParse(parts[1]);
+    if (hour == null || minute == null) return null;
+    final now = DateTime.now();
+    return DateTime(now.year, now.month, now.day, hour, minute);
   }
 
   /// 코치의 실제 응답 텍스트에 대상 태스크가 언급됐는지 정규화 부분일치로 확인하고,
@@ -566,6 +602,12 @@ class TaskResistanceService {
     return prefs.getString('nyang_vacation') != null;
   }
 
+  /// 그룹별 재개입 쿨다운. active/tapering_test는 근거 없는 임의 대기시간을 두지 않고
+  /// 전역 1일 1회 캡에만 맡긴다. faded만 "3회 연속 성공"이라는 근거가 있으므로 쿨다운을 둔다.
+  static int _cooldownDaysFor(String interventionMode) {
+    return interventionMode == 'faded' ? 5 : 0;
+  }
+
   /// 오늘 날짜로 이미 선제개입 로그가 하나라도 있으면 true (그룹 무관, 전역 1일 1회 제한).
   /// 로그는 코치가 실제로 화제를 꺼낸 게 확인됐을 때만 기록되므로([confirmPreemptiveIntervention]),
   /// 이 체크는 "오늘 이미 실제로 성공한 적이 있는가"를 의미한다.
@@ -593,15 +635,18 @@ class TaskResistanceService {
       return null;
     }
 
-    final incompleteTasks = tasksList.whereType<Map>().where(
+    // done이 아니어도 이미 진행 중(inProgress)인 태스크는 제외 — 사용자가 이미 시작한 일에
+    // "언제 하실 생각이세요?"라고 묻는 건 어색하다.
+    final eligibleTasks = tasksList.whereType<Map>().where(
       (t) =>
           (t['category'] == 'today' ||
               t['category'] == 'habit' ||
               t['category'] == 'schedule') &&
-          t['done'] != true,
+          t['done'] != true &&
+          t['inProgress'] != true,
     );
 
-    for (final task in incompleteTasks) {
+    for (final task in eligibleTasks) {
       final text = task['text'] as String?;
       if (text == null || text.trim().isEmpty) continue;
       final groupId = computeGroupId(
@@ -710,5 +755,169 @@ class TaskResistanceService {
       eventCount: g.eventCount,
     );
     await _saveGroupProfiles(prefs, profiles);
+  }
+
+  // ── 시간 지정형 선제 체크인 (마스터 전용, 배지 알림) ────────────────
+  // 대화형 선제개입(findPreemptiveInterventionTarget)과 별개의 독립 예산으로 동작한다.
+  // 마스터 코치 채팅 화면에 있지 않아도(코치선택/프렌즈 코치 화면) 놓치지 않도록,
+  // 시작 30분 전~5분 후 창에서 정적 문구를 바로 채팅 기록에 심어두고 배지로 알린다.
+  // LLM 호출이 없어 "생략될 위험" 자체가 없다 — 창에 들어오면 반드시 메시지가 있다.
+
+  static const int _scheduledCheckInLeadMinutes = 30;
+  static const int _scheduledCheckInGraceMinutes = 5;
+  static const String _scheduledCheckInDeliveredKey =
+      'nyang_scheduled_checkin_delivered';
+  static const String _scheduledCheckInUnreadKey =
+      'nyang_scheduled_checkin_unread';
+
+  static Future<void> checkForScheduledCheckIn({
+    required String masterCoachId,
+  }) async {
+    if (await _isVacationMode()) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    final profiles = await _loadGroupProfiles(prefs);
+    final candidates = profiles
+        .where(
+          (g) => g.resistanceScore >= _floor && g.confidence >= _minConfidence,
+        )
+        .toList();
+    if (candidates.isEmpty) return;
+    candidates.sort((a, b) => b.resistanceScore.compareTo(a.resistanceScore));
+
+    final rawTasks = prefs.getString('nyang_tasks');
+    if (rawTasks == null) return;
+    List<dynamic> tasksList;
+    try {
+      tasksList = jsonDecode(rawTasks) as List;
+    } catch (_) {
+      return;
+    }
+
+    final now = DateTime.now();
+    final eligibleTasks = tasksList.whereType<Map>().where(
+      (t) =>
+          (t['category'] == 'today' ||
+              t['category'] == 'habit' ||
+              t['category'] == 'schedule') &&
+          t['done'] != true &&
+          t['inProgress'] != true,
+    );
+
+    for (final group in candidates) {
+      // 같은 그룹을 대화형 선제개입과 이중으로 찌르지 않도록 쿨다운을 공유한다.
+      final cooldownDays = _cooldownDaysFor(group.interventionMode);
+      if (await _hasRecentPreemptiveLog(
+        group.groupId,
+        withinDays: cooldownDays,
+      )) {
+        continue;
+      }
+
+      for (final task in eligibleTasks) {
+        final text = task['text'] as String?;
+        final taskId = task['id']?.toString();
+        if (text == null || text.trim().isEmpty || taskId == null) continue;
+
+        final groupId = computeGroupId(
+          habitId: task['habitId'] as String?,
+          taskText: text,
+        );
+        if (groupId != group.groupId) continue;
+
+        final scheduled = _parseTaskTime(task);
+        if (scheduled == null) continue; // 시간 미정형은 이 기능 대상 아님
+        final windowStart = scheduled.subtract(
+          const Duration(minutes: _scheduledCheckInLeadMinutes),
+        );
+        final windowEnd = scheduled.add(
+          const Duration(minutes: _scheduledCheckInGraceMinutes),
+        );
+        if (now.isBefore(windowStart) || now.isAfter(windowEnd)) continue;
+
+        final fireKey = '${taskId}_${DateFormat('yyyy-MM-dd').format(now)}';
+        final delivered =
+            prefs.getStringList(_scheduledCheckInDeliveredKey) ?? [];
+        if (delivered.contains(fireKey)) continue;
+
+        final message = _generateScheduledCheckInMessage(text);
+        await _appendStaticMessageToCoachHistory(masterCoachId, message);
+
+        delivered.add(fireKey);
+        await prefs.setStringList(_scheduledCheckInDeliveredKey, delivered);
+        await prefs.setString(
+          _scheduledCheckInUnreadKey,
+          jsonEncode({
+            'taskId': taskId,
+            'coachId': masterCoachId,
+            'fireKey': fireKey,
+          }),
+        );
+
+        await _logPreemptiveIntervention(
+          groupId: group.groupId,
+          taskId: taskId,
+          message: message,
+          coachId: masterCoachId,
+        );
+        return; // 한 번 전달했으면 이번 체크는 종료
+      }
+    }
+  }
+
+  static String _generateScheduledCheckInMessage(String taskText) {
+    final templates = [
+      '대표님, 이따 $taskText 있으신데 다른 일정은 정리되고 계세요?',
+      '대표님, $taskText 앞두고 계신데 컨디션은 괜찮으세요?',
+      '대표님, 이따 시간 확보는 괜찮으신가요? $taskText 일정이 있으셔서요.',
+    ];
+    return templates[Random().nextInt(templates.length)];
+  }
+
+  /// LLM 호출 없이, 지정된 코치의 채팅 기록에 코치 발화를 직접 추가한다.
+  /// 저장 스키마는 ChatMessage.toJson()과 동일하게 맞춘다 (text/isUser/time).
+  static Future<void> _appendStaticMessageToCoachHistory(
+    String coachId,
+    String message,
+  ) async {
+    final prefs = await SharedPreferences.getInstance();
+    final key = 'nyang_chat_history_$coachId';
+    final raw = prefs.getString(key);
+    List<dynamic> history = [];
+    if (raw != null) {
+      try {
+        final decoded = jsonDecode(raw);
+        if (decoded is List) history = decoded;
+      } catch (_) {}
+    }
+    history.add({
+      'text': message,
+      'isUser': false,
+      'time': DateTime.now().toIso8601String(),
+    });
+    final trimmed = history.length > 100
+        ? history.sublist(history.length - 100)
+        : history;
+    await prefs.setString(key, jsonEncode(trimmed));
+  }
+
+  /// 배지를 띄울지 여부.
+  static Future<bool> hasUnreadScheduledCheckIn() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_scheduledCheckInUnreadKey) != null;
+  }
+
+  /// 배지를 눌러 확인 처리하고, 이동할 코치 id를 반환한다 (없으면 null).
+  static Future<String?> consumeUnreadScheduledCheckIn() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_scheduledCheckInUnreadKey);
+    if (raw == null) return null;
+    await prefs.remove(_scheduledCheckInUnreadKey);
+    try {
+      final decoded = jsonDecode(raw) as Map;
+      return decoded['coachId'] as String?;
+    } catch (_) {
+      return null;
+    }
   }
 }

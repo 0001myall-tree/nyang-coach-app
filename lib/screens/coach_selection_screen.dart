@@ -15,6 +15,8 @@ import '../widgets/app_bottom_sheet.dart';
 import '../widgets/app_card.dart';
 import '../widgets/app_chip.dart';
 import '../widgets/plan_guide_bottom_sheet.dart';
+import '../widgets/scheduled_checkin_icon.dart';
+import '../services/task_resistance_service.dart';
 
 class CoachSelectionScreen extends StatefulWidget {
   final String? returnCoachId;
@@ -471,12 +473,48 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
     }
   }
 
+  bool _hasUnreadScheduledCheckIn = false;
+  Timer? _scheduledCheckInPollTimer;
+
   @override
   void initState() {
     super.initState();
     UserDataService.load().then((d) {
       if (mounted) setState(() => _userData = d);
     });
+    _refreshScheduledCheckInBadge();
+    _scheduledCheckInPollTimer = Timer.periodic(
+      const Duration(seconds: 15),
+      (_) => _refreshScheduledCheckInBadge(),
+    );
+  }
+
+  @override
+  void dispose() {
+    _scheduledCheckInPollTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _refreshScheduledCheckInBadge() async {
+    final unread = await TaskResistanceService.hasUnreadScheduledCheckIn();
+    if (mounted && unread != _hasUnreadScheduledCheckIn) {
+      setState(() => _hasUnreadScheduledCheckIn = unread);
+    }
+  }
+
+  Future<void> _openScheduledCheckIn() async {
+    final coachId = await TaskResistanceService.consumeUnreadScheduledCheckIn();
+    if (mounted) setState(() => _hasUnreadScheduledCheckIn = false);
+    if (coachId == null || !mounted) return;
+    Navigator.of(context).push(
+      PageRouteBuilder(
+        pageBuilder: (_, __, ___) => MainTabScreen(coachId: coachId),
+        transitionsBuilder: (_, animation, __, child) {
+          return FadeTransition(opacity: animation, child: child);
+        },
+        transitionDuration: const Duration(milliseconds: 300),
+      ),
+    );
   }
 
   List<Map<String, dynamic>> get _friendsCoaches => [
@@ -1217,27 +1255,36 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: TextButton(
-                        onPressed: _showPlanGuidePlaceholder,
-                        style: TextButton.styleFrom(
-                          foregroundColor: AppDesignTokens.brandAccent,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 6,
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        if (_hasUnreadScheduledCheckIn)
+                          ScheduledCheckInIcon(
+                            onTap: _openScheduledCheckIn,
+                            iconColor: AppDesignTokens.brandAccent,
+                          )
+                        else
+                          const SizedBox.shrink(),
+                        TextButton(
+                          onPressed: _showPlanGuidePlaceholder,
+                          style: TextButton.styleFrom(
+                            foregroundColor: AppDesignTokens.brandAccent,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 6,
+                            ),
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                           ),
-                          minimumSize: Size.zero,
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
-                        child: Text(
-                          '구독 안내 >',
-                          style: GoogleFonts.notoSansKr(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w800,
+                          child: Text(
+                            '구독 안내 >',
+                            style: GoogleFonts.notoSansKr(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w800,
+                            ),
                           ),
                         ),
-                      ),
+                      ],
                     ),
                     const SizedBox(height: 32),
                     Center(
