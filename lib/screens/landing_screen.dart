@@ -990,7 +990,7 @@ class _LandingScreenState extends State<LandingScreen>
                                             MainAxisAlignment.center,
                                         children: [
                                           Text(
-                                            '로그인 / 가입',
+                                            '로그인',
                                             style: TextStyle(
                                               fontSize: 18,
                                               fontWeight: FontWeight.bold,
@@ -1019,7 +1019,14 @@ class _LandingScreenState extends State<LandingScreen>
                         AppButton(
                           label: '로그인 없이 둘러보기',
                           icon: const Icon(Icons.visibility_outlined),
-                          onPressed: () {},
+                          onPressed: () {
+                            Navigator.of(context).pushReplacement(
+                              MaterialPageRoute(
+                                builder: (context) =>
+                                    const MainTabScreen(coachId: 'cat'),
+                              ),
+                            );
+                          },
                           variant: AppButtonVariant.outline,
                           backgroundColor: AppDesignTokens.surface,
                           foregroundColor: AppDesignTokens.brandPressed,
