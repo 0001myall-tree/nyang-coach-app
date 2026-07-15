@@ -69,7 +69,7 @@ class _LandingScreenState extends State<LandingScreen>
       _enforceWidgetAccessInBackground(
         hasMasterPlan: data.isPlanActive && data.planType == 'master',
       );
-      _syncTasksInBackground();
+      await _syncTasksBeforeNavigation();
 
       final prefs = await SharedPreferences.getInstance();
       await prefs.reload();
@@ -151,18 +151,61 @@ class _LandingScreenState extends State<LandingScreen>
     );
   }
 
-  void _syncTasksInBackground() {
-    unawaited(
-      (() async {
-        await TasksSyncService.syncFromCloud();
-        await NotificationService().syncDailyMorningCall();
-        await NotificationService().syncDailyNightCall();
-        await NotificationService().syncCoreReminders();
-      })().catchError((Object e, StackTrace stackTrace) {
-        debugPrint('Task cloud sync failed: $e');
-        debugPrintStack(stackTrace: stackTrace);
-      }),
-    );
+  Future<void> _syncTasksBeforeNavigation() async {
+    try {
+      final diag = await TasksSyncService.syncFromCloud().timeout(
+        const Duration(seconds: 12),
+        onTimeout: () => {'status': 'ERROR', 'message': 'TIMEOUT'},
+      );
+      if (!_isTaskSyncUsable(diag)) {
+        _showCloudSyncWarning(diag['message']?.toString() ?? 'UNKNOWN_ERROR');
+      }
+      await _syncNotificationsSafely();
+    } catch (e, stackTrace) {
+      debugPrint('Task cloud sync failed: $e');
+      debugPrintStack(stackTrace: stackTrace);
+      _showCloudSyncWarning(e.toString());
+    }
+  }
+
+  Future<void> _syncNotificationsSafely() async {
+    try {
+      await NotificationService().syncDailyMorningCall();
+    } catch (e) {
+      debugPrint('Morning notification sync skipped: $e');
+    }
+    try {
+      await NotificationService().syncDailyNightCall();
+    } catch (e) {
+      debugPrint('Night notification sync skipped: $e');
+    }
+    try {
+      await NotificationService().syncCoreReminders();
+    } catch (e) {
+      debugPrint('Core reminder sync skipped: $e');
+    }
+  }
+
+  bool _isTaskSyncUsable(Map<String, dynamic> diag) {
+    final status = diag['status'];
+    return status == 'SUCCESS' || status == 'EMPTY';
+  }
+
+  void _showCloudSyncWarning(String message) {
+    if (!mounted) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '로그인은 됐지만 클라우드 동기화에 실패했어요: $message',
+            style: GoogleFonts.notoSansKr(fontWeight: FontWeight.w700),
+          ),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    });
   }
 
   @override
@@ -551,7 +594,17 @@ class _LandingScreenState extends State<LandingScreen>
             : '로그인 성공: ${userCred.user?.displayName}',
       );
       if (!isNaverTest) {
-        await TasksSyncService.syncFromCloud();
+        final diag = await TasksSyncService.syncFromCloud();
+        if (!outerContext.mounted) return;
+        if (!_isTaskSyncUsable(diag)) {
+          ScaffoldMessenger.of(outerContext).showSnackBar(
+            SnackBar(
+              content: Text('로그인은 됐지만 클라우드 동기화에 실패했어요: ${diag['message']}'),
+              backgroundColor: Colors.redAccent,
+            ),
+          );
+          return;
+        }
       }
       final data = await UserDataService.load();
       if (!outerContext.mounted) return;
@@ -559,6 +612,7 @@ class _LandingScreenState extends State<LandingScreen>
       final testCoachId = data.selectedCoachId ?? 'cat';
       if (data.selectedCoachId == null) {
         await UserDataService.setSelectedCoach(testCoachId);
+        if (!outerContext.mounted) return;
       }
 
       if (isNaverTest || data.canAccessCoach(testCoachId)) {
@@ -589,9 +643,14 @@ class _LandingScreenState extends State<LandingScreen>
         : provider == 'naverTest'
         ? '네이버 테스트'
         : 'Google';
+    final failureMessage = authService.lastErrorMessage;
     ScaffoldMessenger.of(outerContext).showSnackBar(
       SnackBar(
-        content: Text('$providerName 로그인에 실패했습니다.'),
+        content: Text(
+          failureMessage == null
+              ? '$providerName 로그인에 실패했습니다.'
+              : '$providerName 로그인에 실패했습니다: $failureMessage',
+        ),
         backgroundColor: Colors.redAccent,
       ),
     );

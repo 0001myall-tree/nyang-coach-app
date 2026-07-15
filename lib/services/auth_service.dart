@@ -9,6 +9,9 @@ import '../services/tasks_sync_service.dart';
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final GoogleSignIn _googleSignIn = GoogleSignIn(scopes: ['email']);
+  String? _lastErrorMessage;
+
+  String? get lastErrorMessage => _lastErrorMessage;
 
   // 유저 상태 스트림 (로그인/로그아웃 상태 변화 감지)
   Stream<User?> get authStateChanges => _auth.authStateChanges();
@@ -18,6 +21,7 @@ class AuthService {
 
   // 구글 로그인
   Future<UserCredential?> signInWithGoogle() async {
+    _lastErrorMessage = null;
     try {
       UserCredential? cred;
       if (kIsWeb) {
@@ -45,12 +49,14 @@ class AuthService {
 
       return cred;
     } catch (e) {
-      debugPrint("Google Sign-In Error: $e");
+      _lastErrorMessage = _formatSignInError(e);
+      debugPrint("Google Sign-In Error: $_lastErrorMessage");
       return null;
     }
   }
 
   Future<UserCredential?> signInWithApple() async {
+    _lastErrorMessage = null;
     try {
       final appleProvider = AppleAuthProvider()..addScope('email');
       final cred = kIsWeb
@@ -60,12 +66,14 @@ class AuthService {
       await _syncAfterSignIn(cred);
       return cred;
     } catch (e) {
-      debugPrint("Apple Sign-In Error: $e");
+      _lastErrorMessage = _formatSignInError(e);
+      debugPrint("Apple Sign-In Error: $_lastErrorMessage");
       return null;
     }
   }
 
   Future<UserCredential?> signInWithNaverTest() async {
+    _lastErrorMessage = null;
     try {
       if (_auth.currentUser != null) return null;
 
@@ -74,9 +82,17 @@ class AuthService {
       await _createNaverTestProfile();
       return cred;
     } catch (e) {
-      debugPrint("Naver Test Sign-In Error: $e");
+      _lastErrorMessage = _formatSignInError(e);
+      debugPrint("Naver Test Sign-In Error: $_lastErrorMessage");
       return null;
     }
+  }
+
+  String _formatSignInError(Object error) {
+    if (error is FirebaseAuthException) {
+      return '${error.code}: ${error.message ?? error.toString()}';
+    }
+    return error.toString();
   }
 
   Future<void> _createNaverTestProfile() async {
@@ -104,9 +120,25 @@ class AuthService {
     await UserDataService.syncFromCloud();
     await MemoryService().syncFromCloud();
     await TasksSyncService.syncFromCloud();
-    await NotificationService().syncDailyMorningCall();
-    await NotificationService().syncDailyNightCall();
-    await NotificationService().syncCoreReminders();
+    await _syncNotificationsSafely();
+  }
+
+  Future<void> _syncNotificationsSafely() async {
+    try {
+      await NotificationService().syncDailyMorningCall();
+    } catch (e) {
+      debugPrint('Morning notification sync skipped: $e');
+    }
+    try {
+      await NotificationService().syncDailyNightCall();
+    } catch (e) {
+      debugPrint('Night notification sync skipped: $e');
+    }
+    try {
+      await NotificationService().syncCoreReminders();
+    } catch (e) {
+      debugPrint('Core reminder sync skipped: $e');
+    }
   }
 
   // 로그아웃

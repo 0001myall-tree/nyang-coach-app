@@ -46,6 +46,32 @@ class NotificationService {
     return 'nyang_night_call_${soundName ?? 'default'}_v3';
   }
 
+  bool _isInvalidSoundError(Object error) {
+    return error is PlatformException && error.code == 'invalid_sound';
+  }
+
+  NotificationDetails _nightCallFallbackDetails() {
+    const androidDetails = AndroidNotificationDetails(
+      'nyang_night_call_default_v3',
+      '냥냥코치 나이트콜',
+      channelDescription: '비서의 하루 마무리 알람입니다.',
+      importance: Importance.max,
+      priority: Priority.high,
+      playSound: true,
+      fullScreenIntent: true,
+      audioAttributesUsage: AudioAttributesUsage.alarm,
+    );
+    const iosDetails = DarwinNotificationDetails(
+      presentSound: true,
+      presentAlert: true,
+      presentBadge: true,
+      presentBanner: true,
+      presentList: true,
+      interruptionLevel: InterruptionLevel.timeSensitive,
+    );
+    return const NotificationDetails(android: androidDetails, iOS: iosDetails);
+  }
+
   String? _coreReminderSoundName(String coachId, int advanceMinutes) {
     if (coachId == 'push') return null;
     if (!_coreReminderSoundMinutes.contains(advanceMinutes)) return null;
@@ -479,15 +505,29 @@ class NotificationService {
       scheduled = scheduled.add(const Duration(days: 1));
     }
 
-    await _plugin.zonedSchedule(
-      id: 999,
-      title: '🌙 나이트콜 시간입니다!',
-      body: '정리하고 취침 준비 하실 시간입니다.',
-      scheduledDate: scheduled,
-      notificationDetails: details,
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-      payload: 'night:$targetCoachId:$soundName',
-    );
+    try {
+      await _plugin.zonedSchedule(
+        id: 999,
+        title: '🌙 나이트콜 시간입니다!',
+        body: '정리하고 취침 준비 하실 시간입니다.',
+        scheduledDate: scheduled,
+        notificationDetails: details,
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        payload: 'night:$targetCoachId:$soundName',
+      );
+    } catch (e) {
+      if (!_isInvalidSoundError(e)) rethrow;
+      debugPrint('Night call custom sound unavailable, using default: $e');
+      await _plugin.zonedSchedule(
+        id: 999,
+        title: '🌙 나이트콜 시간입니다!',
+        body: '정리하고 취침 준비 하실 시간입니다.',
+        scheduledDate: scheduled,
+        notificationDetails: _nightCallFallbackDetails(),
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        payload: 'night:$targetCoachId:$soundName',
+      );
+    }
   }
 
   Future<void> scheduleDailyNightCall({
@@ -544,16 +584,33 @@ class NotificationService {
       scheduled = scheduled.add(const Duration(days: 1));
     }
 
-    await _plugin.zonedSchedule(
-      id: 998,
-      title: '🌙 나이트콜 시간입니다!',
-      body: '정리하고 취침 준비 하실 시간입니다.',
-      scheduledDate: scheduled,
-      notificationDetails: details,
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-      matchDateTimeComponents: DateTimeComponents.time,
-      payload: 'night:$targetCoachId:$soundName',
-    );
+    try {
+      await _plugin.zonedSchedule(
+        id: 998,
+        title: '🌙 나이트콜 시간입니다!',
+        body: '정리하고 취침 준비 하실 시간입니다.',
+        scheduledDate: scheduled,
+        notificationDetails: details,
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        matchDateTimeComponents: DateTimeComponents.time,
+        payload: 'night:$targetCoachId:$soundName',
+      );
+    } catch (e) {
+      if (!_isInvalidSoundError(e)) rethrow;
+      debugPrint(
+        'Daily night call custom sound unavailable, using default: $e',
+      );
+      await _plugin.zonedSchedule(
+        id: 998,
+        title: '🌙 나이트콜 시간입니다!',
+        body: '정리하고 취침 준비 하실 시간입니다.',
+        scheduledDate: scheduled,
+        notificationDetails: _nightCallFallbackDetails(),
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        matchDateTimeComponents: DateTimeComponents.time,
+        payload: 'night:$targetCoachId:$soundName',
+      );
+    }
   }
 
   Future<void> cancelDailyNightCall() async {
