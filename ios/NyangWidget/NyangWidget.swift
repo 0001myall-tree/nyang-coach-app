@@ -9,10 +9,7 @@ struct NyangEntry: TimelineEntry {
     let scheduleTitle: String
     let remainingCount: Int
     let progress: Int
-    let masterAccess: Bool
     let catMessage: String
-    let secMaleMessage: String
-    let secFemaleMessage: String
 }
 
 struct NyangProvider: TimelineProvider {
@@ -23,10 +20,7 @@ struct NyangProvider: TimelineProvider {
             scheduleTitle: "운동",
             remainingCount: 2,
             progress: 34,
-            masterAccess: true,
-            catMessage: "차근차근 간다냥!",
-            secMaleMessage: "차근차근 좋습니다.",
-            secFemaleMessage: "충분히 해낼 수 있어요."
+            catMessage: "차근차근 간다냥!"
         )
     }
 
@@ -46,10 +40,7 @@ struct NyangProvider: TimelineProvider {
         let scheduleTitle = defaults.string(forKey: "widget_schedule_title")?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let remainingCount = defaults.object(forKey: "remaining_count") as? Int ?? Int(defaults.string(forKey: "remaining_count") ?? "") ?? 0
         let progress = defaults.object(forKey: "progress") as? Int ?? Int(defaults.string(forKey: "progress") ?? "") ?? 0
-        let masterAccess = defaults.object(forKey: "master_widget_access") as? Bool ?? Bool(defaults.string(forKey: "master_widget_access") ?? "") ?? false
         let catMessage = defaults.string(forKey: "coach_message_cat") ?? "오늘도 시작해보자냥!"
-        let secMaleMessage = defaults.string(forKey: "coach_message_sec_male") ?? "오늘도 함께 해보시죠."
-        let secFemaleMessage = defaults.string(forKey: "coach_message_sec_female") ?? "오늘도 응원할게요."
 
         return NyangEntry(
             date: Date(),
@@ -57,107 +48,14 @@ struct NyangProvider: TimelineProvider {
             scheduleTitle: scheduleTitle,
             remainingCount: remainingCount,
             progress: progress,
-            masterAccess: masterAccess,
-            catMessage: catMessage,
-            secMaleMessage: secMaleMessage,
-            secFemaleMessage: secFemaleMessage
+            catMessage: catMessage
         )
     }
 }
 
-enum CompactWidgetStyle {
-    case cat
-    case secMale
-    case secFemale
-
-    var title: String {
-        switch self {
-        case .cat: return "냥냥코치 미니 위젯"
-        case .secMale: return "남비서 코치"
-        case .secFemale: return "여비서 코치"
-        }
-    }
-
-    var description: String {
-        switch self {
-        case .cat: return "오늘 목표와 남은 할 일을 냥냥코치 위젯으로 확인합니다."
-        case .secMale: return "남비서 코치 위젯으로 오늘 진행률을 확인합니다."
-        case .secFemale: return "여비서 코치 위젯으로 오늘 진행률을 확인합니다."
-        }
-    }
-
-    var accent: Color {
-        switch self {
-        case .cat: return Color(red: 0.55, green: 0.49, blue: 1.0)
-        case .secMale: return Color(red: 0.65, green: 0.65, blue: 0.84)
-        case .secFemale: return Color(red: 0.77, green: 0.66, blue: 0.90)
-        }
-    }
-
-    var background: [Color] {
-        switch self {
-        case .cat:
-            return [
-                Color(red: 0.20, green: 0.15, blue: 0.36),
-                Color(red: 0.14, green: 0.11, blue: 0.28),
-            ]
-        case .secMale:
-            return [
-                Color(red: 0.17, green: 0.17, blue: 0.32),
-                Color(red: 0.11, green: 0.12, blue: 0.24),
-            ]
-        case .secFemale:
-            return [
-                Color(red: 0.98, green: 0.95, blue: 1.0),
-                Color(red: 0.91, green: 0.87, blue: 0.98),
-            ]
-        }
-    }
-
-    var textColor: Color {
-        switch self {
-        case .secFemale: return Color(red: 0.35, green: 0.29, blue: 0.45)
-        default: return Color(red: 0.96, green: 0.95, blue: 1.0)
-        }
-    }
-
-    var messageIcon: String {
-        switch self {
-        case .cat: return "sparkles"
-        case .secMale: return "cup.and.saucer.fill"
-        case .secFemale: return "heart.fill"
-        }
-    }
-
-    func message(from entry: NyangEntry) -> String {
-        switch self {
-        case .cat:
-            return entry.catMessage
-        case .secMale:
-            return entry.masterAccess ? entry.secMaleMessage : "마스터 플랜 전용 위젯입니다."
-        case .secFemale:
-            return entry.masterAccess ? entry.secFemaleMessage : "마스터 플랜 전용 위젯이에요."
-        }
-    }
-
-    func remainingCount(from entry: NyangEntry) -> Int {
-        switch self {
-        case .cat:
-            return entry.remainingCount
-        case .secMale, .secFemale:
-            return entry.masterAccess ? entry.remainingCount : 0
-        }
-    }
-
-    func progress(from entry: NyangEntry) -> Int {
-        switch self {
-        case .cat:
-            return entry.progress
-        case .secMale, .secFemale:
-            return entry.masterAccess ? entry.progress : 0
-        }
-    }
-}
+private let compactWidgetTitle = "냥냥코치 미니 위젯"
+private let compactWidgetDescription = "오늘 목표와 남은 할 일을 냥냥코치 위젯으로 확인합니다."
+private let compactWidgetAccent = Color(red: 0.55, green: 0.49, blue: 1.0)
 
 struct NyangCharacterWidgetView: View {
     let entry: NyangEntry
@@ -344,7 +242,6 @@ struct NyangCharacterWidgetView: View {
 
 struct NyangCompactWidgetView: View {
     let entry: NyangEntry
-    let style: CompactWidgetStyle
 
     private var hasTimedSchedule: Bool {
         !entry.scheduleTime.isEmpty && !entry.scheduleTitle.isEmpty
@@ -362,40 +259,50 @@ struct NyangCompactWidgetView: View {
     }
 
     var body: some View {
+        Link(destination: URL(string: "nyangcoach://widget/cat/tasks")!) {
+            compactContent
+        }
+    }
+
+    private var compactContent: some View {
         ZStack(alignment: .topLeading) {
             Color.white
 
             GeometryReader { proxy in
-                let textBlockHeight: CGFloat = 26
-                let spacerHeight: CGFloat = 8
-                let topPadding: CGFloat = 8
-                let bottomPadding: CGFloat = 10
+                let textHeight: CGFloat = 26
+                let topPadding: CGFloat = 4
+                let imageTextGap: CGFloat = 6
+                let bottomPadding: CGFloat = 14
                 let horizontalPadding = min(max(proxy.size.width * 0.08, 12), 16)
-                let reservedHeight = textBlockHeight + spacerHeight + topPadding + bottomPadding
-                let imageSize = min(max(proxy.size.height - reservedHeight, 60), 142)
+                let textCenterY = proxy.size.height - bottomPadding - textHeight / 2
+                let imageAreaHeight = max(textCenterY - textHeight / 2 - imageTextGap - topPadding, 1)
+                let imageSize = min(proxy.size.width * 0.96, imageAreaHeight)
+                let imageCenterY = topPadding + imageSize / 2
 
-                VStack(alignment: .center, spacing: 0) {
-                    Image(catImageName)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: imageSize, height: imageSize, alignment: .center)
-                        .accessibilityHidden(true)
+                Image(catImageName)
+                    .renderingMode(.original)
+                    .interpolation(.high)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: imageSize, height: imageSize, alignment: .center)
+                    .position(
+                        x: proxy.size.width / 2,
+                        y: imageCenterY
+                    )
+                    .accessibilityHidden(true)
 
-                    Spacer(minLength: spacerHeight)
-
-                    miniText
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .frame(height: textBlockHeight)
-                }
-                .padding(.top, topPadding)
-                .padding(.leading, horizontalPadding)
-                .padding(.trailing, horizontalPadding)
-                .padding(.bottom, bottomPadding)
+                miniText
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .frame(height: textHeight)
+                    .position(
+                        x: proxy.size.width / 2,
+                        y: textCenterY
+                    )
+                    .padding(.horizontal, horizontalPadding)
             }
         }
         .widgetWhiteBackground()
         .unredacted()
-        .widgetURL(URL(string: "nyangcoach://widget/cat/tasks"))
     }
 
     private var miniText: some View {
@@ -403,7 +310,7 @@ struct NyangCompactWidgetView: View {
             if hasTimedSchedule {
                 HStack(alignment: .firstTextBaseline, spacing: 13) {
                     Text(entry.scheduleTime)
-                        .foregroundColor(style.accent)
+                        .foregroundColor(compactWidgetAccent)
                         .font(.system(size: 20, weight: .bold, design: .rounded))
                         .lineLimit(1)
                         .fixedSize(horizontal: true, vertical: false)
@@ -418,8 +325,8 @@ struct NyangCompactWidgetView: View {
             } else {
                 (Text("남은 일정 ")
                     .foregroundColor(Color(red: 0.15, green: 0.14, blue: 0.16))
-                 + Text("\(style.remainingCount(from: entry))")
-                    .foregroundColor(style.accent)
+                 + Text("\(entry.remainingCount)")
+                    .foregroundColor(compactWidgetAccent)
                  + Text("개")
                     .foregroundColor(Color(red: 0.15, green: 0.14, blue: 0.16)))
                     .font(.system(size: 20, weight: .semibold, design: .rounded))
@@ -449,38 +356,10 @@ struct NyangCompactWidget: Widget {
 
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: kind, provider: NyangProvider()) { entry in
-            NyangCompactWidgetView(entry: entry, style: .cat)
+            NyangCompactWidgetView(entry: entry)
         }
-        .configurationDisplayName(CompactWidgetStyle.cat.title)
-        .description(CompactWidgetStyle.cat.description)
-        .supportedFamilies([.systemSmall])
-        .contentMarginsDisabled()
-    }
-}
-
-struct SecMaleCompactWidget: Widget {
-    let kind: String = "SecMaleWidget"
-
-    var body: some WidgetConfiguration {
-        StaticConfiguration(kind: kind, provider: NyangProvider()) { entry in
-            NyangCompactWidgetView(entry: entry, style: .secMale)
-        }
-        .configurationDisplayName(CompactWidgetStyle.secMale.title)
-        .description(CompactWidgetStyle.secMale.description)
-        .supportedFamilies([.systemSmall])
-        .contentMarginsDisabled()
-    }
-}
-
-struct SecFemaleCompactWidget: Widget {
-    let kind: String = "SecFemaleWidget"
-
-    var body: some WidgetConfiguration {
-        StaticConfiguration(kind: kind, provider: NyangProvider()) { entry in
-            NyangCompactWidgetView(entry: entry, style: .secFemale)
-        }
-        .configurationDisplayName(CompactWidgetStyle.secFemale.title)
-        .description(CompactWidgetStyle.secFemale.description)
+        .configurationDisplayName(compactWidgetTitle)
+        .description(compactWidgetDescription)
         .supportedFamilies([.systemSmall])
         .contentMarginsDisabled()
     }

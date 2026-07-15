@@ -93,6 +93,7 @@ class _NyangCoachAppState extends State<NyangCoachApp>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    NotificationService().recordAppActive();
   }
 
   @override
@@ -105,10 +106,12 @@ class _NyangCoachAppState extends State<NyangCoachApp>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       NotificationService().handleNativeMorningAlarm();
+      NotificationService().recordAppActive();
     }
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached) {
       TasksSyncService.syncToCloud();
+      NotificationService().scheduleInactiveReturnReminder();
     }
   }
 

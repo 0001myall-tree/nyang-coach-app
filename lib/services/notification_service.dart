@@ -12,6 +12,7 @@ import '../screens/morning_call_screen.dart';
 import '../screens/night_call_screen.dart';
 import '../screens/core_reminder_screen.dart';
 import '../screens/coach_config.dart';
+import '../screens/main_tab_screen.dart';
 import 'analytics_service.dart';
 import 'morning_call_alarm_session.dart';
 import 'tasks_sync_service.dart';
@@ -31,6 +32,9 @@ class NotificationService {
   static const int _morningCallRepeatCount = 3;
   static const int _maxScheduledCoreReminders = 50;
   static const Set<int> _coreReminderSoundMinutes = {10, 30};
+  static const int _inactiveReturnNotificationId = 889;
+  static const Duration _inactiveReturnDelay = Duration(days: 3);
+  static const Duration _inactiveReturnCooldown = Duration(days: 5);
   String? _lastMorningPayload;
   DateTime? _lastMorningOpenedAt;
 
@@ -187,6 +191,27 @@ class NotificationService {
     }
   }
 
+  Future<void> _openInactiveReturn(String payload) async {
+    final parts = payload.split(':');
+    final coachId = parts.length > 1 && parts[1].isNotEmpty ? parts[1] : 'cat';
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      'nyang_inactive_return_last_opened_at',
+      DateTime.now().toIso8601String(),
+    );
+    await prefs.setString(
+      'nyang_last_app_active_at',
+      DateTime.now().toIso8601String(),
+    );
+    await UserDataService.setSelectedCoach(coachId);
+    AnalyticsService.logFeatureUsage('inactive_return_push');
+
+    navigatorKey.currentState?.pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => MainTabScreen(coachId: coachId)),
+      (route) => false,
+    );
+  }
+
   Future<void> init() async {
     if (kIsWeb) return;
     tz.initializeTimeZones();
@@ -221,6 +246,10 @@ class NotificationService {
         }
         if (payload.startsWith('morning:')) {
           await _openMorningCall(payload);
+          return;
+        }
+        if (payload.startsWith('inactive_return:')) {
+          await _openInactiveReturn(payload);
         }
       },
     );
@@ -257,8 +286,75 @@ class NotificationService {
         _openCoreReminder(payload);
       } else if (payload.startsWith('morning:')) {
         _openMorningCall(payload);
+      } else if (payload.startsWith('inactive_return:')) {
+        _openInactiveReturn(payload);
       }
     });
+  }
+
+  Future<void> recordAppActive() async {
+    if (kIsWeb) return;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      'nyang_last_app_active_at',
+      DateTime.now().toIso8601String(),
+    );
+    await _plugin.cancel(id: _inactiveReturnNotificationId);
+  }
+
+  Future<void> scheduleInactiveReturnReminder() async {
+    if (kIsWeb) return;
+
+    final now = DateTime.now();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('nyang_last_app_active_at', now.toIso8601String());
+
+    final lastOpenedRaw = prefs.getString(
+      'nyang_inactive_return_last_opened_at',
+    );
+    if (lastOpenedRaw != null) {
+      final lastOpened = DateTime.tryParse(lastOpenedRaw);
+      if (lastOpened != null &&
+          now.difference(lastOpened) < _inactiveReturnCooldown) {
+        await _plugin.cancel(id: _inactiveReturnNotificationId);
+        return;
+      }
+    }
+
+    const androidDetails = AndroidNotificationDetails(
+      'nyang_inactive_return_v1',
+      '냥냥코치 재방문 알림',
+      channelDescription: '며칠 동안 앱에 접속하지 않았을 때 냥냥코치가 안부를 전합니다.',
+      importance: Importance.high,
+      priority: Priority.high,
+      playSound: true,
+      audioAttributesUsage: AudioAttributesUsage.notification,
+    );
+    const iosDetails = DarwinNotificationDetails(
+      presentSound: true,
+      presentAlert: true,
+      presentBadge: true,
+      presentBanner: true,
+      presentList: true,
+    );
+    const details = NotificationDetails(
+      android: androidDetails,
+      iOS: iosDetails,
+    );
+
+    await _plugin.cancel(id: _inactiveReturnNotificationId);
+    await _plugin.zonedSchedule(
+      id: _inactiveReturnNotificationId,
+      title: '냥냥코치',
+      body: '집사야, 요즘 뭐해? 보고 싶다냥.',
+      scheduledDate: tz.TZDateTime.from(
+        now.add(_inactiveReturnDelay),
+        tz.local,
+      ),
+      notificationDetails: details,
+      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      payload: 'inactive_return:cat',
+    );
   }
 
   Future<void> handleNativeMorningAlarm() async {
