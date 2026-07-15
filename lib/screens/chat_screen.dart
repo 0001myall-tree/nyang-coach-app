@@ -4976,85 +4976,6 @@ class _ChatScreenState extends State<ChatScreen>
       }
     }
 
-    // 9. 7일 이상 연속 미완료 습관 (master only)
-    if (_coach.isMaster && needsGoalContext) {
-      final habitsRaw = prefs.getString('nyang_habits');
-      final habitLogsRaw = prefs.getString('nyang_habit_logs');
-      if (habitsRaw != null && habitLogsRaw != null) {
-        try {
-          final habits = jsonDecode(habitsRaw) as List;
-          final habitLogs = jsonDecode(habitLogsRaw) as Map<String, dynamic>;
-          final dismissalsRaw =
-              prefs.getString('nyang_habit_dismissals') ?? '{}';
-          final dismissals = jsonDecode(dismissalsRaw) as Map<String, dynamic>;
-          final todayStr = await _getEffectiveTodayStr();
-          final parts = todayStr.split('-');
-          DateTime baseDate;
-          if (parts.length >= 3) {
-            baseDate = DateTime(
-              int.parse(parts[0]),
-              int.parse(parts[1]),
-              int.parse(parts[2]),
-            );
-          } else {
-            final n = DateTime.now();
-            baseDate = DateTime(n.year, n.month, n.day);
-          }
-          final longAbsent = <Map<String, dynamic>>[];
-          for (final h in habits) {
-            final hId = h['id'].toString();
-            final logs = (habitLogs[hId] as Map<String, dynamic>?) ?? {};
-            final createdAtStr = h['createdAt'] as String?;
-            DateTime? createdAtDate;
-            if (createdAtStr != null) {
-              final parsed = DateTime.tryParse(createdAtStr);
-              if (parsed != null) {
-                createdAtDate = DateTime(parsed.year, parsed.month, parsed.day);
-              }
-            }
-
-            int miss = 0;
-            for (int i = 1; i <= 7; i++) {
-              final d = baseDate.subtract(Duration(days: i));
-
-              if (createdAtDate != null) {
-                final dDate = DateTime(d.year, d.month, d.day);
-                if (dDate.isBefore(createdAtDate)) {
-                  break; // Stop counting if we check dates before habit creation
-                }
-              }
-
-              final ds =
-                  '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
-              final log = logs[ds] as Map<String, dynamic>?;
-              if (log == null || log['done'] != true)
-                miss++;
-              else
-                break;
-            }
-            if (miss >= 7) {
-              final di =
-                  (dismissals[hId] as Map<String, dynamic>?) ?? {'count': 0};
-              if ((di['count'] as int? ?? 0) >= 2) continue;
-              final lastAsked = di['lastAsked'] as String?;
-              if (lastAsked != null) {
-                if (baseDate.difference(DateTime.parse(lastAsked)).inDays < 7)
-                  continue;
-              }
-              longAbsent.add({'name': h['name'], 'days': miss});
-            }
-          }
-          if (longAbsent.isNotEmpty) {
-            sb.writeln('\n[7일 이상 연속 미완료 습관 - 개입 필요]');
-            for (final h in longAbsent)
-              sb.writeln('- "${h['name']}" (${h['days']}일 연속 미완료)');
-            sb.writeln(
-              '*오늘 할 일 정리가 마무리된 흐름에서 자연스럽게 한 번 꺼낸다. 먼저 이유를 물어보고 판단한다.',
-            );
-          }
-        } catch (_) {}
-      }
-    }
 
     // 10. 현재 날짜/시간 (master + halmae)
     final dayNames = ['일', '월', '화', '수', '목', '금', '토'];
@@ -5236,30 +5157,13 @@ class _ChatScreenState extends State<ChatScreen>
         allTasksDone = allTasks.every((t) => t['done'] == true);
       }
 
-      final currentTotalMinutes = now.hour * 60 + now.minute;
       final minSleepTimeStr = prefs.getString('nyang_premium_min_sleep_time');
-      bool isSleepWindow = false;
       bool isUnsetLateNight = false;
 
-      if (minSleepTimeStr != null) {
-        try {
-          final parts = minSleepTimeStr.split(':');
-          final bedH = int.tryParse(parts[0]) ?? 1;
-          final bedM = int.tryParse(parts.length > 1 ? parts[1] : '0') ?? 0;
-          final bedTotalMinutes = bedH * 60 + bedM;
-          final wakeTotalMinutes = (bedTotalMinutes + 4 * 60) % (24 * 60);
-
-          if (bedTotalMinutes < wakeTotalMinutes) {
-            isSleepWindow =
-                currentTotalMinutes >= bedTotalMinutes &&
-                currentTotalMinutes < wakeTotalMinutes;
-          } else {
-            isSleepWindow =
-                currentTotalMinutes >= bedTotalMinutes ||
-                currentTotalMinutes < wakeTotalMinutes;
-          }
-        } catch (_) {}
-      } else {
+      // 취침시간이 설정된 사용자의 "단순 심야 접속"은 더 이상 여기서 다루지 않는다.
+      // 그건 위 "취침 기준 초과 개입"(이틀 연속 패턴 확인)이 전담하고, 여기서 또
+      // 매번 단발성으로 개입하면 두 지침이 같은 시간대(취침+1h~+4h)에 겹칠 수 있었음.
+      if (minSleepTimeStr == null) {
         // 미설정 시 자정 ~ 새벽 4시 사이를 모호한 시간대로 간주
         if (now.hour >= 0 && now.hour < 4) {
           isUnsetLateNight = true;
@@ -5278,11 +5182,6 @@ class _ChatScreenState extends State<ChatScreen>
         sb.writeln('\n[특별 지침: 모든 할 일 100% 완료 상태]');
         sb.writeln(
           '사용자가 오늘 계획한 모든 할 일을 100% 완료했습니다. 절대로 다른 일을 더 하라고 재촉하거나 묻지 마세요. 시간대와 상관없이 완벽한 하루를 보낸 것을 축하하며, 푹 쉬라고 강하게 권장하세요.',
-        );
-      } else if (isSleepWindow) {
-        sb.writeln('\n[특별 지침: 사용자 설정 취침 시간 초과]');
-        sb.writeln(
-          '현재 시간은 사용자가 설정한 최소 취침 시간을 넘긴 심야 시간대입니다. 가볍게 휴식을 권유하거나 현재 일과를 마무리 중인지 먼저 부드럽게 물어보세요. 단, 무조건 자라고 강요하지 마세요. 만약 사용자가 "아직 할 일이 남았다"거나 "더 일해야 한다"고 답변한다면, "늦은 시간까지 정말 고생이 많으십니다. 무리하지 마시고 파이팅입니다!" 라며 따뜻하게 응원하고 일에 집중할 수 있도록 든든하게 지지해 주세요.',
         );
       } else if (isUnsetLateNight) {
         sb.writeln('\n[특별 지침: 심야 시간대 접속]');

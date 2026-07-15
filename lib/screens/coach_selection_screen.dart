@@ -594,6 +594,10 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
       'tags': [
         {'svgPath': 'assets/icons/bullseye.svg', 'text': '장기목표 조력'},
         {'svgPath': 'assets/icons/route.svg', 'text': '최적 경로 제안'},
+        {
+          'svgPath': 'assets/icons/magnifying-glass-chart.svg',
+          'text': '실행 패턴을 분석한 코치의 한마디',
+        },
       ],
       'features': [
         {
@@ -624,6 +628,10 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
       'tags': [
         {'svgPath': 'assets/icons/bullseye.svg', 'text': '장기목표 조력'},
         {'svgPath': 'assets/icons/thumbtack.svg', 'text': '미루는 항목 관리'},
+        {
+          'svgPath': 'assets/icons/magnifying-glass-chart.svg',
+          'text': '실행 패턴을 분석한 코치의 한마디',
+        },
       ],
       'features': [
         {
