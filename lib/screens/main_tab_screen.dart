@@ -130,12 +130,14 @@ class MainTabScreen extends StatefulWidget {
   final int initialDrawerIndex;
   final String? initialBottomSheet;
   final String? handoffFromCoachId;
+  final bool openTasksOverlayOnStart;
   const MainTabScreen({
     super.key,
     required this.coachId,
     this.initialDrawerIndex = 0,
     this.initialBottomSheet,
     this.handoffFromCoachId,
+    this.openTasksOverlayOnStart = false,
   });
 
   @override
@@ -471,6 +473,18 @@ class _MainTabScreenState extends State<MainTabScreen>
     _startScheduledCheckInEngine();
     AnalyticsService.logAppOpen();
     _ensureCurrentCoachAccess();
+    if (widget.openTasksOverlayOnStart) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        Navigator.of(context, rootNavigator: true).push(
+          MaterialPageRoute(
+            builder: (_) => _WidgetTasksOverlayScreen(
+              initialBottomSheet: widget.initialBottomSheet,
+            ),
+          ),
+        );
+      });
+    }
 
     // 냥냥코치 웹 앱(Nyang Insight) 연동 등을 통해 실시간으로 Firebase에 추가된 할 일 동기화
     _authSubscription = FirebaseAuth.instance.authStateChanges().listen((user) {

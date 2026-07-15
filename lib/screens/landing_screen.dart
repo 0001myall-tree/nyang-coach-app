@@ -103,12 +103,10 @@ class _LandingScreenState extends State<LandingScreen>
           await UserDataService.setSelectedCoach(widgetCoachId);
         }
 
-        final initialDrawerIdx =
+        final isWidgetTasksRoute =
             (widgetRoute == 'tasks' ||
-                widgetRoute == 'tasks_done_bottom_sheet' ||
-                widgetRoute == 'tasks_remaining_bottom_sheet')
-            ? 1
-            : 0;
+            widgetRoute == 'tasks_done_bottom_sheet' ||
+            widgetRoute == 'tasks_remaining_bottom_sheet');
         final initBottomSheet = widgetRoute == 'tasks_done_bottom_sheet'
             ? 'done'
             : widgetRoute == 'tasks_remaining_bottom_sheet'
@@ -120,8 +118,8 @@ class _LandingScreenState extends State<LandingScreen>
         final mainRoute = MaterialPageRoute(
           builder: (context) => MainTabScreen(
             coachId: targetCoachId,
-            initialDrawerIndex: initialDrawerIdx,
             initialBottomSheet: initBottomSheet,
+            openTasksOverlayOnStart: isWidgetTasksRoute,
           ),
         );
 
