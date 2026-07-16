@@ -1,0 +1,122 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function authEmail() {
+      return request.auth.token.email;
+    }
+
+    function isAllowedEmail() {
+      return signedIn()
+        && request.auth.token.email_verified == true
+        && exists(/databases/$(database)/documents/allowedEmails/$(authEmail()))
+        && get(/databases/$(database)/documents/allowedEmails/$(authEmail())).data.enabled == true;
+    }
+
+    function allowedEmailData() {
+      return get(/databases/$(database)/documents/allowedEmails/$(authEmail())).data;
+    }
+
+    function isAllowedUser(userId) {
+      return isAllowedEmail() && request.auth.uid == userId;
+    }
+
+    function protectedUserDataKeys() {
+      return [
+        'plan_type',
+        'points',
+        'owned_coaches',
+        'owned_coach_expires_at',
+        'plan_expires_at'
+      ];
+    }
+
+    function hasUserData(data) {
+      return data.keys().hasAny(['userData']) && data.userData is map;
+    }
+
+    function hasDefaultPrivilegeUserData(data) {
+      return !hasUserData(data)
+        || (
+          data.userData.plan_type == 'none'
+          && (!data.userData.keys().hasAny(['points']) || data.userData.points == 0)
+          && (!data.userData.keys().hasAny(['owned_coaches']) || data.userData.owned_coaches.size() == 0)
+          && (!data.userData.keys().hasAny(['owned_coach_expires_at']) || data.userData.owned_coach_expires_at.size() == 0)
+          && (!data.userData.keys().hasAny(['plan_expires_at']) || data.userData.plan_expires_at == null)
+        );
+    }
+
+    function hasEntitledPrivilegeUserData(data) {
+      return hasUserData(data)
+        && allowedEmailData().keys().hasAny(['plan_type'])
+        && data.userData.plan_type == allowedEmailData().plan_type
+        && (!data.userData.keys().hasAny(['points']) || data.userData.points == 0)
+        && (
+          !allowedEmailData().keys().hasAny(['owned_coaches'])
+          || data.userData.owned_coaches == allowedEmailData().owned_coaches
+        )
+        && (
+          !allowedEmailData().keys().hasAny(['owned_coach_expires_at'])
+          || data.userData.owned_coach_expires_at == allowedEmailData().owned_coach_expires_at
+        )
+        && (
+          !allowedEmailData().keys().hasAny(['plan_expires_at'])
+          || data.userData.plan_expires_at == allowedEmailData().plan_expires_at
+        );
+    }
+
+    function protectedUserDataUnchanged() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(['userData'])
+        || (
+          hasUserData(request.resource.data)
+          && hasUserData(resource.data)
+          && !request.resource.data.userData.diff(resource.data.userData)
+            .affectedKeys()
+            .hasAny(protectedUserDataKeys())
+        );
+    }
+
+    match /allowedEmails/{email} {
+      allow get: if signedIn() && authEmail() == email;
+      allow list, create, update, delete: if false;
+    }
+
+    match /users/{userId} {
+      allow read: if isAllowedUser(userId);
+      allow create: if isAllowedUser(userId)
+        && (
+          hasDefaultPrivilegeUserData(request.resource.data)
+          || hasEntitledPrivilegeUserData(request.resource.data)
+        );
+      allow update: if isAllowedUser(userId)
+        && (
+          protectedUserDataUnchanged()
+          || (!hasUserData(resource.data) && hasDefaultPrivilegeUserData(request.resource.data))
+          || hasEntitledPrivilegeUserData(request.resource.data)
+        );
+      allow delete: if false;
+
+      match /{document=**} {
+        allow read, write: if isAllowedUser(userId);
+      }
+    }
+
+    match /analytics/{document=**} {
+      allow create, update: if isAllowedEmail();
+      allow read, delete: if false;
+    }
+
+    match /error_logs/{document=**} {
+      allow create: if isAllowedEmail();
+      allow read, update, delete: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

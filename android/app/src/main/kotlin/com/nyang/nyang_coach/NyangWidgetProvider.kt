@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
 import android.net.Uri
+import android.view.Gravity
 import android.widget.RemoteViews
 import es.antonborri.home_widget.HomeWidgetProvider
 
@@ -39,6 +40,11 @@ class NyangWidgetProvider : HomeWidgetProvider() {
                     } else {
                         WidgetTextFormatter.formatMiniRemainingCount(remainingCount, "#8B7CFF")
                     }
+                )
+                setInt(
+                    R.id.mini_info_text,
+                    "setGravity",
+                    if (hasTimedSchedule) Gravity.START or Gravity.CENTER_VERTICAL else Gravity.CENTER
                 )
                 WidgetResponsiveStyle.applyMini(context, appWidgetManager, widgetId, this)
 

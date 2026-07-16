@@ -46,10 +46,10 @@ class RecoveryInsightService {
   static const int lowActivationRestartDays = 1;
   static const int physicalFatigueLateWindowDays = 3;
   static const int physicalFatigueLateThresholdDays = 2;
-  static const int fatigueSignalWindowDays = 3;
-  static const int fatigueSignalThresholdCount = 4;
-  static const int restOfferFatigueWindowDays = 3;
-  static const int restOfferFatigueThresholdCount = 5;
+  static const int conditionDeclineSignalWindowDays = 3;
+  static const int conditionDeclineSignalThresholdCount = 4;
+  static const int restOfferConditionDeclineWindowDays = 3;
+  static const int restOfferConditionDeclineThresholdCount = 5;
 
   static const List<String> _highCognitiveKeywords = [
     '공부',
@@ -150,7 +150,7 @@ class RecoveryInsightService {
     return await getActiveStrategy() != null;
   }
 
-  static Future<void> recordFatigueSignalToday() async {
+  static Future<void> recordConditionDeclineSignalToday() async {
     final prefs = await SharedPreferences.getInstance();
     final counts = _loadStringIntMap(prefs.getString(fatigueSignalCountsKey));
     final todayKey = _dateKey(_dateOnly(DateTime.now()));
@@ -158,7 +158,7 @@ class RecoveryInsightService {
 
     final cutoff = _dateOnly(
       DateTime.now(),
-    ).subtract(const Duration(days: fatigueSignalWindowDays - 1));
+    ).subtract(const Duration(days: conditionDeclineSignalWindowDays - 1));
     counts.removeWhere((date, _) {
       final parsed = DateTime.tryParse(date);
       return parsed == null || parsed.isBefore(cutoff);
@@ -167,15 +167,19 @@ class RecoveryInsightService {
     await prefs.setString(fatigueSignalCountsKey, jsonEncode(counts));
   }
 
-  static Future<bool> hasRecentFatigueSignalBurst() async {
+  static Future<bool> hasRecentConditionDeclineSignalBurst() async {
     final prefs = await SharedPreferences.getInstance();
     final counts = _loadStringIntMap(prefs.getString(fatigueSignalCountsKey));
     final base = _dateOnly(DateTime.now());
     var total = 0;
-    for (var offset = 0; offset < restOfferFatigueWindowDays; offset++) {
+    for (
+      var offset = 0;
+      offset < restOfferConditionDeclineWindowDays;
+      offset++
+    ) {
       total += counts[_dateKey(base.subtract(Duration(days: offset)))] ?? 0;
     }
-    return total >= restOfferFatigueThresholdCount;
+    return total >= restOfferConditionDeclineThresholdCount;
   }
 
   static Future<void> startMasterRestDeclineRiskControlIfEligible({
@@ -313,6 +317,7 @@ class RecoveryInsightService {
             ? '\n[특별 지침: 저활성 후 $days일 재시작 코칭 정책 - 마스터 코치 전용]'
             : '\n[특별 지침: 휴식 제안 거절 후 $days일 위험 완충 코칭 정책 - 마스터 코치 전용]',
       )
+      ..writeln('이 특별 지침은 기본 마스터 코치 역할 지침보다 우선합니다.')
       ..writeln(
         isLowActivationRestart
             ? '현재 사용자는 최근 실행 저하 또는 플래너 공백 이후 다시 진입한 상태입니다. 복귀를 반갑게 맞이하는 표현은 사용할 수 있지만, 이 기간에는 선제 대응, 미룬 항목 추궁, 압박 질문을 하지 마세요.'
@@ -476,12 +481,12 @@ class RecoveryInsightService {
     if (lateDays >= physicalFatigueLateThresholdDays) return true;
 
     final counts = _loadStringIntMap(prefs.getString(fatigueSignalCountsKey));
-    var fatigueSignals = 0;
-    for (var offset = 0; offset < fatigueSignalWindowDays; offset++) {
+    var conditionDeclineSignals = 0;
+    for (var offset = 0; offset < conditionDeclineSignalWindowDays; offset++) {
       final key = _dateKey(base.subtract(Duration(days: offset)));
-      fatigueSignals += counts[key] ?? 0;
+      conditionDeclineSignals += counts[key] ?? 0;
     }
-    return fatigueSignals >= fatigueSignalThresholdCount;
+    return conditionDeclineSignals >= conditionDeclineSignalThresholdCount;
   }
 
   static bool _hasPlanningOverloadSignal(

@@ -292,7 +292,10 @@ struct NyangCompactWidgetView: View {
                     .accessibilityHidden(true)
 
                 miniText
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .frame(
+                        maxWidth: .infinity,
+                        alignment: hasTimedSchedule ? .leading : .center
+                    )
                     .frame(height: textHeight)
                     .position(
                         x: proxy.size.width / 2,
@@ -332,6 +335,7 @@ struct NyangCompactWidgetView: View {
                     .font(.system(size: 20, weight: .semibold, design: .rounded))
                     .lineLimit(1)
                     .minimumScaleFactor(0.78)
+                    .multilineTextAlignment(.center)
             }
         }
     }

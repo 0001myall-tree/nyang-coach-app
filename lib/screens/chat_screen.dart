@@ -662,12 +662,6 @@ class _ChatScreenState extends State<ChatScreen>
     return text.replaceAll(RegExp(r'\s+'), '').toLowerCase();
   }
 
-  bool _containsStrongRestSignal(String text) {
-    final normalized = _normalizeRestText(text);
-    const signals = ['번아웃', '소진', '탈진'];
-    return signals.any(normalized.contains);
-  }
-
   bool _containsAnyRestSignal(String text) {
     final normalized = text.replaceAll(RegExp(r'\s+'), '').toLowerCase();
     const signals = [
@@ -732,7 +726,7 @@ class _ChatScreenState extends State<ChatScreen>
 
   Future<bool> _hasRepeatedRecentRestSignals(String currentText) async {
     if (!_containsAnyRestSignal(currentText)) return false;
-    return RecoveryInsightService.hasRecentFatigueSignalBurst();
+    return RecoveryInsightService.hasRecentConditionDeclineSignalBurst();
   }
 
   bool get _canProactivelyOfferRest => const {
@@ -803,20 +797,19 @@ class _ChatScreenState extends State<ChatScreen>
 
   Future<bool> _maybeOfferRest(String userText) async {
     final hasExecutionIntent = _containsExecutionIntent(userText);
-    final isPureStrongRest =
-        _containsStrongRestSignal(userText) && !hasExecutionIntent;
     final isRepeatedRest =
         await _hasRepeatedRecentRestSignals(userText) && !hasExecutionIntent;
 
     if (!_canProactivelyOfferRest ||
         widget.vacationInfo != null ||
-        (!isPureStrongRest && !isRepeatedRest) ||
+        !isRepeatedRest ||
         _containsSelfHarmRiskSignal(userText)) {
       return false;
     }
 
     final prefs = await SharedPreferences.getInstance();
     if (prefs.getString('nyang_vacation') != null) return false;
+    if (await RecoveryInsightService.isRecoveryStrategyActive()) return false;
 
     final todayStr = _getTodayStrWithReset(prefs);
     final today = DateTime.tryParse(todayStr) ?? DateTime.now();
@@ -1012,6 +1005,7 @@ class _ChatScreenState extends State<ChatScreen>
   Future<void> _maybeStartRestDeclineRiskControl(String userText) async {
     if (!_hasPendingRestOffer) return;
     if (_containsSelfHarmRiskSignal(userText)) return;
+    if (!_containsExecutionIntent(userText)) return;
     await RecoveryInsightService.startMasterRestDeclineRiskControlIfEligible(
       isMasterCoach: _coach.isMaster,
     );
@@ -1109,13 +1103,15 @@ class _ChatScreenState extends State<ChatScreen>
 
     final key = _dateKey(nightDate);
     final entries = prefs.getStringList('nyang_late_planner_entry_dates') ?? [];
-    if (entries.contains(key)) return;
-
-    final updated = {...entries, key}.toList()..sort();
-    final trimmed = updated.length > 14
-        ? updated.sublist(updated.length - 14)
-        : updated;
-    await prefs.setStringList('nyang_late_planner_entry_dates', trimmed);
+    var didUpdate = false;
+    if (!entries.contains(key)) {
+      final updated = {...entries, key}.toList()..sort();
+      final trimmed = updated.length > 14
+          ? updated.sublist(updated.length - 14)
+          : updated;
+      await prefs.setStringList('nyang_late_planner_entry_dates', trimmed);
+      didUpdate = true;
+    }
 
     final severeNightDate = _latePlannerNightDate(
       DateTime.now(),
@@ -1135,9 +1131,10 @@ class _ChatScreenState extends State<ChatScreen>
           'nyang_physical_fatigue_late_entry_dates',
           trimmedSevere,
         );
+        didUpdate = true;
       }
     }
-    TasksSyncService.scheduleSyncToCloud();
+    if (didUpdate) TasksSyncService.scheduleSyncToCloud();
   }
 
   Future<String> _getEffectiveTodayStr() async {
@@ -4222,7 +4219,7 @@ class _ChatScreenState extends State<ChatScreen>
     }
 
     if (_containsAnyRestSignal(trimmed)) {
-      RecoveryInsightService.recordFatigueSignalToday();
+      await RecoveryInsightService.recordConditionDeclineSignalToday();
     }
 
     if (await _tryCancelVacation(trimmed)) return;

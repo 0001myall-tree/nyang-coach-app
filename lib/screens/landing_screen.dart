@@ -61,6 +61,12 @@ class _LandingScreenState extends State<LandingScreen>
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) return;
 
+      final allowed = await AuthService().ensureCurrentUserAllowed();
+      if (!allowed) {
+        _showAuthAccessDeniedWarning();
+        return;
+      }
+
       await UserDataService.syncFromCloud().timeout(
         const Duration(seconds: 8),
         onTimeout: () {},
@@ -197,6 +203,23 @@ class _LandingScreenState extends State<LandingScreen>
         SnackBar(
           content: Text(
             '로그인은 됐지만 클라우드 동기화에 실패했어요: $message',
+            style: GoogleFonts.notoSansKr(fontWeight: FontWeight.w700),
+          ),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    });
+  }
+
+  void _showAuthAccessDeniedWarning() {
+    if (!mounted) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '등록된 이메일 계정만 이용할 수 있어요.',
             style: GoogleFonts.notoSansKr(fontWeight: FontWeight.w700),
           ),
           behavior: SnackBarBehavior.floating,

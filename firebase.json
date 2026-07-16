@@ -1,1 +1,44 @@
-{"flutter":{"platforms":{"android":{"default":{"projectId":"nyangcoach","appId":"1:912621917226:android:1fc904ef2302f0bfc69f53","fileOutput":"android/app/google-services.json"}},"ios":{"default":{"projectId":"nyangcoach","appId":"1:912621917226:ios:b86b41359211a272c69f53","uploadDebugSymbols":false,"fileOutput":"ios/Runner/GoogleService-Info.plist"}},"macos":{"default":{"projectId":"nyangcoach","appId":"1:912621917226:ios:b86b41359211a272c69f53","uploadDebugSymbols":false,"fileOutput":"macos/Runner/GoogleService-Info.plist"}},"dart":{"lib/firebase_options.dart":{"projectId":"nyangcoach","configurations":{"android":"1:912621917226:android:1fc904ef2302f0bfc69f53","ios":"1:912621917226:ios:b86b41359211a272c69f53","macos":"1:912621917226:ios:b86b41359211a272c69f53","web":"1:912621917226:web:4c9ae368ec728618c69f53","windows":"1:912621917226:web:4c9ae368ec728618c69f53"}}}}}}
+{
+  "firestore": {
+    "rules": "firestore.rules"
+  },
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "nyangcoach",
+          "appId": "1:912621917226:android:1fc904ef2302f0bfc69f53",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "ios": {
+        "default": {
+          "projectId": "nyangcoach",
+          "appId": "1:912621917226:ios:b86b41359211a272c69f53",
+          "uploadDebugSymbols": false,
+          "fileOutput": "ios/Runner/GoogleService-Info.plist"
+        }
+      },
+      "macos": {
+        "default": {
+          "projectId": "nyangcoach",
+          "appId": "1:912621917226:ios:b86b41359211a272c69f53",
+          "uploadDebugSymbols": false,
+          "fileOutput": "macos/Runner/GoogleService-Info.plist"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "nyangcoach",
+          "configurations": {
+            "android": "1:912621917226:android:1fc904ef2302f0bfc69f53",
+            "ios": "1:912621917226:ios:b86b41359211a272c69f53",
+            "macos": "1:912621917226:ios:b86b41359211a272c69f53",
+            "web": "1:912621917226:web:4c9ae368ec728618c69f53",
+            "windows": "1:912621917226:web:4c9ae368ec728618c69f53"
+          }
+        }
+      }
+    }
+  }
+}
