@@ -35,6 +35,13 @@ class NotificationService {
   static const int _inactiveReturnNotificationId = 889;
   static const Duration _inactiveReturnDelay = Duration(days: 3);
   static const Duration _inactiveReturnCooldown = Duration(days: 5);
+  static const List<String> _inactiveReturnMessages = [
+    '집사야, 요즘 뭐해? 보고 싶다냥.',
+    '집사야, 냥냥코치가 기다리고 있다냥.',
+    '요즘 조용하다냥. 잠깐 얼굴 보여줄래?',
+    '집사야, 오늘은 어떻게 지내고 있냥?',
+    '냥냥코치가 슬쩍 안부 물으러 왔다냥.',
+  ];
   String? _lastMorningPayload;
   DateTime? _lastMorningOpenedAt;
 
@@ -342,11 +349,16 @@ class NotificationService {
       iOS: iosDetails,
     );
 
+    final message =
+        _inactiveReturnMessages[Random().nextInt(
+          _inactiveReturnMessages.length,
+        )];
+
     await _plugin.cancel(id: _inactiveReturnNotificationId);
     await _plugin.zonedSchedule(
       id: _inactiveReturnNotificationId,
       title: '냥냥코치',
-      body: '집사야, 요즘 뭐해? 보고 싶다냥.',
+      body: message,
       scheduledDate: tz.TZDateTime.from(
         now.add(_inactiveReturnDelay),
         tz.local,
