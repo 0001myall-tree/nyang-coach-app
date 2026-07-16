@@ -7,6 +7,50 @@
   "client": [
     {
       "client_info": {
+        "mobilesdk_app_id": "1:912621917226:android:d8f8876a860616c8c69f53",
+        "android_client_info": {
+          "package_name": "com.coscene.nyangcoach"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "912621917226-rvofnb0qmpajoekttcsrs9n9tbcjpaot.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.coscene.nyangcoach",
+            "certificate_hash": "7673162955ac53a53927f713b0baee3029cd45cc"
+          }
+        },
+        {
+          "client_id": "912621917226-7i963r1k8mjkf4llrlda93pelj6tpkro.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD9xoVzpI5jLQeUxNdLJSXue7MC0hl-qmM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "912621917226-7i963r1k8mjkf4llrlda93pelj6tpkro.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "912621917226-ajnj53vsr2q11ikd6osla0aog9e4p2u3.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.nyang.nyangCoach"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
         "mobilesdk_app_id": "1:912621917226:android:1fc904ef2302f0bfc69f53",
         "android_client_info": {
           "package_name": "com.nyang.nyang_coach"

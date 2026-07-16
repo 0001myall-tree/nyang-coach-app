@@ -52,7 +52,7 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyD9xoVzpI5jLQeUxNdLJSXue7MC0hl-qmM',
-    appId: '1:912621917226:android:1fc904ef2302f0bfc69f53',
+    appId: '1:912621917226:android:d8f8876a860616c8c69f53',
     messagingSenderId: '912621917226',
     projectId: 'nyangcoach',
     storageBucket: 'nyangcoach.firebasestorage.app',
@@ -64,7 +64,8 @@ class DefaultFirebaseOptions {
     messagingSenderId: '912621917226',
     projectId: 'nyangcoach',
     storageBucket: 'nyangcoach.firebasestorage.app',
-    iosClientId: '912621917226-ajnj53vsr2q11ikd6osla0aog9e4p2u3.apps.googleusercontent.com',
+    iosClientId:
+        '912621917226-ajnj53vsr2q11ikd6osla0aog9e4p2u3.apps.googleusercontent.com',
     iosBundleId: 'com.nyang.nyangCoach',
   );
 
@@ -74,7 +75,8 @@ class DefaultFirebaseOptions {
     messagingSenderId: '912621917226',
     projectId: 'nyangcoach',
     storageBucket: 'nyangcoach.firebasestorage.app',
-    iosClientId: '912621917226-ajnj53vsr2q11ikd6osla0aog9e4p2u3.apps.googleusercontent.com',
+    iosClientId:
+        '912621917226-ajnj53vsr2q11ikd6osla0aog9e4p2u3.apps.googleusercontent.com',
     iosBundleId: 'com.nyang.nyangCoach',
   );
 
