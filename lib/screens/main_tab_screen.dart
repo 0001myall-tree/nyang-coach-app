@@ -1857,6 +1857,16 @@ class _MainTabScreenState extends State<MainTabScreen>
                         ),
                         const SizedBox(height: 18),
                         _buildPlannerHelpSection(
+                          iconPath: 'assets/icons/compass.svg',
+                          title: '어디에 뭐가 있는지 모를 땐?',
+                          body:
+                              '코치한테 물어봐.\n'
+                              '장기 비전은 어디서 입력해?\n'
+                              '할 일 창은 어디 있어?\n'
+                              '코치가 대답해줄 거야.',
+                        ),
+                        const SizedBox(height: 18),
+                        _buildPlannerHelpSection(
                           iconPath: 'assets/icons/planner-calendar-days.svg',
                           title: '오늘 뭐부터 할지 모르겠다면',
                           body:

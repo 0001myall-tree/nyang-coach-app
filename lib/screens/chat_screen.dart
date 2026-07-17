@@ -4641,7 +4641,19 @@ class _ChatScreenState extends State<ChatScreen>
       );
     }
 
-    if (text.contains('일정') || text.contains('캘린더')) {
+    final asksDatedPlan =
+        text.contains('내일계획') ||
+        text.contains('내일플랜') ||
+        text.contains('내일뭐') ||
+        text.contains('내일할거') ||
+        text.contains('내일할일') ||
+        (text.contains('계획') &&
+            (text.contains('내일') ||
+                text.contains('날짜') ||
+                text.contains('이번주') ||
+                text.contains('다음주')));
+
+    if (text.contains('일정') || text.contains('캘린더') || asksDatedPlan) {
       return _FeatureLocationReply(
         _featureLocationMessage('schedule'),
         'schedule',
