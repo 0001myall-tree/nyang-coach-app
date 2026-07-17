@@ -2771,57 +2771,98 @@ class _TasksScreenState extends State<TasksScreen>
               ),
             )
           else ...[
-            // 항상 1위만 표시
-            _buildCoreItem(0),
-            // 나머지는 접기/펼치기
-            if (coreTasks.length > 1) ...[
-              if (_coreExpanded)
-                ...List.generate(
-                  coreTasks.length - 1,
-                  (i) => _buildCoreItem(i + 1),
-                )
-              else
-                GestureDetector(
-                  onTap: () => setState(() => _coreExpanded = true),
-                  child: Padding(
-                    padding: const EdgeInsets.only(top: 4),
-                    child: Row(
-                      children: [
-                        const SizedBox(width: 28),
-                        Text(
-                          '+ 핵심 ${coreTasks.length - 1}개 더',
-                          style: GoogleFonts.notoSansKr(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: _coach.accentColor.withOpacity(0.7),
-                          ),
+            if (_coreExpanded)
+              ...List.generate(coreTasks.length, (i) => _buildCoreItem(i))
+            else
+              _buildCoreSummary(),
+            if (coreTasks.length > 1 && !_coreExpanded)
+              GestureDetector(
+                onTap: () => setState(() => _coreExpanded = true),
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Row(
+                    children: [
+                      const SizedBox(width: 28),
+                      Text(
+                        _nextPendingCoreIndex() == -1
+                            ? '완료한 핵심 보기'
+                            : '+ 핵심 ${coreTasks.length - 1}개 더',
+                        style: GoogleFonts.notoSansKr(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: _coach.accentColor.withOpacity(0.7),
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ),
-              if (_coreExpanded)
-                GestureDetector(
-                  onTap: () => setState(() => _coreExpanded = false),
-                  child: Padding(
-                    padding: const EdgeInsets.only(top: 4),
-                    child: Row(
-                      children: [
-                        const SizedBox(width: 28),
-                        Text(
-                          '접기',
-                          style: GoogleFonts.notoSansKr(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: _coach.accentColor.withOpacity(0.5),
-                          ),
+              ),
+            if (_coreExpanded)
+              GestureDetector(
+                onTap: () => setState(() => _coreExpanded = false),
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Row(
+                    children: [
+                      const SizedBox(width: 28),
+                      Text(
+                        '접기',
+                        style: GoogleFonts.notoSansKr(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: _coach.accentColor.withOpacity(0.5),
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ),
-            ],
+              ),
           ],
+        ],
+      ),
+    );
+  }
+
+  bool _isCoreTaskDone(TaskItem coreTask) {
+    final coreId = coreTask.id.toString();
+    return tasks.any(
+      (t) => (t.id.toString() == coreId || t.text == coreTask.text) && t.done,
+    );
+  }
+
+  int _nextPendingCoreIndex() {
+    return coreTasks.indexWhere((coreTask) => !_isCoreTaskDone(coreTask));
+  }
+
+  Widget _buildCoreSummary() {
+    final pendingIndex = _nextPendingCoreIndex();
+    if (pendingIndex != -1) return _buildCoreItem(pendingIndex);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        children: [
+          Container(
+            width: 20,
+            height: 20,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: _coach.accentColor,
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.check, size: 12, color: Colors.white),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              '오늘의 핵심을 모두 완료했어요',
+              style: GoogleFonts.notoSansKr(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: const Color(0xFF3D3A4E),
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -2829,7 +2870,7 @@ class _TasksScreenState extends State<TasksScreen>
 
   Widget _buildCoreItem(int idx) {
     final c = coreTasks[idx];
-    final isDone = tasks.any((t) => t.text == c.text && t.done);
+    final isDone = _isCoreTaskDone(c);
     return Container(
       margin: const EdgeInsets.only(bottom: 6),
       child: Row(
@@ -4195,14 +4236,6 @@ class _TasksScreenState extends State<TasksScreen>
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    '수정하기',
-                    style: GoogleFonts.notoSansKr(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                      color: const Color(0xFF3D3A4E),
-                    ),
-                  ),
                   if (item != null) ...[
                     Builder(
                       builder: (context) {
@@ -4667,90 +4700,135 @@ class _TasksScreenState extends State<TasksScreen>
                       ),
                     ),
                   const SizedBox(height: 24),
-                  GestureDetector(
-                    onTap: () async {
-                      await _checkCoreReminderEnabledGlobally();
-                      final text = textCtrl.text.trim();
-                      if (text.isEmpty) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('내용을 입력해주세요.')),
-                        );
-                        return;
-                      }
+                  Row(
+                    children: [
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () async {
+                            await _checkCoreReminderEnabledGlobally();
+                            final text = textCtrl.text.trim();
+                            if (text.isEmpty) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('내용을 입력해주세요.')),
+                              );
+                              return;
+                            }
 
-                      item.text = text;
-                      item.time = null;
-                      item.timeStart = null;
-                      item.timeEnd = null;
-                      item.duration = null;
+                            item.text = text;
+                            item.time = null;
+                            item.timeStart = null;
+                            item.timeEnd = null;
+                            item.duration = null;
 
-                      final effectiveTimeType = _effectiveClockTimeType(
-                        mTimeType,
-                        mEndTime,
-                      );
+                            final effectiveTimeType = _effectiveClockTimeType(
+                              mTimeType,
+                              mEndTime,
+                            );
 
-                      if (effectiveTimeType == 'single' && mStartTime != null) {
-                        item.time = _formatTime(mStartTime!);
-                        item.timeStart =
-                            '${mStartTime!.hour.toString().padLeft(2, '0')}:${mStartTime!.minute.toString().padLeft(2, '0')}';
-                      } else if (effectiveTimeType == 'range' &&
-                          mStartTime != null) {
-                        item.time = _formatTime(mStartTime!);
-                        item.timeStart =
-                            '${mStartTime!.hour.toString().padLeft(2, '0')}:${mStartTime!.minute.toString().padLeft(2, '0')}';
-                        if (mEndTime != null) {
-                          item.time += ' ~ ${_formatTime(mEndTime!)}';
-                          item.timeEnd =
-                              '${mEndTime!.hour.toString().padLeft(2, '0')}:${mEndTime!.minute.toString().padLeft(2, '0')}';
-                        }
-                      } else if (mTimeType == 'duration' && mDuration != null) {
-                        item.duration = mDuration;
-                      }
+                            if (effectiveTimeType == 'single' &&
+                                mStartTime != null) {
+                              item.time = _formatTime(mStartTime!);
+                              item.timeStart =
+                                  '${mStartTime!.hour.toString().padLeft(2, '0')}:${mStartTime!.minute.toString().padLeft(2, '0')}';
+                            } else if (effectiveTimeType == 'range' &&
+                                mStartTime != null) {
+                              item.time = _formatTime(mStartTime!);
+                              item.timeStart =
+                                  '${mStartTime!.hour.toString().padLeft(2, '0')}:${mStartTime!.minute.toString().padLeft(2, '0')}';
+                              if (mEndTime != null) {
+                                item.time += ' ~ ${_formatTime(mEndTime!)}';
+                                item.timeEnd =
+                                    '${mEndTime!.hour.toString().padLeft(2, '0')}:${mEndTime!.minute.toString().padLeft(2, '0')}';
+                              }
+                            } else if (mTimeType == 'duration' &&
+                                mDuration != null) {
+                              item.duration = mDuration;
+                            }
 
-                      if (isScheduleItem) {
-                        item.isReminderEnabled = _resolvedTimeReminderEnabled(
-                          effectiveTimeType,
-                          mStartTime,
-                          mReminderEnabled,
-                        );
-                        item.isRecurring = mRepeatEnabled;
-                        item.recurrenceRule = mRepeatEnabled
-                            ? (mRepeatRule ?? item.recurrenceRule)
-                            : null;
-                        if (item.isRecurring && item.recurrenceRule != null) {
-                          _replaceFutureRecurringSchedules(
-                            item,
-                            item.recurrenceRule!,
-                          );
-                        }
-                      } else if (item is TaskItem) {
-                        item.isReminderEnabled = _resolvedTimeReminderEnabled(
-                          effectiveTimeType,
-                          mStartTime,
-                          mReminderEnabled,
-                        );
-                      }
+                            if (isScheduleItem) {
+                              item.isReminderEnabled =
+                                  _resolvedTimeReminderEnabled(
+                                    effectiveTimeType,
+                                    mStartTime,
+                                    mReminderEnabled,
+                                  );
+                              item.isRecurring = mRepeatEnabled;
+                              item.recurrenceRule = mRepeatEnabled
+                                  ? (mRepeatRule ?? item.recurrenceRule)
+                                  : null;
+                              if (item.isRecurring &&
+                                  item.recurrenceRule != null) {
+                                _replaceFutureRecurringSchedules(
+                                  item,
+                                  item.recurrenceRule!,
+                                );
+                              }
+                            } else if (item is TaskItem) {
+                              item.isReminderEnabled =
+                                  _resolvedTimeReminderEnabled(
+                                    effectiveTimeType,
+                                    mStartTime,
+                                    mReminderEnabled,
+                                  );
+                            }
 
-                      onSave();
-                      Navigator.pop(ctx);
-                    },
-                    child: Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: _coach.accentColor,
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Text(
-                        '저장하기',
-                        style: GoogleFonts.notoSansKr(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w800,
-                          color: Colors.white,
+                            onSave();
+                            Navigator.pop(ctx);
+                          },
+                          child: Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              color: _coach.accentColor,
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: Text(
+                              '수정하기',
+                              style: GoogleFonts.notoSansKr(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w800,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
                         ),
                       ),
-                    ),
+                      if (item is TaskItem) ...[
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () {
+                              Navigator.pop(ctx);
+                              Future.microtask(() {
+                                if (mounted) _showTaskDeleteOptions(item);
+                              });
+                            },
+                            child: Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: _coach.accentColor.withOpacity(0.45),
+                                  width: 1.5,
+                                ),
+                              ),
+                              child: Text(
+                                '삭제하기',
+                                style: GoogleFonts.notoSansKr(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w800,
+                                  color: _coach.accentColor.withOpacity(0.82),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                 ],
               ),
@@ -4847,7 +4925,6 @@ class _TasksScreenState extends State<TasksScreen>
               Expanded(
                 child: GestureDetector(
                   onTap: () {
-                    if (t.done) return;
                     if (isMilestone) {
                       if (milestoneInfo.isMilestoneSelf) {
                         _showVisionModal(milestoneInfo.vision);
@@ -5044,31 +5121,6 @@ class _TasksScreenState extends State<TasksScreen>
                         ],
                       ],
                     ),
-                  ),
-                ),
-              ),
-              // 삭제 버튼
-              GestureDetector(
-                onTap: () {
-                  if (isMilestone && milestoneInfo.isMilestoneSelf) {
-                    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('마일스톤 일정은 목표 탭의 비전 관리에서 관리할 수 있습니다.'),
-                      ),
-                    );
-                    return;
-                  }
-                  _showTaskDeleteOptions(t);
-                },
-                child: Container(
-                  width: 40,
-                  height: 52,
-                  alignment: Alignment.center,
-                  child: const Icon(
-                    Icons.close,
-                    size: 16,
-                    color: Color(0xFFD1D5DB),
                   ),
                 ),
               ),

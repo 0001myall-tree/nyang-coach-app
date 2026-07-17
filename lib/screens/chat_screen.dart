@@ -4608,27 +4608,18 @@ class _ChatScreenState extends State<ChatScreen>
         text.contains('비전창') ||
         text.contains('비전어디') ||
         text.contains('마일스톤')) {
-      return const _FeatureLocationReply(
-        '장기 비전은 할 일 탭 안의 목표 화면 아래쪽에 있어요. 바로 열어드릴게요.',
-        'vision',
-      );
+      return _FeatureLocationReply(_featureLocationMessage('vision'), 'vision');
     }
 
     if (text.contains('목표')) {
-      return const _FeatureLocationReply(
-        '목표는 할 일 탭의 목표 화면에서 볼 수 있어요. 주간/월간 목표와 장기 비전을 같이 관리합니다.',
-        'goals',
-      );
+      return _FeatureLocationReply(_featureLocationMessage('goals'), 'goals');
     }
 
     if (text.contains('오늘할일') ||
         text.contains('오늘의할일') ||
         text.contains('할일') ||
         text.contains('태스크')) {
-      return const _FeatureLocationReply(
-        '오늘 할 일은 할 일 탭의 오늘 화면에 적으면 돼요. 바로 열어드릴게요.',
-        'today',
-      );
+      return _FeatureLocationReply(_featureLocationMessage('today'), 'today');
     }
 
     if (text.contains('설정') ||
@@ -4644,38 +4635,109 @@ class _ChatScreenState extends State<ChatScreen>
         text.contains('비서학습') ||
         text.contains('학습설정') ||
         text.contains('호칭')) {
-      return const _FeatureLocationReply(
-        '모닝콜, 일정 알람, 위젯, 채팅 배경, 오늘 할 일 초기화 시간, 비서 학습 설정은 하단 설정 탭에서 바꿀 수 있어요.',
+      return _FeatureLocationReply(
+        _featureLocationMessage('settings'),
         'settings',
       );
     }
 
     if (text.contains('일정') || text.contains('캘린더')) {
-      return const _FeatureLocationReply(
-        '날짜가 있는 일정은 할 일 탭의 일정 화면에서 등록하고 확인할 수 있어요.',
+      return _FeatureLocationReply(
+        _featureLocationMessage('schedule'),
         'schedule',
       );
     }
 
     if (text.contains('습관') || text.contains('루틴')) {
-      return const _FeatureLocationReply(
-        '반복해서 챙길 습관은 할 일 탭의 습관 화면에서 관리하면 돼요.',
-        'habit',
-      );
+      return _FeatureLocationReply(_featureLocationMessage('habit'), 'habit');
     }
 
     if (text.contains('기록') || text.contains('리포트') || text.contains('통계')) {
-      return const _FeatureLocationReply(
-        '기록과 리포트는 하단 기록 탭에서 볼 수 있어요. 바로 이동할게요.',
+      return _FeatureLocationReply(
+        _featureLocationMessage('records'),
         'records',
       );
     }
 
     if (asksGenericLocation) {
-      return const _FeatureLocationReply('어떤 화면을 찾고 계세요?', 'picker');
+      return _FeatureLocationReply(_featureLocationMessage('picker'), 'picker');
     }
 
     return null;
+  }
+
+  String _featureLocationMessage(String location) {
+    final target = switch (location) {
+      'today' => '오늘 할 일',
+      'goals' => '목표',
+      'vision' => '장기 비전',
+      'schedule' => '일정',
+      'habit' => '습관',
+      'records' => '기록',
+      'settings' => '설정',
+      _ => '',
+    };
+
+    String base(String suffix) => target.isEmpty ? suffix : '$target$suffix';
+
+    return switch (_coach.id) {
+      'cat' => switch (location) {
+        'picker' => '어떤 화면 찾는 거냥? 냥이가 바로 데려다주겠다냥.',
+        'settings' =>
+          '설정 탭에 있다냥. 모닝콜, 일정 알람, 위젯, 채팅 배경, 초기화 시간, 비서 학습 설정까지 거기서 바꾸면 된다냥.',
+        'vision' => '장기 비전은 목표 화면 아래쪽에 있다냥. 바로 열어주겠다냥.',
+        _ => '${base(' 화면으로 바로 데려다주겠다냥.')}',
+      },
+      'boyfriend' => switch (location) {
+        'picker' => '어디 찾는지 말해줘. 내가 바로 데려다줄게.',
+        'settings' =>
+          '설정 탭에 있어. 모닝콜, 일정 알람, 위젯, 채팅 배경, 초기화 시간, 비서 학습 설정까지 거기서 바꾸면 돼.',
+        'vision' => '장기 비전은 목표 화면 아래쪽에 있어. 내가 바로 열어줄게.',
+        _ => '${base(' 화면에 있어. 바로 열어줄게.')}',
+      },
+      'girlfriend' => switch (location) {
+        'picker' => '오빠 어디 찾는 거야? 내가 바로 데려다줄게!',
+        'settings' =>
+          '오빠, 설정 탭에 있어! 모닝콜, 일정 알람, 위젯, 채팅 배경, 초기화 시간, 비서 학습 설정까지 거기서 바꾸면 돼.',
+        'vision' => '오빠 장기 비전은 목표 화면 아래쪽에 있어. 바로 열어줄게!',
+        _ => '오빠, ${base(' 화면에 있어. 바로 열어줄게!')}',
+      },
+      'halmae' => switch (location) {
+        'picker' => '뭘 찾는 게냐, 우리 새끼. 할미가 바로 데려다주마.',
+        'settings' =>
+          '설정 탭에 있다, 우리 새끼. 모닝콜이랑 알람, 위젯, 채팅 배경, 초기화 시간, 비서 학습 설정 다 거기서 바꾸면 된다.',
+        'vision' => '장기 비전은 목표 화면 아래쪽에 있다. 할미가 바로 열어주마.',
+        _ => '${base(' 화면에 있다. 할미가 바로 열어주마.')}',
+      },
+      'bro' => switch (location) {
+        'picker' => '어디 찾냐. 말만 해라, 바로 보내준다.',
+        'settings' =>
+          '설정 탭이다. 모닝콜, 일정 알람, 위젯, 채팅 배경, 초기화 시간, 비서 학습 설정 다 거기서 바꾸면 된다.',
+        'vision' => '장기 비전은 목표 화면 아래쪽이다. 바로 열어준다.',
+        _ => '${base(' 화면이다. 바로 열어준다.')}',
+      },
+      'sec_male' => switch (location) {
+        'picker' => '대표님, 찾으시는 화면을 선택해 주시면 바로 이동하겠습니다.',
+        'settings' =>
+          '대표님, 설정 탭에서 모닝콜, 일정 알람, 위젯, 채팅 배경, 오늘 할 일 초기화 시간, 비서 학습 설정을 변경하실 수 있습니다.',
+        'vision' => '대표님, 장기 비전은 목표 화면 하단에서 확인하실 수 있습니다. 바로 이동하겠습니다.',
+        _ => '대표님, ${base(' 화면으로 바로 이동하겠습니다.')}',
+      },
+      'sec_female' => switch (location) {
+        'picker' => '대표님, 어떤 화면을 찾으세요? 제가 바로 열어드릴게요.',
+        'settings' =>
+          '대표님, 설정 탭에서 모닝콜, 일정 알람, 위젯, 채팅 배경, 오늘 할 일 초기화 시간, 비서 학습 설정을 바꿀 수 있어요.',
+        'vision' => '대표님, 장기 비전은 목표 화면 아래쪽에 있어요. 바로 열어드릴게요.',
+        _ => '대표님, ${base(' 화면으로 바로 이동할게요.')}',
+      },
+      _ => switch (location) {
+        'picker' => '어떤 화면을 찾고 있어? 바로 열어줄게.',
+        'settings' =>
+          '설정 탭에서 모닝콜, 일정 알람, 위젯, 채팅 배경, 오늘 할 일 초기화 시간, 비서 학습 설정을 바꿀 수 있어.',
+        'vision' => '장기 비전은 목표 화면 아래쪽에 있어. 바로 열어줄게.',
+        _ => '${base(' 화면에 있어. 바로 열어줄게.')}',
+      },
+    };
   }
 
   // ── 웹앱 buildMemoryContext() 이식 (전 코치 등급) ───────

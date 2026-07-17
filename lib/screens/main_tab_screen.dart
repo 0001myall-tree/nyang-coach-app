@@ -1959,6 +1959,7 @@ class _MainTabScreenState extends State<MainTabScreen>
   Widget _buildSideDrawer() {
     final useCleanDrawer = _widgetIntentDrawerMode && _openDrawerIndex == 1;
     final screenWidth = MediaQuery.of(context).size.width;
+    final drawerTopPadding = MediaQuery.of(context).padding.top + 12;
     Widget drawerContent;
     if (_openDrawerIndex == 1) {
       drawerContent = TasksScreen(
@@ -2017,10 +2018,13 @@ class _MainTabScreenState extends State<MainTabScreen>
                 Expanded(
                   child: Material(
                     color: Colors.white,
-                    child: MediaQuery.removePadding(
-                      context: context,
-                      removeTop: true,
-                      child: drawerContent,
+                    child: Padding(
+                      padding: EdgeInsets.only(top: drawerTopPadding),
+                      child: MediaQuery.removePadding(
+                        context: context,
+                        removeTop: true,
+                        child: drawerContent,
+                      ),
                     ),
                   ),
                 ),
