@@ -2946,17 +2946,6 @@ class _TasksScreenState extends State<TasksScreen>
                   : const Color(0xFFA0A0B0).withOpacity(0.5),
             ),
           ),
-          const SizedBox(width: 12),
-          GestureDetector(
-            onTap: () {
-              setState(() {
-                coreTasks.removeAt(idx);
-                if (coreTasks.length <= 1) _coreExpanded = false;
-              });
-              _saveCoreTasks();
-            },
-            child: const Icon(Icons.close, size: 16, color: Color(0xFFA0A0B0)),
-          ),
         ],
       ),
     );

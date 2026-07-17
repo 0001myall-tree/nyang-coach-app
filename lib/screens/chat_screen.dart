@@ -4586,6 +4586,34 @@ class _ChatScreenState extends State<ChatScreen>
     final text = rawText.trim().toLowerCase().replaceAll(' ', '');
     if (text.isEmpty) return null;
 
+    final mentionsFeatureSurface =
+        text.contains('탭') ||
+        text.contains('텝') ||
+        text.contains('창') ||
+        text.contains('화면');
+    final mentionsFeature =
+        text.contains('장기비전') ||
+        text.contains('비전') ||
+        text.contains('마일스톤') ||
+        text.contains('목표') ||
+        text.contains('오늘할일') ||
+        text.contains('오늘의할일') ||
+        text.contains('할일') ||
+        text.contains('태스크') ||
+        text.contains('설정') ||
+        text.contains('알림') ||
+        text.contains('모닝콜') ||
+        text.contains('위젯') ||
+        text.contains('채팅배경') ||
+        text.contains('비서학습') ||
+        text.contains('일정') ||
+        text.contains('캘린더') ||
+        text.contains('습관') ||
+        text.contains('루틴') ||
+        text.contains('기록') ||
+        text.contains('리포트') ||
+        text.contains('통계');
+
     final asksLocation =
         text.contains('어디') ||
         text.contains('어떻게들어') ||
@@ -4593,7 +4621,8 @@ class _ChatScreenState extends State<ChatScreen>
         text.contains('찾아') ||
         text.contains('보여줘') ||
         text.contains('열어줘') ||
-        text.contains('가줘');
+        text.contains('가줘') ||
+        (mentionsFeatureSurface && mentionsFeature);
     if (!asksLocation) return null;
 
     final asksGenericLocation =
