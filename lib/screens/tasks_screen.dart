@@ -1703,11 +1703,15 @@ class _TasksScreenState extends State<TasksScreen>
         reminderEnabled = _isCoreReminderEnabledGlobally;
       }
     } else {
-      if (_todayTimeType == 'single' && _todayStartTime != null) {
+      final effectiveTimeType = _effectiveClockTimeType(
+        _todayTimeType,
+        _todayEndTime,
+      );
+      if (effectiveTimeType == 'single' && _todayStartTime != null) {
         timeStr = _formatTime(_todayStartTime!);
         timeStartStr =
             '${_todayStartTime!.hour.toString().padLeft(2, '0')}:${_todayStartTime!.minute.toString().padLeft(2, '0')}';
-      } else if (_todayTimeType == 'range' && _todayStartTime != null) {
+      } else if (effectiveTimeType == 'range' && _todayStartTime != null) {
         timeStr = _formatTime(_todayStartTime!);
         if (_todayEndTime != null) {
           timeStr += ' ~ ${_formatTime(_todayEndTime!)}';
@@ -1720,7 +1724,7 @@ class _TasksScreenState extends State<TasksScreen>
         durStr = _todayDuration;
       }
       reminderEnabled = _resolvedTimeReminderEnabled(
-        _todayTimeType,
+        effectiveTimeType,
         _todayStartTime,
         _todayReminderEnabled,
       );
@@ -4301,11 +4305,10 @@ class _TasksScreenState extends State<TasksScreen>
                   Builder(
                     builder: (context) {
                       final modeTypes = isScheduleItem
-                          ? ['single', 'range', 'duration', 'repeat']
-                          : ['single', 'range', 'duration'];
+                          ? ['single', 'duration', 'repeat']
+                          : ['single', 'duration'];
                       const labels = {
                         'single': '특정 시간',
-                        'range': '시간 범위',
                         'duration': '소요 시간',
                         'repeat': '반복',
                       };
@@ -4313,9 +4316,12 @@ class _TasksScreenState extends State<TasksScreen>
                       return Row(
                         children: modeTypes.map((t) {
                           final isRepeat = t == 'repeat';
+                          final isClockType =
+                              t == 'single' &&
+                              (mTimeType == 'single' || mTimeType == 'range');
                           final isActive = isRepeat
                               ? mRepeatEnabled
-                              : mTimeType == t;
+                              : (isClockType || mTimeType == t);
                           final isLast = t == modeTypes.last;
 
                           return Expanded(
@@ -4336,11 +4342,19 @@ class _TasksScreenState extends State<TasksScreen>
                                 }
 
                                 setModalState(() {
-                                  mTimeType = mTimeType == t ? 'none' : t;
                                   mReminderEnabled = false;
-                                  mStartTime = null;
-                                  mEndTime = null;
-                                  if (t != 'duration') mDuration = null;
+                                  if (t == 'single') {
+                                    mTimeType = isClockType ? 'none' : 'single';
+                                    mDuration = null;
+                                    if (isClockType) {
+                                      mStartTime = null;
+                                      mEndTime = null;
+                                    }
+                                  } else {
+                                    mTimeType = mTimeType == t ? 'none' : t;
+                                    mStartTime = null;
+                                    mEndTime = null;
+                                  }
                                 });
                               },
                               child: Container(
@@ -4404,7 +4418,7 @@ class _TasksScreenState extends State<TasksScreen>
                       child: Row(
                         children: [
                           Text(
-                            mTimeType == 'range' ? '시작: ' : '시간: ',
+                            '시작: ',
                             style: GoogleFonts.notoSansKr(
                               fontSize: 13,
                               color: const Color(0xFF6B7280),
@@ -4449,49 +4463,46 @@ class _TasksScreenState extends State<TasksScreen>
                               ),
                             ),
                           ),
-                          if (mTimeType == 'range') ...[
-                            const SizedBox(width: 8),
-                            Text(
-                              '~ 종료: ',
-                              style: GoogleFonts.notoSansKr(
-                                fontSize: 13,
-                                color: const Color(0xFF6B7280),
-                              ),
+                          const SizedBox(width: 8),
+                          Text(
+                            '~ 종료: ',
+                            style: GoogleFonts.notoSansKr(
+                              fontSize: 13,
+                              color: const Color(0xFF6B7280),
                             ),
-                            GestureDetector(
-                              onTap: () async {
-                                final t = await showTimePicker(
-                                  context: context,
-                                  initialTime: mEndTime ?? TimeOfDay.now(),
-                                );
-                                if (t != null)
-                                  setModalState(() => mEndTime = t);
-                              },
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                  vertical: 6,
+                          ),
+                          GestureDetector(
+                            onTap: () async {
+                              final t = await showTimePicker(
+                                context: context,
+                                initialTime: mEndTime ?? TimeOfDay.now(),
+                              );
+                              if (t != null) setModalState(() => mEndTime = t);
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 6,
+                              ),
+                              decoration: BoxDecoration(
+                                border: Border.all(
+                                  color: const Color(0xFFE5E7EB),
                                 ),
-                                decoration: BoxDecoration(
-                                  border: Border.all(
-                                    color: const Color(0xFFE5E7EB),
-                                  ),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Text(
-                                  mEndTime != null
-                                      ? _formatTime(mEndTime!)
-                                      : '선택',
-                                  style: GoogleFonts.notoSansKr(
-                                    fontSize: 13,
-                                    color: mEndTime != null
-                                        ? _coach.accentColor
-                                        : const Color(0xFFA0A0B0),
-                                  ),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                mEndTime != null
+                                    ? _formatTime(mEndTime!)
+                                    : '선택',
+                                style: GoogleFonts.notoSansKr(
+                                  fontSize: 13,
+                                  color: mEndTime != null
+                                      ? _coach.accentColor
+                                      : const Color(0xFFA0A0B0),
                                 ),
                               ),
                             ),
-                          ],
+                          ),
                           const SizedBox(width: 8),
                           if (isScheduleItem || item is TaskItem)
                             GestureDetector(
@@ -4673,11 +4684,17 @@ class _TasksScreenState extends State<TasksScreen>
                       item.timeEnd = null;
                       item.duration = null;
 
-                      if (mTimeType == 'single' && mStartTime != null) {
+                      final effectiveTimeType = _effectiveClockTimeType(
+                        mTimeType,
+                        mEndTime,
+                      );
+
+                      if (effectiveTimeType == 'single' && mStartTime != null) {
                         item.time = _formatTime(mStartTime!);
                         item.timeStart =
                             '${mStartTime!.hour.toString().padLeft(2, '0')}:${mStartTime!.minute.toString().padLeft(2, '0')}';
-                      } else if (mTimeType == 'range' && mStartTime != null) {
+                      } else if (effectiveTimeType == 'range' &&
+                          mStartTime != null) {
                         item.time = _formatTime(mStartTime!);
                         item.timeStart =
                             '${mStartTime!.hour.toString().padLeft(2, '0')}:${mStartTime!.minute.toString().padLeft(2, '0')}';
@@ -4692,7 +4709,7 @@ class _TasksScreenState extends State<TasksScreen>
 
                       if (isScheduleItem) {
                         item.isReminderEnabled = _resolvedTimeReminderEnabled(
-                          mTimeType,
+                          effectiveTimeType,
                           mStartTime,
                           mReminderEnabled,
                         );
@@ -4708,7 +4725,7 @@ class _TasksScreenState extends State<TasksScreen>
                         }
                       } else if (item is TaskItem) {
                         item.isReminderEnabled = _resolvedTimeReminderEnabled(
-                          mTimeType,
+                          effectiveTimeType,
                           mStartTime,
                           mReminderEnabled,
                         );
@@ -5126,24 +5143,38 @@ class _TasksScreenState extends State<TasksScreen>
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Row(
-                            children: ['single', 'range', 'duration'].map((t) {
+                            children: ['single', 'duration'].map((t) {
                               final labels = {
                                 'single': '특정 시간',
-                                'range': '시간 범위',
                                 'duration': '소요 시간',
                               };
-                              final isActive = _todayTimeType == t;
+                              final isClockType =
+                                  t == 'single' &&
+                                  (_todayTimeType == 'single' ||
+                                      _todayTimeType == 'range');
+                              final isActive =
+                                  isClockType || _todayTimeType == t;
                               final isLast = t == 'duration';
                               return Expanded(
                                 child: GestureDetector(
                                   onTap: () => setState(() {
-                                    _todayTimeType = _todayTimeType == t
-                                        ? 'none'
-                                        : t;
                                     _todayReminderEnabled = false;
-                                    _todayStartTime = null;
-                                    _todayEndTime = null;
-                                    if (t != 'duration') _todayDuration = null;
+                                    if (t == 'single') {
+                                      _todayTimeType = isClockType
+                                          ? 'none'
+                                          : 'single';
+                                      _todayDuration = null;
+                                      if (isClockType) {
+                                        _todayStartTime = null;
+                                        _todayEndTime = null;
+                                      }
+                                    } else {
+                                      _todayTimeType = _todayTimeType == t
+                                          ? 'none'
+                                          : t;
+                                      _todayStartTime = null;
+                                      _todayEndTime = null;
+                                    }
                                   }),
                                   child: Container(
                                     margin: EdgeInsets.only(
@@ -5187,7 +5218,7 @@ class _TasksScreenState extends State<TasksScreen>
                               child: Row(
                                 children: [
                                   Text(
-                                    _todayTimeType == 'range' ? '시작: ' : '시간: ',
+                                    '시작: ',
                                     style: GoogleFonts.notoSansKr(
                                       fontSize: 13,
                                       color: const Color(0xFF6B7280),
@@ -5232,60 +5263,56 @@ class _TasksScreenState extends State<TasksScreen>
                                       ),
                                     ),
                                   ),
-                                  if (_todayTimeType == 'range') ...[
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      '~',
-                                      style: GoogleFonts.notoSansKr(
-                                        fontSize: 13,
-                                        color: const Color(0xFF6B7280),
-                                      ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    '~',
+                                    style: GoogleFonts.notoSansKr(
+                                      fontSize: 13,
+                                      color: const Color(0xFF6B7280),
                                     ),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      '종료: ',
-                                      style: GoogleFonts.notoSansKr(
-                                        fontSize: 13,
-                                        color: const Color(0xFF6B7280),
-                                      ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    '종료: ',
+                                    style: GoogleFonts.notoSansKr(
+                                      fontSize: 13,
+                                      color: const Color(0xFF6B7280),
                                     ),
-                                    GestureDetector(
-                                      onTap: () async {
-                                        final t = await showTimePicker(
-                                          context: context,
-                                          initialTime:
-                                              _todayEndTime ?? TimeOfDay.now(),
-                                        );
-                                        if (t != null)
-                                          setState(() => _todayEndTime = t);
-                                      },
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 10,
-                                          vertical: 6,
+                                  ),
+                                  GestureDetector(
+                                    onTap: () async {
+                                      final t = await showTimePicker(
+                                        context: context,
+                                        initialTime:
+                                            _todayEndTime ?? TimeOfDay.now(),
+                                      );
+                                      if (t != null)
+                                        setState(() => _todayEndTime = t);
+                                    },
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 10,
+                                        vertical: 6,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        border: Border.all(
+                                          color: const Color(0xFFE5E7EB),
                                         ),
-                                        decoration: BoxDecoration(
-                                          border: Border.all(
-                                            color: const Color(0xFFE5E7EB),
-                                          ),
-                                          borderRadius: BorderRadius.circular(
-                                            8,
-                                          ),
-                                        ),
-                                        child: Text(
-                                          _todayEndTime != null
-                                              ? _formatTime(_todayEndTime!)
-                                              : '선택',
-                                          style: GoogleFonts.notoSansKr(
-                                            fontSize: 13,
-                                            color: _todayEndTime != null
-                                                ? _coach.accentColor
-                                                : const Color(0xFFA0A0B0),
-                                          ),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Text(
+                                        _todayEndTime != null
+                                            ? _formatTime(_todayEndTime!)
+                                            : '선택',
+                                        style: GoogleFonts.notoSansKr(
+                                          fontSize: 13,
+                                          color: _todayEndTime != null
+                                              ? _coach.accentColor
+                                              : const Color(0xFFA0A0B0),
                                         ),
                                       ),
                                     ),
-                                  ],
+                                  ),
                                   const SizedBox(width: 8),
                                   GestureDetector(
                                     onTap: () async {
@@ -7555,6 +7582,13 @@ class _TasksScreenState extends State<TasksScreen>
     return 'none';
   }
 
+  String _effectiveClockTimeType(String timeType, TimeOfDay? endTime) {
+    if (timeType == 'single' || timeType == 'range') {
+      return endTime != null ? 'range' : 'single';
+    }
+    return timeType;
+  }
+
   ScheduleItem _scheduleFromMovedTask(
     TaskItem task,
     String timeType,
@@ -7576,10 +7610,12 @@ class _TasksScreenState extends State<TasksScreen>
       deferredCount: task.deferredCount + 1,
     );
 
-    if (timeType == 'single' && startTime != null) {
+    final effectiveTimeType = _effectiveClockTimeType(timeType, endTime);
+
+    if (effectiveTimeType == 'single' && startTime != null) {
       entry.timeStart = _storedTime(startTime);
       entry.time = _formatTime(startTime);
-    } else if (timeType == 'range' && startTime != null) {
+    } else if (effectiveTimeType == 'range' && startTime != null) {
       entry.timeStart = _storedTime(startTime);
       entry.time = _formatTime(startTime);
       if (endTime != null) {
@@ -7607,19 +7643,27 @@ class _TasksScreenState extends State<TasksScreen>
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
-          children: ['single', 'range', 'duration'].map((t) {
-            final labels = {
-              'single': '특정 시간',
-              'range': '시간 범위',
-              'duration': '소요 시간',
-            };
-            final isActive = timeType == t;
+          children: ['single', 'duration'].map((t) {
+            final labels = {'single': '특정 시간', 'duration': '소요 시간'};
+            final isClockType =
+                t == 'single' && (timeType == 'single' || timeType == 'range');
+            final isActive = isClockType || timeType == t;
             final isLast = t == 'duration';
             return Expanded(
               child: GestureDetector(
                 onTap: () {
-                  setTimeType(timeType == t ? 'none' : t);
-                  if (t != 'duration') setDuration(null);
+                  if (t == 'single') {
+                    setTimeType(isClockType ? 'none' : 'single');
+                    setDuration(null);
+                    if (isClockType) {
+                      setStartTime(null);
+                      setEndTime(null);
+                    }
+                  } else {
+                    setTimeType(timeType == t ? 'none' : t);
+                    setStartTime(null);
+                    setEndTime(null);
+                  }
                 },
                 child: Container(
                   margin: EdgeInsets.only(right: isLast ? 0 : 6),
@@ -7658,7 +7702,7 @@ class _TasksScreenState extends State<TasksScreen>
             child: Row(
               children: [
                 Text(
-                  timeType == 'range' ? '시작: ' : '시간: ',
+                  '시작: ',
                   style: GoogleFonts.notoSansKr(
                     fontSize: 13,
                     color: const Color(0xFF6B7280),
@@ -7692,44 +7736,42 @@ class _TasksScreenState extends State<TasksScreen>
                     ),
                   ),
                 ),
-                if (timeType == 'range') ...[
-                  const SizedBox(width: 8),
-                  Text(
-                    '~ 종료: ',
-                    style: GoogleFonts.notoSansKr(
-                      fontSize: 13,
-                      color: const Color(0xFF6B7280),
+                const SizedBox(width: 8),
+                Text(
+                  '~ 종료: ',
+                  style: GoogleFonts.notoSansKr(
+                    fontSize: 13,
+                    color: const Color(0xFF6B7280),
+                  ),
+                ),
+                GestureDetector(
+                  onTap: () async {
+                    final t = await showTimePicker(
+                      context: context,
+                      initialTime: endTime ?? TimeOfDay.now(),
+                    );
+                    if (t != null) setEndTime(t);
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: const Color(0xFFE5E7EB)),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      endTime != null ? _formatTime(endTime) : '선택',
+                      style: GoogleFonts.notoSansKr(
+                        fontSize: 13,
+                        color: endTime != null
+                            ? _coach.accentColor
+                            : const Color(0xFFA0A0B0),
+                      ),
                     ),
                   ),
-                  GestureDetector(
-                    onTap: () async {
-                      final t = await showTimePicker(
-                        context: context,
-                        initialTime: endTime ?? TimeOfDay.now(),
-                      );
-                      if (t != null) setEndTime(t);
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        border: Border.all(color: const Color(0xFFE5E7EB)),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        endTime != null ? _formatTime(endTime) : '선택',
-                        style: GoogleFonts.notoSansKr(
-                          fontSize: 13,
-                          color: endTime != null
-                              ? _coach.accentColor
-                              : const Color(0xFFA0A0B0),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+                ),
               ],
             ),
           ),
@@ -7986,9 +8028,14 @@ class _TasksScreenState extends State<TasksScreen>
     }
 
     final reminderGloballyEnabled = await _checkCoreReminderEnabledGlobally();
+    final effectiveScheduleTimeType = _effectiveClockTimeType(
+      _schTimeType,
+      _schEndTime,
+    );
     final shouldEnableReminder =
         reminderGloballyEnabled &&
-        (_schTimeType == 'single' || _schTimeType == 'range') &&
+        (effectiveScheduleTimeType == 'single' ||
+            effectiveScheduleTimeType == 'range') &&
         _schStartTime != null &&
         _schReminderEnabled;
 
@@ -8013,10 +8060,11 @@ class _TasksScreenState extends State<TasksScreen>
             : {...repeatRule, 'startDate': _dateKey(_calSelectedDay)},
       );
 
-      if (_schTimeType == 'single' && _schStartTime != null) {
+      if (effectiveScheduleTimeType == 'single' && _schStartTime != null) {
         entry.timeStart = "${_schStartTime!.hour}:${_schStartTime!.minute}";
         entry.time = _formatTime(_schStartTime!);
-      } else if (_schTimeType == 'range' && _schStartTime != null) {
+      } else if (effectiveScheduleTimeType == 'range' &&
+          _schStartTime != null) {
         entry.timeStart = "${_schStartTime!.hour}:${_schStartTime!.minute}";
         if (_schEndTime != null) {
           entry.timeEnd = "${_schEndTime!.hour}:${_schEndTime!.minute}";
@@ -10128,14 +10176,14 @@ class _TasksScreenState extends State<TasksScreen>
         : (16.0 + MediaQuery.of(context).padding.bottom);
 
     Widget scheduleModeButton(String type, {bool isLast = false}) {
-      const labels = {
-        'single': '특정 시간',
-        'range': '시간 범위',
-        'duration': '소요 시간',
-        'repeat': '반복',
-      };
+      const labels = {'single': '특정 시간', 'duration': '소요 시간', 'repeat': '반복'};
       final isRepeat = type == 'repeat';
-      final isActive = isRepeat ? _schRepeatEnabled : _schTimeType == type;
+      final isClockType =
+          type == 'single' &&
+          (_schTimeType == 'single' || _schTimeType == 'range');
+      final isActive = isRepeat
+          ? _schRepeatEnabled
+          : (isClockType || _schTimeType == type);
 
       return Expanded(
         child: GestureDetector(
@@ -10151,11 +10199,19 @@ class _TasksScreenState extends State<TasksScreen>
               return;
             }
             setState(() {
-              _schTimeType = _schTimeType == type ? 'none' : type;
               _schReminderEnabled = false;
-              _schStartTime = null;
-              _schEndTime = null;
-              if (type != 'duration') _schDuration = null;
+              if (type == 'single') {
+                _schTimeType = isClockType ? 'none' : 'single';
+                _schDuration = null;
+                if (isClockType) {
+                  _schStartTime = null;
+                  _schEndTime = null;
+                }
+              } else {
+                _schTimeType = _schTimeType == type ? 'none' : type;
+                _schStartTime = null;
+                _schEndTime = null;
+              }
             });
           },
           child: Container(
@@ -10227,7 +10283,6 @@ class _TasksScreenState extends State<TasksScreen>
           Row(
             children: [
               scheduleModeButton('single'),
-              scheduleModeButton('range'),
               scheduleModeButton('duration'),
               scheduleModeButton('repeat', isLast: true),
             ],
@@ -10238,7 +10293,7 @@ class _TasksScreenState extends State<TasksScreen>
               child: Row(
                 children: [
                   Text(
-                    _schTimeType == 'range' ? '시작: ' : '시간: ',
+                    '시작: ',
                     style: GoogleFonts.notoSansKr(
                       fontSize: 13,
                       color: const Color(0xFF6B7280),
@@ -10281,54 +10336,50 @@ class _TasksScreenState extends State<TasksScreen>
                       ),
                     ),
                   ),
-                  if (_schTimeType == 'range') ...[
-                    const SizedBox(width: 8),
-                    Text(
-                      '~',
-                      style: GoogleFonts.notoSansKr(
-                        fontSize: 13,
-                        color: const Color(0xFF6B7280),
-                      ),
+                  const SizedBox(width: 8),
+                  Text(
+                    '~',
+                    style: GoogleFonts.notoSansKr(
+                      fontSize: 13,
+                      color: const Color(0xFF6B7280),
                     ),
-                    const SizedBox(width: 8),
-                    Text(
-                      '종료: ',
-                      style: GoogleFonts.notoSansKr(
-                        fontSize: 13,
-                        color: const Color(0xFF6B7280),
-                      ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    '종료: ',
+                    style: GoogleFonts.notoSansKr(
+                      fontSize: 13,
+                      color: const Color(0xFF6B7280),
                     ),
-                    GestureDetector(
-                      onTap: () async {
-                        final t = await showTimePicker(
-                          context: context,
-                          initialTime: _schEndTime ?? TimeOfDay.now(),
-                        );
-                        if (t != null) setState(() => _schEndTime = t);
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          border: Border.all(color: const Color(0xFFE5E7EB)),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          _schEndTime != null
-                              ? _formatTime(_schEndTime!)
-                              : '선택',
-                          style: GoogleFonts.notoSansKr(
-                            fontSize: 13,
-                            color: _schEndTime != null
-                                ? _coach.accentColor
-                                : const Color(0xFFA0A0B0),
-                          ),
+                  ),
+                  GestureDetector(
+                    onTap: () async {
+                      final t = await showTimePicker(
+                        context: context,
+                        initialTime: _schEndTime ?? TimeOfDay.now(),
+                      );
+                      if (t != null) setState(() => _schEndTime = t);
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: const Color(0xFFE5E7EB)),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        _schEndTime != null ? _formatTime(_schEndTime!) : '선택',
+                        style: GoogleFonts.notoSansKr(
+                          fontSize: 13,
+                          color: _schEndTime != null
+                              ? _coach.accentColor
+                              : const Color(0xFFA0A0B0),
                         ),
                       ),
                     ),
-                  ],
+                  ),
                   const SizedBox(width: 8),
                   GestureDetector(
                     onTap: () async {
@@ -10951,26 +11002,27 @@ class _TasksScreenState extends State<TasksScreen>
                           _checkBtn(
                             'single',
                             '특정 시간',
-                            timeType,
-                            (v) => setModalState(
-                              () => timeType = timeType == v ? 'none' : v,
-                            ),
-                          ),
-                          _checkBtn(
-                            'range',
-                            '시간 범위',
-                            timeType,
-                            (v) => setModalState(
-                              () => timeType = timeType == v ? 'none' : v,
-                            ),
+                            timeType == 'range' ? 'single' : timeType,
+                            (v) => setModalState(() {
+                              final isClockType =
+                                  timeType == 'single' || timeType == 'range';
+                              timeType = isClockType ? 'none' : v;
+                              mDuration = null;
+                              if (isClockType) {
+                                mStartTime = null;
+                                mEndTime = null;
+                              }
+                            }),
                           ),
                           _checkBtn(
                             'duration',
                             '소요 시간',
                             timeType,
-                            (v) => setModalState(
-                              () => timeType = timeType == v ? 'none' : v,
-                            ),
+                            (v) => setModalState(() {
+                              timeType = timeType == v ? 'none' : v;
+                              mStartTime = null;
+                              mEndTime = null;
+                            }),
                           ),
                         ],
                       ),
@@ -11012,50 +11064,48 @@ class _TasksScreenState extends State<TasksScreen>
                                   ),
                                 ),
                               ),
-                              if (timeType == 'range') ...[
-                                const SizedBox(width: 8),
-                                Text(
-                                  '~',
-                                  style: GoogleFonts.notoSansKr(
-                                    fontSize: 13,
-                                    color: const Color(0xFF6B7280),
+                              const SizedBox(width: 8),
+                              Text(
+                                '~',
+                                style: GoogleFonts.notoSansKr(
+                                  fontSize: 13,
+                                  color: const Color(0xFF6B7280),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              GestureDetector(
+                                onTap: () async {
+                                  final t = await showTimePicker(
+                                    context: context,
+                                    initialTime: mEndTime ?? TimeOfDay.now(),
+                                  );
+                                  if (t != null)
+                                    setModalState(() => mEndTime = t);
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 8,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    border: Border.all(
+                                      color: const Color(0xFFE5E7EB),
+                                    ),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(
+                                    mEndTime != null
+                                        ? _formatTime(mEndTime!)
+                                        : '종료 시간 선택',
+                                    style: GoogleFonts.notoSansKr(
+                                      fontSize: 13,
+                                      color: mEndTime != null
+                                          ? _coach.accentColor
+                                          : const Color(0xFFA0A0B0),
+                                    ),
                                   ),
                                 ),
-                                const SizedBox(width: 8),
-                                GestureDetector(
-                                  onTap: () async {
-                                    final t = await showTimePicker(
-                                      context: context,
-                                      initialTime: mEndTime ?? TimeOfDay.now(),
-                                    );
-                                    if (t != null)
-                                      setModalState(() => mEndTime = t);
-                                  },
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 10,
-                                      vertical: 8,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      border: Border.all(
-                                        color: const Color(0xFFE5E7EB),
-                                      ),
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: Text(
-                                      mEndTime != null
-                                          ? _formatTime(mEndTime!)
-                                          : '종료 시간 선택',
-                                      style: GoogleFonts.notoSansKr(
-                                        fontSize: 13,
-                                        color: mEndTime != null
-                                            ? _coach.accentColor
-                                            : const Color(0xFFA0A0B0),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ],
+                              ),
                               const SizedBox(width: 8),
                               GestureDetector(
                                 onTap: () async {
@@ -11208,6 +11258,10 @@ class _TasksScreenState extends State<TasksScreen>
                     final name = nameCtrl.text.trim();
                     if (name.isEmpty) return;
                     if (freq == 'weekly' && days.isEmpty) return;
+                    final effectiveHabitTimeType = _effectiveClockTimeType(
+                      timeType,
+                      mEndTime,
+                    );
 
                     final habit = HabitItem(
                       id:
@@ -11217,7 +11271,7 @@ class _TasksScreenState extends State<TasksScreen>
                       freq: freq,
                       days: List.from(days),
                       checkType: checkType,
-                      timeType: timeType,
+                      timeType: effectiveHabitTimeType,
                       tracking: tracking,
                       countGoal: (checkType == 'count' || checkType == 'both')
                           ? int.tryParse(countCtrl.text)
@@ -11230,14 +11284,18 @@ class _TasksScreenState extends State<TasksScreen>
                           ? int.tryParse(durationCtrl.text)
                           : null,
                       timeStart:
-                          (timeType == 'single' || timeType == 'range') &&
+                          (effectiveHabitTimeType == 'single' ||
+                                  effectiveHabitTimeType == 'range') &&
                               mStartTime != null
                           ? "${mStartTime!.hour}:${mStartTime!.minute}"
                           : null,
-                      timeEnd: timeType == 'range' && mEndTime != null
+                      timeEnd:
+                          effectiveHabitTimeType == 'range' && mEndTime != null
                           ? "${mEndTime!.hour}:${mEndTime!.minute}"
                           : null,
-                      habitDuration: timeType == 'duration' ? mDuration : null,
+                      habitDuration: effectiveHabitTimeType == 'duration'
+                          ? mDuration
+                          : null,
                       createdAt:
                           editHabit?.createdAt ??
                           DateTime.now().toIso8601String(),
