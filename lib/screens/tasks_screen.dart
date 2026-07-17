@@ -545,7 +545,6 @@ class _TasksScreenState extends State<TasksScreen>
 
   final SpeechToText _speechToText = SpeechToText();
   bool _speechEnabled = false;
-  bool _isListeningToday = false;
   bool _isListeningSchedule = false;
   bool _isConfirmDialogShowing = false;
 
@@ -8142,20 +8141,14 @@ class _TasksScreenState extends State<TasksScreen>
         onStatus: (status) {
           if (status == 'notListening' || status == 'done') {
             if (mounted) {
-              setState(() {
-                _isListeningToday = false;
-                _isListeningSchedule = false;
-              });
+              setState(() => _isListeningSchedule = false);
             }
           }
         },
         onError: (error) {
           debugPrint("Speech error: $error");
           if (mounted) {
-            setState(() {
-              _isListeningToday = false;
-              _isListeningSchedule = false;
-            });
+            setState(() => _isListeningSchedule = false);
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(content: Text('음성 인식 오류: ${error.errorMsg}')),
             );
@@ -8168,24 +8161,16 @@ class _TasksScreenState extends State<TasksScreen>
     }
   }
 
-  void _startListening({required bool isToday}) async {
+  void _startListening() async {
     if (!_speechEnabled) {
       _initSpeech();
       return;
     }
-    final controller = isToday ? _todayInputCtrl : _schInputCtrl;
+    final controller = _schInputCtrl;
     final baseText = controller.text;
     final baseSelection = controller.selection;
 
-    setState(() {
-      if (isToday) {
-        _isListeningToday = true;
-        _isListeningSchedule = false;
-      } else {
-        _isListeningToday = false;
-        _isListeningSchedule = true;
-      }
-    });
+    setState(() => _isListeningSchedule = true);
 
     await _speechToText.listen(
       listenMode: ListenMode.dictation,
@@ -8213,7 +8198,7 @@ class _TasksScreenState extends State<TasksScreen>
           });
 
           if (result.finalResult) {
-            _handleSpeechFinished(controller.text.trim(), isToday: isToday);
+            _handleSpeechFinished(controller.text.trim(), isToday: false);
           }
         }
       },
@@ -8224,19 +8209,13 @@ class _TasksScreenState extends State<TasksScreen>
   }
 
   Future<void> _stopListening() async {
-    final wasListeningToday = _isListeningToday;
     final wasListeningSchedule = _isListeningSchedule;
     await _speechToText.stop();
     if (mounted) {
-      setState(() {
-        _isListeningToday = false;
-        _isListeningSchedule = false;
-      });
+      setState(() => _isListeningSchedule = false);
       Future.delayed(const Duration(milliseconds: 200), () {
         if (mounted) {
-          if (wasListeningToday) {
-            _handleSpeechFinished(_todayInputCtrl.text.trim(), isToday: true);
-          } else if (wasListeningSchedule) {
+          if (wasListeningSchedule) {
             _handleSpeechFinished(_schInputCtrl.text.trim(), isToday: false);
           }
         }
@@ -10563,7 +10542,7 @@ class _TasksScreenState extends State<TasksScreen>
                             if (_isListeningSchedule) {
                               _stopListening();
                             } else {
-                              _startListening(isToday: false);
+                              _startListening();
                             }
                           },
                           child: Container(

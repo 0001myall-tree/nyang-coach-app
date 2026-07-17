@@ -4613,6 +4613,11 @@ class _ChatScreenState extends State<ChatScreen>
         text.contains('기록') ||
         text.contains('리포트') ||
         text.contains('통계');
+    final asksTodoReset =
+        (text.contains('할일') ||
+            text.contains('오늘할일') ||
+            text.contains('오늘의할일')) &&
+        (text.contains('초기화') || text.contains('리셋') || text.contains('reset'));
 
     final asksLocation =
         text.contains('어디') ||
@@ -4622,7 +4627,8 @@ class _ChatScreenState extends State<ChatScreen>
         text.contains('보여줘') ||
         text.contains('열어줘') ||
         text.contains('가줘') ||
-        (mentionsFeatureSurface && mentionsFeature);
+        (mentionsFeatureSurface && mentionsFeature) ||
+        asksTodoReset;
     if (!asksLocation) return null;
 
     final asksGenericLocation =
@@ -4644,14 +4650,8 @@ class _ChatScreenState extends State<ChatScreen>
       return _FeatureLocationReply(_featureLocationMessage('goals'), 'goals');
     }
 
-    if (text.contains('오늘할일') ||
-        text.contains('오늘의할일') ||
-        text.contains('할일') ||
-        text.contains('태스크')) {
-      return _FeatureLocationReply(_featureLocationMessage('today'), 'today');
-    }
-
-    if (text.contains('설정') ||
+    if (asksTodoReset ||
+        text.contains('설정') ||
         text.contains('알림') ||
         text.contains('모닝콜') ||
         text.contains('일정알람') ||
@@ -4659,6 +4659,11 @@ class _ChatScreenState extends State<ChatScreen>
         text.contains('채팅배경') ||
         text.contains('배경') ||
         text.contains('오늘할일초기화') ||
+        text.contains('오늘의할일초기화') ||
+        text.contains('할일초기화') ||
+        text.contains('오늘할일리셋') ||
+        text.contains('오늘의할일리셋') ||
+        text.contains('할일리셋') ||
         text.contains('초기화시간') ||
         text.contains('리셋시간') ||
         text.contains('비서학습') ||
@@ -4668,6 +4673,13 @@ class _ChatScreenState extends State<ChatScreen>
         _featureLocationMessage('settings'),
         'settings',
       );
+    }
+
+    if (text.contains('오늘할일') ||
+        text.contains('오늘의할일') ||
+        text.contains('할일') ||
+        text.contains('태스크')) {
+      return _FeatureLocationReply(_featureLocationMessage('today'), 'today');
     }
 
     final asksDatedPlan =

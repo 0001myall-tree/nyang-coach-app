@@ -1843,6 +1843,14 @@ class _MainTabScreenState extends State<MainTabScreen>
                         ),
                         const SizedBox(height: 18),
                         _buildPlannerHelpSection(
+                          iconPath: 'assets/icons/planner-reset.svg',
+                          title: '오늘의 할 일 리셋',
+                          body:
+                              '할 일 목록이 매일 리셋되니까 사라졌다고 놀라지 마세요.\n'
+                              '설정에서 할 일 리셋 시간을 조율할 수 있고, 다음 날 계획은 할 일 > 일정 탭에서 추가할 수 있습니다.',
+                        ),
+                        const SizedBox(height: 18),
+                        _buildPlannerHelpSection(
                           iconPath: 'assets/icons/planner-comments.svg',
                           title: '하기 싫을 땐 코치에게 말하기',
                           body:
