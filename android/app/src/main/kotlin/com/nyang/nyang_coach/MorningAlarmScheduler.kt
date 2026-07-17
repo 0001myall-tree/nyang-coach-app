@@ -1,4 +1,4 @@
-package com.nyang.nyang_coach
+package com.coscene.nyangcoach
 
 import android.app.AlarmManager
 import android.app.PendingIntent
@@ -9,8 +9,8 @@ import java.util.Calendar
 object MorningAlarmScheduler {
     private const val REQUEST_CODE = 7301
     private const val SHOW_REQUEST_CODE = 7302
-    const val ACTION_FIRE = "com.nyang.nyang_coach.MORNING_ALARM_FIRE"
-    const val ACTION_SHOW = "com.nyang.nyang_coach.MORNING_ALARM_SHOW"
+    const val ACTION_FIRE = "com.coscene.nyangcoach.MORNING_ALARM_FIRE"
+    const val ACTION_SHOW = "com.coscene.nyangcoach.MORNING_ALARM_SHOW"
     const val EXTRA_PAYLOAD = "payload"
 
     fun schedule(context: Context, triggerMillis: Long, payload: String) {

@@ -346,6 +346,7 @@ class ChatScreen extends StatefulWidget {
   final String coachId;
   final VoidCallback? onOpenDrawer;
   final ValueChanged<List<String>>? onOpenGoalVisionDrawer;
+  final ValueChanged<String>? onOpenFeatureLocation;
   final ValueChanged<String>? onSwitchCoach;
   final VoidCallback? onVacationChanged;
   final String? handoffFromCoachId;
@@ -357,6 +358,7 @@ class ChatScreen extends StatefulWidget {
     required this.coachId,
     this.onOpenDrawer,
     this.onOpenGoalVisionDrawer,
+    this.onOpenFeatureLocation,
     this.onSwitchCoach,
     this.onVacationChanged,
     this.handoffFromCoachId,
@@ -367,6 +369,13 @@ class ChatScreen extends StatefulWidget {
 
   @override
   State<ChatScreen> createState() => _ChatScreenState();
+}
+
+class _FeatureLocationReply {
+  final String message;
+  final String location;
+
+  const _FeatureLocationReply(this.message, this.location);
 }
 
 // 외부(TasksScreen 등)에서 ChatScreen에 AI 메시지를 주입하기 위한 컨트롤러
@@ -4145,6 +4154,7 @@ class _ChatScreenState extends State<ChatScreen>
         );
         _suggestedTasks = [];
         _dynamicChips = _coach.chips;
+        _suppressDefaultChips = false;
       });
       _scrollToBottom();
       await _saveHistory();
@@ -4152,6 +4162,40 @@ class _ChatScreenState extends State<ChatScreen>
         coachId: widget.coachId,
         usedApi: false,
       );
+      return;
+    }
+
+    final navigationReply = _featureLocationReply(trimmed);
+    if (navigationReply != null) {
+      setState(() {
+        _messages.add(
+          ChatMessage(text: trimmed, isUser: true, time: DateTime.now()),
+        );
+        _messages.add(
+          ChatMessage(
+            text: navigationReply.message,
+            isUser: false,
+            time: DateTime.now(),
+            kind: navigationReply.location == 'picker'
+                ? 'feature_location_picker'
+                : null,
+          ),
+        );
+        _suggestedTasks = [];
+        _dynamicChips = [];
+        _suppressDefaultChips = navigationReply.location == 'picker';
+      });
+      _scrollToBottom();
+      await _saveHistory();
+      await AnalyticsService.logConversationMessage(
+        coachId: widget.coachId,
+        usedApi: false,
+      );
+      if (navigationReply.location == 'picker') {
+        return;
+      }
+      await Future.delayed(const Duration(milliseconds: 260));
+      widget.onOpenFeatureLocation?.call(navigationReply.location);
       return;
     }
 
@@ -4536,6 +4580,102 @@ class _ChatScreenState extends State<ChatScreen>
         _isCheckingNextActionAllowance = false;
       }
     }
+  }
+
+  _FeatureLocationReply? _featureLocationReply(String rawText) {
+    final text = rawText.trim().toLowerCase().replaceAll(' ', '');
+    if (text.isEmpty) return null;
+
+    final asksLocation =
+        text.contains('어디') ||
+        text.contains('어떻게들어') ||
+        text.contains('어떻게가') ||
+        text.contains('찾아') ||
+        text.contains('보여줘') ||
+        text.contains('열어줘') ||
+        text.contains('가줘');
+    if (!asksLocation) return null;
+
+    final asksGenericLocation =
+        text.contains('어디서보') ||
+        text.contains('어디서봐') ||
+        text.contains('어디인지') ||
+        text.contains('어디에있는지') ||
+        text.contains('어딨') ||
+        text.contains('모르겠');
+
+    if (text.contains('장기비전') ||
+        text.contains('비전창') ||
+        text.contains('비전어디') ||
+        text.contains('마일스톤')) {
+      return const _FeatureLocationReply(
+        '장기 비전은 할 일 탭 안의 목표 화면 아래쪽에 있어요. 바로 열어드릴게요.',
+        'vision',
+      );
+    }
+
+    if (text.contains('목표')) {
+      return const _FeatureLocationReply(
+        '목표는 할 일 탭의 목표 화면에서 볼 수 있어요. 주간/월간 목표와 장기 비전을 같이 관리합니다.',
+        'goals',
+      );
+    }
+
+    if (text.contains('오늘할일') ||
+        text.contains('오늘의할일') ||
+        text.contains('할일') ||
+        text.contains('태스크')) {
+      return const _FeatureLocationReply(
+        '오늘 할 일은 할 일 탭의 오늘 화면에 적으면 돼요. 바로 열어드릴게요.',
+        'today',
+      );
+    }
+
+    if (text.contains('설정') ||
+        text.contains('알림') ||
+        text.contains('모닝콜') ||
+        text.contains('일정알람') ||
+        text.contains('위젯') ||
+        text.contains('채팅배경') ||
+        text.contains('배경') ||
+        text.contains('오늘할일초기화') ||
+        text.contains('초기화시간') ||
+        text.contains('리셋시간') ||
+        text.contains('비서학습') ||
+        text.contains('학습설정') ||
+        text.contains('호칭')) {
+      return const _FeatureLocationReply(
+        '모닝콜, 일정 알람, 위젯, 채팅 배경, 오늘 할 일 초기화 시간, 비서 학습 설정은 하단 설정 탭에서 바꿀 수 있어요.',
+        'settings',
+      );
+    }
+
+    if (text.contains('일정') || text.contains('캘린더')) {
+      return const _FeatureLocationReply(
+        '날짜가 있는 일정은 할 일 탭의 일정 화면에서 등록하고 확인할 수 있어요.',
+        'schedule',
+      );
+    }
+
+    if (text.contains('습관') || text.contains('루틴')) {
+      return const _FeatureLocationReply(
+        '반복해서 챙길 습관은 할 일 탭의 습관 화면에서 관리하면 돼요.',
+        'habit',
+      );
+    }
+
+    if (text.contains('기록') || text.contains('리포트') || text.contains('통계')) {
+      return const _FeatureLocationReply(
+        '기록과 리포트는 하단 기록 탭에서 볼 수 있어요. 바로 이동할게요.',
+        'records',
+      );
+    }
+
+    if (asksGenericLocation) {
+      return const _FeatureLocationReply('어떤 화면을 찾고 계세요?', 'picker');
+    }
+
+    return null;
   }
 
   // ── 웹앱 buildMemoryContext() 이식 (전 코치 등급) ───────
@@ -7630,6 +7770,9 @@ $timerOutputRule
     if (msg.kind == 'vision_choice') {
       return _buildVisionChoiceCard(msg);
     }
+    if (msg.kind == 'feature_location_picker') {
+      return _buildFeatureLocationPickerCard(msg);
+    }
     if (msg.kind == 'milestone_check' ||
         msg.kind == 'milestone_setup' ||
         msg.kind == 'milestone_notice') {
@@ -7741,6 +7884,139 @@ $timerOutputRule
                 ),
               ),
             ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFeatureLocationPickerCard(ChatMessage msg) {
+    final time = DateFormat('a h:mm', 'ko').format(msg.time);
+    final options = const [
+      ('오늘 할 일', 'today'),
+      ('목표', 'goals'),
+      ('장기 비전', 'vision'),
+      ('일정', 'schedule'),
+      ('습관', 'habit'),
+      ('기록', 'records'),
+      ('설정', 'settings'),
+    ];
+
+    Widget optionButton(String label, String location) {
+      return Material(
+        color: const Color(0xFFF6F1FF),
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: () {
+            setState(() => _suppressDefaultChips = false);
+            widget.onOpenFeatureLocation?.call(location);
+          },
+          child: Container(
+            height: 42,
+            alignment: Alignment.center,
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFE5DAFF)),
+            ),
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.notoSansKr(
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+                color: const Color(0xFF6F5FD6),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(18),
+            child: Image.asset(
+              _coach.imagePath,
+              width: 36,
+              height: 36,
+              fit: BoxFit.cover,
+              alignment: Alignment.topCenter,
+              errorBuilder: (_, __, ___) => Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: _coach.accentLight,
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: Icon(Icons.person, color: _coach.accentColor, size: 20),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Container(
+              constraints: BoxConstraints(
+                maxWidth: MediaQuery.of(context).size.width * 0.76,
+              ),
+              padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: const Color(0xFFE8E1F4)),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF8B7CFF).withValues(alpha: 0.10),
+                    blurRadius: 16,
+                    offset: const Offset(0, 5),
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    msg.text,
+                    style: GoogleFonts.notoSansKr(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w900,
+                      height: 1.45,
+                      color: const Color(0xFF2C2742),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  GridView.count(
+                    crossAxisCount: 2,
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    mainAxisSpacing: 8,
+                    crossAxisSpacing: 8,
+                    childAspectRatio: 2.9,
+                    children: [
+                      for (final option in options)
+                        optionButton(option.$1, option.$2),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(left: 6, bottom: 2),
+            child: Text(
+              time,
+              style: GoogleFonts.notoSansKr(
+                fontSize: AppDesignTokens.textMeta,
+                color: AppDesignTokens.textDisabled,
+              ),
+            ),
+          ),
         ],
       ),
     );

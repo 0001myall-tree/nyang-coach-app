@@ -1,4 +1,4 @@
-package com.nyang.nyang_coach
+package com.coscene.nyangcoach
 
 import android.graphics.Color
 import android.text.SpannableString

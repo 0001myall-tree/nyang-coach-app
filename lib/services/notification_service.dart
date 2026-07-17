@@ -269,11 +269,6 @@ class NotificationService {
         ?.requestNotificationsPermission();
     await _plugin
         .resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin
-        >()
-        ?.requestExactAlarmsPermission();
-    await _plugin
-        .resolvePlatformSpecificImplementation<
           IOSFlutterLocalNotificationsPlugin
         >()
         ?.requestPermissions(alert: true, badge: true, sound: true);

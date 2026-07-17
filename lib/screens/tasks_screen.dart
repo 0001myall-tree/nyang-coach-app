@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/gestures.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -497,6 +498,10 @@ class TasksScreenController {
     _state?._openGoalVision(highlightVisionIds: highlightVisionIds);
   }
 
+  void openTab(int index) {
+    _state?._openTab(index);
+  }
+
   void refresh() {
     _state?._loadAll();
   }
@@ -557,6 +562,7 @@ class _TasksScreenState extends State<TasksScreen>
   Map<String, dynamic>? _schRepeatRule;
 
   String _todayTimeType = 'none'; // 'none', 'single', 'range', 'duration'
+  bool _showTodayTimeOptions = false;
   bool _todayReminderEnabled = false;
   TimeOfDay? _todayStartTime;
   TimeOfDay? _todayEndTime;
@@ -749,6 +755,13 @@ class _TasksScreenState extends State<TasksScreen>
         showDone: false,
         fullScreen: true,
       );
+    }
+  }
+
+  void _openTab(int index) {
+    if (!mounted || index < 0 || index >= _tabCtrl.length) return;
+    if (_tabCtrl.index != index) {
+      _tabCtrl.animateTo(index);
     }
   }
 
@@ -1734,6 +1747,7 @@ class _TasksScreenState extends State<TasksScreen>
       _todayStartTime = null;
       _todayEndTime = null;
       _todayDuration = null;
+      _showTodayTimeOptions = false;
     });
     _saveTasks();
     _todayInputCtrl.clear();
@@ -4235,15 +4249,16 @@ class _TasksScreenState extends State<TasksScreen>
                                           TextSpan(
                                             text: mInfo.isMilestoneSelf
                                                 ? '연동된 마일스톤: '
-                                                : '메모장의 실행 목록: ',
+                                                : '메모장의 실행 목록',
                                             style: const TextStyle(
                                               fontWeight: FontWeight.bold,
                                             ),
                                           ),
-                                          TextSpan(
-                                            text:
-                                                '${mInfo.visionName} > ${mInfo.milestoneText}',
-                                          ),
+                                          if (mInfo.isMilestoneSelf)
+                                            TextSpan(
+                                              text:
+                                                  '${mInfo.visionName} > ${mInfo.milestoneText}',
+                                            ),
                                         ],
                                       ),
                                     ),
@@ -4897,7 +4912,7 @@ class _TasksScreenState extends State<TasksScreen>
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        // 마일스톤 태그 및 비전명 표시
+                        // 마일스톤/메모 실행 목록 출처만 간결하게 표시한다.
                         if (isMilestone) ...[
                           Row(
                             children: [
@@ -4918,17 +4933,6 @@ class _TasksScreenState extends State<TasksScreen>
                                     fontSize: 9,
                                     fontWeight: FontWeight.bold,
                                     color: const Color(0xFF5A50E6),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 6),
-                              Expanded(
-                                child: Text(
-                                  milestoneInfo.visionName,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: GoogleFonts.notoSansKr(
-                                    fontSize: 11,
-                                    color: const Color(0xFF7C6EFA),
                                   ),
                                 ),
                               ),
@@ -5108,276 +5112,304 @@ class _TasksScreenState extends State<TasksScreen>
         padding: EdgeInsets.fromLTRB(16, 10, 16, bottomPadding),
         child: Column(
           children: [
-            // 시간 설정 UI
-            Container(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: ['single', 'range', 'duration'].map((t) {
-                      final labels = {
-                        'single': '특정 시간',
-                        'range': '시간 범위',
-                        'duration': '소요 시간',
-                      };
-                      final isActive = _todayTimeType == t;
-                      final isLast = t == 'duration';
-                      return Expanded(
-                        child: GestureDetector(
-                          onTap: () => setState(() {
-                            _todayTimeType = _todayTimeType == t ? 'none' : t;
-                            _todayReminderEnabled = false;
-                            _todayStartTime = null;
-                            _todayEndTime = null;
-                            if (t != 'duration') _todayDuration = null;
-                          }),
-                          child: Container(
-                            margin: EdgeInsets.only(right: isLast ? 0 : 6),
-                            padding: const EdgeInsets.symmetric(vertical: 9),
-                            decoration: BoxDecoration(
-                              color: isActive
-                                  ? _coach.accentColor.withOpacity(0.08)
-                                  : Colors.white,
-                              border: Border.all(
-                                color: isActive
-                                    ? _coach.accentColor
-                                    : const Color(0xFFE5E7EB),
-                                width: 2,
-                              ),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Text(
-                              labels[t]!,
-                              textAlign: TextAlign.center,
-                              style: GoogleFonts.notoSansKr(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
-                                color: isActive
-                                    ? _coach.accentColor
-                                    : const Color(0xFF9CA3AF),
-                              ),
-                            ),
-                          ),
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                  if (_todayTimeType == 'single' || _todayTimeType == 'range')
-                    Padding(
-                      padding: const EdgeInsets.only(top: 12),
-                      child: Row(
+            // 시간 설정 UI: 기본은 접고, 입력창의 시계 버튼을 눌렀을 때만 표시한다.
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 180),
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeInCubic,
+              child: !_showTodayTimeOptions
+                  ? const SizedBox.shrink()
+                  : Container(
+                      key: const ValueKey('today-time-options'),
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            _todayTimeType == 'range' ? '시작: ' : '시간: ',
-                            style: GoogleFonts.notoSansKr(
-                              fontSize: 13,
-                              color: const Color(0xFF6B7280),
-                            ),
-                          ),
-                          GestureDetector(
-                            onTap: () async {
-                              final t = await showTimePicker(
-                                context: context,
-                                initialTime: _todayStartTime ?? TimeOfDay.now(),
-                              );
-                              if (t != null) {
-                                setState(() {
-                                  _todayStartTime = t;
-                                  _todayReminderEnabled =
-                                      _isCoreReminderEnabledGlobally;
-                                });
-                              }
-                            },
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 6,
-                              ),
-                              decoration: BoxDecoration(
-                                border: Border.all(
-                                  color: const Color(0xFFE5E7EB),
-                                ),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Text(
-                                _todayStartTime != null
-                                    ? _formatTime(_todayStartTime!)
-                                    : '선택',
-                                style: GoogleFonts.notoSansKr(
-                                  fontSize: 13,
-                                  color: _todayStartTime != null
-                                      ? _coach.accentColor
-                                      : const Color(0xFFA0A0B0),
-                                ),
-                              ),
-                            ),
-                          ),
-                          if (_todayTimeType == 'range') ...[
-                            const SizedBox(width: 8),
-                            Text(
-                              '~',
-                              style: GoogleFonts.notoSansKr(
-                                fontSize: 13,
-                                color: const Color(0xFF6B7280),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              '종료: ',
-                              style: GoogleFonts.notoSansKr(
-                                fontSize: 13,
-                                color: const Color(0xFF6B7280),
-                              ),
-                            ),
-                            GestureDetector(
-                              onTap: () async {
-                                final t = await showTimePicker(
-                                  context: context,
-                                  initialTime: _todayEndTime ?? TimeOfDay.now(),
-                                );
-                                if (t != null)
-                                  setState(() => _todayEndTime = t);
-                              },
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                  vertical: 6,
-                                ),
-                                decoration: BoxDecoration(
-                                  border: Border.all(
-                                    color: const Color(0xFFE5E7EB),
-                                  ),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Text(
-                                  _todayEndTime != null
-                                      ? _formatTime(_todayEndTime!)
-                                      : '선택',
-                                  style: GoogleFonts.notoSansKr(
-                                    fontSize: 13,
-                                    color: _todayEndTime != null
-                                        ? _coach.accentColor
-                                        : const Color(0xFFA0A0B0),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                          const SizedBox(width: 8),
-                          GestureDetector(
-                            onTap: () async {
-                              final enabled =
-                                  await _checkCoreReminderEnabledGlobally();
-                              if (!enabled) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('설정에서 일정 알람을 켜주세요.'),
-                                    duration: Duration(seconds: 2),
-                                  ),
-                                );
-                                return;
-                              }
-                              if (_todayStartTime == null) {
-                                _showSelectTimeBeforeReminderSnackBar();
-                                return;
-                              }
-                              setState(
-                                () => _todayReminderEnabled =
-                                    !_todayReminderEnabled,
-                              );
-                            },
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 200),
-                              width: 28,
-                              height: 28,
-                              decoration: BoxDecoration(
-                                color:
-                                    _resolvedTimeReminderEnabled(
-                                      _todayTimeType,
-                                      _todayStartTime,
-                                      _todayReminderEnabled,
-                                    )
-                                    ? _coach.accentColor.withOpacity(0.12)
-                                    : Colors.transparent,
-                                shape: BoxShape.circle,
-                              ),
-                              child: Icon(
-                                !_isCoreReminderEnabledGlobally
-                                    ? Icons.notifications_off
-                                    : (_resolvedTimeReminderEnabled(
-                                            _todayTimeType,
-                                            _todayStartTime,
-                                            _todayReminderEnabled,
-                                          )
-                                          ? Icons.notifications_active
-                                          : Icons.notifications_off),
-                                size: 18,
-                                color:
-                                    _resolvedTimeReminderEnabled(
-                                      _todayTimeType,
-                                      _todayStartTime,
-                                      _todayReminderEnabled,
-                                    )
-                                    ? _coach.accentColor
-                                    : const Color(0xFFB0B0C8),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  if (_todayTimeType == 'duration')
-                    Padding(
-                      padding: const EdgeInsets.only(top: 12),
-                      child: Wrap(
-                        spacing: 6,
-                        runSpacing: 6,
-                        children:
-                            [
-                              '10분',
-                              '15분',
-                              '30분',
-                              '1시간',
-                              '2시간',
-                              '3시간',
-                              '4시간+',
-                            ].map((d) {
-                              final isActive = _todayDuration == d;
-                              return GestureDetector(
-                                onTap: () => setState(() => _todayDuration = d),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 10,
-                                    vertical: 6,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: isActive
-                                        ? const Color(0xFFFDF2F8)
-                                        : Colors.white,
-                                    border: Border.all(
-                                      color: isActive
-                                          ? const Color(0xFFDB2777)
-                                          : const Color(0xFFE5E7EB),
+                          Row(
+                            children: ['single', 'range', 'duration'].map((t) {
+                              final labels = {
+                                'single': '특정 시간',
+                                'range': '시간 범위',
+                                'duration': '소요 시간',
+                              };
+                              final isActive = _todayTimeType == t;
+                              final isLast = t == 'duration';
+                              return Expanded(
+                                child: GestureDetector(
+                                  onTap: () => setState(() {
+                                    _todayTimeType = _todayTimeType == t
+                                        ? 'none'
+                                        : t;
+                                    _todayReminderEnabled = false;
+                                    _todayStartTime = null;
+                                    _todayEndTime = null;
+                                    if (t != 'duration') _todayDuration = null;
+                                  }),
+                                  child: Container(
+                                    margin: EdgeInsets.only(
+                                      right: isLast ? 0 : 6,
                                     ),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Text(
-                                    d,
-                                    style: GoogleFonts.notoSansKr(
-                                      fontSize: 13,
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 9,
+                                    ),
+                                    decoration: BoxDecoration(
                                       color: isActive
-                                          ? const Color(0xFFDB2777)
-                                          : const Color(0xFF6B7280),
+                                          ? _coach.accentColor.withOpacity(0.08)
+                                          : Colors.white,
+                                      border: Border.all(
+                                        color: isActive
+                                            ? _coach.accentColor
+                                            : const Color(0xFFE5E7EB),
+                                        width: 2,
+                                      ),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Text(
+                                      labels[t]!,
+                                      textAlign: TextAlign.center,
+                                      style: GoogleFonts.notoSansKr(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w700,
+                                        color: isActive
+                                            ? _coach.accentColor
+                                            : const Color(0xFF9CA3AF),
+                                      ),
                                     ),
                                   ),
                                 ),
                               );
                             }).toList(),
+                          ),
+                          if (_todayTimeType == 'single' ||
+                              _todayTimeType == 'range')
+                            Padding(
+                              padding: const EdgeInsets.only(top: 12),
+                              child: Row(
+                                children: [
+                                  Text(
+                                    _todayTimeType == 'range' ? '시작: ' : '시간: ',
+                                    style: GoogleFonts.notoSansKr(
+                                      fontSize: 13,
+                                      color: const Color(0xFF6B7280),
+                                    ),
+                                  ),
+                                  GestureDetector(
+                                    onTap: () async {
+                                      final t = await showTimePicker(
+                                        context: context,
+                                        initialTime:
+                                            _todayStartTime ?? TimeOfDay.now(),
+                                      );
+                                      if (t != null) {
+                                        setState(() {
+                                          _todayStartTime = t;
+                                          _todayReminderEnabled =
+                                              _isCoreReminderEnabledGlobally;
+                                        });
+                                      }
+                                    },
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 10,
+                                        vertical: 6,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        border: Border.all(
+                                          color: const Color(0xFFE5E7EB),
+                                        ),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Text(
+                                        _todayStartTime != null
+                                            ? _formatTime(_todayStartTime!)
+                                            : '선택',
+                                        style: GoogleFonts.notoSansKr(
+                                          fontSize: 13,
+                                          color: _todayStartTime != null
+                                              ? _coach.accentColor
+                                              : const Color(0xFFA0A0B0),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  if (_todayTimeType == 'range') ...[
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      '~',
+                                      style: GoogleFonts.notoSansKr(
+                                        fontSize: 13,
+                                        color: const Color(0xFF6B7280),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      '종료: ',
+                                      style: GoogleFonts.notoSansKr(
+                                        fontSize: 13,
+                                        color: const Color(0xFF6B7280),
+                                      ),
+                                    ),
+                                    GestureDetector(
+                                      onTap: () async {
+                                        final t = await showTimePicker(
+                                          context: context,
+                                          initialTime:
+                                              _todayEndTime ?? TimeOfDay.now(),
+                                        );
+                                        if (t != null)
+                                          setState(() => _todayEndTime = t);
+                                      },
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 10,
+                                          vertical: 6,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          border: Border.all(
+                                            color: const Color(0xFFE5E7EB),
+                                          ),
+                                          borderRadius: BorderRadius.circular(
+                                            8,
+                                          ),
+                                        ),
+                                        child: Text(
+                                          _todayEndTime != null
+                                              ? _formatTime(_todayEndTime!)
+                                              : '선택',
+                                          style: GoogleFonts.notoSansKr(
+                                            fontSize: 13,
+                                            color: _todayEndTime != null
+                                                ? _coach.accentColor
+                                                : const Color(0xFFA0A0B0),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                  const SizedBox(width: 8),
+                                  GestureDetector(
+                                    onTap: () async {
+                                      final enabled =
+                                          await _checkCoreReminderEnabledGlobally();
+                                      if (!enabled) {
+                                        ScaffoldMessenger.of(
+                                          context,
+                                        ).showSnackBar(
+                                          const SnackBar(
+                                            content: Text('설정에서 일정 알람을 켜주세요.'),
+                                            duration: Duration(seconds: 2),
+                                          ),
+                                        );
+                                        return;
+                                      }
+                                      if (_todayStartTime == null) {
+                                        _showSelectTimeBeforeReminderSnackBar();
+                                        return;
+                                      }
+                                      setState(
+                                        () => _todayReminderEnabled =
+                                            !_todayReminderEnabled,
+                                      );
+                                    },
+                                    child: AnimatedContainer(
+                                      duration: const Duration(
+                                        milliseconds: 200,
+                                      ),
+                                      width: 28,
+                                      height: 28,
+                                      decoration: BoxDecoration(
+                                        color:
+                                            _resolvedTimeReminderEnabled(
+                                              _todayTimeType,
+                                              _todayStartTime,
+                                              _todayReminderEnabled,
+                                            )
+                                            ? _coach.accentColor.withOpacity(
+                                                0.12,
+                                              )
+                                            : Colors.transparent,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: Icon(
+                                        !_isCoreReminderEnabledGlobally
+                                            ? Icons.notifications_off
+                                            : (_resolvedTimeReminderEnabled(
+                                                    _todayTimeType,
+                                                    _todayStartTime,
+                                                    _todayReminderEnabled,
+                                                  )
+                                                  ? Icons.notifications_active
+                                                  : Icons.notifications_off),
+                                        size: 18,
+                                        color:
+                                            _resolvedTimeReminderEnabled(
+                                              _todayTimeType,
+                                              _todayStartTime,
+                                              _todayReminderEnabled,
+                                            )
+                                            ? _coach.accentColor
+                                            : const Color(0xFFB0B0C8),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          if (_todayTimeType == 'duration')
+                            Padding(
+                              padding: const EdgeInsets.only(top: 12),
+                              child: Wrap(
+                                spacing: 6,
+                                runSpacing: 6,
+                                children:
+                                    [
+                                      '10분',
+                                      '15분',
+                                      '30분',
+                                      '1시간',
+                                      '2시간',
+                                      '3시간',
+                                      '4시간+',
+                                    ].map((d) {
+                                      final isActive = _todayDuration == d;
+                                      return GestureDetector(
+                                        onTap: () =>
+                                            setState(() => _todayDuration = d),
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 10,
+                                            vertical: 6,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: isActive
+                                                ? const Color(0xFFFDF2F8)
+                                                : Colors.white,
+                                            border: Border.all(
+                                              color: isActive
+                                                  ? const Color(0xFFDB2777)
+                                                  : const Color(0xFFE5E7EB),
+                                            ),
+                                            borderRadius: BorderRadius.circular(
+                                              8,
+                                            ),
+                                          ),
+                                          child: Text(
+                                            d,
+                                            style: GoogleFonts.notoSansKr(
+                                              fontSize: 13,
+                                              color: isActive
+                                                  ? const Color(0xFFDB2777)
+                                                  : const Color(0xFF6B7280),
+                                            ),
+                                          ),
+                                        ),
+                                      );
+                                    }).toList(),
+                              ),
+                            ),
+                        ],
                       ),
                     ),
-                ],
-              ),
             ),
             // 직접 추가 입력창
             Row(
@@ -5418,28 +5450,31 @@ class _TasksScreenState extends State<TasksScreen>
                           ),
                         ),
                         GestureDetector(
-                          onTap: () {
-                            if (_isListeningToday) {
-                              _stopListening();
-                            } else {
-                              _startListening(isToday: true);
-                            }
-                          },
+                          onTap: () => setState(
+                            () =>
+                                _showTodayTimeOptions = !_showTodayTimeOptions,
+                          ),
                           child: Container(
                             width: 32,
                             height: 32,
                             decoration: BoxDecoration(
-                              color: _isListeningToday
-                                  ? Colors.red.withOpacity(0.1)
+                              color: _showTodayTimeOptions
+                                  ? _coach.accentColor.withOpacity(0.10)
                                   : Colors.transparent,
                               shape: BoxShape.circle,
                             ),
-                            child: Icon(
-                              _isListeningToday ? Icons.mic : Icons.mic_none,
-                              size: 18,
-                              color: _isListeningToday
-                                  ? Colors.red
-                                  : const Color(0xFF8B7CFF),
+                            child: Center(
+                              child: SvgPicture.asset(
+                                'assets/icons/fa-clock-regular.svg',
+                                width: 18,
+                                height: 18,
+                                colorFilter: ColorFilter.mode(
+                                  _showTodayTimeOptions
+                                      ? _coach.accentColor
+                                      : const Color(0xFF8B7CFF),
+                                  BlendMode.srcIn,
+                                ),
+                              ),
                             ),
                           ),
                         ),
@@ -9429,17 +9464,6 @@ class _TasksScreenState extends State<TasksScreen>
                                 fontSize: 9,
                                 fontWeight: FontWeight.bold,
                                 color: const Color(0xFF5A50E6),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                          Expanded(
-                            child: Text(
-                              milestoneInfo.visionName,
-                              overflow: TextOverflow.ellipsis,
-                              style: GoogleFonts.notoSansKr(
-                                fontSize: 11,
-                                color: const Color(0xFF7C6EFA),
                               ),
                             ),
                           ),

@@ -1,4 +1,4 @@
-package com.nyang.nyang_coach
+package com.coscene.nyangcoach
 
 import android.app.PendingIntent
 import android.appwidget.AppWidgetManager

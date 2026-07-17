@@ -579,10 +579,52 @@ class _MainTabScreenState extends State<MainTabScreen>
   void _openTasksGoalVisionDrawer(List<String> highlightVisionIds) {
     setState(() {
       _openDrawerIndex = 1;
+      _widgetIntentDrawerMode = false;
     });
     Future.delayed(const Duration(milliseconds: 300), () {
       if (!mounted) return;
       _tasksController.openGoalVision(highlightVisionIds: highlightVisionIds);
+    });
+  }
+
+  void _openFeatureLocationFromChat(String location) {
+    final taskTabByLocation = {
+      'today': 0,
+      'goals': 1,
+      'schedule': 2,
+      'habit': 3,
+    };
+
+    if (location == 'records') {
+      setState(() {
+        _openDrawerIndex = 2;
+        _widgetIntentDrawerMode = false;
+      });
+      return;
+    }
+
+    if (location == 'settings') {
+      setState(() {
+        _openDrawerIndex = 3;
+        _widgetIntentDrawerMode = false;
+      });
+      return;
+    }
+
+    setState(() {
+      _openDrawerIndex = 1;
+      _widgetIntentDrawerMode = false;
+    });
+    Future.delayed(const Duration(milliseconds: 300), () {
+      if (!mounted) return;
+      if (location == 'vision') {
+        _tasksController.openGoalVision();
+        return;
+      }
+      final tabIndex = taskTabByLocation[location];
+      if (tabIndex != null) {
+        _tasksController.openTab(tabIndex);
+      }
     });
   }
 
@@ -1108,6 +1150,7 @@ class _MainTabScreenState extends State<MainTabScreen>
       controller: _chatController,
       onOpenDrawer: () => setState(() => _openDrawerIndex = 1),
       onOpenGoalVisionDrawer: _openTasksGoalVisionDrawer,
+      onOpenFeatureLocation: _openFeatureLocationFromChat,
       onSwitchCoach: _switchCoachFromChat,
       onVacationChanged: () {
         _loadVacation();
@@ -1970,33 +2013,6 @@ class _MainTabScreenState extends State<MainTabScreen>
             ),
             child: Column(
               children: [
-                // 닫기 버튼 (drawer-close-btn)
-                SafeArea(
-                  bottom: false,
-                  child: Align(
-                    alignment: Alignment.centerRight,
-                    child: GestureDetector(
-                      onTap: () async {
-                        await _closeDrawerAndCheck();
-                      },
-                      child: Container(
-                        margin: const EdgeInsets.fromLTRB(0, 2, 10, 0),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 6,
-                        ),
-                        child: Text(
-                          '✕ 닫기',
-                          style: GoogleFonts.notoSansKr(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                            color: const Color(0xFFA0A0B0),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
                 // 내용물 화면
                 Expanded(
                   child: Material(

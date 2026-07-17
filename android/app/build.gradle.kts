@@ -19,7 +19,7 @@ if (hasReleaseKeystore) {
 }
 
 android {
-    namespace = "com.nyang.nyang_coach"
+    namespace = "com.coscene.nyangcoach"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
