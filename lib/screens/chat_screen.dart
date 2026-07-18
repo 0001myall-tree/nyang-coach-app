@@ -7579,19 +7579,6 @@ $timerOutputRule
               ],
             ),
           ),
-          const SizedBox(width: 8),
-          GestureDetector(
-            onTap: () {
-              if (widget.onOpenDrawer != null) {
-                widget.onOpenDrawer!();
-              }
-            },
-            child: const Icon(
-              Icons.chevron_right_rounded,
-              size: 28,
-              color: AppDesignTokens.brandPressed,
-            ),
-          ),
         ],
       ),
     );
@@ -7753,34 +7740,6 @@ $timerOutputRule
                   ),
                 ],
               ],
-            ),
-          ),
-          const SizedBox(width: 12),
-          // 보기 버튼
-          GestureDetector(
-            onTap: () {
-              if (widget.onOpenDrawer != null) {
-                widget.onOpenDrawer!();
-              }
-            },
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 7),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: AppDesignTokens.brandCardBorder,
-                  width: 1.5,
-                ),
-              ),
-              child: Text(
-                '보기 ›',
-                style: GoogleFonts.notoSansKr(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: AppDesignTokens.brandPressed,
-                ),
-              ),
             ),
           ),
         ],
