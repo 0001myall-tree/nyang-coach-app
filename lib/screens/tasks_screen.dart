@@ -5077,34 +5077,6 @@ class _TasksScreenState extends State<TasksScreen>
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        // 마일스톤/메모 실행 목록 출처만 간결하게 표시한다.
-                        if (isMilestone) ...[
-                          Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 6,
-                                  vertical: 2,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFE0E0FF),
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: Text(
-                                  milestoneInfo.isMilestoneSelf
-                                      ? '마일스톤'
-                                      : '메모장의 실행 목록',
-                                  style: GoogleFonts.notoSansKr(
-                                    fontSize: 9,
-                                    fontWeight: FontWeight.bold,
-                                    color: const Color(0xFF5A50E6),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 4),
-                        ],
                         Row(
                           crossAxisAlignment: timeInfo != null
                               ? CrossAxisAlignment.start
@@ -5161,7 +5133,9 @@ class _TasksScreenState extends State<TasksScreen>
                             ),
                             if (t.inProgress ||
                                 t.isHabit ||
-                                isRecurringSchedule) ...[
+                                isRecurringSchedule ||
+                                (isMilestone &&
+                                    !milestoneInfo.isMilestoneSelf)) ...[
                               const SizedBox(width: 10),
                               Padding(
                                 padding: const EdgeInsets.only(right: 12),
@@ -5227,6 +5201,28 @@ class _TasksScreenState extends State<TasksScreen>
                                               fontSize: 11,
                                               fontWeight: FontWeight.w800,
                                               color: _coach.accentColor,
+                                            ),
+                                          ),
+                                        )
+                                      : isMilestone &&
+                                            !milestoneInfo.isMilestoneSelf
+                                      ? Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 9,
+                                            vertical: 5,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFFF3F4F6),
+                                            borderRadius: BorderRadius.circular(
+                                              8,
+                                            ),
+                                          ),
+                                          child: Text(
+                                            '메모장',
+                                            style: GoogleFonts.notoSansKr(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w800,
+                                              color: const Color(0xFF8B8A96),
                                             ),
                                           ),
                                         )
