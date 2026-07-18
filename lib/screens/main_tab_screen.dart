@@ -1224,6 +1224,11 @@ class _MainTabScreenState extends State<MainTabScreen>
       _openDrawerIndex = index;
       _widgetIntentDrawerMode = false;
     });
+    if (index == 1) {
+      Future.delayed(const Duration(milliseconds: 80), () {
+        _tasksController.resetTodayDateSelection();
+      });
+    }
   }
 
   Future<void> _closeDrawerAndCheck() async {

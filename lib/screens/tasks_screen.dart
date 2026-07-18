@@ -502,6 +502,10 @@ class TasksScreenController {
     _state?._openTab(index);
   }
 
+  void resetTodayDateSelection() {
+    _state?._resetTodayDateSelection();
+  }
+
   void refresh() {
     _state?._loadAll();
   }
@@ -540,8 +544,10 @@ class _TasksScreenState extends State<TasksScreen>
   List<VisionItem> visions = [];
   Map<String, Map<String, dynamic>> habitLogs = {};
   Map<String, List<ScheduleItem>> schedules = {};
+  Map<String, List<TaskItem>> plannedTodayTasksByDate = {};
   Map<String, dynamic>? vacationInfo;
   double _resetHour = 3.0;
+  DateTime? _selectedTodayDate;
 
   final SpeechToText _speechToText = SpeechToText();
   bool _speechEnabled = false;
@@ -590,6 +596,7 @@ class _TasksScreenState extends State<TasksScreen>
     super.initState();
     _coach = CoachConfigs.get(widget.coachId);
     _tabCtrl = TabController(length: 4, vsync: this);
+    _tabCtrl.addListener(_handleTaskTabChanged);
     widget.controller?._attach(this);
     _loadAll();
     _initSpeech();
@@ -599,6 +606,7 @@ class _TasksScreenState extends State<TasksScreen>
   void dispose() {
     widget.controller?._detach();
     _visionHighlightTimer?.cancel();
+    _tabCtrl.removeListener(_handleTaskTabChanged);
     _tabCtrl.dispose();
     _todayInputCtrl.dispose();
     _todayInputFocusNode.dispose();
@@ -618,6 +626,7 @@ class _TasksScreenState extends State<TasksScreen>
     final rawHabits = prefs.getString('nyang_habits');
     final rawVisions = prefs.getString('nyang_visions');
     final rawSchedules = prefs.getString('nyang_schedules');
+    final rawPlannedTodayTasks = prefs.getString('nyang_today_tasks_by_date');
     final rawLogs = prefs.getString('nyang_habit_logs');
     final rawVacation = prefs.getString('nyang_vacation');
     final hasActivePlan = await _hasActivePlan();
@@ -670,6 +679,18 @@ class _TasksScreenState extends State<TasksScreen>
           return MapEntry(key, list);
         });
       }
+      if (rawPlannedTodayTasks != null) {
+        final Map<String, dynamic> decodedMap = jsonDecode(
+          rawPlannedTodayTasks,
+        );
+        plannedTodayTasksByDate = decodedMap.map((key, value) {
+          final list = (value as List)
+              .map((e) => TaskItem.fromJson(e))
+              .toList();
+          return MapEntry(key, list);
+        });
+      }
+      _selectedTodayDate = null;
       if (rawLogs != null) {
         final decoded = jsonDecode(rawLogs) as Map<String, dynamic>;
         habitLogs = decoded.map(
@@ -759,9 +780,15 @@ class _TasksScreenState extends State<TasksScreen>
 
   void _openTab(int index) {
     if (!mounted || index < 0 || index >= _tabCtrl.length) return;
+    if (index == 0) _resetTodayDateSelection();
     if (_tabCtrl.index != index) {
       _tabCtrl.animateTo(index);
     }
+  }
+
+  void _handleTaskTabChanged() {
+    if (!mounted || _tabCtrl.index == 0 || _selectedTodayDate == null) return;
+    setState(() => _selectedTodayDate = null);
   }
 
   void _openGoalVision({List<String> highlightVisionIds = const []}) {
@@ -1226,6 +1253,11 @@ class _TasksScreenState extends State<TasksScreen>
 
   // ── saveTasks (웹앱 그대로) ───────────────────────────────
   Future<void> _saveTasks() async {
+    if (!_isViewingActualToday) {
+      await _savePlannedTodayTasks();
+      return;
+    }
+
     if (!await _hasActivePlan()) {
       for (final task in tasks) {
         task.isReminderEnabled = false;
@@ -1240,6 +1272,17 @@ class _TasksScreenState extends State<TasksScreen>
     await WidgetSyncService.syncFromStoredTasks();
     widget.onProgressChanged?.call();
     TasksSyncService.scheduleSyncToCloud();
+  }
+
+  Future<void> _savePlannedTodayTasks() async {
+    final prefs = await SharedPreferences.getInstance();
+    final encoded = <String, dynamic>{};
+    plannedTodayTasksByDate.forEach((key, value) {
+      if (value.isNotEmpty) {
+        encoded[key] = value.map((t) => t.toJson()).toList();
+      }
+    });
+    await prefs.setString('nyang_today_tasks_by_date', jsonEncode(encoded));
   }
 
   Future<void> _saveTodayRecord() async {
@@ -1435,6 +1478,34 @@ class _TasksScreenState extends State<TasksScreen>
       base = base.subtract(const Duration(days: 1));
     }
     return '${base.year}-${base.month.toString().padLeft(2, '0')}-${base.day.toString().padLeft(2, '0')}';
+  }
+
+  DateTime _dateFromKey(String key) {
+    final parts = key.split('-');
+    if (parts.length < 3) return DateTime.now();
+    return DateTime(
+      int.tryParse(parts[0]) ?? DateTime.now().year,
+      int.tryParse(parts[1]) ?? DateTime.now().month,
+      int.tryParse(parts[2]) ?? DateTime.now().day,
+    );
+  }
+
+  DateTime get _activeTodayDate =>
+      _selectedTodayDate ?? _dateFromKey(_getTodayStr());
+
+  String get _activeTodayDateKey => _dateKey(_activeTodayDate);
+
+  bool get _isViewingActualToday => _activeTodayDateKey == _getTodayStr();
+
+  List<TaskItem> get _activeTodayTasks {
+    if (_isViewingActualToday) return tasks;
+    return plannedTodayTasksByDate.putIfAbsent(_activeTodayDateKey, () => []);
+  }
+
+  void _resetTodayDateSelection() {
+    if (!mounted) return;
+    if (_selectedTodayDate == null) return;
+    setState(() => _selectedTodayDate = null);
   }
 
   // ── injectTodayHabits (웹앱 그대로) ──────────────────────
@@ -1744,7 +1815,7 @@ class _TasksScreenState extends State<TasksScreen>
       isReminderEnabled: reminderEnabled,
     );
     setState(() {
-      tasks.add(task);
+      _activeTodayTasks.add(task);
       _todayTimeType = 'none';
       _todayReminderEnabled = false;
       _todayStartTime = null;
@@ -1776,9 +1847,10 @@ class _TasksScreenState extends State<TasksScreen>
       return;
     }
 
-    final t = tasks.firstWhere(
+    final currentTasks = _activeTodayTasks;
+    final t = currentTasks.firstWhere(
       (t) => t.id.toString() == id.toString(),
-      orElse: () => tasks.first,
+      orElse: () => currentTasks.first,
     );
     final milestoneInfo = _getMilestoneInfoForTask(t);
     if (t.done) {
@@ -1789,10 +1861,12 @@ class _TasksScreenState extends State<TasksScreen>
         t.achievedCount = null;
         t.achievedDuration = null;
         t.inProgressAt = null;
-        if (t.habitId != null && habitLogs[t.habitId!] != null) {
+        if (_isViewingActualToday &&
+            t.habitId != null &&
+            habitLogs[t.habitId!] != null) {
           habitLogs[t.habitId!]!.remove(_getTodayStr());
         }
-        if (t.category == 'schedule') {
+        if (_isViewingActualToday && t.category == 'schedule') {
           final today = _getTodayStr();
           final sId = t.id.toString().replaceAll('schedule_', '');
           if (schedules.containsKey(today)) {
@@ -1815,9 +1889,11 @@ class _TasksScreenState extends State<TasksScreen>
         }
       });
       _saveTasks();
-      _saveHabitLogs();
-      _saveCoreTasks();
-      if (t.category == 'schedule') _saveSchedules();
+      if (_isViewingActualToday) {
+        _saveHabitLogs();
+        _saveCoreTasks();
+        if (t.category == 'schedule') _saveSchedules();
+      }
       if (milestoneInfo != null && milestoneInfo.isMilestoneSelf) {
         _saveVisions();
       }
@@ -1857,7 +1933,7 @@ class _TasksScreenState extends State<TasksScreen>
         t.inProgress = false;
         t.completedAt = DateTime.now().toIso8601String();
         final completedAt = DateTime.tryParse(t.completedAt!);
-        if (t.habitId != null) {
+        if (_isViewingActualToday && t.habitId != null) {
           habitLogs[t.habitId!] ??= <String, dynamic>{};
           final logMap = <String, dynamic>{
             'done': true,
@@ -1882,7 +1958,7 @@ class _TasksScreenState extends State<TasksScreen>
           }
           habitLogs[t.habitId!]![_getTodayStr()] = logMap;
         }
-        if (t.category == 'schedule') {
+        if (_isViewingActualToday && t.category == 'schedule') {
           final today = _getTodayStr();
           final sId = t.id.toString().replaceAll('schedule_', '');
           if (schedules.containsKey(today)) {
@@ -1909,29 +1985,35 @@ class _TasksScreenState extends State<TasksScreen>
         }
       });
       _saveTasks();
-      _saveHabitLogs();
-      _saveCoreTasks();
-      if (t.category == 'schedule') _saveSchedules();
+      if (_isViewingActualToday) {
+        _saveHabitLogs();
+        _saveCoreTasks();
+        if (t.category == 'schedule') _saveSchedules();
+      }
       if (milestoneInfo != null && milestoneInfo.isMilestoneSelf) {
         _saveVisions();
       }
       // 미뤄둔 할일 리마인드 체크 (완료했는지 여부 반환)
-      final bool isDeferredResolved = await _checkAndStoreDeferReminder(t.text);
-      final bool isCoreTask = coreTasks.any(
-        (ct) => ct.id.toString() == t.id.toString(),
-      );
+      final bool isDeferredResolved = _isViewingActualToday
+          ? await _checkAndStoreDeferReminder(t.text)
+          : false;
+      final bool isCoreTask =
+          _isViewingActualToday &&
+          coreTasks.any((ct) => ct.id.toString() == t.id.toString());
 
       // 로컬 칭찬 팝업 (Flirt)
-      final doneCount = tasks.where((ts) => ts.done).length;
-      final totalCount = tasks.length;
+      final doneCount = currentTasks.where((ts) => ts.done).length;
+      final totalCount = currentTasks.length;
 
       // 선제개입 저항예측 4일차: 완료 결과를 이벤트/상태머신에 반영 (6장 폐루프)
-      TaskResistanceService.onTaskCompleted(
-        taskId: t.id.toString(),
-        date: _getTodayStr(),
-        completionOrder: doneCount,
-        totalTasksThatDay: totalCount,
-      );
+      if (_isViewingActualToday) {
+        TaskResistanceService.onTaskCompleted(
+          taskId: t.id.toString(),
+          date: _getTodayStr(),
+          completionOrder: doneCount,
+          totalTasksThatDay: totalCount,
+        );
+      }
 
       final remainingCount = totalCount - doneCount;
       final progressPct = totalCount > 0 ? doneCount / totalCount : 0.0;
@@ -2233,10 +2315,14 @@ class _TasksScreenState extends State<TasksScreen>
 
   void _deleteTaskPermanently(TaskItem task) {
     setState(() {
-      tasks.removeWhere((t) => t.id.toString() == task.id.toString());
-      coreTasks.removeWhere((t) => t.id.toString() == task.id.toString());
+      _activeTodayTasks.removeWhere(
+        (t) => t.id.toString() == task.id.toString(),
+      );
+      if (_isViewingActualToday) {
+        coreTasks.removeWhere((t) => t.id.toString() == task.id.toString());
+      }
 
-      if (task.category == 'schedule') {
+      if (_isViewingActualToday && task.category == 'schedule') {
         final today = _getTodayStr();
         final scheduleId = task.id.toString().replaceAll('schedule_', '');
         final daySchedules = schedules[today];
@@ -2247,8 +2333,10 @@ class _TasksScreenState extends State<TasksScreen>
       }
     });
     _saveTasks();
-    _saveCoreTasks();
-    if (task.category == 'schedule') _saveSchedules();
+    if (_isViewingActualToday) {
+      _saveCoreTasks();
+      if (task.category == 'schedule') _saveSchedules();
+    }
   }
 
   void _skipHabitToday(TaskItem task) {
@@ -2306,10 +2394,12 @@ class _TasksScreenState extends State<TasksScreen>
 
   void _removeTaskForMove(TaskItem task) {
     _recordDeferredTaskIfLate(task);
-    tasks.removeWhere((t) => t.id.toString() == task.id.toString());
-    coreTasks.removeWhere((t) => t.id.toString() == task.id.toString());
+    _activeTodayTasks.removeWhere((t) => t.id.toString() == task.id.toString());
+    if (_isViewingActualToday) {
+      coreTasks.removeWhere((t) => t.id.toString() == task.id.toString());
+    }
 
-    if (task.category == 'schedule') {
+    if (_isViewingActualToday && task.category == 'schedule') {
       final today = _getTodayStr();
       final scheduleId = task.id.toString().replaceAll('schedule_', '');
       final daySchedules = schedules[today];
@@ -2646,7 +2736,7 @@ class _TasksScreenState extends State<TasksScreen>
 
   // ── 진행률 계산 ───────────────────────────────────────────
   List<MilestoneItem> get _todayMilestoneItems {
-    final todayStr = _getTodayStr();
+    final todayStr = _activeTodayDateKey;
     final parts = todayStr.split('-');
     if (parts.length < 3) return [];
 
@@ -2663,7 +2753,7 @@ class _TasksScreenState extends State<TasksScreen>
     WidgetsBinding.instance.addPostFrameCallback(
       (_) => _checkCoreReminderEnabledGlobally(),
     );
-    final bool isVacation = vacationInfo != null;
+    final bool isVacation = _isViewingActualToday && vacationInfo != null;
 
     return Scaffold(
       resizeToAvoidBottomInset: false,
@@ -3315,7 +3405,7 @@ class _TasksScreenState extends State<TasksScreen>
 
   // ── 탭바 ─────────────────────────────────────────────────
   Widget _buildTabBar() {
-    final isVacation = vacationInfo != null;
+    final isVacation = _isViewingActualToday && vacationInfo != null;
     const tabs = [
       {'icon': Icons.assignment_outlined, 'label': '오늘'},
       {'icon': Icons.track_changes_outlined, 'label': '목표'},
@@ -3353,7 +3443,7 @@ class _TasksScreenState extends State<TasksScreen>
 
   // ── 오늘 탭 ──────────────────────────────────────────────
   Widget _buildTodayTab() {
-    final isVacation = vacationInfo != null;
+    final isVacation = _isViewingActualToday && vacationInfo != null;
     return Container(
       color: isVacation ? Colors.transparent : Colors.white,
       child: Column(
@@ -3383,7 +3473,7 @@ class _TasksScreenState extends State<TasksScreen>
             )
           else ...[
             // 핵심 할 일 (Core Tasks)
-            _buildCoreSection(),
+            if (_isViewingActualToday) _buildCoreSection(),
             // 태스크 목록
             Expanded(child: _buildTaskList()),
             // 입력 영역
@@ -3405,24 +3495,16 @@ class _TasksScreenState extends State<TasksScreen>
     if (selected == null || !mounted) return;
 
     setState(() {
-      _calSelectedDay = selected;
-      _calFocusedDay = selected;
+      _selectedTodayDate = DateTime(
+        selected.year,
+        selected.month,
+        selected.day,
+      );
     });
-    _tabCtrl.animateTo(2);
   }
 
   Widget _buildTodayHeader() {
-    final todayStr = _getTodayStr();
-    final parts = todayStr.split('-');
-    int y = DateTime.now().year;
-    int m = DateTime.now().month;
-    int d = DateTime.now().day;
-    if (parts.length >= 3) {
-      y = int.tryParse(parts[0]) ?? y;
-      m = int.tryParse(parts[1]) ?? m;
-      d = int.tryParse(parts[2]) ?? d;
-    }
-    final targetDate = DateTime(y, m, d);
+    final targetDate = _activeTodayDate;
     final months = [
       '1월',
       '2월',
@@ -3440,7 +3522,7 @@ class _TasksScreenState extends State<TasksScreen>
     final days = ['일', '월', '화', '수', '목', '금', '토'];
     final dateStr =
         '${targetDate.year}년 ${months[targetDate.month - 1]} ${targetDate.day}일 (${days[targetDate.weekday % 7]})';
-    final isVacationActive = vacationInfo != null;
+    final isVacationActive = _isViewingActualToday && vacationInfo != null;
 
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
@@ -3449,25 +3531,29 @@ class _TasksScreenState extends State<TasksScreen>
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           GestureDetector(
+            behavior: HitTestBehavior.opaque,
             onTap: () => _pickDateFromTodayHeader(targetDate),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  dateStr,
-                  style: GoogleFonts.notoSansKr(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: const Color(0xFFA0A0B0),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    dateStr,
+                    style: GoogleFonts.notoSansKr(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                      color: const Color(0xFF3D3A4E),
+                    ),
                   ),
-                ),
-                const SizedBox(width: 3),
-                const Icon(
-                  Icons.keyboard_arrow_down_rounded,
-                  size: 16,
-                  color: Color(0xFFA0A0B0),
-                ),
-              ],
+                  const SizedBox(width: 8),
+                  const Icon(
+                    Icons.chevron_right_rounded,
+                    size: 20,
+                    color: Color(0xFF8B7CFF),
+                  ),
+                ],
+              ),
             ),
           ),
           GestureDetector(
@@ -4042,7 +4128,7 @@ class _TasksScreenState extends State<TasksScreen>
   }
 
   Widget _buildTaskList() {
-    final todayStr = _getTodayStr();
+    final todayStr = _activeTodayDateKey;
     final parts = todayStr.split('-');
     int y = DateTime.now().year;
     int m = DateTime.now().month;
@@ -4067,7 +4153,11 @@ class _TasksScreenState extends State<TasksScreen>
       );
     }).toList();
 
-    final combinedTasks = [...tasks, ...milestoneTasks];
+    final currentTasks = _activeTodayTasks;
+    final combinedTasks = [
+      ...currentTasks,
+      if (_isViewingActualToday) ...milestoneTasks,
+    ];
 
     if (combinedTasks.isEmpty) {
       return Center(
@@ -4077,7 +4167,9 @@ class _TasksScreenState extends State<TasksScreen>
             const Icon(Icons.pets, color: Colors.grey, size: 40),
             const SizedBox(height: 12),
             Text(
-              '코치와 대화하면\n여기에 할 일이 추가돼요!',
+              _isViewingActualToday
+                  ? '코치와 대화하면\n여기에 할 일이 추가돼요!'
+                  : '이 날짜에 계획된 할 일이 없어요.',
               textAlign: TextAlign.center,
               style: GoogleFonts.notoSansKr(
                 fontSize: 14,
@@ -5067,13 +5159,56 @@ class _TasksScreenState extends State<TasksScreen>
                                 ],
                               ),
                             ),
-                            if (t.isHabit || isRecurringSchedule) ...[
+                            if (t.inProgress ||
+                                t.isHabit ||
+                                isRecurringSchedule) ...[
                               const SizedBox(width: 10),
                               Padding(
                                 padding: const EdgeInsets.only(right: 12),
                                 child: Align(
                                   alignment: Alignment.centerRight,
-                                  child: t.isHabit
+                                  child: t.inProgress
+                                      ? Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 9,
+                                            vertical: 4,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: _coach.accentColor
+                                                .withValues(alpha: 0.08),
+                                            borderRadius: BorderRadius.circular(
+                                              999,
+                                            ),
+                                            border: Border.all(
+                                              color: _coach.accentColor
+                                                  .withValues(alpha: 0.28),
+                                            ),
+                                          ),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Container(
+                                                width: 5,
+                                                height: 5,
+                                                decoration: BoxDecoration(
+                                                  color: _coach.accentColor
+                                                      .withValues(alpha: 0.55),
+                                                  shape: BoxShape.circle,
+                                                ),
+                                              ),
+                                              const SizedBox(width: 4),
+                                              Text(
+                                                '진행중',
+                                                style: GoogleFonts.notoSansKr(
+                                                  fontSize: 10,
+                                                  fontWeight: FontWeight.w800,
+                                                  color: _coach.accentColor,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        )
+                                      : t.isHabit
                                       ? Container(
                                           padding: const EdgeInsets.symmetric(
                                             horizontal: 9,
@@ -5113,41 +5248,6 @@ class _TasksScreenState extends State<TasksScreen>
             ],
           ),
         ),
-        if (t.inProgress)
-          Positioned(
-            top: -6,
-            right: 8,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: _coach.accentColor.withOpacity(0.35)),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 5,
-                    height: 5,
-                    decoration: BoxDecoration(
-                      color: _coach.accentColor.withOpacity(0.45),
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    '진행중',
-                    style: GoogleFonts.notoSansKr(
-                      fontSize: 9,
-                      fontWeight: FontWeight.w800,
-                      color: _coach.accentColor,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
       ],
     );
   }
