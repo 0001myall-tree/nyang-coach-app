@@ -690,7 +690,6 @@ class _TasksScreenState extends State<TasksScreen>
           return MapEntry(key, list);
         });
       }
-      _selectedTodayDate = null;
       if (rawLogs != null) {
         final decoded = jsonDecode(rawLogs) as Map<String, dynamic>;
         habitLogs = decoded.map(
@@ -1500,6 +1499,74 @@ class _TasksScreenState extends State<TasksScreen>
   List<TaskItem> get _activeTodayTasks {
     if (_isViewingActualToday) return tasks;
     return plannedTodayTasksByDate.putIfAbsent(_activeTodayDateKey, () => []);
+  }
+
+  List<TaskItem> _plannedTodayTasksForDate(DateTime day) {
+    final key = _dateKey(day);
+    final source = key == _getTodayStr()
+        ? tasks
+        : (plannedTodayTasksByDate[key] ?? <TaskItem>[]);
+    return source.where((task) => task.category == 'today').toList();
+  }
+
+  bool _hasScheduleTabEvents(DateTime day) {
+    final key = _dateKey(day);
+    return (schedules[key]?.isNotEmpty ?? false) ||
+        _plannedTodayTasksForDate(day).isNotEmpty;
+  }
+
+  void _togglePlannedTaskForSchedule(String dateKey, TaskItem task) {
+    setState(() {
+      if (task.done) {
+        task.done = false;
+        task.completedAt = null;
+        task.inProgress = false;
+        task.inProgressAt = null;
+      } else if (!task.inProgress) {
+        task.inProgress = true;
+        task.inProgressAt = null;
+      } else {
+        task.done = true;
+        task.inProgress = false;
+        task.completedAt = DateTime.now().toIso8601String();
+      }
+    });
+    if (dateKey == _getTodayStr()) {
+      _saveTasks();
+    } else {
+      _savePlannedTodayTasks();
+    }
+  }
+
+  void _removePlannedTaskForSchedule(String dateKey, TaskItem task) {
+    setState(() {
+      if (dateKey == _getTodayStr()) {
+        tasks.removeWhere((t) => t.id.toString() == task.id.toString());
+      } else {
+        final dayTasks = plannedTodayTasksByDate[dateKey];
+        dayTasks?.removeWhere((t) => t.id.toString() == task.id.toString());
+        if (dayTasks != null && dayTasks.isEmpty) {
+          plannedTodayTasksByDate.remove(dateKey);
+        }
+      }
+      coreTasks.removeWhere((t) => t.id.toString() == task.id.toString());
+    });
+    if (dateKey == _getTodayStr()) {
+      _saveTasks();
+      _saveCoreTasks();
+    } else {
+      _savePlannedTodayTasks();
+    }
+  }
+
+  void _savePlannedTaskForSchedule(String dateKey) {
+    setState(() {});
+    if (dateKey == _getTodayStr()) {
+      _saveTasks();
+      _saveCoreTasks();
+    } else {
+      _savePlannedTodayTasks();
+    }
   }
 
   void _resetTodayDateSelection() {
@@ -2492,7 +2559,13 @@ class _TasksScreenState extends State<TasksScreen>
                             focusedDay = focused;
                           });
                         },
-                        eventLoader: (day) => schedules[_dateKey(day)] ?? [],
+                        eventLoader: (day) {
+                          final key = _dateKey(day);
+                          return <Object>[
+                            ...?schedules[key],
+                            ..._plannedTodayTasksForDate(day),
+                          ];
+                        },
                         calendarStyle: CalendarStyle(
                           markerSize: 4,
                           markerDecoration: BoxDecoration(
@@ -9102,8 +9175,7 @@ class _TasksScreenState extends State<TasksScreen>
     required bool isToday,
     required bool isOutside,
   }) {
-    final dateStr = _dateKey(day);
-    final hasEvents = schedules[dateStr]?.isNotEmpty ?? false;
+    final hasEvents = _hasScheduleTabEvents(day);
     final dayMilestones = _getMilestonesForDay(day);
     final hasMilestones = dayMilestones.isNotEmpty;
 
@@ -9217,7 +9289,11 @@ class _TasksScreenState extends State<TasksScreen>
                 });
               },
               eventLoader: (day) {
-                return schedules[_dateKey(day)] ?? [];
+                final key = _dateKey(day);
+                return <Object>[
+                  ...?schedules[key],
+                  ..._plannedTodayTasksForDate(day),
+                ];
               },
               calendarBuilders: CalendarBuilders(
                 defaultBuilder: (context, day, focusedDay) =>
@@ -9329,6 +9405,7 @@ class _TasksScreenState extends State<TasksScreen>
   Widget _buildScheduleListOnly() {
     final dateStr = _dateKey(_calSelectedDay);
     final daySch = schedules[dateStr] ?? [];
+    final dayPlannedTasks = _plannedTodayTasksForDate(_calSelectedDay);
     final dayMilestones = _getMilestonesForDay(_calSelectedDay);
 
     return Column(
@@ -9558,7 +9635,7 @@ class _TasksScreenState extends State<TasksScreen>
         ],
 
         // 일반 일정 목록
-        if (daySch.isEmpty && dayMilestones.isEmpty)
+        if (daySch.isEmpty && dayPlannedTasks.isEmpty && dayMilestones.isEmpty)
           Center(
             child: Padding(
               padding: const EdgeInsets.all(20),
@@ -9794,6 +9871,199 @@ class _TasksScreenState extends State<TasksScreen>
                                 ],
                               );
                       }(),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+
+        if (dayPlannedTasks.isNotEmpty)
+          ListView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            padding: EdgeInsets.fromLTRB(16, daySch.isEmpty ? 0 : 4, 16, 0),
+            itemCount: dayPlannedTasks.length,
+            itemBuilder: (ctx, i) {
+              final task = dayPlannedTasks[i];
+              final displayTime = _displayTimeFromStored(
+                time: task.time,
+                timeStart: task.timeStart,
+                timeEnd: task.timeEnd,
+              );
+              final titleColor = task.done
+                  ? const Color(0xFF9CA3AF)
+                  : const Color(0xFF3D3A4E);
+
+              return Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFE8E3F8)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        GestureDetector(
+                          onTap: () =>
+                              _togglePlannedTaskForSchedule(dateStr, task),
+                          child: Container(
+                            width: 28,
+                            height: 28,
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              color: task.done
+                                  ? _coach.accentColor
+                                  : Colors.white,
+                              border: Border.all(
+                                color: task.inProgress
+                                    ? _coach.accentColor
+                                    : task.done
+                                    ? _coach.accentColor
+                                    : const Color(0xFFD1D5DB),
+                                width: 1.5,
+                              ),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: task.done
+                                ? const Icon(
+                                    Icons.check,
+                                    color: Colors.white,
+                                    size: 16,
+                                  )
+                                : null,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () {
+                              _showEditItemModal(task, () {
+                                _savePlannedTaskForSchedule(dateStr);
+                              });
+                            },
+                            child: Container(
+                              color: Colors.transparent,
+                              padding: const EdgeInsets.symmetric(vertical: 4),
+                              child: Text(
+                                task.text,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: GoogleFonts.notoSansKr(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: titleColor,
+                                  decoration: TextDecoration.none,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        if (task.inProgress)
+                          Padding(
+                            padding: const EdgeInsets.only(right: 6),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 7,
+                                vertical: 3,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(999),
+                                border: Border.all(
+                                  color: _coach.accentColor.withOpacity(0.35),
+                                ),
+                              ),
+                              child: Text(
+                                '• 진행중',
+                                style: GoogleFonts.notoSansKr(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w800,
+                                  color: _coach.accentColor,
+                                ),
+                              ),
+                            ),
+                          )
+                        else
+                          Padding(
+                            padding: const EdgeInsets.only(right: 6),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 7,
+                                vertical: 3,
+                              ),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF5F3FF),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                '할 일',
+                                style: GoogleFonts.notoSansKr(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w800,
+                                  color: const Color(0xFF8B7CFF),
+                                ),
+                              ),
+                            ),
+                          ),
+                        GestureDetector(
+                          onTap: () =>
+                              _removePlannedTaskForSchedule(dateStr, task),
+                          child: const Icon(
+                            Icons.close,
+                            color: Color(0xFFD1D5DB),
+                            size: 18,
+                          ),
+                        ),
+                      ],
+                    ),
+                    GestureDetector(
+                      onTap: () {
+                        _showEditItemModal(task, () {
+                          _savePlannedTaskForSchedule(dateStr);
+                        });
+                      },
+                      child: (displayTime != null || task.duration != null)
+                          ? Padding(
+                              padding: const EdgeInsets.only(left: 40, top: 2),
+                              child: Row(
+                                children: [
+                                  if (displayTime != null) ...[
+                                    const Icon(
+                                      Icons.access_time,
+                                      size: 15,
+                                      color: Color(0xFF9CA3AF),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      displayTime,
+                                      style: GoogleFonts.notoSansKr(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w700,
+                                        color: const Color(0xFF9CA3AF),
+                                      ),
+                                    ),
+                                  ],
+                                  if (displayTime != null &&
+                                      task.duration != null)
+                                    const SizedBox(width: 10),
+                                  if (task.duration != null)
+                                    Text(
+                                      '⏱ ${task.duration}',
+                                      style: GoogleFonts.notoSansKr(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w700,
+                                        color: const Color(0xFF9CA3AF),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            )
+                          : const SizedBox(height: 0),
                     ),
                   ],
                 ),

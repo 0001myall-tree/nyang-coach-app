@@ -2,21 +2,17 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'coach_config.dart';
-import 'main_tab_screen.dart';
 import 'landing_screen.dart';
 import '../services/notification_service.dart';
 import '../services/auth_service.dart';
 import '../services/tasks_sync_service.dart';
 import '../models/user_data.dart';
 import '../services/widget_sync_service.dart';
-import 'package:home_widget/home_widget.dart';
 
 class SettingsScreen extends StatefulWidget {
   final String coachId;
@@ -52,9 +48,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String _coreReminderCoachId = 'push';
   int _coreReminderAdvanceMinutes = 10;
   String? _homeWidgetStatus;
-  String _secMaleWidgetName = '남비서';
-  String _secFemaleWidgetName = '여비서';
   UserData? _userData;
+  String? _expandedSettingsSection;
 
   bool get _isMaster =>
       widget.coachId == 'sec_male' || widget.coachId == 'sec_female';
@@ -108,24 +103,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
           prefs.getInt('nyang_core_reminder_advance') ?? 10;
       _resetHour = prefs.getDouble('nyang_reset_hour') ?? 3.0;
       _chatBgStyle = prefs.getString('nyang_chat_bg_style') ?? 'simple';
-      _secMaleWidgetName = _secretaryWidgetName(
-        prefs.getString('nyang_coach_name_sec_male'),
-        '남비서',
-      );
-      _secFemaleWidgetName = _secretaryWidgetName(
-        prefs.getString('nyang_coach_name_sec_female'),
-        '여비서',
-      );
       _homeWidgetStatus = _buildHomeWidgetStatus(
         nyang: prefs.getBool('widget_nyang_enabled') ?? false,
         catCharacter: prefs.getBool('widget_cat_character_enabled') ?? false,
       );
     });
-  }
-
-  String _secretaryWidgetName(String? value, String fallback) {
-    final trimmed = value?.trim() ?? '';
-    return trimmed.isEmpty ? fallback : trimmed;
   }
 
   String? _buildHomeWidgetStatus({
@@ -1310,57 +1292,98 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   padding: const EdgeInsets.all(16),
                   child: Column(
                     children: [
-                      // 프로필/구독/쿠폰 관리
-                      _buildProfileCard(),
-                      const SizedBox(height: 16),
-
-                      // 알람 설정 버튼
-                      _buildActionButton(
-                        icon: Icons.alarm,
-                        label: '모닝콜',
-                        status: _morningCallStatus,
-                        onTap: _showMorningCallSettingsModal,
+                      _buildSettingsNavigationTile(
+                        icon: Icons.person_rounded,
+                        label: '내 프로필',
+                        status:
+                            '$_planStatusLabel · ${_userData?.points ?? 0}P',
+                        onTap: _paidSettingsTap(_showProfileSheet),
+                        leadingCircle: true,
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 10),
 
-                      // 일정 알람 설정 버튼
-                      _buildActionButton(
-                        icon: Icons.notifications_none,
-                        label: '일정 알람',
-                        status: _coreReminderStatus,
-                        onTap: _paidSettingsTap(_showCoreReminderSettingsModal),
+                      _buildSettingsSectionTile(
+                        id: 'notifications',
+                        icon: Icons.notifications_none_rounded,
+                        label: '알림',
+                        status: _notificationSectionStatus,
+                        children: [
+                          _buildSettingsDetailRow(
+                            icon: Icons.alarm_rounded,
+                            label: '모닝콜',
+                            status: _morningCallStatus ?? '꺼짐',
+                            onTap: _showMorningCallSettingsModal,
+                          ),
+                          _buildSettingsDetailRow(
+                            icon: Icons.notifications_none_rounded,
+                            label: '일정 알림',
+                            status: _coreReminderStatus ?? '꺼짐',
+                            onTap: _paidSettingsTap(
+                              _showCoreReminderSettingsModal,
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 10),
 
-                      // 홈 화면 위젯 버튼 (모달 호출)
-                      _buildActionButton(
-                        icon: Icons.widgets_rounded,
-                        label: '홈 화면 위젯',
-                        status: _homeWidgetStatus,
-                        onTap: _paidSettingsTap(_showHomeWidgetSettingsModal),
+                      _buildSettingsSectionTile(
+                        id: 'display',
+                        icon: Icons.tune_rounded,
+                        label: '화면 및 사용',
+                        status: _displaySectionStatus,
+                        children: [
+                          _buildSettingsDetailRow(
+                            icon: Icons.widgets_rounded,
+                            label: '홈 화면 위젯',
+                            status: _homeWidgetStatus ?? '미사용',
+                            onTap: _paidSettingsTap(
+                              _showHomeWidgetSettingsModal,
+                            ),
+                          ),
+                          if (!_isMaster)
+                            _buildSettingsDetailRow(
+                              icon: Icons.wallpaper_rounded,
+                              label: '채팅 배경',
+                              status: _chatBgStyle == 'emotional'
+                                  ? '감성 버전'
+                                  : '심플 버전',
+                              onTap: _paidSettingsTap(_showBgStylePicker),
+                            ),
+                          _buildSettingsDetailRow(
+                            icon: Icons.refresh_rounded,
+                            label: '오늘 할 일 초기화',
+                            status: _formatResetHour(_resetHour.toInt()),
+                            onTap: _paidSettingsTap(_showResetHourPicker),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 10),
 
-                      if (!_isMaster) ...[
-                        // 채팅 배경 설정
-                        _buildBgStyleCard(),
-                        const SizedBox(height: 16),
-                      ],
+                      _buildSettingsNavigationTile(
+                        icon: Icons.psychology_rounded,
+                        label: '비서 학습 설정',
+                        status: 'MASTER 전용',
+                        subtitle: '고정 일정과 취침 시간을 설정해요.',
+                        onTap: () {
+                          if (_hasMasterPlan) {
+                            _showPremiumLearnSettingsModal();
+                            return;
+                          }
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('비서 학습 설정은 마스터 플랜 구독자 전용입니다.'),
+                            ),
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 10),
 
-                      // 할 일 리셋 시간 설정
-                      _buildResetHourCard(),
-                      const SizedBox(height: 16),
-
-                      // MASTER 전용 비서 학습 설정
-                      _buildPremiumLearnCard(),
-                      const SizedBox(height: 16),
-
-                      _buildActionButton(
+                      _buildSettingsNavigationTile(
                         icon: Icons.policy_outlined,
                         label: '약관 및 개인정보',
                         onTap: _showLegalLinksSheet,
                       ),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 20),
 
                       _buildLogoutButton(),
 
@@ -1376,60 +1399,214 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _buildBgStyleCard() {
+  String get _notificationSectionStatus {
+    final enabledCount = [
+      _morningCallEnabled,
+      _coreReminderEnabled,
+    ].where((enabled) => enabled).length;
+    if (enabledCount == 0) return '꺼짐';
+    if (enabledCount == 1) {
+      return _morningCallEnabled ? '모닝콜 켜짐' : '일정 알림 켜짐';
+    }
+    return '2개 켜짐';
+  }
+
+  String get _displaySectionStatus {
+    final active = <String>[];
+    if (_homeWidgetStatus != null) active.add('위젯');
+    active.add(_chatBgStyle == 'emotional' ? '감성 배경' : '심플 배경');
+    return active.first;
+  }
+
+  Widget _buildSettingsNavigationTile({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+    String? subtitle,
+    String? status,
+    bool leadingCircle = false,
+  }) {
     return GestureDetector(
-      onTap: _paidSettingsTap(_showBgStylePicker),
+      onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.all(16),
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFFE8E3F8), width: 1.2),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0xFFE8E3F8), width: 1),
         ),
         child: Row(
           children: [
-            const Icon(
-              Icons.wallpaper_rounded,
-              color: Color(0xFF8B7CFF),
-              size: 18,
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                '채팅 배경',
-                style: GoogleFonts.notoSansKr(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                  color: const Color(0xFF3D3A4E),
-                ),
-              ),
-            ),
+            leadingCircle
+                ? Container(
+                    width: 30,
+                    height: 30,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFB6A4FF),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(icon, color: Colors.white, size: 18),
+                  )
+                : Icon(icon, color: const Color(0xFF8B7CFF), size: 20),
             const SizedBox(width: 12),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-              decoration: BoxDecoration(
-                color: const Color(0xFFEDE7FF),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    _chatBgStyle == 'emotional' ? '감성 버전' : '심플 버전',
+                    label,
                     style: GoogleFonts.notoSansKr(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w900,
-                      color: const Color(0xFF8B7CFF),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                      color: const Color(0xFF3D3A4E),
                     ),
                   ),
-                  const SizedBox(width: 2),
-                  const Icon(
-                    Icons.chevron_right_rounded,
-                    size: 18,
-                    color: Color(0xFF8B7CFF),
+                  if (subtitle != null) ...[
+                    const SizedBox(height: 3),
+                    Text(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.notoSansKr(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                        color: const Color(0xFF9A96A8),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            if (status != null) ...[
+              _buildSettingStatusBadge(status),
+              const SizedBox(width: 6),
+            ],
+            const Icon(
+              Icons.chevron_right_rounded,
+              size: 22,
+              color: Color(0xFF8E8A9E),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSettingsSectionTile({
+    required String id,
+    required IconData icon,
+    required String label,
+    required String status,
+    required List<Widget> children,
+  }) {
+    final expanded = _expandedSettingsSection == id;
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeOut,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: expanded ? const Color(0xFFD8D0FA) : const Color(0xFFE8E3F8),
+          width: 1,
+        ),
+      ),
+      child: Column(
+        children: [
+          GestureDetector(
+            onTap: () {
+              setState(() {
+                _expandedSettingsSection = expanded ? null : id;
+              });
+            },
+            child: Container(
+              color: Colors.transparent,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
+              child: Row(
+                children: [
+                  Icon(icon, color: const Color(0xFF8B7CFF), size: 20),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      label,
+                      style: GoogleFonts.notoSansKr(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                        color: const Color(0xFF3D3A4E),
+                      ),
+                    ),
+                  ),
+                  _buildSettingStatusBadge(status),
+                  const SizedBox(width: 6),
+                  AnimatedRotation(
+                    turns: expanded ? 0.25 : 0,
+                    duration: const Duration(milliseconds: 160),
+                    child: const Icon(
+                      Icons.chevron_right_rounded,
+                      size: 22,
+                      color: Color(0xFF8E8A9E),
+                    ),
                   ),
                 ],
               ),
+            ),
+          ),
+          AnimatedCrossFade(
+            firstChild: const SizedBox(width: double.infinity),
+            secondChild: Column(
+              children: [
+                const Divider(
+                  height: 1,
+                  thickness: 1,
+                  color: Color(0xFFF0EDF8),
+                ),
+                ...children,
+              ],
+            ),
+            crossFadeState: expanded
+                ? CrossFadeState.showSecond
+                : CrossFadeState.showFirst,
+            duration: const Duration(milliseconds: 160),
+            sizeCurve: Curves.easeOut,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSettingsDetailRow({
+    required IconData icon,
+    required String label,
+    required String status,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        color: Colors.transparent,
+        padding: const EdgeInsets.fromLTRB(18, 13, 14, 13),
+        child: Row(
+          children: [
+            Icon(icon, color: const Color(0xFFB6A4FF), size: 18),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                label,
+                style: GoogleFonts.notoSansKr(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: const Color(0xFF4B465C),
+                ),
+              ),
+            ),
+            _buildSettingStatusBadge(status),
+            const SizedBox(width: 6),
+            const Icon(
+              Icons.chevron_right_rounded,
+              size: 20,
+              color: Color(0xFFB8B5C8),
             ),
           ],
         ),
@@ -1531,94 +1708,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _buildActionButton({
-    required IconData icon,
-    required String label,
-    String? subtitle,
-    String? status,
-    VoidCallback? onTap,
-    bool isToggle = false,
-    bool toggleValue = false,
-    ValueChanged<bool>? onToggle,
-  }) {
-    return GestureDetector(
-      onTap: isToggle && onToggle != null
-          ? () => onToggle(!toggleValue)
-          : onTap,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFFE8E3F8), width: 1.2),
-        ),
-        child: Row(
-          children: [
-            Icon(icon, color: const Color(0xFF8B7CFF), size: 18),
-            const SizedBox(width: 8),
-            if (subtitle != null)
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      label,
-                      style: GoogleFonts.notoSansKr(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: const Color(0xFF3D3A4E),
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      subtitle,
-                      style: GoogleFonts.notoSansKr(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w500,
-                        color: const Color(0xFFA0A0B0),
-                      ),
-                    ),
-                  ],
-                ),
-              )
-            else ...[
-              Text(
-                label,
-                style: GoogleFonts.notoSansKr(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                  color: const Color(0xFF3D3A4E),
-                ),
-              ),
-              const Spacer(),
-            ],
-            if (status != null) ...[
-              _buildSettingStatusBadge(status),
-              const SizedBox(width: 8),
-            ],
-            if (isToggle)
-              Transform.scale(
-                scale: 0.8,
-                child: CupertinoSwitch(
-                  value: toggleValue,
-                  activeColor: const Color(0xFF8B7CFF),
-                  onChanged: onToggle,
-                ),
-              )
-            else
-              const Icon(
-                Icons.chevron_right_rounded,
-                size: 22,
-                color: Color(0xFF8E8A9E),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _buildSettingStatusBadge(String text) {
     return ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 136),
@@ -1637,67 +1726,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             fontWeight: FontWeight.w900,
             color: const Color(0xFF7D68DE),
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildProfileCard() {
-    return GestureDetector(
-      onTap: _paidSettingsTap(_showProfileSheet),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFFE8E3F8), width: 1.2),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 30,
-              height: 30,
-              decoration: const BoxDecoration(
-                color: Color(0xFFB6A4FF),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.person_rounded,
-                color: Colors.white,
-                size: 18,
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Row(
-                children: [
-                  Text(
-                    '내 프로필',
-                    style: GoogleFonts.notoSansKr(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w800,
-                      color: const Color(0xFF3D3A4E),
-                    ),
-                  ),
-                  const SizedBox(width: 40),
-                  Text(
-                    '${_planStatusLabel} · ${_userData?.points ?? 0}P',
-                    style: GoogleFonts.notoSansKr(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: const Color(0xFF9A96A8),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const Icon(
-              Icons.chevron_right_rounded,
-              size: 22,
-              color: Color(0xFF8E8A9E),
-            ),
-          ],
         ),
       ),
     );
@@ -2342,68 +2370,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildResetHourCard() {
-    return GestureDetector(
-      onTap: _paidSettingsTap(_showResetHourPicker),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFFE8E3F8), width: 1.2),
-        ),
-        child: Row(
-          children: [
-            const Icon(Icons.refresh, color: Color(0xFF8B7CFF), size: 18),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '오늘의 할 일 초기화',
-                    style: GoogleFonts.notoSansKr(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: const Color(0xFF3D3A4E),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 12),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-              decoration: BoxDecoration(
-                color: const Color(0xFFEDE7FF),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    _formatResetHour(_resetHour.toInt()),
-                    style: GoogleFonts.notoSansKr(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w900,
-                      color: const Color(0xFF8B7CFF),
-                    ),
-                  ),
-                  const SizedBox(width: 2),
-                  const Icon(
-                    Icons.chevron_right_rounded,
-                    size: 18,
-                    color: Color(0xFF8B7CFF),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -3511,14 +3477,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             ? null
                             : femaleName;
                         this.setState(() {
-                          _secMaleWidgetName = _secretaryWidgetName(
-                            maleName,
-                            '남비서',
-                          );
-                          _secFemaleWidgetName = _secretaryWidgetName(
-                            femaleName,
-                            '여비서',
-                          );
                           _homeWidgetStatus = _buildHomeWidgetStatus(
                             nyang:
                                 prefs.getBool('widget_nyang_enabled') ?? false,
@@ -3681,122 +3639,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const SizedBox(height: 12),
           Padding(padding: const EdgeInsets.only(left: 46), child: child),
         ],
-      ),
-    );
-  }
-
-  Widget _buildPremiumLearnCard() {
-    return GestureDetector(
-      onTap: () {
-        if (_hasMasterPlan) {
-          _showPremiumLearnSettingsModal();
-          return;
-        }
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('비서 학습 설정은 마스터 플랜 구독자 전용입니다.')),
-        );
-      },
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFFE8E3F8), width: 1.2),
-        ),
-        child: Column(
-          children: [
-            // 상단 뱃지 행
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-              child: Align(
-                alignment: Alignment.centerRight,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 7,
-                    vertical: 3,
-                  ),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFEDE7FF),
-                    borderRadius: BorderRadius.circular(5),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (!_hasMasterPlan) ...[
-                        const Icon(
-                          Icons.lock,
-                          size: 10,
-                          color: Color(0xFF8B7CFF),
-                        ),
-                        const SizedBox(width: 4),
-                      ],
-                      Text(
-                        'MASTER 전용',
-                        style: GoogleFonts.notoSansKr(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w800,
-                          color: const Color(0xFF8B7CFF),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            // 메인 내용
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Transform.translate(
-                    offset: const Offset(0, -5),
-                    child: const Icon(
-                      Icons.psychology_rounded,
-                      size: 36,
-                      color: Color(0xFF8B7CFF),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Transform.translate(
-                      offset: const Offset(0, -8),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            '비서 학습 설정',
-                            style: GoogleFonts.notoSansKr(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w900,
-                              color: const Color(0xFF3D3A4E),
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            '고정 일정과 취침 시간을 설정하면 비서가 더 완벽한 일정을 짜드려요.',
-                            style: GoogleFonts.notoSansKr(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w400,
-                              color: const Color(0xFF888899),
-                              height: 1.4,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  Transform.translate(
-                    offset: const Offset(0, -5),
-                    child: const Icon(
-                      Icons.chevron_right_rounded,
-                      color: Color(0xFFA0A0B0),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
