@@ -4827,6 +4827,13 @@ class _TasksScreenState extends State<TasksScreen>
     );
   }
 
+  bool _isRecurringScheduleTask(TaskItem task) {
+    if (task.category != 'schedule') return false;
+    final scheduleId = task.id.toString().replaceAll('schedule_', '');
+    final todaySchedules = schedules[_getTodayStr()] ?? [];
+    return todaySchedules.any((s) => s.id == scheduleId && s.isRecurring);
+  }
+
   Widget _buildTaskItem(TaskItem t) {
     final milestoneInfo = _getMilestoneInfoForTask(t);
     final isMilestone = milestoneInfo != null;
@@ -4835,6 +4842,12 @@ class _TasksScreenState extends State<TasksScreen>
       timeStart: t.timeStart,
       timeEnd: t.timeEnd,
     );
+    final timeInfo = displayTime ?? t.duration;
+    final hasReminder =
+        t.isReminderEnabled &&
+        _isCoreReminderEnabledGlobally &&
+        displayTime != null;
+    final isRecurringSchedule = _isRecurringScheduleTask(t);
 
     return Stack(
       clipBehavior: Clip.none,
@@ -4909,7 +4922,7 @@ class _TasksScreenState extends State<TasksScreen>
                   ),
                 ),
               ),
-              // 텍스트와 메타데이터 (Column으로 세로 배치)
+              // 텍스트와 메타데이터
               Expanded(
                 child: GestureDetector(
                   onTap: () {
@@ -5022,91 +5035,100 @@ class _TasksScreenState extends State<TasksScreen>
                           ),
                           const SizedBox(height: 4),
                         ],
-                        // 할 일 텍스트
-                        Text(
-                          t.text,
-                          style: GoogleFonts.notoSansKr(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: t.done
-                                ? const Color(0xFFA0A0B0)
-                                : const Color(0xFF3D3A4E),
-                            decoration: t.done
-                                ? TextDecoration.lineThrough
-                                : null,
-                          ),
-                        ),
-                        // 알림 종 아이콘, 시간/소요시간 뱃지, 습관 뱃지 표시
-                        if (displayTime != null ||
-                            t.duration != null ||
-                            t.isHabit ||
-                            (t.isReminderEnabled &&
-                                _isCoreReminderEnabledGlobally &&
-                                displayTime != null)) ...[
-                          const SizedBox(height: 4),
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              // 깨끗한 보라색 종 아이콘
-                              if (t.isReminderEnabled &&
-                                  _isCoreReminderEnabledGlobally &&
-                                  displayTime != null)
-                                const Padding(
-                                  padding: EdgeInsets.only(right: 6),
-                                  child: Icon(
-                                    Icons.notifications_active,
-                                    size: 14,
-                                    color: Color(0xFF8B7CFF),
-                                  ),
-                                ),
-                              // 시간/소요시간 뱃지
-                              if (displayTime != null || t.duration != null)
-                                Container(
-                                  margin: const EdgeInsets.only(right: 6),
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 6,
-                                    vertical: 2,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: displayTime != null
-                                        ? const Color(0xFFF5F3FF)
-                                        : const Color(0xFFFDF2F8),
-                                    borderRadius: BorderRadius.circular(6),
-                                  ),
-                                  child: Text(
-                                    displayTime ?? '⏱ ${t.duration}',
+                        Row(
+                          crossAxisAlignment: timeInfo != null
+                              ? CrossAxisAlignment.start
+                              : CrossAxisAlignment.center,
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    t.text,
                                     style: GoogleFonts.notoSansKr(
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w700,
-                                      color: displayTime != null
-                                          ? const Color(0xFF8B7CFF)
-                                          : const Color(0xFFDB2777),
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: t.done
+                                          ? const Color(0xFFA0A0B0)
+                                          : const Color(0xFF3D3A4E),
+                                      decoration: t.done
+                                          ? TextDecoration.lineThrough
+                                          : null,
                                     ),
                                   ),
-                                ),
-                              // 습관 뱃지
-                              if (t.isHabit)
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 6,
-                                    vertical: 2,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: _coach.accentColor.withOpacity(0.1),
-                                    borderRadius: BorderRadius.circular(6),
-                                  ),
-                                  child: Text(
-                                    '습관',
-                                    style: GoogleFonts.notoSansKr(
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w700,
-                                      color: _coach.accentColor,
+                                  if (timeInfo != null) ...[
+                                    const SizedBox(height: 4),
+                                    Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        if (hasReminder) ...[
+                                          const Icon(
+                                            Icons.notifications_active,
+                                            size: 13,
+                                            color: Color(0xFFA0A0B0),
+                                          ),
+                                          const SizedBox(width: 4),
+                                        ],
+                                        const Icon(
+                                          Icons.access_time_rounded,
+                                          size: 14,
+                                          color: Color(0xFFA0A0B0),
+                                        ),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          timeInfo,
+                                          style: GoogleFonts.notoSansKr(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w700,
+                                            color: const Color(0xFFA0A0B0),
+                                          ),
+                                        ),
+                                      ],
                                     ),
-                                  ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                            if (t.isHabit || isRecurringSchedule) ...[
+                              const SizedBox(width: 10),
+                              Padding(
+                                padding: const EdgeInsets.only(right: 12),
+                                child: Align(
+                                  alignment: Alignment.centerRight,
+                                  child: t.isHabit
+                                      ? Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 9,
+                                            vertical: 5,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: _coach.accentColor
+                                                .withValues(alpha: 0.1),
+                                            borderRadius: BorderRadius.circular(
+                                              8,
+                                            ),
+                                          ),
+                                          child: Text(
+                                            '습관',
+                                            style: GoogleFonts.notoSansKr(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w800,
+                                              color: _coach.accentColor,
+                                            ),
+                                          ),
+                                        )
+                                      : const Icon(
+                                          Icons.repeat_rounded,
+                                          size: 19,
+                                          color: Color(0xFFA0A0B0),
+                                        ),
                                 ),
+                              ),
                             ],
-                          ),
-                        ],
+                          ],
+                        ),
                       ],
                     ),
                   ),
