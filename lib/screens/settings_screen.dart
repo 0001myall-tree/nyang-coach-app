@@ -1264,13 +1264,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
         top: false,
         bottom: false,
         child: Transform.translate(
-          offset: const Offset(0, -32),
+          offset: const Offset(0, -18),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // 상단 타이틀
               Padding(
-                padding: const EdgeInsets.fromLTRB(20, 10, 20, 10),
+                padding: const EdgeInsets.fromLTRB(20, 14, 20, 10),
                 child: Row(
                   children: [
                     const Icon(Icons.settings, color: Colors.black, size: 24),
@@ -1779,6 +1779,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   void _showProfileSheet() {
     final couponController = TextEditingController();
+    final profileScrollController = ScrollController();
     String? errorText;
     bool isApplying = false;
     bool isRestoring = false;
@@ -1959,250 +1960,254 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                   child: SafeArea(
                     top: false,
-                    child: Scrollbar(
-                      thumbVisibility: true,
-                      child: SingleChildScrollView(
-                        primary: true,
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Center(
-                              child: Container(
-                                width: 48,
-                                height: 4,
-                                margin: const EdgeInsets.only(bottom: 22),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFE5E7EB),
-                                  borderRadius: BorderRadius.circular(2),
-                                ),
-                              ),
-                            ),
-                            Row(
+                    child: Stack(
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.only(right: 10),
+                          child: SingleChildScrollView(
+                            controller: profileScrollController,
+                            primary: false,
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Container(
-                                  width: 38,
-                                  height: 38,
-                                  decoration: const BoxDecoration(
-                                    color: Color(0xFFB6A4FF),
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: const Icon(
-                                    Icons.person_rounded,
-                                    color: Colors.white,
-                                    size: 22,
+                                Center(
+                                  child: Container(
+                                    width: 48,
+                                    height: 4,
+                                    margin: const EdgeInsets.only(bottom: 22),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFE5E7EB),
+                                      borderRadius: BorderRadius.circular(2),
+                                    ),
                                   ),
                                 ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        '내 프로필',
-                                        style: GoogleFonts.notoSansKr(
-                                          fontSize: 22,
-                                          fontWeight: FontWeight.w900,
-                                          color: const Color(0xFF1A1A2E),
-                                        ),
+                                Row(
+                                  children: [
+                                    Container(
+                                      width: 38,
+                                      height: 38,
+                                      decoration: const BoxDecoration(
+                                        color: Color(0xFFB6A4FF),
+                                        shape: BoxShape.circle,
                                       ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        '구독, 포인트, 쿠폰을 확인해요.',
-                                        style: GoogleFonts.notoSansKr(
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w600,
-                                          color: const Color(0xFF8A8798),
-                                        ),
+                                      child: const Icon(
+                                        Icons.person_rounded,
+                                        color: Colors.white,
+                                        size: 22,
                                       ),
-                                    ],
-                                  ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            '내 프로필',
+                                            style: GoogleFonts.notoSansKr(
+                                              fontSize: 22,
+                                              fontWeight: FontWeight.w900,
+                                              color: const Color(0xFF1A1A2E),
+                                            ),
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            '구독, 포인트, 쿠폰을 확인해요.',
+                                            style: GoogleFonts.notoSansKr(
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w600,
+                                              color: const Color(0xFF8A8798),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                                const SizedBox(width: 8),
-                                IconButton(
-                                  onPressed: () =>
-                                      Navigator.of(sheetContext).pop(),
-                                  icon: const Icon(Icons.close_rounded),
-                                  tooltip: '닫기',
-                                  style: IconButton.styleFrom(
-                                    foregroundColor: const Color(0xFF8A8798),
-                                    backgroundColor: const Color(0xFFF8F7FF),
-                                    shape: const CircleBorder(),
-                                  ),
+                                const SizedBox(height: 22),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: _buildProfileInfoCard(
+                                        label: '구독 상태',
+                                        value: _planStatusLabel,
+                                        icon: Icons.workspace_premium_rounded,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: _buildProfileInfoCard(
+                                        label: '포인트',
+                                        value: '${_userData?.points ?? 0}P',
+                                        icon: Icons.toll_rounded,
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                              ],
-                            ),
-                            const SizedBox(height: 22),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: _buildProfileInfoCard(
-                                    label: '구독 상태',
-                                    value: _planStatusLabel,
-                                    icon: Icons.workspace_premium_rounded,
-                                  ),
+                                const SizedBox(height: 10),
+                                _buildProfileInfoCard(
+                                  label: '구독 남은 기간',
+                                  value: _planRemainingLabel,
+                                  icon: Icons.event_available_rounded,
+                                  isWide: true,
                                 ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: _buildProfileInfoCard(
-                                    label: '포인트',
-                                    value: '${_userData?.points ?? 0}P',
-                                    icon: Icons.toll_rounded,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 10),
-                            _buildProfileInfoCard(
-                              label: '구독 남은 기간',
-                              value: _planRemainingLabel,
-                              icon: Icons.event_available_rounded,
-                              isWide: true,
-                            ),
-                            const SizedBox(height: 18),
-                            _buildPurchasedCoachSection(),
-                            const SizedBox(height: 18),
-                            Text(
-                              '쿠폰 입력',
-                              style: GoogleFonts.notoSansKr(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w900,
-                                color: const Color(0xFF1A1A2E),
-                              ),
-                            ),
-                            const SizedBox(height: 10),
-                            TextField(
-                              controller: couponController,
-                              textCapitalization: TextCapitalization.characters,
-                              decoration: InputDecoration(
-                                hintText: '쿠폰 또는 구독권 코드',
-                                errorText: errorText,
-                                hintStyle: GoogleFonts.notoSansKr(
-                                  color: const Color(0xFFB8B5C6),
-                                  fontWeight: FontWeight.w600,
-                                ),
-                                filled: true,
-                                fillColor: const Color(0xFFF8F7FF),
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(16),
-                                  borderSide: const BorderSide(
-                                    color: Color(0xFFE8E3F8),
-                                  ),
-                                ),
-                                enabledBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(16),
-                                  borderSide: const BorderSide(
-                                    color: Color(0xFFE8E3F8),
-                                  ),
-                                ),
-                                focusedBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(16),
-                                  borderSide: const BorderSide(
-                                    color: Color(0xFFB6A4FF),
-                                    width: 1.5,
-                                  ),
-                                ),
-                              ),
-                              style: GoogleFonts.notoSansKr(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w800,
-                                color: const Color(0xFF1A1A2E),
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            SizedBox(
-                              width: double.infinity,
-                              height: 54,
-                              child: ElevatedButton(
-                                onPressed: isApplying ? null : applyCoupon,
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFF1A1A2E),
-                                  disabledBackgroundColor: const Color(
-                                    0xFFE5E7EB,
-                                  ),
-                                  elevation: 0,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(16),
-                                  ),
-                                ),
-                                child: Text(
-                                  isApplying ? '확인 중...' : '쿠폰 적용하기',
-                                  style: GoogleFonts.notoSansKr(
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w900,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            SizedBox(
-                              width: double.infinity,
-                              height: 52,
-                              child: OutlinedButton.icon(
-                                onPressed: isRestoring
-                                    ? null
-                                    : restoreCloudData,
-                                icon: isRestoring
-                                    ? const SizedBox(
-                                        width: 17,
-                                        height: 17,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                          color: Color(0xFF8B7CFF),
-                                        ),
-                                      )
-                                    : const Icon(Icons.cloud_download_rounded),
-                                label: Text(
-                                  isRestoring ? '복원 중...' : '클라우드 데이터 복원',
+                                const SizedBox(height: 18),
+                                _buildPurchasedCoachSection(),
+                                const SizedBox(height: 18),
+                                Text(
+                                  '쿠폰 입력',
                                   style: GoogleFonts.notoSansKr(
                                     fontSize: 14,
                                     fontWeight: FontWeight.w900,
+                                    color: const Color(0xFF1A1A2E),
                                   ),
                                 ),
-                                style: OutlinedButton.styleFrom(
-                                  foregroundColor: const Color(0xFF8B7CFF),
-                                  side: const BorderSide(
-                                    color: Color(0xFFD8CEFF),
-                                    width: 1.2,
+                                const SizedBox(height: 10),
+                                TextField(
+                                  controller: couponController,
+                                  textCapitalization:
+                                      TextCapitalization.characters,
+                                  decoration: InputDecoration(
+                                    hintText: '쿠폰 또는 구독권 코드',
+                                    errorText: errorText,
+                                    hintStyle: GoogleFonts.notoSansKr(
+                                      color: const Color(0xFFB8B5C6),
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                    filled: true,
+                                    fillColor: const Color(0xFFF8F7FF),
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                      borderSide: const BorderSide(
+                                        color: Color(0xFFE8E3F8),
+                                      ),
+                                    ),
+                                    enabledBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                      borderSide: const BorderSide(
+                                        color: Color(0xFFE8E3F8),
+                                      ),
+                                    ),
+                                    focusedBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                      borderSide: const BorderSide(
+                                        color: Color(0xFFB6A4FF),
+                                        width: 1.5,
+                                      ),
+                                    ),
                                   ),
-                                  backgroundColor: Colors.white,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(16),
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 10),
-                            SizedBox(
-                              width: double.infinity,
-                              child: TextButton(
-                                onPressed: () {
-                                  Navigator.pop(context);
-                                  Future.delayed(
-                                    Duration.zero,
-                                    _showLogoutDialog,
-                                  );
-                                },
-                                style: TextButton.styleFrom(
-                                  foregroundColor: const Color(0xFF9A96A8),
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 12,
-                                  ),
-                                ),
-                                child: Text(
-                                  '다른 계정으로 로그인하기',
                                   style: GoogleFonts.notoSansKr(
-                                    fontSize: 13,
+                                    fontSize: 15,
                                     fontWeight: FontWeight.w800,
+                                    color: const Color(0xFF1A1A2E),
                                   ),
                                 ),
-                              ),
+                                const SizedBox(height: 12),
+                                SizedBox(
+                                  width: double.infinity,
+                                  height: 54,
+                                  child: ElevatedButton(
+                                    onPressed: isApplying ? null : applyCoupon,
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFF1A1A2E),
+                                      disabledBackgroundColor: const Color(
+                                        0xFFE5E7EB,
+                                      ),
+                                      elevation: 0,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(16),
+                                      ),
+                                    ),
+                                    child: Text(
+                                      isApplying ? '확인 중...' : '쿠폰 적용하기',
+                                      style: GoogleFonts.notoSansKr(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w900,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                SizedBox(
+                                  width: double.infinity,
+                                  height: 52,
+                                  child: OutlinedButton.icon(
+                                    onPressed: isRestoring
+                                        ? null
+                                        : restoreCloudData,
+                                    icon: isRestoring
+                                        ? const SizedBox(
+                                            width: 17,
+                                            height: 17,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              color: Color(0xFF8B7CFF),
+                                            ),
+                                          )
+                                        : const Icon(
+                                            Icons.cloud_download_rounded,
+                                          ),
+                                    label: Text(
+                                      isRestoring ? '복원 중...' : '클라우드 데이터 복원',
+                                      style: GoogleFonts.notoSansKr(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w900,
+                                      ),
+                                    ),
+                                    style: OutlinedButton.styleFrom(
+                                      foregroundColor: const Color(0xFF8B7CFF),
+                                      side: const BorderSide(
+                                        color: Color(0xFFD8CEFF),
+                                        width: 1.2,
+                                      ),
+                                      backgroundColor: Colors.white,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(16),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 10),
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: TextButton(
+                                    onPressed: () {
+                                      Navigator.pop(context);
+                                      Future.delayed(
+                                        Duration.zero,
+                                        _showLogoutDialog,
+                                      );
+                                    },
+                                    style: TextButton.styleFrom(
+                                      foregroundColor: const Color(0xFF9A96A8),
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 12,
+                                      ),
+                                    ),
+                                    child: Text(
+                                      '다른 계정으로 로그인하기',
+                                      style: GoogleFonts.notoSansKr(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
-                          ],
+                          ),
                         ),
-                      ),
+                        Positioned(
+                          top: 56,
+                          right: 0,
+                          bottom: 12,
+                          child: _buildCompactScrollHandle(
+                            profileScrollController,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -2211,7 +2216,56 @@ class _SettingsScreenState extends State<SettingsScreen> {
           },
         );
       },
-    ).whenComplete(couponController.dispose);
+    ).whenComplete(() {
+      couponController.dispose();
+      profileScrollController.dispose();
+    });
+  }
+
+  Widget _buildCompactScrollHandle(ScrollController controller) {
+    return IgnorePointer(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          return AnimatedBuilder(
+            animation: controller,
+            builder: (context, child) {
+              final hasScroll =
+                  controller.hasClients &&
+                  controller.position.maxScrollExtent > 4;
+              final maxScroll = hasScroll
+                  ? controller.position.maxScrollExtent
+                  : 0.0;
+              final offset = hasScroll
+                  ? controller.offset.clamp(0.0, maxScroll).toDouble()
+                  : 0.0;
+              const thumbHeight = 34.0;
+              final trackHeight = constraints.maxHeight.isFinite
+                  ? constraints.maxHeight
+                  : thumbHeight;
+              final travel = trackHeight > thumbHeight
+                  ? trackHeight - thumbHeight
+                  : 0.0;
+              final top = maxScroll > 0 ? travel * (offset / maxScroll) : 0.0;
+
+              return Opacity(
+                opacity: hasScroll ? 0.75 : 0.0,
+                child: Transform.translate(
+                  offset: Offset(0, top),
+                  child: Container(
+                    width: 4,
+                    height: thumbHeight,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFB6A4FF).withOpacity(0.65),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                  ),
+                ),
+              );
+            },
+          );
+        },
+      ),
+    );
   }
 
   Widget _buildProfileInfoCard({
