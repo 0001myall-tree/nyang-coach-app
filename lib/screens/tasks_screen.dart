@@ -3046,7 +3046,6 @@ class _TasksScreenState extends State<TasksScreen>
                 color: isDone
                     ? const Color(0xFFB0B0C0)
                     : const Color(0xFF3D3A4E),
-                decoration: isDone ? TextDecoration.lineThrough : null,
               ),
             ),
           ),
