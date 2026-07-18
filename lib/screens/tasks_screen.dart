@@ -2797,19 +2797,10 @@ class _TasksScreenState extends State<TasksScreen>
   Widget _buildCoreSection() {
     return Container(
       width: double.infinity,
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.only(top: 8, bottom: 14),
+      padding: const EdgeInsets.fromLTRB(28, 22, 28, 24),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: _coach.accentColor.withOpacity(0.1),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-        border: Border.all(color: _coach.accentColor.withOpacity(0.2)),
+        color: _coach.accentColor.withValues(alpha: 0.055),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2933,11 +2924,11 @@ class _TasksScreenState extends State<TasksScreen>
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              '오늘의 핵심을 모두 완료했어요',
+              '모두 완료',
               style: GoogleFonts.notoSansKr(
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
-                color: const Color(0xFF3D3A4E),
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+                color: _coach.accentColor,
               ),
             ),
           ),
