@@ -4305,7 +4305,11 @@ class _TasksScreenState extends State<TasksScreen>
     );
   }
 
-  void _showEditItemModal(dynamic item, VoidCallback onSave) {
+  void _showEditItemModal(
+    dynamic item,
+    VoidCallback onSave, {
+    VoidCallback? onDelete,
+  }) {
     final textCtrl = TextEditingController(text: item.text);
 
     String mTimeType = 'none';
@@ -4940,12 +4944,16 @@ class _TasksScreenState extends State<TasksScreen>
                           ),
                         ),
                       ),
-                      if (item is TaskItem) ...[
+                      if (onDelete != null || item is TaskItem) ...[
                         const SizedBox(width: 10),
                         Expanded(
                           child: GestureDetector(
                             onTap: () {
                               Navigator.pop(ctx);
+                              if (onDelete != null) {
+                                onDelete();
+                                return;
+                              }
                               Future.microtask(() {
                                 if (mounted) _showTaskDeleteOptions(item);
                               });
@@ -9426,6 +9434,85 @@ class _TasksScreenState extends State<TasksScreen>
     );
   }
 
+  Widget _scheduleItemTrailingIcons({
+    required bool isRecurring,
+    required bool isReminderEnabled,
+    Map<String, dynamic>? recurrenceRule,
+  }) {
+    final children = <Widget>[];
+    if (isRecurring) {
+      children.add(
+        Tooltip(
+          message: _repeatRuleLabel(recurrenceRule),
+          child: Icon(
+            Icons.repeat_rounded,
+            size: 17,
+            color: _coach.accentColor.withOpacity(0.72),
+          ),
+        ),
+      );
+    }
+    if (isReminderEnabled) {
+      if (children.isNotEmpty) children.add(const SizedBox(width: 7));
+      children.add(
+        Icon(
+          Icons.notifications_active,
+          size: 17,
+          color: _coach.accentColor.withOpacity(0.72),
+        ),
+      );
+    }
+    if (children.isEmpty) return const SizedBox.shrink();
+    return Row(mainAxisSize: MainAxisSize.min, children: children);
+  }
+
+  Widget _scheduleMetaInfoRow({
+    String? displayTime,
+    String? duration,
+    EdgeInsets padding = const EdgeInsets.only(top: 6),
+  }) {
+    final hasDisplayTime = displayTime != null && displayTime.trim().isNotEmpty;
+    final hasDuration = duration != null && duration.trim().isNotEmpty;
+    if (!hasDisplayTime && !hasDuration) return const SizedBox.shrink();
+
+    return Padding(
+      padding: padding,
+      child: Row(
+        children: [
+          if (hasDisplayTime) ...[
+            const Icon(Icons.access_time, size: 16, color: Color(0xFF9CA3AF)),
+            const SizedBox(width: 4),
+            Text(
+              displayTime,
+              style: GoogleFonts.notoSansKr(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: const Color(0xFF9CA3AF),
+              ),
+            ),
+          ],
+          if (hasDisplayTime && hasDuration) const SizedBox(width: 10),
+          if (hasDuration) ...[
+            const Icon(
+              Icons.timer_outlined,
+              size: 16,
+              color: Color(0xFF9CA3AF),
+            ),
+            const SizedBox(width: 4),
+            Text(
+              duration,
+              style: GoogleFonts.notoSansKr(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: const Color(0xFF9CA3AF),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   Widget _buildScheduleListOnly() {
     final dateStr = _dateKey(_calSelectedDay);
     final daySch = schedules[dateStr] ?? [];
@@ -9737,10 +9824,22 @@ class _TasksScreenState extends State<TasksScreen>
                                   (fn) => setState(fn),
                                 );
                               } else {
-                                _showEditItemModal(s, () {
-                                  setState(() {});
-                                  _saveSchedules();
-                                });
+                                _showEditItemModal(
+                                  s,
+                                  () {
+                                    setState(() {});
+                                    _saveSchedules();
+                                  },
+                                  onDelete: () {
+                                    setState(() {
+                                      daySch.removeAt(i);
+                                      if (daySch.isEmpty) {
+                                        schedules.remove(dateStr);
+                                      }
+                                    });
+                                    _saveSchedules();
+                                  },
+                                );
                               }
                             },
                             child: Container(
@@ -9759,56 +9858,13 @@ class _TasksScreenState extends State<TasksScreen>
                             ),
                           ),
                         ),
-                        if (displayTime != null)
-                          Padding(
-                            padding: const EdgeInsets.only(right: 6),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 7,
-                                vertical: 3,
-                              ),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFF5F3FF),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Text(
-                                displayTime,
-                                style: GoogleFonts.notoSansKr(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w800,
-                                  color: const Color(0xFF8B7CFF),
-                                ),
-                              ),
-                            ),
-                          ),
-                        if (s.isReminderEnabled)
-                          Padding(
-                            padding: const EdgeInsets.only(right: 4),
-                            child: Icon(
-                              Icons.notifications_active,
-                              size: 16,
-                              color: _coach.accentColor.withOpacity(0.7),
-                            ),
-                          ),
-                        GestureDetector(
-                          onTap: () {
-                            setState(() {
-                              daySch.removeAt(i);
-                              if (daySch.isEmpty) {
-                                schedules.remove(dateStr);
-                              }
-                            });
-                            _saveSchedules();
-                          },
-                          child: const Icon(
-                            Icons.close,
-                            color: Color(0xFFD1D5DB),
-                            size: 18,
-                          ),
+                        _scheduleItemTrailingIcons(
+                          isRecurring: s.isRecurring,
+                          isReminderEnabled: s.isReminderEnabled,
+                          recurrenceRule: s.recurrenceRule,
                         ),
                       ],
                     ),
-                    const SizedBox(height: 4),
                     GestureDetector(
                       onTap: () {
                         if (isMilestone) {
@@ -9818,83 +9874,28 @@ class _TasksScreenState extends State<TasksScreen>
                             (fn) => setState(fn),
                           );
                         } else {
-                          _showEditItemModal(s, () {
-                            setState(() {});
-                            _saveSchedules();
-                          });
+                          _showEditItemModal(
+                            s,
+                            () {
+                              setState(() {});
+                              _saveSchedules();
+                            },
+                            onDelete: () {
+                              setState(() {
+                                daySch.removeAt(i);
+                                if (daySch.isEmpty) {
+                                  schedules.remove(dateStr);
+                                }
+                              });
+                              _saveSchedules();
+                            },
+                          );
                         }
                       },
-                      child: () {
-                        return (s.duration != null || s.isRecurring)
-                            ? Row(
-                                children: [
-                                  if (s.duration != null)
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 6,
-                                        vertical: 2,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFFFDF2F8),
-                                        borderRadius: BorderRadius.circular(6),
-                                      ),
-                                      child: Text(
-                                        '⏱ ${s.duration}',
-                                        style: GoogleFonts.notoSansKr(
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.w700,
-                                          color: const Color(0xFFDB2777),
-                                        ),
-                                      ),
-                                    ),
-                                  if (s.isRecurring)
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 6,
-                                        vertical: 2,
-                                      ),
-                                      margin: const EdgeInsets.only(left: 6),
-                                      decoration: BoxDecoration(
-                                        color: _coach.accentColor.withOpacity(
-                                          0.08,
-                                        ),
-                                        borderRadius: BorderRadius.circular(6),
-                                      ),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Icon(
-                                            Icons.repeat_rounded,
-                                            size: 12,
-                                            color: _coach.accentColor,
-                                          ),
-                                          const SizedBox(width: 3),
-                                          Text(
-                                            _repeatRuleLabel(s.recurrenceRule),
-                                            style: GoogleFonts.notoSansKr(
-                                              fontSize: 11,
-                                              fontWeight: FontWeight.w800,
-                                              color: _coach.accentColor,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                ],
-                              )
-                            : Row(
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.all(4),
-                                    child: const Icon(
-                                      Icons.access_time,
-                                      size: 16,
-                                      color: Color(0xFFD1D5DB),
-                                    ),
-                                  ),
-                                ],
-                              );
-                      }(),
+                      child: _scheduleMetaInfoRow(
+                        displayTime: displayTime,
+                        duration: s.duration,
+                      ),
                     ),
                   ],
                 ),
@@ -9915,181 +9916,56 @@ class _TasksScreenState extends State<TasksScreen>
                 timeStart: task.timeStart,
                 timeEnd: task.timeEnd,
               );
-              final titleColor = task.done
-                  ? const Color(0xFF9CA3AF)
-                  : const Color(0xFF3D3A4E);
-
-              return Container(
-                margin: const EdgeInsets.only(bottom: 8),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFFE8E3F8)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        GestureDetector(
-                          onTap: () =>
-                              _togglePlannedTaskForSchedule(dateStr, task),
-                          child: Container(
-                            width: 28,
-                            height: 28,
-                            alignment: Alignment.center,
-                            decoration: BoxDecoration(
-                              color: task.done
-                                  ? _coach.accentColor
-                                  : Colors.white,
-                              border: Border.all(
-                                color: task.inProgress
-                                    ? _coach.accentColor
-                                    : task.done
-                                    ? _coach.accentColor
-                                    : const Color(0xFFD1D5DB),
-                                width: 1.5,
-                              ),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: task.done
-                                ? const Icon(
-                                    Icons.check,
-                                    color: Colors.white,
-                                    size: 16,
-                                  )
-                                : null,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: GestureDetector(
-                            onTap: () {
-                              _showEditItemModal(task, () {
-                                _savePlannedTaskForSchedule(dateStr);
-                              });
-                            },
-                            child: Container(
-                              color: Colors.transparent,
-                              padding: const EdgeInsets.symmetric(vertical: 4),
-                              child: Text(
-                                task.text,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: GoogleFonts.notoSansKr(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                  color: titleColor,
-                                  decoration: TextDecoration.none,
-                                ),
+              return GestureDetector(
+                onTap: () {
+                  _showEditItemModal(
+                    task,
+                    () {
+                      _savePlannedTaskForSchedule(dateStr);
+                    },
+                    onDelete: () {
+                      _removePlannedTaskForSchedule(dateStr, task);
+                    },
+                  );
+                },
+                child: Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFE8E3F8)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              task.text,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: GoogleFonts.notoSansKr(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: const Color(0xFF3D3A4E),
+                                decoration: TextDecoration.none,
                               ),
                             ),
                           ),
-                        ),
-                        if (task.inProgress)
-                          Padding(
-                            padding: const EdgeInsets.only(right: 6),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 7,
-                                vertical: 3,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(999),
-                                border: Border.all(
-                                  color: _coach.accentColor.withOpacity(0.35),
-                                ),
-                              ),
-                              child: Text(
-                                '• 진행중',
-                                style: GoogleFonts.notoSansKr(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w800,
-                                  color: _coach.accentColor,
-                                ),
-                              ),
-                            ),
-                          )
-                        else
-                          Padding(
-                            padding: const EdgeInsets.only(right: 6),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 7,
-                                vertical: 3,
-                              ),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFF5F3FF),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Text(
-                                '할 일',
-                                style: GoogleFonts.notoSansKr(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w800,
-                                  color: const Color(0xFF8B7CFF),
-                                ),
-                              ),
-                            ),
+                          _scheduleItemTrailingIcons(
+                            isRecurring: false,
+                            isReminderEnabled: task.isReminderEnabled,
                           ),
-                        GestureDetector(
-                          onTap: () =>
-                              _removePlannedTaskForSchedule(dateStr, task),
-                          child: const Icon(
-                            Icons.close,
-                            color: Color(0xFFD1D5DB),
-                            size: 18,
-                          ),
-                        ),
-                      ],
-                    ),
-                    GestureDetector(
-                      onTap: () {
-                        _showEditItemModal(task, () {
-                          _savePlannedTaskForSchedule(dateStr);
-                        });
-                      },
-                      child: (displayTime != null || task.duration != null)
-                          ? Padding(
-                              padding: const EdgeInsets.only(left: 40, top: 2),
-                              child: Row(
-                                children: [
-                                  if (displayTime != null) ...[
-                                    const Icon(
-                                      Icons.access_time,
-                                      size: 15,
-                                      color: Color(0xFF9CA3AF),
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      displayTime,
-                                      style: GoogleFonts.notoSansKr(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w700,
-                                        color: const Color(0xFF9CA3AF),
-                                      ),
-                                    ),
-                                  ],
-                                  if (displayTime != null &&
-                                      task.duration != null)
-                                    const SizedBox(width: 10),
-                                  if (task.duration != null)
-                                    Text(
-                                      '⏱ ${task.duration}',
-                                      style: GoogleFonts.notoSansKr(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w700,
-                                        color: const Color(0xFF9CA3AF),
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            )
-                          : const SizedBox(height: 0),
-                    ),
-                  ],
+                        ],
+                      ),
+                      _scheduleMetaInfoRow(
+                        displayTime: displayTime,
+                        duration: task.duration,
+                      ),
+                    ],
+                  ),
                 ),
               );
             },

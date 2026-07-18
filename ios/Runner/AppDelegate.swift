@@ -1,9 +1,16 @@
 import Flutter
 import UIKit
 import UserNotifications
+import WidgetKit
 
 @main
 @objc class AppDelegate: FlutterAppDelegate {
+  private func reloadWidgetsIfAvailable() {
+    if #available(iOS 14.0, *) {
+      WidgetCenter.shared.reloadAllTimelines()
+    }
+  }
+
   private func storeWidgetIntent(from url: URL) {
     guard url.scheme == "nyangcoach", url.host == "widget" else { return }
 
@@ -25,6 +32,7 @@ import UserNotifications
     if let url = launchOptions?[.url] as? URL {
       storeWidgetIntent(from: url)
     }
+    reloadWidgetsIfAvailable()
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 

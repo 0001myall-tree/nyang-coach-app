@@ -25,6 +25,7 @@ class AuthService {
     if (user == null) return false;
     final allowData = await _allowedEmailData(user.email);
     if (!_isEnabledAllowedEmail(allowData)) {
+      if (_isAppleUser(user)) return true;
       await _signOutAuthOnly();
       return false;
     }
@@ -134,9 +135,10 @@ class AuthService {
   }
 
   Future<void> _syncAfterSignIn(UserCredential? cred) async {
-    if (cred?.user == null) return;
-    final allowData = await _allowedEmailData(cred?.user?.email);
-    if (!_isEnabledAllowedEmail(allowData)) {
+    final user = cred?.user;
+    if (user == null) return;
+    final allowData = await _allowedEmailData(user.email);
+    if (!_isEnabledAllowedEmail(allowData) && !_isAppleUser(user)) {
       await _signOutAuthOnly();
       throw const AuthAccessDeniedException();
     }
@@ -145,6 +147,10 @@ class AuthService {
     await MemoryService().syncFromCloud();
     await TasksSyncService.syncFromCloud();
     await _syncNotificationsSafely();
+  }
+
+  bool _isAppleUser(User user) {
+    return user.providerData.any((info) => info.providerId == 'apple.com');
   }
 
   Future<bool> _isAllowedEmail(String? email) async {
