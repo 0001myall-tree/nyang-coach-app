@@ -3394,6 +3394,23 @@ class _TasksScreenState extends State<TasksScreen>
     );
   }
 
+  Future<void> _pickDateFromTodayHeader(DateTime initialDate) async {
+    final selected = await showDatePicker(
+      context: context,
+      initialDate: initialDate,
+      firstDate: DateTime(2020, 1, 1),
+      lastDate: DateTime(2050, 12, 31),
+      locale: const Locale('ko', 'KR'),
+    );
+    if (selected == null || !mounted) return;
+
+    setState(() {
+      _calSelectedDay = selected;
+      _calFocusedDay = selected;
+    });
+    _tabCtrl.animateTo(2);
+  }
+
   Widget _buildTodayHeader() {
     final todayStr = _getTodayStr();
     final parts = todayStr.split('-');
@@ -3423,63 +3440,61 @@ class _TasksScreenState extends State<TasksScreen>
     final days = ['일', '월', '화', '수', '목', '금', '토'];
     final dateStr =
         '${targetDate.year}년 ${months[targetDate.month - 1]} ${targetDate.day}일 (${days[targetDate.weekday % 7]})';
+    final isVacationActive = vacationInfo != null;
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
       color: Colors.white,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            dateStr,
-            style: GoogleFonts.notoSansKr(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: const Color(0xFFA0A0B0),
-            ),
-          ),
-          const SizedBox(height: 4),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
-                children: [
-                  // 고양이 아이콘
-                  const Icon(Icons.pets, color: Colors.grey, size: 18),
-                  const SizedBox(width: 6),
-                  Text(
-                    '오늘의 할 일',
-                    style: GoogleFonts.notoSansKr(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w900,
-                      color: const Color(0xFF3D3A4E),
-                    ),
-                  ),
-                ],
-              ),
-              GestureDetector(
-                onTap: _showVacationModal,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: const Color(0xFFE8E3F8)),
-                  ),
-                  child: Text(
-                    '휴식 모드 설정',
-                    style: GoogleFonts.notoSansKr(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: const Color(0xFF6B5EA8),
-                    ),
+          GestureDetector(
+            onTap: () => _pickDateFromTodayHeader(targetDate),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  dateStr,
+                  style: GoogleFonts.notoSansKr(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: const Color(0xFFA0A0B0),
                   ),
                 ),
+                const SizedBox(width: 3),
+                const Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  size: 16,
+                  color: Color(0xFFA0A0B0),
+                ),
+              ],
+            ),
+          ),
+          GestureDetector(
+            onTap: _showVacationModal,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: isVacationActive ? _coach.accentColor : Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: isVacationActive
+                      ? _coach.accentColor
+                      : const Color(0xFFE5E7EB),
+                ),
               ),
-            ],
+              child: Text(
+                '휴식 모드 설정',
+                style: GoogleFonts.notoSansKr(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: isVacationActive
+                      ? Colors.white
+                      : const Color(0xFFA0A0B0),
+                ),
+              ),
+            ),
           ),
         ],
       ),
