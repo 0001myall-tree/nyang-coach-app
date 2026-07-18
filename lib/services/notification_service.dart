@@ -227,9 +227,9 @@ class NotificationService {
         AndroidInitializationSettings('@mipmap/ic_launcher');
     const DarwinInitializationSettings iosSettings =
         DarwinInitializationSettings(
-          requestAlertPermission: true,
-          requestBadgePermission: true,
-          requestSoundPermission: true,
+          requestAlertPermission: false,
+          requestBadgePermission: false,
+          requestSoundPermission: false,
           defaultPresentBanner: true,
           defaultPresentList: true,
           defaultPresentSound: true,
@@ -260,18 +260,75 @@ class NotificationService {
         }
       },
     );
+  }
 
-    // 안드로이드 13 이상을 위한 권한 요청 팝업 띄우기
-    await _plugin
-        .resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin
-        >()
-        ?.requestNotificationsPermission();
-    await _plugin
-        .resolvePlatformSpecificImplementation<
-          IOSFlutterLocalNotificationsPlugin
-        >()
-        ?.requestPermissions(alert: true, badge: true, sound: true);
+  Future<bool> requestNotificationPermissions() async {
+    if (kIsWeb) return true;
+
+    final androidAllowed =
+        await _plugin
+            .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin
+            >()
+            ?.requestNotificationsPermission() ??
+        true;
+    final iosAllowed =
+        await _plugin
+            .resolvePlatformSpecificImplementation<
+              IOSFlutterLocalNotificationsPlugin
+            >()
+            ?.requestPermissions(alert: true, badge: true, sound: true) ??
+        true;
+
+    return androidAllowed && iosAllowed;
+  }
+
+  Future<bool> _invokeAndroidAlarmPermissionCheck(String method) async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
+      return true;
+    }
+    try {
+      return await _androidAlarmChannel.invokeMethod<bool>(method) ?? true;
+    } catch (_) {
+      return true;
+    }
+  }
+
+  Future<void> _openAndroidAlarmPermissionSettings(String method) async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+    try {
+      await _androidAlarmChannel.invokeMethod(method);
+    } catch (_) {}
+  }
+
+  Future<bool> canUseMorningCallFullScreen() async {
+    return _invokeAndroidAlarmPermissionCheck('canUseFullScreenIntent');
+  }
+
+  Future<bool> ensureMorningCallPresentationPermission({
+    bool openSettings = false,
+  }) async {
+    final canPostNotifications = await _invokeAndroidAlarmPermissionCheck(
+      'canPostNotifications',
+    );
+    final canScheduleExactAlarms = await _invokeAndroidAlarmPermissionCheck(
+      'canScheduleExactAlarms',
+    );
+    final canUseFullScreen = await canUseMorningCallFullScreen();
+
+    if (openSettings) {
+      if (!canPostNotifications) {
+        await _openAndroidAlarmPermissionSettings('openNotificationSettings');
+      } else if (!canScheduleExactAlarms) {
+        await _openAndroidAlarmPermissionSettings('openExactAlarmSettings');
+      } else if (!canUseFullScreen) {
+        await _openAndroidAlarmPermissionSettings(
+          'openFullScreenIntentSettings',
+        );
+      }
+    }
+
+    return canPostNotifications && canScheduleExactAlarms && canUseFullScreen;
   }
 
   Future<void> handleLaunchNotification() async {

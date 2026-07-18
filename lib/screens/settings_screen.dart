@@ -515,18 +515,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
       coachName = CoachConfigs.get(coachId).name;
     }
 
+    bool canUseFullScreen = true;
     if (enabled) {
+      final canNotify = await NotificationService()
+          .requestNotificationPermissions();
       await NotificationService().scheduleDailyMorningCall(
         hour: time.hour,
         minute: time.minute,
         coachId: coachId,
       );
+      final canPresentAlarm = await NotificationService()
+          .ensureMorningCallPresentationPermission(openSettings: true);
+      canUseFullScreen = canNotify && canPresentAlarm;
     } else {
       await NotificationService().cancelAllMorningCalls();
     }
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('⏰ $timeStr에 $coachName 모닝콜이 설정되었어요!')),
+        SnackBar(
+          content: Text(
+            enabled && !canUseFullScreen
+                ? '⏰ 모닝콜은 설정됐어요. 열린 설정에서 알림/알람 권한을 허용하면 잠금화면에서도 더 안정적으로 떠요.'
+                : '⏰ $timeStr에 $coachName 모닝콜이 설정되었어요!',
+          ),
+        ),
       );
     }
   }

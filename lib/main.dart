@@ -95,6 +95,9 @@ class _NyangCoachAppState extends State<NyangCoachApp>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     NotificationService().recordAppActive();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(NotificationService().requestNotificationPermissions());
+    });
   }
 
   @override
