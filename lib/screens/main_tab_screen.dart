@@ -435,7 +435,6 @@ class _MainTabScreenState extends State<MainTabScreen>
   String? _lastMorningCallDate;
   final Set<String> _firedCoreReminders = {};
   StreamSubscription? _reminderAudioSub;
-  int _reminderPlayCount = 0;
   String _chatBgStyle = 'simple';
   StreamSubscription<User?>? _authSubscription;
 
@@ -1197,9 +1196,6 @@ class _MainTabScreenState extends State<MainTabScreen>
   Color get _activeColor =>
       _isMaster ? const Color(0xFFD4A017) : const Color(0xFF8B7CFF);
 
-  static const Color _tabBg = Color(0xFF1A1929);
-  static const Color _inactiveColor = Color(0xFF888899);
-
   void _onTabTapped(int index) {
     _loadBgStyle();
     if (index == 0) {
@@ -1852,15 +1848,15 @@ class _MainTabScreenState extends State<MainTabScreen>
                           title: '오늘의 할 일 리셋',
                           body:
                               '할 일 목록이 매일 리셋되니까 사라졌다고 놀라지 마세요.\n'
-                              '설정에서 할 일 리셋 시간을 조율할 수 있고, 다음 날 계획은 할 일 > 일정 탭에서 추가할 수 있습니다.',
+                              '설정에서 할 일 리셋 시간을 조율할 수 있고, 다음 날 계획은 할 일 탭 상단 날짜를 누르고 짜시면 돼요.',
                         ),
                         const SizedBox(height: 18),
                         _buildPlannerHelpSection(
                           iconPath: 'assets/icons/planner-comments.svg',
                           title: '하기 싫을 땐 코치에게 말하기',
                           body:
-                              '하기 싫은 일이 있을 때 코치에게 언제든 솔직히 말하세요.\n'
-                              '코치가 때론 달래주고 동기부여도 해주면서 리드해줄 거예요.',
+                              '하기 싫은 일이 있을 때 코치에게 언제든 투정해도 돼요.\n'
+                              '코치가 다 받아주고 리드해줘요.',
                         ),
                         const SizedBox(height: 18),
                         _buildPlannerHelpSection(
@@ -1883,7 +1879,7 @@ class _MainTabScreenState extends State<MainTabScreen>
                           iconPath: 'assets/icons/planner-calendar-days.svg',
                           title: '오늘 뭐부터 할지 모르겠다면',
                           body:
-                              '혼자 고민하지 말고, 무엇부터 시작하면 좋을지 코치와 이야기하세요.\n'
+                              '혼자 고민하지 말고, 코치와 의논하세요.\n'
                               '특히 마스터 코치(비서 코치)들은 사용자의 우선순위와 미룬 항목 등을 파악하면서 더 똑똑하게 대답해줍니다.',
                         ),
                       ],

@@ -777,7 +777,7 @@ ${feedbackType == 0
    - 꾸준히 해낸 일이 있다면 컨디션 속에서도 놓치지 않았다는 점을 자연스럽게 언급해 주세요.
    - 다음 주 컨디션 관리를 위한 한 가지 제안으로 마무리하세요.'''}
 4. 분량: 3~4문장으로 간결하게. JSON이나 마크다운 없이 순수 텍스트로만 답변해 주세요.
-5. 가독성: 문장 앞에 접속어가 올 때는 그 접속어 앞에서 줄을 바꾸고 두 칸 들여쓰기해 주세요. 예: "또한,", "특히,", "다만,", "하지만,", "그리고,", "앞으로,".''';
+5. 가독성: 문장 앞에 접속어가 올 때는 그 접속어 앞에서 한 줄을 비우고, 들여쓰기 없이 문단을 시작해 주세요. 예: "또한,", "특히,", "다만,", "하지만,", "그리고,", "앞으로,".''';
   }
 
   String _formatCoachCommentForDisplay(String text) {
@@ -788,24 +788,13 @@ ${feedbackType == 0
       r'\s+(특히|또한|다만|하지만|그러나|그리고|그래서|따라서|그러므로|한편|반면|더불어|아울러|앞으로|다음으로),',
     );
 
-    final buffer = StringBuffer();
-    var lastEnd = 0;
-    for (final match in connectorPattern.allMatches(trimmed)) {
-      final before = trimmed.substring(lastEnd, match.start);
-      buffer.write(before);
-
-      final previousText = trimmed.substring(0, match.start).trimRight();
-      final alreadyLineStart =
-          previousText.isEmpty || previousText.endsWith('\n');
-      buffer.write(alreadyLineStart ? '  ' : '\n  ');
-      buffer.write(match.group(1));
-      buffer.write(',');
-      lastEnd = match.end;
-    }
-
-    if (lastEnd == 0) return trimmed;
-    buffer.write(trimmed.substring(lastEnd));
-    return buffer.toString().replaceAll(RegExp(r'\n{3,}'), '\n\n');
+    return trimmed
+        .replaceAll(RegExp(r'\r\n?'), '\n')
+        .replaceAll(RegExp(r'\n[ \t]+'), '\n')
+        .replaceAll(RegExp(r'[ \t]+'), ' ')
+        .replaceAllMapped(connectorPattern, (match) => '\n\n${match.group(1)},')
+        .replaceAll(RegExp(r'\n{3,}'), '\n\n')
+        .trim();
   }
 
   String _formatGoalText(String? raw) {
