@@ -3968,13 +3968,38 @@ class _TasksScreenState extends State<TasksScreen>
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              '🌙 휴식 모드 설정',
-                              style: GoogleFonts.notoSansKr(
-                                fontSize: AppDesignTokens.textTitle,
-                                fontWeight: FontWeight.w900,
-                                color: AppDesignTokens.textPrimary,
-                              ),
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Container(
+                                  width: 30,
+                                  height: 30,
+                                  decoration: const BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: AppDesignTokens.brandSoft,
+                                  ),
+                                  child: Center(
+                                    child: SvgPicture.asset(
+                                      'assets/icons/fa-cloud-moon-solid.svg',
+                                      width: 16,
+                                      height: 16,
+                                      colorFilter: const ColorFilter.mode(
+                                        AppDesignTokens.brandMuted,
+                                        BlendMode.srcIn,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  '휴식 모드 설정',
+                                  style: GoogleFonts.notoSansKr(
+                                    fontSize: AppDesignTokens.textTitle,
+                                    fontWeight: FontWeight.w900,
+                                    color: AppDesignTokens.textPrimary,
+                                  ),
+                                ),
+                              ],
                             ),
                             const SizedBox(height: 4),
                             Text(

@@ -1841,14 +1841,15 @@ class _MainTabScreenState extends State<MainTabScreen>
                               '"내일 오후 3시 회의 추가해줘"\n'
                               '"저녁 7시에 운동 등록해줘"\n'
                               '처럼 \'추가해줘\' 또는 \'등록해줘\'를 붙여 말하면 바로 일정을 등록할 수 있어요.',
+                          highlightTerms: const ['추가해줘', '등록해줘'],
                         ),
                         const SizedBox(height: 18),
                         _buildPlannerHelpSection(
                           iconPath: 'assets/icons/planner-reset.svg',
-                          title: '오늘의 할 일 리셋',
+                          title: '오늘의 할 일 초기화',
                           body:
-                              '할 일 목록이 매일 리셋되니까 사라졌다고 놀라지 마세요.\n'
-                              '설정에서 할 일 리셋 시간을 조율할 수 있고, 다음 날 계획은 할 일 탭 상단 날짜를 누르고 짜시면 돼요.',
+                              '할 일 목록이 매일 초기화돼요.\n'
+                              '설정에서 할 일 초기화 시간을 조율할 수 있어요. 다음 날 계획은 할 일 탭 상단 날짜를 누르고 짜시면 돼요.',
                         ),
                         const SizedBox(height: 18),
                         _buildPlannerHelpSection(
@@ -1920,6 +1921,7 @@ class _MainTabScreenState extends State<MainTabScreen>
     required String iconPath,
     required String title,
     required String body,
+    List<String> highlightTerms = const [],
   }) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1958,8 +1960,8 @@ class _MainTabScreenState extends State<MainTabScreen>
                 ),
               ),
               const SizedBox(height: 7),
-              Text(
-                body,
+              Text.rich(
+                TextSpan(children: _plannerBodySpans(body, highlightTerms)),
                 style: GoogleFonts.notoSansKr(
                   fontSize: 13,
                   height: 1.55,
@@ -1972,6 +1974,33 @@ class _MainTabScreenState extends State<MainTabScreen>
         ),
       ],
     );
+  }
+
+  List<TextSpan> _plannerBodySpans(String body, List<String> highlightTerms) {
+    if (highlightTerms.isEmpty) return [TextSpan(text: body)];
+
+    final pattern = RegExp(highlightTerms.map(RegExp.escape).join('|'));
+    final spans = <TextSpan>[];
+    var cursor = 0;
+    for (final match in pattern.allMatches(body)) {
+      if (match.start > cursor) {
+        spans.add(TextSpan(text: body.substring(cursor, match.start)));
+      }
+      spans.add(
+        TextSpan(
+          text: match.group(0),
+          style: const TextStyle(
+            color: AppDesignTokens.brandMuted,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+      );
+      cursor = match.end;
+    }
+    if (cursor < body.length) {
+      spans.add(TextSpan(text: body.substring(cursor)));
+    }
+    return spans;
   }
 
   // ── 서랍 (모든 탭 공통) ────────────────────────
