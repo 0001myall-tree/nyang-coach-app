@@ -104,6 +104,14 @@ class _ParsedDeleteCommand {
   _ParsedDeleteCommand({required this.target, required this.kind, this.date});
 }
 
+class _ParsedEditCommand {
+  final String target;
+  final String kind;
+  final DateTime? date;
+
+  _ParsedEditCommand({required this.target, required this.kind, this.date});
+}
+
 class _ParsedReply {
   final String text;
   final List<String> chips;
@@ -366,6 +374,7 @@ class ChatScreen extends StatefulWidget {
   final ValueChanged<String>? onOpenFeatureLocation;
   final Future<bool> Function(String name)? onRegisterHabit;
   final Future<String> Function(Map<String, dynamic> command)? onDeleteCommand;
+  final Future<String> Function(Map<String, dynamic> command)? onEditCommand;
   final ValueChanged<String>? onSwitchCoach;
   final VoidCallback? onVacationChanged;
   final String? handoffFromCoachId;
@@ -380,6 +389,7 @@ class ChatScreen extends StatefulWidget {
     this.onOpenFeatureLocation,
     this.onRegisterHabit,
     this.onDeleteCommand,
+    this.onEditCommand,
     this.onSwitchCoach,
     this.onVacationChanged,
     this.handoffFromCoachId,
@@ -2966,6 +2976,7 @@ class _ChatScreenState extends State<ChatScreen>
       RegExp(r'\s*(?:할\s*건데|할건데|할\s*건대|할\s*거야|할거야|할게|하려고|하려구|할래|할\s*래|하기)$'),
       '',
     );
+    cleaned = cleaned.replaceAll(RegExp(r'\s*(?:일정|스케줄)$'), '');
     cleaned = cleaned.replaceAll(RegExp(r'\s+'), ' ').trim();
     cleaned = cleaned.replaceFirst(RegExp(r'(?:을|를|은|는|이|가)$'), '').trim();
     return cleaned;
@@ -3090,6 +3101,87 @@ class _ChatScreenState extends State<ChatScreen>
     return _ParsedDeleteCommand(target: cleaned, kind: kind, date: parsedDate);
   }
 
+  bool _isEditCommand(String input) {
+    final cleaned = _cleanScheduleRegistrationInput(input);
+    final normalized = cleaned.replaceAll(RegExp(r'\s+'), '');
+    if (RegExp(
+      r'(?:그말|방금말|아까말|이전말|이전메시지|방금메시지|채팅|메시지)(?:을|를)?(?:수정|변경|바꿔|고쳐)',
+    ).hasMatch(normalized)) {
+      return false;
+    }
+    final hasEditableTarget =
+        normalized.contains('일정') ||
+        normalized.contains('할일') ||
+        normalized.contains('오늘할일') ||
+        normalized.contains('오늘의할일') ||
+        normalized.contains('태스크') ||
+        normalized.contains('반복일정');
+    if (!hasEditableTarget) return false;
+    return RegExp(
+      r'(?:수정|변경|바꿔|바꾸|고쳐)\s*(?:해\s*)?(?:줘요?|주세요|달라)?$',
+    ).hasMatch(cleaned);
+  }
+
+  _ParsedEditCommand _parseEditCommand(String input) {
+    var cleaned = _cleanScheduleRegistrationInput(input);
+    cleaned = cleaned
+        .replaceFirst(
+          RegExp(r'\s*(?:수정|변경|바꿔|바꾸|고쳐)\s*(?:해\s*)?(?:줘요?|주세요|달라)?$'),
+          '',
+        )
+        .trim();
+
+    DateTime? parsedDate;
+    final now = DateTime.now();
+    final dayAfterTomorrowRegex = RegExp(r'(?:내일\s*모레|내일모레|낼\s*모레|낼모레)');
+    final weekRelRegex = RegExp(
+      r'(이번\s*주|다음\s*주|담\s*주|다다음\s*주)\s+([월화수목금토일])(?:요일)?',
+    );
+    final weekRelMatch = weekRelRegex.firstMatch(cleaned);
+    if (weekRelMatch != null) {
+      final rel = weekRelMatch.group(1)!.replaceAll(RegExp(r'\s'), '');
+      final targetWeekday = _weekdayFromKorean(weekRelMatch.group(2)!);
+      if (targetWeekday != -1) {
+        var diff = targetWeekday - now.weekday;
+        if (rel == '다음주' || rel == '담주') diff += 7;
+        if (rel == '다다음주') diff += 14;
+        parsedDate = now.add(Duration(days: diff));
+        cleaned = cleaned.replaceFirst(weekRelMatch.group(0)!, '').trim();
+      }
+    } else if (cleaned.contains('그글피')) {
+      parsedDate = now.add(const Duration(days: 4));
+      cleaned = cleaned.replaceAll('그글피', '').trim();
+    } else if (cleaned.contains('글피')) {
+      parsedDate = now.add(const Duration(days: 3));
+      cleaned = cleaned.replaceAll('글피', '').trim();
+    } else if (dayAfterTomorrowRegex.hasMatch(cleaned)) {
+      parsedDate = now.add(const Duration(days: 2));
+      cleaned = cleaned.replaceFirst(dayAfterTomorrowRegex, '').trim();
+    } else if (cleaned.contains('모레')) {
+      parsedDate = now.add(const Duration(days: 2));
+      cleaned = cleaned.replaceAll('모레', '').trim();
+    } else if (cleaned.contains('내일')) {
+      parsedDate = now.add(const Duration(days: 1));
+      cleaned = cleaned.replaceAll('내일', '').trim();
+    } else if (cleaned.contains('오늘')) {
+      parsedDate = now;
+      cleaned = cleaned.replaceAll('오늘', '').trim();
+    }
+
+    String kind = cleaned.contains('반복')
+        ? 'recurring_schedule'
+        : 'task_or_schedule';
+    cleaned = cleaned.replaceAll(RegExp(r'\s*반복\s*일정\s*'), ' ');
+    cleaned = cleaned.replaceAll(RegExp(r'\s*(?:일정|할\s*일|태스크)\s*$'), '');
+    cleaned = cleaned.replaceAll(
+      RegExp(r'\s+(?:[월화수목금토일]\s*요일|[월화수목금토일])\s*(?:로|으로|에)?\s*$'),
+      '',
+    );
+    cleaned = cleaned.replaceAll(RegExp(r'\s+'), ' ').trim();
+    cleaned = _cleanRegistrationTitle(cleaned);
+    return _ParsedEditCommand(target: cleaned, kind: kind, date: parsedDate);
+  }
+
   String _emptyDeleteTargetReply() {
     return switch (widget.coachId) {
       'boyfriend' => '어떤 걸 삭제할지 이름까지 같이 말해줘.',
@@ -3099,6 +3191,44 @@ class _ChatScreenState extends State<ChatScreen>
       'sec_male' => '삭제할 항목명을 함께 말씀해 주세요.',
       'sec_female' => '삭제할 항목명을 함께 말씀해 주세요.',
       _ => '어떤 걸 삭제할지 이름까지 같이 말해달라냥.',
+    };
+  }
+
+  String _emptyEditTargetReply() {
+    return switch (widget.coachId) {
+      'boyfriend' => '어떤 일정을 수정할지 이름까지 같이 말해줘.',
+      'girlfriend' => '오빠, 어떤 일정을 수정할지 이름까지 같이 말해줘.',
+      'bro' => '뭘 수정할지 이름까지 같이 말해라.',
+      'halmae' => '뭘 고칠지 이름까지 말해줘야 한다, 우리 새끼.',
+      'sec_male' => '수정할 항목명을 함께 말씀해 주세요.',
+      'sec_female' => '수정할 항목명을 함께 말씀해 주세요.',
+      _ => '어떤 일정을 수정할지 이름까지 같이 말해달라냥.',
+    };
+  }
+
+  bool _needsWeeklyRepeatWeekday(String input) {
+    var cleaned = _cleanScheduleRegistrationInput(input);
+    final suffixRegex = RegExp(
+      r'\s*(등록해\s*(?:줘요?|주세요|달라)|추가해\s*(?:줘요?|주세요|달라))$',
+    );
+    cleaned = cleaned.replaceFirst(suffixRegex, '').trim();
+    if (!RegExp(r'매\s*주(?:마다)?').hasMatch(cleaned)) return false;
+    if (RegExp(r'(평일|주말)').hasMatch(cleaned)) return false;
+    if (RegExp(r'[월화수목금토일]\s*요일|[월화수목금토일]\s*(?:마다|에)').hasMatch(cleaned)) {
+      return false;
+    }
+    return true;
+  }
+
+  String _weeklyRepeatWeekdayQuestion() {
+    return switch (widget.coachId) {
+      'boyfriend' => '매주 반복으로 등록하려면 무슨 요일로 할지 말해줘.',
+      'girlfriend' => '오빠, 매주 반복으로 등록하려면 무슨 요일로 할지 말해줘.',
+      'bro' => '매주 반복이면 요일이 필요하다. 무슨 요일로 할지 말해라.',
+      'halmae' => '매주 반복이면 요일을 정해야 한다. 무슨 요일로 해줄까?',
+      'sec_male' => '매주 반복 일정으로 등록하려면 요일이 필요합니다. 무슨 요일로 해드릴까요?',
+      'sec_female' => '매주 반복 일정으로 등록하려면 요일이 필요해요. 무슨 요일로 해드릴까요?',
+      _ => '매주 반복 일정이면 요일이 필요하다냥. 무슨 요일로 해줄까냥?',
     };
   }
 
@@ -4870,6 +5000,45 @@ class _ChatScreenState extends State<ChatScreen>
       return;
     }
 
+    if (_userData.isPlanActive && _isEditCommand(trimmed)) {
+      final parsed = _parseEditCommand(trimmed);
+      setState(() {
+        _messages.add(
+          ChatMessage(text: trimmed, isUser: true, time: DateTime.now()),
+        );
+        _dynamicChips = [];
+      });
+      _scrollToBottom();
+      await _saveHistory();
+      await AnalyticsService.logConversationMessage(
+        coachId: widget.coachId,
+        usedApi: false,
+        coachReplied: false,
+      );
+
+      String reply;
+      if (parsed.target.isEmpty) {
+        reply = _emptyEditTargetReply();
+      } else if (widget.onEditCommand == null) {
+        reply = '수정할 항목을 찾는 중 문제가 생겼어요. 잠시 후 다시 시도해 주세요.';
+      } else {
+        reply = await widget.onEditCommand!.call({
+          'target': parsed.target,
+          'kind': parsed.kind,
+          if (parsed.date != null) 'date': _dateKey(parsed.date!),
+        });
+      }
+      if (!mounted) return;
+      setState(() {
+        _messages.add(
+          ChatMessage(text: reply, isUser: false, time: DateTime.now()),
+        );
+      });
+      _scrollToBottom();
+      await _saveHistory();
+      return;
+    }
+
     if (_userData.isPlanActive && _isHabitRegistrationCommand(trimmed)) {
       final parsed = _parseHabitRegistration(trimmed);
       setState(() {
@@ -4932,6 +5101,20 @@ class _ChatScreenState extends State<ChatScreen>
         usedApi: false,
         coachReplied: false,
       );
+      if (_needsWeeklyRepeatWeekday(trimmed)) {
+        setState(() {
+          _messages.add(
+            ChatMessage(
+              text: _weeklyRepeatWeekdayQuestion(),
+              isUser: false,
+              time: DateTime.now(),
+            ),
+          );
+        });
+        _scrollToBottom();
+        await _saveHistory();
+        return;
+      }
       await Future.delayed(const Duration(milliseconds: 120));
       if (!mounted) return;
       await _showScheduleRegistrationDialog(trimmed);
@@ -5304,6 +5487,7 @@ class _ChatScreenState extends State<ChatScreen>
   _FeatureLocationReply? _featureLocationReply(String rawText) {
     final text = rawText.trim().toLowerCase().replaceAll(' ', '');
     if (text.isEmpty) return null;
+    if (_isDeletionCommand(rawText)) return null;
 
     final mentionsFeatureSurface =
         text.contains('탭') ||
@@ -5337,6 +5521,22 @@ class _ChatScreenState extends State<ChatScreen>
             text.contains('오늘할일') ||
             text.contains('오늘의할일')) &&
         (text.contains('초기화') || text.contains('리셋') || text.contains('reset'));
+    final asksRepeatScheduleGuide =
+        (text.contains('반복일정') ||
+            (text.contains('반복') && text.contains('일정'))) &&
+        (text.contains('어떻게') ||
+            text.contains('어디') ||
+            text.contains('만들') ||
+            text.contains('등록') ||
+            text.contains('추가') ||
+            text.contains('삭제') ||
+            text.contains('지우') ||
+            text.contains('없애') ||
+            text.contains('수정') ||
+            text.contains('변경') ||
+            text.contains('바꾸') ||
+            text.contains('편집') ||
+            text.contains('하고싶'));
 
     final asksLocation =
         text.contains('어디') ||
@@ -5347,7 +5547,8 @@ class _ChatScreenState extends State<ChatScreen>
         text.contains('열어줘') ||
         text.contains('가줘') ||
         (mentionsFeatureSurface && mentionsFeature) ||
-        asksTodoReset;
+        asksTodoReset ||
+        asksRepeatScheduleGuide;
     if (!asksLocation) return null;
 
     final asksGenericLocation =
@@ -5401,6 +5602,26 @@ class _ChatScreenState extends State<ChatScreen>
       return _FeatureLocationReply(_featureLocationMessage('today'), 'today');
     }
 
+    if (asksRepeatScheduleGuide) {
+      final repeatLocation =
+          text.contains('삭제') ||
+              text.contains('지우') ||
+              text.contains('없애') ||
+              text.contains('취소')
+          ? 'repeat_schedule_delete'
+          : (text.contains('수정') ||
+                text.contains('변경') ||
+                text.contains('바꾸') ||
+                text.contains('편집') ||
+                text.contains('고치'))
+          ? 'repeat_schedule_edit'
+          : 'repeat_schedule';
+      return _FeatureLocationReply(
+        _featureLocationMessage(repeatLocation),
+        'schedule',
+      );
+    }
+
     final asksDatedPlan =
         text.contains('내일계획') ||
         text.contains('내일플랜') ||
@@ -5443,6 +5664,9 @@ class _ChatScreenState extends State<ChatScreen>
       'today' => '오늘 할 일',
       'goals' => '목표',
       'vision' => '장기 비전',
+      'repeat_schedule' => '반복 일정',
+      'repeat_schedule_delete' => '반복 일정',
+      'repeat_schedule_edit' => '반복 일정',
       'schedule' => '일정',
       'habit' => '습관',
       'records' => '기록',
@@ -5458,6 +5682,12 @@ class _ChatScreenState extends State<ChatScreen>
         'settings' =>
           '설정 탭에 있다냥. 모닝콜, 일정 알람, 위젯, 채팅 배경, 초기화 시간, 비서 학습 설정까지 거기서 바꾸면 된다냥.',
         'vision' => '장기 비전은 목표 화면 아래쪽에 있다냥. 바로 열어주겠다냥.',
+        'repeat_schedule' =>
+          '반복 일정은 일정 탭에서 만든다냥. 일정을 입력하고 시계 버튼을 누른 다음 반복을 고르면 된다냥.',
+        'repeat_schedule_delete' =>
+          '반복 일정은 일정 탭에서 해당 일정을 누르고 삭제하기를 누르면 된다냥. 반복으로 등록된 같은 일정이 같이 삭제된다냥.',
+        'repeat_schedule_edit' =>
+          '반복 일정 수정은 일정 탭에서 해당 일정을 눌러서 하면 된다냥. 바로 일정 탭으로 데려다주겠다냥.',
         _ => '${base(' 화면으로 바로 데려다주겠다냥.')}',
       },
       'boyfriend' => switch (location) {
@@ -5465,6 +5695,11 @@ class _ChatScreenState extends State<ChatScreen>
         'settings' =>
           '설정 탭에 있어. 모닝콜, 일정 알람, 위젯, 채팅 배경, 초기화 시간, 비서 학습 설정까지 거기서 바꾸면 돼.',
         'vision' => '장기 비전은 목표 화면 아래쪽에 있어. 내가 바로 열어줄게.',
+        'repeat_schedule' =>
+          '반복 일정은 일정 탭에서 만들면 돼. 일정 입력하고 시계 버튼 누른 다음 반복을 고르면 돼.',
+        'repeat_schedule_delete' =>
+          '반복 일정은 일정 탭에서 해당 일정을 누르고 삭제하기를 누르면 돼. 반복으로 등록된 같은 일정이 같이 삭제돼.',
+        'repeat_schedule_edit' => '반복 일정 수정은 일정 탭에서 해당 일정을 눌러서 하면 돼. 바로 열어줄게.',
         _ => '${base(' 화면에 있어. 바로 열어줄게.')}',
       },
       'girlfriend' => switch (location) {
@@ -5472,6 +5707,12 @@ class _ChatScreenState extends State<ChatScreen>
         'settings' =>
           '오빠, 설정 탭에 있어! 모닝콜, 일정 알람, 위젯, 채팅 배경, 초기화 시간, 비서 학습 설정까지 거기서 바꾸면 돼.',
         'vision' => '오빠 장기 비전은 목표 화면 아래쪽에 있어. 바로 열어줄게!',
+        'repeat_schedule' =>
+          '오빠, 반복 일정은 일정 탭에서 만들면 돼! 일정 입력하고 시계 버튼 누른 다음 반복을 고르면 돼.',
+        'repeat_schedule_delete' =>
+          '오빠, 반복 일정은 일정 탭에서 해당 일정을 누르고 삭제하기를 누르면 돼! 반복으로 등록된 같은 일정이 같이 삭제돼.',
+        'repeat_schedule_edit' =>
+          '오빠, 반복 일정 수정은 일정 탭에서 해당 일정을 눌러서 하면 돼. 바로 열어줄게!',
         _ => '오빠, ${base(' 화면에 있어. 바로 열어줄게!')}',
       },
       'halmae' => switch (location) {
@@ -5479,6 +5720,12 @@ class _ChatScreenState extends State<ChatScreen>
         'settings' =>
           '설정 탭에 있다, 우리 새끼. 모닝콜이랑 알람, 위젯, 채팅 배경, 초기화 시간, 비서 학습 설정 다 거기서 바꾸면 된다.',
         'vision' => '장기 비전은 목표 화면 아래쪽에 있다. 할미가 바로 열어주마.',
+        'repeat_schedule' =>
+          '반복 일정은 일정 탭에서 만든다, 우리 새끼. 일정 적고 시계 버튼 누른 다음 반복을 고르면 된다.',
+        'repeat_schedule_delete' =>
+          '반복 일정은 일정 탭에서 그 일정을 누르고 삭제하기를 누르면 된다. 반복으로 등록된 같은 일정이 같이 지워진다.',
+        'repeat_schedule_edit' =>
+          '반복 일정 수정은 일정 탭에서 그 일정을 눌러서 하면 된다. 할미가 바로 열어주마.',
         _ => '${base(' 화면에 있다. 할미가 바로 열어주마.')}',
       },
       'bro' => switch (location) {
@@ -5486,6 +5733,11 @@ class _ChatScreenState extends State<ChatScreen>
         'settings' =>
           '설정 탭이다. 모닝콜, 일정 알람, 위젯, 채팅 배경, 초기화 시간, 비서 학습 설정 다 거기서 바꾸면 된다.',
         'vision' => '장기 비전은 목표 화면 아래쪽이다. 바로 열어준다.',
+        'repeat_schedule' =>
+          '반복 일정은 일정 탭에서 만든다. 일정 입력하고 시계 버튼 누른 다음 반복을 고르면 된다.',
+        'repeat_schedule_delete' =>
+          '반복 일정은 일정 탭에서 해당 일정 누르고 삭제하기 누르면 된다. 반복으로 등록된 같은 일정이 같이 삭제된다.',
+        'repeat_schedule_edit' => '반복 일정 수정은 일정 탭에서 해당 일정 눌러서 하면 된다. 바로 열어준다.',
         _ => '${base(' 화면이다. 바로 열어준다.')}',
       },
       'sec_male' => switch (location) {
@@ -5493,6 +5745,12 @@ class _ChatScreenState extends State<ChatScreen>
         'settings' =>
           '대표님, 설정 탭에서 모닝콜, 일정 알람, 위젯, 채팅 배경, 오늘 할 일 초기화 시간, 비서 학습 설정을 변경하실 수 있습니다.',
         'vision' => '대표님, 장기 비전은 목표 화면 하단에서 확인하실 수 있습니다. 바로 이동하겠습니다.',
+        'repeat_schedule' =>
+          '대표님, 반복 일정은 일정 탭에서 생성하실 수 있습니다. 일정을 입력한 뒤 시계 버튼을 누르고 반복을 선택해 주세요.',
+        'repeat_schedule_delete' =>
+          '대표님, 반복 일정은 일정 탭에서 해당 일정을 누른 뒤 삭제하기를 선택하시면 됩니다. 반복으로 등록된 같은 일정이 함께 삭제됩니다.',
+        'repeat_schedule_edit' =>
+          '대표님, 반복 일정 수정은 일정 탭에서 해당 일정을 선택해 진행하실 수 있습니다. 바로 이동하겠습니다.',
         _ => '대표님, ${base(' 화면으로 바로 이동하겠습니다.')}',
       },
       'sec_female' => switch (location) {
@@ -5500,6 +5758,12 @@ class _ChatScreenState extends State<ChatScreen>
         'settings' =>
           '대표님, 설정 탭에서 모닝콜, 일정 알람, 위젯, 채팅 배경, 오늘 할 일 초기화 시간, 비서 학습 설정을 바꿀 수 있어요.',
         'vision' => '대표님, 장기 비전은 목표 화면 아래쪽에 있어요. 바로 열어드릴게요.',
+        'repeat_schedule' =>
+          '대표님, 반복 일정은 일정 탭에서 만들 수 있어요. 일정을 입력한 뒤 시계 버튼을 누르고 반복을 선택해 주세요.',
+        'repeat_schedule_delete' =>
+          '대표님, 반복 일정은 일정 탭에서 해당 일정을 누른 뒤 삭제하기를 선택하면 돼요. 반복으로 등록된 같은 일정이 함께 삭제돼요.',
+        'repeat_schedule_edit' =>
+          '대표님, 반복 일정 수정은 일정 탭에서 해당 일정을 선택해 진행할 수 있어요. 바로 이동할게요.',
         _ => '대표님, ${base(' 화면으로 바로 이동할게요.')}',
       },
       _ => switch (location) {
@@ -5507,6 +5771,11 @@ class _ChatScreenState extends State<ChatScreen>
         'settings' =>
           '설정 탭에서 모닝콜, 일정 알람, 위젯, 채팅 배경, 오늘 할 일 초기화 시간, 비서 학습 설정을 바꿀 수 있어.',
         'vision' => '장기 비전은 목표 화면 아래쪽에 있어. 바로 열어줄게.',
+        'repeat_schedule' =>
+          '반복 일정은 일정 탭에서 만들 수 있어. 일정을 입력하고 시계 버튼을 누른 다음 반복을 선택하면 돼.',
+        'repeat_schedule_delete' =>
+          '반복 일정은 일정 탭에서 해당 일정을 누르고 삭제하기를 선택하면 돼. 반복으로 등록된 같은 일정이 함께 삭제돼.',
+        'repeat_schedule_edit' => '반복 일정 수정은 일정 탭에서 해당 일정을 눌러서 하면 돼. 바로 열어줄게.',
         _ => '${base(' 화면에 있어. 바로 열어줄게.')}',
       },
     };

@@ -512,6 +512,11 @@ class TasksScreenController {
         '삭제할 항목을 찾는 중 문제가 생겼어요. 잠시 후 다시 시도해 주세요.';
   }
 
+  Future<String> handleEditCommand(Map<String, dynamic> command) async {
+    return await _state?._handleEditCommandFromChat(command) ??
+        '수정할 항목을 찾는 중 문제가 생겼어요. 잠시 후 다시 시도해 주세요.';
+  }
+
   void resetTodayDateSelection() {
     _state?._resetTodayDateSelection();
   }
@@ -853,18 +858,20 @@ class _TasksScreenState extends State<TasksScreen>
     final kind = (command['kind'] ?? 'task_or_schedule').toString();
     final dateKey = command['date']?.toString();
     final targetDate = dateKey == null ? null : DateTime.tryParse(dateKey);
-    if (target.isEmpty) return '삭제할 항목명을 함께 말해 주세요.';
+    if (target.isEmpty) {
+      return _deleteCommandReply('emptyTarget', target);
+    }
 
     if (kind == 'habit') {
       _openTab(3);
       final found = habits.where((h) => _titleMatches(h.name, target)).toList();
       if (found.isEmpty) {
-        return '습관 탭을 열어둘게요. "$target" 습관은 못 찾았으니 이름을 한 번 확인해 주세요.';
+        return _deleteCommandReply('habitNotFound', target);
       }
       if (found.length > 1) {
-        return '습관 탭을 열어둘게요. "$target"와 비슷한 습관이 여러 개라서 직접 확인 후 삭제해 주세요.';
+        return _deleteCommandReply('habitMultiple', target);
       }
-      return '습관 탭을 열어둘게요. "$target" 항목의 휴지통 버튼으로 삭제해 주세요.';
+      return _deleteCommandReply('habitOpened', target);
     }
 
     if (kind == 'recurring_schedule') {
@@ -874,27 +881,26 @@ class _TasksScreenState extends State<TasksScreen>
         recurringOnly: true,
       );
       if (matches.isEmpty) {
-        final dateLabel = targetDate == null
-            ? ''
-            : '${targetDate.month}월 ${targetDate.day}일에 ';
-        return '${dateLabel}"$target" 반복 일정은 못 찾았어요. 날짜나 이름을 한 번 확인해 주세요.';
+        _openTab(2);
+        return _deleteCommandReply(
+          'recurringNotFound',
+          target,
+          date: targetDate,
+        );
       }
       if (matches.length > 1) {
-        return '"$target"와 비슷한 반복 일정이 여러 개 있어요. 날짜나 이름을 조금 더 구체적으로 말해 주세요.';
+        return _deleteCommandReply('recurringMultiple', target);
       }
       await _openScheduleDeleteMatch(matches.first, recurring: true);
-      return '"$target" 반복 일정의 삭제 확인창을 열어둘게요.';
+      return _deleteCommandReply('recurringOpened', target);
     }
 
     final matches = _findTaskAndScheduleMatches(target, dateKey: dateKey);
     if (matches.isEmpty) {
-      final dateLabel = targetDate == null
-          ? ''
-          : '${targetDate.month}월 ${targetDate.day}일에 ';
-      return '${dateLabel}"$target"로 등록된 할 일이나 일정을 못 찾았어요. 날짜나 이름을 한 번 확인해 주세요.';
+      return _deleteCommandReply('notFound', target, date: targetDate);
     }
     if (matches.length > 1) {
-      return '"$target"와 비슷한 항목이 여러 개 있어요. 날짜나 이름을 조금 더 구체적으로 말해 주세요.';
+      return _deleteCommandReply('multiple', target);
     }
 
     final match = matches.first;
@@ -906,7 +912,260 @@ class _TasksScreenState extends State<TasksScreen>
     } else {
       await _openScheduleDeleteMatch(match, recurring: false);
     }
-    return '"$target" 항목을 찾아뒀어요. 확인 후 삭제하거나 날짜를 바꿔 주세요.';
+    return _deleteCommandReply('opened', target);
+  }
+
+  Future<String> _handleEditCommandFromChat(
+    Map<String, dynamic> command,
+  ) async {
+    if (!await _hasActivePlan()) {
+      return '할 일, 일정 관리는 Friends 또는 Master 플랜에서 이용할 수 있어요.';
+    }
+    final target = (command['target'] ?? '').toString().trim();
+    final kind = (command['kind'] ?? 'task_or_schedule').toString();
+    final dateKey = command['date']?.toString();
+    final targetDate = dateKey == null ? null : DateTime.tryParse(dateKey);
+    if (target.isEmpty) {
+      return _editCommandReply('emptyTarget', target);
+    }
+
+    final matches = kind == 'recurring_schedule'
+        ? _findScheduleMatches(target, dateKey: dateKey, recurringOnly: true)
+        : _findTaskAndScheduleMatches(target, dateKey: dateKey);
+    if (matches.isEmpty) {
+      _openTab(2);
+      return _editCommandReply(
+        kind == 'recurring_schedule' ? 'recurringNotFound' : 'notFound',
+        target,
+        date: targetDate,
+      );
+    }
+    if (matches.length > 1) {
+      return _editCommandReply(
+        kind == 'recurring_schedule' ? 'recurringMultiple' : 'multiple',
+        target,
+      );
+    }
+
+    final match = matches.first;
+    if (match['type'] == 'task') {
+      await _openTaskEditMatch(
+        match['task'] as TaskItem,
+        dateKey: match['dateKey'] as String?,
+      );
+    } else {
+      await _openScheduleEditMatch(match);
+    }
+    return _editCommandReply(
+      kind == 'recurring_schedule' ? 'recurringOpened' : 'opened',
+      target,
+    );
+  }
+
+  String _deleteCommandReply(String key, String target, {DateTime? date}) {
+    final quoted = target.isEmpty ? '항목' : '"$target"';
+    final datePrefix = date == null ? '' : '${date.month}월 ${date.day}일에 ';
+    switch (widget.coachId) {
+      case 'boyfriend':
+        return switch (key) {
+          'emptyTarget' => '어떤 걸 삭제할지 이름까지 같이 말해줘.',
+          'habitNotFound' => '습관 탭은 열어둘게. $quoted 습관은 못 찾았으니까 이름 한번만 확인해줘.',
+          'habitMultiple' => '습관 탭은 열어둘게. $quoted 비슷한 게 여러 개라 직접 보고 지워줘.',
+          'habitOpened' => '습관 탭 열어둘게. $quoted 옆 휴지통 버튼으로 확인하고 삭제해줘.',
+          'recurringNotFound' =>
+            '$datePrefix$quoted 반복 일정은 못 찾았어. 날짜나 이름 한번만 확인해줘.',
+          'recurringMultiple' =>
+            '$quoted 비슷한 반복 일정이 여러 개야. 날짜나 이름을 조금만 더 정확히 말해줘.',
+          'recurringOpened' => '$quoted 반복 일정 삭제 확인창 열어둘게. 마지막으로 확인만 해줘.',
+          'notFound' => '$datePrefix$quoted로 등록된 할 일이나 일정은 못 찾았어. 이름 한번만 확인해줘.',
+          'multiple' => '$quoted 비슷한 항목이 여러 개야. 날짜나 이름을 조금만 더 정확히 말해줘.',
+          _ => '$quoted 찾아뒀어. 확인하고 삭제하거나 날짜를 바꿔줘.',
+        };
+      case 'girlfriend':
+        return switch (key) {
+          'emptyTarget' => '오빠, 어떤 걸 삭제할지 이름까지 같이 말해줘.',
+          'habitNotFound' => '오빠, 습관 탭은 열어둘게. $quoted 습관은 못 찾았으니까 이름 한번 확인해줘.',
+          'habitMultiple' => '오빠, 습관 탭은 열어둘게. $quoted 비슷한 게 여러 개라 직접 보고 지워줘.',
+          'habitOpened' => '오빠, 습관 탭 열어둘게. $quoted 옆 휴지통 버튼으로 확인하고 삭제해줘.',
+          'recurringNotFound' =>
+            '오빠, $datePrefix$quoted 반복 일정은 못 찾았어. 날짜나 이름 한번 확인해줘.',
+          'recurringMultiple' => '오빠, $quoted 비슷한 반복 일정이 여러 개야. 조금만 더 정확히 말해줘.',
+          'recurringOpened' => '오빠, $quoted 반복 일정 삭제 확인창 열어둘게. 마지막으로 확인해줘.',
+          'notFound' =>
+            '오빠, $datePrefix$quoted로 등록된 할 일이나 일정은 못 찾았어. 이름 한번 확인해줘.',
+          'multiple' => '오빠, $quoted 비슷한 항목이 여러 개야. 조금만 더 정확히 말해줘.',
+          _ => '오빠, $quoted 찾아뒀어. 확인하고 삭제하거나 날짜를 바꿔줘.',
+        };
+      case 'bro':
+        return switch (key) {
+          'emptyTarget' => '뭘 삭제할지 이름까지 같이 말해라.',
+          'habitNotFound' => '습관 탭은 열어둔다. $quoted 습관은 안 보이니까 이름 확인해라.',
+          'habitMultiple' => '습관 탭은 열어둔다. $quoted 비슷한 게 여러 개니까 직접 보고 지워라.',
+          'habitOpened' => '습관 탭 열어둔다. $quoted 옆 휴지통 눌러서 확인하고 삭제해라.',
+          'recurringNotFound' =>
+            '$datePrefix$quoted 반복 일정은 안 보인다. 날짜나 이름 확인해라.',
+          'recurringMultiple' => '$quoted 비슷한 반복 일정이 여러 개다. 날짜나 이름 더 정확히 말해라.',
+          'recurringOpened' => '$quoted 반복 일정 삭제 확인창 열어뒀다. 확인하고 지워라.',
+          'notFound' => '$datePrefix$quoted로 등록된 할 일이나 일정은 안 보인다. 이름 확인해라.',
+          'multiple' => '$quoted 비슷한 항목이 여러 개다. 날짜나 이름 더 정확히 말해라.',
+          _ => '$quoted 찾아뒀다. 확인하고 삭제하거나 날짜 바꿔라.',
+        };
+      case 'halmae':
+        return switch (key) {
+          'emptyTarget' => '뭘 지울지 이름까지 말해줘야 한다, 우리 새끼.',
+          'habitNotFound' => '습관 탭은 열어둘게. $quoted 습관은 못 찾았으니 이름을 다시 봐라.',
+          'habitMultiple' => '습관 탭은 열어둘게. $quoted 비슷한 게 여러 개니 네가 보고 지워라.',
+          'habitOpened' => '습관 탭 열어둘게. $quoted 옆 휴지통 버튼 눌러서 확인하고 지워라.',
+          'recurringNotFound' =>
+            '$datePrefix$quoted 반복 일정은 못 찾았다. 날짜나 이름을 다시 봐라.',
+          'recurringMultiple' => '$quoted 비슷한 반복 일정이 여러 개다. 조금 더 똑바로 말해줘야 한다.',
+          'recurringOpened' => '$quoted 반복 일정 삭제 확인창 열어뒀다. 마지막으로 보고 지워라.',
+          'notFound' => '$datePrefix$quoted로 등록된 할 일이나 일정은 못 찾았다. 이름을 다시 봐라.',
+          'multiple' => '$quoted 비슷한 항목이 여러 개다. 조금 더 자세히 말해줘라.',
+          _ => '$quoted 찾아뒀다. 확인하고 지우든 날짜를 바꾸든 해라.',
+        };
+      case 'sec_male':
+        return switch (key) {
+          'emptyTarget' => '삭제할 항목명을 함께 말씀해 주세요.',
+          'habitNotFound' =>
+            '습관 탭을 열어두겠습니다. $quoted 습관은 찾지 못했습니다. 항목명을 확인해 주세요.',
+          'habitMultiple' =>
+            '습관 탭을 열어두겠습니다. $quoted와 유사한 습관이 여러 개라 직접 확인 후 삭제해 주세요.',
+          'habitOpened' => '습관 탭을 열어두겠습니다. $quoted 항목의 휴지통 버튼으로 확인 후 삭제해 주세요.',
+          'recurringNotFound' =>
+            '$datePrefix$quoted 반복 일정은 찾지 못했습니다. 날짜나 항목명을 확인해 주세요.',
+          'recurringMultiple' =>
+            '$quoted와 유사한 반복 일정이 여러 개입니다. 날짜나 항목명을 더 구체적으로 말씀해 주세요.',
+          'recurringOpened' => '$quoted 반복 일정 삭제 확인창을 열어두겠습니다. 최종 확인을 부탁드립니다.',
+          'notFound' =>
+            '$datePrefix$quoted로 등록된 할 일이나 일정은 찾지 못했습니다. 항목명을 확인해 주세요.',
+          'multiple' => '$quoted와 유사한 항목이 여러 개입니다. 날짜나 항목명을 더 구체적으로 말씀해 주세요.',
+          _ => '$quoted 항목을 찾아두었습니다. 확인 후 삭제하거나 날짜를 변경해 주세요.',
+        };
+      case 'sec_female':
+        return switch (key) {
+          'emptyTarget' => '삭제할 항목명을 함께 말씀해 주세요.',
+          'habitNotFound' => '습관 탭을 열어둘게요. $quoted 습관은 찾지 못했어요. 항목명을 확인해 주세요.',
+          'habitMultiple' =>
+            '습관 탭을 열어둘게요. $quoted와 비슷한 습관이 여러 개라 직접 확인 후 삭제해 주세요.',
+          'habitOpened' => '습관 탭을 열어둘게요. $quoted 항목의 휴지통 버튼으로 확인 후 삭제해 주세요.',
+          'recurringNotFound' =>
+            '$datePrefix$quoted 반복 일정은 찾지 못했어요. 날짜나 항목명을 확인해 주세요.',
+          'recurringMultiple' =>
+            '$quoted와 비슷한 반복 일정이 여러 개예요. 날짜나 항목명을 더 구체적으로 말씀해 주세요.',
+          'recurringOpened' => '$quoted 반복 일정 삭제 확인창을 열어둘게요. 최종 확인을 부탁드려요.',
+          'notFound' =>
+            '$datePrefix$quoted로 등록된 할 일이나 일정은 찾지 못했어요. 항목명을 확인해 주세요.',
+          'multiple' => '$quoted와 비슷한 항목이 여러 개예요. 날짜나 항목명을 더 구체적으로 말씀해 주세요.',
+          _ => '$quoted 항목을 찾아두었어요. 확인 후 삭제하거나 날짜를 변경해 주세요.',
+        };
+      default:
+        return switch (key) {
+          'emptyTarget' => '어떤 걸 삭제할지 이름까지 같이 말해달라냥.',
+          'habitNotFound' => '습관 탭을 열어둘게냥. $quoted 습관은 못 찾았다냥. 이름을 확인해달라냥.',
+          'habitMultiple' => '습관 탭을 열어둘게냥. $quoted 비슷한 게 여러 개라 직접 보고 삭제해달라냥.',
+          'habitOpened' => '습관 탭 열어둘게냥. $quoted 옆 휴지통 버튼으로 확인하고 삭제해달라냥.',
+          'recurringNotFound' =>
+            '$datePrefix$quoted 반복 일정은 못 찾았다냥. 날짜나 이름을 확인해달라냥.',
+          'recurringMultiple' =>
+            '$quoted 비슷한 반복 일정이 여러 개다냥. 날짜나 이름을 더 정확히 말해달라냥.',
+          'recurringOpened' => '$quoted 반복 일정 삭제 확인창을 열어둘게냥. 마지막으로 확인해달라냥.',
+          'notFound' => '$datePrefix$quoted로 등록된 할 일이나 일정은 못 찾았다냥. 이름을 확인해달라냥.',
+          'multiple' => '$quoted 비슷한 항목이 여러 개다냥. 날짜나 이름을 더 정확히 말해달라냥.',
+          _ => '$quoted 항목을 찾아뒀다냥. 확인 후 삭제하거나 날짜를 바꿔달라냥.',
+        };
+    }
+  }
+
+  String _editCommandReply(String key, String target, {DateTime? date}) {
+    final quoted = target.isEmpty ? '항목' : '"$target"';
+    final datePrefix = date == null ? '' : '${date.month}월 ${date.day}일에 ';
+    switch (widget.coachId) {
+      case 'boyfriend':
+        return switch (key) {
+          'emptyTarget' => '어떤 일정을 수정할지 이름까지 같이 말해줘.',
+          'recurringNotFound' =>
+            '$datePrefix$quoted 반복 일정은 못 찾았어. 일정 탭에서 한번 확인해줘.',
+          'recurringMultiple' =>
+            '$quoted 비슷한 반복 일정이 여러 개야. 날짜나 이름을 조금만 더 정확히 말해줘.',
+          'recurringOpened' => '$quoted 반복 일정 수정창 열어둘게. 바꿀 내용은 확인해서 직접 조정해줘.',
+          'notFound' => '$datePrefix$quoted 항목은 못 찾았어. 일정 탭에서 한번 확인해줘.',
+          'multiple' => '$quoted 비슷한 항목이 여러 개야. 날짜나 이름을 조금만 더 정확히 말해줘.',
+          _ => '$quoted 수정창 열어둘게. 바꿀 내용은 확인해서 직접 조정해줘.',
+        };
+      case 'girlfriend':
+        return switch (key) {
+          'emptyTarget' => '오빠, 어떤 일정을 수정할지 이름까지 같이 말해줘.',
+          'recurringNotFound' =>
+            '오빠, $datePrefix$quoted 반복 일정은 못 찾았어. 일정 탭에서 한번 확인해줘.',
+          'recurringMultiple' => '오빠, $quoted 비슷한 반복 일정이 여러 개야. 조금만 더 정확히 말해줘.',
+          'recurringOpened' =>
+            '오빠, $quoted 반복 일정 수정창 열어둘게. 바꿀 내용은 직접 확인해서 조정해줘.',
+          'notFound' => '오빠, $datePrefix$quoted 항목은 못 찾았어. 일정 탭에서 한번 확인해줘.',
+          'multiple' => '오빠, $quoted 비슷한 항목이 여러 개야. 조금만 더 정확히 말해줘.',
+          _ => '오빠, $quoted 수정창 열어둘게. 바꿀 내용은 직접 확인해서 조정해줘.',
+        };
+      case 'bro':
+        return switch (key) {
+          'emptyTarget' => '뭘 수정할지 이름까지 같이 말해라.',
+          'recurringNotFound' =>
+            '$datePrefix$quoted 반복 일정은 안 보인다. 일정 탭에서 확인해라.',
+          'recurringMultiple' => '$quoted 비슷한 반복 일정이 여러 개다. 날짜나 이름 더 정확히 말해라.',
+          'recurringOpened' => '$quoted 반복 일정 수정창 열어뒀다. 바꿀 건 직접 보고 조정해라.',
+          'notFound' => '$datePrefix$quoted 항목은 안 보인다. 일정 탭에서 확인해라.',
+          'multiple' => '$quoted 비슷한 항목이 여러 개다. 날짜나 이름 더 정확히 말해라.',
+          _ => '$quoted 수정창 열어뒀다. 바꿀 건 직접 보고 조정해라.',
+        };
+      case 'halmae':
+        return switch (key) {
+          'emptyTarget' => '뭘 고칠지 이름까지 말해줘야 한다, 우리 새끼.',
+          'recurringNotFound' =>
+            '$datePrefix$quoted 반복 일정은 못 찾았다. 일정 탭에서 다시 봐라.',
+          'recurringMultiple' => '$quoted 비슷한 반복 일정이 여러 개다. 조금 더 자세히 말해줘라.',
+          'recurringOpened' => '$quoted 반복 일정 수정창 열어뒀다. 바꿀 건 네가 보고 고쳐라.',
+          'notFound' => '$datePrefix$quoted 항목은 못 찾았다. 일정 탭에서 다시 봐라.',
+          'multiple' => '$quoted 비슷한 항목이 여러 개다. 조금 더 자세히 말해줘라.',
+          _ => '$quoted 수정창 열어뒀다. 바꿀 건 네가 보고 고쳐라.',
+        };
+      case 'sec_male':
+        return switch (key) {
+          'emptyTarget' => '수정할 항목명을 함께 말씀해 주세요.',
+          'recurringNotFound' =>
+            '$datePrefix$quoted 반복 일정은 찾지 못했습니다. 일정 탭에서 확인해 주세요.',
+          'recurringMultiple' =>
+            '$quoted와 유사한 반복 일정이 여러 개입니다. 날짜나 항목명을 더 구체적으로 말씀해 주세요.',
+          'recurringOpened' =>
+            '$quoted 반복 일정 수정창을 열어두었습니다. 변경 내용은 확인 후 조정해 주세요.',
+          'notFound' => '$datePrefix$quoted 항목은 찾지 못했습니다. 일정 탭에서 확인해 주세요.',
+          'multiple' => '$quoted와 유사한 항목이 여러 개입니다. 날짜나 항목명을 더 구체적으로 말씀해 주세요.',
+          _ => '$quoted 수정창을 열어두었습니다. 변경 내용은 확인 후 조정해 주세요.',
+        };
+      case 'sec_female':
+        return switch (key) {
+          'emptyTarget' => '수정할 항목명을 함께 말씀해 주세요.',
+          'recurringNotFound' =>
+            '$datePrefix$quoted 반복 일정은 찾지 못했어요. 일정 탭에서 확인해 주세요.',
+          'recurringMultiple' =>
+            '$quoted와 비슷한 반복 일정이 여러 개예요. 날짜나 항목명을 더 구체적으로 말씀해 주세요.',
+          'recurringOpened' =>
+            '$quoted 반복 일정 수정창을 열어두었어요. 변경 내용은 확인 후 조정해 주세요.',
+          'notFound' => '$datePrefix$quoted 항목은 찾지 못했어요. 일정 탭에서 확인해 주세요.',
+          'multiple' => '$quoted와 비슷한 항목이 여러 개예요. 날짜나 항목명을 더 구체적으로 말씀해 주세요.',
+          _ => '$quoted 수정창을 열어두었어요. 변경 내용은 확인 후 조정해 주세요.',
+        };
+      default:
+        return switch (key) {
+          'emptyTarget' => '어떤 일정을 수정할지 이름까지 같이 말해달라냥.',
+          'recurringNotFound' =>
+            '$datePrefix$quoted 반복 일정은 못 찾았다냥. 일정 탭에서 확인해달라냥.',
+          'recurringMultiple' =>
+            '$quoted 비슷한 반복 일정이 여러 개다냥. 날짜나 이름을 더 정확히 말해달라냥.',
+          'recurringOpened' => '$quoted 반복 일정 수정창 열어둘게냥. 바꿀 내용은 확인해서 조정해달라냥.',
+          'notFound' => '$datePrefix$quoted 항목은 못 찾았다냥. 일정 탭에서 확인해달라냥.',
+          'multiple' => '$quoted 비슷한 항목이 여러 개다냥. 날짜나 이름을 더 정확히 말해달라냥.',
+          _ => '$quoted 수정창 열어둘게냥. 바꿀 내용은 확인해서 조정해달라냥.',
+        };
+    }
   }
 
   String _normalizeDeleteMatchText(String value) {
@@ -995,6 +1254,34 @@ class _TasksScreenState extends State<TasksScreen>
     await _showTaskDeleteOptions(task);
   }
 
+  Future<void> _openTaskEditMatch(TaskItem task, {String? dateKey}) async {
+    final targetDate = dateKey == null ? null : DateTime.tryParse(dateKey);
+    _openTab(0);
+    if (targetDate != null) {
+      setState(() {
+        _selectedTodayDate = targetDate;
+      });
+    }
+    await Future.delayed(const Duration(milliseconds: 360));
+    if (!mounted) return;
+    _showEditItemModal(task, () {
+      setState(() {
+        final cIdx = coreTasks.indexWhere((ct) => ct.id == task.id);
+        if (cIdx != -1) {
+          coreTasks[cIdx].time = task.time;
+          coreTasks[cIdx].timeStart = task.timeStart;
+          coreTasks[cIdx].timeEnd = task.timeEnd;
+          coreTasks[cIdx].duration = task.duration;
+          coreTasks[cIdx].text = task.text;
+          coreTasks[cIdx].isReminderEnabled = task.isReminderEnabled;
+        }
+      });
+      _saveTasks();
+      _saveCoreTasks();
+      if (task.category == 'schedule') _saveSchedules();
+    });
+  }
+
   Future<void> _openScheduleDeleteMatch(
     Map<String, dynamic> match, {
     required bool recurring,
@@ -1013,6 +1300,36 @@ class _TasksScreenState extends State<TasksScreen>
       await _deleteRecurringScheduleItem(schedule);
       return;
     }
+    _showEditItemModal(
+      schedule,
+      () {
+        setState(() {});
+        _saveSchedules();
+      },
+      onDelete: () {
+        setState(() {
+          final daySchedules = schedules[dateKey];
+          daySchedules?.removeWhere((s) => s.id == schedule.id);
+          if (daySchedules != null && daySchedules.isEmpty) {
+            schedules.remove(dateKey);
+          }
+        });
+        _saveSchedules();
+      },
+    );
+  }
+
+  Future<void> _openScheduleEditMatch(Map<String, dynamic> match) async {
+    final schedule = match['schedule'] as ScheduleItem;
+    final dateKey = match['dateKey'] as String;
+    final targetDate = DateTime.tryParse(dateKey) ?? DateTime.now();
+    setState(() {
+      _calSelectedDay = targetDate;
+      _calFocusedDay = targetDate;
+    });
+    _openTab(2);
+    await Future.delayed(const Duration(milliseconds: 360));
+    if (!mounted) return;
     _showEditItemModal(
       schedule,
       () {
@@ -9016,6 +9333,7 @@ class _TasksScreenState extends State<TasksScreen>
       RegExp(r'\s*(?:할\s*건데|할건데|할\s*건대|할\s*거야|할거야|할게|하려고|하려구|할래|할\s*래|하기)$'),
       '',
     );
+    cleaned = cleaned.replaceAll(RegExp(r'\s*(?:일정|스케줄)$'), '');
     cleaned = cleaned.replaceAll(RegExp(r'\s+'), ' ').trim();
     cleaned = cleaned.replaceFirst(RegExp(r'(?:을|를|은|는|이|가)$'), '').trim();
     return cleaned;

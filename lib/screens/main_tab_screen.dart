@@ -646,6 +646,20 @@ class _MainTabScreenState extends State<MainTabScreen>
     return _tasksController.handleDeleteCommand(command);
   }
 
+  Future<String> _handleEditCommandFromChat(
+    Map<String, dynamic> command,
+  ) async {
+    setState(() {
+      _openDrawerIndex = 1;
+      _widgetIntentDrawerMode = false;
+    });
+    await Future.delayed(const Duration(milliseconds: 320));
+    if (!mounted) {
+      return '수정할 항목을 찾는 중 문제가 생겼어요. 잠시 후 다시 시도해 주세요.';
+    }
+    return _tasksController.handleEditCommand(command);
+  }
+
   Future<void> _showWidgetTasksOverlay(String? initialBottomSheet) async {
     if (_isWidgetTasksOverlayOpen) return;
     _isWidgetTasksOverlayOpen = true;
@@ -1194,6 +1208,7 @@ class _MainTabScreenState extends State<MainTabScreen>
       onOpenFeatureLocation: _openFeatureLocationFromChat,
       onRegisterHabit: _registerHabitFromChat,
       onDeleteCommand: _handleDeleteCommandFromChat,
+      onEditCommand: _handleEditCommandFromChat,
       onSwitchCoach: _switchCoachFromChat,
       onVacationChanged: () {
         _loadVacation();
