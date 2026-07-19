@@ -5074,17 +5074,21 @@ class _TasksScreenState extends State<TasksScreen>
                                 vertical: 10,
                               ),
                               decoration: BoxDecoration(
-                                color: const Color(0xFFF0EFFF),
+                                color: _coach.accentColor.withValues(
+                                  alpha: 0.10,
+                                ),
                                 borderRadius: BorderRadius.circular(10),
                                 border: Border.all(
-                                  color: const Color(0xFFD8D0FA),
+                                  color: _coach.accentColor.withValues(
+                                    alpha: 0.25,
+                                  ),
                                 ),
                               ),
                               child: Row(
                                 children: [
-                                  const Icon(
+                                  Icon(
                                     Icons.flag,
-                                    color: Color(0xFF8B7CFF),
+                                    color: _coach.accentColor,
                                     size: 16,
                                   ),
                                   const SizedBox(width: 8),
@@ -5093,7 +5097,7 @@ class _TasksScreenState extends State<TasksScreen>
                                       text: TextSpan(
                                         style: GoogleFonts.notoSansKr(
                                           fontSize: 12,
-                                          color: const Color(0xFF5A50E6),
+                                          color: _coach.accentColor,
                                         ),
                                         children: [
                                           TextSpan(
@@ -5113,9 +5117,9 @@ class _TasksScreenState extends State<TasksScreen>
                                       ),
                                     ),
                                   ),
-                                  const Icon(
+                                  Icon(
                                     Icons.chevron_right,
-                                    color: Color(0xFF8B7CFF),
+                                    color: _coach.accentColor,
                                     size: 16,
                                   ),
                                 ],
@@ -6733,6 +6737,7 @@ class _TasksScreenState extends State<TasksScreen>
     final emptyIcon = type == 'week'
         ? 'assets/icons/calendar-week.svg'
         : 'assets/icons/bullseye.svg';
+    final emptyIconColor = _coach.accentColor;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -6750,16 +6755,18 @@ class _TasksScreenState extends State<TasksScreen>
                     height: 50,
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF5F3FF),
+                      color: emptyIconColor.withValues(alpha: 0.10),
                       shape: BoxShape.circle,
-                      border: Border.all(color: const Color(0xFFE8E3F8)),
+                      border: Border.all(
+                        color: emptyIconColor.withValues(alpha: 0.18),
+                      ),
                     ),
                     child: SvgPicture.asset(
                       emptyIcon,
                       width: 24,
                       height: 24,
-                      colorFilter: const ColorFilter.mode(
-                        Color(0xFF9B8CFF),
+                      colorFilter: ColorFilter.mode(
+                        emptyIconColor,
                         BlendMode.srcIn,
                       ),
                     ),
@@ -10156,7 +10163,7 @@ class _TasksScreenState extends State<TasksScreen>
                     ? Icons.diamond
                     : Icons.flag,
                 size: 10,
-                color: const Color(0xFFC084FC), // 연보라색
+                color: _coach.accentColor,
               ),
             ),
           if (hasEvents)
@@ -10430,18 +10437,17 @@ class _TasksScreenState extends State<TasksScreen>
             itemBuilder: (ctx, i) {
               final m = dayMilestones[i];
               final isDone = m.milestone.done;
+              final milestoneColor = _coach.accentColor;
               return Container(
                 margin: const EdgeInsets.only(bottom: 8),
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: isDone
-                      ? const Color(0xFFF8FCFA)
-                      : const Color(0xFFF3F0FF),
+                  color: milestoneColor.withValues(alpha: isDone ? 0.06 : 0.10),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color: isDone
-                        ? const Color(0xFFDFF8EE)
-                        : const Color(0xFFD8D0FA),
+                    color: milestoneColor.withValues(
+                      alpha: isDone ? 0.18 : 0.28,
+                    ),
                   ),
                 ),
                 child: Stack(
@@ -10468,13 +10474,9 @@ class _TasksScreenState extends State<TasksScreen>
                             height: 28,
                             alignment: Alignment.center,
                             decoration: BoxDecoration(
-                              color: isDone
-                                  ? const Color(0xFF5AD7B0)
-                                  : Colors.white,
+                              color: isDone ? milestoneColor : Colors.white,
                               border: Border.all(
-                                color: isDone
-                                    ? const Color(0xFF5AD7B0)
-                                    : const Color(0xFF8B7CFF),
+                                color: milestoneColor,
                                 width: 1.5,
                               ),
                               borderRadius: BorderRadius.circular(8),
@@ -10485,9 +10487,9 @@ class _TasksScreenState extends State<TasksScreen>
                                     color: Colors.white,
                                     size: 16,
                                   )
-                                : const Icon(
+                                : Icon(
                                     Icons.flag,
-                                    color: Color(0xFF8B7CFF),
+                                    color: milestoneColor,
                                     size: 16,
                                   ),
                           ),
@@ -10616,7 +10618,7 @@ class _TasksScreenState extends State<TasksScreen>
                               vertical: 2,
                             ),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFE0E0FF),
+                              color: _coach.accentColor.withValues(alpha: 0.12),
                               borderRadius: BorderRadius.circular(4),
                             ),
                             child: Text(
@@ -10626,7 +10628,7 @@ class _TasksScreenState extends State<TasksScreen>
                               style: GoogleFonts.notoSansKr(
                                 fontSize: 9,
                                 fontWeight: FontWeight.bold,
-                                color: const Color(0xFF5A50E6),
+                                color: _coach.accentColor,
                               ),
                             ),
                           ),
