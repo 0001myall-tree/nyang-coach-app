@@ -101,22 +101,22 @@ struct NyangCharacterWidgetView: View {
     private func makeMetrics(for size: CGSize) -> Metrics {
         let clampedWidth = max(size.width, 280)
         let isComplete = min(max(entry.progress, 0), 100) == 100
-        let baseImageWidth = min(max(clampedWidth * 0.40, 140), isComplete ? 178 : 166)
-        let imageWidth = clampedWidth < 330 ? min(baseImageWidth, 150) : baseImageWidth
+        let baseImageWidth = min(max(clampedWidth * 0.60, 210), isComplete ? 267 : 249)
+        let imageWidth = clampedWidth < 330 ? min(baseImageWidth, 225) : baseImageWidth
         let imageHeight = imageWidth * 0.73
-        let textTrailing = min(max(imageWidth * 0.72, 108), 140)
+        let textTrailing = min(max(imageWidth * 0.58, 126), 160)
         let compact = clampedWidth < 330
 
         return Metrics(
-            textLeading: compact ? 24 : 32,
+            textLeading: compact ? 22 : 30,
             textTrailing: textTrailing,
             imageWidth: imageWidth,
             imageHeight: imageHeight,
-            imageTrailing: compact ? 10 : 16,
-            imageCenterYRatio: 0.52,
-            checkSize: compact ? 34 : 40,
-            checkTrailing: compact ? 13 : 18,
-            checkCenterYRatio: 0.64,
+            imageTrailing: compact ? -2 : 0,
+            imageCenterYRatio: 0.55,
+            checkSize: compact ? 32 : 38,
+            checkTrailing: compact ? 8 : 12,
+            checkCenterYRatio: 0.70,
             timeFontSize: compact ? 18 : 20,
             titleFontSize: compact ? 16 : 18
         )
@@ -142,7 +142,13 @@ struct NyangCharacterWidgetView: View {
 
                 ZStack(alignment: .bottomTrailing) {
                     HStack {
-                        widgetText(timeFontSize: metrics.timeFontSize, titleFontSize: metrics.titleFontSize)
+                        VStack(alignment: .leading, spacing: 14) {
+                            widgetText(
+                                timeFontSize: metrics.timeFontSize,
+                                titleFontSize: metrics.titleFontSize
+                            )
+                            scheduleButton
+                        }
                             .padding(.leading, metrics.textLeading)
                             .padding(.trailing, metrics.textTrailing)
                             .frame(maxHeight: .infinity, alignment: .center)
@@ -238,6 +244,33 @@ struct NyangCharacterWidgetView: View {
             }
         }
     }
+
+    private var scheduleButton: some View {
+        HStack(spacing: 9) {
+            Text("+")
+                .font(.system(size: 24, weight: .regular, design: .rounded))
+                .offset(y: -1)
+
+            Text("일정 보기")
+                .font(.system(size: 18, weight: .bold, design: .rounded))
+                .lineLimit(1)
+                .minimumScaleFactor(0.82)
+
+            Text("›")
+                .font(.system(size: 28, weight: .bold, design: .rounded))
+                .offset(y: -1)
+        }
+        .foregroundColor(.white)
+        .frame(width: 146, height: 40)
+        .background(
+            RoundedRectangle(cornerRadius: 15, style: .continuous)
+                .stroke(Color.white.opacity(0.36), lineWidth: 1.6)
+                .background(
+                    RoundedRectangle(cornerRadius: 15, style: .continuous)
+                        .fill(Color.white.opacity(0.06))
+                )
+        )
+    }
 }
 
 struct NyangCompactWidgetView: View {
@@ -279,7 +312,7 @@ struct NyangCompactWidgetView: View {
                 let imageSize = min(proxy.size.width * 0.96, imageAreaHeight)
                 let imageCenterY = topPadding + imageSize / 2
 
-                Image(catImageName)
+                Image(catImageName, bundle: .main)
                     .renderingMode(.original)
                     .interpolation(.high)
                     .resizable()

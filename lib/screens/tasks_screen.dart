@@ -5121,9 +5121,9 @@ class _TasksScreenState extends State<TasksScreen>
                                 ),
                               ),
                               child: Text(
-                                '삭제하기',
+                                '삭제/날짜 ↻',
                                 style: GoogleFonts.notoSansKr(
-                                  fontSize: 16,
+                                  fontSize: 15,
                                   fontWeight: FontWeight.w800,
                                   color: _coach.accentColor.withOpacity(0.82),
                                 ),
@@ -9792,42 +9792,6 @@ class _TasksScreenState extends State<TasksScreen>
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Row(
-                                    children: [
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 6,
-                                          vertical: 2,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFFE0E0FF),
-                                          borderRadius: BorderRadius.circular(
-                                            4,
-                                          ),
-                                        ),
-                                        child: Text(
-                                          '마일스톤',
-                                          style: GoogleFonts.notoSansKr(
-                                            fontSize: 9,
-                                            fontWeight: FontWeight.bold,
-                                            color: const Color(0xFF5A50E6),
-                                          ),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 6),
-                                      Expanded(
-                                        child: Text(
-                                          m.vision.name,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: GoogleFonts.notoSansKr(
-                                            fontSize: 11,
-                                            color: const Color(0xFF7C6EFA),
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 2),
                                   Text(
                                     m.milestone.text.isNotEmpty
                                         ? m.milestone.text
@@ -9839,29 +9803,6 @@ class _TasksScreenState extends State<TasksScreen>
                                       decoration: TextDecoration.none,
                                     ),
                                   ),
-                                  if ((m.milestone.memo != null &&
-                                          m.milestone.memo!.isNotEmpty) ||
-                                      (m.milestone.memoSections != null &&
-                                          m
-                                              .milestone
-                                              .memoSections!
-                                              .isNotEmpty) ||
-                                      (m.milestone.actionCandidates != null &&
-                                          m
-                                              .milestone
-                                              .actionCandidates!
-                                              .isNotEmpty)) ...[
-                                    const SizedBox(height: 6),
-                                    MilestoneMemoDisplayWidget(
-                                      milestone: m.milestone,
-                                      style: GoogleFonts.notoSansKr(
-                                        fontSize: 12,
-                                        color: const Color(0xFF6B7280),
-                                        height: 1.5,
-                                      ),
-                                      maxLines: 1,
-                                    ),
-                                  ],
                                 ],
                               ),
                             ),
