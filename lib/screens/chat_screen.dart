@@ -30,6 +30,7 @@ import 'cat_preview/cat_onboarding_preview_screen.dart';
 import '../models/user_data.dart';
 import '../theme/app_design_tokens.dart';
 import '../widgets/app_chip.dart';
+import '../widgets/core_reminder_settings_sheet.dart';
 import '../widgets/plan_guide_bottom_sheet.dart';
 
 // ─────────────────────────────────────────────────────────────
@@ -2992,13 +2993,13 @@ class _ChatScreenState extends State<ChatScreen>
 
   String _habitRegistrationReply(String habitName) {
     return switch (widget.coachId) {
-      'boyfriend' => '$habitName, 습관 탭에 매일 30분으로 등록해뒀어.',
-      'girlfriend' => '오빠, $habitName 습관 탭에 매일 30분으로 등록해뒀어 🩷',
-      'bro' => '$habitName 습관 탭에 매일 30분으로 박아뒀다.',
-      'halmae' => '$habitName, 습관 탭에 매일 30분으로 넣어뒀다.',
-      'sec_male' => '$habitName 항목을 습관 탭에 매일 30분 기준으로 등록했습니다.',
-      'sec_female' => '$habitName 항목을 습관 탭에 매일 30분 기준으로 등록해두었습니다.',
-      _ => '$habitName 습관을 매일 30분으로 등록했다냥.',
+      'boyfriend' => '$habitName, 습관 탭에 임의로 적어뒀어. 자세한 사항은 한번 확인해줘.',
+      'girlfriend' => '오빠, $habitName 습관 탭에 임의로 적어뒀어. 자세한 사항은 한번 확인해줘.',
+      'bro' => '$habitName 습관 탭에 일단 적어뒀다. 자세한 사항은 한번 확인해라.',
+      'halmae' => '$habitName, 습관 탭에 임의로 적어뒀다. 자세한 사항은 잘 확인해라.',
+      'sec_male' => '$habitName 항목을 습관 탭에 임의로 기록해두었습니다. 자세한 사항은 확인해 주세요.',
+      'sec_female' => '$habitName 항목을 습관 탭에 임의로 기록해두었습니다. 자세한 사항은 확인해 주세요.',
+      _ => '$habitName 습관을 습관 탭에 임의로 적어뒀다냥. 자세한 사항은 확인해달라냥.',
     };
   }
 
@@ -3373,19 +3374,6 @@ class _ChatScreenState extends State<ChatScreen>
                     const SizedBox(height: 16),
                     GestureDetector(
                       onTap: () async {
-                        if (!reminderEnabled) {
-                          final enabled =
-                              prefs.getBool('nyang_core_reminder_enabled') ??
-                              false;
-                          if (!enabled) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('설정에서 일정 알람을 먼저 켜주세요.'),
-                              ),
-                            );
-                            return;
-                          }
-                        }
                         if (confirmedTime == null) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
@@ -3393,6 +3381,19 @@ class _ChatScreenState extends State<ChatScreen>
                             ),
                           );
                           return;
+                        }
+                        if (!reminderEnabled) {
+                          final enabled =
+                              prefs.getBool('nyang_core_reminder_enabled') ??
+                              false;
+                          if (!enabled) {
+                            final savedEnabled =
+                                await showCoreReminderSettingsSheet(context);
+                            final refreshedEnabled =
+                                prefs.getBool('nyang_core_reminder_enabled') ??
+                                false;
+                            if (!savedEnabled || !refreshedEnabled) return;
+                          }
                         }
                         setDialogState(
                           () => reminderEnabled = !reminderEnabled,

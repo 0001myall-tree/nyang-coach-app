@@ -28,6 +28,7 @@ import '../services/api_usage_limit_service.dart';
 import '../services/widget_sync_service.dart';
 import '../services/daily_reset_service.dart';
 import '../theme/app_design_tokens.dart';
+import '../widgets/core_reminder_settings_sheet.dart';
 
 // ─────────────────────────────────────────────────────────────
 // 데이터 모델 (웹앱 그대로)
@@ -774,6 +775,14 @@ class _TasksScreenState extends State<TasksScreen>
     return enabled;
   }
 
+  Future<bool> _ensureCoreReminderEnabledFromHere() async {
+    final enabled = await _checkCoreReminderEnabledGlobally();
+    if (enabled) return true;
+    final savedEnabled = await showCoreReminderSettingsSheet(context);
+    if (!savedEnabled) return false;
+    return _checkCoreReminderEnabledGlobally();
+  }
+
   void _openBottomSheet(String type) {
     if (type == 'done') {
       _showTasksBottomSheet(title: '오늘 완료한 할 일', showDone: true);
@@ -820,7 +829,11 @@ class _TasksScreenState extends State<TasksScreen>
     if (!mounted) return true;
     Future.delayed(const Duration(milliseconds: 360), () {
       if (!mounted) return;
-      _showHabitModal(context, editHabit: habit);
+      _showHabitModal(
+        context,
+        editHabit: habit,
+        guideText: _habitRegistrationGuideText(),
+      );
     });
     return true;
   }
@@ -2729,16 +2742,8 @@ class _TasksScreenState extends State<TasksScreen>
                         child: GestureDetector(
                           onTap: () async {
                             final enabled =
-                                await _checkCoreReminderEnabledGlobally();
-                            if (!enabled) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('설정에서 일정 알람을 켜주세요.'),
-                                  duration: Duration(seconds: 2),
-                                ),
-                              );
-                              return;
-                            }
+                                await _ensureCoreReminderEnabledFromHere();
+                            if (!enabled) return;
                             setModalState(
                               () => moveReminderEnabled = !moveReminderEnabled,
                             );
@@ -3206,21 +3211,18 @@ class _TasksScreenState extends State<TasksScreen>
           ),
           GestureDetector(
             onTap: () async {
-              final enabled = await _checkCoreReminderEnabledGlobally();
-              if (!enabled || c.time == null) {
+              if (c.time == null) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      enabled
-                          ? '시간이 지정된 일정만 리마인더를 받을 수 있습니다.'
-                          : '설정에서 일정 알람을 켜주세요.',
-                    ),
+                  const SnackBar(
+                    content: Text('시간이 지정된 일정만 리마인더를 받을 수 있습니다.'),
                     duration: const Duration(seconds: 2),
                     backgroundColor: const Color(0xFF1A1A2E),
                   ),
                 );
                 return;
               }
+              final enabled = await _ensureCoreReminderEnabledFromHere();
+              if (!enabled) return;
               setState(() {
                 c.isReminderEnabled = !c.isReminderEnabled;
               });
@@ -3504,17 +3506,13 @@ class _TasksScreenState extends State<TasksScreen>
                                   if (isSelected)
                                     GestureDetector(
                                       onTap: () async {
-                                        final enabled =
-                                            await _checkCoreReminderEnabledGlobally();
-                                        if (!enabled || t.time == null) {
+                                        if (t.time == null) {
                                           ScaffoldMessenger.of(
                                             context,
                                           ).showSnackBar(
-                                            SnackBar(
+                                            const SnackBar(
                                               content: Text(
-                                                enabled
-                                                    ? '시간이 지정된 일정만 리마인더를 받을 수 있습니다.'
-                                                    : '설정에서 일정 알람을 켜주세요.',
+                                                '시간이 지정된 일정만 리마인더를 받을 수 있습니다.',
                                               ),
                                               duration: const Duration(
                                                 seconds: 2,
@@ -3526,6 +3524,9 @@ class _TasksScreenState extends State<TasksScreen>
                                           );
                                           return;
                                         }
+                                        final enabled =
+                                            await _ensureCoreReminderEnabledFromHere();
+                                        if (!enabled) return;
                                         setModalState(() {
                                           t.isReminderEnabled =
                                               !t.isReminderEnabled;
@@ -4840,21 +4841,13 @@ class _TasksScreenState extends State<TasksScreen>
                           if (isScheduleItem || item is TaskItem)
                             GestureDetector(
                               onTap: () async {
-                                final enabled =
-                                    await _checkCoreReminderEnabledGlobally();
-                                if (!enabled) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text('설정에서 일정 알람을 켜주세요.'),
-                                      duration: Duration(seconds: 2),
-                                    ),
-                                  );
-                                  return;
-                                }
                                 if (mStartTime == null) {
                                   _showSelectTimeBeforeReminderSnackBar();
                                   return;
                                 }
+                                final enabled =
+                                    await _ensureCoreReminderEnabledFromHere();
+                                if (!enabled) return;
                                 setModalState(
                                   () => mReminderEnabled = !mReminderEnabled,
                                 );
@@ -5100,6 +5093,18 @@ class _TasksScreenState extends State<TasksScreen>
                           child: GestureDetector(
                             onTap: () {
                               Navigator.pop(ctx);
+                              final shouldDeleteRecurring =
+                                  isScheduleItem && item.isRecurring ||
+                                  item is TaskItem &&
+                                      _isRecurringScheduleTask(item);
+                              if (shouldDeleteRecurring) {
+                                Future.microtask(() {
+                                  if (mounted) {
+                                    _deleteRecurringScheduleItem(item);
+                                  }
+                                });
+                                return;
+                              }
                               if (onDelete != null) {
                                 onDelete();
                                 return;
@@ -5121,7 +5126,11 @@ class _TasksScreenState extends State<TasksScreen>
                                 ),
                               ),
                               child: Text(
-                                '삭제/날짜 ↻',
+                                (isScheduleItem && item.isRecurring ||
+                                        item is TaskItem &&
+                                            _isRecurringScheduleTask(item))
+                                    ? '삭제하기'
+                                    : '삭제 / 날짜 ↻',
                                 style: GoogleFonts.notoSansKr(
                                   fontSize: 15,
                                   fontWeight: FontWeight.w800,
@@ -5148,6 +5157,132 @@ class _TasksScreenState extends State<TasksScreen>
     final scheduleId = task.id.toString().replaceAll('schedule_', '');
     final daySchedules = schedules[_activeTodayDateKey] ?? [];
     return daySchedules.any((s) => s.id == scheduleId && s.isRecurring);
+  }
+
+  ScheduleItem? _scheduleItemForTask(TaskItem task) {
+    if (task.category != 'schedule') return null;
+    final scheduleId = task.id.toString().replaceAll('schedule_', '');
+    final activeDayMatch = schedules[_activeTodayDateKey]?.where(
+      (s) => s.id == scheduleId,
+    );
+    if (activeDayMatch != null && activeDayMatch.isNotEmpty) {
+      return activeDayMatch.first;
+    }
+    for (final daySchedules in schedules.values) {
+      for (final schedule in daySchedules) {
+        if (schedule.id == scheduleId) return schedule;
+      }
+    }
+    return null;
+  }
+
+  Future<void> _deleteRecurringScheduleItem(dynamic item) async {
+    final ScheduleItem? source = item is ScheduleItem
+        ? item
+        : item is TaskItem
+        ? _scheduleItemForTask(item)
+        : null;
+    if (source == null || !source.isRecurring) return;
+
+    final confirm =
+        await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) {
+            return AlertDialog(
+              title: Text(
+                '반복 일정 삭제',
+                style: GoogleFonts.notoSansKr(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                  color: const Color(0xFF3D3A4E),
+                ),
+              ),
+              content: Text(
+                '정말 삭제하시겠습니까?\n반복으로 등록된 같은 일정이 모두 삭제됩니다.',
+                style: GoogleFonts.notoSansKr(
+                  fontSize: 14,
+                  color: const Color(0xFF6B7280),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext, false),
+                  child: Text(
+                    '아니오',
+                    style: GoogleFonts.notoSansKr(
+                      color: const Color(0xFF9593A5),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext, true),
+                  child: Text(
+                    '예',
+                    style: GoogleFonts.notoSansKr(
+                      color: Colors.red,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        ) ??
+        false;
+    if (!confirm) return;
+
+    final recurrenceGroupId = source.recurrenceGroupId;
+    final removedScheduleIds = <String>{};
+
+    setState(() {
+      final emptyDateKeys = <String>[];
+      schedules.forEach((dateKey, daySchedules) {
+        daySchedules.removeWhere((schedule) {
+          final shouldRemove = recurrenceGroupId != null
+              ? schedule.recurrenceGroupId == recurrenceGroupId
+              : schedule.id == source.id;
+          if (shouldRemove) removedScheduleIds.add(schedule.id);
+          return shouldRemove;
+        });
+        if (daySchedules.isEmpty) emptyDateKeys.add(dateKey);
+      });
+      for (final dateKey in emptyDateKeys) {
+        schedules.remove(dateKey);
+      }
+
+      bool isRemovedScheduleTask(TaskItem task) =>
+          task.category == 'schedule' &&
+          removedScheduleIds.contains(
+            task.id.toString().replaceAll('schedule_', ''),
+          );
+
+      tasks.removeWhere(isRemovedScheduleTask);
+      coreTasks.removeWhere(isRemovedScheduleTask);
+      _activeTodayTasks.removeWhere(isRemovedScheduleTask);
+    });
+
+    await _saveSchedules();
+    await _persistTaskCollectionsAfterScheduleDelete();
+  }
+
+  Future<void> _persistTaskCollectionsAfterScheduleDelete() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      'nyang_tasks',
+      jsonEncode(tasks.map((t) => t.toJson()).toList()),
+    );
+    await prefs.setString(
+      'nyang_core_tasks',
+      jsonEncode(coreTasks.map((t) => t.toJson()).toList()),
+    );
+    if (_isViewingActualToday) {
+      await _saveTodayRecord();
+      await WidgetSyncService.syncFromStoredTasks();
+    }
+    NotificationService().syncCoreReminders();
+    widget.onProgressChanged?.call();
+    TasksSyncService.scheduleSyncToCloud();
   }
 
   Widget _buildTaskItem(TaskItem t) {
@@ -5696,23 +5831,13 @@ class _TasksScreenState extends State<TasksScreen>
                                   const SizedBox(width: 8),
                                   GestureDetector(
                                     onTap: () async {
-                                      final enabled =
-                                          await _checkCoreReminderEnabledGlobally();
-                                      if (!enabled) {
-                                        ScaffoldMessenger.of(
-                                          context,
-                                        ).showSnackBar(
-                                          const SnackBar(
-                                            content: Text('설정에서 일정 알람을 켜주세요.'),
-                                            duration: Duration(seconds: 2),
-                                          ),
-                                        );
-                                        return;
-                                      }
                                       if (_todayStartTime == null) {
                                         _showSelectTimeBeforeReminderSnackBar();
                                         return;
                                       }
+                                      final enabled =
+                                          await _ensureCoreReminderEnabledFromHere();
+                                      if (!enabled) return;
                                       setState(
                                         () => _todayReminderEnabled =
                                             !_todayReminderEnabled,
@@ -9091,21 +9216,14 @@ class _TasksScreenState extends State<TasksScreen>
                     // Alarm Toggle Button
                     GestureDetector(
                       onTap: () async {
-                        if (!isReminderEnabled) {
-                          final globalEnabled =
-                              await _checkCoreReminderEnabledGlobally();
-                          if (!globalEnabled) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('설정에서 일정 알람을 먼저 켜주세요.'),
-                              ),
-                            );
-                            return;
-                          }
-                        }
                         if (confirmedTime == null) {
                           _showSelectTimeBeforeReminderSnackBar();
                           return;
+                        }
+                        if (!isReminderEnabled) {
+                          final globalEnabled =
+                              await _ensureCoreReminderEnabledFromHere();
+                          if (!globalEnabled) return;
                         }
                         setDialogState(
                           () => isReminderEnabled = !isReminderEnabled,
@@ -10774,21 +10892,13 @@ class _TasksScreenState extends State<TasksScreen>
                             const SizedBox(width: 8),
                             GestureDetector(
                               onTap: () async {
-                                final enabled =
-                                    await _checkCoreReminderEnabledGlobally();
-                                if (!enabled) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text('설정에서 일정 알람을 켜주세요.'),
-                                      duration: Duration(seconds: 2),
-                                    ),
-                                  );
-                                  return;
-                                }
                                 if (_schStartTime == null) {
                                   _showSelectTimeBeforeReminderSnackBar();
                                   return;
                                 }
+                                final enabled =
+                                    await _ensureCoreReminderEnabledFromHere();
+                                if (!enabled) return;
                                 updateOptions(
                                   () => _schReminderEnabled =
                                       !_schReminderEnabled,
@@ -11265,10 +11375,30 @@ class _TasksScreenState extends State<TasksScreen>
     _injectTodayHabits();
   }
 
+  String _habitRegistrationGuideText() {
+    switch (widget.coachId) {
+      case 'boyfriend':
+        return '일단 매일 30분 기준으로 적어뒀어. 세부사항은 한번 확인하고 너한테 맞게 조정해줘.';
+      case 'girlfriend':
+        return '일단 매일 30분 기준으로 적어뒀어. 세부사항은 한번 보고 편한 대로 조정해줘.';
+      case 'bro':
+        return '일단 매일 30분 기준으로 잡아뒀다. 세부사항은 한번 보고 너한테 맞게 손봐라.';
+      case 'halmae':
+        return '일단 매일 30분 기준으로 적어뒀다. 세부사항은 잘 보고 네 생활에 맞게 고쳐라.';
+      case 'sec_male':
+        return '일단 매일 30분 기준으로 기록해두었습니다. 세부사항을 확인하신 뒤 필요에 맞게 조정해 주세요.';
+      case 'sec_female':
+        return '일단 매일 30분 기준으로 기록해두었습니다. 세부사항을 확인하신 뒤 편하신 방식으로 조정해 주세요.';
+      default:
+        return '일단 매일 30분 기준으로 적어뒀다냥. 세부사항은 잘 보고 맞게 조정해달라냥.';
+    }
+  }
+
   // ── 습관 추가 모달 (웹앱 openHabitModal 이식) ────────────
   Future<void> _showHabitModal(
     BuildContext context, {
     HabitItem? editHabit,
+    String? guideText,
   }) async {
     if (!await _ensurePlanForTaskInput()) return;
     final nameCtrl = TextEditingController(text: editHabit?.name ?? '');
@@ -11361,6 +11491,32 @@ class _TasksScreenState extends State<TasksScreen>
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      if (guideText != null) ...[
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 12,
+                          ),
+                          decoration: BoxDecoration(
+                            color: _coach.accentColor.withOpacity(0.08),
+                            border: Border.all(
+                              color: _coach.accentColor.withOpacity(0.18),
+                            ),
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: Text(
+                            guideText,
+                            style: GoogleFonts.notoSansKr(
+                              fontSize: 13,
+                              height: 1.45,
+                              fontWeight: FontWeight.w700,
+                              color: const Color(0xFF3D3A4E),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 18),
+                      ],
                       // 습관 이름
                       _modalLabel('습관 이름'),
                       Material(
@@ -11623,16 +11779,8 @@ class _TasksScreenState extends State<TasksScreen>
                               GestureDetector(
                                 onTap: () async {
                                   final enabled =
-                                      await _checkCoreReminderEnabledGlobally();
-                                  if (!enabled) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                        content: Text('설정에서 일정 알람을 켜주세요.'),
-                                        duration: Duration(seconds: 2),
-                                      ),
-                                    );
-                                    return;
-                                  }
+                                      await _ensureCoreReminderEnabledFromHere();
+                                  if (!enabled) return;
                                   setModalState(
                                     () => mReminderEnabled = !mReminderEnabled,
                                   );
