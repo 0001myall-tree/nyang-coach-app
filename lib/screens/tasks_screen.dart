@@ -3204,6 +3204,7 @@ class _TasksScreenState extends State<TasksScreen>
                         },
                         calendarStyle: CalendarStyle(
                           markerSize: 4,
+                          markersMaxCount: 1,
                           markerDecoration: BoxDecoration(
                             color: _coach.accentColor,
                             shape: BoxShape.circle,
@@ -10332,6 +10333,8 @@ class _TasksScreenState extends State<TasksScreen>
                       isToday: false,
                       isOutside: true,
                     ),
+                markerBuilder: (context, day, events) =>
+                    const SizedBox.shrink(),
               ),
               calendarStyle: CalendarStyle(
                 cellMargin: const EdgeInsets.all(2),
