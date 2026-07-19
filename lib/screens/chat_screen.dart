@@ -3249,19 +3249,11 @@ class _ChatScreenState extends State<ChatScreen>
     cleaned = repeatParse.text;
     final repeatRule = repeatParse.rule;
 
-    final lastWeekdayRegex = RegExp(r'이번\s*달\s+마지막\s+([월화수목금토일])(?:요일)?');
-    final lastWeekdayMatch = lastWeekdayRegex.firstMatch(cleaned);
-    if (lastWeekdayMatch != null) {
-      final targetWeekday = _weekdayFromKorean(lastWeekdayMatch.group(1)!);
-      if (targetWeekday != -1) {
-        var date = DateTime(parsedDate.year, parsedDate.month + 1, 0);
-        while (date.weekday != targetWeekday) {
-          date = date.subtract(const Duration(days: 1));
-        }
-        parsedDate = date;
-        hasDate = true;
-        cleaned = cleaned.replaceFirst(lastWeekdayMatch.group(0)!, '').trim();
-      }
+    final nthWeekdayDate = _parseMonthNthWeekdayDate(cleaned);
+    if (nthWeekdayDate != null) {
+      parsedDate = nthWeekdayDate.date;
+      hasDate = true;
+      cleaned = cleaned.replaceFirst(nthWeekdayDate.matchedText, '').trim();
     }
 
     if (!hasDate) {
@@ -3383,6 +3375,94 @@ class _ChatScreenState extends State<ChatScreen>
     if (value.contains('토')) return DateTime.saturday;
     if (value.contains('일')) return DateTime.sunday;
     return -1;
+  }
+
+  int _monthOffsetFromKorean(String value) {
+    final compact = value.replaceAll(RegExp(r'\s'), '');
+    return switch (compact) {
+      '이번달' => 0,
+      '다음달' => 1,
+      '다다음달' => 2,
+      _ => 0,
+    };
+  }
+
+  int _nthFromKorean(String value) {
+    final compact = value.replaceAll(RegExp(r'\s'), '');
+    return switch (compact) {
+      '첫째' || '첫' || '1째' || '1번째' => 1,
+      '둘째' || '두번째' || '2째' || '2번째' => 2,
+      '셋째' || '세번째' || '3째' || '3번째' => 3,
+      '넷째' || '네번째' || '4째' || '4번째' => 4,
+      '다섯째' || '다섯번째' || '5째' || '5번째' => 5,
+      '마지막' || '마지막째' => -1,
+      _ => 1,
+    };
+  }
+
+  String _nthLabelFromValue(int nth) {
+    return switch (nth) {
+      1 => '첫째',
+      2 => '둘째',
+      3 => '셋째',
+      4 => '넷째',
+      5 => '다섯째',
+      -1 => '마지막',
+      _ => '$nth째',
+    };
+  }
+
+  DateTime _lastWeekdayOfMonth(int year, int month, int weekday) {
+    var date = DateTime(year, month + 1, 0);
+    while (date.weekday != weekday) {
+      date = date.subtract(const Duration(days: 1));
+    }
+    return date;
+  }
+
+  DateTime _monthNthWeekdayDate(int year, int month, int nth, int weekday) {
+    if (nth == -1) return _lastWeekdayOfMonth(year, month, weekday);
+    return _nthWeekdayOfMonth(year, month, nth, weekday);
+  }
+
+  ({DateTime date, String matchedText, String label})?
+  _parseMonthNthWeekdayDate(String input) {
+    final regex = RegExp(
+      r'((?:이번|다음|다다음)\s*달|(?:\d{1,2})\s*월)\s*(첫째|첫|둘째|두번째|셋째|세번째|넷째|네번째|다섯째|다섯번째|마지막|마지막째|1째|1번째|2째|2번째|3째|3번째|4째|4번째|5째|5번째)\s*주\s*([월화수목금토일])(?:요일)?\s*(?:에|날)?',
+    );
+    final match = regex.firstMatch(input);
+    if (match == null) return null;
+
+    final monthText = match.group(1)!;
+    final nth = _nthFromKorean(match.group(2)!);
+    final weekday = _weekdayFromKorean(match.group(3)!);
+    if (weekday == -1) return null;
+
+    final today = DateTime.now();
+    late final int year;
+    late final int month;
+    final compactMonthText = monthText.replaceAll(RegExp(r'\s'), '');
+    final absoluteMonthMatch = RegExp(
+      r'^(\d{1,2})월$',
+    ).firstMatch(compactMonthText);
+    if (absoluteMonthMatch != null) {
+      month = int.tryParse(absoluteMonthMatch.group(1)!) ?? today.month;
+      if (month < 1 || month > 12) return null;
+      year = month < today.month ? today.year + 1 : today.year;
+    } else {
+      final monthOffset = _monthOffsetFromKorean(compactMonthText);
+      final monthStart = DateTime(today.year, today.month + monthOffset, 1);
+      year = monthStart.year;
+      month = monthStart.month;
+    }
+
+    final date = _monthNthWeekdayDate(year, month, nth, weekday);
+    final labelMonth = absoluteMonthMatch != null
+        ? '$month월'
+        : _relativeDateQuestionLabel(compactMonthText);
+    final label =
+        '$labelMonth ${_nthLabelFromValue(nth)} 주 ${_weekdayLabel(weekday)}요일';
+    return (date: date, matchedText: match.group(0)!, label: label);
   }
 
   ({String text, Map<String, dynamic>? rule}) _parseScheduleRepeatExpression(
@@ -3687,6 +3767,11 @@ class _ChatScreenState extends State<ChatScreen>
         final target = today.add(Duration(days: relative.offset));
         return '${relative.label}는 ${_fullKoreanDate(target)}입니다.';
       }
+    }
+
+    final nthWeekdayDate = _parseMonthNthWeekdayDate(normalized);
+    if (nthWeekdayDate != null) {
+      return '${nthWeekdayDate.label}은 ${_fullKoreanDate(nthWeekdayDate.date)}입니다.';
     }
 
     final weekMatch = RegExp(
