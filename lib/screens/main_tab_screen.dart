@@ -153,6 +153,7 @@ class _MainTabScreenState extends State<MainTabScreen>
   final TasksScreenController _tasksController = TasksScreenController();
   bool _coachAccessChecked = false;
   bool _widgetIntentDrawerMode = false;
+  bool _isWidgetTasksOverlayOpen = false;
   bool _redirectingForCoachAccess = false;
 
   int _logoTapCount = 0;
@@ -475,13 +476,7 @@ class _MainTabScreenState extends State<MainTabScreen>
     if (widget.openTasksOverlayOnStart) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
-        Navigator.of(context, rootNavigator: true).push(
-          MaterialPageRoute(
-            builder: (_) => _WidgetTasksOverlayScreen(
-              initialBottomSheet: widget.initialBottomSheet,
-            ),
-          ),
-        );
+        _showWidgetTasksOverlay(widget.initialBottomSheet);
       });
     }
 
@@ -637,6 +632,33 @@ class _MainTabScreenState extends State<MainTabScreen>
     return _tasksController.addHabitFromChat(name);
   }
 
+  Future<void> _showWidgetTasksOverlay(String? initialBottomSheet) async {
+    if (_isWidgetTasksOverlayOpen) return;
+    _isWidgetTasksOverlayOpen = true;
+
+    if (_openDrawerIndex != 0 || _widgetIntentDrawerMode) {
+      setState(() {
+        _openDrawerIndex = 0;
+        _widgetIntentDrawerMode = false;
+      });
+    }
+
+    await Navigator.of(context, rootNavigator: true).push(
+      MaterialPageRoute(
+        builder: (_) =>
+            _WidgetTasksOverlayScreen(initialBottomSheet: initialBottomSheet),
+      ),
+    );
+
+    _isWidgetTasksOverlayOpen = false;
+    if (!mounted) return;
+    setState(() {
+      _openDrawerIndex = 0;
+      _widgetIntentDrawerMode = false;
+    });
+    _chatController.refreshTaskProgress();
+  }
+
   Future<void> _checkWidgetIntent() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.reload();
@@ -673,11 +695,7 @@ class _MainTabScreenState extends State<MainTabScreen>
         // 위젯을 누르기 전에 있던 화면은 그대로 두고, 할 일 창을 그 위에
         // 겹쳐서 띄운다. 닫으면 원래 있던 화면이 그대로 다시 보인다.
         if (!mounted) return;
-        Navigator.of(context, rootNavigator: true).push(
-          MaterialPageRoute(
-            builder: (_) => _WidgetTasksOverlayScreen(initialBottomSheet: type),
-          ),
-        );
+        await _showWidgetTasksOverlay(type);
         return;
       }
 
