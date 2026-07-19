@@ -466,6 +466,9 @@ class _ChatScreenState extends State<ChatScreen>
   bool _isCheckingVisionRecommendationAllowance = false;
   bool _isCheckingNextActionAllowance = false;
 
+  Color get _accentButtonTextColor =>
+      _coach.id == 'sec_male' ? const Color(0xFF173A63) : Colors.white;
+
   // 냥냥코치 비구독자 무료체험 단계 (0=시작 전, 1=인트로 완료, 2=업셀 완료)
   int _catFreeTrialStep = 0;
   UserData _userData = UserData();
@@ -3855,7 +3858,15 @@ class _ChatScreenState extends State<ChatScreen>
                       children: [
                         Row(
                           children: [
-                            const Text('📌', style: TextStyle(fontSize: 16)),
+                            SvgPicture.asset(
+                              'assets/icons/thumbtack.svg',
+                              width: 15,
+                              height: 15,
+                              colorFilter: ColorFilter.mode(
+                                _coach.accentColor,
+                                BlendMode.srcIn,
+                              ),
+                            ),
                             const SizedBox(width: 6),
                             Text(
                               '일정 등록 제안',
@@ -3882,19 +3893,21 @@ class _ChatScreenState extends State<ChatScreen>
                               vertical: 8,
                             ),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFF5F3FF),
+                              color: _coach.accentColor.withValues(alpha: 0.10),
                               borderRadius: BorderRadius.circular(14),
                               border: Border.all(
-                                color: const Color(0xFFDDD6FE),
+                                color: _coach.accentColor.withValues(
+                                  alpha: 0.25,
+                                ),
                               ),
                             ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                const Icon(
+                                Icon(
                                   Icons.repeat_rounded,
                                   size: 14,
-                                  color: Color(0xFF8B7CFF),
+                                  color: _coach.accentColor,
                                 ),
                                 const SizedBox(width: 6),
                                 Text(
@@ -3902,7 +3915,7 @@ class _ChatScreenState extends State<ChatScreen>
                                   style: GoogleFonts.notoSansKr(
                                     fontSize: 13,
                                     fontWeight: FontWeight.bold,
-                                    color: const Color(0xFF8B7CFF),
+                                    color: _coach.accentColor,
                                   ),
                                 ),
                                 const SizedBox(width: 6),
@@ -3962,15 +3975,20 @@ class _ChatScreenState extends State<ChatScreen>
                               vertical: 8,
                             ),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFF3F4F6),
+                              color: _coach.accentColor.withValues(alpha: 0.08),
                               borderRadius: BorderRadius.circular(14),
                             ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                const Text(
-                                  '📅',
-                                  style: TextStyle(fontSize: 13),
+                                SvgPicture.asset(
+                                  'assets/icons/planner-calendar-days.svg',
+                                  width: 13,
+                                  height: 13,
+                                  colorFilter: ColorFilter.mode(
+                                    _coach.accentColor,
+                                    BlendMode.srcIn,
+                                  ),
                                 ),
                                 const SizedBox(width: 6),
                                 Text(
@@ -3978,7 +3996,7 @@ class _ChatScreenState extends State<ChatScreen>
                                   style: GoogleFonts.notoSansKr(
                                     fontSize: 13,
                                     fontWeight: FontWeight.bold,
-                                    color: const Color(0xFF4B5563),
+                                    color: _coach.accentColor,
                                   ),
                                 ),
                                 const SizedBox(width: 6),
@@ -4014,15 +4032,20 @@ class _ChatScreenState extends State<ChatScreen>
                               vertical: 8,
                             ),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFF5F3FF),
+                              color: _coach.accentColor.withValues(alpha: 0.10),
                               borderRadius: BorderRadius.circular(14),
                             ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                const Text(
-                                  '🕒',
-                                  style: TextStyle(fontSize: 13),
+                                SvgPicture.asset(
+                                  'assets/icons/fa-clock-regular.svg',
+                                  width: 13,
+                                  height: 13,
+                                  colorFilter: ColorFilter.mode(
+                                    _coach.accentColor,
+                                    BlendMode.srcIn,
+                                  ),
                                 ),
                                 const SizedBox(width: 6),
                                 Text(
@@ -4032,14 +4055,14 @@ class _ChatScreenState extends State<ChatScreen>
                                   style: GoogleFonts.notoSansKr(
                                     fontSize: 13,
                                     fontWeight: FontWeight.bold,
-                                    color: const Color(0xFF8B7CFF),
+                                    color: _coach.accentColor,
                                   ),
                                 ),
                                 const SizedBox(width: 6),
-                                const Icon(
+                                Icon(
                                   Icons.edit,
                                   size: 12,
-                                  color: Color(0xFF8B7CFF),
+                                  color: _coach.accentColor,
                                 ),
                               ],
                             ),
@@ -4084,21 +4107,31 @@ class _ChatScreenState extends State<ChatScreen>
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(20),
                           border: Border.all(
-                            color: const Color(0xFF1E1E2D),
+                            color: _coach.accentColor,
                             width: 1.5,
                           ),
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Text('🔔', style: TextStyle(fontSize: 13)),
+                            SvgPicture.asset(
+                              reminderEnabled
+                                  ? 'assets/icons/bell.svg'
+                                  : 'assets/icons/bell-slash.svg',
+                              width: 13,
+                              height: 13,
+                              colorFilter: ColorFilter.mode(
+                                _coach.accentColor,
+                                BlendMode.srcIn,
+                              ),
+                            ),
                             const SizedBox(width: 6),
                             Text(
                               reminderEnabled ? '알람 ON' : '알람 OFF',
                               style: GoogleFonts.notoSansKr(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w800,
-                                color: const Color(0xFF1E1E2D),
+                                color: _coach.accentColor,
                               ),
                             ),
                           ],
@@ -4111,8 +4144,8 @@ class _ChatScreenState extends State<ChatScreen>
                         Expanded(
                           child: ElevatedButton(
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF1E1E2D),
-                              foregroundColor: Colors.white,
+                              backgroundColor: _coach.accentColor,
+                              foregroundColor: _accentButtonTextColor,
                               padding: const EdgeInsets.symmetric(vertical: 14),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(16),
@@ -7627,13 +7660,25 @@ $timerOutputRule
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // 헤더
-            Text(
-              '📌 할 일로 추가할까요?',
-              style: GoogleFonts.notoSansKr(
-                fontSize: 10,
-                fontWeight: FontWeight.w800,
-                color: accent,
-              ),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SvgPicture.asset(
+                  'assets/icons/thumbtack.svg',
+                  width: 10,
+                  height: 10,
+                  colorFilter: ColorFilter.mode(accent, BlendMode.srcIn),
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  '할 일로 추가할까요?',
+                  style: GoogleFonts.notoSansKr(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    color: accent,
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 4),
             // 할 일 이름
@@ -7724,7 +7769,7 @@ $timerOutputRule
                           style: GoogleFonts.notoSansKr(
                             fontSize: 12,
                             fontWeight: FontWeight.w800,
-                            color: Colors.white,
+                            color: _accentButtonTextColor,
                           ),
                         ),
                       ),

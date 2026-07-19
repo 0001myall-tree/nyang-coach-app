@@ -52,6 +52,7 @@ class TaskItem {
   int? achievedCount;
   int? achievedDuration;
   int deferredCount;
+  String? source;
 
   TaskItem({
     required this.id,
@@ -70,6 +71,7 @@ class TaskItem {
     this.isReminderEnabled = true,
     this.completedAt,
     this.deferredCount = 0,
+    this.source,
   });
 
   Map<String, dynamic> toJson() => {
@@ -93,6 +95,7 @@ class TaskItem {
     if (achievedCount != null) 'achievedCount': achievedCount,
     if (achievedDuration != null) 'achievedDuration': achievedDuration,
     'deferredCount': deferredCount,
+    if (source != null) 'source': source,
   };
 
   factory TaskItem.fromJson(Map<String, dynamic> j) => TaskItem(
@@ -117,6 +120,7 @@ class TaskItem {
     isReminderEnabled: j['isReminderEnabled'] ?? true,
     completedAt: j['completedAt'],
     deferredCount: j['deferredCount'] ?? 0,
+    source: j['source']?.toString(),
   );
 }
 
@@ -547,6 +551,9 @@ class _TasksScreenState extends State<TasksScreen>
 
   late TabController _tabCtrl;
   late CoachConfig _coach;
+
+  Color get _accentButtonTextColor =>
+      _coach.id == 'sec_male' ? const Color(0xFF173A63) : Colors.white;
 
   // 데이터 (웹앱 변수 그대로)
   bool _isCoreReminderEnabledGlobally = false;
@@ -2092,6 +2099,26 @@ class _TasksScreenState extends State<TasksScreen>
         deferredCount: schedule.deferredCount,
       );
     }).toList();
+  }
+
+  bool _isInsightTask(TaskItem task) =>
+      task.source == 'insight' || _hasNyangInsightMarker(task.text);
+
+  bool _hasNyangInsightMarker(String text) {
+    return RegExp(
+      r'[\(\[]\s*냥\s*인사이트\s*[\)\]]',
+      caseSensitive: false,
+    ).hasMatch(text);
+  }
+
+  String _cleanInsightTaskTitle(String text) {
+    return text
+        .replaceAll(
+          RegExp(r'[\(\[]\s*냥\s*인사이트\s*[\)\]]', caseSensitive: false),
+          '',
+        )
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
   }
 
   List<TaskItem> get _activeTodayTasksWithSchedules {
@@ -4095,6 +4122,7 @@ class _TasksScreenState extends State<TasksScreen>
                             timeEnd: existing.timeEnd,
                             isHabit: existing.isHabit,
                             habitId: existing.habitId,
+                            source: existing.source,
                             done: existing.done,
                             isReminderEnabled: existing.isReminderEnabled,
                             createdAt: DateTime.now().toIso8601String(),
@@ -4972,7 +5000,11 @@ class _TasksScreenState extends State<TasksScreen>
     VoidCallback onSave, {
     VoidCallback? onDelete,
   }) {
-    final textCtrl = TextEditingController(text: item.text);
+    final wasInsightTask = item is TaskItem && _isInsightTask(item);
+    final initialText = wasInsightTask
+        ? _cleanInsightTaskTitle(item.text)
+        : item.text;
+    final textCtrl = TextEditingController(text: initialText);
 
     String mTimeType = 'none';
     TimeOfDay? mStartTime;
@@ -5572,6 +5604,9 @@ class _TasksScreenState extends State<TasksScreen>
                             }
 
                             item.text = text;
+                            if (wasInsightTask && item is TaskItem) {
+                              item.source = 'insight';
+                            }
                             item.time = null;
                             item.timeStart = null;
                             item.timeEnd = null;
@@ -5852,6 +5887,10 @@ class _TasksScreenState extends State<TasksScreen>
   Widget _buildTaskItem(TaskItem t) {
     final milestoneInfo = _getMilestoneInfoForTask(t);
     final isMilestone = milestoneInfo != null;
+    final isInsightTask = _isInsightTask(t);
+    final displayTitle = isInsightTask
+        ? _cleanInsightTaskTitle(t.text)
+        : t.text;
     final displayTime = _displayTimeFromStored(
       time: t.time,
       timeStart: t.timeStart,
@@ -5964,6 +6003,7 @@ class _TasksScreenState extends State<TasksScreen>
                           coreTasks[cIdx].timeEnd = t.timeEnd;
                           coreTasks[cIdx].duration = t.duration;
                           coreTasks[cIdx].text = t.text;
+                          coreTasks[cIdx].source = t.source;
                         }
 
                         // 오늘 탭에 주입된 일정 카드를 수정한 경우, 원본 ScheduleItem에도
@@ -6033,7 +6073,7 @@ class _TasksScreenState extends State<TasksScreen>
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Text(
-                                    t.text,
+                                    displayTitle,
                                     style: GoogleFonts.notoSansKr(
                                       fontSize: 14,
                                       fontWeight: FontWeight.w600,
@@ -6078,6 +6118,7 @@ class _TasksScreenState extends State<TasksScreen>
                             ),
                             if (t.inProgress ||
                                 t.isHabit ||
+                                isInsightTask ||
                                 isRecurringSchedule ||
                                 (isMilestone &&
                                     !milestoneInfo.isMilestoneSelf)) ...[
@@ -6149,6 +6190,34 @@ class _TasksScreenState extends State<TasksScreen>
                                             ),
                                           ),
                                         )
+                                      : isRecurringSchedule
+                                      ? const Icon(
+                                          Icons.repeat_rounded,
+                                          size: 19,
+                                          color: Color(0xFFA0A0B0),
+                                        )
+                                      : isInsightTask
+                                      ? Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 9,
+                                            vertical: 5,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: _coach.accentColor
+                                                .withValues(alpha: 0.1),
+                                            borderRadius: BorderRadius.circular(
+                                              8,
+                                            ),
+                                          ),
+                                          child: Text(
+                                            'insight',
+                                            style: GoogleFonts.notoSansKr(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w800,
+                                              color: _coach.accentColor,
+                                            ),
+                                          ),
+                                        )
                                       : isMilestone &&
                                             !milestoneInfo.isMilestoneSelf
                                       ? Container(
@@ -6171,11 +6240,7 @@ class _TasksScreenState extends State<TasksScreen>
                                             ),
                                           ),
                                         )
-                                      : const Icon(
-                                          Icons.repeat_rounded,
-                                          size: 19,
-                                          color: Color(0xFFA0A0B0),
-                                        ),
+                                      : const SizedBox.shrink(),
                                 ),
                               ),
                             ],
@@ -6938,6 +7003,7 @@ class _TasksScreenState extends State<TasksScreen>
   Widget _buildVisionSection() {
     final isAddVisionHighlighted =
         _highlightAddVisionButton && _highlightPulseOn;
+    final visionColor = _coach.accentColor;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -6948,18 +7014,14 @@ class _TasksScreenState extends State<TasksScreen>
             children: [
               Row(
                 children: [
-                  const Icon(
-                    Icons.star_border,
-                    color: Color(0xFF8B7CFF),
-                    size: 24,
-                  ),
+                  Icon(Icons.star_border, color: visionColor, size: 16),
                   const SizedBox(width: 8),
                   Text(
                     '장기 비전',
                     style: GoogleFonts.notoSansKr(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w900,
-                      color: const Color(0xFF3D3A4E),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                      color: visionColor,
                     ),
                   ),
                 ],
@@ -6980,21 +7042,19 @@ class _TasksScreenState extends State<TasksScreen>
                   ),
                   decoration: BoxDecoration(
                     color: isAddVisionHighlighted
-                        ? const Color(0xFFF5F3FF)
+                        ? visionColor.withValues(alpha: 0.10)
                         : Colors.white,
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(
                       color: isAddVisionHighlighted
-                          ? const Color(0xFF8B7CFF)
+                          ? visionColor
                           : const Color(0xFFE8E3F8),
                       width: isAddVisionHighlighted ? 1.6 : 1,
                     ),
                     boxShadow: [
                       if (isAddVisionHighlighted)
                         BoxShadow(
-                          color: const Color(
-                            0xFF8B7CFF,
-                          ).withValues(alpha: 0.22),
+                          color: visionColor.withValues(alpha: 0.22),
                           blurRadius: 14,
                           offset: const Offset(0, 4),
                         ),
@@ -7069,19 +7129,17 @@ class _TasksScreenState extends State<TasksScreen>
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
                     color: isHighlighted
-                        ? const Color(0xFFF5F3FF)
+                        ? visionColor.withValues(alpha: 0.10)
                         : Colors.white,
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(
-                      color: isHighlighted
-                          ? const Color(0xFF8B7CFF)
-                          : Colors.transparent,
+                      color: isHighlighted ? visionColor : Colors.transparent,
                       width: 1.6,
                     ),
                     boxShadow: [
                       BoxShadow(
                         color: isHighlighted
-                            ? const Color(0xFF8B7CFF).withOpacity(0.26)
+                            ? visionColor.withValues(alpha: 0.26)
                             : Colors.black.withOpacity(0.03),
                         blurRadius: isHighlighted ? 18 : 10,
                         offset: Offset(0, isHighlighted ? 6 : 4),
@@ -7098,17 +7156,17 @@ class _TasksScreenState extends State<TasksScreen>
                               v.name,
                               style: GoogleFonts.notoSansKr(
                                 fontSize: 16,
-                                fontWeight: FontWeight.w900,
+                                fontWeight: FontWeight.w600,
                                 color: const Color(0xFF3D3A4E),
                               ),
                             ),
                             const SizedBox(height: 8),
                             Row(
                               children: [
-                                const Icon(
+                                Icon(
                                   Icons.calendar_today_outlined,
                                   size: 14,
-                                  color: Color(0xFFA0A0B0),
+                                  color: visionColor,
                                 ),
                                 const SizedBox(width: 4),
                                 Container(
@@ -7117,7 +7175,7 @@ class _TasksScreenState extends State<TasksScreen>
                                     vertical: 2,
                                   ),
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFFF5F3FF),
+                                    color: visionColor.withValues(alpha: 0.10),
                                     borderRadius: BorderRadius.circular(6),
                                   ),
                                   child: Text(
@@ -7125,7 +7183,7 @@ class _TasksScreenState extends State<TasksScreen>
                                     style: GoogleFonts.notoSansKr(
                                       fontSize: 12,
                                       fontWeight: FontWeight.w700,
-                                      color: const Color(0xFF8B7CFF),
+                                      color: visionColor,
                                     ),
                                   ),
                                 ),
@@ -7297,10 +7355,11 @@ class _TasksScreenState extends State<TasksScreen>
               ).format(DateTime.now());
               final newTask = TaskItem(
                 id: DateTime.now().millisecondsSinceEpoch.toString(),
-                text: action.title,
+                text: _cleanInsightTaskTitle(action.title),
                 category: 'today',
                 done: false,
                 createdAt: todayStr,
+                source: 'insight',
               );
               setState(() {
                 tasks.add(newTask);
@@ -9619,7 +9678,15 @@ class _TasksScreenState extends State<TasksScreen>
                       children: [
                         Row(
                           children: [
-                            const Text('📌', style: TextStyle(fontSize: 16)),
+                            SvgPicture.asset(
+                              'assets/icons/thumbtack.svg',
+                              width: 15,
+                              height: 15,
+                              colorFilter: ColorFilter.mode(
+                                _coach.accentColor,
+                                BlendMode.srcIn,
+                              ),
+                            ),
                             const SizedBox(width: 6),
                             Text(
                               '일정 등록 제안',
@@ -9685,15 +9752,20 @@ class _TasksScreenState extends State<TasksScreen>
                               vertical: 8,
                             ),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFF3F4F6),
+                              color: _coach.accentColor.withValues(alpha: 0.08),
                               borderRadius: BorderRadius.circular(14),
                             ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                const Text(
-                                  '📅',
-                                  style: TextStyle(fontSize: 13),
+                                SvgPicture.asset(
+                                  'assets/icons/planner-calendar-days.svg',
+                                  width: 13,
+                                  height: 13,
+                                  colorFilter: ColorFilter.mode(
+                                    _coach.accentColor,
+                                    BlendMode.srcIn,
+                                  ),
                                 ),
                                 const SizedBox(width: 6),
                                 Text(
@@ -9701,7 +9773,7 @@ class _TasksScreenState extends State<TasksScreen>
                                   style: GoogleFonts.notoSansKr(
                                     fontSize: 13,
                                     fontWeight: FontWeight.bold,
-                                    color: const Color(0xFF4B5563),
+                                    color: _coach.accentColor,
                                   ),
                                 ),
                                 const SizedBox(width: 6),
@@ -9736,15 +9808,20 @@ class _TasksScreenState extends State<TasksScreen>
                               vertical: 8,
                             ),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFF5F3FF),
+                              color: _coach.accentColor.withValues(alpha: 0.10),
                               borderRadius: BorderRadius.circular(14),
                             ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                const Text(
-                                  '🕒',
-                                  style: TextStyle(fontSize: 13),
+                                SvgPicture.asset(
+                                  'assets/icons/fa-clock-regular.svg',
+                                  width: 13,
+                                  height: 13,
+                                  colorFilter: ColorFilter.mode(
+                                    _coach.accentColor,
+                                    BlendMode.srcIn,
+                                  ),
                                 ),
                                 const SizedBox(width: 6),
                                 Text(
@@ -9754,14 +9831,14 @@ class _TasksScreenState extends State<TasksScreen>
                                   style: GoogleFonts.notoSansKr(
                                     fontSize: 13,
                                     fontWeight: FontWeight.bold,
-                                    color: const Color(0xFF8B7CFF),
+                                    color: _coach.accentColor,
                                   ),
                                 ),
                                 const SizedBox(width: 6),
-                                const Icon(
+                                Icon(
                                   Icons.edit,
                                   size: 12,
-                                  color: Color(0xFF8B7CFF),
+                                  color: _coach.accentColor,
                                 ),
                               ],
                             ),
@@ -9774,10 +9851,12 @@ class _TasksScreenState extends State<TasksScreen>
                               vertical: 8,
                             ),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFF5F3FF),
+                              color: _coach.accentColor.withValues(alpha: 0.10),
                               borderRadius: BorderRadius.circular(14),
                               border: Border.all(
-                                color: const Color(0xFFD9D0FF),
+                                color: _coach.accentColor.withValues(
+                                  alpha: 0.25,
+                                ),
                               ),
                             ),
                             child: Row(
@@ -9839,21 +9918,31 @@ class _TasksScreenState extends State<TasksScreen>
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(20),
                           border: Border.all(
-                            color: const Color(0xFF1E1E2D),
+                            color: _coach.accentColor,
                             width: 1.5,
                           ),
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Text('🔔', style: TextStyle(fontSize: 13)),
+                            SvgPicture.asset(
+                              isReminderEnabled
+                                  ? 'assets/icons/bell.svg'
+                                  : 'assets/icons/bell-slash.svg',
+                              width: 13,
+                              height: 13,
+                              colorFilter: ColorFilter.mode(
+                                _coach.accentColor,
+                                BlendMode.srcIn,
+                              ),
+                            ),
                             const SizedBox(width: 6),
                             Text(
                               isReminderEnabled ? '알람 ON' : '알람 OFF',
                               style: GoogleFonts.notoSansKr(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w800,
-                                color: const Color(0xFF1E1E2D),
+                                color: _coach.accentColor,
                               ),
                             ),
                           ],
@@ -9867,8 +9956,8 @@ class _TasksScreenState extends State<TasksScreen>
                         Expanded(
                           child: ElevatedButton(
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF1E1E2D),
-                              foregroundColor: Colors.white,
+                              backgroundColor: _coach.accentColor,
+                              foregroundColor: _accentButtonTextColor,
                               padding: const EdgeInsets.symmetric(vertical: 14),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(16),

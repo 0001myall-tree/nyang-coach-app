@@ -1053,10 +1053,14 @@ ${feedbackType == 0
         children: [
           Row(
             children: [
-              const Icon(
-                Icons.view_week_rounded,
-                size: 18,
-                color: Color(0xFF3D3A4E),
+              SvgPicture.asset(
+                'assets/icons/chart-simple.svg',
+                width: 17,
+                height: 17,
+                colorFilter: ColorFilter.mode(
+                  _coach.accentColor,
+                  BlendMode.srcIn,
+                ),
               ),
               const SizedBox(width: 8),
               Text(
@@ -1159,7 +1163,15 @@ ${feedbackType == 0
             children: [
               Row(
                 children: [
-                  const Text('🌱', style: TextStyle(fontSize: 16)),
+                  SvgPicture.asset(
+                    'assets/icons/seedling.svg',
+                    width: 16,
+                    height: 16,
+                    colorFilter: ColorFilter.mode(
+                      _coach.accentColor,
+                      BlendMode.srcIn,
+                    ),
+                  ),
                   const SizedBox(width: 8),
                   Text(
                     '습관 트래킹',
@@ -1556,7 +1568,15 @@ ${feedbackType == 0
         children: [
           Row(
             children: [
-              const Text('🌱', style: TextStyle(fontSize: 14)),
+              SvgPicture.asset(
+                'assets/icons/seedling.svg',
+                width: 14,
+                height: 14,
+                colorFilter: ColorFilter.mode(
+                  _coach.accentColor,
+                  BlendMode.srcIn,
+                ),
+              ),
               const SizedBox(width: 6),
               Text(
                 '습관 패턴',
