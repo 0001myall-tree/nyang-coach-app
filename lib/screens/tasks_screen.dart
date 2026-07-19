@@ -4481,6 +4481,7 @@ class _TasksScreenState extends State<TasksScreen>
               ? null
               : Map<String, dynamic>.from(item.recurrenceRule!))
         : null;
+    bool timeOptionsExpanded = false;
 
     if (item.timeStart != null && item.timeEnd != null) {
       mTimeType = 'range';
@@ -4636,362 +4637,410 @@ class _TasksScreenState extends State<TasksScreen>
                     ),
                   ),
                   const SizedBox(height: 16),
-                  Builder(
-                    builder: (context) {
-                      final modeTypes = isScheduleItem
-                          ? ['single', 'duration', 'repeat']
-                          : ['single', 'duration'];
-                      const labels = {
-                        'single': '특정 시간',
-                        'duration': '소요 시간',
-                        'repeat': '반복',
-                      };
+                  GestureDetector(
+                    onTap: () => setModalState(
+                      () => timeOptionsExpanded = !timeOptionsExpanded,
+                    ),
+                    child: Builder(
+                      builder: (context) {
+                        final effectiveTimeType = _effectiveClockTimeType(
+                          mTimeType,
+                          mEndTime,
+                        );
+                        final hasClockTime =
+                            (effectiveTimeType == 'single' ||
+                                effectiveTimeType == 'range') &&
+                            mStartTime != null;
+                        final hasDuration =
+                            effectiveTimeType == 'duration' &&
+                            mDuration != null;
+                        final reminderActive = _resolvedTimeReminderEnabled(
+                          effectiveTimeType,
+                          mStartTime,
+                          mReminderEnabled,
+                        );
+                        final summary = hasClockTime
+                            ? (mEndTime != null
+                                  ? '${_formatTime(mStartTime!)} ~ ${_formatTime(mEndTime!)}'
+                                  : _formatTime(mStartTime!))
+                            : (hasDuration ? mDuration! : null);
 
-                      return Row(
-                        children: modeTypes.map((t) {
-                          final isRepeat = t == 'repeat';
-                          final isClockType =
-                              t == 'single' &&
-                              (mTimeType == 'single' || mTimeType == 'range');
-                          final isActive = isRepeat
-                              ? mRepeatEnabled
-                              : (isClockType || mTimeType == t);
-                          final isLast = t == modeTypes.last;
+                        return Container(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: summary == null ? 10 : 12,
+                            vertical: summary == null ? 8 : 10,
+                          ),
+                          decoration: BoxDecoration(
+                            color: summary == null
+                                ? Colors.transparent
+                                : const Color(0xFFF8F7FF),
+                            borderRadius: BorderRadius.circular(14),
+                            border: summary == null
+                                ? null
+                                : Border.all(color: const Color(0xFFE8E3F8)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              SvgPicture.asset(
+                                'assets/icons/fa-clock-regular.svg',
+                                width: 18,
+                                height: 18,
+                                colorFilter: ColorFilter.mode(
+                                  summary == null
+                                      ? const Color(0xFFB0B0C8)
+                                      : _coach.accentColor,
+                                  BlendMode.srcIn,
+                                ),
+                              ),
+                              if (summary != null) ...[
+                                const SizedBox(width: 7),
+                                Text(
+                                  summary,
+                                  style: GoogleFonts.notoSansKr(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w800,
+                                    color: const Color(0xFF3D3A4E),
+                                  ),
+                                ),
+                                if (hasClockTime) ...[
+                                  const SizedBox(width: 8),
+                                  SvgPicture.asset(
+                                    reminderActive
+                                        ? 'assets/icons/bell.svg'
+                                        : 'assets/icons/bell-slash.svg',
+                                    width: 16,
+                                    height: 16,
+                                    colorFilter: ColorFilter.mode(
+                                      reminderActive
+                                          ? _coach.accentColor
+                                          : const Color(0xFFB0B0C8),
+                                      BlendMode.srcIn,
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  if (timeOptionsExpanded) ...[
+                    const SizedBox(height: 12),
+                    Builder(
+                      builder: (context) {
+                        final modeTypes = isScheduleItem
+                            ? ['single', 'duration', 'repeat']
+                            : ['single', 'duration'];
+                        const labels = {
+                          'single': '특정 시간',
+                          'duration': '소요 시간',
+                          'repeat': '반복',
+                        };
 
-                          return Expanded(
-                            child: GestureDetector(
-                              onTap: () async {
-                                if (isRepeat) {
-                                  final rule = await _showScheduleRepeatDialog(
-                                    initialRule: mRepeatRule,
-                                    baseDate: _calSelectedDay,
-                                  );
-                                  if (rule != null) {
-                                    setModalState(() {
-                                      mRepeatEnabled = true;
-                                      mRepeatRule = rule;
-                                    });
+                        return Row(
+                          children: modeTypes.map((t) {
+                            final isRepeat = t == 'repeat';
+                            final isClockType =
+                                t == 'single' &&
+                                (mTimeType == 'single' || mTimeType == 'range');
+                            final isActive = isRepeat
+                                ? mRepeatEnabled
+                                : (isClockType || mTimeType == t);
+                            final isLast = t == modeTypes.last;
+
+                            return Expanded(
+                              child: GestureDetector(
+                                onTap: () async {
+                                  if (isRepeat) {
+                                    final rule =
+                                        await _showScheduleRepeatDialog(
+                                          initialRule: mRepeatRule,
+                                          baseDate: _calSelectedDay,
+                                        );
+                                    if (rule != null) {
+                                      setModalState(() {
+                                        mRepeatEnabled = true;
+                                        mRepeatRule = rule;
+                                      });
+                                    }
+                                    return;
                                   }
-                                  return;
-                                }
 
-                                setModalState(() {
-                                  mReminderEnabled = false;
-                                  if (t == 'single') {
-                                    mTimeType = isClockType ? 'none' : 'single';
-                                    mDuration = null;
-                                    if (isClockType) {
+                                  setModalState(() {
+                                    mReminderEnabled = false;
+                                    if (t == 'single') {
+                                      mTimeType = isClockType
+                                          ? 'none'
+                                          : 'single';
+                                      mDuration = null;
+                                      if (isClockType) {
+                                        mStartTime = null;
+                                        mEndTime = null;
+                                      }
+                                    } else {
+                                      mTimeType = mTimeType == t ? 'none' : t;
                                       mStartTime = null;
                                       mEndTime = null;
                                     }
-                                  } else {
-                                    mTimeType = mTimeType == t ? 'none' : t;
-                                    mStartTime = null;
-                                    mEndTime = null;
-                                  }
-                                });
-                              },
-                              child: Container(
-                                margin: EdgeInsets.only(right: isLast ? 0 : 6),
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 9,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: isActive
-                                      ? _coach.accentColor.withOpacity(0.08)
-                                      : Colors.white,
-                                  border: Border.all(
-                                    color: isActive
-                                        ? _coach.accentColor
-                                        : const Color(0xFFE5E7EB),
-                                    width: 2,
+                                  });
+                                },
+                                child: Container(
+                                  margin: EdgeInsets.only(
+                                    right: isLast ? 0 : 6,
                                   ),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    if (isRepeat) ...[
-                                      Icon(
-                                        Icons.repeat_rounded,
-                                        size: 16,
-                                        color: isActive
-                                            ? _coach.accentColor
-                                            : const Color(0xFF9CA3AF),
-                                      ),
-                                      const SizedBox(width: 3),
-                                    ],
-                                    Flexible(
-                                      child: Text(
-                                        labels[t]!,
-                                        textAlign: TextAlign.center,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: GoogleFonts.notoSansKr(
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w700,
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 9,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: isActive
+                                        ? _coach.accentColor.withOpacity(0.08)
+                                        : Colors.white,
+                                    border: Border.all(
+                                      color: isActive
+                                          ? _coach.accentColor
+                                          : const Color(0xFFE5E7EB),
+                                      width: 2,
+                                    ),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      if (isRepeat) ...[
+                                        Icon(
+                                          Icons.repeat_rounded,
+                                          size: 16,
                                           color: isActive
                                               ? _coach.accentColor
                                               : const Color(0xFF9CA3AF),
                                         ),
+                                        const SizedBox(width: 3),
+                                      ],
+                                      Flexible(
+                                        child: Text(
+                                          labels[t]!,
+                                          textAlign: TextAlign.center,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: GoogleFonts.notoSansKr(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w700,
+                                            color: isActive
+                                                ? _coach.accentColor
+                                                : const Color(0xFF9CA3AF),
+                                          ),
+                                        ),
                                       ),
-                                    ),
-                                  ],
+                                    ],
+                                  ),
                                 ),
                               ),
-                            ),
-                          );
-                        }).toList(),
-                      );
-                    },
-                  ),
-                  if (mTimeType == 'single' || mTimeType == 'range')
-                    Padding(
-                      padding: const EdgeInsets.only(top: 12),
-                      child: Row(
-                        children: [
-                          Text(
-                            '시작: ',
-                            style: GoogleFonts.notoSansKr(
-                              fontSize: 13,
-                              color: const Color(0xFF6B7280),
-                            ),
-                          ),
-                          GestureDetector(
-                            onTap: () async {
-                              final t = await showTimePicker(
-                                context: context,
-                                initialTime: mStartTime ?? TimeOfDay.now(),
-                              );
-                              if (t != null) {
-                                final enabled =
-                                    await _checkCoreReminderEnabledGlobally();
-                                setModalState(() {
-                                  mStartTime = t;
-                                  mReminderEnabled = enabled;
-                                });
-                              }
-                            },
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 6,
-                              ),
-                              decoration: BoxDecoration(
-                                border: Border.all(
-                                  color: const Color(0xFFE5E7EB),
-                                ),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Text(
-                                mStartTime != null
-                                    ? _formatTime(mStartTime!)
-                                    : '선택',
-                                style: GoogleFonts.notoSansKr(
-                                  fontSize: 13,
-                                  color: mStartTime != null
-                                      ? _coach.accentColor
-                                      : const Color(0xFFA0A0B0),
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            '~ 종료: ',
-                            style: GoogleFonts.notoSansKr(
-                              fontSize: 13,
-                              color: const Color(0xFF6B7280),
-                            ),
-                          ),
-                          GestureDetector(
-                            onTap: () async {
-                              final t = await showTimePicker(
-                                context: context,
-                                initialTime: mEndTime ?? TimeOfDay.now(),
-                              );
-                              if (t != null) setModalState(() => mEndTime = t);
-                            },
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 6,
-                              ),
-                              decoration: BoxDecoration(
-                                border: Border.all(
-                                  color: const Color(0xFFE5E7EB),
-                                ),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Text(
-                                mEndTime != null
-                                    ? _formatTime(mEndTime!)
-                                    : '선택',
-                                style: GoogleFonts.notoSansKr(
-                                  fontSize: 13,
-                                  color: mEndTime != null
-                                      ? _coach.accentColor
-                                      : const Color(0xFFA0A0B0),
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          if (isScheduleItem || item is TaskItem)
-                            GestureDetector(
-                              onTap: () async {
-                                if (mStartTime == null) {
-                                  _showSelectTimeBeforeReminderSnackBar();
-                                  return;
-                                }
-                                final enabled =
-                                    await _ensureCoreReminderEnabledFromHere();
-                                if (!enabled) return;
-                                setModalState(
-                                  () => mReminderEnabled = !mReminderEnabled,
-                                );
-                              },
-                              child: AnimatedContainer(
-                                duration: const Duration(milliseconds: 200),
-                                width: 28,
-                                height: 28,
-                                decoration: BoxDecoration(
-                                  color:
-                                      _resolvedTimeReminderEnabled(
-                                        mTimeType,
-                                        mStartTime,
-                                        mReminderEnabled,
-                                      )
-                                      ? _coach.accentColor.withOpacity(0.12)
-                                      : Colors.transparent,
-                                  shape: BoxShape.circle,
-                                ),
-                                child: Icon(
-                                  !_isCoreReminderEnabledGlobally
-                                      ? Icons.notifications_off
-                                      : (_resolvedTimeReminderEnabled(
-                                              mTimeType,
-                                              mStartTime,
-                                              mReminderEnabled,
-                                            )
-                                            ? Icons.notifications_active
-                                            : Icons.notifications_off),
-                                  size: 18,
-                                  color:
-                                      _resolvedTimeReminderEnabled(
-                                        mTimeType,
-                                        mStartTime,
-                                        mReminderEnabled,
-                                      )
-                                      ? _coach.accentColor
-                                      : const Color(0xFFB0B0C8),
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
+                            );
+                          }).toList(),
+                        );
+                      },
                     ),
-                  if (mTimeType == 'duration')
-                    Padding(
-                      padding: const EdgeInsets.only(top: 12),
-                      child: Wrap(
-                        spacing: 6,
-                        runSpacing: 6,
-                        children:
-                            [
-                              '10분',
-                              '15분',
-                              '30분',
-                              '1시간',
-                              '2시간',
-                              '3시간',
-                              '4시간+',
-                            ].map((d) {
-                              final isActive = mDuration == d;
-                              return GestureDetector(
-                                onTap: () => setModalState(() => mDuration = d),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 10,
-                                    vertical: 6,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: isActive
-                                        ? const Color(0xFFFDF2F8)
-                                        : Colors.white,
-                                    border: Border.all(
-                                      color: isActive
-                                          ? const Color(0xFFDB2777)
-                                          : const Color(0xFFE5E7EB),
-                                    ),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Text(
-                                    d,
-                                    style: GoogleFonts.notoSansKr(
-                                      fontSize: 13,
-                                      color: isActive
-                                          ? const Color(0xFFDB2777)
-                                          : const Color(0xFF6B7280),
-                                    ),
-                                  ),
-                                ),
-                              );
-                            }).toList(),
-                      ),
-                    ),
-                  const SizedBox(height: 16),
-                  // 알림 토글 - ScheduleItem이고, 글로벌 리마인더 ON이고, 시작 시간 있을 때
-                  if (isScheduleItem &&
-                      _isCoreReminderEnabledGlobally &&
-                      (mTimeType == 'single' || mTimeType == 'range') &&
-                      mStartTime != null)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: GestureDetector(
-                        onTap: () => setModalState(
-                          () => mReminderEnabled = !mReminderEnabled,
-                        ),
+                    if (mTimeType == 'single' || mTimeType == 'range')
+                      Padding(
+                        padding: const EdgeInsets.only(top: 12),
                         child: Row(
                           children: [
-                            AnimatedContainer(
-                              duration: const Duration(milliseconds: 200),
-                              width: 28,
-                              height: 28,
-                              decoration: BoxDecoration(
-                                color: mReminderEnabled
-                                    ? _coach.accentColor.withOpacity(0.12)
-                                    : Colors.transparent,
-                                shape: BoxShape.circle,
-                              ),
-                              child: Icon(
-                                mReminderEnabled
-                                    ? Icons.notifications_active
-                                    : Icons.notifications_none_outlined,
-                                size: 18,
-                                color: mReminderEnabled
-                                    ? _coach.accentColor
-                                    : const Color(0xFFB0B0C8),
-                              ),
-                            ),
-                            const SizedBox(width: 4),
                             Text(
-                              mReminderEnabled ? '알림 켜짐 (핵심에 자동 추가)' : '알림 끄기',
+                              '시작: ',
                               style: GoogleFonts.notoSansKr(
-                                fontSize: 12,
-                                color: mReminderEnabled
-                                    ? _coach.accentColor
-                                    : const Color(0xFFB0B0C8),
-                                fontWeight: mReminderEnabled
-                                    ? FontWeight.w600
-                                    : FontWeight.w400,
+                                fontSize: 13,
+                                color: const Color(0xFF6B7280),
                               ),
                             ),
+                            GestureDetector(
+                              onTap: () async {
+                                final t = await showTimePicker(
+                                  context: context,
+                                  initialTime: mStartTime ?? TimeOfDay.now(),
+                                );
+                                if (t != null) {
+                                  final enabled =
+                                      await _checkCoreReminderEnabledGlobally();
+                                  setModalState(() {
+                                    mStartTime = t;
+                                    mReminderEnabled = enabled;
+                                  });
+                                }
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 6,
+                                ),
+                                decoration: BoxDecoration(
+                                  border: Border.all(
+                                    color: const Color(0xFFE5E7EB),
+                                  ),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  mStartTime != null
+                                      ? _formatTime(mStartTime!)
+                                      : '선택',
+                                  style: GoogleFonts.notoSansKr(
+                                    fontSize: 13,
+                                    color: mStartTime != null
+                                        ? _coach.accentColor
+                                        : const Color(0xFFA0A0B0),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              '~ 종료: ',
+                              style: GoogleFonts.notoSansKr(
+                                fontSize: 13,
+                                color: const Color(0xFF6B7280),
+                              ),
+                            ),
+                            GestureDetector(
+                              onTap: () async {
+                                final t = await showTimePicker(
+                                  context: context,
+                                  initialTime: mEndTime ?? TimeOfDay.now(),
+                                );
+                                if (t != null)
+                                  setModalState(() => mEndTime = t);
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 6,
+                                ),
+                                decoration: BoxDecoration(
+                                  border: Border.all(
+                                    color: const Color(0xFFE5E7EB),
+                                  ),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  mEndTime != null
+                                      ? _formatTime(mEndTime!)
+                                      : '선택',
+                                  style: GoogleFonts.notoSansKr(
+                                    fontSize: 13,
+                                    color: mEndTime != null
+                                        ? _coach.accentColor
+                                        : const Color(0xFFA0A0B0),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            if (isScheduleItem || item is TaskItem)
+                              GestureDetector(
+                                onTap: () async {
+                                  if (mStartTime == null) {
+                                    _showSelectTimeBeforeReminderSnackBar();
+                                    return;
+                                  }
+                                  final enabled =
+                                      await _ensureCoreReminderEnabledFromHere();
+                                  if (!enabled) return;
+                                  setModalState(
+                                    () => mReminderEnabled = !mReminderEnabled,
+                                  );
+                                },
+                                child: AnimatedContainer(
+                                  duration: const Duration(milliseconds: 200),
+                                  width: 28,
+                                  height: 28,
+                                  decoration: BoxDecoration(
+                                    color:
+                                        _resolvedTimeReminderEnabled(
+                                          mTimeType,
+                                          mStartTime,
+                                          mReminderEnabled,
+                                        )
+                                        ? _coach.accentColor.withOpacity(0.12)
+                                        : Colors.transparent,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Icon(
+                                    !_isCoreReminderEnabledGlobally
+                                        ? Icons.notifications_off
+                                        : (_resolvedTimeReminderEnabled(
+                                                mTimeType,
+                                                mStartTime,
+                                                mReminderEnabled,
+                                              )
+                                              ? Icons.notifications_active
+                                              : Icons.notifications_off),
+                                    size: 18,
+                                    color:
+                                        _resolvedTimeReminderEnabled(
+                                          mTimeType,
+                                          mStartTime,
+                                          mReminderEnabled,
+                                        )
+                                        ? _coach.accentColor
+                                        : const Color(0xFFB0B0C8),
+                                  ),
+                                ),
+                              ),
                           ],
                         ),
                       ),
-                    ),
+                    if (mTimeType == 'duration')
+                      Padding(
+                        padding: const EdgeInsets.only(top: 12),
+                        child: Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          children:
+                              [
+                                '10분',
+                                '15분',
+                                '30분',
+                                '1시간',
+                                '2시간',
+                                '3시간',
+                                '4시간+',
+                              ].map((d) {
+                                final isActive = mDuration == d;
+                                return GestureDetector(
+                                  onTap: () =>
+                                      setModalState(() => mDuration = d),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 6,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: isActive
+                                          ? const Color(0xFFFDF2F8)
+                                          : Colors.white,
+                                      border: Border.all(
+                                        color: isActive
+                                            ? const Color(0xFFDB2777)
+                                            : const Color(0xFFE5E7EB),
+                                      ),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Text(
+                                      d,
+                                      style: GoogleFonts.notoSansKr(
+                                        fontSize: 13,
+                                        color: isActive
+                                            ? const Color(0xFFDB2777)
+                                            : const Color(0xFF6B7280),
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              }).toList(),
+                        ),
+                      ),
+                  ],
                   const SizedBox(height: 24),
                   Row(
                     children: [
@@ -8872,9 +8921,9 @@ class _TasksScreenState extends State<TasksScreen>
       }
     }
 
-    // 2. Check "이번주/다음주/다다음주 [요일]"
+    // 2. Check "이번주/다음주/담주/다다음주 [요일]"
     if (!hasDate) {
-      final weekRelRegex = RegExp(r'(이번주|다음주|다다음주)\s+([월화수목금토일])(?:요일)?');
+      final weekRelRegex = RegExp(r'(이번주|다음주|담주|다다음주)\s+([월화수목금토일])(?:요일)?');
       final weekRelMatch = weekRelRegex.firstMatch(cleaned);
       if (weekRelMatch != null) {
         final rel = weekRelMatch.group(1)!;
@@ -8884,7 +8933,7 @@ class _TasksScreenState extends State<TasksScreen>
           final now = DateTime.now();
           int diff = targetWeekday - now.weekday;
           int weeksAdd = 0;
-          if (rel == '다음주') weeksAdd = 7;
+          if (rel == '다음주' || rel == '담주') weeksAdd = 7;
           if (rel == '다다음주') weeksAdd = 14;
           parsedDate = now.add(Duration(days: diff + weeksAdd));
           hasDate = true;
@@ -8893,20 +8942,33 @@ class _TasksScreenState extends State<TasksScreen>
       }
     }
 
-    // 3. Check "오늘", "내일", "모레"
+    // 3. Check "오늘", "내일", "모레", "내일모레", "글피", "그글피"
     if (!hasDate) {
-      if (cleaned.contains('오늘')) {
+      final dayAfterTomorrowRegex = RegExp(r'(?:내일\s*모레|내일모레|낼\s*모레|낼모레)');
+      if (cleaned.contains('그글피')) {
+        parsedDate = DateTime.now().add(const Duration(days: 4));
+        hasDate = true;
+        cleaned = cleaned.replaceAll('그글피', '').trim();
+      } else if (cleaned.contains('글피')) {
+        parsedDate = DateTime.now().add(const Duration(days: 3));
+        hasDate = true;
+        cleaned = cleaned.replaceAll('글피', '').trim();
+      } else if (dayAfterTomorrowRegex.hasMatch(cleaned)) {
+        parsedDate = DateTime.now().add(const Duration(days: 2));
+        hasDate = true;
+        cleaned = cleaned.replaceFirst(dayAfterTomorrowRegex, '').trim();
+      } else if (cleaned.contains('오늘')) {
         parsedDate = DateTime.now();
         hasDate = true;
         cleaned = cleaned.replaceAll('오늘', '').trim();
-      } else if (cleaned.contains('내일')) {
-        parsedDate = DateTime.now().add(const Duration(days: 1));
-        hasDate = true;
-        cleaned = cleaned.replaceAll('내일', '').trim();
       } else if (cleaned.contains('모레')) {
         parsedDate = DateTime.now().add(const Duration(days: 2));
         hasDate = true;
         cleaned = cleaned.replaceAll('모레', '').trim();
+      } else if (cleaned.contains('내일')) {
+        parsedDate = DateTime.now().add(const Duration(days: 1));
+        hasDate = true;
+        cleaned = cleaned.replaceAll('내일', '').trim();
       }
     }
 
@@ -11404,7 +11466,8 @@ class _TasksScreenState extends State<TasksScreen>
     final nameCtrl = TextEditingController(text: editHabit?.name ?? '');
     String freq = editHabit?.freq ?? 'daily';
     List<int> days = List.from(editHabit?.days ?? []);
-    String checkType = editHabit?.checkType ?? 'check';
+    bool countSettingEnabled =
+        editHabit?.checkType == 'count' || editHabit?.checkType == 'both';
     bool tracking = editHabit?.tracking ?? true;
     String timeType = editHabit?.timeType ?? 'none';
     TimeOfDay? mStartTime;
@@ -11432,9 +11495,6 @@ class _TasksScreenState extends State<TasksScreen>
       text: editHabit?.countGoal?.toString() ?? '',
     );
     final unitCtrl = TextEditingController(text: editHabit?.unit ?? '');
-    final durationCtrl = TextEditingController(
-      text: editHabit?.durationGoal?.toString() ?? '',
-    );
 
     const dayNames = ['월', '화', '수', '목', '금', '토', '일'];
 
@@ -11588,78 +11648,6 @@ class _TasksScreenState extends State<TasksScreen>
                               ),
                             );
                           }),
-                        ),
-                      ],
-                      const SizedBox(height: 20),
-                      // 체크 방식
-                      _modalLabel('체크 방식'),
-                      Wrap(
-                        spacing: 8,
-                        children: [
-                          _checkBtn(
-                            'count',
-                            '수량',
-                            checkType,
-                            (v) => setModalState(
-                              () => checkType = checkType == v ? 'check' : v,
-                            ),
-                          ),
-                          _checkBtn(
-                            'duration',
-                            '시간',
-                            checkType,
-                            (v) => setModalState(
-                              () => checkType = checkType == v ? 'check' : v,
-                            ),
-                          ),
-                          _checkBtn(
-                            'both',
-                            '수량+시간',
-                            checkType,
-                            (v) => setModalState(
-                              () => checkType = checkType == v ? 'check' : v,
-                            ),
-                          ),
-                        ],
-                      ),
-                      if (checkType == 'count' || checkType == 'both') ...[
-                        const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Material(
-                                type: MaterialType.transparency,
-                                child: TextField(
-                                  controller: countCtrl,
-                                  keyboardType: TextInputType.number,
-                                  decoration: _modalInputDeco(
-                                    '목표 수량 (예: 5000)',
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Material(
-                                type: MaterialType.transparency,
-                                child: TextField(
-                                  controller: unitCtrl,
-                                  decoration: _modalInputDeco('단위 (예: 보)'),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                      if (checkType == 'duration' || checkType == 'both') ...[
-                        const SizedBox(height: 12),
-                        Material(
-                          type: MaterialType.transparency,
-                          child: TextField(
-                            controller: durationCtrl,
-                            keyboardType: TextInputType.number,
-                            decoration: _modalInputDeco('목표 시간 (분)'),
-                          ),
                         ),
                       ],
                       const SizedBox(height: 20),
@@ -11866,6 +11854,57 @@ class _TasksScreenState extends State<TasksScreen>
                           ),
                         ),
                       const SizedBox(height: 20),
+                      _modalLabel('수량 설정'),
+                      Wrap(
+                        spacing: 8,
+                        children: [
+                          _checkBtn(
+                            'none',
+                            '없음',
+                            countSettingEnabled ? 'enabled' : 'none',
+                            (_) => setModalState(
+                              () => countSettingEnabled = false,
+                            ),
+                          ),
+                          _checkBtn(
+                            'enabled',
+                            '있음',
+                            countSettingEnabled ? 'enabled' : 'none',
+                            (_) =>
+                                setModalState(() => countSettingEnabled = true),
+                          ),
+                        ],
+                      ),
+                      if (countSettingEnabled) ...[
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Material(
+                                type: MaterialType.transparency,
+                                child: TextField(
+                                  controller: countCtrl,
+                                  keyboardType: TextInputType.number,
+                                  decoration: _modalInputDeco(
+                                    '목표 수량 (예: 5000)',
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Material(
+                                type: MaterialType.transparency,
+                                child: TextField(
+                                  controller: unitCtrl,
+                                  decoration: _modalInputDeco('단위 (예: 보)'),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                      const SizedBox(height: 20),
                       // 습관 트래킹
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -11931,19 +11970,17 @@ class _TasksScreenState extends State<TasksScreen>
                       name: name,
                       freq: freq,
                       days: List.from(days),
-                      checkType: checkType,
+                      checkType: countSettingEnabled ? 'count' : 'check',
                       timeType: effectiveHabitTimeType,
                       tracking: tracking,
-                      countGoal: (checkType == 'count' || checkType == 'both')
+                      countGoal: countSettingEnabled
                           ? int.tryParse(countCtrl.text)
                           : null,
-                      unit: unitCtrl.text.trim().isEmpty
-                          ? null
-                          : unitCtrl.text.trim(),
-                      durationGoal:
-                          (checkType == 'duration' || checkType == 'both')
-                          ? int.tryParse(durationCtrl.text)
+                      unit:
+                          countSettingEnabled && unitCtrl.text.trim().isNotEmpty
+                          ? unitCtrl.text.trim()
                           : null,
+                      durationGoal: null,
                       timeStart:
                           (effectiveHabitTimeType == 'single' ||
                                   effectiveHabitTimeType == 'range') &&

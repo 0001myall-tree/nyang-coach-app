@@ -80,11 +80,13 @@ class _ParsedScheduleRegistration {
   final String title;
   final DateTime date;
   final TimeOfDay? time;
+  final Map<String, dynamic>? repeatRule;
 
   _ParsedScheduleRegistration({
     required this.title,
     required this.date,
     this.time,
+    this.repeatRule,
   });
 }
 
@@ -3013,21 +3015,14 @@ class _ChatScreenState extends State<ChatScreen>
     DateTime parsedDate = DateTime.now();
     bool hasDate = false;
 
-    int dayOfWeek(String value) {
-      if (value.contains('월')) return DateTime.monday;
-      if (value.contains('화')) return DateTime.tuesday;
-      if (value.contains('수')) return DateTime.wednesday;
-      if (value.contains('목')) return DateTime.thursday;
-      if (value.contains('금')) return DateTime.friday;
-      if (value.contains('토')) return DateTime.saturday;
-      if (value.contains('일')) return DateTime.sunday;
-      return -1;
-    }
+    final repeatParse = _parseScheduleRepeatExpression(cleaned, parsedDate);
+    cleaned = repeatParse.text;
+    final repeatRule = repeatParse.rule;
 
     final lastWeekdayRegex = RegExp(r'이번\s*달\s+마지막\s+([월화수목금토일])(?:요일)?');
     final lastWeekdayMatch = lastWeekdayRegex.firstMatch(cleaned);
     if (lastWeekdayMatch != null) {
-      final targetWeekday = dayOfWeek(lastWeekdayMatch.group(1)!);
+      final targetWeekday = _weekdayFromKorean(lastWeekdayMatch.group(1)!);
       if (targetWeekday != -1) {
         var date = DateTime(parsedDate.year, parsedDate.month + 1, 0);
         while (date.weekday != targetWeekday) {
@@ -3041,16 +3036,16 @@ class _ChatScreenState extends State<ChatScreen>
 
     if (!hasDate) {
       final weekRelRegex = RegExp(
-        r'(이번\s*주|다음\s*주|다다음\s*주)\s+([월화수목금토일])(?:요일)?',
+        r'(이번\s*주|다음\s*주|담\s*주|다다음\s*주)\s+([월화수목금토일])(?:요일)?',
       );
       final weekRelMatch = weekRelRegex.firstMatch(cleaned);
       if (weekRelMatch != null) {
         final rel = weekRelMatch.group(1)!.replaceAll(RegExp(r'\s'), '');
-        final targetWeekday = dayOfWeek(weekRelMatch.group(2)!);
+        final targetWeekday = _weekdayFromKorean(weekRelMatch.group(2)!);
         if (targetWeekday != -1) {
           final now = DateTime.now();
           var diff = targetWeekday - now.weekday;
-          if (rel == '다음주') diff += 7;
+          if (rel == '다음주' || rel == '담주') diff += 7;
           if (rel == '다다음주') diff += 14;
           parsedDate = now.add(Duration(days: diff));
           hasDate = true;
@@ -3060,18 +3055,31 @@ class _ChatScreenState extends State<ChatScreen>
     }
 
     if (!hasDate) {
-      if (cleaned.contains('오늘')) {
+      final dayAfterTomorrowRegex = RegExp(r'(?:내일\s*모레|내일모레|낼\s*모레|낼모레)');
+      if (cleaned.contains('그글피')) {
+        parsedDate = DateTime.now().add(const Duration(days: 4));
+        hasDate = true;
+        cleaned = cleaned.replaceAll('그글피', '').trim();
+      } else if (cleaned.contains('글피')) {
+        parsedDate = DateTime.now().add(const Duration(days: 3));
+        hasDate = true;
+        cleaned = cleaned.replaceAll('글피', '').trim();
+      } else if (dayAfterTomorrowRegex.hasMatch(cleaned)) {
+        parsedDate = DateTime.now().add(const Duration(days: 2));
+        hasDate = true;
+        cleaned = cleaned.replaceFirst(dayAfterTomorrowRegex, '').trim();
+      } else if (cleaned.contains('오늘')) {
         parsedDate = DateTime.now();
         hasDate = true;
         cleaned = cleaned.replaceAll('오늘', '').trim();
-      } else if (cleaned.contains('내일')) {
-        parsedDate = DateTime.now().add(const Duration(days: 1));
-        hasDate = true;
-        cleaned = cleaned.replaceAll('내일', '').trim();
       } else if (cleaned.contains('모레')) {
         parsedDate = DateTime.now().add(const Duration(days: 2));
         hasDate = true;
         cleaned = cleaned.replaceAll('모레', '').trim();
+      } else if (cleaned.contains('내일')) {
+        parsedDate = DateTime.now().add(const Duration(days: 1));
+        hasDate = true;
+        cleaned = cleaned.replaceAll('내일', '').trim();
       }
     }
 
@@ -3079,7 +3087,7 @@ class _ChatScreenState extends State<ChatScreen>
       final bareWeekdayRegex = RegExp(r'([월화수목금토일])요일');
       final bareWeekdayMatch = bareWeekdayRegex.firstMatch(cleaned);
       if (bareWeekdayMatch != null) {
-        final targetWeekday = dayOfWeek(bareWeekdayMatch.group(1)!);
+        final targetWeekday = _weekdayFromKorean(bareWeekdayMatch.group(1)!);
         if (targetWeekday != -1) {
           final now = DateTime.now();
           var diff = targetWeekday - now.weekday;
@@ -3088,6 +3096,10 @@ class _ChatScreenState extends State<ChatScreen>
           cleaned = cleaned.replaceFirst(bareWeekdayMatch.group(0)!, '').trim();
         }
       }
+    }
+
+    if (repeatRule != null && !hasDate) {
+      parsedDate = _firstDateForRepeatRule(parsedDate, repeatRule);
     }
 
     TimeOfDay? parsedTime;
@@ -3128,7 +3140,383 @@ class _ChatScreenState extends State<ChatScreen>
       title: cleaned.isEmpty ? '새 일정' : cleaned,
       date: parsedDate,
       time: parsedTime,
+      repeatRule: repeatRule,
     );
+  }
+
+  int _weekdayFromKorean(String value) {
+    if (value.contains('월')) return DateTime.monday;
+    if (value.contains('화')) return DateTime.tuesday;
+    if (value.contains('수')) return DateTime.wednesday;
+    if (value.contains('목')) return DateTime.thursday;
+    if (value.contains('금')) return DateTime.friday;
+    if (value.contains('토')) return DateTime.saturday;
+    if (value.contains('일')) return DateTime.sunday;
+    return -1;
+  }
+
+  ({String text, Map<String, dynamic>? rule}) _parseScheduleRepeatExpression(
+    String input,
+    DateTime defaultDate,
+  ) {
+    var cleaned = input;
+    final rule = <String, dynamic>{'endType': 'never'};
+
+    final monthlyNthRegex = RegExp(
+      r'(?:매월|매달)\s*(첫째|첫|둘째|두번째|셋째|세번째|넷째|네번째|다섯째|마지막|1째|1번째|2째|2번째|3째|3번째|4째|4번째|5째|5번째)\s*주\s*([월화수목금토일])(?:요일)?',
+    );
+    final monthlyNthMatch = monthlyNthRegex.firstMatch(cleaned);
+    if (monthlyNthMatch != null) {
+      final nthText = monthlyNthMatch.group(1)!;
+      final weekday = _weekdayFromKorean(monthlyNthMatch.group(2)!);
+      final nth = switch (nthText) {
+        '첫째' || '첫' || '1째' || '1번째' => 1,
+        '둘째' || '두번째' || '2째' || '2번째' => 2,
+        '셋째' || '세번째' || '3째' || '3번째' => 3,
+        '넷째' || '네번째' || '4째' || '4번째' => 4,
+        _ => 5,
+      };
+      rule
+        ..['type'] = 'monthly'
+        ..['monthlyMode'] = 'nthWeekday'
+        ..['nth'] = nth
+        ..['weekday'] = weekday == -1 ? defaultDate.weekday : weekday;
+      cleaned = cleaned.replaceFirst(monthlyNthMatch.group(0)!, '').trim();
+      return (text: cleaned, rule: rule);
+    }
+
+    final monthlyDateRegex = RegExp(r'(?:매월|매달)\s*(\d{1,2})\s*일');
+    final monthlyDateMatch = monthlyDateRegex.firstMatch(cleaned);
+    if (monthlyDateMatch != null) {
+      final day = int.tryParse(monthlyDateMatch.group(1)!) ?? defaultDate.day;
+      rule
+        ..['type'] = 'monthly'
+        ..['monthlyMode'] = 'date'
+        ..['dayOfMonth'] = day.clamp(1, 31);
+      cleaned = cleaned.replaceFirst(monthlyDateMatch.group(0)!, '').trim();
+      return (text: cleaned, rule: rule);
+    }
+
+    final weekdayEveryRegex = RegExp(
+      r'((?:[월화수목금토일](?:요일)?(?:\s*(?:,|과|와|랑|하고|및)?\s*)?)+)\s*마다',
+    );
+    final weeklyRegex = RegExp(
+      r'매주\s*((?:[월화수목금토일](?:요일)?(?:\s*(?:,|과|와|랑|하고|및)?\s*)?)+)',
+    );
+    final weeklyMatch =
+        weeklyRegex.firstMatch(cleaned) ??
+        weekdayEveryRegex.firstMatch(cleaned);
+    if (weeklyMatch != null) {
+      final weekdays = <int>[];
+      for (final match in RegExp(
+        r'[월화수목금토일](?:요일)?',
+      ).allMatches(weeklyMatch.group(1)!)) {
+        final weekday = _weekdayFromKorean(match.group(0)!);
+        if (weekday != -1 && !weekdays.contains(weekday)) {
+          weekdays.add(weekday);
+        }
+      }
+      if (weekdays.isNotEmpty) {
+        rule
+          ..['type'] = 'weekly'
+          ..['weekdays'] = weekdays;
+        cleaned = cleaned.replaceFirst(weeklyMatch.group(0)!, '').trim();
+        return (text: cleaned, rule: rule);
+      }
+    }
+
+    final weekdayGroupRegex = RegExp(r'(평일|주말)(?:마다)?');
+    final weekdayGroupMatch = weekdayGroupRegex.firstMatch(cleaned);
+    if (weekdayGroupMatch != null) {
+      final group = weekdayGroupMatch.group(1)!;
+      rule
+        ..['type'] = 'weekly'
+        ..['weekdays'] = group == '평일' ? [1, 2, 3, 4, 5] : [6, 7];
+      cleaned = cleaned.replaceFirst(weekdayGroupMatch.group(0)!, '').trim();
+      return (text: cleaned, rule: rule);
+    }
+
+    final dailyRegex = RegExp(r'(?:매일|매일마다|날마다|매일\s*매일)');
+    final dailyMatch = dailyRegex.firstMatch(cleaned);
+    if (dailyMatch != null) {
+      rule['type'] = 'daily';
+      cleaned = cleaned.replaceFirst(dailyMatch.group(0)!, '').trim();
+      return (text: cleaned, rule: rule);
+    }
+
+    return (text: input, rule: null);
+  }
+
+  DateTime _firstDateForRepeatRule(
+    DateTime baseDate,
+    Map<String, dynamic> rule,
+  ) {
+    final base = DateTime(baseDate.year, baseDate.month, baseDate.day);
+    final type = rule['type']?.toString() ?? 'daily';
+    if (type == 'weekly') {
+      final weekdays =
+          (rule['weekdays'] as List?)
+              ?.map((e) => int.tryParse(e.toString()))
+              .whereType<int>()
+              .toList() ??
+          [];
+      if (weekdays.isEmpty) return base;
+      for (var offset = 0; offset < 7; offset++) {
+        final candidate = base.add(Duration(days: offset));
+        if (weekdays.contains(candidate.weekday)) return candidate;
+      }
+      return base;
+    }
+    if (type == 'monthly') {
+      if (rule['monthlyMode'] == 'nthWeekday') {
+        final nth = int.tryParse(rule['nth']?.toString() ?? '') ?? 1;
+        final weekday =
+            int.tryParse(rule['weekday']?.toString() ?? '') ?? base.weekday;
+        final candidate = _nthWeekdayOfMonth(
+          base.year,
+          base.month,
+          nth,
+          weekday,
+        );
+        if (!candidate.isBefore(base)) return candidate;
+        final nextMonth = DateTime(base.year, base.month + 1, 1);
+        return _nthWeekdayOfMonth(
+          nextMonth.year,
+          nextMonth.month,
+          nth,
+          weekday,
+        );
+      }
+      final day =
+          int.tryParse(rule['dayOfMonth']?.toString() ?? '') ?? base.day;
+      final candidate = DateTime(
+        base.year,
+        base.month,
+        day.clamp(1, DateTime(base.year, base.month + 1, 0).day),
+      );
+      if (!candidate.isBefore(base)) return candidate;
+      final nextMonth = DateTime(base.year, base.month + 1, 1);
+      return DateTime(
+        nextMonth.year,
+        nextMonth.month,
+        day.clamp(1, DateTime(nextMonth.year, nextMonth.month + 1, 0).day),
+      );
+    }
+    return base;
+  }
+
+  DateTime _nthWeekdayOfMonth(int year, int month, int nth, int weekday) {
+    final matches = <DateTime>[];
+    final lastDay = DateTime(year, month + 1, 0).day;
+    for (var day = 1; day <= lastDay; day++) {
+      final date = DateTime(year, month, day);
+      if (date.weekday == weekday) matches.add(date);
+    }
+    if (matches.isEmpty) return DateTime(year, month, 1);
+    final index = nth.clamp(1, matches.length) - 1;
+    return matches[index];
+  }
+
+  List<DateTime> _datesForScheduleRepeat(
+    DateTime startDate,
+    Map<String, dynamic> rule,
+  ) {
+    final start = DateTime(startDate.year, startDate.month, startDate.day);
+    final endType = rule['endType']?.toString() ?? 'never';
+    final endDate = DateTime.tryParse(rule['endDate']?.toString() ?? '');
+    final hardEnd = endType == 'date' && endDate != null
+        ? DateTime(endDate.year, endDate.month, endDate.day)
+        : start.add(const Duration(days: 365));
+    final repeatCount = int.tryParse(rule['count']?.toString() ?? '');
+    final maxCount = endType == 'count'
+        ? (repeatCount == null || repeatCount < 1 ? 1 : repeatCount)
+        : 370;
+    final dates = <DateTime>[];
+    final type = rule['type']?.toString() ?? 'daily';
+
+    bool canAdd(DateTime date) =>
+        !date.isBefore(start) &&
+        !date.isAfter(hardEnd) &&
+        dates.length < maxCount;
+
+    if (type == 'daily') {
+      var date = start;
+      while (canAdd(date)) {
+        dates.add(date);
+        date = date.add(const Duration(days: 1));
+      }
+      return dates;
+    }
+
+    if (type == 'weekly') {
+      final weekdays =
+          (rule['weekdays'] as List?)
+              ?.map((e) => int.tryParse(e.toString()))
+              .whereType<int>()
+              .toSet() ??
+          {start.weekday};
+      var date = start;
+      while (canAdd(date)) {
+        if (weekdays.contains(date.weekday)) dates.add(date);
+        date = date.add(const Duration(days: 1));
+      }
+      return dates;
+    }
+
+    if (type == 'monthly') {
+      var monthCursor = DateTime(start.year, start.month, 1);
+      while (dates.length < maxCount && !monthCursor.isAfter(hardEnd)) {
+        DateTime candidate;
+        if (rule['monthlyMode'] == 'nthWeekday') {
+          final nth = int.tryParse(rule['nth']?.toString() ?? '') ?? 1;
+          final weekday =
+              int.tryParse(rule['weekday']?.toString() ?? '') ?? start.weekday;
+          candidate = _nthWeekdayOfMonth(
+            monthCursor.year,
+            monthCursor.month,
+            nth,
+            weekday,
+          );
+        } else {
+          final day =
+              int.tryParse(rule['dayOfMonth']?.toString() ?? '') ?? start.day;
+          candidate = DateTime(
+            monthCursor.year,
+            monthCursor.month,
+            day.clamp(
+              1,
+              DateTime(monthCursor.year, monthCursor.month + 1, 0).day,
+            ),
+          );
+        }
+        if (canAdd(candidate)) dates.add(candidate);
+        monthCursor = DateTime(monthCursor.year, monthCursor.month + 1, 1);
+      }
+      return dates;
+    }
+
+    return [start];
+  }
+
+  String _weekdayLabel(int weekday) {
+    const labels = {1: '월', 2: '화', 3: '수', 4: '목', 5: '금', 6: '토', 7: '일'};
+    return labels[weekday] ?? '';
+  }
+
+  String _repeatRuleLabel(Map<String, dynamic>? rule) {
+    if (rule == null) return '';
+    final type = rule['type']?.toString() ?? 'daily';
+    if (type == 'daily') return '매일';
+    if (type == 'weekly') {
+      final weekdays =
+          (rule['weekdays'] as List?)
+              ?.map((e) => int.tryParse(e.toString()))
+              .whereType<int>()
+              .toList() ??
+          [];
+      final ordered = [
+        7,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+      ].where(weekdays.contains).map(_weekdayLabel).join(' · ');
+      return ordered.isEmpty ? '매주' : '매주 $ordered';
+    }
+    if (type == 'monthly') {
+      if (rule['monthlyMode'] == 'nthWeekday') {
+        final nth = int.tryParse(rule['nth']?.toString() ?? '') ?? 1;
+        final weekday =
+            int.tryParse(rule['weekday']?.toString() ?? '') ?? DateTime.monday;
+        return '매월 ${nth}째주 ${_weekdayLabel(weekday)}요일';
+      }
+      final day = int.tryParse(rule['dayOfMonth']?.toString() ?? '') ?? 1;
+      return '매월 $day일';
+    }
+    return '반복';
+  }
+
+  String? _calendarDateQuestionReply(String input) {
+    final normalized = input.replaceAll(RegExp(r'\s+'), '');
+    final asksDate = RegExp(r'(몇일|며칠|몇월몇일|날짜|언제)').hasMatch(normalized);
+    if (!asksDate) return null;
+
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final relativeDayPatterns = <({String label, int offset, RegExp pattern})>[
+      (label: '그글피', offset: 4, pattern: RegExp(r'그글피')),
+      (label: '글피', offset: 3, pattern: RegExp(r'글피')),
+      (label: '모레', offset: 2, pattern: RegExp(r'(?:내일모레|낼모레|모레)')),
+      (label: '내일', offset: 1, pattern: RegExp(r'내일')),
+      (label: '오늘', offset: 0, pattern: RegExp(r'오늘')),
+    ];
+    for (final relative in relativeDayPatterns) {
+      if (relative.pattern.hasMatch(normalized)) {
+        final target = today.add(Duration(days: relative.offset));
+        return '${relative.label}는 ${_fullKoreanDate(target)}입니다.';
+      }
+    }
+
+    final weekMatch = RegExp(
+      r'(이번주|다음주|담주|다다음주)([월화수목금토일])(?:요일)?',
+    ).firstMatch(normalized);
+    if (weekMatch != null) {
+      final rel = weekMatch.group(1)!;
+      final weekday = _weekdayFromKorean(weekMatch.group(2)!);
+      if (weekday == -1) return null;
+      final thisMonday = today.subtract(Duration(days: today.weekday - 1));
+      final weekOffset = switch (rel) {
+        '다음주' || '담주' => 7,
+        '다다음주' => 14,
+        _ => 0,
+      };
+      final target = thisMonday.add(Duration(days: weekOffset + weekday - 1));
+      return '${_relativeDateQuestionLabel(rel)} ${_weekdayLabel(weekday)}요일은 ${_fullKoreanDate(target)}입니다.';
+    }
+
+    final monthMatch = RegExp(
+      r'(이번달|다음달|다다음달)([월화수목금토일])(?:요일)?',
+    ).firstMatch(normalized);
+    if (monthMatch != null) {
+      final rel = monthMatch.group(1)!;
+      final weekday = _weekdayFromKorean(monthMatch.group(2)!);
+      if (weekday == -1) return null;
+      final monthOffset = switch (rel) {
+        '다음달' => 1,
+        '다다음달' => 2,
+        _ => 0,
+      };
+      final monthStart = DateTime(today.year, today.month + monthOffset, 1);
+      final monthEnd = DateTime(monthStart.year, monthStart.month + 1, 0);
+      final dates = <DateTime>[];
+      for (var day = 1; day <= monthEnd.day; day++) {
+        final date = DateTime(monthStart.year, monthStart.month, day);
+        if (date.weekday == weekday) dates.add(date);
+      }
+      if (dates.isEmpty) return null;
+      final joined = dates.map((date) => '${date.day}일').join(', ');
+      return '${_relativeDateQuestionLabel(rel)} ${_weekdayLabel(weekday)}요일은 $joined입니다.';
+    }
+
+    return null;
+  }
+
+  String _relativeDateQuestionLabel(String rel) {
+    return switch (rel) {
+      '이번주' => '이번 주',
+      '다음주' || '담주' => '다음 주',
+      '다다음주' => '다다음 주',
+      '이번달' => '이번 달',
+      '다음달' => '다음 달',
+      '다다음달' => '다다음 달',
+      _ => rel,
+    };
+  }
+
+  String _fullKoreanDate(DateTime date) {
+    return '${date.year}년 ${date.month}월 ${date.day}일';
   }
 
   String _storedTime(TimeOfDay time) => '${time.hour}:${time.minute}';
@@ -3158,30 +3546,46 @@ class _ChatScreenState extends State<ChatScreen>
     DateTime date,
     TimeOfDay? time,
     bool reminderEnabled,
+    Map<String, dynamic>? repeatRule,
   ) async {
     final prefs = await SharedPreferences.getInstance();
     final rawSchedules = prefs.getString('nyang_schedules');
     final Map<String, dynamic> schedules = rawSchedules == null
         ? {}
         : Map<String, dynamic>.from(jsonDecode(rawSchedules));
-    final dateStr = _dateKey(date);
-    final dayList = List<dynamic>.from(schedules[dateStr] ?? []);
-    final id = DateTime.now().millisecondsSinceEpoch.toString();
-    final entry = {
-      'id': id,
-      'text': title,
-      'done': false,
-      'createdAt': DateTime.now().toIso8601String(),
-      'deferredCount': 0,
-      'isReminderEnabled': reminderEnabled,
-      if (time != null) 'timeStart': _storedTime(time),
-      if (time != null) 'time': _formatTimeOfDay(time),
-    };
-    dayList.add(entry);
-    schedules[dateStr] = dayList;
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    final createdAt = DateTime.now().toIso8601String();
+    final repeatDates = repeatRule == null
+        ? [date]
+        : _datesForScheduleRepeat(date, repeatRule);
+    final recurrenceGroupId = repeatRule == null ? null : 'repeat_$nowMs';
+
+    for (var i = 0; i < repeatDates.length; i++) {
+      final targetDate = repeatDates[i];
+      final dateStr = _dateKey(targetDate);
+      final dayList = List<dynamic>.from(schedules[dateStr] ?? []);
+      final entry = {
+        'id': repeatRule == null ? nowMs.toString() : '${nowMs}_$i',
+        'text': title,
+        'done': false,
+        'createdAt': createdAt,
+        'deferredCount': 0,
+        'isReminderEnabled': reminderEnabled,
+        'isRecurring': repeatRule != null,
+        if (recurrenceGroupId != null) 'recurrenceGroupId': recurrenceGroupId,
+        if (repeatRule != null)
+          'recurrenceRule': {...repeatRule, 'startDate': _dateKey(date)},
+        if (time != null) 'timeStart': _storedTime(time),
+        if (time != null) 'time': _formatTimeOfDay(time),
+      };
+      dayList.add(entry);
+      schedules[dateStr] = dayList;
+    }
     await prefs.setString('nyang_schedules', jsonEncode(schedules));
 
-    if (dateStr == _dateKey(DateTime.now())) {
+    if (repeatDates.any(
+      (targetDate) => _dateKey(targetDate) == _dateKey(DateTime.now()),
+    )) {
       await _updateTodayRecord(prefs);
       await _refreshAttendanceStreak(prefs);
     }
@@ -3194,6 +3598,7 @@ class _ChatScreenState extends State<ChatScreen>
     final titleCtrl = TextEditingController(text: parsed.title);
     DateTime confirmedDate = parsed.date;
     TimeOfDay? confirmedTime = parsed.time;
+    Map<String, dynamic>? confirmedRepeatRule = parsed.repeatRule;
     bool reminderEnabled = false;
 
     final prefs = await SharedPreferences.getInstance();
@@ -3243,6 +3648,50 @@ class _ChatScreenState extends State<ChatScreen>
                             size: 20,
                           ),
                         ),
+                        if (confirmedRepeatRule != null)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF5F3FF),
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                color: const Color(0xFFDDD6FE),
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(
+                                  Icons.repeat_rounded,
+                                  size: 14,
+                                  color: Color(0xFF8B7CFF),
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  _repeatRuleLabel(confirmedRepeatRule),
+                                  style: GoogleFonts.notoSansKr(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.bold,
+                                    color: const Color(0xFF8B7CFF),
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                GestureDetector(
+                                  onTap: () => setDialogState(
+                                    () => confirmedRepeatRule = null,
+                                  ),
+                                  child: const Icon(
+                                    Icons.close_rounded,
+                                    size: 14,
+                                    color: Color(0xFFB8B5C8),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                       ],
                     ),
                     const SizedBox(height: 18),
@@ -3455,6 +3904,7 @@ class _ChatScreenState extends State<ChatScreen>
                                 confirmedDate,
                                 confirmedTime,
                                 reminderEnabled && confirmedTime != null,
+                                confirmedRepeatRule,
                               );
                               if (!mounted) return;
                               navigator.pop();
@@ -4209,6 +4659,32 @@ class _ChatScreenState extends State<ChatScreen>
             isUser: false,
             time: DateTime.now(),
             kind: 'vision_choice',
+          ),
+        );
+        _suggestedTasks = [];
+        _dynamicChips = _coach.chips;
+        _suppressDefaultChips = false;
+      });
+      _scrollToBottom();
+      await _saveHistory();
+      await AnalyticsService.logConversationMessage(
+        coachId: widget.coachId,
+        usedApi: false,
+      );
+      return;
+    }
+
+    final dateQuestionReply = _calendarDateQuestionReply(trimmed);
+    if (dateQuestionReply != null) {
+      setState(() {
+        _messages.add(
+          ChatMessage(text: trimmed, isUser: true, time: DateTime.now()),
+        );
+        _messages.add(
+          ChatMessage(
+            text: dateQuestionReply,
+            isUser: false,
+            time: DateTime.now(),
           ),
         );
         _suggestedTasks = [];
