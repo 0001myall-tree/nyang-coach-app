@@ -502,6 +502,10 @@ class TasksScreenController {
     _state?._openTab(index);
   }
 
+  Future<bool> addHabitFromChat(String name) async {
+    return await _state?._addHabitFromChat(name) ?? false;
+  }
+
   void resetTodayDateSelection() {
     _state?._resetTodayDateSelection();
   }
@@ -738,6 +742,11 @@ class _TasksScreenState extends State<TasksScreen>
     await _checkWeekMonthReset(prefs);
     _injectTodayHabits();
     _injectTodaySchedules();
+    final coreMilestonesChanged = _syncTodayMilestonesIntoCoreTasks();
+    if (coreMilestonesChanged) {
+      if (mounted) setState(() {});
+      await _saveCoreTasks();
+    }
 
     if (widget.initialBottomSheet != null) {
       _openBottomSheet(widget.initialBottomSheet!);
@@ -783,6 +792,37 @@ class _TasksScreenState extends State<TasksScreen>
     if (_tabCtrl.index != index) {
       _tabCtrl.animateTo(index);
     }
+  }
+
+  Future<bool> _addHabitFromChat(String name) async {
+    if (!await _hasActivePlan()) return false;
+    final trimmedName = name.trim();
+    if (trimmedName.isEmpty) return false;
+
+    final habit = HabitItem(
+      id: DateTime.now().millisecondsSinceEpoch,
+      name: trimmedName,
+      freq: 'daily',
+      checkType: 'check',
+      timeType: 'duration',
+      tracking: true,
+      habitDuration: '30분',
+      createdAt: DateTime.now().toIso8601String(),
+      isReminderEnabled: false,
+    );
+
+    setState(() {
+      habits.add(habit);
+    });
+    _openTab(3);
+    await _saveHabits();
+    _injectTodayHabits();
+    if (!mounted) return true;
+    Future.delayed(const Duration(milliseconds: 360), () {
+      if (!mounted) return;
+      _showHabitModal(context, editHabit: habit);
+    });
+    return true;
   }
 
   void _handleTaskTabChanged() {
@@ -1361,6 +1401,7 @@ class _TasksScreenState extends State<TasksScreen>
   }
 
   Future<void> _saveCoreTasks() async {
+    _syncTodayMilestonesIntoCoreTasks();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(
       'nyang_core_tasks',
@@ -1406,6 +1447,8 @@ class _TasksScreenState extends State<TasksScreen>
       'nyang_visions',
       jsonEncode(visions.map((v) => v.toJson()).toList()),
     );
+    final coreChanged = _syncTodayMilestonesIntoCoreTasks();
+    if (coreChanged) await _saveCoreTasks();
     TasksSyncService.scheduleSyncToCloud();
     await WidgetSyncService.syncFromStoredTasks();
     widget.onProgressChanged?.call();
@@ -1507,6 +1550,35 @@ class _TasksScreenState extends State<TasksScreen>
         ? tasks
         : (plannedTodayTasksByDate[key] ?? <TaskItem>[]);
     return source.where((task) => task.category == 'today').toList();
+  }
+
+  List<TaskItem> _scheduleTaskItemsForDate(String dateKey) {
+    return (schedules[dateKey] ?? []).map((schedule) {
+      return TaskItem(
+        id: 'schedule_${schedule.id}',
+        text: schedule.text,
+        category: 'schedule',
+        done: schedule.done,
+        time: schedule.time,
+        duration: schedule.duration,
+        timeStart: schedule.timeStart,
+        timeEnd: schedule.timeEnd,
+        createdAt: schedule.createdAt,
+        isReminderEnabled: schedule.isReminderEnabled,
+        deferredCount: schedule.deferredCount,
+      );
+    }).toList();
+  }
+
+  List<TaskItem> get _activeTodayTasksWithSchedules {
+    final currentTasks = List<TaskItem>.from(_activeTodayTasks);
+    final currentIds = currentTasks.map((t) => t.id.toString()).toSet();
+    for (final scheduleTask in _scheduleTaskItemsForDate(_activeTodayDateKey)) {
+      if (currentIds.add(scheduleTask.id.toString())) {
+        currentTasks.add(scheduleTask);
+      }
+    }
+    return currentTasks;
   }
 
   bool _hasScheduleTabEvents(DateTime day) {
@@ -1665,7 +1737,7 @@ class _TasksScreenState extends State<TasksScreen>
     // 오늘 날짜가 아니게 된 (혹은 삭제된) 일정 태스크 제거
     tasks.removeWhere((t) {
       if (t.category != 'schedule') return false;
-      if (!t.id.toString().startsWith('schedule_')) return false;
+      if (!t.id.toString().startsWith('schedule_')) return true;
       return !todayScheduleIds.contains(
         t.id.toString().replaceAll('schedule_', ''),
       );
@@ -1900,7 +1972,7 @@ class _TasksScreenState extends State<TasksScreen>
       final idStr = id.toString();
       for (final v in visions) {
         for (final m in v.milestones) {
-          final mId = 'milestone_${v.name}_${m.text}';
+          final mId = _milestoneTaskId(v, m);
           if (mId == idStr) {
             setState(() {
               _setMilestoneCompletion(m, !m.done);
@@ -1914,11 +1986,24 @@ class _TasksScreenState extends State<TasksScreen>
       return;
     }
 
-    final currentTasks = _activeTodayTasks;
+    final currentTasks = _activeTodayTasksWithSchedules;
     final t = currentTasks.firstWhere(
       (t) => t.id.toString() == id.toString(),
       orElse: () => currentTasks.first,
     );
+    if (!_isViewingActualToday && t.category == 'schedule') {
+      final scheduleId = t.id.toString().replaceAll('schedule_', '');
+      final daySchedules = schedules[_activeTodayDateKey];
+      final idx =
+          daySchedules?.indexWhere((schedule) => schedule.id == scheduleId) ??
+          -1;
+      if (daySchedules == null || idx < 0) return;
+      setState(() {
+        daySchedules[idx].done = !daySchedules[idx].done;
+      });
+      _saveSchedules();
+      return;
+    }
     final milestoneInfo = _getMilestoneInfoForTask(t);
     if (t.done) {
       // 완료 취소
@@ -2389,21 +2474,21 @@ class _TasksScreenState extends State<TasksScreen>
         coreTasks.removeWhere((t) => t.id.toString() == task.id.toString());
       }
 
-      if (_isViewingActualToday && task.category == 'schedule') {
-        final today = _getTodayStr();
+      if (task.category == 'schedule') {
+        final dateKey = _activeTodayDateKey;
         final scheduleId = task.id.toString().replaceAll('schedule_', '');
-        final daySchedules = schedules[today];
+        final daySchedules = schedules[dateKey];
         daySchedules?.removeWhere((s) => s.id == scheduleId);
         if (daySchedules != null && daySchedules.isEmpty) {
-          schedules.remove(today);
+          schedules.remove(dateKey);
         }
       }
     });
     _saveTasks();
     if (_isViewingActualToday) {
       _saveCoreTasks();
-      if (task.category == 'schedule') _saveSchedules();
     }
+    if (task.category == 'schedule') _saveSchedules();
   }
 
   void _skipHabitToday(TaskItem task) {
@@ -2821,6 +2906,75 @@ class _TasksScreenState extends State<TasksScreen>
     ).map((mv) => mv.milestone).toList();
   }
 
+  String _milestoneTaskId(VisionItem vision, MilestoneItem milestone) =>
+      'milestone_${vision.name}_${milestone.text}';
+
+  TaskItem _milestoneTaskItem(VisionItem vision, MilestoneItem milestone) =>
+      TaskItem(
+        id: _milestoneTaskId(vision, milestone),
+        text: milestone.text,
+        category: 'today',
+        done: milestone.done,
+        createdAt: milestone.date ?? DateTime.now().toIso8601String(),
+        completedAt: milestone.done ? milestone.achievedDate : null,
+        isReminderEnabled: false,
+      );
+
+  List<TaskItem> _todayMilestoneTaskItemsForActualToday() {
+    final todayStr = _getTodayStr();
+    final parts = todayStr.split('-');
+    if (parts.length < 3) return [];
+    final year = int.tryParse(parts[0]) ?? DateTime.now().year;
+    final month = int.tryParse(parts[1]) ?? DateTime.now().month;
+    final day = int.tryParse(parts[2]) ?? DateTime.now().day;
+    return _getMilestonesForDay(
+      DateTime(year, month, day),
+    ).map((mv) => _milestoneTaskItem(mv.vision, mv.milestone)).toList();
+  }
+
+  bool _syncTodayMilestonesIntoCoreTasks() {
+    final milestoneTasks = _todayMilestoneTaskItemsForActualToday();
+    final milestoneIds = milestoneTasks.map((t) => t.id.toString()).toSet();
+    var changed = false;
+
+    final beforeRemove = coreTasks.length;
+    coreTasks.removeWhere(
+      (task) =>
+          task.id.toString().startsWith('milestone_') &&
+          !milestoneIds.contains(task.id.toString()),
+    );
+    if (coreTasks.length != beforeRemove) changed = true;
+
+    for (final milestoneTask in milestoneTasks) {
+      final index = coreTasks.indexWhere(
+        (task) => task.id.toString() == milestoneTask.id.toString(),
+      );
+      if (index < 0) {
+        coreTasks.add(milestoneTask);
+        changed = true;
+        continue;
+      }
+
+      final existing = coreTasks[index];
+      if (existing.text != milestoneTask.text ||
+          existing.done != milestoneTask.done ||
+          existing.createdAt != milestoneTask.createdAt ||
+          existing.completedAt != milestoneTask.completedAt ||
+          existing.category != milestoneTask.category ||
+          existing.isReminderEnabled != false) {
+        existing.text = milestoneTask.text;
+        existing.category = milestoneTask.category;
+        existing.done = milestoneTask.done;
+        existing.createdAt = milestoneTask.createdAt;
+        existing.completedAt = milestoneTask.completedAt;
+        existing.isReminderEnabled = false;
+        changed = true;
+      }
+    }
+
+    return changed;
+  }
+
   @override
   Widget build(BuildContext context) {
     WidgetsBinding.instance.addPostFrameCallback(
@@ -2967,6 +3121,7 @@ class _TasksScreenState extends State<TasksScreen>
 
   bool _isCoreTaskDone(TaskItem coreTask) {
     final coreId = coreTask.id.toString();
+    if (coreId.startsWith('milestone_')) return coreTask.done;
     return tasks.any(
       (t) => (t.id.toString() == coreId || t.text == coreTask.text) && t.done,
     );
@@ -4229,22 +4384,17 @@ class _TasksScreenState extends State<TasksScreen>
     final targetDate = DateTime(y, m, d);
     final todayMilestones = _getMilestonesForDay(targetDate);
     final milestoneTasks = todayMilestones.map((mv) {
-      final m = mv.milestone;
-      final v = mv.vision;
-      final id = 'milestone_${v.name}_${m.text}';
-      return TaskItem(
-        id: id,
-        text: m.text,
-        category: 'today',
-        done: m.done,
-        createdAt: m.date ?? DateTime.now().toIso8601String(),
-      );
+      return _milestoneTaskItem(mv.vision, mv.milestone);
     }).toList();
 
-    final currentTasks = _activeTodayTasks;
+    final currentTasks = _activeTodayTasksWithSchedules;
+    final currentIds = currentTasks.map((t) => t.id.toString()).toSet();
     final combinedTasks = [
       ...currentTasks,
-      if (_isViewingActualToday) ...milestoneTasks,
+      if (_isViewingActualToday)
+        ...milestoneTasks.where(
+          (task) => !currentIds.contains(task.id.toString()),
+        ),
     ];
 
     if (combinedTasks.isEmpty) {
@@ -4934,7 +5084,7 @@ class _TasksScreenState extends State<TasksScreen>
                               borderRadius: BorderRadius.circular(16),
                             ),
                             child: Text(
-                              '수정하기',
+                              '수정완료',
                               style: GoogleFonts.notoSansKr(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w800,
@@ -4996,8 +5146,8 @@ class _TasksScreenState extends State<TasksScreen>
   bool _isRecurringScheduleTask(TaskItem task) {
     if (task.category != 'schedule') return false;
     final scheduleId = task.id.toString().replaceAll('schedule_', '');
-    final todaySchedules = schedules[_getTodayStr()] ?? [];
-    return todaySchedules.any((s) => s.id == scheduleId && s.isRecurring);
+    final daySchedules = schedules[_activeTodayDateKey] ?? [];
+    return daySchedules.any((s) => s.id == scheduleId && s.isRecurring);
   }
 
   Widget _buildTaskItem(TaskItem t) {
@@ -5125,7 +5275,7 @@ class _TasksScreenState extends State<TasksScreen>
                             'schedule_',
                             '',
                           );
-                          final daySchedules = schedules[_getTodayStr()];
+                          final daySchedules = schedules[_activeTodayDateKey];
                           final sIdx =
                               daySchedules?.indexWhere(
                                 (s) => s.id == scheduleId,
@@ -8251,7 +8401,9 @@ class _TasksScreenState extends State<TasksScreen>
     final text = _schInputCtrl.text.trim();
     if (text.isEmpty) return;
     final cleaned = text.replaceAll(RegExp(r'[.\s]+$'), '');
-    final commandSuffixRegex = RegExp(r'\s*(등록해줘|추가해줘|넣어줘)$');
+    final commandSuffixRegex = RegExp(
+      r'\s*(등록해\s*(?:줘요?|주세요)|추가해\s*(?:줘요?|주세요)|넣어\s*(?:줘요?|주세요))$',
+    );
     if (commandSuffixRegex.hasMatch(cleaned)) {
       _showVoiceRegistrationConfirmDialog(text, isToday: false);
       return;
@@ -8416,7 +8568,9 @@ class _TasksScreenState extends State<TasksScreen>
   void _handleSpeechFinished(String spokenText, {required bool isToday}) {
     if (_isConfirmDialogShowing) return;
     final cleaned = spokenText.replaceAll(RegExp(r'[.\s]+$'), '');
-    final suffixRegex = RegExp(r'\s*(등록해줘|추가해줘|넣어줘)$');
+    final suffixRegex = RegExp(
+      r'\s*(등록해\s*(?:줘요?|주세요)|추가해\s*(?:줘요?|주세요)|넣어\s*(?:줘요?|주세요))$',
+    );
     if (suffixRegex.hasMatch(cleaned)) {
       _showVoiceRegistrationConfirmDialog(spokenText, isToday: isToday);
     }
@@ -8464,6 +8618,19 @@ class _TasksScreenState extends State<TasksScreen>
       );
     }
     return normalized;
+  }
+
+  String _cleanRegistrationTitle(String input) {
+    var cleaned = input.replaceAll(RegExp(r'\s+'), ' ').trim();
+    cleaned = cleaned.replaceAll(RegExp(r'^(?:나|나는|내가|저|저는)\s+'), '');
+    cleaned = cleaned.replaceAll(RegExp(r'^(?:앞으로|이제)\s+'), '');
+    cleaned = cleaned.replaceAll(
+      RegExp(r'\s*(?:할\s*건데|할건데|할\s*건대|할\s*거야|할거야|할게|하려고|하려구|할래|할\s*래|하기)$'),
+      '',
+    );
+    cleaned = cleaned.replaceAll(RegExp(r'\s+'), ' ').trim();
+    cleaned = cleaned.replaceFirst(RegExp(r'(?:을|를|은|는|이|가)$'), '').trim();
+    return cleaned;
   }
 
   ({String text, Map<String, dynamic>? rule}) _parseNaturalLanguageRepeat(
@@ -8549,7 +8716,9 @@ class _TasksScreenState extends State<TasksScreen>
   ) {
     String cleaned = input.trim();
     cleaned = cleaned.replaceAll(RegExp(r'[.\s]+$'), '');
-    final suffixRegex = RegExp(r'\s*(등록해줘|추가해줘|넣어줘)$');
+    final suffixRegex = RegExp(
+      r'\s*(등록해\s*(?:줘요?|주세요)|추가해\s*(?:줘요?|주세요)|넣어\s*(?:줘요?|주세요))$',
+    );
     cleaned = cleaned.replaceFirst(suffixRegex, '').trim();
     cleaned = _normalizeKoreanTimeWords(cleaned);
 
@@ -8672,7 +8841,7 @@ class _TasksScreenState extends State<TasksScreen>
       }
     }
 
-    cleaned = cleaned.replaceAll(RegExp(r'\s+'), ' ').trim();
+    cleaned = _cleanRegistrationTitle(cleaned);
 
     return ParsedVoiceRegistration(
       title: cleaned.isEmpty ? "새 일정" : cleaned,
@@ -9155,7 +9324,7 @@ class _TasksScreenState extends State<TasksScreen>
     if (tIdStr.startsWith('milestone_')) {
       for (final v in visions) {
         for (final m in v.milestones) {
-          final mId = 'milestone_${v.name}_${m.text}';
+          final mId = _milestoneTaskId(v, m);
           if (mId == tIdStr) {
             return MilestoneInfo(
               visionName: v.name,

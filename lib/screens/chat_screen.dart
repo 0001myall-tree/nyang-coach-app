@@ -87,6 +87,12 @@ class _ParsedScheduleRegistration {
   });
 }
 
+class _ParsedHabitRegistration {
+  final String title;
+
+  _ParsedHabitRegistration({required this.title});
+}
+
 class _ParsedReply {
   final String text;
   final List<String> chips;
@@ -347,6 +353,7 @@ class ChatScreen extends StatefulWidget {
   final VoidCallback? onOpenDrawer;
   final ValueChanged<List<String>>? onOpenGoalVisionDrawer;
   final ValueChanged<String>? onOpenFeatureLocation;
+  final Future<bool> Function(String name)? onRegisterHabit;
   final ValueChanged<String>? onSwitchCoach;
   final VoidCallback? onVacationChanged;
   final String? handoffFromCoachId;
@@ -359,6 +366,7 @@ class ChatScreen extends StatefulWidget {
     this.onOpenDrawer,
     this.onOpenGoalVisionDrawer,
     this.onOpenFeatureLocation,
+    this.onRegisterHabit,
     this.onSwitchCoach,
     this.onVacationChanged,
     this.handoffFromCoachId,
@@ -2927,7 +2935,9 @@ class _ChatScreenState extends State<ChatScreen>
 
   bool _isScheduleRegistrationCommand(String input) {
     final cleaned = _cleanScheduleRegistrationInput(input);
-    final suffixRegex = RegExp(r'\s*(등록해\s*줘요?|추가해\s*줘요?|등록해\s*달라|추가해\s*달라)$');
+    final suffixRegex = RegExp(
+      r'\s*(등록해\s*(?:줘요?|주세요|달라)|추가해\s*(?:줘요?|주세요|달라))$',
+    );
     return suffixRegex.hasMatch(cleaned);
   }
 
@@ -2935,9 +2945,68 @@ class _ChatScreenState extends State<ChatScreen>
     return input.trim().replaceAll(RegExp(r'[\s.。!！~〜]+$'), '');
   }
 
+  String _cleanRegistrationTitle(String input) {
+    var cleaned = input.replaceAll(RegExp(r'\s+'), ' ').trim();
+    cleaned = cleaned.replaceAll(RegExp(r'^(?:나|나는|내가|저|저는)\s+'), '');
+    cleaned = cleaned.replaceAll(RegExp(r'^(?:앞으로|이제)\s+'), '');
+    cleaned = cleaned.replaceAll(
+      RegExp(r'\s*(?:할\s*건데|할건데|할\s*건대|할\s*거야|할거야|할게|하려고|하려구|할래|할\s*래|하기)$'),
+      '',
+    );
+    cleaned = cleaned.replaceAll(RegExp(r'\s+'), ' ').trim();
+    cleaned = cleaned.replaceFirst(RegExp(r'(?:을|를|은|는|이|가)$'), '').trim();
+    return cleaned;
+  }
+
+  bool _isHabitRegistrationCommand(String input) {
+    final cleaned = _cleanScheduleRegistrationInput(input);
+    if (!cleaned.contains('습관')) return false;
+    final suffixRegex = RegExp(
+      r'\s*(등록해\s*(?:줘요?|주세요|달라)|추가해\s*(?:줘요?|주세요|달라)|넣어\s*(?:줘요?|주세요))$',
+    );
+    return suffixRegex.hasMatch(cleaned);
+  }
+
+  _ParsedHabitRegistration _parseHabitRegistration(String input) {
+    var cleaned = _cleanScheduleRegistrationInput(input);
+    final suffixRegex = RegExp(
+      r'\s*(등록해\s*(?:줘요?|주세요|달라)|추가해\s*(?:줘요?|주세요|달라)|넣어\s*(?:줘요?|주세요))$',
+    );
+    cleaned = cleaned.replaceFirst(suffixRegex, '').trim();
+    cleaned = cleaned.replaceAll(RegExp(r'습관\s*(?:탭|텝)\s*에'), ' ');
+    cleaned = cleaned.replaceAll(RegExp(r'\s*습관\s*(?:으로|에)?\s*$'), '');
+    cleaned = cleaned.replaceAll(RegExp(r'^습관\s*(?:으로|에)?\s*'), '');
+    cleaned = cleaned.replaceAll(RegExp(r'^(?:나|나는|내가|저|저는)\s+'), '');
+    cleaned = cleaned.replaceAll(RegExp(r'^(?:앞으로|이제)\s+'), '');
+    cleaned = cleaned.replaceAll(
+      RegExp(r'(?:^|\s)(?:매일|매일마다|날마다)(?:\s|$)'),
+      ' ',
+    );
+    cleaned = cleaned.replaceAll(
+      RegExp(r'\s*(?:할\s*건데|할건데|할\s*건대|할\s*거야|할거야|할게|하려고|하려구|할래|할\s*래|하기)$'),
+      '',
+    );
+    cleaned = _cleanRegistrationTitle(cleaned);
+    return _ParsedHabitRegistration(title: cleaned);
+  }
+
+  String _habitRegistrationReply(String habitName) {
+    return switch (widget.coachId) {
+      'boyfriend' => '$habitName, 습관 탭에 매일 30분으로 등록해뒀어.',
+      'girlfriend' => '오빠, $habitName 습관 탭에 매일 30분으로 등록해뒀어 🩷',
+      'bro' => '$habitName 습관 탭에 매일 30분으로 박아뒀다.',
+      'halmae' => '$habitName, 습관 탭에 매일 30분으로 넣어뒀다.',
+      'sec_male' => '$habitName 항목을 습관 탭에 매일 30분 기준으로 등록했습니다.',
+      'sec_female' => '$habitName 항목을 습관 탭에 매일 30분 기준으로 등록해두었습니다.',
+      _ => '$habitName 습관을 매일 30분으로 등록했다냥.',
+    };
+  }
+
   _ParsedScheduleRegistration _parseScheduleRegistration(String input) {
     String cleaned = _cleanScheduleRegistrationInput(input);
-    final suffixRegex = RegExp(r'\s*(등록해\s*줘요?|추가해\s*줘요?|등록해\s*달라|추가해\s*달라)$');
+    final suffixRegex = RegExp(
+      r'\s*(등록해\s*(?:줘요?|주세요|달라)|추가해\s*(?:줘요?|주세요|달라))$',
+    );
     cleaned = cleaned.replaceFirst(suffixRegex, '').trim();
 
     DateTime parsedDate = DateTime.now();
@@ -3053,7 +3122,7 @@ class _ChatScreenState extends State<ChatScreen>
       }
     }
 
-    cleaned = cleaned.replaceAll(RegExp(r'\s+'), ' ').trim();
+    cleaned = _cleanRegistrationTitle(cleaned);
     return _ParsedScheduleRegistration(
       title: cleaned.isEmpty ? '새 일정' : cleaned,
       date: parsedDate,
@@ -3112,17 +3181,6 @@ class _ChatScreenState extends State<ChatScreen>
     await prefs.setString('nyang_schedules', jsonEncode(schedules));
 
     if (dateStr == _dateKey(DateTime.now())) {
-      final rawTasks = prefs.getString('nyang_tasks') ?? '[]';
-      final tasks = List<dynamic>.from(jsonDecode(rawTasks));
-      tasks.add({
-        ...entry,
-        'id':
-            DateTime.now().millisecondsSinceEpoch +
-            DateTime.now().microsecond % 1000,
-        'category': 'schedule',
-        'isHabit': false,
-      });
-      await prefs.setString('nyang_tasks', jsonEncode(tasks));
       await _updateTodayRecord(prefs);
       await _refreshAttendanceStreak(prefs);
     }
@@ -4196,6 +4254,54 @@ class _ChatScreenState extends State<ChatScreen>
       }
       await Future.delayed(const Duration(milliseconds: 260));
       widget.onOpenFeatureLocation?.call(navigationReply.location);
+      return;
+    }
+
+    if (_userData.isPlanActive && _isHabitRegistrationCommand(trimmed)) {
+      final parsed = _parseHabitRegistration(trimmed);
+      setState(() {
+        _messages.add(
+          ChatMessage(text: trimmed, isUser: true, time: DateTime.now()),
+        );
+        _dynamicChips = [];
+      });
+      _scrollToBottom();
+      await _saveHistory();
+      await AnalyticsService.logConversationMessage(
+        coachId: widget.coachId,
+        usedApi: false,
+        coachReplied: false,
+      );
+      if (parsed.title.isEmpty) {
+        setState(() {
+          _messages.add(
+            ChatMessage(
+              text: '어떤 습관을 등록할지 이름을 같이 말해줘.',
+              isUser: false,
+              time: DateTime.now(),
+            ),
+          );
+        });
+        _scrollToBottom();
+        await _saveHistory();
+        return;
+      }
+      final registered =
+          await widget.onRegisterHabit?.call(parsed.title) ?? false;
+      if (!mounted) return;
+      setState(() {
+        _messages.add(
+          ChatMessage(
+            text: registered
+                ? _habitRegistrationReply(parsed.title)
+                : '습관 탭을 여는 중 문제가 생겼어요. 잠시 후 다시 시도해 주세요.',
+            isUser: false,
+            time: DateTime.now(),
+          ),
+        );
+      });
+      _scrollToBottom();
+      await _saveHistory();
       return;
     }
 

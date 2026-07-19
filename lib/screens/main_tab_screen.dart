@@ -627,6 +627,16 @@ class _MainTabScreenState extends State<MainTabScreen>
     });
   }
 
+  Future<bool> _registerHabitFromChat(String name) async {
+    setState(() {
+      _openDrawerIndex = 1;
+      _widgetIntentDrawerMode = false;
+    });
+    await Future.delayed(const Duration(milliseconds: 320));
+    if (!mounted) return false;
+    return _tasksController.addHabitFromChat(name);
+  }
+
   Future<void> _checkWidgetIntent() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.reload();
@@ -1150,6 +1160,7 @@ class _MainTabScreenState extends State<MainTabScreen>
       onOpenDrawer: () => setState(() => _openDrawerIndex = 1),
       onOpenGoalVisionDrawer: _openTasksGoalVisionDrawer,
       onOpenFeatureLocation: _openFeatureLocationFromChat,
+      onRegisterHabit: _registerHabitFromChat,
       onSwitchCoach: _switchCoachFromChat,
       onVacationChanged: () {
         _loadVacation();
