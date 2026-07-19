@@ -96,6 +96,14 @@ class _ParsedHabitRegistration {
   _ParsedHabitRegistration({required this.title});
 }
 
+class _ParsedDeleteCommand {
+  final String target;
+  final String kind;
+  final DateTime? date;
+
+  _ParsedDeleteCommand({required this.target, required this.kind, this.date});
+}
+
 class _ParsedReply {
   final String text;
   final List<String> chips;
@@ -357,6 +365,7 @@ class ChatScreen extends StatefulWidget {
   final ValueChanged<List<String>>? onOpenGoalVisionDrawer;
   final ValueChanged<String>? onOpenFeatureLocation;
   final Future<bool> Function(String name)? onRegisterHabit;
+  final Future<String> Function(Map<String, dynamic> command)? onDeleteCommand;
   final ValueChanged<String>? onSwitchCoach;
   final VoidCallback? onVacationChanged;
   final String? handoffFromCoachId;
@@ -370,6 +379,7 @@ class ChatScreen extends StatefulWidget {
     this.onOpenGoalVisionDrawer,
     this.onOpenFeatureLocation,
     this.onRegisterHabit,
+    this.onDeleteCommand,
     this.onSwitchCoach,
     this.onVacationChanged,
     this.handoffFromCoachId,
@@ -3005,6 +3015,93 @@ class _ChatScreenState extends State<ChatScreen>
     };
   }
 
+  bool _isDeletionCommand(String input) {
+    final cleaned = _cleanScheduleRegistrationInput(input);
+    final normalized = cleaned.replaceAll(RegExp(r'\s+'), '');
+    if (normalized.contains('휴식취소') ||
+        normalized.contains('휴식해제') ||
+        normalized.contains('쉬는거취소')) {
+      return false;
+    }
+    if (RegExp(
+      r'(?:그말|방금말|아까말|이전말|이전메시지|방금메시지|채팅|메시지)(?:을|를)?(?:삭제|취소|지워|없애)',
+    ).hasMatch(normalized)) {
+      return false;
+    }
+    return RegExp(
+      r'\s*(?:삭제|취소|지워|없애)\s*(?:해\s*)?(?:줘요?|주세요|달라)?$',
+    ).hasMatch(cleaned);
+  }
+
+  _ParsedDeleteCommand _parseDeletionCommand(String input) {
+    var cleaned = _cleanScheduleRegistrationInput(input);
+    cleaned = cleaned
+        .replaceFirst(
+          RegExp(r'\s*(?:삭제|취소|지워|없애)\s*(?:해\s*)?(?:줘요?|주세요|달라)?$'),
+          '',
+        )
+        .trim();
+
+    String kind = 'task_or_schedule';
+    if (cleaned.contains('습관')) kind = 'habit';
+    if (cleaned.contains('반복')) kind = 'recurring_schedule';
+
+    DateTime? parsedDate;
+    final now = DateTime.now();
+    final dayAfterTomorrowRegex = RegExp(r'(?:내일\s*모레|내일모레|낼\s*모레|낼모레)');
+    final weekRelRegex = RegExp(
+      r'(이번\s*주|다음\s*주|담\s*주|다다음\s*주)\s+([월화수목금토일])(?:요일)?',
+    );
+    final weekRelMatch = weekRelRegex.firstMatch(cleaned);
+    if (weekRelMatch != null) {
+      final rel = weekRelMatch.group(1)!.replaceAll(RegExp(r'\s'), '');
+      final targetWeekday = _weekdayFromKorean(weekRelMatch.group(2)!);
+      if (targetWeekday != -1) {
+        var diff = targetWeekday - now.weekday;
+        if (rel == '다음주' || rel == '담주') diff += 7;
+        if (rel == '다다음주') diff += 14;
+        parsedDate = now.add(Duration(days: diff));
+        cleaned = cleaned.replaceFirst(weekRelMatch.group(0)!, '').trim();
+      }
+    } else if (cleaned.contains('그글피')) {
+      parsedDate = now.add(const Duration(days: 4));
+      cleaned = cleaned.replaceAll('그글피', '').trim();
+    } else if (cleaned.contains('글피')) {
+      parsedDate = now.add(const Duration(days: 3));
+      cleaned = cleaned.replaceAll('글피', '').trim();
+    } else if (dayAfterTomorrowRegex.hasMatch(cleaned)) {
+      parsedDate = now.add(const Duration(days: 2));
+      cleaned = cleaned.replaceFirst(dayAfterTomorrowRegex, '').trim();
+    } else if (cleaned.contains('모레')) {
+      parsedDate = now.add(const Duration(days: 2));
+      cleaned = cleaned.replaceAll('모레', '').trim();
+    } else if (cleaned.contains('내일')) {
+      parsedDate = now.add(const Duration(days: 1));
+      cleaned = cleaned.replaceAll('내일', '').trim();
+    } else if (cleaned.contains('오늘')) {
+      parsedDate = now;
+      cleaned = cleaned.replaceAll('오늘', '').trim();
+    }
+
+    cleaned = cleaned.replaceAll(RegExp(r'\s*(?:반복\s*)?일정\s*$'), '').trim();
+    cleaned = cleaned.replaceAll(RegExp(r'\s*습관\s*$'), '').trim();
+    cleaned = cleaned.replaceAll(RegExp(r'\s+'), ' ').trim();
+    cleaned = _cleanRegistrationTitle(cleaned);
+    return _ParsedDeleteCommand(target: cleaned, kind: kind, date: parsedDate);
+  }
+
+  String _emptyDeleteTargetReply() {
+    return switch (widget.coachId) {
+      'boyfriend' => '어떤 걸 삭제할지 이름까지 같이 말해줘.',
+      'girlfriend' => '오빠, 어떤 걸 삭제할지 이름까지 같이 말해줘.',
+      'bro' => '뭘 삭제할지 이름까지 같이 말해라.',
+      'halmae' => '뭘 지울지 이름까지 말해줘야 한다, 우리 새끼.',
+      'sec_male' => '삭제할 항목명을 함께 말씀해 주세요.',
+      'sec_female' => '삭제할 항목명을 함께 말씀해 주세요.',
+      _ => '어떤 걸 삭제할지 이름까지 같이 말해달라냥.',
+    };
+  }
+
   _ParsedScheduleRegistration _parseScheduleRegistration(String input) {
     String cleaned = _cleanScheduleRegistrationInput(input);
     final suffixRegex = RegExp(
@@ -4731,6 +4828,45 @@ class _ChatScreenState extends State<ChatScreen>
       }
       await Future.delayed(const Duration(milliseconds: 260));
       widget.onOpenFeatureLocation?.call(navigationReply.location);
+      return;
+    }
+
+    if (_userData.isPlanActive && _isDeletionCommand(trimmed)) {
+      final parsed = _parseDeletionCommand(trimmed);
+      setState(() {
+        _messages.add(
+          ChatMessage(text: trimmed, isUser: true, time: DateTime.now()),
+        );
+        _dynamicChips = [];
+      });
+      _scrollToBottom();
+      await _saveHistory();
+      await AnalyticsService.logConversationMessage(
+        coachId: widget.coachId,
+        usedApi: false,
+        coachReplied: false,
+      );
+
+      String reply;
+      if (parsed.target.isEmpty) {
+        reply = _emptyDeleteTargetReply();
+      } else if (widget.onDeleteCommand == null) {
+        reply = '삭제할 항목을 찾는 중 문제가 생겼어요. 잠시 후 다시 시도해 주세요.';
+      } else {
+        reply = await widget.onDeleteCommand!.call({
+          'target': parsed.target,
+          'kind': parsed.kind,
+          if (parsed.date != null) 'date': _dateKey(parsed.date!),
+        });
+      }
+      if (!mounted) return;
+      setState(() {
+        _messages.add(
+          ChatMessage(text: reply, isUser: false, time: DateTime.now()),
+        );
+      });
+      _scrollToBottom();
+      await _saveHistory();
       return;
     }
 

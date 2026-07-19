@@ -507,6 +507,11 @@ class TasksScreenController {
     return await _state?._addHabitFromChat(name) ?? false;
   }
 
+  Future<String> handleDeleteCommand(Map<String, dynamic> command) async {
+    return await _state?._handleDeleteCommandFromChat(command) ??
+        '삭제할 항목을 찾는 중 문제가 생겼어요. 잠시 후 다시 시도해 주세요.';
+  }
+
   void resetTodayDateSelection() {
     _state?._resetTodayDateSelection();
   }
@@ -836,6 +841,195 @@ class _TasksScreenState extends State<TasksScreen>
       );
     });
     return true;
+  }
+
+  Future<String> _handleDeleteCommandFromChat(
+    Map<String, dynamic> command,
+  ) async {
+    if (!await _hasActivePlan()) {
+      return '할 일, 일정, 습관 관리는 Friends 또는 Master 플랜에서 이용할 수 있어요.';
+    }
+    final target = (command['target'] ?? '').toString().trim();
+    final kind = (command['kind'] ?? 'task_or_schedule').toString();
+    final dateKey = command['date']?.toString();
+    final targetDate = dateKey == null ? null : DateTime.tryParse(dateKey);
+    if (target.isEmpty) return '삭제할 항목명을 함께 말해 주세요.';
+
+    if (kind == 'habit') {
+      _openTab(3);
+      final found = habits.where((h) => _titleMatches(h.name, target)).toList();
+      if (found.isEmpty) {
+        return '습관 탭을 열어둘게요. "$target" 습관은 못 찾았으니 이름을 한 번 확인해 주세요.';
+      }
+      if (found.length > 1) {
+        return '습관 탭을 열어둘게요. "$target"와 비슷한 습관이 여러 개라서 직접 확인 후 삭제해 주세요.';
+      }
+      return '습관 탭을 열어둘게요. "$target" 항목의 휴지통 버튼으로 삭제해 주세요.';
+    }
+
+    if (kind == 'recurring_schedule') {
+      final matches = _findScheduleMatches(
+        target,
+        dateKey: dateKey,
+        recurringOnly: true,
+      );
+      if (matches.isEmpty) {
+        final dateLabel = targetDate == null
+            ? ''
+            : '${targetDate.month}월 ${targetDate.day}일에 ';
+        return '${dateLabel}"$target" 반복 일정은 못 찾았어요. 날짜나 이름을 한 번 확인해 주세요.';
+      }
+      if (matches.length > 1) {
+        return '"$target"와 비슷한 반복 일정이 여러 개 있어요. 날짜나 이름을 조금 더 구체적으로 말해 주세요.';
+      }
+      await _openScheduleDeleteMatch(matches.first, recurring: true);
+      return '"$target" 반복 일정의 삭제 확인창을 열어둘게요.';
+    }
+
+    final matches = _findTaskAndScheduleMatches(target, dateKey: dateKey);
+    if (matches.isEmpty) {
+      final dateLabel = targetDate == null
+          ? ''
+          : '${targetDate.month}월 ${targetDate.day}일에 ';
+      return '${dateLabel}"$target"로 등록된 할 일이나 일정을 못 찾았어요. 날짜나 이름을 한 번 확인해 주세요.';
+    }
+    if (matches.length > 1) {
+      return '"$target"와 비슷한 항목이 여러 개 있어요. 날짜나 이름을 조금 더 구체적으로 말해 주세요.';
+    }
+
+    final match = matches.first;
+    if (match['type'] == 'task') {
+      await _openTaskDeleteMatch(
+        match['task'] as TaskItem,
+        dateKey: match['dateKey'] as String?,
+      );
+    } else {
+      await _openScheduleDeleteMatch(match, recurring: false);
+    }
+    return '"$target" 항목을 찾아뒀어요. 확인 후 삭제하거나 날짜를 바꿔 주세요.';
+  }
+
+  String _normalizeDeleteMatchText(String value) {
+    return value
+        .replaceAll(RegExp(r'\s+'), '')
+        .replaceAll(RegExp(r'(?:약속|일정|할일|항목)$'), '')
+        .replaceAll(RegExp(r'(?:을|를|은|는|이|가)$'), '')
+        .toLowerCase();
+  }
+
+  bool _titleMatches(String title, String target) {
+    final normalizedTitle = _normalizeDeleteMatchText(title);
+    final normalizedTarget = _normalizeDeleteMatchText(target);
+    if (normalizedTarget.isEmpty) return false;
+    return normalizedTitle == normalizedTarget ||
+        normalizedTitle.contains(normalizedTarget) ||
+        normalizedTarget.contains(normalizedTitle);
+  }
+
+  List<Map<String, dynamic>> _findScheduleMatches(
+    String target, {
+    String? dateKey,
+    bool recurringOnly = false,
+  }) {
+    final matches = <Map<String, dynamic>>[];
+    final seenRecurringGroups = <String>{};
+    schedules.forEach((key, daySchedules) {
+      if (dateKey != null && key != dateKey) return;
+      for (var i = 0; i < daySchedules.length; i++) {
+        final schedule = daySchedules[i];
+        if (recurringOnly && !schedule.isRecurring) continue;
+        if (!_titleMatches(schedule.text, target)) continue;
+        if (recurringOnly) {
+          final groupKey = schedule.recurrenceGroupId ?? schedule.id;
+          if (!seenRecurringGroups.add(groupKey)) continue;
+        }
+        matches.add({
+          'type': 'schedule',
+          'schedule': schedule,
+          'dateKey': key,
+          'index': i,
+        });
+      }
+    });
+    return matches;
+  }
+
+  List<Map<String, dynamic>> _findTaskAndScheduleMatches(
+    String target, {
+    String? dateKey,
+  }) {
+    final matches = <Map<String, dynamic>>[];
+    final todayKey = _getTodayStr();
+    if (dateKey == null || dateKey == todayKey) {
+      for (final task in tasks) {
+        if (_titleMatches(task.text, target)) {
+          matches.add({'type': 'task', 'task': task, 'dateKey': todayKey});
+        }
+      }
+    }
+    if (dateKey != null && dateKey != todayKey) {
+      for (final task in plannedTodayTasksByDate[dateKey] ?? <TaskItem>[]) {
+        if (_titleMatches(task.text, target)) {
+          matches.add({'type': 'task', 'task': task, 'dateKey': dateKey});
+        }
+      }
+    }
+    matches.addAll(_findScheduleMatches(target, dateKey: dateKey));
+    return matches;
+  }
+
+  Future<void> _openTaskDeleteMatch(TaskItem task, {String? dateKey}) async {
+    final targetDate = dateKey == null ? null : DateTime.tryParse(dateKey);
+    _openTab(0);
+    if (targetDate != null) {
+      setState(() {
+        _selectedTodayDate = targetDate;
+      });
+    }
+    await Future.delayed(const Duration(milliseconds: 360));
+    if (!mounted) return;
+    if (task.category == 'schedule' && _isRecurringScheduleTask(task)) {
+      await _deleteRecurringScheduleItem(task);
+      return;
+    }
+    await _showTaskDeleteOptions(task);
+  }
+
+  Future<void> _openScheduleDeleteMatch(
+    Map<String, dynamic> match, {
+    required bool recurring,
+  }) async {
+    final schedule = match['schedule'] as ScheduleItem;
+    final dateKey = match['dateKey'] as String;
+    final targetDate = DateTime.tryParse(dateKey) ?? DateTime.now();
+    setState(() {
+      _calSelectedDay = targetDate;
+      _calFocusedDay = targetDate;
+    });
+    _openTab(2);
+    await Future.delayed(const Duration(milliseconds: 360));
+    if (!mounted) return;
+    if (recurring || schedule.isRecurring) {
+      await _deleteRecurringScheduleItem(schedule);
+      return;
+    }
+    _showEditItemModal(
+      schedule,
+      () {
+        setState(() {});
+        _saveSchedules();
+      },
+      onDelete: () {
+        setState(() {
+          final daySchedules = schedules[dateKey];
+          daySchedules?.removeWhere((s) => s.id == schedule.id);
+          if (daySchedules != null && daySchedules.isEmpty) {
+            schedules.remove(dateKey);
+          }
+        });
+        _saveSchedules();
+      },
+    );
   }
 
   void _handleTaskTabChanged() {
@@ -6219,7 +6413,9 @@ class _TasksScreenState extends State<TasksScreen>
 
   Widget _buildGoalList(String type) {
     final goals = type == 'week' ? weekGoals : monthGoals;
-    final emptyEmoji = type == 'week' ? '📅' : '🎯';
+    final emptyIcon = type == 'week'
+        ? 'assets/icons/calendar-week.svg'
+        : 'assets/icons/bullseye.svg';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -6232,8 +6428,26 @@ class _TasksScreenState extends State<TasksScreen>
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(emptyEmoji, style: const TextStyle(fontSize: 40)),
-                  const SizedBox(height: 12),
+                  Container(
+                    width: 50,
+                    height: 50,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF5F3FF),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: const Color(0xFFE8E3F8)),
+                    ),
+                    child: SvgPicture.asset(
+                      emptyIcon,
+                      width: 24,
+                      height: 24,
+                      colorFilter: const ColorFilter.mode(
+                        Color(0xFF9B8CFF),
+                        BlendMode.srcIn,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
                   Text(
                     type == 'week' ? '이번 주 목표를\n추가해봐요!' : '이번 달 목표를\n추가해봐요!',
                     textAlign: TextAlign.center,
