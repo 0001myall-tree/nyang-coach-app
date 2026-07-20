@@ -125,9 +125,6 @@ struct NyangCharacterWidgetView: View {
         let imageHeight: CGFloat
         let imageTrailing: CGFloat
         let imageCenterYRatio: CGFloat
-        let checkSize: CGFloat
-        let checkTrailing: CGFloat
-        let checkCenterYRatio: CGFloat
         let timeFontSize: CGFloat
         let titleFontSize: CGFloat
     }
@@ -163,9 +160,6 @@ struct NyangCharacterWidgetView: View {
             imageHeight: imageSide,
             imageTrailing: compact ? 30 : 42,
             imageCenterYRatio: 0.5,
-            checkSize: compact ? 32 : 38,
-            checkTrailing: compact ? 12 : 16,
-            checkCenterYRatio: 0.72,
             timeFontSize: compact ? 18 : 20,
             titleFontSize: compact ? 16 : 18
         )
@@ -216,31 +210,6 @@ struct NyangCharacterWidgetView: View {
                         )
                         .accessibilityHidden(true)
 
-                    ZStack {
-                        Text("✓")
-                            .font(.system(size: metrics.checkSize + 8, weight: .heavy, design: .rounded))
-                            .foregroundColor(.white)
-                            .shadow(color: Color.black.opacity(0.18), radius: 3, x: 0, y: 2)
-
-                        Text("✓")
-                            .font(.system(size: metrics.checkSize, weight: .heavy, design: .rounded))
-                            .foregroundStyle(
-                                LinearGradient(
-                                    colors: [
-                                        Color(red: 0.64, green: 0.54, blue: 1.0),
-                                        Color(red: 0.47, green: 0.38, blue: 0.92),
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                    }
-                    .rotationEffect(.degrees(-3))
-                    .position(
-                        x: proxy.size.width - metrics.checkTrailing - (metrics.checkSize / 2),
-                        y: proxy.size.height * metrics.checkCenterYRatio
-                    )
-                    .accessibilityHidden(true)
                 }
             }
         }

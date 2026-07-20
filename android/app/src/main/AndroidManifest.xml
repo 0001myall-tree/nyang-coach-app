@@ -33,6 +33,13 @@
               android:name="io.flutter.embedding.android.NormalTheme"
               android:resource="@style/NormalTheme"
               />
+            <!-- 위젯 URI(nyangcoach://...)를 Flutter 엔진이 화면 경로로
+                 중복 처리해 페이지가 이중으로 쌓이는 것을 막는다.
+                 위젯 인텐트는 MainActivity.handleIntent가 전담 처리한다. -->
+            <meta-data
+              android:name="flutter_deeplinking_enabled"
+              android:value="false"
+              />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>

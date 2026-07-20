@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'main_tab_screen.dart';
 import 'landing_screen.dart';
@@ -34,7 +35,8 @@ const _coachMintSoft = Color(0xFFEAF8F4);
 const _coachMintText = Color(0xFF38C7A0);
 const _masterGold = Color(0xFFE5B94A);
 
-class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
+class _CoachSelectionScreenState extends State<CoachSelectionScreen>
+    with WidgetsBindingObserver {
   String _selectedCoachId = 'cat';
   CoachTab _currentTab = CoachTab.friends;
   UserData _userData = UserData();
@@ -479,6 +481,7 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     UserDataService.load().then((d) {
       if (mounted) setState(() => _userData = d);
     });
@@ -487,12 +490,71 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen> {
       const Duration(seconds: 15),
       (_) => _refreshScheduledCheckInBadge(),
     );
+    // 접근 권한 실패로 채팅 화면에서 이 화면으로 넘어온 직후에도
+    // 소비되지 않은 위젯 인텐트가 남아있을 수 있어 진입 시 한 번 확인한다.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkWidgetIntent();
+    });
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _scheduledCheckInPollTimer?.cancel();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _checkWidgetIntent();
+    }
+  }
+
+  /// 코치 선택 화면(또는 그 위의 구독 안내 시트)에 있을 때 위젯을 눌러도
+  /// 일정 전체창이 열리도록 위젯 인텐트를 여기서도 처리한다.
+  /// 채팅 화면은 이 화면으로 대체되어 사라지므로 여기서 받지 않으면
+  /// 위젯 탭이 무시된다.
+  Future<void> _checkWidgetIntent() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.reload();
+    final widgetRoute = prefs.getString('widget_route');
+    final widgetCoachId = prefs.getString('widget_coach_id');
+    if (widgetRoute == null && widgetCoachId == null) return;
+
+    if (widgetRoute != null) await prefs.remove('widget_route');
+    if (widgetCoachId != null) await prefs.remove('widget_coach_id');
+
+    final isTasksRoute =
+        widgetRoute == 'tasks' ||
+        widgetRoute == 'tasks_done_bottom_sheet' ||
+        widgetRoute == 'tasks_remaining_bottom_sheet';
+    if (!isTasksRoute) return;
+
+    final data = await UserDataService.load();
+    // 냥냥코치 접근 권한이 없으면 코치 선택 화면에 그대로 머문다.
+    if (!data.canAccessCoach('cat')) return;
+
+    final initialBottomSheet = widgetRoute == 'tasks_done_bottom_sheet'
+        ? 'done'
+        : widgetRoute == 'tasks_remaining_bottom_sheet'
+        ? 'remaining'
+        : null;
+
+    await UserDataService.setSelectedCoach('cat');
+    if (!mounted) return;
+    // 구독 안내 시트 등 위에 덮인 창까지 포함해 스택을 정리하고
+    // 냥냥코치 채팅 + 일정 전체창으로 이동한다.
+    Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
+      MaterialPageRoute(
+        builder: (_) => MainTabScreen(
+          coachId: 'cat',
+          initialBottomSheet: initialBottomSheet,
+          openTasksOverlayOnStart: true,
+        ),
+      ),
+      (route) => false,
+    );
   }
 
   Future<void> _refreshScheduledCheckInBadge() async {
