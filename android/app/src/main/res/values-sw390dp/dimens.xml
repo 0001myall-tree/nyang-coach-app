@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <dimen name="cat_character_text_padding_start">26dp</dimen>
+    <dimen name="cat_character_text_padding_start">34dp</dimen>
     <dimen name="cat_character_card_padding_end">18dp</dimen>
-    <dimen name="cat_character_clock_size">16dp</dimen>
-    <dimen name="cat_character_time_text_size">20sp</dimen>
-    <dimen name="cat_character_title_text_size">18sp</dimen>
+    <dimen name="cat_character_clock_size">18dp</dimen>
+    <dimen name="cat_character_time_text_size">22sp</dimen>
+    <dimen name="cat_character_title_text_size">20sp</dimen>
     <dimen name="cat_character_title_margin_top">4dp</dimen>
     <dimen name="cat_character_button_margin_top">14dp</dimen>
-    <dimen name="cat_character_button_text_size">14sp</dimen>
-    <dimen name="cat_character_image_size">106dp</dimen>
-    <dimen name="cat_character_image_margin_end">22dp</dimen>
+    <dimen name="cat_character_button_text_size">15sp</dimen>
+    <dimen name="cat_character_image_size">159dp</dimen>
+    <dimen name="cat_character_image_margin_end">12dp</dimen>
 </resources>
