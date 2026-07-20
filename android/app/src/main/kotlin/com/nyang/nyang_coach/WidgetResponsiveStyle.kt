@@ -9,7 +9,13 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 
 object WidgetResponsiveStyle {
-    fun applyMini(context: Context, appWidgetManager: AppWidgetManager, widgetId: Int, views: RemoteViews) {
+    fun applyMini(
+        context: Context,
+        appWidgetManager: AppWidgetManager,
+        widgetId: Int,
+        views: RemoteViews,
+        hasTwoLineText: Boolean = false,
+    ) {
         val options = appWidgetManager.getAppWidgetOptions(widgetId)
         val minWidthDp = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 120)
         val minHeightDp = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 120)
@@ -19,7 +25,9 @@ object WidgetResponsiveStyle {
         val horizontalPadding = lerp(13f, 16f, scale).roundToInt()
         val topPadding = lerp(6f, 9f, scale).roundToInt()
         val bottomPadding = lerp(24f, 30f, scale).roundToInt()
-        val imageSize = lerp(132f, 142f, scale)
+        // 2줄(시간/일정명) 텍스트가 뜰 때는 iOS처럼 냥냥이를 살짝 줄여
+        // 텍스트와 겹치지 않게 한다.
+        val imageSize = lerp(132f, 142f, scale) - if (hasTwoLineText) 12f else 0f
 
         views.setViewPadding(
             R.id.widget_root,
@@ -28,7 +36,6 @@ object WidgetResponsiveStyle {
             dp(context, horizontalPadding),
             dp(context, bottomPadding)
         )
-        views.setTextViewTextSize(R.id.mini_info_text, TypedValue.COMPLEX_UNIT_SP, lerp(18f, 20f, scale))
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             views.setViewLayoutWidth(R.id.mini_cat_image, imageSize, TypedValue.COMPLEX_UNIT_DIP)

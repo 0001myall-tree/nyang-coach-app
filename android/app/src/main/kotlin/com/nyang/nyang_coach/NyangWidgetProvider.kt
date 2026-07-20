@@ -6,7 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
 import android.net.Uri
-import android.view.Gravity
+import android.view.View
 import android.widget.RemoteViews
 import es.antonborri.home_widget.HomeWidgetProvider
 
@@ -15,38 +15,40 @@ class NyangWidgetProvider : HomeWidgetProvider() {
     override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray, widgetData: SharedPreferences) {
         appWidgetIds.forEach { widgetId ->
             val views = RemoteViews(context.packageName, R.layout.nyang_widget_layout).apply {
-                val rawProgress = widgetData.all["progress"]
-                val progress = ((rawProgress as? Number)?.toInt() ?: (rawProgress as? String)?.toIntOrNull() ?: 0).coerceIn(0, 100)
-
                 val scheduleTime = widgetData.getString("widget_schedule_time", "")?.trim().orEmpty()
                 val scheduleTitle = widgetData.getString("widget_schedule_title", "")?.trim().orEmpty()
                 val hasTimedSchedule = scheduleTime.isNotEmpty() && scheduleTitle.isNotEmpty()
 
-                val rawRemaining = widgetData.all["remaining_count"]
-                val remainingCount = (rawRemaining as? Number)?.toInt() ?: (rawRemaining as? String)?.toIntOrNull() ?: 0
+                val remainingCount = NyangWidgetMood.readInt(widgetData, "remaining_count")
 
-                setImageViewResource(
-                    R.id.mini_cat_image,
-                    when {
-                        progress > 80 -> R.drawable.iphonecatwidget3
-                        progress > 30 -> R.drawable.iphonecatwidget2
-                        else -> R.drawable.iphonecatwidget1
-                    }
-                )
-                setTextViewText(
-                    R.id.mini_info_text,
-                    if (hasTimedSchedule) {
-                        WidgetTextFormatter.formatMiniScheduleMessage(scheduleTime, scheduleTitle, "#8B7CFF")
+                setImageViewResource(R.id.mini_cat_image, NyangWidgetMood.catImageRes(widgetData))
+
+                if (hasTimedSchedule) {
+                    // 시계+시간 / 일정명 2줄 좌측 정렬 (iOS 미니 위젯과 동일)
+                    setViewVisibility(R.id.mini_schedule_block, View.VISIBLE)
+                    setViewVisibility(R.id.mini_info_text, View.GONE)
+                    setTextViewText(R.id.mini_schedule_time, scheduleTime)
+                    setTextViewText(R.id.mini_schedule_title, scheduleTitle)
+                } else {
+                    setViewVisibility(R.id.mini_schedule_block, View.GONE)
+                    setViewVisibility(R.id.mini_info_text, View.VISIBLE)
+                    // 글자 크기는 레이아웃의 자동 축소(autoSize, 최대 18sp)가 담당한다.
+                    if (NyangWidgetMood.isAwayOverDay(widgetData)) {
+                        setTextViewText(R.id.mini_info_text, "집사 보고싶다옹...")
                     } else {
-                        WidgetTextFormatter.formatMiniRemainingCount(remainingCount, "#8B7CFF")
+                        setTextViewText(
+                            R.id.mini_info_text,
+                            WidgetTextFormatter.formatMiniRemainingCount(remainingCount, "#8B7CFF")
+                        )
                     }
+                }
+                WidgetResponsiveStyle.applyMini(
+                    context,
+                    appWidgetManager,
+                    widgetId,
+                    this,
+                    hasTwoLineText = hasTimedSchedule
                 )
-                setInt(
-                    R.id.mini_info_text,
-                    "setGravity",
-                    if (hasTimedSchedule) Gravity.START or Gravity.CENTER_VERTICAL else Gravity.CENTER
-                )
-                WidgetResponsiveStyle.applyMini(context, appWidgetManager, widgetId, this)
 
                 val intentRemaining = Intent(context, MainActivity::class.java).apply {
                     action = "nyang_coach.OPEN_TASKS"

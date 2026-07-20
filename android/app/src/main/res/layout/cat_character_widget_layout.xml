@@ -1,77 +1,98 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- iOS 가로 위젯(systemMedium)과 동일한 구성:
+     왼쪽에 시계+시간 / 일정명 / 일정 보기 버튼, 오른쪽에 냥냥이 얼굴. -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/cat_character_widget_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:clipChildren="false"
-    android:clipToPadding="false">
+    android:clickable="true"
+    android:focusable="true">
 
     <LinearLayout
         android:id="@+id/cat_character_card"
         android:layout_width="match_parent"
-        android:layout_height="@dimen/cat_character_card_height"
-        android:layout_gravity="bottom"
-        android:layout_marginStart="@dimen/cat_character_card_margin_horizontal"
-        android:layout_marginEnd="@dimen/cat_character_card_margin_horizontal"
-        android:layout_marginBottom="@dimen/cat_character_card_margin_bottom"
+        android:layout_height="match_parent"
         android:background="@drawable/widget_bg_cat_character"
-        android:clipChildren="false"
-        android:clipToPadding="false"
         android:gravity="center_vertical"
         android:orientation="horizontal"
         android:paddingStart="@dimen/cat_character_text_padding_start"
-        android:paddingEnd="@dimen/cat_character_text_padding_end">
+        android:paddingEnd="@dimen/cat_character_card_padding_end">
 
         <LinearLayout
-            android:layout_width="match_parent"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
+            android:layout_weight="1"
             android:gravity="center_vertical"
             android:orientation="vertical">
 
-            <TextView
-                android:id="@+id/cat_character_time"
-                android:layout_width="match_parent"
+            <LinearLayout
+                android:id="@+id/cat_character_time_row"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:autoSizeMaxTextSize="@dimen/cat_character_time_text_size"
-                android:autoSizeMinTextSize="14sp"
-                android:autoSizeStepGranularity="1sp"
-                android:autoSizeTextType="uniform"
-                android:ellipsize="end"
-                android:includeFontPadding="false"
-                android:maxLines="1"
-                android:text="17:00"
-                android:textColor="#8B7CFF"
-                android:textSize="@dimen/cat_character_time_text_size"
-                android:textStyle="bold" />
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <ImageView
+                    android:layout_width="@dimen/cat_character_clock_size"
+                    android:layout_height="@dimen/cat_character_clock_size"
+                    android:contentDescription="@null"
+                    android:src="@drawable/ic_fa_clock" />
+
+                <TextView
+                    android:id="@+id/cat_character_time"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="5dp"
+                    android:includeFontPadding="false"
+                    android:maxLines="1"
+                    android:text="17:00"
+                    android:textColor="#8B7CFF"
+                    android:textSize="@dimen/cat_character_time_text_size"
+                    android:textStyle="bold" />
+            </LinearLayout>
 
             <TextView
                 android:id="@+id/cat_character_text"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="@dimen/cat_character_title_margin_top"
-                android:autoSizeMaxTextSize="@dimen/cat_character_title_text_size"
-                android:autoSizeMinTextSize="13sp"
-                android:autoSizeStepGranularity="1sp"
-                android:autoSizeTextType="uniform"
                 android:ellipsize="end"
                 android:includeFontPadding="false"
-                android:maxLines="1"
+                android:lineSpacingExtra="3dp"
+                android:maxLines="2"
                 android:text="오늘 할 일 0개 남음"
                 android:textColor="#F8F6FF"
                 android:textSize="@dimen/cat_character_title_text_size"
                 android:textStyle="bold" />
-        </LinearLayout>
-    </LinearLayout>
 
-    <ImageView
-        android:id="@+id/cat_character_image"
-        android:layout_width="@dimen/cat_character_image_width"
-        android:layout_height="@dimen/cat_character_image_height"
-        android:layout_gravity="end|bottom"
-        android:layout_marginEnd="@dimen/cat_character_image_margin_end"
-        android:layout_marginBottom="@dimen/cat_character_image_margin_bottom"
-        android:adjustViewBounds="true"
-        android:scaleType="fitCenter"
-        android:src="@drawable/cat_widget2" />
+            <TextView
+                android:id="@+id/cat_character_button"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/cat_character_button_margin_top"
+                android:background="@drawable/widget_btn_schedule"
+                android:includeFontPadding="false"
+                android:maxLines="1"
+                android:paddingStart="14dp"
+                android:paddingTop="7dp"
+                android:paddingEnd="14dp"
+                android:paddingBottom="7dp"
+                android:text="+  일정 보기  ›"
+                android:textColor="#FFFFFF"
+                android:textSize="@dimen/cat_character_button_text_size"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <ImageView
+            android:id="@+id/cat_character_image"
+            android:layout_width="@dimen/cat_character_image_size"
+            android:layout_height="@dimen/cat_character_image_size"
+            android:layout_gravity="center_vertical"
+            android:layout_marginEnd="@dimen/cat_character_image_margin_end"
+            android:adjustViewBounds="true"
+            android:contentDescription="@null"
+            android:scaleType="fitCenter"
+            android:src="@drawable/iphonecatwidget2" />
+    </LinearLayout>
 
 </FrameLayout>
