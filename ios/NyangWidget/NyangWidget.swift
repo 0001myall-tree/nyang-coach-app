@@ -323,7 +323,8 @@ struct NyangCompactWidgetView: View {
             Color.white
 
             GeometryReader { proxy in
-                let textHeight: CGFloat = 26
+                // 시간 일정이 있으면 시간/일정명을 두 줄로 쌓아 보여준다.
+                let textHeight: CGFloat = hasTimedSchedule ? 42 : 26
                 let topPadding: CGFloat = 4
                 let imageTextGap: CGFloat = 6
                 let bottomPadding: CGFloat = 18
@@ -348,7 +349,7 @@ struct NyangCompactWidgetView: View {
                 miniText
                     .frame(
                         maxWidth: .infinity,
-                        alignment: .center
+                        alignment: hasTimedSchedule ? .leading : .center
                     )
                     .frame(height: textHeight)
                     .position(
@@ -365,19 +366,28 @@ struct NyangCompactWidgetView: View {
     private var miniText: some View {
         Group {
             if hasTimedSchedule {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(entry.scheduleTime)
-                        .foregroundColor(compactWidgetAccent)
-                        .font(.system(size: 15, weight: .bold, design: .rounded))
-                        .lineLimit(1)
-                        .fixedSize(horizontal: true, vertical: false)
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(alignment: .center, spacing: 5) {
+                        Image("fa_clock_solid")
+                            .renderingMode(.template)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 12, height: 12)
+                            .foregroundColor(Color(red: 0.63, green: 0.55, blue: 1.0))
 
-                    Text(truncatedScheduleTitle(entry.scheduleTitle))
+                        Text(entry.scheduleTime)
+                            .foregroundColor(compactWidgetAccent)
+                            .font(.system(size: 15, weight: .bold, design: .rounded))
+                            .lineLimit(1)
+                    }
+
+                    // 글자 수 대신 좌우 여백에 맞춰 자연스럽게 잘리고
+                    // 말줄임(…)이 붙도록 폭 기준으로 자른다.
+                    Text(entry.scheduleTitle)
                         .foregroundColor(Color(red: 0.15, green: 0.14, blue: 0.16))
                         .font(.system(size: 15, weight: .semibold, design: .rounded))
                         .lineLimit(1)
                         .truncationMode(.tail)
-                        .minimumScaleFactor(0.78)
                 }
             } else if isAwayOverDay(entry) {
                 Text("집사 보고싶다옹...")
