@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
@@ -222,7 +223,14 @@ class NotificationService {
   Future<void> init() async {
     if (kIsWeb) return;
     tz.initializeTimeZones();
-    tz.setLocalLocation(tz.getLocation('Asia/Seoul'));
+    // 예약 알림이 사용자의 현지 시간에 맞게 울리도록 기기 시간대를 따른다.
+    // 감지에 실패하면 한국 시간으로 폴백한다.
+    try {
+      final deviceTimeZone = await FlutterTimezone.getLocalTimezone();
+      tz.setLocalLocation(tz.getLocation(deviceTimeZone));
+    } catch (_) {
+      tz.setLocalLocation(tz.getLocation('Asia/Seoul'));
+    }
     const AndroidInitializationSettings androidSettings =
         AndroidInitializationSettings('@mipmap/ic_launcher');
     const DarwinInitializationSettings iosSettings =
