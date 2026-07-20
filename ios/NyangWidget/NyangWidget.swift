@@ -324,15 +324,17 @@ struct NyangCompactWidgetView: View {
 
             GeometryReader { proxy in
                 // 시간 일정이 있으면 시간/일정명을 두 줄로 쌓아 보여준다.
-                let textHeight: CGFloat = hasTimedSchedule ? 42 : 26
+                let textHeight: CGFloat = hasTimedSchedule ? 40 : 26
                 let topPadding: CGFloat = 4
-                let imageTextGap: CGFloat = 6
+                let imageTextGap: CGFloat = 3
                 let bottomPadding: CGFloat = 18
                 let horizontalPadding = min(max(proxy.size.width * 0.08, 12), 16)
                 let textCenterY = proxy.size.height - bottomPadding - textHeight / 2
                 let imageAreaHeight = max(textCenterY - textHeight / 2 - imageTextGap - topPadding, 1)
-                let imageSize = min(proxy.size.width * 0.96, imageAreaHeight)
-                let imageCenterY = topPadding + imageSize / 2
+                // 냥냥이를 살짝 키우고(5%) 조금 아래로 내려서 텍스트와의
+                // 간격이 휑해 보이지 않게 한다. (이미지 여백 덕에 글자와는 안 겹침)
+                let imageSize = min(proxy.size.width * 0.96, imageAreaHeight * 1.05)
+                let imageCenterY = topPadding + imageSize / 2 + 2
 
                 Image(catImageName, bundle: .main)
                     .renderingMode(.original)
@@ -372,12 +374,12 @@ struct NyangCompactWidgetView: View {
                             .renderingMode(.template)
                             .resizable()
                             .scaledToFit()
-                            .frame(width: 12, height: 12)
+                            .frame(width: 11, height: 11)
                             .foregroundColor(Color(red: 0.63, green: 0.55, blue: 1.0))
 
                         Text(entry.scheduleTime)
                             .foregroundColor(compactWidgetAccent)
-                            .font(.system(size: 15, weight: .bold, design: .rounded))
+                            .font(.system(size: 14, weight: .bold, design: .rounded))
                             .lineLimit(1)
                     }
 
