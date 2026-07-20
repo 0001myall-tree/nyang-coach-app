@@ -10,6 +10,47 @@ struct NyangEntry: TimelineEntry {
     let remainingCount: Int
     let progress: Int
     let catMessage: String
+    let isVacation: Bool
+    let lastOpenedAt: Date?
+}
+
+/// 휴식 모드가 아닌 상태로 24시간 이상 앱을 열지 않았는지 여부.
+/// 이때는 남은 일정 개수가 의미 없으므로 위젯 문구를 "보고싶다옹"으로 바꾼다.
+func isAwayOverDay(_ entry: NyangEntry) -> Bool {
+    if entry.isVacation {
+        return false
+    }
+    guard let lastOpened = entry.lastOpenedAt else {
+        return false
+    }
+    return Date().timeIntervalSince(lastOpened) >= 24 * 3600
+}
+
+/// 냥냥이 표정 우선순위: 휴식 모드 > 미접속(48h/24h) > 목표 달성률.
+func nyangCatImageName(for entry: NyangEntry) -> String {
+    if entry.isVacation {
+        return "iphonecatwidget7"
+    }
+    if let lastOpened = entry.lastOpenedAt {
+        let hours = Date().timeIntervalSince(lastOpened) / 3600
+        if hours >= 48 {
+            return "iphonecatwidget6"
+        }
+        if hours >= 24 {
+            return "iphonecatwidget5"
+        }
+    }
+    let progress = min(max(entry.progress, 0), 100)
+    if progress >= 90 {
+        return "iphonecatwidget4"
+    }
+    if progress >= 51 {
+        return "iphonecatwidget3"
+    }
+    if progress >= 10 {
+        return "iphonecatwidget2"
+    }
+    return "iphonecatwidget1"
 }
 
 struct NyangProvider: TimelineProvider {
@@ -20,7 +61,9 @@ struct NyangProvider: TimelineProvider {
             scheduleTitle: "운동",
             remainingCount: 2,
             progress: 34,
-            catMessage: "차근차근 간다냥!"
+            catMessage: "차근차근 간다냥!",
+            isVacation: false,
+            lastOpenedAt: Date()
         )
     }
 
@@ -41,6 +84,10 @@ struct NyangProvider: TimelineProvider {
         let remainingCount = defaults.object(forKey: "remaining_count") as? Int ?? Int(defaults.string(forKey: "remaining_count") ?? "") ?? 0
         let progress = defaults.object(forKey: "progress") as? Int ?? Int(defaults.string(forKey: "progress") ?? "") ?? 0
         let catMessage = defaults.string(forKey: "coach_message_cat") ?? "오늘도 시작해보자냥!"
+        let isVacation = defaults.bool(forKey: "vacation_mode")
+        let lastOpenedMillis = defaults.object(forKey: "last_opened_at") as? Double
+            ?? Double(defaults.string(forKey: "last_opened_at") ?? "")
+        let lastOpenedAt = lastOpenedMillis.map { Date(timeIntervalSince1970: $0 / 1000) }
 
         return NyangEntry(
             date: Date(),
@@ -48,9 +95,15 @@ struct NyangProvider: TimelineProvider {
             scheduleTitle: scheduleTitle,
             remainingCount: remainingCount,
             progress: progress,
-            catMessage: catMessage
+            catMessage: catMessage,
+            isVacation: isVacation,
+            lastOpenedAt: lastOpenedAt
         )
     }
+}
+
+private func truncatedScheduleTitle(_ title: String, limit: Int = 10) -> String {
+    title.count > limit ? String(title.prefix(limit)) + "…" : title
 }
 
 private let compactWidgetTitle = "냥냥코치 미니 위젯"
@@ -87,36 +140,32 @@ struct NyangCharacterWidgetView: View {
         entry.remainingCount == 0 && min(max(entry.progress, 0), 100) == 0
     }
 
+    /// 시간 일정 없이 24시간 이상 미접속이라 "집사, 보고싶다옹...."을 띄우는 상태.
+    /// 이때는 일정 보기 버튼도 숨긴다.
+    private var showsMissYouMessage: Bool {
+        !hasTimedSchedule && isAwayOverDay(entry)
+    }
+
     private var catImageName: String {
-        switch min(max(entry.progress, 0), 100) {
-        case 0:
-            return "cat_widget1"
-        case 100:
-            return "cat_widget3"
-        default:
-            return "cat_widget2"
-        }
+        nyangCatImageName(for: entry)
     }
 
     private func makeMetrics(for size: CGSize) -> Metrics {
         let clampedWidth = max(size.width, 280)
-        let isComplete = min(max(entry.progress, 0), 100) == 100
-        let baseImageWidth = min(max(clampedWidth * 0.60, 210), isComplete ? 267 : 249)
-        let imageWidth = clampedWidth < 330 ? min(baseImageWidth, 225) : baseImageWidth
-        let imageHeight = imageWidth * 0.73
-        let textTrailing = min(max(imageWidth * 0.58, 126), 160)
         let compact = clampedWidth < 330
+        let imageSide = size.height * 0.68
+        let textTrailing = min(max(imageSide * 1.35, 140), 170)
 
         return Metrics(
             textLeading: compact ? 22 : 30,
             textTrailing: textTrailing,
-            imageWidth: imageWidth,
-            imageHeight: imageHeight,
-            imageTrailing: compact ? -2 : 0,
-            imageCenterYRatio: 0.55,
+            imageWidth: imageSide,
+            imageHeight: imageSide,
+            imageTrailing: compact ? 30 : 42,
+            imageCenterYRatio: 0.5,
             checkSize: compact ? 32 : 38,
-            checkTrailing: compact ? 8 : 12,
-            checkCenterYRatio: 0.70,
+            checkTrailing: compact ? 12 : 16,
+            checkCenterYRatio: 0.72,
             timeFontSize: compact ? 18 : 20,
             titleFontSize: compact ? 16 : 18
         )
@@ -147,7 +196,9 @@ struct NyangCharacterWidgetView: View {
                                 timeFontSize: metrics.timeFontSize,
                                 titleFontSize: metrics.titleFontSize
                             )
-                            scheduleButton
+                            if !showsMissYouMessage {
+                                scheduleButton
+                            }
                         }
                             .padding(.leading, metrics.textLeading)
                             .padding(.trailing, metrics.textTrailing)
@@ -217,14 +268,22 @@ struct NyangCharacterWidgetView: View {
                             .lineLimit(1)
                     }
 
-                    Text(entry.scheduleTitle)
+                    Text(truncatedScheduleTitle(entry.scheduleTitle))
                         .foregroundColor(.white)
                         .font(.system(size: titleFontSize, weight: .bold, design: .rounded))
                         .lineLimit(1)
                         .minimumScaleFactor(0.82)
                 }
             } else {
-                if hasNoTodayItems {
+                if isAwayOverDay(entry) {
+                    Text("집사,\n보고싶다옹....")
+                        .foregroundColor(.white)
+                        .font(.system(size: titleFontSize, weight: .bold, design: .rounded))
+                        .lineLimit(2)
+                        .lineSpacing(3)
+                        .multilineTextAlignment(.leading)
+                        .minimumScaleFactor(0.82)
+                } else if hasNoTodayItems {
                     Text("집사야 오늘 뭐할까?")
                         .foregroundColor(.white)
                         .font(.system(size: titleFontSize, weight: .bold, design: .rounded))
@@ -246,27 +305,27 @@ struct NyangCharacterWidgetView: View {
     }
 
     private var scheduleButton: some View {
-        HStack(spacing: 9) {
+        HStack(spacing: 7) {
             Text("+")
-                .font(.system(size: 24, weight: .regular, design: .rounded))
+                .font(.system(size: 19, weight: .regular, design: .rounded))
                 .offset(y: -1)
 
             Text("일정 보기")
-                .font(.system(size: 18, weight: .bold, design: .rounded))
+                .font(.system(size: 14, weight: .bold, design: .rounded))
                 .lineLimit(1)
                 .minimumScaleFactor(0.82)
 
             Text("›")
-                .font(.system(size: 28, weight: .bold, design: .rounded))
+                .font(.system(size: 22, weight: .bold, design: .rounded))
                 .offset(y: -1)
         }
         .foregroundColor(.white)
-        .frame(width: 146, height: 40)
+        .frame(width: 116, height: 32)
         .background(
-            RoundedRectangle(cornerRadius: 15, style: .continuous)
-                .stroke(Color.white.opacity(0.36), lineWidth: 1.6)
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(Color.white.opacity(0.36), lineWidth: 1.4)
                 .background(
-                    RoundedRectangle(cornerRadius: 15, style: .continuous)
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
                         .fill(Color.white.opacity(0.06))
                 )
         )
@@ -281,14 +340,7 @@ struct NyangCompactWidgetView: View {
     }
 
     private var catImageName: String {
-        let progress = min(max(entry.progress, 0), 100)
-        if progress > 80 {
-            return "iphonecatwidget3"
-        }
-        if progress > 30 {
-            return "iphonecatwidget2"
-        }
-        return "iphonecatwidget1"
+        nyangCatImageName(for: entry)
     }
 
     var body: some View {
@@ -305,7 +357,7 @@ struct NyangCompactWidgetView: View {
                 let textHeight: CGFloat = 26
                 let topPadding: CGFloat = 4
                 let imageTextGap: CGFloat = 6
-                let bottomPadding: CGFloat = 14
+                let bottomPadding: CGFloat = 18
                 let horizontalPadding = min(max(proxy.size.width * 0.08, 12), 16)
                 let textCenterY = proxy.size.height - bottomPadding - textHeight / 2
                 let imageAreaHeight = max(textCenterY - textHeight / 2 - imageTextGap - topPadding, 1)
@@ -327,7 +379,7 @@ struct NyangCompactWidgetView: View {
                 miniText
                     .frame(
                         maxWidth: .infinity,
-                        alignment: hasTimedSchedule ? .leading : .center
+                        alignment: .center
                     )
                     .frame(height: textHeight)
                     .position(
@@ -344,20 +396,27 @@ struct NyangCompactWidgetView: View {
     private var miniText: some View {
         Group {
             if hasTimedSchedule {
-                HStack(alignment: .firstTextBaseline, spacing: 13) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text(entry.scheduleTime)
                         .foregroundColor(compactWidgetAccent)
-                        .font(.system(size: 20, weight: .bold, design: .rounded))
+                        .font(.system(size: 15, weight: .bold, design: .rounded))
                         .lineLimit(1)
                         .fixedSize(horizontal: true, vertical: false)
 
-                    Text(entry.scheduleTitle)
+                    Text(truncatedScheduleTitle(entry.scheduleTitle))
                         .foregroundColor(Color(red: 0.15, green: 0.14, blue: 0.16))
-                        .font(.system(size: 18, weight: .semibold, design: .rounded))
+                        .font(.system(size: 15, weight: .semibold, design: .rounded))
                         .lineLimit(1)
                         .truncationMode(.tail)
                         .minimumScaleFactor(0.78)
                 }
+            } else if isAwayOverDay(entry) {
+                Text("집사 보고싶다옹...")
+                    .foregroundColor(Color(red: 0.15, green: 0.14, blue: 0.16))
+                    .font(.system(size: 20, weight: .semibold, design: .rounded))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.78)
+                    .multilineTextAlignment(.center)
             } else {
                 (Text("남은 일정 ")
                     .foregroundColor(Color(red: 0.15, green: 0.14, blue: 0.16))

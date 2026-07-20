@@ -1949,6 +1949,7 @@ class _TasksScreenState extends State<TasksScreen>
     } else {
       await prefs.setString('nyang_vacation', jsonEncode(vacationInfo));
     }
+    await WidgetSyncService.syncFromStoredTasks();
     TasksSyncService.scheduleSyncToCloud();
   }
 
