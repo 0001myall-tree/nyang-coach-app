@@ -354,11 +354,12 @@ struct NyangCompactWidgetView: View {
                         alignment: hasTimedSchedule ? .leading : .center
                     )
                     .frame(height: textHeight)
+                    .padding(.horizontal, horizontalPadding)
+                    .frame(width: proxy.size.width)
                     .position(
                         x: proxy.size.width / 2,
                         y: textCenterY
                     )
-                    .padding(.horizontal, horizontalPadding)
             }
         }
         .widgetWhiteBackground()
@@ -405,7 +406,7 @@ struct NyangCompactWidgetView: View {
                     .foregroundColor(compactWidgetAccent)
                  + Text("개")
                     .foregroundColor(Color(red: 0.15, green: 0.14, blue: 0.16)))
-                    .font(.system(size: 20, weight: .semibold, design: .rounded))
+                    .font(.system(size: 18, weight: .semibold, design: .rounded))
                     .lineLimit(1)
                     .minimumScaleFactor(0.78)
                     .multilineTextAlignment(.center)
