@@ -35,6 +35,8 @@
 	</array>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
+	<key>FlutterDeepLinkingEnabled</key>
+	<false/>
 	<key>CFBundleName</key>
 	<string>냥냥코치</string>
 	<key>CFBundlePackageType</key>

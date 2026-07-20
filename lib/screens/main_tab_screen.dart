@@ -153,7 +153,10 @@ class _MainTabScreenState extends State<MainTabScreen>
   final TasksScreenController _tasksController = TasksScreenController();
   bool _coachAccessChecked = false;
   bool _widgetIntentDrawerMode = false;
-  bool _isWidgetTasksOverlayOpen = false;
+  // 앱 전체에서 위젯 일정 전체창이 딱 하나만 뜨도록 모든 화면 인스턴스가
+  // 공유하는 플래그. 위젯을 연타하거나 화면이 겹쳐 쌓인 상태에서도
+  // 이미 열려 있으면 새로 덮어 띄우지 않는다.
+  static bool _isWidgetTasksOverlayOpen = false;
   bool _redirectingForCoachAccess = false;
 
   int _logoTapCount = 0;
@@ -1424,6 +1427,9 @@ class _MainTabScreenState extends State<MainTabScreen>
               elevation: 0,
               centerTitle: false,
               titleSpacing: 20,
+              // 딥링크 등으로 화면이 겹쳐 쌓여도 자동 뒤로가기 버튼이
+              // 커스텀 뒤로가기 옆에 겹쳐 나오지 않게 한다.
+              automaticallyImplyLeading: false,
               title: _buildAppBarTitle(isImmersive: true),
               actions: [
                 if (hasUnreadScheduledCheckIn)
