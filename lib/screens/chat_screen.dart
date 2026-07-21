@@ -7809,9 +7809,9 @@ $timerOutputRule
                         _coachSwitchTarget == null &&
                         ((_dynamicChips.contains('🌙 오늘은 쉬어가기') &&
                                 _dynamicChips.contains('🐾 오늘은 조금만 하기')) ||
-                            (!_coach.isMaster &&
-                                (_dynamicChips.isNotEmpty ||
-                                    _coach.chips.isNotEmpty))))
+                            _coach.isMaster ||
+                            (_dynamicChips.isNotEmpty ||
+                                _coach.chips.isNotEmpty)))
                       _buildChips(),
                   ],
                 ),
@@ -9882,10 +9882,31 @@ $timerOutputRule
     );
   }
 
+  // 마스터 코치 채팅창 하단 고정 채팅칩. (탭 동작은 추후 정의)
+  static const List<String> _masterQuickChips = ['카운트다운 해줘', '타이머 띄워줘'];
+
+  // 마스터 칩 앞 FontAwesome 아이콘. 칩 글씨색(코치 accent)에 맞춰 톤을 통일한다.
+  Widget? _chipIcon(String chip) {
+    final asset = switch (chip) {
+      '카운트다운 해줘' => 'assets/icons/fa-hourglass-half-solid.svg',
+      '타이머 띄워줘' => 'assets/icons/fa-stopwatch-solid.svg',
+      _ => null,
+    };
+    if (asset == null) return null;
+    return SvgPicture.asset(
+      asset,
+      width: 14,
+      height: 14,
+      colorFilter: ColorFilter.mode(_coach.accentColor, BlendMode.srcIn),
+    );
+  }
+
   Widget _buildChips() {
-    final chips = _suppressDefaultChips
-        ? const <String>[]
-        : (_dynamicChips.isNotEmpty ? _dynamicChips : _coach.chips);
+    final chips = _coach.isMaster
+        ? _masterQuickChips
+        : (_suppressDefaultChips
+              ? const <String>[]
+              : (_dynamicChips.isNotEmpty ? _dynamicChips : _coach.chips));
     return Container(
       height: 52,
       margin: const EdgeInsets.only(top: 8),
@@ -9898,6 +9919,7 @@ $timerOutputRule
           final chip = chips[i];
           return AppChip(
             label: chip,
+            icon: _chipIcon(chip),
             backgroundColor: AppDesignTokens.surface,
             foregroundColor: _coach.accentColor,
             borderColor: _coach.accentColor.withValues(alpha: 0.30),
