@@ -3765,13 +3765,17 @@ class _ChatScreenState extends State<ChatScreen>
     for (final relative in relativeDayPatterns) {
       if (relative.pattern.hasMatch(normalized)) {
         final target = today.add(Duration(days: relative.offset));
-        return '${relative.label}는 ${_fullKoreanDate(target)}입니다.';
+        return _coachFactLine(
+          '${relative.label}${_topicParticle(relative.label)} ${_fullKoreanDate(target)}',
+        );
       }
     }
 
     final nthWeekdayDate = _parseMonthNthWeekdayDate(normalized);
     if (nthWeekdayDate != null) {
-      return '${nthWeekdayDate.label}은 ${_fullKoreanDate(nthWeekdayDate.date)}입니다.';
+      return _coachFactLine(
+        '${nthWeekdayDate.label}${_topicParticle(nthWeekdayDate.label)} ${_fullKoreanDate(nthWeekdayDate.date)}',
+      );
     }
 
     final weekMatch = RegExp(
@@ -3788,7 +3792,9 @@ class _ChatScreenState extends State<ChatScreen>
         _ => 0,
       };
       final target = thisMonday.add(Duration(days: weekOffset + weekday - 1));
-      return '${_relativeDateQuestionLabel(rel)} ${_weekdayLabel(weekday)}요일은 ${_fullKoreanDate(target)}입니다.';
+      return _coachFactLine(
+        '${_relativeDateQuestionLabel(rel)} ${_weekdayLabel(weekday)}요일은 ${_fullKoreanDate(target)}',
+      );
     }
 
     final monthMatch = RegExp(
@@ -3812,10 +3818,121 @@ class _ChatScreenState extends State<ChatScreen>
       }
       if (dates.isEmpty) return null;
       final joined = dates.map((date) => '${date.day}일').join(', ');
-      return '${_relativeDateQuestionLabel(rel)} ${_weekdayLabel(weekday)}요일은 $joined입니다.';
+      return _coachFactLine(
+        '${_relativeDateQuestionLabel(rel)} ${_weekdayLabel(weekday)}요일은 $joined',
+      );
     }
 
     return null;
+  }
+
+  /// "7월 31일은 무슨 요일이야?" 처럼 특정 날짜의 요일을 묻는 질문을
+  /// 로컬에서 바로 계산해 답한다. (API 호출·오답 방지)
+  String? _weekdayQuestionReply(String input) {
+    final normalized = input.replaceAll(RegExp(r'\s+'), '');
+    final asksWeekday = RegExp(
+      r'(무슨요일|몇요일|요일이야|요일이지|요일이니|요일이냐|요일일까|요일인가|요일이에요|요일이예요|요일예요|요일인가요|요일이었|요일이더|요일알려|요일뭐|요일좀|요일\?)',
+    ).hasMatch(normalized);
+    if (!asksWeekday) return null;
+
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
+    DateTime? target;
+    String? label;
+
+    // 1) 상대 표현 (오늘/내일/모레/어제 등)
+    final relatives = <({String label, int offset, RegExp pattern})>[
+      (label: '그글피', offset: 4, pattern: RegExp(r'그글피')),
+      (label: '글피', offset: 3, pattern: RegExp(r'글피')),
+      (label: '모레', offset: 2, pattern: RegExp(r'(?:내일모레|낼모레|모레)')),
+      (label: '내일', offset: 1, pattern: RegExp(r'내일')),
+      (label: '오늘', offset: 0, pattern: RegExp(r'오늘')),
+      (label: '어제', offset: -1, pattern: RegExp(r'어제')),
+      (label: '그저께', offset: -2, pattern: RegExp(r'(?:그저께|그제)')),
+    ];
+    for (final r in relatives) {
+      if (r.pattern.hasMatch(normalized)) {
+        target = today.add(Duration(days: r.offset));
+        label = r.label;
+        break;
+      }
+    }
+
+    // 2) (YYYY년) M월 D일
+    if (target == null) {
+      final ymd = RegExp(
+        r'(?:(\d{4})년)?(\d{1,2})월(\d{1,2})일',
+      ).firstMatch(normalized);
+      if (ymd != null) {
+        final year = int.tryParse(ymd.group(1) ?? '') ?? now.year;
+        final month = int.tryParse(ymd.group(2)!) ?? 0;
+        final day = int.tryParse(ymd.group(3)!) ?? 0;
+        final d = DateTime(year, month, day);
+        if (month >= 1 && month <= 12 && d.month == month && d.day == day) {
+          target = d;
+          label = ymd.group(1) != null
+              ? '$year년 $month월 $day일'
+              : '$month월 $day일';
+        }
+      }
+    }
+
+    // 3) D일 (이번 달 기준)
+    if (target == null) {
+      final dOnly = RegExp(r'(\d{1,2})일').firstMatch(normalized);
+      if (dOnly != null) {
+        final day = int.tryParse(dOnly.group(1)!) ?? 0;
+        final d = DateTime(now.year, now.month, day);
+        if (day >= 1 && d.month == now.month && d.day == day) {
+          target = d;
+          label = '$day일';
+        }
+      }
+    }
+
+    // 4) 날짜 표현이 없으면 "오늘"의 요일을 묻는 것으로 본다.
+    //    단 "무슨 요일에 할까/등록" 같은 스케줄 문의는 제외한다.
+    if (target == null) {
+      final core = normalized.replaceAll(RegExp(r'[?!.~]+$'), '');
+      final schedulingLike = RegExp(
+        r'요일(에|로|마다)|할까|할래|등록|잡아|추가|해줘|해줄|반복',
+      ).hasMatch(core);
+      if (!schedulingLike) {
+        target = today;
+        label = '오늘';
+      }
+    }
+
+    if (target == null || label == null) return null;
+    final weekday = _weekdayLabel(target.weekday);
+    return _coachFactLine('$label${_topicParticle(label)} $weekday요일');
+  }
+
+  /// "7월 31일은 금요일" / "오늘은 2026년 7월 21일" 같은 사실 문장을
+  /// 코치 말투로 마무리한다. (요일·날짜 로컬 응답 공용)
+  String _coachFactLine(String subject) {
+    return switch (widget.coachId) {
+      'cat' => '$subject이다냥! 🐾',
+      'bro' => '$subject이다. 됐지?',
+      'halmae' => '$subject이란다~',
+      'boyfriend' => '자기야, $subject이야 💙',
+      'girlfriend' => '오빠, $subject이야 🩷',
+      'sec_male' => '$subject입니다.',
+      'sec_female' => '$subject이에요! 🌸',
+      _ => '$subject입니다.',
+    };
+  }
+
+  /// 마지막 글자의 받침 유무로 주격 보조사(은/는)를 고른다.
+  String _topicParticle(String word) {
+    if (word.isEmpty) return '은';
+    final code = word.codeUnitAt(word.length - 1);
+    if (code >= 0xAC00 && code <= 0xD7A3) {
+      final hasBatchim = (code - 0xAC00) % 28 != 0;
+      return hasBatchim ? '은' : '는';
+    }
+    return '은';
   }
 
   String _relativeDateQuestionLabel(String rel) {
@@ -5019,7 +5136,8 @@ class _ChatScreenState extends State<ChatScreen>
       return;
     }
 
-    final dateQuestionReply = _calendarDateQuestionReply(trimmed);
+    final dateQuestionReply =
+        _weekdayQuestionReply(trimmed) ?? _calendarDateQuestionReply(trimmed);
     if (dateQuestionReply != null) {
       setState(() {
         _messages.add(
