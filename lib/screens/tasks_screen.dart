@@ -1289,6 +1289,7 @@ class _TasksScreenState extends State<TasksScreen>
           coreTasks[cIdx].duration = task.duration;
           coreTasks[cIdx].text = task.text;
           coreTasks[cIdx].isReminderEnabled = task.isReminderEnabled;
+          coreTasks[cIdx].memo = task.memo;
         }
       });
       _saveTasks();
@@ -5631,7 +5632,9 @@ class _TasksScreenState extends State<TasksScreen>
                             width: 17,
                             height: 17,
                             colorFilter: ColorFilter.mode(
-                              _coach.accentColor,
+                              memoCtrl.text.trim().isEmpty
+                                  ? const Color(0xFFB0B0C8)
+                                  : _coach.accentColor,
                               BlendMode.srcIn,
                             ),
                           ),
@@ -5642,7 +5645,9 @@ class _TasksScreenState extends State<TasksScreen>
                               style: GoogleFonts.notoSansKr(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w700,
-                                color: const Color(0xFF3D3A4E),
+                                color: memoCtrl.text.trim().isEmpty
+                                    ? const Color(0xFF9CA3AF)
+                                    : const Color(0xFF3D3A4E),
                               ),
                             ),
                           ),
@@ -6136,6 +6141,7 @@ class _TasksScreenState extends State<TasksScreen>
                           coreTasks[cIdx].duration = t.duration;
                           coreTasks[cIdx].text = t.text;
                           coreTasks[cIdx].source = t.source;
+                          coreTasks[cIdx].memo = t.memo;
                         }
 
                         // 오늘 탭에 주입된 일정 카드를 수정한 경우, 원본 ScheduleItem에도
@@ -6160,6 +6166,7 @@ class _TasksScreenState extends State<TasksScreen>
                             daySchedules[sIdx].duration = t.duration;
                             daySchedules[sIdx].isReminderEnabled =
                                 t.isReminderEnabled;
+                            daySchedules[sIdx].memo = t.memo;
                           }
                         }
 
