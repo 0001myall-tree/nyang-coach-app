@@ -5641,7 +5641,7 @@ class _TasksScreenState extends State<TasksScreen>
                           const SizedBox(width: 9),
                           Expanded(
                             child: Text(
-                              memoCtrl.text.trim().isEmpty ? '메모 추가' : '메모',
+                              memoCtrl.text.trim().isEmpty ? '메모 추가' : '메모 보기',
                               style: GoogleFonts.notoSansKr(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w700,
@@ -5700,7 +5700,7 @@ class _TasksScreenState extends State<TasksScreen>
                       }),
                       behavior: HitTestBehavior.opaque,
                       child: Padding(
-                        padding: const EdgeInsets.only(top: 2, bottom: 2),
+                        padding: const EdgeInsets.only(top: 8, bottom: 2),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
