@@ -320,11 +320,14 @@ class VisionDeadline {
     'month': month,
     'period': period,
   };
-  factory VisionDeadline.fromJson(Map<String, dynamic> j) => VisionDeadline(
-    year: j['year'].toString(),
-    month: j['month'].toString(),
-    period: j['period'],
-  );
+  factory VisionDeadline.fromJson(Map<String, dynamic>? j) {
+    final now = DateTime.now();
+    return VisionDeadline(
+      year: (j?['year'] ?? now.year + 1).toString(),
+      month: (j?['month'] ?? 1).toString(),
+      period: (j?['period'] ?? '말').toString(),
+    );
+  }
 }
 
 class MemoSection {
@@ -459,10 +462,12 @@ class VisionItem {
 
   factory VisionItem.fromJson(Map<String, dynamic> j) => VisionItem(
     id: j['id'].toString(),
-    name: j['name'],
-    desc: j['desc'],
+    name: (j['name'] ?? j['text'] ?? '').toString(),
+    desc: j['desc']?.toString(),
     coachId: j['coachId'] ?? 'self',
-    deadline: VisionDeadline.fromJson(j['deadline']),
+    deadline: VisionDeadline.fromJson(
+      j['deadline'] is Map ? Map<String, dynamic>.from(j['deadline']) : null,
+    ),
     milestones:
         (j['milestones'] as List?)
             ?.map((e) => MilestoneItem.fromJson(e))

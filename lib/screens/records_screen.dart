@@ -218,11 +218,13 @@ class _RecordsScreenState extends State<RecordsScreen> {
     final weekMonday = _getWeekMondayStr();
     final cacheKey = 'nyang_coach_weekly_feedback_sec_male';
     final cachedData = prefs.getString(cacheKey);
+    final sourceSignature = _weeklyFeedbackSourceSignature(prefs);
 
     try {
       if (cachedData != null) {
         final cached = jsonDecode(cachedData) as Map<String, dynamic>;
         if (cached['weekMonday'] == weekMonday &&
+            cached['sourceSignature'] == sourceSignature &&
             (cached['text'] as String?)?.trim().isNotEmpty == true) {
           if (!mounted) return;
           setState(() {
@@ -234,13 +236,33 @@ class _RecordsScreenState extends State<RecordsScreen> {
     } catch (_) {}
 
     final feedbackType = _selectFeedbackType(prefs, weekMonday);
-    await _triggerWeeklyFeedback(weekMonday, cacheKey, feedbackType);
+    await _triggerWeeklyFeedback(
+      weekMonday,
+      cacheKey,
+      feedbackType,
+      sourceSignature,
+    );
+  }
+
+  String _weeklyFeedbackSourceSignature(SharedPreferences prefs) {
+    return jsonEncode({
+      'lastDate': _lastDate,
+      'history': prefs.getString('nyang_history') ?? '',
+      'weekGoals': prefs.getString('nyang_week_goals') ?? '',
+      'monthGoals': prefs.getString('nyang_month_goals') ?? '',
+      'visions': prefs.getString('nyang_visions') ?? '',
+      'habits': prefs.getString('nyang_habits') ?? '',
+      'habitLogs': prefs.getString('nyang_habit_logs') ?? '',
+      'vacation': prefs.getString('nyang_vacation') ?? '',
+      'title': _userTitle,
+    });
   }
 
   Future<void> _triggerWeeklyFeedback(
     String weekMonday,
     String cacheKey,
     int feedbackType,
+    String sourceSignature,
   ) async {
     if (_isGeneratingWeeklyFeedback) return;
     _isGeneratingWeeklyFeedback = true;
@@ -317,6 +339,7 @@ class _RecordsScreenState extends State<RecordsScreen> {
           'weekMonday': weekMonday,
           'text': feedbackText,
           'type': feedbackType,
+          'sourceSignature': sourceSignature,
         }),
       );
       await prefs.setString(
@@ -343,6 +366,7 @@ class _RecordsScreenState extends State<RecordsScreen> {
     final prefs = await SharedPreferences.getInstance();
     final records = _getLast7Records();
     final visibleVisions = _formatVisionText(prefs.getString('nyang_visions'));
+    final hasVisibleVisions = visibleVisions != '없음';
     final weekGoalText = _formatGoalText(prefs.getString('nyang_week_goals'));
     final monthGoalText = _formatGoalText(prefs.getString('nyang_month_goals'));
 
@@ -444,10 +468,15 @@ class _RecordsScreenState extends State<RecordsScreen> {
       final visionsRaw = prefs.getString('nyang_visions');
       if (visionsRaw != null) {
         visionItems = (jsonDecode(visionsRaw) as List)
-            .map((e) => VisionItem.fromJson(e))
+            .whereType<Map>()
+            .map((e) => VisionItem.fromJson(Map<String, dynamic>.from(e)))
             .toList();
       }
     } catch (_) {}
+
+    final visionEmptyGuidance = hasVisibleVisions
+        ? '- 장기 비전은 이미 제공되어 있습니다. 절대 장기 비전이 비어 있다고 말하지 말고, 제공된 장기 비전 이름과 상세 데이터를 기준으로 회고하세요.'
+        : '- 장기 비전이 비어 있다면, 장기 비전을 작성하면 매주 실행과 연결해 점검할 수 있다고 안내하세요.';
 
     DateTime? parseDotDate(String? s) {
       if (s == null || s.isEmpty) return null;
@@ -568,7 +597,7 @@ ${feedbackType == 0
    - 최근 새로 추가/수정된 장기비전 메모나 마일스톤이 있다면, 미래를 준비하고 있다는 점을 자연스럽게 언급하세요. (예: "최근에는 '앱 출시 준비' 관련 메모도 추가했네요. 실행뿐 아니라 방향까지 구상하시는 점이 인상적입니다.")
    - 가장 가까운 마감 예정 마일스톤이 있다면 다음 준비 대상으로 안내하세요.
    - 마감일이 지난 미완료 마일스톤이 있다면 부드럽게 확인을 권유하세요.
-   - 장기 비전이 비어 있다면, 장기 비전을 작성하면 매주 실행과 연결해 점검할 수 있다고 안내하세요.
+   $visionEmptyGuidance
    - 마지막으로 미래를 응원하는 한마디로 마무리하세요.'''
         : '''   [컨디션 회고형]
    - 실행이나 성장보다 이번 주의 컨디션 흐름에 초점을 맞춥니다.
