@@ -799,6 +799,10 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
     final stageLabels = {5: '5분 집중', 15: '15분 집중', 25: '25분 집중'};
     final remain = _manager.getRemainSeconds();
     final isDone = remain <= 0;
+    // 마스터 코치 타이머는 "05:00"이 이미 시간을 보여주므로
+    // 그 아래 "n분 집중" 문구를 숨겨 중복을 없앤다.
+    final isMaster =
+        widget.coachId == 'sec_male' || widget.coachId == 'sec_female';
     const timerMain = Color(0xFF9B8AF0);
     const timerAccent = Color(0xFFA99AE8);
     const timerInk = Color(0xFF2F266C);
@@ -854,19 +858,22 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
                     color: timerInk,
                   ),
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  isDone
-                      ? '완료'
-                      : _manager.running
-                      ? '${_manager.stage}분 집중 중'
-                      : stageLabels[_manager.stage] ?? '${_manager.stage}분 집중',
-                  style: GoogleFonts.notoSansKr(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: timerAccent,
+                if (!isMaster) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    isDone
+                        ? '완료'
+                        : _manager.running
+                        ? '${_manager.stage}분 집중 중'
+                        : stageLabels[_manager.stage] ??
+                              '${_manager.stage}분 집중',
+                    style: GoogleFonts.notoSansKr(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: timerAccent,
+                    ),
                   ),
-                ),
+                ],
                 const SizedBox(height: 14),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,

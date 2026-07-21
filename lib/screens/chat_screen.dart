@@ -83,9 +83,9 @@ class CountdownFocusModeScreen extends StatefulWidget {
 class _CountdownFocusModeScreenState extends State<CountdownFocusModeScreen>
     with TickerProviderStateMixin {
   static const _timerTotalSeconds = 15 * 60;
-  // 도입부 호흡 안내: 원이 커졌다 줄어드는 한 호흡을 여유롭게 3번 반복한다.
-  static const _breathCycle = Duration(seconds: 5);
-  static const _breathCount = 3;
+  // 도입부 호흡 안내: 원이 커졌다 줄어드는 한 호흡(4초)을 2번 반복한다.
+  static const _breathCycle = Duration(seconds: 4);
+  static const _breathCount = 2;
 
   late final AnimationController _breathCtrl;
   Timer? _flowTimer;
@@ -516,6 +516,300 @@ class _CountdownFocusModeScreenState extends State<CountdownFocusModeScreen>
   }
 }
 
+// ── 수면 도우미 모드 (1분 복식호흡) ─────────────────────────
+// 카운트다운 모드의 전체화면 다크 오버레이 구조를 재활용하되,
+// 느리고 반복적인 원 확대·축소로 화면에서 이탈(휴대폰 내려놓기)하도록 유도한다.
+enum _SleepPhase { breathing, ending, resting, menu }
+
+class SleepAssistModeScreen extends StatefulWidget {
+  const SleepAssistModeScreen({super.key});
+
+  @override
+  State<SleepAssistModeScreen> createState() => _SleepAssistModeScreenState();
+}
+
+class _SleepAssistModeScreenState extends State<SleepAssistModeScreen>
+    with SingleTickerProviderStateMixin {
+  static const _inhale = Duration(seconds: 4); // 들이마시기: 천천히 커짐
+  static const _exhale = Duration(seconds: 5); // 내쉬기: 더 천천히 작아짐
+  static const _sessionDuration = Duration(seconds: 60); // 약 1분(≈6회)
+  static const _bg = Color(0xFF04040A);
+
+  late final AnimationController _breathCtrl;
+  Timer? _sessionTimer;
+  Timer? _introTimer;
+  Timer? _endTimer;
+  _SleepPhase _phase = _SleepPhase.breathing;
+  bool _showCues = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _breathCtrl = AnimationController(
+      vsync: this,
+      duration: _inhale + _exhale,
+    );
+    _startSession();
+  }
+
+  void _startSession() {
+    _phase = _SleepPhase.breathing;
+    _showCues = false;
+    _breathCtrl
+      ..reset()
+      ..repeat();
+    // 첫 안내를 한 호흡(≈9초)간 보여준 뒤 짧은 호흡 문구로 교체한다.
+    _introTimer = Timer(_inhale + _exhale, () {
+      if (mounted) setState(() => _showCues = true);
+    });
+    _sessionTimer = Timer(_sessionDuration, _startEnding);
+  }
+
+  void _startEnding() {
+    if (!mounted) return;
+    _breathCtrl.stop();
+    setState(() => _phase = _SleepPhase.ending);
+    // 마지막 안내를 약 7초 보여준 뒤 거의 완전히 검은 화면으로 전환한다.
+    _endTimer = Timer(const Duration(seconds: 7), () {
+      if (mounted) setState(() => _phase = _SleepPhase.resting);
+    });
+  }
+
+  void _restart() {
+    _sessionTimer?.cancel();
+    _introTimer?.cancel();
+    _endTimer?.cancel();
+    setState(_startSession);
+  }
+
+  @override
+  void dispose() {
+    _sessionTimer?.cancel();
+    _introTimer?.cancel();
+    _endTimer?.cancel();
+    _breathCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: _bg,
+      body: switch (_phase) {
+        _SleepPhase.breathing || _SleepPhase.ending => _buildBreathingScreen(),
+        _SleepPhase.resting => GestureDetector(
+          onTap: () => setState(() => _phase = _SleepPhase.menu),
+          behavior: HitTestBehavior.opaque,
+          child: const SizedBox.expand(),
+        ),
+        _SleepPhase.menu => _buildMenu(),
+      },
+    );
+  }
+
+  Widget _buildBreathingScreen() {
+    final ending = _phase == _SleepPhase.ending;
+    final scale = TweenSequence<double>([
+      TweenSequenceItem(
+        tween: Tween(begin: 0.72, end: 1.12),
+        weight: _inhale.inMilliseconds.toDouble(),
+      ),
+      TweenSequenceItem(
+        tween: Tween(begin: 1.12, end: 0.72),
+        weight: _exhale.inMilliseconds.toDouble(),
+      ),
+    ]).animate(CurvedAnimation(parent: _breathCtrl, curve: Curves.easeInOut));
+
+    return Stack(
+      children: [
+        const Positioned.fill(
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: RadialGradient(
+                center: Alignment(0, -0.1),
+                radius: 1.1,
+                colors: [Color(0xFF15122B), Color(0xFF0A0A1C), _bg],
+                stops: [0.0, 0.5, 1.0],
+              ),
+            ),
+          ),
+        ),
+        // 호흡 콘텐츠 (종료 시 천천히 흐려짐)
+        AnimatedOpacity(
+          opacity: ending ? 0 : 1,
+          duration: const Duration(milliseconds: 1400),
+          curve: Curves.easeInOut,
+          child: SafeArea(
+            child: Column(
+              children: [
+                // 종료 버튼은 눈에 띄지 않게 최소화
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Padding(
+                    padding: const EdgeInsets.only(left: 8, top: 4),
+                    child: IconButton(
+                      onPressed: () => Navigator.pop(context),
+                      icon: const Icon(Icons.close_rounded),
+                      color: Colors.white.withValues(alpha: 0.26),
+                      iconSize: 22,
+                    ),
+                  ),
+                ),
+                const Spacer(flex: 2),
+                _buildGuidanceText(),
+                const SizedBox(height: 44),
+                AnimatedBuilder(
+                  animation: scale,
+                  builder: (_, child) =>
+                      Transform.scale(scale: scale.value, child: child),
+                  child: _buildSleepCircle(206),
+                ),
+                const Spacer(flex: 3),
+              ],
+            ),
+          ),
+        ),
+        // 종료 안내 (천천히 나타남)
+        AnimatedOpacity(
+          opacity: ending ? 1 : 0,
+          duration: const Duration(milliseconds: 1600),
+          curve: Curves.easeInOut,
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 36),
+              child: Text(
+                '충분히 편안해지셨다면 이제 휴대폰을 내려놓으세요.\n눈을 감고, 방금처럼 편안하게 숨을 이어가시면 됩니다.',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.notoSansKr(
+                  fontSize: 16,
+                  height: 1.7,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white.withValues(alpha: 0.82),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildGuidanceText() {
+    if (!_showCues) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 34),
+        child: Column(
+          children: [
+            Text(
+              '딱 1분만, 몸의 힘을 빼고 천천히 호흡해 보세요.\n배가 부풀고 가라앉는 감각에만 집중해 주세요.',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.notoSansKr(
+                fontSize: 18,
+                height: 1.55,
+                fontWeight: FontWeight.w800,
+                color: Colors.white,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              '어지럽거나 불편하면 평소 호흡으로 돌아가도 괜찮아요.',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.notoSansKr(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: Colors.white.withValues(alpha: 0.5),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    // 원의 움직임에 맞춰 들이마시기/내쉬기 문구를 교체한다.
+    final inhaleRatio =
+        _inhale.inMilliseconds / (_inhale + _exhale).inMilliseconds;
+    return AnimatedBuilder(
+      animation: _breathCtrl,
+      builder: (_, __) {
+        final cue = _breathCtrl.value < inhaleRatio
+            ? '천천히 들이마셔요'
+            : '더 천천히 내쉬어요';
+        return AnimatedSwitcher(
+          duration: const Duration(milliseconds: 500),
+          child: Text(
+            cue,
+            key: ValueKey(cue),
+            textAlign: TextAlign.center,
+            style: GoogleFonts.notoSansKr(
+              fontSize: 20,
+              fontWeight: FontWeight.w800,
+              color: Colors.white.withValues(alpha: 0.92),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildMenu() {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextButton(
+            onPressed: _restart,
+            child: Text(
+              '다시 시작',
+              style: GoogleFonts.notoSansKr(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: Colors.white.withValues(alpha: 0.72),
+              ),
+            ),
+          ),
+          const SizedBox(height: 18),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(
+              '종료',
+              style: GoogleFonts.notoSansKr(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: Colors.white.withValues(alpha: 0.5),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSleepCircle(double size) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: const RadialGradient(
+          colors: [Color(0xFFCEB8FF), Color(0xFF9A71E3), Color(0xFF6F54B5)],
+          stops: [0.0, 0.62, 1.0],
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFFB995FF).withValues(alpha: 0.30),
+            blurRadius: 40,
+            spreadRadius: 8,
+          ),
+          BoxShadow(
+            color: const Color(0xFFB995FF).withValues(alpha: 0.14),
+            blurRadius: 80,
+            spreadRadius: 18,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _SuggestedTask {
   final String text;
   String? time; // HH:mm 24h (mutable for time-picker edit)
@@ -893,6 +1187,8 @@ class _ChatScreenState extends State<ChatScreen>
   List<ChatMessage> _pastMessages = [];
   List<String> _dynamicChips = [];
   bool _suppressDefaultChips = false;
+  // 마스터 채팅칩 "+더보기" 확장 상태 (수면 도우미 등 추가 칩 표시).
+  bool _masterChipsExpanded = false;
   String? _coachSwitchTarget;
   bool _isLoading = false;
   late CoachConfig _coach;
@@ -1161,6 +1457,19 @@ class _ChatScreenState extends State<ChatScreen>
         },
         transitionDuration: const Duration(milliseconds: 220),
         reverseTransitionDuration: const Duration(milliseconds: 180),
+      ),
+    );
+  }
+
+  void _openSleepAssistMode() {
+    Navigator.of(context).push(
+      PageRouteBuilder<void>(
+        pageBuilder: (_, _, _) => const SleepAssistModeScreen(),
+        transitionsBuilder: (_, animation, _, child) {
+          return FadeTransition(opacity: animation, child: child);
+        },
+        transitionDuration: const Duration(milliseconds: 280),
+        reverseTransitionDuration: const Duration(milliseconds: 200),
       ),
     );
   }
@@ -1879,6 +2188,7 @@ class _ChatScreenState extends State<ChatScreen>
         _pastLoaded = false;
         _pastMessages = [];
         _dynamicChips.clear();
+        _masterChipsExpanded = false;
         _isLoading = false;
         _coach = CoachConfigs.get(widget.coachId);
         _timerConfirmMinutes = null;
@@ -10351,6 +10661,8 @@ $timerOutputRule
     final asset = switch (chip) {
       '카운트다운 해줘' => 'assets/icons/fa-hourglass-half-solid.svg',
       '타이머 띄워줘' => 'assets/icons/fa-stopwatch-solid.svg',
+      '수면 도우미' => 'assets/icons/fa-moon-solid.svg',
+      '돌아가기' => 'assets/icons/fa-arrow-rotate-left-solid.svg',
       _ => null,
     };
     if (asset == null) return null;
@@ -10374,6 +10686,10 @@ $timerOutputRule
         onTap: () {
           if (chip == '카운트다운 해줘') {
             _openCountdownFocusMode();
+            return;
+          }
+          if (chip == '수면 도우미') {
+            _openSleepAssistMode();
             return;
           }
           _send(chip);
@@ -10419,23 +10735,91 @@ $timerOutputRule
     );
   }
 
+  // 배경 없이 채팅칩 글자와 같은 색·크기·굵기의 텍스트 버튼 (+더보기 / 돌아가기).
+  Widget _buildMasterTextButton(
+    String label, {
+    Widget? icon,
+    required VoidCallback onTap,
+  }) {
+    const chipInk = AppDesignTokens.brandMuted;
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (icon != null) ...[icon, const SizedBox(width: 5)],
+            Text(
+              label,
+              style: GoogleFonts.notoSansKr(
+                fontSize: 12,
+                fontWeight: FontWeight.w900,
+                color: chipInk,
+                letterSpacing: 0,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMasterChipRow() {
+    const chipInk = AppDesignTokens.brandMuted;
+    final List<Widget> items = [];
+    if (_masterChipsExpanded) {
+      items.add(_buildMasterQuickChip('수면 도우미'));
+      items.add(const SizedBox(width: 12));
+      items.add(
+        _buildMasterTextButton(
+          '돌아가기',
+          icon: _chipIcon('돌아가기', color: chipInk),
+          onTap: () => setState(() => _masterChipsExpanded = false),
+        ),
+      );
+    } else {
+      for (final chip in _masterQuickChips) {
+        items.add(_buildMasterQuickChip(chip));
+        items.add(const SizedBox(width: 12));
+      }
+      items.add(
+        _buildMasterTextButton(
+          '+더보기',
+          onTap: () => setState(() => _masterChipsExpanded = true),
+        ),
+      );
+    }
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
+      child: Row(mainAxisSize: MainAxisSize.min, children: items),
+    );
+  }
+
   Widget _buildChips() {
-    final chips = _coach.isMaster
-        ? _masterQuickChips
-        : (_suppressDefaultChips
-              ? const <String>[]
-              : (_dynamicChips.isNotEmpty ? _dynamicChips : _coach.chips));
+    if (_coach.isMaster) {
+      return Container(
+        height: 48,
+        margin: const EdgeInsets.only(top: 8, bottom: 8),
+        alignment: Alignment.centerLeft,
+        child: _buildMasterChipRow(),
+      );
+    }
+    final chips = _suppressDefaultChips
+        ? const <String>[]
+        : (_dynamicChips.isNotEmpty ? _dynamicChips : _coach.chips);
     return Container(
-      height: _coach.isMaster ? 48 : 52,
-      margin: EdgeInsets.only(top: 8, bottom: _coach.isMaster ? 8 : 0),
+      height: 52,
+      margin: const EdgeInsets.only(top: 8),
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
-        padding: EdgeInsets.fromLTRB(16, 0, 16, _coach.isMaster ? 6 : 0),
+        padding: const EdgeInsets.symmetric(horizontal: 16),
         itemCount: chips.length,
-        separatorBuilder: (_, __) => SizedBox(width: _coach.isMaster ? 12 : 8),
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
         itemBuilder: (ctx, i) {
           final chip = chips[i];
-          if (_coach.isMaster) return _buildMasterQuickChip(chip);
           return AppChip(
             label: chip,
             icon: _chipIcon(chip),
