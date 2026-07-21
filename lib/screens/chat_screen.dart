@@ -10342,7 +10342,7 @@ $timerOutputRule
   static const List<String> _masterQuickChips = ['카운트다운 해줘', '타이머 띄워줘'];
 
   // 마스터 칩 앞 FontAwesome 아이콘. 칩 글씨색(코치 accent)에 맞춰 톤을 통일한다.
-  Widget? _chipIcon(String chip) {
+  Widget? _chipIcon(String chip, {Color? color}) {
     final asset = switch (chip) {
       '카운트다운 해줘' => 'assets/icons/fa-hourglass-half-solid.svg',
       '타이머 띄워줘' => 'assets/icons/fa-stopwatch-solid.svg',
@@ -10353,7 +10353,64 @@ $timerOutputRule
       asset,
       width: 14,
       height: 14,
-      colorFilter: ColorFilter.mode(_coach.accentColor, BlendMode.srcIn),
+      colorFilter: ColorFilter.mode(
+        color ?? _coach.accentColor,
+        BlendMode.srcIn,
+      ),
+    );
+  }
+
+  Widget _buildMasterQuickChip(String chip) {
+    const chipInk = AppDesignTokens.brandMuted;
+    final icon = _chipIcon(chip, color: chipInk);
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () {
+          if (chip == '카운트다운 해줘') {
+            _openCountdownFocusMode();
+            return;
+          }
+          _send(chip);
+        },
+        borderRadius: BorderRadius.circular(15),
+        child: Container(
+          height: 38,
+          padding: const EdgeInsets.symmetric(horizontal: 15),
+          decoration: BoxDecoration(
+            color: AppDesignTokens.brandSurface.withValues(alpha: 0.96),
+            borderRadius: BorderRadius.circular(15),
+            boxShadow: [
+              BoxShadow(
+                color: AppDesignTokens.brand.withValues(alpha: 0.14),
+                blurRadius: 18,
+                spreadRadius: 1,
+                offset: const Offset(0, 6),
+              ),
+              BoxShadow(
+                color: AppDesignTokens.brandAccent.withValues(alpha: 0.18),
+                blurRadius: 10,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (icon != null) ...[icon, const SizedBox(width: 7)],
+              Text(
+                chip,
+                style: GoogleFonts.notoSansKr(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w900,
+                  color: chipInk,
+                  letterSpacing: 0,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -10364,15 +10421,16 @@ $timerOutputRule
               ? const <String>[]
               : (_dynamicChips.isNotEmpty ? _dynamicChips : _coach.chips));
     return Container(
-      height: 52,
-      margin: const EdgeInsets.only(top: 8),
+      height: _coach.isMaster ? 48 : 52,
+      margin: EdgeInsets.only(top: 8, bottom: _coach.isMaster ? 8 : 0),
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
+        padding: EdgeInsets.fromLTRB(16, 0, 16, _coach.isMaster ? 6 : 0),
         itemCount: chips.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        separatorBuilder: (_, __) => SizedBox(width: _coach.isMaster ? 12 : 8),
         itemBuilder: (ctx, i) {
           final chip = chips[i];
+          if (_coach.isMaster) return _buildMasterQuickChip(chip);
           return AppChip(
             label: chip,
             icon: _chipIcon(chip),
