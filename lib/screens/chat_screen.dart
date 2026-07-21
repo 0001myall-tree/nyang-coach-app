@@ -440,6 +440,11 @@ class _ChatScreenState extends State<ChatScreen>
   final _ctrl = TextEditingController();
   final _scrollCtrl = ScrollController();
   final List<ChatMessage> _messages = [];
+  // "지난 대화 보기": 최근 7일치 보관함이 있으면 상단에 연한 링크를 띄우고,
+  // 누르면 과거 메시지를 오늘 대화 위에 펼친다. (로컬 열람 전용)
+  bool _hasArchivedChat = false;
+  bool _pastLoaded = false;
+  List<ChatMessage> _pastMessages = [];
   List<String> _dynamicChips = [];
   bool _suppressDefaultChips = false;
   String? _coachSwitchTarget;
@@ -1411,6 +1416,9 @@ class _ChatScreenState extends State<ChatScreen>
       _ctrl.clear();
       setState(() {
         _messages.clear();
+        _hasArchivedChat = false;
+        _pastLoaded = false;
+        _pastMessages = [];
         _dynamicChips.clear();
         _isLoading = false;
         _coach = CoachConfigs.get(widget.coachId);
@@ -2109,11 +2117,48 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   // ── 히스토리 & 복귀 인사 (웹앱 startGreeting 이식) ──────
+  String get _chatArchiveKey =>
+      '${DailyResetService.chatArchivePrefix}${widget.coachId}';
+
+  List<ChatMessage> _decodeRecentArchive(String? raw) {
+    if (raw == null) return [];
+    final cutoff = DateTime.now().subtract(
+      const Duration(days: DailyResetService.chatArchiveDays),
+    );
+    try {
+      return (jsonDecode(raw) as List)
+          .map((e) => ChatMessage.fromJson(e))
+          .where((m) => m.time.isAfter(cutoff))
+          .toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  Future<void> _checkArchivedChat() async {
+    final prefs = await SharedPreferences.getInstance();
+    final has = _decodeRecentArchive(prefs.getString(_chatArchiveKey)).isNotEmpty;
+    if (mounted && has != _hasArchivedChat) {
+      setState(() => _hasArchivedChat = has);
+    }
+  }
+
+  Future<void> _loadPastMessages() async {
+    final prefs = await SharedPreferences.getInstance();
+    final past = _decodeRecentArchive(prefs.getString(_chatArchiveKey));
+    if (!mounted) return;
+    setState(() {
+      _pastMessages = past;
+      _pastLoaded = true;
+    });
+  }
+
   Future<void> _loadHistoryAndGreet() async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString('nyang_chat_history_${widget.coachId}');
     final lastVisitStr = prefs.getString('last_visit_${widget.coachId}');
     final now = DateTime.now();
+    unawaited(_checkArchivedChat());
 
     if (raw != null) {
       final List list = jsonDecode(raw);
@@ -9020,23 +9065,29 @@ $timerOutputRule
 
   // ── 메시지 목록 ────────────────────────────────────────────
   Widget _buildMessageList() {
+    final items = <Widget>[];
+
+    // 상단: 지난 대화 영역 (열기 전엔 연한 링크, 열면 과거 메시지 + 구분선)
+    if (_pastLoaded) {
+      for (final m in _pastMessages) {
+        items.add(_buildBubble(m));
+      }
+      if (_pastMessages.isNotEmpty) items.add(_buildTodayDivider());
+    } else if (_hasArchivedChat) {
+      items.add(_buildPastChatLink());
+    }
+
+    // 오늘 메시지 (+ 집중 타이머 위젯)
     final timerIndex = _timerActiveMinutes == null
         ? null
         : (_timerActiveInsertIndex ?? _messages.length).clamp(
             0,
             _messages.length,
           );
-    final list = ListView.builder(
-      controller: _scrollCtrl,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      itemCount:
-          _messages.length +
-          (_isLoading ? 1 : 0) +
-          (_timerActiveMinutes != null ? 1 : 0) +
-          (_coachSwitchTarget != null ? 1 : 0),
-      itemBuilder: (ctx, i) {
-        if (_timerActiveMinutes != null && i == timerIndex) {
-          return Padding(
+    for (var idx = 0; idx <= _messages.length; idx++) {
+      if (timerIndex != null && idx == timerIndex) {
+        items.add(
+          Padding(
             padding: const EdgeInsets.only(bottom: 12),
             child: FocusTimerWidget(
               coachId: widget.coachId,
@@ -9050,17 +9101,22 @@ $timerOutputRule
                 _scrollToBottom();
               },
             ),
-          );
-        }
-        final messageIndex = timerIndex != null && i > timerIndex ? i - 1 : i;
-        if (_isLoading && messageIndex == _messages.length) {
-          return _buildTypingIndicator();
-        }
-        if (_coachSwitchTarget != null && messageIndex == _messages.length) {
-          return _buildNyangSwitchBubble();
-        }
-        return _buildBubble(_messages[messageIndex]);
-      },
+          ),
+        );
+      }
+      if (idx < _messages.length) {
+        items.add(_buildBubble(_messages[idx]));
+      }
+    }
+
+    if (_isLoading) items.add(_buildTypingIndicator());
+    if (_coachSwitchTarget != null) items.add(_buildNyangSwitchBubble());
+
+    final list = ListView.builder(
+      controller: _scrollCtrl,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      itemCount: items.length,
+      itemBuilder: (ctx, i) => items[i],
     );
 
     // 마스터 비서는 은은한 민트톤 배경
@@ -9074,6 +9130,55 @@ $timerOutputRule
 
     // 프렌즈는 배경 투명 (main_tab_screen에서 전체 배경 처리)
     return ColoredBox(color: Colors.transparent, child: list);
+  }
+
+  // 채팅창 상단의 연한 "지난 대화 보기" 링크.
+  Widget _buildPastChatLink() {
+    return Padding(
+      padding: const EdgeInsets.only(top: 2, bottom: 14),
+      child: Center(
+        child: GestureDetector(
+          onTap: _loadPastMessages,
+          behavior: HitTestBehavior.opaque,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            child: Text(
+              '지난 대화 보기',
+              style: GoogleFonts.notoSansKr(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: const Color(0xFFB2AEC6),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // 지난 대화와 오늘 대화 사이 구분선.
+  Widget _buildTodayDivider() {
+    const lineColor = Color(0xFFE2DEF0);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      child: Row(
+        children: [
+          const Expanded(child: Divider(color: lineColor, thickness: 1)),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            child: Text(
+              '오늘',
+              style: GoogleFonts.notoSansKr(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: const Color(0xFFA7A2BE),
+              ),
+            ),
+          ),
+          const Expanded(child: Divider(color: lineColor, thickness: 1)),
+        ],
+      ),
+    );
   }
 
   Widget _buildBubble(ChatMessage msg) {

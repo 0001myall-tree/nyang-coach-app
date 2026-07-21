@@ -12,6 +12,54 @@ class DailyResetService {
   static const String previousDayAllDoneKey =
       'nyang_previous_day_all_tasks_done';
 
+  /// "지난 대화 보기"용 코치별 로컬 보관함 키 접두사. 최근 7일치만 유지한다.
+  static const String chatArchivePrefix = 'nyang_chat_archive_';
+  static const int chatArchiveDays = 7;
+
+  /// 리셋으로 지워지는 채팅 원문을 코치별 보관함에 합치고 7일 이전은 버린다.
+  /// 서버로 올리지 않는 순수 로컬 저장이며, 열람 표시 용도로만 쓴다.
+  static Future<void> _archiveChatHistory(
+    SharedPreferences prefs,
+    String coachId,
+  ) async {
+    final rawHistory = prefs.getString('nyang_chat_history_$coachId');
+    if (rawHistory == null) return;
+    List<dynamic> todays;
+    try {
+      todays = jsonDecode(rawHistory) as List;
+    } catch (_) {
+      return;
+    }
+    if (todays.isEmpty) return;
+
+    final archiveKey = '$chatArchivePrefix$coachId';
+    List<dynamic> archive;
+    try {
+      archive = jsonDecode(prefs.getString(archiveKey) ?? '[]') as List;
+    } catch (_) {
+      archive = [];
+    }
+
+    archive.addAll(todays);
+
+    // 7일 지난 메시지는 버린다. (time 파싱 실패한 항목은 보수적으로 유지)
+    final cutoff = DateTime.now().subtract(
+      const Duration(days: chatArchiveDays),
+    );
+    archive = archive.where((e) {
+      final t = DateTime.tryParse((e is Map ? e['time'] : null)?.toString() ?? '');
+      return t == null || t.isAfter(cutoff);
+    }).toList();
+
+    // 방어적 상한: 아주 많으면 최근 것만 유지.
+    const maxEntries = 2000;
+    if (archive.length > maxEntries) {
+      archive = archive.sublist(archive.length - maxEntries);
+    }
+
+    await prefs.setString(archiveKey, jsonEncode(archive));
+  }
+
   static Future<void> recordDayTransition({
     required SharedPreferences prefs,
     required String fromDate,
@@ -163,7 +211,8 @@ class DailyResetService {
         }
       }
 
-      // 4. Clear all chat histories
+      // 4. Archive each coach's chat into a rolling 7-day store, then clear.
+      //    "지난 대화 보기"에서 최근 7일치를 열람하는 데만 쓰이는 로컬 보관함이다.
       final coachIds = [
         'cat',
         'boyfriend',
@@ -174,6 +223,7 @@ class DailyResetService {
         'sec_female',
       ];
       for (final id in coachIds) {
+        await _archiveChatHistory(prefs, id);
         await prefs.setString('nyang_chat_history_$id', '[]');
       }
 
