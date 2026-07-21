@@ -5240,18 +5240,23 @@ class _TasksScreenState extends State<TasksScreen>
                           ),
                           child: Row(
                             children: [
-                              SvgPicture.asset(
-                                'assets/icons/fa-clock-regular.svg',
-                                width: 18,
-                                height: 18,
-                                colorFilter: ColorFilter.mode(
-                                  summary == null
-                                      ? const Color(0xFFB0B0C8)
-                                      : _coach.accentColor,
-                                  BlendMode.srcIn,
+                              SizedBox(
+                                width: 20,
+                                child: Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: SvgPicture.asset(
+                                    'assets/icons/fa-clock-regular.svg',
+                                    height: 18,
+                                    colorFilter: ColorFilter.mode(
+                                      summary == null
+                                          ? const Color(0xFFB0B0C8)
+                                          : _coach.accentColor,
+                                      BlendMode.srcIn,
+                                    ),
+                                  ),
                                 ),
                               ),
-                              const SizedBox(width: 9),
+                              const SizedBox(width: 7),
                               Expanded(
                                 child: Text(
                                   summary ?? '시간 미정',
@@ -5627,18 +5632,23 @@ class _TasksScreenState extends State<TasksScreen>
                       ),
                       child: Row(
                         children: [
-                          SvgPicture.asset(
-                            'assets/icons/fa-file-lines-regular.svg',
-                            width: 17,
-                            height: 17,
-                            colorFilter: ColorFilter.mode(
-                              memoCtrl.text.trim().isEmpty
-                                  ? const Color(0xFFB0B0C8)
-                                  : _coach.accentColor,
-                              BlendMode.srcIn,
+                          SizedBox(
+                            width: 20,
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: SvgPicture.asset(
+                                'assets/icons/fa-file-lines-regular.svg',
+                                height: 18,
+                                colorFilter: ColorFilter.mode(
+                                  memoCtrl.text.trim().isEmpty
+                                      ? const Color(0xFFB0B0C8)
+                                      : _coach.accentColor,
+                                  BlendMode.srcIn,
+                                ),
+                              ),
                             ),
                           ),
-                          const SizedBox(width: 9),
+                          const SizedBox(width: 7),
                           Expanded(
                             child: Text(
                               memoCtrl.text.trim().isEmpty ? '메모 추가' : '메모 보기',
