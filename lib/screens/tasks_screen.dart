@@ -8397,20 +8397,6 @@ class _TasksScreenState extends State<TasksScreen>
                                                                     ),
                                                               ),
                                                         ),
-                                                        const SizedBox(
-                                                          height: 2,
-                                                        ),
-                                                        Text(
-                                                          '오늘의 작은 성취가 미래의 큰 변화를 만들어요.',
-                                                          style:
-                                                              GoogleFonts.notoSansKr(
-                                                                fontSize: 12,
-                                                                color:
-                                                                    const Color(
-                                                                      0xFF6B7280,
-                                                                    ),
-                                                              ),
-                                                        ),
                                                       ],
                                                     ),
                                                   ),
@@ -10659,6 +10645,24 @@ class _TasksScreenState extends State<TasksScreen>
     );
   }
 
+  // 일정 항목 사이를 노골적인 카드 테두리 대신 은은한 그라데이션으로 구분한다.
+  Widget _scheduleGradientDivider() {
+    return Container(
+      height: 1.2,
+      margin: const EdgeInsets.symmetric(vertical: 2, horizontal: 6),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            Color(0x00B9A9F0),
+            Color(0x4DB9A9F0),
+            Color(0x00B9A9F0),
+          ],
+          stops: [0.0, 0.5, 1.0],
+        ),
+      ),
+    );
+  }
+
   Widget _buildScheduleListOnly() {
     final dateStr = _dateKey(_calSelectedDay);
     final daySch = schedules[dateStr] ?? [];
@@ -10668,22 +10672,7 @@ class _TasksScreenState extends State<TasksScreen>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                '${_calSelectedDay.year}년 ${_calSelectedDay.month}월 ${_calSelectedDay.day}일 스케줄',
-                style: GoogleFonts.notoSansKr(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w900,
-                  color: const Color(0xFF3D3A4E),
-                ),
-              ),
-            ],
-          ),
-        ),
+        const SizedBox(height: 12),
 
         // 마일스톤들 (맨 위에 렌더링)
         if (dayMilestones.isNotEmpty) ...[
@@ -10842,11 +10831,12 @@ class _TasksScreenState extends State<TasksScreen>
             ),
           )
         else if (daySch.isNotEmpty)
-          ListView.builder(
+          ListView.separated(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             padding: const EdgeInsets.symmetric(horizontal: 16),
             itemCount: daySch.length,
+            separatorBuilder: (_, __) => _scheduleGradientDivider(),
             itemBuilder: (ctx, i) {
               final s = daySch[i];
               final milestoneInfo = _getMilestoneInfoForTask(s);
@@ -10857,12 +10847,9 @@ class _TasksScreenState extends State<TasksScreen>
                 timeEnd: s.timeEnd,
               );
               return Container(
-                margin: const EdgeInsets.only(bottom: 8),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFFE8E3F8)),
+                padding: const EdgeInsets.symmetric(
+                  vertical: 10,
+                  horizontal: 4,
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -10985,12 +10972,18 @@ class _TasksScreenState extends State<TasksScreen>
             },
           ),
 
+        if (dayPlannedTasks.isNotEmpty && daySch.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: _scheduleGradientDivider(),
+          ),
         if (dayPlannedTasks.isNotEmpty)
-          ListView.builder(
+          ListView.separated(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            padding: EdgeInsets.fromLTRB(16, daySch.isEmpty ? 0 : 4, 16, 0),
+            padding: EdgeInsets.fromLTRB(16, daySch.isEmpty ? 0 : 0, 16, 0),
             itemCount: dayPlannedTasks.length,
+            separatorBuilder: (_, __) => _scheduleGradientDivider(),
             itemBuilder: (ctx, i) {
               final task = dayPlannedTasks[i];
               final displayTime = _displayTimeFromStored(
@@ -11011,12 +11004,9 @@ class _TasksScreenState extends State<TasksScreen>
                   );
                 },
                 child: Container(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFFE8E3F8)),
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 10,
+                    horizontal: 4,
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
