@@ -2107,6 +2107,7 @@ class _TasksScreenState extends State<TasksScreen>
         createdAt: schedule.createdAt,
         isReminderEnabled: schedule.isReminderEnabled,
         deferredCount: schedule.deferredCount,
+        memo: schedule.memo,
       );
     }).toList();
   }
@@ -2323,6 +2324,7 @@ class _TasksScreenState extends State<TasksScreen>
         existingTask.duration = s.duration;
         existingTask.done = s.done;
         existingTask.deferredCount = s.deferredCount;
+        existingTask.memo = s.memo;
 
         // Check if reminder was toggled from schedule edit
         bool reminderToggled =
@@ -2358,6 +2360,7 @@ class _TasksScreenState extends State<TasksScreen>
             coreTasks[coreIndex].duration = s.duration;
             coreTasks[coreIndex].done = s.done;
             coreTasks[coreIndex].deferredCount = s.deferredCount;
+            coreTasks[coreIndex].memo = s.memo;
             coreTasksChanged = true;
           }
         }
@@ -2378,6 +2381,7 @@ class _TasksScreenState extends State<TasksScreen>
           createdAt: s.createdAt,
           isReminderEnabled: s.isReminderEnabled,
           deferredCount: s.deferredCount,
+          memo: s.memo,
         );
         tasks.add(newTask);
 
@@ -5040,6 +5044,15 @@ class _TasksScreenState extends State<TasksScreen>
     // 메모(선택): 기본 접힘. 값이 있어도 눌러야 펼쳐진다.
     final memoCtrl = TextEditingController(text: item.memo ?? '');
     bool memoExpanded = false;
+    // 메모는 사용자가 직접 만든 할 일·일정에만 지원한다.
+    // 습관/마일스톤 연동/메모장 실행목록 항목은 원본에 맥락이 있어 제외한다.
+    final bool memoAllowed =
+        _getMilestoneInfoForTask(item) == null &&
+        !wasInsightTask &&
+        !(item is TaskItem && (item.category == 'habit' || item.isHabit));
+    // "메모 보기"/활성색은 실제로 저장된 메모가 있을 때만 (입력 중에는 바뀌지 않음).
+    final bool hadSavedMemo =
+        item.memo != null && (item.memo as String).trim().isNotEmpty;
 
     if (item.timeStart != null && item.timeEnd != null) {
       mTimeType = 'range';
@@ -5613,8 +5626,10 @@ class _TasksScreenState extends State<TasksScreen>
                         ),
                       ),
                   ],
+                  if (memoAllowed) ...[
                   const SizedBox(height: 12),
-                  // 메모(선택). 없으면 "메모 추가", 있으면 "메모". 눌러야 펼쳐진다.
+                  // 메모(선택). 저장된 메모가 없으면 "메모 추가"(회색),
+                  // 있으면 "메모 보기"(연보라·활성). 눌러야 펼쳐진다.
                   GestureDetector(
                     onTap: () =>
                         setModalState(() => memoExpanded = !memoExpanded),
@@ -5640,9 +5655,9 @@ class _TasksScreenState extends State<TasksScreen>
                                 'assets/icons/fa-file-lines-regular.svg',
                                 height: 18,
                                 colorFilter: ColorFilter.mode(
-                                  memoCtrl.text.trim().isEmpty
-                                      ? const Color(0xFFB0B0C8)
-                                      : _coach.accentColor,
+                                  hadSavedMemo
+                                      ? _coach.accentColor
+                                      : const Color(0xFFB0B0C8),
                                   BlendMode.srcIn,
                                 ),
                               ),
@@ -5651,13 +5666,13 @@ class _TasksScreenState extends State<TasksScreen>
                           const SizedBox(width: 7),
                           Expanded(
                             child: Text(
-                              memoCtrl.text.trim().isEmpty ? '메모 추가' : '메모 보기',
+                              hadSavedMemo ? '메모 보기' : '메모 추가',
                               style: GoogleFonts.notoSansKr(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w700,
-                                color: memoCtrl.text.trim().isEmpty
-                                    ? const Color(0xFF9CA3AF)
-                                    : const Color(0xFF3D3A4E),
+                                color: hadSavedMemo
+                                    ? const Color(0xFF3D3A4E)
+                                    : const Color(0xFF9CA3AF),
                               ),
                             ),
                           ),
@@ -5733,6 +5748,7 @@ class _TasksScreenState extends State<TasksScreen>
                       ),
                     ),
                   ],
+                  ],
                   const SizedBox(height: 24),
                   Row(
                     children: [
@@ -5752,8 +5768,10 @@ class _TasksScreenState extends State<TasksScreen>
                             if (wasInsightTask && item is TaskItem) {
                               item.source = 'insight';
                             }
-                            final memoText = memoCtrl.text.trim();
-                            item.memo = memoText.isEmpty ? null : memoText;
+                            if (memoAllowed) {
+                              final memoText = memoCtrl.text.trim();
+                              item.memo = memoText.isEmpty ? null : memoText;
+                            }
                             item.time = null;
                             item.timeStart = null;
                             item.timeEnd = null;
