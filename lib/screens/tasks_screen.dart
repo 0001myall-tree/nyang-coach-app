@@ -53,6 +53,7 @@ class TaskItem {
   int? achievedDuration;
   int deferredCount;
   String? source;
+  String? memo;
 
   TaskItem({
     required this.id,
@@ -72,6 +73,7 @@ class TaskItem {
     this.completedAt,
     this.deferredCount = 0,
     this.source,
+    this.memo,
   });
 
   Map<String, dynamic> toJson() => {
@@ -96,6 +98,7 @@ class TaskItem {
     if (achievedDuration != null) 'achievedDuration': achievedDuration,
     'deferredCount': deferredCount,
     if (source != null) 'source': source,
+    if (memo != null && memo!.isNotEmpty) 'memo': memo,
   };
 
   factory TaskItem.fromJson(Map<String, dynamic> j) => TaskItem(
@@ -121,6 +124,7 @@ class TaskItem {
     completedAt: j['completedAt'],
     deferredCount: j['deferredCount'] ?? 0,
     source: j['source']?.toString(),
+    memo: j['memo']?.toString(),
   );
 }
 
@@ -244,6 +248,7 @@ class ScheduleItem {
   bool isRecurring;
   String? recurrenceGroupId;
   Map<String, dynamic>? recurrenceRule;
+  String? memo;
 
   ScheduleItem({
     required this.id,
@@ -259,6 +264,7 @@ class ScheduleItem {
     this.isRecurring = false,
     this.recurrenceGroupId,
     this.recurrenceRule,
+    this.memo,
   });
 
   Map<String, dynamic> toJson() => {
@@ -275,6 +281,7 @@ class ScheduleItem {
     'isRecurring': isRecurring,
     if (recurrenceGroupId != null) 'recurrenceGroupId': recurrenceGroupId,
     if (recurrenceRule != null) 'recurrenceRule': recurrenceRule,
+    if (memo != null && memo!.isNotEmpty) 'memo': memo,
   };
 
   factory ScheduleItem.fromJson(Map<String, dynamic> j) => ScheduleItem(
@@ -293,6 +300,7 @@ class ScheduleItem {
     recurrenceRule: j['recurrenceRule'] is Map
         ? Map<String, dynamic>.from(j['recurrenceRule'])
         : null,
+    memo: j['memo']?.toString(),
   );
 }
 
@@ -5028,6 +5036,9 @@ class _TasksScreenState extends State<TasksScreen>
               : Map<String, dynamic>.from(item.recurrenceRule!))
         : null;
     bool timeOptionsExpanded = false;
+    // 메모(선택): 기본 접힘. 값이 있어도 눌러야 펼쳐진다.
+    final memoCtrl = TextEditingController(text: item.memo ?? '');
+    bool memoExpanded = false;
 
     if (item.timeStart != null && item.timeEnd != null) {
       mTimeType = 'range';
@@ -5216,21 +5227,17 @@ class _TasksScreenState extends State<TasksScreen>
                             : (hasDuration ? mDuration! : null);
 
                         return Container(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: summary == null ? 10 : 12,
-                            vertical: summary == null ? 8 : 10,
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 13,
                           ),
                           decoration: BoxDecoration(
-                            color: summary == null
-                                ? Colors.transparent
-                                : const Color(0xFFF8F7FF),
+                            color: const Color(0xFFF8F7FF),
                             borderRadius: BorderRadius.circular(14),
-                            border: summary == null
-                                ? null
-                                : Border.all(color: const Color(0xFFE8E3F8)),
+                            border: Border.all(color: const Color(0xFFE8E3F8)),
                           ),
                           child: Row(
-                            mainAxisSize: MainAxisSize.min,
                             children: [
                               SvgPicture.asset(
                                 'assets/icons/fa-clock-regular.svg',
@@ -5243,33 +5250,42 @@ class _TasksScreenState extends State<TasksScreen>
                                   BlendMode.srcIn,
                                 ),
                               ),
-                              if (summary != null) ...[
-                                const SizedBox(width: 7),
-                                Text(
-                                  summary,
+                              const SizedBox(width: 9),
+                              Expanded(
+                                child: Text(
+                                  summary ?? '시간 미정',
                                   style: GoogleFonts.notoSansKr(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w800,
-                                    color: const Color(0xFF3D3A4E),
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w700,
+                                    color: summary == null
+                                        ? const Color(0xFF9CA3AF)
+                                        : const Color(0xFF3D3A4E),
                                   ),
                                 ),
-                                if (hasClockTime) ...[
-                                  const SizedBox(width: 8),
-                                  SvgPicture.asset(
+                              ),
+                              if (summary != null && hasClockTime) ...[
+                                SvgPicture.asset(
+                                  reminderActive
+                                      ? 'assets/icons/bell.svg'
+                                      : 'assets/icons/bell-slash.svg',
+                                  width: 16,
+                                  height: 16,
+                                  colorFilter: ColorFilter.mode(
                                     reminderActive
-                                        ? 'assets/icons/bell.svg'
-                                        : 'assets/icons/bell-slash.svg',
-                                    width: 16,
-                                    height: 16,
-                                    colorFilter: ColorFilter.mode(
-                                      reminderActive
-                                          ? _coach.accentColor
-                                          : const Color(0xFFB0B0C8),
-                                      BlendMode.srcIn,
-                                    ),
+                                        ? _coach.accentColor
+                                        : const Color(0xFFB0B0C8),
+                                    BlendMode.srcIn,
                                   ),
-                                ],
+                                ),
+                                const SizedBox(width: 8),
                               ],
+                              Icon(
+                                timeOptionsExpanded
+                                    ? Icons.keyboard_arrow_up_rounded
+                                    : Icons.chevron_right_rounded,
+                                size: 20,
+                                color: const Color(0xFFC4C0D8),
+                              ),
                             ],
                           ),
                         );
@@ -5591,6 +5607,117 @@ class _TasksScreenState extends State<TasksScreen>
                         ),
                       ),
                   ],
+                  const SizedBox(height: 12),
+                  // 메모(선택). 없으면 "메모 추가", 있으면 "메모". 눌러야 펼쳐진다.
+                  GestureDetector(
+                    onTap: () =>
+                        setModalState(() => memoExpanded = !memoExpanded),
+                    behavior: HitTestBehavior.opaque,
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 13,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF8F7FF),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: const Color(0xFFE8E3F8)),
+                      ),
+                      child: Row(
+                        children: [
+                          SvgPicture.asset(
+                            'assets/icons/fa-file-lines-regular.svg',
+                            width: 17,
+                            height: 17,
+                            colorFilter: ColorFilter.mode(
+                              _coach.accentColor,
+                              BlendMode.srcIn,
+                            ),
+                          ),
+                          const SizedBox(width: 9),
+                          Expanded(
+                            child: Text(
+                              memoCtrl.text.trim().isEmpty ? '메모 추가' : '메모',
+                              style: GoogleFonts.notoSansKr(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                                color: const Color(0xFF3D3A4E),
+                              ),
+                            ),
+                          ),
+                          Icon(
+                            memoExpanded
+                                ? Icons.keyboard_arrow_up_rounded
+                                : Icons.chevron_right_rounded,
+                            size: 20,
+                            color: const Color(0xFFC4C0D8),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  if (memoExpanded) ...[
+                    const SizedBox(height: 10),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF5F3FF),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFDDD6FE)),
+                      ),
+                      child: TextField(
+                        controller: memoCtrl,
+                        maxLength: 100,
+                        minLines: 2,
+                        maxLines: 4,
+                        onChanged: (_) => setModalState(() {}),
+                        style: GoogleFonts.notoSansKr(
+                          fontSize: 14,
+                          color: const Color(0xFF3D3A4E),
+                        ),
+                        decoration: InputDecoration(
+                          border: InputBorder.none,
+                          contentPadding: const EdgeInsets.symmetric(
+                            vertical: 12,
+                          ),
+                          counterStyle: GoogleFonts.notoSansKr(
+                            fontSize: 11,
+                            color: const Color(0xFFA7A2BE),
+                          ),
+                        ),
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: () => setModalState(() {
+                        memoCtrl.clear();
+                        memoExpanded = false;
+                      }),
+                      behavior: HitTestBehavior.opaque,
+                      child: Padding(
+                        padding: const EdgeInsets.only(top: 2, bottom: 2),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.delete_outline_rounded,
+                              size: 16,
+                              color: Color(0xFF9CA3AF),
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              '메모 삭제',
+                              style: GoogleFonts.notoSansKr(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: const Color(0xFF9CA3AF),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 24),
                   Row(
                     children: [
@@ -5610,6 +5737,8 @@ class _TasksScreenState extends State<TasksScreen>
                             if (wasInsightTask && item is TaskItem) {
                               item.source = 'insight';
                             }
+                            final memoText = memoCtrl.text.trim();
+                            item.memo = memoText.isEmpty ? null : memoText;
                             item.time = null;
                             item.timeStart = null;
                             item.timeEnd = null;
