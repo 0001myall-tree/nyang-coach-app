@@ -16,10 +16,17 @@ class TasksSyncService {
     'nyang_visions',
   };
 
+  /// 로컬에서 막 수정됐지만 아직 클라우드로 업로드되지 않은 키.
+  /// 이 키들은 클라우드 스냅샷/다운로드가 로컬을 덮어쓰지 못하게 막아,
+  /// 방금 저장한 값(예: 메모)이 오래된 클라우드 데이터로 사라지는 것을 방지한다.
+  static final Set<String> _pendingUploadKeys = {};
+
   static void scheduleSyncToCloud({
     Duration delay = const Duration(seconds: 4),
   }) {
     if (FirebaseAuth.instance.currentUser == null) return;
+    // 업로드가 확정되기 전까지 핵심 데이터를 "로컬이 최신" 상태로 표시한다.
+    _pendingUploadKeys.addAll(_criticalDataKeys);
     _syncTimer?.cancel();
     _syncTimer = Timer(delay, () {
       syncToCloud();
@@ -106,6 +113,8 @@ class TasksSyncService {
       }
 
       await batch.commit();
+      // 업로드가 확정됐으므로 방금 올린 키들의 "로컬 최신" 표시를 해제한다.
+      _pendingUploadKeys.removeAll(keys);
       debugPrint('✅ TasksSyncService: 로컬 데이터를 클라우드에 성공적으로 백업했습니다.');
     } catch (e) {
       debugPrint('❌ TasksSyncService syncToCloud 오류: $e');
@@ -152,6 +161,9 @@ class TasksSyncService {
         final key = doc.id;
         final data = doc.data();
         foundKeys.add(key);
+
+        // 업로드 대기 중인(로컬이 더 최신인) 키는 클라우드 값으로 덮지 않는다.
+        if (_pendingUploadKeys.contains(key)) continue;
 
         if (data.containsKey('value')) {
           final value = data['value'];
@@ -210,6 +222,10 @@ class TasksSyncService {
       for (final doc in snapshot.docs) {
         final key = doc.id;
         final data = doc.data();
+
+        // 방금 로컬에서 수정돼 아직 업로드 대기 중인 키는 덮어쓰지 않는다.
+        // (오래된 클라우드 스냅샷이 방금 저장한 메모 등을 지우는 것을 방지)
+        if (_pendingUploadKeys.contains(key)) continue;
 
         if (data.containsKey('value')) {
           final value = data['value'];
