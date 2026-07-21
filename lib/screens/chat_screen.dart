@@ -83,6 +83,9 @@ class CountdownFocusModeScreen extends StatefulWidget {
 class _CountdownFocusModeScreenState extends State<CountdownFocusModeScreen>
     with TickerProviderStateMixin {
   static const _timerTotalSeconds = 15 * 60;
+  // 도입부 호흡 안내: 원이 커졌다 줄어드는 한 호흡을 여유롭게 3번 반복한다.
+  static const _breathCycle = Duration(seconds: 5);
+  static const _breathCount = 3;
 
   late final AnimationController _breathCtrl;
   Timer? _flowTimer;
@@ -97,14 +100,16 @@ class _CountdownFocusModeScreenState extends State<CountdownFocusModeScreen>
     super.initState();
     _breathCtrl = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 4),
-    )..forward();
+      duration: _breathCycle,
+    )..repeat();
     _startIntroFlow();
   }
 
   void _startIntroFlow() {
-    _flowTimer = Timer(const Duration(seconds: 4), () {
+    // 호흡 3번(_breathCycle * 3)을 마친 뒤 카운트다운으로 넘어간다.
+    _flowTimer = Timer(_breathCycle * _breathCount, () {
       if (!mounted) return;
+      _breathCtrl.stop();
       setState(() {
         _phase = _CountdownFocusPhase.countdown;
         _countdownValue = 5;
