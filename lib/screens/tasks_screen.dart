@@ -4933,10 +4933,11 @@ class _TasksScreenState extends State<TasksScreen>
     final currentIds = currentTasks.map((t) => t.id.toString()).toSet();
     final combinedTasks = [
       ...currentTasks,
-      if (_isViewingActualToday)
-        ...milestoneTasks.where(
-          (task) => !currentIds.contains(task.id.toString()),
-        ),
+      // 선택한 날짜(targetDate)에 걸린 마일스톤은 실제 오늘이든 다른 날짜든
+      // 항상 함께 보여준다. milestoneTasks는 이미 그 날짜 기준으로 계산돼 있다.
+      ...milestoneTasks.where(
+        (task) => !currentIds.contains(task.id.toString()),
+      ),
     ];
 
     if (combinedTasks.isEmpty) {
