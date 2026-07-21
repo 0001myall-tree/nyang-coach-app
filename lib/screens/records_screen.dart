@@ -588,13 +588,19 @@ ${feedbackType == 0
       r'\s+(특히|또한|다만|하지만|그러나|그리고|그래서|따라서|그러므로|한편|반면|더불어|아울러|앞으로|다음으로),',
     );
 
-    return trimmed
+    final formatted = trimmed
         .replaceAll(RegExp(r'\r\n?'), '\n')
         .replaceAll(RegExp(r'\n[ \t]+'), '\n')
         .replaceAll(RegExp(r'[ \t]+'), ' ')
         .replaceAllMapped(connectorPattern, (match) => '\n\n${match.group(1)},')
         .replaceAll(RegExp(r'\n{3,}'), '\n\n')
         .trim();
+
+    // 첫 인사말("소연님," 등)과 본문 사이의 줄바꿈을 없애 한 문장처럼 붙인다.
+    return formatted.replaceFirstMapped(
+      RegExp(r'^([가-힣]{1,12}(?:님|께),)\s*\n+\s*'),
+      (m) => '${m.group(1)} ',
+    );
   }
 
   String _formatGoalText(String? raw) {
@@ -620,7 +626,14 @@ ${feedbackType == 0
     try {
       final decoded = jsonDecode(raw) as List;
       final text = decoded
-          .map((vision) => ((vision as Map)['text'] ?? '').toString())
+          .map((vision) {
+            final map = vision as Map;
+            // VisionItem은 비전 제목을 'name'에 저장한다. ('text'는 과거 호환용)
+            final name = (map['name'] ?? map['text'] ?? '').toString().trim();
+            final desc = (map['desc'] ?? '').toString().trim();
+            if (name.isEmpty) return '';
+            return desc.isEmpty ? name : '$name ($desc)';
+          })
           .where((text) => text.trim().isNotEmpty)
           .join(', ');
       return text.isEmpty ? '없음' : text;
