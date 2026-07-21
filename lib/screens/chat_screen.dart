@@ -70,6 +70,447 @@ class ChatMessage {
   );
 }
 
+enum _CountdownFocusPhase { breathing, countdown, ready, timer }
+
+class CountdownFocusModeScreen extends StatefulWidget {
+  const CountdownFocusModeScreen({super.key});
+
+  @override
+  State<CountdownFocusModeScreen> createState() =>
+      _CountdownFocusModeScreenState();
+}
+
+class _CountdownFocusModeScreenState extends State<CountdownFocusModeScreen>
+    with TickerProviderStateMixin {
+  static const _timerTotalSeconds = 15 * 60;
+
+  late final AnimationController _breathCtrl;
+  Timer? _flowTimer;
+  Timer? _focusTimer;
+  _CountdownFocusPhase _phase = _CountdownFocusPhase.breathing;
+  int _countdownValue = 5;
+  int _remainingSeconds = _timerTotalSeconds;
+  bool _timerRunning = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _breathCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 4),
+    )..forward();
+    _startIntroFlow();
+  }
+
+  void _startIntroFlow() {
+    _flowTimer = Timer(const Duration(seconds: 4), () {
+      if (!mounted) return;
+      setState(() {
+        _phase = _CountdownFocusPhase.countdown;
+        _countdownValue = 5;
+      });
+      _flowTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+        if (!mounted) {
+          timer.cancel();
+          return;
+        }
+        if (_countdownValue <= 1) {
+          timer.cancel();
+          setState(() => _phase = _CountdownFocusPhase.ready);
+          return;
+        }
+        setState(() => _countdownValue -= 1);
+      });
+    });
+  }
+
+  void _startFocusTimer() {
+    _focusTimer?.cancel();
+    setState(() {
+      _phase = _CountdownFocusPhase.timer;
+      _remainingSeconds = _timerTotalSeconds;
+      _timerRunning = true;
+    });
+    _focusTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      if (!_timerRunning) return;
+      if (_remainingSeconds <= 0) {
+        timer.cancel();
+        setState(() => _timerRunning = false);
+        return;
+      }
+      setState(() => _remainingSeconds -= 1);
+    });
+  }
+
+  void _toggleTimer() {
+    if (_phase != _CountdownFocusPhase.timer) return;
+    setState(() => _timerRunning = !_timerRunning);
+  }
+
+  Future<void> _requestExitTimer() async {
+    final shouldExit =
+        await showDialog<bool>(
+          context: context,
+          barrierColor: Colors.black.withValues(alpha: 0.58),
+          builder: (dialogContext) {
+            return AlertDialog(
+              backgroundColor: const Color(0xFF17132B),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+              title: Text(
+                '집중을 끝내고 채팅으로 돌아갈까요?',
+                style: GoogleFonts.notoSansKr(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w800,
+                  color: Colors.white,
+                ),
+              ),
+              actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext, false),
+                  child: Text(
+                    '계속 집중',
+                    style: GoogleFonts.notoSansKr(
+                      fontWeight: FontWeight.w800,
+                      color: const Color(0xFFC9B7FF),
+                    ),
+                  ),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext, true),
+                  child: Text(
+                    '돌아가기',
+                    style: GoogleFonts.notoSansKr(
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        ) ??
+        false;
+    if (shouldExit && mounted) Navigator.pop(context);
+  }
+
+  void _handleClose() {
+    if (_phase == _CountdownFocusPhase.timer) {
+      _requestExitTimer();
+      return;
+    }
+    Navigator.pop(context);
+  }
+
+  String _formatRemaining() {
+    final minutes = _remainingSeconds ~/ 60;
+    final seconds = _remainingSeconds % 60;
+    return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+  }
+
+  @override
+  void dispose() {
+    _flowTimer?.cancel();
+    _focusTimer?.cancel();
+    _breathCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return PopScope(
+      canPop: _phase != _CountdownFocusPhase.timer,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && _phase == _CountdownFocusPhase.timer) {
+          _requestExitTimer();
+        }
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFF08091A),
+        body: Stack(
+          children: [
+            Positioned.fill(child: _buildBackground()),
+            SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 22),
+                child: Column(
+                  children: [
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: IconButton(
+                        onPressed: _handleClose,
+                        icon: const Icon(Icons.close_rounded),
+                        color: Colors.white.withValues(alpha: 0.86),
+                        iconSize: 24,
+                        tooltip: '닫기',
+                      ),
+                    ),
+                    Expanded(child: _buildPhaseContent()),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBackground() {
+    return const DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: RadialGradient(
+          center: Alignment(0, -0.18),
+          radius: 1.05,
+          colors: [Color(0xFF1A1735), Color(0xFF0B0C21), Color(0xFF070817)],
+          stops: [0.0, 0.52, 1.0],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPhaseContent() {
+    switch (_phase) {
+      case _CountdownFocusPhase.breathing:
+        return _buildBreathing();
+      case _CountdownFocusPhase.countdown:
+        return _buildCountdown();
+      case _CountdownFocusPhase.ready:
+        return _buildReady();
+      case _CountdownFocusPhase.timer:
+        return _buildTimer();
+    }
+  }
+
+  Widget _buildBreathing() {
+    final scale = TweenSequence<double>([
+      TweenSequenceItem(tween: Tween(begin: 0.86, end: 1.06), weight: 50),
+      TweenSequenceItem(tween: Tween(begin: 1.06, end: 0.92), weight: 50),
+    ]).animate(CurvedAnimation(parent: _breathCtrl, curve: Curves.easeInOut));
+
+    return Column(
+      children: [
+        const Spacer(flex: 2),
+        Text(
+          '잠시 생각을 내려놓고\n숨을 천천히 쉬어요.',
+          textAlign: TextAlign.center,
+          style: GoogleFonts.notoSansKr(
+            fontSize: 22,
+            height: 1.45,
+            fontWeight: FontWeight.w800,
+            color: Colors.white,
+          ),
+        ),
+        const SizedBox(height: 22),
+        Text(
+          '천천히 들이마시고 내쉬세요.',
+          textAlign: TextAlign.center,
+          style: GoogleFonts.notoSansKr(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: Colors.white.withValues(alpha: 0.72),
+          ),
+        ),
+        const SizedBox(height: 58),
+        AnimatedBuilder(
+          animation: scale,
+          builder: (_, child) =>
+              Transform.scale(scale: scale.value, child: child),
+          child: _buildGlowCircle(size: 218),
+        ),
+        const Spacer(flex: 3),
+      ],
+    );
+  }
+
+  Widget _buildCountdown() {
+    return Column(
+      children: [
+        const Spacer(flex: 3),
+        _buildGlowCircle(
+          size: 230,
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 430),
+            transitionBuilder: (child, animation) {
+              final scale = Tween<double>(begin: 0.86, end: 1.08).animate(
+                CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
+              );
+              return FadeTransition(
+                opacity: animation,
+                child: ScaleTransition(scale: scale, child: child),
+              );
+            },
+            child: Text(
+              '$_countdownValue',
+              key: ValueKey(_countdownValue),
+              style: GoogleFonts.inter(
+                fontSize: 86,
+                fontWeight: FontWeight.w800,
+                color: Colors.white,
+              ),
+            ),
+          ),
+        ),
+        const Spacer(flex: 4),
+      ],
+    );
+  }
+
+  Widget _buildReady() {
+    return Column(
+      children: [
+        const Spacer(flex: 2),
+        _buildGlowCircle(
+          size: 220,
+          child: const Icon(Icons.check_rounded, size: 82, color: Colors.white),
+        ),
+        const SizedBox(height: 42),
+        Text(
+          '이제 시작해볼까요?',
+          textAlign: TextAlign.center,
+          style: GoogleFonts.notoSansKr(
+            fontSize: 22,
+            fontWeight: FontWeight.w800,
+            color: Colors.white,
+          ),
+        ),
+        const Spacer(flex: 3),
+        _buildPrimaryButton('시작하기', _startFocusTimer),
+      ],
+    );
+  }
+
+  Widget _buildTimer() {
+    final progress = 1 - (_remainingSeconds / _timerTotalSeconds);
+    return Column(
+      children: [
+        const Spacer(flex: 3),
+        SizedBox(
+          width: 260,
+          height: 260,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              SizedBox(
+                width: 236,
+                height: 236,
+                child: CircularProgressIndicator(
+                  value: progress.clamp(0, 1),
+                  strokeWidth: 2.8,
+                  backgroundColor: const Color(
+                    0xFF4E3C87,
+                  ).withValues(alpha: 0.25),
+                  valueColor: const AlwaysStoppedAnimation(Color(0xFF9E7CFF)),
+                  strokeCap: StrokeCap.round,
+                ),
+              ),
+              Text(
+                _formatRemaining(),
+                style: GoogleFonts.inter(
+                  fontSize: 56,
+                  fontWeight: FontWeight.w800,
+                  color: Colors.white,
+                  letterSpacing: 0,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const Spacer(flex: 4),
+        Row(
+          children: [
+            Expanded(
+              child: _buildSecondaryButton(
+                _timerRunning ? '일시정지' : '계속하기',
+                _toggleTimer,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(child: _buildSecondaryButton('돌아가기', _requestExitTimer)),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildGlowCircle({required double size, Widget? child}) {
+    return Container(
+      width: size,
+      height: size,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: const RadialGradient(
+          colors: [Color(0xFFCEB8FF), Color(0xFF9A71E3), Color(0xFF6F54B5)],
+          stops: [0.0, 0.62, 1.0],
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFFB995FF).withValues(alpha: 0.34),
+            blurRadius: 38,
+            spreadRadius: 8,
+          ),
+          BoxShadow(
+            color: const Color(0xFFB995FF).withValues(alpha: 0.16),
+            blurRadius: 76,
+            spreadRadius: 18,
+          ),
+        ],
+      ),
+      child: child,
+    );
+  }
+
+  Widget _buildPrimaryButton(String label, VoidCallback onTap) {
+    return SizedBox(
+      width: double.infinity,
+      child: FilledButton(
+        onPressed: onTap,
+        style: FilledButton.styleFrom(
+          backgroundColor: const Color(0xFF6F5EA8),
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+        ),
+        child: Text(
+          label,
+          style: GoogleFonts.notoSansKr(
+            fontSize: 16,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSecondaryButton(String label, VoidCallback onTap) {
+    return FilledButton(
+      onPressed: onTap,
+      style: FilledButton.styleFrom(
+        backgroundColor: const Color(0xFF5C4B86).withValues(alpha: 0.78),
+        foregroundColor: Colors.white,
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      ),
+      child: Text(
+        label,
+        style: GoogleFonts.notoSansKr(
+          fontSize: 14,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
+}
+
 class _SuggestedTask {
   final String text;
   String? time; // HH:mm 24h (mutable for time-picker edit)
@@ -704,6 +1145,19 @@ class _ChatScreenState extends State<ChatScreen>
       default:
         return '함께 가자';
     }
+  }
+
+  void _openCountdownFocusMode() {
+    Navigator.of(context).push(
+      PageRouteBuilder<void>(
+        pageBuilder: (_, _, _) => const CountdownFocusModeScreen(),
+        transitionsBuilder: (_, animation, _, child) {
+          return FadeTransition(opacity: animation, child: child);
+        },
+        transitionDuration: const Duration(milliseconds: 220),
+        reverseTransitionDuration: const Duration(milliseconds: 180),
+      ),
+    );
   }
 
   String _normalizeRestText(String text) {
@@ -2137,7 +2591,9 @@ class _ChatScreenState extends State<ChatScreen>
 
   Future<void> _checkArchivedChat() async {
     final prefs = await SharedPreferences.getInstance();
-    final has = _decodeRecentArchive(prefs.getString(_chatArchiveKey)).isNotEmpty;
+    final has = _decodeRecentArchive(
+      prefs.getString(_chatArchiveKey),
+    ).isNotEmpty;
     if (mounted && has != _hasArchivedChat) {
       setState(() => _hasArchivedChat = has);
     }
@@ -9930,6 +10386,10 @@ $timerOutputRule
               }
               if (chip == '🐾 오늘은 조금만 하기') {
                 _chooseLightDay();
+                return;
+              }
+              if (_coach.isMaster && chip == '카운트다운 해줘') {
+                _openCountdownFocusMode();
                 return;
               }
               _send(chip);
