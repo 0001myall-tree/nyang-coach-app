@@ -245,8 +245,15 @@ $profileCtx
   ) async {
     if (chatHistory.isEmpty) return;
     try {
+      // 채팅 기록은 {'isUser','text'} 형식으로 저장된다. (구형 {'role','content'}도 허용)
       final textLogs = chatHistory
-          .map((m) => '${m['role']}: ${m['content']}')
+          .whereType<Map>()
+          .map((m) {
+            final role =
+                m['role'] ?? ((m['isUser'] == true) ? 'user' : 'assistant');
+            final content = m['content'] ?? m['text'] ?? '';
+            return '$role: $content';
+          })
           .join('\n');
       final prompt =
           '''당신은 사용자의 하루를 회고하고 기록하는 전문 데이터 분석가입니다. 오늘 대화 내역을 바탕으로 하루를 요약해주세요.
@@ -283,7 +290,9 @@ $textLogs
         estimatedTokens: estimatedPromptTokens,
       );
 
-      final callable = FirebaseFunctions.instance.httpsCallable('chatProxy');
+      final callable = FirebaseFunctions.instanceFor(
+        region: 'asia-northeast3',
+      ).httpsCallable('chatProxy');
       final response = await callable.call({
         'messages': messages,
         'temperature': 0.2,
@@ -407,7 +416,9 @@ ${jsonEncode(masterProfile)}
         estimatedTokens: estimatedPromptTokens,
       );
 
-      final callable = FirebaseFunctions.instance.httpsCallable('chatProxy');
+      final callable = FirebaseFunctions.instanceFor(
+        region: 'asia-northeast3',
+      ).httpsCallable('chatProxy');
       final response = await callable.call({
         'messages': messages,
         'temperature': 0.3,
