@@ -7,7 +7,6 @@ class CoachConfig {
   final Color accentColor;
   final Color accentLight;
   final List<String> chips;
-  final List<String> backFlirts;
   final List<String> flirtOne;
   final List<String> flirtHalf;
   final List<String> flirtFew;
@@ -27,7 +26,6 @@ class CoachConfig {
     required this.accentColor,
     required this.accentLight,
     required this.chips,
-    this.backFlirts = const [],
     this.flirtOne = const [],
     this.flirtHalf = const [],
     this.flirtFew = const [],
@@ -73,12 +71,6 @@ class CoachConfigs {
       accentLight: Color(0xFFF3F0FF),
       chips: ['오늘 뭐부터 할까', '하기 싫다', '같이 생각해줘'],
       voiceCount: 5, // 목소리 파일 5개
-      backFlirts: [
-        '보고 싶었냥 ㅠㅠ 냥이 매일 기다렸다냥... 🥺💛',
-        '어디 갔다 왔냥? 냥이 혼자 너무 심심했냥~ 이제 같이 하자냥 🐱',
-        '흥~ 냥이 기다렸거든?... 그래도 왔으니까 신난다옹💪',
-        '집사 왔다! 냥이 모르는 척할까 했는데 실패했다 😼',
-      ],
       flirtOne: [
         '오! 완료했다냥! 잘했다냥 🐾',
         '시작이 반이다냥! 멋지다 집사 😼',
@@ -151,11 +143,6 @@ class CoachConfigs {
       accentLight: Color(0xFFEEF2FF),
       chips: ['오늘 뭐부터 할까', '하기 싫다', '관리 좀 하고싶어'],
       voiceCount: 5, // 목소리 파일 5개
-      backFlirts: [
-        '야 나 진짜 기다렸어... 매일 생각했는데. 다시 왔지? 그걸로 됐어 🥺💙',
-        '어디 갔다 왔어? 자기 없으니까 뭔가 허전하더라... 이제 같이 하자 💙',
-        '솔직히 보고 싶었어. 많이. 오늘부터 다시 시작하자, 내가 옆에 있을게 🥹',
-      ],
       flirtOne: [
         '하나 끝냈네. 하기 싫었을 수도 있는데, 일단 움직인 게 마음 놓인다 💙',
         '방금 하나 정리하니까 머리가 조금 가벼워졌겠다. 이 흐름으로 5분만 더 가볼까?',
@@ -262,11 +249,6 @@ class CoachConfigs {
       accentLight: Color(0xFFFDF2F8),
       chips: ['오늘 뭐부터 할까', '하기 싫다', '관리 좀 하고싶어'],
       voiceCount: 5, // 목소리 파일 5개
-      backFlirts: [
-        '오빠!!!! 어디 갔다 왔어ㅠㅠ 보고싶었어!!!! 🩷',
-        '안 그래도 자기 생각 중이었는데... 왜 이제 왔어ㅠ 이제 매일 와 알겠지? 💗',
-        '오빠 없으니까 너무 심심했어ㅠ 이제 같이 하는 거야 약속! 🩷',
-      ],
       flirtOne: [
         '오빠 하나 끝냈구나. 하기 전엔 좀 귀찮았을 텐데, 지금은 살짝 후련해? 🩷',
         '방금 하나 지우니까 머리가 조금 가벼워졌겠다. 이 흐름으로 5분만 더 해볼까? 💗',
@@ -369,11 +351,6 @@ class CoachConfigs {
       accentLight: Color(0xFFECFDF5),
       chips: ['방 치우기 싫어', '오늘 뭐부터 해?', '오늘 뭐 먹지?'],
       voiceCount: 5, // 목소리 파일 5개
-      backFlirts: [
-        '이놈아!! 어디 갔다 이제 오냐! ㅠㅠ 👵',
-        '안 그래도 너 기다리다가 목 빠지는 줄 알았다! 얼른 와라!',
-        '왔냐? 밥은 먹었고? 이제 할미랑 다시 시작하는 거다! ❤️',
-      ],
       flirtOne: [
         '그래. 잘 해치웠네. 역시 내 새끼 👵',
         '시작했으니 반은 온 기다. 우리 기특한 내 강아지!',
@@ -481,11 +458,6 @@ class CoachConfigs {
       accentLight: Color(0xFFEEF2FF),
       chips: ['집인데 운동 뭐하지?', '복부 운동 짜줘', '지금 할 운동'],
       voiceCount: 5, // 목소리 파일 5개
-      backFlirts: [
-        '왔네. 다시 형이랑 조져보자 🔥',
-        '기다리고 있었다. 임마.',
-        '또 왔네. 넌 분명히 될 놈이니까 형 믿고 다시 시작하자. 💪',
-      ],
       flirtOne: [
         '좋아, 확실히 끝냈다. 텐션 올리자 🔥',
         '시작이 좋네. 나머지도 다 부숴버리자. 💪',
@@ -570,11 +542,6 @@ class CoachConfigs {
       accentLight: Color(0xFFF0EEFF),
       chips: ['오늘 브리핑해줘', '우선순위 정리해줘', '일정 알람 설정해줘'],
       voiceCount: 5, // 목소리 파일 5개
-      backFlirts: [
-        '오셨네요. 밀린 일정 브리핑부터 시작할까요?',
-        '공백 기간의 데이터를 검토 중입니다. 다시 체계적으로 일정을 잡아드리겠습니다.',
-        '기다리고 있었습니다. 제가 도와드릴 일이 있을까요?',
-      ],
       flirtOne: [
         '역시 가뿐히 해내셨네요. 다음 일정도 제가 잘 서포트하겠습니다.',
         '완료하셨군요. 단호한 실행력은 언제 봐도 든든합니다.',
@@ -689,11 +656,6 @@ $_commonCleaningRules''',
       accentLight: Color(0xFFF3E8FB),
       chips: ['컨디션 체크해줘', '루틴 밸런스 봐줘', '부드러운 알람 설정'],
       voiceCount: 5, // 목소리 파일 5개
-      backFlirts: [
-        '다시 오셨네요. 제가 도와드릴 일이 있을까요?',
-        '안녕하세요. 필요한 거 있으신가요?',
-        '필요하면 제가 컨디션을 고려해서 무리하지 않게 일정을 잡아드릴게요.',
-      ],
       flirtOne: [
         '역시 가뿐히 해내셨네요. 곁에서 지켜보는 저까지 기분이 좋아져요.',
         '벌써 완료하셨군요! 남은 일정도 제가 편안하게 챙겨드릴게요.',
