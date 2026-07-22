@@ -1,10 +1,46 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
+import '../models/user_data.dart';
 
 class AnalyticsService {
   static final _firestore = FirebaseFirestore.instance;
   static final _auth = FirebaseAuth.instance;
+
+  /// Firebase 콘솔 대시보드용. Firestore 집계(비용·토큰 등 상세 회계)와 별개로,
+  /// 사용자 행동은 이쪽으로 보내 콘솔에서 리텐션·기능 사용량을 바로 본다.
+  static final FirebaseAnalytics analytics = FirebaseAnalytics.instance;
+
+  /// 콘솔에서 플랜·코치별로 사용 패턴을 나눠 볼 수 있도록 사용자 속성을 심는다.
+  static Future<void> _syncAnalyticsUserProperties(String uid) async {
+    try {
+      final data = await UserDataService.load();
+      await analytics.setUserId(id: uid);
+      await analytics.setUserProperty(
+        name: 'plan_type',
+        value: data.isPlanActive ? data.planType : 'none',
+      );
+      await analytics.setUserProperty(
+        name: 'selected_coach',
+        value: data.selectedCoachId ?? 'unset',
+      );
+    } catch (e) {
+      debugPrint('Firebase Analytics user properties failed: $e');
+    }
+  }
+
+  /// Analytics 전송 실패가 앱 동작이나 Firestore 집계를 막지 않게 감싼다.
+  static Future<void> _safeAnalyticsEvent(
+    String name, [
+    Map<String, Object>? parameters,
+  ]) async {
+    try {
+      await analytics.logEvent(name: name, parameters: parameters);
+    } catch (e) {
+      debugPrint('Firebase Analytics event failed ($name): $e');
+    }
+  }
   static const double _krwPerUsd = 1400;
   static const double _gpt4oMiniBlendedUsdPerMillionTokens = 0.285;
 
@@ -99,6 +135,8 @@ class AnalyticsService {
     final user = _auth.currentUser;
     if (user == null) return;
 
+    await _syncAnalyticsUserProperties(user.uid);
+
     final now = DateTime.now();
     final dateKey = _dateKey(now);
     final summaryRef = _userAnalyticsSummaryRef(user.uid);
@@ -149,6 +187,11 @@ class AnalyticsService {
   }) async {
     final user = _auth.currentUser;
     if (user == null) return;
+
+    await _safeAnalyticsEvent('chat_message', {
+      'coach_id': coachId,
+      'used_api': usedApi.toString(),
+    });
 
     final dateKey = _dateKey(DateTime.now());
     final conversationPayload = {
@@ -328,6 +371,8 @@ class AnalyticsService {
   static Future<void> logFeatureUsage(String featureName) async {
     final user = _auth.currentUser;
     if (user == null) return;
+
+    await _safeAnalyticsEvent('feature_use', {'feature_name': featureName});
 
     final dateKey = _dateKey(DateTime.now());
     final featurePayload = {

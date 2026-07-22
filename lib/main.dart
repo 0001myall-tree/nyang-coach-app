@@ -10,6 +10,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'firebase_options.dart';
 import 'screens/landing_screen.dart';
 import 'screens/coach_config.dart';
+import 'package:firebase_analytics/firebase_analytics.dart';
+import 'services/analytics_service.dart';
 import 'services/notification_service.dart';
 import 'services/tasks_sync_service.dart';
 import 'services/widget_sync_service.dart';
@@ -138,6 +140,10 @@ class _NyangCoachAppState extends State<NyangCoachApp>
             ),
       ),
       navigatorKey: navigatorKey,
+      // 화면 이동을 자동으로 기록해 콘솔에서 화면별 체류·이탈을 볼 수 있게 한다.
+      navigatorObservers: [
+        FirebaseAnalyticsObserver(analytics: AnalyticsService.analytics),
+      ],
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
