@@ -4291,12 +4291,21 @@ class _TasksScreenState extends State<TasksScreen>
             )
           else if (_isViewingPastDate)
             Expanded(
-              child: Center(
+              child: Align(
+                alignment: const Alignment(0, -0.55),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Text('📖', style: TextStyle(fontSize: 40)),
-                    const SizedBox(height: 12),
+                    SvgPicture.asset(
+                      'assets/icons/clock-rotate-left.svg',
+                      width: 40,
+                      height: 40,
+                      colorFilter: ColorFilter.mode(
+                        _coach.accentColor,
+                        BlendMode.srcIn,
+                      ),
+                    ),
+                    const SizedBox(height: 14),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 32),
                       child: Text(
