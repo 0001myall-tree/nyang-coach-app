@@ -771,6 +771,7 @@ class _TasksScreenState extends State<TasksScreen>
 
     await _checkReset(prefs);
     await _checkWeekMonthReset(prefs);
+    await _promoteAndPrunePlannedTasks();
     _injectTodayHabits();
     _injectTodaySchedules();
     final coreMilestonesChanged = _syncTodayMilestonesIntoCoreTasks();
@@ -1615,6 +1616,8 @@ class _TasksScreenState extends State<TasksScreen>
   }
 
   Future<void> _checkReset(SharedPreferences prefs) async {
+    // 첫 클라우드 복원 전에는 리셋하지 않는다 (재설치 직후 데이터 유실 방지).
+    if (DailyResetService.isCloudRestorePending(prefs)) return;
     final today = _getTodayStr();
     final lastDate = prefs.getString('nyang_last_date');
 
@@ -1733,6 +1736,7 @@ class _TasksScreenState extends State<TasksScreen>
 
   // ── checkWeekMonthReset ───────────────────────────────────
   Future<void> _checkWeekMonthReset(SharedPreferences prefs) async {
+    if (DailyResetService.isCloudRestorePending(prefs)) return;
     final thisWeek = _getWeekMondayStr();
     final todayStr = _getTodayStr();
     final parts = todayStr.split('-');
@@ -1841,7 +1845,10 @@ class _TasksScreenState extends State<TasksScreen>
       await _savePlannedTodayTasks();
       return;
     }
+    await _persistTodayTasks();
+  }
 
+  Future<void> _persistTodayTasks() async {
     if (!await _hasActivePlan()) {
       for (final task in tasks) {
         task.isReminderEnabled = false;
@@ -1867,6 +1874,36 @@ class _TasksScreenState extends State<TasksScreen>
       }
     });
     await prefs.setString('nyang_today_tasks_by_date', jsonEncode(encoded));
+    TasksSyncService.scheduleSyncToCloud();
+  }
+
+  /// 미리 세워둔 계획 중 날짜가 오늘이 된 것은 오늘 할 일로 승격하고,
+  /// 이미 지나가버린 날짜의 계획은 정리한다.
+  Future<void> _promoteAndPrunePlannedTasks() async {
+    final todayKey = _getTodayStr();
+    final today = _dateFromKey(todayKey);
+
+    final promoted = plannedTodayTasksByDate.remove(todayKey);
+    final staleKeys = plannedTodayTasksByDate.keys
+        .where((key) => _dateFromKey(key).isBefore(today))
+        .toList();
+    for (final key in staleKeys) {
+      plannedTodayTasksByDate.remove(key);
+    }
+    if (promoted == null && staleKeys.isEmpty) return;
+
+    if (promoted != null) {
+      final existingIds = tasks.map((t) => t.id.toString()).toSet();
+      for (final task in promoted) {
+        if (existingIds.add(task.id.toString())) tasks.add(task);
+      }
+    }
+    if (mounted) setState(() {});
+
+    await _savePlannedTodayTasks();
+    if (promoted != null && promoted.isNotEmpty) {
+      await _persistTodayTasks();
+    }
   }
 
   Future<void> _saveTodayRecord() async {
@@ -2084,6 +2121,9 @@ class _TasksScreenState extends State<TasksScreen>
   String get _activeTodayDateKey => _dateKey(_activeTodayDate);
 
   bool get _isViewingActualToday => _activeTodayDateKey == _getTodayStr();
+
+  bool get _isViewingPastDate =>
+      _activeTodayDate.isBefore(_dateFromKey(_getTodayStr()));
 
   List<TaskItem> get _activeTodayTasks {
     if (_isViewingActualToday) return tasks;
@@ -4243,6 +4283,30 @@ class _TasksScreenState extends State<TasksScreen>
                         fontSize: 14,
                         color: const Color(0xFFA0A0B0),
                         height: 1.6,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          else if (_isViewingPastDate)
+            Expanded(
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text('📖', style: TextStyle(fontSize: 40)),
+                    const SizedBox(height: 12),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 32),
+                      child: Text(
+                        '오늘 탭은 실행을 위한 공간이며,\n과거 기록은 장기 보관하지 않습니다.',
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.notoSansKr(
+                          fontSize: 14,
+                          color: const Color(0xFFA0A0B0),
+                          height: 1.6,
+                        ),
                       ),
                     ),
                   ],

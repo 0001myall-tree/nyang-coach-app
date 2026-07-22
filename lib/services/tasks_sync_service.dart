@@ -14,7 +14,13 @@ class TasksSyncService {
     'nyang_schedules',
     'nyang_history',
     'nyang_visions',
+    'nyang_today_tasks_by_date',
   };
+
+  /// 기기 로컬 전용 키. 클라우드에 백업/복원하지 않는다.
+  /// ('이 기기가 첫 복원을 마쳤는가'는 기기별 사실이라, 클라우드에서 true를
+  /// 물려받으면 새 기기의 덮어쓰기 보호가 무력화된다.)
+  static const _localOnlyKeys = {'nyang_has_synced_from_cloud'};
 
   /// 로컬에서 막 수정됐지만 아직 클라우드로 업로드되지 않은 키.
   /// 이 키들은 클라우드 스냅샷/다운로드가 로컬을 덮어쓰지 못하게 막아,
@@ -57,6 +63,7 @@ class TasksSyncService {
       // 1. 로컬에 존재하는 데이터 업로드 및 업데이트
       for (final key in keys) {
         if (key == 'nyang_user_data') continue; // UserDataService에서 별도 관리
+        if (_localOnlyKeys.contains(key)) continue;
 
         final value = prefs.get(key);
         if (value != null) {
@@ -100,7 +107,9 @@ class TasksSyncService {
       // 2. 로컬에서 삭제된 데이터를 클라우드에서도 삭제 (첫 동기화가 완료된 상태에서만 안전하게 실행)
       if (hasSyncedFromCloud) {
         for (final key in cloudKeys) {
-          if (key.startsWith('nyang_') && key != 'nyang_user_data' && !keys.contains(key)) {
+          if (key.startsWith('nyang_') &&
+              key != 'nyang_user_data' &&
+              (_localOnlyKeys.contains(key) || !keys.contains(key))) {
             final docRef = FirebaseFirestore.instance
                 .collection('users')
                 .doc(user.uid)
@@ -113,12 +122,37 @@ class TasksSyncService {
       }
 
       await batch.commit();
-      // 업로드가 확정됐으므로 방금 올린 키들의 "로컬 최신" 표시를 해제한다.
-      _pendingUploadKeys.removeAll(keys);
+      // 업로드가 확정됐으므로 "로컬 최신" 표시를 해제한다.
+      // (removeAll(keys)를 쓰면 로컬에 아직 없는 키가 pending에 영원히 남아
+      // 클라우드 복원을 계속 막는 누수가 생긴다.)
+      _pendingUploadKeys.clear();
       debugPrint('✅ TasksSyncService: 로컬 데이터를 클라우드에 성공적으로 백업했습니다.');
     } catch (e) {
       debugPrint('❌ TasksSyncService syncToCloud 오류: $e');
     }
+  }
+
+  /// syncFromCloud를 재시도 포함으로 실행한다. 각 시도는 12초 타임아웃이며,
+  /// 일시적 네트워크 문제로 첫 복원이 실패해 빈 화면으로 진입하는 것을 줄인다.
+  static Future<Map<String, dynamic>> syncFromCloudWithRetry({
+    int maxAttempts = 2,
+  }) async {
+    Map<String, dynamic> diag = {'status': 'ERROR', 'message': 'NOT_ATTEMPTED'};
+    for (var attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        diag = await syncFromCloud().timeout(
+          const Duration(seconds: 12),
+          onTimeout: () => {'status': 'ERROR', 'message': 'TIMEOUT'},
+        );
+      } catch (e) {
+        diag = {'status': 'ERROR', 'message': e.toString()};
+      }
+      if (diag['status'] == 'SUCCESS' || diag['status'] == 'EMPTY') return diag;
+      if (attempt < maxAttempts) {
+        await Future.delayed(const Duration(seconds: 2));
+      }
+    }
+    return diag;
   }
 
   static Future<Map<String, dynamic>> syncFromCloud() async {
@@ -164,6 +198,8 @@ class TasksSyncService {
 
         // 업로드 대기 중인(로컬이 더 최신인) 키는 클라우드 값으로 덮지 않는다.
         if (_pendingUploadKeys.contains(key)) continue;
+
+        if (_localOnlyKeys.contains(key)) continue;
 
         if (data.containsKey('value')) {
           final value = data['value'];
@@ -226,6 +262,7 @@ class TasksSyncService {
         // 방금 로컬에서 수정돼 아직 업로드 대기 중인 키는 덮어쓰지 않는다.
         // (오래된 클라우드 스냅샷이 방금 저장한 메모 등을 지우는 것을 방지)
         if (_pendingUploadKeys.contains(key)) continue;
+        if (_localOnlyKeys.contains(key)) continue;
 
         if (data.containsKey('value')) {
           final value = data['value'];

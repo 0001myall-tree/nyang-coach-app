@@ -145,7 +145,7 @@ class AuthService {
     await UserDataService.syncFromCloud();
     await _applyAllowedEmailEntitlement(allowData);
     await MemoryService().syncFromCloud();
-    await TasksSyncService.syncFromCloud();
+    await TasksSyncService.syncFromCloudWithRetry();
     await _syncNotificationsSafely();
   }
 

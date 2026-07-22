@@ -82,8 +82,8 @@ class CountdownFocusModeScreen extends StatefulWidget {
 }
 
 class _CountdownFocusModeScreenState extends State<CountdownFocusModeScreen>
-    with TickerProviderStateMixin {
-  static const _timerTotalSeconds = 15 * 60;
+    with TickerProviderStateMixin, WidgetsBindingObserver {
+  static const _timerTotalSeconds = 10 * 60;
   // 도입부 호흡 안내: 원이 커졌다 줄어드는 한 호흡(4초)을 2번 반복한다.
   static const _breathCycle = Duration(seconds: 4);
   static const _breathCount = 2;
@@ -96,14 +96,29 @@ class _CountdownFocusModeScreenState extends State<CountdownFocusModeScreen>
   int _remainingSeconds = _timerTotalSeconds;
   bool _timerRunning = false;
 
+  /// 벽시계 기준 종료 시각. 화면이 꺼지거나 앱이 백그라운드로 가면 1초 틱이
+  /// 정지되므로, 틱 횟수 대신 이 시각과의 차이로 남은 시간을 계산한다.
+  DateTime? _timerEndAt;
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _breathCtrl = AnimationController(
       vsync: this,
       duration: _breathCycle,
     )..repeat();
     _startIntroFlow();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // 백그라운드에서 돌아오면 실제 흘러간 시간만큼 즉시 따라잡는다.
+    if (state == AppLifecycleState.resumed &&
+        _phase == _CountdownFocusPhase.timer &&
+        _timerRunning) {
+      _syncRemainingFromClock();
+    }
   }
 
   void _startIntroFlow() {
@@ -136,6 +151,9 @@ class _CountdownFocusModeScreenState extends State<CountdownFocusModeScreen>
       _phase = _CountdownFocusPhase.timer;
       _remainingSeconds = _timerTotalSeconds;
       _timerRunning = true;
+      _timerEndAt = DateTime.now().add(
+        const Duration(seconds: _timerTotalSeconds),
+      );
     });
     _focusTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (!mounted) {
@@ -143,18 +161,49 @@ class _CountdownFocusModeScreenState extends State<CountdownFocusModeScreen>
         return;
       }
       if (!_timerRunning) return;
-      if (_remainingSeconds <= 0) {
-        timer.cancel();
-        setState(() => _timerRunning = false);
-        return;
-      }
-      setState(() => _remainingSeconds -= 1);
+      _syncRemainingFromClock();
     });
+  }
+
+  void _syncRemainingFromClock() {
+    final endAt = _timerEndAt;
+    if (endAt == null || !mounted) return;
+    final remaining = endAt.difference(DateTime.now()).inSeconds;
+    if (remaining <= 0) {
+      _focusTimer?.cancel();
+      setState(() {
+        _remainingSeconds = 0;
+        _timerRunning = false;
+        _timerEndAt = null;
+      });
+      HapticFeedback.vibrate();
+      return;
+    }
+    if (remaining != _remainingSeconds) {
+      setState(() => _remainingSeconds = remaining);
+    }
   }
 
   void _toggleTimer() {
     if (_phase != _CountdownFocusPhase.timer) return;
-    setState(() => _timerRunning = !_timerRunning);
+    setState(() {
+      if (_timerRunning) {
+        // 일시정지: 지금까지 남은 시간을 고정해 두고 종료 시각은 비운다.
+        final endAt = _timerEndAt;
+        if (endAt != null) {
+          _remainingSeconds = endAt
+              .difference(DateTime.now())
+              .inSeconds
+              .clamp(0, _timerTotalSeconds);
+        }
+        _timerEndAt = null;
+        _timerRunning = false;
+      } else {
+        // 재개: 고정해 둔 남은 시간만큼 뒤를 새 종료 시각으로 잡는다.
+        _timerEndAt = DateTime.now().add(Duration(seconds: _remainingSeconds));
+        _timerRunning = true;
+      }
+    });
   }
 
   Future<void> _requestExitTimer() async {
@@ -222,6 +271,7 @@ class _CountdownFocusModeScreenState extends State<CountdownFocusModeScreen>
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _flowTimer?.cancel();
     _focusTimer?.cancel();
     _breathCtrl.dispose();
@@ -3536,6 +3586,14 @@ class _ChatScreenState extends State<ChatScreen>
     }
   }
 
+  /// 사용자가 이번 발화에서 직접 타이머를 요청했는지 판정.
+  /// (마스터 코치의 타이머는 명시 요청 또는 제안 동의로만 제공된다.)
+  bool _isExplicitTimerRequest(String userText) {
+    final normalized = userText.replaceAll(RegExp(r'\s+'), '').toLowerCase();
+    if (!normalized.contains('타이머')) return false;
+    return ['띄워', '켜', '줘', '틀어', '시작', '설정', '맞춰'].any(normalized.contains);
+  }
+
   bool _isMasterTimerAuthorizationResponse(String userText) {
     if (!_coach.isMaster || _messages.length < 2) return false;
     final previous = _messages[_messages.length - 2];
@@ -6475,7 +6533,9 @@ class _ChatScreenState extends State<ChatScreen>
       );
       final masterTimerEligible = await _isMasterTimerSuggestionEligible(
         parsed.timerConfirmTaskName,
-        userAuthorized: _isMasterTimerAuthorizationResponse(trimmed),
+        userAuthorized:
+            _isMasterTimerAuthorizationResponse(trimmed) ||
+            _isExplicitTimerRequest(trimmed),
       );
       if (!mounted || widget.coachId != currentId) return;
       if (isVisionNewActionFlow) {
@@ -6884,6 +6944,7 @@ class _ChatScreenState extends State<ChatScreen>
 
     // 1. 마스터 프로필 (tier별 분기)
     final mpRaw = prefs.getString('nyang_master_profile');
+    bool fullMasterProfileInjected = false;
     if (mpRaw != null &&
         mpRaw != 'null' &&
         (!_coach.isMaster || needsGoalContext)) {
@@ -6909,6 +6970,7 @@ class _ChatScreenState extends State<ChatScreen>
           sb.writeln('- 오늘의 장애물: ${hc['obstacles'] ?? '없음'}');
         } else {
           // master: 전체
+          fullMasterProfileInjected = true;
           final scenes = (hc['scenes_insights'] as List?) ?? [];
           final lcCandidates = (mp['low_change_candidates'] as List?) ?? [];
           sb.writeln('[고변화 - 실시간]');
@@ -6945,8 +7007,10 @@ class _ChatScreenState extends State<ChatScreen>
       } catch (_) {}
     }
 
-    // 코칭 개입 규칙
-    if (!_coach.isMaster || needsGoalContext) {
+    // 코칭 개입 규칙 — 규칙이 참조하는 [사용자 고유 표현]/[관심 축]/[성공·실패 공식]
+    // 섹션은 마스터 전체 프로필에만 존재하므로, 그 프로필이 실제로 주입된 턴에만 넣는다.
+    // (프렌즈에게 주면 받은 적 없는 데이터를 활용하라는 죽은 지침이 되어 환각을 유발한다.)
+    if (fullMasterProfileInjected) {
       sb.writeln('''
 [코칭 개입 규칙 (매우 중요)]
 1. 언어적 동기화: [사용자 고유 표현]을 문장 속에 자연스럽게 섞어 사용하세요. (주 1~2회 빈도 제한)
@@ -7042,9 +7106,9 @@ class _ChatScreenState extends State<ChatScreen>
       }
     }
 
-    // 2. 장기 패턴
-    final ltRaw = prefs.getString('nyang_long_term');
-    if (ltRaw != null && (!_coach.isMaster || needsGoalContext)) {
+    // 2. 장기 패턴 (마스터 전용 — 메모리 시스템이 저장하는 실제 키로 읽는다)
+    final ltRaw = prefs.getString('nyang_long_term_memory');
+    if (ltRaw != null && _coach.isMaster && needsGoalContext) {
       try {
         final lt = jsonDecode(ltRaw) as List;
         if (lt.isNotEmpty) {
@@ -7221,10 +7285,10 @@ class _ChatScreenState extends State<ChatScreen>
               '*[~] 표시된 항목은 사용자가 이미 시작했지만 아직 완료 전인 상태. "아직 안 했네요"처럼 아예 안 한 것으로 말하지 말고, 이미 시작한 것을 인정하며 마무리를 자연스럽게 격려할 것.',
             );
             sb.writeln(
-              '*타이머 확인 카드는 "앱 기록상 미루기 2회 이상"으로 표시된 미완료 할 일에만 제안할 수 있음.',
+              '*"앱 기록상 미루기 2회 이상"으로 표시된 미완료 할 일을 사용자가 계속 시작하지 못하면 카운트다운을 먼저 제안할 수 있음. 제안만 하고 [COUNTDOWN_START] 태그는 사용자가 동의한 다음 턴에만 붙일 것. 단, 사용자가 방금 실행 저항을 표현한 턴에는 [실행 저항 원인 진단 흐름]의 턴 지시가 항상 우선함.',
             );
             sb.writeln(
-              '*"최근 대화상 귀찮음 표현 2회 이상"이지만 앱 기록상 미루기 2회 미만인 경우에는 카드를 띄우지 말고, 먼저 달랜 뒤 "필요하면 타이머라도 띄워드릴까요?"라고 말로만 물을 것. 이 경우 [TIMER_CONFIRM] 태그는 절대 출력하지 말 것.',
+              '*타이머 확인 카드([TIMER_CONFIRM])는 사용자가 직접 요청했거나 "필요하면 타이머라도 띄워드릴까요?"에 동의했을 때만 출력할 것. 코치가 먼저 타이머 태그를 출력하지 말 것.',
             );
           }
         }
@@ -7575,14 +7639,17 @@ class _ChatScreenState extends State<ChatScreen>
       }
     }
 
-    // 15. 프렌즈 코치용 타이머 동의(Opt-in) 로직
+    // 15. 프렌즈 코치용 타이머 제공 로직
     if (!_coach.isMaster) {
       sb.writeln('\n[타이머 제공 규칙]');
       sb.writeln(
-        '- 사용자가 행동을 시작하기 귀찮아하거나 코치의 행동 제안(예: "5분만 해보자")에 동의할 경우, "오케이 파이팅! 혹시 타이머 필요하면 말해 켜줄게"라고 자연스럽게 말하며 절대 먼저 타이머 태그를 출력하지 마세요.',
+        '- 사용자가 행동을 시작하기로 했거나 코치의 행동 제안(예: "5분만 해보자")에 동의하는 등 타이머가 도움이 될 상황이면, 코치가 먼저 자연스럽게 타이머를 제안하며 답변 끝에 [TIMER_CONFIRM:5] (또는 10 등 적절한 시간) 태그를 출력해도 됩니다. 예: "그럼 5분만 같이 가보자! 타이머 켜줄게" + [TIMER_CONFIRM:5]',
       );
       sb.writeln(
-        '- 오직 사용자가 명시적으로 "타이머 띄워줘", "응 타이머 줘" 등 타이머를 요청했을 때만 답변 끝에 [TIMER_CONFIRM:5] (또는 10 등 적절한 시간) 태그를 출력하세요.',
+        '- 사용자가 명시적으로 "타이머 띄워줘", "응 타이머 줘"라고 요청하면 바로 태그를 출력하세요.',
+      );
+      sb.writeln(
+        '- 단, 사용자가 타이머를 거절했거나 순수하게 감정만 토로하는 중이면 같은 대화에서 다시 권하지 마세요.',
       );
     }
 
@@ -8044,7 +8111,7 @@ class _ChatScreenState extends State<ChatScreen>
 - 사용자가 실행 저항을 표현하면 바로 해결책을 제시하지 말고 원인을 딱 한 번만 진단합니다. 진단 질문은 앱이 지정해준 문장만 쓰고, 새로 만들거나 두 번 반복하지 않습니다.
 - 사용자가 원인을 구체적으로 말하면 [하기 싫다 실행 개입 전략]에 따라 개입을 하나만 제안합니다.
 - 사용자가 원인을 특정하지 못하면("생각이 너무 많아요", "나도 잘 모르겠어요", "그냥 귀찮아요", "다 하기 싫어요", "이유를 모르겠어요") 원인을 더 분석하거나 다시 묻지 말고 카운트다운을 제안합니다.
-- 카운트다운은 모든 상황에서 쓰는 기본 해결책이 아닙니다. 원인이 불명확할 때 생각을 끊고 실행으로 전환시키는 장치로만 씁니다.
+- 카운트다운은 모든 상황에서 쓰는 기본 해결책이 아닙니다. 원인이 불명확할 때, 또는 앱 기록상 미루기 2회 이상인 일을 계속 시작하지 못할 때 생각을 끊고 실행으로 전환시키는 장치로 씁니다.
 - 카운트다운 제안에 사용자가 동의했거나 사용자가 직접 카운트다운을 요청한 경우에만, 짧게 한 문장으로 답한 뒤 답변 맨 끝에 [COUNTDOWN_START] 태그를 붙입니다. 코치가 먼저 붙이지 않습니다.
 - 원인 진단 질문은 하루에 한 번만 합니다. 이미 물어본 날에는 다시 묻지 말고 바로 해결책으로 연결해 대화가 길어지지 않게 합니다.'''
         : '';
@@ -8065,9 +8132,8 @@ class _ChatScreenState extends State<ChatScreen>
         ? '''4. [TIMER_START] 태그는 절대 사용 금지.
    - 사용자가 직접 "타이머 띄워줘", "15분 타이머 켜줘"처럼 명시적으로 요청한 경우에는 짧게 응답한 뒤 [TIMER_CONFIRM:분] 태그를 붙입니다. 시간이 없으면 15분을 기본값으로 사용합니다.
    - 직전 답변에서 "필요하면 타이머라도 띄워드릴까요?"라고 물었고 사용자가 동의했다면 [TIMER_CONFIRM:분:할일이름]을 출력합니다.
-   - 코치가 먼저 [TIMER_CONFIRM:분:할일이름]을 출력할 수 있는 경우는 [오늘 할 일 현황]에 "앱 기록상 미루기 2회 이상"으로 표시된 동일한 미완료 할 일뿐입니다.
-   - 대화에서 같은 일을 귀찮다고 2회 이상 반복했더라도 앱 기록상 미루기 2회 미만이면 태그나 확인 카드를 제안하지 마세요. 먼저 짧게 달랜 뒤 "필요하면 타이머라도 띄워드릴까요?"라고 말로만 물으세요.'''
-        : '''4. [TIMER_START] 태그는 절대 사용 금지. 사용자가 직접 "타이머 띄워줘", "15분 타이머 켜줘"처럼 명시적으로 요청한 경우에는 목적, 컨디션, 일정, 시간을 캐묻지 말고 짧게 응답한 뒤 [TIMER_CONFIRM:분] 태그만 붙입니다. 시간이 없으면 15분을 기본값으로 사용합니다. 코치가 먼저 타이머 태그를 출력하지 마세요.''';
+   - 코치가 먼저 [TIMER_CONFIRM] 태그를 출력하지 마세요. 코치가 먼저 권하는 장치는 타이머가 아니라 카운트다운입니다. [오늘 할 일 현황]에 "앱 기록상 미루기 2회 이상"으로 표시된 미완료 할 일을 사용자가 계속 시작하지 못하면, 짧게 공감한 뒤 "생각을 끊고 바로 시작할 수 있게 카운트다운을 띄워드릴까요?"처럼 카운트다운을 먼저 제안하세요. [COUNTDOWN_START] 태그는 사용자가 동의한 다음 턴에만 붙입니다.'''
+        : '''4. [TIMER_START] 태그는 절대 사용 금지. 사용자가 직접 "타이머 띄워줘", "15분 타이머 켜줘"처럼 명시적으로 요청한 경우에는 목적, 컨디션, 일정, 시간을 캐묻지 말고 짧게 응답한 뒤 [TIMER_CONFIRM:분] 태그만 붙입니다. 시간이 없으면 15분을 기본값으로 사용합니다. 타이머가 도움이 될 상황이면 [타이머 제공 규칙]에 따라 코치가 먼저 제안하며 태그를 붙여도 됩니다.''';
     // 냥냥이 연결(COACH_SWITCH)은 장기 목표 압박을 주는 마스터 코치(남비서/여비서) 전용 탈출구다.
     // 프렌즈 코치는 이미 압박 없는 오늘 하루 중심이라 서로 스위치될 이유가 없다.
     final coachSwitchRule = _coach.isMaster

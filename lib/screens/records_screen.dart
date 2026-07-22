@@ -215,16 +215,17 @@ class _RecordsScreenState extends State<RecordsScreen> {
   Future<void> _loadOrGenerateWeeklyFeedback() async {
     if (_isGeneratingWeeklyFeedback) return;
     final prefs = await SharedPreferences.getInstance();
+    // 구버전이 쓰던 여비서용 캐시 키 정리. 코치의 한마디는 마스터 공용으로
+    // sec_male 키 하나만 사용한다. (로컬에 남아 있으면 클라우드에 계속 재업로드됨)
+    await prefs.remove('nyang_coach_weekly_feedback_sec_female');
     final weekMonday = _getWeekMondayStr();
     final cacheKey = 'nyang_coach_weekly_feedback_sec_male';
     final cachedData = prefs.getString(cacheKey);
-    final sourceSignature = _weeklyFeedbackSourceSignature(prefs);
 
     try {
       if (cachedData != null) {
         final cached = jsonDecode(cachedData) as Map<String, dynamic>;
         if (cached['weekMonday'] == weekMonday &&
-            cached['sourceSignature'] == sourceSignature &&
             (cached['text'] as String?)?.trim().isNotEmpty == true) {
           if (!mounted) return;
           setState(() {
@@ -236,33 +237,13 @@ class _RecordsScreenState extends State<RecordsScreen> {
     } catch (_) {}
 
     final feedbackType = _selectFeedbackType(prefs, weekMonday);
-    await _triggerWeeklyFeedback(
-      weekMonday,
-      cacheKey,
-      feedbackType,
-      sourceSignature,
-    );
-  }
-
-  String _weeklyFeedbackSourceSignature(SharedPreferences prefs) {
-    return jsonEncode({
-      'lastDate': _lastDate,
-      'history': prefs.getString('nyang_history') ?? '',
-      'weekGoals': prefs.getString('nyang_week_goals') ?? '',
-      'monthGoals': prefs.getString('nyang_month_goals') ?? '',
-      'visions': prefs.getString('nyang_visions') ?? '',
-      'habits': prefs.getString('nyang_habits') ?? '',
-      'habitLogs': prefs.getString('nyang_habit_logs') ?? '',
-      'vacation': prefs.getString('nyang_vacation') ?? '',
-      'title': _userTitle,
-    });
+    await _triggerWeeklyFeedback(weekMonday, cacheKey, feedbackType);
   }
 
   Future<void> _triggerWeeklyFeedback(
     String weekMonday,
     String cacheKey,
     int feedbackType,
-    String sourceSignature,
   ) async {
     if (_isGeneratingWeeklyFeedback) return;
     _isGeneratingWeeklyFeedback = true;
@@ -339,7 +320,6 @@ class _RecordsScreenState extends State<RecordsScreen> {
           'weekMonday': weekMonday,
           'text': feedbackText,
           'type': feedbackType,
-          'sourceSignature': sourceSignature,
         }),
       );
       await prefs.setString(
@@ -1050,7 +1030,7 @@ ${feedbackType == 0
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  _isMaster ? '코치의 한마디' : '코치의 한마디',
+                  '코치의 한마디',
                   style: GoogleFonts.notoSansKr(
                     fontSize: 13,
                     fontWeight: FontWeight.w800,

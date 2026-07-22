@@ -157,10 +157,7 @@ class _LandingScreenState extends State<LandingScreen>
 
   Future<void> _syncTasksBeforeNavigation() async {
     try {
-      final diag = await TasksSyncService.syncFromCloud().timeout(
-        const Duration(seconds: 12),
-        onTimeout: () => {'status': 'ERROR', 'message': 'TIMEOUT'},
-      );
+      final diag = await TasksSyncService.syncFromCloudWithRetry();
       if (!_isTaskSyncUsable(diag)) {
         _showCloudSyncWarning(diag['message']?.toString() ?? 'UNKNOWN_ERROR');
       }
@@ -615,7 +612,7 @@ class _LandingScreenState extends State<LandingScreen>
             : '로그인 성공: ${userCred.user?.displayName}',
       );
       if (!isNaverTest) {
-        final diag = await TasksSyncService.syncFromCloud();
+        final diag = await TasksSyncService.syncFromCloudWithRetry();
         if (!outerContext.mounted) return;
         if (!_isTaskSyncUsable(diag)) {
           ScaffoldMessenger.of(outerContext).showSnackBar(

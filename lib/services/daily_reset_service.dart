@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import 'memory_service.dart';
 import 'tasks_sync_service.dart';
@@ -101,8 +102,17 @@ class DailyResetService {
     return DateFormat('yyyy-MM-dd').format(monday);
   }
 
+  /// 로그인 상태인데 이 기기에서 첫 클라우드 복원이 아직 성공하지 않았으면 true.
+  /// 이 상태에서 리셋이 돌면 재설치 직후의 빈 로컬을 기준으로 하루 전환이
+  /// 실행되어, 곧 복원될 데이터를 지우거나 빈 값을 서버로 역전파할 수 있다.
+  static bool isCloudRestorePending(SharedPreferences prefs) {
+    if (FirebaseAuth.instance.currentUser == null) return false;
+    return !(prefs.getBool('nyang_has_synced_from_cloud') ?? false);
+  }
+
   static Future<void> checkAndExecuteReset() async {
     final prefs = await SharedPreferences.getInstance();
+    if (isCloudRestorePending(prefs)) return;
     final resetHour = prefs.getDouble('nyang_reset_hour') ?? 3.0;
     final today = _getTodayStr(resetHour);
     final lastDate = prefs.getString('nyang_last_date');
@@ -370,6 +380,31 @@ class DailyResetService {
           await prefs.setString('nyang_core_tasks', jsonEncode(coreList));
         }
       }
+    }
+
+    // 3. 오늘 날짜로 미리 세워둔 계획 승격 + 지나간 날짜의 계획 정리
+    final rawPlanned = prefs.getString('nyang_today_tasks_by_date');
+    if (rawPlanned != null) {
+      try {
+        final Map<String, dynamic> plannedMap = jsonDecode(rawPlanned);
+        final todayPlanned = plannedMap.remove(today);
+        if (todayPlanned is List) {
+          final existingIds = injectedTasks
+              .map((t) => t['id'].toString())
+              .toSet();
+          for (final t in todayPlanned) {
+            if (t is Map && existingIds.add(t['id'].toString())) {
+              injectedTasks.add(Map<String, dynamic>.from(t));
+            }
+          }
+        }
+        // 키는 yyyy-MM-dd 형식이라 문자열 비교가 날짜 순서와 일치한다.
+        plannedMap.removeWhere((key, _) => key.compareTo(today) < 0);
+        await prefs.setString(
+          'nyang_today_tasks_by_date',
+          jsonEncode(plannedMap),
+        );
+      } catch (_) {}
     }
 
     await prefs.setString('nyang_tasks', jsonEncode(injectedTasks));
