@@ -22,6 +22,7 @@ import 'package:nyang_coach/services/tasks_sync_service.dart';
 import 'package:nyang_coach/services/user_title_service.dart';
 import 'package:nyang_coach/services/daily_reset_service.dart';
 import 'package:nyang_coach/services/task_resistance_service.dart';
+import 'package:nyang_coach/services/execution_resistance_service.dart';
 import 'package:nyang_coach/services/recovery_insight_service.dart';
 import 'coach_config.dart';
 import 'focus_timer_widget.dart';
@@ -860,6 +861,7 @@ class _ParsedReply {
   final int? timerConfirmMinutes;
   final String? timerConfirmTaskName;
   final String? visionSourceId;
+  final bool startCountdown;
   final List<_SuggestedTask> suggestedTasks;
   _ParsedReply({
     required this.text,
@@ -869,6 +871,7 @@ class _ParsedReply {
     this.timerConfirmMinutes,
     this.timerConfirmTaskName,
     this.visionSourceId,
+    this.startCountdown = false,
     List<_SuggestedTask>? suggestedTasks,
   }) : suggestedTasks = suggestedTasks ?? [];
 }
@@ -1231,6 +1234,13 @@ class _ChatScreenState extends State<ChatScreen>
 
   // 선제개입 저항예측: 이번 턴에 프롬프트에 주입한 선제개입 대상 (응답 확인 후 소진 여부 판정용)
   PreemptiveInterventionResult? _pendingPreemptiveTarget;
+
+  // 실행 저항 원인 진단: 진단 질문을 던진 직후, 사용자의 원인 답변을 기다리는 상태
+  bool _awaitingResistanceCause = false;
+  // 카운트다운을 제안한 직후, 사용자의 동의 여부를 기다리는 상태
+  bool _awaitingCountdownConsent = false;
+  // 이번 턴에 주입한 원인 진단 질문 (실제로 물었을 때만 하루 1회를 소진 처리)
+  String? _pendingDiagnosisQuestion;
 
   // Firebase Cloud Functions chatProxy (웹앱과 동일한 서버 사용)
   static final _chatProxy =
@@ -2199,6 +2209,9 @@ class _ChatScreenState extends State<ChatScreen>
         _drawerOpen = false;
         _flirtVisible = false;
         _catFreeTrialStep = 0;
+        _awaitingResistanceCause = false;
+        _awaitingCountdownConsent = false;
+        _pendingDiagnosisQuestion = null;
       });
       _initAndLoad();
     }
@@ -3206,6 +3219,7 @@ class _ChatScreenState extends State<ChatScreen>
     final noChipsRegex = RegExp(r'\[NO_CHIPS\]');
     final coachSwitchRegex = RegExp(r'\[COACH_SWITCH:\s*([a-z_]+)\s*\]');
     final timerConfirmRegex = RegExp(r'\[TIMER_CONFIRM:(\d+)(?::([^\]]+))?\]');
+    final countdownStartRegex = RegExp(r'\[COUNTDOWN_START\]');
     final taskRegex = RegExp(r'\[TASK:\s*(.+?)\]');
     final visionSourceRegex = RegExp(r'\[VISION_SOURCE:\s*([^\]]+)\]');
     // CORE_REC 태그 파싱: [CORE_REC:{...}]
@@ -3216,6 +3230,7 @@ class _ChatScreenState extends State<ChatScreen>
     int? timerConfirmMinutes;
     String? timerConfirmTaskName;
     String? visionSourceId;
+    bool startCountdown = false;
     List<_SuggestedTask> suggestedTasks = [];
     String text = raw;
 
@@ -3279,6 +3294,11 @@ class _ChatScreenState extends State<ChatScreen>
       text = text.replaceAll(timerMatch.group(0)!, '').trim();
     }
 
+    if (countdownStartRegex.hasMatch(text)) {
+      startCountdown = true;
+      text = text.replaceAll(countdownStartRegex, '').trim();
+    }
+
     final visionSourceMatch = visionSourceRegex.firstMatch(text);
     if (visionSourceMatch != null) {
       visionSourceId = visionSourceMatch.group(1)?.trim();
@@ -3302,6 +3322,7 @@ class _ChatScreenState extends State<ChatScreen>
     if (suppressDefaultChips) {
       timerConfirmMinutes = null;
       timerConfirmTaskName = null;
+      startCountdown = false;
       suggestedTasks = [];
     }
 
@@ -3313,6 +3334,7 @@ class _ChatScreenState extends State<ChatScreen>
       timerConfirmMinutes: timerConfirmMinutes,
       timerConfirmTaskName: timerConfirmTaskName,
       visionSourceId: visionSourceId,
+      startCountdown: startCountdown,
       suggestedTasks: suggestedTasks,
     );
   }
@@ -6447,6 +6469,7 @@ class _ChatScreenState extends State<ChatScreen>
       if (!mounted || widget.coachId != currentId) return;
       final parsed = _parseReply(raw);
       unawaited(_confirmPreemptiveIfMentioned(parsed.text));
+      await _confirmResistanceDiagnosisIfAsked(parsed.text);
       final suggestedTasks = await _filterDuplicateSuggestedTasks(
         parsed.suggestedTasks,
       );
@@ -6495,8 +6518,16 @@ class _ChatScreenState extends State<ChatScreen>
           _timerActiveInsertIndex ?? _messages.length,
         );
       }
+      if (_coach.isMaster) {
+        // 코치가 스스로 카운트다운을 권한 경우도 동의 대기 상태로 잡아둔다.
+        _awaitingCountdownConsent =
+            !parsed.startCountdown && parsed.text.contains('카운트다운');
+      }
       _scrollToBottom();
       await _saveHistory();
+      if (_coach.isMaster && parsed.startCountdown && mounted) {
+        _openCountdownFocusMode();
+      }
       await AnalyticsService.logConversationMessage(
         coachId: widget.coachId,
         usedApi: true,
@@ -6516,6 +6547,10 @@ class _ChatScreenState extends State<ChatScreen>
         }
       }
     } catch (e) {
+      // 응답을 못 받았으면 이번 턴에 잡아둔 실행 저항 흐름 상태는 흘려보낸다.
+      _awaitingResistanceCause = false;
+      _awaitingCountdownConsent = false;
+      _pendingDiagnosisQuestion = null;
       if (!mounted || widget.coachId != currentId) return;
       setState(() => _isLoading = false);
       if (e is ApiUsageLimitException) {
@@ -7905,6 +7940,89 @@ class _ChatScreenState extends State<ChatScreen>
     );
   }
 
+  /// 이번 턴에 원인 진단 질문을 주입했다면, 코치가 실제로 그 질문을 던졌는지 확인하고
+  /// 던졌을 때만 그날의 1회를 소진 처리한다. 안 물었으면 다음 저항 표현 때 다시 시도된다.
+  Future<void> _confirmResistanceDiagnosisIfAsked(String responseText) async {
+    final question = _pendingDiagnosisQuestion;
+    _pendingDiagnosisQuestion = null;
+    if (question == null) return;
+    String core(String text) =>
+        text.replaceAll(RegExp(r'[\s.,!?~"“”·]'), '').toLowerCase();
+    if (!core(responseText).contains(core(question))) {
+      _awaitingResistanceCause = false;
+      return;
+    }
+    await ExecutionResistanceService.markDiagnosisAskedToday();
+  }
+
+  /// 실행 저항 흐름에서 이번 턴에만 적용할 지시문을 만든다.
+  /// 진단 질문과 카운트다운 제안 문장은 모델이 새로 만들지 않도록 앱이 골라서 넘긴다.
+  /// (마스터 코치 전용. 진단 질문은 하루 1회만.)
+  Future<String> _buildResistanceTurnDirective(
+    String userText, {
+    required bool isGreeting,
+  }) async {
+    if (!_coach.isMaster || isGreeting) {
+      _awaitingResistanceCause = false;
+      _awaitingCountdownConsent = false;
+      _pendingDiagnosisQuestion = null;
+      return '';
+    }
+
+    // 카운트다운 제안 직후 턴: 동의 여부만 판정한다.
+    if (_awaitingCountdownConsent) {
+      _awaitingCountdownConsent = false;
+      return '''
+
+[이번 턴 지시 - 카운트다운 동의 확인]
+- 직전 답변에서 카운트다운을 제안했습니다. 사용자가 동의하면(응, 네, 좋아요, 해줘 등) 한 문장으로 짧게 답한 뒤 답변 맨 끝에 [COUNTDOWN_START]를 붙이세요.
+- 거절하거나 다른 이야기를 하면 태그를 붙이지 말고 카운트다운을 다시 권하지 마세요.''';
+    }
+
+    // 진단 질문 직후 턴: 원인이 구체적인지 불명확한지에 따라 분기한다.
+    if (_awaitingResistanceCause) {
+      _awaitingResistanceCause = false;
+      final offer = ExecutionResistanceService.pickCountdownOffer();
+      if (ExecutionResistanceService.isVagueCauseAnswer(userText)) {
+        _awaitingCountdownConsent = true;
+        return '''
+
+[이번 턴 지시 - 원인 불명확, 카운트다운 제안]
+- 사용자가 실행 저항의 원인을 특정하지 못했습니다. 원인을 더 분석하거나 같은 질문을 다시 하지 마세요.
+- 짧게 한 문장으로 받아준 뒤, 아래 문장을 그대로 붙여 카운트다운을 제안하고 답변을 끝내세요. 호칭과 말투만 코치에 맞게 다듬고 내용은 바꾸지 마세요.
+  "$offer"
+- 이번 답변에는 [COUNTDOWN_START], [TASK], [TIMER_CONFIRM]을 붙이지 마세요. 사용자가 동의하면 다음 턴에 붙입니다.''';
+      }
+      return '''
+
+[이번 턴 지시 - 원인 확인 완료]
+- 사용자가 실행 저항의 원인을 이야기했습니다. 원인 진단 질문을 다시 하지 말고, [하기 싫다 실행 개입 전략]에 따라 그 원인에 맞는 개입을 하나만 제안하세요.
+- 원인이 여전히 불명확하다고 판단되면 더 캐묻지 말고 아래 문장으로 카운트다운을 제안하세요.
+  "$offer"''';
+    }
+
+    if (!ExecutionResistanceService.isResistanceExpression(userText)) return '';
+
+    // 하루 1회 제한: 이미 물어봤으면 대화를 늘리지 말고 바로 해결책으로 간다.
+    if (await ExecutionResistanceService.hasAskedDiagnosisToday()) {
+      return '''
+
+[이번 턴 지시 - 원인 진단 생략]
+- 오늘은 이미 원인 진단 질문을 했습니다. 원인을 다시 묻지 말고 [하기 싫다 실행 개입 전략]에 따라 바로 개입을 하나만 제안하세요.''';
+    }
+
+    _awaitingResistanceCause = true;
+    final question = ExecutionResistanceService.pickDiagnosisQuestion();
+    _pendingDiagnosisQuestion = question;
+    return '''
+
+[이번 턴 지시 - 실행 저항 원인 진단]
+- 사용자가 방금 실행 저항을 표현했습니다. 이번 답변에서는 해결책, 5분 시작, 작은 단위 쪼개기, 타이머, 카운트다운을 제안하지 마세요.
+- 짧게 공감하는 한 문장 뒤에 아래 질문을 문장 그대로 한 번만 물으세요. 문장을 새로 만들거나 다른 질문을 덧붙이지 마세요.
+  "$question"
+- 답변은 2문장 이내로 유지하고 [TASK], [TIMER_CONFIRM], [COUNTDOWN_START] 태그를 출력하지 마세요.''';
+  }
+
   Future<String> _callOpenAI(String userText, {bool isGreeting = false}) async {
     final historyLimit = _coach.isMaster ? 10 : 6;
     final history = _messages.length > historyLimit
@@ -7913,6 +8031,23 @@ class _ChatScreenState extends State<ChatScreen>
 
     // 할매 코치 전용: 랜덤 애정 표현 주입 (비활성화)
     String halmaeHint = '';
+
+    final resistanceTurnDirective = await _buildResistanceTurnDirective(
+      userText,
+      isGreeting: isGreeting,
+    );
+    // 카운트다운은 원인이 불명확할 때만 쓰는 장치라 마스터 코치에게만 흐름 규칙을 준다.
+    final resistanceFlowRule = _coach.isMaster
+        ? '''
+
+[실행 저항 원인 진단 흐름 - 마스터 코치 전용]
+- 사용자가 실행 저항을 표현하면 바로 해결책을 제시하지 말고 원인을 딱 한 번만 진단합니다. 진단 질문은 앱이 지정해준 문장만 쓰고, 새로 만들거나 두 번 반복하지 않습니다.
+- 사용자가 원인을 구체적으로 말하면 [하기 싫다 실행 개입 전략]에 따라 개입을 하나만 제안합니다.
+- 사용자가 원인을 특정하지 못하면("생각이 너무 많아요", "나도 잘 모르겠어요", "그냥 귀찮아요", "다 하기 싫어요", "이유를 모르겠어요") 원인을 더 분석하거나 다시 묻지 말고 카운트다운을 제안합니다.
+- 카운트다운은 모든 상황에서 쓰는 기본 해결책이 아닙니다. 원인이 불명확할 때 생각을 끊고 실행으로 전환시키는 장치로만 씁니다.
+- 카운트다운 제안에 사용자가 동의했거나 사용자가 직접 카운트다운을 요청한 경우에만, 짧게 한 문장으로 답한 뒤 답변 맨 끝에 [COUNTDOWN_START] 태그를 붙입니다. 코치가 먼저 붙이지 않습니다.
+- 원인 진단 질문은 하루에 한 번만 합니다. 이미 물어본 날에는 다시 묻지 말고 바로 해결책으로 연결해 대화가 길어지지 않게 합니다.'''
+        : '';
 
     final customTitle = await UserTitleService.getTitle();
     final baseSystemPrompt = _coach.isMaster
@@ -8015,6 +8150,7 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
 - 분류가 애매하면 "그럼 5분만 같이 해볼까요?"를 기본값으로 사용하세요.
 - 거절 분기: "지금은 못 해요"는 시작하기 쉬운 시간을 한 번만 묻고, 시간을 말하면 받아주세요. "곧 다른 일정이 있어요"는 다시 묻지 말고 일정 뒤 5분을 제안하세요. "다른 걸 먼저 할래요"는 우선순위 변경으로 인정하세요.
 - 타이머는 "5분만 시작"이 자연스러운 경우에만 말로 연결하고, 아래 [TIMER_CONFIRM] 규칙을 항상 우선하세요. 명시 요청이나 앱 기록상 조건 없이는 타이머 태그를 출력하지 마세요.
+$resistanceFlowRule
 
 [결정 피로 감소 전략]
 - 사용자가 무엇을 할지, 어떻게 할지 결정을 내리지 못하거나 고민이 길어질 때는 완벽한 결정보다 '작은 임시 결정'을 우선으로 제안하세요.
@@ -8030,7 +8166,7 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
    단, 정서적 여유가 낮은 사용자의 순수 감정 토로에는 [CHIPS]를 쓰지 말고 답변 끝에 [NO_CHIPS]를 붙이세요.$coachSwitchRule
    자해·자살 위험을 확인하거나 긴급 도움을 안내하는 상황에서는 [CHIPS]와 [COACH_SWITCH]를 붙이지 말고 [NO_CHIPS]만 붙이세요.
 $timerOutputRule
-5. 사용자가 특정 할 일을 언급하거나 해결 가능한 문제가 드러나고, 그걸 오늘 할 일로 등록할 만한 상황이라면 답변에 [TASK: 할일명] 태그를 포함하세요. 예: "5시에 청소해야지" → [TASK: 5시에 청소], "오후 3시에 회의가 있어" → [TASK: 오후 3시 회의], "SNS 반응이 안 좋아" → [TASK: SNS 콘텐츠 분석하기]. 억지로 추가하지 마세요. 정서적 여유가 낮거나 순수 감정 토로인 상황에는 사용자가 행동 지원을 명시적으로 요청하지 않는 한 [TASK]와 [TIMER_CONFIRM]을 출력하지 마세요. 자해·자살 위험 상황에서는 두 태그를 절대 출력하지 마세요.$halmaeHint''';
+5. 사용자가 특정 할 일을 언급하거나 해결 가능한 문제가 드러나고, 그걸 오늘 할 일로 등록할 만한 상황이라면 답변에 [TASK: 할일명] 태그를 포함하세요. 예: "5시에 청소해야지" → [TASK: 5시에 청소], "오후 3시에 회의가 있어" → [TASK: 오후 3시 회의], "SNS 반응이 안 좋아" → [TASK: SNS 콘텐츠 분석하기]. 억지로 추가하지 마세요. 정서적 여유가 낮거나 순수 감정 토로인 상황에는 사용자가 행동 지원을 명시적으로 요청하지 않는 한 [TASK]와 [TIMER_CONFIRM]을 출력하지 마세요. 자해·자살 위험 상황에서는 두 태그를 절대 출력하지 마세요.$halmaeHint$resistanceTurnDirective''';
 
     String effectiveUserText = userText;
     if (userText == '지금 뭐하지?') {
