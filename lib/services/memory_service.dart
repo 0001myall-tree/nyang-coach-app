@@ -343,12 +343,25 @@ $textLogs
       }
       await saveMemoryData();
 
-      if (dailySummaries.length >= 7) {
+      // 증류(프로필 재작성)는 가장 무거운 호출이라 요약이 충분히 쌓였고
+      // 마지막 증류로부터 7일 이상 지났을 때만 실행한다. (요약은 매일, 증류는 주 1회)
+      if (dailySummaries.length >= 7 && _shouldRunDistill(date)) {
         await distillLifeOperationMemory(date);
       }
     } catch (e) {
       print('Daily summary error: $e');
     }
+  }
+
+  /// 마지막 증류 실행일(last_batch_run)로부터 7일 이상 지났는지 확인.
+  bool _shouldRunDistill(String todayStr) {
+    final lastRun =
+        masterProfile['meta']?['last_batch_run']?.toString().trim() ?? '';
+    if (lastRun.isEmpty) return true;
+    final last = DateTime.tryParse(lastRun);
+    final today = DateTime.tryParse(todayStr);
+    if (last == null || today == null) return true;
+    return today.difference(last).inDays >= 7;
   }
 
   Future<void> distillLifeOperationMemory(String todayStr) async {
