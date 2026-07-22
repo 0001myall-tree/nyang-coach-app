@@ -177,6 +177,8 @@ class _CountdownFocusModeScreenState extends State<CountdownFocusModeScreen>
         _timerEndAt = null;
       });
       HapticFeedback.vibrate();
+      // 시작 대비 완주 비율로 이 개입이 실제로 붙잡아 두는지 본다.
+      unawaited(AnalyticsService.logFeatureUsage('countdown_complete'));
       return;
     }
     if (remaining != _remainingSeconds) {
@@ -1509,6 +1511,7 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   void _openCountdownFocusMode() {
+    unawaited(AnalyticsService.logFeatureUsage('countdown'));
     Navigator.of(context).push(
       PageRouteBuilder<void>(
         pageBuilder: (_, _, _) => const CountdownFocusModeScreen(),
@@ -1522,6 +1525,7 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   void _openSleepAssistMode() {
+    unawaited(AnalyticsService.logFeatureUsage('sleep_assist'));
     Navigator.of(context).push(
       PageRouteBuilder<void>(
         pageBuilder: (_, _, _) => const SleepAssistModeScreen(),
