@@ -4309,7 +4309,7 @@ class _TasksScreenState extends State<TasksScreen>
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 32),
                       child: Text(
-                        '오늘 탭은 실행을 위한 공간이며,\n과거 기록은 장기 보관하지 않습니다.',
+                        '오늘 탭은 오늘의 실행과\n미래 계획을 위한 공간입니다.',
                         textAlign: TextAlign.center,
                         style: GoogleFonts.notoSansKr(
                           fontSize: 14,
