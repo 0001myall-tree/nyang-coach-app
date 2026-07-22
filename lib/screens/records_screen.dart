@@ -528,6 +528,30 @@ class _RecordsScreenState extends State<RecordsScreen> {
       }
     }
 
+    // 지난 주 일일 대화 요약 (메모리 시스템 산출물). 저조한 주의 원인을
+    // 추측이 아니라 실제 컨디션/고민 기록으로 해석하기 위한 근거로 쓴다.
+    String chatSummarySection = '';
+    final dsRaw = prefs.getString('nyang_daily_summaries');
+    if (dsRaw != null) {
+      try {
+        final summaries = (jsonDecode(dsRaw) as List).whereType<Map>().where((
+          s,
+        ) {
+          final d = DateTime.tryParse(s['date']?.toString() ?? '');
+          return d != null && !d.isBefore(weekStart) && !d.isAfter(weekEnd);
+        }).toList();
+        if (summaries.isNotEmpty) {
+          final buffer = StringBuffer('\n[지난 주 대화 기록 요약]\n');
+          for (final s in summaries) {
+            buffer.writeln(
+              '- ${s['date']}: 컨디션(${s['condition'] ?? '-'}) / 고민(${s['concern'] ?? '-'}) / 감정(${s['emotion'] ?? '-'})',
+            );
+          }
+          chatSummarySection = buffer.toString().trimRight();
+        }
+      } catch (_) {}
+    }
+
     return '''당신은 사용자의 한 주간 성과를 분석하는 수석 비서이자 전문 코치입니다.
 사용자의 지난 7일간의 실제 할 일 완료 내역과 현재 설정된 목표/비전을 바탕으로, $title께 드리는 주간 코칭 한마디를 격식 있게 작성해 주세요.
 
@@ -551,6 +575,7 @@ $recordBuffer
 
 [현재 설정된 습관 트래킹 빈도]
 ${habitFreqBuffer.toString().trim()}
+$chatSummarySection
 
 [회고 유형: ${feedbackType == 0
         ? '실행 회고형'
@@ -563,13 +588,15 @@ ${habitFreqBuffer.toString().trim()}
 2. 공통 원칙:
    - 휴무일(회복일)은 미완료나 실패로 해석하지 말고, 필요한 회복을 일정에 포함한 것으로 자연스럽게 존중해 주세요.
    - [현재 설정된 습관 트래킹 빈도]를 반드시 참고하세요. 특정 요일에만 하기로 한 습관이라면 그 빈도에 맞게 평가해 주세요.
+   - 완료율이 저조한 주에는 원인을 추측으로 단정하지 말고, [지난 주 대화 기록 요약]이 있다면 거기 나타난 컨디션과 고민을 근거로 원인을 해석해 주세요. 요약에 없는 사정을 지어내지 마세요.
 3. 유형별 작성 방식:
 ${feedbackType == 0
         ? '''   [실행 회고형]
    - 사용자가 실제로 무엇을 했고, 무엇을 미뤘으며, 무엇이 개선되었는지를 중심으로 회고합니다.
    - 완료한 일들 중 목표/비전과 연결되는 중요한 활동 1~2개를 콕 집어 구체적으로 칭찬하세요. (추상적 칭찬 금지)
    - 3일 이상 미루다 다시 시작한 항목이 있다면 특별히 언급해 주세요.
-   - 반복적으로 밀린 중요한 일이 있다면 부드럽게 지적하고 다음 주 우선순위로 권유하세요.'''
+   - 반복적으로 밀린 중요한 일이 있다면 부드럽게 지적하고 다음 주 우선순위로 권유하세요.
+   - 단, 미완료가 대부분인 주에는 밀린 항목을 나열하거나 지적하지 말고 이 구조로 쓰세요: 수고 인정 → 원인 해석([지난 주 대화 기록 요약]이 있으면 그 근거로, 없으면 계획이 컨디션보다 컸을 가능성으로) → 다음 주에는 확실히 해낼 수 있는 만큼만 계획하자는 제안. 예: "이번 주도 고생 많으셨습니다. 계획대로 안 된 날이 많았지만, 의지 문제라기보다 계획이 이번 주 컨디션보다 컸던 것일 수 있습니다. 다음 주에는 확실히 해낼 수 있는 만큼만 담아보시면 어떨까요?"'''
         : feedbackType == 1
         ? '''   [장기 비전형]
    - 현재 장기 비전과 마일스톤을 중심으로 회고합니다. [장기 비전 상세 데이터]를 반드시 참고하세요.
