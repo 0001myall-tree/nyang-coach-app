@@ -51,11 +51,21 @@ class ExecutionResistanceService {
     '눕기싫',
   ];
 
+  /// "미루"는 회고("미루던 거 다 했어요")에도 쓰이므로 지금 미루고 있다는
+  /// 의도가 드러나는 형태만 신호로 본다.
   static const List<String> _resistanceSignals = [
     '하기싫',
     '하기가싫',
     '귀찮',
-    '미루',
+    '미루고싶',
+    '미루고있',
+    '미루게되',
+    '미루게돼',
+    '자꾸미루',
+    '계속미루',
+    '자꾸미뤄',
+    '계속미뤄',
+    '미루는중',
     '못하겠',
     '안하고싶',
     '시작하기싫',
@@ -69,12 +79,69 @@ class ExecutionResistanceService {
     '몸이안움직',
   ];
 
+  /// 저항 단어를 부정하는 표현. ("안 귀찮아", "미루지 않았어")
+  static const List<String> _negatedResistanceSignals = [
+    '안귀찮',
+    '귀찮지않',
+    '하나도귀찮',
+    '별로귀찮',
+    '하기싫지않',
+    '하기싫진않',
+    '미루지않',
+    '안미루',
+  ];
+
+  /// 완료 보고 표현. 저항 단어보다 뒤에 나오면 "미루던 걸 해냈다"는 뜻이다.
+  static const List<String> _completionSignals = [
+    '했어',
+    '했다',
+    '했습니다',
+    '했네',
+    '했음',
+    '했지',
+    '다했',
+    '해냈',
+    '끝냈',
+    '끝났',
+    '마쳤',
+    '완료',
+  ];
+
+  static int _firstIndexOf(String text, List<String> signals) {
+    var found = -1;
+    for (final signal in signals) {
+      final index = text.indexOf(signal);
+      if (index >= 0 && (found < 0 || index < found)) found = index;
+    }
+    return found;
+  }
+
+  static int _lastIndexOf(String text, List<String> signals) {
+    var found = -1;
+    for (final signal in signals) {
+      final index = text.lastIndexOf(signal);
+      if (index > found) found = index;
+    }
+    return found;
+  }
+
   /// 사용자의 말이 실행 저항 표현인지 판정.
   static bool isResistanceExpression(String text) {
     final normalized = _normalize(text);
     if (normalized.isEmpty) return false;
     if (_sleepContextSignals.any(normalized.contains)) return false;
-    return _resistanceSignals.any(normalized.contains);
+    if (_negatedResistanceSignals.any(normalized.contains)) return false;
+
+    final signalIndex = _firstIndexOf(normalized, _resistanceSignals);
+    if (signalIndex < 0) return false;
+
+    // 저항 표현 뒤에 완료 표현이 오면 이미 해낸 일에 대한 회고다.
+    // ("귀찮은 일 다 끝냈어요", "하기 싫었는데 했어요")
+    // 반대 순서라면 지금의 저항으로 본다. ("다 했는데 이건 하기 싫어")
+    final completionIndex = _lastIndexOf(normalized, _completionSignals);
+    if (completionIndex > signalIndex) return false;
+
+    return true;
   }
 
   /// 원인을 특정하지 못한 답변인지 판정. 여기서 걸러지지 않으면 구체적인 원인으로 본다.
