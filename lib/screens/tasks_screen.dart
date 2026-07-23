@@ -18,7 +18,6 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'coach_config.dart';
 import '../services/memory_service.dart';
 import '../services/task_resistance_service.dart';
-import '../services/recovery_insight_service.dart';
 import '../models/user_data.dart';
 import '../services/notification_service.dart';
 import '../services/tasks_sync_service.dart';
@@ -2669,7 +2668,6 @@ class _TasksScreenState extends State<TasksScreen>
             : null;
       });
       _saveTasks();
-      _showRecoveryStartPraiseIfNeeded();
     } else {
       HabitItem? habitInfo;
       if (t.habitId != null) {
@@ -2837,17 +2835,6 @@ class _TasksScreenState extends State<TasksScreen>
       }
     }
     HapticFeedback.lightImpact();
-  }
-
-  Future<void> _showRecoveryStartPraiseIfNeeded() async {
-    final message = await RecoveryInsightService.localInProgressPraise(
-      isMasterCoach: _coach.isMaster,
-      coachId: widget.coachId,
-    );
-    if (!mounted || message == null) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), duration: const Duration(seconds: 3)),
-    );
   }
 
   Future<bool> _checkAndStoreDeferReminder(String completedTaskText) async {

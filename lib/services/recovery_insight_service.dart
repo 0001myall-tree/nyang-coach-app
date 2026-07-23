@@ -89,7 +89,10 @@ class RecoveryInsightService {
     var evaluatedDays = 0;
     var lowActivationDays = 0;
 
-    for (var offset = 0; offset < lowActivationWindowDays; offset++) {
+    // 오늘(base)은 아직 진행 중인 하루이므로 완료율 평가에서 제외하고
+    // 어제(offset 1)부터 지난 7일의 '완료된 하루'만 공정하게 평가한다.
+    // (hasRecentPerformanceDrop, _hasRecentLowActivationRestartSignal 등과 동일 기준)
+    for (var offset = 1; offset <= lowActivationWindowDays; offset++) {
       final date = base.subtract(Duration(days: offset));
       final record = byDate[_dateKey(date)];
       if (record == null || record['isVacation'] == true) continue;
@@ -272,19 +275,6 @@ class RecoveryInsightService {
     }
 
     return true;
-  }
-
-  static Future<String?> localInProgressPraise({
-    required bool isMasterCoach,
-    required String coachId,
-  }) async {
-    if (!isMasterCoach) return null;
-    final strategy = await getActiveStrategy();
-    if (strategy?['primaryCause'] != causeMotivationDrop) return null;
-    if (coachId == 'sec_female') {
-      return '대표님, 지금 시작하신 것만으로도 정말 잘하셨어요. 오늘은 이 작은 시작을 제일 크게 볼게요.';
-    }
-    return '대표님, 시작하신 것만으로도 충분히 좋은 신호입니다. 오늘은 이 흐름만 살려도 괜찮습니다.';
   }
 
   static Future<String?> buildMasterRecoveryPromptGuidance() async {

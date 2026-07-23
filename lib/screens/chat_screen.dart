@@ -1392,7 +1392,6 @@ class _ChatScreenState extends State<ChatScreen>
         plannerAwayDays: plannerAwayDays,
       );
     }
-    await prefs.setString('nyang_last_planner_visit_date', todayStr);
     await _updateTodayRecord(prefs);
     await _refreshAttendanceStreak(prefs);
     await _loadHistoryAndGreet();
@@ -1401,15 +1400,41 @@ class _ChatScreenState extends State<ChatScreen>
     _initSpeech();
   }
 
+  /// 마지막으로 '활동한 날'로부터 며칠 지났는지 계산한다.
+  ///
+  /// 기기 로컬 방문 기록(nyang_last_planner_visit_date)은 기기마다 따로 저장돼,
+  /// 안드로이드에서 매일 써도 아이폰에서는 '오래 부재'로 잡히는 크로스 기기
+  /// 오판정을 일으켰다. 대신 모든 기기의 활동이 동기화되는 nyang_history의
+  /// 마지막 활동일을 기준으로 삼는다. 오늘은 아직 진행 중이므로 후보에서 제외한다.
   int? _plannerAwayDays(SharedPreferences prefs, String todayStr) {
-    final lastVisit = DateTime.tryParse(
-      prefs.getString('nyang_last_planner_visit_date') ?? '',
-    );
     final today = DateTime.tryParse(todayStr);
-    if (lastVisit == null || today == null) return null;
-    final days = DateTime(today.year, today.month, today.day)
-        .difference(DateTime(lastVisit.year, lastVisit.month, lastVisit.day))
-        .inDays;
+    if (today == null) return null;
+    final todayDate = DateTime(today.year, today.month, today.day);
+
+    final rawHistory = prefs.getString('nyang_history');
+    if (rawHistory == null) return null;
+
+    DateTime? lastActive;
+    try {
+      final decoded = jsonDecode(rawHistory);
+      if (decoded is! List) return null;
+      for (final item in decoded) {
+        if (item is! Map) continue;
+        final parsed = DateTime.tryParse(item['date']?.toString() ?? '');
+        if (parsed == null) continue;
+        final day = DateTime(parsed.year, parsed.month, parsed.day);
+        // 오늘(진행 중)은 부재일수 기준에서 제외하고, 오늘 이전의 마지막 활동일을 찾는다.
+        if (!day.isBefore(todayDate)) continue;
+        if (lastActive == null || day.isAfter(lastActive)) {
+          lastActive = day;
+        }
+      }
+    } catch (_) {
+      return null;
+    }
+
+    if (lastActive == null) return null;
+    final days = todayDate.difference(lastActive).inDays;
     return days > 0 ? days : 0;
   }
 
@@ -6065,13 +6090,17 @@ class _ChatScreenState extends State<ChatScreen>
 
     final navigationReply = _featureLocationReply(trimmed);
     if (navigationReply != null) {
+      final navMessage = await UserTitleService.applyForCoach(
+        navigationReply.message,
+        _coach.id,
+      );
       setState(() {
         _messages.add(
           ChatMessage(text: trimmed, isUser: true, time: DateTime.now()),
         );
         _messages.add(
           ChatMessage(
-            text: navigationReply.message,
+            text: navMessage,
             isUser: false,
             time: DateTime.now(),
             kind: navigationReply.location == 'picker'
@@ -8127,12 +8156,9 @@ class _ChatScreenState extends State<ChatScreen>
         : '';
 
     final customTitle = await UserTitleService.getTitle();
-    final baseSystemPrompt = _coach.isMaster
-        ? _coach.systemPrompt.replaceAll(
-            UserTitleService.defaultTitle,
-            customTitle,
-          )
-        : _coach.systemPrompt;
+    // 최종 조립된 프롬프트 전체에 호칭 치환을 한 번에 적용하므로
+    // (systemPromptWithChips), 여기서는 원문 프롬프트를 그대로 사용한다.
+    final baseSystemPrompt = _coach.systemPrompt;
 
     final useVisionNewActionContext = userText == '미래를 위한 오늘 - 새 행동 추천받기';
     final contextString = useVisionNewActionContext
@@ -8150,7 +8176,7 @@ class _ChatScreenState extends State<ChatScreen>
         ? '''
    사용자가 우울함, 무기력함, 감정적 고통을 토로하고 그 감정이 2회 이상 반복되거나 깊어지고 있다면, 냥냥코치가 사용자를 걱정하고 있다는 뉘앙스로 자연스럽게 연결하세요. 예: "방금 냥냥코치한테서 연락이 왔는데, 지금 대표님 걱정하고 있대요. 같이 얘기해보시겠어요?" 또는 "냥냥코치가 대표님 기다리고 있을 것 같은데, 잠깐 얘기 나눠보시는 건 어떨까요?" 처럼 팀으로서 함께 챙기는 느낌을 주세요. 답변 끝에 [COACH_SWITCH:cat]만 붙이세요. 단 한 번의 가벼운 감정 표현에는 붙이지 마세요.'''
         : '';
-    final systemPromptWithChips =
+    final assembledSystemPrompt =
         '''$baseSystemPrompt
 ${contextString.isNotEmpty ? '\n$contextString' : ''}
 
@@ -8243,6 +8269,15 @@ $resistanceFlowRule
    자해·자살 위험을 확인하거나 긴급 도움을 안내하는 상황에서는 [CHIPS]와 [COACH_SWITCH]를 붙이지 말고 [NO_CHIPS]만 붙이세요.
 $timerOutputRule
 5. 사용자가 특정 할 일을 언급하거나 해결 가능한 문제가 드러나고, 그걸 오늘 할 일로 등록할 만한 상황이라면 답변에 [TASK: 할일명] 태그를 포함하세요. 예: "5시에 청소해야지" → [TASK: 5시에 청소], "오후 3시에 회의가 있어" → [TASK: 오후 3시 회의], "SNS 반응이 안 좋아" → [TASK: SNS 콘텐츠 분석하기]. 억지로 추가하지 마세요. 정서적 여유가 낮거나 순수 감정 토로인 상황에는 사용자가 행동 지원을 명시적으로 요청하지 않는 한 [TASK]와 [TIMER_CONFIRM]을 출력하지 마세요. 자해·자살 위험 상황에서는 두 태그를 절대 출력하지 마세요.$halmaeHint$resistanceTurnDirective''';
+
+    // 마스터 코치는 하드코딩된 "대표님"을 사용자가 지정한 호칭으로 치환한다.
+    // baseSystemPrompt 뒤에 이어붙인 coachSwitchRule 등 모든 조각까지 함께 반영된다.
+    final systemPromptWithChips = _coach.isMaster
+        ? assembledSystemPrompt.replaceAll(
+            UserTitleService.defaultTitle,
+            customTitle,
+          )
+        : assembledSystemPrompt;
 
     String effectiveUserText = userText;
     if (userText == '지금 뭐하지?') {
