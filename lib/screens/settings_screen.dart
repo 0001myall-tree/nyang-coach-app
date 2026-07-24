@@ -1390,6 +1390,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                       const SizedBox(height: 10),
 
+                      _buildSettingsSectionTile(
+                        id: 'external',
+                        svgAsset: 'assets/icons/plug.svg',
+                        label: '외부 연동',
+                        status: '준비 중',
+                        children: [
+                          _buildSettingsDetailRow(
+                            svgAsset: 'assets/icons/calendar-days.svg',
+                            label: '아이폰 캘린더 연동',
+                            status: '준비 중',
+                            onTap: _showExternalCalendarComingSoon,
+                          ),
+                          // TODO: 구글 캘린더 연동 항목은 지원 확정 후 여기에 추가
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+
                       _buildSettingsNavigationTile(
                         icon: Icons.policy_outlined,
                         label: '약관 및 개인정보',
@@ -1505,9 +1522,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  /// 설정 행 앞 글리프. svgAsset이 있으면 폰트어썸 SVG를, 없으면 Material 아이콘을 그린다.
+  Widget _buildSettingLeadingGlyph({
+    IconData? icon,
+    String? svgAsset,
+    required Color color,
+    required double size,
+  }) {
+    if (svgAsset != null) {
+      return SvgPicture.asset(
+        svgAsset,
+        width: size,
+        height: size,
+        colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
+      );
+    }
+    return Icon(icon, color: color, size: size);
+  }
+
   Widget _buildSettingsSectionTile({
     required String id,
-    required IconData icon,
+    IconData? icon,
+    String? svgAsset,
     required String label,
     required String status,
     required List<Widget> children,
@@ -1538,7 +1574,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
               child: Row(
                 children: [
-                  Icon(icon, color: const Color(0xFF8B7CFF), size: 20),
+                  _buildSettingLeadingGlyph(
+                    icon: icon,
+                    svgAsset: svgAsset,
+                    color: const Color(0xFF8B7CFF),
+                    size: 20,
+                  ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
@@ -1589,7 +1630,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Widget _buildSettingsDetailRow({
-    required IconData icon,
+    IconData? icon,
+    String? svgAsset,
     required String label,
     required String status,
     required VoidCallback onTap,
@@ -1601,7 +1643,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
         padding: const EdgeInsets.fromLTRB(18, 13, 14, 13),
         child: Row(
           children: [
-            Icon(icon, color: const Color(0xFFB6A4FF), size: 18),
+            _buildSettingLeadingGlyph(
+              icon: icon,
+              svgAsset: svgAsset,
+              color: const Color(0xFFB6A4FF),
+              size: 18,
+            ),
             const SizedBox(width: 12),
             Expanded(
               child: Text(
@@ -1623,6 +1670,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  // 아이폰 캘린더 연동 기능은 아직 구현 전이라 준비 중 안내만 표시한다.
+  void _showExternalCalendarComingSoon() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('아이폰 캘린더 연동은 곧 지원될 예정이에요.')),
     );
   }
 
