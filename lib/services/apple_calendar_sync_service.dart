@@ -168,23 +168,30 @@ class AppleCalendarSyncService {
 
   /// 연동 켜기: 권한 요청 → 전용 캘린더 확보 → 현재 일정 전체 내보내기.
   Future<AppleCalendarEnableResult> enable() async {
-    if (!isSupportedPlatform) return AppleCalendarEnableResult.unsupported;
-    await _ensureTimezone();
-    if (!await _ensurePermissions()) {
-      return AppleCalendarEnableResult.permissionDenied;
-    }
     final prefs = await SharedPreferences.getInstance();
-    final previousCalendarId = prefs.getString(_kCalendarIdKey);
-    final calId = await _ensureCalendar();
-    if (calId == null) return AppleCalendarEnableResult.failed;
-    if (previousCalendarId != null && previousCalendarId != calId) {
-      await _saveEventMap({});
+    try {
+      if (!isSupportedPlatform) return AppleCalendarEnableResult.unsupported;
+      await _ensureTimezone();
+      if (!await _ensurePermissions()) {
+        return AppleCalendarEnableResult.permissionDenied;
+      }
+      final previousCalendarId = prefs.getString(_kCalendarIdKey);
+      final calId = await _ensureCalendar();
+      if (calId == null) return AppleCalendarEnableResult.failed;
+      if (previousCalendarId != null && previousCalendarId != calId) {
+        await _saveEventMap({});
+      }
+      await prefs.setBool(_kEnabledKey, true);
+      try {
+        await _serializeSync(
+          () async => _syncInternal(await _loadEntriesFromPrefs(), calId),
+        );
+      } catch (_) {}
+      return AppleCalendarEnableResult.success;
+    } catch (_) {
+      await prefs.setBool(_kEnabledKey, false);
+      return AppleCalendarEnableResult.failed;
     }
-    await prefs.setBool(_kEnabledKey, true);
-    await _serializeSync(
-      () async => _syncInternal(await _loadEntriesFromPrefs(), calId),
-    );
-    return AppleCalendarEnableResult.success;
   }
 
   /// 연동 끄기: 플래그를 내리고, 기본적으로 전용 캘린더를 통째로 삭제(이벤트도 함께 제거).
@@ -447,13 +454,20 @@ class AppleCalendarSyncService {
 
     for (final e in entries) {
       liveIds.add(e.id);
-      final eventId = await _upsertEvent(calId, e, oldMap[e.id]);
-      if (eventId != null) newMap[e.id] = eventId;
+      try {
+        final eventId = await _upsertEvent(calId, e, oldMap[e.id]);
+        if (eventId != null) newMap[e.id] = eventId;
+      } catch (_) {
+        final existingEventId = oldMap[e.id];
+        if (existingEventId != null) newMap[e.id] = existingEventId;
+      }
     }
     // 앱에서 사라진 일정 → 캘린더 이벤트도 삭제
     for (final entry in oldMap.entries) {
       if (!liveIds.contains(entry.key)) {
-        await _plugin.deleteEvent(calId, entry.value);
+        try {
+          await _plugin.deleteEvent(calId, entry.value);
+        } catch (_) {}
       }
     }
     await _saveEventMap(newMap);

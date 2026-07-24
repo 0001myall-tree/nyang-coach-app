@@ -1695,7 +1695,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       final confirmed = await _confirmDisableAppleCalendar();
       if (confirmed != true) return;
       setState(() => _appleCalendarBusy = true);
-      await service.disable();
+      try {
+        await service.disable();
+      } catch (_) {}
       if (!mounted) return;
       setState(() {
         _appleCalendarEnabled = false;
@@ -1711,7 +1713,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
     messenger.showSnackBar(
       const SnackBar(content: Text('아이폰 캘린더에 연동하는 중이에요…')),
     );
-    final result = await service.enable();
+    AppleCalendarEnableResult result;
+    try {
+      result = await service.enable();
+    } catch (_) {
+      result = AppleCalendarEnableResult.failed;
+    }
     if (!mounted) return;
     setState(() {
       _appleCalendarEnabled = result == AppleCalendarEnableResult.success;
