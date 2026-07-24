@@ -2874,8 +2874,89 @@ class _TasksScreenState extends State<TasksScreen>
       ),
       (label: '취소', value: 'cancel'),
     ];
+    final action = await _showDeleteOptionsDialog(
+      title: isHabitTask ? '이 습관 할 일을 어떻게 할까요?' : '이 일정을 삭제할까요?',
+      actions: actions,
+    );
+
+    if (action == 'delete') {
+      _deleteTaskPermanently(task);
+    } else if (action == 'skip') {
+      _skipHabitToday(task);
+    } else if (action == 'move') {
+      _showMoveTaskModal(task);
+    }
+  }
+
+  /// 일정 탭에서 등록된 일정(ScheduleItem)을 지우거나 다른 날짜로 옮길 때,
+  /// 오늘 탭과 동일하게 확인 다이얼로그를 먼저 띄운다.
+  Future<void> _showScheduleDeleteOptions(
+    ScheduleItem item,
+    VoidCallback onDelete,
+  ) async {
+    final action = await _showDeleteOptionsDialog(
+      title: '이 일정을 삭제할까요?',
+      actions: const <({String label, String value})>[
+        (label: '삭제하기', value: 'delete'),
+        (label: '다른 날짜로 옮기기', value: 'move'),
+        (label: '취소', value: 'cancel'),
+      ],
+    );
+
+    if (action == 'delete') {
+      onDelete();
+    } else if (action == 'move') {
+      _moveScheduleToAnotherDate(item);
+    }
+  }
+
+  /// schedules 맵에서 해당 일정이 걸려 있는 날짜 키를 찾는다. (없으면 null)
+  String? _dateKeyForScheduleItem(ScheduleItem item) {
+    for (final entry in schedules.entries) {
+      if (entry.value.any((s) => s.id == item.id)) return entry.key;
+    }
+    return null;
+  }
+
+  /// 일정 탭의 일정을 다른 날짜로 옮긴다. 오늘 탭의 이동 모달을 재사용하고,
+  /// 이동이 끝나면 원래 날짜에서 id로 안전하게 제거한다.
+  void _moveScheduleToAnotherDate(ScheduleItem item) {
+    final dateKey = _dateKeyForScheduleItem(item);
+    final movedTask = TaskItem(
+      id: 'schedule_${item.id}',
+      text: item.text,
+      category: 'schedule',
+      done: item.done,
+      time: item.time,
+      duration: item.duration,
+      timeStart: item.timeStart,
+      timeEnd: item.timeEnd,
+      createdAt: item.createdAt,
+      isReminderEnabled: item.isReminderEnabled,
+      deferredCount: item.deferredCount,
+      memo: item.memo,
+    );
+    _showMoveTaskModal(
+      movedTask,
+      onMoved: () {
+        if (dateKey == null) return;
+        setState(() {
+          final list = schedules[dateKey];
+          list?.removeWhere((s) => s.id == item.id);
+          if (list != null && list.isEmpty) schedules.remove(dateKey);
+        });
+        _saveSchedules();
+      },
+    );
+  }
+
+  /// 삭제/이동 선택 다이얼로그 공용 UI. 선택한 action 값을 돌려준다.
+  Future<String?> _showDeleteOptionsDialog({
+    required String title,
+    required List<({String label, String value})> actions,
+  }) {
     String selectedAction = actions.first.value;
-    final action = await showDialog<String>(
+    return showDialog<String>(
       context: context,
       barrierColor: Colors.black.withOpacity(0.48),
       builder: (ctx) {
@@ -2903,7 +2984,7 @@ class _TasksScreenState extends State<TasksScreen>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      isHabitTask ? '이 습관 할 일을 어떻게 할까요?' : '이 일정을 삭제할까요?',
+                      title,
                       style: GoogleFonts.notoSansKr(
                         fontSize: 18,
                         fontWeight: FontWeight.w900,
@@ -2987,14 +3068,6 @@ class _TasksScreenState extends State<TasksScreen>
         );
       },
     );
-
-    if (action == 'delete') {
-      _deleteTaskPermanently(task);
-    } else if (action == 'skip') {
-      _skipHabitToday(task);
-    } else if (action == 'move') {
-      _showMoveTaskModal(task);
-    }
   }
 
   Widget _buildTaskDialogOption({
@@ -5956,6 +6029,20 @@ class _TasksScreenState extends State<TasksScreen>
                                 return;
                               }
                               if (onDelete != null) {
+                                // 일정 탭의 일정은 바로 지우지 않고 오늘 탭과 동일한
+                                // 확인 다이얼로그(삭제 / 다른 날짜로 옮기기)를 먼저 띄운다.
+                                if (isScheduleItem) {
+                                  final deleteCallback = onDelete;
+                                  Future.microtask(() {
+                                    if (mounted) {
+                                      _showScheduleDeleteOptions(
+                                        item,
+                                        deleteCallback,
+                                      );
+                                    }
+                                  });
+                                  return;
+                                }
                                 onDelete();
                                 return;
                               }
