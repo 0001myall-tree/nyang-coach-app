@@ -11,6 +11,7 @@ import 'package:audioplayers/audioplayers.dart';
 import '../models/user_data.dart';
 import '../services/notification_service.dart';
 import '../services/analytics_service.dart';
+import '../services/apple_calendar_sync_service.dart';
 import '../services/morning_call_alarm_session.dart';
 import '../services/daily_reset_service.dart';
 import '../services/widget_sync_service.dart';
@@ -524,6 +525,12 @@ class _MainTabScreenState extends State<MainTabScreen>
   Future<void> _handleAppResumed() async {
     await NotificationService().handleNativeMorningAlarm();
     await DailyResetService.checkAndExecuteReset();
+    try {
+      await AppleCalendarSyncService.instance.syncAll();
+    } catch (e, stackTrace) {
+      debugPrint('Resume Apple calendar sync failed: $e');
+      debugPrintStack(stackTrace: stackTrace);
+    }
     if (mounted) {
       _tasksController.refresh();
       _chatController.refreshTaskProgress();

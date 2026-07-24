@@ -12,6 +12,7 @@ import 'screens/landing_screen.dart';
 import 'screens/coach_config.dart';
 import 'package:firebase_analytics/firebase_analytics.dart';
 import 'services/analytics_service.dart';
+import 'services/apple_calendar_sync_service.dart';
 import 'services/notification_service.dart';
 import 'services/tasks_sync_service.dart';
 import 'services/widget_sync_service.dart';
@@ -65,6 +66,13 @@ Future<void> _runStartupBackgroundJobs() async {
     await WidgetSyncService.syncFromStoredTasks();
   } catch (e, stackTrace) {
     debugPrint('Startup widget sync failed: $e');
+    debugPrintStack(stackTrace: stackTrace);
+  }
+
+  try {
+    await AppleCalendarSyncService.instance.syncAll();
+  } catch (e, stackTrace) {
+    debugPrint('Startup Apple calendar sync failed: $e');
     debugPrintStack(stackTrace: stackTrace);
   }
 

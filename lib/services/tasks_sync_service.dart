@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/user_data.dart';
+import 'apple_calendar_sync_service.dart';
 import 'widget_sync_service.dart';
 
 class TasksSyncService {
@@ -222,6 +223,9 @@ class TasksSyncService {
 
       diag['keys_found'] = foundKeys;
       await WidgetSyncService.syncFromStoredTasks();
+      unawaited(
+        AppleCalendarSyncService.instance.syncAll(pullExternalChanges: false),
+      );
       debugPrint('✅ TasksSyncService: 클라우드 데이터를 로컬에 성공적으로 복원했습니다.');
       diag['status'] = 'SUCCESS';
       diag['message'] = 'OK';
@@ -291,6 +295,11 @@ class TasksSyncService {
       if (changed) {
         debugPrint('🔔 TasksSyncService: Firestore 변경 감지되어 로컬 데이터 동기화 완료!');
         await WidgetSyncService.syncFromStoredTasks();
+        unawaited(
+          AppleCalendarSyncService.instance.syncAll(
+            pullExternalChanges: false,
+          ),
+        );
         onDataChanged();
       }
     }, onError: (e) {

@@ -2077,7 +2077,9 @@ class _TasksScreenState extends State<TasksScreen>
     await NotificationService().syncCoreReminders();
     widget.onProgressChanged?.call();
     // 애플 캘린더 연동(iOS)이 켜져 있으면 변경을 미러링. 실패해도 앱 흐름엔 영향 없음.
-    unawaited(AppleCalendarSyncService.instance.syncAll());
+    unawaited(
+      AppleCalendarSyncService.instance.syncAll(pullExternalChanges: false),
+    );
   }
 
   Future<bool> _hasActivePlan() async {

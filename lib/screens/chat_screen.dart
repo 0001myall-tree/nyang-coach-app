@@ -4949,7 +4949,9 @@ class _ChatScreenState extends State<ChatScreen>
     }
 
     TasksSyncService.scheduleSyncToCloud();
-    unawaited(AppleCalendarSyncService.instance.syncAll());
+    unawaited(
+      AppleCalendarSyncService.instance.syncAll(pullExternalChanges: false),
+    );
   }
 
   Future<void> _showScheduleRegistrationDialog(String speechText) async {
