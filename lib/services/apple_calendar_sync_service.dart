@@ -996,21 +996,30 @@ class AppleCalendarSyncService {
     if (date == null) return existingEventId;
 
     final timing = _computeTiming(date, entry);
-    final event = Event(
-      calId,
-      eventId: existingEventId,
-      title: entry.title.trim().isEmpty ? '일정' : entry.title,
-      start: timing.start,
-      end: timing.end,
-      allDay: timing.allDay,
-      description: '[${entry.kindLabel}]\n$_eventNote',
-      url: Uri.parse(_deepLink),
-    );
-    final res = await _plugin.createOrUpdateEvent(event);
+    Event buildEvent(String? eventId) {
+      return Event(
+        calId,
+        eventId: eventId,
+        title: entry.title.trim().isEmpty ? '일정' : entry.title,
+        start: timing.start,
+        end: timing.end,
+        allDay: timing.allDay,
+        description: '[${entry.kindLabel}]\n$_eventNote',
+        url: Uri.parse(_deepLink),
+      );
+    }
+
+    final res = await _plugin.createOrUpdateEvent(buildEvent(existingEventId));
     if (res != null && res.isSuccess && res.data != null) {
       return res.data;
     }
-    return existingEventId;
+    if (existingEventId != null) {
+      final recreated = await _plugin.createOrUpdateEvent(buildEvent(null));
+      if (recreated != null && recreated.isSuccess && recreated.data != null) {
+        return recreated.data;
+      }
+    }
+    return null;
   }
 
   _EventTiming _computeTiming(DateTime date, CalendarScheduleEntry entry) {
