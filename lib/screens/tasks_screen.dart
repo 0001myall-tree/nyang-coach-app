@@ -2140,6 +2140,73 @@ class _TasksScreenState extends State<TasksScreen>
     return source.where((task) => task.category == 'today').toList();
   }
 
+  List<TaskItem> _todayTaskStoreForDateKey(String dateKey) {
+    return dateKey == _getTodayStr()
+        ? tasks
+        : plannedTodayTasksByDate.putIfAbsent(dateKey, () => []);
+  }
+
+  void _syncCoreTaskFromTask(TaskItem task) {
+    final coreIndex = coreTasks.indexWhere(
+      (coreTask) => coreTask.id.toString() == task.id.toString(),
+    );
+    if (coreIndex != -1) {
+      _copyTaskEdits(coreTasks[coreIndex], task);
+      coreTasks[coreIndex].done = task.done;
+      coreTasks[coreIndex].completedAt = task.completedAt;
+      coreTasks[coreIndex].inProgress = task.inProgress;
+      coreTasks[coreIndex].inProgressAt = task.inProgressAt;
+    } else if (task.isReminderEnabled) {
+      coreTasks.add(task);
+    }
+  }
+
+  Future<void> _saveScheduleTabTaskEdit(String dateKey, TaskItem task) async {
+    setState(() {
+      final store = _todayTaskStoreForDateKey(dateKey);
+      final index = store.indexWhere(
+        (item) => item.id.toString() == task.id.toString(),
+      );
+      if (index != -1) {
+        _copyTaskEdits(store[index], task);
+        store[index].done = task.done;
+        store[index].completedAt = task.completedAt;
+        store[index].inProgress = task.inProgress;
+        store[index].inProgressAt = task.inProgressAt;
+      }
+      _syncCoreTaskFromTask(task);
+    });
+
+    if (dateKey == _getTodayStr()) {
+      await _persistTodayTasks();
+      await _saveCoreTasks();
+    } else {
+      await _savePlannedTodayTasks();
+      await _saveCoreTasks();
+    }
+  }
+
+  Future<void> _deleteScheduleTabTask(String dateKey, TaskItem task) async {
+    setState(() {
+      final store = _todayTaskStoreForDateKey(dateKey);
+      store.removeWhere((item) => item.id.toString() == task.id.toString());
+      if (dateKey != _getTodayStr() && store.isEmpty) {
+        plannedTodayTasksByDate.remove(dateKey);
+      }
+      coreTasks.removeWhere(
+        (coreTask) => coreTask.id.toString() == task.id.toString(),
+      );
+    });
+
+    if (dateKey == _getTodayStr()) {
+      await _persistTodayTasks();
+      await _saveCoreTasks();
+    } else {
+      await _savePlannedTodayTasks();
+      await _saveCoreTasks();
+    }
+  }
+
   List<TaskItem> _scheduleTaskItemsForDate(String dateKey) {
     return (schedules[dateKey] ?? []).map((schedule) {
       return TaskItem(
@@ -5165,12 +5232,87 @@ class _TasksScreenState extends State<TasksScreen>
 
   void _copyTaskEditsToSchedule(ScheduleItem target, TaskItem source) {
     target.text = source.text;
-    target.time = source.time;
+    target.time = _displayTimeFromStored(
+      time: source.time,
+      timeStart: source.timeStart,
+      timeEnd: source.timeEnd,
+    );
     target.timeStart = source.timeStart;
     target.timeEnd = source.timeEnd;
     target.duration = source.duration;
     target.isReminderEnabled = source.isReminderEnabled;
     target.memo = source.memo;
+  }
+
+  void _copyScheduleEditsToTask(TaskItem target, ScheduleItem source) {
+    target.text = source.text;
+    target.time = _displayTimeFromStored(
+      time: source.time,
+      timeStart: source.timeStart,
+      timeEnd: source.timeEnd,
+    );
+    target.timeStart = source.timeStart;
+    target.timeEnd = source.timeEnd;
+    target.duration = source.duration;
+    target.done = source.done;
+    target.isReminderEnabled = source.isReminderEnabled;
+    target.deferredCount = source.deferredCount;
+    target.memo = source.memo;
+  }
+
+  Future<void> _saveScheduleTabScheduleEdit(
+    String dateKey,
+    ScheduleItem schedule,
+  ) async {
+    setState(() {
+      final scheduleId = 'schedule_${schedule.id}';
+      for (final task in tasks) {
+        if (task.id.toString() == scheduleId) {
+          _copyScheduleEditsToTask(task, schedule);
+        }
+      }
+      for (final dayTasks in plannedTodayTasksByDate.values) {
+        for (final task in dayTasks) {
+          if (task.id.toString() == scheduleId) {
+            _copyScheduleEditsToTask(task, schedule);
+          }
+        }
+      }
+      final coreIndex = coreTasks.indexWhere(
+        (task) => task.id.toString() == scheduleId,
+      );
+      if (coreIndex != -1) {
+        _copyScheduleEditsToTask(coreTasks[coreIndex], schedule);
+      } else if (schedule.isReminderEnabled) {
+        coreTasks.add(
+          TaskItem(
+            id: scheduleId,
+            text: schedule.text,
+            category: 'schedule',
+            done: schedule.done,
+            time: _displayTimeFromStored(
+              time: schedule.time,
+              timeStart: schedule.timeStart,
+              timeEnd: schedule.timeEnd,
+            ),
+            duration: schedule.duration,
+            timeStart: schedule.timeStart,
+            timeEnd: schedule.timeEnd,
+            createdAt: schedule.createdAt,
+            isReminderEnabled: schedule.isReminderEnabled,
+            deferredCount: schedule.deferredCount,
+            memo: schedule.memo,
+          ),
+        );
+      }
+    });
+    await _saveSchedules();
+    if (dateKey == _getTodayStr()) {
+      await _persistTodayTasks();
+    } else {
+      await _savePlannedTodayTasks();
+    }
+    await _saveCoreTasks();
   }
 
   void _showEditItemModal(
@@ -11053,8 +11195,7 @@ class _TasksScreenState extends State<TasksScreen>
                                 _showEditItemModal(
                                   s,
                                   () {
-                                    setState(() {});
-                                    _saveSchedules();
+                                    _saveScheduleTabScheduleEdit(dateStr, s);
                                   },
                                   onDelete: () {
                                     setState(() {
@@ -11103,8 +11244,7 @@ class _TasksScreenState extends State<TasksScreen>
                           _showEditItemModal(
                             s,
                             () {
-                              setState(() {});
-                              _saveSchedules();
+                              _saveScheduleTabScheduleEdit(dateStr, s);
                             },
                             onDelete: () {
                               setState(() {
@@ -11153,10 +11293,10 @@ class _TasksScreenState extends State<TasksScreen>
                   _showEditItemModal(
                     task,
                     () {
-                      _savePlannedTaskForSchedule(dateStr);
+                      _saveScheduleTabTaskEdit(dateStr, task);
                     },
                     onDelete: () {
-                      _removePlannedTaskForSchedule(dateStr, task);
+                      _deleteScheduleTabTask(dateStr, task);
                     },
                   );
                 },
