@@ -59,6 +59,12 @@ dependencies:
   url_launcher: ^6.3.2
   flutter_linkify: ^6.0.0
   firebase_analytics: ^12.4.5
+  device_calendar: ^4.3.3
+
+# device_calendar 4.3.3은 timezone ^0.9.0을 요구하지만, 프로젝트(flutter_local_notifications)는
+# timezone ^0.11.0을 쓴다. 코어 API(TZDateTime 등)가 호환되므로 0.11로 강제한다.
+dependency_overrides:
+  timezone: ^0.11.0
 
 dev_dependencies:
   flutter_test:

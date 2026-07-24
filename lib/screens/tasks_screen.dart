@@ -26,6 +26,7 @@ import '../services/analytics_service.dart';
 import '../services/api_usage_limit_service.dart';
 import '../services/widget_sync_service.dart';
 import '../services/daily_reset_service.dart';
+import '../services/apple_calendar_sync_service.dart';
 import '../theme/app_design_tokens.dart';
 import '../widgets/core_reminder_settings_sheet.dart';
 
@@ -2075,6 +2076,8 @@ class _TasksScreenState extends State<TasksScreen>
     _injectTodaySchedules();
     await NotificationService().syncCoreReminders();
     widget.onProgressChanged?.call();
+    // 애플 캘린더 연동(iOS)이 켜져 있으면 변경을 미러링. 실패해도 앱 흐름엔 영향 없음.
+    unawaited(AppleCalendarSyncService.instance.syncAll());
   }
 
   Future<bool> _hasActivePlan() async {

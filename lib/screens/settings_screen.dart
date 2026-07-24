@@ -13,6 +13,7 @@ import '../services/auth_service.dart';
 import '../services/tasks_sync_service.dart';
 import '../models/user_data.dart';
 import '../services/widget_sync_service.dart';
+import '../services/apple_calendar_sync_service.dart';
 
 class SettingsScreen extends StatefulWidget {
   final String coachId;
@@ -50,6 +51,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String? _homeWidgetStatus;
   UserData? _userData;
   String? _expandedSettingsSection;
+  bool _appleCalendarEnabled = false; // iOS 애플 캘린더 연동 여부
+  bool _appleCalendarBusy = false; // 연동 켜기/끄기 진행 중
 
   bool get _isMaster =>
       widget.coachId == 'sec_male' || widget.coachId == 'sec_female';
@@ -78,8 +81,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (!userData.isPlanActive) {
       await _disablePaidReminderSettings(prefs);
     }
+    final appleCalendarEnabled = await AppleCalendarSyncService.instance
+        .isEnabled();
+    if (!mounted) return;
     setState(() {
       _userData = userData;
+      _appleCalendarEnabled = appleCalendarEnabled;
       _morningCallEnabled =
           prefs.getBool('nyang_morning_call_enabled') ?? false;
       final timeStr = prefs.getString('nyang_morning_call_time') ?? '07:00';
@@ -1388,23 +1395,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           );
                         },
                       ),
-                      const SizedBox(height: 10),
-
-                      _buildSettingsSectionTile(
-                        id: 'external',
-                        svgAsset: 'assets/icons/plug.svg',
-                        label: '외부 연동',
-                        status: '준비 중',
-                        children: [
-                          _buildSettingsDetailRow(
-                            svgAsset: 'assets/icons/calendar-days.svg',
-                            label: '아이폰 캘린더 연동',
-                            status: '준비 중',
-                            onTap: _showExternalCalendarComingSoon,
-                          ),
-                          // TODO: 구글 캘린더 연동 항목은 지원 확정 후 여기에 추가
-                        ],
-                      ),
+                      // 외부 연동은 아이폰(애플 캘린더) 전용이라 iOS에서만 노출한다.
+                      // 안드로이드 구글 캘린더 연동은 지원 확정 후 별도로 추가.
+                      if (Platform.isIOS) ...[
+                        const SizedBox(height: 10),
+                        _buildSettingsSectionTile(
+                          id: 'external',
+                          svgAsset: 'assets/icons/plug.svg',
+                          label: '외부 연동',
+                          status: _appleCalendarEnabled ? '연동됨' : '꺼짐',
+                          children: [
+                            _buildSettingsDetailRow(
+                              svgAsset: 'assets/icons/calendar-days.svg',
+                              label: '아이폰 캘린더 연동',
+                              status: _appleCalendarBusy
+                                  ? '처리 중'
+                                  : (_appleCalendarEnabled ? '연동됨' : '꺼짐'),
+                              onTap: _toggleAppleCalendar,
+                            ),
+                            // TODO: 구글 캘린더 연동 항목은 지원 확정 후 여기에 추가
+                          ],
+                        ),
+                      ],
                       const SizedBox(height: 10),
 
                       _buildSettingsNavigationTile(
@@ -1682,10 +1694,109 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  // 아이폰 캘린더 연동 기능은 아직 구현 전이라 준비 중 안내만 표시한다.
-  void _showExternalCalendarComingSoon() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('아이폰 캘린더 연동은 곧 지원될 예정이에요.')),
+  // 아이폰(애플) 캘린더 단방향 연동을 켜고 끈다.
+  Future<void> _toggleAppleCalendar() async {
+    if (_appleCalendarBusy) return;
+    final service = AppleCalendarSyncService.instance;
+    final messenger = ScaffoldMessenger.of(context);
+
+    if (_appleCalendarEnabled) {
+      final confirmed = await _confirmDisableAppleCalendar();
+      if (confirmed != true) return;
+      setState(() => _appleCalendarBusy = true);
+      await service.disable();
+      if (!mounted) return;
+      setState(() {
+        _appleCalendarEnabled = false;
+        _appleCalendarBusy = false;
+      });
+      messenger.showSnackBar(
+        const SnackBar(content: Text('아이폰 캘린더 연동을 해제했어요.')),
+      );
+      return;
+    }
+
+    setState(() => _appleCalendarBusy = true);
+    messenger.showSnackBar(
+      const SnackBar(content: Text('아이폰 캘린더에 연동하는 중이에요…')),
+    );
+    final result = await service.enable();
+    if (!mounted) return;
+    setState(() {
+      _appleCalendarEnabled = result == AppleCalendarEnableResult.success;
+      _appleCalendarBusy = false;
+    });
+    messenger.hideCurrentSnackBar();
+    switch (result) {
+      case AppleCalendarEnableResult.success:
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text('아이폰 캘린더에 연동했어요. 캘린더 앱에서 "냥냥코치" 달력을 확인해보세요.'),
+          ),
+        );
+      case AppleCalendarEnableResult.permissionDenied:
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text('캘린더 접근 권한이 필요해요. 설정 > 냥냥코치에서 캘린더를 허용해주세요.'),
+          ),
+        );
+      case AppleCalendarEnableResult.unsupported:
+      case AppleCalendarEnableResult.failed:
+        messenger.showSnackBar(
+          const SnackBar(content: Text('연동에 실패했어요. 잠시 후 다시 시도해주세요.')),
+        );
+    }
+  }
+
+  Future<bool?> _confirmDisableAppleCalendar() {
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: Text(
+            '연동을 해제할까요?',
+            style: GoogleFonts.notoSansKr(
+              fontSize: 17,
+              fontWeight: FontWeight.w900,
+              color: const Color(0xFF3D3A4E),
+            ),
+          ),
+          content: Text(
+            '아이폰 캘린더의 "냥냥코치" 달력과 그 안의 일정이 모두 삭제돼요. (냥냥코치 앱의 일정은 그대로예요.)',
+            style: GoogleFonts.notoSansKr(
+              fontSize: 13.5,
+              height: 1.5,
+              fontWeight: FontWeight.w500,
+              color: const Color(0xFF6B6676),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(
+                '취소',
+                style: GoogleFonts.notoSansKr(
+                  fontWeight: FontWeight.w700,
+                  color: const Color(0xFF9A96A8),
+                ),
+              ),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text(
+                '해제',
+                style: GoogleFonts.notoSansKr(
+                  fontWeight: FontWeight.w900,
+                  color: const Color(0xFF8B7CFF),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 
