@@ -201,7 +201,8 @@ class AppleCalendarSyncService {
   Future<List<CalendarScheduleEntry>> _loadEntriesFromPrefs() async {
     final prefs = await SharedPreferences.getInstance();
     final entries = <String, CalendarScheduleEntry>{};
-    final todayKey = _getTodayKey(prefs);
+    final todayKey = _calendarTodayKey();
+    final scheduleTaskIds = <String>{};
 
     void addEntry(CalendarScheduleEntry entry) {
       if (entry.title.trim().isEmpty) return;
@@ -217,7 +218,11 @@ class AppleCalendarSyncService {
       final id = item['id']?.toString();
       if (id == null) return;
       final category = item['category']?.toString() ?? 'today';
-      if (category == 'schedule') return;
+      if (category == 'schedule' ||
+          id.startsWith('schedule_') ||
+          scheduleTaskIds.contains(id)) {
+        return;
+      }
       addEntry(
         CalendarScheduleEntry(
           id: '$idPrefix:$dateKey:$id',
@@ -240,6 +245,9 @@ class AppleCalendarSyncService {
             if (item is! Map) continue;
             final id = item['id']?.toString();
             if (id == null) continue;
+            scheduleTaskIds
+              ..add(id)
+              ..add('schedule_$id');
             addEntry(
               CalendarScheduleEntry(
                 id: 'schedule:$dateKey:$id',
@@ -662,7 +670,7 @@ class AppleCalendarSyncService {
     required _ExternalEventPatch patch,
   }) async {
     final prefs = await SharedPreferences.getInstance();
-    final todayKey = _getTodayKey(prefs);
+    final todayKey = _calendarTodayKey();
     final tasks = _decodeList(prefs.getString(_kTasksPrefsKey));
     final planned = _decodeMap(prefs.getString(_kPlannedTasksPrefsKey));
 
@@ -953,7 +961,8 @@ class AppleCalendarSyncService {
       }
       return _EventTiming(start: startDt, end: endDt, allDay: false);
     }
-    // 시간 미정 → 종일 이벤트
+    // 시간 미정 → 종일 이벤트. EventKit은 하루짜리 종일 일정을
+    // [해당일 00:00, 다음날 00:00) 범위로 저장한다.
     final dayStart = tz.TZDateTime(tz.local, date.year, date.month, date.day);
     return _EventTiming(
       start: dayStart,
@@ -985,6 +994,10 @@ class AppleCalendarSyncService {
       base = base.subtract(const Duration(days: 1));
     }
     return _dateKey(base);
+  }
+
+  String _calendarTodayKey() {
+    return _dateKey(DateTime.now());
   }
 
   String _dateKey(DateTime date) {
