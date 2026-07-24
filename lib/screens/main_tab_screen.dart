@@ -1925,8 +1925,8 @@ class _MainTabScreenState extends State<MainTabScreen>
                           iconPath: 'assets/icons/planner-reset.svg',
                           title: '오늘의 할 일 초기화',
                           body:
-                              '할 일 목록이 매일 초기화돼요.\n'
-                              '설정에서 할 일 초기화 시간을 조율할 수 있어요. 다음 날 계획은 할 일 탭 상단 날짜를 누르고 짜시면 돼요.',
+                              '할 일 목록이 매일 자정에 초기화돼요.\n'
+                              '다음 날 계획은 할 일 탭 상단 날짜를 누르고 짜시면 돼요.',
                         ),
                         const SizedBox(height: 18),
                         _buildPlannerHelpSection(

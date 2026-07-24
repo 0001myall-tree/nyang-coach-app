@@ -111,12 +111,14 @@ class AppleCalendarSyncService {
 
     final savedId = prefs.getString(_kCalendarIdKey);
     if (savedId != null && cals != null && cals.any((c) => c.id == savedId)) {
+      await _deleteDuplicateCalendars(cals, keepId: savedId);
       return savedId;
     }
     if (cals != null) {
       for (final c in cals) {
         if (c.name == _calendarName && c.isReadOnly != true && c.id != null) {
           await prefs.setString(_kCalendarIdKey, c.id!);
+          await _deleteDuplicateCalendars(cals, keepId: c.id!);
           return c.id;
         }
       }
@@ -129,6 +131,22 @@ class AppleCalendarSyncService {
     final id = created.data;
     if (id != null) await prefs.setString(_kCalendarIdKey, id);
     return id;
+  }
+
+  Future<void> _deleteDuplicateCalendars(
+    Iterable<Calendar> calendars, {
+    required String keepId,
+  }) async {
+    for (final calendar in calendars) {
+      final id = calendar.id;
+      if (id == null || id == keepId) continue;
+      if (calendar.name != _calendarName || calendar.isReadOnly == true) {
+        continue;
+      }
+      try {
+        await _plugin.deleteCalendar(id);
+      } catch (_) {}
+    }
   }
 
   Future<Map<String, String>> _loadEventMap() async {
@@ -155,9 +173,13 @@ class AppleCalendarSyncService {
     if (!await _ensurePermissions()) {
       return AppleCalendarEnableResult.permissionDenied;
     }
+    final prefs = await SharedPreferences.getInstance();
+    final previousCalendarId = prefs.getString(_kCalendarIdKey);
     final calId = await _ensureCalendar();
     if (calId == null) return AppleCalendarEnableResult.failed;
-    final prefs = await SharedPreferences.getInstance();
+    if (previousCalendarId != null && previousCalendarId != calId) {
+      await _saveEventMap({});
+    }
     await prefs.setBool(_kEnabledKey, true);
     await _serializeSync(
       () async => _syncInternal(await _loadEntriesFromPrefs(), calId),
@@ -173,7 +195,8 @@ class AppleCalendarSyncService {
     if (removeCalendar) {
       final calId = prefs.getString(_kCalendarIdKey);
       if (calId != null) {
-        await _plugin.deleteCalendar(calId);
+        final result = await _plugin.deleteCalendar(calId);
+        if (!(result.isSuccess && result.data == true)) return;
       }
       await prefs.remove(_kCalendarIdKey);
       await _saveEventMap({});
@@ -184,11 +207,22 @@ class AppleCalendarSyncService {
   Future<bool> syncAll({bool pullExternalChanges = true}) async {
     if (!await isEnabled()) return false;
     await _ensureTimezone();
+    final prefs = await SharedPreferences.getInstance();
+    final previousCalendarId = prefs.getString(_kCalendarIdKey);
     final calId = await _ensureCalendar();
     if (calId == null) return false;
+    final calendarWasReplaced =
+        previousCalendarId != null && previousCalendarId != calId;
     return _serializeSync(() async {
       var entries = await _loadEntriesFromPrefs();
       final oldMap = await _loadEventMap();
+      if (calendarWasReplaced) {
+        // 사용자가 전용 캘린더 자체를 삭제하면 EventKit 이벤트 id가 전부 사라진다.
+        // 이를 "모든 일정을 삭제"로 오해하지 않고 새 캘린더에 다시 내보낸다.
+        await _saveEventMap({});
+        await _syncInternal(entries, calId);
+        return false;
+      }
       var pulledExternalChanges = false;
       if (pullExternalChanges && oldMap.isNotEmpty) {
         pulledExternalChanges = await _pullExternalChanges(
@@ -444,6 +478,17 @@ class AppleCalendarSyncService {
       for (final event in events)
         if (event.eventId != null) event.eventId!: event,
     };
+    final mappedSourceIds = oldMap.keys.where(entryById.containsKey).toList();
+    if (mappedSourceIds.isNotEmpty &&
+        mappedSourceIds.every(
+          (sourceId) => !eventById.containsKey(oldMap[sourceId]),
+        )) {
+      // 캘린더 계정/전용 캘린더가 사라지거나 일시적으로 이벤트 조회가 빈 값이면
+      // 모든 앱 일정을 삭제로 오판할 수 있다. 전부 사라진 경우는 앱 데이터를
+      // 지우지 않고 매핑만 재생성하도록 한다.
+      await _saveEventMap({});
+      return false;
+    }
 
     var didChange = false;
     for (final mapEntry in oldMap.entries) {
