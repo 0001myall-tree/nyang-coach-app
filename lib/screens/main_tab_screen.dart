@@ -526,7 +526,12 @@ class _MainTabScreenState extends State<MainTabScreen>
     await NotificationService().handleNativeMorningAlarm();
     await DailyResetService.checkAndExecuteReset();
     try {
-      await AppleCalendarSyncService.instance.syncAll();
+      final appleCalendarChanged = await AppleCalendarSyncService.instance
+          .syncAll();
+      if (appleCalendarChanged) {
+        await WidgetSyncService.syncFromStoredTasks();
+        TasksSyncService.scheduleSyncToCloud();
+      }
     } catch (e, stackTrace) {
       debugPrint('Resume Apple calendar sync failed: $e');
       debugPrintStack(stackTrace: stackTrace);

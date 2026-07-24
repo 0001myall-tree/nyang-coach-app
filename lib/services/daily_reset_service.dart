@@ -48,7 +48,9 @@ class DailyResetService {
       const Duration(days: chatArchiveDays),
     );
     archive = archive.where((e) {
-      final t = DateTime.tryParse((e is Map ? e['time'] : null)?.toString() ?? '');
+      final t = DateTime.tryParse(
+        (e is Map ? e['time'] : null)?.toString() ?? '',
+      );
       return t == null || t.isAfter(cutoff);
     }).toList();
 
@@ -113,7 +115,7 @@ class DailyResetService {
   static Future<void> checkAndExecuteReset() async {
     final prefs = await SharedPreferences.getInstance();
     if (isCloudRestorePending(prefs)) return;
-    final resetHour = prefs.getDouble('nyang_reset_hour') ?? 3.0;
+    const resetHour = 0.0;
     final today = _getTodayStr(resetHour);
     final lastDate = prefs.getString('nyang_last_date');
 

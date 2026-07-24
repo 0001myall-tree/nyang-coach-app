@@ -105,10 +105,8 @@ class _CountdownFocusModeScreenState extends State<CountdownFocusModeScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _breathCtrl = AnimationController(
-      vsync: this,
-      duration: _breathCycle,
-    )..repeat();
+    _breathCtrl = AnimationController(vsync: this, duration: _breathCycle)
+      ..repeat();
     _startIntroFlow();
   }
 
@@ -599,10 +597,7 @@ class _SleepAssistModeScreenState extends State<SleepAssistModeScreen>
   @override
   void initState() {
     super.initState();
-    _breathCtrl = AnimationController(
-      vsync: this,
-      duration: _inhale + _exhale,
-    );
+    _breathCtrl = AnimationController(vsync: this, duration: _inhale + _exhale);
     _startSession();
   }
 
@@ -2044,8 +2039,7 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   Future<String> _getEffectiveTodayStr() async {
-    final prefs = await SharedPreferences.getInstance();
-    final resetHour = prefs.getDouble('nyang_reset_hour') ?? 3.0;
+    const resetHour = 0.0;
     final n = DateTime.now();
     var base = DateTime(n.year, n.month, n.day);
     if (n.hour < resetHour) {
@@ -2065,7 +2059,7 @@ class _ChatScreenState extends State<ChatScreen>
       prefs.getString(DailyResetService.lastResetAtKey) ?? '',
     );
     final resetToDate = prefs.getString(DailyResetService.lastResetToDateKey);
-    final resetHour = prefs.getDouble('nyang_reset_hour') ?? 3.0;
+    const resetHour = 0.0;
     final preStartEndHour = (resetHour.ceil() + 5).clamp(6, 10);
     final recentlyReset =
         resetAt != null &&
@@ -3489,7 +3483,7 @@ class _ChatScreenState extends State<ChatScreen>
     String? fallbackKey,
   }) async {
     final prefs = await SharedPreferences.getInstance();
-    final resetHour = prefs.getDouble('nyang_reset_hour') ?? 3.0;
+    const resetHour = 0.0;
     final now = DateTime.now();
     final todayKey = _effectiveUsageDateKey(now, resetHour);
     final history = await _loadFeatureUsageHistory(
@@ -3797,8 +3791,8 @@ class _ChatScreenState extends State<ChatScreen>
             compact.contains('남은'));
   }
 
-  String _getDateStrWithResetOffset(SharedPreferences prefs, int daysAgo) {
-    final resetHour = prefs.getDouble('nyang_reset_hour') ?? 3.0;
+  String _getDateStrWithResetOffset(SharedPreferences _, int daysAgo) {
+    const resetHour = 0.0;
     final now = DateTime.now();
     var base = DateTime(now.year, now.month, now.day);
     if (now.hour < resetHour) {
@@ -6927,7 +6921,7 @@ class _ChatScreenState extends State<ChatScreen>
       'sec_male' => switch (location) {
         'picker' => '대표님, 찾으시는 화면을 선택해 주시면 바로 이동하겠습니다.',
         'settings' =>
-          '대표님, 설정 탭에서 모닝콜, 일정 알람, 위젯, 채팅 배경, 오늘 할 일 초기화 시간, 비서 학습 설정을 변경하실 수 있습니다.',
+          '대표님, 설정 탭에서 모닝콜, 일정 알람, 위젯, 채팅 배경, 비서 학습 설정을 변경하실 수 있습니다.',
         'vision' => '대표님, 장기 비전은 목표 화면 하단에서 확인하실 수 있습니다. 바로 이동하겠습니다.',
         'repeat_schedule' =>
           '대표님, 반복 일정은 일정 탭에서 생성하실 수 있습니다. 일정을 입력한 뒤 시계 버튼을 누르고 반복을 선택해 주세요.',
@@ -6939,8 +6933,7 @@ class _ChatScreenState extends State<ChatScreen>
       },
       'sec_female' => switch (location) {
         'picker' => '대표님, 어떤 화면을 찾으세요? 제가 바로 열어드릴게요.',
-        'settings' =>
-          '대표님, 설정 탭에서 모닝콜, 일정 알람, 위젯, 채팅 배경, 오늘 할 일 초기화 시간, 비서 학습 설정을 바꿀 수 있어요.',
+        'settings' => '대표님, 설정 탭에서 모닝콜, 일정 알람, 위젯, 채팅 배경, 비서 학습 설정을 바꿀 수 있어요.',
         'vision' => '대표님, 장기 비전은 목표 화면 아래쪽에 있어요. 바로 열어드릴게요.',
         'repeat_schedule' =>
           '대표님, 반복 일정은 일정 탭에서 만들 수 있어요. 일정을 입력한 뒤 시계 버튼을 누르고 반복을 선택해 주세요.',
@@ -6952,8 +6945,7 @@ class _ChatScreenState extends State<ChatScreen>
       },
       _ => switch (location) {
         'picker' => '어떤 화면을 찾고 있어? 바로 열어줄게.',
-        'settings' =>
-          '설정 탭에서 모닝콜, 일정 알람, 위젯, 채팅 배경, 오늘 할 일 초기화 시간, 비서 학습 설정을 바꿀 수 있어.',
+        'settings' => '설정 탭에서 모닝콜, 일정 알람, 위젯, 채팅 배경, 비서 학습 설정을 바꿀 수 있어.',
         'vision' => '장기 비전은 목표 화면 아래쪽에 있어. 바로 열어줄게.',
         'repeat_schedule' =>
           '반복 일정은 일정 탭에서 만들 수 있어. 일정을 입력하고 시계 버튼을 누른 다음 반복을 선택하면 돼.',
@@ -7687,12 +7679,8 @@ class _ChatScreenState extends State<ChatScreen>
       sb.writeln(
         '- 사용자가 행동을 시작하기로 했거나 코치의 행동 제안(예: "5분만 해보자")에 동의하는 등 타이머가 도움이 될 상황이면, 코치가 먼저 자연스럽게 타이머를 제안하며 답변 끝에 [TIMER_CONFIRM:5] (또는 10 등 적절한 시간) 태그를 출력해도 됩니다. 예: "그럼 5분만 같이 가보자! 타이머 켜줄게" + [TIMER_CONFIRM:5]',
       );
-      sb.writeln(
-        '- 사용자가 명시적으로 "타이머 띄워줘", "응 타이머 줘"라고 요청하면 바로 태그를 출력하세요.',
-      );
-      sb.writeln(
-        '- 단, 사용자가 타이머를 거절했거나 순수하게 감정만 토로하는 중이면 같은 대화에서 다시 권하지 마세요.',
-      );
+      sb.writeln('- 사용자가 명시적으로 "타이머 띄워줘", "응 타이머 줘"라고 요청하면 바로 태그를 출력하세요.');
+      sb.writeln('- 단, 사용자가 타이머를 거절했거나 순수하게 감정만 토로하는 중이면 같은 대화에서 다시 권하지 마세요.');
     }
 
     return sb.toString();
@@ -11401,8 +11389,8 @@ $timerOutputRule
     );
   }
 
-  String _getTodayStrWithReset(SharedPreferences prefs) {
-    final resetHour = prefs.getDouble('nyang_reset_hour') ?? 3.0;
+  String _getTodayStrWithReset(SharedPreferences _) {
+    const resetHour = 0.0;
     final now = DateTime.now();
     var base = DateTime(now.year, now.month, now.day);
     if (now.hour < resetHour) {

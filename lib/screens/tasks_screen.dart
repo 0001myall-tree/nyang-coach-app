@@ -581,7 +581,6 @@ class _TasksScreenState extends State<TasksScreen>
   Map<String, List<ScheduleItem>> schedules = {};
   Map<String, List<TaskItem>> plannedTodayTasksByDate = {};
   Map<String, dynamic>? vacationInfo;
-  double _resetHour = 3.0;
   DateTime? _selectedTodayDate;
 
   final SpeechToText _speechToText = SpeechToText();
@@ -734,7 +733,6 @@ class _TasksScreenState extends State<TasksScreen>
       if (rawVacation != null) {
         vacationInfo = jsonDecode(rawVacation) as Map<String, dynamic>;
       }
-      _resetHour = prefs.getDouble('nyang_reset_hour') ?? 3.0;
     });
 
     if (!hasActivePlan) {
@@ -1656,8 +1654,6 @@ class _TasksScreenState extends State<TasksScreen>
         n.month,
         n.day,
       ).subtract(const Duration(days: 1));
-      if (n.hour < _resetHour)
-        yesterday = yesterday.subtract(const Duration(days: 1));
       final yStr =
           '${yesterday.year}-${yesterday.month.toString().padLeft(2, '0')}-${yesterday.day.toString().padLeft(2, '0')}';
 
@@ -2102,10 +2098,7 @@ class _TasksScreenState extends State<TasksScreen>
   // ── getTodayStr ───────────────────────────────────────────
   String _getTodayStr() {
     final n = DateTime.now();
-    var base = DateTime(n.year, n.month, n.day);
-    if (n.hour < _resetHour) {
-      base = base.subtract(const Duration(days: 1));
-    }
+    final base = DateTime(n.year, n.month, n.day);
     return '${base.year}-${base.month.toString().padLeft(2, '0')}-${base.day.toString().padLeft(2, '0')}';
   }
 

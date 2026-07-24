@@ -40,8 +40,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   );
 
   String _chatBgStyle = 'simple'; // 'simple' or 'emotional'
-  double _resetHour = 3.0; // 0 ~ 6
-
   bool _morningCallEnabled = true;
   TimeOfDay _morningCallTime = const TimeOfDay(hour: 7, minute: 0);
   String _morningCallCoachId = 'cat';
@@ -108,7 +106,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
           : savedCoreReminderCoach;
       _coreReminderAdvanceMinutes =
           prefs.getInt('nyang_core_reminder_advance') ?? 10;
-      _resetHour = prefs.getDouble('nyang_reset_hour') ?? 3.0;
       _chatBgStyle = prefs.getString('nyang_chat_bg_style') ?? 'simple';
       _homeWidgetStatus = _buildHomeWidgetStatus(
         nyang: prefs.getBool('widget_nyang_enabled') ?? false,
@@ -1368,12 +1365,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                   : '심플 버전',
                               onTap: _paidSettingsTap(_showBgStylePicker),
                             ),
-                          _buildSettingsDetailRow(
-                            icon: Icons.refresh_rounded,
-                            label: '오늘 할 일 초기화',
-                            status: _formatResetHour(_resetHour.toInt()),
-                            onTap: _paidSettingsTap(_showResetHourPicker),
-                          ),
                         ],
                       ),
                       const SizedBox(height: 10),
@@ -2630,100 +2621,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ],
       ),
-    );
-  }
-
-  String _formatResetHour(int hour) {
-    return hour == 0 ? '자정' : '새벽 ${hour}시';
-  }
-
-  Future<void> _showResetHourPicker() async {
-    int selectedHour = _resetHour.round().clamp(0, 6);
-    final controller = FixedExtentScrollController(initialItem: selectedHour);
-
-    await showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (context) {
-        return SafeArea(
-          top: false,
-          child: SizedBox(
-            height: 280,
-            child: Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 16, 12, 8),
-                  child: Row(
-                    children: [
-                      Text(
-                        '리셋 시간 선택',
-                        style: GoogleFonts.notoSansKr(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w900,
-                          color: const Color(0xFF3D3A4E),
-                        ),
-                      ),
-                      const Spacer(),
-                      TextButton(
-                        onPressed: () async {
-                          setState(() => _resetHour = selectedHour.toDouble());
-                          final prefs = await SharedPreferences.getInstance();
-                          await prefs.setDouble(
-                            'nyang_reset_hour',
-                            selectedHour.toDouble(),
-                          );
-                          TasksSyncService.scheduleSyncToCloud();
-                          if (context.mounted) Navigator.pop(context);
-                        },
-                        child: Text(
-                          '완료',
-                          style: GoogleFonts.notoSansKr(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w900,
-                            color: const Color(0xFF8B7CFF),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Expanded(
-                  child: CupertinoPicker(
-                    scrollController: controller,
-                    itemExtent: 44,
-                    magnification: 1.08,
-                    useMagnifier: true,
-                    selectionOverlay: Container(
-                      margin: const EdgeInsets.symmetric(horizontal: 36),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF3F0FF).withOpacity(0.72),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    onSelectedItemChanged: (index) => selectedHour = index,
-                    children: List.generate(7, (index) {
-                      return Center(
-                        child: Text(
-                          _formatResetHour(index),
-                          style: GoogleFonts.notoSansKr(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w800,
-                            color: const Color(0xFF3D3A4E),
-                          ),
-                        ),
-                      );
-                    }),
-                  ),
-                ),
-                const SizedBox(height: 12),
-              ],
-            ),
-          ),
-        );
-      },
     );
   }
 

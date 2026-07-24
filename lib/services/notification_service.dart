@@ -973,7 +973,7 @@ class NotificationService {
     );
 
     // Compute today base date and todayStr matching TasksScreen logic
-    final resetHour = 3.0;
+    const resetHour = 0.0;
     final now = DateTime.now();
     var baseToday = DateTime(now.year, now.month, now.day);
     if (now.hour < resetHour) {

@@ -34,8 +34,7 @@ class FocusTimerManager {
   }
 
   static Future<String> todayKey() async {
-    final prefs = await SharedPreferences.getInstance();
-    final resetHour = prefs.getDouble('nyang_reset_hour') ?? 3.0;
+    const resetHour = 0.0;
     final now = DateTime.now();
     var baseToday = DateTime(now.year, now.month, now.day);
     if (now.hour < resetHour) {

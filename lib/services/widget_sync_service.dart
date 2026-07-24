@@ -75,7 +75,7 @@ class WidgetSyncService {
     );
   }
 
-  /// 오늘 날짜(설정된 리셋 시각 반영)에 걸린 마일스톤을 tasks_screen.dart의
+  /// 오늘 날짜에 걸린 마일스톤을 tasks_screen.dart의
   /// _todayMilestoneItems 계산과 동일한 기준으로 뽑아 위젯 집계에 합산한다.
   static List<Map<String, dynamic>> _todayMilestoneTasks(
     SharedPreferences prefs,
@@ -83,12 +83,8 @@ class WidgetSyncService {
     final rawVisions = prefs.getString('nyang_visions');
     if (rawVisions == null) return <Map<String, dynamic>>[];
 
-    final resetHour = prefs.getDouble('nyang_reset_hour') ?? 3.0;
     final now = DateTime.now();
-    var base = DateTime(now.year, now.month, now.day);
-    if (now.hour < resetHour) {
-      base = base.subtract(const Duration(days: 1));
-    }
+    final base = DateTime(now.year, now.month, now.day);
     final todayStr =
         '${base.year}-${base.month.toString().padLeft(2, '0')}-${base.day.toString().padLeft(2, '0')}';
 
@@ -309,13 +305,9 @@ class WidgetSyncService {
     return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
   }
 
-  static String _effectiveTodayKey(SharedPreferences prefs) {
-    final resetHour = prefs.getDouble('nyang_reset_hour') ?? 3.0;
+  static String _effectiveTodayKey(SharedPreferences _) {
     final now = DateTime.now();
-    var base = DateTime(now.year, now.month, now.day);
-    if (now.hour < resetHour) {
-      base = base.subtract(const Duration(days: 1));
-    }
+    final base = DateTime(now.year, now.month, now.day);
     return _localDateKey(base);
   }
 

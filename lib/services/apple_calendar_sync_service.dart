@@ -74,9 +74,9 @@ class AppleCalendarSyncService {
 
   // 동기화가 겹쳐 실행되면 같은 일정이 이벤트로 중복 생성될 수 있어 한 줄로 직렬화한다.
   Future<void> _syncGate = Future.value();
-  Future<void> _serializeSync(Future<void> Function() task) {
+  Future<T> _serializeSync<T>(Future<T> Function() task) {
     final next = _syncGate.then((_) => task());
-    _syncGate = next.catchError((_) {});
+    _syncGate = next.then((_) {}).catchError((_) {});
     return next;
   }
 
@@ -181,19 +181,25 @@ class AppleCalendarSyncService {
   }
 
   /// 현재 일정 전체를 캘린더에 반영한다. 연동이 꺼져 있으면 아무 것도 하지 않는다.
-  Future<void> syncAll({bool pullExternalChanges = true}) async {
-    if (!await isEnabled()) return;
+  Future<bool> syncAll({bool pullExternalChanges = true}) async {
+    if (!await isEnabled()) return false;
     await _ensureTimezone();
     final calId = await _ensureCalendar();
-    if (calId == null) return;
-    await _serializeSync(() async {
+    if (calId == null) return false;
+    return _serializeSync(() async {
       var entries = await _loadEntriesFromPrefs();
       final oldMap = await _loadEventMap();
+      var pulledExternalChanges = false;
       if (pullExternalChanges && oldMap.isNotEmpty) {
-        await _pullExternalChanges(calId, entries, oldMap);
+        pulledExternalChanges = await _pullExternalChanges(
+          calId,
+          entries,
+          oldMap,
+        );
         entries = await _loadEntriesFromPrefs();
       }
       await _syncInternal(entries, calId);
+      return pulledExternalChanges;
     });
   }
 
@@ -419,45 +425,48 @@ class AppleCalendarSyncService {
     await _saveEventMap(newMap);
   }
 
-  Future<void> _pullExternalChanges(
+  Future<bool> _pullExternalChanges(
     String calId,
     List<CalendarScheduleEntry> entries,
     Map<String, String> oldMap,
   ) async {
     final entryById = {for (final entry in entries) entry.id: entry};
     final ids = oldMap.values.toList();
-    if (ids.isEmpty) return;
+    if (ids.isEmpty) return false;
 
     final res = await _plugin.retrieveEvents(
       calId,
       RetrieveEventsParams(eventIds: ids),
     );
-    if (!res.isSuccess) return;
+    if (!res.isSuccess) return false;
     final events = res.data ?? const <Event>[];
     final eventById = {
       for (final event in events)
         if (event.eventId != null) event.eventId!: event,
     };
 
+    var didChange = false;
     for (final mapEntry in oldMap.entries) {
       final source = entryById[mapEntry.key];
       if (source == null) continue;
       final event = eventById[mapEntry.value];
       if (event == null) {
-        await _applyExternalDelete(source);
+        didChange = await _applyExternalDelete(source) || didChange;
       } else {
-        await _applyExternalUpdate(source, event);
+        didChange = await _applyExternalUpdate(source, event) || didChange;
       }
     }
+    return didChange;
   }
 
-  Future<void> _applyExternalDelete(CalendarScheduleEntry source) async {
+  Future<bool> _applyExternalDelete(CalendarScheduleEntry source) async {
     final parts = source.id.split(':');
-    if (parts.isEmpty) return;
+    if (parts.isEmpty) return false;
     switch (parts.first) {
       case 'schedule':
         if (parts.length >= 3) {
           await _deleteSchedule(parts[1], parts.sublist(2).join(':'));
+          return true;
         }
         break;
       case 'task':
@@ -467,6 +476,7 @@ class AppleCalendarSyncService {
             parts.sublist(2).join(':'),
             fromToday: true,
           );
+          return true;
         }
         break;
       case 'planned':
@@ -476,11 +486,13 @@ class AppleCalendarSyncService {
             parts.sublist(2).join(':'),
             fromToday: false,
           );
+          return true;
         }
         break;
       case 'habit':
         if (parts.length >= 3) {
           await _skipHabitOnDate(parts[1], parts.sublist(2).join(':'));
+          return true;
         }
         break;
       case 'milestone':
@@ -490,20 +502,22 @@ class AppleCalendarSyncService {
             visionId: parts[2],
             milestoneIndex: int.tryParse(parts[3]),
           );
+          return true;
         }
         break;
     }
+    return false;
   }
 
-  Future<void> _applyExternalUpdate(
+  Future<bool> _applyExternalUpdate(
     CalendarScheduleEntry source,
     Event event,
   ) async {
     final parts = source.id.split(':');
-    if (parts.isEmpty) return;
+    if (parts.isEmpty) return false;
 
     final patch = _eventPatch(source, event);
-    if (!patch.hasChanges) return;
+    if (!patch.hasChanges) return false;
 
     switch (parts.first) {
       case 'schedule':
@@ -513,6 +527,7 @@ class AppleCalendarSyncService {
             id: parts.sublist(2).join(':'),
             patch: patch,
           );
+          return true;
         }
         break;
       case 'task':
@@ -523,6 +538,7 @@ class AppleCalendarSyncService {
             fromToday: true,
             patch: patch,
           );
+          return true;
         }
         break;
       case 'planned':
@@ -533,6 +549,7 @@ class AppleCalendarSyncService {
             fromToday: false,
             patch: patch,
           );
+          return true;
         }
         break;
       case 'habit':
@@ -542,6 +559,7 @@ class AppleCalendarSyncService {
             habitId: parts.sublist(2).join(':'),
             patch: patch,
           );
+          return true;
         }
         break;
       case 'milestone':
@@ -552,9 +570,11 @@ class AppleCalendarSyncService {
             milestoneIndex: int.tryParse(parts[3]),
             patch: patch,
           );
+          return true;
         }
         break;
     }
+    return false;
   }
 
   _ExternalEventPatch _eventPatch(CalendarScheduleEntry source, Event event) {
@@ -567,7 +587,7 @@ class AppleCalendarSyncService {
     String? timeEnd;
     if (event.allDay != true && start != null) {
       timeStart = _storedTime(start);
-      if (source.timeEnd != null && event.end != null) {
+      if (event.end != null && event.end!.isAfter(start)) {
         timeEnd = _storedTime(event.end!);
       }
     }
@@ -961,14 +981,11 @@ class AppleCalendarSyncService {
       }
       return _EventTiming(start: startDt, end: endDt, allDay: false);
     }
-    // 시간 미정 → 종일 이벤트. EventKit은 하루짜리 종일 일정을
-    // [해당일 00:00, 다음날 00:00) 범위로 저장한다.
+    // 시간 미정 → iOS 종일 이벤트. device_calendar의 iOS 구현은 endDate를
+    // 그대로 EventKit에 전달하므로 다음날 00:00을 넣으면 화면에서 이틀짜리처럼
+    // 보일 수 있다. 같은 날짜를 넣어 한 날짜 칸에만 표시되게 한다.
     final dayStart = tz.TZDateTime(tz.local, date.year, date.month, date.day);
-    return _EventTiming(
-      start: dayStart,
-      end: dayStart.add(const Duration(days: 1)),
-      allDay: true,
-    );
+    return _EventTiming(start: dayStart, end: dayStart, allDay: true);
   }
 
   (int, int)? _parseHhMm(String? value) {
@@ -986,13 +1003,9 @@ class AppleCalendarSyncService {
     return '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
   }
 
-  String _getTodayKey(SharedPreferences prefs) {
-    final resetHour = prefs.getDouble('nyang_reset_hour') ?? 3.0;
+  String _getTodayKey(SharedPreferences _) {
     final now = DateTime.now();
-    var base = DateTime(now.year, now.month, now.day);
-    if (now.hour < resetHour) {
-      base = base.subtract(const Duration(days: 1));
-    }
+    final base = DateTime(now.year, now.month, now.day);
     return _dateKey(base);
   }
 
