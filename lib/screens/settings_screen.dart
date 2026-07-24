@@ -1530,11 +1530,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
     required double size,
   }) {
     if (svgAsset != null) {
-      return SvgPicture.asset(
-        svgAsset,
+      // 폰트어썸 solid 아이콘은 여백 없이 꽉 차 Material 아이콘보다 커 보이므로
+      // 살짝 줄여서 크기감을 맞추고, 원래 size 박스 안에 중앙 정렬해 정렬을 유지한다.
+      final glyphSize = size * 0.8;
+      return SizedBox(
         width: size,
         height: size,
-        colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
+        child: Center(
+          child: SvgPicture.asset(
+            svgAsset,
+            width: glyphSize,
+            height: glyphSize,
+            colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
+          ),
+        ),
       );
     }
     return Icon(icon, color: color, size: size);
