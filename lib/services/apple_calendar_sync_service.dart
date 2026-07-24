@@ -49,7 +49,7 @@ class AppleCalendarSyncService {
   // 이벤트를 탭하면 기존 위젯 딥링크 경로로 앱이 열리고 오늘 할 일 탭으로 진입한다.
   static const String _deepLink = 'nyangcoach://widget/cat/tasks';
   static const String _eventNote =
-      '냥냥코치에서 관리하는 일정이에요.\n수정·삭제는 냥냥코치 앱에서 해주세요.';
+      '냥냥코치에서 보낸 일정이에요.\n수정·삭제는 냥냥코치 앱에서 해주세요.';
 
   bool get isSupportedPlatform => Platform.isIOS;
 
@@ -284,7 +284,11 @@ class AppleCalendarSyncService {
     }
     // 시간 미정 → 종일 이벤트
     final dayStart = tz.TZDateTime(tz.local, date.year, date.month, date.day);
-    return _EventTiming(start: dayStart, end: dayStart, allDay: true);
+    return _EventTiming(
+      start: dayStart,
+      end: dayStart.add(const Duration(days: 1)),
+      allDay: true,
+    );
   }
 
   (int, int)? _parseHhMm(String? value) {

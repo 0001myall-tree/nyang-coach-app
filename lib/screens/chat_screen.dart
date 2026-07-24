@@ -18,6 +18,7 @@ import 'package:nyang_coach/screens/coach_selection_screen.dart';
 import 'package:nyang_coach/services/notification_service.dart';
 import 'package:nyang_coach/services/analytics_service.dart';
 import 'package:nyang_coach/services/api_usage_limit_service.dart';
+import 'package:nyang_coach/services/apple_calendar_sync_service.dart';
 import 'package:nyang_coach/services/tasks_sync_service.dart';
 import 'package:nyang_coach/services/user_title_service.dart';
 import 'package:nyang_coach/services/daily_reset_service.dart';
@@ -4948,6 +4949,7 @@ class _ChatScreenState extends State<ChatScreen>
     }
 
     TasksSyncService.scheduleSyncToCloud();
+    unawaited(AppleCalendarSyncService.instance.syncAll());
   }
 
   Future<void> _showScheduleRegistrationDialog(String speechText) async {
