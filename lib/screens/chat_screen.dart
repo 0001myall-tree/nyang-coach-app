@@ -6643,7 +6643,7 @@ class _ChatScreenState extends State<ChatScreen>
           );
         }
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
       // 응답을 못 받았으면 이번 턴에 잡아둔 실행 저항 흐름 상태는 흘려보낸다.
       _awaitingResistanceCause = false;
       _awaitingCountdownConsent = false;
@@ -6656,7 +6656,16 @@ class _ChatScreenState extends State<ChatScreen>
           showUpgrade: e.message.contains('마스터 플랜'),
         );
       } else {
-        _showError('실패: $e');
+        unawaited(
+          AnalyticsService.logError(
+            e.toString(),
+            stackTrace.toString(),
+            contextInfo: 'chat_proxy_${widget.coachId}',
+          ),
+        );
+        debugPrint('Chat response failed: $e');
+        debugPrintStack(stackTrace: stackTrace);
+        _showError(_friendlyChatErrorMessage(e));
       }
     } finally {
       if (isVisionNewActionFlow) {
@@ -8582,9 +8591,23 @@ $timerOutputRule
     return lines[Random().nextInt(lines.length)];
   }
 
+  String _friendlyChatErrorMessage(Object error) {
+    if (error is FirebaseFunctionsException) {
+      if (error.code == 'deadline-exceeded' || error.code == 'unavailable') {
+        return '답변 서버가 잠시 불안정해요. 잠깐 뒤에 다시 보내주세요.';
+      }
+    }
+    return '답변을 만드는 중 문제가 생겼어요. 잠시 후 다시 시도해 주세요.';
+  }
+
   void _showError(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), backgroundColor: Colors.red[400]),
+      SnackBar(
+        content: Text(msg),
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: Colors.red[400],
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      ),
     );
   }
 
