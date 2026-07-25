@@ -81,11 +81,19 @@ class _LandingScreenState extends State<LandingScreen>
       await prefs.reload();
       final widgetRoute = prefs.getString('widget_route');
       final widgetCoachId = prefs.getString('widget_coach_id');
+      final widgetDate = prefs.getString('widget_date');
+      final widgetItemId = prefs.getString('widget_item_id');
 
       if (widgetRoute != null) prefs.remove('widget_route');
       if (widgetCoachId != null) prefs.remove('widget_coach_id');
+      if (widgetDate != null) prefs.remove('widget_date');
+      if (widgetItemId != null) prefs.remove('widget_item_id');
 
-      final hasWidgetIntent = widgetRoute != null || widgetCoachId != null;
+      final hasWidgetIntent =
+          widgetRoute != null ||
+          widgetCoachId != null ||
+          widgetDate != null ||
+          widgetItemId != null;
       final targetCoachId = hasWidgetIntent
           ? 'cat'
           : data.selectedCoachId ?? 'cat';
@@ -109,15 +117,13 @@ class _LandingScreenState extends State<LandingScreen>
           await UserDataService.setSelectedCoach(widgetCoachId);
         }
 
-        final isWidgetTasksRoute =
-            (widgetRoute == 'tasks' ||
-            widgetRoute == 'tasks_done_bottom_sheet' ||
-            widgetRoute == 'tasks_remaining_bottom_sheet');
+        final isWidgetTasksRoute = isPlannerOverlayRoute(widgetRoute);
         final initBottomSheet = widgetRoute == 'tasks_done_bottom_sheet'
             ? 'done'
             : widgetRoute == 'tasks_remaining_bottom_sheet'
             ? 'remaining'
             : null;
+        final initPlannerTabIndex = plannerOverlayTabIndexForRoute(widgetRoute);
 
         final nav = Navigator.of(context);
         final landingRoute = ModalRoute.of(context);
@@ -126,6 +132,9 @@ class _LandingScreenState extends State<LandingScreen>
             coachId: targetCoachId,
             initialBottomSheet: initBottomSheet,
             openTasksOverlayOnStart: isWidgetTasksRoute,
+            initialPlannerTabIndex: initPlannerTabIndex,
+            initialPlannerDateKey: widgetDate,
+            initialPlannerItemId: widgetItemId,
           ),
         );
 

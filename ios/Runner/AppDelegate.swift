@@ -17,9 +17,17 @@ import WidgetKit
     let parts = url.pathComponents.filter { $0 != "/" }
     let coachId = parts.first ?? "cat"
     let route = parts.dropFirst().first ?? "tasks"
+    let queryItems = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
     let defaults = UserDefaults.standard
     defaults.set(route, forKey: "flutter.widget_route")
     defaults.set(coachId, forKey: "flutter.widget_coach_id")
+    for item in queryItems {
+      if item.name == "date" {
+        defaults.set(item.value, forKey: "flutter.widget_date")
+      } else if item.name == "id" {
+        defaults.set(item.value, forKey: "flutter.widget_item_id")
+      }
+    }
     defaults.synchronize()
   }
 

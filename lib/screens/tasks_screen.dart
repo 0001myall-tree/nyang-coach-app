@@ -486,6 +486,9 @@ class TasksScreen extends StatefulWidget {
   final VoidCallback? onProgressChanged;
   final TasksScreenController? controller;
   final String? initialBottomSheet;
+  final int initialTabIndex;
+  final String? initialPlannerDateKey;
+  final String? initialPlannerItemId;
   const TasksScreen({
     super.key,
     required this.coachId,
@@ -493,6 +496,9 @@ class TasksScreen extends StatefulWidget {
     this.onProgressChanged,
     this.controller,
     this.initialBottomSheet,
+    this.initialTabIndex = 0,
+    this.initialPlannerDateKey,
+    this.initialPlannerItemId,
   });
 
   @override
@@ -624,15 +630,31 @@ class _TasksScreenState extends State<TasksScreen>
   bool _highlightAddVisionButton = false;
   bool _highlightPulseOn = false;
   Timer? _visionHighlightTimer;
+  bool _handledInitialPlannerTarget = false;
 
   @override
   void initState() {
     super.initState();
     _coach = CoachConfigs.get(widget.coachId);
-    _tabCtrl = TabController(length: 4, vsync: this);
+    final initialPlannerDate = DateTime.tryParse(
+      widget.initialPlannerDateKey ?? '',
+    );
+    if (initialPlannerDate != null && widget.initialTabIndex == 2) {
+      _calSelectedDay = DateTime(
+        initialPlannerDate.year,
+        initialPlannerDate.month,
+        initialPlannerDate.day,
+      );
+      _calFocusedDay = _calSelectedDay;
+    }
+    _tabCtrl = TabController(
+      length: 4,
+      vsync: this,
+      initialIndex: widget.initialTabIndex.clamp(0, 3),
+    );
     _tabCtrl.addListener(_handleTaskTabChanged);
     widget.controller?._attach(this);
-    _loadAll();
+    _loadAll().then((_) => _handleInitialPlannerTarget());
     _initSpeech();
   }
 
@@ -781,6 +803,26 @@ class _TasksScreenState extends State<TasksScreen>
     if (widget.initialBottomSheet != null) {
       _openBottomSheet(widget.initialBottomSheet!);
     }
+  }
+
+  void _handleInitialPlannerTarget() {
+    if (_handledInitialPlannerTarget || !mounted) return;
+    _handledInitialPlannerTarget = true;
+
+    if (widget.initialTabIndex == 1) {
+      final visionId = _visionIdFromPlannerItemId(widget.initialPlannerItemId);
+      if (visionId != null) {
+        _openGoalVision(highlightVisionIds: [visionId]);
+      }
+    }
+  }
+
+  String? _visionIdFromPlannerItemId(String? id) {
+    if (id == null) return null;
+    final parts = id.split(':');
+    if (parts.length >= 4 && parts.first == 'milestone') return parts[2];
+    if (parts.length >= 2 && parts.first == 'vision') return parts[1];
+    return null;
   }
 
   Future<bool> _checkCoreReminderEnabledGlobally() async {

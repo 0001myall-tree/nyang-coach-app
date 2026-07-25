@@ -520,15 +520,21 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen>
     await prefs.reload();
     final widgetRoute = prefs.getString('widget_route');
     final widgetCoachId = prefs.getString('widget_coach_id');
-    if (widgetRoute == null && widgetCoachId == null) return;
+    final widgetDate = prefs.getString('widget_date');
+    final widgetItemId = prefs.getString('widget_item_id');
+    if (widgetRoute == null &&
+        widgetCoachId == null &&
+        widgetDate == null &&
+        widgetItemId == null) {
+      return;
+    }
 
     if (widgetRoute != null) await prefs.remove('widget_route');
     if (widgetCoachId != null) await prefs.remove('widget_coach_id');
+    if (widgetDate != null) await prefs.remove('widget_date');
+    if (widgetItemId != null) await prefs.remove('widget_item_id');
 
-    final isTasksRoute =
-        widgetRoute == 'tasks' ||
-        widgetRoute == 'tasks_done_bottom_sheet' ||
-        widgetRoute == 'tasks_remaining_bottom_sheet';
+    final isTasksRoute = isPlannerOverlayRoute(widgetRoute);
     if (!isTasksRoute) return;
 
     final data = await UserDataService.load();
@@ -540,6 +546,7 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen>
         : widgetRoute == 'tasks_remaining_bottom_sheet'
         ? 'remaining'
         : null;
+    final initialPlannerTabIndex = plannerOverlayTabIndexForRoute(widgetRoute);
 
     await UserDataService.setSelectedCoach('cat');
     if (!mounted) return;
@@ -551,6 +558,9 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen>
           coachId: 'cat',
           initialBottomSheet: initialBottomSheet,
           openTasksOverlayOnStart: true,
+          initialPlannerTabIndex: initialPlannerTabIndex,
+          initialPlannerDateKey: widgetDate,
+          initialPlannerItemId: widgetItemId,
         ),
       ),
       (route) => false,

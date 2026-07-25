@@ -123,6 +123,26 @@ class SettingsPlaceholderScreen extends StatelessWidget {
 bool _isMasterCoach(String coachId) =>
     coachId == 'sec_male' || coachId == 'sec_female';
 
+bool isPlannerOverlayRoute(String? route) {
+  return route == 'tasks' ||
+      route == 'tasks_done_bottom_sheet' ||
+      route == 'tasks_remaining_bottom_sheet' ||
+      route == 'schedule' ||
+      route == 'recurring_schedule' ||
+      route == 'habit' ||
+      route == 'vision' ||
+      route == 'milestone';
+}
+
+int plannerOverlayTabIndexForRoute(String? route) {
+  return switch (route) {
+    'schedule' || 'recurring_schedule' => 2,
+    'habit' => 3,
+    'vision' || 'milestone' => 1,
+    _ => 0,
+  };
+}
+
 // ─────────────────────────────────────────────────────────────
 // 메인 탭 화면
 // ─────────────────────────────────────────────────────────────
@@ -132,6 +152,9 @@ class MainTabScreen extends StatefulWidget {
   final String? initialBottomSheet;
   final String? handoffFromCoachId;
   final bool openTasksOverlayOnStart;
+  final int initialPlannerTabIndex;
+  final String? initialPlannerDateKey;
+  final String? initialPlannerItemId;
   const MainTabScreen({
     super.key,
     required this.coachId,
@@ -139,6 +162,9 @@ class MainTabScreen extends StatefulWidget {
     this.initialBottomSheet,
     this.handoffFromCoachId,
     this.openTasksOverlayOnStart = false,
+    this.initialPlannerTabIndex = 0,
+    this.initialPlannerDateKey,
+    this.initialPlannerItemId,
   });
 
   @override
@@ -154,10 +180,10 @@ class _MainTabScreenState extends State<MainTabScreen>
   final TasksScreenController _tasksController = TasksScreenController();
   bool _coachAccessChecked = false;
   bool _widgetIntentDrawerMode = false;
-  // 앱 전체에서 위젯 일정 전체창이 딱 하나만 뜨도록 모든 화면 인스턴스가
+  // 앱 전체에서 플래너 전체창이 딱 하나만 뜨도록 모든 화면 인스턴스가
   // 공유하는 플래그. 위젯을 연타하거나 화면이 겹쳐 쌓인 상태에서도
   // 이미 열려 있으면 새로 덮어 띄우지 않는다.
-  static bool _isWidgetTasksOverlayOpen = false;
+  static bool _isPlannerOverlayOpen = false;
   bool _redirectingForCoachAccess = false;
 
   int _logoTapCount = 0;
@@ -480,7 +506,12 @@ class _MainTabScreenState extends State<MainTabScreen>
     if (widget.openTasksOverlayOnStart) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
-        _showWidgetTasksOverlay(widget.initialBottomSheet);
+        _showPlannerOverlay(
+          initialBottomSheet: widget.initialBottomSheet,
+          initialTabIndex: widget.initialPlannerTabIndex,
+          initialDateKey: widget.initialPlannerDateKey,
+          initialItemId: widget.initialPlannerItemId,
+        );
       });
     }
 
@@ -675,9 +706,21 @@ class _MainTabScreenState extends State<MainTabScreen>
     return _tasksController.handleEditCommand(command);
   }
 
-  Future<void> _showWidgetTasksOverlay(String? initialBottomSheet) async {
-    if (_isWidgetTasksOverlayOpen) return;
-    _isWidgetTasksOverlayOpen = true;
+  Future<void> _showPlannerOverlay({
+    String? initialBottomSheet,
+    int initialTabIndex = 0,
+    String? initialDateKey,
+    String? initialItemId,
+  }) async {
+    if (_isPlannerOverlayOpen) {
+      final navigator = Navigator.of(context, rootNavigator: true);
+      if (navigator.canPop()) {
+        navigator.pop();
+        await Future.delayed(const Duration(milliseconds: 180));
+      }
+      _isPlannerOverlayOpen = false;
+    }
+    _isPlannerOverlayOpen = true;
 
     if (_openDrawerIndex != 0 || _widgetIntentDrawerMode) {
       setState(() {
@@ -688,12 +731,16 @@ class _MainTabScreenState extends State<MainTabScreen>
 
     await Navigator.of(context, rootNavigator: true).push(
       MaterialPageRoute(
-        builder: (_) =>
-            _WidgetTasksOverlayScreen(initialBottomSheet: initialBottomSheet),
+        builder: (_) => _PlannerOverlayScreen(
+          initialBottomSheet: initialBottomSheet,
+          initialTabIndex: initialTabIndex,
+          initialDateKey: initialDateKey,
+          initialItemId: initialItemId,
+        ),
       ),
     );
 
-    _isWidgetTasksOverlayOpen = false;
+    _isPlannerOverlayOpen = false;
     if (!mounted) return;
     setState(() {
       _openDrawerIndex = 0;
@@ -707,15 +754,19 @@ class _MainTabScreenState extends State<MainTabScreen>
     await prefs.reload();
     final widgetRoute = prefs.getString('widget_route');
     final widgetCoachId = prefs.getString('widget_coach_id');
+    final widgetDate = prefs.getString('widget_date');
+    final widgetItemId = prefs.getString('widget_item_id');
 
-    if (widgetRoute != null || widgetCoachId != null) {
+    if (widgetRoute != null ||
+        widgetCoachId != null ||
+        widgetDate != null ||
+        widgetItemId != null) {
       if (widgetRoute != null) prefs.remove('widget_route');
       if (widgetCoachId != null) prefs.remove('widget_coach_id');
+      if (widgetDate != null) prefs.remove('widget_date');
+      if (widgetItemId != null) prefs.remove('widget_item_id');
 
-      final isTasksRoute =
-          widgetRoute == 'tasks' ||
-          widgetRoute == 'tasks_done_bottom_sheet' ||
-          widgetRoute == 'tasks_remaining_bottom_sheet';
+      final isTasksRoute = isPlannerOverlayRoute(widgetRoute);
       const targetCoachId = 'cat';
       final type = widgetRoute == 'tasks_done_bottom_sheet'
           ? 'done'
@@ -738,7 +789,12 @@ class _MainTabScreenState extends State<MainTabScreen>
         // 위젯을 누르기 전에 있던 화면은 그대로 두고, 할 일 창을 그 위에
         // 겹쳐서 띄운다. 닫으면 원래 있던 화면이 그대로 다시 보인다.
         if (!mounted) return;
-        await _showWidgetTasksOverlay(type);
+        await _showPlannerOverlay(
+          initialBottomSheet: type,
+          initialTabIndex: plannerOverlayTabIndexForRoute(widgetRoute),
+          initialDateKey: widgetDate,
+          initialItemId: widgetItemId,
+        );
         return;
       }
 
@@ -2522,9 +2578,17 @@ class _BarChartPainter extends CustomPainter {
 
 // 위젯(홈 화면)에서 '할 일'을 눌렀을 때, 그 전 화면 위에 얹어서 보여주는
 // 독립된 할 일 창. 닫으면 원래 있던 화면이 그대로 다시 보인다.
-class _WidgetTasksOverlayScreen extends StatelessWidget {
+class _PlannerOverlayScreen extends StatelessWidget {
   final String? initialBottomSheet;
-  const _WidgetTasksOverlayScreen({this.initialBottomSheet});
+  final int initialTabIndex;
+  final String? initialDateKey;
+  final String? initialItemId;
+  const _PlannerOverlayScreen({
+    this.initialBottomSheet,
+    this.initialTabIndex = 0,
+    this.initialDateKey,
+    this.initialItemId,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -2559,6 +2623,9 @@ class _WidgetTasksOverlayScreen extends StatelessWidget {
               child: TasksScreen(
                 coachId: 'cat',
                 initialBottomSheet: initialBottomSheet,
+                initialTabIndex: initialTabIndex,
+                initialPlannerDateKey: initialDateKey,
+                initialPlannerItemId: initialItemId,
               ),
             ),
           ],

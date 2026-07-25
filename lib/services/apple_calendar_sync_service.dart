@@ -58,10 +58,8 @@ class AppleCalendarSyncService {
   static const String _kHabitLogsPrefsKey = 'nyang_habit_logs';
   static const String _kVisionsPrefsKey = 'nyang_visions';
   static const String _calendarName = '냥냥코치';
-  // 이벤트를 탭하면 기존 위젯 딥링크 경로로 앱이 열리고 오늘 할 일 탭으로 진입한다.
-  static const String _deepLink = 'nyangcoach://widget/cat/tasks';
-  static const String _eventNote =
-      '냥냥코치에서 보낸 항목이에요.\n수정·삭제는 냥냥코치 앱에서 해주세요.\n바로가기: $_deepLink';
+  // 이벤트를 탭하면 기존 위젯 딥링크 경로를 재사용해 앱 안의 플래너 전체창으로 진입한다.
+  static const String _deepLinkBase = 'nyangcoach://widget/cat';
   static const int _habitSyncDays = 90;
 
   bool get isSupportedPlatform => Platform.isIOS;
@@ -1004,8 +1002,9 @@ class AppleCalendarSyncService {
         start: timing.start,
         end: timing.end,
         allDay: timing.allDay,
-        description: '[${entry.kindLabel}]\n$_eventNote',
-        url: Uri.parse(_deepLink),
+        description:
+            '[${entry.kindLabel}]\n${_eventNote(_deepLinkForEntry(entry))}',
+        url: Uri.parse(_deepLinkForEntry(entry)),
       );
     }
 
@@ -1020,6 +1019,22 @@ class AppleCalendarSyncService {
       }
     }
     return null;
+  }
+
+  String _deepLinkForEntry(CalendarScheduleEntry entry) {
+    final route = switch (entry.id.split(':').first) {
+      'schedule' => 'schedule',
+      'habit' => 'habit',
+      'milestone' => 'vision',
+      _ => 'tasks',
+    };
+    final encodedDate = Uri.encodeQueryComponent(entry.dateKey);
+    final encodedId = Uri.encodeQueryComponent(entry.id);
+    return '$_deepLinkBase/$route?date=$encodedDate&id=$encodedId';
+  }
+
+  String _eventNote(String deepLink) {
+    return '냥냥코치에서 보낸 항목이에요.\n수정·삭제는 냥냥코치 앱에서 해주세요.\n바로가기: $deepLink';
   }
 
   _EventTiming _computeTiming(DateTime date, CalendarScheduleEntry entry) {
