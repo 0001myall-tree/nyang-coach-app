@@ -1196,8 +1196,13 @@ class ChatScreen extends StatefulWidget {
 class _FeatureLocationReply {
   final String message;
   final String location;
+  final bool shouldNavigate;
 
-  const _FeatureLocationReply(this.message, this.location);
+  const _FeatureLocationReply(
+    this.message,
+    this.location, {
+    this.shouldNavigate = true,
+  });
 }
 
 // 외부(TasksScreen 등)에서 ChatScreen에 AI 메시지를 주입하기 위한 컨트롤러
@@ -6116,7 +6121,8 @@ class _ChatScreenState extends State<ChatScreen>
         coachId: widget.coachId,
         usedApi: false,
       );
-      if (navigationReply.location == 'picker') {
+      if (navigationReply.location == 'picker' ||
+          !navigationReply.shouldNavigate) {
         return;
       }
       await Future.delayed(const Duration(milliseconds: 260));
@@ -6695,10 +6701,16 @@ class _ChatScreenState extends State<ChatScreen>
         text.contains('리포트') ||
         text.contains('통계');
     final asksTodoReset =
-        (text.contains('할일') ||
-            text.contains('오늘할일') ||
-            text.contains('오늘의할일')) &&
-        (text.contains('초기화') || text.contains('리셋') || text.contains('reset'));
+        text.contains('초기화시간') ||
+        text.contains('리셋시간') ||
+        (((text.contains('할일') ||
+                text.contains('오늘할일') ||
+                text.contains('오늘의할일') ||
+                text.contains('하루') ||
+                text.contains('오늘')) &&
+            (text.contains('초기화') ||
+                text.contains('리셋') ||
+                text.contains('reset'))));
     final asksRepeatScheduleGuide =
         (text.contains('반복일정') ||
             (text.contains('반복') && text.contains('일정'))) &&
@@ -6748,8 +6760,15 @@ class _ChatScreenState extends State<ChatScreen>
       return _FeatureLocationReply(_featureLocationMessage('goals'), 'goals');
     }
 
-    if (asksTodoReset ||
-        text.contains('설정') ||
+    if (asksTodoReset) {
+      return _FeatureLocationReply(
+        _featureLocationMessage('todo_reset'),
+        'today',
+        shouldNavigate: false,
+      );
+    }
+
+    if (text.contains('설정') ||
         text.contains('알림') ||
         text.contains('모닝콜') ||
         text.contains('일정알람') ||
@@ -6849,6 +6868,7 @@ class _ChatScreenState extends State<ChatScreen>
       'habit' => '습관',
       'records' => '기록',
       'settings' => '설정',
+      'todo_reset' => '오늘 할 일 초기화',
       _ => '',
     };
 
@@ -6858,7 +6878,9 @@ class _ChatScreenState extends State<ChatScreen>
       'cat' => switch (location) {
         'picker' => '어떤 화면 찾는 거냥? 냥이가 바로 데려다주겠다냥.',
         'settings' =>
-          '설정 탭에 있다냥. 모닝콜, 일정 알람, 위젯, 채팅 배경, 초기화 시간, 비서 학습 설정까지 거기서 바꾸면 된다냥.',
+          '설정 탭에 있다냥. 모닝콜, 일정 알람, 위젯, 채팅 배경, 비서 학습 설정까지 거기서 바꾸면 된다냥.',
+        'todo_reset' =>
+          '오늘 할 일은 매일 자정에 자동으로 초기화된다냥. 초기화 시간을 따로 조절하는 기능은 지금은 없다냥.',
         'vision' => '장기 비전은 목표 화면 아래쪽에 있다냥. 바로 열어주겠다냥.',
         'repeat_schedule' =>
           '반복 일정은 일정 탭에서 만든다냥. 일정을 입력하고 시계 버튼을 누른 다음 반복을 고르면 된다냥.',
@@ -6870,8 +6892,8 @@ class _ChatScreenState extends State<ChatScreen>
       },
       'boyfriend' => switch (location) {
         'picker' => '어디 찾는지 말해줘. 내가 바로 데려다줄게.',
-        'settings' =>
-          '설정 탭에 있어. 모닝콜, 일정 알람, 위젯, 채팅 배경, 초기화 시간, 비서 학습 설정까지 거기서 바꾸면 돼.',
+        'settings' => '설정 탭에 있어. 모닝콜, 일정 알람, 위젯, 채팅 배경, 비서 학습 설정까지 거기서 바꾸면 돼.',
+        'todo_reset' => '오늘 할 일은 매일 자정에 자동으로 초기화돼. 초기화 시간은 따로 바꿀 수 없어.',
         'vision' => '장기 비전은 목표 화면 아래쪽에 있어. 내가 바로 열어줄게.',
         'repeat_schedule' =>
           '반복 일정은 일정 탭에서 만들면 돼. 일정 입력하고 시계 버튼 누른 다음 반복을 고르면 돼.',
@@ -6883,7 +6905,8 @@ class _ChatScreenState extends State<ChatScreen>
       'girlfriend' => switch (location) {
         'picker' => '오빠 어디 찾는 거야? 내가 바로 데려다줄게!',
         'settings' =>
-          '오빠, 설정 탭에 있어! 모닝콜, 일정 알람, 위젯, 채팅 배경, 초기화 시간, 비서 학습 설정까지 거기서 바꾸면 돼.',
+          '오빠, 설정 탭에 있어! 모닝콜, 일정 알람, 위젯, 채팅 배경, 비서 학습 설정까지 거기서 바꾸면 돼.',
+        'todo_reset' => '오빠, 오늘 할 일은 매일 자정에 자동으로 초기화돼! 초기화 시간을 따로 바꾸는 기능은 없어.',
         'vision' => '오빠 장기 비전은 목표 화면 아래쪽에 있어. 바로 열어줄게!',
         'repeat_schedule' =>
           '오빠, 반복 일정은 일정 탭에서 만들면 돼! 일정 입력하고 시계 버튼 누른 다음 반복을 고르면 돼.',
@@ -6896,7 +6919,9 @@ class _ChatScreenState extends State<ChatScreen>
       'halmae' => switch (location) {
         'picker' => '뭘 찾는 게냐, 우리 새끼. 할미가 바로 데려다주마.',
         'settings' =>
-          '설정 탭에 있다, 우리 새끼. 모닝콜이랑 알람, 위젯, 채팅 배경, 초기화 시간, 비서 학습 설정 다 거기서 바꾸면 된다.',
+          '설정 탭에 있다, 우리 새끼. 모닝콜이랑 알람, 위젯, 채팅 배경, 비서 학습 설정 다 거기서 바꾸면 된다.',
+        'todo_reset' =>
+          '오늘 할 일은 매일 자정에 자동으로 초기화된다, 우리 새끼. 초기화 시간은 따로 바꾸는 기능이 없다.',
         'vision' => '장기 비전은 목표 화면 아래쪽에 있다. 할미가 바로 열어주마.',
         'repeat_schedule' =>
           '반복 일정은 일정 탭에서 만든다, 우리 새끼. 일정 적고 시계 버튼 누른 다음 반복을 고르면 된다.',
@@ -6908,8 +6933,8 @@ class _ChatScreenState extends State<ChatScreen>
       },
       'bro' => switch (location) {
         'picker' => '어디 찾냐. 말만 해라, 바로 보내준다.',
-        'settings' =>
-          '설정 탭이다. 모닝콜, 일정 알람, 위젯, 채팅 배경, 초기화 시간, 비서 학습 설정 다 거기서 바꾸면 된다.',
+        'settings' => '설정 탭이다. 모닝콜, 일정 알람, 위젯, 채팅 배경, 비서 학습 설정 다 거기서 바꾸면 된다.',
+        'todo_reset' => '오늘 할 일은 매일 자정에 자동 초기화된다. 초기화 시간은 따로 못 바꾼다.',
         'vision' => '장기 비전은 목표 화면 아래쪽이다. 바로 열어준다.',
         'repeat_schedule' =>
           '반복 일정은 일정 탭에서 만든다. 일정 입력하고 시계 버튼 누른 다음 반복을 고르면 된다.',
@@ -6922,6 +6947,8 @@ class _ChatScreenState extends State<ChatScreen>
         'picker' => '대표님, 찾으시는 화면을 선택해 주시면 바로 이동하겠습니다.',
         'settings' =>
           '대표님, 설정 탭에서 모닝콜, 일정 알람, 위젯, 채팅 배경, 비서 학습 설정을 변경하실 수 있습니다.',
+        'todo_reset' =>
+          '대표님, 오늘 할 일은 매일 자정에 자동으로 초기화됩니다. 초기화 시간을 별도로 조절하는 기능은 현재 제공하지 않습니다.',
         'vision' => '대표님, 장기 비전은 목표 화면 하단에서 확인하실 수 있습니다. 바로 이동하겠습니다.',
         'repeat_schedule' =>
           '대표님, 반복 일정은 일정 탭에서 생성하실 수 있습니다. 일정을 입력한 뒤 시계 버튼을 누르고 반복을 선택해 주세요.',
@@ -6934,6 +6961,8 @@ class _ChatScreenState extends State<ChatScreen>
       'sec_female' => switch (location) {
         'picker' => '대표님, 어떤 화면을 찾으세요? 제가 바로 열어드릴게요.',
         'settings' => '대표님, 설정 탭에서 모닝콜, 일정 알람, 위젯, 채팅 배경, 비서 학습 설정을 바꿀 수 있어요.',
+        'todo_reset' =>
+          '대표님, 오늘 할 일은 매일 자정에 자동으로 초기화돼요. 초기화 시간을 따로 조절하는 기능은 현재 없어요.',
         'vision' => '대표님, 장기 비전은 목표 화면 아래쪽에 있어요. 바로 열어드릴게요.',
         'repeat_schedule' =>
           '대표님, 반복 일정은 일정 탭에서 만들 수 있어요. 일정을 입력한 뒤 시계 버튼을 누르고 반복을 선택해 주세요.',
@@ -6946,6 +6975,7 @@ class _ChatScreenState extends State<ChatScreen>
       _ => switch (location) {
         'picker' => '어떤 화면을 찾고 있어? 바로 열어줄게.',
         'settings' => '설정 탭에서 모닝콜, 일정 알람, 위젯, 채팅 배경, 비서 학습 설정을 바꿀 수 있어.',
+        'todo_reset' => '오늘 할 일은 매일 자정에 자동으로 초기화돼. 초기화 시간은 따로 바꿀 수 없어.',
         'vision' => '장기 비전은 목표 화면 아래쪽에 있어. 바로 열어줄게.',
         'repeat_schedule' =>
           '반복 일정은 일정 탭에서 만들 수 있어. 일정을 입력하고 시계 버튼을 누른 다음 반복을 선택하면 돼.',
