@@ -33,18 +33,16 @@ class NotificationService {
   static const int _morningCallRepeatCount = 3;
   static const int _maxScheduledCoreReminders = 50;
   static const Set<int> _coreReminderSoundMinutes = {10, 30};
-  static const int _inactiveReturnNotificationId = 889;
-  static const Duration _inactiveReturnDelay = Duration(days: 3);
-  static const Duration _inactiveReturnCooldown = Duration(days: 5);
-  static const List<String> _inactiveReturnMessages = [
-    '집사야, 오늘 뭐할지 하나만 같이 정해볼까?',
-    '집사야, 하기 싫을 땐 냥냥코치를 기억해달라냥.',
-    '집사야, 오늘 할 일 하나만 가볍게 골라보자냥.',
-    '오늘 100점 말고 3분만 하자냥. 같이 시작해보자냥.',
-    '하기 싫은 거 있으면 나한테 던져달라냥. 작게 줄여주겠다냥.',
-  ];
+  static const int _lunchCheckInNotificationId = 889;
+  static const int _lunchCheckInHour = 12;
+  static const int _lunchCheckInMinute = 0;
+  static const String _lunchCheckInMessage = '집사야, 하기 싫은 거 있으면 나한테 던져달라냥.';
   String? _lastMorningPayload;
   DateTime? _lastMorningOpenedAt;
+
+  String _dateKey(DateTime date) {
+    return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+  }
 
   String _morningCallChannelId(String? soundName) {
     return 'nyang_morning_call_${soundName ?? 'default'}_v6';
@@ -199,20 +197,16 @@ class NotificationService {
     }
   }
 
-  Future<void> _openInactiveReturn(String payload) async {
+  Future<void> _openLunchCheckIn(String payload) async {
     final parts = payload.split(':');
     final coachId = parts.length > 1 && parts[1].isNotEmpty ? parts[1] : 'cat';
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(
-      'nyang_inactive_return_last_opened_at',
-      DateTime.now().toIso8601String(),
-    );
     await prefs.setString(
       'nyang_last_app_active_at',
       DateTime.now().toIso8601String(),
     );
     await UserDataService.setSelectedCoach(coachId);
-    AnalyticsService.logFeatureUsage('inactive_return_push');
+    AnalyticsService.logFeatureUsage('lunch_checkin_push');
 
     navigatorKey.currentState?.pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => MainTabScreen(coachId: coachId)),
@@ -263,8 +257,8 @@ class NotificationService {
           await _openMorningCall(payload);
           return;
         }
-        if (payload.startsWith('inactive_return:')) {
-          await _openInactiveReturn(payload);
+        if (payload.startsWith('lunch_checkin:')) {
+          await _openLunchCheckIn(payload);
         }
       },
     );
@@ -353,8 +347,8 @@ class NotificationService {
         _openCoreReminder(payload);
       } else if (payload.startsWith('morning:')) {
         _openMorningCall(payload);
-      } else if (payload.startsWith('inactive_return:')) {
-        _openInactiveReturn(payload);
+      } else if (payload.startsWith('lunch_checkin:')) {
+        _openLunchCheckIn(payload);
       }
     });
   }
@@ -366,32 +360,24 @@ class NotificationService {
       'nyang_last_app_active_at',
       DateTime.now().toIso8601String(),
     );
-    await _plugin.cancel(id: _inactiveReturnNotificationId);
+    await _plugin.cancel(id: _lunchCheckInNotificationId);
   }
 
-  Future<void> scheduleInactiveReturnReminder() async {
+  Future<void> scheduleLunchCheckInReminder() async {
     if (kIsWeb) return;
 
     final now = DateTime.now();
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('nyang_last_app_active_at', now.toIso8601String());
-
-    final lastOpenedRaw = prefs.getString(
-      'nyang_inactive_return_last_opened_at',
-    );
-    if (lastOpenedRaw != null) {
-      final lastOpened = DateTime.tryParse(lastOpenedRaw);
-      if (lastOpened != null &&
-          now.difference(lastOpened) < _inactiveReturnCooldown) {
-        await _plugin.cancel(id: _inactiveReturnNotificationId);
-        return;
-      }
-    }
+    final todayKey = _dateKey(now);
+    final lastActiveRaw = prefs.getString('nyang_last_app_active_at');
+    final lastActive = lastActiveRaw == null
+        ? null
+        : DateTime.tryParse(lastActiveRaw);
 
     const androidDetails = AndroidNotificationDetails(
-      'nyang_inactive_return_v1',
-      '냥냥코치 재방문 알림',
-      channelDescription: '며칠 동안 앱에 접속하지 않았을 때 냥냥코치가 안부를 전합니다.',
+      'nyang_lunch_checkin_v1',
+      '냥냥코치 점심 체크인',
+      channelDescription: '그날 아직 앱을 열지 않았을 때 점심에 가볍게 말을 겁니다.',
       importance: Importance.high,
       priority: Priority.high,
       playSound: true,
@@ -409,23 +395,29 @@ class NotificationService {
       iOS: iosDetails,
     );
 
-    final message =
-        _inactiveReturnMessages[Random().nextInt(
-          _inactiveReturnMessages.length,
-        )];
+    var scheduledDate = tz.TZDateTime(
+      tz.local,
+      now.year,
+      now.month,
+      now.day,
+      _lunchCheckInHour,
+      _lunchCheckInMinute,
+    );
+    if (!scheduledDate.isAfter(tz.TZDateTime.from(now, tz.local)) ||
+        (lastActive != null && _dateKey(lastActive) == todayKey)) {
+      scheduledDate = scheduledDate.add(const Duration(days: 1));
+    }
 
-    await _plugin.cancel(id: _inactiveReturnNotificationId);
+    await _plugin.cancel(id: _lunchCheckInNotificationId);
     await _plugin.zonedSchedule(
-      id: _inactiveReturnNotificationId,
+      id: _lunchCheckInNotificationId,
       title: '냥냥코치',
-      body: message,
-      scheduledDate: tz.TZDateTime.from(
-        now.add(_inactiveReturnDelay),
-        tz.local,
-      ),
+      body: _lunchCheckInMessage,
+      scheduledDate: scheduledDate,
       notificationDetails: details,
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-      payload: 'inactive_return:cat',
+      matchDateTimeComponents: DateTimeComponents.time,
+      payload: 'lunch_checkin:cat',
     );
   }
 

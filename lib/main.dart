@@ -125,7 +125,7 @@ class _NyangCoachAppState extends State<NyangCoachApp>
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached) {
       TasksSyncService.syncToCloud();
-      NotificationService().scheduleInactiveReturnReminder();
+      NotificationService().scheduleLunchCheckInReminder();
     }
   }
 
