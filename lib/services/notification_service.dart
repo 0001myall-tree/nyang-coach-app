@@ -37,11 +37,11 @@ class NotificationService {
   static const Duration _inactiveReturnDelay = Duration(days: 3);
   static const Duration _inactiveReturnCooldown = Duration(days: 5);
   static const List<String> _inactiveReturnMessages = [
-    '집사야, 요즘 뭐해? 보고 싶다냥.',
-    '집사야, 냥냥코치가 기다리고 있다냥.',
-    '요즘 조용하다냥. 잠깐 얼굴 보여줄래?',
-    '집사야, 오늘은 어떻게 지내고 있냥?',
-    '냥냥코치가 슬쩍 안부 물으러 왔다냥.',
+    '집사야, 오늘 뭐할지 하나만 같이 정해볼까?',
+    '집사야, 하기 싫을 땐 냥냥코치를 기억해달라냥.',
+    '계획 밀린 거 괜찮다냥. 오늘 하나만 다시 고르자냥.',
+    '오늘 100점 말고 3분만 하자냥. 같이 시작해보자냥.',
+    '하기 싫은 거 있으면 나한테 던져달라냥. 작게 줄여주겠다냥.',
   ];
   String? _lastMorningPayload;
   DateTime? _lastMorningOpenedAt;
