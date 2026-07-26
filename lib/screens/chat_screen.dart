@@ -881,8 +881,20 @@ class _ParsedScheduleRegistration {
 
 class _ParsedHabitRegistration {
   final String title;
+  final String freq;
+  final List<int> days;
+  final TimeOfDay? time;
+  final TimeOfDay? endTime;
+  final String? habitDuration;
 
-  _ParsedHabitRegistration({required this.title});
+  _ParsedHabitRegistration({
+    required this.title,
+    required this.freq,
+    required this.days,
+    this.time,
+    this.endTime,
+    this.habitDuration,
+  });
 }
 
 class _ParsedDeleteCommand {
@@ -1163,7 +1175,15 @@ class ChatScreen extends StatefulWidget {
   final VoidCallback? onOpenDrawer;
   final ValueChanged<List<String>>? onOpenGoalVisionDrawer;
   final ValueChanged<String>? onOpenFeatureLocation;
-  final Future<bool> Function(String name)? onRegisterHabit;
+  final Future<bool> Function(
+    String name, {
+    String freq,
+    List<int> days,
+    TimeOfDay? time,
+    TimeOfDay? endTime,
+    String? habitDuration,
+  })?
+  onRegisterHabit;
   final Future<String> Function(Map<String, dynamic> command)? onDeleteCommand;
   final Future<String> Function(Map<String, dynamic> command)? onEditCommand;
   final ValueChanged<String>? onSwitchCoach;
@@ -3930,27 +3950,187 @@ class _ChatScreenState extends State<ChatScreen>
     cleaned = cleaned.replaceAll(RegExp(r'^습관\s*(?:으로|에)?\s*'), '');
     cleaned = cleaned.replaceAll(RegExp(r'^(?:나|나는|내가|저|저는)\s+'), '');
     cleaned = cleaned.replaceAll(RegExp(r'^(?:앞으로|이제)\s+'), '');
+
+    var parsedFreq = 'daily';
+    var parsedDays = <int>[];
+    const weekdayByText = {
+      '월': 0,
+      '화': 1,
+      '수': 2,
+      '목': 3,
+      '금': 4,
+      '토': 5,
+      '일': 6,
+    };
+    final weeklyRegex = RegExp(
+      r'(?:매주|매 주)\s*((?:[월화수목금토일](?:요일)?(?:\s*(?:,|/|·|과|와|랑|하고|및)?\s*)?)+)',
+    );
+    final weeklyMatch = weeklyRegex.firstMatch(cleaned);
+    if (weeklyMatch != null) {
+      final days = <int>[];
+      for (final match in RegExp(
+        r'[월화수목금토일](?:요일)?',
+      ).allMatches(weeklyMatch.group(1)!)) {
+        final day = weekdayByText[match.group(0)![0]];
+        if (day != null && !days.contains(day)) days.add(day);
+      }
+      if (days.isNotEmpty) {
+        parsedFreq = 'weekly';
+        parsedDays = days;
+        cleaned = cleaned.replaceFirst(weeklyMatch.group(0)!, '').trim();
+      }
+    }
+
+    if (parsedFreq == 'daily') {
+      final bareWeeklyRegex = RegExp(
+        r'^\s*((?:[월화수목금토일](?:요일)?\s*(?:,|/|·|과|와|랑|하고|및)\s*)+[월화수목금토일](?:요일)?)\s*',
+      );
+      final bareWeeklyMatch = bareWeeklyRegex.firstMatch(cleaned);
+      if (bareWeeklyMatch != null) {
+        final days = <int>[];
+        for (final match in RegExp(
+          r'[월화수목금토일](?:요일)?',
+        ).allMatches(bareWeeklyMatch.group(1)!)) {
+          final day = weekdayByText[match.group(0)![0]];
+          if (day != null && !days.contains(day)) days.add(day);
+        }
+        if (days.length >= 2) {
+          parsedFreq = 'weekly';
+          parsedDays = days;
+          cleaned = cleaned.replaceFirst(bareWeeklyMatch.group(0)!, '').trim();
+        }
+      }
+    }
+
     cleaned = cleaned.replaceAll(
       RegExp(r'(?:^|\s)(?:매일|매일마다|날마다)(?:\s|$)'),
       ' ',
     );
+
+    TimeOfDay? parsedTime;
+    TimeOfDay? parsedEndTime;
+    String? parsedHabitDuration;
+
+    TimeOfDay? parseHabitTime(
+      String? rawPrefix,
+      String rawHourText,
+      String? rawMinuteText,
+      String fullMatch, {
+      String fallbackPrefix = '',
+    }) {
+      final prefix = (rawPrefix ?? fallbackPrefix).replaceAll(
+        RegExp(r'\s'),
+        '',
+      );
+      final rawHour = int.tryParse(rawHourText) ?? 0;
+      var minute = 0;
+      if (rawMinuteText != null) {
+        minute = int.tryParse(rawMinuteText) ?? 0;
+      } else if (fullMatch.contains('반')) {
+        minute = 30;
+      }
+
+      if (rawHour < 1 || rawHour > 24 || minute < 0 || minute > 59) {
+        return null;
+      }
+      var hour24 = rawHour;
+      if (prefix == '오전' || prefix == '아침') {
+        hour24 = rawHour == 12 ? 0 : rawHour;
+      } else if (prefix == '오후' || prefix == '저녁' || prefix == '밤') {
+        hour24 = rawHour == 12 ? 12 : rawHour + 12;
+      }
+      if (hour24 < 0 || hour24 > 23) return null;
+      return TimeOfDay(hour: hour24, minute: minute);
+    }
+
+    final timeRangeRegex = RegExp(
+      r'((?:오전|아침|오후|저녁|밤)\s*)?(\d{1,2})시(?:\s*(\d{1,2})분|\s*반)?\s*(?:부터|에서|-|~)\s*((?:오전|아침|오후|저녁|밤)\s*)?(\d{1,2})시(?:\s*(\d{1,2})분|\s*반)?(?:\s*까지)?',
+    );
+    final rangeMatch = timeRangeRegex.firstMatch(cleaned);
+    if (rangeMatch != null) {
+      final startPrefix = rangeMatch.group(1) ?? '';
+      final start = parseHabitTime(
+        startPrefix,
+        rangeMatch.group(2)!,
+        rangeMatch.group(3),
+        rangeMatch.group(0)!,
+      );
+      final end = parseHabitTime(
+        rangeMatch.group(4),
+        rangeMatch.group(5)!,
+        rangeMatch.group(6),
+        rangeMatch.group(0)!,
+        fallbackPrefix: startPrefix,
+      );
+      if (start != null && end != null) {
+        parsedTime = start;
+        parsedEndTime = end;
+        cleaned = cleaned.replaceFirst(rangeMatch.group(0)!, '').trim();
+      }
+    }
+
+    if (parsedTime == null) {
+      final timeRegex = RegExp(
+        r'((?:오전|아침|오후|저녁|밤)\s*)?(\d{1,2})시(?:\s*(\d{1,2})분|\s*반)?(?:\s*(?:에|쯤|경))?',
+      );
+      final timeMatch = timeRegex.firstMatch(cleaned);
+      if (timeMatch != null) {
+        final time = parseHabitTime(
+          timeMatch.group(1),
+          timeMatch.group(2)!,
+          timeMatch.group(3),
+          timeMatch.group(0)!,
+        );
+        if (time != null) {
+          parsedTime = time;
+          cleaned = cleaned.replaceFirst(timeMatch.group(0)!, '').trim();
+        }
+      }
+    }
+
+    if (parsedTime == null) {
+      final durationRegex = RegExp(
+        r'(?:^|\s)((?:\d+\s*시간(?:\s*\d+\s*분)?|\d+\s*분))(?:\s|$)',
+      );
+      final durationMatch = durationRegex.firstMatch(cleaned);
+      if (durationMatch != null) {
+        parsedHabitDuration = durationMatch
+            .group(1)!
+            .replaceAll(RegExp(r'\s+'), '');
+        cleaned = cleaned.replaceFirst(durationMatch.group(0)!, ' ').trim();
+      }
+    }
+
     cleaned = cleaned.replaceAll(
       RegExp(r'\s*(?:할\s*건데|할건데|할\s*건대|할\s*거야|할거야|할게|하려고|하려구|할래|할\s*래|하기)$'),
       '',
     );
+    cleaned = cleaned.replaceAll(RegExp(r'\s*습관\s*(?:좀|조금|하나|으로|로)?\s*$'), '');
+    cleaned = cleaned.replaceAll(RegExp(r'\s*(?:좀|조금|하나|부탁해|부탁할게)\s*$'), '');
+    cleaned = cleaned.replaceAllMapped(
+      RegExp(r'(.+?)하는$'),
+      (match) => match.group(1)!,
+    );
     cleaned = _cleanRegistrationTitle(cleaned);
-    return _ParsedHabitRegistration(title: cleaned);
+    return _ParsedHabitRegistration(
+      title: cleaned,
+      freq: parsedFreq,
+      days: parsedDays,
+      time: parsedTime,
+      endTime: parsedEndTime,
+      habitDuration: parsedHabitDuration,
+    );
   }
 
   String _habitRegistrationReply(String habitName) {
     return switch (widget.coachId) {
-      'boyfriend' => '$habitName, 습관 탭에 임의로 적어뒀어. 자세한 사항은 한번 확인해줘.',
-      'girlfriend' => '오빠, $habitName 습관 탭에 임의로 적어뒀어. 자세한 사항은 한번 확인해줘.',
-      'bro' => '$habitName 습관 탭에 일단 적어뒀다. 자세한 사항은 한번 확인해라.',
-      'halmae' => '$habitName, 습관 탭에 임의로 적어뒀다. 자세한 사항은 잘 확인해라.',
-      'sec_male' => '$habitName 항목을 습관 탭에 임의로 기록해두었습니다. 자세한 사항은 확인해 주세요.',
-      'sec_female' => '$habitName 항목을 습관 탭에 임의로 기록해두었습니다. 자세한 사항은 확인해 주세요.',
-      _ => '$habitName 습관을 습관 탭에 임의로 적어뒀다냥. 자세한 사항은 확인해달라냥.',
+      'boyfriend' => '$habitName, 습관 탭에 추가해뒀어. 세부 설정은 한번 확인해줘.',
+      'girlfriend' => '오빠, $habitName 습관 탭에 추가해뒀어. 세부 설정은 한번 확인해줘.',
+      'bro' => '$habitName 습관 탭에 추가해뒀다. 세부 설정은 한번 확인해라.',
+      'halmae' => '$habitName, 습관 탭에 추가해뒀다. 세부 설정은 잘 확인해라.',
+      'sec_male' => '$habitName 항목을 습관 탭에 추가해두었습니다. 세부 설정을 확인해 주세요.',
+      'sec_female' => '$habitName 항목을 습관 탭에 추가해두었어요. 세부 설정을 확인해 주세요.',
+      _ => '$habitName 습관을 습관 탭에 추가해뒀다냥. 세부 설정은 확인해달라냥.',
     };
   }
 
@@ -6238,7 +6418,15 @@ class _ChatScreenState extends State<ChatScreen>
         return;
       }
       final registered =
-          await widget.onRegisterHabit?.call(parsed.title) ?? false;
+          await widget.onRegisterHabit?.call(
+            parsed.title,
+            freq: parsed.freq,
+            days: parsed.days,
+            time: parsed.time,
+            endTime: parsed.endTime,
+            habitDuration: parsed.habitDuration,
+          ) ??
+          false;
       if (!mounted) return;
       setState(() {
         _messages.add(
@@ -6598,10 +6786,8 @@ class _ChatScreenState extends State<ChatScreen>
         } else {
           _timerConfirmMinutes = null;
           _timerConfirmTaskName = null;
-          if (parsed.timerConfirmMinutes != null) {
-            _timerActiveMinutes = parsed.timerConfirmMinutes;
-            _timerActiveInsertIndex = _messages.length;
-          }
+          _timerActiveMinutes = null;
+          _timerActiveInsertIndex = null;
         }
         if (!isFutureTodayFlow && parsed.suggestedTasks.isNotEmpty) {
           _suggestedTasks = suggestedTasks;
@@ -6609,12 +6795,8 @@ class _ChatScreenState extends State<ChatScreen>
         // 배너 로직 삭제 (팝업으로 대체)
         _isLoading = false;
       });
-      if (!_coach.isMaster && parsed.timerConfirmMinutes != null) {
-        await _saveFocusTimerAnchor(
-          parsed.timerConfirmMinutes!,
-          _timerActiveInsertIndex ?? _messages.length,
-        );
-      }
+      // 프렌즈 코치의 타이머는 사용자의 명시 요청을 위 directTimerMinutes 분기에서만 시작한다.
+      // 모델이 실수로 [TIMER_CONFIRM]을 붙여도 기존 코칭 단계를 건너뛰지 않도록 여기서는 무시한다.
       if (_coach.isMaster) {
         // 코치가 스스로 카운트다운을 권한 경우도 동의 대기 상태로 잡아둔다.
         _awaitingCountdownConsent =
@@ -7716,10 +7898,14 @@ class _ChatScreenState extends State<ChatScreen>
     if (!_coach.isMaster) {
       sb.writeln('\n[타이머 제공 규칙]');
       sb.writeln(
-        '- 사용자가 행동을 시작하기로 했거나 코치의 행동 제안(예: "5분만 해보자")에 동의하는 등 타이머가 도움이 될 상황이면, 코치가 먼저 자연스럽게 타이머를 제안하며 답변 끝에 [TIMER_CONFIRM:5] (또는 10 등 적절한 시간) 태그를 출력해도 됩니다. 예: "그럼 5분만 같이 가보자! 타이머 켜줄게" + [TIMER_CONFIRM:5]',
+        '- 타이머는 기존 코칭 전략을 대체하거나 건너뛰는 장치가 아닙니다. 구체적인 과업이 있어도 먼저 위의 [하기 싫다 실행 개입 전략]과 캐릭터별 기본 프롬프트를 따르세요.',
       );
-      sb.writeln('- 사용자가 명시적으로 "타이머 띄워줘", "응 타이머 줘"라고 요청하면 바로 태그를 출력하세요.');
-      sb.writeln('- 단, 사용자가 타이머를 거절했거나 순수하게 감정만 토로하는 중이면 같은 대화에서 다시 권하지 마세요.');
+      sb.writeln(
+        '- 코치가 먼저 답변 끝에 [TIMER_CONFIRM] 태그를 출력하지 마세요. 사용자가 직접 "타이머 켜줘", "5분 타이머 띄워줘", "집중모드 시작해줘"처럼 타이머 실행을 명시적으로 요청한 경우에만 태그를 출력할 수 있습니다.',
+      );
+      sb.writeln(
+        '- 타이머가 도움이 될 수 있어도 말로만 짧게 열어두세요. 예: "시작 사인이 필요하면 타이머도 켜줄 수 있으니까, 필요하면 말해달라냥." 이 경우에는 [TIMER_CONFIRM]을 붙이지 않습니다.',
+      );
     }
 
     return sb.toString();
@@ -8200,7 +8386,7 @@ class _ChatScreenState extends State<ChatScreen>
    - 사용자가 직접 "타이머 띄워줘", "15분 타이머 켜줘"처럼 명시적으로 요청한 경우에는 짧게 응답한 뒤 [TIMER_CONFIRM:분] 태그를 붙입니다. 시간이 없으면 15분을 기본값으로 사용합니다.
    - 직전 답변에서 "필요하면 타이머라도 띄워드릴까요?"라고 물었고 사용자가 동의했다면 [TIMER_CONFIRM:분:할일이름]을 출력합니다.
    - 코치가 먼저 [TIMER_CONFIRM] 태그를 출력하지 마세요. 코치가 먼저 권하는 장치는 타이머가 아니라 카운트다운입니다. [오늘 할 일 현황]에 "앱 기록상 미루기 2회 이상"으로 표시된 미완료 할 일을 사용자가 계속 시작하지 못하면, 짧게 공감한 뒤 "생각을 끊고 바로 시작할 수 있게 카운트다운을 띄워드릴까요?"처럼 카운트다운을 먼저 제안하세요. [COUNTDOWN_START] 태그는 사용자가 동의한 다음 턴에만 붙입니다.'''
-        : '''4. [TIMER_START] 태그는 절대 사용 금지. 사용자가 직접 "타이머 띄워줘", "15분 타이머 켜줘"처럼 명시적으로 요청한 경우에는 목적, 컨디션, 일정, 시간을 캐묻지 말고 짧게 응답한 뒤 [TIMER_CONFIRM:분] 태그만 붙입니다. 시간이 없으면 15분을 기본값으로 사용합니다. 타이머가 도움이 될 상황이면 [타이머 제공 규칙]에 따라 코치가 먼저 제안하며 태그를 붙여도 됩니다.''';
+        : '''4. [TIMER_START] 태그는 절대 사용 금지. [TIMER_CONFIRM]은 사용자가 직접 "타이머 띄워줘", "15분 타이머 켜줘", "집중모드 시작해줘"처럼 타이머 실행을 명시적으로 요청한 경우에만 붙입니다. 시간이 없으면 15분을 기본값으로 사용합니다. 구체적인 과업이 있어도 타이머로 바로 넘어가지 말고 기존 코칭 프롬프트를 따르세요. 코치가 먼저 타이머를 제안할 때는 말로만 "필요하면 말해"라고 하고 [TIMER_CONFIRM] 태그를 붙이지 마세요.''';
     // 냥냥이 연결(COACH_SWITCH)은 장기 목표 압박을 주는 마스터 코치(남비서/여비서) 전용 탈출구다.
     // 프렌즈 코치는 이미 압박 없는 오늘 하루 중심이라 서로 스위치될 이유가 없다.
     final coachSwitchRule = _coach.isMaster

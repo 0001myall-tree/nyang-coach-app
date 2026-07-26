@@ -668,14 +668,28 @@ class _MainTabScreenState extends State<MainTabScreen>
     });
   }
 
-  Future<bool> _registerHabitFromChat(String name) async {
+  Future<bool> _registerHabitFromChat(
+    String name, {
+    String freq = 'daily',
+    List<int> days = const [],
+    TimeOfDay? time,
+    TimeOfDay? endTime,
+    String? habitDuration,
+  }) async {
     setState(() {
       _openDrawerIndex = 1;
       _widgetIntentDrawerMode = false;
     });
     await Future.delayed(const Duration(milliseconds: 320));
     if (!mounted) return false;
-    return _tasksController.addHabitFromChat(name);
+    return _tasksController.addHabitFromChat(
+      name,
+      freq: freq,
+      days: days,
+      time: time,
+      endTime: endTime,
+      habitDuration: habitDuration,
+    );
   }
 
   Future<String> _handleDeleteCommandFromChat(

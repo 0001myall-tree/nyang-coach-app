@@ -526,8 +526,23 @@ class TasksScreenController {
     _state?._openTab(index);
   }
 
-  Future<bool> addHabitFromChat(String name) async {
-    return await _state?._addHabitFromChat(name) ?? false;
+  Future<bool> addHabitFromChat(
+    String name, {
+    String freq = 'daily',
+    List<int> days = const [],
+    TimeOfDay? time,
+    TimeOfDay? endTime,
+    String? habitDuration,
+  }) async {
+    return await _state?._addHabitFromChat(
+          name,
+          freq: freq,
+          days: days,
+          time: time,
+          endTime: endTime,
+          habitDuration: habitDuration,
+        ) ??
+        false;
   }
 
   Future<String> handleDeleteCommand(Map<String, dynamic> command) async {
@@ -874,7 +889,14 @@ class _TasksScreenState extends State<TasksScreen>
     }
   }
 
-  Future<bool> _addHabitFromChat(String name) async {
+  Future<bool> _addHabitFromChat(
+    String name, {
+    String freq = 'daily',
+    List<int> days = const [],
+    TimeOfDay? time,
+    TimeOfDay? endTime,
+    String? habitDuration,
+  }) async {
     if (!await _hasActivePlan()) return false;
     final trimmedName = name.trim();
     if (trimmedName.isEmpty) return false;
@@ -882,13 +904,18 @@ class _TasksScreenState extends State<TasksScreen>
     final habit = HabitItem(
       id: DateTime.now().millisecondsSinceEpoch,
       name: trimmedName,
-      freq: 'daily',
+      freq: freq,
+      days: List.from(days),
       checkType: 'check',
-      timeType: 'duration',
+      timeType: time == null
+          ? 'duration'
+          : (endTime == null ? 'single' : 'range'),
       tracking: true,
-      habitDuration: '30분',
+      timeStart: time == null ? null : "${time.hour}:${time.minute}",
+      timeEnd: endTime == null ? null : "${endTime.hour}:${endTime.minute}",
+      habitDuration: time == null ? (habitDuration ?? '30분') : null,
       createdAt: DateTime.now().toIso8601String(),
-      isReminderEnabled: false,
+      isReminderEnabled: time != null && _isCoreReminderEnabledGlobally,
     );
 
     setState(() {
@@ -12556,19 +12583,19 @@ class _TasksScreenState extends State<TasksScreen>
   String _habitRegistrationGuideText() {
     switch (widget.coachId) {
       case 'boyfriend':
-        return '일단 매일 30분 기준으로 적어뒀어. 세부사항은 한번 확인하고 너한테 맞게 조정해줘.';
+        return '습관 탭에 추가해뒀어. 세부 설정은 한번 확인하고 너한테 맞게 조정해줘.';
       case 'girlfriend':
-        return '일단 매일 30분 기준으로 적어뒀어. 세부사항은 한번 보고 편한 대로 조정해줘.';
+        return '습관 탭에 추가해뒀어. 세부 설정은 한번 보고 편한 대로 조정해줘.';
       case 'bro':
-        return '일단 매일 30분 기준으로 잡아뒀다. 세부사항은 한번 보고 너한테 맞게 손봐라.';
+        return '습관 탭에 추가해뒀다. 세부 설정은 한번 보고 너한테 맞게 손봐라.';
       case 'halmae':
-        return '일단 매일 30분 기준으로 적어뒀다. 세부사항은 잘 보고 네 생활에 맞게 고쳐라.';
+        return '습관 탭에 추가해뒀다. 세부 설정은 잘 보고 네 생활에 맞게 고쳐라.';
       case 'sec_male':
-        return '일단 매일 30분 기준으로 기록해두었습니다. 세부사항을 확인하신 뒤 필요에 맞게 조정해 주세요.';
+        return '습관 탭에 추가해두었습니다. 세부 설정을 확인하신 뒤 필요에 맞게 조정해 주세요.';
       case 'sec_female':
-        return '일단 매일 30분 기준으로 기록해두었습니다. 세부사항을 확인하신 뒤 편하신 방식으로 조정해 주세요.';
+        return '습관 탭에 추가해두었어요. 세부 설정을 확인하신 뒤 편하신 방식으로 조정해 주세요.';
       default:
-        return '일단 매일 30분 기준으로 적어뒀다냥. 세부사항은 잘 보고 맞게 조정해달라냥.';
+        return '습관 탭에 추가해뒀다냥. 세부 설정은 잘 보고 맞게 조정해달라냥.';
     }
   }
 
