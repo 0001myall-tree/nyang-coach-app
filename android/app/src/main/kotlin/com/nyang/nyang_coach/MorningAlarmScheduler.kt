@@ -21,14 +21,11 @@ object MorningAlarmScheduler {
             .commit()
 
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        val fireIntent = Intent(context, MainActivity::class.java).apply {
+        val fireIntent = Intent(context, MorningAlarmReceiver::class.java).apply {
             action = ACTION_FIRE
             putExtra(EXTRA_PAYLOAD, payload)
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or
-                Intent.FLAG_ACTIVITY_CLEAR_TOP or
-                Intent.FLAG_ACTIVITY_SINGLE_TOP
         }
-        val firePendingIntent = PendingIntent.getActivity(
+        val firePendingIntent = PendingIntent.getBroadcast(
             context,
             REQUEST_CODE,
             fireIntent,
@@ -83,10 +80,10 @@ object MorningAlarmScheduler {
 
     fun cancel(context: Context) {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        val fireIntent = Intent(context, MainActivity::class.java).apply {
+        val fireIntent = Intent(context, MorningAlarmReceiver::class.java).apply {
             action = ACTION_FIRE
         }
-        val firePendingIntent = PendingIntent.getActivity(
+        val firePendingIntent = PendingIntent.getBroadcast(
             context,
             REQUEST_CODE,
             fireIntent,
