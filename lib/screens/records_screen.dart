@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:nyang_coach/services/user_title_service.dart';
 import 'package:nyang_coach/services/analytics_service.dart';
 import 'package:nyang_coach/services/api_usage_limit_service.dart';
+import 'package:nyang_coach/models/user_data.dart';
 import 'coach_config.dart';
 import 'tasks_screen.dart'; // for HabitItem, etc.
 
@@ -19,6 +20,8 @@ class RecordsScreen extends StatefulWidget {
 }
 
 class _RecordsScreenState extends State<RecordsScreen> {
+  static const int _weeklyFeedbackCacheVersion = 2;
+
   bool _isLoading = true;
   List<Map<String, dynamic>> _history = [];
   Map<String, Map<String, dynamic>> _habitLogs = {};
@@ -27,6 +30,7 @@ class _RecordsScreenState extends State<RecordsScreen> {
   String _userTitle = UserTitleService.defaultTitle;
   String? _weeklyFeedbackText;
   bool _isGeneratingWeeklyFeedback = false;
+  bool _hasMasterPlan = false;
   String _lastDate = '';
   final HttpsCallable _chatProxy = FirebaseFunctions.instanceFor(
     region: 'asia-northeast3',
@@ -40,6 +44,8 @@ class _RecordsScreenState extends State<RecordsScreen> {
 
   Future<void> _loadData() async {
     final prefs = await SharedPreferences.getInstance();
+    final userData = await UserDataService.load();
+    _hasMasterPlan = userData.isPlanActive && userData.planType == 'master';
 
     // 1. History (nyang_history)
     final rawHistory = prefs.getString('nyang_history');
@@ -91,9 +97,10 @@ class _RecordsScreenState extends State<RecordsScreen> {
     }
   }
 
-  bool get _isMaster =>
-      widget.coachId == 'sec_male' || widget.coachId == 'sec_female';
+  bool get _isMaster => _hasMasterPlan;
   CoachConfig get _coach => CoachConfigs.get(widget.coachId);
+  CoachConfig get _recordCoach =>
+      _isMaster ? CoachConfigs.get('sec_male') : _coach;
 
   // ── 최근 7일(또는 30일) 데이터 계산 ─────────────────────
   List<Map<String, dynamic>> _getLast7Records() {
@@ -226,6 +233,7 @@ class _RecordsScreenState extends State<RecordsScreen> {
       if (cachedData != null) {
         final cached = jsonDecode(cachedData) as Map<String, dynamic>;
         if (cached['weekMonday'] == weekMonday &&
+            cached['version'] == _weeklyFeedbackCacheVersion &&
             (cached['text'] as String?)?.trim().isNotEmpty == true) {
           if (!mounted) return;
           setState(() {
@@ -320,6 +328,7 @@ class _RecordsScreenState extends State<RecordsScreen> {
           'weekMonday': weekMonday,
           'text': feedbackText,
           'type': feedbackType,
+          'version': _weeklyFeedbackCacheVersion,
         }),
       );
       await prefs.setString(
@@ -397,12 +406,36 @@ class _RecordsScreenState extends State<RecordsScreen> {
     }
 
     final recordBuffer = StringBuffer();
+    final completionSummaryBuffer = StringBuffer();
+    final lowCompletionDays = <String>[];
+    final partialCompletionDays = <String>[];
+    final perfectCompletionDays = <String>[];
+    var trackableDays = 0;
+    var totalDoneCount = 0;
+    var totalTaskCount = 0;
+
     for (final record in records) {
       if (record['isVacation'] == true) {
         recordBuffer.writeln(
           '- ${record['date']}: 휴무일(회복일)로 설정됨. 완료/미완료 평가에서 제외.',
         );
         continue;
+      }
+
+      final dateStr = record['date']?.toString() ?? '';
+      final doneCount = _recordDoneCount(record);
+      final taskCount = _recordTotalCount(record);
+      final pct = taskCount == 0 ? 0 : ((doneCount / taskCount) * 100).round();
+      if (taskCount > 0) {
+        trackableDays++;
+        totalDoneCount += doneCount;
+        totalTaskCount += taskCount;
+        if (doneCount == taskCount) {
+          perfectCompletionDays.add('$dateStr($pct%)');
+        } else {
+          partialCompletionDays.add('$dateStr($pct%)');
+          if (pct <= 40) lowCompletionDays.add('$dateStr($pct%)');
+        }
       }
 
       final tasks = (record['tasks'] as List?) ?? [];
@@ -424,6 +457,33 @@ class _RecordsScreenState extends State<RecordsScreen> {
         '- ${record['date']}: 완료한 일[${done.isEmpty ? '없음' : done}], 완료하지 못한 일[${undone.isEmpty ? '없음' : undone}]',
       );
     }
+
+    final weeklyPct = totalTaskCount == 0
+        ? 0
+        : ((totalDoneCount / totalTaskCount) * 100).round();
+    final lowPlannerAttendance = trackableDays <= 3;
+    final manyLowCompletionDays =
+        trackableDays > 0 &&
+        lowCompletionDays.length >= (trackableDays / 2).ceil();
+    completionSummaryBuffer.writeln('- 평가 대상일: $trackableDays일');
+    completionSummaryBuffer.writeln(
+      '- 주간 전체 완료율: $weeklyPct% ($totalDoneCount/$totalTaskCount)',
+    );
+    completionSummaryBuffer.writeln(
+      '- 100% 완료한 날: ${perfectCompletionDays.isEmpty ? '없음' : perfectCompletionDays.join(', ')}',
+    );
+    completionSummaryBuffer.writeln(
+      '- 일부 미완료가 있던 날: ${partialCompletionDays.isEmpty ? '없음' : partialCompletionDays.join(', ')}',
+    );
+    completionSummaryBuffer.writeln(
+      '- 저조한 완료율(40% 이하)인 날: ${lowCompletionDays.isEmpty ? '없음' : lowCompletionDays.join(', ')}',
+    );
+    completionSummaryBuffer.writeln(
+      '- 저조한 날이 많은 주인가: ${manyLowCompletionDays ? '예' : '아니오'}',
+    );
+    completionSummaryBuffer.writeln(
+      '- 플래너 기록일이 적은 주인가: ${lowPlannerAttendance ? '예' : '아니오'}',
+    );
 
     final isMale = widget.coachId == 'sec_male' || _isMaster;
     final title = _userTitle;
@@ -558,6 +618,9 @@ class _RecordsScreenState extends State<RecordsScreen> {
 [사용자의 지난 7일간 할 일 완료 현황]
 $recordBuffer
 
+[주간 완료율 요약]
+${completionSummaryBuffer.toString().trim()}
+
 [분석 참고 데이터]
 - 꾸준히 해낸 일 (3일 이상 연속 완료): ${consistentTasks.join(', ').isEmpty ? '없음' : consistentTasks.join(', ')}
 - 미루다 다시 시작한 일 (3일 이상 연속으로 미루다 최근 다시 시작): ${resumedTasks.join(', ').isEmpty ? '없음' : resumedTasks.join(', ')}
@@ -588,7 +651,9 @@ $chatSummarySection
 2. 공통 원칙:
    - 휴무일(회복일)은 미완료나 실패로 해석하지 말고, 필요한 회복을 일정에 포함한 것으로 자연스럽게 존중해 주세요.
    - [현재 설정된 습관 트래킹 빈도]를 반드시 참고하세요. 특정 요일에만 하기로 한 습관이라면 그 빈도에 맞게 평가해 주세요.
-   - 완료율이 저조한 주에는 원인을 추측으로 단정하지 말고, [지난 주 대화 기록 요약]이 있다면 거기 나타난 컨디션과 고민을 근거로 원인을 해석해 주세요. 요약에 없는 사정을 지어내지 마세요.
+   - [주간 완료율 요약]의 수치를 우선 기준으로 삼으세요. 100% 완료한 날이 대부분이고 저조한 날이 하루뿐이면 "계획대로 진행되지 않은 날이 많았다", "저조한 날이 많았다", "대부분 미완료였다" 같은 복수/다수 표현을 절대 쓰지 마세요.
+   - 플래너 기록일이 적은 주(플래너 기록일이 적은 주인가: 예)에는 완료율을 강하게 평가하지 말고, 먼저 플래너로 돌아오는 리듬을 부드럽게 제안하세요.
+   - 완료율이 저조한 주(저조한 날이 많은 주인가: 예)에는 원인을 추측으로 단정하지 말고, [지난 주 대화 기록 요약]이 있다면 거기 나타난 컨디션과 고민을 근거로 원인을 해석해 주세요. 요약에 없는 사정을 지어내지 마세요.
 3. 유형별 작성 방식:
 ${feedbackType == 0
         ? '''   [실행 회고형]
@@ -596,7 +661,9 @@ ${feedbackType == 0
    - 완료한 일들 중 목표/비전과 연결되는 중요한 활동 1~2개를 콕 집어 구체적으로 칭찬하세요. (추상적 칭찬 금지)
    - 3일 이상 미루다 다시 시작한 항목이 있다면 특별히 언급해 주세요.
    - 반복적으로 밀린 중요한 일이 있다면 부드럽게 지적하고 다음 주 우선순위로 권유하세요.
-   - 단, 미완료가 대부분인 주에는 밀린 항목을 나열하거나 지적하지 말고 이 구조로 쓰세요: 수고 인정 → 원인 해석([지난 주 대화 기록 요약]이 있으면 그 근거로, 없으면 계획이 컨디션보다 컸을 가능성으로) → 다음 주에는 확실히 해낼 수 있는 만큼만 계획하자는 제안. 예: "이번 주도 고생 많으셨습니다. 계획대로 안 된 날이 많았지만, 의지 문제라기보다 계획이 이번 주 컨디션보다 컸던 것일 수 있습니다. 다음 주에는 확실히 해낼 수 있는 만큼만 담아보시면 어떨까요?"'''
+   - 단, [주간 완료율 요약]에서 "저조한 날이 많은 주인가: 예"인 경우에만 밀린 항목을 나열하거나 지적하지 말고 이 구조로 쓰세요: 수고 인정 → 원인 해석([지난 주 대화 기록 요약]이 있으면 그 근거로, 없으면 계획이 컨디션보다 컸을 가능성으로) → 다음 주에는 확실히 해낼 수 있는 만큼만 계획하자는 제안.
+   - 플래너 기록일이 적은 주라면 아래 구조를 따르세요: "이번 주는 완료율보다 플래너에 다시 돌아오는 리듬을 먼저 잡는 것이 좋아 보입니다. 기록이 적었던 만큼 성과를 크게 판단하기는 어렵겠습니다. 해야 할 일이 있는데 하기 싫을 때는 냥냥코치를 기억해 주세요. 하기 싫은 마음까지 달래드리겠습니다." 성과 판단 보류 문장과 냥냥코치 안내 문장은 반드시 서로 다른 문장으로 분리하세요. "판단하기보다는, 냥냥코치를..."처럼 하나의 비교 문장으로 연결하지 마세요.
+   - 저조한 날이 하루뿐이면 전체 주간은 긍정적으로 평가하고, 해당 날짜만 "토요일 하루 완료율이 낮았습니다"처럼 단수로 정확히 언급하세요.'''
         : feedbackType == 1
         ? '''   [장기 비전형]
    - 현재 장기 비전과 마일스톤을 중심으로 회고합니다. [장기 비전 상세 데이터]를 반드시 참고하세요.
@@ -784,7 +851,7 @@ ${feedbackType == 0
                     ],
                   ),
                   Text(
-                    '최근 7일 ▾',
+                    _isMaster ? '최근 30일 ▾' : '최근 7일 ▾',
                     style: GoogleFonts.notoSansKr(
                       fontSize: 13,
                       fontWeight: FontWeight.w700,
@@ -852,7 +919,7 @@ ${feedbackType == 0
           '$streak일',
           '최고 -일',
           Icons.local_fire_department_outlined,
-          _coach.accentColor,
+          _recordCoach.accentColor,
           true,
         ),
         _summaryCard(
@@ -884,7 +951,7 @@ ${feedbackType == 0
         boxShadow: isAccent
             ? [
                 BoxShadow(
-                  color: color.withOpacity(0.3),
+                  color: color.withValues(alpha: 0.3),
                   blurRadius: 10,
                   offset: const Offset(0, 4),
                 ),
@@ -914,7 +981,7 @@ ${feedbackType == 0
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
                   color: isAccent
-                      ? Colors.white.withOpacity(0.9)
+                      ? Colors.white.withValues(alpha: 0.9)
                       : const Color(0xFF6B7280),
                 ),
               ),
@@ -1063,7 +1130,7 @@ ${feedbackType == 0
                     fontWeight: FontWeight.w800,
                     color: _isMaster
                         ? CoachConfigs.get('sec_male').accentColor
-                        : _coach.accentColor,
+                        : _recordCoach.accentColor,
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -1107,7 +1174,7 @@ ${feedbackType == 0
                 width: 17,
                 height: 17,
                 colorFilter: ColorFilter.mode(
-                  _coach.accentColor,
+                  _recordCoach.accentColor,
                   BlendMode.srcIn,
                 ),
               ),
@@ -1166,7 +1233,7 @@ ${feedbackType == 0
                       decoration: BoxDecoration(
                         color: isVacation
                             ? const Color(0xFF6EBF8B)
-                            : _coach.accentColor,
+                            : _recordCoach.accentColor,
                         borderRadius: BorderRadius.circular(6),
                       ),
                     ),
@@ -1180,7 +1247,7 @@ ${feedbackType == 0
                       color: isVacation
                           ? const Color(0xFF6EBF8B)
                           : isToday
-                          ? _coach.accentColor
+                          ? _recordCoach.accentColor
                           : const Color(0xFF6B7280),
                     ),
                   ),
@@ -1217,7 +1284,7 @@ ${feedbackType == 0
                     width: 16,
                     height: 16,
                     colorFilter: ColorFilter.mode(
-                      _coach.accentColor,
+                      _recordCoach.accentColor,
                       BlendMode.srcIn,
                     ),
                   ),
@@ -1364,7 +1431,7 @@ ${feedbackType == 0
                         style: GoogleFonts.notoSansKr(
                           fontSize: 12,
                           fontWeight: FontWeight.w800,
-                          color: _coach.accentColor,
+                          color: _recordCoach.accentColor,
                         ),
                       ),
                     ],
@@ -1376,7 +1443,9 @@ ${feedbackType == 0
                       value: hPct / 100.0,
                       minHeight: 6,
                       backgroundColor: const Color(0xFFF3F4F6),
-                      valueColor: AlwaysStoppedAnimation(_coach.accentColor),
+                      valueColor: AlwaysStoppedAnimation(
+                        _recordCoach.accentColor,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -1622,7 +1691,7 @@ ${feedbackType == 0
                 width: 14,
                 height: 14,
                 colorFilter: ColorFilter.mode(
-                  _coach.accentColor,
+                  _recordCoach.accentColor,
                   BlendMode.srcIn,
                 ),
               ),
