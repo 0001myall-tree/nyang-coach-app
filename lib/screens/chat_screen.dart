@@ -935,18 +935,6 @@ class _ParsedReply {
   }) : suggestedTasks = suggestedTasks ?? [];
 }
 
-class _BroWorkoutLink {
-  final String id;
-  final String title;
-  final String url;
-
-  const _BroWorkoutLink({
-    required this.id,
-    required this.title,
-    required this.url,
-  });
-}
-
 class _VisionMilestoneContext {
   final String sourceId;
   final String visionName;
@@ -978,98 +966,6 @@ class _MilestoneCheckResult {
     this.highlightVisionIds = const [],
   });
 }
-
-const _broWorkoutWarmupLinks = [
-  _BroWorkoutLink(
-    id: 'warmup_basic',
-    title: '운동 전 워밍업',
-    url: 'https://www.youtube.com/shorts/FHct19rKIVg',
-  ),
-  _BroWorkoutLink(
-    id: 'warmup_lower_body',
-    title: '하체운동하기 전 스트레칭',
-    url: 'https://www.youtube.com/shorts/B70dXLEq_lA',
-  ),
-  _BroWorkoutLink(
-    id: 'warmup_simple',
-    title: '간단 스트레칭',
-    url: 'https://www.youtube.com/shorts/BcS1Eg4Cpt0',
-  ),
-  _BroWorkoutLink(
-    id: 'warmup_full_body',
-    title: '몸 전체 풀어주는 전신 스트레칭',
-    url: 'https://www.youtube.com/watch?v=X2s3RZR8lPI',
-  ),
-  _BroWorkoutLink(
-    id: 'warmup_full_body_24',
-    title: '24분 전신 스트레칭',
-    url: 'https://www.youtube.com/watch?v=jw1gxrzRgeU',
-  ),
-];
-
-const _broWorkoutHiitLinks = [
-  _BroWorkoutLink(
-    id: 'hiit_diet_10',
-    title: '10분 다이어트 홈트',
-    url: 'https://www.youtube.com/watch?v=N-15wUPnqpc',
-  ),
-  _BroWorkoutLink(
-    id: 'hiit_15',
-    title: '15분 고강도 홈트',
-    url: 'https://www.youtube.com/watch?v=QvE69Q1ugFU',
-  ),
-  _BroWorkoutLink(
-    id: 'hiit_no_noise_24',
-    title: '층간소음 걱정 없는 고강도 타바타 24분',
-    url: 'https://www.youtube.com/watch?v=4EKo44DUvjg',
-  ),
-  _BroWorkoutLink(
-    id: 'hiit_belly_15',
-    title: '뱃살빼기 15분 타바타',
-    url: 'https://www.youtube.com/watch?v=0iqP6WP2ET4',
-  ),
-  _BroWorkoutLink(
-    id: 'hiit_abs_10',
-    title: '악마의 10분 복근운동',
-    url: 'https://www.youtube.com/watch?v=ee1alaQgE9U',
-  ),
-  _BroWorkoutLink(
-    id: 'hiit_full_body_23',
-    title: '땅끄부부 전신 다이어트 운동 23분',
-    url: 'https://www.youtube.com/watch?v=DCAp0b16kyo',
-  ),
-];
-
-const _broWorkoutGymLinks = [
-  _BroWorkoutLink(
-    id: 'gym_female_han_hye_jin',
-    title: '한혜진 헬스장 루틴',
-    url: 'https://www.youtube.com/watch?v=l4THcKL-sPM',
-  ),
-  _BroWorkoutLink(
-    id: 'gym_male_beginner',
-    title: '헬스장 초보 남자 루틴',
-    url: 'https://www.youtube.com/shorts/Xx75VdQXZ18',
-  ),
-  _BroWorkoutLink(
-    id: 'gym_common_beginner_5',
-    title: '헬스장 초보 남녀 공통 5가지 운동',
-    url: 'https://www.youtube.com/shorts/TvBX2_iHlAo',
-  ),
-];
-
-const _broWorkoutStarterLinks = [
-  _BroWorkoutLink(
-    id: 'starter_hip_hinge',
-    title: '힙힌지',
-    url: 'https://www.youtube.com/shorts/U-Q-wTeHqks',
-  ),
-  _BroWorkoutLink(
-    id: 'starter_bridge',
-    title: '브릿지',
-    url: 'https://www.youtube.com/shorts/GOfayAYXbYk',
-  ),
-];
 
 // ─────────────────────────────────────────────────────────────
 // 로컬 응답 (API 절감용) - 웹앱 getLocalResponse / localCoachLine 이식
@@ -5536,39 +5432,6 @@ class _ChatScreenState extends State<ChatScreen>
     return input.replaceAll(RegExp(r'\s+'), '').toLowerCase();
   }
 
-  Future<_BroWorkoutLink> _pickBroWorkoutLink(
-    List<_BroWorkoutLink> links,
-  ) async {
-    final prefs = await SharedPreferences.getInstance();
-    final lastId = prefs.getString('bro_last_workout_link_id');
-    final candidates = links.length <= 1
-        ? links
-        : links.where((link) => link.id != lastId).toList();
-    final pool = candidates.isEmpty ? links : candidates;
-    final picked = pool[Random().nextInt(pool.length)];
-    await prefs.setString('bro_last_workout_link_id', picked.id);
-    return picked;
-  }
-
-  _BroWorkoutLink _broStarterLink(String id) {
-    return _broWorkoutStarterLinks.firstWhere((link) => link.id == id);
-  }
-
-  bool _isBroVideoRequest(String normalized) {
-    return _containsAny(normalized, [
-      '응',
-      'ㅇㅇ',
-      '줘',
-      '알려줘',
-      '추천',
-      '추천해줘',
-      '영상',
-      '링크',
-      '보내',
-      '보내줘',
-    ]);
-  }
-
   bool _isBroWorkoutRecommendationRequest(String normalized) {
     return _containsAny(normalized, [
       '추천',
@@ -5654,121 +5517,18 @@ class _ChatScreenState extends State<ChatScreen>
         '말투는 갓생 형 코치답게 짧고 힘 있게 해줘.';
   }
 
-  Future<_BroWorkoutLink> _selectBroWarmupLink(String normalized) {
-    if (_containsAny(normalized, ['하체', '다리', '스쿼트', '런지'])) {
-      return _pickBroWorkoutLink([
-        _broWorkoutWarmupLinks.firstWhere(
-          (link) => link.id == 'warmup_lower_body',
-        ),
-      ]);
-    }
-    if (_containsAny(normalized, ['24분', '길게', '제대로', '회복'])) {
-      return _pickBroWorkoutLink([
-        _broWorkoutWarmupLinks.firstWhere(
-          (link) => link.id == 'warmup_full_body_24',
-        ),
-      ]);
-    }
-    if (_containsAny(normalized, ['전신', '몸전체', '온몸', '전체'])) {
-      return _pickBroWorkoutLink([
-        _broWorkoutWarmupLinks.firstWhere(
-          (link) => link.id == 'warmup_full_body',
-        ),
-      ]);
-    }
-    return _pickBroWorkoutLink([
-      _broWorkoutWarmupLinks.firstWhere((link) => link.id == 'warmup_basic'),
-      _broWorkoutWarmupLinks.firstWhere((link) => link.id == 'warmup_simple'),
-    ]);
-  }
-
-  Future<_BroWorkoutLink> _selectBroWorkoutLink(String normalized) {
-    if (_containsAny(normalized, ['층간소음', '조용', '점프없이', '노점프'])) {
-      return _pickBroWorkoutLink([
-        _broWorkoutHiitLinks.firstWhere(
-          (link) => link.id == 'hiit_no_noise_24',
-        ),
-      ]);
-    }
-    if (_containsAny(normalized, ['복근', 'abs'])) {
-      return _pickBroWorkoutLink([
-        _broWorkoutHiitLinks.firstWhere((link) => link.id == 'hiit_abs_10'),
-      ]);
-    }
-    if (_containsAny(normalized, ['뱃살', '배살', '복부'])) {
-      return _pickBroWorkoutLink([
-        _broWorkoutHiitLinks.firstWhere((link) => link.id == 'hiit_belly_15'),
-      ]);
-    }
-    if (_containsAny(normalized, ['전신', '몸전체', '온몸'])) {
-      return _pickBroWorkoutLink([
-        _broWorkoutHiitLinks.firstWhere(
-          (link) => link.id == 'hiit_full_body_23',
-        ),
-      ]);
-    }
-    if (_containsAny(normalized, ['고강도', '타바타', '빡세', '빡센'])) {
-      return _pickBroWorkoutLink([
-        _broWorkoutHiitLinks.firstWhere((link) => link.id == 'hiit_15'),
-      ]);
-    }
-    if (_containsAny(normalized, ['다이어트', '살빼', '살빼기', '감량'])) {
-      return _pickBroWorkoutLink([
-        _broWorkoutHiitLinks.firstWhere((link) => link.id == 'hiit_diet_10'),
-        _broWorkoutHiitLinks.firstWhere(
-          (link) => link.id == 'hiit_full_body_23',
-        ),
-      ]);
-    }
-    return _pickBroWorkoutLink([
-      _broWorkoutHiitLinks.firstWhere((link) => link.id == 'hiit_diet_10'),
-      _broWorkoutHiitLinks.firstWhere((link) => link.id == 'hiit_15'),
-    ]);
-  }
-
-  Future<_BroWorkoutLink> _selectBroGymLink(String normalized) {
-    if (_containsAny(normalized, ['여자', '여성'])) {
-      return _pickBroWorkoutLink([
-        _broWorkoutGymLinks.firstWhere(
-          (link) => link.id == 'gym_female_han_hye_jin',
-        ),
-      ]);
-    }
-    if (_containsAny(normalized, ['남자', '남성'])) {
-      return _pickBroWorkoutLink([
-        _broWorkoutGymLinks.firstWhere(
-          (link) => link.id == 'gym_male_beginner',
-        ),
-      ]);
-    }
-    return _pickBroWorkoutLink([
-      _broWorkoutGymLinks.firstWhere(
-        (link) => link.id == 'gym_common_beginner_5',
-      ),
-    ]);
-  }
-
   Future<String?> _tryBuildBroWorkoutReply(String input) async {
     if (_coach.id != 'bro') return null;
     final normalized = _workoutNormalized(input);
     final prefs = await SharedPreferences.getInstance();
-    final pendingVideo = prefs.getString('bro_pending_workout_video');
     final pendingContext = prefs.getString('bro_pending_workout_context');
-    final bridgeLink = _broStarterLink('starter_bridge');
-    final hipHingeLink = _broStarterLink('starter_hip_hinge');
-
-    if (pendingVideo == 'bridge' && _isBroVideoRequest(normalized)) {
-      await prefs.remove('bro_pending_workout_video');
-      return '좋아. 이거 보면 바로 감 잡힐 거다.\n${bridgeLink.url}\n\n형도 전문가 아니다. 그냥 운동 좋아해서 이것저것 해본 사람인데, 이건 몸 깨우기 괜찮더라.';
-    }
 
     if (_containsAny(normalized, ['브릿지가뭐야', '브릿지뭐야', '브릿지어떻게'])) {
-      await prefs.setString('bro_pending_workout_video', 'bridge');
-      return '브릿지는 누워서 무릎 세우고 엉덩이 들어올리는 운동.\n엉덩이 근육 깨우는 데 좋다.\n아 나 헬스 전문가 아니고 그냥 운동 좋아하는 사람이다. 😂\n필요하면 영상도 줄까?';
+      return '브릿지는 누워서 무릎 세우고 엉덩이 들어올리는 운동.\n발은 바닥에 붙이고, 엉덩이를 들어 올렸다가 천천히 내려오면 된다. 엉덩이랑 하체 깨우는 데 좋다.';
     }
 
     if (_containsAny(normalized, ['브릿지영상', '브릿지링크', '브릿지추천'])) {
-      return '브릿지는 이거 보면 된다.\n${bridgeLink.url}\n\n짧게 감만 잡고, 무리하지 말고 천천히 해.';
+      return '브릿지는 8회만 가자.\n누워서 무릎 세우고, 엉덩이를 천천히 들어 올렸다가 내려와. 허리로 버티지 말고 엉덩이에 힘 주는 느낌으로.';
     }
 
     if (pendingContext == 'reluctant_reason') {
@@ -5780,7 +5540,7 @@ class _ChatScreenState extends State<ChatScreen>
         return '오케이. 귀찮은 거면 의지 싸움으로 끌고 가지 마라.\n딱 하나만 정하자.\n집이야, 헬스장이야, 밖이야? 장소 말하면 형이 제일 덜 귀찮은 첫 행동만 잘라줄게.';
       }
       if (_containsAny(normalized, ['무섭', '오래쉬', '오랜만', '몇달', '몇년', '모르겠'])) {
-        return '그럼 바로 빡센 거 추천하면 안 되겠다.\n지금은 운동을 잘하는 게 아니라 다시 시작하는 게 목표다.\n뭐 해야 할지 모르겠으면 추천해달라고 해. 형이 가볍게 시작할 걸로 골라줄게.';
+        return '그럼 바로 빡센 거 추천하면 안 되겠다.\n오늘은 1단계만 가자. 목이랑 어깨 풀고, 제자리 걷기 1분. 몸이 괜찮으면 그때 쉬운 본운동 하나 붙이면 된다.';
       }
       return '오케이. 그럼 오늘은 이유부터 잡자.\n몸이 힘든 쪽이야, 귀찮은 쪽이야, 아니면 뭘 해야 할지 몰라서 막힌 거야?';
     }
@@ -5908,16 +5668,14 @@ class _ChatScreenState extends State<ChatScreen>
 
     if (longBreak && !warmedUp && explicitWorkoutRequest) {
       if (lowerBody && Random().nextBool()) {
-        await prefs.setString('bro_pending_workout_video', 'bridge');
-        return '오케이. 오래 쉬었으면 바로 스쿼트부터 박지 마라.\n너 하체도 좀 깨워야 할 것 같은데 브릿지 해봤냐?\n누워서 하는 거라 진입 장벽 낮다.\n필요하면 영상도 줄까?';
+        return '오케이. 오래 쉬었으면 바로 스쿼트부터 박지 마라.\n누워서 브릿지 8회만 해보자. 무릎 세우고, 엉덩이 들어올렸다가 천천히 내려오면 된다.\n하체 깨우기엔 이게 진입 장벽 낮다.';
       }
       final starter = Random().nextInt(4);
       if (starter == 0) {
-        return '오케이.\n그럼 갑자기 빡세게 하는 것보다 몸부터 깨우는 게 좋겠다.\n형이 운동하면서 자주 보는 동작인데 한번 해볼래?\n${hipHingeLink.url}\n\n형도 전문가 아니다. 그냥 운동 좋아해서 이것저것 해본 사람인데, 오래 쉬었을 땐 이런 식으로 몸 깨우는 게 낫더라.';
+        return '오케이.\n그럼 갑자기 빡세게 하는 것보다 몸부터 깨우는 게 좋겠다.\n벽 앞에 서서 힙힌지 8회만 해봐. 허리 꺾지 말고 엉덩이를 뒤로 빼는 느낌.\n오래 쉬었을 땐 이런 식으로 문턱 낮추는 게 낫다.';
       }
       if (starter == 1) {
-        final link = await _selectBroWarmupLink(normalized);
-        return '오케이. 오래 쉬었으면 오늘은 이기는 기준을 낮추자.\n갑자기 빡세게 말고, 몸부터 깨워.\n스트레칭 영상 필요하면 말해. 형이 추천해 줄 수 있으니까.\n참고할 거면 이거 봐.\n${link.url}\n\n풀고 오면 그때 더 할지 보자.';
+        return '오케이. 오래 쉬었으면 오늘은 단계 낮춰서 가자.\n1단계 목 돌리기 5번, 어깨 돌리기 10번, 제자리 걷기 1분.\n2단계 몸 괜찮으면 브릿지 8회만 붙여. 갑자기 빡세게 가지 마라.';
       }
       if (starter == 2) {
         return '오케이. 오래 쉬었으면 오늘은 운동복 입고 10분 산책만 해도 성공이다.\n몸이 깨어나야 다음 것도 된다.\n형도 전문가 아니다. 그냥 운동 좋아해서 이것저것 해본 사람인데, 다시 시작할 땐 이렇게 문턱 낮추는 게 제일 세다.';
@@ -5926,24 +5684,22 @@ class _ChatScreenState extends State<ChatScreen>
     }
 
     if (gym && warmedUp) {
-      final link = await _selectBroGymLink(normalized);
       return _pickLine([
-        '좋아. 헬스장 갔으면 방황하지 마라. 루틴 없으면 시간 다 날린다.\n이거 보고 오늘 할 것만 딱 정해.\n${link.url}\n\n복잡하게 가지 말고, 몇 개만 제대로 해도 충분하다.',
-        '좋다. 몸 풀었으면 이제 루틴 잡고 가자.\n이거 하나 보고 오늘 할 거만 정해.\n${link.url}\n\n기구 앞에서 멍 때리지 말고 바로 시작해.',
+        '좋아. 몸 풀었으면 본운동 간다.\n레그프레스 2세트, 랫풀다운 2세트, 러닝머신 걷기 10분. 세트 사이엔 60초만 쉬어. 복잡하게 가지 말고 이 정도만 제대로 해.',
+        '좋다. 이제 루틴 잡고 가자.\n스쿼트나 레그프레스 2세트, 체스트프레스 2세트, 마지막에 가볍게 걷기 10분. 몸 괜찮으면 다음번에 세트 하나 늘리면 된다.',
       ]);
     }
 
     if (warmedUp) {
-      final link = await _selectBroWorkoutLink(normalized);
       if (_containsAny(normalized, ['층간소음', '조용', '점프없이', '노점프'])) {
-        return '집이면 층간소음 신경 써야지. 괜히 점프하다가 운동보다 민원 먼저 온다.\n이걸로 가자. 조용한데 빡세다.\n${link.url}\n\n하고 나서 더 할 만하면 그대로 이어가.';
+        return '집이면 층간소음 신경 써야지. 점프는 빼자.\n스쿼트 10회, 뒤로 다리 뻗기 10회, 플랭크 20초. 1라운드 하고 괜찮으면 2라운드. 단계 올리는 건 그다음이다.';
       }
       if (_containsAny(normalized, ['복근', '뱃살', '배살', '복부'])) {
-        return '복근이면 짧고 굵게 가자. 대신 허리 꺾지 말고 배에 힘 제대로 줘.\n이거 얼마 안 걸린다.\n${link.url}\n\n더 할 만하면 그대로 이어가. 흐름 탔을 때 가는 거다.';
+        return '복근이면 허리부터 지켜라. 배에 힘 제대로 주고 간다.\n데드버그 10회, 플랭크 20초, 크런치 10회. 1라운드 먼저 하고, 허리 괜찮으면 2라운드까지.';
       }
       return _pickLine([
-        '좋아. 이제 몸 깨웠지?\n그럼 이거 하나만 가자. 짧게 치고 흐름 만들기 좋다.\n${link.url}\n\n하고 나서 더 할 만하면 그대로 이어가. 오늘은 시작한 네가 이긴 거다.',
-        '좋다. 이제 본운동 들어가자.\n이거 얼마 안 걸린다. 일단 하나만 따라 해.\n${link.url}\n\n끝나고 몸 괜찮으면 더 가도 된다. 흐름 탔을 때 밀어붙이는 거다.',
+        '좋아. 이제 몸 깨웠지? 그럼 본운동은 작게 간다.\n스쿼트 10회, 푸쉬업은 무릎 대고 8회, 제자리 걷기 1분. 1라운드 먼저 끝내.',
+        '좋다. 이제 본운동 들어가자.\n런지 8회씩, 플랭크 20초, 제자리 빠른 걷기 1분. 할 만하면 한 라운드만 더. 무리하면 바로 컷.',
       ]);
     }
 
@@ -5951,17 +5707,15 @@ class _ChatScreenState extends State<ChatScreen>
       return null;
     }
 
-    final link = await _selectBroWarmupLink(normalized);
-
     if (gym) {
-      return '헬스장 가는 건 좋은데, 바로 무게부터 들지 마라. 관절 놀란다.\n일단 가볍게 몸부터 풀어. 폼롤러나 스트레칭 밴드 있으면 더 좋고.\n스트레칭 영상 필요하면 말해. 형이 추천해 줄 수 있으니까.\n참고할 거면 이거 봐.\n${link.url}\n\n풀고 오면 그때 오늘 루틴 딱 잡아줄게.';
+      return '헬스장 가는 건 좋은데, 바로 무게부터 들지 마라. 관절 놀란다.\n1단계 러닝머신 걷기 5분, 2단계 어깨 돌리기 10번, 3단계 빈 무게로 첫 세트. 풀고 오면 그때 본운동 잡자.';
     }
     if (_containsAny(normalized, ['하체', '다리', '스쿼트', '런지'])) {
-      return '하체 갈 거면 더더욱 바로 들이박지 마라.\n무릎이랑 고관절 먼저 깨워야 된다.\n스트레칭 영상 필요하면 말해. 형이 추천해 줄 수 있으니까.\n참고할 거면 이거 봐. 얼마 안 걸린다.\n${link.url}\n\n풀고 오면 그때 더 할 거 이어가자.';
+      return '하체 갈 거면 더더욱 바로 들이박지 마라.\n고관절 돌리기 10번, 브릿지 8회, 맨몸 스쿼트 8회. 이게 1단계다. 무릎 괜찮으면 그때 세트 늘린다.';
     }
     return _pickLine([
-      '야 잠깐. 바로 고강도 박지 마라. 관절 놀란다.\n폼롤러 있으면 하체랑 등부터 굴리고, 밴드 있으면 어깨랑 고관절부터 열어.\n스트레칭 영상 필요하면 말해. 형이 추천해 줄 수 있으니까.\n참고할 거면 이거 봐. 얼마 안 걸린다.\n${link.url}\n\n풀고 오면 그때 더 할 거 이어가자. 흐름 탔을 때 가는 거다.',
-      '좋다. 근데 바로 빡세게 가지 마라. 몸부터 깨워야 오래 간다.\n스트레칭 영상 필요하면 말해. 형이 추천해 줄 수 있으니까.\n참고할 거면 이걸로 관절이랑 근육부터 깨워.\n${link.url}\n\n풀고 오면 그때 본운동 가자. 시작만 해도 이긴 거다.',
+      '야 잠깐. 바로 고강도 박지 마라. 관절 놀란다.\n목 돌리기, 어깨 돌리기, 제자리 걷기 1분. 이거 하고 몸 괜찮으면 본운동 하나만 붙인다.',
+      '좋다. 근데 바로 빡세게 가지 마라. 몸부터 깨워야 오래 간다.\n팔 크게 돌리기 10번, 허리 가볍게 돌리기 10번, 제자리 걷기 1분. 1단계부터 끝내.',
     ]);
   }
 
