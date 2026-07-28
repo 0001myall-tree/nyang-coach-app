@@ -674,7 +674,7 @@ class _IndividualCoachGuide extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '남친, 할매, 갓생 형 코치를 1년 이용권으로 추가할 수 있어요.',
+                  '할매, 갓생 형 코치를 1년 이용권으로 추가할 수 있어요.',
                   style: GoogleFonts.notoSansKr(
                     fontSize: AppDesignTokens.textCaption,
                     fontWeight: FontWeight.w600,

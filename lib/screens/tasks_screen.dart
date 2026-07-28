@@ -1102,21 +1102,6 @@ class _TasksScreenState extends State<TasksScreen>
     final quoted = target.isEmpty ? '항목' : '"$target"';
     final datePrefix = date == null ? '' : '${date.month}월 ${date.day}일에 ';
     switch (widget.coachId) {
-      case 'boyfriend':
-        return switch (key) {
-          'emptyTarget' => '어떤 걸 삭제할지 이름까지 같이 말해줘.',
-          'habitNotFound' => '습관 탭은 열어둘게. $quoted 습관은 못 찾았으니까 이름 한번만 확인해줘.',
-          'habitMultiple' => '습관 탭은 열어둘게. $quoted 비슷한 게 여러 개라 직접 보고 지워줘.',
-          'habitOpened' => '습관 탭 열어둘게. $quoted 옆 휴지통 버튼으로 확인하고 삭제해줘.',
-          'recurringNotFound' =>
-            '$datePrefix$quoted 반복 일정은 못 찾았어. 날짜나 이름 한번만 확인해줘.',
-          'recurringMultiple' =>
-            '$quoted 비슷한 반복 일정이 여러 개야. 날짜나 이름을 조금만 더 정확히 말해줘.',
-          'recurringOpened' => '$quoted 반복 일정 삭제 확인창 열어둘게. 마지막으로 확인만 해줘.',
-          'notFound' => '$datePrefix$quoted로 등록된 할 일이나 일정은 못 찾았어. 이름 한번만 확인해줘.',
-          'multiple' => '$quoted 비슷한 항목이 여러 개야. 날짜나 이름을 조금만 더 정확히 말해줘.',
-          _ => '$quoted 찾아뒀어. 확인하고 삭제하거나 날짜를 바꿔줘.',
-        };
       case 'bro':
         return switch (key) {
           'emptyTarget' => '뭘 삭제할지 이름까지 같이 말해라.',
@@ -1202,18 +1187,6 @@ class _TasksScreenState extends State<TasksScreen>
     final quoted = target.isEmpty ? '항목' : '"$target"';
     final datePrefix = date == null ? '' : '${date.month}월 ${date.day}일에 ';
     switch (widget.coachId) {
-      case 'boyfriend':
-        return switch (key) {
-          'emptyTarget' => '어떤 일정을 수정할지 이름까지 같이 말해줘.',
-          'recurringNotFound' =>
-            '$datePrefix$quoted 반복 일정은 못 찾았어. 일정 탭에서 한번 확인해줘.',
-          'recurringMultiple' =>
-            '$quoted 비슷한 반복 일정이 여러 개야. 날짜나 이름을 조금만 더 정확히 말해줘.',
-          'recurringOpened' => '$quoted 반복 일정 수정창 열어둘게. 바꿀 내용은 확인해서 직접 조정해줘.',
-          'notFound' => '$datePrefix$quoted 항목은 못 찾았어. 일정 탭에서 한번 확인해줘.',
-          'multiple' => '$quoted 비슷한 항목이 여러 개야. 날짜나 이름을 조금만 더 정확히 말해줘.',
-          _ => '$quoted 수정창 열어둘게. 바꿀 내용은 확인해서 직접 조정해줘.',
-        };
       case 'bro':
         return switch (key) {
           'emptyTarget' => '뭘 수정할지 이름까지 같이 말해라.',
@@ -5412,8 +5385,6 @@ class _TasksScreenState extends State<TasksScreen>
     switch (_coach.id) {
       case 'cat':
         return '오늘은 하나만 해도 충분하다냥. 남겨둘 일 한두 가지만 골라볼까냥?';
-      case 'boyfriend':
-        return '오늘은 하나만 해도 충분해. 남겨둘 일 한두 가지만 같이 골라볼까?';
       case 'halmae':
         return '오늘은 하나만 해도 충분혀. 남겨둘 일 한두 가지만 골라보자.';
       case 'bro':
@@ -12968,8 +12939,6 @@ class _TasksScreenState extends State<TasksScreen>
 
   String _habitRegistrationGuideText() {
     switch (widget.coachId) {
-      case 'boyfriend':
-        return '습관 탭에 추가해뒀어. 세부 설정은 한번 확인하고 너한테 맞게 조정해줘.';
       case 'bro':
         return '습관 탭에 추가해뒀다. 세부 설정은 한번 보고 너한테 맞게 손봐라.';
       case 'halmae':

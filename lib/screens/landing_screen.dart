@@ -951,8 +951,6 @@ class _LandingScreenState extends State<LandingScreen>
                             ),
                           ),
                         ),
-
-                        // 남친 코치 (좌상단) - 주석 처리 / 제거됨
                         // 남비서 코치 (우상단) - 주석 처리 / 제거됨
                         // 여비서 코치 (좌하단) - 주석 처리 / 제거됨
                         // 할매 코치 (우하단) - 주석 처리 / 제거됨
