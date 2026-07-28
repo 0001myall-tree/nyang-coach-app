@@ -651,8 +651,11 @@ class _TasksScreenState extends State<TasksScreen>
   String? _todayDuration;
   static const _taskCheckboxHintSeenKey = 'nyang_hint_seen_task_checkbox';
   static const _inProgressToastSeenKey = 'nyang_hint_seen_in_progress_toast';
+  static const _lightenPlanCardDismissedDateKey =
+      'nyang_lighten_plan_card_dismissed_date';
   bool _taskCheckboxHintSeen = false;
   bool _inProgressToastSeen = false;
+  String? _lightenPlanCardDismissedDate;
   bool _taskCheckboxHintPulseStarted = false;
   bool _inProgressHintPopupVisible = false;
   late final AnimationController _taskCheckboxHintPulseCtrl;
@@ -739,6 +742,9 @@ class _TasksScreenState extends State<TasksScreen>
     final taskCheckboxHintSeen =
         prefs.getBool(_taskCheckboxHintSeenKey) ?? false;
     final inProgressToastSeen = prefs.getBool(_inProgressToastSeenKey) ?? false;
+    final lightenPlanCardDismissedDate = prefs.getString(
+      _lightenPlanCardDismissedDateKey,
+    );
     final hasActivePlan = await _hasActivePlan();
     if (!hasActivePlan) {
       await prefs.setBool('nyang_core_reminder_enabled', false);
@@ -751,6 +757,7 @@ class _TasksScreenState extends State<TasksScreen>
       _isCoreReminderEnabledGlobally = coreEnabled;
       _taskCheckboxHintSeen = taskCheckboxHintSeen;
       _inProgressToastSeen = inProgressToastSeen;
+      _lightenPlanCardDismissedDate = lightenPlanCardDismissedDate;
       _todayReminderEnabled = false;
       if (rawTasks != null) {
         tasks = (jsonDecode(rawTasks) as List)
@@ -5397,10 +5404,15 @@ class _TasksScreenState extends State<TasksScreen>
 
     final remainingTasks = sortedTasks.where((task) => !task.done).toList();
     final doneTasks = sortedTasks.where((task) => task.done).toList();
+    final showLightenPlanCard = _shouldShowLightenPlanCard(
+      remainingTasks: remainingTasks,
+      doneTasks: doneTasks,
+    );
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
       children: [
+        if (showLightenPlanCard) _buildLightenPlanCard(),
         if (remainingTasks.isNotEmpty)
           _buildRemainingTaskGroup(remainingTasks)
         else
@@ -5408,6 +5420,137 @@ class _TasksScreenState extends State<TasksScreen>
         if (remainingTasks.isNotEmpty) ...doneTasks.map(_buildTaskItem),
       ],
     );
+  }
+
+  bool _shouldShowLightenPlanCard({
+    required List<TaskItem> remainingTasks,
+    required List<TaskItem> doneTasks,
+  }) {
+    final now = DateTime.now();
+    return _isViewingActualToday &&
+        vacationInfo == null &&
+        now.hour >= 15 &&
+        remainingTasks.length >= 3 &&
+        doneTasks.isEmpty &&
+        _lightenPlanCardDismissedDate != _getTodayStr();
+  }
+
+  String get _lightenPlanCardMessage {
+    switch (_coach.id) {
+      case 'cat':
+        return '오늘은 하나만 해도 충분하다냥. 남겨둘 일 한두 가지만 골라볼까냥?';
+      case 'boyfriend':
+        return '오늘은 하나만 해도 충분해. 남겨둘 일 한두 가지만 같이 골라볼까?';
+      case 'girlfriend':
+        return '오늘은 하나만 해도 충분해, 자기야. 남겨둘 일 한두 가지만 같이 골라볼까?';
+      case 'halmae':
+        return '오늘은 하나만 해도 충분혀. 남겨둘 일 한두 가지만 골라보자.';
+      case 'bro':
+        return '오늘은 하나만 해도 충분하다. 남겨둘 거 한두 개만 딱 골라보자.';
+      case 'sec_male':
+      case 'sec_female':
+      default:
+        return '오늘은 하나만 해도 충분해요. 남겨둘 일 한두 가지만 골라볼까요?';
+    }
+  }
+
+  Widget _buildLightenPlanCard() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFBF8FF),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: _coach.accentColor.withValues(alpha: 0.22)),
+        boxShadow: [
+          BoxShadow(
+            color: _coach.accentColor.withValues(alpha: 0.13),
+            blurRadius: 22,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 30,
+            height: 30,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: _coach.accentColor.withValues(alpha: 0.12),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.filter_alt_outlined,
+              size: 17,
+              color: _coach.accentColor,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _lightenPlanCardMessage,
+                  style: GoogleFonts.notoSansKr(
+                    fontSize: 13,
+                    height: 1.45,
+                    fontWeight: FontWeight.w800,
+                    color: const Color(0xFF3D3A4E),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                GestureDetector(
+                  onTap: () async {
+                    await _dismissLightenPlanCardForToday();
+                    if (!mounted) return;
+                    _showCoreSelectionModal();
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 7,
+                    ),
+                    decoration: BoxDecoration(
+                      color: _coach.accentColor,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      '오늘의 핵심 고르기',
+                      style: GoogleFonts.notoSansKr(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w900,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          GestureDetector(
+            onTap: _dismissLightenPlanCardForToday,
+            behavior: HitTestBehavior.opaque,
+            child: const Padding(
+              padding: EdgeInsets.all(4),
+              child: Icon(Icons.close, size: 18, color: Color(0xFFA0A0B0)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _dismissLightenPlanCardForToday() async {
+    final today = _getTodayStr();
+    if (_lightenPlanCardDismissedDate == today) return;
+    setState(() {
+      _lightenPlanCardDismissedDate = today;
+    });
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_lightenPlanCardDismissedDateKey, today);
   }
 
   Widget _buildRemainingTaskGroup(List<TaskItem> remainingTasks) {
