@@ -7,13 +7,14 @@ import 'package:shared_preferences/shared_preferences.dart';
 ///
 /// 흐름: 실행 저항 표현 → 원인 진단 질문(하루 1회) → 사용자 답변
 ///  - 원인이 구체적이면 기존 [하기 싫다 실행 개입 전략]으로 연결
-///  - 원인이 불명확하면 더 캐묻지 말고 카운트다운 제안
+///  - 원인이 불명확하면 더 캐묻지 말고 마음 비우고 시작 제안
 ///
-/// 진단 질문과 카운트다운 제안 문장은 API가 새로 만들지 않고 여기 정의된 문장 중
+/// 진단 질문과 시작 의식 제안 문장은 API가 새로 만들지 않고 여기 정의된 문장 중
 /// 하나를 랜덤으로 골라 프롬프트에 그대로 주입한다.
 class ExecutionResistanceService {
   /// 원인 진단 질문을 마지막으로 던진 날짜(yyyy-MM-dd). 하루 1회 제한용.
-  static const String _diagnosisAskedDateKey = 'nyang_resistance_diagnosis_date';
+  static const String _diagnosisAskedDateKey =
+      'nyang_resistance_diagnosis_date';
 
   /// 원인 진단 질문 후보. 이 중 하나를 문장 그대로 사용한다.
   static const List<String> diagnosisQuestions = [
@@ -24,10 +25,10 @@ class ExecutionResistanceService {
     '지금 움직이기 어렵게 만드는 가장 큰 이유가 무엇일까요?',
   ];
 
-  /// 원인이 불명확할 때 쓰는 카운트다운 제안 문장 후보.
+  /// 원인이 불명확할 때 쓰는 시작 의식 제안 문장 후보.
   static const List<String> countdownOffers = [
-    '그럴 땐 이유를 더 생각하기보다 잠깐 머리를 비우고 시작하는 게 더 도움이 될 수도 있습니다. 제가 카운트다운을 띄워드릴까요?',
-    '잘 모르겠을 땐 일단 생각을 멈추고 먼저 몸을 움직여 보는 것도 좋은 방법입니다. 카운트다운을 시작해 드릴까요?',
+    '그럴 땐 이유를 더 생각하기보다 잠깐 머리를 비우고 시작하는 게 더 도움이 될 수도 있습니다. 마음 비우고 시작해볼까요?',
+    '잘 모르겠을 땐 생각을 잠깐 내려놓고 시작 의식부터 해보는 것도 괜찮습니다. 마음 비우고 시작해볼까요?',
   ];
 
   static final Random _random = Random();

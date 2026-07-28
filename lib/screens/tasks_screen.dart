@@ -2188,6 +2188,31 @@ class _TasksScreenState extends State<TasksScreen>
     TasksSyncService.scheduleSyncToCloud();
   }
 
+  String _fallbackHabitStartedAt(DateTime completedAt) {
+    final fallback = completedAt.subtract(const Duration(minutes: 30));
+    final dayStart = DateTime(
+      completedAt.year,
+      completedAt.month,
+      completedAt.day,
+    );
+    return (fallback.isBefore(dayStart) ? dayStart : fallback)
+        .toIso8601String();
+  }
+
+  String? _habitStartedAtForCompletion({
+    required String? currentStartedAt,
+    required DateTime completedAt,
+  }) {
+    if (currentStartedAt == null) return _fallbackHabitStartedAt(completedAt);
+    final parsedStartedAt = DateTime.tryParse(currentStartedAt);
+    if (parsedStartedAt == null) return _fallbackHabitStartedAt(completedAt);
+    final elapsed = completedAt.difference(parsedStartedAt).abs();
+    if (elapsed < const Duration(minutes: 1)) {
+      return _fallbackHabitStartedAt(completedAt);
+    }
+    return currentStartedAt;
+  }
+
   // ── getTodayStr ───────────────────────────────────────────
   String _getTodayStr() {
     final n = DateTime.now();
@@ -2484,6 +2509,7 @@ class _TasksScreenState extends State<TasksScreen>
           timeEnd: h.timeEnd,
           createdAt: DateTime.now().toIso8601String(),
           completedAt: isDone ? log!['completedAt'] : null,
+          inProgressAt: isDone ? log!['startedAt'] as String? : null,
         ),
       );
     }
@@ -2846,11 +2872,21 @@ class _TasksScreenState extends State<TasksScreen>
         }
       }
 
+      final completedAtTime = DateTime.now();
+      final completedAtIso = completedAtTime.toIso8601String();
+      final habitStartedAt = t.habitId != null
+          ? _habitStartedAtForCompletion(
+              currentStartedAt: t.inProgressAt,
+              completedAt: completedAtTime,
+            )
+          : t.inProgressAt;
+
       // 완료 처리
       setState(() {
         t.done = true;
         t.inProgress = false;
-        t.completedAt = DateTime.now().toIso8601String();
+        t.inProgressAt = habitStartedAt;
+        t.completedAt = completedAtIso;
         final completedAt = DateTime.tryParse(t.completedAt!);
         if (_isViewingActualToday && t.habitId != null) {
           habitLogs[t.habitId!] ??= <String, dynamic>{};
