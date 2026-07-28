@@ -19,7 +19,6 @@ class DailyResetService {
   static const List<String> coachIds = [
     'cat',
     'boyfriend',
-    'girlfriend',
     'halmae',
     'bro',
     'sec_male',
@@ -62,19 +61,37 @@ class DailyResetService {
 
   /// 리셋으로 지워지는 채팅 원문을 코치별 보관함에 합치고 7일 이전은 버린다.
   /// 서버로 올리지 않는 순수 로컬 저장이며, 열람 표시 용도로만 쓴다.
-  static Future<void> _archiveChatHistory(
+  static Future<List<dynamic>> _archiveChatHistory(
     SharedPreferences prefs,
     String coachId,
+    String currentDate,
   ) async {
     final rawHistory = prefs.getString('nyang_chat_history_$coachId');
-    if (rawHistory == null) return;
-    List<dynamic> todays;
+    if (rawHistory == null) return [];
+    List<dynamic> history;
     try {
-      todays = jsonDecode(rawHistory) as List;
+      history = jsonDecode(rawHistory) as List;
     } catch (_) {
-      return;
+      return [];
     }
-    if (todays.isEmpty) return;
+    if (history.isEmpty) return [];
+
+    final currentMessages = <dynamic>[];
+    final pastMessages = <dynamic>[];
+    for (final message in history) {
+      final time = DateTime.tryParse(
+        (message is Map ? message['time'] : null)?.toString() ?? '',
+      );
+      final messageDate = time == null
+          ? null
+          : DateFormat('yyyy-MM-dd').format(time);
+      if (messageDate == currentDate) {
+        currentMessages.add(message);
+      } else {
+        pastMessages.add(message);
+      }
+    }
+    if (pastMessages.isEmpty) return currentMessages;
 
     final archiveKey = '$chatArchivePrefix$coachId';
     List<dynamic> archive;
@@ -84,7 +101,7 @@ class DailyResetService {
       archive = [];
     }
 
-    archive.addAll(todays);
+    archive.addAll(pastMessages);
 
     // 7일 지난 메시지는 버린다. (time 파싱 실패한 항목은 보수적으로 유지)
     final cutoff = DateTime.now().subtract(
@@ -104,6 +121,7 @@ class DailyResetService {
     }
 
     await prefs.setString(archiveKey, jsonEncode(archive));
+    return currentMessages;
   }
 
   static Future<void> recordDayTransition({
@@ -255,11 +273,15 @@ class DailyResetService {
         await MemoryService().generateDailySummary(lastDate, oldChatHistory);
       }
 
-      // 4. Archive each coach's chat into a rolling 7-day store, then clear.
-      //    "지난 대화 보기"에서 최근 7일치를 열람하는 데만 쓰이는 로컬 보관함이다.
+      // 4. Archive previous-day chat into a rolling 7-day store.
+      //    Same-day messages stay in the current chat so app re-entry does not
+      //    collapse today's conversation or trigger another automatic greeting.
       for (final id in coachIds) {
-        await _archiveChatHistory(prefs, id);
-        await prefs.setString('nyang_chat_history_$id', '[]');
+        final currentMessages = await _archiveChatHistory(prefs, id, today);
+        await prefs.setString(
+          'nyang_chat_history_$id',
+          jsonEncode(currentMessages),
+        );
       }
 
       await prefs.setString('nyang_last_date', today);

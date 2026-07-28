@@ -121,7 +121,6 @@ class AuthService {
       ownedCoaches: const [
         'cat',
         'boyfriend',
-        'girlfriend',
         'bro',
         'halmae',
         'sec_male',

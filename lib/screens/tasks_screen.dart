@@ -1117,21 +1117,6 @@ class _TasksScreenState extends State<TasksScreen>
           'multiple' => '$quoted 비슷한 항목이 여러 개야. 날짜나 이름을 조금만 더 정확히 말해줘.',
           _ => '$quoted 찾아뒀어. 확인하고 삭제하거나 날짜를 바꿔줘.',
         };
-      case 'girlfriend':
-        return switch (key) {
-          'emptyTarget' => '오빠, 어떤 걸 삭제할지 이름까지 같이 말해줘.',
-          'habitNotFound' => '오빠, 습관 탭은 열어둘게. $quoted 습관은 못 찾았으니까 이름 한번 확인해줘.',
-          'habitMultiple' => '오빠, 습관 탭은 열어둘게. $quoted 비슷한 게 여러 개라 직접 보고 지워줘.',
-          'habitOpened' => '오빠, 습관 탭 열어둘게. $quoted 옆 휴지통 버튼으로 확인하고 삭제해줘.',
-          'recurringNotFound' =>
-            '오빠, $datePrefix$quoted 반복 일정은 못 찾았어. 날짜나 이름 한번 확인해줘.',
-          'recurringMultiple' => '오빠, $quoted 비슷한 반복 일정이 여러 개야. 조금만 더 정확히 말해줘.',
-          'recurringOpened' => '오빠, $quoted 반복 일정 삭제 확인창 열어둘게. 마지막으로 확인해줘.',
-          'notFound' =>
-            '오빠, $datePrefix$quoted로 등록된 할 일이나 일정은 못 찾았어. 이름 한번 확인해줘.',
-          'multiple' => '오빠, $quoted 비슷한 항목이 여러 개야. 조금만 더 정확히 말해줘.',
-          _ => '오빠, $quoted 찾아뒀어. 확인하고 삭제하거나 날짜를 바꿔줘.',
-        };
       case 'bro':
         return switch (key) {
           'emptyTarget' => '뭘 삭제할지 이름까지 같이 말해라.',
@@ -1228,18 +1213,6 @@ class _TasksScreenState extends State<TasksScreen>
           'notFound' => '$datePrefix$quoted 항목은 못 찾았어. 일정 탭에서 한번 확인해줘.',
           'multiple' => '$quoted 비슷한 항목이 여러 개야. 날짜나 이름을 조금만 더 정확히 말해줘.',
           _ => '$quoted 수정창 열어둘게. 바꿀 내용은 확인해서 직접 조정해줘.',
-        };
-      case 'girlfriend':
-        return switch (key) {
-          'emptyTarget' => '오빠, 어떤 일정을 수정할지 이름까지 같이 말해줘.',
-          'recurringNotFound' =>
-            '오빠, $datePrefix$quoted 반복 일정은 못 찾았어. 일정 탭에서 한번 확인해줘.',
-          'recurringMultiple' => '오빠, $quoted 비슷한 반복 일정이 여러 개야. 조금만 더 정확히 말해줘.',
-          'recurringOpened' =>
-            '오빠, $quoted 반복 일정 수정창 열어둘게. 바꿀 내용은 직접 확인해서 조정해줘.',
-          'notFound' => '오빠, $datePrefix$quoted 항목은 못 찾았어. 일정 탭에서 한번 확인해줘.',
-          'multiple' => '오빠, $quoted 비슷한 항목이 여러 개야. 조금만 더 정확히 말해줘.',
-          _ => '오빠, $quoted 수정창 열어둘게. 바꿀 내용은 직접 확인해서 조정해줘.',
         };
       case 'bro':
         return switch (key) {
@@ -5441,8 +5414,6 @@ class _TasksScreenState extends State<TasksScreen>
         return '오늘은 하나만 해도 충분하다냥. 남겨둘 일 한두 가지만 골라볼까냥?';
       case 'boyfriend':
         return '오늘은 하나만 해도 충분해. 남겨둘 일 한두 가지만 같이 골라볼까?';
-      case 'girlfriend':
-        return '오늘은 하나만 해도 충분해, 자기야. 남겨둘 일 한두 가지만 같이 골라볼까?';
       case 'halmae':
         return '오늘은 하나만 해도 충분혀. 남겨둘 일 한두 가지만 골라보자.';
       case 'bro':
@@ -12999,8 +12970,6 @@ class _TasksScreenState extends State<TasksScreen>
     switch (widget.coachId) {
       case 'boyfriend':
         return '습관 탭에 추가해뒀어. 세부 설정은 한번 확인하고 너한테 맞게 조정해줘.';
-      case 'girlfriend':
-        return '습관 탭에 추가해뒀어. 세부 설정은 한번 보고 편한 대로 조정해줘.';
       case 'bro':
         return '습관 탭에 추가해뒀다. 세부 설정은 한번 보고 너한테 맞게 손봐라.';
       case 'halmae':

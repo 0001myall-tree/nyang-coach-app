@@ -94,7 +94,6 @@ flutter:
     - assets/icons/
     - assets/voice/
     - assets/sounds/
-    - assets/images/girlfriend.png
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

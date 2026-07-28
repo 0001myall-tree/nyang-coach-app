@@ -1002,17 +1002,6 @@ class _LocalResponses {
         '오늘 얼마나 했는지도 궁금한데, 자기 컨디션부터 먼저 걱정돼 💙',
       ],
     },
-    'girlfriend': {
-      'greet': [
-        '오빠!!!! 어디 갔다 왔어ㅠㅠ 보고싶었어!!!! 🩷',
-        '안 그래도 자기 생각 중이었는데... 왜 이제 왔어ㅠ 💗',
-        '오빠 없으니까 너무 심심했어ㅠ 이제 같이 하는 거야!',
-      ],
-      'status': [
-        '오빠 오늘 밥은 먹었어? 잠은 좀 잤어? 나 그게 먼저 궁금해 🩷',
-        '오늘 할 일도 궁금한데, 오빠가 오빠를 잘 챙겼는지가 더 궁금해!',
-      ],
-    },
     'cat': {
       'greet': [
         '보고 싶었냥 ㅠㅠ 냥이 매일 기다렸다냥... 🥺💛',
@@ -1158,8 +1147,6 @@ class _ChatScreenState extends State<ChatScreen>
   List<ChatMessage> _pastMessages = [];
   List<String> _dynamicChips = [];
   bool _suppressDefaultChips = false;
-  // 마스터 채팅칩 "+더보기" 확장 상태 (수면 도우미 등 추가 칩 표시).
-  bool _masterChipsExpanded = false;
   String? _coachSwitchTarget;
   bool _isLoading = false;
   late CoachConfig _coach;
@@ -1440,8 +1427,6 @@ class _ChatScreenState extends State<ChatScreen>
         return '같이 가자냥';
       case 'boyfriend':
         return '내가 있잖아~^^';
-      case 'girlfriend':
-        return '내가 응원할게~^^';
       case 'halmae':
         return '우리 새끼 잘한다!!!';
       case 'bro':
@@ -1553,7 +1538,6 @@ class _ChatScreenState extends State<ChatScreen>
   bool get _canProactivelyOfferRest => const {
     'cat',
     'boyfriend',
-    'girlfriend',
     'halmae',
     'bro',
     'sec_male',
@@ -1563,7 +1547,6 @@ class _ChatScreenState extends State<ChatScreen>
   String _restOfferMessage() {
     return switch (widget.coachId) {
       'boyfriend' => '요 며칠 진짜 열심히 한 거 내가 다 봤어.\n계속 달리면 나도 걱정돼.',
-      'girlfriend' => '오빠 요 며칠 정말 열심히 한 거 내가 다 봤어.\n계속 달리면 나도 걱정돼.',
       'halmae' => '우리 새끼 요 며칠 애쓴 거 할미가 다 봤다.\n계속 그러다 몸 상할까 걱정이다.',
       'bro' => '야, 요 며칠 빡세게 달린 거 내가 다 봤다.\n계속 밀어붙이면 퍼진다.',
       'sec_male' => '요 며칠 꾸준히 달려오신 걸 확인했습니다.\n계속 무리하시면 컨디션이 걱정됩니다.',
@@ -1575,8 +1558,6 @@ class _ChatScreenState extends State<ChatScreen>
   String _vacationActivatedMessage() {
     return switch (widget.coachId) {
       'boyfriend' => '오늘은 휴식 모드로 하자. 오늘은 할 일 체크 안 할 테니까 아무 걱정하지 말고 푹 쉬어.',
-      'girlfriend' =>
-        '오빠, 오늘은 휴식 모드로 하자. 오늘은 할 일 체크 안 할 테니까 아무 걱정하지 말고 푹 쉬어 🩷',
       'halmae' => '오늘은 휴식 모드로 하자, 우리 새끼. 오늘은 할 일 체크 안 할 테니 아무 걱정 말고 푹 쉬어라.',
       'bro' => '오늘은 휴식 모드다. 할 일 체크 안 들어가니까 걱정 말고 제대로 쉬어.',
       'sec_male' =>
@@ -1589,7 +1570,6 @@ class _ChatScreenState extends State<ChatScreen>
   String _lightDayMessage() {
     return switch (widget.coachId) {
       'boyfriend' => '알겠어. 오늘은 욕심내지 말고 할 수 있는 만큼만 같이 가자.',
-      'girlfriend' => '알겠어 오빠. 오늘은 욕심내지 말고 할 수 있는 만큼만 같이 가자 🩷',
       'halmae' => '그래, 우리 새끼. 오늘은 욕심내지 말고 할 수 있는 만큼만 하자.',
       'bro' => '오케이. 오늘은 욕심내지 말고 딱 할 수 있는 만큼만 가자.',
       'sec_male' => '알겠습니다. 오늘은 범위를 줄이고 할 수 있는 만큼만 진행하시죠.',
@@ -1602,7 +1582,6 @@ class _ChatScreenState extends State<ChatScreen>
     return switch (widget.coachId) {
       'boyfriend' =>
         '알겠어. 휴식 모드는 취소했어. 다시 해보고 싶은 마음이 들었으면 처음부터 다 하려고 하지 말고 천천히 돌아가자.',
-      'girlfriend' => '알겠어 오빠. 휴식 모드는 취소했어. 처음부터 다 하려고 하지 말고 천천히 돌아가자 🩷',
       'halmae' => '알았다, 우리 새끼. 휴식 모드는 취소했으니 처음부터 무리하지 말고 천천히 돌아가자.',
       'bro' => '오케이, 휴식 모드 취소했다. 처음부터 풀파워로 가지 말고 천천히 복귀하자.',
       'sec_male' => '휴식 모드를 해제했습니다, 대표님. 처음부터 모든 일정을 처리하려 하지 마시고 천천히 복귀하시죠.',
@@ -2192,7 +2171,6 @@ class _ChatScreenState extends State<ChatScreen>
         _pastLoaded = false;
         _pastMessages = [];
         _dynamicChips.clear();
-        _masterChipsExpanded = false;
         _isLoading = false;
         _coach = CoachConfigs.get(widget.coachId);
         _timerConfirmMinutes = null;
@@ -2232,11 +2210,16 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   /// 외부에서 AI 메시지를 채팅창에 직접 주입합니다 (핵심 설정 완료 반응 등).
-  void _injectAiMessage(String text) {
+  void _injectAiMessage(String text, {String? kind}) {
     if (!mounted) return;
     setState(() {
       _messages.add(
-        ChatMessage(text: text, isUser: false, time: DateTime.now()),
+        ChatMessage(
+          text: text,
+          isUser: false,
+          time: DateTime.now(),
+          kind: kind,
+        ),
       );
     });
     _saveHistory();
@@ -2592,11 +2575,6 @@ class _ChatScreenState extends State<ChatScreen>
                               '해내면 때론 애인처럼, 때론 친구처럼 마음껏 칭찬해주고',
                             ),
                             _buildAboutSpeaker(
-                              'girlfriend',
-                              '응원 요정',
-                              '지친 날엔 비타민이 돼드려요!',
-                            ),
-                            _buildAboutSpeaker(
                               'halmae',
                               '할매 코치',
                               '우리 새끼 다독이는 건 내가 최고지.',
@@ -2732,7 +2710,6 @@ class _ChatScreenState extends State<ChatScreen>
     IconData getEmblem() {
       if (coachId == 'cat') return Icons.pets;
       if (coachId == 'boyfriend') return Icons.favorite_border;
-      if (coachId == 'girlfriend') return Icons.local_florist_outlined;
       if (coachId == 'halmae') return Icons.volunteer_activism_outlined;
       if (coachId == 'sec_male' || coachId == 'sec_female')
         return Icons.business_center_outlined;
@@ -2842,7 +2819,7 @@ class _ChatScreenState extends State<ChatScreen>
       ];
       final greet = femaleGreets[Random().nextInt(femaleGreets.length)]
           .replaceAll(UserTitleService.defaultTitle, userTitle);
-      _injectAiMessage(greet);
+      _injectAiMessage(greet, kind: 'auto_greeting');
       return;
     }
 
@@ -2971,7 +2948,12 @@ class _ChatScreenState extends State<ChatScreen>
       if (!mounted) return;
       setState(() {
         _messages.add(
-          ChatMessage(text: greet, isUser: false, time: DateTime.now()),
+          ChatMessage(
+            text: greet,
+            isUser: false,
+            time: DateTime.now(),
+            kind: 'auto_greeting',
+          ),
         );
         _dynamicChips = [];
         _suppressDefaultChips = true;
@@ -2998,7 +2980,12 @@ class _ChatScreenState extends State<ChatScreen>
             '주변의 할 일창이나 습관 트래커도 자유롭게 눌러보라냥~';
         setState(() {
           _messages.add(
-            ChatMessage(text: intro, isUser: false, time: DateTime.now()),
+            ChatMessage(
+              text: intro,
+              isUser: false,
+              time: DateTime.now(),
+              kind: 'auto_greeting',
+            ),
           );
         });
         await _saveHistory();
@@ -3031,7 +3018,7 @@ class _ChatScreenState extends State<ChatScreen>
         if (daysDiff >= 3) {
           final cid = _coach.id;
           final List<String> greets;
-          if (cid == 'boyfriend' || cid == 'girlfriend') {
+          if (cid == 'boyfriend') {
             greets = [
               '왜 이제 왔어. 기다렸잖아ㅜㅎㅎ 오늘 어땠어?',
               '뭐야, 왜 이렇게 오랜만이야~ 보고 싶었잖아!',
@@ -3057,7 +3044,7 @@ class _ChatScreenState extends State<ChatScreen>
             ];
           }
           final greet = greets[Random().nextInt(greets.length)];
-          _injectAiMessage(greet);
+          _injectAiMessage(greet, kind: 'auto_greeting');
         }
       }
       await prefs.setString(
@@ -3783,7 +3770,12 @@ class _ChatScreenState extends State<ChatScreen>
 
       setState(() {
         _messages.add(
-          ChatMessage(text: greetingText, isUser: false, time: DateTime.now()),
+          ChatMessage(
+            text: greetingText,
+            isUser: false,
+            time: DateTime.now(),
+            kind: 'auto_greeting',
+          ),
         );
         _suppressDefaultChips = parsed.suppressDefaultChips;
         _dynamicChips = parsed.chips.isNotEmpty
@@ -3792,6 +3784,7 @@ class _ChatScreenState extends State<ChatScreen>
         _coachSwitchTarget = parsed.coachSwitchTarget;
         _isLoading = false;
       });
+      await _saveHistory();
       _scrollToBottom();
     } catch (_) {
       if (!mounted || widget.coachId != currentId) return;
@@ -4020,7 +4013,6 @@ class _ChatScreenState extends State<ChatScreen>
   String _habitRegistrationReply(String habitName) {
     return switch (widget.coachId) {
       'boyfriend' => '$habitName, 습관 탭에 추가해뒀어. 세부 설정은 한번 확인해줘.',
-      'girlfriend' => '오빠, $habitName 습관 탭에 추가해뒀어. 세부 설정은 한번 확인해줘.',
       'bro' => '$habitName 습관 탭에 추가해뒀다. 세부 설정은 한번 확인해라.',
       'halmae' => '$habitName, 습관 탭에 추가해뒀다. 세부 설정은 잘 확인해라.',
       'sec_male' => '$habitName 항목을 습관 탭에 추가해두었습니다. 세부 설정을 확인해 주세요.',
@@ -4188,7 +4180,6 @@ class _ChatScreenState extends State<ChatScreen>
   String _emptyDeleteTargetReply() {
     return switch (widget.coachId) {
       'boyfriend' => '어떤 걸 삭제할지 이름까지 같이 말해줘.',
-      'girlfriend' => '오빠, 어떤 걸 삭제할지 이름까지 같이 말해줘.',
       'bro' => '뭘 삭제할지 이름까지 같이 말해라.',
       'halmae' => '뭘 지울지 이름까지 말해줘야 한다, 우리 새끼.',
       'sec_male' => '삭제할 항목명을 함께 말씀해 주세요.',
@@ -4200,7 +4191,6 @@ class _ChatScreenState extends State<ChatScreen>
   String _emptyEditTargetReply() {
     return switch (widget.coachId) {
       'boyfriend' => '어떤 일정을 수정할지 이름까지 같이 말해줘.',
-      'girlfriend' => '오빠, 어떤 일정을 수정할지 이름까지 같이 말해줘.',
       'bro' => '뭘 수정할지 이름까지 같이 말해라.',
       'halmae' => '뭘 고칠지 이름까지 말해줘야 한다, 우리 새끼.',
       'sec_male' => '수정할 항목명을 함께 말씀해 주세요.',
@@ -4226,7 +4216,6 @@ class _ChatScreenState extends State<ChatScreen>
   String _weeklyRepeatWeekdayQuestion() {
     return switch (widget.coachId) {
       'boyfriend' => '매주 반복으로 등록하려면 무슨 요일로 할지 말해줘.',
-      'girlfriend' => '오빠, 매주 반복으로 등록하려면 무슨 요일로 할지 말해줘.',
       'bro' => '매주 반복이면 요일이 필요하다. 무슨 요일로 할지 말해라.',
       'halmae' => '매주 반복이면 요일을 정해야 한다. 무슨 요일로 해줄까?',
       'sec_male' => '매주 반복 일정으로 등록하려면 요일이 필요합니다. 무슨 요일로 해드릴까요?',
@@ -4917,7 +4906,6 @@ class _ChatScreenState extends State<ChatScreen>
       'bro' => '$subject이다. 됐지?',
       'halmae' => '$subject이란다~',
       'boyfriend' => '자기야, $subject이야 💙',
-      'girlfriend' => '오빠, $subject이야 🩷',
       'sec_male' => '$subject입니다.',
       'sec_female' => '$subject이에요! 🌸',
       _ => '$subject입니다.',
@@ -6848,20 +6836,6 @@ class _ChatScreenState extends State<ChatScreen>
           '반복 일정은 일정 탭에서 해당 일정을 누르고 삭제하기를 누르면 돼. 반복으로 등록된 같은 일정이 같이 삭제돼.',
         'repeat_schedule_edit' => '반복 일정 수정은 일정 탭에서 해당 일정을 눌러서 하면 돼. 바로 열어줄게.',
         _ => '${base(' 화면에 있어. 바로 열어줄게.')}',
-      },
-      'girlfriend' => switch (location) {
-        'picker' => '오빠 어디 찾는 거야? 내가 바로 데려다줄게!',
-        'settings' =>
-          '오빠, 설정 탭에 있어! 모닝콜, 일정 알람, 위젯, 채팅 배경, 비서 학습 설정까지 거기서 바꾸면 돼.',
-        'todo_reset' => '오빠, 오늘 할 일은 매일 자정에 자동으로 초기화돼! 초기화 시간을 따로 바꾸는 기능은 없어.',
-        'vision' => '오빠 장기 비전은 목표 화면 아래쪽에 있어. 바로 열어줄게!',
-        'repeat_schedule' =>
-          '오빠, 반복 일정은 일정 탭에서 만들면 돼! 일정 입력하고 시계 버튼 누른 다음 반복을 고르면 돼.',
-        'repeat_schedule_delete' =>
-          '오빠, 반복 일정은 일정 탭에서 해당 일정을 누르고 삭제하기를 누르면 돼! 반복으로 등록된 같은 일정이 같이 삭제돼.',
-        'repeat_schedule_edit' =>
-          '오빠, 반복 일정 수정은 일정 탭에서 해당 일정을 눌러서 하면 돼. 바로 열어줄게!',
-        _ => '오빠, ${base(' 화면에 있어. 바로 열어줄게!')}',
       },
       'halmae' => switch (location) {
         'picker' => '뭘 찾는 게냐, 우리 새끼. 할미가 바로 데려다주마.',
@@ -9285,7 +9259,6 @@ $timerOutputRule
   List<dynamic> _memoSearchVisionsCache = [];
 
   List<Map<String, String>> get _cheatKeyItems => [
-    {'icon': 'assets/icons/bolt.svg', 'label': '지금 뭐하지?'},
     {'icon': 'assets/icons/compass.svg', 'label': '미래를 위한 오늘'},
     {'icon': 'assets/icons/flag.svg', 'label': '마일스톤 확인'},
     {'icon': 'assets/icons/magnifying-glass.svg', 'label': '메모 검색'},
@@ -10900,15 +10873,27 @@ $timerOutputRule
     );
   }
 
-  // 마스터 코치 채팅창 하단 고정 채팅칩. (탭 동작은 추후 정의)
-  static const List<String> _masterQuickChips = ['마음 비우고 시작', '타이머 띄워줘'];
+  // 마스터 코치 채팅창 하단 고정 채팅칩.
+  bool get _isMasterChipNightTime {
+    final hour = DateTime.now().hour;
+    return hour >= 21 || hour < 6;
+  }
+
+  List<String> get _masterQuickChips => _isMasterChipNightTime
+      ? ['잠이 안 와', '마음 비우고 하게 해줘', '내일로 미뤄도 돼?']
+      : ['지금 뭐하지?', '마음 비우고 하게 해줘', '오늘 핵심 정리해줘'];
 
   // 마스터 칩 앞 FontAwesome 아이콘. 칩 글씨색(코치 accent)에 맞춰 톤을 통일한다.
   Widget? _chipIcon(String chip, {Color? color}) {
     final asset = switch (chip) {
       '마음 비우고 시작' => 'assets/icons/fa-hourglass-half-solid.svg',
+      '마음 비우고 하게 해줘' => 'assets/icons/fa-hourglass-half-solid.svg',
+      '지금 뭐하지?' => 'assets/icons/bolt.svg',
+      '오늘 핵심 정리해줘' => 'assets/icons/bullseye.svg',
+      '내일로 미뤄도 돼?' => 'assets/icons/clock-rotate-left.svg',
       '타이머 띄워줘' => 'assets/icons/fa-stopwatch-solid.svg',
       '수면 도우미' => 'assets/icons/fa-moon-solid.svg',
+      '잠이 안 와' => 'assets/icons/fa-moon-solid.svg',
       '돌아가기' => 'assets/icons/fa-arrow-rotate-left-solid.svg',
       _ => null,
     };
@@ -10931,12 +10916,16 @@ $timerOutputRule
       color: Colors.transparent,
       child: InkWell(
         onTap: () {
-          if (chip == '마음 비우고 시작') {
+          if (chip == '마음 비우고 시작' || chip == '마음 비우고 하게 해줘') {
             _openCountdownFocusMode();
             return;
           }
-          if (chip == '수면 도우미') {
+          if (chip == '수면 도우미' || chip == '잠이 안 와') {
             _openSleepAssistMode();
+            return;
+          }
+          if (chip == '지금 뭐하지?') {
+            _send('지금 뭐하지?');
             return;
           }
           _send(chip);
@@ -10982,61 +10971,11 @@ $timerOutputRule
     );
   }
 
-  // 배경 없이 채팅칩 글자와 같은 색·크기·굵기의 텍스트 버튼 (+더보기 / 돌아가기).
-  Widget _buildMasterTextButton(
-    String label, {
-    Widget? icon,
-    required VoidCallback onTap,
-  }) {
-    const chipInk = AppDesignTokens.brandMuted;
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (icon != null) ...[icon, const SizedBox(width: 5)],
-            Text(
-              label,
-              style: GoogleFonts.notoSansKr(
-                fontSize: 12,
-                fontWeight: FontWeight.w900,
-                color: chipInk,
-                letterSpacing: 0,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _buildMasterChipRow() {
-    const chipInk = AppDesignTokens.brandMuted;
     final List<Widget> items = [];
-    if (_masterChipsExpanded) {
-      items.add(_buildMasterQuickChip('수면 도우미'));
+    for (final chip in _masterQuickChips) {
+      items.add(_buildMasterQuickChip(chip));
       items.add(const SizedBox(width: 12));
-      items.add(
-        _buildMasterTextButton(
-          '돌아가기',
-          icon: _chipIcon('돌아가기', color: chipInk),
-          onTap: () => setState(() => _masterChipsExpanded = false),
-        ),
-      );
-    } else {
-      for (final chip in _masterQuickChips) {
-        items.add(_buildMasterQuickChip(chip));
-        items.add(const SizedBox(width: 12));
-      }
-      items.add(
-        _buildMasterTextButton(
-          '+더보기',
-          onTap: () => setState(() => _masterChipsExpanded = true),
-        ),
-      );
     }
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
@@ -11086,6 +11025,10 @@ $timerOutputRule
                 _openCountdownFocusMode();
                 return;
               }
+              if (_coach.isMaster && chip == '마음 비우고 하게 해줘') {
+                _openCountdownFocusMode();
+                return;
+              }
               _send(chip);
             },
           );
@@ -11100,8 +11043,6 @@ $timerOutputRule
     final isMasterVacation = _coach.isMaster && widget.vacationInfo != null;
     final isImmersiveInput = isFriends || isMasterVacation;
     final isNyang = widget.coachId == 'cat';
-    final isGirlfriend = widget.coachId == 'girlfriend';
-    final girlfriendPink = _coach.accentColor;
     const masterLavenderBorder = AppDesignTokens.brandCardBorder;
     const masterLavenderIcon = AppDesignTokens.brandMuted;
     const masterLavenderShadow = AppDesignTokens.brand;
@@ -11166,15 +11107,9 @@ $timerOutputRule
                                 : (isNyang
                                       ? _coach.accentColor.withOpacity(0.6)
                                       : (isImmersiveInput
-                                            ? (isGirlfriend
-                                                  ? girlfriendPink.withOpacity(
-                                                      0.45,
-                                                    )
-                                                  : Colors.white.withOpacity(
-                                                      isMasterVacation
-                                                          ? 0.6
-                                                          : 0.3,
-                                                    ))
+                                            ? Colors.white.withOpacity(
+                                                isMasterVacation ? 0.6 : 0.3,
+                                              )
                                             : masterLavenderBorder))),
                       width: _isListening ? 2.0 : 1.2,
                     ),
@@ -11197,9 +11132,7 @@ $timerOutputRule
                               : (isNyang
                                     ? _coach.accentColor
                                     : (isFriends
-                                          ? (isGirlfriend
-                                                ? girlfriendPink
-                                                : Colors.white)
+                                          ? Colors.white
                                           : masterLavenderIcon))),
                     size: 20,
                   ),
@@ -11229,9 +11162,7 @@ $timerOutputRule
                           : (isNyang
                                 ? _coach.accentColor.withOpacity(0.5)
                                 : (isFriends
-                                      ? (isGirlfriend
-                                            ? girlfriendPink.withOpacity(0.45)
-                                            : Colors.white.withOpacity(0.3))
+                                      ? Colors.white.withOpacity(0.3)
                                       : (isMasterVacation
                                             ? Colors.white.withOpacity(
                                                 AppDesignTokens
@@ -11253,9 +11184,7 @@ $timerOutputRule
                           : (isNyang
                                 ? AppDesignTokens.textPrimary
                                 : (isFriends
-                                      ? (isGirlfriend
-                                            ? AppDesignTokens.textPrimary
-                                            : Colors.white)
+                                      ? Colors.white
                                       : AppDesignTokens.textPrimary)),
                     ),
                     decoration: InputDecoration(
@@ -11269,10 +11198,7 @@ $timerOutputRule
                                       alpha: 0.62,
                                     )
                                   : (isFriends
-                                        ? (isGirlfriend
-                                              ? AppDesignTokens.textPrimary
-                                                    .withValues(alpha: 0.45)
-                                              : Colors.white.withOpacity(0.6))
+                                        ? Colors.white.withOpacity(0.6)
                                         : AppDesignTokens.textDisabled)),
                       ),
                       border: InputBorder.none,

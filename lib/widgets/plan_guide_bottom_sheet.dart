@@ -551,7 +551,8 @@ class _PlanPriceBox extends StatelessWidget {
           const SizedBox(height: 12),
           ...features.map((feature) {
             final isSignatureFeature =
-                feature.$2 == '미루는 항목, 습관이 될 때까지 관리' || feature.$2 == '장기 목표 조력';
+                feature.$2 == '미루는 항목, 습관이 될 때까지 관리' ||
+                feature.$2 == '장기 목표 조력';
             return Padding(
               padding: const EdgeInsets.only(bottom: 8),
               child: Row(
@@ -673,7 +674,7 @@ class _IndividualCoachGuide extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '남친, 할매, 여친, 갓생 형 코치를 1년 이용권으로 추가할 수 있어요.',
+                  '남친, 할매, 갓생 형 코치를 1년 이용권으로 추가할 수 있어요.',
                   style: GoogleFonts.notoSansKr(
                     fontSize: AppDesignTokens.textCaption,
                     fontWeight: FontWeight.w600,

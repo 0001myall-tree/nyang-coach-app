@@ -3527,8 +3527,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           ),
                         );
                         TasksSyncService.scheduleSyncToCloud();
-                        await NotificationService()
-                            .disableNightCallReminders();
+                        await NotificationService().disableNightCallReminders();
                         Navigator.pop(context);
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(content: Text('비서 학습 설정이 저장되었습니다.')),

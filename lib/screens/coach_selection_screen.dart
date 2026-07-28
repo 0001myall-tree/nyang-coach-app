@@ -630,18 +630,6 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen>
       ],
     },
     {
-      'id': 'girlfriend',
-      'name': '응원 요정',
-      'subtitle': '여친 같은 응원',
-      'image': 'assets/images/girlfriend.png',
-      'color': _coachMint,
-      'price': '₩2,900 / 1년 이용',
-      'tags': [
-        {'icon': Icons.auto_awesome, 'text': '칭찬 요정'},
-        {'icon': Icons.favorite, 'text': '자기돌봄'},
-      ],
-    },
-    {
       'id': 'bro',
       'name': '갓생 형 코치',
       'subtitle': '자기관리',
