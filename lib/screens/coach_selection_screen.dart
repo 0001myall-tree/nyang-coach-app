@@ -239,6 +239,11 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen>
                                 '그래서 냥냥코치가 태어났다냥!\n\n우리는 여러분이 다시 움직일 수 있도록 함께하는 코치들이다냥.',
                           ),
                           _buildTeamIntroSpeaker(
+                            imagePath: 'assets/images/boyfriend.png',
+                            name: '햇살 코치',
+                            text: '프렌즈 코치들은 하기 싫은 날에도 옆에서 다정하게 응원해줘요.',
+                          ),
+                          _buildTeamIntroSpeaker(
                             imagePath: 'assets/images/sec_male.png',
                             name:
                                 CoachConfigs.all['sec_male']?.name ?? '남비서 코치',
@@ -598,6 +603,18 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen>
       'tags': [
         {'icon': Icons.extension, 'text': '할 일 쪼개기'},
         {'icon': Icons.track_changes_rounded, 'text': '실행 습관'},
+      ],
+    },
+    {
+      'id': 'boyfriend',
+      'name': '햇살 코치',
+      'subtitle': '자상한 챙김',
+      'image': 'assets/images/boyfriend.png',
+      'color': _coachMint,
+      'price': '₩2,900 / 1년 이용',
+      'tags': [
+        {'icon': Icons.favorite, 'text': '자기돌봄'},
+        {'icon': Icons.local_cafe, 'text': '생활관리'},
       ],
     },
     {

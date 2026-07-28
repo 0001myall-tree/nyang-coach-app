@@ -118,7 +118,14 @@ class AuthService {
     final testData = UserData(
       planType: 'master',
       selectedCoachId: 'cat',
-      ownedCoaches: const ['cat', 'bro', 'halmae', 'sec_male', 'sec_female'],
+      ownedCoaches: const [
+        'cat',
+        'boyfriend',
+        'bro',
+        'halmae',
+        'sec_male',
+        'sec_female',
+      ],
     );
     await UserDataService.save(testData);
     await NotificationService().syncDailyMorningCall();

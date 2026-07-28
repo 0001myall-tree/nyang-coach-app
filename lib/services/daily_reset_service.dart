@@ -18,6 +18,7 @@ class DailyResetService {
   static const int chatArchiveDays = 7;
   static const List<String> coachIds = [
     'cat',
+    'boyfriend',
     'halmae',
     'bro',
     'sec_male',

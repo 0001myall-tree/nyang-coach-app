@@ -669,6 +669,7 @@ class TaskResistanceService {
   static String _generatePreemptiveMessage(String coachId, String taskText) {
     // 기존 _restOfferMessage()/_vacationActivatedMessage() 패턴 재사용 (페르소나별 하드코딩, LLM 호출 없음)
     return switch (coachId) {
+      'boyfriend' => '오늘 $taskText 있던데, 언제쯤 할 생각이야? 괜찮아?',
       'halmae' => '우리 새끼, 오늘 $taskText 있던데 언제쯤 할 생각이니?',
       'bro' => '야, 오늘 $taskText 있던데 언제 할 거냐?',
       'sec_male' => '오늘 $taskText 일정이 있으신데, 언제쯤 진행하실 계획이신가요?',
