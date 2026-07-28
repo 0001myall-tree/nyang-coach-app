@@ -49,9 +49,9 @@ Future<void> _runStartupBackgroundJobs() async {
   }
 
   try {
-    await NotificationService().syncDailyNightCall();
+    await NotificationService().disableNightCallReminders();
   } catch (e, stackTrace) {
-    debugPrint('Startup night call sync failed: $e');
+    debugPrint('Startup night call cleanup failed: $e');
     debugPrintStack(stackTrace: stackTrace);
   }
 

@@ -185,9 +185,9 @@ class _LandingScreenState extends State<LandingScreen>
       debugPrint('Morning notification sync skipped: $e');
     }
     try {
-      await NotificationService().syncDailyNightCall();
+      await NotificationService().disableNightCallReminders();
     } catch (e) {
-      debugPrint('Night notification sync skipped: $e');
+      debugPrint('Night notification cleanup skipped: $e');
     }
     try {
       await NotificationService().syncCoreReminders();

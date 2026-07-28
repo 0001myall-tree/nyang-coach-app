@@ -330,6 +330,28 @@ class VisionDeadline {
   }
 }
 
+class _TaskHintTrianglePainter extends CustomPainter {
+  final Color color;
+
+  const _TaskHintTrianglePainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()..color = color;
+    final path = Path()
+      ..moveTo(0, 0)
+      ..lineTo(size.width / 2, size.height)
+      ..lineTo(size.width, 0)
+      ..close();
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _TaskHintTrianglePainter oldDelegate) {
+    return oldDelegate.color != color;
+  }
+}
+
 class MemoSection {
   String title;
   String content;
@@ -627,6 +649,14 @@ class _TasksScreenState extends State<TasksScreen>
   TimeOfDay? _todayStartTime;
   TimeOfDay? _todayEndTime;
   String? _todayDuration;
+  static const _taskCheckboxHintSeenKey = 'nyang_hint_seen_task_checkbox';
+  static const _inProgressToastSeenKey = 'nyang_hint_seen_in_progress_toast';
+  bool _taskCheckboxHintSeen = false;
+  bool _inProgressToastSeen = false;
+  bool _taskCheckboxHintPulseStarted = false;
+  bool _inProgressHintPopupVisible = false;
+  late final AnimationController _taskCheckboxHintPulseCtrl;
+  Timer? _inProgressHintPopupTimer;
 
   // 오늘 탭 입력
   final _todayInputCtrl = TextEditingController();
@@ -650,6 +680,10 @@ class _TasksScreenState extends State<TasksScreen>
   @override
   void initState() {
     super.initState();
+    _taskCheckboxHintPulseCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    );
     _coach = CoachConfigs.get(widget.coachId);
     final initialPlannerDate = DateTime.tryParse(
       widget.initialPlannerDateKey ?? '',
@@ -677,6 +711,8 @@ class _TasksScreenState extends State<TasksScreen>
   void dispose() {
     widget.controller?._detach();
     _visionHighlightTimer?.cancel();
+    _inProgressHintPopupTimer?.cancel();
+    _taskCheckboxHintPulseCtrl.dispose();
     _tabCtrl.removeListener(_handleTaskTabChanged);
     _tabCtrl.dispose();
     _todayInputCtrl.dispose();
@@ -700,6 +736,9 @@ class _TasksScreenState extends State<TasksScreen>
     final rawPlannedTodayTasks = prefs.getString('nyang_today_tasks_by_date');
     final rawLogs = prefs.getString('nyang_habit_logs');
     final rawVacation = prefs.getString('nyang_vacation');
+    final taskCheckboxHintSeen =
+        prefs.getBool(_taskCheckboxHintSeenKey) ?? false;
+    final inProgressToastSeen = prefs.getBool(_inProgressToastSeenKey) ?? false;
     final hasActivePlan = await _hasActivePlan();
     if (!hasActivePlan) {
       await prefs.setBool('nyang_core_reminder_enabled', false);
@@ -710,6 +749,8 @@ class _TasksScreenState extends State<TasksScreen>
 
     setState(() {
       _isCoreReminderEnabledGlobally = coreEnabled;
+      _taskCheckboxHintSeen = taskCheckboxHintSeen;
+      _inProgressToastSeen = inProgressToastSeen;
       _todayReminderEnabled = false;
       if (rawTasks != null) {
         tasks = (jsonDecode(rawTasks) as List)
@@ -1762,36 +1803,19 @@ class _TasksScreenState extends State<TasksScreen>
       await _saveCoreTasks();
 
       // 3. Generate daily summary before clearing chat history
-      final currentChar = prefs.getString('nyang_selected_coach') ?? '';
-      if (currentChar.isNotEmpty) {
-        final historyStr = prefs.getString('nyang_chat_history_$currentChar');
-        if (historyStr != null) {
-          try {
-            final List<dynamic> oldChatHistory = jsonDecode(historyStr);
-            if (oldChatHistory.isNotEmpty) {
-              await MemoryService().loadMemoryData();
-              await MemoryService().generateDailySummary(
-                lastDate,
-                oldChatHistory,
-              );
-            }
-          } catch (e) {
-            print('Failed to generate daily summary: $e');
-          }
+      try {
+        final oldChatHistory =
+            DailyResetService.collectChatHistoryForDailySummary(prefs);
+        if (oldChatHistory.isNotEmpty) {
+          await MemoryService().loadMemoryData();
+          await MemoryService().generateDailySummary(lastDate, oldChatHistory);
         }
+      } catch (e) {
+        print('Failed to generate daily summary: $e');
       }
 
       // 4. Clear all chat histories
-      final coachIds = [
-        'cat',
-        'boyfriend',
-        'girlfriend',
-        'halmae',
-        'bro',
-        'sec_male',
-        'sec_female',
-      ];
-      for (final id in coachIds) {
+      for (final id in DailyResetService.coachIds) {
         await prefs.setString('nyang_chat_history_$id', '[]');
       }
 
@@ -2802,6 +2826,7 @@ class _TasksScreenState extends State<TasksScreen>
             : null;
       });
       _saveTasks();
+      _showInProgressHintToastOnce();
     } else {
       HabitItem? habitInfo;
       if (t.habitId != null) {
@@ -3782,36 +3807,109 @@ class _TasksScreenState extends State<TasksScreen>
     return Scaffold(
       resizeToAvoidBottomInset: false,
       backgroundColor: isVacation ? Colors.transparent : Colors.white,
-      body: Container(
-        decoration: isVacation
-            ? const BoxDecoration(
-                image: DecorationImage(
-                  image: AssetImage('assets/images/vacation_bg.jpg'),
-                  fit: BoxFit.cover,
-                ),
-              )
-            : null,
-        child: Container(
-          color: isVacation
-              ? Colors.white.withOpacity(0.85)
-              : Colors.transparent,
-          child: Column(
-            children: [
-              // 탭바 (오늘 / 목표 / 일정 / 습관)
-              _buildTabBar(),
-              Expanded(
-                child: TabBarView(
-                  controller: _tabCtrl,
-                  children: [
-                    _buildTodayTab(),
-                    _buildGoalTab(),
-                    _buildScheduleTab(),
-                    _buildHabitTab(),
-                  ],
+      body: Stack(
+        children: [
+          Container(
+            decoration: isVacation
+                ? const BoxDecoration(
+                    image: DecorationImage(
+                      image: AssetImage('assets/images/vacation_bg.jpg'),
+                      fit: BoxFit.cover,
+                    ),
+                  )
+                : null,
+            child: Container(
+              color: isVacation
+                  ? Colors.white.withValues(alpha: 0.85)
+                  : Colors.transparent,
+              child: Column(
+                children: [
+                  // 탭바 (오늘 / 목표 / 일정 / 습관)
+                  _buildTabBar(),
+                  Expanded(
+                    child: TabBarView(
+                      controller: _tabCtrl,
+                      children: [
+                        _buildTodayTab(),
+                        _buildGoalTab(),
+                        _buildScheduleTab(),
+                        _buildHabitTab(),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          Positioned(
+            left: 20,
+            right: 20,
+            top: 86,
+            child: IgnorePointer(
+              child: AnimatedOpacity(
+                opacity: _inProgressHintPopupVisible ? 1 : 0,
+                duration: const Duration(milliseconds: 180),
+                curve: Curves.easeOut,
+                child: AnimatedSlide(
+                  offset: _inProgressHintPopupVisible
+                      ? Offset.zero
+                      : const Offset(0, -0.08),
+                  duration: const Duration(milliseconds: 180),
+                  curve: Curves.easeOut,
+                  child: _buildInProgressHintPopup(),
                 ),
               ),
-            ],
+            ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInProgressHintPopup() {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: _coach.accentColor.withValues(alpha: 0.22)),
+        boxShadow: [
+          BoxShadow(
+            color: _coach.accentColor.withValues(alpha: 0.18),
+            blurRadius: 24,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+        child: Row(
+          children: [
+            Container(
+              width: 30,
+              height: 30,
+              decoration: BoxDecoration(
+                color: _coach.accentColor.withValues(alpha: 0.11),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.timelapse_rounded,
+                size: 18,
+                color: _coach.accentColor,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                '진행 중으로 바뀌었어요. 한 번 더 누르면 완료예요.',
+                style: GoogleFonts.notoSansKr(
+                  fontSize: 12.8,
+                  height: 1.35,
+                  fontWeight: FontWeight.w800,
+                  color: const Color(0xFF3D3A4E),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -5277,10 +5375,143 @@ class _TasksScreenState extends State<TasksScreen>
   }
 
   Widget _buildRemainingTaskGroup(List<TaskItem> remainingTasks) {
+    final showCheckboxHint =
+        !_taskCheckboxHintSeen && remainingTasks.any((task) => !task.done);
+    if (showCheckboxHint && !_taskCheckboxHintPulseStarted) {
+      _taskCheckboxHintPulseStarted = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _taskCheckboxHintPulseCtrl.forward(from: 0);
+        }
+      });
+    }
     return Column(
       mainAxisSize: MainAxisSize.min,
-      children: remainingTasks.map(_buildTaskItem).toList(),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (showCheckboxHint) _buildTaskCheckboxHint(),
+        ...remainingTasks.asMap().entries.map(
+          (entry) => _buildTaskItem(
+            entry.value,
+            showCheckboxTapHint: showCheckboxHint && entry.key == 0,
+          ),
+        ),
+      ],
     );
+  }
+
+  Widget _buildTaskCheckboxHint() {
+    return Padding(
+      padding: const EdgeInsets.only(left: 10, right: 10, bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(width: 4),
+          Column(
+            children: [
+              Container(
+                width: 22,
+                height: 22,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  border: Border.all(color: const Color(0xFFB7A5FF), width: 2),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+              ),
+              CustomPaint(
+                size: const Size(10, 6),
+                painter: _TaskHintTrianglePainter(
+                  color: const Color(0xFFF6F2FF),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(width: 10),
+          Flexible(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF6F2FF),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFE4DAFF)),
+              ),
+              child: Text(
+                '한 번 누르면 진행 중, 한 번 더 누르면 완료예요.',
+                style: GoogleFonts.notoSansKr(
+                  fontSize: 12.5,
+                  height: 1.35,
+                  fontWeight: FontWeight.w700,
+                  color: const Color(0xFF6D5BD0),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCheckboxTapHintDot() {
+    return AnimatedBuilder(
+      animation: _taskCheckboxHintPulseCtrl,
+      builder: (context, child) {
+        final opacity = TweenSequence<double>([
+          TweenSequenceItem(tween: ConstantTween<double>(0), weight: 8),
+          TweenSequenceItem(tween: Tween<double>(begin: 0, end: 1), weight: 14),
+          TweenSequenceItem(tween: Tween<double>(begin: 1, end: 0), weight: 18),
+          TweenSequenceItem(tween: Tween<double>(begin: 0, end: 1), weight: 14),
+          TweenSequenceItem(tween: Tween<double>(begin: 1, end: 0), weight: 18),
+          TweenSequenceItem(tween: ConstantTween<double>(0), weight: 8),
+        ]).evaluate(_taskCheckboxHintPulseCtrl);
+        final scale = 0.85 + (opacity * 0.25);
+        return Opacity(
+          opacity: opacity,
+          child: Transform.scale(scale: scale, child: child),
+        );
+      },
+      child: Container(
+        width: 7,
+        height: 7,
+        decoration: BoxDecoration(
+          color: _coach.accentColor,
+          shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(
+              color: _coach.accentColor.withValues(alpha: 0.35),
+              blurRadius: 8,
+              spreadRadius: 1,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _markTaskCheckboxHintSeen() async {
+    if (_taskCheckboxHintSeen) return;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_taskCheckboxHintSeenKey, true);
+    if (!mounted) return;
+    setState(() {
+      _taskCheckboxHintSeen = true;
+    });
+  }
+
+  Future<void> _showInProgressHintToastOnce() async {
+    if (_inProgressToastSeen || !mounted) return;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_inProgressToastSeenKey, true);
+    if (!mounted) return;
+    _inProgressHintPopupTimer?.cancel();
+    setState(() {
+      _inProgressToastSeen = true;
+      _inProgressHintPopupVisible = true;
+    });
+    _inProgressHintPopupTimer = Timer(const Duration(seconds: 3), () {
+      if (!mounted) return;
+      setState(() => _inProgressHintPopupVisible = false);
+    });
   }
 
   void _copyTaskEdits(TaskItem target, TaskItem source) {
@@ -6431,7 +6662,7 @@ class _TasksScreenState extends State<TasksScreen>
     TasksSyncService.scheduleSyncToCloud();
   }
 
-  Widget _buildTaskItem(TaskItem t) {
+  Widget _buildTaskItem(TaskItem t, {bool showCheckboxTapHint = false}) {
     final milestoneInfo = _getMilestoneInfoForTask(t);
     final isMilestone = milestoneInfo != null;
     final isInsightTask = _isInsightTask(t);
@@ -6488,7 +6719,10 @@ class _TasksScreenState extends State<TasksScreen>
             children: [
               // 체크버튼
               GestureDetector(
-                onTap: () => _toggleTask(t.id),
+                onTap: () {
+                  _markTaskCheckboxHintSeen();
+                  _toggleTask(t.id);
+                },
                 child: Container(
                   width: 48,
                   height: 52,
@@ -6519,6 +6753,8 @@ class _TasksScreenState extends State<TasksScreen>
                     ),
                     child: t.done
                         ? const Icon(Icons.check, color: Colors.white, size: 14)
+                        : showCheckboxTapHint
+                        ? _buildCheckboxTapHintDot()
                         : null,
                   ),
                 ),

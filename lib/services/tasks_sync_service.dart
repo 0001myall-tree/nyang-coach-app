@@ -16,6 +16,12 @@ class TasksSyncService {
     'nyang_history',
     'nyang_visions',
     'nyang_today_tasks_by_date',
+    'nyang_morning_call_enabled',
+    'nyang_morning_call_time',
+    'nyang_morning_call_coach',
+    'nyang_premium_min_sleep_time',
+    'nyang_premium_sleep_duration',
+    'nyang_premium_routines',
   };
 
   /// 기기 로컬 전용 키. 클라우드에 백업/복원하지 않는다.
@@ -51,7 +57,8 @@ class TasksSyncService {
       final batch = FirebaseFirestore.instance.batch();
 
       final keys = prefs.getKeys().where((k) => k.startsWith('nyang_')).toSet();
-      final hasSyncedFromCloud = prefs.getBool('nyang_has_synced_from_cloud') ?? false;
+      final hasSyncedFromCloud =
+          prefs.getBool('nyang_has_synced_from_cloud') ?? false;
 
       // Firestore의 현재 백업된 데이터 목록 가져오기
       final snapshot = await FirebaseFirestore.instance
@@ -80,7 +87,6 @@ class TasksSyncService {
               _criticalDataKeys.contains(key) &&
               _isEmptyEncodedValue(value) &&
               cloudKeys.contains(key)) {
-            
             final doc = snapshot.docs.firstWhere((d) => d.id == key);
             final cloudVal = doc.data()['value'];
             bool cloudIsEmpty = true;
@@ -159,10 +165,7 @@ class TasksSyncService {
   static Future<Map<String, dynamic>> syncFromCloud() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
-      return {
-        'status': 'ERROR',
-        'message': 'NOT_LOGGED_IN',
-      };
+      return {'status': 'ERROR', 'message': 'NOT_LOGGED_IN'};
     }
 
     final diag = <String, dynamic>{
@@ -255,56 +258,61 @@ class TasksSyncService {
         .doc(uid)
         .collection('appData')
         .snapshots()
-        .listen((snapshot) async {
-      final prefs = await SharedPreferences.getInstance();
-      bool changed = false;
+        .listen(
+          (snapshot) async {
+            final prefs = await SharedPreferences.getInstance();
+            bool changed = false;
 
-      for (final doc in snapshot.docs) {
-        final key = doc.id;
-        final data = doc.data();
+            for (final doc in snapshot.docs) {
+              final key = doc.id;
+              final data = doc.data();
 
-        // 방금 로컬에서 수정돼 아직 업로드 대기 중인 키는 덮어쓰지 않는다.
-        // (오래된 클라우드 스냅샷이 방금 저장한 메모 등을 지우는 것을 방지)
-        if (_pendingUploadKeys.contains(key)) continue;
-        if (_localOnlyKeys.contains(key)) continue;
+              // 방금 로컬에서 수정돼 아직 업로드 대기 중인 키는 덮어쓰지 않는다.
+              // (오래된 클라우드 스냅샷이 방금 저장한 메모 등을 지우는 것을 방지)
+              if (_pendingUploadKeys.contains(key)) continue;
+              if (_localOnlyKeys.contains(key)) continue;
 
-        if (data.containsKey('value')) {
-          final value = data['value'];
-          final localValue = prefs.get(key);
+              if (data.containsKey('value')) {
+                final value = data['value'];
+                final localValue = prefs.get(key);
 
-          if (localValue != value) {
-            changed = true;
-            if (value is String) {
-              await prefs.setString(key, value);
-            } else if (value is bool) {
-              await prefs.setBool(key, value);
-            } else if (value is int) {
-              await prefs.setInt(key, value);
-            } else if (value is double) {
-              await prefs.setDouble(key, value);
-            } else if (value is List) {
-              await prefs.setStringList(
-                key,
-                value.map((item) => item.toString()).toList(),
-              );
+                if (localValue != value) {
+                  changed = true;
+                  if (value is String) {
+                    await prefs.setString(key, value);
+                  } else if (value is bool) {
+                    await prefs.setBool(key, value);
+                  } else if (value is int) {
+                    await prefs.setInt(key, value);
+                  } else if (value is double) {
+                    await prefs.setDouble(key, value);
+                  } else if (value is List) {
+                    await prefs.setStringList(
+                      key,
+                      value.map((item) => item.toString()).toList(),
+                    );
+                  }
+                }
+              }
             }
-          }
-        }
-      }
 
-      if (changed) {
-        debugPrint('🔔 TasksSyncService: Firestore 변경 감지되어 로컬 데이터 동기화 완료!');
-        await WidgetSyncService.syncFromStoredTasks();
-        unawaited(
-          AppleCalendarSyncService.instance.syncAll(
-            pullExternalChanges: false,
-          ),
+            if (changed) {
+              debugPrint(
+                '🔔 TasksSyncService: Firestore 변경 감지되어 로컬 데이터 동기화 완료!',
+              );
+              await WidgetSyncService.syncFromStoredTasks();
+              unawaited(
+                AppleCalendarSyncService.instance.syncAll(
+                  pullExternalChanges: false,
+                ),
+              );
+              onDataChanged();
+            }
+          },
+          onError: (e) {
+            debugPrint('❌ TasksSyncService realTimeSync 오류: $e');
+          },
         );
-        onDataChanged();
-      }
-    }, onError: (e) {
-      debugPrint('❌ TasksSyncService realTimeSync 오류: $e');
-    });
   }
 
   static void stopRealTimeSync() {

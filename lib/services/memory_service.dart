@@ -252,7 +252,10 @@ $profileCtx
             final role =
                 m['role'] ?? ((m['isUser'] == true) ? 'user' : 'assistant');
             final content = m['content'] ?? m['text'] ?? '';
-            return '$role: $content';
+            final coachId = (m['coachId'] ?? '').toString().trim();
+            return coachId.isEmpty
+                ? '$role: $content'
+                : '[$coachId] $role: $content';
           })
           .join('\n');
       final prompt =

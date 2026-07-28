@@ -677,7 +677,7 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen>
         {
           'icon': '🌙',
           'title': '수면·컨디션 케어',
-          'sub': '수면 패턴을 살펴 피로가 쌓이기 전에 휴식과 하루 마무리 시점을 알려드려요. 필요하면 나이트콜도 해드립니다.',
+          'sub': '수면 패턴을 살펴 피로가 쌓이기 전에 휴식과 하루 마무리 시점을 알려드려요.',
         },
         {
           'icon': '💌',
@@ -707,7 +707,7 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen>
         {
           'icon': '🌙',
           'title': '수면·컨디션 케어',
-          'sub': '수면 패턴을 살펴 피로가 쌓이기 전에 휴식과 하루 마무리 시점을 알려드려요. 필요하면 나이트콜도 해드립니다.',
+          'sub': '수면 패턴을 살펴 피로가 쌓이기 전에 휴식과 하루 마무리 시점을 알려드려요.',
         },
         {
           'icon': '💌',

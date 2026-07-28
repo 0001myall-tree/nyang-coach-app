@@ -16,6 +16,49 @@ class DailyResetService {
   /// "지난 대화 보기"용 코치별 로컬 보관함 키 접두사. 최근 7일치만 유지한다.
   static const String chatArchivePrefix = 'nyang_chat_archive_';
   static const int chatArchiveDays = 7;
+  static const List<String> coachIds = [
+    'cat',
+    'boyfriend',
+    'girlfriend',
+    'halmae',
+    'bro',
+    'sec_male',
+    'sec_female',
+  ];
+
+  /// 하루 요약용으로 모든 코치의 현재 채팅 기록을 모아 시간순으로 합친다.
+  static List<dynamic> collectChatHistoryForDailySummary(
+    SharedPreferences prefs,
+  ) {
+    final merged = <Map<String, dynamic>>[];
+    for (final coachId in coachIds) {
+      final rawHistory = prefs.getString('nyang_chat_history_$coachId');
+      if (rawHistory == null) continue;
+      try {
+        final history = jsonDecode(rawHistory) as List;
+        for (final item in history) {
+          if (item is! Map) continue;
+          final text = (item['text'] ?? item['content'] ?? '')
+              .toString()
+              .trim();
+          if (text.isEmpty) continue;
+          merged.add({...item.cast<String, dynamic>(), 'coachId': coachId});
+        }
+      } catch (_) {}
+    }
+
+    int byTime(Map<String, dynamic> a, Map<String, dynamic> b) {
+      final at = DateTime.tryParse(a['time']?.toString() ?? '');
+      final bt = DateTime.tryParse(b['time']?.toString() ?? '');
+      if (at == null && bt == null) return 0;
+      if (at == null) return 1;
+      if (bt == null) return -1;
+      return at.compareTo(bt);
+    }
+
+    merged.sort(byTime);
+    return merged;
+  }
 
   /// 리셋으로 지워지는 채팅 원문을 코치별 보관함에 합치고 7일 이전은 버린다.
   /// 서버로 올리지 않는 순수 로컬 저장이며, 열람 표시 용도로만 쓴다.
@@ -206,34 +249,14 @@ class DailyResetService {
       await prefs.remove('nyang_deferred_tasks_today');
 
       // 3. Generate daily summary
-      final currentChar = prefs.getString('nyang_selected_coach') ?? '';
-      if (currentChar.isNotEmpty) {
-        final historyStr = prefs.getString('nyang_chat_history_$currentChar');
-        if (historyStr != null) {
-          try {
-            final List<dynamic> oldChatHistory = jsonDecode(historyStr);
-            if (oldChatHistory.isNotEmpty) {
-              await MemoryService().loadMemoryData();
-              await MemoryService().generateDailySummary(
-                lastDate,
-                oldChatHistory,
-              );
-            }
-          } catch (_) {}
-        }
+      final oldChatHistory = collectChatHistoryForDailySummary(prefs);
+      if (oldChatHistory.isNotEmpty) {
+        await MemoryService().loadMemoryData();
+        await MemoryService().generateDailySummary(lastDate, oldChatHistory);
       }
 
       // 4. Archive each coach's chat into a rolling 7-day store, then clear.
       //    "지난 대화 보기"에서 최근 7일치를 열람하는 데만 쓰이는 로컬 보관함이다.
-      final coachIds = [
-        'cat',
-        'boyfriend',
-        'girlfriend',
-        'halmae',
-        'bro',
-        'sec_male',
-        'sec_female',
-      ];
       for (final id in coachIds) {
         await _archiveChatHistory(prefs, id);
         await prefs.setString('nyang_chat_history_$id', '[]');

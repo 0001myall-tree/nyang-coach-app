@@ -519,6 +519,7 @@ class _MainTabScreenState extends State<MainTabScreen>
     _authSubscription = FirebaseAuth.instance.authStateChanges().listen((user) {
       if (user != null) {
         TasksSyncService.startRealTimeSync(user.uid, () {
+          unawaited(NotificationService().syncDailyMorningCall());
           if (mounted) {
             _tasksController.refresh();
             _chatController.refreshTaskProgress();

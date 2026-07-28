@@ -2642,8 +2642,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     List<Map<String, dynamic>> weekGoals = [];
     List<Map<String, dynamic>> monthGoals = [];
     List<Map<String, dynamic>> visions = [];
-    bool isDailyNightCallEnabled = false;
-    String selectedNightCallCoach = 'sec_male';
     bool isLoaded = false;
 
     showModalBottomSheet(
@@ -2660,12 +2658,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 final rawVisions = prefs.getString('nyang_visions');
                 final rawRoutines = prefs.getString('nyang_premium_routines');
                 final title = prefs.getString('nyang_master_title');
-                final dailyNightCall = prefs.getBool(
-                  'nyang_night_call_daily_enabled',
-                );
-                final nightCallCoach = prefs.getString(
-                  'nyang_night_call_coach',
-                );
                 final minSleepTimeStr = prefs.getString(
                   'nyang_premium_min_sleep_time',
                 );
@@ -2722,10 +2714,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       prefs.getString('nyang_coach_name_sec_male') ?? '';
                   femaleNameController.text =
                       prefs.getString('nyang_coach_name_sec_female') ?? '';
-                  if (dailyNightCall != null)
-                    isDailyNightCallEnabled = dailyNightCall;
-                  if (nightCallCoach != null)
-                    selectedNightCallCoach = nightCallCoach;
                   if (minSleepTimeStr != null) {
                     final parts = minSleepTimeStr.split(':');
                     if (parts.length >= 2) {
@@ -3397,156 +3385,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 ],
                               ),
                               const SizedBox(height: 18),
-                              Container(
-                                height: 1,
-                                color: const Color(0xFFF0EEF8),
-                              ),
-                              const SizedBox(height: 14),
-                              Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          '취침 준비 알림',
-                                          style: GoogleFonts.notoSansKr(
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.w800,
-                                            color: const Color(0xFF3D3A4E),
-                                          ),
-                                        ),
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          '최소 취침 시간 2시간 전에 취침 준비 알림을 받습니다.',
-                                          style: GoogleFonts.notoSansKr(
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.w500,
-                                            color: const Color(0xFF9593A5),
-                                            height: 1.35,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  Switch(
-                                    value: isDailyNightCallEnabled,
-                                    onChanged: (val) => setState(
-                                      () => isDailyNightCallEnabled = val,
-                                    ),
-                                    activeColor: const Color(0xFF8B7CFF),
-                                  ),
-                                ],
-                              ),
-                              if (isDailyNightCallEnabled) ...[
-                                const SizedBox(height: 14),
-                                Text(
-                                  '담당 비서',
-                                  style: GoogleFonts.notoSansKr(
-                                    fontSize: 11,
-                                    color: const Color(0xFF9593A5),
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                Row(
-                                  children: [
-                                    GestureDetector(
-                                      onTap: () => setState(
-                                        () =>
-                                            selectedNightCallCoach = 'sec_male',
-                                      ),
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 12,
-                                          vertical: 8,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color:
-                                              selectedNightCallCoach ==
-                                                  'sec_male'
-                                              ? const Color(0xFFEBE5FF)
-                                              : Colors.white,
-                                          border: Border.all(
-                                            color:
-                                                selectedNightCallCoach ==
-                                                    'sec_male'
-                                                ? const Color(0xFF8B7CFF)
-                                                : const Color(0xFFE5E7EB),
-                                          ),
-                                          borderRadius: BorderRadius.circular(
-                                            12,
-                                          ),
-                                        ),
-                                        child: Text(
-                                          '남비서 코치',
-                                          style: GoogleFonts.notoSansKr(
-                                            fontSize: 13,
-                                            fontWeight:
-                                                selectedNightCallCoach ==
-                                                    'sec_male'
-                                                ? FontWeight.w700
-                                                : FontWeight.w500,
-                                            color:
-                                                selectedNightCallCoach ==
-                                                    'sec_male'
-                                                ? const Color(0xFF8B7CFF)
-                                                : const Color(0xFF6B7280),
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    GestureDetector(
-                                      onTap: () => setState(
-                                        () => selectedNightCallCoach =
-                                            'sec_female',
-                                      ),
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 12,
-                                          vertical: 8,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color:
-                                              selectedNightCallCoach ==
-                                                  'sec_female'
-                                              ? const Color(0xFFEBE5FF)
-                                              : Colors.white,
-                                          border: Border.all(
-                                            color:
-                                                selectedNightCallCoach ==
-                                                    'sec_female'
-                                                ? const Color(0xFF8B7CFF)
-                                                : const Color(0xFFE5E7EB),
-                                          ),
-                                          borderRadius: BorderRadius.circular(
-                                            12,
-                                          ),
-                                        ),
-                                        child: Text(
-                                          '여비서 코치',
-                                          style: GoogleFonts.notoSansKr(
-                                            fontSize: 13,
-                                            fontWeight:
-                                                selectedNightCallCoach ==
-                                                    'sec_female'
-                                                ? FontWeight.w700
-                                                : FontWeight.w500,
-                                            color:
-                                                selectedNightCallCoach ==
-                                                    'sec_female'
-                                                ? const Color(0xFF8B7CFF)
-                                                : const Color(0xFF6B7280),
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
                             ],
                           ),
                         ),
@@ -3648,14 +3486,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 false,
                           );
                         });
-                        await prefs.setBool('nyang_night_call_enabled', true);
+                        await prefs.setBool('nyang_night_call_enabled', false);
                         await prefs.setBool(
                           'nyang_night_call_daily_enabled',
-                          isDailyNightCallEnabled,
-                        );
-                        await prefs.setString(
-                          'nyang_night_call_coach',
-                          selectedNightCallCoach,
+                          false,
                         );
                         await prefs.setString(
                           'nyang_premium_min_sleep_time',
@@ -3693,17 +3527,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           ),
                         );
                         TasksSyncService.scheduleSyncToCloud();
-                        int nightCallH = minSleepTime.hour - 2;
-                        if (nightCallH < 0) nightCallH += 24;
-                        if (isDailyNightCallEnabled) {
-                          await NotificationService().scheduleDailyNightCall(
-                            hour: nightCallH,
-                            minute: minSleepTime.minute,
-                            coachId: selectedNightCallCoach,
-                          );
-                        } else {
-                          await NotificationService().cancelDailyNightCall();
-                        }
+                        await NotificationService()
+                            .disableNightCallReminders();
                         Navigator.pop(context);
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(content: Text('비서 학습 설정이 저장되었습니다.')),

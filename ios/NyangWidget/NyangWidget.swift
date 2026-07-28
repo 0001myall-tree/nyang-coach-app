@@ -110,6 +110,48 @@ private let compactWidgetTitle = "냥냥코치 미니 위젯"
 private let compactWidgetDescription = "오늘 목표와 남은 할 일을 냥냥코치 위젯으로 확인합니다."
 private let compactWidgetAccent = Color(red: 0.55, green: 0.49, blue: 1.0)
 
+struct NyangCompactWidgetBackground: View {
+    var body: some View {
+        GeometryReader { proxy in
+            let side = max(proxy.size.width, proxy.size.height) * 0.78
+            let glow = Color(red: 0.72, green: 0.61, blue: 1.0)
+            let softGlow = Color(red: 0.86, green: 0.80, blue: 1.0)
+
+            ZStack {
+                Color.white
+
+                RadialGradient(
+                    colors: [glow.opacity(0.22), softGlow.opacity(0.10), .clear],
+                    center: .topLeading,
+                    startRadius: 0,
+                    endRadius: side * 0.66
+                )
+
+                RadialGradient(
+                    colors: [glow.opacity(0.20), softGlow.opacity(0.08), .clear],
+                    center: .topTrailing,
+                    startRadius: 0,
+                    endRadius: side * 0.62
+                )
+
+                RadialGradient(
+                    colors: [glow.opacity(0.24), softGlow.opacity(0.10), .clear],
+                    center: .bottomLeading,
+                    startRadius: 0,
+                    endRadius: side * 0.66
+                )
+
+                RadialGradient(
+                    colors: [glow.opacity(0.24), softGlow.opacity(0.10), .clear],
+                    center: .bottomTrailing,
+                    startRadius: 0,
+                    endRadius: side * 0.66
+                )
+            }
+        }
+    }
+}
+
 struct NyangCharacterWidgetView: View {
     let entry: NyangEntry
     private let backgroundColors = [
@@ -320,7 +362,7 @@ struct NyangCompactWidgetView: View {
 
     private var compactContent: some View {
         ZStack(alignment: .topLeading) {
-            Color.white
+            NyangCompactWidgetBackground()
 
             GeometryReader { proxy in
                 // 시간 일정이 있으면 시간/일정명을 두 줄로 쌓아 보여준다.
@@ -362,7 +404,7 @@ struct NyangCompactWidgetView: View {
                     )
             }
         }
-        .widgetWhiteBackground()
+        .widgetCompactBackground()
         .unredacted()
     }
 
@@ -480,6 +522,17 @@ extension View {
             }
         } else {
             background(Color.white)
+        }
+    }
+
+    @ViewBuilder
+    func widgetCompactBackground() -> some View {
+        if #available(iOSApplicationExtension 17.0, *) {
+            containerBackground(for: .widget) {
+                NyangCompactWidgetBackground()
+            }
+        } else {
+            background(NyangCompactWidgetBackground())
         }
     }
 }

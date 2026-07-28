@@ -9,7 +9,6 @@ import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 import '../main.dart';
 import '../screens/morning_call_screen.dart';
-import '../screens/night_call_screen.dart';
 import '../screens/core_reminder_screen.dart';
 import '../screens/coach_config.dart';
 import '../screens/main_tab_screen.dart';
@@ -51,36 +50,6 @@ class NotificationService {
 
   String _coreReminderChannelId(String? soundName) {
     return 'nyang_core_reminder_${soundName ?? 'push'}_v2';
-  }
-
-  String _nightCallChannelId(String? soundName) {
-    return 'nyang_night_call_${soundName ?? 'default'}_v3';
-  }
-
-  bool _isInvalidSoundError(Object error) {
-    return error is PlatformException && error.code == 'invalid_sound';
-  }
-
-  NotificationDetails _nightCallFallbackDetails() {
-    const androidDetails = AndroidNotificationDetails(
-      'nyang_night_call_default_v3',
-      '냥냥코치 나이트콜',
-      channelDescription: '비서의 하루 마무리 알람입니다.',
-      importance: Importance.max,
-      priority: Priority.high,
-      playSound: true,
-      fullScreenIntent: true,
-      audioAttributesUsage: AudioAttributesUsage.alarm,
-    );
-    const iosDetails = DarwinNotificationDetails(
-      presentSound: true,
-      presentAlert: true,
-      presentBadge: true,
-      presentBanner: true,
-      presentList: true,
-      interruptionLevel: InterruptionLevel.timeSensitive,
-    );
-    return const NotificationDetails(android: androidDetails, iOS: iosDetails);
   }
 
   String? _coreReminderSoundName(String coachId, int advanceMinutes) {
@@ -134,30 +103,6 @@ class NotificationService {
 
     // Reschedule next morning call (picks a new random coach for tomorrow)
     await rescheduleNextMorningCall();
-  }
-
-  ({String coachId, String? soundName}) _parseNightPayload(String payload) {
-    if (!payload.startsWith('night:')) {
-      return (coachId: payload, soundName: null);
-    }
-    final parts = payload.split(':');
-    return (
-      coachId: parts.length > 1 ? parts[1] : 'sec_male',
-      soundName: parts.length > 2 && parts[2].isNotEmpty ? parts[2] : null,
-    );
-  }
-
-  void _openNightCall(String payload) {
-    final parsed = _parseNightPayload(payload);
-    AnalyticsService.logFeatureUsage('night_call');
-    navigatorKey.currentState?.push(
-      MaterialPageRoute(
-        builder: (context) => NightCallScreen(
-          coachId: parsed.coachId,
-          soundName: parsed.soundName,
-        ),
-      ),
-    );
   }
 
   Future<void> _openCoreReminder(String payload) async {
@@ -243,10 +188,6 @@ class NotificationService {
       onDidReceiveNotificationResponse: (NotificationResponse response) async {
         final payload = response.payload;
         if (payload == null) return;
-        if (payload.startsWith('night:')) {
-          _openNightCall(payload);
-          return;
-        }
         if (payload.startsWith('core:')) {
           _openCoreReminder(payload);
           return;
@@ -339,9 +280,7 @@ class NotificationService {
     if (payload == null || details?.didNotificationLaunchApp != true) return;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (payload.startsWith('night:')) {
-        _openNightCall(payload);
-      } else if (payload.startsWith('core:')) {
+      if (payload.startsWith('core:')) {
         _openCoreReminder(payload);
       } else if (payload.startsWith('morning:')) {
         _openMorningCall(payload);
@@ -611,203 +550,13 @@ class NotificationService {
     }
   }
 
-  Future<void> scheduleNightCall({
-    required int hour,
-    required int minute,
-    required String coachId,
-  }) async {
-    if (kIsWeb) return;
-    await _plugin.cancel(id: 999);
-    final targetCoachId = coachId == 'sec_female' || coachId == 'sec_male'
-        ? coachId
-        : 'sec_male';
-    final soundName = '${targetCoachId}_night_${Random().nextInt(6) + 1}';
-
-    final AndroidNotificationDetails androidDetails =
-        AndroidNotificationDetails(
-          _nightCallChannelId(soundName),
-          '냥냥코치 나이트콜',
-          channelDescription: '비서의 하루 마무리 알람입니다.',
-          importance: Importance.max,
-          priority: Priority.high,
-          sound: RawResourceAndroidNotificationSound(soundName),
-          playSound: true,
-          fullScreenIntent: true,
-          audioAttributesUsage: AudioAttributesUsage.alarm,
-        );
-
-    final DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
-      sound: '$soundName.caf',
-      presentSound: true,
-      presentAlert: true,
-      presentBadge: true,
-      presentBanner: true,
-      presentList: true,
-      interruptionLevel: InterruptionLevel.timeSensitive,
-    );
-
-    final NotificationDetails details = NotificationDetails(
-      android: androidDetails,
-      iOS: iosDetails,
-    );
-
-    final now = tz.TZDateTime.now(tz.local);
-    tz.TZDateTime scheduled = tz.TZDateTime(
-      tz.local,
-      now.year,
-      now.month,
-      now.day,
-      hour,
-      minute,
-    );
-
-    if (scheduled.isBefore(now)) {
-      scheduled = scheduled.add(const Duration(days: 1));
-    }
-
-    try {
-      await _plugin.zonedSchedule(
-        id: 999,
-        title: '🌙 나이트콜 시간입니다!',
-        body: '정리하고 취침 준비 하실 시간입니다.',
-        scheduledDate: scheduled,
-        notificationDetails: details,
-        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-        payload: 'night:$targetCoachId:$soundName',
-      );
-    } catch (e) {
-      if (!_isInvalidSoundError(e)) rethrow;
-      debugPrint('Night call custom sound unavailable, using default: $e');
-      await _plugin.zonedSchedule(
-        id: 999,
-        title: '🌙 나이트콜 시간입니다!',
-        body: '정리하고 취침 준비 하실 시간입니다.',
-        scheduledDate: scheduled,
-        notificationDetails: _nightCallFallbackDetails(),
-        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-        payload: 'night:$targetCoachId:$soundName',
-      );
-    }
-  }
-
-  Future<void> scheduleDailyNightCall({
-    required int hour,
-    required int minute,
-    required String coachId,
-  }) async {
-    if (kIsWeb) return;
-    await cancelDailyNightCall();
-    final targetCoachId = coachId == 'sec_female' || coachId == 'sec_male'
-        ? coachId
-        : 'sec_male';
-    final soundName = '${targetCoachId}_night_${Random().nextInt(6) + 1}';
-
-    final AndroidNotificationDetails androidDetails =
-        AndroidNotificationDetails(
-          _nightCallChannelId(soundName),
-          '냥냥코치 나이트콜',
-          channelDescription: '비서의 하루 마무리 알람입니다.',
-          importance: Importance.max,
-          priority: Priority.high,
-          sound: RawResourceAndroidNotificationSound(soundName),
-          playSound: true,
-          fullScreenIntent: true,
-          audioAttributesUsage: AudioAttributesUsage.alarm,
-        );
-
-    final DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
-      sound: '$soundName.caf',
-      presentSound: true,
-      presentAlert: true,
-      presentBadge: true,
-      presentBanner: true,
-      presentList: true,
-      interruptionLevel: InterruptionLevel.timeSensitive,
-    );
-
-    final NotificationDetails details = NotificationDetails(
-      android: androidDetails,
-      iOS: iosDetails,
-    );
-
-    final now = tz.TZDateTime.now(tz.local);
-    tz.TZDateTime scheduled = tz.TZDateTime(
-      tz.local,
-      now.year,
-      now.month,
-      now.day,
-      hour,
-      minute,
-    );
-
-    if (scheduled.isBefore(now)) {
-      scheduled = scheduled.add(const Duration(days: 1));
-    }
-
-    try {
-      await _plugin.zonedSchedule(
-        id: 998,
-        title: '🌙 나이트콜 시간입니다!',
-        body: '정리하고 취침 준비 하실 시간입니다.',
-        scheduledDate: scheduled,
-        notificationDetails: details,
-        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-        matchDateTimeComponents: DateTimeComponents.time,
-        payload: 'night:$targetCoachId:$soundName',
-      );
-    } catch (e) {
-      if (!_isInvalidSoundError(e)) rethrow;
-      debugPrint(
-        'Daily night call custom sound unavailable, using default: $e',
-      );
-      await _plugin.zonedSchedule(
-        id: 998,
-        title: '🌙 나이트콜 시간입니다!',
-        body: '정리하고 취침 준비 하실 시간입니다.',
-        scheduledDate: scheduled,
-        notificationDetails: _nightCallFallbackDetails(),
-        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-        matchDateTimeComponents: DateTimeComponents.time,
-        payload: 'night:$targetCoachId:$soundName',
-      );
-    }
-  }
-
-  Future<void> cancelDailyNightCall() async {
-    if (kIsWeb) return;
-    await _plugin.cancel(id: 998);
-  }
-
-  Future<void> syncDailyNightCall() async {
+  Future<void> disableNightCallReminders() async {
     if (kIsWeb) return;
     final prefs = await SharedPreferences.getInstance();
-    final isEnabled = prefs.getBool('nyang_night_call_daily_enabled') ?? false;
-    if (!isEnabled) {
-      await cancelDailyNightCall();
-      return;
-    }
-
-    final minSleepTime = prefs.getString('nyang_premium_min_sleep_time');
-    if (minSleepTime == null) {
-      await cancelDailyNightCall();
-      return;
-    }
-
-    final parts = minSleepTime.split(':');
-    final bedHour = int.tryParse(parts[0]);
-    final bedMinute = int.tryParse(parts.length > 1 ? parts[1] : '0') ?? 0;
-    if (bedHour == null) {
-      await cancelDailyNightCall();
-      return;
-    }
-
-    var nightCallHour = bedHour - 2;
-    if (nightCallHour < 0) nightCallHour += 24;
-    await scheduleDailyNightCall(
-      hour: nightCallHour,
-      minute: bedMinute,
-      coachId: prefs.getString('nyang_night_call_coach') ?? 'sec_male',
-    );
+    await prefs.setBool('nyang_night_call_enabled', false);
+    await prefs.setBool('nyang_night_call_daily_enabled', false);
+    await _plugin.cancel(id: 999);
+    await _plugin.cancel(id: 998);
   }
 
   Future<void> showImmediateNotification({

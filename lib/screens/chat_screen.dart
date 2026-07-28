@@ -15,7 +15,6 @@ import 'package:speech_to_text/speech_to_text.dart';
 import 'package:speech_to_text/speech_recognition_result.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:nyang_coach/screens/coach_selection_screen.dart';
-import 'package:nyang_coach/services/notification_service.dart';
 import 'package:nyang_coach/services/analytics_service.dart';
 import 'package:nyang_coach/services/api_usage_limit_service.dart';
 import 'package:nyang_coach/services/apple_calendar_sync_service.dart';
@@ -1308,11 +1307,11 @@ class _ChatScreenState extends State<ChatScreen>
   // 선제개입 저항예측: 이번 턴에 프롬프트에 주입한 선제개입 대상 (응답 확인 후 소진 여부 판정용)
   PreemptiveInterventionResult? _pendingPreemptiveTarget;
 
-  // 실행 저항 원인 진단: 진단 질문을 던진 직후, 사용자의 원인 답변을 기다리는 상태
+  // 실행 저항 원인 확인: 확인 질문을 던진 직후, 사용자의 원인 답변을 기다리는 상태
   bool _awaitingResistanceCause = false;
   // 카운트다운을 제안한 직후, 사용자의 동의 여부를 기다리는 상태
   bool _awaitingCountdownConsent = false;
-  // 이번 턴에 주입한 원인 진단 질문 (실제로 물었을 때만 하루 1회를 소진 처리)
+  // 이번 턴에 주입한 원인 확인 질문 (실제로 물었을 때만 하루 1회를 소진 처리)
   String? _pendingDiagnosisQuestion;
 
   // Firebase Cloud Functions chatProxy (웹앱과 동일한 서버 사용)
@@ -7316,13 +7315,13 @@ class _ChatScreenState extends State<ChatScreen>
       if (preemptive != null) {
         _pendingPreemptiveTarget = preemptive;
         if (preemptive.isTimeSpecific) {
-          // 시간 지정형: "지금 여유되면" 톤이 아니라 일정정리/컨디션/시간확보 확인 톤으로.
+          // 시간 지정형: 이미 정해둔 시간을 존중하며, 부담을 줄여주는 가벼운 확인 톤으로.
           sb.writeln('\n[특별 지침: 시간 지정 일정 체크인 (자연스러운 타이밍에만, 강요 금지)]');
           sb.writeln(
             '사용자가 평소 자주 부담스러워했던 "${preemptive.taskText}" 일정이 곧 시작됩니다(정해진 시간 있음). 다음 규칙을 지키며 대화 흐름에 맞을 때만 화제로 꺼내보세요:',
           );
           sb.writeln(
-            '1. **일정/컨디션/시간 확보를 묻는 질문으로**: "${preemptive.taskText}"를 지금 당장 하라고 권하지 말고, 이미 정해둔 시간을 존중하며 가볍게 확인하세요. 예: "이따 ${preemptive.taskText} 있으신데 다른 일정은 정리되고 계세요?", "${preemptive.taskText} 앞두고 계신데 컨디션은 괜찮으세요?", "이따 시간 확보는 괜찮으신가요?"',
+            '1. **관찰+부담 완화 제안**: "${preemptive.taskText}"를 지금 당장 하라고 권하지 말고, 이미 정해둔 시간을 존중하며 짧게 짚은 뒤 원하면 작게 준비를 도와주겠다고 제안하세요. 예: "이따 ${preemptive.taskText} 있으시네요. 지금 바로 하실 필요는 없고, 원하시면 시작 전에 필요한 것만 작게 정리해드리겠습니다.", "곧 ${preemptive.taskText} 시간이네요. 부담되시면 첫 3분만 어떻게 시작할지 제가 줄여드릴게요."',
           );
           sb.writeln(
             '2. **"마음의 준비" 같은 표현 금지**: 감정을 직접 짚어주는 표현("마음의 준비 되셨어요?" 등)은 쓰지 말고, 상황·논리 위주로 가볍게 확인하세요.',
@@ -7340,13 +7339,13 @@ class _ChatScreenState extends State<ChatScreen>
             '사용자가 평소 자주 부담스러워했던 "${preemptive.taskText}" 일정이 오늘 아직 남아있습니다. 다음 규칙을 지키며 대화 흐름에 맞을 때만 화제로 꺼내보세요:',
           );
           sb.writeln(
-            '1. **질문으로 시작**: 반드시 질문 형태로 제안하세요. 예: "그러고 보니 오늘 ${preemptive.taskText} 일정도 있으셨죠. 오늘은 어떠세요?", "지금 여유 있으시다면 ${preemptive.taskText}부터 해보시는 건 어떠세요?"',
+            '1. **관찰+작은 도움 제안**: 질문으로 캐묻기보다 "${preemptive.taskText}"가 남아 있다는 사실을 짧게 짚고, 원하면 부담 낮은 첫 단계로 줄여주겠다고 제안하세요. 예: "그러고 보니 오늘 ${preemptive.taskText}도 남아 있네요. 지금 당장 밀어붙이지 않아도 되고, 원하시면 첫 단계만 아주 작게 줄여드릴게요.", "이 일은 계속 부담으로 남아 있던 것 같습니다. 바로 시작보다 3분짜리 첫 단계만 정해둘까요?"',
           );
           sb.writeln(
             '2. **명령·추궁 금지**: "${preemptive.taskText} 하세요" 같은 명령형이나 "왜 아직 안 하셨어요?" 같은 추궁형은 절대 쓰지 마세요.',
           );
           sb.writeln(
-            '3. **대화 맥락에 연결**: 사용자가 지금 다른 감정이나 급한 일을 이야기하고 있다면, 먼저 충분히 공감한 뒤 자연스럽게 이어서 화제를 꺼내세요. 예: 사용자가 "너무 피곤하다"고 하면 "오늘 하루 쉽지 않으셨군요. 그러고 보니 오늘 ${preemptive.taskText} 일정도 있으셨죠. 오늘은 어떠세요?"처럼 연결하세요.',
+            '3. **대화 맥락에 연결**: 사용자가 지금 다른 감정이나 급한 일을 이야기하고 있다면, 먼저 충분히 공감한 뒤 자연스럽게 이어서 화제를 꺼내세요. 예: 사용자가 "너무 피곤하다"고 하면 "오늘 하루 쉽지 않으셨군요. 이런 상태라면 ${preemptive.taskText}는 크게 잡지 말고 첫 단계만 줄여두는 편이 낫겠습니다."처럼 연결하세요.',
           );
           sb.writeln(
             '4. **타이밍이 안 맞으면 생략**: 지금 이 화제를 꺼내는 게 어색하다고 판단되면 이번 턴엔 언급하지 않아도 됩니다.',
@@ -7539,7 +7538,7 @@ class _ChatScreenState extends State<ChatScreen>
             //  프렌즈의 "타이머 먼저 제안 가능" 규칙과 모순이 생긴다)
             if (_coach.isMaster) {
               sb.writeln(
-                '*"앱 기록상 미루기 2회 이상"으로 표시된 미완료 할 일을 사용자가 계속 시작하지 못하면 카운트다운을 먼저 제안할 수 있음. 제안만 하고 [COUNTDOWN_START] 태그는 사용자가 동의한 다음 턴에만 붙일 것. 단, 사용자가 방금 실행 저항을 표현한 턴에는 [실행 저항 원인 진단 흐름]의 턴 지시가 항상 우선함.',
+                '*"앱 기록상 미루기 2회 이상"으로 표시된 미완료 할 일을 사용자가 계속 시작하지 못하면 카운트다운을 먼저 제안할 수 있음. 제안만 하고 [COUNTDOWN_START] 태그는 사용자가 동의한 다음 턴에만 붙일 것. 단, 사용자가 방금 실행 저항을 표현한 턴에는 [실행 저항 원인 추론 흐름]의 턴 지시가 항상 우선함.',
               );
               sb.writeln(
                 '*타이머 확인 카드([TIMER_CONFIRM])는 사용자가 직접 요청했거나 "필요하면 타이머라도 띄워드릴까요?"에 동의했을 때만 출력할 것. 코치가 먼저 타이머 태그를 출력하지 말 것.',
@@ -7669,7 +7668,7 @@ class _ChatScreenState extends State<ChatScreen>
             if (needsLightGoalContext) {
               sb.writeln('\n[귀찮음 상황의 목표 연결 규칙]');
               sb.writeln(
-                '*사용자가 귀찮아하는 일이 위 목표와 자연스럽게 연결될 때만 그 의미를 짧게 짚어주세요. 억지로 연결하거나 길게 분석하지 마세요. 원인 진단 질문을 하는 턴에는 목표 이야기를 꺼내지 말고, 원인을 들은 뒤 개입을 제안할 때 한 문장으로만 곁들이세요.',
+                '*사용자가 귀찮아하는 일이 위 목표와 자연스럽게 연결될 때만 그 의미를 짧게 짚어주세요. 억지로 연결하거나 길게 분석하지 마세요. 원인 확인 질문을 하는 턴에는 목표 이야기를 꺼내지 말고, 원인을 들은 뒤 개입을 제안할 때 한 문장으로만 곁들이세요.',
               );
             } else {
               sb.writeln('\n비전과 마일스톤의 진행 상황을 대화 중에 자연스럽게 확인하거나 응원해주세요.');
@@ -7790,8 +7789,6 @@ class _ChatScreenState extends State<ChatScreen>
 
     // 13. 취침 기준 초과 앱 진입 개입 (master only)
     if (_coach.isMaster) {
-      final isDailyNightCallEnabled =
-          prefs.getBool('nyang_night_call_daily_enabled') ?? false;
       final minSleepTimeStr = prefs.getString('nyang_premium_min_sleep_time');
       final lateEntries =
           prefs.getStringList('nyang_late_planner_entry_dates') ?? [];
@@ -7813,24 +7810,18 @@ class _ChatScreenState extends State<ChatScreen>
           hasRecentConsecutiveLateEntry &&
           lastInterventionNight != latestLateEntry;
 
-      if (!isDailyNightCallEnabled &&
-          shouldInterveneByLateEntry &&
-          minSleepTimeStr != null) {
+      if (shouldInterveneByLateEntry && minSleepTimeStr != null) {
         try {
           // 취침시간 기준 늦은 시간대(취침+1h~+7h)에 실제로 들어왔을 때만 개입.
-          // (예전엔 저녁 6시~취침 2시간전 구간에도 선제적으로 나이트콜 제안을 했으나,
-          // 나이트콜은 이제 사용자 설정으로 자동 발동되므로 그 제안 로직은 제거함 — 실제로
-          // 무리하고 있을 때(늦게까지 깨어있을 때)만 개입하는 게 목적에 맞음)
+          // 실제로 무리하고 있을 때(늦게까지 깨어있을 때)만 개입한다.
           final isLateNightEntry =
               _latePlannerNightDate(DateTime.now(), minSleepTimeStr) != null;
 
           if (isLateNightEntry) {
-            if (latestLateEntry != null) {
-              await prefs.setString(
-                'nyang_late_planner_intervention_night',
-                latestLateEntry,
-              );
-            }
+            await prefs.setString(
+              'nyang_late_planner_intervention_night',
+              latestLateEntry,
+            );
             sb.writeln('\n[특별 지침: 취침 기준 초과 개입 - 최우선 실행]');
             sb.writeln(
               '사용자가 이틀 연속으로 본인이 정한 최소 취침 시간($minSleepTimeStr)보다 1시간 이상 늦은 시간에 앱/플래너에 들어왔습니다.',
@@ -8262,7 +8253,7 @@ class _ChatScreenState extends State<ChatScreen>
     );
   }
 
-  /// 이번 턴에 원인 진단 질문을 주입했다면, 코치가 실제로 그 질문을 던졌는지 확인하고
+  /// 이번 턴에 원인 확인 질문을 주입했다면, 코치가 실제로 그 질문을 던졌는지 확인하고
   /// 던졌을 때만 그날의 1회를 소진 처리한다. 안 물었으면 다음 저항 표현 때 다시 시도된다.
   Future<void> _confirmResistanceDiagnosisIfAsked(String responseText) async {
     final question = _pendingDiagnosisQuestion;
@@ -8278,8 +8269,8 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   /// 실행 저항 흐름에서 이번 턴에만 적용할 지시문을 만든다.
-  /// 진단 질문과 카운트다운 제안 문장은 모델이 새로 만들지 않도록 앱이 골라서 넘긴다.
-  /// (마스터 코치 전용. 진단 질문은 하루 1회만.)
+  /// 확인 질문과 카운트다운 제안 문장은 모델이 새로 만들지 않도록 앱이 골라서 넘긴다.
+  /// (마스터 코치 전용. 확인 질문은 하루 1회만.)
   Future<String> _buildResistanceTurnDirective(
     String userText, {
     required bool isGreeting,
@@ -8301,7 +8292,7 @@ class _ChatScreenState extends State<ChatScreen>
 - 거절하거나 다른 이야기를 하면 태그를 붙이지 말고 카운트다운을 다시 권하지 마세요.''';
     }
 
-    // 진단 질문 직후 턴: 원인이 구체적인지 불명확한지에 따라 분기한다.
+    // 확인 질문 직후 턴: 원인이 구체적인지 불명확한지에 따라 분기한다.
     if (_awaitingResistanceCause) {
       _awaitingResistanceCause = false;
       final offer = ExecutionResistanceService.pickCountdownOffer();
@@ -8318,7 +8309,7 @@ class _ChatScreenState extends State<ChatScreen>
       return '''
 
 [이번 턴 지시 - 원인 확인 완료]
-- 사용자가 실행 저항의 원인을 이야기했습니다. 원인 진단 질문을 다시 하지 말고, [하기 싫다 실행 개입 전략]에 따라 그 원인에 맞는 개입을 하나만 제안하세요.
+- 사용자가 실행 저항의 원인을 이야기했습니다. 원인을 다시 묻지 말고, [하기 싫다 실행 개입 전략]에 따라 그 원인에 맞는 개입을 하나만 제안하세요.
 - 해결책으로 곧장 넘어가지 말고, 사용자가 짚어낸 병목을 한 문장으로 먼저 받아주세요. 언어화된 것을 인정받는 것만으로도 저항감이 낮아집니다. 예: "분량이 부담이셨군요." 단, 원인을 재해석하거나 분석을 덧붙이지는 마세요.
 - 원인이 여전히 불명확하다고 판단되면 더 캐묻지 말고 아래 문장으로 카운트다운을 제안하세요.
   "$offer"''';
@@ -8326,12 +8317,12 @@ class _ChatScreenState extends State<ChatScreen>
 
     if (!ExecutionResistanceService.isResistanceExpression(userText)) return '';
 
-    // 하루 1회 제한: 이미 물어봤으면 대화를 늘리지 말고 바로 해결책으로 간다.
+    // 하루 1회 제한: 이미 물어봤으면 대화를 늘리지 말고 바로 작은 제안으로 간다.
     if (await ExecutionResistanceService.hasAskedDiagnosisToday()) {
       return '''
 
-[이번 턴 지시 - 원인 진단 생략]
-- 오늘은 이미 원인 진단 질문을 했습니다. 원인을 다시 묻지 말고 [하기 싫다 실행 개입 전략]에 따라 바로 개입을 하나만 제안하세요.''';
+[이번 턴 지시 - 원인 확인 질문 생략]
+- 오늘은 이미 원인 확인 질문을 했습니다. 원인을 다시 묻지 말고 [하기 싫다 실행 개입 전략]에 따라 바로 개입을 하나만 제안하세요.''';
     }
 
     _awaitingResistanceCause = true;
@@ -8339,9 +8330,10 @@ class _ChatScreenState extends State<ChatScreen>
     _pendingDiagnosisQuestion = question;
     return '''
 
-[이번 턴 지시 - 실행 저항 원인 진단]
-- 사용자가 방금 실행 저항을 표현했습니다. 이번 답변에서는 해결책, 5분 시작, 작은 단위 쪼개기, 타이머, 카운트다운, 목표·비전과의 연결이나 일의 중요성 언급을 하지 마세요. 그런 이야기는 원인을 들은 다음 턴에 합니다.
-- 짧게 공감하는 한 문장 뒤에 아래 질문을 문장 그대로 한 번만 물으세요. 문장을 새로 만들거나 다른 질문을 덧붙이지 마세요.
+[이번 턴 지시 - 하기 싫음/귀찮음 대응]
+- 사용자가 할 일을 하기 싫어하거나 귀찮다고 했습니다. 질문부터 하지 말고, 보이는 원인을 한 문장으로 짚은 뒤 작은 실행 제안 하나로 연결하세요.
+- 해결책을 여러 개 나열하거나 목표·비전의 중요성을 길게 설명하지 마세요.
+- 원인이 불명확할 때만, 짧게 공감하는 한 문장 뒤에 아래 질문을 문장 그대로 한 번만 물으세요. 문장을 새로 만들거나 다른 질문을 덧붙이지 마세요.
   "$question"
 - 답변은 2문장 이내로 유지하고 [TASK], [TIMER_CONFIRM], [COUNTDOWN_START] 태그를 출력하지 마세요.''';
   }
@@ -8363,13 +8355,13 @@ class _ChatScreenState extends State<ChatScreen>
     final resistanceFlowRule = _coach.isMaster
         ? '''
 
-[실행 저항 원인 진단 흐름 - 마스터 코치 전용]
-- 사용자가 실행 저항을 표현하면 바로 해결책을 제시하지 말고 원인을 딱 한 번만 진단합니다. 진단 질문은 앱이 지정해준 문장만 쓰고, 새로 만들거나 두 번 반복하지 않습니다.
-- 사용자가 원인을 구체적으로 말하면 [하기 싫다 실행 개입 전략]에 따라 개입을 하나만 제안합니다.
+[실행 저항 원인 추론 흐름 - 마스터 코치 전용]
+- 사용자가 실행 저항을 표현하면 질문부터 하지 말고, 먼저 사용자의 말과 현재 맥락에서 원인을 부드럽게 추론합니다. 원인을 어느 정도 추측할 수 있으면 [하기 싫다 실행 개입 전략]에 따라 개입을 하나만 제안합니다.
+- 원인을 추측하기 어렵거나 잘못 짚으면 부담이 큰 상황에서만 원인 확인 질문을 한 번 사용합니다. 확인 질문은 앱이 지정해준 문장만 쓰고, 새로 만들거나 두 번 반복하지 않습니다.
 - 사용자가 원인을 특정하지 못하면("생각이 너무 많아요", "나도 잘 모르겠어요", "그냥 귀찮아요", "다 하기 싫어요", "이유를 모르겠어요") 원인을 더 분석하거나 다시 묻지 말고 카운트다운을 제안합니다.
 - 카운트다운은 모든 상황에서 쓰는 기본 해결책이 아닙니다. 원인이 불명확할 때, 또는 앱 기록상 미루기 2회 이상인 일을 계속 시작하지 못할 때 생각을 끊고 실행으로 전환시키는 장치로 씁니다.
 - 카운트다운 제안에 사용자가 동의했거나 사용자가 직접 카운트다운을 요청한 경우에만, 짧게 한 문장으로 답한 뒤 답변 맨 끝에 [COUNTDOWN_START] 태그를 붙입니다. 코치가 먼저 붙이지 않습니다.
-- 원인 진단 질문은 하루에 한 번만 합니다. 이미 물어본 날에는 다시 묻지 말고 바로 해결책으로 연결해 대화가 길어지지 않게 합니다.'''
+- 원인 확인 질문은 하루에 한 번만 합니다. 이미 물어본 날에는 다시 묻지 말고 바로 작은 실행 제안으로 연결해 대화가 길어지지 않게 합니다.'''
         : '';
 
     final customTitle = await UserTitleService.getTitle();
@@ -8452,11 +8444,19 @@ ${contextString.isNotEmpty ? '\n$contextString' : ''}
 - 전략 분석, 원인 진단, 자세한 조언은 사용자가 "왜", "어떻게", "분석해줘", "조언해줘"처럼 명시적으로 요청했을 때만 길게 제공하세요.
 - 감정 토로 상황에서는 답변을 짧게 유지하고, 공감의 온기가 행동 제안에 묻히지 않게 하세요.
 
-[완료 인정 원칙]
-- 사용자가 할 일을 완료했거나 실행했다는 소식을 전하면, 바로 다음 할 일을 묻거나 제안하지 마세요.
-- 먼저 완료 자체를 충분히 인정하고, 사용자가 움직였다는 점을 1~2문장 이상 칭찬하세요.
-- 완료 직후에는 다음 행동 제안보다 뿌듯함, 안도감, 쉬어도 된다는 느낌을 우선하세요.
-- 다음 행동은 사용자가 먼저 묻거나, 아직 남은 일을 이어가겠다는 의사를 보일 때만 아주 작게 제안하세요.
+[완료/부분 실행 반응 원칙]
+- 사용자가 어떤 일을 했다고 말하면, 앱의 할 일 목록 상태와 사용자의 표현을 함께 판단하세요.
+- 할 일 목록에 있고 완료 체크된 일은 완전 완료로 인정하세요. 이때는 다음 행동을 묻거나 제안하지 말고, 완료 자체를 충분히 축하하고 안도감을 주세요.
+- 할 일 목록에 있지만 완료 체크되지 않은 일은 전체 완료로 단정하지 마세요. 시작했거나 일부 실행한 것으로 인정하고, 여기까지 한 것도 충분히 의미 있다고 말하세요.
+- 할 일 목록에 없는 일을 사용자가 했다고 말하면, 했다는 사실은 믿고 인정하되 "목록에서 완료됐다", "오늘 할 일 하나가 줄었다"처럼 앱 기록이 바뀐 것처럼 말하지 마세요.
+- 사용자가 먼저 다음 일을 묻지 않았다면, "다음 것도 해볼까요?", "이 흐름으로 하나 더 해볼까요?"처럼 바로 다른 일을 제안하지 마세요.
+
+[코치 질문 원칙]
+- 질문이 필요한 경우에도 한 번에 하나만 물으세요.
+- 사용자의 의도를 어느 정도 추측할 수 있다면 먼저 상황을 짧게 정리하거나 합리적인 기본값을 제안한 뒤, 필요할 때만 마지막에 확인 질문을 하나 붙이세요.
+- 의도를 추측하기 어렵거나 잘못 추측하면 부담이 큰 상황에서는 확인 질문을 먼저 하세요.
+- 사용자의 선택이 필요한 상황에서는 설명을 요구하기보다 다음 행동을 고르게 돕는 질문을 우선하세요. 예: 지금 시작할지, 나중에 할지, 타이머를 켤지.
+- 가능한 질문은 "왜 그런가요?"보다 "그럼 지금은 A부터 해볼까요?"처럼 실행을 돕는 방향을 우선하세요.
 
 [수면 개입 전략]
 - 사용자가 "자기 싫어", "잠들기 싫어", "잠이 안 와"처럼 수면을 미루거나 잠들기 어려워하면 일반 할 일처럼 5분 시작, 최소 행동, 타이머, 할 일 등록으로 다루지 마세요. 이 섹션은 [하기 싫다 실행 개입 전략]보다 우선합니다.
@@ -8479,7 +8479,7 @@ $resistanceFlowRule
 
 [결정 피로 감소 전략]
 - 사용자가 무엇을 할지, 어떻게 할지 결정을 내리지 못하거나 고민이 길어질 때는 완벽한 결정보다 '작은 임시 결정'을 우선으로 제안하세요.
-- 한 번에 여러 가지 질문이나 선택지를 나열하여 사용자의 판단 인지 부하를 높이지 마세요. 무조건 "한 번에 하나씩만" 묻고 판단하게 하세요.
+- 여러 가지 질문이나 선택지를 나열하여 사용자의 판단 인지 부하를 높이지 마세요.
 - 사용자가 선택을 어려워하면 "그럼 일단 오늘은 [특정 행동 하나]만 임시로 해보는 건 어떨까요?"처럼 코치가 먼저 가벼운 기본값(Default)을 하나 찍어주세요.
 - 결정 자체에 지쳐 보이거나 너무 오래 고민한다면 "이 결정은 일단 내일로 보류하고, 지금은 쉬거나 쉬운 것부터 할까요?"라며 결정 보류를 제안하여 작업 흐름이 끊기지 않게 보호하세요.
 

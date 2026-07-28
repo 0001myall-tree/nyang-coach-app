@@ -367,7 +367,7 @@ class AnalyticsService {
     );
   }
 
-  /// 기능 사용 로깅 (모닝콜, 명상, 나이트콜 등)
+  /// 기능 사용 로깅 (모닝콜, 명상 등)
   static Future<void> logFeatureUsage(String featureName) async {
     final user = _auth.currentUser;
     if (user == null) return;

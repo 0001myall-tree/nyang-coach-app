@@ -130,7 +130,7 @@ class AuthService {
     );
     await UserDataService.save(testData);
     await NotificationService().syncDailyMorningCall();
-    await NotificationService().syncDailyNightCall();
+    await NotificationService().disableNightCallReminders();
     await NotificationService().syncCoreReminders();
   }
 
@@ -269,9 +269,9 @@ class AuthService {
       debugPrint('Morning notification sync skipped: $e');
     }
     try {
-      await NotificationService().syncDailyNightCall();
+      await NotificationService().disableNightCallReminders();
     } catch (e) {
-      debugPrint('Night notification sync skipped: $e');
+      debugPrint('Night notification cleanup skipped: $e');
     }
     try {
       await NotificationService().syncCoreReminders();
