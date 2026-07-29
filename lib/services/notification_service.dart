@@ -35,6 +35,11 @@ class NotificationService {
   static const int _inactiveReturnNotificationId = 889;
   static const Duration _inactiveReturnDelay = Duration(days: 3);
   static const Duration _inactiveReturnCooldown = Duration(days: 5);
+  static const String _androidMorningChannelVersion = 'v8';
+  static const String _androidCoreReminderChannelVersion = 'v3';
+  static const String _androidPushChannelId = 'nyang_push_channel';
+  static const String _androidFocusTimerChannelId =
+      'nyang_focus_timer_channel_v3';
   static const List<String> _inactiveReturnMessages = [
     '집사야, 오늘 뭐할지 하나만 같이 정해볼까?',
     '집사야, 하기 싫을 땐 냥냥코치를 기억해달라냥.',
@@ -46,11 +51,11 @@ class NotificationService {
   DateTime? _lastMorningOpenedAt;
 
   String _morningCallChannelId(String? soundName) {
-    return 'nyang_morning_call_${soundName ?? 'default'}_v6';
+    return 'nyang_morning_call_${soundName ?? 'default'}_$_androidMorningChannelVersion';
   }
 
   String _coreReminderChannelId(String? soundName) {
-    return 'nyang_core_reminder_${soundName ?? 'push'}_v2';
+    return 'nyang_core_reminder_${soundName ?? 'push'}_$_androidCoreReminderChannelVersion';
   }
 
   String? _coreReminderSoundName(String coachId, int advanceMinutes) {
@@ -209,6 +214,97 @@ class NotificationService {
         }
       },
     );
+    await _ensureAndroidNotificationChannels();
+  }
+
+  Future<void> _ensureAndroidNotificationChannels() async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+    final android = _plugin
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >();
+    if (android == null) return;
+
+    await android.createNotificationChannel(
+      const AndroidNotificationChannel(
+        _androidPushChannelId,
+        '기본 푸시 알림',
+        description: '냥냥코치 기본 푸시 알림입니다.',
+        importance: Importance.max,
+        playSound: true,
+        audioAttributesUsage: AudioAttributesUsage.notification,
+      ),
+    );
+    await android.createNotificationChannel(
+      const AndroidNotificationChannel(
+        _androidFocusTimerChannelId,
+        '집중 타이머',
+        description: '집중 타이머 완료 알림입니다.',
+        importance: Importance.max,
+        playSound: true,
+        audioAttributesUsage: AudioAttributesUsage.notification,
+      ),
+    );
+    await android.createNotificationChannel(
+      AndroidNotificationChannel(
+        _morningCallChannelId(null),
+        '냥냥코치 모닝콜',
+        description: '냥냥코치 모닝콜 알람입니다.',
+        importance: Importance.max,
+        playSound: true,
+        enableVibration: true,
+        vibrationPattern: Int64List.fromList([0, 450, 180, 450, 350, 900]),
+        audioAttributesUsage: AudioAttributesUsage.alarm,
+      ),
+    );
+    await android.createNotificationChannel(
+      AndroidNotificationChannel(
+        _coreReminderChannelId(null),
+        '냥냥코치 일정 알림',
+        description: '지정된 일정 시작 전 알림입니다.',
+        importance: Importance.high,
+        playSound: true,
+        audioAttributesUsage: AudioAttributesUsage.notification,
+      ),
+    );
+
+    final voiceCoachIds = CoachConfigs.all.values
+        .where((coach) => coach.voiceCount > 0)
+        .map((coach) => coach.id);
+    for (final coachId in voiceCoachIds) {
+      final count = CoachConfigs.get(coachId).voiceCount;
+      for (int i = 1; i <= count; i++) {
+        final soundName = '${coachId}_$i';
+        await android.createNotificationChannel(
+          AndroidNotificationChannel(
+            _morningCallChannelId(soundName),
+            '냥냥코치 모닝콜',
+            description: '냥냥코치 모닝콜 알람입니다.',
+            importance: Importance.max,
+            sound: RawResourceAndroidNotificationSound(soundName),
+            playSound: true,
+            enableVibration: true,
+            vibrationPattern: Int64List.fromList([0, 450, 180, 450, 350, 900]),
+            audioAttributesUsage: AudioAttributesUsage.alarm,
+          ),
+        );
+      }
+
+      for (final minutes in _coreReminderSoundMinutes) {
+        final soundName = '${coachId}_reminder_$minutes';
+        await android.createNotificationChannel(
+          AndroidNotificationChannel(
+            _coreReminderChannelId(soundName),
+            '냥냥코치 일정 알림',
+            description: '지정된 일정 시작 전 알림입니다.',
+            importance: Importance.high,
+            sound: RawResourceAndroidNotificationSound(soundName),
+            playSound: true,
+            audioAttributesUsage: AudioAttributesUsage.notification,
+          ),
+        );
+      }
+    }
   }
 
   Future<bool> requestNotificationPermissions() async {
@@ -574,7 +670,7 @@ class NotificationService {
     if (kIsWeb) return;
     const AndroidNotificationDetails androidDetails =
         AndroidNotificationDetails(
-          'nyang_push_channel',
+          _androidPushChannelId,
           '기본 푸시 알람',
           importance: Importance.max,
           priority: Priority.high,
@@ -617,7 +713,7 @@ class NotificationService {
 
     final AndroidNotificationDetails androidDetails =
         AndroidNotificationDetails(
-          'nyang_focus_timer_channel_v3',
+          _androidFocusTimerChannelId,
           '집중 타이머 알람',
           channelDescription: '집중 타이머 완료 알람입니다.',
           importance: Importance.max,
