@@ -3972,6 +3972,115 @@ class _ChatScreenState extends State<ChatScreen>
         .any((message) => _isAvoidanceMessage(message.text));
   }
 
+  Future<String?> _tryBuildMasterLocalReply(String input) async {
+    if (!_coach.isMaster) return null;
+    if (_timerConfirmMinutes != null || _awaitingCountdownConsent) return null;
+
+    final raw = input.trim();
+    if (raw.isEmpty) return null;
+    final normalized = raw.replaceAll(RegExp(r'\s+'), '').toLowerCase();
+    final isQuestion = raw.contains('?') || raw.contains('？');
+
+    String? reply;
+    if (['안녕', '안녕하세요', '하이', 'ㅎㅇ', '왔어', '나왔어', '들어왔어'].contains(normalized) ||
+        (normalized.length <= 8 && normalized.contains('안녕'))) {
+      reply = _coach.id == 'nyang_halbae'
+          ? '왔구나냥. 지금은 길게 벌리지 말고, 오늘 흐름만 차분히 보면 된다냥.'
+          : '오셨네요. 지금은 크게 벌리지 말고, 오늘 흐름부터 차분히 확인해볼게요.';
+    } else if ([
+      '고마워',
+      '고맙다',
+      '고맙',
+      '감사',
+      '감사해',
+      '땡큐',
+      'thanks',
+      'thankyou',
+    ].contains(normalized)) {
+      reply = _coach.id == 'nyang_halbae'
+          ? '괜찮다냥. 필요한 순간에 다시 부르면 된다냥.'
+          : '천만에요. 필요하실 때 다시 바로 도와드릴게요.';
+    } else if ([
+      '잘자',
+      '자러갈게',
+      '잘게',
+      '나갈게',
+      '이따올게',
+      '다녀올게',
+    ].contains(normalized)) {
+      reply = _coach.id == 'nyang_halbae'
+          ? '그래냥. 오늘은 여기서 잘 접어두고, 몸부터 쉬게 해주라냥.'
+          : '좋아요. 오늘은 여기서 잘 접어두고, 몸부터 쉬게 해주세요.';
+    } else if (_isSimpleMasterStatusRequest(normalized, isQuestion)) {
+      reply = await _buildLocalMasterStatusReply();
+    }
+
+    if (reply == null) return null;
+    return UserTitleService.applyForCoach(reply, _coach.id);
+  }
+
+  bool _isSimpleMasterStatusRequest(String normalized, bool isQuestion) {
+    final asksStatus =
+        normalized.contains('오늘상태') ||
+        normalized.contains('진행상황') ||
+        normalized.contains('얼마나했') ||
+        normalized.contains('몇개했') ||
+        normalized.contains('몇개남') ||
+        normalized.contains('남은거') ||
+        normalized.contains('남은일') ||
+        normalized.contains('할일상태');
+    final asksAnalysis =
+        normalized.contains('분석') ||
+        normalized.contains('평가') ||
+        normalized.contains('추천') ||
+        normalized.contains('뭐부터') ||
+        normalized.contains('뭐하지') ||
+        normalized.contains('계획') ||
+        normalized.contains('짜줘');
+    return asksStatus &&
+        !asksAnalysis &&
+        (isQuestion || normalized.length <= 12);
+  }
+
+  Future<String> _buildLocalMasterStatusReply() async {
+    final prefs = await SharedPreferences.getInstance();
+    final context = await _buildMasterGreetingContext(
+      prefs: prefs,
+      now: DateTime.now(),
+      lastVisit: null,
+      todayVisitCount: 1,
+    );
+    final done = context.completedTasks;
+    final total = context.totalTasks;
+    final remaining = context.remainingTasks;
+    final inProgress = context.inProgressTaskName;
+    final core = context.coreTaskName;
+
+    if (_coach.id == 'nyang_halbae') {
+      if (total == 0) return '오늘 등록된 할 일은 아직 없다냥. 먼저 하나만 가볍게 잡아도 충분하다냥.';
+      if (remaining == 0)
+        return '오늘 할 일 $total개 중 $done개 완료다냥. 다 끝냈으니 더 벌리지 말고 쉬어도 된다냥.';
+      if (inProgress != null) {
+        return '오늘 할 일 $total개 중 $done개 완료, $remaining개 남았다냥. 지금은 "$inProgress" 마무리만 보면 되겠다냥.';
+      }
+      if (core != null) {
+        return '오늘 할 일 $total개 중 $done개 완료, $remaining개 남았다냥. 핵심은 "$core" 쪽을 먼저 보면 된다냥.';
+      }
+      return '오늘 할 일 $total개 중 $done개 완료, $remaining개 남았다냥. 하나만 고르면 흐름은 다시 붙는다냥.';
+    }
+
+    if (total == 0) return '오늘 등록된 할 일은 아직 없어요. 먼저 하나만 가볍게 잡아도 충분합니다.';
+    if (remaining == 0)
+      return '오늘 할 일 $total개 중 $done개 완료예요. 다 끝내셨으니 더 벌리지 말고 쉬셔도 됩니다.';
+    if (inProgress != null) {
+      return '오늘 할 일 $total개 중 $done개 완료, $remaining개 남았어요. 지금은 "$inProgress" 마무리만 보시면 좋겠습니다.';
+    }
+    if (core != null) {
+      return '오늘 할 일 $total개 중 $done개 완료, $remaining개 남았어요. 핵심은 "$core" 쪽을 먼저 보시면 됩니다.';
+    }
+    return '오늘 할 일 $total개 중 $done개 완료, $remaining개 남았어요. 하나만 고르면 흐름은 다시 붙습니다.';
+  }
+
   int _conversationAvoidanceCountForTask(
     String taskName, {
     required bool allowGeneric,
@@ -6238,8 +6347,14 @@ class _ChatScreenState extends State<ChatScreen>
       );
       _messages.add(
         ChatMessage(
-          text:
-              '머리가 복잡할 땐 두 가지가 섞여 있더라냥.\n뭘 해야 할지 모르는 건지, 해야 할 건 아는데 마음이 흩어진 건지부터 보면 된다냥.',
+          text: '뭘 해야 할지 모르는 건가? 아님 해야 할 건 아는데 마음이 흩어진 걸까냥?',
+          isUser: false,
+          time: DateTime.now(),
+        ),
+      );
+      _messages.add(
+        ChatMessage(
+          text: '',
           isUser: false,
           time: DateTime.now(),
           kind: 'mental_clutter_choice',
@@ -6390,6 +6505,13 @@ class _ChatScreenState extends State<ChatScreen>
           text: '좋아. 오늘은 어떻게 나를 챙겨볼까?',
           isUser: false,
           time: DateTime.now(),
+        ),
+      );
+      _messages.add(
+        ChatMessage(
+          text: '',
+          isUser: false,
+          time: DateTime.now(),
           kind: 'grooming_care_choice',
         ),
       );
@@ -6419,6 +6541,14 @@ class _ChatScreenState extends State<ChatScreen>
       _messages.add(
         ChatMessage(text: reply, isUser: false, time: DateTime.now()),
       );
+      _messages.add(
+        ChatMessage(
+          text: '',
+          isUser: false,
+          time: DateTime.now(),
+          kind: 'grooming_care_followup',
+        ),
+      );
       _suggestedTasks = [];
       _dynamicChips = _coach.chips;
       _suppressDefaultChips = false;
@@ -6442,6 +6572,21 @@ class _ChatScreenState extends State<ChatScreen>
     return _sendGroomingCareRoutine(
       userText: '기분 전환 루틴',
       reply: _pickMoodRefreshGroomingRoutine(),
+    );
+  }
+
+  Future<void> _acceptGroomingCareRoutine() async {
+    await _send(
+      '알았어. 해볼게',
+      apiInputOverride: '방금 추천받은 가꾸기 루틴을 해보겠다고 한다. 부담을 키우지 말고 짧게 응원해줘.',
+    );
+  }
+
+  Future<void> _resistGroomingCareRoutine() async {
+    await _send(
+      '하기 귀찮아',
+      apiInputOverride:
+          '방금 추천받은 가꾸기 루틴이 귀찮다고 느낀다. 더 작게 줄이거나 부담을 낮춰서 바로 시작할 수 있게 도와줘.',
     );
   }
 
@@ -7050,6 +7195,32 @@ class _ChatScreenState extends State<ChatScreen>
           ),
         );
         _dynamicChips = _coach.chips;
+      });
+      _scrollToBottom();
+      await _saveHistory();
+      await AnalyticsService.logConversationMessage(
+        coachId: widget.coachId,
+        usedApi: false,
+      );
+      return;
+    }
+
+    final masterLocalReply = await _tryBuildMasterLocalReply(trimmed);
+    if (masterLocalReply != null) {
+      setState(() {
+        _messages.add(
+          ChatMessage(text: trimmed, isUser: true, time: DateTime.now()),
+        );
+        _messages.add(
+          ChatMessage(
+            text: masterLocalReply,
+            isUser: false,
+            time: DateTime.now(),
+          ),
+        );
+        _suggestedTasks = [];
+        _dynamicChips = _coach.chips;
+        _suppressDefaultChips = false;
       });
       _scrollToBottom();
       await _saveHistory();
@@ -8722,10 +8893,17 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   Future<String> _callOpenAI(String userText, {bool isGreeting = false}) async {
-    final historyLimit = _coach.isMaster ? 10 : 6;
-    final history = _messages.length > historyLimit
-        ? _messages.sublist(_messages.length - historyLimit)
-        : _messages;
+    final historyLimit = 6;
+    final promptHistory = _messages
+        .where((message) {
+          if (message.kind == 'vision_choice') return false;
+          if (message.text.trim().isEmpty) return false;
+          return true;
+        })
+        .toList(growable: false);
+    final history = promptHistory.length > historyLimit
+        ? promptHistory.sublist(promptHistory.length - historyLimit)
+        : promptHistory;
 
     // 할매 코치 전용: 랜덤 애정 표현 주입 (비활성화)
     String halmaeHint = '';
@@ -9004,16 +9182,14 @@ $timerOutputRule
           ]
         : [
             {'role': 'system', 'content': systemPromptWithChips},
-            ...history
-                .where((m) => m.kind != 'vision_choice')
-                .map(
-                  (m) => {
-                    'role': m.isUser ? 'user' : 'assistant',
-                    'content': m.isUser
-                        ? '[${m.time.hour}:${m.time.minute.toString().padLeft(2, '0')}] ${m.text}'
-                        : m.text,
-                  },
-                ),
+            ...history.map(
+              (m) => {
+                'role': m.isUser ? 'user' : 'assistant',
+                'content': m.isUser
+                    ? '[${m.time.hour}:${m.time.minute.toString().padLeft(2, '0')}] ${m.text}'
+                    : m.text,
+              },
+            ),
             {'role': 'user', 'content': '$timePrefix$effectiveUserText'},
           ];
 
@@ -10842,6 +11018,9 @@ $timerOutputRule
     if (msg.kind == 'grooming_care_choice') {
       return _buildGroomingCareChoiceCard(msg);
     }
+    if (msg.kind == 'grooming_care_followup') {
+      return _buildGroomingCareFollowupCard(msg);
+    }
     if (msg.kind == 'feature_location_picker') {
       return _buildFeatureLocationPickerCard(msg);
     }
@@ -11444,16 +11623,18 @@ $timerOutputRule
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text(
-                    msg.text,
-                    style: GoogleFonts.notoSansKr(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w800,
-                      height: 1.45,
-                      color: const Color(0xFF1A1A2E),
+                  if (msg.text.trim().isNotEmpty) ...[
+                    Text(
+                      msg.text,
+                      style: GoogleFonts.notoSansKr(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                        height: 1.45,
+                        color: const Color(0xFF1A1A2E),
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 12),
+                    const SizedBox(height: 12),
+                  ],
                   choiceButton(
                     '뭐부터 할지 모르겠어',
                     () => _send('뭐부터 할지 모르겠어', apiInputOverride: '지금 뭐하지?'),
@@ -11664,19 +11845,118 @@ $timerOutputRule
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text(
-                    msg.text,
-                    style: GoogleFonts.notoSansKr(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w800,
-                      height: 1.45,
-                      color: const Color(0xFF1A1A2E),
+                  if (msg.text.trim().isNotEmpty) ...[
+                    Text(
+                      msg.text,
+                      style: GoogleFonts.notoSansKr(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                        height: 1.45,
+                        color: const Color(0xFF1A1A2E),
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 12),
+                    const SizedBox(height: 12),
+                  ],
                   choiceButton('5분 실천', _sendFiveMinuteGroomingRoutine),
                   const SizedBox(height: 8),
                   choiceButton('기분 전환 루틴', _sendMoodRefreshGroomingRoutine),
+                ],
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(left: 6, bottom: 2),
+            child: Text(
+              time,
+              style: GoogleFonts.notoSansKr(
+                fontSize: AppDesignTokens.textMeta,
+                color: AppDesignTokens.textDisabled,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGroomingCareFollowupCard(ChatMessage msg) {
+    final time = DateFormat('a h:mm', 'ko').format(msg.time);
+    final accent = _coach.accentColor;
+
+    Widget choiceButton(String label, VoidCallback onTap) {
+      return GestureDetector(
+        onTap: _isLoading ? null : onTap,
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF8F5FF),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFE5DEFF)),
+          ),
+          child: Text(
+            label,
+            textAlign: TextAlign.center,
+            style: GoogleFonts.notoSansKr(
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+              color: accent,
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(18),
+            child: Image.asset(
+              _coach.imagePath,
+              width: 36,
+              height: 36,
+              fit: BoxFit.cover,
+              alignment: Alignment.topCenter,
+              errorBuilder: (_, __, ___) => Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: _coach.accentLight,
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: Icon(Icons.person, color: _coach.accentColor, size: 20),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Container(
+              constraints: BoxConstraints(
+                maxWidth: MediaQuery.of(context).size.width * 0.72,
+              ),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: const Color(0xFFE8E1F4)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.06),
+                    blurRadius: 12,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  choiceButton('알았어. 해볼게', _acceptGroomingCareRoutine),
+                  const SizedBox(height: 8),
+                  choiceButton('하기 귀찮아', _resistGroomingCareRoutine),
                 ],
               ),
             ),

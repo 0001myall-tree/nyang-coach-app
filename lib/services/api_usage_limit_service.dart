@@ -159,9 +159,8 @@ class ApiUsageLimitService {
     final prefs = await SharedPreferences.getInstance();
     final noticeKey =
         'nyang_api_usage_notice_${user.uid}_daily_${scopeKey}_$dailyStage';
-    // 반복 테스트를 위해 임시로 캐시 무시 (주석 처리)
-    // if (prefs.getBool(noticeKey) == true) return null;
-    // await prefs.setBool(noticeKey, true);
+    if (prefs.getBool(noticeKey) == true) return null;
+    await prefs.setBool(noticeKey, true);
 
     return ApiUsageNotice(
       message: _dailyUsageNotice(dailyStage, dailyPercent, userData.planType),
