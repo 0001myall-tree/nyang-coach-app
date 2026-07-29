@@ -6,7 +6,6 @@ import 'dart:ui' show Color;
 import 'package:device_calendar/device_calendar.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:timezone/data/latest_all.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 
 /// 서비스가 ScheduleItem(UI 파일)에 직접 의존하지 않도록 넘겨받는 경량 일정 정보.
@@ -81,9 +80,13 @@ class AppleCalendarSyncService {
   bool _tzReady = false;
   Future<void> _ensureTimezone() async {
     if (_tzReady) return;
-    // notification_service와 동일하게 기기 시간대를 따르고, 실패 시 한국 시간으로 폴백.
+    // 기기 시간대를 따르고, 실패 시 한국 시간으로 폴백.
+    //
+    // tz DB 로딩은 NotificationService.init()이 앱 시작 시 이미 끝내 놓으므로
+    // (main.dart에서 이 서비스보다 먼저 await 된다) 여기서 initializeTimeZones()를
+    // 다시 부르지 않는다. 그 함수는 마지막 줄이 setLocalLocation(UTC)라서, 다시 부르면
+    // 아래 setLocalLocation이 끝날 때까지 앱 전역 tz.local이 UTC로 노출된다.
     try {
-      tzdata.initializeTimeZones();
       final deviceTimeZone = await FlutterTimezone.getLocalTimezone();
       tz.setLocalLocation(tz.getLocation(deviceTimeZone));
     } catch (_) {

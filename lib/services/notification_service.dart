@@ -38,6 +38,7 @@ class NotificationService {
   static const String _androidMorningChannelVersion = 'v10';
   static const String _androidCoreReminderChannelVersion = 'v4';
   static const String _androidPushChannelId = 'nyang_push_channel';
+  static const String _staleScheduleCleanupKey = 'nyang_stale_schedule_cleanup_v1';
   static const String _androidFocusTimerChannelId =
       'nyang_focus_timer_channel_v3';
   static const List<String> _inactiveReturnMessages = [
@@ -179,8 +180,15 @@ class NotificationService {
 
   Future<void> init() async {
     if (kIsWeb) return;
-    tz.initializeTimeZones();
-    tz.setLocalLocation(tz.getLocation('Asia/Seoul'));
+    // 여기서 예외가 나면 아래 _plugin.initialize()까지 통째로 건너뛰어 알림이 전부 죽는다.
+    // tz는 iOS 예약에만 쓰이므로 실패해도 나머지 초기화는 계속 진행한다.
+    try {
+      tz.initializeTimeZones();
+      tz.setLocalLocation(tz.getLocation('Asia/Seoul'));
+      debugPrint('타임존 초기화 완료: tz.local=${tz.local.name}');
+    } catch (e) {
+      debugPrint('타임존 초기화 실패: $e');
+    }
     const AndroidInitializationSettings androidSettings =
         AndroidInitializationSettings('@mipmap/ic_launcher');
     const DarwinInitializationSettings iosSettings =
@@ -215,6 +223,25 @@ class NotificationService {
       },
     );
     await _ensureAndroidNotificationChannels();
+    await _purgeStaleScheduledNotificationsOnce();
+  }
+
+  /// 기기에 남아 있는 예약 알림을 한 번만 전부 지운다.
+  ///
+  /// 타임존을 기기 설정에서 자동 감지하던 기간(2026-07-20 ~ 07-28)에 예약된 알림들이
+  /// 잘못된 시각으로 등록돼 엉뚱한 때 울렸다. 코드는 Asia/Seoul로 되돌렸지만 기기에 이미
+  /// 박힌 예약은 그대로 남기 때문에, 한 번 싹 지우고 아래 sync들이 다시 예약하게 한다.
+  /// (main.dart에서 init() 직후 syncDailyMorningCall / syncCoreReminders가 호출된다.)
+  Future<void> _purgeStaleScheduledNotificationsOnce() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.getBool(_staleScheduleCleanupKey) ?? false) return;
+    try {
+      await _plugin.cancelAll();
+    } catch (e) {
+      debugPrint('예약 알림 초기화 실패: $e');
+      return;
+    }
+    await prefs.setBool(_staleScheduleCleanupKey, true);
   }
 
   Future<void> _ensureAndroidNotificationChannels() async {
@@ -546,6 +573,24 @@ class NotificationService {
       android: androidDetails,
       iOS: iosDetails,
     );
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      // 안드로이드는 AlarmManager에 epoch millis를 그대로 넘기고 기기 시계로 발화하므로
+      // timezone 패키지를 거치지 않고 순수 DateTime(= 기기 로컬 시각)으로 계산한다.
+      // tz.local이 Asia/Seoul이 아니라 UTC로 잡히면 벽시계 시각이 9시간 밀리기 때문이다.
+      // (Kotlin의 MorningAlarmScheduler.rescheduleFromPrefs와 같은 계산이다.)
+      final now = DateTime.now();
+      var scheduled = DateTime(now.year, now.month, now.day, hour, minute);
+      if (!scheduled.isAfter(now)) {
+        // 날짜 필드를 +1 하면 서머타임이 있어도 벽시계 시각이 그대로 유지된다.
+        scheduled = DateTime(now.year, now.month, now.day + 1, hour, minute);
+      }
+      await _androidAlarmChannel.invokeMethod('scheduleMorningAlarm', {
+        'triggerMillis': scheduled.millisecondsSinceEpoch,
+        'payload': 'morning:$targetCoachId:${soundName ?? ''}',
+      });
+      return;
+    }
+
     final now = tz.TZDateTime.now(tz.local);
     tz.TZDateTime scheduled = tz.TZDateTime(
       tz.local,
@@ -557,14 +602,6 @@ class NotificationService {
     );
     if (scheduled.isBefore(now)) {
       scheduled = scheduled.add(const Duration(days: 1));
-    }
-
-    if (defaultTargetPlatform == TargetPlatform.android) {
-      await _androidAlarmChannel.invokeMethod('scheduleMorningAlarm', {
-        'triggerMillis': scheduled.millisecondsSinceEpoch,
-        'payload': 'morning:$targetCoachId:${soundName ?? ''}',
-      });
-      return;
     }
 
     // iOS cannot start the in-app audio loop from a killed/background state
