@@ -6922,6 +6922,20 @@ class _ChatScreenState extends State<ChatScreen>
     effect: '별 거 아니어도 기분이 좀 나아지',
   );
 
+  /// 공용 문장 중 새벽에도 꺼낼 수 있는 것들. 몸을 깨우는 동작이 없고
+  /// 부담을 내려놓는 쪽이라, 재우는 방향으로 안내하는 새벽 톤과 어긋나지 않는다.
+  /// 새벽 목록이 제일 얇아서(전용 5개) 여기서 받아 가는 몫이 크다.
+  static const List<_GroomingLine> _calmGroomingLines = [
+    _GroomingLine(
+      '오늘은 예뻐져야 한다는 숙제는 잠깐 미뤄두자. 손을 씻고 향이 나는 걸 하나 발라봐.',
+      effect: '몸이 편해지면 마음도 조금 따라오',
+    ),
+    _GroomingLine(
+      '목이랑 어깨만 천천히 풀어보자.',
+      effect: '스트레칭을 꾸준히 하면 몸선도 자세도 조금씩 좋아져서 몸이 괜히 더 가볍고 편해지',
+    ),
+  ];
+
   /// 집에서 시간대를 안 타는 문장. 아침·낮·저녁 목록에 공통으로 얹는다.
   /// 새벽(0~6시)엔 몸을 깨우는 동작이라 빼둔다 — 그 시간대는 재우는 쪽으로 안내한다.
   static const List<_GroomingLine> _anytimeHomeGroomingRoutines = [
@@ -6930,20 +6944,13 @@ class _ChatScreenState extends State<ChatScreen>
       effect: '몸이 시원해져서 기분도 조금 괜찮아지',
     ),
     _GroomingLine(
-      '오늘은 예뻐져야 한다는 숙제는 잠깐 미뤄두자. 손을 씻고 향이 나는 걸 하나 발라봐.',
-      effect: '몸이 편해지면 마음도 조금 따라오',
-    ),
-    _GroomingLine(
       '따뜻한 물 한 모금 마시고 얼굴만 가볍게 씻어보자. 지금은 완벽한 관리보다 다시 산뜻해지는 느낌 하나면 충분해.',
     ),
     _GroomingLine(
       '좋아하는 향수나 바디미스트가 있으면 한 번만 뿌려봐.',
       effect: '향 하나로 기분이 꽤 빨리 돌아오',
     ),
-    _GroomingLine(
-      '목이랑 어깨만 천천히 풀어보자.',
-      effect: '스트레칭을 꾸준히 하면 몸선도 자세도 조금씩 좋아져서 몸이 괜히 더 가볍고 편해지',
-    ),
+    ..._calmGroomingLines,
     _GroomingLine(
       '화장품 바르기 전에 손부터 씻고, 화장품 용기 표면도 한 번 닦아줘.',
       effect: '별 거 아닌 거 같아도 이런 게 쌓이면 피부가 덜 예민해지',
@@ -7041,9 +7048,9 @@ class _ChatScreenState extends State<ChatScreen>
       ],
     };
     final isLateNight = hour < 6;
-    // 새벽을 뺀 시간대엔 공용 문장도 후보에 넣는다.
+    // 새벽엔 공용 문장 중 조용한 것만 받는다. 나머지는 몸을 깨우는 쪽이라 뺀다.
     final pool = isLateNight
-        ? lines
+        ? [...lines, ..._calmGroomingLines]
         : [...lines, ..._anytimeHomeGroomingRoutines];
     return _renderGroomingLine(
       _pickFreshGroomingLine(pool),
