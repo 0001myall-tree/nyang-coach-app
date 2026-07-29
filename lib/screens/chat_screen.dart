@@ -6944,6 +6944,10 @@ class _ChatScreenState extends State<ChatScreen>
       '목이랑 어깨만 천천히 풀어보자.',
       effect: '스트레칭을 꾸준히 하면 몸선도 자세도 조금씩 좋아져서 몸이 괜히 더 가볍고 편해지',
     ),
+    _GroomingLine(
+      '화장품 바르기 전에 손부터 씻고, 화장품 용기 표면도 한 번 닦아줘.',
+      effect: '별 거 아닌 거 같아도 이런 게 쌓이면 피부가 덜 예민해지',
+    ),
     _manualScalpMassageLine,
   ];
 
