@@ -140,6 +140,55 @@ class _SettingsScreenState extends State<SettingsScreen> {
     ).showSnackBar(const SnackBar(content: Text('무료 이용자는 모닝콜 설정만 이용할 수 있어요.')));
   }
 
+  /// 알람 설정 결과 안내.
+  /// 설정 서랍(모달 바텀시트)이 열린 상태에서 뜨기 때문에 스낵바는 서랍에 가려 보이지 않는다.
+  /// 게다가 모닝콜은 시스템 권한 설정 화면을 함께 열어서, 자동으로 사라지는 스낵바로는
+  /// 안내를 놓치게 된다. 그래서 사용자가 직접 닫아야 하는 팝업으로 띄운다.
+  Future<void> _showAlarmNoticeDialog({
+    required String title,
+    required String message,
+  }) {
+    return showDialog<void>(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: Text(
+            title,
+            style: GoogleFonts.notoSansKr(
+              fontSize: 17,
+              fontWeight: FontWeight.w900,
+              color: const Color(0xFF3D3A4E),
+            ),
+          ),
+          content: Text(
+            message,
+            style: GoogleFonts.notoSansKr(
+              fontSize: 13.5,
+              height: 1.5,
+              fontWeight: FontWeight.w500,
+              color: const Color(0xFF6B6676),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(
+                '확인',
+                style: GoogleFonts.notoSansKr(
+                  fontWeight: FontWeight.w900,
+                  color: const Color(0xFF8B7CFF),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   VoidCallback _paidSettingsTap(VoidCallback action) {
     return () {
       if (_isFreeUser) {
@@ -544,14 +593,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
       await NotificationService().cancelAllMorningCalls();
     }
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            enabled && !canUseFullScreen
-                ? '⏰ 모닝콜은 설정됐어요. 열린 설정에서 알림/알람 권한을 허용하면 잠금화면에서도 더 안정적으로 떠요.'
-                : '⏰ $timeStr에 $coachName 모닝콜이 설정되었어요!',
-          ),
-        ),
+      final needsPermission = enabled && !canUseFullScreen;
+      await _showAlarmNoticeDialog(
+        title: needsPermission ? '⏰ 모닝콜 권한을 확인해주세요' : '⏰ 모닝콜이 설정되었어요',
+        message: needsPermission
+            ? '모닝콜은 설정됐어요. 열린 설정에서 알림/알람 권한을 허용하면 잠금화면에서도 더 안정적으로 떠요.'
+            : enabled
+            ? '$timeStr에 $coachName 모닝콜이 울려요!'
+            : '모닝콜을 껐어요.',
       );
     }
   }
@@ -858,9 +907,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
         : CoachConfigs.get(coachId).name;
 
     if (mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('🔔 $coachName 일정 알람이 설정되었어요!')));
+      await _showAlarmNoticeDialog(
+        title: enabled ? '🔔 $coachName 일정 알람이 설정되었어요' : '🔔 일정 알람을 껐어요',
+        message: enabled
+            ? '일정 시작 $advanceMinutes분 전에 알려드릴게요!'
+            : '이제 일정 알람이 울리지 않아요.',
+      );
     }
   }
 
