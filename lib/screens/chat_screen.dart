@@ -6543,11 +6543,15 @@ class _ChatScreenState extends State<ChatScreen>
       coachId: widget.coachId,
       usedApi: false,
     );
+    // 가꾸기 퍼널의 분모. 이 값 대비 accept/resist 비율이 "문장이 실제로 먹혔나"의
+    // 유일한 신호라서, 문장을 더 손보기 전에 이것부터 쌓아둔다.
+    await AnalyticsService.logFeatureUsage('grooming_care');
   }
 
   Future<void> _sendGroomingCareRoutine({
     required String userText,
     required String reply,
+    required String feature,
   }) async {
     if (_isLoading) return;
     HapticFeedback.lightImpact();
@@ -6577,12 +6581,15 @@ class _ChatScreenState extends State<ChatScreen>
       coachId: widget.coachId,
       usedApi: false,
     );
+    // 집·밖 중 어느 쪽에서 열리는지. 한쪽이 거의 안 눌리면 그 목록부터 손보면 된다.
+    await AnalyticsService.logFeatureUsage(feature);
   }
 
   Future<void> _sendHomeGroomingRoutine() {
     return _sendGroomingCareRoutine(
       userText: '집이야',
       reply: _pickHomeGroomingRoutine(),
+      feature: 'grooming_home',
     );
   }
 
@@ -6590,10 +6597,16 @@ class _ChatScreenState extends State<ChatScreen>
     return _sendGroomingCareRoutine(
       userText: '밖이야',
       reply: _pickOutdoorGroomingRoutine(),
+      feature: 'grooming_outdoor',
     );
   }
 
   Future<void> _acceptGroomingCareRoutine() async {
+    // _send가 로딩 중이면 아무 일도 안 하고 빠져나간다. 그 경우까지 세면
+    // 분자만 부풀어서 비율이 실제보다 좋게 보인다.
+    if (_isLoading) return;
+    // 문장을 받아들인 비율. grooming_care 대비로 봐야 의미가 있다.
+    await AnalyticsService.logFeatureUsage('grooming_accept');
     await _send(
       '알았어. 해볼게',
       apiInputOverride: '방금 추천받은 가꾸기 루틴을 해보겠다고 한다. 부담을 키우지 말고 짧게 응원해줘.',
@@ -6601,6 +6614,9 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   Future<void> _resistGroomingCareRoutine() async {
+    if (_isLoading) return;
+    // 이 비율이 곧 "뭐야 하고 지나가는" 비율이다. 문장 손볼 우선순위의 근거.
+    await AnalyticsService.logFeatureUsage('grooming_resist');
     await _send(
       '하기 귀찮아',
       apiInputOverride:
