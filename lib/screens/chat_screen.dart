@@ -6603,7 +6603,9 @@ class _ChatScreenState extends State<ChatScreen>
             text: '',
             isUser: false,
             time: DateTime.now(),
-            kind: 'grooming_care_followup_moved',
+            kind: retryPlace == 'home'
+                ? 'grooming_followup_from_home'
+                : 'grooming_followup_from_outdoor',
           ),
         );
       } else if (shownToday) {
@@ -11623,8 +11625,11 @@ $timerOutputRule
     if (msg.kind == 'grooming_askback') {
       return _buildGroomingAskBackCard(msg);
     }
-    if (msg.kind == 'grooming_care_followup_moved') {
-      return _buildGroomingMovedFollowupCard(msg);
+    if (msg.kind == 'grooming_followup_from_home') {
+      return _buildGroomingMovedFollowupCard(msg, wasHome: true);
+    }
+    if (msg.kind == 'grooming_followup_from_outdoor') {
+      return _buildGroomingMovedFollowupCard(msg, wasHome: false);
     }
     if (msg.kind == 'grooming_care_followup') {
       return _buildGroomingCareFollowupCard(msg);
@@ -12394,8 +12399,12 @@ $timerOutputRule
 
   /// 장소를 기억해서 바로 추천한 뒤에 붙는 카드. 그 사이 자리를 옮겼을 수도
   /// 있어서, 수락·거절에 더해 반대쪽으로 다시 받는 버튼을 하나 더 둔다.
-  Widget _buildGroomingMovedFollowupCard(ChatMessage msg) {
-    final wasHome = _lastGroomingPlace == 'home';
+  /// 어느 자리에서 뽑은 카드인지는 메시지 종류에 박아 둔다. 지금 장소를 보고
+  /// 그리면, 나중에 자리를 옮겼을 때 위로 지나간 옛날 카드까지 버튼이 뒤집힌다.
+  Widget _buildGroomingMovedFollowupCard(
+    ChatMessage msg, {
+    required bool wasHome,
+  }) {
     return _buildGroomingChoiceCard(msg, [
       ('알았어. 해볼게', _acceptGroomingCareRoutine),
       ('하기 귀찮아', _resistGroomingCareRoutine),
