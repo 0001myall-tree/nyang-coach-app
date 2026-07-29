@@ -9578,13 +9578,6 @@ $timerOutputRule
       });
     }
 
-    final isVacation = widget.vacationInfo != null;
-    final chatBackgroundColor = (_coach.isMaster && !isVacation)
-        ? (_coach.id == 'nyang_halbae'
-              ? AppDesignTokens.brandSoftAlt
-              : const Color(0xFFEDF7F4))
-        : Colors.transparent;
-
     return Stack(
       children: [
         Column(
@@ -9604,7 +9597,7 @@ $timerOutputRule
               ),
             Expanded(
               child: Container(
-                color: chatBackgroundColor,
+                color: Colors.transparent,
                 width: double.infinity,
                 child: Column(
                   children: [
@@ -9639,7 +9632,7 @@ $timerOutputRule
                 ),
               ),
             ),
-            Container(color: chatBackgroundColor, child: _buildInputArea()),
+            _buildInputArea(),
           ],
         ),
         if (_coach.isMaster && _cheatKeyOpen && !keyboardOpen) ...[

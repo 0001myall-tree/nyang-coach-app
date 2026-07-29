@@ -7011,10 +7011,10 @@ class _TasksScreenState extends State<TasksScreen>
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
                                         if (hasReminder) ...[
-                                          const Icon(
+                                          Icon(
                                             Icons.notifications_active,
                                             size: 13,
-                                            color: Color(0xFFA0A0B0),
+                                            color: _coach.accentColor,
                                           ),
                                           const SizedBox(width: 4),
                                         ],
