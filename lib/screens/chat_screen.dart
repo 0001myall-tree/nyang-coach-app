@@ -3050,7 +3050,7 @@ class _ChatScreenState extends State<ChatScreen>
         .where((line) => !recentLines.contains(line))
         .toList(growable: false);
     final pool = candidates.isNotEmpty ? candidates : lines;
-    return pool[Random().nextInt(pool.length)];
+    return _pickFreshGroomingLine(pool);
   }
 
   List<String> _linesForGreeting(
@@ -6590,6 +6590,26 @@ class _ChatScreenState extends State<ChatScreen>
     );
   }
 
+  /// 방금 본 문장이 또 나오면 "복붙" 티가 제일 크게 난다. 최근에 나온 건 후보에서 뺀다.
+  /// 앱을 다시 켜면 비워지는데, 한 세션 안의 연속 반복만 막아도 체감이 크게 달라져서
+  /// 저장까지는 하지 않는다(뽑기 함수들이 전부 동기라 async로 바꾸면 호출부까지 번진다).
+  /// 5분 실천과 기분 전환이 이 기록을 함께 쓴다 — 두 목록에 겹치는 문장이 있어서,
+  /// 버튼을 바꿔 눌렀을 때 같은 문장이 다시 나오는 것도 같이 막힌다.
+  final List<String> _recentGroomingLines = [];
+  static const int _groomingRecentMemory = 3;
+
+  String _pickFreshGroomingLine(List<String> pool) {
+    final fresh = pool.where((s) => !_recentGroomingLines.contains(s)).toList();
+    // 후보가 다 소진되면 어쩔 수 없이 전체에서 다시 고른다.
+    final candidates = fresh.isEmpty ? pool : fresh;
+    final picked = candidates[Random().nextInt(candidates.length)];
+    _recentGroomingLines.add(picked);
+    while (_recentGroomingLines.length > _groomingRecentMemory) {
+      _recentGroomingLines.removeAt(0);
+    }
+    return picked;
+  }
+
   /// 시간대를 안 타는 가꾸기 문장. 아침·낮·저녁 목록에 공통으로 얹는다.
   /// 새벽(0~6시)엔 몸을 깨우는 동작이라 빼둔다 — 그 시간대는 재우는 쪽으로 안내한다.
   static const List<String> _anytimeGroomingRoutines = [
@@ -6666,7 +6686,7 @@ class _ChatScreenState extends State<ChatScreen>
       _manualScalpMassageRoutine(),
       ..._anytimeGroomingRoutines,
     ];
-    return lines[Random().nextInt(lines.length)];
+    return _pickFreshGroomingLine(lines);
   }
 
   String _pickNyangPerfectionismInsight() {
