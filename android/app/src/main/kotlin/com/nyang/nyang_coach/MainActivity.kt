@@ -7,11 +7,12 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.AudioAttributes
-import android.media.Ringtone
+import android.media.MediaPlayer
 import android.media.RingtoneManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.PowerManager
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
@@ -23,7 +24,7 @@ import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterFragmentActivity() {
     private val morningAlarmChannel = "nyang_coach/morning_alarm"
-    private var morningAlarmRingtone: Ringtone? = null
+    private var morningAlarmPlayer: MediaPlayer? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -54,7 +55,8 @@ class MainActivity : FlutterFragmentActivity() {
                         result.success(null)
                     }
                     "startMorningAlarmSound" -> {
-                        startMorningAlarmSound()
+                        val soundName = call.argument<String>("soundName")
+                        startMorningAlarmSound(soundName)
                         result.success(null)
                     }
                     "stopMorningAlarmSound" -> {
@@ -203,28 +205,59 @@ class MainActivity : FlutterFragmentActivity() {
         getVibrator().cancel()
     }
 
-    private fun startMorningAlarmSound() {
+    private fun startMorningAlarmSound(soundName: String?) {
         stopMorningAlarmSound()
-        val alarmUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
-            ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
-            ?: return
-        morningAlarmRingtone = RingtoneManager.getRingtone(applicationContext, alarmUri)?.apply {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                audioAttributes = AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_ALARM)
-                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                    .build()
-            }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+        val alarmUri = resolveAlarmSoundUri(soundName) ?: return
+        val player = MediaPlayer()
+        try {
+            player.apply {
+                setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_ALARM)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                        .build(),
+                )
+                setWakeMode(applicationContext, PowerManager.PARTIAL_WAKE_LOCK)
+                setDataSource(applicationContext, alarmUri)
                 isLooping = true
+                setVolume(1.0f, 1.0f)
+                setOnErrorListener { player, _, _ ->
+                    player.release()
+                    if (morningAlarmPlayer === player) morningAlarmPlayer = null
+                    true
+                }
+                prepare()
+                start()
             }
-            play()
+            morningAlarmPlayer = player
+        } catch (e: Exception) {
+            player.release()
+            morningAlarmPlayer = null
         }
     }
 
     private fun stopMorningAlarmSound() {
-        morningAlarmRingtone?.stop()
-        morningAlarmRingtone = null
+        morningAlarmPlayer?.let {
+            try {
+                if (it.isPlaying) it.stop()
+            } catch (_: IllegalStateException) {
+            } finally {
+                it.release()
+            }
+        }
+        morningAlarmPlayer = null
+    }
+
+    private fun resolveAlarmSoundUri(soundName: String?): Uri? {
+        val rawSoundId = soundName
+            ?.takeIf { it.isNotBlank() }
+            ?.let { resources.getIdentifier(it, "raw", packageName) }
+            ?: 0
+        if (rawSoundId != 0) {
+            return Uri.parse("android.resource://$packageName/$rawSoundId")
+        }
+        return RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+            ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
     }
 
     private fun getVibrator(): Vibrator {

@@ -35,8 +35,8 @@ class NotificationService {
   static const int _inactiveReturnNotificationId = 889;
   static const Duration _inactiveReturnDelay = Duration(days: 3);
   static const Duration _inactiveReturnCooldown = Duration(days: 5);
-  static const String _androidMorningChannelVersion = 'v8';
-  static const String _androidCoreReminderChannelVersion = 'v3';
+  static const String _androidMorningChannelVersion = 'v10';
+  static const String _androidCoreReminderChannelVersion = 'v4';
   static const String _androidPushChannelId = 'nyang_push_channel';
   static const String _androidFocusTimerChannelId =
       'nyang_focus_timer_channel_v3';
@@ -262,9 +262,10 @@ class NotificationService {
         _coreReminderChannelId(null),
         '냥냥코치 일정 알림',
         description: '지정된 일정 시작 전 알림입니다.',
-        importance: Importance.high,
+        importance: Importance.max,
         playSound: true,
-        audioAttributesUsage: AudioAttributesUsage.notification,
+        enableVibration: true,
+        audioAttributesUsage: AudioAttributesUsage.alarm,
       ),
     );
 
@@ -297,10 +298,11 @@ class NotificationService {
             _coreReminderChannelId(soundName),
             '냥냥코치 일정 알림',
             description: '지정된 일정 시작 전 알림입니다.',
-            importance: Importance.high,
+            importance: Importance.max,
             sound: RawResourceAndroidNotificationSound(soundName),
             playSound: true,
-            audioAttributesUsage: AudioAttributesUsage.notification,
+            enableVibration: true,
+            audioAttributesUsage: AudioAttributesUsage.alarm,
           ),
         );
       }
@@ -562,6 +564,7 @@ class NotificationService {
         'triggerMillis': scheduled.millisecondsSinceEpoch,
         'payload': 'morning:$targetCoachId:${soundName ?? ''}',
       });
+      return;
     }
 
     // iOS cannot start the in-app audio loop from a killed/background state

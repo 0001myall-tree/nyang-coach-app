@@ -50,6 +50,16 @@ class MorningCallAlarmSession {
     final selectedSoundName = soundName?.trim().isNotEmpty == true
         ? soundName!.trim()
         : '${coachId}_${Random().nextInt(count) + 1}';
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      _soundPath = null;
+      _usesNativeAlarmSound = true;
+      _isActive = true;
+      _isPlaying = true;
+      await _startVibration();
+      await _startNativeAlarmSound(soundName: selectedSoundName);
+      return;
+    }
+
     _soundPath = 'voice/$selectedSoundName.mp3';
     _usesNativeAlarmSound = false;
     _isActive = true;
@@ -138,10 +148,12 @@ class MorningCallAlarmSession {
     }
   }
 
-  Future<void> _startNativeAlarmSound() async {
+  Future<void> _startNativeAlarmSound({String? soundName}) async {
     if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
     try {
-      await _alarmChannel.invokeMethod('startMorningAlarmSound');
+      await _alarmChannel.invokeMethod('startMorningAlarmSound', {
+        if (soundName != null && soundName.isNotEmpty) 'soundName': soundName,
+      });
     } catch (e) {
       debugPrint('모닝콜 기본 알람음 시작 실패: $e');
     }

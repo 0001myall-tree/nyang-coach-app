@@ -70,7 +70,7 @@ class MorningAlarmReceiver : BroadcastReceiver() {
             RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
         }
         val channelSuffix = soundName ?: "default"
-        val channelId = "nyang_native_morning_alarm_${channelSuffix}_v4"
+        val channelId = "nyang_native_morning_alarm_${channelSuffix}_v6"
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 channelId,
@@ -111,5 +111,6 @@ class MorningAlarmReceiver : BroadcastReceiver() {
             .build()
 
         manager.notify(7304, notification)
+        MorningAlarmScheduler.rescheduleFromPrefs(context)
     }
 }

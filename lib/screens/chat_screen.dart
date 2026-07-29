@@ -6227,6 +6227,343 @@ class _ChatScreenState extends State<ChatScreen>
     );
   }
 
+  Future<void> _handleMentalClutterChip() async {
+    if (_isLoading) return;
+    if (!await _ensureMasterCoachAccess()) return;
+    HapticFeedback.lightImpact();
+
+    setState(() {
+      _messages.add(
+        ChatMessage(text: '머리가 복잡해', isUser: true, time: DateTime.now()),
+      );
+      _messages.add(
+        ChatMessage(
+          text:
+              '머리가 복잡할 땐 두 가지가 섞여 있더라냥.\n뭘 해야 할지 모르는 건지, 해야 할 건 아는데 마음이 흩어진 건지부터 보면 된다냥.',
+          isUser: false,
+          time: DateTime.now(),
+          kind: 'mental_clutter_choice',
+        ),
+      );
+      _suggestedTasks = [];
+      _dynamicChips = _coach.chips;
+      _suppressDefaultChips = false;
+    });
+    _scrollToBottom();
+    await _saveHistory();
+    await AnalyticsService.logConversationMessage(
+      coachId: widget.coachId,
+      usedApi: false,
+    );
+  }
+
+  Future<void> _startMentalClutterCountdown() async {
+    if (_isLoading) return;
+    HapticFeedback.lightImpact();
+
+    setState(() {
+      _messages.add(
+        ChatMessage(text: '해야 할 건 아는데 복잡해', isUser: true, time: DateTime.now()),
+      );
+      _messages.add(
+        ChatMessage(
+          text:
+              '그럴 땐 생각을 더 정리하기보다 몸을 먼저 움직이는 게 낫더라냥.\n머리는 잠깐 내려놓고, 작은 시작 의식부터 해보자냥.',
+          isUser: false,
+          time: DateTime.now(),
+        ),
+      );
+      _suggestedTasks = [];
+      _dynamicChips = _coach.chips;
+      _suppressDefaultChips = false;
+    });
+    _scrollToBottom();
+    await _saveHistory();
+    await AnalyticsService.logConversationMessage(
+      coachId: widget.coachId,
+      usedApi: false,
+    );
+
+    await Future.delayed(const Duration(milliseconds: 650));
+    if (mounted) _openCountdownFocusMode();
+  }
+
+  Future<void> _handleStartDifficultyChip() async {
+    if (_isLoading) return;
+    if (!await _ensureMasterCoachAccess()) return;
+    HapticFeedback.lightImpact();
+
+    setState(() {
+      _messages.add(
+        ChatMessage(text: '시작하기가 힘들어', isUser: true, time: DateTime.now()),
+      );
+      _messages.add(
+        ChatMessage(
+          text: '시작이 안 되는 건 할 일을 너무 많이 짊어졌을 때라냥.\n오늘 첫 조각을 정해서 한 스푼만 뜨자냥.',
+          isUser: false,
+          time: DateTime.now(),
+          kind: 'start_difficulty_choice',
+        ),
+      );
+      _suggestedTasks = [];
+      _dynamicChips = _coach.chips;
+      _suppressDefaultChips = false;
+    });
+    _scrollToBottom();
+    await _saveHistory();
+    await AnalyticsService.logConversationMessage(
+      coachId: widget.coachId,
+      usedApi: false,
+    );
+  }
+
+  Future<void> _startMorningCountdown() async {
+    if (_isLoading) return;
+    HapticFeedback.lightImpact();
+
+    setState(() {
+      _messages.add(
+        ChatMessage(text: '생각 비우고 시작할래', isUser: true, time: DateTime.now()),
+      );
+      _messages.add(
+        ChatMessage(
+          text: '좋다냥. 생각은 잠깐 내려놓고, 몸이 먼저 하루 문턱을 넘게 해보자냥.',
+          isUser: false,
+          time: DateTime.now(),
+        ),
+      );
+      _suggestedTasks = [];
+      _dynamicChips = _coach.chips;
+      _suppressDefaultChips = false;
+    });
+    _scrollToBottom();
+    await _saveHistory();
+    await AnalyticsService.logConversationMessage(
+      coachId: widget.coachId,
+      usedApi: false,
+    );
+
+    await Future.delayed(const Duration(milliseconds: 650));
+    if (mounted) _openCountdownFocusMode();
+  }
+
+  Future<void> _handlePerfectionismDistressChip() async {
+    if (_isLoading) return;
+    if (!await _ensureMasterCoachAccess()) return;
+    HapticFeedback.lightImpact();
+
+    final insight = _pickNyangPerfectionismInsight();
+    final action = await _buildPerfectionismSmallAction();
+
+    setState(() {
+      _messages.add(
+        ChatMessage(text: '완벽하게 못 해서 속상해', isUser: true, time: DateTime.now()),
+      );
+      _messages.add(
+        ChatMessage(
+          text: '$insight\n$action',
+          isUser: false,
+          time: DateTime.now(),
+        ),
+      );
+      _suggestedTasks = [];
+      _dynamicChips = _coach.chips;
+      _suppressDefaultChips = false;
+    });
+    _scrollToBottom();
+    await _saveHistory();
+    await AnalyticsService.logConversationMessage(
+      coachId: widget.coachId,
+      usedApi: false,
+    );
+  }
+
+  Future<void> _handleGroomingCareChip() async {
+    if (_isLoading) return;
+
+    setState(() {
+      _messages.add(
+        ChatMessage(text: '나 좀 가꾸고 싶어', isUser: true, time: DateTime.now()),
+      );
+      _messages.add(
+        ChatMessage(
+          text: '좋아. 오늘은 어떻게 나를 챙겨볼까?',
+          isUser: false,
+          time: DateTime.now(),
+          kind: 'grooming_care_choice',
+        ),
+      );
+      _suggestedTasks = [];
+      _dynamicChips = _coach.chips;
+      _suppressDefaultChips = false;
+    });
+    _scrollToBottom();
+    await _saveHistory();
+    await AnalyticsService.logConversationMessage(
+      coachId: widget.coachId,
+      usedApi: false,
+    );
+  }
+
+  Future<void> _sendGroomingCareRoutine({
+    required String userText,
+    required String reply,
+  }) async {
+    if (_isLoading) return;
+    HapticFeedback.lightImpact();
+
+    setState(() {
+      _messages.add(
+        ChatMessage(text: userText, isUser: true, time: DateTime.now()),
+      );
+      _messages.add(
+        ChatMessage(text: reply, isUser: false, time: DateTime.now()),
+      );
+      _suggestedTasks = [];
+      _dynamicChips = _coach.chips;
+      _suppressDefaultChips = false;
+    });
+    _scrollToBottom();
+    await _saveHistory();
+    await AnalyticsService.logConversationMessage(
+      coachId: widget.coachId,
+      usedApi: false,
+    );
+  }
+
+  Future<void> _sendFiveMinuteGroomingRoutine() {
+    return _sendGroomingCareRoutine(
+      userText: '5분 실천',
+      reply: _pickFiveMinuteGroomingRoutine(),
+    );
+  }
+
+  Future<void> _sendMoodRefreshGroomingRoutine() {
+    return _sendGroomingCareRoutine(
+      userText: '기분 전환 루틴',
+      reply: _pickMoodRefreshGroomingRoutine(),
+    );
+  }
+
+  String _pickFiveMinuteGroomingRoutine() {
+    final hour = DateTime.now().hour;
+    final lines = switch (hour) {
+      >= 6 && < 12 => const [
+        '물 한 잔 먼저 마셔보자. 혹시 챙겨 먹는 영양제가 있으면 지금 같이 먹어도 좋아. 몸 안쪽 컨디션이 잡히면 피부도 훨씬 덜 푸석해 보여.',
+        '선크림은 발랐어? 밖에 안 나가도 창가에 오래 있으면 피부가 지칠 수 있어. 오늘은 선크림 하나만 챙겨도 관리한 느낌이 날 거야.',
+        '아침 얼굴이 좀 부어 보이면 찬물로 손을 씻고, 턱이랑 귀 밑을 가볍게 쓸어줘. 세게 하지 말고 1분만 해도 얼굴이 조금 깨는 느낌이 들어.',
+        '머리 앞쪽만 정리해보자. 아침엔 전체 스타일보다 앞머리랑 정수리 볼륨만 살아도 훨씬 말끔해 보여.',
+        '어깨를 내리고 목을 길게 세워봐. 아침 자세가 잡히면 옷핏도 얼굴 인상도 같이 정돈돼 보여.',
+      ],
+      >= 12 && < 18 => const [
+        '턱에 힘 빼고 입꼬리를 살짝 올려봐. 머리 앞쪽만 정리하고 자세만 바로 세워도 인상이 훨씬 부드러워져. 크게 바꾸지 않아도 괜찮아 보일 거야.',
+        '미스트나 선크림이 있으면 피부부터 가볍게 챙겨보자. 얼굴에 수분감 하나만 더해도 피곤한 느낌이 조금 덜해 보여. 그다음 입술이 건조하면 립밤만 발라줘.',
+        '지금 앉아 있어, 서 있어? 배에 힘을 아주 살짝만 줘봐. 허리를 세우고 아랫배를 안쪽으로 가볍게 당기면 전체 라인이 훨씬 정돈돼 보여. 모델들도 촬영 전에 자주 쓰는 작은 습관이래.',
+        '거울 앞에 잠깐 서봐. 머리, 얼굴, 옷 중에 제일 신경 쓰이는 곳 하나만 가볍게 만져주자. 별 거 아니어도 기분 좀 나아질 걸.',
+      ],
+      >= 18 && < 24 => const [
+        '손톱은 정리했어? 아직이면 오늘은 손톱만 깔끔하게 깎아보자. 작은 부분인데도 손끝이 정돈되면 기분이 꽤 달라져.',
+        '혹시 집 안에 방치된 미용기기 있어? 고데기, 괄사, 마사지기, 드라이기 같은 거. 없으면 안 쓰는 마스크팩도 괜찮아. 오늘은 새로 뭘 사지 말고, 이미 있는 걸 한 번 써먹어보자.',
+        '두피 마사지 어때? 간단한 괄사 도구가 있으면 정수리 쪽으로 천천히 쓸어올려봐. 두피가 덜 굳고, 꾸준히 해주면 노화 예방이나 머리 빠짐 관리에도 도움 된대.',
+        '몸 전체를 관리하려고 하지 말고, 오늘은 신경 쓰이던 잔털 한 군데만 정리해봐. 작은 정돈인데도 깔끔해진 느낌이 꽤 오래 가.',
+        '자기 전 세안하고 화장품 바를 때, 여러 개를 한꺼번에 올리지 말고 하나씩 찹찹 흡수시켜줘. 헤어라인, 귀 뒤, 목 아래쪽까지 같이 발라주면 피부가 훨씬 잘 챙겨진 느낌이 들어.',
+      ],
+      _ => const [
+        '너무 늦은 시간이니까 자극적인 관리는 빼자. 얼굴만 가볍게 씻고 보습 하나 얹어줘. 오늘은 피부를 깨우기보다 편하게 재우는 쪽이 좋아.',
+        '립밤이나 핸드크림처럼 조용한 관리 하나만 하자. 새벽엔 크게 꾸미려 하기보다 몸이 쉬어도 된다는 신호를 주는 게 더 좋아.',
+        '두피를 세게 문지르진 말고 손끝으로 살짝만 눌러줘. 머리가 조금 가벼워지면 바로 내려놓고 쉬자. 오래 하면 자극될 수 있어.',
+        '잠옷이나 편한 옷으로 갈아입고 목 주변만 느슨하게 풀어줘. 편해 보이는 상태를 만드는 것도 충분한 관리야.',
+      ],
+    };
+    return lines[Random().nextInt(lines.length)];
+  }
+
+  String? _groomingToolFallbackReply(String text) {
+    final normalized = text.replaceAll(RegExp(r'\s+'), '');
+    final mentionsScalpCare =
+        normalized.contains('괄사') ||
+        normalized.contains('두피마사지') ||
+        normalized.contains('두피') ||
+        normalized.contains('마사지도구');
+    final saysUnavailable =
+        normalized.contains('없') ||
+        normalized.contains('안가지') ||
+        normalized.contains('안갖') ||
+        normalized.contains('못찾');
+    if (!mentionsScalpCare || !saysUnavailable) return null;
+    return _manualScalpMassageRoutine();
+  }
+
+  String _manualScalpMassageRoutine() {
+    return '그럼 그냥 손끝으로 두피를 천천히 눌러봐. 뻐근하다 싶은 부위를 둥글게 문질러주면 머리가 훨씬 가벼워져. 두피가 풀리면 얼굴 컨디션도 조금 살아나는 느낌이 들 거야. 맞다, 너무 길게 하면 자극이 될 수 있으니까 3분 정도만 하면 좋아.';
+  }
+
+  String _pickMoodRefreshGroomingRoutine() {
+    final lines = [
+      '오늘은 예뻐져야 한다는 숙제보다 기분을 먼저 살려보자. 손을 씻고 향이 나는 걸 하나 발라봐. 몸이 편해지면 마음도 조금 따라와.',
+      '편한 옷으로 갈아입고 조명을 조금 따뜻하게 바꿔봐. 분위기가 바뀌면 나를 대하는 마음도 덜 거칠어져.',
+      '따뜻한 물 한 모금 마시고 얼굴만 가볍게 씻어보자. 지금은 완벽한 관리보다 다시 산뜻해지는 느낌 하나면 충분해.',
+      '좋아하는 향수나 바디미스트가 있으면 한 번만 뿌려봐. 향은 기분을 빨리 데려오는 작은 스위치 같아.',
+      '거울 앞에 잠깐 서봐. 머리, 얼굴, 옷 중에 제일 신경 쓰이는 곳 하나만 가볍게 만져주자. 별 거 아니어도 기분 좀 나아질 걸.',
+      '목이랑 어깨만 천천히 풀어보자. 스트레칭을 꾸준히 하면 몸선도 자세도 조금씩 좋아져서, 괜히 더 단정하고 예뻐 보여.',
+      _manualScalpMassageRoutine(),
+    ];
+    return lines[Random().nextInt(lines.length)];
+  }
+
+  String _pickNyangPerfectionismInsight() {
+    const lines = [
+      '완벽이라는 건 허상이라냥. 오직 네가 만든 규칙만 있을 뿐이지. 네가 만든 규칙에서 너를 놓아줘. 그리고 조용히 안아주라냥.',
+      '완벽을 꿈꾸며 멈춰 서기보다, 부족하지만 한 걸음 내딛는 걸 택하라냥. 작은 성공의 조각들이 모여 너를 단단하게 만들어 줄 테니.',
+      '\'난 하루 만에 슈퍼맨처럼 다 해낼 수 있어!\' 하고 눈높이를 너무 높게 잡으면, \'난 왜 이 모양이지?\' 하고 스스로를 미워하게 된다냥. 완벽이라는 눈으로 보면 세상 모든 일이 다 실패로 보이거든. 오늘 아주 작은 일 하나를 열심히 해낸 것만으로도 \'나 칭찬해!\' 하고 어깨를 으쓱여 주라냥! 그 작은 하루가 모여 진짜 실력이 될 거라냥.',
+      '죽어도 해내야 하는 일은 없어. \'안 되면 말지 뭐\' 하고 가볍게 시도해보는 거야. 시간이 지나면 어느새 네 실력이 돼있을 거라냥.',
+      '어쩌면 완벽주의는 내가 특별하지 않으면 안 된다는 기대에서 시작된다냥. 내가 모든 걸 완벽하게 해낼 수 없는 사람이라는 걸 인정하려면 처음엔 기분이 텁텁하지. 그래도 그 불편함을 가만히 느껴주면 시간이 지날수록 덤덤해지고, 그제야 무거운 짐을 내려놓을 수 있다냥. 완벽하지 않아도, 진심으로 괜찮아지게 된다냥.',
+      '부지런해지는 법이 뭔 줄 아냥? 내 선택으로 했다는 감각이라냥. 그런데 완벽주의는 그 감각을 줄이고, \'해야 한다\'는 감옥에 나를 가둔다냥. 그 감옥에 왜 나를 가뒀을까? 그게 나의 진짜 마음인지, 아니면 그래야만 남들에게 잘 보일 수 있을 것 같은 마음인지 한번 살펴보라냥.',
+      '더 잘하려고 할수록 몸과 마음에 힘이 들어가고, 오히려 잘 안 될 때가 있다냥. 힘을 빼고 자그마하게 할 수 있는 것부터 해야 내 잠재력이 조금씩 나온다냥. 완벽하지 못해서 속상해하지 않아도 된다냥. 내가 하고자 하는 일을 어떻게 하면 조금 더 즐겁게 시작할 수 있을지 살펴보라냥. 물론 처음부터 잘 되지는 않겠지만, 그래도 가볍게 시작해보는 거다냥.',
+      '완벽하게 해내야만 사랑받을 수 있다는 마음이 들 때가 있다냥. 하지만 그런 사랑이라면 차라리 거부해버리라냥. 사람은 완벽할 수가 없다냥. 그 사실을 인정하면 처음엔 기분이 안 좋아도, 그 기분을 충분히 느껴줘. 언젠가 덤덤하게 받아들이면 더 자유로워지고, 더 많은 일을 하게 될 거라냥.',
+      '완벽주의가 생기는 이유는 실패에 대한 두려움일 수도 있다냥. 왜 실패하는 게 두려운지 가만히 살펴보라냥. 남의 시선이 내 안에 들어와 나를 감시하고 있는 건 아닐까? 혼자 쓰는 계획표 앞에서도 마음이 무겁다면, 그건 내 안의 감시자가 너무 엄격해진 걸 수도 있다냥. 실패해도 괜찮다냥. 오늘 좀 못해도 괜찮다냥. 그 틀을 벗어버리면 더 자유로워지고 더 움직이게 될 거라냥.',
+      '완벽주의에 오래 매달리면, 어느새 내가 진짜 원하는 것보다 "이 정도는 되어야 나답다"는 틀을 더 붙잡게 된다냥. 허상의 틀에 나를 맞추려다 보면, 살아 있는 내 마음은 점점 작아지더군. 자네는 기준에 맞춰 완성되는 물건이 아니라, 해보면서 모양을 찾아가는 사람이라냥. 오늘은 완벽한 내가 아니라, 지금의 내가 할 수 있는 작은 일 하나를 골라보라냥.',
+    ];
+    return lines[Random().nextInt(lines.length)];
+  }
+
+  Future<String> _buildPerfectionismSmallAction() async {
+    final taskName = await _pickSmallPendingTaskName();
+    if (taskName != null) {
+      return '지금은 "$taskName"을 전부 끝내려 하지 말고, 첫 조각 하나만 잡아보자냥.';
+    }
+    return '지금은 새 일을 만들기보다 물 한 잔 마시고, 오늘 잘 버틴 것 하나만 떠올려보자냥.';
+  }
+
+  Future<String?> _pickSmallPendingTaskName() async {
+    final prefs = await SharedPreferences.getInstance();
+    final tasks = _decodeMapList(prefs.getString('nyang_tasks'));
+    final pending = tasks.where((task) {
+      if (task['done'] == true) return false;
+      final category = task['category']?.toString();
+      return category == 'today' ||
+          category == 'habit' ||
+          category == 'schedule';
+    }).toList();
+    if (pending.isEmpty) return null;
+
+    pending.sort((a, b) {
+      final aInProgress = a['inProgress'] == true ? 0 : 1;
+      final bInProgress = b['inProgress'] == true ? 0 : 1;
+      if (aInProgress != bInProgress) return aInProgress.compareTo(bInProgress);
+      final aTime = a['timeStart']?.toString() ?? a['time']?.toString() ?? '';
+      final bTime = b['timeStart']?.toString() ?? b['time']?.toString() ?? '';
+      if (aTime.isNotEmpty && bTime.isNotEmpty) return aTime.compareTo(bTime);
+      if (aTime.isNotEmpty) return -1;
+      if (bTime.isNotEmpty) return 1;
+      final aText = _taskText(a) ?? '';
+      final bText = _taskText(b) ?? '';
+      return aText.length.compareTo(bText.length);
+    });
+
+    return _taskText(pending.first);
+  }
+
   // ── 메시지 전송 (웹앱 sendMessage 이식) ─────────────────
   Future<void> _send(String text, {String? apiInputOverride}) async {
     final trimmed = text.trim();
@@ -6245,6 +6582,39 @@ class _ChatScreenState extends State<ChatScreen>
     }
     _ctrl.clear();
     HapticFeedback.lightImpact();
+
+    if (widget.coachId == 'boyfriend' &&
+        trimmed == '나 좀 가꾸고 싶어' &&
+        apiInputOverride == null) {
+      await _handleGroomingCareChip();
+      return;
+    }
+
+    final groomingToolFallback = _groomingToolFallbackReply(trimmed);
+    if (widget.coachId == 'boyfriend' && groomingToolFallback != null) {
+      setState(() {
+        _messages.add(
+          ChatMessage(text: trimmed, isUser: true, time: DateTime.now()),
+        );
+        _messages.add(
+          ChatMessage(
+            text: groomingToolFallback,
+            isUser: false,
+            time: DateTime.now(),
+          ),
+        );
+        _suggestedTasks = [];
+        _dynamicChips = _coach.chips;
+        _suppressDefaultChips = false;
+      });
+      _scrollToBottom();
+      await _saveHistory();
+      await AnalyticsService.logConversationMessage(
+        coachId: widget.coachId,
+        usedApi: false,
+      );
+      return;
+    }
 
     if (trimmed == '미래를 위한 오늘' && apiInputOverride == null) {
       setState(() {
@@ -10394,11 +10764,14 @@ $timerOutputRule
       itemBuilder: (ctx, i) => items[i],
     );
 
-    // 마스터 비서는 은은한 민트톤 배경
+    // 마스터 코치별 대화 영역 배경
     if (_coach.isMaster) {
       final isVacationBg = widget.vacationInfo != null;
+      final masterChatListColor = _coach.id == 'nyang_halbae'
+          ? AppDesignTokens.brandSoftAlt
+          : const Color(0xFFEDF7F4);
       return ColoredBox(
-        color: isVacationBg ? Colors.transparent : const Color(0xFFEDF7F4),
+        color: isVacationBg ? Colors.transparent : masterChatListColor,
         child: list,
       );
     }
@@ -10459,6 +10832,15 @@ $timerOutputRule
   Widget _buildBubble(ChatMessage msg) {
     if (msg.kind == 'vision_choice') {
       return _buildVisionChoiceCard(msg);
+    }
+    if (msg.kind == 'mental_clutter_choice') {
+      return _buildMentalClutterChoiceCard(msg);
+    }
+    if (msg.kind == 'start_difficulty_choice') {
+      return _buildStartDifficultyChoiceCard(msg);
+    }
+    if (msg.kind == 'grooming_care_choice') {
+      return _buildGroomingCareChoiceCard(msg);
     }
     if (msg.kind == 'feature_location_picker') {
       return _buildFeatureLocationPickerCard(msg);
@@ -10987,6 +11369,333 @@ $timerOutputRule
     );
   }
 
+  Widget _buildMentalClutterChoiceCard(ChatMessage msg) {
+    final time = DateFormat('a h:mm', 'ko').format(msg.time);
+    final accent = _coach.accentColor;
+
+    Widget choiceButton(String label, VoidCallback onTap) {
+      return GestureDetector(
+        onTap: _isLoading ? null : onTap,
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF8F5FF),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFE5DEFF)),
+          ),
+          child: Text(
+            label,
+            textAlign: TextAlign.center,
+            style: GoogleFonts.notoSansKr(
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+              color: accent,
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(18),
+            child: Image.asset(
+              _coach.imagePath,
+              width: 36,
+              height: 36,
+              fit: BoxFit.cover,
+              alignment: Alignment.topCenter,
+              errorBuilder: (_, __, ___) => Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: _coach.accentLight,
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: Icon(Icons.person, color: _coach.accentColor, size: 20),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Container(
+              constraints: BoxConstraints(
+                maxWidth: MediaQuery.of(context).size.width * 0.72,
+              ),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: const Color(0xFFE8E1F4)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.06),
+                    blurRadius: 12,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    msg.text,
+                    style: GoogleFonts.notoSansKr(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                      height: 1.45,
+                      color: const Color(0xFF1A1A2E),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  choiceButton(
+                    '뭐부터 할지 모르겠어',
+                    () => _send('뭐부터 할지 모르겠어', apiInputOverride: '지금 뭐하지?'),
+                  ),
+                  const SizedBox(height: 8),
+                  choiceButton('해야 할 건 아는데 복잡해', _startMentalClutterCountdown),
+                ],
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(left: 6, bottom: 2),
+            child: Text(
+              time,
+              style: GoogleFonts.notoSansKr(
+                fontSize: AppDesignTokens.textMeta,
+                color: AppDesignTokens.textDisabled,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStartDifficultyChoiceCard(ChatMessage msg) {
+    final time = DateFormat('a h:mm', 'ko').format(msg.time);
+    final accent = _coach.accentColor;
+
+    Widget choiceButton(String label, VoidCallback onTap) {
+      return GestureDetector(
+        onTap: _isLoading ? null : onTap,
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF8F5FF),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFE5DEFF)),
+          ),
+          child: Text(
+            label,
+            textAlign: TextAlign.center,
+            style: GoogleFonts.notoSansKr(
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+              color: accent,
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(18),
+            child: Image.asset(
+              _coach.imagePath,
+              width: 36,
+              height: 36,
+              fit: BoxFit.cover,
+              alignment: Alignment.topCenter,
+              errorBuilder: (_, __, ___) => Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: _coach.accentLight,
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: Icon(Icons.person, color: _coach.accentColor, size: 20),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Container(
+              constraints: BoxConstraints(
+                maxWidth: MediaQuery.of(context).size.width * 0.72,
+              ),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: const Color(0xFFE8E1F4)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.06),
+                    blurRadius: 12,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    msg.text,
+                    style: GoogleFonts.notoSansKr(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                      height: 1.45,
+                      color: const Color(0xFF1A1A2E),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  choiceButton(
+                    '첫 조각 골라줘',
+                    () => _send('첫 조각 골라줘', apiInputOverride: '지금 뭐하지?'),
+                  ),
+                  const SizedBox(height: 8),
+                  choiceButton('생각 비우고 시작할래', _startMorningCountdown),
+                ],
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(left: 6, bottom: 2),
+            child: Text(
+              time,
+              style: GoogleFonts.notoSansKr(
+                fontSize: AppDesignTokens.textMeta,
+                color: AppDesignTokens.textDisabled,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGroomingCareChoiceCard(ChatMessage msg) {
+    final time = DateFormat('a h:mm', 'ko').format(msg.time);
+    final accent = _coach.accentColor;
+
+    Widget choiceButton(String label, VoidCallback onTap) {
+      return GestureDetector(
+        onTap: _isLoading ? null : onTap,
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF8F5FF),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFE5DEFF)),
+          ),
+          child: Text(
+            label,
+            textAlign: TextAlign.center,
+            style: GoogleFonts.notoSansKr(
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+              color: accent,
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(18),
+            child: Image.asset(
+              _coach.imagePath,
+              width: 36,
+              height: 36,
+              fit: BoxFit.cover,
+              alignment: Alignment.topCenter,
+              errorBuilder: (_, __, ___) => Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: _coach.accentLight,
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: Icon(Icons.person, color: _coach.accentColor, size: 20),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Container(
+              constraints: BoxConstraints(
+                maxWidth: MediaQuery.of(context).size.width * 0.72,
+              ),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: const Color(0xFFE8E1F4)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.06),
+                    blurRadius: 12,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    msg.text,
+                    style: GoogleFonts.notoSansKr(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                      height: 1.45,
+                      color: const Color(0xFF1A1A2E),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  choiceButton('5분 실천', _sendFiveMinuteGroomingRoutine),
+                  const SizedBox(height: 8),
+                  choiceButton('기분 전환 루틴', _sendMoodRefreshGroomingRoutine),
+                ],
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(left: 6, bottom: 2),
+            child: Text(
+              time,
+              style: GoogleFonts.notoSansKr(
+                fontSize: AppDesignTokens.textMeta,
+                color: AppDesignTokens.textDisabled,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   // ── 타이핑 인디케이터 ─────────────────────────────────────
   Widget _buildTypingIndicator() {
     return Padding(
@@ -11163,15 +11872,44 @@ $timerOutputRule
     return hour >= 21 || hour < 6;
   }
 
-  List<String> get _masterQuickChips => _isMasterChipNightTime
-      ? ['잠이 안 와', '마음 비우고 하게 해줘', '내일로 미뤄도 돼?']
-      : ['지금 뭐하지?', '마음 비우고 하게 해줘', '오늘 핵심 정리해줘'];
+  bool get _isNyangPerfectionismChipTime {
+    final hour = DateTime.now().hour;
+    return hour >= 18 || hour < 6;
+  }
+
+  bool get _isNyangMorningStartChipTime {
+    final hour = DateTime.now().hour;
+    return hour >= 6 && hour < 12;
+  }
+
+  List<String> get _masterQuickChips {
+    final focusChip = _coach.id == 'nyang_halbae' ? '머리가 복잡해' : '마음 비우고 하게 해줘';
+    if (_coach.id == 'nyang_halbae') {
+      if (_isNyangMorningStartChipTime) {
+        return ['시작하기가 힘들어', focusChip, '오늘 핵심 정리해줘'];
+      }
+      if (_isNyangPerfectionismChipTime) {
+        return _isMasterChipNightTime
+            ? ['완벽하게 못 해서 속상해', focusChip, '내일로 미뤄도 돼?']
+            : ['완벽하게 못 해서 속상해', focusChip, '오늘 핵심 정리해줘'];
+      }
+      return _isMasterChipNightTime
+          ? [focusChip, '잠이 안 와', '내일로 미뤄도 돼?']
+          : [focusChip, '지금 뭐하지?', '오늘 핵심 정리해줘'];
+    }
+    return _isMasterChipNightTime
+        ? ['잠이 안 와', focusChip, '내일로 미뤄도 돼?']
+        : ['지금 뭐하지?', focusChip, '오늘 핵심 정리해줘'];
+  }
 
   // 마스터 칩 앞 FontAwesome 아이콘. 칩 글씨색(코치 accent)에 맞춰 톤을 통일한다.
   Widget? _chipIcon(String chip, {Color? color}) {
     final asset = switch (chip) {
       '마음 비우고 시작' => 'assets/icons/fa-hourglass-half-solid.svg',
       '마음 비우고 하게 해줘' => 'assets/icons/fa-hourglass-half-solid.svg',
+      '머리가 복잡해' => 'assets/icons/fa-hourglass-half-solid.svg',
+      '시작하기가 힘들어' => 'assets/icons/fa-hourglass-half-solid.svg',
+      '완벽하게 못 해서 속상해' => 'assets/icons/fa-hourglass-half-solid.svg',
       '지금 뭐하지?' => 'assets/icons/bolt.svg',
       '오늘 핵심 정리해줘' => 'assets/icons/bullseye.svg',
       '내일로 미뤄도 돼?' => 'assets/icons/clock-rotate-left.svg',
@@ -11202,6 +11940,18 @@ $timerOutputRule
         onTap: () {
           if (chip == '마음 비우고 시작' || chip == '마음 비우고 하게 해줘') {
             _openCountdownFocusMode();
+            return;
+          }
+          if (_coach.id == 'nyang_halbae' && chip == '머리가 복잡해') {
+            _handleMentalClutterChip();
+            return;
+          }
+          if (_coach.id == 'nyang_halbae' && chip == '시작하기가 힘들어') {
+            _handleStartDifficultyChip();
+            return;
+          }
+          if (_coach.id == 'nyang_halbae' && chip == '완벽하게 못 해서 속상해') {
+            _handlePerfectionismDistressChip();
             return;
           }
           if (chip == '수면 도우미' || chip == '잠이 안 와') {
