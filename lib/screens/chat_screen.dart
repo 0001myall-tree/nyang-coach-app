@@ -6513,11 +6513,26 @@ class _ChatScreenState extends State<ChatScreen>
 
   Future<void> _handleGroomingCareChip() async {
     if (_isLoading) return;
+    await _loadGroomingMemory();
+    if (!mounted) return;
+    // 날이 바뀐 뒤 다시 열면 지난 추천을 한 번 되묻는다. 뭘 추천했는지 인용하진
+    // 않는다 — 문장을 잘라 붙이면 어색해지고, 되묻는다는 사실만으로 충분하다.
+    final askBack =
+        _lastGroomingBody != null && _lastGroomingDate != _todayGroomingKey;
 
     setState(() {
       _messages.add(
         ChatMessage(text: '나 좀 가꾸고 싶어', isUser: true, time: DateTime.now()),
       );
+      if (askBack) {
+        _messages.add(
+          ChatMessage(
+            text: '저번에 얘기한 거 해봤어? 못 했어도 괜찮아.',
+            isUser: false,
+            time: DateTime.now(),
+          ),
+        );
+      }
       _messages.add(
         ChatMessage(
           text: '좋아. 지금 집이야, 밖이야?',
@@ -6583,6 +6598,7 @@ class _ChatScreenState extends State<ChatScreen>
     );
     // 집·밖 중 어느 쪽에서 열리는지. 한쪽이 거의 안 눌리면 그 목록부터 손보면 된다.
     await AnalyticsService.logFeatureUsage(feature);
+    await _saveGroomingMemory();
   }
 
   Future<void> _sendHomeGroomingRoutine() {
@@ -6617,6 +6633,12 @@ class _ChatScreenState extends State<ChatScreen>
     if (_isLoading) return;
     // 이 비율이 곧 "뭐야 하고 지나가는" 비율이다. 문장 손볼 우선순위의 근거.
     await AnalyticsService.logFeatureUsage('grooming_resist');
+    // 거절한 문장은 목록에서 빼고 기억해둔다.
+    final rejected = _lastGroomingBody;
+    if (rejected != null && !_dislikedGroomingLines.contains(rejected)) {
+      _dislikedGroomingLines.add(rejected);
+      await _saveGroomingMemory();
+    }
     await _send(
       '하기 귀찮아',
       apiInputOverride:
@@ -6632,6 +6654,55 @@ class _ChatScreenState extends State<ChatScreen>
   /// 도입구와 어미가 매번 달라지므로, 완성된 문장이 아니라 본문(body)을 기준으로 기억한다.
   final List<String> _recentGroomingLines = [];
   static const int _groomingRecentMemory = 3;
+
+  /// 귀찮다고 한 문장. 다시 안 꺼낸다 — 거절을 기억하는 게 관계처럼 느껴지는
+  /// 가장 강한 신호라서, 저장하는 셋 중 이것만은 꼭 남긴다.
+  final List<String> _dislikedGroomingLines = [];
+
+  /// 마지막으로 추천한 문장과 그 날짜. 날이 바뀐 뒤 다시 열면 되물어본다.
+  String? _lastGroomingBody;
+  String? _lastGroomingDate;
+  bool _groomingMemoryLoaded = false;
+
+  String get _groomingMemoryPrefix => 'nyang_grooming_${widget.coachId}';
+  String get _todayGroomingKey =>
+      DateTime.now().toIso8601String().substring(0, 10);
+
+  /// 앱을 다시 켜도 남아야 하는 것만 prefs에서 읽는다. 전부 사실이라 틀릴 일이 없다.
+  Future<void> _loadGroomingMemory() async {
+    if (_groomingMemoryLoaded) return;
+    final prefs = await SharedPreferences.getInstance();
+    _recentGroomingLines
+      ..clear()
+      ..addAll(prefs.getStringList('${_groomingMemoryPrefix}_recent') ?? []);
+    _dislikedGroomingLines
+      ..clear()
+      ..addAll(prefs.getStringList('${_groomingMemoryPrefix}_disliked') ?? []);
+    _lastGroomingBody = prefs.getString('${_groomingMemoryPrefix}_last_body');
+    _lastGroomingDate = prefs.getString('${_groomingMemoryPrefix}_last_date');
+    _groomingMemoryLoaded = true;
+  }
+
+  Future<void> _saveGroomingMemory() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(
+      '${_groomingMemoryPrefix}_recent',
+      _recentGroomingLines,
+    );
+    await prefs.setStringList(
+      '${_groomingMemoryPrefix}_disliked',
+      _dislikedGroomingLines,
+    );
+    final body = _lastGroomingBody;
+    if (body != null) {
+      await prefs.setString('${_groomingMemoryPrefix}_last_body', body);
+      await prefs.setString(
+        '${_groomingMemoryPrefix}_last_date',
+        _todayGroomingKey,
+      );
+    }
+  }
+
   final Random _groomingRandom = Random();
 
   /// 오늘 정한 어미 후보 셋. 셋 다 추측('~일 거야', '~걸')이거나 경험담('~더라')이라
@@ -6669,12 +6740,18 @@ class _ChatScreenState extends State<ChatScreen>
   ];
 
   _GroomingLine _pickFreshGroomingLine(List<_GroomingLine> pool) {
-    final fresh = pool
+    // 귀찮다고 한 건 최근 여부와 상관없이 뺀다.
+    final allowed = pool
+        .where((line) => !_dislikedGroomingLines.contains(line.body))
+        .toList();
+    final base = allowed.isEmpty ? pool : allowed;
+    final fresh = base
         .where((line) => !_recentGroomingLines.contains(line.body))
         .toList();
     // 후보가 다 소진되면 어쩔 수 없이 전체에서 다시 고른다.
-    final candidates = fresh.isEmpty ? pool : fresh;
+    final candidates = fresh.isEmpty ? base : fresh;
     final picked = candidates[_groomingRandom.nextInt(candidates.length)];
+    _lastGroomingBody = picked.body;
     _recentGroomingLines.add(picked.body);
     while (_recentGroomingLines.length > _groomingRecentMemory) {
       _recentGroomingLines.removeAt(0);
