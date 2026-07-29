@@ -7031,6 +7031,9 @@ class _ChatScreenState extends State<ChatScreen>
         _GroomingLine(
           '잠옷이나 편한 옷으로 갈아입고 목 주변만 느슨하게 풀어줘. 몸이 편해지는 상태를 만드는 것도 충분한 관리야.',
         ),
+        _GroomingLine(
+          '뭘 관리하려고 하지 말고 잘 자는 게 1순위일 것 같아. 눈 감고 천천히 숨을 쉬어봐. 온 몸에 긴장 빼고. 할 수 있겠어?',
+        ),
       ],
     };
     final isLateNight = hour < 6;
