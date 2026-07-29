@@ -6540,10 +6540,15 @@ class _ChatScreenState extends State<ChatScreen>
     if (_isLoading) return;
     await _loadGroomingMemory();
     if (!mounted) return;
+    // 오늘 이미 하나 꺼내줬는데 또 눌렀다면, 그건 그게 별로였다는 뜻이다.
+    // 못 본 척하고 집·밖부터 다시 물으면 방금 한 말을 잊은 사람처럼 보인다.
+    final shownToday = _lastGroomingDate == _todayGroomingKey;
     // 날이 바뀐 뒤 다시 열면 지난 추천을 한 번 되묻는다. 뭘 추천했는지 인용하진
     // 않는다 — 문장을 잘라 붙이면 어색해지고, 되묻는다는 사실만으로 충분하다.
     final askBack =
-        _lastGroomingBody != null && _lastGroomingDate != _todayGroomingKey;
+        _lastGroomingBody != null &&
+        !shownToday &&
+        _askBackDoneDate != _todayGroomingKey;
 
     setState(() {
       _messages.add(
@@ -6566,6 +6571,10 @@ class _ChatScreenState extends State<ChatScreen>
             time: DateTime.now(),
             kind: 'grooming_askback',
           ),
+        );
+      } else if (shownToday) {
+        _appendGroomingPlaceQuestion(
+          text: '아까 그건 별로였어? 그럼 다른 걸로 보자. 지금 집이야, 밖이야?',
         );
       } else {
         _appendGroomingPlaceQuestion();
@@ -6602,8 +6611,9 @@ class _ChatScreenState extends State<ChatScreen>
   Future<void> _answerGroomingAskBack(bool done) async {
     if (_isLoading) return;
     HapticFeedback.lightImpact();
-    // 되묻기에 답이 돌아왔으니 오늘은 다시 묻지 않는다.
-    _lastGroomingDate = _todayGroomingKey;
+    // 되묻기에 답이 돌아왔으니 오늘은 다시 묻지 않는다. 추천 날짜와 따로 두는 건,
+    // 여기서 그걸 오늘로 밀면 아직 아무것도 안 꺼내줬는데 "아까 그건 별로였어?"가 뜬다.
+    _askBackDoneDate = _todayGroomingKey;
 
     setState(() {
       _messages.add(
@@ -6751,9 +6761,14 @@ class _ChatScreenState extends State<ChatScreen>
   /// 풀 크기만큼만 쌓이므로(현재 38개) 따로 만료시키지 않는다.
   final Map<String, _GroomingDislike> _groomingDislikes = {};
 
-  /// 마지막으로 추천한 문장과 그 날짜. 날이 바뀐 뒤 다시 열면 되물어본다.
+  /// 마지막으로 추천한 문장과 그 날짜. 날이 바뀐 뒤 다시 열면 되물어보고,
+  /// 같은 날 또 열면 아까 것이 별로였냐고 짚는다.
   String? _lastGroomingBody;
   String? _lastGroomingDate;
+
+  /// 되묻기에 답한 날. 답을 받고도 루틴을 안 고른 채 다시 열었을 때
+  /// 같은 질문을 또 하지 않으려고, 추천 날짜와 따로 센다.
+  String? _askBackDoneDate;
   bool _groomingMemoryLoaded = false;
 
   String get _groomingMemoryPrefix => 'nyang_grooming_${widget.coachId}';
@@ -6770,6 +6785,7 @@ class _ChatScreenState extends State<ChatScreen>
     _loadGroomingDislikes(prefs);
     _lastGroomingBody = prefs.getString('${_groomingMemoryPrefix}_last_body');
     _lastGroomingDate = prefs.getString('${_groomingMemoryPrefix}_last_date');
+    _askBackDoneDate = prefs.getString('${_groomingMemoryPrefix}_askback_date');
     _groomingMemoryLoaded = true;
   }
 
@@ -6816,11 +6832,21 @@ class _ChatScreenState extends State<ChatScreen>
       ),
     );
     final body = _lastGroomingBody;
+    final date = _lastGroomingDate;
+    // 오늘 날짜를 여기서 찍지 않는다. 이 함수는 되묻기에 답만 해도 불리는데,
+    // 그때 추천 날짜까지 오늘로 밀리면 안 꺼내준 걸 꺼내준 걸로 세게 된다.
+    // 날짜는 실제로 문장을 뽑는 자리에서만 갱신한다.
     if (body != null) {
       await prefs.setString('${_groomingMemoryPrefix}_last_body', body);
+    }
+    if (date != null) {
+      await prefs.setString('${_groomingMemoryPrefix}_last_date', date);
+    }
+    final askBackDate = _askBackDoneDate;
+    if (askBackDate != null) {
       await prefs.setString(
-        '${_groomingMemoryPrefix}_last_date',
-        _todayGroomingKey,
+        '${_groomingMemoryPrefix}_askback_date',
+        askBackDate,
       );
     }
   }
@@ -6869,6 +6895,8 @@ class _ChatScreenState extends State<ChatScreen>
     final candidates = fresh.isEmpty ? pool : fresh;
     final picked = candidates[_groomingRandom.nextInt(candidates.length)];
     _lastGroomingBody = picked.body;
+    // 실제로 문장을 꺼내주는 건 여기뿐이다. 추천 날짜는 이 자리에서만 갱신한다.
+    _lastGroomingDate = _todayGroomingKey;
     _recentGroomingLines.add(picked.body);
     while (_recentGroomingLines.length > _groomingRecentMemory) {
       _recentGroomingLines.removeAt(0);
