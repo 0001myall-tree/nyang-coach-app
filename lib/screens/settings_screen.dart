@@ -95,15 +95,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
           minute: int.tryParse(parts[1]) ?? 0,
         );
       }
-      _morningCallCoachId =
+      final savedMorningCallCoach =
           prefs.getString('nyang_morning_call_coach') ?? 'cat';
+      _morningCallCoachId = _notificationVoiceCoachId(
+        savedMorningCallCoach,
+        fallback: 'cat',
+        allowRandom: true,
+      );
       _coreReminderEnabled =
           prefs.getBool('nyang_core_reminder_enabled') ?? false;
       final savedCoreReminderCoach =
           prefs.getString('nyang_core_reminder_coach') ?? 'push';
-      _coreReminderCoachId = savedCoreReminderCoach == 'random'
-          ? 'push'
-          : savedCoreReminderCoach;
+      _coreReminderCoachId = _notificationVoiceCoachId(
+        savedCoreReminderCoach,
+        fallback: 'push',
+      );
       _coreReminderAdvanceMinutes =
           prefs.getInt('nyang_core_reminder_advance') ?? 10;
       _chatBgStyle = prefs.getString('nyang_chat_bg_style') ?? 'simple';
@@ -710,7 +716,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           ),
                           _buildMorningCallCoachSectionHeader('FRIENDS 코치'),
                           ...CoachConfigs.all.values
-                              .where((coach) => coach.tier == 'friends')
+                              .where(
+                                (coach) =>
+                                    coach.tier == 'friends' &&
+                                    coach.voiceCount > 0,
+                              )
                               .map((coach) {
                                 return _buildMorningCallCoachItem(
                                   id: coach.id,
@@ -737,7 +747,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           ),
                           _buildMorningCallCoachSectionHeader('MASTER 코치'),
                           ...CoachConfigs.all.values
-                              .where((coach) => coach.tier == 'master')
+                              .where(
+                                (coach) =>
+                                    coach.tier == 'master' &&
+                                    coach.voiceCount > 0,
+                              )
                               .map((coach) {
                                 return _buildMorningCallCoachItem(
                                   id: coach.id,
@@ -1024,7 +1038,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           ),
                           _buildMorningCallCoachSectionHeader('FRIENDS 코치'),
                           ...CoachConfigs.all.values
-                              .where((coach) => coach.tier == 'friends')
+                              .where(
+                                (coach) =>
+                                    coach.tier == 'friends' &&
+                                    coach.voiceCount > 0,
+                              )
                               .map((coach) {
                                 return _buildMorningCallCoachItem(
                                   id: coach.id,
@@ -1051,7 +1069,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           ),
                           _buildMorningCallCoachSectionHeader('MASTER 코치'),
                           ...CoachConfigs.all.values
-                              .where((coach) => coach.tier == 'master')
+                              .where(
+                                (coach) =>
+                                    coach.tier == 'master' &&
+                                    coach.voiceCount > 0,
+                              )
                               .map((coach) {
                                 return _buildMorningCallCoachItem(
                                   id: coach.id,
@@ -1944,6 +1966,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return CoachConfigs.get(coachId).name.replaceAll(' 코치', '');
   }
 
+  String _notificationVoiceCoachId(
+    String coachId, {
+    required String fallback,
+    bool allowRandom = false,
+  }) {
+    if (allowRandom && coachId == 'random') return coachId;
+    if (coachId == 'push') return coachId;
+    final coach = CoachConfigs.all[coachId];
+    if (coach == null || coach.voiceCount <= 0) return fallback;
+    return coachId;
+  }
+
   String _formatAmPmHour(TimeOfDay time) {
     final period = time.hour < 12 ? 'AM' : 'PM';
     final hour12 = time.hourOfPeriod == 0 ? 12 : time.hourOfPeriod;
@@ -2634,8 +2668,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void _showPremiumLearnSettingsModal() {
     String selectedTitle = '대표님';
     final titleController = TextEditingController();
-    final maleNameController = TextEditingController();
-    final femaleNameController = TextEditingController();
     TimeOfDay minSleepTime = const TimeOfDay(hour: 23, minute: 0);
     int sleepDuration = 7;
     List<Map<String, dynamic>> routines = [];
@@ -2710,10 +2742,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   titleController.text = selectedTitle == '대표님'
                       ? ''
                       : selectedTitle;
-                  maleNameController.text =
-                      prefs.getString('nyang_coach_name_sec_male') ?? '';
-                  femaleNameController.text =
-                      prefs.getString('nyang_coach_name_sec_female') ?? '';
                   if (minSleepTimeStr != null) {
                     final parts = minSleepTimeStr.split(':');
                     if (parts.length >= 2) {
@@ -3067,162 +3095,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           ),
                         ),
 
-                        // 비서 애칭 설정
-                        _buildLearnField(
-                          icon: const Icon(
-                            Icons.badge,
-                            color: Color(0xFF8B7CFF),
-                            size: 18,
-                          ),
-                          title: '비서 애칭 설정',
-                          subtitle: '비서의 애칭을 정해주세요.',
-                          child: Column(
-                            children: [
-                              Row(
-                                children: [
-                                  GestureDetector(
-                                    onTap: () => setState(() {
-                                      maleNameController.clear();
-                                    }),
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 12,
-                                        vertical: 8,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: maleNameController.text.isEmpty
-                                            ? const Color(0xFFEBE5FF)
-                                            : Colors.white,
-                                        border: Border.all(
-                                          color: maleNameController.text.isEmpty
-                                              ? const Color(0xFF8B7CFF)
-                                              : const Color(0xFFE5E7EB),
-                                        ),
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                      child: Text(
-                                        '남비서 코치 (기본)',
-                                        style: GoogleFonts.notoSansKr(
-                                          fontSize: 13,
-                                          fontWeight:
-                                              maleNameController.text.isEmpty
-                                              ? FontWeight.w700
-                                              : FontWeight.w500,
-                                          color: maleNameController.text.isEmpty
-                                              ? const Color(0xFF8B7CFF)
-                                              : const Color(0xFF6B7280),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: TextField(
-                                      controller: maleNameController,
-                                      onChanged: (val) {
-                                        setState(() {});
-                                      },
-                                      decoration: InputDecoration(
-                                        hintText: '자유 기입',
-                                        hintStyle: TextStyle(
-                                          color: Colors.grey[400],
-                                          fontSize: 13,
-                                        ),
-                                        border: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(
-                                            12,
-                                          ),
-                                          borderSide: BorderSide.none,
-                                        ),
-                                        filled: true,
-                                        fillColor: const Color(0xFFF9FAFB),
-                                        contentPadding:
-                                            const EdgeInsets.symmetric(
-                                              horizontal: 12,
-                                              vertical: 8,
-                                            ),
-                                        isDense: true,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 8),
-                              Row(
-                                children: [
-                                  GestureDetector(
-                                    onTap: () => setState(() {
-                                      femaleNameController.clear();
-                                    }),
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 12,
-                                        vertical: 8,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: femaleNameController.text.isEmpty
-                                            ? const Color(0xFFEBE5FF)
-                                            : Colors.white,
-                                        border: Border.all(
-                                          color:
-                                              femaleNameController.text.isEmpty
-                                              ? const Color(0xFF8B7CFF)
-                                              : const Color(0xFFE5E7EB),
-                                        ),
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                      child: Text(
-                                        '여비서 코치 (기본)',
-                                        style: GoogleFonts.notoSansKr(
-                                          fontSize: 13,
-                                          fontWeight:
-                                              femaleNameController.text.isEmpty
-                                              ? FontWeight.w700
-                                              : FontWeight.w500,
-                                          color:
-                                              femaleNameController.text.isEmpty
-                                              ? const Color(0xFF8B7CFF)
-                                              : const Color(0xFF6B7280),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: TextField(
-                                      controller: femaleNameController,
-                                      onChanged: (val) {
-                                        setState(() {});
-                                      },
-                                      decoration: InputDecoration(
-                                        hintText: '자유 기입',
-                                        hintStyle: TextStyle(
-                                          color: Colors.grey[400],
-                                          fontSize: 13,
-                                        ),
-                                        border: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(
-                                            12,
-                                          ),
-                                          borderSide: BorderSide.none,
-                                        ),
-                                        filled: true,
-                                        fillColor: const Color(0xFFF9FAFB),
-                                        contentPadding:
-                                            const EdgeInsets.symmetric(
-                                              horizontal: 12,
-                                              vertical: 8,
-                                            ),
-                                        isDense: true,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-
                         // 1. 수면
                         _buildLearnField(
                           icon: '🌙',
@@ -3460,23 +3332,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           'nyang_master_title',
                           selectedTitle,
                         );
-                        final maleName = maleNameController.text.trim();
-                        final femaleName = femaleNameController.text.trim();
-                        await prefs.setString(
-                          'nyang_coach_name_sec_male',
-                          maleName,
-                        );
-                        await prefs.setString(
-                          'nyang_coach_name_sec_female',
-                          femaleName,
-                        );
-
-                        CoachConfigs.customSecMaleName = maleName.isEmpty
-                            ? null
-                            : maleName;
-                        CoachConfigs.customSecFemaleName = femaleName.isEmpty
-                            ? null
-                            : femaleName;
+                        await prefs.remove('nyang_coach_name_sec_male');
+                        await prefs.remove('nyang_coach_name_sec_female');
                         this.setState(() {
                           _homeWidgetStatus = _buildHomeWidgetStatus(
                             nyang:

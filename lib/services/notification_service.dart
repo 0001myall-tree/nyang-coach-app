@@ -54,6 +54,7 @@ class NotificationService {
 
   String? _coreReminderSoundName(String coachId, int advanceMinutes) {
     if (coachId == 'push') return null;
+    if ((CoachConfigs.all[coachId]?.voiceCount ?? 0) <= 0) return null;
     if (!_coreReminderSoundMinutes.contains(advanceMinutes)) return null;
     return '${coachId}_reminder_$advanceMinutes';
   }
@@ -396,7 +397,7 @@ class NotificationService {
       } else {
         targetCoachId = 'cat';
       }
-    } else if ((CoachConfigs.all[targetCoachId]?.voiceCount ?? 0) <= 0) {
+    } else if (!CoachConfigs.all.containsKey(targetCoachId)) {
       targetCoachId = 'cat';
     }
     // Save the resolved coach ID to SharedPreferences so the in-app engine can align with it

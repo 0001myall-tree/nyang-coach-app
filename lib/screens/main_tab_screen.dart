@@ -1004,7 +1004,7 @@ class _MainTabScreenState extends State<MainTabScreen>
       } else {
         targetCoachId = 'cat';
       }
-    } else if ((CoachConfigs.all[targetCoachId]?.voiceCount ?? 0) <= 0) {
+    } else if (!CoachConfigs.all.containsKey(targetCoachId)) {
       targetCoachId = 'cat';
     }
 
@@ -1136,6 +1136,10 @@ class _MainTabScreenState extends State<MainTabScreen>
     }
     if (targetCoachId != 'push' &&
         !CoachConfigs.all.containsKey(targetCoachId)) {
+      targetCoachId = 'push';
+    }
+    if (targetCoachId != 'push' &&
+        (CoachConfigs.all[targetCoachId]?.voiceCount ?? 0) <= 0) {
       targetCoachId = 'push';
     }
 

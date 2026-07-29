@@ -2094,14 +2094,6 @@ class _ChatScreenState extends State<ChatScreen>
     final rawMsg = templates[Random().nextInt(templates.length)];
     String msg = await UserTitleService.applyForCoach(rawMsg, widget.coachId);
 
-    // 비서 코치 + 커스텀 애칭 설정 시 이름 로컬 앞에 붙이기
-    final customName = widget.coachId == 'sec_male'
-        ? CoachConfigs.customSecMaleName
-        : CoachConfigs.customSecFemaleName;
-    if (customName != null && customName.trim().isNotEmpty) {
-      msg = '${customName.trim()}입니다. $msg';
-    }
-
     if (!mounted) return;
     setState(() {
       _messages.add(
@@ -2587,37 +2579,37 @@ class _ChatScreenState extends State<ChatScreen>
 
                             _buildAboutSpeaker(
                               'sec_male',
-                              '남비서 코치',
+                              '냥할배',
                               '그 부분은 저희 마스터 코치들도 함께 돕고 있습니다.',
                             ),
                             _buildAboutSpeaker(
                               'sec_female',
-                              '여비서 코치',
+                              '비서 실장',
                               '프렌즈 코치들이 마음을 챙긴다면,\n저희는 실행을 더 체계적으로 보좌합니다.',
                             ),
                             _buildAboutSpeaker(
                               'sec_male',
-                              '남비서 코치',
+                              '냥할배',
                               '자꾸 미루는 일정을 다시 챙겨드리고,\n언제 하면 좋을지 제안도 드립니다.',
                             ),
                             _buildAboutSpeaker(
                               'sec_female',
-                              '여비서 코치',
+                              '비서 실장',
                               '목표와 일정을 바탕으로\n오늘 가장 중요한 일을 정리해드리고,\n주간 리포트도 준비해드립니다.',
                             ),
                             _buildAboutSpeaker(
                               'sec_male',
-                              '남비서 코치',
+                              '냥할배',
                               '최근에는 여러분의 컨디션도 함께 챙기고 있습니다.',
                             ),
                             _buildAboutSpeaker(
                               'sec_female',
-                              '여비서 코치',
+                              '비서 실장',
                               '잠이 부족하거나 지쳐 있을 때는\n부담스럽지 않은 작은 챌린지도 제안해드리고요.',
                             ),
                             _buildAboutSpeaker(
                               'sec_male',
-                              '남비서 코치',
+                              '냥할배',
                               '저희에 대해 더 궁금하시다면\n마스터 코치의 더보기를 눌러주세요.',
                             ),
                             Padding(
@@ -7491,23 +7483,17 @@ class _ChatScreenState extends State<ChatScreen>
       final visionsRaw = prefs.getString('nyang_visions');
       final monthGoalsRaw = prefs.getString('nyang_goals_month');
       final weekGoalsRaw = prefs.getString('nyang_goals_week');
-      final secMaleName = prefs.getString('nyang_coach_name_sec_male');
-      final secFemaleName = prefs.getString('nyang_coach_name_sec_female');
 
       final bool isAllEmpty =
           (bedtime == null || bedtime.isEmpty) &&
           isListEmpty(routinesRaw) &&
           isListEmpty(visionsRaw) &&
           isListEmpty(monthGoalsRaw) &&
-          isListEmpty(weekGoalsRaw) &&
-          (secMaleName == null || secMaleName.trim().isEmpty) &&
-          (secFemaleName == null || secFemaleName.trim().isEmpty);
+          isListEmpty(weekGoalsRaw);
 
       if (isAllEmpty) {
         sb.writeln('\n[비서 학습 설정 미완료 상태]');
-        sb.writeln(
-          '- 현재 사용자의 취침 예정 시간, 고정 루틴, 애칭, 장기 비전, 목표 등이 전혀 설정되어 있지 않습니다.',
-        );
+        sb.writeln('- 현재 사용자의 취침 예정 시간, 고정 루틴, 장기 비전, 목표 등이 전혀 설정되어 있지 않습니다.');
         sb.writeln(
           '- 사용자가 "일정을 짜달라", "오늘 뭐부터 할까" 등 일정 관리와 관련된 대화를 시작할 때 한하여 자연스럽게 다음 내용을 덧붙여 유도하세요.',
         );

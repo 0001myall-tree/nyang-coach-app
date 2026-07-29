@@ -6,10 +6,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/date_symbol_data_local.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'firebase_options.dart';
 import 'screens/landing_screen.dart';
-import 'screens/coach_config.dart';
 import 'package:firebase_analytics/firebase_analytics.dart';
 import 'services/analytics_service.dart';
 import 'services/apple_calendar_sync_service.dart';
@@ -25,16 +23,6 @@ void main() async {
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   await initializeDateFormatting('ko', null);
   await NotificationService().init();
-
-  final prefs = await SharedPreferences.getInstance();
-  final _secMaleName = prefs.getString('nyang_coach_name_sec_male');
-  final _secFemaleName = prefs.getString('nyang_coach_name_sec_female');
-  CoachConfigs.customSecMaleName =
-      (_secMaleName != null && _secMaleName.isNotEmpty) ? _secMaleName : null;
-  CoachConfigs.customSecFemaleName =
-      (_secFemaleName != null && _secFemaleName.isNotEmpty)
-      ? _secFemaleName
-      : null;
 
   runApp(const ProviderScope(child: NyangCoachApp()));
   unawaited(_runStartupBackgroundJobs());
