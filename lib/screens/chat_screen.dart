@@ -6705,7 +6705,7 @@ class _ChatScreenState extends State<ChatScreen>
     if (_isLoading) return;
     // 이 비율이 곧 "뭐야 하고 지나가는" 비율이다. 문장 손볼 우선순위의 근거.
     await AnalyticsService.logFeatureUsage('grooming_resist');
-    // 거절한 문장은 횟수를 세어둔다. 두 번째부터 후보에서 빠진다.
+    // 거절한 문장은 횟수만 세어둔다. 뽑기에는 영향을 주지 않는다.
     final rejected = _lastGroomingBody;
     if (rejected != null) {
       final record = _groomingDislikes[rejected];
@@ -6717,6 +6717,9 @@ class _ChatScreenState extends State<ChatScreen>
       } else {
         record.count += 1;
         record.lastAt = DateTime.now();
+        // 전에도 거절했던 문장을 또 거절한 경우. grooming_resist 대비로 보면
+        // "반복 때문에 지치는가"를 알 수 있다. 문장을 더 쓸지 정하는 근거다.
+        await AnalyticsService.logFeatureUsage('grooming_resist_repeat');
       }
       await _saveGroomingMemory();
     }
@@ -6736,26 +6739,17 @@ class _ChatScreenState extends State<ChatScreen>
   final List<String> _recentGroomingLines = [];
   static const int _groomingRecentMemory = 3;
 
-  /// 귀찮다고 한 문장의 거절 횟수와 마지막 거절 시각. 거절을 기억하는 게
-  /// 관계처럼 느껴지는 가장 강한 신호라서, 저장하는 셋 중 이것만은 꼭 남긴다.
-  /// 다만 한 번 거절했다고 영영 빼면 그날 기분 때문에 넘긴 문장까지 사라진다.
-  /// 두 번 이상 거절한 것만 빼고, 그것도 한 달이 지나면 기록째로 지워 되돌린다.
+  /// 귀찮다고 한 문장의 거절 횟수와 마지막 거절 시각.
+  ///
+  /// 뽑기에는 쓰지 않는다. 한때 거절한 문장을 후보에서 뺐는데, 시간대별로 나뉜
+  /// 풀이 원래 3~12개라 뺄수록 눈에 띄게 얕아졌다. 게다가 안 나온 문장을
+  /// 알아차리는 사람은 없어서, 기억한다는 느낌은 주지 못하고 풀만 깎였다.
+  /// 그 몫은 되묻기가 한다 — 그건 기억이 화면에 뜬다.
+  ///
+  /// 대신 어떤 문장이 반복해서 거절당하는지 세어두고 지표로 내보낸다.
+  /// 숨길 문장이 아니라 고쳐 쓸 문장을 찾는 게 이 기록의 쓸모다.
+  /// 풀 크기만큼만 쌓이므로(현재 38개) 따로 만료시키지 않는다.
   final Map<String, _GroomingDislike> _groomingDislikes = {};
-  static const int _groomingDislikeThreshold = 2;
-  static const Duration _groomingDislikeExpiry = Duration(days: 30);
-
-  /// 만료된 거절 기록을 버린다. 여기서 지우면 그 문장은 다시 후보가 된다.
-  void _pruneGroomingDislikes() {
-    final deadline = DateTime.now().subtract(_groomingDislikeExpiry);
-    _groomingDislikes.removeWhere(
-      (_, record) => record.lastAt.isBefore(deadline),
-    );
-  }
-
-  bool _isGroomingLineMuted(String body) {
-    final record = _groomingDislikes[body];
-    return record != null && record.count >= _groomingDislikeThreshold;
-  }
 
   /// 마지막으로 추천한 문장과 그 날짜. 날이 바뀐 뒤 다시 열면 되물어본다.
   String? _lastGroomingBody;
@@ -6779,8 +6773,8 @@ class _ChatScreenState extends State<ChatScreen>
     _groomingMemoryLoaded = true;
   }
 
-  /// 거절 기록을 읽는다. 예전 버전은 문장 목록만 저장했고 그게 곧 영구 제외였는데,
-  /// 이제는 한 번 거절한 것으로 치고 넘긴다 — 완화가 기존 사용자에게도 적용된다.
+  /// 거절 기록을 읽는다. 예전 버전은 문장 목록만 저장했으니 한 번 거절한 것으로
+  /// 치고 넘긴다 — 그 목록 때문에 후보에서 빠져 있던 문장이 전부 돌아온다.
   void _loadGroomingDislikes(SharedPreferences prefs) {
     _groomingDislikes.clear();
     final raw = prefs.getString('${_groomingMemoryPrefix}_disliked_v2');
@@ -6805,7 +6799,6 @@ class _ChatScreenState extends State<ChatScreen>
         _groomingDislikes[body] = _GroomingDislike(count: 1, lastAt: now);
       }
     }
-    _pruneGroomingDislikes();
   }
 
   Future<void> _saveGroomingMemory() async {
@@ -6814,7 +6807,6 @@ class _ChatScreenState extends State<ChatScreen>
       '${_groomingMemoryPrefix}_recent',
       _recentGroomingLines,
     );
-    _pruneGroomingDislikes();
     await prefs.setString(
       '${_groomingMemoryPrefix}_disliked_v2',
       jsonEncode(
@@ -6870,17 +6862,11 @@ class _ChatScreenState extends State<ChatScreen>
   ];
 
   _GroomingLine _pickFreshGroomingLine(List<_GroomingLine> pool) {
-    // 두 번 이상 귀찮다고 한 건 최근 여부와 상관없이 뺀다.
-    _pruneGroomingDislikes();
-    final allowed = pool
-        .where((line) => !_isGroomingLineMuted(line.body))
-        .toList();
-    final base = allowed.isEmpty ? pool : allowed;
-    final fresh = base
+    final fresh = pool
         .where((line) => !_recentGroomingLines.contains(line.body))
         .toList();
     // 후보가 다 소진되면 어쩔 수 없이 전체에서 다시 고른다.
-    final candidates = fresh.isEmpty ? base : fresh;
+    final candidates = fresh.isEmpty ? pool : fresh;
     final picked = candidates[_groomingRandom.nextInt(candidates.length)];
     _lastGroomingBody = picked.body;
     _recentGroomingLines.add(picked.body);
