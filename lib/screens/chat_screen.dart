@@ -6590,6 +6590,12 @@ class _ChatScreenState extends State<ChatScreen>
     );
   }
 
+  /// 시간대를 안 타는 가꾸기 문장. 아침·낮·저녁 목록에 공통으로 얹는다.
+  /// 새벽(0~6시)엔 몸을 깨우는 동작이라 빼둔다 — 그 시간대는 재우는 쪽으로 안내한다.
+  static const List<String> _anytimeGroomingRoutines = [
+    '기지개를 쭉 편 다음 겨드랑이를 꾹꾹 눌러줘. 그리고 마지막으로 겨드랑이에서 팔 안쪽으로 쓸어주면 림프 순환이 잘 된대. 몸이 시원해져서 기분도 괜찮아질 거야.',
+  ];
+
   String _pickFiveMinuteGroomingRoutine() {
     final hour = DateTime.now().hour;
     final lines = switch (hour) {
@@ -6621,7 +6627,11 @@ class _ChatScreenState extends State<ChatScreen>
         '잠옷이나 편한 옷으로 갈아입고 목 주변만 느슨하게 풀어줘. 편해 보이는 상태를 만드는 것도 충분한 관리야.',
       ],
     };
-    return lines[Random().nextInt(lines.length)];
+    // 새벽을 뺀 시간대엔 공용 문장도 후보에 넣는다.
+    final pool = (hour >= 6 && hour < 24)
+        ? [...lines, ..._anytimeGroomingRoutines]
+        : lines;
+    return pool[Random().nextInt(pool.length)];
   }
 
   String? _groomingToolFallbackReply(String text) {
@@ -6654,6 +6664,7 @@ class _ChatScreenState extends State<ChatScreen>
       '거울 앞에 잠깐 서봐. 머리, 얼굴, 옷 중에 제일 신경 쓰이는 곳 하나만 가볍게 만져주자. 별 거 아니어도 기분 좀 나아질 걸.',
       '목이랑 어깨만 천천히 풀어보자. 스트레칭을 꾸준히 하면 몸선도 자세도 조금씩 좋아져서, 몸이 괜히 더 가볍고 편해질 걸.',
       _manualScalpMassageRoutine(),
+      ..._anytimeGroomingRoutines,
     ];
     return lines[Random().nextInt(lines.length)];
   }
