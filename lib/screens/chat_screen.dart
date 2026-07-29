@@ -1219,6 +1219,31 @@ class _GroomingLine {
   final String? effect;
 }
 
+/// 어떤 문장을 몇 번 거절했는지와, 마지막으로 거절한 시각.
+/// 한 번은 그날 컨디션일 수 있어서 횟수를 같이 센다.
+class _GroomingDislike {
+  _GroomingDislike({required this.count, required this.lastAt});
+
+  int count;
+  DateTime lastAt;
+
+  Map<String, dynamic> toJson() => {
+    'count': count,
+    'at': lastAt.millisecondsSinceEpoch,
+  };
+
+  static _GroomingDislike? fromJson(dynamic raw) {
+    if (raw is! Map) return null;
+    final count = raw['count'];
+    final at = raw['at'];
+    if (count is! int || at is! int) return null;
+    return _GroomingDislike(
+      count: count,
+      lastAt: DateTime.fromMillisecondsSinceEpoch(at),
+    );
+  }
+}
+
 // ─────────────────────────────────────────────────────────────
 // 채팅 화면
 // ─────────────────────────────────────────────────────────────
@@ -6524,6 +6549,8 @@ class _ChatScreenState extends State<ChatScreen>
       _messages.add(
         ChatMessage(text: '나 좀 가꾸고 싶어', isUser: true, time: DateTime.now()),
       );
+      // 되물을 게 있으면 여기서 멈춘다. 물어놓고 다음 질문을 같이 띄우면
+      // 대답할 자리가 없어서, 되묻는 게 아니라 혼잣말처럼 읽힌다.
       if (askBack) {
         _messages.add(
           ChatMessage(
@@ -6532,22 +6559,17 @@ class _ChatScreenState extends State<ChatScreen>
             time: DateTime.now(),
           ),
         );
+        _messages.add(
+          ChatMessage(
+            text: '',
+            isUser: false,
+            time: DateTime.now(),
+            kind: 'grooming_askback',
+          ),
+        );
+      } else {
+        _appendGroomingPlaceQuestion();
       }
-      _messages.add(
-        ChatMessage(
-          text: '좋아. 지금 집이야, 밖이야?',
-          isUser: false,
-          time: DateTime.now(),
-        ),
-      );
-      _messages.add(
-        ChatMessage(
-          text: '',
-          isUser: false,
-          time: DateTime.now(),
-          kind: 'grooming_care_choice',
-        ),
-      );
       _suggestedTasks = [];
       _dynamicChips = _coach.chips;
       _suppressDefaultChips = false;
@@ -6561,6 +6583,56 @@ class _ChatScreenState extends State<ChatScreen>
     // 가꾸기 퍼널의 분모. 이 값 대비 accept/resist 비율이 "문장이 실제로 먹혔나"의
     // 유일한 신호라서, 문장을 더 손보기 전에 이것부터 쌓아둔다.
     await AnalyticsService.logFeatureUsage('grooming_care');
+  }
+
+  /// 집·밖을 묻는 말과 선택지를 붙인다. setState 안에서만 부른다.
+  void _appendGroomingPlaceQuestion({String text = '좋아. 지금 집이야, 밖이야?'}) {
+    _messages.add(ChatMessage(text: text, isUser: false, time: DateTime.now()));
+    _messages.add(
+      ChatMessage(
+        text: '',
+        isUser: false,
+        time: DateTime.now(),
+        kind: 'grooming_care_choice',
+      ),
+    );
+  }
+
+  /// 되묻기에 답하면 그제서야 집·밖을 묻는다. 답에 따라 이어지는 말만 달라진다.
+  Future<void> _answerGroomingAskBack(bool done) async {
+    if (_isLoading) return;
+    HapticFeedback.lightImpact();
+    // 되묻기에 답이 돌아왔으니 오늘은 다시 묻지 않는다.
+    _lastGroomingDate = _todayGroomingKey;
+
+    setState(() {
+      _messages.add(
+        ChatMessage(
+          text: done ? '응, 해봤어' : '아니, 못 했어',
+          isUser: true,
+          time: DateTime.now(),
+        ),
+      );
+      _appendGroomingPlaceQuestion(
+        text: done
+            ? '잘했어. 그럼 오늘 것도 골라보자. 지금 집이야, 밖이야?'
+            : '그럴 수도 있지. 오늘 걸로 다시 해보자. 지금 집이야, 밖이야?',
+      );
+      _suggestedTasks = [];
+      _dynamicChips = _coach.chips;
+      _suppressDefaultChips = false;
+    });
+    _scrollToBottom();
+    await _saveHistory();
+    await _saveGroomingMemory();
+    await AnalyticsService.logConversationMessage(
+      coachId: widget.coachId,
+      usedApi: false,
+    );
+    // 되묻기에 실제로 답하는 비율, 그리고 해본 비율. 문장이 밖에서 먹혔는지의 유일한 단서다.
+    await AnalyticsService.logFeatureUsage(
+      done ? 'grooming_askback_done' : 'grooming_askback_missed',
+    );
   }
 
   Future<void> _sendGroomingCareRoutine({
@@ -6633,10 +6705,19 @@ class _ChatScreenState extends State<ChatScreen>
     if (_isLoading) return;
     // 이 비율이 곧 "뭐야 하고 지나가는" 비율이다. 문장 손볼 우선순위의 근거.
     await AnalyticsService.logFeatureUsage('grooming_resist');
-    // 거절한 문장은 목록에서 빼고 기억해둔다.
+    // 거절한 문장은 횟수를 세어둔다. 두 번째부터 후보에서 빠진다.
     final rejected = _lastGroomingBody;
-    if (rejected != null && !_dislikedGroomingLines.contains(rejected)) {
-      _dislikedGroomingLines.add(rejected);
+    if (rejected != null) {
+      final record = _groomingDislikes[rejected];
+      if (record == null) {
+        _groomingDislikes[rejected] = _GroomingDislike(
+          count: 1,
+          lastAt: DateTime.now(),
+        );
+      } else {
+        record.count += 1;
+        record.lastAt = DateTime.now();
+      }
       await _saveGroomingMemory();
     }
     await _send(
@@ -6655,9 +6736,26 @@ class _ChatScreenState extends State<ChatScreen>
   final List<String> _recentGroomingLines = [];
   static const int _groomingRecentMemory = 3;
 
-  /// 귀찮다고 한 문장. 다시 안 꺼낸다 — 거절을 기억하는 게 관계처럼 느껴지는
-  /// 가장 강한 신호라서, 저장하는 셋 중 이것만은 꼭 남긴다.
-  final List<String> _dislikedGroomingLines = [];
+  /// 귀찮다고 한 문장의 거절 횟수와 마지막 거절 시각. 거절을 기억하는 게
+  /// 관계처럼 느껴지는 가장 강한 신호라서, 저장하는 셋 중 이것만은 꼭 남긴다.
+  /// 다만 한 번 거절했다고 영영 빼면 그날 기분 때문에 넘긴 문장까지 사라진다.
+  /// 두 번 이상 거절한 것만 빼고, 그것도 한 달이 지나면 기록째로 지워 되돌린다.
+  final Map<String, _GroomingDislike> _groomingDislikes = {};
+  static const int _groomingDislikeThreshold = 2;
+  static const Duration _groomingDislikeExpiry = Duration(days: 30);
+
+  /// 만료된 거절 기록을 버린다. 여기서 지우면 그 문장은 다시 후보가 된다.
+  void _pruneGroomingDislikes() {
+    final deadline = DateTime.now().subtract(_groomingDislikeExpiry);
+    _groomingDislikes.removeWhere(
+      (_, record) => record.lastAt.isBefore(deadline),
+    );
+  }
+
+  bool _isGroomingLineMuted(String body) {
+    final record = _groomingDislikes[body];
+    return record != null && record.count >= _groomingDislikeThreshold;
+  }
 
   /// 마지막으로 추천한 문장과 그 날짜. 날이 바뀐 뒤 다시 열면 되물어본다.
   String? _lastGroomingBody;
@@ -6675,12 +6773,39 @@ class _ChatScreenState extends State<ChatScreen>
     _recentGroomingLines
       ..clear()
       ..addAll(prefs.getStringList('${_groomingMemoryPrefix}_recent') ?? []);
-    _dislikedGroomingLines
-      ..clear()
-      ..addAll(prefs.getStringList('${_groomingMemoryPrefix}_disliked') ?? []);
+    _loadGroomingDislikes(prefs);
     _lastGroomingBody = prefs.getString('${_groomingMemoryPrefix}_last_body');
     _lastGroomingDate = prefs.getString('${_groomingMemoryPrefix}_last_date');
     _groomingMemoryLoaded = true;
+  }
+
+  /// 거절 기록을 읽는다. 예전 버전은 문장 목록만 저장했고 그게 곧 영구 제외였는데,
+  /// 이제는 한 번 거절한 것으로 치고 넘긴다 — 완화가 기존 사용자에게도 적용된다.
+  void _loadGroomingDislikes(SharedPreferences prefs) {
+    _groomingDislikes.clear();
+    final raw = prefs.getString('${_groomingMemoryPrefix}_disliked_v2');
+    if (raw != null) {
+      try {
+        final decoded = jsonDecode(raw);
+        if (decoded is Map) {
+          decoded.forEach((body, value) {
+            final record = _GroomingDislike.fromJson(value);
+            if (body is String && record != null) {
+              _groomingDislikes[body] = record;
+            }
+          });
+        }
+      } catch (_) {
+        // 형식이 깨졌으면 기록을 버린다. 거절 기억을 잃는 것보다 앱이 막히는 게 나쁘다.
+      }
+    } else {
+      final legacy = prefs.getStringList('${_groomingMemoryPrefix}_disliked');
+      final now = DateTime.now();
+      for (final body in legacy ?? const <String>[]) {
+        _groomingDislikes[body] = _GroomingDislike(count: 1, lastAt: now);
+      }
+    }
+    _pruneGroomingDislikes();
   }
 
   Future<void> _saveGroomingMemory() async {
@@ -6689,9 +6814,14 @@ class _ChatScreenState extends State<ChatScreen>
       '${_groomingMemoryPrefix}_recent',
       _recentGroomingLines,
     );
-    await prefs.setStringList(
-      '${_groomingMemoryPrefix}_disliked',
-      _dislikedGroomingLines,
+    _pruneGroomingDislikes();
+    await prefs.setString(
+      '${_groomingMemoryPrefix}_disliked_v2',
+      jsonEncode(
+        _groomingDislikes.map(
+          (body, record) => MapEntry(body, record.toJson()),
+        ),
+      ),
     );
     final body = _lastGroomingBody;
     if (body != null) {
@@ -6740,9 +6870,10 @@ class _ChatScreenState extends State<ChatScreen>
   ];
 
   _GroomingLine _pickFreshGroomingLine(List<_GroomingLine> pool) {
-    // 귀찮다고 한 건 최근 여부와 상관없이 뺀다.
+    // 두 번 이상 귀찮다고 한 건 최근 여부와 상관없이 뺀다.
+    _pruneGroomingDislikes();
     final allowed = pool
-        .where((line) => !_dislikedGroomingLines.contains(line.body))
+        .where((line) => !_isGroomingLineMuted(line.body))
         .toList();
     final base = allowed.isEmpty ? pool : allowed;
     final fresh = base
@@ -11370,6 +11501,9 @@ $timerOutputRule
     if (msg.kind == 'grooming_care_choice') {
       return _buildGroomingCareChoiceCard(msg);
     }
+    if (msg.kind == 'grooming_askback') {
+      return _buildGroomingAskBackCard(msg);
+    }
     if (msg.kind == 'grooming_care_followup') {
       return _buildGroomingCareFollowupCard(msg);
     }
@@ -12123,6 +12257,32 @@ $timerOutputRule
   }
 
   Widget _buildGroomingCareChoiceCard(ChatMessage msg) {
+    return _buildGroomingChoiceCard(msg, [
+      ('집이야', _sendHomeGroomingRoutine),
+      ('밖이야', _sendOutdoorGroomingRoutine),
+    ]);
+  }
+
+  Widget _buildGroomingAskBackCard(ChatMessage msg) {
+    return _buildGroomingChoiceCard(msg, [
+      ('응, 해봤어', () => _answerGroomingAskBack(true)),
+      ('아니, 못 했어', () => _answerGroomingAskBack(false)),
+    ]);
+  }
+
+  Widget _buildGroomingCareFollowupCard(ChatMessage msg) {
+    return _buildGroomingChoiceCard(msg, [
+      ('알았어. 해볼게', _acceptGroomingCareRoutine),
+      ('하기 귀찮아', _resistGroomingCareRoutine),
+    ]);
+  }
+
+  /// 가꾸기 플로우의 선택지 말풍선. 되묻기·집밖·수락거절이 생김새가 같아서
+  /// 한 군데서 만든다 — 버튼 문구와 눌렀을 때 할 일만 다르다.
+  Widget _buildGroomingChoiceCard(
+    ChatMessage msg,
+    List<(String, VoidCallback)> options,
+  ) {
     final time = DateFormat('a h:mm', 'ko').format(msg.time);
     final accent = _coach.accentColor;
 
@@ -12209,106 +12369,10 @@ $timerOutputRule
                     ),
                     const SizedBox(height: 12),
                   ],
-                  choiceButton('집이야', _sendHomeGroomingRoutine),
-                  const SizedBox(height: 8),
-                  choiceButton('밖이야', _sendOutdoorGroomingRoutine),
-                ],
-              ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.only(left: 6, bottom: 2),
-            child: Text(
-              time,
-              style: GoogleFonts.notoSansKr(
-                fontSize: AppDesignTokens.textMeta,
-                color: AppDesignTokens.textDisabled,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildGroomingCareFollowupCard(ChatMessage msg) {
-    final time = DateFormat('a h:mm', 'ko').format(msg.time);
-    final accent = _coach.accentColor;
-
-    Widget choiceButton(String label, VoidCallback onTap) {
-      return GestureDetector(
-        onTap: _isLoading ? null : onTap,
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          decoration: BoxDecoration(
-            color: const Color(0xFFF8F5FF),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: const Color(0xFFE5DEFF)),
-          ),
-          child: Text(
-            label,
-            textAlign: TextAlign.center,
-            style: GoogleFonts.notoSansKr(
-              fontSize: 13,
-              fontWeight: FontWeight.w800,
-              color: accent,
-            ),
-          ),
-        ),
-      );
-    }
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(18),
-            child: Image.asset(
-              _coach.imagePath,
-              width: 36,
-              height: 36,
-              fit: BoxFit.cover,
-              alignment: Alignment.topCenter,
-              errorBuilder: (_, __, ___) => Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: _coach.accentLight,
-                  borderRadius: BorderRadius.circular(18),
-                ),
-                child: Icon(Icons.person, color: _coach.accentColor, size: 20),
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Flexible(
-            child: Container(
-              constraints: BoxConstraints(
-                maxWidth: MediaQuery.of(context).size.width * 0.72,
-              ),
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: const Color(0xFFE8E1F4)),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.06),
-                    blurRadius: 12,
-                    offset: const Offset(0, 3),
-                  ),
-                ],
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  choiceButton('알았어. 해볼게', _acceptGroomingCareRoutine),
-                  const SizedBox(height: 8),
-                  choiceButton('하기 귀찮아', _resistGroomingCareRoutine),
+                  for (var i = 0; i < options.length; i++) ...[
+                    if (i > 0) const SizedBox(height: 8),
+                    choiceButton(options[i].$1, options[i].$2),
+                  ],
                 ],
               ),
             ),
