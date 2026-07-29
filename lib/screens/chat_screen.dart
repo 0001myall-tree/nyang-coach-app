@@ -7,7 +7,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:http/http.dart' as http;
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
@@ -69,6 +68,159 @@ class ChatMessage {
         (j['highlightVisionIds'] as List?)?.map((e) => e.toString()).toList() ??
         const [],
   );
+}
+
+class _MasterGreetingContext {
+  final String timeSlot;
+  final int todayVisitCount;
+  final int? daysSinceLastVisit;
+  final String? inProgressTaskName;
+  final String? coreTaskName;
+  final int totalTasks;
+  final int completedTasks;
+  final int remainingTasks;
+
+  const _MasterGreetingContext({
+    required this.timeSlot,
+    required this.todayVisitCount,
+    required this.daysSinceLastVisit,
+    required this.inProgressTaskName,
+    required this.coreTaskName,
+    required this.totalTasks,
+    required this.completedTasks,
+    required this.remainingTasks,
+  });
+
+  double? get completionRate =>
+      totalTasks == 0 ? null : completedTasks / totalTasks;
+}
+
+class _MasterGreetingResult {
+  final String text;
+  final List<String> usedLines;
+
+  const _MasterGreetingResult(this.text, this.usedLines);
+}
+
+class _MasterGreetingCopy {
+  static const highCompletionRate = 0.7;
+  static const lowCompletionRate = 0.3;
+  static const manyRemainingCount = 5;
+  static const recentLineLimit = 5;
+
+  static const timeLines = {
+    'sec_female': {
+      'dawn': ['늦은 시간이네요.'],
+      'morning': ['좋은 아침입니다.'],
+      'afternoon': ['좋은 오후입니다.'],
+      'evening': ['오늘도 수고 많으셨어요.'],
+      'night': ['늦은 시간이네요.'],
+    },
+    'sec_male': {
+      'dawn': ['늦은 시간까지 마음이 분주한가 보구나냥.'],
+      'morning': ['새 하루가 시작됐구나냥.'],
+      'afternoon': ['하루가 제법 흘렀구나냥.'],
+      'evening': ['오늘도 여기까지 왔구나냥.'],
+      'night': ['늦은 시간까지 마음이 분주한가 보구나냥.'],
+    },
+  };
+
+  static const relationLines = {
+    'sec_female': {
+      'firstToday': ['오셨군요.', '기다리고 있었어요.', '오늘도 함께 시작해볼까요?', '오늘도 잘 부탁드려요.'],
+      'repeatToday': ['다시 오셨군요. 이어서 해볼까요?', '또 만나서 반가워요.'],
+      'afterFewDays': ['다시 만나서 반가워요.', '잠시 쉬었다가 돌아오셨군요. 좋습니다.', '잘 지내고 계셨나요?'],
+      'afterLongDays': [
+        '오셨네요! 다시 돌아와 주셔서 기분 좋아요.',
+        '반갑습니다! 오늘은 가볍게 시작해봐도 좋을 것 같아요.',
+      ],
+    },
+    'sec_male': {
+      'firstToday': [
+        '허허, 오늘도 왔구나냥.',
+        '또 얼굴을 보는구나냥.',
+        '반갑구나냥.',
+        '오늘도 한 걸음 내딛으러 왔구나냥.',
+        '오늘 컨디션은 어떠냥.',
+      ],
+      'repeatToday': ['다시 왔구나냥.', '또 만나 반갑구나냥.'],
+      'afterFewDays': ['다시 와주었구나냥.', '다시 만나 반갑구냥.', '쉬었다 다시 걷는 것도 좋다냥.'],
+      'afterLongDays': ['오랜만이구나냥. 다시 온 것만으로도 됐다냥.', '한동안 쉬었구나냥. 천천히 같이 걷자냥.'],
+    },
+  };
+
+  static const statusLines = {
+    'sec_female': {
+      'inProgress': [
+        '{{task}} 하고 계시네요. 마무리까지 응원합니다.',
+        '이미 시작하신 일정이 있네요. 흐름을 잘 이어가시면 좋을 것 같습니다.',
+      ],
+      'core': [
+        '오늘 핵심 일정이 하나 남아 있어요. 이것부터 끝내볼까요?',
+        '가장 중요한 일정이 아직 남아 있습니다. 여기에 먼저 집중해보시면 좋겠어요.',
+        '오늘은 이 핵심 일정 하나만 마쳐도 충분합니다.',
+      ],
+      'completionHigh': [
+        '벌써 많이 해내셨네요. 지금 흐름이 좋습니다.',
+        '오늘 일정의 대부분을 마치셨어요. 남은 일도 가볍게 정리해볼까요?',
+        '꽤 많이 진행하셨네요. 차분하게 잘 이어가고 계세요.',
+      ],
+      'completionLow': [
+        '아직 미완료 일정들이 보이지만 지금부터 차근차근 하시면 됩니다.',
+        '오늘은 가장 가벼운 일부터 시작해봐도 좋을 것 같습니다.',
+        '할 일이 많아 보여도 할 수 있는 것만 하나씩 보면 됩니다.',
+      ],
+      'remainingMany': [
+        '아직 일정이 여러 개 남아 있어요. 가장 중요한 것부터 하나씩 정리해볼까요?',
+        '할 일이 많아 보이지만 한 번에 하나만 보면 됩니다.',
+        '남은 일정이 조금 많네요. 우선순위를 정해볼까요?',
+      ],
+      'remainingOne': [
+        '이제 일정 하나만 남았어요. 마지막까지 함께 가볼까요?',
+        '오늘의 마지막 일정이 남아 있습니다.',
+        '하나만 더 마치면 오늘 일정이 끝나요.',
+      ],
+      'noTasks': [
+        '오늘 등록된 일정이 없어요. 쉬는 날이라면 편히 쉬셔도 좋습니다.',
+        '오늘은 비어 있는 하루네요. 필요하다면 중요한 일 하나만 적어둘까요?',
+        '일정이 없는 날도 괜찮아요. 오늘 필요한 것이 있는지 천천히 생각해보세요.',
+      ],
+    },
+    'sec_male': {
+      'inProgress': [
+        '시작한 일을 끝까지 붙잡는 것도 힘이라냥. 조금만 더 이어가 보세냥.',
+        '이미 첫걸음은 내디뎠구나냥. 남은 길은 처음보다 가볍다냥.',
+      ],
+      'core': [
+        '일이 많아도 중요한 것은 대개 하나라냥. 오늘은 그것부터 붙잡아 보세냥.',
+        '마음이 여러 갈래여도 중요한 일은 꼭 붙잡고 있자냥.',
+        '중요한 하나를 끝내면 나머지 하루가 가벼워지기도 한다냥.',
+      ],
+      'completionHigh': [
+        '오늘도 제법 많이 걸어왔구나냥. 남은 길은 서두르지 않아도 된다냥.',
+        '많이 해낸 날에는 더 몰아붙이기보다 흐름을 지키는 게 중요하다냥.',
+        '완료가 쌓였구냥. 미래가 서서히 달라지고 있다냥.',
+      ],
+      'completionLow': [
+        '할 일을 많이 계획했군. 지치지 않게 핵심에 집중해보자냥.',
+        '오늘은 바쁘군. 그럴수록 욕심은 덜고 핵심에 집중하는 것이 좋다냥.',
+        '마음이 무거울수록 가장 쉬운 것부터 해보는 건 어떠냥.',
+      ],
+      'remainingMany': [
+        '일이 많아 보인다고 마음까지 바쁠 필요는 없다냥. 하나씩 줄이면 된다냥.',
+        '여러 일을 한꺼번에 생각하면 발이 무거워진다냥. 하나만 고르세냥.',
+      ],
+      'remainingOne': [
+        '마지막 하나가 남았구나냥. 끝은 생각보다 가까이 있다냥.',
+        '하나를 마치면 오늘을 편히 내려놓을 수 있겠구나냥.',
+      ],
+      'noTasks': [
+        '비어 있는 하루도 쓸모가 있다냥. 무엇으로 채울지는 자네가 정하면 된다냥.',
+        '아무 일정이 없는 날에는 마음이 가는 곳을 살펴봐도 좋다냥.',
+        '계획의 빈칸 또한 계획이라냥.',
+      ],
+    },
+  };
 }
 
 enum _CountdownFocusPhase { breathing, countdown, ready, timer }
@@ -2789,76 +2941,236 @@ class _ChatScreenState extends State<ChatScreen>
     );
   }
 
-  // ── 마스터 코치 (비서) 첫 인사 ──────────────────────────────
-  Future<void> _startSecretaryGreeting() async {
-    final isMale = _coach.id == 'sec_male';
-    final now = DateTime.now();
-    final hour = now.hour;
+  // ── 마스터 코치 (비서/냥할배) 로컬 첫 인사 ────────────────
+  String _masterGreetingDateKey(String coachId) =>
+      'nyang_master_local_greeting_date_$coachId';
 
-    if (!isMale) {
-      final userTitle = await UserTitleService.getTitle();
-      final femaleGreets = [
-        '안녕하세요, 대표님. 오늘 컨디션은 어떠세요?',
-        '안녕하세요, 대표님. 오늘 일은 어떻게 되고 계세요?',
-        '안녕하세요, 대표님. 혹시 필요하신 거 있으신가요?',
-        '대표님, 오셨네요. 오늘 하루 어떠세요?',
-        '대표님, 안녕하세요. 오늘 기분은 좀 어떠세요?',
-        '안녕하세요, 대표님. 오늘 무엇부터 시작할까요?',
-        '대표님, 오셨어요. 필요한 거 있으시면 말씀해주세요.',
-        '대표님, 오셨네요. 오늘도 옆에서 챙겨드릴게요.',
-        '대표님, 기다리고 있었어요. 오늘 어떻게 도와드릴까요?',
-        '대표님, 오셨어요. 무엇부터 챙겨드릴까요?',
-      ];
-      final greet = femaleGreets[Random().nextInt(femaleGreets.length)]
-          .replaceAll(UserTitleService.defaultTitle, userTitle);
-      _injectAiMessage(greet, kind: 'auto_greeting');
-      return;
+  String _masterGreetingRecentLinesKey(String coachId) =>
+      'nyang_master_local_greeting_recent_lines_$coachId';
+
+  String _masterGreetingVisitCountKey(String coachId, String todayKey) =>
+      'nyang_master_local_greeting_visit_count_${coachId}_$todayKey';
+
+  String _timeSlotForGreeting(DateTime now) {
+    if (now.hour < 6) return 'dawn';
+    if (now.hour < 12) return 'morning';
+    if (now.hour < 18) return 'afternoon';
+    if (now.hour < 23) return 'evening';
+    return 'night';
+  }
+
+  List<Map<String, dynamic>> _decodeMapList(String? raw) {
+    if (raw == null || raw.isEmpty) return [];
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! List) return [];
+      return decoded.whereType<Map>().map((e) {
+        return e.map((key, value) => MapEntry(key.toString(), value));
+      }).toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  String? _taskText(Map<String, dynamic>? task) {
+    final text = task?['text']?.toString().trim();
+    return text == null || text.isEmpty ? null : text;
+  }
+
+  Future<_MasterGreetingContext> _buildMasterGreetingContext({
+    required SharedPreferences prefs,
+    required DateTime now,
+    required DateTime? lastVisit,
+    required int todayVisitCount,
+  }) async {
+    final tasks = _decodeMapList(prefs.getString('nyang_tasks'));
+    final todayTasks = tasks.where((task) {
+      final category = task['category']?.toString();
+      return category == 'today' ||
+          category == 'habit' ||
+          category == 'schedule';
+    }).toList();
+    final incompleteTasks = todayTasks
+        .where((task) => task['done'] != true)
+        .toList(growable: false);
+    final completedTasks = todayTasks
+        .where((task) => task['done'] == true)
+        .toList(growable: false);
+
+    final inProgressSchedule = incompleteTasks
+        .cast<Map<String, dynamic>?>()
+        .firstWhere(
+          (task) =>
+              task?['category'] == 'schedule' && task?['inProgress'] == true,
+          orElse: () => null,
+        );
+    final inProgressAny =
+        inProgressSchedule ??
+        incompleteTasks.cast<Map<String, dynamic>?>().firstWhere(
+          (task) => task?['inProgress'] == true,
+          orElse: () => null,
+        );
+
+    final coreTasks = _decodeMapList(prefs.getString('nyang_core_tasks'));
+    final pendingCore = coreTasks.cast<Map<String, dynamic>?>().firstWhere(
+      (task) => task?['done'] != true,
+      orElse: () => null,
+    );
+
+    final daysSinceLastVisit = lastVisit == null
+        ? null
+        : DateTime(now.year, now.month, now.day)
+              .difference(
+                DateTime(lastVisit.year, lastVisit.month, lastVisit.day),
+              )
+              .inDays;
+
+    return _MasterGreetingContext(
+      timeSlot: _timeSlotForGreeting(now),
+      todayVisitCount: todayVisitCount,
+      daysSinceLastVisit: daysSinceLastVisit,
+      inProgressTaskName: _taskText(inProgressAny),
+      coreTaskName: _taskText(pendingCore),
+      totalTasks: todayTasks.length,
+      completedTasks: completedTasks.length,
+      remainingTasks: incompleteTasks.length,
+    );
+  }
+
+  String _relationGroupForGreeting(_MasterGreetingContext context) {
+    final days = context.daysSinceLastVisit;
+    if (days != null && days >= 4) return 'afterLongDays';
+    if (days != null && days >= 2) return 'afterFewDays';
+    if (context.todayVisitCount >= 2) return 'repeatToday';
+    return 'firstToday';
+  }
+
+  String _pickGreetingLine(List<String> lines, Set<String> recentLines) {
+    if (lines.isEmpty) return '';
+    final candidates = lines
+        .where((line) => !recentLines.contains(line))
+        .toList(growable: false);
+    final pool = candidates.isNotEmpty ? candidates : lines;
+    return pool[Random().nextInt(pool.length)];
+  }
+
+  List<String> _linesForGreeting(
+    Map<String, Map<String, List<String>>> source,
+    String coachId,
+    String group,
+  ) {
+    return source[coachId]?[group] ?? source['sec_female']?[group] ?? const [];
+  }
+
+  _MasterGreetingResult _buildLocalMasterGreeting(
+    _MasterGreetingContext context,
+    Set<String> recentLines,
+  ) {
+    final coachId = _coach.id == 'sec_male' ? 'sec_male' : 'sec_female';
+    final timeLine = _pickGreetingLine(
+      _linesForGreeting(
+        _MasterGreetingCopy.timeLines,
+        coachId,
+        context.timeSlot,
+      ),
+      recentLines,
+    );
+    final relationLine = _pickGreetingLine(
+      _linesForGreeting(
+        _MasterGreetingCopy.relationLines,
+        coachId,
+        _relationGroupForGreeting(context),
+      ),
+      recentLines,
+    );
+
+    final statusGroups = <String>[];
+    if (context.inProgressTaskName != null) {
+      statusGroups.add('inProgress');
+    } else if (context.coreTaskName != null) {
+      statusGroups.add('core');
+    } else if (context.completionRate != null &&
+        context.completionRate! >= _MasterGreetingCopy.highCompletionRate) {
+      statusGroups.add('completionHigh');
+    } else if (context.completionRate != null &&
+        context.completionRate! < _MasterGreetingCopy.lowCompletionRate &&
+        context.remainingTasks > 0) {
+      statusGroups.add('completionLow');
+    } else if (context.remainingTasks >=
+        _MasterGreetingCopy.manyRemainingCount) {
+      statusGroups.add('remainingMany');
+    } else if (context.remainingTasks == 1) {
+      statusGroups.add('remainingOne');
+    } else if (context.totalTasks == 0) {
+      statusGroups.add('noTasks');
+    } else if (context.remainingTasks > 0) {
+      statusGroups.add('remainingMany');
+    } else {
+      statusGroups.add('completionHigh');
     }
 
-    final prefs = await SharedPreferences.getInstance();
+    final primaryGroup = statusGroups.first;
+    if (primaryGroup == 'completionHigh' && context.remainingTasks == 1) {
+      statusGroups.add('remainingOne');
+    } else if (primaryGroup == 'completionLow' &&
+        context.remainingTasks >= _MasterGreetingCopy.manyRemainingCount) {
+      statusGroups.add('remainingMany');
+    }
 
-    final rawTasks = prefs.getString('nyang_tasks');
-    List<dynamic> tasksList = rawTasks != null ? jsonDecode(rawTasks) : [];
+    final usedLines = <String>[timeLine, relationLine];
+    final sentences = <String>['$timeLine $relationLine'];
+    for (final group in statusGroups.take(2)) {
+      var line = _pickGreetingLine(
+        _linesForGreeting(_MasterGreetingCopy.statusLines, coachId, group),
+        recentLines,
+      );
+      if (group == 'inProgress' && context.inProgressTaskName != null) {
+        line = line.replaceAll('{{task}}', context.inProgressTaskName!);
+      }
+      sentences.add(line);
+      usedLines.add(line);
+    }
 
-    final todayTasks = tasksList
-        .where(
-          (t) =>
-              t['category'] == 'today' ||
-              t['category'] == 'habit' ||
-              t['category'] == 'schedule',
-        )
-        .toList();
-    final incompleteTasks = todayTasks.where((t) => t['done'] != true).toList();
-    final completedTasks = todayTasks.where((t) => t['done'] == true).toList();
+    return _MasterGreetingResult(sentences.take(3).join(' '), usedLines);
+  }
 
-    final hasTasks = todayTasks.isNotEmpty;
-    final total = todayTasks.length;
-    final done = completedTasks.length;
-    final left = incompleteTasks.length;
-    final currentTime =
-        '${hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
-    final timeSlot = hour < 5
-        ? '늦은 밤 또는 새벽'
-        : hour < 12
-        ? '오전'
-        : hour < 18
-        ? '오후'
-        : '저녁';
-    final taskContext = hasTasks
-        ? '오늘 할 일은 총 $total개이고, $done개 완료, $left개 남아 있다.'
-        : '현재 등록된 오늘 할 일은 없다.';
-    final prompt =
-        '''[남비서 첫 인사]
-현재 시각은 $currentTime이고 시간대는 "$timeSlot"이다. $taskContext
+  Future<void> _startSecretaryGreeting({
+    required SharedPreferences prefs,
+    required DateTime now,
+    required DateTime? lastVisit,
+  }) async {
+    final todayKey = _getTodayStrWithReset(prefs);
+    final greetedDateKey = _masterGreetingDateKey(widget.coachId);
+    if (prefs.getString(greetedDateKey) == todayKey) return;
 
-- 현재 시각과 맞지 않는 인사를 절대 하지 않는다. 특히 정오 이후나 새벽에는 "좋은 아침", "좋은 오전"이라고 말하지 않는다.
-- 새벽에는 "늦은 시간이네요"처럼 현재 시간만 자연스럽게 반영하고, 아침처럼 하루 계획을 세우라고 하지 않는다.
-- 첫 인사는 사용자를 반기는 1~2문장으로 끝낸다.
-- 사용자가 요청하지 않았는데 오늘 할 일 정리, 핵심 선정, 소요시간 입력, 업무 보고, 우선순위 설정, "지금 뭐하지?" 사용을 먼저 권하지 않는다.
-- 할 일 현황은 필요할 때 한 문장으로 가볍게 참고할 수 있지만, 미완료 항목을 압박하거나 평가하지 않는다.
-- 마지막은 "필요하신 게 있으면 말씀해 주세요"처럼 대화의 자유도를 열어둔다.''';
+    final visitCountKey = _masterGreetingVisitCountKey(
+      widget.coachId,
+      todayKey,
+    );
+    final todayVisitCount = (prefs.getInt(visitCountKey) ?? 0) + 1;
+    await prefs.setInt(visitCountKey, todayVisitCount);
 
-    await _sendGreeting(prompt);
+    final context = await _buildMasterGreetingContext(
+      prefs: prefs,
+      now: now,
+      lastVisit: lastVisit,
+      todayVisitCount: todayVisitCount,
+    );
+    final recentKey = _masterGreetingRecentLinesKey(widget.coachId);
+    final recentLines = (prefs.getStringList(recentKey) ?? const []).toSet();
+    final greeting = _buildLocalMasterGreeting(context, recentLines);
+    if (!mounted) return;
+    final nextRecentLines = <String>[...recentLines, ...greeting.usedLines];
+    final trimmedRecentLines =
+        nextRecentLines.length > _MasterGreetingCopy.recentLineLimit
+        ? nextRecentLines.sublist(
+            nextRecentLines.length - _MasterGreetingCopy.recentLineLimit,
+          )
+        : nextRecentLines;
+
+    await prefs.setString(greetedDateKey, todayKey);
+    await prefs.setStringList(recentKey, trimmedRecentLines);
+    _injectAiMessage(greeting.text, kind: 'auto_greeting');
   }
 
   // ── 히스토리 & 복귀 인사 (웹앱 startGreeting 이식) ──────
@@ -2905,6 +3217,9 @@ class _ChatScreenState extends State<ChatScreen>
     final raw = prefs.getString('nyang_chat_history_${widget.coachId}');
     final lastVisitStr = prefs.getString('last_visit_${widget.coachId}');
     final now = DateTime.now();
+    final lastVisit = lastVisitStr == null
+        ? null
+        : DateTime.tryParse(lastVisitStr);
     unawaited(_checkArchivedChat());
 
     if (raw != null) {
@@ -2995,11 +3310,15 @@ class _ChatScreenState extends State<ChatScreen>
 
       // 마스터 코치(비서): 상황별 스마트 인사
       if (_coach.isMaster) {
+        await _startSecretaryGreeting(
+          prefs: prefs,
+          now: now,
+          lastVisit: lastVisit,
+        );
         await prefs.setString(
           'last_visit_${widget.coachId}',
           now.toIso8601String(),
         );
-        await _startSecretaryGreeting();
         return;
       }
 
@@ -3045,6 +3364,19 @@ class _ChatScreenState extends State<ChatScreen>
       );
       return;
     } else {
+      if (_coach.isMaster) {
+        await _startSecretaryGreeting(
+          prefs: prefs,
+          now: now,
+          lastVisit: lastVisit,
+        );
+        await prefs.setString(
+          'last_visit_${widget.coachId}',
+          now.toIso8601String(),
+        );
+        return;
+      }
+
       // 냥냥코치 비구독자 & 히스토리가 이미 있을 경우
       // 대화 기록이 있어도 아직 무료체험 미리보기를 안 봤으면 계속 보여준다.
       if (widget.coachId == 'cat' && !_userData.isPlanActive) {
@@ -3745,42 +4077,6 @@ class _ChatScreenState extends State<ChatScreen>
       return '$title, 어제($yesterdayStr) 미완료로 남은 항목은 ${incomplete.join(', ')}였습니다.';
     } catch (_) {
       return '$title, 어제 기록을 확인하는 중에 문제가 생겼습니다.';
-    }
-  }
-
-  // ── 복귀/첫방문 인사 전송 ────────────────────────────────
-  Future<void> _sendGreeting(String prompt) async {
-    final currentId = widget.coachId;
-    setState(() => _isLoading = true);
-    try {
-      final raw = await _callOpenAI(prompt, isGreeting: true);
-      if (!mounted || widget.coachId != currentId) return;
-      final parsed = _parseReply(raw);
-
-      String greetingText = parsed.text;
-      unawaited(_confirmPreemptiveIfMentioned(greetingText));
-
-      setState(() {
-        _messages.add(
-          ChatMessage(
-            text: greetingText,
-            isUser: false,
-            time: DateTime.now(),
-            kind: 'auto_greeting',
-          ),
-        );
-        _suppressDefaultChips = parsed.suppressDefaultChips;
-        _dynamicChips = parsed.chips.isNotEmpty
-            ? parsed.chips
-            : (_suppressDefaultChips ? [] : _coach.chips);
-        _coachSwitchTarget = parsed.coachSwitchTarget;
-        _isLoading = false;
-      });
-      await _saveHistory();
-      _scrollToBottom();
-    } catch (_) {
-      if (!mounted || widget.coachId != currentId) return;
-      setState(() => _isLoading = false);
     }
   }
 
@@ -8362,9 +8658,12 @@ $timerOutputRule
       estimatedTokens: estimatedPromptTokens,
     );
 
+    final model = _coach.isMaster ? 'gpt-4.1-mini' : 'gpt-4o-mini';
+
     // Firebase Cloud Functions chatProxy 호출 (웹앱과 동일한 Gemini AI 서버)
     final result = await _chatProxy.call({
       'messages': messages,
+      'model': model,
       'temperature': 0.9,
     });
 
