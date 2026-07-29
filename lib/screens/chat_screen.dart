@@ -9201,7 +9201,7 @@ $timerOutputRule
       estimatedTokens: estimatedPromptTokens,
     );
 
-    final model = _coach.isMaster ? 'gpt-4.1-mini' : 'gpt-4o-mini';
+    const model = 'gpt-4.1-mini';
 
     // Firebase Cloud Functions chatProxy 호출 (웹앱과 동일한 Gemini AI 서버)
     final result = await _chatProxy.call({
