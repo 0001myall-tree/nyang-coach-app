@@ -7179,6 +7179,36 @@ class _ChatScreenState extends State<ChatScreen>
     );
   }
 
+  /// 마지막 말풍선이 집·밖 선택지 카드인가. 그 자리에서 온 답만 장소로 읽는다.
+  bool get _awaitingGroomingPlace =>
+      _messages.isNotEmpty && _messages.last.kind == 'grooming_care_choice';
+
+  /// 밖으로 치는 말. 회사·학교·카페는 남 앞이라 밖 문장이 그대로 맞는다.
+  static const List<String> _outdoorPlaceWords = [
+    '밖',
+    '회사',
+    '사무실',
+    '학교',
+    '카페',
+    '지하철',
+    '버스',
+    '외출',
+    '이동중',
+    '길',
+  ];
+
+  static const List<String> _homePlaceWords = ['집', '방', '자취', '침대'];
+
+  /// 버튼 대신 타이핑한 답을 집·밖으로 읽는다. 어느 쪽도 아니면 null을 주고
+  /// 평소 대화로 넘긴다 — 애매한 걸 억지로 한쪽에 밀어 넣지 않는다.
+  String? _groomingPlaceFromText(String text) {
+    final normalized = text.replaceAll(RegExp(r'\s+'), '');
+    // 밖을 먼저 본다. '집에 가는 길이야'처럼 둘 다 걸리는 말은 아직 밖이다.
+    if (_outdoorPlaceWords.any(normalized.contains)) return 'outdoor';
+    if (_homePlaceWords.any(normalized.contains)) return 'home';
+    return null;
+  }
+
   String? _groomingToolFallbackReply(String text) {
     final normalized = text.replaceAll(RegExp(r'\s+'), '');
     final mentionsScalpCare =
@@ -7344,6 +7374,26 @@ class _ChatScreenState extends State<ChatScreen>
         apiInputOverride == null) {
       await _handleGroomingCareChip();
       return;
+    }
+
+    // 선택지 카드가 떠 있을 때만 타이핑한 답을 장소로 읽는다. 아무 때나 '집'을
+    // 집어내면, 밖에서 지쳐 "집에 가고 싶어"라고 한 사람한테 집 루틴을 던지게 된다.
+    if (apiInputOverride == null && _awaitingGroomingPlace) {
+      final typedPlace = _groomingPlaceFromText(trimmed);
+      if (typedPlace != null) {
+        final isHome = typedPlace == 'home';
+        await _sendGroomingCareRoutine(
+          userText: trimmed,
+          reply: isHome
+              ? _pickHomeGroomingRoutine()
+              : _pickOutdoorGroomingRoutine(),
+          feature: isHome ? 'grooming_home' : 'grooming_outdoor',
+          place: typedPlace,
+        );
+        // 버튼 대신 쳐서 들어온 비율. 높으면 선택지가 안 보이거나 좁다는 뜻이다.
+        await AnalyticsService.logFeatureUsage('grooming_place_typed');
+        return;
+      }
     }
 
     final groomingToolFallback = _groomingToolFallbackReply(trimmed);
