@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import 'memory_service.dart';
+import 'coach_id_service.dart';
 import 'tasks_sync_service.dart';
 
 class DailyResetService {
@@ -21,7 +22,7 @@ class DailyResetService {
     'boyfriend',
     'halmae',
     'bro',
-    'sec_male',
+    CoachIdService.nyangHalbaeId,
     'sec_female',
   ];
 
@@ -31,7 +32,10 @@ class DailyResetService {
   ) {
     final merged = <Map<String, dynamic>>[];
     for (final coachId in coachIds) {
-      final rawHistory = prefs.getString('nyang_chat_history_$coachId');
+      final normalizedCoachId = CoachIdService.normalize(coachId);
+      final rawHistory = prefs.getString(
+        'nyang_chat_history_$normalizedCoachId',
+      );
       if (rawHistory == null) continue;
       try {
         final history = jsonDecode(rawHistory) as List;
@@ -41,7 +45,10 @@ class DailyResetService {
               .toString()
               .trim();
           if (text.isEmpty) continue;
-          merged.add({...item.cast<String, dynamic>(), 'coachId': coachId});
+          merged.add({
+            ...item.cast<String, dynamic>(),
+            'coachId': normalizedCoachId,
+          });
         }
       } catch (_) {}
     }
@@ -66,7 +73,8 @@ class DailyResetService {
     String coachId,
     String currentDate,
   ) async {
-    final rawHistory = prefs.getString('nyang_chat_history_$coachId');
+    final normalizedCoachId = CoachIdService.normalize(coachId);
+    final rawHistory = prefs.getString('nyang_chat_history_$normalizedCoachId');
     if (rawHistory == null) return [];
     List<dynamic> history;
     try {
@@ -93,7 +101,7 @@ class DailyResetService {
     }
     if (pastMessages.isEmpty) return currentMessages;
 
-    final archiveKey = '$chatArchivePrefix$coachId';
+    final archiveKey = '$chatArchivePrefix$normalizedCoachId';
     List<dynamic> archive;
     try {
       archive = jsonDecode(prefs.getString(archiveKey) ?? '[]') as List;

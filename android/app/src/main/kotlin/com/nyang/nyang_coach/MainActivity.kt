@@ -6,6 +6,9 @@ import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.media.AudioAttributes
+import android.media.Ringtone
+import android.media.RingtoneManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -20,6 +23,7 @@ import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterFragmentActivity() {
     private val morningAlarmChannel = "nyang_coach/morning_alarm"
+    private var morningAlarmRingtone: Ringtone? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -47,6 +51,14 @@ class MainActivity : FlutterFragmentActivity() {
                     }
                     "stopMorningVibration" -> {
                         stopMorningVibration()
+                        result.success(null)
+                    }
+                    "startMorningAlarmSound" -> {
+                        startMorningAlarmSound()
+                        result.success(null)
+                    }
+                    "stopMorningAlarmSound" -> {
+                        stopMorningAlarmSound()
                         result.success(null)
                     }
                     "canPostNotifications" -> {
@@ -189,6 +201,30 @@ class MainActivity : FlutterFragmentActivity() {
 
     private fun stopMorningVibration() {
         getVibrator().cancel()
+    }
+
+    private fun startMorningAlarmSound() {
+        stopMorningAlarmSound()
+        val alarmUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+            ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+            ?: return
+        morningAlarmRingtone = RingtoneManager.getRingtone(applicationContext, alarmUri)?.apply {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                audioAttributes = AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_ALARM)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .build()
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                isLooping = true
+            }
+            play()
+        }
+    }
+
+    private fun stopMorningAlarmSound() {
+        morningAlarmRingtone?.stop()
+        morningAlarmRingtone = null
     }
 
     private fun getVibrator(): Vibrator {

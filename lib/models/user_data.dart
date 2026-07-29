@@ -4,6 +4,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 
+import '../services/coach_id_service.dart';
+
 // ─────────────────────────────────────────────────────────────
 // UserData 모델
 // ─────────────────────────────────────────────────────────────
@@ -48,21 +50,31 @@ class UserData {
     'selected_coach_id': selectedCoachId,
   };
 
-  factory UserData.fromJson(Map<String, dynamic> j) => UserData(
-    planType: j['plan_type'] ?? 'none',
-    points: (j['points'] ?? 0) as int,
-    ownedCoaches: List<String>.from(j['owned_coaches'] ?? []),
-    ownedCoachExpiresAt: ((j['owned_coach_expires_at'] as Map?) ?? {}).map(
-      (key, value) => MapEntry(
-        key.toString(),
-        value == null ? null : DateTime.tryParse(value.toString()),
-      ),
-    ),
-    planExpiresAt: j['plan_expires_at'] != null
-        ? DateTime.tryParse(j['plan_expires_at'])
-        : null,
-    selectedCoachId: j['selected_coach_id'],
-  );
+  factory UserData.fromJson(Map<String, dynamic> j) {
+    final owned = List<String>.from(
+      j['owned_coaches'] ?? [],
+    ).map(CoachIdService.normalize).toSet().toList();
+    final expires = <String, DateTime?>{};
+    for (final entry in ((j['owned_coach_expires_at'] as Map?) ?? {}).entries) {
+      final key = CoachIdService.normalize(entry.key.toString());
+      expires[key] ??= entry.value == null
+          ? null
+          : DateTime.tryParse(entry.value.toString());
+    }
+
+    return UserData(
+      planType: j['plan_type'] ?? 'none',
+      points: (j['points'] ?? 0) as int,
+      ownedCoaches: owned,
+      ownedCoachExpiresAt: expires,
+      planExpiresAt: j['plan_expires_at'] != null
+          ? DateTime.tryParse(j['plan_expires_at'])
+          : null,
+      selectedCoachId: j['selected_coach_id'] == null
+          ? null
+          : CoachIdService.normalize(j['selected_coach_id'].toString()),
+    );
+  }
 
   // ── 권한 헬퍼 ─────────────────────────────────────────────
 
@@ -75,30 +87,34 @@ class UserData {
 
   /// 특정 코치에 접근 가능한지
   /// 1. 냥냥코치(cat): 누구나 무료 입장
-  /// 2. 비서코치(sec_male/sec_female): master 플랜 구독자만
+  /// 2. 마스터 코치(nyang_halbae/sec_female): master 플랜 구독자만
   /// 3. 나머지 friends 코치: friends/master 플랜 구독자 중 해당 코치를 구매한 사람만
   bool canAccessCoach(String coachId) {
-    if (coachId == 'cat') return true;
+    final normalizedCoachId = CoachIdService.normalize(coachId);
+    if (normalizedCoachId == 'cat') return true;
     if (!isPlanActive) return false;
-    if (coachId == 'sec_male' || coachId == 'sec_female') {
+    if (CoachIdService.isMaster(normalizedCoachId)) {
       return planType == 'master';
     }
     // 나머지 friends 코치 — 플랜 활성 + 개별 구매 필요
-    return isOwnedCoachActive(coachId);
+    return isOwnedCoachActive(normalizedCoachId);
   }
 
   bool isOwnedCoachActive(String coachId) {
-    if (!ownedCoaches.contains(coachId)) return false;
-    final expiresAt = ownedCoachExpiresAt[coachId];
+    final normalizedCoachId = CoachIdService.normalize(coachId);
+    if (!ownedCoaches.contains(normalizedCoachId)) return false;
+    final expiresAt = ownedCoachExpiresAt[normalizedCoachId];
     if (expiresAt == null) return true;
     return expiresAt.isAfter(DateTime.now());
   }
 
-  DateTime? ownedCoachExpiry(String coachId) => ownedCoachExpiresAt[coachId];
+  DateTime? ownedCoachExpiry(String coachId) =>
+      ownedCoachExpiresAt[CoachIdService.normalize(coachId)];
 
   String ownedCoachRemainingLabel(String coachId) {
-    if (!ownedCoaches.contains(coachId)) return '미구매';
-    final expiresAt = ownedCoachExpiresAt[coachId];
+    final normalizedCoachId = CoachIdService.normalize(coachId);
+    if (!ownedCoaches.contains(normalizedCoachId)) return '미구매';
+    final expiresAt = ownedCoachExpiresAt[normalizedCoachId];
     if (expiresAt == null) return '이용 중';
     final remaining = expiresAt.difference(DateTime.now()).inDays + 1;
     if (remaining <= 0) return '만료됨';
@@ -179,10 +195,11 @@ class UserDataService {
 
   static Future<void> addOwnedCoach(String coachId) async {
     final data = await load();
-    if (!data.ownedCoaches.contains(coachId)) {
-      data.ownedCoaches.add(coachId);
+    final normalizedCoachId = CoachIdService.normalize(coachId);
+    if (!data.ownedCoaches.contains(normalizedCoachId)) {
+      data.ownedCoaches.add(normalizedCoachId);
     }
-    data.ownedCoachExpiresAt[coachId] = DateTime.now().add(
+    data.ownedCoachExpiresAt[normalizedCoachId] = DateTime.now().add(
       const Duration(days: 365),
     );
     await save(data);
@@ -196,7 +213,7 @@ class UserDataService {
 
   static Future<void> setSelectedCoach(String coachId) async {
     final data = await load();
-    data.selectedCoachId = coachId;
+    data.selectedCoachId = CoachIdService.normalize(coachId);
     await save(data);
   }
 }

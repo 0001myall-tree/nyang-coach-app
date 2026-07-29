@@ -609,7 +609,7 @@ class _TasksScreenState extends State<TasksScreen>
   late CoachConfig _coach;
 
   Color get _accentButtonTextColor =>
-      _coach.id == 'sec_male' ? const Color(0xFF173A63) : Colors.white;
+      _coach.id == 'nyang_halbae' ? const Color(0xFF173A63) : Colors.white;
 
   // 데이터 (웹앱 변수 그대로)
   bool _isCoreReminderEnabledGlobally = false;
@@ -1145,7 +1145,7 @@ class _TasksScreenState extends State<TasksScreen>
           'multiple' => '$quoted 비슷한 항목이 여러 개다. 조금 더 자세히 말해줘라.',
           _ => '$quoted 찾아뒀다. 확인하고 지우든 날짜를 바꾸든 해라.',
         };
-      case 'sec_male':
+      case 'nyang_halbae':
         return switch (key) {
           'emptyTarget' => '삭제할 항목명을 함께 말씀해 주세요.',
           'habitNotFound' =>
@@ -1236,7 +1236,7 @@ class _TasksScreenState extends State<TasksScreen>
           'multiple' => '$quoted 비슷한 항목이 여러 개다. 조금 더 자세히 말해줘라.',
           _ => '$quoted 수정창 열어뒀다. 바꿀 건 네가 보고 고쳐라.',
         };
-      case 'sec_male':
+      case 'nyang_halbae':
         return switch (key) {
           'emptyTarget' => '수정할 항목명을 함께 말씀해 주세요.',
           'recurringNotFound' =>
@@ -1842,9 +1842,11 @@ class _TasksScreenState extends State<TasksScreen>
 
   Future<void> _updateCoach() async {
     final prefs = await SharedPreferences.getInstance();
-    final cId = prefs.getString('nyang_selected_coach') ?? 'cat';
+    final cId = CoachConfigs.normalizeId(
+      prefs.getString('nyang_selected_coach') ?? 'cat',
+    );
     setState(() {
-      _coach = CoachConfigs.all[cId] ?? CoachConfigs.all['cat']!;
+      _coach = CoachConfigs.get(cId);
     });
   }
 
@@ -5418,7 +5420,7 @@ class _TasksScreenState extends State<TasksScreen>
         return '오늘은 하나만 해도 충분혀. 남겨둘 일 한두 가지만 골라보자.';
       case 'bro':
         return '오늘은 하나만 해도 충분하다. 남겨둘 거 한두 개만 딱 골라보자.';
-      case 'sec_male':
+      case 'nyang_halbae':
       case 'sec_female':
       default:
         return '오늘은 하나만 해도 충분해요. 남겨둘 일 한두 가지만 골라볼까요?';
@@ -12974,7 +12976,7 @@ class _TasksScreenState extends State<TasksScreen>
         return '습관 탭에 추가해뒀다. 세부 설정은 한번 보고 너한테 맞게 손봐라.';
       case 'halmae':
         return '습관 탭에 추가해뒀다. 세부 설정은 잘 보고 네 생활에 맞게 고쳐라.';
-      case 'sec_male':
+      case 'nyang_halbae':
         return '습관 탭에 추가해두었습니다. 세부 설정을 확인하신 뒤 필요에 맞게 조정해 주세요.';
       case 'sec_female':
         return '습관 탭에 추가해두었어요. 세부 설정을 확인하신 뒤 편하신 방식으로 조정해 주세요.';

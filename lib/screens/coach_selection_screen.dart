@@ -244,8 +244,9 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen>
                             text: '프렌즈 코치들은 하기 싫은 날에도 옆에서 다정하게 응원해줘요.',
                           ),
                           _buildTeamIntroSpeaker(
-                            imagePath: 'assets/images/sec_male.png',
-                            name: CoachConfigs.all['sec_male']?.name ?? '냥할배',
+                            imagePath: 'assets/images/nyang_halbae.png',
+                            name:
+                                CoachConfigs.all['nyang_halbae']?.name ?? '냥할배',
                             text:
                                 '마스터 코치는 목표와 패턴을 함께 보고, 중요한 흐름을 놓치지 않게 챙겨드립니다.',
                           ),
@@ -643,16 +644,16 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen>
 
   List<Map<String, dynamic>> get _masterCoaches => [
     {
-      'id': 'sec_male',
-      'name': CoachConfigs.all['sec_male']?.name ?? '냥할배',
-      'subtitle': '스마트 케어',
-      'image': 'assets/images/sec_male.png',
+      'id': 'nyang_halbae',
+      'name': CoachConfigs.all['nyang_halbae']?.name ?? '냥할배',
+      'subtitle': '방향 찾기',
+      'image': 'assets/images/nyang_halbae.png',
       'color': _masterGold,
       'price': 'MASTER 플랜 전용',
       'description': '복잡한 일정과 우선순위를 논리적으로 분석해 최적의 경로를 제안합니다.',
       'tags': [
+        {'svgPath': 'assets/icons/route.svg', 'text': '생각의 길잡이'},
         {'svgPath': 'assets/icons/bullseye.svg', 'text': '장기목표 조력'},
-        {'svgPath': 'assets/icons/route.svg', 'text': '최적 경로 제안'},
       ],
       'features': [
         {
@@ -675,7 +676,7 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen>
     {
       'id': 'sec_female',
       'name': CoachConfigs.all['sec_female']?.name ?? '비서 실장',
-      'subtitle': '야무진 챙김',
+      'subtitle': '스마트 케어',
       'image': 'assets/images/sec_female.png',
       'color': _masterGold,
       'price': 'MASTER 플랜 전용',
@@ -792,7 +793,7 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen>
                               );
                               final planActive = _userData.isPlanActive;
                               final isFriendsCoach = ![
-                                'sec_male',
+                                'nyang_halbae',
                                 'sec_female',
                               ].contains(coach['id']);
                               final alreadyOwned = !isLocked;

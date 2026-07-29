@@ -672,7 +672,7 @@ class TaskResistanceService {
       'boyfriend' => '오늘 $taskText 있던데, 언제쯤 할 생각이야? 괜찮아?',
       'halmae' => '우리 새끼, 오늘 $taskText 있던데 언제쯤 할 생각이니?',
       'bro' => '야, 오늘 $taskText 있던데 언제 할 거냐?',
-      'sec_male' => '오늘 $taskText 일정이 있으신데, 언제쯤 진행하실 계획이신가요?',
+      'nyang_halbae' => '오늘 $taskText 일정이 있구나. 언제쯤 붙잡아볼 생각이냥?',
       'sec_female' => '대표님, 오늘 $taskText 있으신데 언제쯤 하실 생각이세요?',
       _ => '오늘 $taskText 있는데 언제쯤 하실 생각이세요?',
     };

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../services/coach_id_service.dart';
+
 class CoachConfig {
   final String id;
   final String _name;
@@ -414,8 +416,8 @@ class CoachConfigs {
 - 고강도 운동은 사용자의 컨디션, 장소, 층간소음, 통증 여부가 괜찮을 때만 마지막 단계로 제안한다.
 - 운동 루틴은 "지금 할 첫 단계"가 가장 먼저 보이게 말한다. 설명보다 행동 순서가 중요하다.$_commonCleaningRules''',
     ),
-    'sec_male': CoachConfig(
-      id: 'sec_male',
+    'nyang_halbae': CoachConfig(
+      id: 'nyang_halbae',
       name: '냥할배',
       tier: 'master',
       accentColor: Color(0xFF8B7CFF),
@@ -500,6 +502,8 @@ class CoachConfigs {
 - 사용자를 평가하거나 비난하지 않고, 완벽을 요구하지 않는다.
 - 답변은 보통 2~4문장 이내로 한다.
 - "냥" 말투는 과하게 반복하지 말고, 문장 끝에 가끔만 섞는다.
+- 존댓말과 냥 말투를 섞지 않는다. "추천드립니다", "말씀해 주세요", "하시죠", "도와드리겠습니다" 같은 비서 말투는 쓰지 않는다.
+- 행동을 권할 때는 "지금은 운동 30분이 괜찮겠구나냥", "이것부터 잡아보자냥"처럼 반말 기반으로 말한다.
 
 [말투 예시]
 "생각은 오래 품어도 삶은 달라지지 않더군. 삶은 시도한 만큼 달라진다냥."
@@ -638,12 +642,19 @@ $_commonCleaningRules''',
     ),
   };
 
-  static CoachConfig get(String id) => all[id] ?? all['cat']!;
+  static String normalizeId(String id) => CoachIdService.normalize(id);
+
+  static bool isNyangHalbae(String id) => CoachIdService.isNyangHalbae(id);
+
+  static bool isMaster(String id) => CoachIdService.isMaster(id);
+
+  static CoachConfig get(String id) =>
+      all[CoachIdService.normalize(id)] ?? all['cat']!;
 
   // 임시 권한 확인 함수 (기본 코치는 열림, Master 등급은 잠금 처리)
   static bool canAccessCoach(String id) {
     if (id == 'random') return true;
-    final coach = all[id];
+    final coach = all[CoachIdService.normalize(id)];
     if (coach == null) return false;
     if (coach.tier == 'master') {
       return false; // 잠금 처리

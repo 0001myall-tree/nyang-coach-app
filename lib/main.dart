@@ -11,6 +11,7 @@ import 'screens/landing_screen.dart';
 import 'package:firebase_analytics/firebase_analytics.dart';
 import 'services/analytics_service.dart';
 import 'services/apple_calendar_sync_service.dart';
+import 'services/coach_id_migration_service.dart';
 import 'services/notification_service.dart';
 import 'services/tasks_sync_service.dart';
 import 'services/widget_sync_service.dart';
@@ -22,6 +23,7 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   await initializeDateFormatting('ko', null);
+  await CoachIdMigrationService.migrateLegacyNyangHalbaeIds();
   await NotificationService().init();
 
   runApp(const ProviderScope(child: NyangCoachApp()));

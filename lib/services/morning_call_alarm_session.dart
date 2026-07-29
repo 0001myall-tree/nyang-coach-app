@@ -23,6 +23,7 @@ class MorningCallAlarmSession {
   StreamSubscription<void>? _completeSub;
   StreamSubscription<PlayerState>? _stateSub;
   String? _soundPath;
+  bool _usesNativeAlarmSound = false;
   bool _isActive = false;
   bool _isPlaying = false;
   bool get isActive => _isActive;
@@ -35,12 +36,22 @@ class MorningCallAlarmSession {
     await stop();
 
     final count = CoachConfigs.get(coachId).voiceCount;
-    if (count <= 0) return;
+    if (count <= 0) {
+      _soundPath = null;
+      _usesNativeAlarmSound = defaultTargetPlatform == TargetPlatform.android;
+      if (!_usesNativeAlarmSound) return;
+      _isActive = true;
+      _isPlaying = true;
+      await _startVibration();
+      await _startNativeAlarmSound();
+      return;
+    }
 
     final selectedSoundName = soundName?.trim().isNotEmpty == true
         ? soundName!.trim()
         : '${coachId}_${Random().nextInt(count) + 1}';
     _soundPath = 'voice/$selectedSoundName.mp3';
+    _usesNativeAlarmSound = false;
     _isActive = true;
     _isPlaying = false;
 
@@ -101,7 +112,9 @@ class MorningCallAlarmSession {
       _completeSub = null;
       _stateSub = null;
       await _player.stop();
+      await _stopNativeAlarmSound();
       await _stopVibration();
+      _usesNativeAlarmSound = false;
     } catch (e) {
       debugPrint('모닝콜 알람 세션 중지 실패: $e');
     }
@@ -122,6 +135,25 @@ class MorningCallAlarmSession {
       await _alarmChannel.invokeMethod('stopMorningVibration');
     } catch (e) {
       debugPrint('모닝콜 진동 중지 실패: $e');
+    }
+  }
+
+  Future<void> _startNativeAlarmSound() async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+    try {
+      await _alarmChannel.invokeMethod('startMorningAlarmSound');
+    } catch (e) {
+      debugPrint('모닝콜 기본 알람음 시작 실패: $e');
+    }
+  }
+
+  Future<void> _stopNativeAlarmSound() async {
+    if (!_usesNativeAlarmSound) return;
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+    try {
+      await _alarmChannel.invokeMethod('stopMorningAlarmSound');
+    } catch (e) {
+      debugPrint('모닝콜 기본 알람음 중지 실패: $e');
     }
   }
 

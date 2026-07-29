@@ -13,6 +13,7 @@ import '../screens/core_reminder_screen.dart';
 import '../screens/coach_config.dart';
 import '../screens/main_tab_screen.dart';
 import 'analytics_service.dart';
+import 'coach_id_service.dart';
 import 'morning_call_alarm_session.dart';
 import 'tasks_sync_service.dart';
 import 'user_title_service.dart';
@@ -53,19 +54,23 @@ class NotificationService {
   }
 
   String? _coreReminderSoundName(String coachId, int advanceMinutes) {
-    if (coachId == 'push') return null;
-    if ((CoachConfigs.all[coachId]?.voiceCount ?? 0) <= 0) return null;
+    final normalizedCoachId = CoachIdService.normalize(
+      coachId,
+      fallback: 'push',
+    );
+    if (normalizedCoachId == 'push') return null;
+    if ((CoachConfigs.get(normalizedCoachId).voiceCount) <= 0) return null;
     if (!_coreReminderSoundMinutes.contains(advanceMinutes)) return null;
-    return '${coachId}_reminder_$advanceMinutes';
+    return '${normalizedCoachId}_reminder_$advanceMinutes';
   }
 
   ({String coachId, String? soundName}) _parseMorningPayload(String payload) {
     if (!payload.startsWith('morning:')) {
-      return (coachId: payload, soundName: null);
+      return (coachId: CoachIdService.normalize(payload), soundName: null);
     }
     final parts = payload.split(':');
     return (
-      coachId: parts.length > 1 ? parts[1] : 'cat',
+      coachId: CoachIdService.normalize(parts.length > 1 ? parts[1] : 'cat'),
       soundName: parts.length > 2 ? parts[2] : null,
     );
   }
@@ -110,7 +115,7 @@ class NotificationService {
     // payload format: core:coachId:soundName:fireKey:taskText (or old format: core:coachId:soundName:taskText)
     final parts = payload.split(':');
     if (parts.length >= 4) {
-      final coachId = parts[1];
+      final coachId = CoachIdService.normalize(parts[1]);
       final soundName = parts[2].isEmpty ? null : parts[2];
 
       String fireKey = '';
@@ -146,7 +151,9 @@ class NotificationService {
 
   Future<void> _openInactiveReturn(String payload) async {
     final parts = payload.split(':');
-    final coachId = parts.length > 1 && parts[1].isNotEmpty ? parts[1] : 'cat';
+    final coachId = CoachIdService.normalize(
+      parts.length > 1 && parts[1].isNotEmpty ? parts[1] : 'cat',
+    );
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(
       'nyang_inactive_return_last_opened_at',
@@ -384,7 +391,7 @@ class NotificationService {
     for (int i = 0; i < _morningCallRepeatCount; i++) {
       await _plugin.cancel(id: i);
     }
-    String targetCoachId = coachId;
+    String targetCoachId = CoachIdService.normalize(coachId);
 
     if (targetCoachId == 'random') {
       final availableCoaches = CoachConfigs.all.values
@@ -405,7 +412,7 @@ class NotificationService {
     await prefs.setString('nyang_morning_call_resolved_coach', targetCoachId);
 
     // CoachConfig에서 목소리 개수 읽기 → 나중에 목소리 추가 시 coach_config.dart만 수정하면 됨
-    final count = CoachConfigs.all[targetCoachId]?.voiceCount ?? 0;
+    final count = CoachConfigs.get(targetCoachId).voiceCount;
     String? soundName;
     if (count > 0) {
       final randNum = Random().nextInt(count) + 1;
@@ -593,8 +600,8 @@ class NotificationService {
 
     String bodyMsg = '수고하셨습니다. 집중 시간이 완료되었습니다.';
     switch (coachId) {
-      case 'sec_male':
-        bodyMsg = '정말 고생하셨습니다! 끝까지 해내신 대표님이 자랑스럽습니다. 최고예요! 🎉';
+      case 'nyang_halbae':
+        bodyMsg = '끝까지 왔구나. 오늘은 여기까지 충분하다냥.';
         break;
       case 'sec_female':
         bodyMsg = '정말 수고하셨어요. 오늘 집중 시간이 참 뿌듯하네요. 🌸';

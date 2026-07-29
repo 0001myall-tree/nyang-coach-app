@@ -10,11 +10,11 @@ import android.view.View
 import android.widget.RemoteViews
 import es.antonborri.home_widget.HomeWidgetProvider
 
-class SecMaleWidgetProvider : HomeWidgetProvider() {
+class NyangHalbaeWidgetProvider : HomeWidgetProvider() {
 
     override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray, widgetData: SharedPreferences) {
         appWidgetIds.forEach { widgetId ->
-            val views = RemoteViews(context.packageName, R.layout.sec_male_widget_layout).apply {
+            val views = RemoteViews(context.packageName, R.layout.nyang_halbae_widget_layout).apply {
                 val rawMasterAccess = widgetData.all["master_widget_access"]
                 val hasMasterAccess = (rawMasterAccess as? Boolean)
                     ?: rawMasterAccess?.toString()?.toBooleanStrictOrNull()
@@ -27,7 +27,7 @@ class SecMaleWidgetProvider : HomeWidgetProvider() {
                 }
                 
                 val coachMessage = if (hasMasterAccess) {
-                    widgetData.getString("coach_message_sec_male", "오늘도 함께 해보시죠.") ?: "오늘도 함께 해보시죠."
+                    widgetData.getString("coach_message_nyang_halbae", "오늘은 하나만 잡아보자냥.") ?: "오늘은 하나만 잡아보자냥."
                 } else {
                     "마스터 플랜 전용 위젯입니다."
                 }
@@ -56,7 +56,7 @@ class SecMaleWidgetProvider : HomeWidgetProvider() {
                 WidgetResponsiveStyle.apply(context, appWidgetManager, widgetId, this)
 
                 val intentRemaining = Intent(context, MainActivity::class.java).apply {
-                    action = "sec_male_coach.OPEN_TASKS"
+                    action = "nyang_halbae_coach.OPEN_TASKS"
                     data = Uri.parse("nyangcoach://widget/cat/tasks")
                     flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
                     putExtra("route", "tasks")
@@ -66,7 +66,7 @@ class SecMaleWidgetProvider : HomeWidgetProvider() {
                 setOnClickPendingIntent(R.id.remaining_row, pendingRemaining)
 
                 val intentChat = Intent(context, MainActivity::class.java).apply {
-                    action = "sec_male_coach.OPEN_CHAT"
+                    action = "nyang_halbae_coach.OPEN_CHAT"
                     data = Uri.parse("nyangcoach://widget/cat/chat")
                     flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
                     putExtra("route", "chat")

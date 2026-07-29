@@ -53,7 +53,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _appleCalendarBusy = false; // 연동 켜기/끄기 진행 중
 
   bool get _isMaster =>
-      widget.coachId == 'sec_male' || widget.coachId == 'sec_female';
+      widget.coachId == 'nyang_halbae' || widget.coachId == 'sec_female';
   bool get _hasMasterPlan =>
       _userData?.isPlanActive == true && _userData?.planType == 'master';
   bool get _isFreeUser => _userData?.isPlanActive != true;
@@ -223,7 +223,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final isMasterPlan =
         latestUserData.isPlanActive && latestUserData.planType == 'master';
     await WidgetSyncService.enforcePlanAccess(hasMasterPlan: isMasterPlan);
-    await prefs.setBool('widget_sec_male_enabled', false);
+    await prefs.setBool('widget_nyang_halbae_enabled', false);
     await prefs.setBool('widget_sec_female_enabled', false);
 
     bool tempNyang = prefs.getBool('widget_nyang_enabled') ?? false;
@@ -440,7 +440,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           'widget_cat_character_enabled',
                           tempCatCharacter,
                         );
-                        await prefs.setBool('widget_sec_male_enabled', false);
+                        await prefs.setBool(
+                          'widget_nyang_halbae_enabled',
+                          false,
+                        );
                         await prefs.setBool('widget_sec_female_enabled', false);
                         await prefs.setBool(
                           'nyang_home_widget_enabled',
@@ -1973,7 +1976,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }) {
     if (allowRandom && coachId == 'random') return coachId;
     if (coachId == 'push') return coachId;
-    final coach = CoachConfigs.all[coachId];
+    final coach = CoachConfigs.all[CoachConfigs.normalizeId(coachId)];
     if (coach == null || coach.voiceCount <= 0) return fallback;
     return coachId;
   }
@@ -2556,7 +2559,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final purchasedCoachIds =
         data?.ownedCoaches
             .where(
-              (id) => id != 'cat' && id != 'sec_male' && id != 'sec_female',
+              (id) => id != 'cat' && id != 'nyang_halbae' && id != 'sec_female',
             )
             .toList() ??
         [];
@@ -2614,7 +2617,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Widget _buildPurchasedCoachRow(String coachId) {
     final data = _userData;
-    final coach = CoachConfigs.all[coachId];
+    final coach = CoachConfigs.all[CoachConfigs.normalizeId(coachId)];
     final name = coach?.name ?? coachId;
     final remaining = data?.ownedCoachRemainingLabel(coachId) ?? '이용 중';
     final isExpired = remaining == '만료됨';
@@ -3332,7 +3335,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           'nyang_master_title',
                           selectedTitle,
                         );
-                        await prefs.remove('nyang_coach_name_sec_male');
+                        await prefs.remove('nyang_coach_name_nyang_halbae');
                         await prefs.remove('nyang_coach_name_sec_female');
                         this.setState(() {
                           _homeWidgetStatus = _buildHomeWidgetStatus(

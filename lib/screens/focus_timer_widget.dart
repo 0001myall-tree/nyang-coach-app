@@ -124,7 +124,7 @@ class FocusTimerManager {
     await saveState();
     await NotificationService().scheduleFocusTimerNotification(
       seconds: remain,
-      coachId: coachId ?? 'sec_male',
+      coachId: coachId ?? 'nyang_halbae',
     );
   }
 
@@ -232,18 +232,18 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
       15: {'done': '15분 집중 성공. 폼 좋다.'},
       25: {'done': '25분 달성. 제대로 했다.'},
     },
-    'sec_male': {
+    'nyang_halbae': {
       5: {
-        'start': '5분입니다. 저도 옆에서 대기하겠습니다.',
-        'done': '5분 완료! 짧은 시간이지만 해내신 모습이 멋집니다. 수고하셨어요! 🎉',
+        'start': '5분만 잡아보자냥. 시작은 작을수록 좋더군.',
+        'done': '5분 지났구나. 짧아 보여도 흐름을 바꾸기엔 충분할 때가 있다냥.',
       },
       15: {
-        'start': '15분 시작합니다. 이 흐름 그대로 가시면 됩니다.',
-        'done': '15분 집중 성공! 대표님의 멋진 몰입에 저도 박수를 보냅니다. 👏',
+        'start': '15분 가보자냥. 끝보다 지금 손에 잡힌 일만 보자.',
+        'done': '15분을 붙잡았구나. 마음이 조금 덜 흩어졌다면 그걸로 좋다냥.',
       },
       25: {
-        'start': '25분입니다. 집중하세요. 제가 지켜보고 있겠습니다.',
-        'done': '25분 달성! 끝까지 해내신 대표님이 자랑스럽습니다. 최고예요! 🥳',
+        'start': '25분을 시작하자냥. 서두르지 말고 한 걸음씩 가면 된다.',
+        'done': '25분을 지나왔구나. 오늘은 그만큼 앞으로 간 것이다냥.',
       },
     },
     'sec_female': {
@@ -259,9 +259,9 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
     },
   };
 
-  bool get _isMale => widget.coachId == 'sec_male';
+  bool get _isMale => widget.coachId == 'nyang_halbae';
   bool get _isMasterTimer =>
-      widget.coachId == 'sec_male' || widget.coachId == 'sec_female';
+      widget.coachId == 'nyang_halbae' || widget.coachId == 'sec_female';
 
   Color get _soundActiveColor => const Color(0xFF7C3AED);
 
@@ -271,7 +271,7 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
 
   // ── 코치 이미지 경로 ──────────────────────────────────────
   String get _coachTimerImg => _isMale
-      ? 'assets/images/sec_male_timer_done.png'
+      ? 'assets/images/coach_nyang_halbae_nobg.png'
       : 'assets/images/sec_female_timer_done.png';
 
   @override
@@ -348,7 +348,7 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
   }
 
   Future<String> _getDoneMsg() async {
-    final m = _msgs[widget.coachId] ?? _msgs['sec_male']!;
+    final m = _msgs[widget.coachId] ?? _msgs['nyang_halbae']!;
     final message = m[_manager.stage]?['done'] ?? '';
     return UserTitleService.applyForCoach(message, widget.coachId);
   }
@@ -796,7 +796,7 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
     // 마스터 코치 타이머는 "05:00"이 이미 시간을 보여주므로
     // 그 아래 "n분 집중" 문구를 숨겨 중복을 없앤다.
     final isMaster =
-        widget.coachId == 'sec_male' || widget.coachId == 'sec_female';
+        widget.coachId == 'nyang_halbae' || widget.coachId == 'sec_female';
     const timerMain = Color(0xFF9B8AF0);
     const timerAccent = Color(0xFFA99AE8);
     const timerInk = Color(0xFF2F266C);

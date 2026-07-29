@@ -840,9 +840,9 @@ class _LandingScreenState extends State<LandingScreen>
                         // 플래너 및 고양이 (중앙 고정 + 냥이만 애니메이션)
 
                         // 코치들 동시 등장 및 숨쉬는(둥둥 떠있는) 애니메이션 (원형 프로필 형태)
-                        // 좌상단: 남비서
+                        // 좌상단: 냥할배
                         _buildPopCoach(
-                          'assets/images/coach_sec_male_nobg.png',
+                          'assets/images/coach_nyang_halbae_nobg.png',
                           const Offset(-100, -120), // 원래 위치로 복구 (기존 -104)
                           0.0,
                           width * 0.24, // 크기 10% 축소
@@ -952,7 +952,7 @@ class _LandingScreenState extends State<LandingScreen>
                           ),
                         ),
 
-                        // 남비서 코치 (우상단) - 주석 처리 / 제거됨
+                        // 냥할배 코치 (우상단) - 주석 처리 / 제거됨
                         // 여비서 코치 (좌하단) - 주석 처리 / 제거됨
                         // 할매 코치 (우하단) - 주석 처리 / 제거됨
                       ],

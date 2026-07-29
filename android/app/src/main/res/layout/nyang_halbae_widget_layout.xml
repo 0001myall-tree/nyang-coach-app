@@ -65,7 +65,7 @@
             android:layout_marginTop="14dp"
             android:max="100"
             android:progress="0"
-            android:progressDrawable="@drawable/widget_progress_bar_sec_male" />
+            android:progressDrawable="@drawable/widget_progress_bar_nyang_halbae" />
     </LinearLayout>
 
     <!-- Bottom: Action Buttons -->

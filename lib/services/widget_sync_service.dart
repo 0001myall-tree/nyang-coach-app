@@ -31,12 +31,12 @@ class WidgetSyncService {
     }
 
     final hadMasterWidget =
-        (prefs.getBool('widget_sec_male_enabled') ?? false) ||
+        (prefs.getBool('widget_nyang_halbae_enabled') ?? false) ||
         (prefs.getBool('widget_sec_female_enabled') ?? false);
     if (!hadMasterWidget && previousAccess == false) return false;
 
     if (hadMasterWidget) {
-      await prefs.setBool('widget_sec_male_enabled', false);
+      await prefs.setBool('widget_nyang_halbae_enabled', false);
       await prefs.setBool('widget_sec_female_enabled', false);
       await prefs.setBool('widget_nyang_enabled', true);
       await prefs.setBool('nyang_home_widget_enabled', true);
@@ -125,7 +125,10 @@ class WidgetSyncService {
     );
     // Generate messages for all 3 supported widgets
     String messageCat = _getCoachMessage(progressPercentage, 'cat');
-    String messageSecMale = _getCoachMessage(progressPercentage, 'sec_male');
+    String messageNyangHalbae = _getCoachMessage(
+      progressPercentage,
+      'nyang_halbae',
+    );
     String messageSecFemale = _getCoachMessage(
       progressPercentage,
       'sec_female',
@@ -167,8 +170,8 @@ class WidgetSyncService {
     // Save coach-specific messages
     await HomeWidget.saveWidgetData<String>('coach_message_cat', messageCat);
     await HomeWidget.saveWidgetData<String>(
-      'coach_message_sec_male',
-      messageSecMale,
+      'coach_message_nyang_halbae',
+      messageNyangHalbae,
     );
     await HomeWidget.saveWidgetData<String>(
       'coach_message_sec_female',
@@ -337,12 +340,12 @@ class WidgetSyncService {
       if (progress >= 0.21) return "충분히 해낼 수 있어요.";
       return "오늘도 응원할게요.";
     } else {
-      // 남비서 코치 (sec_male)
-      if (progress >= 1.0) return "오늘도 수고 많으셨습니다.";
-      if (progress >= 0.80) return "마지막까지 함께합니다.";
-      if (progress >= 0.51) return "흐름이 아주 좋습니다.";
-      if (progress >= 0.21) return "차근차근 좋습니다.";
-      return "오늘도 함께 해보시죠.";
+      // 냥할배 코치 (nyang_halbae)
+      if (progress >= 1.0) return "오늘 몫은 잘 덜어냈구나냥.";
+      if (progress >= 0.80) return "끝은 생각보다 가까이 있다냥.";
+      if (progress >= 0.51) return "흐름이 잡혔구나냥.";
+      if (progress >= 0.21) return "차근차근 가고 있구나냥.";
+      return "오늘은 하나만 잡아보자냥.";
     }
   }
 }

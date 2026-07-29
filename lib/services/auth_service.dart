@@ -123,7 +123,7 @@ class AuthService {
         'boyfriend',
         'bro',
         'halmae',
-        'sec_male',
+        'nyang_halbae',
         'sec_female',
       ],
     );

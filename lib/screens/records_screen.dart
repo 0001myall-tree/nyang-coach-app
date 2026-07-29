@@ -100,7 +100,7 @@ class _RecordsScreenState extends State<RecordsScreen> {
   bool get _isMaster => _hasMasterPlan;
   CoachConfig get _coach => CoachConfigs.get(widget.coachId);
   CoachConfig get _recordCoach =>
-      _isMaster ? CoachConfigs.get('sec_male') : _coach;
+      _isMaster ? CoachConfigs.get('nyang_halbae') : _coach;
 
   // ── 최근 7일(또는 30일) 데이터 계산 ─────────────────────
   List<Map<String, dynamic>> _getLast7Records() {
@@ -198,7 +198,9 @@ class _RecordsScreenState extends State<RecordsScreen> {
 
     final usedTypes = <int>{};
     try {
-      final d1 = prefs.getString('nyang_coach_weekly_feedback_sec_male');
+      final d1 =
+          prefs.getString('nyang_coach_weekly_feedback_nyang_halbae') ??
+          prefs.getString('nyang_coach_weekly_feedback_sec_male');
       if (d1 != null) {
         final m = jsonDecode(d1) as Map<String, dynamic>;
         if (m['weekMonday'] == fmt(lastWeekMonday) && m['type'] != null) {
@@ -222,11 +224,23 @@ class _RecordsScreenState extends State<RecordsScreen> {
   Future<void> _loadOrGenerateWeeklyFeedback() async {
     if (_isGeneratingWeeklyFeedback) return;
     final prefs = await SharedPreferences.getInstance();
+    final legacyMaleFeedback = prefs.getString(
+      'nyang_coach_weekly_feedback_sec_male',
+    );
+    if (legacyMaleFeedback != null &&
+        prefs.getString('nyang_coach_weekly_feedback_nyang_halbae') == null) {
+      await prefs.setString(
+        'nyang_coach_weekly_feedback_nyang_halbae',
+        legacyMaleFeedback,
+      );
+    }
+    await prefs.remove('nyang_coach_weekly_feedback_sec_male');
+
     // 구버전이 쓰던 여비서용 캐시 키 정리. 코치의 한마디는 마스터 공용으로
-    // sec_male 키 하나만 사용한다. (로컬에 남아 있으면 클라우드에 계속 재업로드됨)
+    // nyang_halbae 키 하나만 사용한다. (로컬에 남아 있으면 클라우드에 계속 재업로드됨)
     await prefs.remove('nyang_coach_weekly_feedback_sec_female');
     final weekMonday = _getWeekMondayStr();
-    final cacheKey = 'nyang_coach_weekly_feedback_sec_male';
+    final cacheKey = 'nyang_coach_weekly_feedback_nyang_halbae';
     final cachedData = prefs.getString(cacheKey);
 
     try {
@@ -485,7 +499,7 @@ class _RecordsScreenState extends State<RecordsScreen> {
       '- 플래너 기록일이 적은 주인가: ${lowPlannerAttendance ? '예' : '아니오'}',
     );
 
-    final isMale = widget.coachId == 'sec_male' || _isMaster;
+    final isMale = widget.coachId == 'nyang_halbae' || _isMaster;
     final title = _userTitle;
 
     final trackingHabits = _habits.where((h) => h.tracking == true).toList();
@@ -647,7 +661,7 @@ $chatSummarySection
         : '컨디션 회고형'}]
 
 [작성 지침]
-1. 어투: ${isMale ? '남비서로서 차분하고 신뢰감 있는 "$title" 호칭의 격식체 (~했습니다, ~하십시오).' : '여비서로서 지적이고 부드러운 "$title" 호칭의 격식체 (~했어요, ~어떨까요).'}
+1. 어투: ${isMale ? '냥할배로서 부드럽고 느긋한 반말 기반 말투. 존댓말과 냥 말투를 섞지 말고, "$title" 호칭도 남발하지 마세요.' : '여비서로서 지적이고 부드러운 "$title" 호칭의 격식체 (~했어요, ~어떨까요).'}
 2. 공통 원칙:
    - 휴무일(회복일)은 미완료나 실패로 해석하지 말고, 필요한 회복을 일정에 포함한 것으로 자연스럽게 존중해 주세요.
    - [현재 설정된 습관 트래킹 빈도]를 반드시 참고하세요. 특정 요일에만 하기로 한 습관이라면 그 빈도에 맞게 평가해 주세요.
@@ -1042,7 +1056,7 @@ ${feedbackType == 0
   }
 
   String _getMasterPatternFeedback(List<Map<String, dynamic>> records) {
-    final bool isMale = widget.coachId == 'sec_male' || _isMaster;
+    final bool isMale = widget.coachId == 'nyang_halbae' || _isMaster;
     final activeRecords = records
         .where((r) => r['isVacation'] != true)
         .toList();
@@ -1061,12 +1075,12 @@ ${feedbackType == 0
     if (total == 0) {
       if (vacationCount > 0) {
         final feedback = isMale
-            ? '이번 주에는 회복을 선택하신 날이 있습니다. 쉬는 날을 일정의 일부로 두신 점도 좋은 관리입니다, 대표님.'
+            ? '이번 주에는 회복을 선택한 날이 있구나. 쉬는 날도 일정의 일부일 수 있다냥.'
             : '이번 주에는 회복을 선택하신 날이 있어요. 잘 쉬는 것도 일정 관리의 일부예요, 대표님.';
         return feedback.replaceAll(UserTitleService.defaultTitle, _userTitle);
       }
       final feedback = isMale
-          ? '아직 이번 주 기록이 없습니다. 오늘부터 시작하시면 됩니다, 대표님.'
+          ? '아직 이번 주 기록은 없구나. 오늘 하나부터 시작하면 된다냥.'
           : '아직 이번 주 기록이 없어요. 오늘 하나만 시작해보는 건 어떨까요, 대표님?';
       return feedback.replaceAll(UserTitleService.defaultTitle, _userTitle);
     }
@@ -1074,12 +1088,12 @@ ${feedbackType == 0
     List<String> parts = [];
     if (successDays >= 5) {
       parts.add(
-        isMale ? '이번 주도 성실하게 움직이신 한 주였습니다.' : '이번 주도 열심히 달리신 한 주였어요, 대표님!',
+        isMale ? '이번 주도 꾸준히 걸어온 한 주였구나냥.' : '이번 주도 열심히 달리신 한 주였어요, 대표님!',
       );
     } else {
       parts.add(
         isMale
-            ? '장기 목표를 설정해두시면 더 의미 있게 연결해드릴 수 있습니다.'
+            ? '장기 목표를 하나 적어두면, 오늘의 일이 어디로 가는지 조금 선명해질 수 있다냥.'
             : '장기 목표를 설정해두시면 더 잘 챙겨드릴 수 있어요!',
       );
     }
@@ -1088,7 +1102,7 @@ ${feedbackType == 0
     if (isOverloaded && successDays >= 4) {
       parts.add(
         isMale
-            ? '이번 주 할 일이 꽤 많으셨는데 잘 버텨내셨습니다. 다음 주엔 체력 관리도 함께 챙겨주세요.'
+            ? '이번 주 할 일이 꽤 많았구나. 다음 주엔 체력도 일정 안에 같이 넣어보자냥.'
             : '이번 주 할 일이 많으셨는데도 잘 해내셨어요. 다음 주엔 체력 관리도 함께 챙겨주세요.',
       );
     }
@@ -1113,7 +1127,7 @@ ${feedbackType == 0
             radius: 28,
             backgroundImage: AssetImage(
               _isMaster
-                  ? 'assets/images/sec_male.png'
+                  ? 'assets/images/nyang_halbae.png'
                   : 'assets/images/${widget.coachId}.png',
             ),
             backgroundColor: const Color(0xFFF3F0FF),
@@ -1129,7 +1143,7 @@ ${feedbackType == 0
                     fontSize: 13,
                     fontWeight: FontWeight.w800,
                     color: _isMaster
-                        ? CoachConfigs.get('sec_male').accentColor
+                        ? CoachConfigs.get('nyang_halbae').accentColor
                         : _recordCoach.accentColor,
                   ),
                 ),

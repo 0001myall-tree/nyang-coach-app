@@ -1,5 +1,7 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'coach_id_service.dart';
+
 class UserTitleService {
   static const String defaultTitle = '대표님';
   static const String prefKey = 'nyang_master_title';
@@ -11,7 +13,7 @@ class UserTitleService {
   }
 
   static bool isSecretaryCoach(String coachId) {
-    return coachId == 'sec_male' || coachId == 'sec_female';
+    return CoachIdService.isMaster(coachId);
   }
 
   static Future<String> applyForCoach(String text, String coachId) async {

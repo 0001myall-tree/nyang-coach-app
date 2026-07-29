@@ -11,6 +11,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.AudioAttributes
 import android.media.RingtoneManager
+import android.net.Uri
 import android.os.Build
 
 class MorningAlarmReceiver : BroadcastReceiver() {
@@ -59,8 +60,17 @@ class MorningAlarmReceiver : BroadcastReceiver() {
         )
 
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        val channelId = "nyang_native_morning_alarm_v1"
-        val alarmSound = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+        val soundName = payload.split(":").getOrNull(2)?.takeIf { it.isNotBlank() }
+        val rawSoundId = soundName?.let {
+            context.resources.getIdentifier(it, "raw", context.packageName)
+        } ?: 0
+        val notificationSound = if (rawSoundId != 0) {
+            Uri.parse("android.resource://${context.packageName}/raw/$soundName")
+        } else {
+            RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+        }
+        val channelSuffix = soundName ?: "default"
+        val channelId = "nyang_native_morning_alarm_${channelSuffix}_v3"
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 channelId,
@@ -69,7 +79,7 @@ class MorningAlarmReceiver : BroadcastReceiver() {
             ).apply {
                 description = "냥냥코치 모닝콜 알람입니다."
                 setSound(
-                    alarmSound,
+                    notificationSound,
                     AudioAttributes.Builder()
                         .setUsage(AudioAttributes.USAGE_ALARM)
                         .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
@@ -87,7 +97,7 @@ class MorningAlarmReceiver : BroadcastReceiver() {
         } else {
             @Suppress("DEPRECATION")
             Notification.Builder(context)
-                .setSound(alarmSound)
+                .setSound(notificationSound)
         }
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentTitle("⏰ 모닝콜 시간입니다!")

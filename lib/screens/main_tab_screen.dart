@@ -121,7 +121,7 @@ class SettingsPlaceholderScreen extends StatelessWidget {
 }
 
 bool _isMasterCoach(String coachId) =>
-    coachId == 'sec_male' || coachId == 'sec_female';
+    coachId == 'nyang_halbae' || coachId == 'sec_female';
 
 bool isPlannerOverlayRoute(String? route) {
   return route == 'tasks' ||
@@ -284,7 +284,7 @@ class _MainTabScreenState extends State<MainTabScreen>
     await UserDataService.setSelectedCoach(coachId);
     if (!mounted) return;
     final isFromSecretary =
-        widget.coachId == 'sec_male' || widget.coachId == 'sec_female';
+        widget.coachId == 'nyang_halbae' || widget.coachId == 'sec_female';
     final handoffFromCoachId = isFromSecretary && coachId == 'cat'
         ? widget.coachId
         : null;
@@ -1134,12 +1134,15 @@ class _MainTabScreenState extends State<MainTabScreen>
         resolvedCoachId != 'random') {
       targetCoachId = resolvedCoachId;
     }
+    targetCoachId = targetCoachId == 'push'
+        ? 'push'
+        : CoachConfigs.normalizeId(targetCoachId);
     if (targetCoachId != 'push' &&
         !CoachConfigs.all.containsKey(targetCoachId)) {
       targetCoachId = 'push';
     }
     if (targetCoachId != 'push' &&
-        (CoachConfigs.all[targetCoachId]?.voiceCount ?? 0) <= 0) {
+        CoachConfigs.get(targetCoachId).voiceCount <= 0) {
       targetCoachId = 'push';
     }
 

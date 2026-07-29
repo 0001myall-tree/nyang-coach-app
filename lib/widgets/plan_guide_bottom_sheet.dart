@@ -383,7 +383,7 @@ class _PlanGroup extends StatelessWidget {
                 const _PlanCoachAvatars(
                   imagePaths: [
                     'assets/images/cat_nobg.png',
-                    'assets/images/coach_sec_male_nobg.png',
+                    'assets/images/coach_nyang_halbae_nobg.png',
                   ],
                 )
               else
