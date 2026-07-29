@@ -6556,6 +6556,14 @@ class _ChatScreenState extends State<ChatScreen>
       }
       _groomingRetryCount += 1;
     }
+    // 장소를 아는 날엔 묻지 않고 바로 뽑는다. setState 밖에서 미리 만들어 둔다 —
+    // 뽑기가 최근 기록까지 건드려서, 빌드 중에 부르면 흐름을 따라가기 어려워진다.
+    final retryPlace = shownToday ? _lastGroomingPlace : null;
+    final retryReply = retryPlace == null
+        ? null
+        : (retryPlace == 'home'
+              ? _pickHomeGroomingRoutine()
+              : _pickOutdoorGroomingRoutine());
 
     setState(() {
       _messages.add(
@@ -6579,9 +6587,28 @@ class _ChatScreenState extends State<ChatScreen>
             kind: 'grooming_askback',
           ),
         );
+      } else if (retryReply != null) {
+        _messages.add(
+          ChatMessage(
+            text: _groomingRetryPrompt(_groomingRetryCount, retryPlace),
+            isUser: false,
+            time: DateTime.now(),
+          ),
+        );
+        _messages.add(
+          ChatMessage(text: retryReply, isUser: false, time: DateTime.now()),
+        );
+        _messages.add(
+          ChatMessage(
+            text: '',
+            isUser: false,
+            time: DateTime.now(),
+            kind: 'grooming_care_followup_moved',
+          ),
+        );
       } else if (shownToday) {
         _appendGroomingPlaceQuestion(
-          text: _groomingRetryPrompt(_groomingRetryCount),
+          text: _groomingRetryPrompt(_groomingRetryCount, null),
         );
       } else {
         _appendGroomingPlaceQuestion();
@@ -6662,9 +6689,11 @@ class _ChatScreenState extends State<ChatScreen>
     required String userText,
     required String reply,
     required String feature,
+    String? place,
   }) async {
     if (_isLoading) return;
     HapticFeedback.lightImpact();
+    if (place != null) _lastGroomingPlace = place;
 
     setState(() {
       _messages.add(
@@ -6701,6 +6730,7 @@ class _ChatScreenState extends State<ChatScreen>
       userText: '집이야',
       reply: _pickHomeGroomingRoutine(),
       feature: 'grooming_home',
+      place: 'home',
     );
   }
 
@@ -6709,6 +6739,7 @@ class _ChatScreenState extends State<ChatScreen>
       userText: '밖이야',
       reply: _pickOutdoorGroomingRoutine(),
       feature: 'grooming_outdoor',
+      place: 'outdoor',
     );
   }
 
@@ -6788,15 +6819,29 @@ class _ChatScreenState extends State<ChatScreen>
   int _groomingRetryCount = 0;
   String? _groomingRetryDate;
 
+  /// 오늘 고른 장소('home'/'outdoor'). 같은 날 또 열면 이걸 다시 묻지 않는다.
+  /// 하루 사이에 나갈 수도 있어서 단정만 하고 끝내지 않고, 아래 카드에
+  /// 자리를 바꾸는 버튼을 같이 둔다.
+  String? _lastGroomingPlace;
+
   /// 다시 누른 횟수에 맞춰 받는 말. 처음엔 안 맞았다고 단정하지 않는다 —
   /// 해놓고 하나 더 받으러 온 걸 수도 있어서, 묻고 그냥 다음으로 넘어간다.
   /// 횟수가 쌓이면 캐묻지 않고 물러난다. 계속 안 맞는 날에 이유까지 물으면
   /// 고르는 게 일이 된다.
-  String _groomingRetryPrompt(int count) {
+  String _groomingRetryPrompt(int count, String? place) {
     const tail = '지금 집이야, 밖이야?';
-    if (count <= 1) return '아까 내가 하라고 한 건 했어? 음.. 그럼 또 뭐가 있을까. $tail';
-    if (count == 2) return '오늘 계속 안 맞네. 다시 골라볼게. $tail';
-    return '오늘은 뭘 꺼내도 잘 안 맞는 날인가 봐. 그런 날도 있어. $tail';
+    if (place == null) {
+      if (count <= 1) return '아까 내가 하라고 한 건 했어? 음.. 그럼 또 뭐가 있을까. $tail';
+      if (count == 2) return '오늘 계속 안 맞네. 다시 골라볼게. $tail';
+      return '오늘은 뭘 꺼내도 잘 안 맞는 날인가 봐. 그런 날도 있어. $tail';
+    }
+    // 장소를 아는 날엔 되묻지 않는다. 방금 들은 걸 또 묻는 게 제일 티가 난다.
+    final label = place == 'home' ? '집' : '밖';
+    if (count <= 1) {
+      return '아까 내가 하라고 한 건 했어? 음.. 그럼 또 뭐가 있을까. 아까 $label이라고 했지?';
+    }
+    if (count == 2) return '오늘 계속 안 맞네. 아직 $label이지? 하나 더 볼게.';
+    return '오늘은 뭘 꺼내도 잘 안 맞는 날인가 봐. 그런 날도 있어.';
   }
 
   bool _groomingMemoryLoaded = false;
@@ -6819,6 +6864,7 @@ class _ChatScreenState extends State<ChatScreen>
     _groomingRetryDate = prefs.getString('${_groomingMemoryPrefix}_retry_date');
     _groomingRetryCount =
         prefs.getInt('${_groomingMemoryPrefix}_retry_count') ?? 0;
+    _lastGroomingPlace = prefs.getString('${_groomingMemoryPrefix}_last_place');
     _groomingMemoryLoaded = true;
   }
 
@@ -6881,6 +6927,10 @@ class _ChatScreenState extends State<ChatScreen>
         '${_groomingMemoryPrefix}_askback_date',
         askBackDate,
       );
+    }
+    final place = _lastGroomingPlace;
+    if (place != null) {
+      await prefs.setString('${_groomingMemoryPrefix}_last_place', place);
     }
     final retryDate = _groomingRetryDate;
     if (retryDate != null) {
@@ -11573,6 +11623,9 @@ $timerOutputRule
     if (msg.kind == 'grooming_askback') {
       return _buildGroomingAskBackCard(msg);
     }
+    if (msg.kind == 'grooming_care_followup_moved') {
+      return _buildGroomingMovedFollowupCard(msg);
+    }
     if (msg.kind == 'grooming_care_followup') {
       return _buildGroomingCareFollowupCard(msg);
     }
@@ -12336,6 +12389,19 @@ $timerOutputRule
     return _buildGroomingChoiceCard(msg, [
       ('응, 해봤어', () => _answerGroomingAskBack(true)),
       ('아니, 못 했어', () => _answerGroomingAskBack(false)),
+    ]);
+  }
+
+  /// 장소를 기억해서 바로 추천한 뒤에 붙는 카드. 그 사이 자리를 옮겼을 수도
+  /// 있어서, 수락·거절에 더해 반대쪽으로 다시 받는 버튼을 하나 더 둔다.
+  Widget _buildGroomingMovedFollowupCard(ChatMessage msg) {
+    final wasHome = _lastGroomingPlace == 'home';
+    return _buildGroomingChoiceCard(msg, [
+      ('알았어. 해볼게', _acceptGroomingCareRoutine),
+      ('하기 귀찮아', _resistGroomingCareRoutine),
+      wasHome
+          ? ('나 지금 밖이야', _sendOutdoorGroomingRoutine)
+          : ('나 지금 집이야', _sendHomeGroomingRoutine),
     ]);
   }
 
