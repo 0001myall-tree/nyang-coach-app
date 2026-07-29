@@ -1203,6 +1203,22 @@ class _LocalResponses {
   }
 }
 
+/// 햇살 코치 가꾸기 문장 한 줄.
+///
+/// 뜻이 담긴 [body]는 그대로 두고, 앞에 붙는 도입구와 뒤에 붙는 효과 문장의
+/// 어미만 매번 새로 조합한다. 같은 내용이라도 입에서 나오는 모양이 달라져서
+/// 복붙 티가 덜 난다.
+///
+/// [effect]는 효과 문장에서 어미를 뗀 어간이다(예: '기분이 조금 나아지').
+/// null이면 효과 문장 없이 [body]만 쓴다 — 효과를 굳이 덧붙일 자리가 아닌
+/// 문장들(새벽처럼 재우는 쪽으로 안내하는 문장)이 여기 해당한다.
+class _GroomingLine {
+  const _GroomingLine(this.body, {this.effect});
+
+  final String body;
+  final String? effect;
+}
+
 // ─────────────────────────────────────────────────────────────
 // 채팅 화면
 // ─────────────────────────────────────────────────────────────
@@ -3050,7 +3066,9 @@ class _ChatScreenState extends State<ChatScreen>
         .where((line) => !recentLines.contains(line))
         .toList(growable: false);
     final pool = candidates.isNotEmpty ? candidates : lines;
-    return _pickFreshGroomingLine(pool);
+    // 인사말은 [recentLines]로 이미 최근 기록을 걸러서 넘어온다(그건 prefs에 저장된다).
+    // 가꾸기 쪽 기록과 섞지 않는다 — 목록이 서로 겹치지 않아서 섞어봐야 서로의 기억만 밀어낸다.
+    return pool[Random().nextInt(pool.length)];
   }
 
   List<String> _linesForGreeting(
@@ -6502,7 +6520,7 @@ class _ChatScreenState extends State<ChatScreen>
       );
       _messages.add(
         ChatMessage(
-          text: '좋아. 오늘은 어떻게 나를 챙겨볼까?',
+          text: '좋아. 지금 집이야, 밖이야?',
           isUser: false,
           time: DateTime.now(),
         ),
@@ -6561,17 +6579,17 @@ class _ChatScreenState extends State<ChatScreen>
     );
   }
 
-  Future<void> _sendFiveMinuteGroomingRoutine() {
+  Future<void> _sendHomeGroomingRoutine() {
     return _sendGroomingCareRoutine(
-      userText: '5분 실천',
-      reply: _pickFiveMinuteGroomingRoutine(),
+      userText: '집이야',
+      reply: _pickHomeGroomingRoutine(),
     );
   }
 
-  Future<void> _sendMoodRefreshGroomingRoutine() {
+  Future<void> _sendOutdoorGroomingRoutine() {
     return _sendGroomingCareRoutine(
-      userText: '기분 전환 루틴',
-      reply: _pickMoodRefreshGroomingRoutine(),
+      userText: '밖이야',
+      reply: _pickOutdoorGroomingRoutine(),
     );
   }
 
@@ -6593,65 +6611,227 @@ class _ChatScreenState extends State<ChatScreen>
   /// 방금 본 문장이 또 나오면 "복붙" 티가 제일 크게 난다. 최근에 나온 건 후보에서 뺀다.
   /// 앱을 다시 켜면 비워지는데, 한 세션 안의 연속 반복만 막아도 체감이 크게 달라져서
   /// 저장까지는 하지 않는다(뽑기 함수들이 전부 동기라 async로 바꾸면 호출부까지 번진다).
-  /// 5분 실천과 기분 전환이 이 기록을 함께 쓴다 — 두 목록에 겹치는 문장이 있어서,
+  /// 집과 밖이 이 기록을 함께 쓴다 — 두 목록에 겹치는 문장이 있어서,
   /// 버튼을 바꿔 눌렀을 때 같은 문장이 다시 나오는 것도 같이 막힌다.
+  /// 도입구와 어미가 매번 달라지므로, 완성된 문장이 아니라 본문(body)을 기준으로 기억한다.
   final List<String> _recentGroomingLines = [];
   static const int _groomingRecentMemory = 3;
+  final Random _groomingRandom = Random();
 
-  String _pickFreshGroomingLine(List<String> pool) {
-    final fresh = pool.where((s) => !_recentGroomingLines.contains(s)).toList();
+  /// 오늘 정한 어미 후보 셋. 셋 다 추측('~일 거야', '~걸')이거나 경험담('~더라')이라
+  /// 효과를 단정하지 않는다. '~해 보여'처럼 남의 시선을 끌어오는 어미는 후보에 없다.
+  static const List<String> _groomingEndings = ['거야', '더라', '걸'];
+
+  /// 직전에 쓴 도입구·어미. 같은 게 연달아 나오면 조합이 돌아가는 게 아니라
+  /// 고장 난 것처럼 읽혀서, 바로 앞에 쓴 것만 후보에서 뺀다.
+  String? _lastGroomingOpener;
+  String? _lastGroomingEnding;
+
+  /// 집 도입구. 빈 문자열이 섞여 있어서 도입구 없이 바로 시작하기도 한다.
+  static const List<String> _homeGroomingOpeners = [
+    '',
+    '딱 5분이면 돼. ',
+    '오래 안 걸리는 걸로 하나 골라봤어. ',
+    '지금 바로 할 수 있는 거야. ',
+    '마음부터 좀 풀어보자. ',
+    '무겁게 생각하지 말고, ',
+  ];
+
+  /// 밖 도입구. 지금 서 있는 자리에서 된다는 걸 앞에서 짚어준다.
+  static const List<String> _outdoorGroomingOpeners = [
+    '',
+    '밖이면 이게 편해. ',
+    '지금 서 있는 자리에서 되는 거야. ',
+    '조용히 할 수 있는 거야. ',
+  ];
+
+  /// 새벽엔 재우는 쪽으로 안내하니까 도입구도 조용한 것만 쓴다. 집·밖 공용.
+  static const List<String> _lateNightGroomingOpeners = [
+    '',
+    '지금은 이 정도면 충분해. ',
+    '오늘은 여기까지만. ',
+  ];
+
+  _GroomingLine _pickFreshGroomingLine(List<_GroomingLine> pool) {
+    final fresh = pool
+        .where((line) => !_recentGroomingLines.contains(line.body))
+        .toList();
     // 후보가 다 소진되면 어쩔 수 없이 전체에서 다시 고른다.
     final candidates = fresh.isEmpty ? pool : fresh;
-    final picked = candidates[Random().nextInt(candidates.length)];
-    _recentGroomingLines.add(picked);
+    final picked = candidates[_groomingRandom.nextInt(candidates.length)];
+    _recentGroomingLines.add(picked.body);
     while (_recentGroomingLines.length > _groomingRecentMemory) {
       _recentGroomingLines.removeAt(0);
     }
     return picked;
   }
 
-  /// 시간대를 안 타는 가꾸기 문장. 아침·낮·저녁 목록에 공통으로 얹는다.
+  /// 직전에 쓴 조각만 빼고 하나 고른다.
+  String _pickGroomingSlot(List<String> pool, String? last) {
+    final fresh = pool.where((s) => s != last).toList();
+    final candidates = fresh.isEmpty ? pool : fresh;
+    return candidates[_groomingRandom.nextInt(candidates.length)];
+  }
+
+  /// 어간에 관형형 'ㄹ'을 붙인다('나아지' → '나아질', '들' → '들', '좋' → '좋을').
+  /// 여기 쓰는 어간은 전부 규칙 활용이라 받침만 보고 판단해도 어색해지지 않는다.
+  String _groomingModifierForm(String stem) {
+    const hangulStart = 0xAC00;
+    const hangulEnd = 0xD7A3;
+    final last = stem.codeUnitAt(stem.length - 1);
+    if (last < hangulStart || last > hangulEnd) return '$stem을';
+    final finalConsonant = (last - hangulStart) % 28;
+    // 받침이 없으면 그 자리에 'ㄹ'(종성 8번)을 넣는다.
+    if (finalConsonant == 0) {
+      return stem.substring(0, stem.length - 1) + String.fromCharCode(last + 8);
+    }
+    if (finalConsonant == 8) return stem; // 이미 'ㄹ' 받침이면 그대로 쓴다.
+    return '$stem을';
+  }
+
+  /// 도입구 + 본문 + (효과 문장 + 어미)로 한 줄을 완성한다.
+  /// 본문은 손대지 않으니 뜻은 그대로 두고 말투만 달라진다.
+  String _renderGroomingLine(_GroomingLine line, List<String> openers) {
+    final opener = _pickGroomingSlot(openers, _lastGroomingOpener);
+    // 후보가 하나뿐인 자리(폴백 답변)는 기억해봐야 다음 뽑기 폭만 좁힌다.
+    if (openers.length > 1) _lastGroomingOpener = opener;
+    final effect = line.effect;
+    if (effect == null) return '$opener${line.body}';
+    final ending = _pickGroomingSlot(_groomingEndings, _lastGroomingEnding);
+    _lastGroomingEnding = ending;
+    final closing = ending == '더라'
+        ? '$effect더라'
+        : '${_groomingModifierForm(effect)} $ending';
+    return '$opener${line.body} $closing.';
+  }
+
+  /// 집(낮)과 밖에 함께 들어가는 문장. 거울은 어디에나 있어서 양쪽 다 된다.
+  /// 한 군데에 두면 어느 쪽으로 뽑히든 최근 기록을 공유해서 연달아 나오는 걸 막을 수 있다.
+  static const _GroomingLine _mirrorSpotGroomingLine = _GroomingLine(
+    '거울 앞에 잠깐 서봐. 머리, 얼굴, 옷 중에 제일 신경 쓰이는 곳 하나만 가볍게 만져주자.',
+    effect: '별 거 아니어도 기분이 좀 나아지',
+  );
+
+  /// 집에서 시간대를 안 타는 문장. 아침·낮·저녁 목록에 공통으로 얹는다.
   /// 새벽(0~6시)엔 몸을 깨우는 동작이라 빼둔다 — 그 시간대는 재우는 쪽으로 안내한다.
-  static const List<String> _anytimeGroomingRoutines = [
-    '기지개를 쭉 편 다음 겨드랑이를 꾹꾹 눌러줘. 그리고 마지막으로 겨드랑이에서 팔 안쪽으로 쓸어주면 림프 순환이 잘 된대. 몸이 시원해져서 기분도 괜찮아질 거야.',
+  static const List<_GroomingLine> _anytimeHomeGroomingRoutines = [
+    _GroomingLine(
+      '기지개를 쭉 편 다음 겨드랑이를 꾹꾹 눌러줘. 그리고 마지막으로 겨드랑이에서 팔 안쪽으로 쓸어주면 림프 순환이 잘 된대.',
+      effect: '몸이 시원해져서 기분도 조금 괜찮아지',
+    ),
+    _GroomingLine(
+      '오늘은 예뻐져야 한다는 숙제는 잠깐 미뤄두자. 손을 씻고 향이 나는 걸 하나 발라봐.',
+      effect: '몸이 편해지면 마음도 조금 따라오',
+    ),
+    _GroomingLine(
+      '따뜻한 물 한 모금 마시고 얼굴만 가볍게 씻어보자. 지금은 완벽한 관리보다 다시 산뜻해지는 느낌 하나면 충분해.',
+    ),
+    _GroomingLine(
+      '좋아하는 향수나 바디미스트가 있으면 한 번만 뿌려봐.',
+      effect: '향 하나로 기분이 꽤 빨리 돌아오',
+    ),
+    _GroomingLine(
+      '목이랑 어깨만 천천히 풀어보자.',
+      effect: '스트레칭을 꾸준히 하면 몸선도 자세도 조금씩 좋아져서 몸이 괜히 더 가볍고 편해지',
+    ),
+    _manualScalpMassageLine,
   ];
 
-  String _pickFiveMinuteGroomingRoutine() {
+  String _pickHomeGroomingRoutine() {
     final hour = DateTime.now().hour;
     final lines = switch (hour) {
       >= 6 && < 12 => const [
-        '물 한 잔 먼저 마셔보자. 혹시 챙겨 먹는 영양제가 있으면 지금 같이 먹어도 좋아. 몸 안쪽 컨디션이 잡히면 피부도 훨씬 덜 푸석해질 거야.',
-        '선크림은 발랐어? 밖에 안 나가도 실내로 햇빛이 들어오면 피부에 안 좋아. 오늘은 선크림 하나만 챙겨도 관리한 느낌이 날 거야.',
-        '아침 얼굴이 좀 부어 보이면 찬물로 손을 씻고, 턱이랑 귀 밑을 가볍게 쓸어줘. 세게 하지 말고 1분만 해도 얼굴이 조금 깨는 느낌이 들 걸.',
-        '머리 앞쪽만 정리해보자. 아침엔 전체 스타일보다 앞머리랑 정수리 볼륨만 살아도 하루가 훨씬 산뜻하게 시작되더라.',
-        '어깨를 내리고 목을 길게 세워봐. 아침 자세가 잡히면 숨도 깊어지고 몸이 한결 가벼울 거야.',
-        '비타민 꾸준히 먹으면 피부에도 좋으니까 과일 챙겨먹는 거 어때?',
+        _GroomingLine(
+          '물 한 잔 먼저 마셔보자. 혹시 챙겨 먹는 영양제가 있으면 지금 같이 먹어도 좋아.',
+          effect: '몸 안쪽 컨디션이 잡히면 피부도 훨씬 덜 푸석해지',
+        ),
+        _GroomingLine(
+          '선크림은 발랐어? 밖에 안 나가도 실내로 햇빛이 들어오면 피부에 안 좋아.',
+          effect: '오늘은 선크림 하나만 챙겨도 관리한 느낌이 나',
+        ),
+        _GroomingLine(
+          '아침에 얼굴이 좀 부은 느낌이면 찬물로 손을 씻고, 턱이랑 귀 밑을 가볍게 쓸어줘. 세게 하지 말고 1분만 해도',
+          effect: '얼굴이 조금 깨는 느낌이 들',
+        ),
+        _GroomingLine(
+          '머리 앞쪽만 정리해보자.',
+          effect: '아침엔 전체 스타일보다 앞머리랑 정수리 볼륨만 살아도 하루가 훨씬 산뜻하게 시작되',
+        ),
+        _GroomingLine(
+          '어깨를 내리고 목을 길게 세워봐.',
+          effect: '아침 자세가 잡히면 숨도 깊어지고 몸이 한결 가벼워지',
+        ),
+        _GroomingLine('과일 챙겨먹는 거 어때?', effect: '비타민을 꾸준히 챙기면 피부 컨디션도 조금씩 달라지'),
       ],
       >= 12 && < 18 => const [
-        '턱에 힘 빼고 입꼬리를 살짝 올려봐. 머리 앞쪽만 정리하고 자세만 바로 세워도 얼굴에 들어간 힘이 스르르 풀리더라. 크게 바꾸지 않아도 충분히 괜찮아.',
-        '미스트나 선크림이 있으면 피부부터 가볍게 챙겨보자. 얼굴에 수분감 하나만 더해도 피곤한 게 조금 가시는 느낌이 들 걸. 그다음 입술이 건조하면 립밤만 발라줘.',
-        '지금 앉아 있어, 서 있어? 배에 힘을 아주 살짝만 줘봐. 허리를 세우고 아랫배를 안쪽으로 가볍게 당기면 몸이 훨씬 곧게 잡히는 느낌이 들 거야. 모델들도 촬영 전에 자주 쓰는 작은 습관이래.',
-        '거울 앞에 잠깐 서봐. 머리, 얼굴, 옷 중에 제일 신경 쓰이는 곳 하나만 가볍게 만져주자. 별 거 아니어도 기분 좀 나아질 걸.',
+        _GroomingLine(
+          '턱에 힘 빼고 입꼬리를 살짝 올려봐. 크게 바꾸지 않아도 충분히 괜찮아.',
+          effect: '머리 앞쪽만 정리하고 자세만 바로 세워도 얼굴에 들어간 힘이 스르르 풀리',
+        ),
+        _GroomingLine(
+          '미스트나 선크림이 있으면 피부부터 가볍게 챙겨보자. 그다음 입술이 건조하면 립밤만 발라줘.',
+          effect: '얼굴에 수분감 하나만 더해도 피곤한 게 조금 가시는 느낌이 들',
+        ),
+        _GroomingLine(
+          '지금 앉아 있어, 서 있어? 배에 힘을 아주 살짝만 줘봐. 모델들도 촬영 전에 자주 쓰는 작은 습관이래.',
+          effect: '허리를 세우고 아랫배를 안쪽으로 가볍게 당기면 몸이 훨씬 곧게 잡히는 느낌이 들',
+        ),
+        _mirrorSpotGroomingLine,
       ],
       >= 18 && < 24 => const [
-        '손톱은 정리했어? 아직이면 오늘은 손톱만 깔끔하게 깎아보자. 작은 부분인데도 손끝이 정돈되면 기분이 꽤 달라지더라.',
-        '혹시 집 안에 방치된 미용기기 있어? 고데기, 괄사, 마사지기, 드라이기 같은 거. 없으면 안 쓰는 마스크팩도 괜찮아. 오늘은 새로 뭘 사지 말고, 이미 있는 걸 한 번 써먹어보자.',
-        '두피 마사지 어때? 간단한 괄사 도구가 있으면 정수리 쪽으로 천천히 쓸어올려봐. 두피가 덜 굳고, 꾸준히 해주면 노화 예방이나 머리 빠짐 관리에도 도움 된대.',
-        '몸 전체를 관리하려고 하지 말고, 오늘은 신경 쓰이던 잔털 한 군데만 정리해봐. 작은 정돈인데도 깔끔해진 느낌이 꽤 오래 갈 걸.',
-        '자기 전 세안하고 화장품 바를 때, 여러 개를 한꺼번에 올리지 말고 하나씩 찹찹 흡수시켜줘. 헤어라인, 귀 뒤, 목 아래쪽까지 같이 발라주면 피부가 훨씬 잘 챙겨진 느낌이 들 거야.',
+        _GroomingLine(
+          '손톱은 정리했어? 아직이면 오늘은 손톱만 깔끔하게 깎아보자.',
+          effect: '작은 부분인데도 손끝이 정돈되면 기분이 꽤 달라지',
+        ),
+        _GroomingLine(
+          '혹시 집 안에 방치된 미용기기 있어? 고데기, 괄사, 마사지기, 드라이기 같은 거. 없으면 안 쓰는 마스크팩도 괜찮아. 오늘은 새로 뭘 사지 말고, 이미 있는 걸 한 번 써먹어보자.',
+          effect: '안 쓰던 걸 꺼내 쓰는 것만으로도 뭔가 챙긴 기분이 나',
+        ),
+        _GroomingLine(
+          '두피 마사지 어때? 간단한 괄사 도구가 있으면 정수리 쪽으로 천천히 쓸어올려봐. 꾸준히 해주면 노화 예방이나 머리 빠짐 관리에도 도움 된대.',
+          effect: '두피가 덜 굳어서 머리가 한결 가벼워지',
+        ),
+        _GroomingLine(
+          '몸 전체를 관리하려고 하지 말고, 오늘은 신경 쓰이던 잔털 한 군데만 정리해봐.',
+          effect: '작은 정돈인데도 깔끔해진 느낌이 꽤 오래 가',
+        ),
+        _GroomingLine(
+          '자기 전 세안하고 화장품 바를 때, 여러 개를 한꺼번에 올리지 말고 하나씩 찹찹 흡수시켜줘.',
+          effect: '헤어라인, 귀 뒤, 목 아래쪽까지 같이 발라주면 피부가 훨씬 잘 챙겨진 느낌이 들',
+        ),
+        _GroomingLine(
+          '향이 나는 오일이나 로션을 목에 바르고 어깨랑 쇄골 쪽을 마사지해줘봐.',
+          effect: '노폐물이 빠져서 피부톤도 조금 맑아지',
+        ),
+        _GroomingLine(
+          '편한 옷으로 갈아입고 조명을 조금 따뜻하게 바꿔봐.',
+          effect: '분위기가 바뀌면 나를 대하는 마음도 덜 거칠어지',
+        ),
       ],
       _ => const [
-        '너무 늦은 시간이니까 자극적인 관리는 빼자. 얼굴만 가볍게 씻고 보습 하나 얹어줘. 오늘은 피부를 깨우기보다 편하게 재우는 쪽이 좋아.',
-        '립밤이나 핸드크림처럼 조용한 관리 하나만 하자. 새벽엔 크게 꾸미려 하기보다 몸이 쉬어도 된다는 신호를 주는 게 더 좋아.',
-        '두피를 세게 문지르진 말고 손끝으로 살짝만 눌러줘. 머리가 조금 가벼워지면 바로 내려놓고 쉬자. 오래 하면 자극될 수 있어.',
-        '잠옷이나 편한 옷으로 갈아입고 목 주변만 느슨하게 풀어줘. 편해 보이는 상태를 만드는 것도 충분한 관리야.',
+        _GroomingLine(
+          '너무 늦은 시간이니까 자극적인 관리는 빼자. 얼굴만 가볍게 씻고 보습 하나 얹어줘. 오늘은 피부를 깨우기보다 편하게 재우는 쪽이 좋아.',
+        ),
+        _GroomingLine(
+          '립밤이나 핸드크림처럼 조용한 관리 하나만 하자. 새벽엔 크게 꾸미려 하기보다 몸이 쉬어도 된다는 신호를 주는 게 더 좋아.',
+        ),
+        _GroomingLine(
+          '두피를 세게 문지르진 말고 손끝으로 살짝만 눌러줘. 머리가 조금 가벼워지면 바로 내려놓고 쉬자. 오래 하면 자극될 수 있어.',
+        ),
+        _GroomingLine(
+          '잠옷이나 편한 옷으로 갈아입고 목 주변만 느슨하게 풀어줘. 몸이 편해지는 상태를 만드는 것도 충분한 관리야.',
+        ),
       ],
     };
+    final isLateNight = hour < 6;
     // 새벽을 뺀 시간대엔 공용 문장도 후보에 넣는다.
-    final pool = (hour >= 6 && hour < 24)
-        ? [...lines, ..._anytimeGroomingRoutines]
-        : lines;
-    return pool[Random().nextInt(pool.length)];
+    final pool = isLateNight
+        ? lines
+        : [...lines, ..._anytimeHomeGroomingRoutines];
+    return _renderGroomingLine(
+      _pickFreshGroomingLine(pool),
+      isLateNight ? _lateNightGroomingOpeners : _homeGroomingOpeners,
+    );
   }
 
   String? _groomingToolFallbackReply(String text) {
@@ -6670,23 +6850,76 @@ class _ChatScreenState extends State<ChatScreen>
     return _manualScalpMassageRoutine();
   }
 
-  String _manualScalpMassageRoutine() {
-    return '그럼 그냥 손끝으로 두피를 천천히 눌러봐. 뻐근하다 싶은 부위를 둥글게 문질러주면 머리가 훨씬 가벼워지더라. 두피가 풀리면 얼굴 컨디션도 조금 살아나는 느낌이 들 거야. 맞다, 너무 길게 하면 자극이 될 수 있으니까 3분 정도만 하면 좋아.';
-  }
+  static const _GroomingLine _manualScalpMassageLine = _GroomingLine(
+    '손끝으로 두피를 천천히 눌러봐. 뻐근하다 싶은 부위를 둥글게 문질러주면 돼. 맞다, 너무 길게 하면 자극이 될 수 있으니까 3분 정도만 하자.',
+    effect: '두피가 풀리면 머리도 가볍고 얼굴 컨디션도 조금 살아나는 느낌이 들',
+  );
 
-  String _pickMoodRefreshGroomingRoutine() {
-    final lines = [
-      '오늘은 예뻐져야 한다는 숙제보다 기분을 먼저 살려보자. 손을 씻고 향이 나는 걸 하나 발라봐. 몸이 편해지면 마음도 조금 따라올 거야.',
-      '향이 나는 오일이나 로션을 목에 바르고 어깨랑 쇄골 쪽을 마사지해줘봐. 노폐물이 빠져서 더 피부톤이 맑아질 거야.',
-      '편한 옷으로 갈아입고 조명을 조금 따뜻하게 바꿔봐. 분위기가 바뀌면 나를 대하는 마음도 덜 거칠어지더라.',
-      '따뜻한 물 한 모금 마시고 얼굴만 가볍게 씻어보자. 지금은 완벽한 관리보다 다시 산뜻해지는 느낌 하나면 충분해.',
-      '좋아하는 향수나 바디미스트가 있으면 한 번만 뿌려봐. 향은 기분을 빨리 데려오는 작은 스위치 같아.',
-      '거울 앞에 잠깐 서봐. 머리, 얼굴, 옷 중에 제일 신경 쓰이는 곳 하나만 가볍게 만져주자. 별 거 아니어도 기분 좀 나아질 걸.',
-      '목이랑 어깨만 천천히 풀어보자. 스트레칭을 꾸준히 하면 몸선도 자세도 조금씩 좋아져서, 몸이 괜히 더 가볍고 편해질 걸.',
-      _manualScalpMassageRoutine(),
-      ..._anytimeGroomingRoutines,
-    ];
-    return _pickFreshGroomingLine(lines);
+  /// "괄사 없어" 같은 답을 바로 되받는 자리라 도입구도 '그럼' 하나로 고정한다.
+  /// 기분 전환 목록에 같은 문장이 들어갈 땐 거기 도입구가 대신 붙는다.
+  String _manualScalpMassageRoutine() =>
+      _renderGroomingLine(_manualScalpMassageLine, const ['그럼 ']);
+
+  /// 밖에서는 시간대를 나누지 않는다. 남 앞에서 티 안 나게 할 수 있는 게
+  /// 어차피 비슷해서, 아침에 뽑히든 저녁에 뽑히든 어색해지지 않을 문장만 모았다.
+  /// 시간에 걸리는 문장(선크림)은 조건절을 앞에 달아서 밤에도 걸리지 않게 했다.
+  static const List<_GroomingLine> _outdoorGroomingRoutines = [
+    _GroomingLine(
+      '햇빛 아래 오래 있었으면 선크림 한 번만 덧발라줘. 없으면 그늘로 두어 걸음만 옮겨도 돼.',
+      effect: '이거 하나만 챙겨도 나중에 피부가 덜 지치',
+    ),
+    _GroomingLine(
+      '턱에 힘 빼고 입꼬리를 살짝 올려봐. 크게 바꾸지 않아도 충분히 괜찮아.',
+      effect: '자세만 바로 세워도 얼굴에 들어간 힘이 스르르 풀리',
+    ),
+    _GroomingLine(
+      '가방에 미스트나 립밤 있어? 있으면 건조한 데 하나만 발라줘.',
+      effect: '수분감 하나만 더해도 피곤한 게 조금 가시는 느낌이 들',
+    ),
+    _GroomingLine(
+      '지금 앉아 있어, 서 있어? 배에 힘을 아주 살짝만 줘봐. 모델들도 촬영 전에 자주 쓰는 작은 습관이래.',
+      effect: '허리를 세우고 아랫배를 안쪽으로 가볍게 당기면 몸이 훨씬 곧게 잡히는 느낌이 들',
+    ),
+    _mirrorSpotGroomingLine,
+    _GroomingLine(
+      '어깨를 뒤로 살짝 열고 시선만 조금 위로 둬봐. 걸음도 같이 느긋해지게.',
+      effect: '움츠린 자세만 풀어도 숨이 깊어지고 몸이 한결 가벼워지',
+    ),
+    _GroomingLine(
+      '물 마신 지 오래됐으면 지금 몇 모금만 마시자. 편의점이든 정수기든 지나가는 길에 있는 걸로.',
+      effect: '몸 안쪽이 채워지면 얼굴 푸석한 것도 조금 가라앉',
+    ),
+    _GroomingLine(
+      '화장실 갈 일 있으면 손 씻고 찬물로 손목 안쪽을 잠깐만 대봐. 오래 말고 몇 초면 돼.',
+      effect: '열이 내려가면서 얼굴에 몰린 기운도 좀 정리되',
+    ),
+    _GroomingLine(
+      '손거울이나 폰 화면으로 앞머리만 슬쩍 정리해봐. 전체를 손볼 필요는 없어.',
+      effect: '앞머리랑 정수리 볼륨만 살아도 인상이 꽤 산뜻해지',
+    ),
+    _GroomingLine(
+      '옷 매무새 한 번만 고쳐보자. 소매랑 옷깃만 정리해도 충분해.',
+      effect: '몇 초 안 걸리는데 몸에 붙어 있던 어수선한 느낌이 가시',
+    ),
+  ];
+
+  /// 새벽에 밖이면 관리보다 무사히 들어가는 게 먼저다. 짧게만 짚어준다.
+  static const List<_GroomingLine> _lateNightOutdoorGroomingRoutines = [
+    _GroomingLine('이 시간에 밖이면 관리보다 무사히 들어가는 게 먼저야. 가는 길에 물 몇 모금이랑 립밤 정도만 챙기자.'),
+    _GroomingLine('새벽 공기에 얼굴이 금방 마르니까 립밤이나 핸드크림만 하나 발라줘. 나머지는 들어가서 하자.'),
+    _GroomingLine('어깨 움츠리고 걷지 말고 목만 살짝 세워봐. 집에 도착하면 씻는 것도 미루지 말고 바로 하자.'),
+  ];
+
+  String _pickOutdoorGroomingRoutine() {
+    final isLateNight = DateTime.now().hour < 6;
+    return _renderGroomingLine(
+      _pickFreshGroomingLine(
+        isLateNight
+            ? _lateNightOutdoorGroomingRoutines
+            : _outdoorGroomingRoutines,
+      ),
+      isLateNight ? _lateNightGroomingOpeners : _outdoorGroomingOpeners,
+    );
   }
 
   String _pickNyangPerfectionismInsight() {
@@ -11883,9 +12116,9 @@ $timerOutputRule
                     ),
                     const SizedBox(height: 12),
                   ],
-                  choiceButton('5분 실천', _sendFiveMinuteGroomingRoutine),
+                  choiceButton('집이야', _sendHomeGroomingRoutine),
                   const SizedBox(height: 8),
-                  choiceButton('기분 전환 루틴', _sendMoodRefreshGroomingRoutine),
+                  choiceButton('밖이야', _sendOutdoorGroomingRoutine),
                 ],
               ),
             ),
