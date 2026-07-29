@@ -6549,6 +6549,13 @@ class _ChatScreenState extends State<ChatScreen>
         _lastGroomingBody != null &&
         !shownToday &&
         _askBackDoneDate != _todayGroomingKey;
+    if (shownToday) {
+      if (_groomingRetryDate != _todayGroomingKey) {
+        _groomingRetryDate = _todayGroomingKey;
+        _groomingRetryCount = 0;
+      }
+      _groomingRetryCount += 1;
+    }
 
     setState(() {
       _messages.add(
@@ -6574,7 +6581,7 @@ class _ChatScreenState extends State<ChatScreen>
         );
       } else if (shownToday) {
         _appendGroomingPlaceQuestion(
-          text: '아까 그건 별로였어? 그럼 다른 걸로 보자. 지금 집이야, 밖이야?',
+          text: _groomingRetryPrompt(_groomingRetryCount),
         );
       } else {
         _appendGroomingPlaceQuestion();
@@ -6592,6 +6599,12 @@ class _ChatScreenState extends State<ChatScreen>
     // 가꾸기 퍼널의 분모. 이 값 대비 accept/resist 비율이 "문장이 실제로 먹혔나"의
     // 유일한 신호라서, 문장을 더 손보기 전에 이것부터 쌓아둔다.
     await AnalyticsService.logFeatureUsage('grooming_care');
+    if (shownToday) {
+      await _saveGroomingMemory();
+      // 하루에 두 번 이상 여는 비율. 이게 높으면 한 번에 주는 문장이 안 맞는다는
+      // 뜻이고, 풀을 늘릴지 정할 때 grooming_resist_repeat과 같이 봐야 한다.
+      await AnalyticsService.logFeatureUsage('grooming_care_retry');
+    }
   }
 
   /// 집·밖을 묻는 말과 선택지를 붙인다. setState 안에서만 부른다.
@@ -6769,6 +6782,23 @@ class _ChatScreenState extends State<ChatScreen>
   /// 되묻기에 답한 날. 답을 받고도 루틴을 안 고른 채 다시 열었을 때
   /// 같은 질문을 또 하지 않으려고, 추천 날짜와 따로 센다.
   String? _askBackDoneDate;
+
+  /// 같은 날 다시 누른 횟수와 그 날짜. 세 번, 네 번 누르는데 매번 똑같이
+  /// "아까 그건 별로였어?"로 받으면, 짚어주려던 게 오히려 녹음 같아진다.
+  int _groomingRetryCount = 0;
+  String? _groomingRetryDate;
+
+  /// 다시 누른 횟수에 맞춰 받는 말. 처음엔 안 맞았다고 단정하지 않는다 —
+  /// 해놓고 하나 더 받으러 온 걸 수도 있어서, 묻고 그냥 다음으로 넘어간다.
+  /// 횟수가 쌓이면 캐묻지 않고 물러난다. 계속 안 맞는 날에 이유까지 물으면
+  /// 고르는 게 일이 된다.
+  String _groomingRetryPrompt(int count) {
+    const tail = '지금 집이야, 밖이야?';
+    if (count <= 1) return '아까 내가 하라고 한 건 했어? 음.. 그럼 또 뭐가 있을까. $tail';
+    if (count == 2) return '오늘 계속 안 맞네. 다시 골라볼게. $tail';
+    return '오늘은 뭘 꺼내도 잘 안 맞는 날인가 봐. 그런 날도 있어. $tail';
+  }
+
   bool _groomingMemoryLoaded = false;
 
   String get _groomingMemoryPrefix => 'nyang_grooming_${widget.coachId}';
@@ -6786,6 +6816,9 @@ class _ChatScreenState extends State<ChatScreen>
     _lastGroomingBody = prefs.getString('${_groomingMemoryPrefix}_last_body');
     _lastGroomingDate = prefs.getString('${_groomingMemoryPrefix}_last_date');
     _askBackDoneDate = prefs.getString('${_groomingMemoryPrefix}_askback_date');
+    _groomingRetryDate = prefs.getString('${_groomingMemoryPrefix}_retry_date');
+    _groomingRetryCount =
+        prefs.getInt('${_groomingMemoryPrefix}_retry_count') ?? 0;
     _groomingMemoryLoaded = true;
   }
 
@@ -6847,6 +6880,14 @@ class _ChatScreenState extends State<ChatScreen>
       await prefs.setString(
         '${_groomingMemoryPrefix}_askback_date',
         askBackDate,
+      );
+    }
+    final retryDate = _groomingRetryDate;
+    if (retryDate != null) {
+      await prefs.setString('${_groomingMemoryPrefix}_retry_date', retryDate);
+      await prefs.setInt(
+        '${_groomingMemoryPrefix}_retry_count',
+        _groomingRetryCount,
       );
     }
   }
