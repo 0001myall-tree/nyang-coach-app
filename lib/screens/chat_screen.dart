@@ -10310,7 +10310,7 @@ $timerOutputRule
                       child: Column(
                         children: [
                           Expanded(
-                            child: _messages.isEmpty
+                            child: _messages.isEmpty && !_coach.isMaster
                                 ? _buildEmptyState()
                                 : _buildMessageList(),
                           ),
@@ -10327,9 +10327,10 @@ $timerOutputRule
                             _dynamicChips.contains('🐾 오늘은 조금만 하기') &&
                             _dynamicChips.length == 2)) &&
                         _coachSwitchTarget == null &&
+                        !_coach.isMaster &&
+                        !_shouldShowFriendInlineChips &&
                         ((_dynamicChips.contains('🌙 오늘은 쉬어가기') &&
                                 _dynamicChips.contains('🐾 오늘은 조금만 하기')) ||
-                            _coach.isMaster ||
                             (_dynamicChips.isNotEmpty ||
                                 _coach.chips.isNotEmpty)))
                       _buildChips(),
@@ -11649,6 +11650,8 @@ $timerOutputRule
 
     if (_isLoading) items.add(_buildTypingIndicator());
     if (_coachSwitchTarget != null) items.add(_buildNyangSwitchBubble());
+    if (_shouldShowMasterInlineChips) items.add(_buildMasterInlineChips());
+    if (_shouldShowFriendInlineChips) items.add(_buildFriendInlineChips());
 
     final list = ListView.builder(
       controller: _scrollCtrl,
@@ -13190,7 +13193,9 @@ $timerOutputRule
     );
   }
 
-  Widget _buildMasterChipRow() {
+  Widget _buildMasterChipRow({
+    EdgeInsets padding = const EdgeInsets.fromLTRB(16, 0, 16, 6),
+  }) {
     final List<Widget> items = [];
     for (final chip in _masterQuickChips) {
       items.add(_buildMasterQuickChip(chip));
@@ -13198,12 +13203,54 @@ $timerOutputRule
     }
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
+      padding: padding,
       child: Row(mainAxisSize: MainAxisSize.min, children: items),
     );
   }
 
-  Widget _buildChips() {
+  bool get _shouldShowMasterInlineChips {
+    if (!_coach.isMaster) return false;
+    if (_suppressDefaultChips || _coachSwitchTarget != null) return false;
+    if (_dynamicChips.contains('🌙 오늘은 쉬어가기') &&
+        _dynamicChips.contains('🐾 오늘은 조금만 하기') &&
+        _dynamicChips.length == 2) {
+      return false;
+    }
+    return _masterQuickChips.isNotEmpty;
+  }
+
+  Widget _buildMasterInlineChips() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(0, 6, 0, 2),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: _buildMasterChipRow(
+          padding: const EdgeInsets.fromLTRB(0, 0, 0, 6),
+        ),
+      ),
+    );
+  }
+
+  bool get _shouldShowFriendInlineChips {
+    if (_coach.isMaster || _messages.isEmpty) return false;
+    if (widget.chatBgStyle != 'simple') return false;
+    if (_suppressDefaultChips || _coachSwitchTarget != null) return false;
+    if (_dynamicChips.contains('🌙 오늘은 쉬어가기') &&
+        _dynamicChips.contains('🐾 오늘은 조금만 하기') &&
+        _dynamicChips.length == 2) {
+      return false;
+    }
+    return _dynamicChips.isNotEmpty || _coach.chips.isNotEmpty;
+  }
+
+  Widget _buildFriendInlineChips() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(0, 6, 0, 2),
+      child: _buildChips(chipPadding: EdgeInsets.zero),
+    );
+  }
+
+  Widget _buildChips({EdgeInsets? chipPadding}) {
     if (_coach.isMaster) {
       return Container(
         height: 48,
@@ -13221,7 +13268,7 @@ $timerOutputRule
       margin: const EdgeInsets.only(top: 8),
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
+        padding: chipPadding ?? const EdgeInsets.symmetric(horizontal: 16),
         itemCount: chips.length,
         separatorBuilder: (_, __) => const SizedBox(width: 8),
         itemBuilder: (ctx, i) {
