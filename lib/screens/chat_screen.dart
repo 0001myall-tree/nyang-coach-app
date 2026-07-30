@@ -3354,8 +3354,16 @@ class _ChatScreenState extends State<ChatScreen>
       '아프', '아팠', '몸살', '감기', '열이', '열나', '두통', '배탈',
       '어지럽', '몸이 안 좋', '컨디션이 안 좋',
     ];
+    // 다 나았다거나 안 아프다는 말은 아픔 신호로 보지 않는다.
+    const notSickWords = [
+      '안 아프', '안아프', '아프지 않', '나았', '나아서', '낫고', '괜찮아졌',
+      '괜찮아 졌', '다 나음',
+    ];
     final feltSick = seen.any(
-      (m) => m.isUser && sickWords.any((w) => m.text.contains(w)),
+      (m) =>
+          m.isUser &&
+          sickWords.any((w) => m.text.contains(w)) &&
+          !notSickWords.any((w) => m.text.contains(w)),
     );
 
     return _MasterGreetingContext(
