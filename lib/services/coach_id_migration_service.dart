@@ -14,7 +14,6 @@ class CoachIdMigrationService {
 
     try {
       await _copyKnownCoachKeys(prefs);
-      await _copyGreetingVisitCountKeys(prefs);
       await _normalizeStoredCoachChoices(prefs);
       await _normalizeUserData(prefs);
       await prefs.setBool(_doneKey, true);
@@ -31,8 +30,6 @@ class CoachIdMigrationService {
       'nyang_chat_history_',
       'nyang_chat_archive_',
       'last_visit_',
-      'nyang_master_local_greeting_date_',
-      'nyang_master_local_greeting_recent_lines_',
       'nyang_coach_weekly_feedback_',
       'nyang_coach_name_',
       'widget_',
@@ -54,23 +51,6 @@ class CoachIdMigrationService {
       } else if (value is List<String>) {
         await prefs.setStringList(newKey, value);
       }
-    }
-  }
-
-  static Future<void> _copyGreetingVisitCountKeys(
-    SharedPreferences prefs,
-  ) async {
-    const oldPrefix =
-        'nyang_master_local_greeting_visit_count_${CoachIdService.legacyNyangHalbaeId}_';
-    const newPrefix =
-        'nyang_master_local_greeting_visit_count_${CoachIdService.nyangHalbaeId}_';
-
-    for (final key in prefs.getKeys()) {
-      if (!key.startsWith(oldPrefix)) continue;
-      final newKey = key.replaceFirst(oldPrefix, newPrefix);
-      if (prefs.containsKey(newKey)) continue;
-      final value = prefs.getInt(key);
-      if (value != null) await prefs.setInt(newKey, value);
     }
   }
 

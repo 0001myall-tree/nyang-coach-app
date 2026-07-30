@@ -43,12 +43,17 @@ class ChatMessage {
   final String? kind;
   final List<String> highlightVisionIds;
 
+  /// 선택 카드가 보여줄 버튼 라벨. 메시지에 박아두는 이유는, 카드를 그릴 때마다
+  /// 지금 할 일 목록을 다시 읽으면 지나간 카드의 버튼까지 뒤늦게 바뀌기 때문이다.
+  final List<String> choices;
+
   ChatMessage({
     required this.text,
     required this.isUser,
     required this.time,
     this.kind,
     this.highlightVisionIds = const [],
+    this.choices = const [],
   });
 
   Map<String, dynamic> toJson() => {
@@ -57,6 +62,7 @@ class ChatMessage {
     'time': time.toIso8601String(),
     if (kind != null) 'kind': kind,
     if (highlightVisionIds.isNotEmpty) 'highlightVisionIds': highlightVisionIds,
+    if (choices.isNotEmpty) 'choices': choices,
   };
 
   factory ChatMessage.fromJson(Map<String, dynamic> j) => ChatMessage(
@@ -67,160 +73,315 @@ class ChatMessage {
     highlightVisionIds:
         (j['highlightVisionIds'] as List?)?.map((e) => e.toString()).toList() ??
         const [],
+    choices:
+        (j['choices'] as List?)?.map((e) => e.toString()).toList() ?? const [],
   );
 }
 
+/// 마스터 코치 자동 발화의 시간 슬롯. 발화 예산은 슬롯당 하루 1회다.
+/// 시각·계획·완료 상태는 "무슨 말을 할지"만 고르고 "몇 번 말할지"는 늘리지 않는다.
+enum _GreetingSlot { dawn, day, evening }
+
 class _MasterGreetingContext {
-  final String timeSlot;
-  final int todayVisitCount;
+  final DateTime now;
   final int? daysSinceLastVisit;
-  final String? inProgressTaskName;
-  final String? coreTaskName;
-  final int totalTasks;
-  final int completedTasks;
-  final int remainingTasks;
+
+  /// 습관을 뺀 오늘 일정. 자정 리셋이 습관을 자동으로 넣어주기 때문에,
+  /// 습관까지 세면 "계획 없음" 분기가 영영 안 걸린다.
+  final int planTotal;
+  final int planDone;
+
+  /// 격려 기준이 되는 완료 개수(습관 포함). 완료율이 아니라 개수를 쓰는 이유도
+  /// 같다 — 자동 주입된 습관이 분모를 오염시킨다.
+  final int doneCount;
+
+  /// 격려에 녹일 완료 항목 이름. 제목이 길거나 완료가 없으면 null.
+  final String? doneLabel;
+
+  /// 저녁 선택 카드에 띄울 미완료 일정(습관 제외).
+  final List<String> pendingPlans;
 
   const _MasterGreetingContext({
-    required this.timeSlot,
-    required this.todayVisitCount,
+    required this.now,
     required this.daysSinceLastVisit,
-    required this.inProgressTaskName,
-    required this.coreTaskName,
-    required this.totalTasks,
-    required this.completedTasks,
-    required this.remainingTasks,
+    required this.planTotal,
+    required this.planDone,
+    required this.doneCount,
+    required this.doneLabel,
+    required this.pendingPlans,
   });
 
-  double? get completionRate =>
-      totalTasks == 0 ? null : completedTasks / totalTasks;
+  bool get hasPlan => planTotal > 0;
+
+  double get planRate => planTotal == 0 ? 0 : planDone / planTotal;
+
+  bool get isComeback =>
+      daysSinceLastVisit != null && daysSinceLastVisit! >= 2;
+
+  _GreetingSlot get slot {
+    if (now.hour < 7) return _GreetingSlot.dawn;
+    if (now.hour < 18) return _GreetingSlot.day;
+    return _GreetingSlot.evening;
+  }
 }
 
 class _MasterGreetingResult {
   final String text;
-  final List<String> usedLines;
 
-  const _MasterGreetingResult(this.text, this.usedLines);
+  /// 비어 있지 않으면 저녁 ≤50% 선택 카드를 띄운다.
+  final List<String> choices;
+
+  const _MasterGreetingResult(this.text, {this.choices = const []});
+}
+
+/// 코치 한 명의 발화 문구 한 벌.
+class _GreetingVoice {
+  final List<String> dawn;
+  final List<String> earlyStart; // 07~09시: 계획 유무를 따지지 않는 시작 인사
+  final List<String> earlyQuestions;
+  final List<String> morningPlan; // 09~12시, 계획 있음
+  final List<String> morningNoPlan;
+  final List<String> afternoonPlan; // 12~18시, 계획 있고 진척도 있음
+  final List<String> afternoonBehind; // 12~18시, 계획은 있는데 아직 완료 0
+  final List<String> afternoonNoPlan;
+  final List<String> dayQuestions;
+  final List<String> eveningLow; // 완료 50% 이하
+  final List<String> eveningMid; // 51~80%
+  final List<String> eveningHigh; // 81~99%
+  final List<String> eveningAll; // 100%
+  final List<String> eveningNoPlan;
+  final List<String> comeback; // 2일 이상 만에 돌아왔을 때 앞에 붙일 한 문장
+
+  /// 격려 문구. (완료 항목 이름을 넣는 형태, 이름 없이 쓰는 형태) 순서다.
+  final List<(String, String)> encStarted; // 오전 1~2개 완료
+  final List<(String, String)> encStrong; // 오전 3개 이상 완료
+  final List<(String, String)> encFlow; // 오후 절반 이상 완료
+  final List<(String, String)> encEvening; // 저녁 발화용
+
+  final String otherChoiceLabel;
+
+  const _GreetingVoice({
+    required this.dawn,
+    required this.earlyStart,
+    required this.earlyQuestions,
+    required this.morningPlan,
+    required this.morningNoPlan,
+    required this.afternoonPlan,
+    required this.afternoonBehind,
+    required this.afternoonNoPlan,
+    required this.dayQuestions,
+    required this.eveningLow,
+    required this.eveningMid,
+    required this.eveningHigh,
+    required this.eveningAll,
+    required this.eveningNoPlan,
+    required this.comeback,
+    required this.encStarted,
+    required this.encStrong,
+    required this.encFlow,
+    required this.encEvening,
+    required this.otherChoiceLabel,
+  });
 }
 
 class _MasterGreetingCopy {
-  static const highCompletionRate = 0.7;
-  static const lowCompletionRate = 0.3;
-  static const manyRemainingCount = 5;
-  static const recentLineLimit = 5;
+  /// 이 길이를 넘는 제목은 말풍선에서 겉돌아서 이름을 빼고 격려만 한다.
+  static const doneLabelMaxLength = 20;
 
-  static const timeLines = {
-    'sec_female': {
-      'dawn': ['늦은 시간이네요.'],
-      'morning': ['좋은 아침입니다.'],
-      'afternoon': ['좋은 오후입니다.'],
-      'evening': ['오늘도 수고 많으셨어요.'],
-      'night': ['늦은 시간이네요.'],
-    },
-    'nyang_halbae': {
-      'dawn': ['늦은 시간까지 마음이 분주한가 보구나냥.'],
-      'morning': ['새 하루가 시작됐구나냥.'],
-      'afternoon': ['하루가 제법 흘렀구나냥.'],
-      'evening': ['오늘도 여기까지 왔구나냥.'],
-      'night': ['늦은 시간까지 마음이 분주한가 보구나냥.'],
-    },
-  };
+  /// 저녁 선택 카드에 버튼으로 직접 노출할 일정 개수. 넘으면 '그 외'로 접는다.
+  static const pendingChoiceLimit = 3;
 
-  static const relationLines = {
-    'sec_female': {
-      'firstToday': ['오셨군요.', '기다리고 있었어요.', '오늘도 함께 시작해볼까요?', '오늘도 잘 부탁드려요.'],
-      'repeatToday': ['다시 오셨군요. 이어서 해볼까요?', '또 만나서 반가워요.'],
-      'afterFewDays': ['다시 만나서 반가워요.', '잠시 쉬었다가 돌아오셨군요. 좋습니다.', '잘 지내고 계셨나요?'],
-      'afterLongDays': [
-        '오셨네요! 다시 돌아와 주셔서 기분 좋아요.',
-        '반갑습니다! 오늘은 가볍게 시작해봐도 좋을 것 같아요.',
-      ],
-    },
-    'nyang_halbae': {
-      'firstToday': [
-        '허허, 오늘도 왔구나냥.',
-        '또 얼굴을 보는구나냥.',
-        '반갑구나냥.',
-        '오늘도 한 걸음 내딛으러 왔구나냥.',
-        '오늘 컨디션은 어떠냥.',
-      ],
-      'repeatToday': ['다시 왔구나냥.', '또 만나 반갑구나냥.'],
-      'afterFewDays': ['다시 와주었구나냥.', '다시 만나 반갑구냥.', '쉬었다 다시 걷는 것도 좋다냥.'],
-      'afterLongDays': ['오랜만이구나냥. 다시 온 것만으로도 됐다냥.', '한동안 쉬었구나냥. 천천히 같이 걷자냥.'],
-    },
-  };
+  static const secretary = _GreetingVoice(
+    dawn: [
+      '늦은 시간이네요. 오늘은 여기까지 하고 쉬어가셔도 좋겠습니다.',
+      '아직 깨어 계시는군요. 남은 건 내일의 대표님께 맡겨두시죠.',
+      '이 시간엔 잘 자는 것이 가장 좋은 준비입니다.',
+    ],
+    earlyStart: [
+      '오늘도 새로운 하루가 시작되었습니다.',
+      '새 하루가 열렸네요.',
+      '오늘 하루가 이제 막 시작됐습니다.',
+      '아침이 왔습니다.',
+    ],
+    earlyQuestions: [
+      '필요하신 게 있으면 말씀해 주세요.',
+      '천천히 준비하시고, 필요할 때 불러주세요.',
+      '무엇부터 살펴볼까요?',
+    ],
+    morningPlan: [
+      '오늘 계획은 챙겨두었습니다.',
+      '오늘 할 일은 정리해 두었어요.',
+      '오전이 아직 넉넉하게 남아 있습니다.',
+    ],
+    morningNoPlan: [
+      '아직 오늘 계획이 없네요.',
+      '오늘은 아직 비어 있는 하루입니다.',
+      '오늘 적어둔 일정이 아직 없어요.',
+    ],
+    afternoonPlan: [
+      '오후로 넘어왔는데 지금 흐름이면 몰아붙이지 않으셔도 괜찮습니다.',
+      '하루의 절반쯤 지났고, 여기까지 오셨으면 남은 건 천천히 보셔도 됩니다.',
+      '오후가 시작됐고, 지금까지 온 걸 보면 서두를 필요는 없어 보여요.',
+    ],
+    afternoonBehind: [
+      '오후로 넘어왔고 오늘 일정은 아직 그대로 기다리고 있습니다.',
+      '하루의 절반이 지났는데 아직 손대지 못한 일들이 남아 있네요.',
+      '오후가 시작됐어요. 남겨둔 것 중 가벼운 것부터 보시죠.',
+    ],
+    afternoonNoPlan: [
+      '오후인데 아직 오늘 계획이 없네요.',
+      '오늘은 아직 적어둔 일정 없이 오후가 됐습니다.',
+    ],
+    dayQuestions: [
+      '무엇부터 시작해볼까요?',
+      '어떤 것부터 손대볼까요?',
+      '하나만 골라볼까요?',
+      '필요하신 게 있으면 말씀해 주세요.',
+    ],
+    eveningLow: [
+      '오늘 하루도 수고하셨습니다. 남은 것 중에 유독 손이 안 가는 게 있으셨나요?',
+      '고생 많으셨어요. 오늘 미뤄진 일 중에 특히 귀찮았던 게 있을까요?',
+      '오늘도 여기까지 오셨네요. 자꾸 미뤄지는 일이 있다면 어떤 걸까요?',
+    ],
+    eveningMid: [
+      '오늘 흐름이 좋으셨네요.',
+      '오늘 하루, 꽤 잘 굴러갔습니다.',
+      '오늘은 흐름을 잘 지키셨어요.',
+    ],
+    eveningHigh: [
+      '이 정도면 곧 다 완료하시겠는데요.',
+      '거의 다 오셨습니다.',
+      '마무리가 눈앞이네요.',
+    ],
+    eveningAll: [
+      '오늘 계획을 전부 마치셨습니다.',
+      '오늘은 남김없이 끝내셨네요.',
+      '오늘 몫을 완주하셨어요.',
+    ],
+    eveningNoPlan: [
+      '오늘은 어떻게 보내셨어요?',
+      '오늘 하루는 어떠셨나요?',
+      '오늘은 어떤 하루였는지 궁금하네요.',
+    ],
+    comeback: [
+      '다시 뵈어 반갑습니다.',
+      '오랜만이네요. 돌아와 주셔서 좋습니다.',
+      '잠시 쉬었다 오셨군요.',
+    ],
+    encStarted: [
+      ('벌써 {{task}} 시작하셨네요.', '벌써 시작하셨네요.'),
+      ('{{task}} 먼저 해두셨군요.', '벌써 하나 해두셨군요.'),
+    ],
+    encStrong: [
+      ('오전인데 {{task}}까지 해내셨으니 출발이 아주 좋습니다.', '오전인데 벌써 여러 개를 해내셨네요.'),
+      ('{{task}} 마치신 걸 보니 오늘 기세가 좋으십니다.', '벌써 여럿 마치셨어요. 대단하십니다.'),
+    ],
+    encFlow: [
+      ('{{task}}까지 마치신 걸 보니 흐름이 좋으십니다.', '여기까지 오셨네요. 흐름이 좋으십니다.'),
+      ('{{task}} 끝내셨으니 오늘 흐름은 잘 잡히셨네요.', '오늘 흐름이 좋으시네요.'),
+    ],
+    encEvening: [
+      ('{{task}} 챙기신 게 눈에 띕니다.', '오늘 챙기신 것들이 눈에 띕니다.'),
+      ('오늘 {{task}} 해내신 건 분명한 성과예요.', '오늘 해내신 것들은 분명한 성과예요.'),
+    ],
+    otherChoiceLabel: '그 외에 있어요',
+  );
 
-  static const statusLines = {
-    'sec_female': {
-      'inProgress': [
-        '{{task}} 하고 계시네요. 마무리까지 응원합니다.',
-        '이미 시작하신 일정이 있네요. 흐름을 잘 이어가시면 좋을 것 같습니다.',
-      ],
-      'core': [
-        '오늘 핵심 일정이 하나 남아 있어요. 이것부터 끝내볼까요?',
-        '가장 중요한 일정이 아직 남아 있습니다. 여기에 먼저 집중해보시면 좋겠어요.',
-        '오늘은 이 핵심 일정 하나만 마쳐도 충분합니다.',
-      ],
-      'completionHigh': [
-        '벌써 많이 해내셨네요. 지금 흐름이 좋습니다.',
-        '오늘 일정의 대부분을 마치셨어요. 남은 일도 가볍게 정리해볼까요?',
-        '꽤 많이 진행하셨네요. 차분하게 잘 이어가고 계세요.',
-      ],
-      'completionLow': [
-        '아직 미완료 일정들이 보이지만 지금부터 차근차근 하시면 됩니다.',
-        '오늘은 가장 가벼운 일부터 시작해봐도 좋을 것 같습니다.',
-        '할 일이 많아 보여도 할 수 있는 것만 하나씩 보면 됩니다.',
-      ],
-      'remainingMany': [
-        '아직 일정이 여러 개 남아 있어요. 가장 중요한 것부터 하나씩 정리해볼까요?',
-        '할 일이 많아 보이지만 한 번에 하나만 보면 됩니다.',
-        '남은 일정이 조금 많네요. 우선순위를 정해볼까요?',
-      ],
-      'remainingOne': [
-        '이제 일정 하나만 남았어요. 마지막까지 함께 가볼까요?',
-        '오늘의 마지막 일정이 남아 있습니다.',
-        '하나만 더 마치면 오늘 일정이 끝나요.',
-      ],
-      'noTasks': [
-        '오늘 등록된 일정이 없어요. 쉬는 날이라면 편히 쉬셔도 좋습니다.',
-        '오늘은 비어 있는 하루네요. 필요하다면 중요한 일 하나만 적어둘까요?',
-        '일정이 없는 날도 괜찮아요. 오늘 필요한 것이 있는지 천천히 생각해보세요.',
-      ],
-    },
-    'nyang_halbae': {
-      'inProgress': [
-        '시작한 일을 끝까지 붙잡는 것도 힘이라냥. 조금만 더 이어가 보세냥.',
-        '이미 첫걸음은 내디뎠구나냥. 남은 길은 처음보다 가볍다냥.',
-      ],
-      'core': [
-        '일이 많아도 중요한 것은 대개 하나라냥. 오늘은 그것부터 붙잡아 보세냥.',
-        '마음이 여러 갈래여도 중요한 일은 꼭 붙잡고 있자냥.',
-        '중요한 하나를 끝내면 나머지 하루가 가벼워지기도 한다냥.',
-      ],
-      'completionHigh': [
-        '오늘도 제법 많이 걸어왔구나냥. 남은 길은 서두르지 않아도 된다냥.',
-        '많이 해낸 날에는 더 몰아붙이기보다 흐름을 지키는 게 중요하다냥.',
-        '완료가 쌓였구냥. 미래가 서서히 달라지고 있다냥.',
-      ],
-      'completionLow': [
-        '할 일을 많이 계획했군. 지치지 않게 핵심에 집중해보자냥.',
-        '오늘은 바쁘군. 그럴수록 욕심은 덜고 핵심에 집중하는 것이 좋다냥.',
-        '마음이 무거울수록 가장 쉬운 것부터 해보는 건 어떠냥.',
-      ],
-      'remainingMany': [
-        '일이 많아 보인다고 마음까지 바쁠 필요는 없다냥. 하나씩 줄이면 된다냥.',
-        '여러 일을 한꺼번에 생각하면 발이 무거워진다냥. 하나만 고르세냥.',
-      ],
-      'remainingOne': [
-        '마지막 하나가 남았구나냥. 끝은 생각보다 가까이 있다냥.',
-        '하나를 마치면 오늘을 편히 내려놓을 수 있겠구나냥.',
-      ],
-      'noTasks': [
-        '비어 있는 하루도 쓸모가 있다냥. 무엇으로 채울지는 자네가 정하면 된다냥.',
-        '아무 일정이 없는 날에는 마음이 가는 곳을 살펴봐도 좋다냥.',
-        '계획의 빈칸 또한 계획이라냥.',
-      ],
-    },
-  };
+  static const nyangHalbae = _GreetingVoice(
+    dawn: [
+      '늦은 시간까지 깨어 있구나냥. 오늘은 여기서 접고 자도 된다냥.',
+      '이 시간엔 잘 자두는 게 제일 큰 준비다냥.',
+      '밤이 깊었다냥. 남은 건 내일의 자네한테 맡기자냥.',
+    ],
+    earlyStart: [
+      '새 하루가 시작됐다냥.',
+      '오늘이 막 열렸구나냥.',
+      '아침이 왔다냥.',
+      '또 하루가 왔구나냥.',
+    ],
+    earlyQuestions: [
+      '필요한 게 있으면 부르라냥.',
+      '천천히 준비하다 부르면 된다냥.',
+      '뭐부터 볼까냥.',
+    ],
+    morningPlan: [
+      '오늘 할 일은 챙겨뒀다냥.',
+      '오늘 계획은 여기 그대로 있다냥.',
+      '오전은 아직 넉넉하다냥.',
+    ],
+    morningNoPlan: [
+      '아직 오늘 계획이 없구나냥.',
+      '오늘은 아직 비어 있는 하루다냥.',
+      '적어둔 일이 아직 없구나냥.',
+    ],
+    afternoonPlan: [
+      '오후로 넘어왔는데 지금 흐름이면 서두르지 않아도 된다냥.',
+      '하루가 절반쯤 지났고, 여기까지 왔으면 남은 건 천천히 봐도 된다냥.',
+      '오후가 시작됐고, 지금까지 온 걸 보면 급할 것 없다냥.',
+    ],
+    afternoonBehind: [
+      '오후로 넘어왔는데 오늘 일은 아직 그대로 기다리고 있다냥.',
+      '하루의 절반이 지났는데 아직 손대지 못한 게 남아 있구나냥.',
+      '오후가 시작됐다냥. 남겨둔 것 중 가벼운 것부터 보자냥.',
+    ],
+    afternoonNoPlan: [
+      '오후가 됐는데 아직 계획이 없구나냥.',
+      '적어둔 일 없이 오후가 왔다냥.',
+    ],
+    dayQuestions: [
+      '뭐부터 시작해볼까냥.',
+      '어떤 것부터 손대볼까냥.',
+      '하나만 골라보자냥.',
+      '필요한 게 있으면 말하라냥.',
+    ],
+    eveningLow: [
+      '오늘도 고생했다냥. 남은 것 중에 유독 손이 안 가는 게 있었냥?',
+      '수고했다냥. 오늘 미뤄진 일 중에 특히 귀찮았던 게 있냥?',
+      '여기까지 왔구나냥. 자꾸 미뤄지는 일이 있다면 뭐냥?',
+    ],
+    eveningMid: [
+      '오늘 흐름이 좋았다냥.',
+      '오늘 하루 제법 잘 굴러갔다냥.',
+      '오늘은 흐름을 잘 지켰다냥.',
+    ],
+    eveningHigh: [
+      '이 정도면 곧 다 끝내겠구나냥.',
+      '거의 다 왔다냥.',
+      '마무리가 코앞이구나냥.',
+    ],
+    eveningAll: [
+      '오늘 계획을 전부 마쳤구나냥.',
+      '오늘은 남김없이 끝냈다냥.',
+      '오늘 몫을 완주했구나냥.',
+    ],
+    eveningNoPlan: [
+      '오늘은 어떻게 보냈냥?',
+      '오늘 하루는 어땠냥?',
+      '오늘은 어떤 하루였냥?',
+    ],
+    comeback: [
+      '오랜만이구나냥.',
+      '다시 와줬구나냥.',
+      '쉬었다 다시 걷는 것도 좋다냥.',
+    ],
+    encStarted: [
+      ('벌써 {{task}} 시작했구나냥.', '벌써 시작했구나냥.'),
+      ('{{task}} 먼저 해뒀구나냥.', '벌써 하나 해뒀구나냥.'),
+    ],
+    encStrong: [
+      ('오전인데 {{task}}까지 해냈으니 출발이 아주 좋다냥.', '오전인데 벌써 여러 개를 해냈다냥.'),
+      ('{{task}} 마친 걸 보니 오늘 기세가 좋구나냥.', '벌써 여럿 마쳤다냥. 제법이다냥.'),
+    ],
+    encFlow: [
+      ('{{task}}까지 마친 걸 보니 흐름이 좋구나냥.', '여기까지 왔다냥. 흐름이 좋구나냥.'),
+      ('{{task}} 끝냈으니 오늘 흐름은 잘 잡혔다냥.', '오늘 흐름이 좋구나냥.'),
+    ],
+    encEvening: [
+      ('{{task}} 챙긴 게 눈에 띈다냥.', '오늘 챙긴 것들이 눈에 띈다냥.'),
+      ('오늘 {{task}} 해낸 건 분명한 성과다냥.', '오늘 해낸 것들은 분명한 성과다냥.'),
+    ],
+    otherChoiceLabel: '그 외에 있다냥',
+  );
 }
 
 enum _CountdownFocusPhase { breathing, countdown, ready, timer }
@@ -1315,6 +1476,8 @@ class ChatScreenController {
 
   /// 할 일 완료 후 미뤄둔 작업 리마인드 확인
   void checkDeferredReminder() {
+    // 탭 복귀는 새 진입이다. 인사와 겹치지 않으므로 억제를 푼다.
+    _state?._greetedOnThisEntry = false;
     _state?._checkDeferredReminder();
   }
 
@@ -1382,6 +1545,16 @@ class _ChatScreenState extends State<ChatScreen>
 
   // 선제개입 저항예측: 이번 턴에 프롬프트에 주입한 선제개입 대상 (응답 확인 후 소진 여부 판정용)
   PreemptiveInterventionResult? _pendingPreemptiveTarget;
+
+  // 이번 진입에서 마스터 코치가 자동 발화를 했는지. 인사 직후에 미뤄둔 할 일
+  // 리마인드까지 겹쳐 내면 부담스러워서, 리마인드는 다음 진입으로 미룬다.
+  bool _greetedOnThisEntry = false;
+  // 저녁 발화에서 사용자가 고른 미완료 일정 (다음 턴 쪼개기 지시에 쓴다).
+  // _send가 로컬 답변으로 빠지면 API 턴까지 못 가고 남을 수 있어서, 시각을 같이
+  // 들고 있다가 오래된 것은 버린다.
+  String? _pendingEveningSplitTask;
+  DateTime? _pendingEveningSplitAt;
+  static const _eveningSplitTtl = Duration(minutes: 3);
 
   // 실행 저항 원인 확인: 확인 질문을 던진 직후, 사용자의 원인 답변을 기다리는 상태
   bool _awaitingResistanceCause = false;
@@ -2368,6 +2541,8 @@ class _ChatScreenState extends State<ChatScreen>
         _awaitingResistanceCause = false;
         _awaitingCountdownConsent = false;
         _pendingDiagnosisQuestion = null;
+        _pendingEveningSplitTask = null;
+        _greetedOnThisEntry = false;
       });
       _initAndLoad();
     }
@@ -2387,6 +2562,8 @@ class _ChatScreenState extends State<ChatScreen>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
+      // 돌아온 것은 새 진입이다. 인사 직후 억제해뒀던 리마인드를 이제 낼 수 있다.
+      _greetedOnThisEntry = false;
       _loadTaskProgress();
       _checkDeferredReminder();
       _checkBedtimeMoveOffer();
@@ -2394,7 +2571,11 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   /// 외부에서 AI 메시지를 채팅창에 직접 주입합니다 (핵심 설정 완료 반응 등).
-  void _injectAiMessage(String text, {String? kind}) {
+  void _injectAiMessage(
+    String text, {
+    String? kind,
+    List<String> choices = const [],
+  }) {
     if (!mounted) return;
     setState(() {
       _messages.add(
@@ -2403,6 +2584,7 @@ class _ChatScreenState extends State<ChatScreen>
           isUser: false,
           time: DateTime.now(),
           kind: kind,
+          choices: choices,
         ),
       );
     });
@@ -2413,6 +2595,9 @@ class _ChatScreenState extends State<ChatScreen>
   // ── 미뤄둔 할일 리마인드 확인 (탭 복귀 시 호출) ──────────
   Future<void> _checkDeferredReminder() async {
     if (!_coach.isMaster) return;
+    // 인사한 진입에서는 리마인드를 내지 않는다. prefs를 지우지 않으므로
+    // 다음 진입(재진입)에서 그대로 뜬다.
+    if (_greetedOnThisEntry) return;
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString('pendingDeferReminder');
     if (raw == null) return;
@@ -2981,22 +3166,53 @@ class _ChatScreenState extends State<ChatScreen>
     );
   }
 
-  // ── 마스터 코치 (비서/냥할배) 로컬 첫 인사 ────────────────
-  String _masterGreetingDateKey(String coachId) =>
-      'nyang_master_local_greeting_date_$coachId';
+  // ── 마스터 코치 (비서/냥할배) 자동 발화 ────────────────
+  // 하루 몇 번 말했는지를 prefs에 적지 않는다. nyang_ 키는 클라우드 복원이
+  // 통째로 덮어써서 "오늘 인사했음" 플래그가 어제로 되돌아가고, 그러면 하루
+  // 1회 가드가 뚫린다. 대신 발화할 때 메시지에 kind를 심고, 오늘 같은 kind가
+  // 있는지로 판정한다 — kind는 채팅 기록에 그대로 저장된다.
+  String _greetingKind(_GreetingSlot slot) => 'auto:${slot.name}';
 
-  String _masterGreetingRecentLinesKey(String coachId) =>
-      'nyang_master_local_greeting_recent_lines_$coachId';
+  _GreetingVoice get _greetingVoice => _coach.id == 'nyang_halbae'
+      ? _MasterGreetingCopy.nyangHalbae
+      : _MasterGreetingCopy.secretary;
 
-  String _masterGreetingVisitCountKey(String coachId, String todayKey) =>
-      'nyang_master_local_greeting_visit_count_${coachId}_$todayKey';
+  bool _isSameDay(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
 
-  String _timeSlotForGreeting(DateTime now) {
-    if (now.hour < 6) return 'dawn';
-    if (now.hour < 12) return 'morning';
-    if (now.hour < 18) return 'afternoon';
-    if (now.hour < 23) return 'evening';
-    return 'night';
+  bool _alreadySpokeInSlot(_GreetingSlot slot, DateTime now) {
+    final kind = _greetingKind(slot);
+    return _messages.any(
+      (m) => !m.isUser && m.kind == kind && _isSameDay(m.time, now),
+    );
+  }
+
+  /// 최근에 쓴 문장은 피해서 고른다. 최근 목록도 prefs가 아니라 채팅 기록에서 본다.
+  String _pickGreetingLine(List<String> pool) {
+    if (pool.isEmpty) return '';
+    final recent = _messages.reversed
+        .where((m) => !m.isUser)
+        .take(12)
+        .map((m) => m.text)
+        .toList(growable: false);
+    final fresh = pool
+        .where((line) => !recent.any((text) => text.contains(line)))
+        .toList(growable: false);
+    final candidates = fresh.isNotEmpty ? fresh : pool;
+    return candidates[Random().nextInt(candidates.length)];
+  }
+
+  /// 격려 문구. 완료한 일 이름이 있으면 문장 안에 녹이고, 없으면 이름 없는 형태를 쓴다.
+  String _pickEncouragement(List<(String, String)> pool, String? doneLabel) {
+    if (pool.isEmpty) return '';
+    final variants = pool
+        .map(
+          (pair) => doneLabel == null
+              ? pair.$2
+              : pair.$1.replaceAll('{{task}}', doneLabel),
+        )
+        .toList(growable: false);
+    return _pickGreetingLine(variants);
   }
 
   List<Map<String, dynamic>> _decodeMapList(String? raw) {
@@ -3017,45 +3233,64 @@ class _ChatScreenState extends State<ChatScreen>
     return text == null || text.isEmpty ? null : text;
   }
 
+  /// 완료 시각이 최근인 순. 시각이 없는 항목은 목록 순서를 지키도록 뒤로 보낸다.
+  List<Map<String, dynamic>> _sortByRecentCompletion(
+    List<Map<String, dynamic>> tasks,
+  ) {
+    final sorted = [...tasks];
+    sorted.sort((a, b) {
+      final ta = DateTime.tryParse(a['completedAt']?.toString() ?? '');
+      final tb = DateTime.tryParse(b['completedAt']?.toString() ?? '');
+      if (ta == null && tb == null) return 0;
+      if (ta == null) return 1;
+      if (tb == null) return -1;
+      return tb.compareTo(ta);
+    });
+    return sorted;
+  }
+
   Future<_MasterGreetingContext> _buildMasterGreetingContext({
     required SharedPreferences prefs,
     required DateTime now,
     required DateTime? lastVisit,
-    required int todayVisitCount,
   }) async {
     final tasks = _decodeMapList(prefs.getString('nyang_tasks'));
-    final todayTasks = tasks.where((task) {
+    bool isPlan(Map<String, dynamic> task) {
       final category = task['category']?.toString();
-      return category == 'today' ||
-          category == 'habit' ||
-          category == 'schedule';
-    }).toList();
-    final incompleteTasks = todayTasks
-        .where((task) => task['done'] != true)
-        .toList(growable: false);
-    final completedTasks = todayTasks
+      return category == 'today' || category == 'schedule';
+    }
+
+    bool isHabit(Map<String, dynamic> task) =>
+        task['category']?.toString() == 'habit';
+
+    // "계획 없음" 판정에서 습관은 뺀다. 자정 리셋이 습관을 자동으로 채워 넣기
+    // 때문에, 습관까지 세면 계획 없음 분기가 영영 걸리지 않는다.
+    final plans = tasks.where(isPlan).toList(growable: false);
+    final habits = tasks.where(isHabit).toList(growable: false);
+    final donePlans = plans
         .where((task) => task['done'] == true)
         .toList(growable: false);
+    final doneHabits = habits
+        .where((task) => task['done'] == true)
+        .toList(growable: false);
+    final pendingPlans = plans
+        .where((task) => task['done'] != true)
+        .map(_taskText)
+        .whereType<String>()
+        .toList(growable: false);
 
-    final inProgressSchedule = incompleteTasks
-        .cast<Map<String, dynamic>?>()
-        .firstWhere(
-          (task) =>
-              task?['category'] == 'schedule' && task?['inProgress'] == true,
-          orElse: () => null,
-        );
-    final inProgressAny =
-        inProgressSchedule ??
-        incompleteTasks.cast<Map<String, dynamic>?>().firstWhere(
-          (task) => task?['inProgress'] == true,
-          orElse: () => null,
-        );
-
-    final coreTasks = _decodeMapList(prefs.getString('nyang_core_tasks'));
-    final pendingCore = coreTasks.cast<Map<String, dynamic>?>().firstWhere(
-      (task) => task?['done'] != true,
-      orElse: () => null,
-    );
+    // 이름은 일정 우선, 습관은 후순위. 제목이 길면 이름을 빼고 격려만 한다.
+    final ordered = [
+      ..._sortByRecentCompletion(donePlans),
+      ..._sortByRecentCompletion(doneHabits),
+    ];
+    final doneCount = ordered.length;
+    final headName = ordered.isEmpty ? null : _taskText(ordered.first);
+    String? doneLabel;
+    if (headName != null &&
+        headName.length <= _MasterGreetingCopy.doneLabelMaxLength) {
+      doneLabel = doneCount > 1 ? "'$headName' 외 ${doneCount - 1}개" : "'$headName'";
+    }
 
     final daysSinceLastVisit = lastVisit == null
         ? null
@@ -3066,153 +3301,160 @@ class _ChatScreenState extends State<ChatScreen>
               .inDays;
 
     return _MasterGreetingContext(
-      timeSlot: _timeSlotForGreeting(now),
-      todayVisitCount: todayVisitCount,
+      now: now,
       daysSinceLastVisit: daysSinceLastVisit,
-      inProgressTaskName: _taskText(inProgressAny),
-      coreTaskName: _taskText(pendingCore),
-      totalTasks: todayTasks.length,
-      completedTasks: completedTasks.length,
-      remainingTasks: incompleteTasks.length,
+      planTotal: plans.length,
+      planDone: donePlans.length,
+      doneCount: doneCount,
+      doneLabel: doneLabel,
+      pendingPlans: pendingPlans,
     );
   }
 
-  String _relationGroupForGreeting(_MasterGreetingContext context) {
-    final days = context.daysSinceLastVisit;
-    if (days != null && days >= 4) return 'afterLongDays';
-    if (days != null && days >= 2) return 'afterFewDays';
-    if (context.todayVisitCount >= 2) return 'repeatToday';
-    return 'firstToday';
-  }
-
-  String _pickGreetingLine(List<String> lines, Set<String> recentLines) {
-    if (lines.isEmpty) return '';
-    final candidates = lines
-        .where((line) => !recentLines.contains(line))
-        .toList(growable: false);
-    final pool = candidates.isNotEmpty ? candidates : lines;
-    // 인사말은 [recentLines]로 이미 최근 기록을 걸러서 넘어온다(그건 prefs에 저장된다).
-    // 가꾸기 쪽 기록과 섞지 않는다 — 목록이 서로 겹치지 않아서 섞어봐야 서로의 기억만 밀어낸다.
-    return pool[Random().nextInt(pool.length)];
-  }
-
-  List<String> _linesForGreeting(
-    Map<String, Map<String, List<String>>> source,
-    String coachId,
-    String group,
-  ) {
-    return source[coachId]?[group] ?? source['sec_female']?[group] ?? const [];
-  }
-
-  _MasterGreetingResult _buildLocalMasterGreeting(
-    _MasterGreetingContext context,
-    Set<String> recentLines,
-  ) {
-    final coachId = _coach.id == 'nyang_halbae' ? 'nyang_halbae' : 'sec_female';
-    final timeLine = _pickGreetingLine(
-      _linesForGreeting(
-        _MasterGreetingCopy.timeLines,
-        coachId,
-        context.timeSlot,
-      ),
-      recentLines,
-    );
-    final relationLine = _pickGreetingLine(
-      _linesForGreeting(
-        _MasterGreetingCopy.relationLines,
-        coachId,
-        _relationGroupForGreeting(context),
-      ),
-      recentLines,
-    );
-
-    final statusGroups = <String>[];
-    if (context.inProgressTaskName != null) {
-      statusGroups.add('inProgress');
-    } else if (context.coreTaskName != null) {
-      statusGroups.add('core');
-    } else if (context.completionRate != null &&
-        context.completionRate! >= _MasterGreetingCopy.highCompletionRate) {
-      statusGroups.add('completionHigh');
-    } else if (context.completionRate != null &&
-        context.completionRate! < _MasterGreetingCopy.lowCompletionRate &&
-        context.remainingTasks > 0) {
-      statusGroups.add('completionLow');
-    } else if (context.remainingTasks >=
-        _MasterGreetingCopy.manyRemainingCount) {
-      statusGroups.add('remainingMany');
-    } else if (context.remainingTasks == 1) {
-      statusGroups.add('remainingOne');
-    } else if (context.totalTasks == 0) {
-      statusGroups.add('noTasks');
-    } else if (context.remainingTasks > 0) {
-      statusGroups.add('remainingMany');
-    } else {
-      statusGroups.add('completionHigh');
-    }
-
-    final primaryGroup = statusGroups.first;
-    if (primaryGroup == 'completionHigh' && context.remainingTasks == 1) {
-      statusGroups.add('remainingOne');
-    } else if (primaryGroup == 'completionLow' &&
-        context.remainingTasks >= _MasterGreetingCopy.manyRemainingCount) {
-      statusGroups.add('remainingMany');
-    }
-
-    final usedLines = <String>[timeLine, relationLine];
-    final sentences = <String>['$timeLine $relationLine'];
-    for (final group in statusGroups.take(2)) {
-      var line = _pickGreetingLine(
-        _linesForGreeting(_MasterGreetingCopy.statusLines, coachId, group),
-        recentLines,
+  /// 오전·오후 격려. 완료가 있으면 시각과 무관하게 붙고, 붙으면 질문을 뺀다.
+  /// 기준은 완료율이 아니라 개수다 — 자동 주입된 습관이 분모를 오염시키기 때문.
+  String _dayEncouragement(_MasterGreetingContext context) {
+    final voice = _greetingVoice;
+    if (context.doneCount == 0) return '';
+    if (context.now.hour < 12) {
+      return _pickEncouragement(
+        context.doneCount >= 3 ? voice.encStrong : voice.encStarted,
+        context.doneLabel,
       );
-      if (group == 'inProgress' && context.inProgressTaskName != null) {
-        line = line.replaceAll('{{task}}', context.inProgressTaskName!);
-      }
-      sentences.add(line);
-      usedLines.add(line);
     }
-
-    return _MasterGreetingResult(sentences.take(3).join(' '), usedLines);
+    if (context.hasPlan && context.planRate >= 0.5) {
+      return _pickEncouragement(voice.encFlow, context.doneLabel);
+    }
+    return _pickEncouragement(voice.encStarted, context.doneLabel);
   }
 
-  Future<void> _startSecretaryGreeting({
+  /// 한 발화는 최대 2문장(복귀 인사가 붙으면 그 앞에 한 문장 더).
+  _MasterGreetingResult _buildMasterGreeting(_MasterGreetingContext context) {
+    final voice = _greetingVoice;
+    final hour = context.now.hour;
+    final parts = <String>[];
+    if (context.isComeback) {
+      parts.add(_pickGreetingLine(voice.comeback));
+    }
+
+    switch (context.slot) {
+      case _GreetingSlot.dawn:
+        parts.add(_pickGreetingLine(voice.dawn));
+        return _MasterGreetingResult(parts.join(' '));
+
+      case _GreetingSlot.day:
+        final encouragement = _dayEncouragement(context);
+        if (hour < 9) {
+          // 9시 전에는 계획 유무를 따지지 않고 하루를 여는 인사만 한다.
+          parts.add(_pickGreetingLine(voice.earlyStart));
+          parts.add(
+            encouragement.isNotEmpty
+                ? encouragement
+                : _pickGreetingLine(voice.earlyQuestions),
+          );
+        } else if (hour < 12) {
+          parts.add(
+            _pickGreetingLine(
+              context.hasPlan ? voice.morningPlan : voice.morningNoPlan,
+            ),
+          );
+          parts.add(
+            encouragement.isNotEmpty
+                ? encouragement
+                : _pickGreetingLine(voice.dayQuestions),
+          );
+        } else {
+          final List<String> pool;
+          if (!context.hasPlan) {
+            pool = voice.afternoonNoPlan;
+          } else if (context.planDone > 0) {
+            pool = voice.afternoonPlan;
+          } else {
+            pool = voice.afternoonBehind;
+          }
+          parts.add(_pickGreetingLine(pool));
+          parts.add(
+            encouragement.isNotEmpty
+                ? encouragement
+                : _pickGreetingLine(voice.dayQuestions),
+          );
+        }
+        return _MasterGreetingResult(parts.join(' '));
+
+      case _GreetingSlot.evening:
+        if (!context.hasPlan) {
+          parts.add(_pickGreetingLine(voice.eveningNoPlan));
+          return _MasterGreetingResult(parts.join(' '));
+        }
+        final rate = context.planRate;
+        if (rate <= 0.5) {
+          // 귀찮았던 일을 버튼으로 고르게 하고, 고른 일은 실행 저항 흐름으로 넘긴다.
+          parts.add(_pickGreetingLine(voice.eveningLow));
+          return _MasterGreetingResult(
+            parts.join(' '),
+            choices: _eveningChoices(context.pendingPlans),
+          );
+        }
+        if (rate >= 1.0) {
+          parts.add(_pickGreetingLine(voice.eveningAll));
+        } else if (rate > 0.8) {
+          parts.add(_pickGreetingLine(voice.eveningHigh));
+        } else {
+          parts.add(_pickGreetingLine(voice.eveningMid));
+        }
+        final encouragement = _pickEncouragement(
+          voice.encEvening,
+          context.doneLabel,
+        );
+        if (encouragement.isNotEmpty) parts.add(encouragement);
+        return _MasterGreetingResult(parts.join(' '));
+    }
+  }
+
+  /// 미완료 일정은 3개까지만 버튼으로 세우고, 넘치면 '그 외'로 접는다.
+  List<String> _eveningChoices(List<String> pending) {
+    if (pending.isEmpty) return const [];
+    if (pending.length <= _MasterGreetingCopy.pendingChoiceLimit) {
+      return List<String>.unmodifiable(pending);
+    }
+    return List<String>.unmodifiable([
+      ...pending.take(_MasterGreetingCopy.pendingChoiceLimit),
+      _greetingVoice.otherChoiceLabel,
+    ]);
+  }
+
+  /// 발화했으면 true. 같은 진입에서 미뤄둔 할 일 리마인드를 겹쳐 내지 않으려고 쓴다.
+  Future<bool> _startMasterGreeting({
     required SharedPreferences prefs,
     required DateTime now,
     required DateTime? lastVisit,
   }) async {
-    final todayKey = _getTodayStrWithReset(prefs);
-    final greetedDateKey = _masterGreetingDateKey(widget.coachId);
-    if (prefs.getString(greetedDateKey) == todayKey) return;
-
-    final visitCountKey = _masterGreetingVisitCountKey(
-      widget.coachId,
-      todayKey,
-    );
-    final todayVisitCount = (prefs.getInt(visitCountKey) ?? 0) + 1;
-    await prefs.setInt(visitCountKey, todayVisitCount);
-
     final context = await _buildMasterGreetingContext(
       prefs: prefs,
       now: now,
       lastVisit: lastVisit,
-      todayVisitCount: todayVisitCount,
     );
-    final recentKey = _masterGreetingRecentLinesKey(widget.coachId);
-    final recentLines = (prefs.getStringList(recentKey) ?? const []).toSet();
-    final greeting = _buildLocalMasterGreeting(context, recentLines);
-    if (!mounted) return;
-    final nextRecentLines = <String>[...recentLines, ...greeting.usedLines];
-    final trimmedRecentLines =
-        nextRecentLines.length > _MasterGreetingCopy.recentLineLimit
-        ? nextRecentLines.sublist(
-            nextRecentLines.length - _MasterGreetingCopy.recentLineLimit,
-          )
-        : nextRecentLines;
+    if (_alreadySpokeInSlot(context.slot, now)) return false;
 
-    await prefs.setString(greetedDateKey, todayKey);
-    await prefs.setStringList(recentKey, trimmedRecentLines);
-    _injectAiMessage(greeting.text, kind: 'auto_greeting');
+    final greeting = _buildMasterGreeting(context);
+    final text = greeting.text.trim();
+    if (text.isEmpty) return false;
+    if (!mounted) return false;
+
+    _injectAiMessage(
+      text,
+      kind: _greetingKind(context.slot),
+      choices: greeting.choices,
+    );
+    // 슬롯별로 실제 몇 번 말했는지, 저녁 카드가 얼마나 뜨는지 나중에 볼 수 있게 남긴다.
+    unawaited(
+      AnalyticsService.logFeatureUsage(
+        greeting.choices.isEmpty
+            ? 'master_greeting_${context.slot.name}'
+            : 'master_evening_card',
+      ),
+    );
+    return true;
   }
 
   // ── 히스토리 & 복귀 인사 (웹앱 startGreeting 이식) ──────
@@ -3350,9 +3592,9 @@ class _ChatScreenState extends State<ChatScreen>
         return;
       }
 
-      // 마스터 코치(비서): 상황별 스마트 인사
+      // 마스터 코치(비서/냥할배): 슬롯별 자동 발화
       if (_coach.isMaster) {
-        await _startSecretaryGreeting(
+        _greetedOnThisEntry = await _startMasterGreeting(
           prefs: prefs,
           now: now,
           lastVisit: lastVisit,
@@ -3407,7 +3649,7 @@ class _ChatScreenState extends State<ChatScreen>
       return;
     } else {
       if (_coach.isMaster) {
-        await _startSecretaryGreeting(
+        _greetedOnThisEntry = await _startMasterGreeting(
           prefs: prefs,
           now: now,
           lastVisit: lastVisit,
@@ -4087,17 +4329,41 @@ class _ChatScreenState extends State<ChatScreen>
 
   Future<String> _buildLocalMasterStatusReply() async {
     final prefs = await SharedPreferences.getInstance();
-    final context = await _buildMasterGreetingContext(
-      prefs: prefs,
-      now: DateTime.now(),
-      lastVisit: null,
-      todayVisitCount: 1,
+    // 상태를 물었을 때의 답이라 여기서는 습관까지 포함해서 센다.
+    final todayTasks = _decodeMapList(prefs.getString('nyang_tasks')).where((
+      task,
+    ) {
+      final category = task['category']?.toString();
+      return category == 'today' ||
+          category == 'habit' ||
+          category == 'schedule';
+    }).toList(growable: false);
+    final incomplete = todayTasks
+        .where((task) => task['done'] != true)
+        .toList(growable: false);
+    final total = todayTasks.length;
+    final remaining = incomplete.length;
+    final done = total - remaining;
+
+    final inProgressSchedule = incomplete.cast<Map<String, dynamic>?>().firstWhere(
+      (task) => task?['category'] == 'schedule' && task?['inProgress'] == true,
+      orElse: () => null,
     );
-    final done = context.completedTasks;
-    final total = context.totalTasks;
-    final remaining = context.remainingTasks;
-    final inProgress = context.inProgressTaskName;
-    final core = context.coreTaskName;
+    final inProgress = _taskText(
+      inProgressSchedule ??
+          incomplete.cast<Map<String, dynamic>?>().firstWhere(
+            (task) => task?['inProgress'] == true,
+            orElse: () => null,
+          ),
+    );
+    final core = _taskText(
+      _decodeMapList(
+        prefs.getString('nyang_core_tasks'),
+      ).cast<Map<String, dynamic>?>().firstWhere(
+        (task) => task?['done'] != true,
+        orElse: () => null,
+      ),
+    );
 
     if (_coach.id == 'nyang_halbae') {
       if (total == 0) return '오늘 등록된 할 일은 아직 없다냥. 먼저 하나만 가볍게 잡아도 충분하다냥.';
@@ -9485,15 +9751,44 @@ class _ChatScreenState extends State<ChatScreen>
   /// 실행 저항 흐름에서 이번 턴에만 적용할 지시문을 만든다.
   /// 확인 질문과 시작 의식 제안 문장은 모델이 새로 만들지 않도록 앱이 골라서 넘긴다.
   /// (마스터 코치 전용. 확인 질문은 하루 1회만.)
-  Future<String> _buildResistanceTurnDirective(
-    String userText, {
-    required bool isGreeting,
-  }) async {
-    if (!_coach.isMaster || isGreeting) {
+  Future<String> _buildResistanceTurnDirective(String userText) async {
+    if (!_coach.isMaster) {
       _awaitingResistanceCause = false;
       _awaitingCountdownConsent = false;
       _pendingDiagnosisQuestion = null;
+      _pendingEveningSplitTask = null;
       return '';
+    }
+
+    // 저녁 발화에서 고른 미완료 일정: 원인을 캐묻지 말고 바로 쪼개준다.
+    final splitAt = _pendingEveningSplitAt;
+    final splitTask =
+        splitAt != null &&
+            DateTime.now().difference(splitAt) <= _eveningSplitTtl
+        ? _pendingEveningSplitTask
+        : null;
+    _pendingEveningSplitTask = null;
+    _pendingEveningSplitAt = null;
+    if (splitTask != null) {
+      _awaitingResistanceCause = false;
+      _awaitingCountdownConsent = false;
+      final now = DateTime.now();
+      final prefs = await SharedPreferences.getInstance();
+      final remaining = (await _buildMasterGreetingContext(
+        prefs: prefs,
+        now: now,
+        lastVisit: null,
+      )).pendingPlans.length;
+      final manyLeft = remaining >= 3
+          ? '\n- 오늘 남은 일이 $remaining개입니다. 다 하려 들지 말고 이것 하나만 붙잡자고 짧게 권하세요.'
+          : '';
+      return '''
+
+[이번 턴 지시 - 저녁에 미뤄진 일 쪼개기]
+- 사용자가 오늘 손이 안 갔던 일로 '$splitTask'을(를) 골랐습니다. 지금은 ${now.hour}시이고 오늘 남은 시간이 많지 않습니다.
+- 원인을 되묻지 말고, 남은 시간과 이 일의 성격을 감안해 부담을 확 낮춘 첫 조각 하나만 제안하세요. 조각을 여러 개 나열하지 마세요.$manyLeft
+- 쪼갠 조각을 새 할 일로 등록하지 마세요. [TASK] 태그를 출력하지 마세요. 기존 '$splitTask' 항목을 그대로 체크하도록 유도하세요.
+- 답변은 2문장 이내로 유지하세요.''';
     }
 
     // 카운트다운 제안 직후 턴: 동의 여부만 판정한다.
@@ -9553,7 +9848,7 @@ class _ChatScreenState extends State<ChatScreen>
 - 답변은 2문장 이내로 유지하고 [TASK], [TIMER_CONFIRM], [COUNTDOWN_START] 태그를 출력하지 마세요.''';
   }
 
-  Future<String> _callOpenAI(String userText, {bool isGreeting = false}) async {
+  Future<String> _callOpenAI(String userText) async {
     final historyLimit = 6;
     final promptHistory = _messages
         .where((message) {
@@ -9571,7 +9866,6 @@ class _ChatScreenState extends State<ChatScreen>
 
     final resistanceTurnDirective = await _buildResistanceTurnDirective(
       userText,
-      isGreeting: isGreeting,
     );
     // 시작 의식은 원인이 불명확할 때만 쓰는 장치라 마스터 코치에게만 흐름 규칙을 준다.
     final resistanceFlowRule = _coach.isMaster
@@ -9836,23 +10130,18 @@ $timerOutputRule
     final timePrefix =
         '[${now.hour}:${now.minute.toString().padLeft(2, '0')}] ';
 
-    final messages = isGreeting
-        ? [
-            {'role': 'system', 'content': systemPromptWithChips},
-            {'role': 'user', 'content': '$timePrefix$effectiveUserText'},
-          ]
-        : [
-            {'role': 'system', 'content': systemPromptWithChips},
-            ...history.map(
-              (m) => {
-                'role': m.isUser ? 'user' : 'assistant',
-                'content': m.isUser
-                    ? '[${m.time.hour}:${m.time.minute.toString().padLeft(2, '0')}] ${m.text}'
-                    : m.text,
-              },
-            ),
-            {'role': 'user', 'content': '$timePrefix$effectiveUserText'},
-          ];
+    final messages = [
+      {'role': 'system', 'content': systemPromptWithChips},
+      ...history.map(
+        (m) => {
+          'role': m.isUser ? 'user' : 'assistant',
+          'content': m.isUser
+              ? '[${m.time.hour}:${m.time.minute.toString().padLeft(2, '0')}] ${m.text}'
+              : m.text,
+        },
+      ),
+      {'role': 'user', 'content': '$timePrefix$effectiveUserText'},
+    ];
 
     final estimatedPromptTokens = AnalyticsService.estimateChatTokens(
       messages,
@@ -11669,6 +11958,12 @@ $timerOutputRule
     if (msg.kind == 'start_difficulty_choice') {
       return _buildStartDifficultyChoiceCard(msg);
     }
+    // 저녁 발화(auto:evening)는 미완료 일정이 있을 때만 선택 카드로 그린다.
+    if ((msg.kind == 'evening_pending_choice' ||
+            msg.kind == _greetingKind(_GreetingSlot.evening)) &&
+        msg.choices.isNotEmpty) {
+      return _buildEveningPendingChoiceCard(msg);
+    }
     if (msg.kind == 'grooming_care_choice') {
       return _buildGroomingCareChoiceCard(msg);
     }
@@ -12433,6 +12728,163 @@ $timerOutputRule
     );
   }
 
+  /// 저녁 발화에서 "귀찮았던 일"을 고르는 카드.
+  /// 버튼 라벨은 메시지에 박아둔 것을 그대로 쓴다 — 그릴 때마다 할 일 목록을
+  /// 다시 읽으면 지나간 카드의 버튼까지 뒤늦게 바뀐다.
+  Widget _buildEveningPendingChoiceCard(ChatMessage msg) {
+    final time = DateFormat('a h:mm', 'ko').format(msg.time);
+    final accent = _coach.accentColor;
+
+    Widget choiceButton(String label, VoidCallback onTap) {
+      return GestureDetector(
+        onTap: _isLoading ? null : onTap,
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF8F5FF),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFE5DEFF)),
+          ),
+          child: Text(
+            label,
+            textAlign: TextAlign.center,
+            style: GoogleFonts.notoSansKr(
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+              color: accent,
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(18),
+            child: Image.asset(
+              _coach.imagePath,
+              width: 36,
+              height: 36,
+              fit: BoxFit.cover,
+              alignment: Alignment.topCenter,
+              errorBuilder: (_, __, ___) => Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: _coach.accentLight,
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: Icon(Icons.person, color: _coach.accentColor, size: 20),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Container(
+              constraints: BoxConstraints(
+                maxWidth: MediaQuery.of(context).size.width * 0.72,
+              ),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: const Color(0xFFE8E1F4)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.06),
+                    blurRadius: 12,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    msg.text,
+                    style: GoogleFonts.notoSansKr(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                      height: 1.45,
+                      color: const Color(0xFF1A1A2E),
+                    ),
+                  ),
+                  for (final label in msg.choices) ...[
+                    const SizedBox(height: 8),
+                    choiceButton(
+                      label,
+                      () => _handleEveningPendingChoice(label, msg.choices),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(left: 6, bottom: 2),
+            child: Text(
+              time,
+              style: GoogleFonts.notoSansKr(
+                fontSize: AppDesignTokens.textMeta,
+                color: AppDesignTokens.textDisabled,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// '그 외'를 누르면 남은 일정을 다시 버튼으로 보여주고, 일정을 고르면
+  /// 기존 실행 저항 흐름을 태워 부담을 낮추는 방향으로 답하게 한다.
+  Future<void> _handleEveningPendingChoice(
+    String label,
+    List<String> shown,
+  ) async {
+    if (_isLoading) return;
+    HapticFeedback.lightImpact();
+
+    if (label == _greetingVoice.otherChoiceLabel) {
+      final prefs = await SharedPreferences.getInstance();
+      final context = await _buildMasterGreetingContext(
+        prefs: prefs,
+        now: DateTime.now(),
+        lastVisit: null,
+      );
+      final rest = context.pendingPlans
+          .where((task) => !shown.contains(task))
+          .toList(growable: false);
+      if (rest.isEmpty) {
+        _injectAiMessage(
+          _coach.id == 'nyang_halbae'
+              ? '남은 건 방금 보여준 게 전부다냥. 그중에 걸리는 게 있으면 눌러보라냥.'
+              : '남은 건 방금 보여드린 게 전부예요. 그중에 걸리는 게 있으면 눌러주세요.',
+        );
+        return;
+      }
+      final restNames = rest.take(3).map((task) => "'$task'").join(', ');
+      _injectAiMessage(
+        _coach.id == 'nyang_halbae'
+            ? '남은 건 $restNames 이런 것들이다냥. 이 중에 제일 손이 안 가는 게 뭐냥?'
+            : '남은 건 $restNames 이런 것들이에요. 이 중에 제일 손이 안 가는 건 어떤 걸까요?',
+        kind: 'evening_pending_choice',
+        choices: _eveningChoices(rest),
+      );
+      await AnalyticsService.logFeatureUsage('master_evening_other');
+      return;
+    }
+
+    _pendingEveningSplitTask = label;
+    _pendingEveningSplitAt = DateTime.now();
+    await AnalyticsService.logFeatureUsage('master_evening_pick');
+    await _send(label, apiInputOverride: "'$label'이(가) 오늘 제일 하기 싫었어");
+  }
   Widget _buildGroomingCareChoiceCard(ChatMessage msg) {
     return _buildGroomingChoiceCard(msg, [
       ('집이야', _sendHomeGroomingRoutine),
