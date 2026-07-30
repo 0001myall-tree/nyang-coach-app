@@ -6381,19 +6381,14 @@ class _ChatScreenState extends State<ChatScreen>
     if (!await _ensureMasterCoachAccess()) return;
     HapticFeedback.lightImpact();
 
-    final insight = _pickNyangPerfectionismInsight();
-    final action = await _buildPerfectionismSmallAction();
+    final reply = await _buildNyangPerfectionismReply();
 
     setState(() {
       _messages.add(
         ChatMessage(text: '완벽하게 못 해서 속상해', isUser: true, time: DateTime.now()),
       );
       _messages.add(
-        ChatMessage(
-          text: '$insight\n$action',
-          isUser: false,
-          time: DateTime.now(),
-        ),
+        ChatMessage(text: reply, isUser: false, time: DateTime.now()),
       );
       _suggestedTasks = [];
       _dynamicChips = _coach.chips;
@@ -7168,20 +7163,39 @@ class _ChatScreenState extends State<ChatScreen>
     );
   }
 
-  String _pickNyangPerfectionismInsight() {
-    const lines = [
-      '완벽이라는 건 허상이라냥. 오직 네가 만든 규칙만 있을 뿐이지. 네가 만든 규칙에서 너를 놓아줘. 그리고 조용히 안아주라냥.',
-      '완벽을 꿈꾸며 멈춰 서기보다, 부족하지만 한 걸음 내딛는 걸 택하라냥. 작은 성공의 조각들이 모여 너를 단단하게 만들어 줄 테니.',
-      '\'난 하루 만에 슈퍼맨처럼 다 해낼 수 있어!\' 하고 눈높이를 너무 높게 잡으면, \'난 왜 이 모양이지?\' 하고 스스로를 미워하게 된다냥. 완벽이라는 눈으로 보면 세상 모든 일이 다 실패로 보이거든. 오늘 아주 작은 일 하나를 열심히 해낸 것만으로도 \'나 칭찬해!\' 하고 어깨를 으쓱여 주라냥! 그 작은 하루가 모여 진짜 실력이 될 거라냥.',
-      '죽어도 해내야 하는 일은 없어. \'안 되면 말지 뭐\' 하고 가볍게 시도해보는 거야. 시간이 지나면 어느새 네 실력이 돼있을 거라냥.',
-      '어쩌면 완벽주의는 내가 특별하지 않으면 안 된다는 기대에서 시작된다냥. 내가 모든 걸 완벽하게 해낼 수 없는 사람이라는 걸 인정하려면 처음엔 기분이 텁텁하지. 그래도 그 불편함을 가만히 느껴주면 시간이 지날수록 덤덤해지고, 그제야 무거운 짐을 내려놓을 수 있다냥. 완벽하지 않아도, 진심으로 괜찮아지게 된다냥.',
-      '부지런해지는 법이 뭔 줄 아냥? 내 선택으로 했다는 감각이라냥. 그런데 완벽주의는 그 감각을 줄이고, \'해야 한다\'는 감옥에 나를 가둔다냥. 그 감옥에 왜 나를 가뒀을까? 그게 나의 진짜 마음인지, 아니면 그래야만 남들에게 잘 보일 수 있을 것 같은 마음인지 한번 살펴보라냥.',
-      '더 잘하려고 할수록 몸과 마음에 힘이 들어가고, 오히려 잘 안 될 때가 있다냥. 힘을 빼고 자그마하게 할 수 있는 것부터 해야 내 잠재력이 조금씩 나온다냥. 완벽하지 못해서 속상해하지 않아도 된다냥. 내가 하고자 하는 일을 어떻게 하면 조금 더 즐겁게 시작할 수 있을지 살펴보라냥. 물론 처음부터 잘 되지는 않겠지만, 그래도 가볍게 시작해보는 거다냥.',
-      '완벽하게 해내야만 사랑받을 수 있다는 마음이 들 때가 있다냥. 하지만 그런 사랑이라면 차라리 거부해버리라냥. 사람은 완벽할 수가 없다냥. 그 사실을 인정하면 처음엔 기분이 안 좋아도, 그 기분을 충분히 느껴줘. 언젠가 덤덤하게 받아들이면 더 자유로워지고, 더 많은 일을 하게 될 거라냥.',
-      '완벽주의가 생기는 이유는 실패에 대한 두려움일 수도 있다냥. 왜 실패하는 게 두려운지 가만히 살펴보라냥. 남의 시선이 내 안에 들어와 나를 감시하고 있는 건 아닐까? 혼자 쓰는 계획표 앞에서도 마음이 무겁다면, 그건 내 안의 감시자가 너무 엄격해진 걸 수도 있다냥. 실패해도 괜찮다냥. 오늘 좀 못해도 괜찮다냥. 그 틀을 벗어버리면 더 자유로워지고 더 움직이게 될 거라냥.',
-      '완벽주의에 오래 매달리면, 어느새 내가 진짜 원하는 것보다 "이 정도는 되어야 나답다"는 틀을 더 붙잡게 된다냥. 허상의 틀에 나를 맞추려다 보면, 살아 있는 내 마음은 점점 작아지더군. 자네는 기준에 맞춰 완성되는 물건이 아니라, 해보면서 모양을 찾아가는 사람이라냥. 오늘은 완벽한 내가 아니라, 지금의 내가 할 수 있는 작은 일 하나를 골라보라냥.',
-    ];
-    return lines[Random().nextInt(lines.length)];
+  static const String _nyangPerfectionismLineDateKey =
+      'nyang_halbae_perfectionism_line_date';
+  static const String _nyangPerfectionismLineIndexKey =
+      'nyang_halbae_perfectionism_line_index';
+
+  static const List<String> _nyangPerfectionismInsights = [
+    '완벽하게 못 해서 속상한 마음, 그거 너무 기준이 높아서 생긴 상처일 수 있다냥. 오늘은 잘하는 나 말고, 시작하는 나만 데려오면 된다냥.',
+    '완벽하게 해내야만 괜찮은 사람이 되는 건 아니다냥. 지금은 완성보다 첫 걸음 하나가 더 중요하다냥.',
+    '자꾸 완벽하게 하려 들면 시작이 제일 무거워진다냥. 오늘은 못난 초안이어도 좋으니, 아주 작게 하나만 건드려보자냥.',
+    '완벽주의는 일을 잘하고 싶다는 마음에서 오지만, 가끔은 그 마음이 발목을 잡는다냥. 지금은 잘하려 하지 말고, 멈춰 있던 걸음만 살짝 움직이면 된다냥.',
+    '죽어도 해내야 하는 일은 없다냥. 오늘은 "안 되면 말지" 하는 마음으로 가볍게 한 번만 건드려보자냥.',
+    '혼자 쓰는 계획표 앞에서도 마음이 무겁다면, 내 안의 기준이 너무 엄격해진 걸 수도 있다냥. 좀 못하면 어때? 첫 걸음만 작게 떼보자냥.',
+  ];
+
+  Future<String> _buildNyangPerfectionismReply() async {
+    final prefs = await SharedPreferences.getInstance();
+    final todayStr = _getTodayStrWithReset(prefs);
+    final action = await _buildPerfectionismSmallAction();
+    final usedToday =
+        prefs.getString(_nyangPerfectionismLineDateKey) == todayStr;
+    if (usedToday) {
+      return '그 마음은 오늘 이미 같이 봤다냥.\n$action';
+    }
+
+    final line = _pickNyangPerfectionismInsight(prefs);
+    await prefs.setString(_nyangPerfectionismLineDateKey, todayStr);
+    return '$line\n$action';
+  }
+
+  String _pickNyangPerfectionismInsight(SharedPreferences prefs) {
+    final index = Random().nextInt(_nyangPerfectionismInsights.length);
+    unawaited(prefs.setInt(_nyangPerfectionismLineIndexKey, index));
+    return _nyangPerfectionismInsights[index];
   }
 
   Future<String> _buildPerfectionismSmallAction() async {
