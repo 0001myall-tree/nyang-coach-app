@@ -1219,6 +1219,7 @@ class _ChatScreenState extends State<ChatScreen>
   int? _timerActiveInsertIndex;
   String? _usageLimitBanner;
   bool _awaitingBroWorkoutPreference = false;
+  String _broQuickWorkoutChipLabel = '';
   bool _isCheckingVisionRecommendationAllowance = false;
   bool _isCheckingNextActionAllowance = false;
 
@@ -1231,6 +1232,8 @@ class _ChatScreenState extends State<ChatScreen>
 
   int _completedTasks = 0;
   int _totalTasks = 0;
+  String? _resistanceChipTaskName;
+  String? _repeatedlyDeferredTaskName;
   int _attendanceStreak = 0;
 
   // 음성 인식 관련
@@ -1270,6 +1273,7 @@ class _ChatScreenState extends State<ChatScreen>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _coach = CoachConfigs.get(widget.coachId);
+    _broQuickWorkoutChipLabel = _pickBroQuickWorkoutChipLabel();
     _flirtAnim = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 350),
@@ -1288,17 +1292,47 @@ class _ChatScreenState extends State<ChatScreen>
 
       int total = 0;
       int completed = 0;
+      final pendingChipCandidates = <Map<String, dynamic>>[];
+      final repeatedlyDeferredCandidates = <Map<String, dynamic>>[];
 
-      for (var item in list) {
+      for (final item in list) {
+        if (item is! Map) continue;
+        final task = Map<String, dynamic>.from(item);
         total++;
-        if (item['done'] == true) {
+        if (task['done'] == true) {
           completed++;
+        } else {
+          pendingChipCandidates.add(task);
+          final deferredCount = (task['deferredCount'] as num?)?.toInt() ?? 0;
+          if (deferredCount >= 2) {
+            repeatedlyDeferredCandidates.add(task);
+          }
         }
       }
       for (final milestone in milestones) {
         total++;
         if (milestone['done'] == true) {
           completed++;
+        } else {
+          pendingChipCandidates.add(milestone);
+        }
+      }
+      _sortPendingTaskCandidates(pendingChipCandidates);
+      String? resistanceChipTaskName;
+      for (final task in pendingChipCandidates) {
+        final text = _taskText(task);
+        if (text != null) {
+          resistanceChipTaskName = text;
+          break;
+        }
+      }
+      _sortRepeatedlyDeferredTaskCandidates(repeatedlyDeferredCandidates);
+      String? repeatedlyDeferredTaskName;
+      for (final task in repeatedlyDeferredCandidates) {
+        final text = _taskText(task);
+        if (text != null) {
+          repeatedlyDeferredTaskName = text;
+          break;
         }
       }
 
@@ -1306,6 +1340,8 @@ class _ChatScreenState extends State<ChatScreen>
         setState(() {
           _totalTasks = total;
           _completedTasks = completed;
+          _resistanceChipTaskName = resistanceChipTaskName;
+          _repeatedlyDeferredTaskName = repeatedlyDeferredTaskName;
         });
       }
     } catch (e) {
@@ -2908,6 +2944,48 @@ class _ChatScreenState extends State<ChatScreen>
     return text == null || text.isEmpty ? null : text;
   }
 
+  void _sortPendingTaskCandidates(List<Map<String, dynamic>> tasks) {
+    tasks.sort((a, b) {
+      final aInProgress = a['inProgress'] == true ? 0 : 1;
+      final bInProgress = b['inProgress'] == true ? 0 : 1;
+      if (aInProgress != bInProgress) return aInProgress.compareTo(bInProgress);
+
+      final aTime = a['timeStart']?.toString() ?? a['time']?.toString() ?? '';
+      final bTime = b['timeStart']?.toString() ?? b['time']?.toString() ?? '';
+      if (aTime.isNotEmpty && bTime.isNotEmpty) return aTime.compareTo(bTime);
+      if (aTime.isNotEmpty) return -1;
+      if (bTime.isNotEmpty) return 1;
+
+      final aText = _taskText(a) ?? '';
+      final bText = _taskText(b) ?? '';
+      return aText.length.compareTo(bText.length);
+    });
+  }
+
+  void _sortRepeatedlyDeferredTaskCandidates(List<Map<String, dynamic>> tasks) {
+    tasks.sort((a, b) {
+      final aInProgress = a['inProgress'] == true ? 0 : 1;
+      final bInProgress = b['inProgress'] == true ? 0 : 1;
+      if (aInProgress != bInProgress) return aInProgress.compareTo(bInProgress);
+
+      final aDeferredCount = (a['deferredCount'] as num?)?.toInt() ?? 0;
+      final bDeferredCount = (b['deferredCount'] as num?)?.toInt() ?? 0;
+      if (aDeferredCount != bDeferredCount) {
+        return bDeferredCount.compareTo(aDeferredCount);
+      }
+
+      final aTime = a['timeStart']?.toString() ?? a['time']?.toString() ?? '';
+      final bTime = b['timeStart']?.toString() ?? b['time']?.toString() ?? '';
+      if (aTime.isNotEmpty && bTime.isNotEmpty) return aTime.compareTo(bTime);
+      if (aTime.isNotEmpty) return -1;
+      if (bTime.isNotEmpty) return 1;
+
+      final aText = _taskText(a) ?? '';
+      final bText = _taskText(b) ?? '';
+      return aText.length.compareTo(bText.length);
+    });
+  }
+
   /// 완료 시각이 최근인 순. 시각이 없는 항목은 목록 순서를 지키도록 뒤로 보낸다.
   List<Map<String, dynamic>> _sortByRecentCompletion(
     List<Map<String, dynamic>> tasks,
@@ -2964,7 +3042,9 @@ class _ChatScreenState extends State<ChatScreen>
     String? doneLabel;
     if (headName != null &&
         headName.length <= MasterGreetingCopy.doneLabelMaxLength) {
-      doneLabel = doneCount > 1 ? "'$headName' 외 ${doneCount - 1}개" : "'$headName'";
+      doneLabel = doneCount > 1
+          ? "'$headName' 외 ${doneCount - 1}개"
+          : "'$headName'";
     }
 
     final daysSinceLastVisit = lastVisit == null
@@ -2984,13 +3064,29 @@ class _ChatScreenState extends State<ChatScreen>
     ].where((m) => _isSameDay(m.time, now) || _isSameDay(m.time, yesterday));
     final lateNight = seen.any((m) => m.time.hour >= 2 && m.time.hour < 5);
     const sickWords = [
-      '아프', '아팠', '몸살', '감기', '열이', '열나', '두통', '배탈',
-      '어지럽', '몸이 안 좋', '컨디션이 안 좋',
+      '아프',
+      '아팠',
+      '몸살',
+      '감기',
+      '열이',
+      '열나',
+      '두통',
+      '배탈',
+      '어지럽',
+      '몸이 안 좋',
+      '컨디션이 안 좋',
     ];
     // 다 나았다거나 안 아프다는 말은 아픔 신호로 보지 않는다.
     const notSickWords = [
-      '안 아프', '안아프', '아프지 않', '나았', '나아서', '낫고', '괜찮아졌',
-      '괜찮아 졌', '다 나음',
+      '안 아프',
+      '안아프',
+      '아프지 않',
+      '나았',
+      '나아서',
+      '낫고',
+      '괜찮아졌',
+      '괜찮아 졌',
+      '다 나음',
     ];
     final feltSick = seen.any(
       (m) =>
@@ -3919,14 +4015,14 @@ class _ChatScreenState extends State<ChatScreen>
   Future<String> _buildLocalMasterStatusReply() async {
     final prefs = await SharedPreferences.getInstance();
     // 상태를 물었을 때의 답이라 여기서는 습관까지 포함해서 센다.
-    final todayTasks = _decodeMapList(prefs.getString('nyang_tasks')).where((
-      task,
-    ) {
-      final category = task['category']?.toString();
-      return category == 'today' ||
-          category == 'habit' ||
-          category == 'schedule';
-    }).toList(growable: false);
+    final todayTasks = _decodeMapList(prefs.getString('nyang_tasks'))
+        .where((task) {
+          final category = task['category']?.toString();
+          return category == 'today' ||
+              category == 'habit' ||
+              category == 'schedule';
+        })
+        .toList(growable: false);
     final incomplete = todayTasks
         .where((task) => task['done'] != true)
         .toList(growable: false);
@@ -3934,10 +4030,13 @@ class _ChatScreenState extends State<ChatScreen>
     final remaining = incomplete.length;
     final done = total - remaining;
 
-    final inProgressSchedule = incomplete.cast<Map<String, dynamic>?>().firstWhere(
-      (task) => task?['category'] == 'schedule' && task?['inProgress'] == true,
-      orElse: () => null,
-    );
+    final inProgressSchedule = incomplete
+        .cast<Map<String, dynamic>?>()
+        .firstWhere(
+          (task) =>
+              task?['category'] == 'schedule' && task?['inProgress'] == true,
+          orElse: () => null,
+        );
     final inProgress = _taskText(
       inProgressSchedule ??
           incomplete.cast<Map<String, dynamic>?>().firstWhere(
@@ -3946,12 +4045,9 @@ class _ChatScreenState extends State<ChatScreen>
           ),
     );
     final core = _taskText(
-      _decodeMapList(
-        prefs.getString('nyang_core_tasks'),
-      ).cast<Map<String, dynamic>?>().firstWhere(
-        (task) => task?['done'] != true,
-        orElse: () => null,
-      ),
+      _decodeMapList(prefs.getString('nyang_core_tasks'))
+          .cast<Map<String, dynamic>?>()
+          .firstWhere((task) => task?['done'] != true, orElse: () => null),
     );
 
     if (_coach.id == 'nyang_halbae') {
@@ -5985,20 +6081,7 @@ class _ChatScreenState extends State<ChatScreen>
       ]);
     }
 
-    if (!explicitWorkoutRequest) {
-      return null;
-    }
-
-    if (gym) {
-      return '헬스장 가는 건 좋은데, 바로 무게부터 들지 마라. 관절 놀란다.\n1단계 러닝머신 걷기 5분, 2단계 어깨 돌리기 10번, 3단계 빈 무게로 첫 세트. 풀고 오면 그때 본운동 잡자.';
-    }
-    if (_containsAny(normalized, ['하체', '다리', '스쿼트', '런지'])) {
-      return '하체 갈 거면 더더욱 바로 들이박지 마라.\n고관절 돌리기 10번, 브릿지 8회, 맨몸 스쿼트 8회. 이게 1단계다. 무릎 괜찮으면 그때 세트 늘린다.';
-    }
-    return _pickLine([
-      '야 잠깐. 바로 고강도 박지 마라. 관절 놀란다.\n목 돌리기, 어깨 돌리기, 제자리 걷기 1분. 이거 하고 몸 괜찮으면 본운동 하나만 붙인다.',
-      '좋다. 근데 바로 빡세게 가지 마라. 몸부터 깨워야 오래 간다.\n팔 크게 돌리기 10번, 허리 가볍게 돌리기 10번, 제자리 걷기 1분. 1단계부터 끝내.',
-    ]);
+    return null;
   }
 
   int? _directTimerRequestMinutes(String text) {
@@ -6232,73 +6315,6 @@ class _ChatScreenState extends State<ChatScreen>
       coachId: widget.coachId,
       usedApi: false,
     );
-  }
-
-  Future<void> _handleMentalClutterChip() async {
-    if (_isLoading) return;
-    if (!await _ensureMasterCoachAccess()) return;
-    HapticFeedback.lightImpact();
-
-    setState(() {
-      _messages.add(
-        ChatMessage(text: '머리가 복잡해', isUser: true, time: DateTime.now()),
-      );
-      _messages.add(
-        ChatMessage(
-          text: '뭘 해야 할지 모르는 건가? 아님 해야 할 건 아는데 마음이 흩어진 걸까냥?',
-          isUser: false,
-          time: DateTime.now(),
-        ),
-      );
-      _messages.add(
-        ChatMessage(
-          text: '',
-          isUser: false,
-          time: DateTime.now(),
-          kind: 'mental_clutter_choice',
-        ),
-      );
-      _suggestedTasks = [];
-      _dynamicChips = _coach.chips;
-      _suppressDefaultChips = false;
-    });
-    _scrollToBottom();
-    await _saveHistory();
-    await AnalyticsService.logConversationMessage(
-      coachId: widget.coachId,
-      usedApi: false,
-    );
-  }
-
-  Future<void> _startMentalClutterCountdown() async {
-    if (_isLoading) return;
-    HapticFeedback.lightImpact();
-
-    setState(() {
-      _messages.add(
-        ChatMessage(text: '해야 할 건 아는데 복잡해', isUser: true, time: DateTime.now()),
-      );
-      _messages.add(
-        ChatMessage(
-          text:
-              '그럴 땐 생각을 더 정리하기보다 몸을 먼저 움직이는 게 낫더라냥.\n머리는 잠깐 내려놓고, 작은 시작 의식부터 해보자냥.',
-          isUser: false,
-          time: DateTime.now(),
-        ),
-      );
-      _suggestedTasks = [];
-      _dynamicChips = _coach.chips;
-      _suppressDefaultChips = false;
-    });
-    _scrollToBottom();
-    await _saveHistory();
-    await AnalyticsService.logConversationMessage(
-      coachId: widget.coachId,
-      usedApi: false,
-    );
-
-    await Future.delayed(const Duration(milliseconds: 650));
-    if (mounted) _openCountdownFocusMode();
   }
 
   Future<void> _handleStartDifficultyChip() async {
@@ -7188,20 +7204,7 @@ class _ChatScreenState extends State<ChatScreen>
     }).toList();
     if (pending.isEmpty) return null;
 
-    pending.sort((a, b) {
-      final aInProgress = a['inProgress'] == true ? 0 : 1;
-      final bInProgress = b['inProgress'] == true ? 0 : 1;
-      if (aInProgress != bInProgress) return aInProgress.compareTo(bInProgress);
-      final aTime = a['timeStart']?.toString() ?? a['time']?.toString() ?? '';
-      final bTime = b['timeStart']?.toString() ?? b['time']?.toString() ?? '';
-      if (aTime.isNotEmpty && bTime.isNotEmpty) return aTime.compareTo(bTime);
-      if (aTime.isNotEmpty) return -1;
-      if (bTime.isNotEmpty) return 1;
-      final aText = _taskText(a) ?? '';
-      final bText = _taskText(b) ?? '';
-      return aText.length.compareTo(bText.length);
-    });
-
+    _sortPendingTaskCandidates(pending);
     return _taskText(pending.first);
   }
 
@@ -9430,7 +9433,6 @@ class _ChatScreenState extends State<ChatScreen>
 
 [이번 턴 지시 - 하기 싫음/귀찮음 대응]
 - 사용자가 할 일을 하기 싫어하거나 귀찮다고 했습니다. 질문부터 하지 말고, 보이는 원인을 한 문장으로 짚은 뒤 작은 실행 제안 하나로 연결하세요.
-- 사용자가 "하기 싫어"처럼 대상을 말하지 않았고 [오늘 할 일 현황]에 미완료 항목이 있으면, 그중 가장 가까운/중요한 항목 하나를 먼저 추정해 "이거야, 아니면 다른 일이야?"처럼 확인하세요. 단, 목록 밖의 일일 수 있으므로 단정하지 마세요.
 - 해결책을 여러 개 나열하거나 목표·비전의 중요성을 길게 설명하지 마세요.
 - 원인이 불명확할 때만, 짧게 공감하는 한 문장 뒤에 아래 질문을 문장 그대로 한 번만 물으세요. 문장을 새로 만들거나 다른 질문을 덧붙이지 마세요.
   "$question"
@@ -9462,7 +9464,6 @@ class _ChatScreenState extends State<ChatScreen>
 
 [실행 저항 원인 추론 흐름 - 마스터 코치 전용]
 - 사용자가 실행 저항을 표현하면 질문부터 하지 말고, 먼저 사용자의 말과 현재 맥락에서 원인을 부드럽게 추론합니다. 원인을 어느 정도 추측할 수 있으면 [하기 싫다 실행 개입 전략]에 따라 개입을 하나만 제안합니다.
-- 사용자가 "하기 싫어", "귀찮아"처럼 대상을 말하지 않은 실행 저항을 표현하면, [오늘 할 일 현황]의 미완료 항목 중 가장 가까운/중요한 항목 하나를 먼저 추정해 확인합니다. 단, 목록 밖의 일일 수 있으므로 "이거야, 아니면 다른 일이야?"처럼 열어둡니다.
 - 원인을 추측하기 어렵거나 잘못 짚으면 부담이 큰 상황에서만 원인 확인 질문을 한 번 사용합니다. 확인 질문은 앱이 지정해준 문장만 쓰고, 새로 만들거나 두 번 반복하지 않습니다.
 - 사용자가 원인을 특정하지 못하면("생각이 너무 많아요", "나도 잘 모르겠어요", "그냥 귀찮아요", "다 하기 싫어요", "이유를 모르겠어요") 원인을 더 분석하거나 다시 묻지 말고 "마음 비우고 시작"을 제안합니다.
 - "마음 비우고 시작"은 모든 상황에서 쓰는 기본 해결책이 아닙니다. 원인이 불명확할 때, 또는 앱 기록상 미루기 2회 이상인 일을 계속 시작하지 못할 때 생각을 잠깐 내려놓고 실행으로 전환시키는 장치로 씁니다.
@@ -9576,7 +9577,6 @@ $masterStyleRule
 
 [하기 싫다 실행 개입 전략]
 - 사용자가 "하기 싫다", "귀찮다", "못 하겠다", "미루고 싶다"처럼 실행 저항을 표현하면 작업 성격을 먼저 판단하고, 실행 성공 가능성·낮은 부담·자연스러움 순으로 한 가지 개입만 고르세요.
-- 사용자가 "하기 싫어", "귀찮아"처럼 대상을 말하지 않았고 [오늘 할 일 현황]에 미완료 항목이 있으면, 먼저 목록에서 가장 가까운/중요한 항목 하나를 추정해 확인하세요. 목록 밖의 일일 수도 있으니 단정하지 말고 선택지를 열어두세요.
 - 오늘 미완료 항목이 없거나 사용자가 순수 감정 토로처럼 말한 경우에는 억지로 목록에 연결하지 말고, "목록에 있는 일 때문이야, 아니면 그냥 아무것도 하기 싫은 느낌이야?"처럼 부담 낮은 확인 질문을 한 번만 하세요.
 - 창작·기획·공부·개발·글쓰기처럼 인지 부담이 큰 작업은 결과물 요구보다 짧은 시간 시작을 권하세요. 단, 창작 작업에 "한 문장만" 같은 산출물 요구는 기본적으로 피하세요.
 - 청소·설거지·정리·빨래 개기처럼 반복 작업은 가장 작은 실행 단위 하나로 낮추세요.
@@ -11541,9 +11541,6 @@ $timerOutputRule
     if (msg.kind == 'vision_choice') {
       return _buildVisionChoiceCard(msg);
     }
-    if (msg.kind == 'mental_clutter_choice') {
-      return _buildMentalClutterChoiceCard(msg);
-    }
     if (msg.kind == 'start_difficulty_choice') {
       return _buildStartDifficultyChoiceCard(msg);
     }
@@ -12095,118 +12092,6 @@ $timerOutputRule
     );
   }
 
-  Widget _buildMentalClutterChoiceCard(ChatMessage msg) {
-    final time = DateFormat('a h:mm', 'ko').format(msg.time);
-    final accent = _coach.accentColor;
-
-    Widget choiceButton(String label, VoidCallback onTap) {
-      return GestureDetector(
-        onTap: _isLoading ? null : onTap,
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          decoration: BoxDecoration(
-            color: const Color(0xFFF8F5FF),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: const Color(0xFFE5DEFF)),
-          ),
-          child: Text(
-            label,
-            textAlign: TextAlign.center,
-            style: GoogleFonts.notoSansKr(
-              fontSize: 13,
-              fontWeight: FontWeight.w800,
-              color: accent,
-            ),
-          ),
-        ),
-      );
-    }
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(18),
-            child: Image.asset(
-              _coach.imagePath,
-              width: 36,
-              height: 36,
-              fit: BoxFit.cover,
-              alignment: Alignment.topCenter,
-              errorBuilder: (_, __, ___) => Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: _coach.accentLight,
-                  borderRadius: BorderRadius.circular(18),
-                ),
-                child: Icon(Icons.person, color: _coach.accentColor, size: 20),
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Flexible(
-            child: Container(
-              constraints: BoxConstraints(
-                maxWidth: MediaQuery.of(context).size.width * 0.72,
-              ),
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: const Color(0xFFE8E1F4)),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.06),
-                    blurRadius: 12,
-                    offset: const Offset(0, 3),
-                  ),
-                ],
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  if (msg.text.trim().isNotEmpty) ...[
-                    Text(
-                      msg.text,
-                      style: GoogleFonts.notoSansKr(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w800,
-                        height: 1.45,
-                        color: const Color(0xFF1A1A2E),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                  ],
-                  choiceButton(
-                    '뭐부터 할지 모르겠어',
-                    () => _send('뭐부터 할지 모르겠어', apiInputOverride: '지금 뭐하지?'),
-                  ),
-                  const SizedBox(height: 8),
-                  choiceButton('해야 할 건 아는데 복잡해', _startMentalClutterCountdown),
-                ],
-              ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.only(left: 6, bottom: 2),
-            child: Text(
-              time,
-              style: GoogleFonts.notoSansKr(
-                fontSize: AppDesignTokens.textMeta,
-                color: AppDesignTokens.textDisabled,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildStartDifficultyChoiceCard(ChatMessage msg) {
     final time = DateFormat('a h:mm', 'ko').format(msg.time);
     final accent = _coach.accentColor;
@@ -12474,6 +12359,7 @@ $timerOutputRule
     await AnalyticsService.logFeatureUsage('master_evening_pick');
     await _send(label, apiInputOverride: "'$label'이(가) 오늘 제일 하기 싫었어");
   }
+
   Widget _buildGroomingCareChoiceCard(ChatMessage msg) {
     return _buildGroomingChoiceCard(msg, [
       ('집이야', _sendHomeGroomingRoutine),
@@ -12814,7 +12700,10 @@ $timerOutputRule
   }
 
   List<String> get _masterQuickChips {
-    final focusChip = _coach.id == 'nyang_halbae' ? '머리가 복잡해' : '마음 비우고 하게 해줘';
+    final focusChip = _coach.id == 'nyang_halbae'
+        ? _nyangHalbaeSmallStartChipLabel(truncateTaskName: true)
+        : '마음 비우고 하게 해줘';
+    final decisionChip = _masterDecisionChipLabel(truncateTaskName: true);
     if (_coach.id == 'nyang_halbae') {
       if (_isNyangMorningStartChipTime) {
         return ['시작하기가 힘들어', focusChip, '오늘 핵심 정리해줘'];
@@ -12826,11 +12715,139 @@ $timerOutputRule
       }
       return _isMasterChipNightTime
           ? [focusChip, '잠이 안 와', '내일로 미뤄도 돼?']
-          : [focusChip, '지금 뭐하지?', '오늘 핵심 정리해줘'];
+          : [focusChip, decisionChip, '오늘 핵심 정리해줘'];
     }
     return _isMasterChipNightTime
         ? ['잠이 안 와', focusChip, '내일로 미뤄도 돼?']
-        : ['지금 뭐하지?', focusChip, '오늘 핵심 정리해줘'];
+        : [decisionChip, focusChip, '오늘 핵심 정리해줘'];
+  }
+
+  static const int _resistanceChipTaskDisplayMaxLength = 10;
+
+  String _resistanceChipPhrase(String taskName) {
+    const resistancePhrases = ['하기 싫어', '하기 귀찮아', '하기 부담돼'];
+    final phraseIndex = taskName.codeUnits.fold<int>(
+      0,
+      (sum, codeUnit) => sum + codeUnit,
+    );
+    return resistancePhrases[phraseIndex % resistancePhrases.length];
+  }
+
+  String _truncateResistanceChipTaskName(String taskName) {
+    if (taskName.length <= _resistanceChipTaskDisplayMaxLength) {
+      return taskName;
+    }
+    return '${taskName.substring(0, _resistanceChipTaskDisplayMaxLength)}...';
+  }
+
+  String _resistanceChipLabel(String chip, {required bool truncateTaskName}) {
+    if (_coach.id != 'cat' && _coach.id != 'boyfriend') return chip;
+    if (chip != '하기 싫다' && chip != '하기 싫어') return chip;
+
+    final taskName = _resistanceChipTaskName?.trim();
+    if (taskName == null || taskName.isEmpty) return chip;
+    final displayTaskName = truncateTaskName
+        ? _truncateResistanceChipTaskName(taskName)
+        : taskName;
+    return '지금 \'$displayTaskName\' ${_resistanceChipPhrase(taskName)}';
+  }
+
+  static const String _nyangHalbaeSmallStartFallbackChip = '지금 조금만 해볼까?';
+
+  String _nyangHalbaeSmallStartChipLabel({required bool truncateTaskName}) {
+    final taskName = _resistanceChipTaskName?.trim();
+    if (taskName == null || taskName.isEmpty) {
+      return _nyangHalbaeSmallStartFallbackChip;
+    }
+    final displayTaskName = truncateTaskName
+        ? _truncateResistanceChipTaskName(taskName)
+        : taskName;
+    return '지금 \'$displayTaskName\' 조금만 해볼까?';
+  }
+
+  bool _isNyangHalbaeSmallStartChip(String chip) {
+    if (_coach.id != 'nyang_halbae') return false;
+    return chip == _nyangHalbaeSmallStartFallbackChip ||
+        chip == _nyangHalbaeSmallStartChipLabel(truncateTaskName: true);
+  }
+
+  String _nyangHalbaeSmallStartApiInput() {
+    final taskName = _resistanceChipTaskName?.trim();
+    if (taskName == null || taskName.isEmpty) {
+      return '지금 할 일을 하기 싫어. 조금만 해볼까?';
+    }
+    return '지금 \'$taskName\' 하기 싫어. 조금만 해볼까?';
+  }
+
+  String _deferredResistancePhrase(String taskName) {
+    const phrases = ['하기가 자꾸 귀찮아', '하기가 자꾸 부담돼'];
+    final phraseIndex = taskName.codeUnits.fold<int>(
+      0,
+      (sum, codeUnit) => sum + codeUnit,
+    );
+    return phrases[phraseIndex % phrases.length];
+  }
+
+  String _masterDecisionChipLabel({required bool truncateTaskName}) {
+    final taskName = _repeatedlyDeferredTaskName?.trim();
+    if (taskName == null || taskName.isEmpty) return '지금 뭐하지?';
+    final displayTaskName = truncateTaskName
+        ? _truncateResistanceChipTaskName(taskName)
+        : taskName;
+    return '\'$displayTaskName\' ${_deferredResistancePhrase(taskName)}';
+  }
+
+  bool _isRepeatedlyDeferredMasterChip(String chip) {
+    if (!_coach.isMaster) return false;
+    final taskName = _repeatedlyDeferredTaskName?.trim();
+    if (taskName == null || taskName.isEmpty) return false;
+    return chip == _masterDecisionChipLabel(truncateTaskName: true);
+  }
+
+  String _repeatedlyDeferredMasterChipApiInput() {
+    final taskName = _repeatedlyDeferredTaskName?.trim();
+    if (taskName == null || taskName.isEmpty) return '지금 뭐하지?';
+    return '\'$taskName\' ${_deferredResistancePhrase(taskName)}. 하기 싫어.';
+  }
+
+  static const Map<String, String> _broQuickWorkoutChipMessages = {
+    '자기 전에 운동 뭐하지?': '자기 전에 가볍게 할 운동 뭐하지?',
+    '앉아있는데 뱃살': '앉은 상태로 뱃살 빠지는 법 없어?',
+    '지금 앉아있는데 다리 운동': '앉은 상태에서 다리 날씬해지는 운동은?',
+    '걷고 있는데 힙업되는 법': '지금 걷고 있는데 힙업되는 법 없을까?',
+    '지금 걷고 있는데 팔뚝 살 빼는 법': '걷고 있는데 팔뚝살 빼는 법은?',
+    '산책 중인데 뱃살 빠지는 법': '걸으면서 뱃살 빼는 법 있어?',
+  };
+
+  bool get _isBroBedtimeWorkoutChipTime => DateTime.now().hour >= 22;
+
+  String _pickBroQuickWorkoutChipLabel() {
+    if (_isBroBedtimeWorkoutChipTime) return '자기 전에 운동 뭐하지?';
+    final labels = _broQuickWorkoutChipMessages.keys
+        .where((label) => label != '자기 전에 운동 뭐하지?')
+        .toList(growable: false);
+    return labels[Random().nextInt(labels.length)];
+  }
+
+  List<String> _displayChipsForCoach(List<String> chips) {
+    if (_coach.id != 'bro') return chips;
+    if (!chips.contains('지금 할 운동')) return chips;
+    final result = chips.where((chip) => chip != '지금 할 운동').toList();
+    result.insert(
+      0,
+      _isBroBedtimeWorkoutChipTime
+          ? '자기 전에 운동 뭐하지?'
+          : _broQuickWorkoutChipLabel,
+    );
+    return result;
+  }
+
+  String _sendTextForChip(String chip, String fallback) {
+    if (_coach.id == 'bro') {
+      final workoutMessage = _broQuickWorkoutChipMessages[chip];
+      if (workoutMessage != null) return workoutMessage;
+    }
+    return fallback;
   }
 
   // 마스터 칩 앞 FontAwesome 아이콘. 칩 글씨색(코치 accent)에 맞춰 톤을 통일한다.
@@ -12838,7 +12855,6 @@ $timerOutputRule
     final asset = switch (chip) {
       '마음 비우고 시작' => 'assets/icons/fa-hourglass-half-solid.svg',
       '마음 비우고 하게 해줘' => 'assets/icons/fa-hourglass-half-solid.svg',
-      '머리가 복잡해' => 'assets/icons/fa-hourglass-half-solid.svg',
       '시작하기가 힘들어' => 'assets/icons/fa-hourglass-half-solid.svg',
       '완벽하게 못 해서 속상해' => 'assets/icons/fa-hourglass-half-solid.svg',
       '지금 뭐하지?' => 'assets/icons/bolt.svg',
@@ -12850,9 +12866,13 @@ $timerOutputRule
       '돌아가기' => 'assets/icons/fa-arrow-rotate-left-solid.svg',
       _ => null,
     };
-    if (asset == null) return null;
+    if (asset == null &&
+        !_isNyangHalbaeSmallStartChip(chip) &&
+        !_isRepeatedlyDeferredMasterChip(chip)) {
+      return null;
+    }
     return SvgPicture.asset(
-      asset,
+      asset ?? 'assets/icons/fa-hourglass-half-solid.svg',
       width: 14,
       height: 14,
       colorFilter: ColorFilter.mode(
@@ -12873,8 +12893,18 @@ $timerOutputRule
             _openCountdownFocusMode();
             return;
           }
-          if (_coach.id == 'nyang_halbae' && chip == '머리가 복잡해') {
-            _handleMentalClutterChip();
+          if (_isNyangHalbaeSmallStartChip(chip)) {
+            _send(
+              _nyangHalbaeSmallStartChipLabel(truncateTaskName: false),
+              apiInputOverride: _nyangHalbaeSmallStartApiInput(),
+            );
+            return;
+          }
+          if (_isRepeatedlyDeferredMasterChip(chip)) {
+            _send(
+              _masterDecisionChipLabel(truncateTaskName: false),
+              apiInputOverride: _repeatedlyDeferredMasterChipApiInput(),
+            );
             return;
           }
           if (_coach.id == 'nyang_halbae' && chip == '시작하기가 힘들어') {
@@ -12958,9 +12988,10 @@ $timerOutputRule
         child: _buildMasterChipRow(),
       );
     }
-    final chips = _suppressDefaultChips
+    final baseChips = _suppressDefaultChips
         ? const <String>[]
         : (_dynamicChips.isNotEmpty ? _dynamicChips : _coach.chips);
+    final chips = _displayChipsForCoach(baseChips);
     return Container(
       height: 52,
       margin: const EdgeInsets.only(top: 8),
@@ -12971,8 +13002,16 @@ $timerOutputRule
         separatorBuilder: (_, __) => const SizedBox(width: 8),
         itemBuilder: (ctx, i) {
           final chip = chips[i];
+          final displayLabel = _resistanceChipLabel(
+            chip,
+            truncateTaskName: true,
+          );
+          final sendLabel = _sendTextForChip(
+            chip,
+            _resistanceChipLabel(chip, truncateTaskName: false),
+          );
           return AppChip(
-            label: chip,
+            label: displayLabel,
             icon: _chipIcon(chip),
             backgroundColor: AppDesignTokens.surface,
             foregroundColor: _coach.accentColor,
@@ -12994,7 +13033,7 @@ $timerOutputRule
                 _openCountdownFocusMode();
                 return;
               }
-              _send(chip);
+              _send(sendLabel);
             },
           );
         },
