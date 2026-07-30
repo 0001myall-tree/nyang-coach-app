@@ -13120,12 +13120,7 @@ $timerOutputRule
             );
             return;
           }
-          _send(
-            chip,
-            masterModelPolicy: chip == '오늘 핵심 정리해줘'
-                ? _MasterModelPolicy.premiumFeature
-                : _MasterModelPolicy.forceGpt4oMini,
-          );
+          _send(chip, masterModelPolicy: _MasterModelPolicy.forceGpt4oMini);
         },
         borderRadius: BorderRadius.circular(15),
         child: Container(
