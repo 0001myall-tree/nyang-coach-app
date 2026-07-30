@@ -101,6 +101,12 @@ class _MasterGreetingContext {
   /// 저녁 선택 카드에 띄울 미완료 일정(습관 제외).
   final List<String> pendingPlans;
 
+  /// 어젯밤 늦게까지(새벽 2~6시) 앱을 쓴 흔적이 있는지.
+  final bool lateNight;
+
+  /// 어제나 오늘 아프다고 말한 적이 있는지.
+  final bool feltSick;
+
   const _MasterGreetingContext({
     required this.now,
     required this.daysSinceLastVisit,
@@ -109,6 +115,8 @@ class _MasterGreetingContext {
     required this.doneCount,
     required this.doneLabel,
     required this.pendingPlans,
+    required this.lateNight,
+    required this.feltSick,
   });
 
   bool get hasPlan => planTotal > 0;
@@ -152,6 +160,8 @@ class _GreetingVoice {
   final List<String> eveningAll; // 100%
   final List<String> eveningNoPlan;
   final List<String> comeback; // 2일 이상 만에 돌아왔을 때 앞에 붙일 한 문장
+  final List<String> afterLateNight; // 늦게 잔 다음 날 낮
+  final List<String> afterSick; // 아프다고 한 다음 날 낮
 
   /// 격려 문구. (완료 항목 이름을 넣는 형태, 이름 없이 쓰는 형태) 순서다.
   final List<(String, String)> encStarted; // 오전 1~2개 완료
@@ -178,6 +188,8 @@ class _GreetingVoice {
     required this.eveningAll,
     required this.eveningNoPlan,
     required this.comeback,
+    required this.afterLateNight,
+    required this.afterSick,
     required this.encStarted,
     required this.encStrong,
     required this.encFlow,
@@ -275,6 +287,14 @@ class _MasterGreetingCopy {
       '다시 뵈어 반갑습니다.',
       '오랜만이네요. 돌아와 주셔서 좋습니다.',
       '잠시 쉬었다 오셨군요.',
+    ],
+    afterLateNight: [
+      '어제 늦게 주무신 것 같은데 컨디션은 괜찮으신지 모르겠네요. 오늘 일정 하시다가 힘든 일 있으면 말씀해 주세요.',
+      '어젯밤 늦게까지 깨어 계셨죠. 무리되는 일이 있으면 언제든 알려주세요.',
+    ],
+    afterSick: [
+      '어제 컨디션이 안 좋으셨는데 좀 회복되셨는지 모르겠어요. 오늘 일정 하시다가 심리적으로 힘든 일 있으면 알려주세요.',
+      '몸은 좀 괜찮아지셨을까요. 오늘은 버거운 일이 있으면 그때그때 말씀해 주세요.',
     ],
     encStarted: [
       ('벌써 {{task}} 시작하셨네요.', '벌써 시작하셨네요.'),
@@ -377,6 +397,14 @@ class _MasterGreetingCopy {
       '오랜만이구나냥.',
       '다시 와줬구나냥.',
       '쉬었다 다시 걷는 것도 좋다냥.',
+    ],
+    afterLateNight: [
+      '어제 늦게 잔 것 같은데 컨디션은 괜찮은지 모르겠구나냥. 오늘 하다가 힘든 일 있으면 말하라냥.',
+      '어젯밤 늦게까지 깨어 있었지냥. 무리되는 게 있으면 언제든 말하라냥.',
+    ],
+    afterSick: [
+      '어제 몸이 안 좋았는데 좀 회복됐는지 모르겠구나냥. 오늘 하다가 마음이 힘든 일 있으면 알려주라냥.',
+      '몸은 좀 괜찮아졌냥. 오늘은 버거운 게 있으면 그때그때 말하라냥.',
     ],
     encStarted: [
       ('벌써 {{task}} 시작했구나냥.', '벌써 시작했구나냥.'),
@@ -3314,6 +3342,21 @@ class _ChatScreenState extends State<ChatScreen>
               )
               .inDays;
 
+    // 어젯밤 흔적은 아카이브까지 봐야 한다 — 하루 지나면 기록이 넘어간다.
+    final yesterday = now.subtract(const Duration(days: 1));
+    final seen = [
+      ..._messages,
+      ..._decodeRecentArchive(prefs.getString(_chatArchiveKey)),
+    ].where((m) => _isSameDay(m.time, now) || _isSameDay(m.time, yesterday));
+    final lateNight = seen.any((m) => m.time.hour >= 2 && m.time.hour < 6);
+    const sickWords = [
+      '아프', '아팠', '몸살', '감기', '열이', '열나', '두통', '배탈',
+      '어지럽', '몸이 안 좋', '컨디션이 안 좋', '병원',
+    ];
+    final feltSick = seen.any(
+      (m) => m.isUser && sickWords.any((w) => m.text.contains(w)),
+    );
+
     return _MasterGreetingContext(
       now: now,
       daysSinceLastVisit: daysSinceLastVisit,
@@ -3322,6 +3365,8 @@ class _ChatScreenState extends State<ChatScreen>
       doneCount: doneCount,
       doneLabel: doneLabel,
       pendingPlans: pendingPlans,
+      lateNight: lateNight,
+      feltSick: feltSick,
     );
   }
 
@@ -3360,6 +3405,15 @@ class _ChatScreenState extends State<ChatScreen>
         return _MasterGreetingResult(parts.join(' '));
 
       case _GreetingSlot.day:
+        // 어제 아팠거나 늦게 잔 날은 계획 이야기보다 컨디션을 먼저 챙긴다.
+        if (context.feltSick || context.lateNight) {
+          parts.add(
+            _pickGreetingLine(
+              context.feltSick ? voice.afterSick : voice.afterLateNight,
+            ),
+          );
+          return _MasterGreetingResult(parts.join(' '));
+        }
         final encouragement = _dayEncouragement(context);
         if (hour < 9) {
           // 9시 전에는 계획 유무를 따지지 않고 하루를 여는 인사만 한다.
