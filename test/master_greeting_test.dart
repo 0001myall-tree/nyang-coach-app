@@ -87,7 +87,18 @@ final cases = <String, MasterGreetingContext>{
     doneLabel: "'운동' 외 1개",
     daysSinceLastVisit: 5,
   ),
+  '복귀-저녁절반이하': ctx(
+    hour: 20,
+    planTotal: 4,
+    planDone: 1,
+    pendingPlans: ['설거지', '빨래', '운동'],
+    daysSinceLastVisit: 5,
+  ),
+  '복귀-새벽': ctx(hour: 3, daysSinceLastVisit: 5),
 };
+
+/// 복귀한 날 낮·저녁에 붙는 문구. 슬롯 문구 대신 이걸로 끊는다.
+final comebackDayCases = ['복귀-낮', '복귀-아팠음', '복귀-저녁전부완료', '복귀-저녁절반이하'];
 
 final voices = {
   '여비서': MasterGreetingCopy.secretary,
@@ -121,6 +132,63 @@ void main() {
           }
         });
       }
+    }
+  });
+
+  group('복귀한 날은 뭘 했고 뭐가 남았는지 짚지 않는다', () {
+    for (final voice in voices.entries) {
+      test(voice.key, () {
+        for (final name in comebackDayCases) {
+          for (var seed = 0; seed < 50; seed++) {
+            final result = MasterGreetingBuilder(
+              voice: voice.value,
+              random: Random(seed),
+            ).build(cases[name]!);
+            final where = '$name 씨앗 $seed: ${result.text}';
+
+            expect(
+              voice.value.comebackSupport.any(result.text.endsWith),
+              isTrue,
+              reason: where,
+            );
+            // 완료 항목 이름도, 미완료를 고르게 하는 카드도 나오지 않는다.
+            expect(result.text, isNot(contains("'")), reason: where);
+            expect(result.choices, isEmpty, reason: where);
+            expect(sentenceCount(result.text), 2, reason: where);
+          }
+        }
+      });
+    }
+  });
+
+  // 문구가 여럿이어도 실제로 한 가지만 나오면 밑천이 하나인 것과 같다.
+  test('복귀 인사가 한 가지로 굳어 있지 않다', () {
+    final seen = <String>{};
+    for (var seed = 0; seed < 50; seed++) {
+      seen.add(
+        MasterGreetingBuilder(
+          voice: MasterGreetingCopy.secretary,
+          random: Random(seed),
+        ).build(cases['복귀-낮']!).text,
+      );
+    }
+    // 복귀 3 × 도움 제안 3 = 9가지가 가능하다.
+    expect(seen.length, greaterThanOrEqualTo(6), reason: seen.join('\n'));
+  });
+
+  test('복귀해도 새벽에는 재우는 말을 한다', () {
+    for (var seed = 0; seed < 50; seed++) {
+      final result = MasterGreetingBuilder(
+        voice: MasterGreetingCopy.secretary,
+        random: Random(seed),
+      ).build(cases['복귀-새벽']!);
+      expect(
+        MasterGreetingCopy.secretary.comebackSupport.any(
+          (line) => result.text.contains(line),
+        ),
+        isFalse,
+        reason: '씨앗 $seed: ${result.text}',
+      );
     }
   });
 

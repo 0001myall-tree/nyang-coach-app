@@ -91,6 +91,9 @@ class GreetingVoice {
   final List<String> eveningAll; // 100%
   final List<String> eveningNoPlan;
   final List<String> comeback; // 2일 이상 만에 돌아왔을 때 앞에 붙일 한 문장
+
+  /// 복귀한 날 뒤에 붙일 문장. 뭘 했고 뭐가 남았는지 짚는 대신 도움을 청하라고만 한다.
+  final List<String> comebackSupport;
   final List<String> afterLateNight; // 늦게 잔 다음 날 낮
   final List<String> afterSick; // 아프다고 한 다음 날 낮
 
@@ -119,6 +122,7 @@ class GreetingVoice {
     required this.eveningAll,
     required this.eveningNoPlan,
     required this.comeback,
+    required this.comebackSupport,
     required this.afterLateNight,
     required this.afterSick,
     required this.encStarted,
@@ -223,6 +227,11 @@ class MasterGreetingCopy {
       '다시 뵈어 반갑습니다.',
       '오랜만이네요, 돌아와 주셔서 좋습니다.',
       '잠시 쉬었다 오셨군요.',
+    ],
+    comebackSupport: [
+      '실행하시다가 어려운 게 있으면 말씀해 주세요.',
+      '하시다가 막히는 게 있으면 언제든 말씀해 주세요.',
+      '필요한 게 있으면 편하게 말씀해 주세요.',
     ],
     afterLateNight: [
       '어제 늦게 주무신 것 같은데 컨디션은 괜찮으신지 모르겠네요. 오늘 일정 하시다가 힘든 일 있으면 말씀해 주세요.',
@@ -334,6 +343,11 @@ class MasterGreetingCopy {
       '다시 와줬구나냥.',
       '쉬었다 다시 걷는 것도 좋다냥.',
     ],
+    comebackSupport: [
+      '하다가 어려운 게 있으면 말하라냥.',
+      '하다가 막히는 게 있으면 언제든 말하라냥.',
+      '필요한 게 있으면 편하게 말하라냥.',
+    ],
     afterLateNight: [
       '어제 늦게 잔 것 같은데 컨디션은 괜찮은지 모르겠구나냥. 오늘 하다가 힘든 일 있으면 말하라냥.',
       '어젯밤 늦게까지 깨어 있었지냥. 무리되는 게 있으면 언제든 말하라냥.',
@@ -386,6 +400,12 @@ class MasterGreetingBuilder {
     final parts = <String>[];
     if (context.isComeback) {
       parts.add(pickLine(voice.comeback));
+      // 오래 비웠다 돌아온 날은 뭘 했고 뭐가 남았는지 짚지 않는다. 뭉뚱그려
+      // 도움을 청하라고만 하고 끝낸다. 새벽 문구는 원래 계획을 안 짚으니 그대로 둔다.
+      if (context.slot != GreetingSlot.dawn) {
+        parts.add(pickLine(voice.comebackSupport));
+        return MasterGreetingResult(parts.join(' '));
+      }
     }
 
     switch (context.slot) {
