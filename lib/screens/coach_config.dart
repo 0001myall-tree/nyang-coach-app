@@ -130,7 +130,7 @@ class CoachConfigs {
       tier: 'friends',
       accentColor: Color(0xFF8BB5F5),
       accentLight: Color(0xFFEEF2FF),
-      chips: ['나 속상해', '하기 싫어', '나 좀 가꾸고 싶어'],
+      chips: ['하기 싫어', '나 좀 가꾸고 싶어', '오늘 컨디션이 별로야'],
       voiceCount: 5, // 목소리 파일 5개
       flirtOne: [
         '하나 끝냈네. 하기 싫었을 수도 있는데, 일단 움직인 게 마음 놓인다 💙',
@@ -236,7 +236,7 @@ class CoachConfigs {
       tier: 'friends',
       accentColor: Color(0xFF5EC39A),
       accentLight: Color(0xFFECFDF5),
-      chips: ['방 치우기 싫어', '화장실 청소 뭐부터 할까?', '배고파'],
+      chips: ['방 치우기 싫어', '설거지 귀찮아', '화장실 청소 뭐부터 할까?'],
       voiceCount: 5, // 목소리 파일 5개
       flirtOne: [
         '그래. 잘 해치웠네. 역시 내 새끼 👵',

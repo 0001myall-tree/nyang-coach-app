@@ -12735,7 +12735,12 @@ $timerOutputRule
     if (chip != '하기 싫다' && chip != '하기 싫어') return chip;
 
     final taskName = _resistanceChipTaskName?.trim();
-    if (taskName == null || taskName.isEmpty) return chip;
+    if (taskName == null || taskName.isEmpty) {
+      if (_coach.id == 'boyfriend' && chip == '하기 싫어') {
+        return '오늘 시작이 꼬였어';
+      }
+      return chip;
+    }
     final displayTaskName = truncateTaskName
         ? _truncateResistanceChipTaskName(taskName)
         : taskName;
