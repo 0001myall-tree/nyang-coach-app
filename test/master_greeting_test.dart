@@ -105,6 +105,29 @@ final voices = {
   '냥할배': MasterGreetingCopy.nyangHalbae,
 };
 
+/// 한 코치의 문구 전부. 풀을 새로 만들면 여기에도 더해야 검사에 걸린다.
+List<String> allTemplates(GreetingVoice v) => [
+  ...v.dawn,
+  ...v.earlyMorning,
+  ...v.earlyStart,
+  ...v.earlyQuestions,
+  ...v.morningPlan,
+  ...v.morningNoPlan,
+  ...v.afternoonBehind,
+  ...v.afternoonNoPlan,
+  ...v.eveningLow,
+  ...v.eveningMid,
+  ...v.eveningHigh,
+  ...v.eveningAll,
+  ...v.eveningNoPlan,
+  ...v.comeback,
+  ...v.comebackSupport,
+  ...v.afterLateNight,
+  ...v.afterSick,
+  for (final pool in [v.encStarted, v.encStrong, v.encFlow, v.encEvening])
+    for (final pair in pool) ...[pair.$1, pair.$2],
+];
+
 void main() {
   group('모든 분기가 말이 되는 문장을 낸다', () {
     for (final voice in voices.entries) {
@@ -202,12 +225,56 @@ void main() {
           voice.value.morningNoPlan,
           voice.value.afternoonBehind,
           voice.value.afternoonNoPlan,
+          voice.value.dawn,
+          voice.value.earlyMorning,
+          voice.value.eveningLow,
+          voice.value.eveningMid,
+          voice.value.eveningHigh,
+          voice.value.eveningAll,
+          voice.value.eveningNoPlan,
         ]) {
           for (final template in pool) {
             expect(
               builder.anchor(template).length,
               greaterThanOrEqualTo(4),
               reason: '${voice.key}: $template',
+            );
+          }
+        }
+      }
+    });
+
+    // '{...하루|...날}였는지'처럼 갈래 바로 뒤에 받침을 타는 어미가 오면, 갈래
+    // 후보에 따라 문장이 깨진다('어떤 날였는지'). 씨앗을 훑어도 조합 운에 걸리는
+    // 종류라 문구를 훑어서 구조로 잡는다.
+    test('갈래 뒤에 붙는 어미가 받침을 타지 않는다', () {
+      // 앞 글자 받침에 따라 형태가 갈리는 조사·어미의 첫 글자.
+      const risky = {'였', '을', '를', '은', '는', '이', '가', '와', '과', '로', '으'};
+      // 한글 음절은 (초성, 중성, 종성)이 한 글자에 담긴다. 종성 자리가 0이면 받침이 없다.
+      bool endsWithConsonant(String option) {
+        final code = option.runes.last;
+        if (code < 0xAC00 || code > 0xD7A3) return false;
+        return (code - 0xAC00) % 28 != 0;
+      }
+
+      final group = RegExp(r'\{([^{}]*\|[^{}]*)\}');
+      for (final voice in voices.entries) {
+        for (final template in allTemplates(voice.value)) {
+          for (final match in group.allMatches(template)) {
+            final after = match.end < template.length
+                ? template[match.end]
+                : '';
+            if (!risky.contains(after)) continue;
+            final endings = match
+                .group(1)!
+                .split('|')
+                .where((option) => option.isNotEmpty)
+                .map(endsWithConsonant)
+                .toSet();
+            expect(
+              endings.length,
+              lessThanOrEqualTo(1),
+              reason: "${voice.key}: '$after' 앞 갈래의 받침이 갈린다 — $template",
             );
           }
         }
@@ -242,6 +309,35 @@ void main() {
       }
       // 갈래 이전에는 earlyStart 4 × earlyQuestions 3 = 12가지가 전부였다.
       expect(seen.length, greaterThan(30), reason: '${seen.length}가지');
+    });
+
+    // 저녁과 새벽은 한 발화에 문구 하나만 나가므로 풀 크기가 곧 밑천이다.
+    // 갈래를 넣기 전에는 새벽 3가지, 저녁 완주 3가지가 전부였다.
+    test('새벽과 저녁도 문구 수보다 많이 나온다', () {
+      for (final voice in voices.entries) {
+        final pools = {
+          '새벽': cases['새벽-아직안잠']!,
+          '이른아침': cases['새벽-일찍깸']!,
+          '저녁-전부완료': cases['저녁-전부완료']!,
+          '저녁-계획없음': cases['저녁-계획없음']!,
+        };
+        for (final entry in pools.entries) {
+          final seen = <String>{};
+          for (var seed = 0; seed < 200; seed++) {
+            seen.add(
+              MasterGreetingBuilder(
+                voice: voice.value,
+                random: Random(seed),
+              ).build(entry.value).text,
+            );
+          }
+          expect(
+            seen.length,
+            greaterThan(5),
+            reason: '${voice.key} ${entry.key}: ${seen.length}가지',
+          );
+        }
+      }
     });
   });
 
