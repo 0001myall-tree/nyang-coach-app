@@ -81,6 +81,8 @@ class ChatMessage {
 
 enum _CountdownFocusPhase { breathing, countdown, ready, timer }
 
+enum _MasterModelPolicy { generalLimited, premiumFeature, forceGpt4oMini }
+
 class CountdownFocusModeScreen extends StatefulWidget {
   const CountdownFocusModeScreen({super.key});
 
@@ -7320,7 +7322,11 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   // ── 메시지 전송 (웹앱 sendMessage 이식) ─────────────────
-  Future<void> _send(String text, {String? apiInputOverride}) async {
+  Future<void> _send(
+    String text, {
+    String? apiInputOverride,
+    _MasterModelPolicy masterModelPolicy = _MasterModelPolicy.generalLimited,
+  }) async {
     final trimmed = text.trim();
     if (trimmed.isEmpty || _isLoading) return;
     if (!await _ensureMasterCoachAccess()) return;
@@ -7967,7 +7973,10 @@ class _ChatScreenState extends State<ChatScreen>
     }
 
     try {
-      final raw = await _callOpenAI(apiInput);
+      final raw = await _callOpenAI(
+        apiInput,
+        masterModelPolicy: masterModelPolicy,
+      );
       if (isVisionNewActionFlow) {
         await _recordFeatureUsage(
           key: 'nyang_vision_new_action_usage_history',
@@ -9516,7 +9525,57 @@ class _ChatScreenState extends State<ChatScreen>
 - 답변은 2문장 이내로 유지하고 [TASK], [TIMER_CONFIRM], [COUNTDOWN_START] 태그를 출력하지 마세요.''';
   }
 
-  Future<String> _callOpenAI(String userText) async {
+  static const int _masterGpt41DailyLimit = 8;
+  static const String _masterGpt41UsageKey = 'nyang_master_gpt41_usage_history';
+
+  Future<bool> _tryReserveMasterGpt41Turn() async {
+    final prefs = await SharedPreferences.getInstance();
+    final now = DateTime.now();
+    const resetHour = 0.0;
+    final todayKey = _effectiveUsageDateKey(now, resetHour);
+    final history = await _loadFeatureUsageHistory(
+      prefs: prefs,
+      key: _masterGpt41UsageKey,
+      fallbackKey: 'nyang_master_general_gpt41_usage_history',
+    );
+    final todayUsage = history.where((item) {
+      final createdAt = DateTime.tryParse((item['createdAt'] ?? '').toString());
+      return createdAt != null &&
+          _effectiveUsageDateKey(createdAt, resetHour) == todayKey;
+    }).length;
+
+    if (todayUsage >= _masterGpt41DailyLimit) return false;
+
+    history.add({'createdAt': now.toIso8601String()});
+    final trimmed = history.length > 40
+        ? history.sublist(history.length - 40)
+        : history;
+    await prefs.setString(_masterGpt41UsageKey, jsonEncode(trimmed));
+    return true;
+  }
+
+  Future<String> _pickChatModel({
+    required _MasterModelPolicy masterModelPolicy,
+    required String resistanceTurnDirective,
+  }) async {
+    if (!_coach.isMaster) return 'gpt-4o-mini';
+    if (resistanceTurnDirective.trim().isNotEmpty) return 'gpt-4o-mini';
+
+    switch (masterModelPolicy) {
+      case _MasterModelPolicy.forceGpt4oMini:
+        return 'gpt-4o-mini';
+      case _MasterModelPolicy.premiumFeature:
+      case _MasterModelPolicy.generalLimited:
+        return await _tryReserveMasterGpt41Turn()
+            ? 'gpt-4.1-mini'
+            : 'gpt-4o-mini';
+    }
+  }
+
+  Future<String> _callOpenAI(
+    String userText, {
+    required _MasterModelPolicy masterModelPolicy,
+  }) async {
     final historyLimit = 6;
     final promptHistory = _messages
         .where((message) {
@@ -9817,7 +9876,10 @@ $timerOutputRule
       estimatedTokens: estimatedPromptTokens,
     );
 
-    const model = 'gpt-4.1-mini';
+    final model = await _pickChatModel(
+      masterModelPolicy: masterModelPolicy,
+      resistanceTurnDirective: resistanceTurnDirective,
+    );
 
     // Firebase Cloud Functions chatProxy 호출 (웹앱과 동일한 Gemini AI 서버)
     final result = await _chatProxy.call({
@@ -10213,7 +10275,7 @@ $timerOutputRule
               ),
             Expanded(
               child: Container(
-                color: Colors.transparent,
+                color: _chatAreaBackgroundColor,
                 width: double.infinity,
                 child: Column(
                   children: [
@@ -10743,7 +10805,12 @@ $timerOutputRule
                 return;
               }
 
-              _send(item['label']!);
+              _send(
+                item['label']!,
+                masterModelPolicy: item['label'] == '미래를 위한 오늘'
+                    ? _MasterModelPolicy.premiumFeature
+                    : _MasterModelPolicy.forceGpt4oMini,
+              );
             },
             child: Container(
               width: 190,
@@ -11499,6 +11566,15 @@ $timerOutputRule
   }
 
   // ── 메시지 목록 ────────────────────────────────────────────
+  Color get _chatAreaBackgroundColor {
+    if (!_coach.isMaster || widget.vacationInfo != null) {
+      return Colors.transparent;
+    }
+    return _coach.id == 'nyang_halbae'
+        ? AppDesignTokens.brandSoftAlt
+        : const Color(0xFFEDF7F4);
+  }
+
   Widget _buildMessageList() {
     final items = <Widget>[];
 
@@ -11557,11 +11633,8 @@ $timerOutputRule
     // 마스터 코치별 대화 영역 배경
     if (_coach.isMaster) {
       final isVacationBg = widget.vacationInfo != null;
-      final masterChatListColor = _coach.id == 'nyang_halbae'
-          ? AppDesignTokens.brandSoftAlt
-          : const Color(0xFFEDF7F4);
       return ColoredBox(
-        color: isVacationBg ? Colors.transparent : masterChatListColor,
+        color: isVacationBg ? Colors.transparent : _chatAreaBackgroundColor,
         child: list,
       );
     }
@@ -12073,7 +12146,11 @@ $timerOutputRule
       return GestureDetector(
         onTap: _isLoading
             ? null
-            : () => _send(label, apiInputOverride: apiInput),
+            : () => _send(
+                label,
+                apiInputOverride: apiInput,
+                masterModelPolicy: _MasterModelPolicy.premiumFeature,
+              ),
         child: Container(
           width: double.infinity,
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -12261,7 +12338,11 @@ $timerOutputRule
                   const SizedBox(height: 12),
                   choiceButton(
                     '첫 조각 골라줘',
-                    () => _send('첫 조각 골라줘', apiInputOverride: '지금 뭐하지?'),
+                    () => _send(
+                      '첫 조각 골라줘',
+                      apiInputOverride: '지금 뭐하지?',
+                      masterModelPolicy: _MasterModelPolicy.forceGpt4oMini,
+                    ),
                   ),
                   const SizedBox(height: 8),
                   choiceButton('생각 비우고 시작할래', _startMorningCountdown),
@@ -12418,7 +12499,11 @@ $timerOutputRule
     if (label == MasterGreetingCopy.offPlanNotYetLabel) {
       await AnalyticsService.logFeatureUsage('master_offplan_not_yet');
       // 저항 흐름을 한 번 더 태운다. 사용자에게 보이는 말은 누른 버튼 그대로다.
-      await _send(label, apiInputOverride: '아까 부담스럽다고 한 그 일, 아직 하기 싫어');
+      await _send(
+        label,
+        apiInputOverride: '아까 부담스럽다고 한 그 일, 아직 하기 싫어',
+        masterModelPolicy: _MasterModelPolicy.forceGpt4oMini,
+      );
       return;
     }
 
@@ -12455,7 +12540,11 @@ $timerOutputRule
     _pendingEveningSplitTask = label;
     _pendingEveningSplitAt = DateTime.now();
     await AnalyticsService.logFeatureUsage('master_evening_pick');
-    await _send(label, apiInputOverride: "'$label'이(가) 오늘 제일 하기 싫었어");
+    await _send(
+      label,
+      apiInputOverride: "'$label'이(가) 오늘 제일 하기 싫었어",
+      masterModelPolicy: _MasterModelPolicy.forceGpt4oMini,
+    );
   }
 
   Widget _buildGroomingCareChoiceCard(ChatMessage msg) {
@@ -13000,6 +13089,7 @@ $timerOutputRule
             _send(
               _nyangHalbaeSmallStartChipLabel(truncateTaskName: false),
               apiInputOverride: _nyangHalbaeSmallStartApiInput(),
+              masterModelPolicy: _MasterModelPolicy.forceGpt4oMini,
             );
             return;
           }
@@ -13007,6 +13097,7 @@ $timerOutputRule
             _send(
               _masterDecisionChipLabel(truncateTaskName: false),
               apiInputOverride: _repeatedlyDeferredMasterChipApiInput(),
+              masterModelPolicy: _MasterModelPolicy.forceGpt4oMini,
             );
             return;
           }
@@ -13023,10 +13114,18 @@ $timerOutputRule
             return;
           }
           if (chip == '지금 뭐하지?') {
-            _send('지금 뭐하지?');
+            _send(
+              '지금 뭐하지?',
+              masterModelPolicy: _MasterModelPolicy.forceGpt4oMini,
+            );
             return;
           }
-          _send(chip);
+          _send(
+            chip,
+            masterModelPolicy: chip == '오늘 핵심 정리해줘'
+                ? _MasterModelPolicy.premiumFeature
+                : _MasterModelPolicy.forceGpt4oMini,
+          );
         },
         borderRadius: BorderRadius.circular(15),
         child: Container(
