@@ -1298,10 +1298,12 @@ class _ChatScreenState extends State<ChatScreen>
         if (task['done'] == true) {
           completed++;
         } else {
-          pendingChipCandidates.add(task);
-          final deferredCount = (task['deferredCount'] as num?)?.toInt() ?? 0;
-          if (deferredCount >= 2) {
-            repeatedlyDeferredCandidates.add(task);
+          if (!_isInProgressTask(task)) {
+            pendingChipCandidates.add(task);
+            final deferredCount = (task['deferredCount'] as num?)?.toInt() ?? 0;
+            if (deferredCount >= 2) {
+              repeatedlyDeferredCandidates.add(task);
+            }
           }
         }
       }
@@ -2923,6 +2925,10 @@ class _ChatScreenState extends State<ChatScreen>
     return text == null || text.isEmpty ? null : text;
   }
 
+  bool _isInProgressTask(Map<String, dynamic> task) {
+    return task['inProgress'] == true;
+  }
+
   void _sortPendingTaskCandidates(List<Map<String, dynamic>> tasks) {
     tasks.sort((a, b) {
       final aInProgress = a['inProgress'] == true ? 0 : 1;
@@ -3005,11 +3011,10 @@ class _ChatScreenState extends State<ChatScreen>
     final doneHabits = habits
         .where((task) => task['done'] == true)
         .toList(growable: false);
-    final pendingPlans = plans
-        .where((task) => task['done'] != true)
-        .map(_taskText)
-        .whereType<String>()
-        .toList(growable: false);
+    final pendingPlans = [
+      ...plans.where((task) => task['done'] != true),
+      ...habits.where((task) => task['done'] != true),
+    ].map(_taskText).whereType<String>().toList(growable: false);
 
     // 이름은 일정 우선, 습관은 후순위. 제목이 길면 이름을 빼고 격려만 한다.
     final ordered = [
@@ -3078,18 +3083,40 @@ class _ChatScreenState extends State<ChatScreen>
     // 'explicit'(사용자가 직접 그렇게 말한 것)만 본다 — 추론으로 잡은 신호까지
     // 세면 하지도 않은 말을 했다고 코치가 우기게 된다.
     final today = DateFormat('yyyy-MM-dd').format(now);
-    final resistedDone = (await TaskResistanceService.getAllEvents())
+    final resistanceEvents = (await TaskResistanceService.getAllEvents())
         .where(
           (e) =>
               e.date == today &&
               e.signalType == 'explicit' &&
-              e.completedEventually &&
               e.taskText.trim().isNotEmpty,
         )
+        .toList(growable: false);
+    final resistedDone = resistanceEvents
+        .where((e) => e.completedEventually)
         .toList(growable: false);
     final resistedName = resistedDone.isEmpty
         ? null
         : resistedDone.first.taskText.trim();
+    String? resistedInProgressName;
+    String? resistedNotStartedName;
+    if (resistedName == null) {
+      for (final event in resistanceEvents) {
+        if (event.completedEventually) continue;
+        final task = tasks.cast<Map<String, dynamic>?>().firstWhere(
+          (task) => task?['id']?.toString() == event.taskId,
+          orElse: () => null,
+        );
+        if (task == null || task['done'] == true) continue;
+        final taskName = _taskText(task) ?? event.taskText.trim();
+        if (taskName.isEmpty) continue;
+        if (task['inProgress'] == true) {
+          resistedInProgressName = taskName;
+        } else {
+          resistedNotStartedName = taskName;
+        }
+        break;
+      }
+    }
 
     // 하기 싫다고 했는데 그게 계획에 없는 일이면 완료도 미완료도 남지 않아서,
     // 했는지 안 했는지 알 방법이 기록에는 없다. 그때만 코치가 직접 묻는다.
@@ -3126,6 +3153,20 @@ class _ChatScreenState extends State<ChatScreen>
           resistedName != null &&
               resistedName.length <= MasterGreetingCopy.doneLabelMaxLength
           ? "'$resistedName'"
+          : null,
+      resistedInProgress: resistedInProgressName != null,
+      resistedInProgressLabel:
+          resistedInProgressName != null &&
+              resistedInProgressName.length <=
+                  MasterGreetingCopy.doneLabelMaxLength
+          ? "'$resistedInProgressName'"
+          : null,
+      resistedNotStarted: resistedNotStartedName != null,
+      resistedNotStartedLabel:
+          resistedNotStartedName != null &&
+              resistedNotStartedName.length <=
+                  MasterGreetingCopy.doneLabelMaxLength
+          ? "'$resistedNotStartedName'"
           : null,
       offPlanResistance: offPlanResistance,
     );
@@ -6157,6 +6198,39 @@ class _ChatScreenState extends State<ChatScreen>
     return '$minutes분 타이머 바로 켜줄게. 일단 시작해보자.';
   }
 
+  bool _isDirectCountdownRequest(String text) {
+    if (!_coach.isMaster) return false;
+    final normalized = text.toLowerCase().replaceAll(RegExp(r'\s+'), '');
+    final hasCountdownWord =
+        normalized.contains('카운트다운') ||
+        normalized.contains('숫자세고') ||
+        normalized.contains('숫자세어') ||
+        normalized.contains('숫자세면서') ||
+        normalized.contains('마음비우고시작') ||
+        normalized.contains('시작의식');
+    if (!hasCountdownWord) return false;
+    return [
+      '켜',
+      '띄워',
+      '시작',
+      '열어',
+      '해줘',
+      '해',
+      '줘',
+      '부탁',
+    ].any(normalized.contains);
+  }
+
+  String _directCountdownStartMessage() {
+    if (_coach.id == 'nyang_halbae') {
+      return '좋다냥. 숫자 세고 바로 시작해보자냥.';
+    }
+    if (_coach.id == 'sec_female') {
+      return '좋아요, 대표님. 숫자 세고 바로 시작해볼게요.';
+    }
+    return '좋아. 숫자 세고 바로 시작해보자.';
+  }
+
   Future<bool> _ensureMasterCoachAccess() async {
     if (!_coach.isMaster) return true;
 
@@ -7635,6 +7709,35 @@ class _ChatScreenState extends State<ChatScreen>
     if (_containsAnyRestSignal(trimmed) ||
         ExecutionResistanceService.isResistanceExpression(trimmed)) {
       TaskResistanceService.detectAndRecordFromMessage(trimmed);
+    }
+
+    if (_isDirectCountdownRequest(trimmed)) {
+      final reply = _directCountdownStartMessage();
+      setState(() {
+        _messages.add(
+          ChatMessage(text: trimmed, isUser: true, time: DateTime.now()),
+        );
+        _messages.add(
+          ChatMessage(text: reply, isUser: false, time: DateTime.now()),
+        );
+        _timerConfirmMinutes = null;
+        _timerConfirmTaskName = null;
+        _timerActiveMinutes = null;
+        _timerActiveInsertIndex = null;
+        _awaitingCountdownConsent = false;
+        _dynamicChips = _coach.chips;
+      });
+      _scrollToBottom();
+      await _saveHistory();
+      await AnalyticsService.logConversationMessage(
+        coachId: widget.coachId,
+        usedApi: false,
+      );
+      if (mounted) {
+        await Future.delayed(const Duration(milliseconds: 450));
+        if (mounted) _openCountdownFocusMode();
+      }
+      return;
     }
 
     final directTimerMinutes = _directTimerRequestMinutes(trimmed);
@@ -10597,6 +10700,7 @@ $timerOutputRule
   List<Map<String, String>> get _cheatKeyItems => [
     {'icon': 'assets/icons/compass.svg', 'label': '미래를 위한 오늘'},
     {'icon': 'assets/icons/flag.svg', 'label': '마일스톤 확인'},
+    {'icon': 'assets/icons/fa-circle-play-solid.svg', 'label': '숫자 세고 시작'},
     {'icon': 'assets/icons/magnifying-glass.svg', 'label': '메모 검색'},
   ];
 
@@ -10628,6 +10732,10 @@ $timerOutputRule
                 AnalyticsService.logFeatureUsage('cheat_future_today');
               } else if (item['label'] == '마일스톤 확인') {
                 _handleMilestoneCheck();
+                return;
+              } else if (item['label'] == '숫자 세고 시작') {
+                AnalyticsService.logFeatureUsage('cheat_countdown_start');
+                _openCountdownFocusMode();
                 return;
               } else if (item['label'] == '메모 검색') {
                 AnalyticsService.logFeatureUsage('cheat_memo_search');
@@ -12037,10 +12145,10 @@ $timerOutputRule
                   Text(
                     msg.text,
                     style: GoogleFonts.notoSansKr(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w800,
-                      height: 1.45,
-                      color: const Color(0xFF1A1A2E),
+                      fontSize: AppDesignTokens.textBody,
+                      fontWeight: FontWeight.w500,
+                      height: 1.6,
+                      color: AppDesignTokens.textPrimary,
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -12257,10 +12365,10 @@ $timerOutputRule
                   Text(
                     msg.text,
                     style: GoogleFonts.notoSansKr(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w800,
-                      height: 1.45,
-                      color: const Color(0xFF1A1A2E),
+                      fontSize: AppDesignTokens.textBody,
+                      fontWeight: FontWeight.w500,
+                      height: 1.6,
+                      color: AppDesignTokens.textPrimary,
                     ),
                   ),
                   for (final label in msg.choices) ...[

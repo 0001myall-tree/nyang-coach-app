@@ -31,7 +31,7 @@ class MasterGreetingContext {
   /// 격려에 녹일 완료 항목 이름. 제목이 길거나 완료가 없으면 null.
   final String? doneLabel;
 
-  /// 저녁 선택 카드에 띄울 미완료 일정(습관 제외).
+  /// 저녁 선택 카드에 띄울 미완료 일정/습관.
   final List<String> pendingPlans;
 
   /// 어젯밤 늦게까지(새벽 2~6시) 앱을 쓴 흔적이 있는지.
@@ -45,6 +45,18 @@ class MasterGreetingContext {
 
   /// 그 일정 이름. 제목이 길면 null이고, 이름 없이 격려만 한다.
   final String? resistedDoneLabel;
+
+  /// 오늘 하기 싫다고 했던 일정이 아직 완료 전이지만 진행 중 표시가 되어 있는지.
+  final bool resistedInProgress;
+
+  /// 그 일정 이름. 제목이 길면 null이고, 이름 없이 응원만 한다.
+  final String? resistedInProgressLabel;
+
+  /// 오늘 하기 싫다고 했던 일정이 계획에 남아 있고 아직 시작 표시도 없는지.
+  final bool resistedNotStarted;
+
+  /// 그 일정 이름. 제목이 길면 null이고, 이름 없이 묻는다.
+  final String? resistedNotStartedLabel;
 
   /// 오늘 하기 싫다고 한 게 계획에 없는 일이라, 했는지 안 했는지 알 길이 없는지.
   /// 이때만 코치가 직접 물어본다 — 기록으로는 영영 알 수 없는 자리다.
@@ -62,6 +74,10 @@ class MasterGreetingContext {
     required this.feltSick,
     this.resistedDone = false,
     this.resistedDoneLabel,
+    this.resistedInProgress = false,
+    this.resistedInProgressLabel,
+    this.resistedNotStarted = false,
+    this.resistedNotStartedLabel,
     this.offPlanResistance = false,
   });
 
@@ -69,8 +85,7 @@ class MasterGreetingContext {
 
   double get planRate => planTotal == 0 ? 0 : planDone / planTotal;
 
-  bool get isComeback =>
-      daysSinceLastVisit != null && daysSinceLastVisit! >= 2;
+  bool get isComeback => daysSinceLastVisit != null && daysSinceLastVisit! >= 2;
 
   GreetingSlot get slot {
     if (now.hour < 7) return GreetingSlot.dawn;
@@ -126,6 +141,12 @@ class GreetingVoice {
   /// 다른 저녁 문구와 달리 이 자체로 두 문장이라 뒤에 격려를 붙이지 않는다.
   final List<(String, String)> eveningResistedDone;
 
+  /// 하기 싫다던 일이 진행 중 표시로 남아 있을 때. 이미 시작한 흐름을 끊지 않는다.
+  final List<(String, String)> eveningResistedInProgress;
+
+  /// 하기 싫다던 일이 아직 시작 표시도 없을 때. 비난하지 않고 시작 표시만 권한다.
+  final List<(String, String)> eveningResistedNotStarted;
+
   /// 계획에 없어 확인할 길이 없는 일을 물어보는 자리. 이름을 부르지 않는다 —
   /// 자유 문장에서 일 이름만 뽑아낼 방법이 없고, 잘못 부르면 딴 일을 묻게 된다.
   final List<String> eveningOffPlanAsk;
@@ -160,6 +181,8 @@ class GreetingVoice {
     required this.encFlow,
     required this.encEvening,
     required this.eveningResistedDone,
+    required this.eveningResistedInProgress,
+    required this.eveningResistedNotStarted,
     required this.eveningOffPlanAsk,
     required this.offPlanDoneReply,
     required this.otherChoiceLabel,
@@ -170,7 +193,7 @@ class MasterGreetingCopy {
   /// 이 길이를 넘는 제목은 말풍선에서 겉돌아서 이름을 빼고 격려만 한다.
   static const doneLabelMaxLength = 20;
 
-  /// 저녁 선택 카드에 버튼으로 직접 노출할 일정 개수. 넘으면 '그 외'로 접는다.
+  /// 저녁 선택 카드에 버튼으로 직접 노출할 일정/습관 개수. 넘으면 '그 외'로 접는다.
   static const pendingChoiceLimit = 3;
 
   /// 계획에 없던 일을 물었을 때 누르는 버튼. 코치가 아니라 사용자가 하는 말이라
@@ -277,11 +300,7 @@ class MasterGreetingCopy {
     ],
     // 복귀 문구는 뒤에 슬롯 문구가 붙으니 반드시 한 문장이어야 한다.
     // 두 문장짜리를 두면 발화가 네 문장으로 늘어난다.
-    comeback: [
-      '다시 뵈어 반갑습니다.',
-      '오랜만이네요, 돌아와 주셔서 좋습니다.',
-      '잠시 쉬었다 오셨군요.',
-    ],
+    comeback: ['다시 뵈어 반갑습니다.', '오랜만이네요, 돌아와 주셔서 좋습니다.', '잠시 쉬었다 오셨군요.'],
     comebackSupport: [
       '실행하시다가 어려운 게 있으면 말씀해 주세요.',
       '하시다가 막히는 게 있으면 언제든 말씀해 주세요.',
@@ -321,6 +340,42 @@ class MasterGreetingCopy {
       (
         '그렇게 미루고 싶어 하시던 {{task}}, 결국 {해내셨습니다|끝내셨습니다}! 버거운 일이 있으면 언제든 말씀해 주세요, 제가 {같이 붙겠습니다|끝까지 돕겠습니다}.',
         '미루고 싶어 하시던 일을 결국 {해내셨습니다|끝내셨습니다}! 버거운 일이 있으면 언제든 말씀해 주세요, 제가 {같이 붙겠습니다|끝까지 돕겠습니다}.',
+      ),
+    ],
+    eveningResistedInProgress: [
+      (
+        '{오|좋습니다}, 아까 하기 싫다고 하셨던 {{task}} 지금 {하고 계시네요|붙잡고 계시네요}. 끝까지 {파이팅입니다|같이 가보시죠|흐름 이어가시죠}.',
+        '{오|좋습니다}, 아까 하기 싫다고 하셨던 일 지금 {하고 계시네요|붙잡고 계시네요}. 끝까지 {파이팅입니다|같이 가보시죠|흐름 이어가시죠}.',
+      ),
+      (
+        '{{task}} 벌써 시작 표시가 되어 있네요. 하기 싫던 걸 {건드린|시작한} 것만으로도 흐름은 {붙었습니다|살아났습니다|바뀌었습니다}.',
+        '하기 싫던 일에 시작 표시가 되어 있네요. {건드린|시작한} 것만으로도 흐름은 {붙었습니다|살아났습니다|바뀌었습니다}.',
+      ),
+      (
+        '아까 부담스러워하시던 {{task}}, 지금 {진행 중으로|시작 표시로} 잡혀 있네요. 오늘은 {끝까지 밀기보다|무리해서 끝내기보다} 이 흐름만 이어가도 좋습니다.',
+        '아까 부담스러워하시던 일, 지금 {진행 중으로|시작 표시로} 잡혀 있네요. 오늘은 {끝까지 밀기보다|무리해서 끝내기보다} 이 흐름만 이어가도 좋습니다.',
+      ),
+      (
+        '{{task}} 시작해두신 것 확인했습니다. 하기 싫던 일을 이미 {움직이셨으니|열어두셨으니}, 이제는 {마무리만 천천히 보시죠|조금씩 이어가시죠}.',
+        '하기 싫던 일을 시작해두신 것 확인했습니다. 이미 {움직이셨으니|열어두셨으니}, 이제는 {마무리만 천천히 보시죠|조금씩 이어가시죠}.',
+      ),
+    ],
+    eveningResistedNotStarted: [
+      (
+        '아까 하기 싫다던 {{task}}은 {어떻게 됐을까요|지금 어떠세요}? 아직 안 하셨으면 완료 말고 시작 표시만 남겨볼까요?',
+        '아까 하기 싫다던 일은 {어떻게 됐을까요|지금 어떠세요}? 아직 안 하셨으면 완료 말고 시작 표시만 남겨볼까요?',
+      ),
+      (
+        '{{task}} 아직 그대로라면 괜찮습니다. 지금은 {끝내려 하지 말고|완료까지 보지 말고} 시작 표시만 남기는 쪽으로 가볼까요?',
+        '아직 그대로인 일이 있다면 괜찮습니다. 지금은 {끝내려 하지 말고|완료까지 보지 말고} 시작 표시만 남기는 쪽으로 가볼까요?',
+      ),
+      (
+        '아까 버겁다고 하셨던 {{task}}, 아직 손이 안 갔다면 딱 5분만 한다고 생각해보시는 건 어떨까요? {완료 말고|마무리 말고} 시작 표시만 찍어보시죠.',
+        '아까 버겁다고 하셨던 일, 아직 손이 안 갔다면 딱 5분만 한다고 생각해보시는 건 어떨까요? {완료 말고|마무리 말고} 시작 표시만 찍어보시죠.',
+      ),
+      (
+        '{{task}}이 아직 남아 있네요. 지금은 {잘하려고 하지 말고|크게 만회하려 하지 말고} 시작 표시 하나만 남기는 걸 목표로 해볼까요?',
+        '아직 남아 있는 일이 있네요. 지금은 {잘하려고 하지 말고|크게 만회하려 하지 말고} 시작 표시 하나만 남기는 걸 목표로 해볼까요?',
       ),
     ],
     eveningOffPlanAsk: [
@@ -411,11 +466,7 @@ class MasterGreetingCopy {
       '{오늘은 어떤 하루였는지|오늘 하루는 어떤 날이었는지} 궁금하다냥.',
       '별다른 일 {없었냥|없이 지나갔냥}?',
     ],
-    comeback: [
-      '오랜만이구나냥.',
-      '다시 와줬구나냥.',
-      '쉬었다 다시 걷는 것도 좋다냥.',
-    ],
+    comeback: ['오랜만이구나냥.', '다시 와줬구나냥.', '쉬었다 다시 걷는 것도 좋다냥.'],
     comebackSupport: [
       '하다가 어려운 게 있으면 말하라냥.',
       '하다가 막히는 게 있으면 언제든 말하라냥.',
@@ -453,6 +504,42 @@ class MasterGreetingCopy {
       (
         '그렇게 미루고 싶어 하던 {{task}}, 결국 {해냈다냥|끝냈다냥}! 버거운 일이 있으면 언제든 말하라냥, 내가 {같이 붙어주겠다냥|끝까지 돕겠다냥}.',
         '미루고 싶어 하던 일을 결국 {해냈다냥|끝냈다냥}! 버거운 일이 있으면 언제든 말하라냥, 내가 {같이 붙어주겠다냥|끝까지 돕겠다냥}.',
+      ),
+    ],
+    eveningResistedInProgress: [
+      (
+        '{오|좋다냥}, 아까 하기 싫다던 {{task}} 지금 {하고 있구나냥|붙잡고 있구나냥}. 끝까지 {파이팅이다냥|같이 가보자냥|흐름 이어가자냥}.',
+        '{오|좋다냥}, 아까 하기 싫다던 일 지금 {하고 있구나냥|붙잡고 있구나냥}. 끝까지 {파이팅이다냥|같이 가보자냥|흐름 이어가자냥}.',
+      ),
+      (
+        '{{task}} 벌써 시작 표시가 되어 있구나냥. 하기 싫던 걸 {건드린|시작한} 것만으로도 흐름은 {붙었다냥|살아났다냥|바뀌었다냥}.',
+        '하기 싫던 일에 시작 표시가 되어 있구나냥. {건드린|시작한} 것만으로도 흐름은 {붙었다냥|살아났다냥|바뀌었다냥}.',
+      ),
+      (
+        '아까 부담스럽다던 {{task}}, 지금 {진행 중으로|시작 표시로} 잡혀 있구나냥. 오늘은 {끝까지 밀기보다|무리해서 끝내기보다} 이 흐름만 이어가도 좋다냥.',
+        '아까 부담스럽다던 일, 지금 {진행 중으로|시작 표시로} 잡혀 있구나냥. 오늘은 {끝까지 밀기보다|무리해서 끝내기보다} 이 흐름만 이어가도 좋다냥.',
+      ),
+      (
+        '{{task}} 시작해둔 것 봤다냥. 하기 싫던 일을 이미 {움직였으니|열어뒀으니}, 이제는 {마무리만 천천히 보자냥|조금씩 이어가자냥}.',
+        '하기 싫던 일을 시작해둔 것 봤다냥. 이미 {움직였으니|열어뒀으니}, 이제는 {마무리만 천천히 보자냥|조금씩 이어가자냥}.',
+      ),
+    ],
+    eveningResistedNotStarted: [
+      (
+        '아까 하기 싫다던 {{task}}은 {어떻게 됐냥|지금 어떠냥}? 아직 안 했으면 완료 말고 시작 표시만 남겨볼까냥?',
+        '아까 하기 싫다던 일은 {어떻게 됐냥|지금 어떠냥}? 아직 안 했으면 완료 말고 시작 표시만 남겨볼까냥?',
+      ),
+      (
+        '{{task}} 아직 그대로라면 괜찮다냥. 지금은 {끝내려 하지 말고|완료까지 보지 말고} 시작 표시만 남기는 쪽으로 가볼까냥?',
+        '아직 그대로인 일이 있다면 괜찮다냥. 지금은 {끝내려 하지 말고|완료까지 보지 말고} 시작 표시만 남기는 쪽으로 가볼까냥?',
+      ),
+      (
+        '아까 버겁다던 {{task}}, 아직 손이 안 갔다면 딱 5분만 한다고 생각해보자냥. {완료 말고|마무리 말고} 시작 표시만 찍어볼까냥?',
+        '아까 버겁다던 일, 아직 손이 안 갔다면 딱 5분만 한다고 생각해보자냥. {완료 말고|마무리 말고} 시작 표시만 찍어볼까냥?',
+      ),
+      (
+        '{{task}}이 아직 남아 있구나냥. 지금은 {잘하려고 하지 말고|크게 만회하려 하지 말고} 시작 표시 하나만 남기는 걸 목표로 해볼까냥?',
+        '아직 남아 있는 일이 있구나냥. 지금은 {잘하려고 하지 말고|크게 만회하려 하지 말고} 시작 표시 하나만 남기는 걸 목표로 해볼까냥?',
       ),
     ],
     eveningOffPlanAsk: [
@@ -541,6 +628,24 @@ class MasterGreetingBuilder {
             return MasterGreetingResult(parts.join(' '));
           }
         }
+        if (context.resistedInProgress) {
+          parts.add(
+            pickEncouragement(
+              voice.eveningResistedInProgress,
+              context.resistedInProgressLabel,
+            ),
+          );
+          return MasterGreetingResult(parts.join(' '));
+        }
+        if (context.resistedNotStarted) {
+          parts.add(
+            pickEncouragement(
+              voice.eveningResistedNotStarted,
+              context.resistedNotStartedLabel,
+            ),
+          );
+          return MasterGreetingResult(parts.join(' '));
+        }
         // 계획에 없는 일이라 기록으로는 영영 알 수 없다. 코치가 직접 묻고,
         // '아직'이면 실행 저항 흐름을 한 번 더 태운다.
         if (context.offPlanResistance) {
@@ -600,7 +705,9 @@ class MasterGreetingBuilder {
   String pickLine(List<String> pool) {
     if (pool.isEmpty) return '';
     final fresh = pool
-        .where((line) => !recentLines.any((text) => text.contains(anchor(line))))
+        .where(
+          (line) => !recentLines.any((text) => text.contains(anchor(line))),
+        )
         .toList(growable: false);
     final candidates = fresh.isNotEmpty ? fresh : pool;
     return expand(candidates[random.nextInt(candidates.length)]);
@@ -665,7 +772,9 @@ class MasterGreetingBuilder {
     final encouragement = _dayEncouragement(context);
     if (encouragement.isNotEmpty) return encouragement;
     if (context.now.hour < 12) {
-      return pickLine(context.hasPlan ? voice.morningPlan : voice.morningNoPlan);
+      return pickLine(
+        context.hasPlan ? voice.morningPlan : voice.morningNoPlan,
+      );
     }
     return pickLine(
       context.hasPlan ? voice.afternoonBehind : voice.afternoonNoPlan,
