@@ -345,6 +345,8 @@ void main() {
           '이른아침': cases['새벽-일찍깸']!,
           '저녁-전부완료': cases['저녁-전부완료']!,
           '저녁-계획없음': cases['저녁-계획없음']!,
+          // 뒷문장이 고정이라 앞머리를 갈라 넓혀둔 자리다. 갈래가 줄면 여기서 걸린다.
+          '저녁초입-완료0': cases['저녁초입-완료0']!,
         };
         for (final entry in pools.entries) {
           final seen = <String>{};
