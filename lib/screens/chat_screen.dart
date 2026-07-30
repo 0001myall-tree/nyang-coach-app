@@ -3352,7 +3352,7 @@ class _ChatScreenState extends State<ChatScreen>
     final lateNight = seen.any((m) => m.time.hour >= 2 && m.time.hour < 5);
     const sickWords = [
       '아프', '아팠', '몸살', '감기', '열이', '열나', '두통', '배탈',
-      '어지럽', '몸이 안 좋', '컨디션이 안 좋', '병원',
+      '어지럽', '몸이 안 좋', '컨디션이 안 좋',
     ];
     final feltSick = seen.any(
       (m) => m.isUser && sickWords.any((w) => m.text.contains(w)),
