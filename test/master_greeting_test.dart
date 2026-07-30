@@ -61,6 +61,27 @@ final cases = <String, MasterGreetingContext>{
     planDone: 1,
     pendingPlans: ['설거지', '빨래', '운동'],
   ),
+  // 저녁 초입(18~20시)은 하루가 아직 열려 있는 것으로 본다.
+  '저녁초입-완료0': ctx(
+    hour: 18,
+    planTotal: 4,
+    pendingPlans: ['설거지', '빨래', '운동'],
+  ),
+  '저녁초입-거의다': ctx(
+    hour: 19,
+    planTotal: 10,
+    planDone: 9,
+    doneCount: 9,
+    doneLabel: "'운동' 외 8개",
+  ),
+  // 완료가 하나라도 있으면 저녁 초입이어도 원래 문구로 간다.
+  '저녁초입-완료1개': ctx(
+    hour: 18,
+    planTotal: 4,
+    planDone: 1,
+    doneCount: 1,
+    pendingPlans: ['설거지', '빨래', '운동'],
+  ),
   '저녁-중간': ctx(hour: 20, planTotal: 4, planDone: 3, doneCount: 3, doneLabel: "'운동' 외 2개"),
   '저녁-거의다': ctx(
     hour: 20,
@@ -118,6 +139,8 @@ List<String> allTemplates(GreetingVoice v) => [
   ...v.eveningLow,
   ...v.eveningMid,
   ...v.eveningHigh,
+  ...v.earlyEveningNone,
+  ...v.earlyEveningHigh,
   ...v.eveningAll,
   ...v.eveningNoPlan,
   ...v.comeback,
@@ -230,6 +253,8 @@ void main() {
           voice.value.eveningLow,
           voice.value.eveningMid,
           voice.value.eveningHigh,
+          voice.value.earlyEveningNone,
+          voice.value.earlyEveningHigh,
           voice.value.eveningAll,
           voice.value.eveningNoPlan,
         ]) {
@@ -371,6 +396,69 @@ void main() {
     }
   });
 
+  // 18시에 하루가 딱 끊기면 "수고하셨습니다"가 이르다. 20시 전까지는 아직
+  // 열려 있는 하루로 말하는지, 20시부터는 원래 마무리 문구로 돌아오는지 본다.
+  group('저녁 초입은 하루를 접지 않는다', () {
+    /// 발화가 이 풀의 어느 틀에서 나왔는지. 펼친 문장은 매번 달라서 지문으로 본다.
+    bool camefrom(GreetingVoice voice, List<String> pool, String text) {
+      final builder = MasterGreetingBuilder(voice: voice);
+      return pool.any((t) => text.contains(builder.anchor(t)));
+    }
+
+    for (final voice in voices.entries) {
+      test('${voice.key} / 완료 0이면 재촉 대신 아직 늦지 않았다고 한다', () {
+        for (var seed = 0; seed < 50; seed++) {
+          String build(String name) => MasterGreetingBuilder(
+            voice: voice.value,
+            random: Random(seed),
+          ).build(cases[name]!).text;
+
+          final early = build('저녁초입-완료0');
+          expect(
+            camefrom(voice.value, voice.value.earlyEveningNone, early),
+            isTrue,
+            reason: '씨앗 $seed: $early',
+          );
+          // 하나라도 했거나 20시를 넘으면 원래대로 뭐가 걸렸는지 묻는다.
+          for (final name in ['저녁초입-완료1개', '저녁-절반이하']) {
+            final text = build(name);
+            expect(
+              camefrom(voice.value, voice.value.eveningLow, text),
+              isTrue,
+              reason: '$name 씨앗 $seed: $text',
+            );
+          }
+        }
+      });
+
+      test('${voice.key} / 거의 끝났으면 코치도 기분이 좋다고 한다', () {
+        for (var seed = 0; seed < 50; seed++) {
+          final early = MasterGreetingBuilder(
+            voice: voice.value,
+            random: Random(seed),
+          ).build(cases['저녁초입-거의다']!);
+          expect(
+            camefrom(voice.value, voice.value.earlyEveningHigh, early.text),
+            isTrue,
+            reason: '씨앗 $seed: ${early.text}',
+          );
+          // 뒤에 격려가 한 문장 더 붙으므로 여기서 늘어지면 세 문장이 된다.
+          expect(sentenceCount(early.text), 2, reason: '씨앗 $seed: ${early.text}');
+
+          final late = MasterGreetingBuilder(
+            voice: voice.value,
+            random: Random(seed),
+          ).build(cases['저녁-거의다']!).text;
+          expect(
+            camefrom(voice.value, voice.value.eveningHigh, late),
+            isTrue,
+            reason: '씨앗 $seed: $late',
+          );
+        }
+      });
+    }
+  });
+
   test('저녁 절반 이하에서만 선택 카드가 붙는다', () {
     final builder = MasterGreetingBuilder(
       voice: MasterGreetingCopy.secretary,
@@ -378,7 +466,11 @@ void main() {
     );
     for (final entry in cases.entries) {
       final result = builder.build(entry.value);
-      final expectsCard = entry.key == '저녁-절반이하';
+      final expectsCard = const {
+        '저녁-절반이하',
+        '저녁초입-완료0',
+        '저녁초입-완료1개',
+      }.contains(entry.key);
       expect(
         result.choices.isNotEmpty,
         expectsCard,

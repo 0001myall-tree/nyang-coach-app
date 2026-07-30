@@ -88,6 +88,10 @@ class GreetingVoice {
   final List<String> eveningLow; // 완료 50% 이하
   final List<String> eveningMid; // 51~80%
   final List<String> eveningHigh; // 81~99%
+  // 저녁 초입(18~20시)은 낮인지 저녁인지 헷갈리는 시간이라 마무리 인사가 이르다.
+  // 이 두 자리에서만 하루가 아직 열려 있다는 쪽으로 말한다.
+  final List<String> earlyEveningNone; // 저녁 초입, 완료 0
+  final List<String> earlyEveningHigh; // 저녁 초입, 81~99%
   final List<String> eveningAll; // 100%
   final List<String> eveningNoPlan;
   final List<String> comeback; // 2일 이상 만에 돌아왔을 때 앞에 붙일 한 문장
@@ -117,6 +121,8 @@ class GreetingVoice {
     required this.eveningLow,
     required this.eveningMid,
     required this.eveningHigh,
+    required this.earlyEveningNone,
+    required this.earlyEveningHigh,
     required this.eveningAll,
     required this.eveningNoPlan,
     required this.comeback,
@@ -137,6 +143,10 @@ class MasterGreetingCopy {
 
   /// 저녁 선택 카드에 버튼으로 직접 노출할 일정 개수. 넘으면 '그 외'로 접는다.
   static const pendingChoiceLimit = 3;
+
+  /// 이 시각 전까지는 저녁이어도 하루가 아직 열려 있는 것으로 본다.
+  /// '아직 늦지 않았다'거나 '벌써 마무리돼 간다'는 말이 참이 되는 경계다.
+  static const earlyEveningUntilHour = 20;
 
   static GreetingVoice forCoach(String coachId) =>
       coachId == 'nyang_halbae' ? nyangHalbae : secretary;
@@ -200,6 +210,19 @@ class MasterGreetingCopy {
       '이 정도면 {곧 다 완료하시겠는데요|금방 다 마치시겠는데요}.',
       '{거의 다 오셨네요|다 온 것이나 마찬가지네요}, 조금만 더 하시면 됩니다.',
       '마무리가 {눈앞이네요|코앞이네요}.',
+    ],
+    // 아직 아무것도 못 했다고 재촉하지 않는다. 시간이 남았다고만 말한다.
+    earlyEveningNone: [
+      '아직 늦지 않았습니다. 지금 {시작하셔도|손대셔도} 오늘 하루는 {충분합니다|충분해요}.',
+      '{저녁은 이제 시작이니|이제 막 저녁이 됐으니} 지금 {하나만 붙잡아도|하나만 해두어도} 오늘은 달라집니다.',
+      '오늘이 아직 {끝난 게 아닙니다|남아 있습니다}. {가벼운 것부터|만만한 것부터} 하나만 {같이 열어볼까요|같이 잡아볼까요}?',
+    ],
+    // 진척만 짚지 않고 코치 자신의 기분을 얹는다. 뒤에 격려가 한 문장 더
+    // 붙으므로 여기서는 반드시 한 문장으로 끝낸다.
+    earlyEveningHigh: [
+      '벌써 마무리가 {눈앞이라|보이니} 저도 {덩달아 기분이 좋습니다|기분이 좋아집니다}.',
+      '오늘도 {벌써 마무리돼 가시네요|어느새 끝이 보이네요}, 지켜보는 저까지 {흐뭇합니다|즐거워집니다}.',
+      '이 시간에 {여기까지 오시다니|벌써 이만큼이라니}, 저도 {마음이 놓입니다|덩달아 뿌듯합니다}.',
     ],
     eveningAll: [
       '오늘 계획을 {전부|남김없이} 마치셨습니다.',
@@ -310,6 +333,16 @@ class MasterGreetingCopy {
       '이 정도면 {곧 다 끝내겠구나냥|금방 다 마치겠구나냥}.',
       '{거의 다 왔다냥|다 온 거나 마찬가지다냥}, 조금만 더 하면 된다냥.',
       '마무리가 {코앞이구나냥|눈앞이구나냥}.',
+    ],
+    earlyEveningNone: [
+      '아직 안 늦었다냥. 지금 {시작해도|손대도} 오늘 하루는 {충분하다냥|넉넉하다냥}.',
+      '{저녁은 이제 시작이니|이제 막 저녁이 됐으니} 지금 {하나만 붙잡아도|하나만 해둬도} 오늘은 달라진다냥.',
+      '오늘이 아직 {끝난 게 아니다냥|남아 있다냥}. {가벼운 것부터|만만한 것부터} 하나만 {같이 열어볼까냥|같이 잡아볼까냥}.',
+    ],
+    earlyEveningHigh: [
+      '벌써 마무리가 {눈앞이라|보이니} 나도 {덩달아 기분이 좋다냥|기분이 좋아진다냥}.',
+      '오늘도 {벌써 마무리돼 가는구나냥|어느새 끝이 보이는구나냥}, 지켜보는 나까지 {흐뭇하다냥|즐거워진다냥}.',
+      '이 시간에 {여기까지 왔다니|벌써 이만큼이라니}, 나도 {마음이 놓인다냥|덩달아 뿌듯하다냥}.',
     ],
     eveningAll: [
       '오늘 계획을 {전부|남김없이} 마쳤구나냥.',
@@ -425,9 +458,19 @@ class MasterGreetingBuilder {
           return MasterGreetingResult(parts.join(' '));
         }
         final rate = context.planRate;
+        // 18~20시는 낮인지 저녁인지 헷갈리는 시간이라 하루를 아직 접지 않는다.
+        final isEarlyEvening = hour < MasterGreetingCopy.earlyEveningUntilHour;
         if (rate <= 0.5) {
           // 귀찮았던 일을 버튼으로 고르게 하고, 고른 일은 실행 저항 흐름으로 넘긴다.
-          parts.add(pickLine(voice.eveningLow));
+          // 다만 아직 하나도 못 한 저녁 초입에는 뭐가 걸렸는지 묻는 대신
+          // 지금 시작해도 늦지 않았다고 말한다.
+          parts.add(
+            pickLine(
+              isEarlyEvening && context.planDone == 0
+                  ? voice.earlyEveningNone
+                  : voice.eveningLow,
+            ),
+          );
           return MasterGreetingResult(
             parts.join(' '),
             choices: eveningChoices(context.pendingPlans),
@@ -436,7 +479,11 @@ class MasterGreetingBuilder {
         if (rate >= 1.0) {
           parts.add(pickLine(voice.eveningAll));
         } else if (rate > 0.8) {
-          parts.add(pickLine(voice.eveningHigh));
+          parts.add(
+            pickLine(
+              isEarlyEvening ? voice.earlyEveningHigh : voice.eveningHigh,
+            ),
+          );
         } else {
           parts.add(pickLine(voice.eveningMid));
         }
