@@ -3343,12 +3343,13 @@ class _ChatScreenState extends State<ChatScreen>
               .inDays;
 
     // 어젯밤 흔적은 아카이브까지 봐야 한다 — 하루 지나면 기록이 넘어간다.
+    // 5시부터는 늦게 잔 쪽이 아니라 일찍 일어난 쪽으로 본다(새벽 인사와 같은 경계).
     final yesterday = now.subtract(const Duration(days: 1));
     final seen = [
       ..._messages,
       ..._decodeRecentArchive(prefs.getString(_chatArchiveKey)),
     ].where((m) => _isSameDay(m.time, now) || _isSameDay(m.time, yesterday));
-    final lateNight = seen.any((m) => m.time.hour >= 2 && m.time.hour < 6);
+    final lateNight = seen.any((m) => m.time.hour >= 2 && m.time.hour < 5);
     const sickWords = [
       '아프', '아팠', '몸살', '감기', '열이', '열나', '두통', '배탈',
       '어지럽', '몸이 안 좋', '컨디션이 안 좋', '병원',
