@@ -136,7 +136,8 @@ class _MasterGreetingResult {
 
 /// 코치 한 명의 발화 문구 한 벌.
 class _GreetingVoice {
-  final List<String> dawn;
+  final List<String> dawn; // 00~05시: 아직 안 잔 사람
+  final List<String> earlyMorning; // 05~07시: 일찍 일어난 사람
   final List<String> earlyStart; // 07~09시: 계획 유무를 따지지 않는 시작 인사
   final List<String> earlyQuestions;
   final List<String> morningPlan; // 09~12시, 계획 있음
@@ -162,6 +163,7 @@ class _GreetingVoice {
 
   const _GreetingVoice({
     required this.dawn,
+    required this.earlyMorning,
     required this.earlyStart,
     required this.earlyQuestions,
     required this.morningPlan,
@@ -196,6 +198,12 @@ class _MasterGreetingCopy {
       '늦은 시간이네요. 오늘은 여기까지 하고 쉬어가셔도 좋겠습니다.',
       '아직 깨어 계시는군요. 남은 건 내일의 대표님께 맡겨두시죠.',
       '이 시간엔 잘 자는 것이 가장 좋은 준비입니다.',
+    ],
+    earlyMorning: [
+      '오늘 일찍 오셨네요. 왠지 좋은 하루가 기다리고 있을 것 같은데요?',
+      '이른 시간부터 움직이시는군요. 오늘 하루는 길게 쓰이겠어요.',
+      '아침이 열리기 전부터 나와 계시네요. 이 조용한 시간, 꽤 좋죠.',
+      '일찍 시작하는 날이네요. 서두르지 않으셔도 시간은 충분합니다.',
     ],
     earlyStart: [
       '오늘도 새로운 하루가 시작되었습니다.',
@@ -292,6 +300,12 @@ class _MasterGreetingCopy {
       '늦은 시간까지 깨어 있구나냥. 오늘은 여기서 접고 자도 된다냥.',
       '이 시간엔 잘 자두는 게 제일 큰 준비다냥.',
       '밤이 깊었다냥. 남은 건 내일의 자네한테 맡기자냥.',
+    ],
+    earlyMorning: [
+      '오늘은 일찍 나왔구나냥. 왠지 좋은 하루가 기다리고 있을 것 같다냥.',
+      '이른 시간부터 움직이는구나냥. 오늘 하루는 길게 쓰이겠다냥.',
+      '해도 안 뜬 시간에 나왔구나냥. 이 조용한 시간이 제법 좋다냥.',
+      '일찍 시작하는 날이구나냥. 서두르지 않아도 시간은 넉넉하다냥.',
     ],
     earlyStart: [
       '새 하루가 시작됐다냥.',
@@ -3339,7 +3353,10 @@ class _ChatScreenState extends State<ChatScreen>
 
     switch (context.slot) {
       case _GreetingSlot.dawn:
-        parts.add(_pickGreetingLine(voice.dawn));
+        // 같은 새벽이라도 5시 전은 아직 안 잔 쪽, 그 뒤는 일찍 일어난 쪽으로 본다.
+        parts.add(
+          _pickGreetingLine(hour < 5 ? voice.dawn : voice.earlyMorning),
+        );
         return _MasterGreetingResult(parts.join(' '));
 
       case _GreetingSlot.day:
