@@ -17,6 +17,7 @@ import 'services/analytics_service.dart';
 import 'services/apple_calendar_sync_service.dart';
 import 'services/auth_service.dart';
 import 'services/coach_id_migration_service.dart';
+import 'services/task_resistance_service.dart';
 import 'services/notification_service.dart';
 import 'services/tasks_sync_service.dart';
 import 'services/widget_sync_service.dart';
@@ -30,6 +31,7 @@ void main() async {
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   await initializeDateFormatting('ko', null);
   await CoachIdMigrationService.migrateLegacyNyangHalbaeIds();
+  await TaskResistanceService.purgeRemovedPreemptiveKeys();
   await NotificationService().init();
 
   runApp(const ProviderScope(child: NyangCoachApp()));

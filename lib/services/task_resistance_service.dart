@@ -187,6 +187,26 @@ class TaskResistanceService {
     if (changed) await _saveAll(prefs, updated);
   }
 
+  /// 선제개입 층을 지우면서 읽는 코드가 사라진 키들. 남겨두면 동기화가 계속 실어 나르고,
+  /// 이름을 재사용할 때 옛 스키마가 먼저 들어온다.
+  static const List<String> _removedPreemptiveKeys = [
+    'nyang_resistance_groups',
+    'nyang_preemptive_log',
+    'nyang_scheduled_checkin_delivered',
+    'nyang_scheduled_checkin_unread',
+  ];
+
+  /// 앱 시작 시 한 번 부른다. 남아 있는 키만 지우므로 두 번째부터는 아무것도 하지 않고,
+  /// 완료 플래그를 두지 않는다 — 기기별 플래그를 prefs에 두면 클라우드 복원이 덮어써서
+  /// 도리어 매번 헛돈다. 삭제는 다음 업로드에서 클라우드 쪽 키까지 지운다
+  /// (TasksSyncService가 "로컬에 없는 클라우드 키"를 지운다).
+  static Future<void> purgeRemovedPreemptiveKeys() async {
+    final prefs = await SharedPreferences.getInstance();
+    for (final key in _removedPreemptiveKeys) {
+      if (prefs.containsKey(key)) await prefs.remove(key);
+    }
+  }
+
   static Future<List<TaskResistanceEvent>> getAllEvents() async {
     final prefs = await SharedPreferences.getInstance();
     return _pruneExpired(await _loadAll(prefs));
