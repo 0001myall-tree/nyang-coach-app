@@ -14,6 +14,8 @@ MasterGreetingContext ctx({
   int? daysSinceLastVisit,
   bool lateNight = false,
   bool feltSick = false,
+  bool resistedDone = false,
+  String? resistedDoneLabel,
 }) {
   return MasterGreetingContext(
     now: DateTime(2026, 7, 30, hour, 30),
@@ -25,6 +27,8 @@ MasterGreetingContext ctx({
     pendingPlans: pendingPlans,
     lateNight: lateNight,
     feltSick: feltSick,
+    resistedDone: resistedDone,
+    resistedDoneLabel: resistedDoneLabel,
   );
 }
 
@@ -97,6 +101,25 @@ final cases = <String, MasterGreetingContext>{
     doneCount: 3,
     doneLabel: "'운동' 외 2개",
   ),
+  // 하기 싫다던 일을 끝낸 날. 완료율이 낮아도 이쪽이 오늘의 이야기다.
+  '저녁-싫다던일완료': ctx(
+    hour: 20,
+    planTotal: 4,
+    planDone: 1,
+    doneCount: 1,
+    doneLabel: "'설거지'",
+    pendingPlans: ['빨래', '운동'],
+    resistedDone: true,
+    resistedDoneLabel: "'설거지'",
+  ),
+  // 제목이 길면 이름을 빼고 해낸 것만 짚는다.
+  '저녁-싫다던일완료-이름김': ctx(
+    hour: 20,
+    planTotal: 4,
+    planDone: 1,
+    pendingPlans: ['빨래', '운동'],
+    resistedDone: true,
+  ),
   '복귀-낮': ctx(hour: 10, planTotal: 2, daysSinceLastVisit: 5),
   // 컨디션 문구는 그 자체로 두 문장이라 복귀 인사가 붙으면 한도에 딱 닿는다.
   '복귀-아팠음': ctx(hour: 10, planTotal: 2, daysSinceLastVisit: 5, feltSick: true),
@@ -147,7 +170,13 @@ List<String> allTemplates(GreetingVoice v) => [
   ...v.comebackSupport,
   ...v.afterLateNight,
   ...v.afterSick,
-  for (final pool in [v.encStarted, v.encStrong, v.encFlow, v.encEvening])
+  for (final pool in [
+    v.encStarted,
+    v.encStrong,
+    v.encFlow,
+    v.encEvening,
+    v.eveningResistedDone,
+  ])
     for (final pair in pool) ...[pair.$1, pair.$2],
 ];
 
@@ -456,6 +485,49 @@ void main() {
             isTrue,
             reason: '씨앗 $seed: $late',
           );
+        }
+      });
+    }
+  });
+
+  group('하기 싫다던 일을 끝낸 저녁', () {
+    for (final voice in voices.entries) {
+      test('${voice.key} / 해낸 것을 짚고 다음에도 돕겠다고 한다', () {
+        final builder = MasterGreetingBuilder(voice: voice.value);
+        for (var seed = 0; seed < 50; seed++) {
+          final named = MasterGreetingBuilder(
+            voice: voice.value,
+            random: Random(seed),
+          ).build(cases['저녁-싫다던일완료']!);
+          final where = '씨앗 $seed: ${named.text}';
+
+          // 완료율이 25%라 원래는 뭐가 걸렸는지 묻고 카드를 띄우던 자리다.
+          expect(
+            voice.value.eveningResistedDone.any(
+              (pair) => named.text.contains(
+                builder.anchor(pair.$1.replaceAll('{{task}}', "'설거지'")),
+              ),
+            ),
+            isTrue,
+            reason: where,
+          );
+          expect(named.text, contains("'설거지'"), reason: where);
+          expect(named.choices, isEmpty, reason: where);
+          expect(sentenceCount(named.text), 2, reason: where);
+
+          // 이름이 길어 못 넣는 날도 축하는 나가야 한다.
+          final unnamed = MasterGreetingBuilder(
+            voice: voice.value,
+            random: Random(seed),
+          ).build(cases['저녁-싫다던일완료-이름김']!);
+          expect(
+            voice.value.eveningResistedDone.any(
+              (pair) => unnamed.text.contains(builder.anchor(pair.$2)),
+            ),
+            isTrue,
+            reason: '씨앗 $seed: ${unnamed.text}',
+          );
+          expect(unnamed.choices, isEmpty, reason: '씨앗 $seed: ${unnamed.text}');
         }
       });
     }

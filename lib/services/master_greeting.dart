@@ -38,6 +38,12 @@ class MasterGreetingContext {
   /// 어제나 오늘 아프다고 말한 적이 있는지.
   final bool feltSick;
 
+  /// 오늘 하기 싫다고 말했던 일정을 끝내 완료했는지.
+  final bool resistedDone;
+
+  /// 그 일정 이름. 제목이 길면 null이고, 이름 없이 격려만 한다.
+  final String? resistedDoneLabel;
+
   const MasterGreetingContext({
     required this.now,
     required this.daysSinceLastVisit,
@@ -48,6 +54,8 @@ class MasterGreetingContext {
     required this.pendingPlans,
     required this.lateNight,
     required this.feltSick,
+    this.resistedDone = false,
+    this.resistedDoneLabel,
   });
 
   bool get hasPlan => planTotal > 0;
@@ -107,6 +115,10 @@ class GreetingVoice {
   final List<(String, String)> encFlow; // 오후 절반 이상 완료
   final List<(String, String)> encEvening; // 저녁 발화용
 
+  /// 하기 싫다던 일을 끝낸 날 저녁. 해낸 것을 짚고, 다음에도 도와주겠다고 한다.
+  /// 다른 저녁 문구와 달리 이 자체로 두 문장이라 뒤에 격려를 붙이지 않는다.
+  final List<(String, String)> eveningResistedDone;
+
   final String otherChoiceLabel;
 
   const GreetingVoice({
@@ -133,6 +145,7 @@ class GreetingVoice {
     required this.encStrong,
     required this.encFlow,
     required this.encEvening,
+    required this.eveningResistedDone,
     required this.otherChoiceLabel,
   });
 }
@@ -277,6 +290,16 @@ class MasterGreetingCopy {
       ('{{task}} 챙기신 게 눈에 띕니다.', '오늘 챙기신 것들이 눈에 띕니다.'),
       ('오늘 {{task}} 해내신 건 분명한 성과예요.', '오늘 해내신 것들은 분명한 성과예요.'),
     ],
+    eveningResistedDone: [
+      (
+        '{{task}} 하기 싫다고 하시더니 결국 {해내셨네요|끝내셨네요}! 앞으로도 부담되는 일이 있으면 말씀해 주세요, 제가 적극적으로 {돕겠습니다|도와드리겠습니다}.',
+        '하기 싫다고 하신 일을 결국 {해내셨네요|끝내셨네요}! 앞으로도 부담되는 일이 있으면 말씀해 주세요, 제가 적극적으로 {돕겠습니다|도와드리겠습니다}.',
+      ),
+      (
+        '그렇게 미루고 싶어 하시던 {{task}}, 결국 {해내셨습니다|끝내셨습니다}! 버거운 일이 있으면 언제든 말씀해 주세요, 제가 {같이 붙겠습니다|끝까지 돕겠습니다}.',
+        '미루고 싶어 하시던 일을 결국 {해내셨습니다|끝내셨습니다}! 버거운 일이 있으면 언제든 말씀해 주세요, 제가 {같이 붙겠습니다|끝까지 돕겠습니다}.',
+      ),
+    ],
     otherChoiceLabel: '그 외에 있어요',
   );
 
@@ -391,6 +414,16 @@ class MasterGreetingCopy {
       ('{{task}} 챙긴 게 눈에 띈다냥.', '오늘 챙긴 것들이 눈에 띈다냥.'),
       ('오늘 {{task}} 해낸 건 분명한 성과다냥.', '오늘 해낸 것들은 분명한 성과다냥.'),
     ],
+    eveningResistedDone: [
+      (
+        '{{task}} 하기 싫다더니 결국 {해냈구나냥|끝냈구나냥}! 앞으로도 부담되는 일이 있으면 말하라냥, 내가 적극적으로 {돕겠다냥|도와주겠다냥}.',
+        '하기 싫다던 일을 결국 {해냈구나냥|끝냈구나냥}! 앞으로도 부담되는 일이 있으면 말하라냥, 내가 적극적으로 {돕겠다냥|도와주겠다냥}.',
+      ),
+      (
+        '그렇게 미루고 싶어 하던 {{task}}, 결국 {해냈다냥|끝냈다냥}! 버거운 일이 있으면 언제든 말하라냥, 내가 {같이 붙어주겠다냥|끝까지 돕겠다냥}.',
+        '미루고 싶어 하던 일을 결국 {해냈다냥|끝냈다냥}! 버거운 일이 있으면 언제든 말하라냥, 내가 {같이 붙어주겠다냥|끝까지 돕겠다냥}.',
+      ),
+    ],
     otherChoiceLabel: '그 외에 있다냥',
   );
 }
@@ -456,6 +489,19 @@ class MasterGreetingBuilder {
         return MasterGreetingResult(parts.join(' '));
 
       case GreetingSlot.evening:
+        // 하기 싫다던 일을 끝낸 날은 그게 오늘의 이야기다. 완료율이 낮아도
+        // 뭐가 걸렸는지 되묻지 않고(선택 카드도 띄우지 않고) 해낸 것만 짚는다.
+        // 문구가 이미 도움을 청하라는 말로 끝나므로 카드가 하던 몫도 겸한다.
+        if (context.resistedDone) {
+          final praise = pickEncouragement(
+            voice.eveningResistedDone,
+            context.resistedDoneLabel,
+          );
+          if (praise.isNotEmpty) {
+            parts.add(praise);
+            return MasterGreetingResult(parts.join(' '));
+          }
+        }
         if (!context.hasPlan) {
           parts.add(pickLine(voice.eveningNoPlan));
           return MasterGreetingResult(parts.join(' '));

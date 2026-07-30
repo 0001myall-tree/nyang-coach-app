@@ -3095,6 +3095,23 @@ class _ChatScreenState extends State<ChatScreen>
           !notSickWords.any((w) => m.text.contains(w)),
     );
 
+    // 오늘 하기 싫다고 말했던 일정 중 끝내 완료한 게 있는지. 저항 신호는
+    // 'explicit'(사용자가 직접 그렇게 말한 것)만 본다 — 추론으로 잡은 신호까지
+    // 세면 하지도 않은 말을 했다고 코치가 우기게 된다.
+    final today = DateFormat('yyyy-MM-dd').format(now);
+    final resistedDone = (await TaskResistanceService.getAllEvents())
+        .where(
+          (e) =>
+              e.date == today &&
+              e.signalType == 'explicit' &&
+              e.completedEventually &&
+              e.taskText.trim().isNotEmpty,
+        )
+        .toList(growable: false);
+    final resistedName = resistedDone.isEmpty
+        ? null
+        : resistedDone.first.taskText.trim();
+
     return MasterGreetingContext(
       now: now,
       daysSinceLastVisit: daysSinceLastVisit,
@@ -3105,6 +3122,12 @@ class _ChatScreenState extends State<ChatScreen>
       pendingPlans: pendingPlans,
       lateNight: lateNight,
       feltSick: feltSick,
+      resistedDone: resistedName != null,
+      resistedDoneLabel:
+          resistedName != null &&
+              resistedName.length <= MasterGreetingCopy.doneLabelMaxLength
+          ? "'$resistedName'"
+          : null,
     );
   }
 
