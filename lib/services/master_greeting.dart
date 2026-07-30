@@ -1,5 +1,7 @@
 import 'dart:math';
 
+import 'coach_id_service.dart';
+
 /// 마스터 코치(여비서/냥할배) 자동 발화의 문구와 조립 규칙.
 ///
 /// 채팅 화면에서 떼어낸 이유는 검증이다. 화면 안에 있으면 앱을 띄우고 로그인해서
@@ -161,8 +163,10 @@ class MasterGreetingCopy {
   /// '아직 늦지 않았다'거나 '벌써 마무리돼 간다'는 말이 참이 되는 경계다.
   static const earlyEveningUntilHour = 20;
 
+  /// 냥할배의 옛 id('sec_male')가 저장된 값에는 아직 남아 있다. 그대로 비교하면
+  /// 냥할배가 여비서 말투로 말하게 되므로 정규화한 id로 고른다.
   static GreetingVoice forCoach(String coachId) =>
-      coachId == 'nyang_halbae' ? nyangHalbae : secretary;
+      CoachIdService.isNyangHalbae(coachId) ? nyangHalbae : secretary;
 
   static const secretary = GreetingVoice(
     dawn: [

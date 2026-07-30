@@ -624,5 +624,10 @@ void main() {
       MasterGreetingCopy.forCoach('nyang_secretary'),
       same(MasterGreetingCopy.secretary),
     );
+    // 저장된 값에 남아 있는 옛 id. 여기서 갈리면 냥할배가 존댓말을 하게 된다.
+    expect(
+      MasterGreetingCopy.forCoach('sec_male'),
+      same(MasterGreetingCopy.nyangHalbae),
+    );
   });
 }
