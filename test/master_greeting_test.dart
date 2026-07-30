@@ -162,6 +162,60 @@ void main() {
   });
 
   // 문구가 여럿이어도 실제로 한 가지만 나오면 밑천이 하나인 것과 같다.
+  group('갈래', () {
+    // 지문이 짧으면 반복 회피가 헐거워진다. 갈래를 촘촘히 넣다가 고정 부분을
+    // 다 없애면 같은 틀이 이틀 연속 나올 수 있으므로 길이를 지킨다.
+    test('모든 틀에 알아볼 만한 지문이 남아 있다', () {
+      for (final voice in voices.entries) {
+        final builder = MasterGreetingBuilder(voice: voice.value);
+        for (final pool in [
+          voice.value.earlyStart,
+          voice.value.earlyQuestions,
+          voice.value.morningPlan,
+          voice.value.morningNoPlan,
+        ]) {
+          for (final template in pool) {
+            expect(
+              builder.anchor(template).length,
+              greaterThanOrEqualTo(4),
+              reason: '${voice.key}: $template',
+            );
+          }
+        }
+      }
+    });
+
+    test('갈래 표기가 펼쳐지지 않고 새어 나가지 않는다', () {
+      for (final voice in voices.values) {
+        for (final entry in cases.entries) {
+          for (var seed = 0; seed < 50; seed++) {
+            final text = MasterGreetingBuilder(
+              voice: voice,
+              random: Random(seed),
+            ).build(entry.value).text;
+            expect(text, isNot(contains('{')), reason: text);
+            expect(text, isNot(contains('|')), reason: text);
+            expect(text, isNot(contains('}')), reason: text);
+          }
+        }
+      }
+    });
+
+    test('아침 인사가 열 가지 넘게 나온다', () {
+      final seen = <String>{};
+      for (var seed = 0; seed < 200; seed++) {
+        seen.add(
+          MasterGreetingBuilder(
+            voice: MasterGreetingCopy.secretary,
+            random: Random(seed),
+          ).build(cases['이른아침-완료없음']!).text,
+        );
+      }
+      // 갈래 이전에는 earlyStart 4 × earlyQuestions 3 = 12가지가 전부였다.
+      expect(seen.length, greaterThan(30), reason: '${seen.length}가지');
+    });
+  });
+
   test('복귀 인사가 한 가지로 굳어 있지 않다', () {
     final seen = <String>{};
     for (var seed = 0; seed < 50; seed++) {
@@ -232,25 +286,34 @@ void main() {
     });
   });
 
-  test('최근에 쓴 문장은 다시 고르지 않는다', () {
+  test('최근에 쓴 틀은 다시 고르지 않는다', () {
     final pool = MasterGreetingCopy.secretary.earlyStart;
+    final plain = MasterGreetingBuilder(voice: MasterGreetingCopy.secretary);
+    // 마지막 틀만 빼고 전부 최근에 나온 것으로 둔다. 최근 목록에는 실제 발화가
+    // 담기므로, 틀이 아니라 펼친 문장을 넣어야 실제와 같은 조건이 된다.
     final builder = MasterGreetingBuilder(
       voice: MasterGreetingCopy.secretary,
-      recentLines: pool.take(pool.length - 1).toList(),
+      recentLines: pool
+          .take(pool.length - 1)
+          .map(plain.expand)
+          .toList(growable: false),
     );
-    // 하나만 남으므로 여러 번 골라도 그 하나여야 한다.
+    final left = plain.anchor(pool.last);
     for (var i = 0; i < 20; i++) {
-      expect(builder.pickLine(pool), pool.last);
+      expect(builder.pickLine(pool), contains(left));
     }
   });
 
   test('풀이 전부 최근에 나왔으면 굳이 침묵하지 않는다', () {
     final pool = MasterGreetingCopy.secretary.earlyStart;
+    final plain = MasterGreetingBuilder(voice: MasterGreetingCopy.secretary);
     final builder = MasterGreetingBuilder(
       voice: MasterGreetingCopy.secretary,
-      recentLines: pool,
+      recentLines: pool.map(plain.expand).toList(growable: false),
     );
-    expect(pool, contains(builder.pickLine(pool)));
+    final line = builder.pickLine(pool);
+    expect(pool.any((t) => line.contains(plain.anchor(t))), isTrue,
+        reason: line);
   });
 
   test('씨앗이 같으면 같은 문장이 나온다', () {
