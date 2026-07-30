@@ -77,6 +77,8 @@ final cases = <String, MasterGreetingContext>{
     doneLabel: "'운동' 외 2개",
   ),
   '복귀-낮': ctx(hour: 10, planTotal: 2, daysSinceLastVisit: 5),
+  // 컨디션 문구는 그 자체로 두 문장이라 복귀 인사가 붙으면 한도에 딱 닿는다.
+  '복귀-아팠음': ctx(hour: 10, planTotal: 2, daysSinceLastVisit: 5, feltSick: true),
   '복귀-저녁전부완료': ctx(
     hour: 20,
     planTotal: 2,
@@ -96,22 +98,27 @@ void main() {
   group('모든 분기가 말이 되는 문장을 낸다', () {
     for (final voice in voices.entries) {
       for (final entry in cases.entries) {
+        // 씨앗 하나만 보면 그 조합만 통과하고 넘어간다. 문구 풀을 골고루
+        // 뽑도록 씨앗을 훑어서, 어떤 조합이 나와도 성립하는지 본다.
         test('${voice.key} / ${entry.key}', () {
-          final result = MasterGreetingBuilder(
-            voice: voice.value,
-            random: Random(1),
-          ).build(entry.value);
+          for (var seed = 0; seed < 50; seed++) {
+            final result = MasterGreetingBuilder(
+              voice: voice.value,
+              random: Random(seed),
+            ).build(entry.value);
+            final where = '씨앗 $seed: ${result.text}';
 
-          expect(result.text.trim(), isNotEmpty);
-          // 치환이 빠진 자리가 그대로 나가면 사용자에게 {{task}}가 보인다.
-          expect(result.text, isNot(contains('{{')));
-          expect(result.text, isNot(contains('  ')));
-          // 복귀 인사가 붙어도 세 문장을 넘지 않는다.
-          expect(
-            sentenceCount(result.text),
-            lessThanOrEqualTo(3),
-            reason: result.text,
-          );
+            expect(result.text.trim(), isNotEmpty, reason: where);
+            // 치환이 빠진 자리가 그대로 나가면 사용자에게 {{task}}가 보인다.
+            expect(result.text, isNot(contains('{{')), reason: where);
+            expect(result.text, isNot(contains('  ')), reason: where);
+            // 복귀 인사가 붙어도 세 문장을 넘지 않는다.
+            expect(
+              sentenceCount(result.text),
+              lessThanOrEqualTo(3),
+              reason: where,
+            );
+          }
         });
       }
     }
