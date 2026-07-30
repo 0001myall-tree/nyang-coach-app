@@ -16,6 +16,7 @@ MasterGreetingContext ctx({
   bool feltSick = false,
   bool resistedDone = false,
   String? resistedDoneLabel,
+  bool offPlanResistance = false,
 }) {
   return MasterGreetingContext(
     now: DateTime(2026, 7, 30, hour, 30),
@@ -29,6 +30,7 @@ MasterGreetingContext ctx({
     feltSick: feltSick,
     resistedDone: resistedDone,
     resistedDoneLabel: resistedDoneLabel,
+    offPlanResistance: offPlanResistance,
   );
 }
 
@@ -120,6 +122,15 @@ final cases = <String, MasterGreetingContext>{
     pendingPlans: ['빨래', '운동'],
     resistedDone: true,
   ),
+  // 계획에 없는 일을 싫다고 한 날. 기록으로는 결과를 알 수 없어 직접 묻는다.
+  '저녁-계획밖싫다': ctx(
+    hour: 20,
+    planTotal: 3,
+    planDone: 2,
+    doneCount: 2,
+    doneLabel: "'운동' 외 1개",
+    offPlanResistance: true,
+  ),
   '복귀-낮': ctx(hour: 10, planTotal: 2, daysSinceLastVisit: 5),
   // 컨디션 문구는 그 자체로 두 문장이라 복귀 인사가 붙으면 한도에 딱 닿는다.
   '복귀-아팠음': ctx(hour: 10, planTotal: 2, daysSinceLastVisit: 5, feltSick: true),
@@ -166,6 +177,8 @@ List<String> allTemplates(GreetingVoice v) => [
   ...v.earlyEveningHigh,
   ...v.eveningAll,
   ...v.eveningNoPlan,
+  ...v.eveningOffPlanAsk,
+  ...v.offPlanDoneReply,
   ...v.comeback,
   ...v.comebackSupport,
   ...v.afterLateNight,
@@ -286,6 +299,8 @@ void main() {
           voice.value.earlyEveningHigh,
           voice.value.eveningAll,
           voice.value.eveningNoPlan,
+          voice.value.eveningOffPlanAsk,
+          voice.value.offPlanDoneReply,
         ]) {
           for (final template in pool) {
             expect(
@@ -533,6 +548,60 @@ void main() {
     }
   });
 
+  group('계획에 없어 확인할 길이 없는 일', () {
+    for (final voice in voices.entries) {
+      test('${voice.key} / 물어보고 두 버튼을 준다', () {
+        final builder = MasterGreetingBuilder(voice: voice.value);
+        for (var seed = 0; seed < 50; seed++) {
+          final result = MasterGreetingBuilder(
+            voice: voice.value,
+            random: Random(seed),
+          ).build(cases['저녁-계획밖싫다']!);
+          final where = '씨앗 $seed: ${result.text}';
+
+          expect(
+            voice.value.eveningOffPlanAsk.any(
+              (t) => result.text.contains(builder.anchor(t)),
+            ),
+            isTrue,
+            reason: where,
+          );
+          // 일정 이름이 아니라 대답 버튼이 붙는다.
+          expect(result.choices, [
+            MasterGreetingCopy.offPlanDoneLabel,
+            MasterGreetingCopy.offPlanNotYetLabel,
+          ], reason: where);
+          expect(sentenceCount(result.text), 1, reason: where);
+        }
+      });
+
+      test('${voice.key} / 했다고 하면 코치가 자기 기분을 말한다', () {
+        final seen = <String>{};
+        for (var seed = 0; seed < 100; seed++) {
+          seen.add(
+            MasterGreetingBuilder(
+              voice: voice.value,
+              random: Random(seed),
+            ).pickLine(voice.value.offPlanDoneReply),
+          );
+        }
+        final builder = MasterGreetingBuilder(voice: voice.value);
+        for (final line in seen) {
+          // 진척을 짚는 게 아니라 코치가 자기 기분을 말하는 자리다.
+          expect(line, matches(RegExp('후련|시원')), reason: line);
+          expect(
+            voice.value.offPlanDoneReply.any(
+              (t) => line.contains(builder.anchor(t)),
+            ),
+            isTrue,
+            reason: line,
+          );
+        }
+        expect(seen.length, greaterThan(2), reason: '${seen.length}가지');
+      });
+    }
+  });
+
   test('저녁 절반 이하에서만 선택 카드가 붙는다', () {
     final builder = MasterGreetingBuilder(
       voice: MasterGreetingCopy.secretary,
@@ -544,6 +613,7 @@ void main() {
         '저녁-절반이하',
         '저녁초입-완료0',
         '저녁초입-완료1개',
+        '저녁-계획밖싫다',
       }.contains(entry.key);
       expect(
         result.choices.isNotEmpty,

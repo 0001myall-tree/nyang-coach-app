@@ -46,6 +46,10 @@ class MasterGreetingContext {
   /// 그 일정 이름. 제목이 길면 null이고, 이름 없이 격려만 한다.
   final String? resistedDoneLabel;
 
+  /// 오늘 하기 싫다고 한 게 계획에 없는 일이라, 했는지 안 했는지 알 길이 없는지.
+  /// 이때만 코치가 직접 물어본다 — 기록으로는 영영 알 수 없는 자리다.
+  final bool offPlanResistance;
+
   const MasterGreetingContext({
     required this.now,
     required this.daysSinceLastVisit,
@@ -58,6 +62,7 @@ class MasterGreetingContext {
     required this.feltSick,
     this.resistedDone = false,
     this.resistedDoneLabel,
+    this.offPlanResistance = false,
   });
 
   bool get hasPlan => planTotal > 0;
@@ -121,6 +126,13 @@ class GreetingVoice {
   /// 다른 저녁 문구와 달리 이 자체로 두 문장이라 뒤에 격려를 붙이지 않는다.
   final List<(String, String)> eveningResistedDone;
 
+  /// 계획에 없어 확인할 길이 없는 일을 물어보는 자리. 이름을 부르지 않는다 —
+  /// 자유 문장에서 일 이름만 뽑아낼 방법이 없고, 잘못 부르면 딴 일을 묻게 된다.
+  final List<String> eveningOffPlanAsk;
+
+  /// 그 일을 했다고 답했을 때. 코치가 자기 기분을 말한다.
+  final List<String> offPlanDoneReply;
+
   final String otherChoiceLabel;
 
   const GreetingVoice({
@@ -148,6 +160,8 @@ class GreetingVoice {
     required this.encFlow,
     required this.encEvening,
     required this.eveningResistedDone,
+    required this.eveningOffPlanAsk,
+    required this.offPlanDoneReply,
     required this.otherChoiceLabel,
   });
 }
@@ -158,6 +172,11 @@ class MasterGreetingCopy {
 
   /// 저녁 선택 카드에 버튼으로 직접 노출할 일정 개수. 넘으면 '그 외'로 접는다.
   static const pendingChoiceLimit = 3;
+
+  /// 계획에 없던 일을 물었을 때 누르는 버튼. 코치가 아니라 사용자가 하는 말이라
+  /// 코치별로 가르지 않는다.
+  static const offPlanDoneLabel = '했어요';
+  static const offPlanNotYetLabel = '아직이요';
 
   /// 이 시각 전까지는 저녁이어도 하루가 아직 열려 있는 것으로 본다.
   /// '아직 늦지 않았다'거나 '벌써 마무리돼 간다'는 말이 참이 되는 경계다.
@@ -304,6 +323,14 @@ class MasterGreetingCopy {
         '미루고 싶어 하시던 일을 결국 {해내셨습니다|끝내셨습니다}! 버거운 일이 있으면 언제든 말씀해 주세요, 제가 {같이 붙겠습니다|끝까지 돕겠습니다}.',
       ),
     ],
+    eveningOffPlanAsk: [
+      '아까 부담스러워하시던 그 일, 혹시 {시작해보셨나요|손대보셨나요}?',
+      '오늘 {마음에 걸린다고 하신|버겁다고 하신} 그 일은 어떻게 되었을까요?',
+    ],
+    offPlanDoneReply: [
+      '와, 해내셨군요! 제가 다 {후련합니다|후련하네요}.',
+      '결국 하셨네요! 듣는 제가 더 {후련합니다|시원합니다}.',
+    ],
     otherChoiceLabel: '그 외에 있어요',
   );
 
@@ -428,6 +455,14 @@ class MasterGreetingCopy {
         '미루고 싶어 하던 일을 결국 {해냈다냥|끝냈다냥}! 버거운 일이 있으면 언제든 말하라냥, 내가 {같이 붙어주겠다냥|끝까지 돕겠다냥}.',
       ),
     ],
+    eveningOffPlanAsk: [
+      '아까 부담스러워하던 그 일, 혹시 {시작해봤냥|손대봤냥}?',
+      '오늘 {마음에 걸린다던|버겁다던} 그 일은 어떻게 됐냥?',
+    ],
+    offPlanDoneReply: [
+      '오, 해냈구나냥! 내가 다 {후련하다냥|후련하구나냥}.',
+      '결국 했구나냥! 듣는 내가 더 {후련하다냥|시원하다냥}.',
+    ],
     otherChoiceLabel: '그 외에 있다냥',
   );
 }
@@ -505,6 +540,18 @@ class MasterGreetingBuilder {
             parts.add(praise);
             return MasterGreetingResult(parts.join(' '));
           }
+        }
+        // 계획에 없는 일이라 기록으로는 영영 알 수 없다. 코치가 직접 묻고,
+        // '아직'이면 실행 저항 흐름을 한 번 더 태운다.
+        if (context.offPlanResistance) {
+          parts.add(pickLine(voice.eveningOffPlanAsk));
+          return MasterGreetingResult(
+            parts.join(' '),
+            choices: const [
+              MasterGreetingCopy.offPlanDoneLabel,
+              MasterGreetingCopy.offPlanNotYetLabel,
+            ],
+          );
         }
         if (!context.hasPlan) {
           parts.add(pickLine(voice.eveningNoPlan));

@@ -3112,6 +3112,26 @@ class _ChatScreenState extends State<ChatScreen>
         ? null
         : resistedDone.first.taskText.trim();
 
+    // 하기 싫다고 했는데 그게 계획에 없는 일이면 완료도 미완료도 남지 않아서,
+    // 했는지 안 했는지 알 방법이 기록에는 없다. 그때만 코치가 직접 묻는다.
+    // 판정은 오늘 대화에서 파생시킨다 — 기기별 플래그를 prefs에 두면 클라우드
+    // 복원이 덮어써서 물었는지 여부가 되돌아간다.
+    final taskNames = tasks
+        .map(_taskText)
+        .whereType<String>()
+        .map((t) => t.replaceAll(RegExp(r'\s+'), ''))
+        .where((t) => t.length >= 2)
+        .toList(growable: false);
+    final offPlanResistance = seen.any((m) {
+      if (!m.isUser || !_isSameDay(m.time, now)) return false;
+      if (!ExecutionResistanceService.isResistanceExpression(m.text)) {
+        return false;
+      }
+      final normalized = m.text.replaceAll(RegExp(r'\s+'), '');
+      // 계획에 있는 일을 두고 한 말이면 저항 이벤트로 이미 남는다. 여기는 아니다.
+      return !taskNames.any(normalized.contains);
+    });
+
     return MasterGreetingContext(
       now: now,
       daysSinceLastVisit: daysSinceLastVisit,
@@ -3128,6 +3148,7 @@ class _ChatScreenState extends State<ChatScreen>
               resistedName.length <= MasterGreetingCopy.doneLabelMaxLength
           ? "'$resistedName'"
           : null,
+      offPlanResistance: offPlanResistance,
     );
   }
 
@@ -12360,6 +12381,22 @@ $timerOutputRule
   ) async {
     if (_isLoading) return;
     HapticFeedback.lightImpact();
+
+    // 계획에 없던 일을 물었을 때의 두 버튼. 일정 이름이 아니므로 먼저 걸러낸다.
+    if (label == MasterGreetingCopy.offPlanDoneLabel) {
+      _injectAiMessage(
+        _greetingBuilder.pickLine(_greetingVoice.offPlanDoneReply),
+        kind: 'evening_pending_choice',
+      );
+      await AnalyticsService.logFeatureUsage('master_offplan_done');
+      return;
+    }
+    if (label == MasterGreetingCopy.offPlanNotYetLabel) {
+      await AnalyticsService.logFeatureUsage('master_offplan_not_yet');
+      // 저항 흐름을 한 번 더 태운다. 사용자에게 보이는 말은 누른 버튼 그대로다.
+      await _send(label, apiInputOverride: '아까 부담스럽다고 한 그 일, 아직 하기 싫어');
+      return;
+    }
 
     if (label == _greetingVoice.otherChoiceLabel) {
       final prefs = await SharedPreferences.getInstance();
