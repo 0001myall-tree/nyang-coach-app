@@ -6480,7 +6480,16 @@ class _ChatScreenState extends State<ChatScreen>
     if (!await _ensureMasterCoachAccess()) return;
     HapticFeedback.lightImpact();
 
-    final reply = await _buildNyangPerfectionismReply();
+    final reply = await _buildNyangPerfectionismLocalReply();
+    if (reply == null) {
+      await _send(
+        '완벽하게 못 해서 속상해',
+        apiInputOverride:
+            '사용자가 완벽하게 못 해서 속상하다고 다시 말했다. 같은 문장을 반복하지 말고, 완벽주의를 짧게 받아준 뒤 지금 할 수 있는 아주 작은 관점 전환이나 행동 하나만 자연스럽게 제안해줘.',
+        masterModelPolicy: _MasterModelPolicy.forceGpt4oMini,
+      );
+      return;
+    }
 
     setState(() {
       _messages.add(
@@ -7266,6 +7275,10 @@ class _ChatScreenState extends State<ChatScreen>
       'nyang_halbae_perfectionism_line_date';
   static const String _nyangPerfectionismLineIndexKey =
       'nyang_halbae_perfectionism_line_index';
+  static const String _nyangPerfectionismClickDateKey =
+      'nyang_halbae_perfectionism_click_date';
+  static const String _nyangPerfectionismClickCountKey =
+      'nyang_halbae_perfectionism_click_count';
 
   static const List<String> _nyangPerfectionismInsights = [
     '완벽하게 못 해서 속상한 마음, 그거 너무 기준이 높아서 생긴 상처일 수 있다냥. 오늘은 잘하는 나 말고, 시작하는 나만 데려오면 된다냥.',
@@ -7276,33 +7289,47 @@ class _ChatScreenState extends State<ChatScreen>
     '혼자 쓰는 계획표 앞에서도 마음이 무겁다면, 내 안의 기준이 너무 엄격해진 걸 수도 있다냥. 좀 못하면 어때? 첫 걸음만 작게 떼보자냥.',
   ];
 
-  Future<String> _buildNyangPerfectionismReply() async {
+  Future<String?> _buildNyangPerfectionismLocalReply() async {
     final prefs = await SharedPreferences.getInstance();
     final todayStr = _getTodayStrWithReset(prefs);
-    final action = await _buildPerfectionismSmallAction();
-    final usedToday =
-        prefs.getString(_nyangPerfectionismLineDateKey) == todayStr;
-    if (usedToday) {
-      return '그 마음은 오늘 이미 같이 봤다냥.\n$action';
+
+    final clickCount = await _nextNyangPerfectionismClickCount(prefs, todayStr);
+    if (clickCount == 1) {
+      final line = _pickNyangPerfectionismInsight(prefs);
+      await prefs.setString(_nyangPerfectionismLineDateKey, todayStr);
+      return line;
     }
 
-    final line = _pickNyangPerfectionismInsight(prefs);
-    await prefs.setString(_nyangPerfectionismLineDateKey, todayStr);
-    return '$line\n$action';
+    if (clickCount == 2) {
+      final taskName = await _pickSmallPendingTaskName();
+      if (taskName != null) {
+        return '흠.. 지금은 \'$taskName\'을 전부 끝내려 하지 말고, 첫 조각 하나만 잡아보자냥.';
+      }
+    }
+
+    return null;
+  }
+
+  Future<int> _nextNyangPerfectionismClickCount(
+    SharedPreferences prefs,
+    String todayStr,
+  ) async {
+    final clickDate = prefs.getString(_nyangPerfectionismClickDateKey);
+    final legacyLineUsedToday =
+        prefs.getString(_nyangPerfectionismLineDateKey) == todayStr;
+    final currentCount = clickDate == todayStr
+        ? prefs.getInt(_nyangPerfectionismClickCountKey) ?? 0
+        : (legacyLineUsedToday ? 1 : 0);
+    final nextCount = currentCount + 1;
+    await prefs.setString(_nyangPerfectionismClickDateKey, todayStr);
+    await prefs.setInt(_nyangPerfectionismClickCountKey, nextCount);
+    return nextCount;
   }
 
   String _pickNyangPerfectionismInsight(SharedPreferences prefs) {
     final index = Random().nextInt(_nyangPerfectionismInsights.length);
     unawaited(prefs.setInt(_nyangPerfectionismLineIndexKey, index));
     return _nyangPerfectionismInsights[index];
-  }
-
-  Future<String> _buildPerfectionismSmallAction() async {
-    final taskName = await _pickSmallPendingTaskName();
-    if (taskName != null) {
-      return '지금은 "$taskName"을 전부 끝내려 하지 말고, 첫 조각 하나만 잡아보자냥.';
-    }
-    return '지금은 새 일을 만들기보다 물 한 잔 마시고, 오늘 잘 버틴 것 하나만 떠올려보자냥.';
   }
 
   Future<String?> _pickSmallPendingTaskName() async {
