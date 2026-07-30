@@ -161,6 +161,33 @@ void main() {
     }
   });
 
+  // 상황 문장과 질문 문장을 각각 두면 둘이 같은 말을 하게 된다. 실제로
+  // "막히는 점 있으면 말씀해 주세요. 필요하신 게 있으면 말씀해 주세요."가 나갔다.
+  group('9시 뒤 낮 발화는 한 문장이다', () {
+    final dayCases = [
+      '오전-계획있음',
+      '오전-계획없음',
+      '오전-완료1개',
+      '오전-완료3개',
+      '오후-진척있음',
+      '오후-완료0',
+      '오후-계획없음',
+    ];
+    for (final voice in voices.entries) {
+      test(voice.key, () {
+        for (final name in dayCases) {
+          for (var seed = 0; seed < 50; seed++) {
+            final text = MasterGreetingBuilder(
+              voice: voice.value,
+              random: Random(seed),
+            ).build(cases[name]!).text;
+            expect(sentenceCount(text), 1, reason: '$name 씨앗 $seed: $text');
+          }
+        }
+      });
+    }
+  });
+
   // 문구가 여럿이어도 실제로 한 가지만 나오면 밑천이 하나인 것과 같다.
   group('갈래', () {
     // 지문이 짧으면 반복 회피가 헐거워진다. 갈래를 촘촘히 넣다가 고정 부분을
@@ -173,6 +200,8 @@ void main() {
           voice.value.earlyQuestions,
           voice.value.morningPlan,
           voice.value.morningNoPlan,
+          voice.value.afternoonBehind,
+          voice.value.afternoonNoPlan,
         ]) {
           for (final template in pool) {
             expect(

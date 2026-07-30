@@ -79,12 +79,12 @@ class GreetingVoice {
   final List<String> earlyMorning; // 05~07시: 일찍 일어난 사람
   final List<String> earlyStart; // 07~09시: 계획 유무를 따지지 않는 시작 인사
   final List<String> earlyQuestions;
+  // 9시 뒤 낮 문구는 한 문장으로 끝나므로 제안이나 질문을 문장 안에 품는다.
+  // 질문만 홀로 던지면 부담이 되니, 부담을 코치가 가져간다는 말과 한 세트로 둔다.
   final List<String> morningPlan; // 09~12시, 계획 있음
   final List<String> morningNoPlan;
-  final List<String> afternoonPlan; // 12~18시, 계획 있고 진척도 있음
   final List<String> afternoonBehind; // 12~18시, 계획은 있는데 아직 완료 0
   final List<String> afternoonNoPlan;
-  final List<String> dayQuestions;
   final List<String> eveningLow; // 완료 50% 이하
   final List<String> eveningMid; // 51~80%
   final List<String> eveningHigh; // 81~99%
@@ -112,10 +112,8 @@ class GreetingVoice {
     required this.earlyQuestions,
     required this.morningPlan,
     required this.morningNoPlan,
-    required this.afternoonPlan,
     required this.afternoonBehind,
     required this.afternoonNoPlan,
-    required this.dayQuestions,
     required this.eveningLow,
     required this.eveningMid,
     required this.eveningHigh,
@@ -171,33 +169,22 @@ class MasterGreetingCopy {
     ],
     morningPlan: [
       '오늘 일정 {실행하시다가|하시다가} 막히는 점 있으면 {말씀해 주세요|알려주세요}.',
-      '{진행하시다|하시다} 걸리는 게 있으면 언제든 {말씀해 주세요|불러주세요}.',
-      '오전이 아직 {넉넉하게|여유롭게} 남아 있습니다.',
+      '{어느 것부터 시작할지|무엇부터 손댈지} 부담 없이 {골라드릴까요|잡아드릴까요}?',
+      '오전이 아직 {넉넉하니|여유로우니} {가벼운 것부터|손이 가는 것부터} 하나만 {열어보시죠|잡아보시죠}.',
     ],
     morningNoPlan: [
-      '오늘은 아직 {계획이|적어둔 일정이} {없네요|비어 있네요}.',
-      '오늘은 {비어 있는|아무것도 적히지 않은} 하루로 시작합니다.',
-      '아직 {받아둔 일정이|적어둔 일이} 없어요.',
-    ],
-    afternoonPlan: [
-      '오후로 넘어왔는데 지금 흐름이면 몰아붙이지 않으셔도 괜찮습니다.',
-      '하루의 절반쯤 지났고, 여기까지 오셨으면 남은 건 천천히 보셔도 됩니다.',
-      '오후가 시작됐고, 지금까지 온 걸 보면 서두를 필요는 없어 보여요.',
+      '오늘은 아직 {계획이|적어둔 일정이} 없는데, {하나만 같이 정해볼까요|제가 하나 골라드릴까요}?',
+      '{비어 있는|아무것도 적히지 않은} 하루인데, 부담 없는 것으로 {하나만 잡아볼까요|하나 정해볼까요}?',
+      '아직 {받아둔 일정이|적어둔 일이} 없으니 오늘은 {가벼운 것|작은 것} 하나만 {정해도 됩니다|잡아도 됩니다}.',
     ],
     afternoonBehind: [
-      '오후로 넘어왔고 오늘 일정은 아직 그대로 기다리고 있습니다.',
-      '하루의 절반이 지났는데 아직 손대지 못한 일들이 남아 있네요.',
-      '오후가 시작됐어요. 남겨둔 것 중 가벼운 것부터 보시죠.',
+      '하루의 절반이 지났으니 {가벼운 것부터|만만한 것부터} 하나만 {열어볼까요|잡아볼까요}?',
+      '오후로 넘어왔는데 {남은 것 중|남겨둔 것 중} {제일 만만한 걸로|가장 가벼운 걸로} 제가 {골라드릴까요|잡아드릴까요}?',
+      '{아직 손대지 못한|아직 그대로인} 일이 남아 있는데, {부담 없는 것부터|작은 것부터} {시작해보시죠|가보시죠}.',
     ],
     afternoonNoPlan: [
-      '오후인데 아직 오늘 계획이 없네요.',
-      '오늘은 아직 적어둔 일정 없이 오후가 됐습니다.',
-    ],
-    dayQuestions: [
-      '무엇부터 시작해볼까요?',
-      '어떤 것부터 손대볼까요?',
-      '하나만 골라볼까요?',
-      '필요하신 게 있으면 말씀해 주세요.',
+      '{오후인데|오후가 됐는데} 아직 적어둔 일정이 없네요, {작은 것|가벼운 것} 하나만 {정해볼까요|잡아볼까요}?',
+      '적어둔 일 없이 오후가 됐는데, {지금부터|이제부터} 할 수 있는 걸로 제가 {골라드릴까요|하나 잡아드릴까요}?',
     ],
     eveningLow: [
       '오늘 하루도 수고하셨습니다. 남은 것 중에 유독 손이 안 가는 게 있으셨나요?',
@@ -252,9 +239,11 @@ class MasterGreetingCopy {
       ('오전인데 {{task}}까지 해내셨으니 출발이 아주 좋습니다.', '오전인데 벌써 여러 개를 해내셨네요.'),
       ('{{task}} 마치신 걸 보니 오늘 기세가 좋으십니다.', '벌써 여럿 마치셨어요. 대단하십니다.'),
     ],
+    // 오후에 진척이 있을 때 나가는 유일한 문장이다. 걷어낸 afternoonPlan이
+    // 하던 '몰아붙이지 않아도 된다'는 말까지 이 한 문장이 맡는다.
     encFlow: [
-      ('{{task}}까지 마치신 걸 보니 흐름이 좋으십니다.', '여기까지 오셨네요. 흐름이 좋으십니다.'),
-      ('{{task}} 끝내셨으니 오늘 흐름은 잘 잡히셨네요.', '오늘 흐름이 좋으시네요.'),
+      ('{{task}}까지 마치셨으니 남은 건 천천히 보셔도 됩니다.', '여기까지 오셨으니 남은 건 천천히 보셔도 됩니다.'),
+      ('{{task}} 끝내신 걸 보면 오늘은 서두르지 않으셔도 되겠어요.', '지금 흐름이면 서두르지 않으셔도 되겠어요.'),
     ],
     encEvening: [
       ('{{task}} 챙기신 게 눈에 띕니다.', '오늘 챙기신 것들이 눈에 띕니다.'),
@@ -288,33 +277,22 @@ class MasterGreetingCopy {
     ],
     morningPlan: [
       '오늘 일정 {하다가|해나가다} 막히는 게 있으면 {말하라냥|알려주라냥}.',
-      '{하다가|가다가} 걸리는 게 있으면 언제든 {말하라냥|부르라냥}.',
-      '오전은 아직 {넉넉하다냥|여유롭다냥}.',
+      '{뭐부터 시작할지|어디부터 손댈지} 부담 없이 {골라줄까냥|잡아줄까냥}.',
+      '오전은 아직 {넉넉하니|여유로우니} {가벼운 것부터|손이 가는 것부터} 하나만 {열어보자냥|잡아보자냥}.',
     ],
     morningNoPlan: [
-      '오늘은 아직 {계획이|적어둔 일이} {없구나냥|비어 있구나냥}.',
-      '오늘은 {비어 있는|아무것도 안 적힌} 하루로 시작한다냥.',
-      '아직 {받아둔 일정이|적어둔 일이} 없다냥.',
-    ],
-    afternoonPlan: [
-      '오후로 넘어왔는데 지금 흐름이면 서두르지 않아도 된다냥.',
-      '하루가 절반쯤 지났고, 여기까지 왔으면 남은 건 천천히 봐도 된다냥.',
-      '오후가 시작됐고, 지금까지 온 걸 보면 급할 것 없다냥.',
+      '오늘은 아직 {계획이|적어둔 일이} 없는데 {하나만 같이 정해볼까냥|내가 하나 골라줄까냥}.',
+      '{비어 있는|아무것도 안 적힌} 하루인데, 부담 없는 걸로 {하나만 잡아볼까냥|하나 정해볼까냥}.',
+      '아직 {받아둔 일정이|적어둔 일이} 없으니 오늘은 {가벼운 것|작은 것} 하나만 {정해도 된다냥|잡아도 된다냥}.',
     ],
     afternoonBehind: [
-      '오후로 넘어왔는데 오늘 일은 아직 그대로 기다리고 있다냥.',
-      '하루의 절반이 지났는데 아직 손대지 못한 게 남아 있구나냥.',
-      '오후가 시작됐다냥. 남겨둔 것 중 가벼운 것부터 보자냥.',
+      '하루가 절반 지났으니 {가벼운 것부터|만만한 것부터} 하나만 {열어볼까냥|잡아볼까냥}.',
+      '오후로 넘어왔는데 {남은 것 중|남겨둔 것 중} {제일 만만한 걸로|가장 가벼운 걸로} 내가 {골라줄까냥|잡아줄까냥}.',
+      '{아직 손대지 못한|아직 그대로인} 일이 남았는데, {부담 없는 것부터|작은 것부터} {시작해보자냥|가보자냥}.',
     ],
     afternoonNoPlan: [
-      '오후가 됐는데 아직 계획이 없구나냥.',
-      '적어둔 일 없이 오후가 왔다냥.',
-    ],
-    dayQuestions: [
-      '뭐부터 시작해볼까냥.',
-      '어떤 것부터 손대볼까냥.',
-      '하나만 골라보자냥.',
-      '필요한 게 있으면 말하라냥.',
+      '{오후인데|오후가 됐는데} 아직 적어둔 일이 없구나냥, {작은 것|가벼운 것} 하나만 {정해볼까냥|잡아볼까냥}.',
+      '적어둔 일 없이 오후가 왔는데, {지금부터|이제부터} 할 수 있는 걸로 내가 {골라줄까냥|하나 잡아줄까냥}.',
     ],
     eveningLow: [
       '오늘도 고생했다냥. 남은 것 중에 유독 손이 안 가는 게 있었냥?',
@@ -368,8 +346,8 @@ class MasterGreetingCopy {
       ('{{task}} 마친 걸 보니 오늘 기세가 좋구나냥.', '벌써 여럿 마쳤다냥. 제법이다냥.'),
     ],
     encFlow: [
-      ('{{task}}까지 마친 걸 보니 흐름이 좋구나냥.', '여기까지 왔다냥. 흐름이 좋구나냥.'),
-      ('{{task}} 끝냈으니 오늘 흐름은 잘 잡혔다냥.', '오늘 흐름이 좋구나냥.'),
+      ('{{task}}까지 마쳤으니 남은 건 천천히 봐도 된다냥.', '여기까지 왔으니 남은 건 천천히 봐도 된다냥.'),
+      ('{{task}} 끝낸 걸 보면 오늘은 서두르지 않아도 되겠다냥.', '지금 흐름이면 서두르지 않아도 되겠다냥.'),
     ],
     encEvening: [
       ('{{task}} 챙긴 게 눈에 띈다냥.', '오늘 챙긴 것들이 눈에 띈다냥.'),
@@ -425,40 +403,18 @@ class MasterGreetingBuilder {
           );
           return MasterGreetingResult(parts.join(' '));
         }
-        final encouragement = _dayEncouragement(context);
         if (hour < 9) {
           // 9시 전에는 계획 유무를 따지지 않고 하루를 여는 인사만 한다.
+          final encouragement = _dayEncouragement(context);
           parts.add(pickLine(voice.earlyStart));
           parts.add(
             encouragement.isNotEmpty
                 ? encouragement
                 : pickLine(voice.earlyQuestions),
           );
-        } else if (hour < 12) {
-          parts.add(
-            pickLine(context.hasPlan ? voice.morningPlan : voice.morningNoPlan),
-          );
-          parts.add(
-            encouragement.isNotEmpty
-                ? encouragement
-                : pickLine(voice.dayQuestions),
-          );
-        } else {
-          final List<String> pool;
-          if (!context.hasPlan) {
-            pool = voice.afternoonNoPlan;
-          } else if (context.planDone > 0) {
-            pool = voice.afternoonPlan;
-          } else {
-            pool = voice.afternoonBehind;
-          }
-          parts.add(pickLine(pool));
-          parts.add(
-            encouragement.isNotEmpty
-                ? encouragement
-                : pickLine(voice.dayQuestions),
-          );
+          return MasterGreetingResult(parts.join(' '));
         }
+        parts.add(_dayLine(context));
         return MasterGreetingResult(parts.join(' '));
 
       case GreetingSlot.evening:
@@ -552,7 +508,22 @@ class MasterGreetingBuilder {
     ]);
   }
 
-  /// 오전·오후 격려. 완료가 있으면 시각과 무관하게 붙고, 붙으면 질문을 뺀다.
+  /// 9시 이후 낮 발화. 상황과 질문을 각각 한 문장씩 두면 둘이 같은 말을 하게
+  /// 되므로(계획 문구가 "막히면 말씀해 주세요"인데 뒤에 "필요하면 말씀해
+  /// 주세요"가 또 붙었다) 한 문장만 낸다. 짚을 완료가 있으면 그게 할 말이고,
+  /// 없으면 상황 문구를 쓴다 — 상황 문구가 제안까지 안에 품고 있다.
+  String _dayLine(MasterGreetingContext context) {
+    final encouragement = _dayEncouragement(context);
+    if (encouragement.isNotEmpty) return encouragement;
+    if (context.now.hour < 12) {
+      return pickLine(context.hasPlan ? voice.morningPlan : voice.morningNoPlan);
+    }
+    return pickLine(
+      context.hasPlan ? voice.afternoonBehind : voice.afternoonNoPlan,
+    );
+  }
+
+  /// 오전·오후 격려. 완료가 있으면 시각과 무관하게 붙는다.
   /// 기준은 완료율이 아니라 개수다 — 자동 주입된 습관이 분모를 오염시키기 때문.
   String _dayEncouragement(MasterGreetingContext context) {
     if (context.doneCount == 0) return '';
@@ -562,7 +533,9 @@ class MasterGreetingBuilder {
         context.doneLabel,
       );
     }
-    if (context.hasPlan && context.planRate >= 0.5) {
+    // 오후에 일정을 하나라도 끝냈으면 완료율과 무관하게 흐름 쪽으로 말한다.
+    // 절반을 기준으로 갈라봐야 1/4쯤에서 "벌써 시작하셨네요"가 나가 어색했다.
+    if (context.hasPlan && context.planDone > 0) {
       return pickEncouragement(voice.encFlow, context.doneLabel);
     }
     return pickEncouragement(voice.encStarted, context.doneLabel);
