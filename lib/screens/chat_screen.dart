@@ -1208,7 +1208,6 @@ class _ChatScreenState extends State<ChatScreen>
   late AnimationController _flirtAnim;
 
   // 할 일 서랍
-  bool _drawerOpen = false;
   // 타이머 확인 버튼
   int? _timerConfirmMinutes;
   String? _timerConfirmTaskName;
@@ -1240,9 +1239,6 @@ class _ChatScreenState extends State<ChatScreen>
   final SpeechToText _speechToText = SpeechToText();
   bool _speechEnabled = false;
   bool _isListening = false;
-
-  // 선제개입 저항예측: 이번 턴에 프롬프트에 주입한 선제개입 대상 (응답 확인 후 소진 여부 판정용)
-  PreemptiveInterventionResult? _pendingPreemptiveTarget;
 
   // 이번 진입에서 마스터 코치가 자동 발화를 했는지. 인사 직후에 미뤄둔 할 일
   // 리마인드까지 겹쳐 내면 부담스러워서, 리마인드는 다음 진입으로 미룬다.
@@ -2266,7 +2262,6 @@ class _ChatScreenState extends State<ChatScreen>
         _timerActiveMinutes = null;
         _timerActiveInsertIndex = null;
         _suggestedTasks = [];
-        _drawerOpen = false;
         _flirtVisible = false;
         _catFreeTrialStep = 0;
         _awaitingResistanceCause = false;
@@ -2354,22 +2349,6 @@ class _ChatScreenState extends State<ChatScreen>
     } catch (e) {
       await prefs.remove('pendingDeferReminder');
     }
-  }
-
-  // ── flirt 토스트 ─────────────────────────────────────────
-  void _showFlirt(String msg) {
-    setState(() {
-      _flirtMsg = msg;
-      _flirtVisible = true;
-    });
-    _flirtAnim.forward(from: 0);
-    Future.delayed(const Duration(milliseconds: 3500), () {
-      if (mounted) {
-        _flirtAnim.reverse().then((_) {
-          if (mounted) setState(() => _flirtVisible = false);
-        });
-      }
-    });
   }
 
   // ── 냥냥코치 비구독자 업셀 바텀시트 ─────────────────────
@@ -7650,9 +7629,11 @@ class _ChatScreenState extends State<ChatScreen>
     await _maybeStartRestDeclineRiskControl(trimmed);
     if (await _maybeOfferRest(trimmed)) return;
 
-    // 선제개입 저항예측 시스템 1일차: 오늘 미완료 태스크 언급 + 저항신호를 태스크 단위로 기록.
+    // 오늘 미완료 태스크를 두고 한 저항 표현을 기록한다. 저녁에 "하기 싫다던 그 일을
+    // 결국 하셨네요"라고 짚는 근거가 이것뿐이다.
     // 대화 흐름을 막지 않는 배경 기록이라 결과를 기다리지 않는다.
-    if (_containsAnyRestSignal(trimmed)) {
+    if (_containsAnyRestSignal(trimmed) ||
+        ExecutionResistanceService.isResistanceExpression(trimmed)) {
       TaskResistanceService.detectAndRecordFromMessage(trimmed);
     }
 
@@ -7897,7 +7878,6 @@ class _ChatScreenState extends State<ChatScreen>
       final usageNotice = await ApiUsageLimitService.takeChatUsageNotice();
       if (!mounted || widget.coachId != currentId) return;
       final parsed = _parseReply(raw);
-      unawaited(_confirmPreemptiveIfMentioned(parsed.text));
       await _confirmResistanceDiagnosisIfAsked(parsed.text);
       final suggestedTasks = await _filterDuplicateSuggestedTasks(
         parsed.suggestedTasks,
@@ -8437,58 +8417,6 @@ class _ChatScreenState extends State<ChatScreen>
         : null;
     if (!isVacation && recoveryPrompt != null) {
       sb.writeln(recoveryPrompt);
-    }
-
-    // 선제개입 저항예측: 자주 저항했던 일정을 자연스러운 타이밍에 화제로 제시 (강요 아님, 휴식모드와 중복 방지)
-    // 이번 턴에 실제로 화제를 꺼냈는지는 응답을 받은 뒤 확인한다 (_confirmPreemptiveIfMentioned 참고).
-    // 마스터 코치 전용 — 프렌즈 코치는 "압박 없는 오늘 하루" 컨셉이라 목표/태스크 체크인을 하지 않음.
-    _pendingPreemptiveTarget = null;
-    if (_coach.isMaster && !isVacation && recoveryPrompt == null) {
-      final preemptive =
-          await TaskResistanceService.findPreemptiveInterventionTarget(
-            coachId: widget.coachId,
-          );
-      if (preemptive != null) {
-        _pendingPreemptiveTarget = preemptive;
-        if (preemptive.isTimeSpecific) {
-          // 시간 지정형: 이미 정해둔 시간을 존중하며, 부담을 줄여주는 가벼운 확인 톤으로.
-          sb.writeln('\n[특별 지침: 시간 지정 일정 체크인 (자연스러운 타이밍에만, 강요 금지)]');
-          sb.writeln(
-            '사용자가 평소 자주 부담스러워했던 "${preemptive.taskText}" 일정이 곧 시작됩니다(정해진 시간 있음). 다음 규칙을 지키며 대화 흐름에 맞을 때만 화제로 꺼내보세요:',
-          );
-          sb.writeln(
-            '1. **관찰+부담 완화 제안**: "${preemptive.taskText}"를 지금 당장 하라고 권하지 말고, 이미 정해둔 시간을 존중하며 짧게 짚은 뒤 원하면 작게 준비를 도와주겠다고 제안하세요. 예: "이따 ${preemptive.taskText} 있으시네요. 지금 바로 하실 필요는 없고, 원하시면 시작 전에 필요한 것만 작게 정리해드리겠습니다.", "곧 ${preemptive.taskText} 시간이네요. 부담되시면 첫 3분만 어떻게 시작할지 제가 줄여드릴게요."',
-          );
-          sb.writeln(
-            '2. **"마음의 준비" 같은 표현 금지**: 감정을 직접 짚어주는 표현("마음의 준비 되셨어요?" 등)은 쓰지 말고, 상황·논리 위주로 가볍게 확인하세요.',
-          );
-          sb.writeln(
-            '3. **명령·추궁 금지**: "${preemptive.taskText} 하세요" 같은 명령형이나 "왜 아직 안 하셨어요?" 같은 추궁형은 절대 쓰지 마세요.',
-          );
-          sb.writeln(
-            '4. **타이밍이 안 맞으면 생략**: 지금 이 화제를 꺼내는 게 어색하다고 판단되면 이번 턴엔 언급하지 않아도 됩니다.',
-          );
-          sb.writeln('5. 이 지침은 이번 응답에서 한 번만 적용하고, 같은 응답 안에서 반복하지 마세요.');
-        } else {
-          sb.writeln('\n[특별 지침: 선제 화제 제시 (자연스러운 타이밍에만, 강요 금지)]');
-          sb.writeln(
-            '사용자가 평소 자주 부담스러워했던 "${preemptive.taskText}" 일정이 오늘 아직 남아있습니다. 다음 규칙을 지키며 대화 흐름에 맞을 때만 화제로 꺼내보세요:',
-          );
-          sb.writeln(
-            '1. **관찰+작은 도움 제안**: 질문으로 캐묻기보다 "${preemptive.taskText}"가 남아 있다는 사실을 짧게 짚고, 원하면 부담 낮은 첫 단계로 줄여주겠다고 제안하세요. 예: "그러고 보니 오늘 ${preemptive.taskText}도 남아 있네요. 지금 당장 밀어붙이지 않아도 되고, 원하시면 첫 단계만 아주 작게 줄여드릴게요.", "이 일은 계속 부담으로 남아 있던 것 같습니다. 바로 시작보다 3분짜리 첫 단계만 정해둘까요?"',
-          );
-          sb.writeln(
-            '2. **명령·추궁 금지**: "${preemptive.taskText} 하세요" 같은 명령형이나 "왜 아직 안 하셨어요?" 같은 추궁형은 절대 쓰지 마세요.',
-          );
-          sb.writeln(
-            '3. **대화 맥락에 연결**: 사용자가 지금 다른 감정이나 급한 일을 이야기하고 있다면, 먼저 충분히 공감한 뒤 자연스럽게 이어서 화제를 꺼내세요. 예: 사용자가 "너무 피곤하다"고 하면 "오늘 하루 쉽지 않으셨군요. 이런 상태라면 ${preemptive.taskText}는 크게 잡지 말고 첫 단계만 줄여두는 편이 낫겠습니다."처럼 연결하세요.',
-          );
-          sb.writeln(
-            '4. **타이밍이 안 맞으면 생략**: 지금 이 화제를 꺼내는 게 어색하다고 판단되면 이번 턴엔 언급하지 않아도 됩니다.',
-          );
-          sb.writeln('5. 이 지침은 이번 응답에서 한 번만 적용하고, 같은 응답 안에서 반복하지 마세요.');
-        }
-      }
     }
 
     // 2. 장기 패턴 (마스터 전용 — 메모리 시스템이 저장하는 실제 키로 읽는다)
@@ -9369,18 +9297,6 @@ class _ChatScreenState extends State<ChatScreen>
     );
 
     return sb.toString();
-  }
-
-  /// 이번 턴에 선제개입 지침을 주입했다면, 실제 응답에 그 태스크가 언급됐는지 확인하고
-  /// 언급됐을 때만 그날의 기회를 소진 처리한다. 언급 안 됐으면 다음 턴에 다시 시도될 수 있다.
-  Future<void> _confirmPreemptiveIfMentioned(String responseText) async {
-    final target = _pendingPreemptiveTarget;
-    _pendingPreemptiveTarget = null;
-    if (target == null) return;
-    await TaskResistanceService.confirmPreemptiveIntervention(
-      target: target,
-      responseText: responseText,
-    );
   }
 
   /// 이번 턴에 원인 확인 질문을 주입했다면, 코치가 실제로 그 질문을 던졌는지 확인하고

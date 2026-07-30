@@ -16,7 +16,6 @@ import '../services/morning_call_alarm_session.dart';
 import '../services/daily_reset_service.dart';
 import '../services/widget_sync_service.dart';
 import '../services/tasks_sync_service.dart';
-import '../services/task_resistance_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'chat_screen.dart';
 import 'coach_config.dart';
@@ -25,7 +24,6 @@ import 'tasks_screen.dart';
 import 'records_screen.dart';
 import 'settings_screen.dart';
 import '../theme/app_design_tokens.dart';
-import '../widgets/scheduled_checkin_icon.dart';
 
 // 각 탭 화면 플레이스홀더
 class ChatPlaceholderScreen extends StatelessWidget {
@@ -460,8 +458,6 @@ class _MainTabScreenState extends State<MainTabScreen>
 
   Timer? _morningCallTimer;
   Timer? _coreReminderTimer;
-  Timer? _scheduledCheckInTimer;
-  bool hasUnreadScheduledCheckIn = false;
   final AudioPlayer _audioPlayer = AudioPlayer();
   String? _lastMorningCallDate;
   final Set<String> _firedCoreReminders = {};
@@ -500,7 +496,6 @@ class _MainTabScreenState extends State<MainTabScreen>
     _loadVacation();
     _startMorningCallEngine();
     _startCoreReminderEngine();
-    _startScheduledCheckInEngine();
     AnalyticsService.logAppOpen();
     _ensureCurrentCoachAccess();
     if (widget.openTasksOverlayOnStart) {
@@ -540,7 +535,6 @@ class _MainTabScreenState extends State<MainTabScreen>
     _tabCtrl.dispose();
     _morningCallTimer?.cancel();
     _coreReminderTimer?.cancel();
-    _scheduledCheckInTimer?.cancel();
     MorningCallAlarmSession().stop();
     _audioPlayer.dispose();
     super.dispose();
@@ -940,42 +934,6 @@ class _MainTabScreenState extends State<MainTabScreen>
         _fireCoreReminder(coachIdStr, advanceMinutes, fireTaskText);
       }
     });
-  }
-
-  /// 배지/문자 시스템(코치 채팅창 밖에 있을 때)은 항상 여비서가 담당한다.
-  /// 사용자가 실제로 마스터 코치 채팅창 안에 있을 때는 이 함수를 안 타고, 지금 보고 있는
-  /// 코치가 대화형 체크인(findPreemptiveInterventionTarget)으로 자연스럽게 처리한다.
-  String _resolveMasterCoachId() => 'sec_female';
-
-  void _startScheduledCheckInEngine() {
-    _scheduledCheckInTimer = Timer.periodic(const Duration(seconds: 10), (
-      timer,
-    ) async {
-      await TaskResistanceService.checkForScheduledCheckIn(
-        masterCoachId: _resolveMasterCoachId(),
-      );
-      final unread = await TaskResistanceService.hasUnreadScheduledCheckIn();
-      if (mounted && unread != hasUnreadScheduledCheckIn) {
-        setState(() => hasUnreadScheduledCheckIn = unread);
-      }
-    });
-  }
-
-  /// 배지를 눌렀을 때 호출 — 해당 코치 방으로 이동하고 배지를 지운다.
-  Future<void> openScheduledCheckIn() async {
-    final coachId = await TaskResistanceService.consumeUnreadScheduledCheckIn();
-    if (mounted) setState(() => hasUnreadScheduledCheckIn = false);
-    if (coachId == null || !mounted) return;
-    Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
-      PageRouteBuilder(
-        pageBuilder: (_, __, ___) => MainTabScreen(coachId: coachId),
-        transitionsBuilder: (_, animation, __, child) {
-          return FadeTransition(opacity: animation, child: child);
-        },
-        transitionDuration: const Duration(milliseconds: 300),
-      ),
-      (route) => false,
-    );
   }
 
   void _fireMorningCall(String configuredCoachId) async {
@@ -1522,8 +1480,6 @@ class _MainTabScreenState extends State<MainTabScreen>
               automaticallyImplyLeading: false,
               title: _buildAppBarTitle(isImmersive: true),
               actions: [
-                if (hasUnreadScheduledCheckIn)
-                  ScheduledCheckInIcon(onTap: openScheduledCheckIn),
                 _buildPlannerHelpAction(),
               ],
             ),

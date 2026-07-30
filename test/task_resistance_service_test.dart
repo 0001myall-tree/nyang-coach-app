@@ -31,6 +31,7 @@ void main() {
     await TaskResistanceService.detectAndRecordFromMessage('설거지 하기 싫어');
 
     // 이벤트가 없으니 "결국 해냈다"고 말할 근거도 생기지 않는다.
+    // 이 경우는 저녁 인사가 직접 물어본다(eveningOffPlanAsk).
     expect(await TaskResistanceService.getAllEvents(), isEmpty);
   });
 
@@ -84,5 +85,14 @@ void main() {
     await TaskResistanceService.detectAndRecordFromMessage('설거지 하기 싫었어');
 
     expect(await TaskResistanceService.getAllEvents(), isEmpty);
+  });
+
+  test('같은 일을 하루에 여러 번 싫다고 해도 한 건이다', () async {
+    seedTasks([task('1', '설거지')]);
+
+    await TaskResistanceService.detectAndRecordFromMessage('설거지 하기 싫어');
+    await TaskResistanceService.detectAndRecordFromMessage('설거지 진짜 하기 싫다');
+
+    expect(await TaskResistanceService.getAllEvents(), hasLength(1));
   });
 }

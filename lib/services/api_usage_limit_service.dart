@@ -216,15 +216,6 @@ class ApiUsageLimitService {
     return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
   }
 
-  static String _weekKey(DateTime date) {
-    final monday = DateTime(
-      date.year,
-      date.month,
-      date.day,
-    ).subtract(Duration(days: date.weekday - 1));
-    return _dateKey(monday);
-  }
-
   static int _usageNoticeStage(int used, int limit) {
     if (limit <= 0) return 0;
     final ratio = used / limit;

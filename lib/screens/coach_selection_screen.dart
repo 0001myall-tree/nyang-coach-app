@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:ui';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -9,15 +8,10 @@ import 'main_tab_screen.dart';
 import 'landing_screen.dart';
 import 'coach_config.dart';
 import '../models/user_data.dart';
-import '../services/auth_service.dart';
 import '../theme/app_design_tokens.dart';
 import '../widgets/app_button.dart';
-import '../widgets/app_bottom_sheet.dart';
 import '../widgets/app_card.dart';
-import '../widgets/app_chip.dart';
 import '../widgets/plan_guide_bottom_sheet.dart';
-import '../widgets/scheduled_checkin_icon.dart';
-import '../services/task_resistance_service.dart';
 
 class CoachSelectionScreen extends StatefulWidget {
   final String? returnCoachId;
@@ -43,8 +37,6 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen>
 
   int _logoTapCount = 0;
   Timer? _logoTapTimer;
-  String? _lastTappedCoachId;
-
   void _goBack() {
     final destination = widget.returnCoachId == null
         ? const LandingScreen()
@@ -58,58 +50,6 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen>
         },
         transitionDuration: const Duration(milliseconds: 220),
       ),
-    );
-  }
-
-  Future<void> _showAccountSwitchDialog() async {
-    final shouldLogout = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: Text(
-            '다른 계정으로 로그인할까요?',
-            style: GoogleFonts.notoSansKr(fontWeight: FontWeight.w900),
-          ),
-          content: Text(
-            '현재 계정에서 로그아웃한 뒤 로그인 화면으로 돌아갑니다.',
-            style: GoogleFonts.notoSansKr(
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-              color: const Color(0xFF6B687A),
-              height: 1.45,
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext, false),
-              child: Text(
-                '취소',
-                style: GoogleFonts.notoSansKr(fontWeight: FontWeight.w700),
-              ),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext, true),
-              child: Text(
-                '로그아웃',
-                style: GoogleFonts.notoSansKr(
-                  fontWeight: FontWeight.w800,
-                  color: const Color(0xFFE15B64),
-                ),
-              ),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (shouldLogout != true) return;
-
-    await AuthService().signOut();
-    if (!mounted) return;
-
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const LandingScreen()),
-      (_) => false,
     );
   }
 
@@ -474,8 +414,6 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen>
     }
   }
 
-  bool _hasUnreadScheduledCheckIn = false;
-  Timer? _scheduledCheckInPollTimer;
 
   @override
   void initState() {
@@ -484,11 +422,6 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen>
     UserDataService.load().then((d) {
       if (mounted) setState(() => _userData = d);
     });
-    _refreshScheduledCheckInBadge();
-    _scheduledCheckInPollTimer = Timer.periodic(
-      const Duration(seconds: 15),
-      (_) => _refreshScheduledCheckInBadge(),
-    );
     // 접근 권한 실패로 채팅 화면에서 이 화면으로 넘어온 직후에도
     // 소비되지 않은 위젯 인텐트가 남아있을 수 있어 진입 시 한 번 확인한다.
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -499,7 +432,6 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _scheduledCheckInPollTimer?.cancel();
     super.dispose();
   }
 
@@ -561,29 +493,6 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen>
           initialPlannerDateKey: widgetDate,
           initialPlannerItemId: widgetItemId,
         ),
-      ),
-      (route) => false,
-    );
-  }
-
-  Future<void> _refreshScheduledCheckInBadge() async {
-    final unread = await TaskResistanceService.hasUnreadScheduledCheckIn();
-    if (mounted && unread != _hasUnreadScheduledCheckIn) {
-      setState(() => _hasUnreadScheduledCheckIn = unread);
-    }
-  }
-
-  Future<void> _openScheduledCheckIn() async {
-    final coachId = await TaskResistanceService.consumeUnreadScheduledCheckIn();
-    if (mounted) setState(() => _hasUnreadScheduledCheckIn = false);
-    if (coachId == null || !mounted) return;
-    Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
-      PageRouteBuilder(
-        pageBuilder: (_, __, ___) => MainTabScreen(coachId: coachId),
-        transitionsBuilder: (_, animation, __, child) {
-          return FadeTransition(opacity: animation, child: child);
-        },
-        transitionDuration: const Duration(milliseconds: 300),
       ),
       (route) => false,
     );
@@ -1318,13 +1227,7 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen>
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        if (_hasUnreadScheduledCheckIn)
-                          ScheduledCheckInIcon(
-                            onTap: _openScheduledCheckIn,
-                            iconColor: AppDesignTokens.brandAccent,
-                          )
-                        else
-                          const SizedBox.shrink(),
+                        const SizedBox.shrink(),
                         TextButton(
                           onPressed: _showPlanGuidePlaceholder,
                           style: TextButton.styleFrom(
@@ -1427,10 +1330,6 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen>
                     final hasFullAccess = coach['id'] == 'cat'
                         ? _userData.isPlanActive
                         : !isLocked;
-                    final coachAccent = _currentTab == CoachTab.friends
-                        ? _coachMint
-                        : coach['color'] as Color;
-
                     return AnimatedScale(
                       scale: isSelected ? 1.03 : 1.0,
                       duration: const Duration(milliseconds: 300),

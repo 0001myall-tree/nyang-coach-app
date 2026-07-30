@@ -1,9 +1,7 @@
 import 'dart:async';
-import 'dart:io';
 import 'dart:convert';
 import 'dart:math';
 import 'package:intl/intl.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/gestures.dart';
@@ -13,7 +11,6 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:speech_to_text/speech_to_text.dart';
-import 'package:speech_to_text/speech_recognition_result.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'coach_config.dart';
 import '../services/memory_service.dart';
@@ -21,7 +18,6 @@ import '../services/task_resistance_service.dart';
 import '../models/user_data.dart';
 import '../services/notification_service.dart';
 import '../services/tasks_sync_service.dart';
-import '../services/user_title_service.dart';
 import '../services/analytics_service.dart';
 import '../services/api_usage_limit_service.dart';
 import '../services/widget_sync_service.dart';
@@ -626,9 +622,6 @@ class _TasksScreenState extends State<TasksScreen>
   Map<String, dynamic>? vacationInfo;
   DateTime? _selectedTodayDate;
 
-  final SpeechToText _speechToText = SpeechToText();
-  bool _speechEnabled = false;
-  bool _isListeningSchedule = false;
   bool _isConfirmDialogShowing = false;
 
   DateTime _calFocusedDay = DateTime.now();
@@ -707,7 +700,6 @@ class _TasksScreenState extends State<TasksScreen>
     _tabCtrl.addListener(_handleTaskTabChanged);
     widget.controller?._attach(this);
     _loadAll().then((_) => _handleInitialPlannerTarget());
-    _initSpeech();
   }
 
   @override
@@ -1840,16 +1832,6 @@ class _TasksScreenState extends State<TasksScreen>
     }
   }
 
-  Future<void> _updateCoach() async {
-    final prefs = await SharedPreferences.getInstance();
-    final cId = CoachConfigs.normalizeId(
-      prefs.getString('nyang_selected_coach') ?? 'cat',
-    );
-    setState(() {
-      _coach = CoachConfigs.get(cId);
-    });
-  }
-
   Future<bool> _showConfirmDeleteDialog(String title, String message) async {
     final result = await showDialog<bool>(
       context: context,
@@ -2356,60 +2338,6 @@ class _TasksScreenState extends State<TasksScreen>
     final key = _dateKey(day);
     return (schedules[key]?.isNotEmpty ?? false) ||
         _plannedTodayTasksForDate(day).isNotEmpty;
-  }
-
-  void _togglePlannedTaskForSchedule(String dateKey, TaskItem task) {
-    setState(() {
-      if (task.done) {
-        task.done = false;
-        task.completedAt = null;
-        task.inProgress = false;
-        task.inProgressAt = null;
-      } else if (!task.inProgress) {
-        task.inProgress = true;
-        task.inProgressAt = null;
-      } else {
-        task.done = true;
-        task.inProgress = false;
-        task.completedAt = DateTime.now().toIso8601String();
-      }
-    });
-    if (dateKey == _getTodayStr()) {
-      _saveTasks();
-    } else {
-      _savePlannedTodayTasks();
-    }
-  }
-
-  void _removePlannedTaskForSchedule(String dateKey, TaskItem task) {
-    setState(() {
-      if (dateKey == _getTodayStr()) {
-        tasks.removeWhere((t) => t.id.toString() == task.id.toString());
-      } else {
-        final dayTasks = plannedTodayTasksByDate[dateKey];
-        dayTasks?.removeWhere((t) => t.id.toString() == task.id.toString());
-        if (dayTasks != null && dayTasks.isEmpty) {
-          plannedTodayTasksByDate.remove(dateKey);
-        }
-      }
-      coreTasks.removeWhere((t) => t.id.toString() == task.id.toString());
-    });
-    if (dateKey == _getTodayStr()) {
-      _saveTasks();
-      _saveCoreTasks();
-    } else {
-      _savePlannedTodayTasks();
-    }
-  }
-
-  void _savePlannedTaskForSchedule(String dateKey) {
-    setState(() {});
-    if (dateKey == _getTodayStr()) {
-      _saveTasks();
-      _saveCoreTasks();
-    } else {
-      _savePlannedTodayTasks();
-    }
   }
 
   void _resetTodayDateSelection() {
@@ -6516,7 +6444,7 @@ class _TasksScreenState extends State<TasksScreen>
                             }
 
                             item.text = text;
-                            if (wasInsightTask && item is TaskItem) {
+                            if (wasInsightTask) {
                               item.source = 'insight';
                             }
                             if (memoAllowed) {
@@ -10154,105 +10082,6 @@ class _TasksScreenState extends State<TasksScreen>
       _schRepeatRule = null;
     });
     _saveSchedules();
-  }
-
-  void _initSpeech() async {
-    try {
-      _speechEnabled = await _speechToText.initialize(
-        onStatus: (status) {
-          if (status == 'notListening' || status == 'done') {
-            if (mounted) {
-              setState(() => _isListeningSchedule = false);
-            }
-          }
-        },
-        onError: (error) {
-          debugPrint("Speech error: $error");
-          if (mounted) {
-            setState(() => _isListeningSchedule = false);
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('음성 인식 오류: ${error.errorMsg}')),
-            );
-          }
-        },
-      );
-      if (mounted) setState(() {});
-    } catch (e) {
-      debugPrint("Speech init error: $e");
-    }
-  }
-
-  void _startListening() async {
-    if (!_speechEnabled) {
-      _initSpeech();
-      return;
-    }
-    final controller = _schInputCtrl;
-    final baseText = controller.text;
-    final baseSelection = controller.selection;
-
-    setState(() => _isListeningSchedule = true);
-
-    await _speechToText.listen(
-      listenMode: ListenMode.dictation,
-      pauseFor: const Duration(seconds: 4),
-      listenFor: const Duration(minutes: 1),
-      onResult: (result) {
-        if (mounted) {
-          setState(() {
-            final spoken = result.recognizedWords;
-            int start = baseSelection.start;
-            int end = baseSelection.end;
-            if (start < 0) {
-              start = baseText.length;
-              end = baseText.length;
-            }
-            final insertText =
-                (baseText.isNotEmpty && start > 0 && baseText[start - 1] != ' '
-                    ? ' '
-                    : '') +
-                spoken;
-            controller.text = baseText.replaceRange(start, end, insertText);
-            controller.selection = TextSelection.collapsed(
-              offset: start + insertText.length,
-            );
-          });
-
-          if (result.finalResult) {
-            _handleSpeechFinished(controller.text.trim(), isToday: false);
-          }
-        }
-      },
-      localeId: 'ko_KR',
-      cancelOnError: false,
-      partialResults: true,
-    );
-  }
-
-  Future<void> _stopListening() async {
-    final wasListeningSchedule = _isListeningSchedule;
-    await _speechToText.stop();
-    if (mounted) {
-      setState(() => _isListeningSchedule = false);
-      Future.delayed(const Duration(milliseconds: 200), () {
-        if (mounted) {
-          if (wasListeningSchedule) {
-            _handleSpeechFinished(_schInputCtrl.text.trim(), isToday: false);
-          }
-        }
-      });
-    }
-  }
-
-  void _handleSpeechFinished(String spokenText, {required bool isToday}) {
-    if (_isConfirmDialogShowing) return;
-    final cleaned = spokenText.replaceAll(RegExp(r'[.\s]+$'), '');
-    final suffixRegex = RegExp(
-      r'\s*(등록해\s*(?:줘요?|주세요)|추가해\s*(?:줘요?|주세요)|넣어\s*(?:줘요?|주세요))$',
-    );
-    if (suffixRegex.hasMatch(cleaned)) {
-      _showVoiceRegistrationConfirmDialog(spokenText, isToday: isToday);
-    }
   }
 
   int _weekdayFromKorean(String value) {

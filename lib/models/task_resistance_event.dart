@@ -1,22 +1,16 @@
-// 태스크 저항 예측 시스템 데이터 모델.
-// 설계 근거: 선제개입_저항예측_설계문서.md 3.1
+// 하기 싫다고 말한 일의 기록. 저녁에 "그거 결국 하셨네요"라고 짚는 근거로만 쓴다.
+// (카테고리로 묶어 점수를 매기고 코치가 먼저 개입하던 층은 2026-07-30 걷어냈다.)
 class TaskResistanceEvent {
   final String id;
   final String taskId;
   final String taskText;
 
-  /// 반복그룹 식별자. habitId가 있으면 'habit_{habitId}', 없으면 'text_{정규화된 태스크텍스트}'.
-  /// 기록 시점에 결정적으로 계산되며(LLM 불필요), 이후 변경되지 않는다.
-  final String groupId;
-
   /// yyyy-MM-dd
   final String date;
 
-  /// 'explicit' | 'implicit'
+  /// 'explicit' | 'implicit'. 저녁 문구는 'explicit'(사용자가 직접 그렇게 말한 것)만 쓴다 —
+  /// 추론으로 잡은 신호까지 세면 하지도 않은 말을 했다고 코치가 우기게 된다.
   final String signalType;
-
-  /// 0~1. 현재는 explicit=1.0, implicit=0.4 고정값.
-  final double intensity;
 
   final bool completedEventually;
 
@@ -29,10 +23,8 @@ class TaskResistanceEvent {
     required this.id,
     required this.taskId,
     required this.taskText,
-    required this.groupId,
     required this.date,
     required this.signalType,
-    required this.intensity,
     required this.completedEventually,
     this.completionOrder,
     required this.totalTasksThatDay,
@@ -42,10 +34,8 @@ class TaskResistanceEvent {
     'id': id,
     'taskId': taskId,
     'taskText': taskText,
-    'groupId': groupId,
     'date': date,
     'signalType': signalType,
-    'intensity': intensity,
     'completedEventually': completedEventually,
     'completionOrder': completionOrder,
     'totalTasksThatDay': totalTasksThatDay,
@@ -56,10 +46,8 @@ class TaskResistanceEvent {
         id: j['id'] as String,
         taskId: j['taskId'] as String,
         taskText: j['taskText'] as String? ?? '',
-        groupId: j['groupId'] as String? ?? '',
         date: j['date'] as String,
         signalType: j['signalType'] as String? ?? 'explicit',
-        intensity: (j['intensity'] as num?)?.toDouble() ?? 1.0,
         completedEventually: j['completedEventually'] as bool? ?? false,
         completionOrder: (j['completionOrder'] as num?)?.toInt(),
         totalTasksThatDay: (j['totalTasksThatDay'] as num?)?.toInt() ?? 0,
