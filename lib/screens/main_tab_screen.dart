@@ -2012,7 +2012,7 @@ class _MainTabScreenState extends State<MainTabScreen>
                           title: '하기 싫을 땐 코치에게 말하기',
                           body:
                               '하기 싫은 일이 있을 때 코치에게 언제든 투정해도 돼요.\n'
-                              '코치가 다 받아주고 리드해줘요.',
+                              '어떤 일이 하기 싫은지 솔직히 말해주면 코치가 더 잘 도와줄 수 있어요.',
                         ),
                         const SizedBox(height: 18),
                         _buildPlannerHelpSection(
