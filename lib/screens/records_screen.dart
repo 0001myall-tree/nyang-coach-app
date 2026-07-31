@@ -20,7 +20,7 @@ class RecordsScreen extends StatefulWidget {
 }
 
 class _RecordsScreenState extends State<RecordsScreen> {
-  static const int _weeklyFeedbackCacheVersion = 2;
+  static const int _weeklyFeedbackCacheVersion = 3;
 
   bool _isLoading = true;
   List<Map<String, dynamic>> _history = [];
@@ -100,7 +100,7 @@ class _RecordsScreenState extends State<RecordsScreen> {
   bool get _isMaster => _hasMasterPlan;
   CoachConfig get _coach => CoachConfigs.get(widget.coachId);
   CoachConfig get _recordCoach =>
-      _isMaster ? CoachConfigs.get('nyang_halbae') : _coach;
+      _isMaster ? CoachConfigs.get('sec_female') : _coach;
 
   // ── 최근 7일(또는 30일) 데이터 계산 ─────────────────────
   List<Map<String, dynamic>> _getLast7Records() {
@@ -499,7 +499,7 @@ class _RecordsScreenState extends State<RecordsScreen> {
       '- 플래너 기록일이 적은 주인가: ${lowPlannerAttendance ? '예' : '아니오'}',
     );
 
-    final isMale = widget.coachId == 'nyang_halbae' || _isMaster;
+    final isMale = !_isMaster && widget.coachId == 'nyang_halbae';
     final title = _userTitle;
 
     final trackingHabits = _habits.where((h) => h.tracking == true).toList();
@@ -1056,7 +1056,7 @@ ${feedbackType == 0
   }
 
   String _getMasterPatternFeedback(List<Map<String, dynamic>> records) {
-    final bool isMale = widget.coachId == 'nyang_halbae' || _isMaster;
+    final bool isMale = !_isMaster && widget.coachId == 'nyang_halbae';
     final activeRecords = records
         .where((r) => r['isVacation'] != true)
         .toList();
@@ -1127,7 +1127,7 @@ ${feedbackType == 0
             radius: 28,
             backgroundImage: AssetImage(
               _isMaster
-                  ? 'assets/images/nyang_halbae.png'
+                  ? 'assets/images/sec_female.png'
                   : 'assets/images/${widget.coachId}.png',
             ),
             backgroundColor: const Color(0xFFF3F0FF),
@@ -1142,9 +1142,7 @@ ${feedbackType == 0
                   style: GoogleFonts.notoSansKr(
                     fontSize: 13,
                     fontWeight: FontWeight.w800,
-                    color: _isMaster
-                        ? CoachConfigs.get('nyang_halbae').accentColor
-                        : _recordCoach.accentColor,
+                    color: _recordCoach.accentColor,
                   ),
                 ),
                 const SizedBox(height: 4),
