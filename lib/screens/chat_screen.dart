@@ -2931,17 +2931,57 @@ class _ChatScreenState extends State<ChatScreen>
     return task['inProgress'] == true;
   }
 
+  /// 정렬용 시각을 분 단위로 바꾼다. 못 읽으면 -1.
+  /// timeStart는 "9:5"처럼 0 패딩 없는 24시간제, time은 "오전 9:05"처럼 표시용
+  /// 문자열이라 그대로 비교하면 10시가 9시보다 앞서 버린다.
+  int _taskTimeInMinutes(String value) {
+    final head = value.split('~').first.trim();
+    final isMorning = head.startsWith('오전');
+    final isAfternoon = head.startsWith('오후');
+
+    final clock = head.replaceAll('오전', '').replaceAll('오후', '').trim();
+    final parts = clock.split(':');
+    if (parts.length != 2) return -1;
+    final hour = int.tryParse(parts[0].trim());
+    final minute = int.tryParse(parts[1].trim());
+    if (hour == null || minute == null) return -1;
+    if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return -1;
+
+    var normalizedHour = hour;
+    if (isAfternoon && hour < 12) normalizedHour += 12;
+    if (isMorning && hour == 12) normalizedHour = 0;
+    return normalizedHour * 60 + minute;
+  }
+
+  /// 채팅칩에 올릴 미완료 일정의 우선순위.
+  /// 소요 시간이 정해진 일정(0)을 먼저 권하고, 시간 표시가 없는 일정(1)이 다음,
+  /// 특정 시각이 잡힌 일정(2)은 그 시각에 하기로 한 것이니 맨 뒤로 보낸다.
+  int _pendingTaskChipRank(Map<String, dynamic> task) {
+    final time = task['timeStart']?.toString() ?? task['time']?.toString() ?? '';
+    if (time.isNotEmpty) return 2;
+    final duration = task['duration']?.toString() ?? '';
+    return duration.isEmpty ? 1 : 0;
+  }
+
   void _sortPendingTaskCandidates(List<Map<String, dynamic>> tasks) {
     tasks.sort((a, b) {
       final aInProgress = a['inProgress'] == true ? 0 : 1;
       final bInProgress = b['inProgress'] == true ? 0 : 1;
       if (aInProgress != bInProgress) return aInProgress.compareTo(bInProgress);
 
+      final aRank = _pendingTaskChipRank(a);
+      final bRank = _pendingTaskChipRank(b);
+      if (aRank != bRank) return aRank.compareTo(bRank);
+
       final aTime = a['timeStart']?.toString() ?? a['time']?.toString() ?? '';
       final bTime = b['timeStart']?.toString() ?? b['time']?.toString() ?? '';
-      if (aTime.isNotEmpty && bTime.isNotEmpty) return aTime.compareTo(bTime);
-      if (aTime.isNotEmpty) return -1;
-      if (bTime.isNotEmpty) return 1;
+      if (aTime.isNotEmpty && bTime.isNotEmpty) {
+        final aMinutes = _taskTimeInMinutes(aTime);
+        final bMinutes = _taskTimeInMinutes(bTime);
+        if (aMinutes >= 0 && bMinutes >= 0 && aMinutes != bMinutes) {
+          return aMinutes.compareTo(bMinutes);
+        }
+      }
 
       final aText = _taskText(a) ?? '';
       final bText = _taskText(b) ?? '';
@@ -7279,6 +7319,8 @@ class _ChatScreenState extends State<ChatScreen>
       'nyang_halbae_perfectionism_click_date';
   static const String _nyangPerfectionismClickCountKey =
       'nyang_halbae_perfectionism_click_count';
+  static const String _nyangPerfectionismTaskLineIndexKey =
+      'nyang_halbae_perfectionism_task_line_index';
 
   static const List<String> _nyangPerfectionismInsights = [
     '완벽하게 못 해서 속상한 마음, 그거 너무 기준이 높아서 생긴 상처일 수 있다냥. 오늘은 잘하는 나 말고, 시작하는 나만 데려오면 된다냥.',
@@ -7315,7 +7357,11 @@ class _ChatScreenState extends State<ChatScreen>
           '흠.. \'$taskName\' 전부 끝내려니 손이 안 나가는 거다냥. 첫 조각만 잡자냥.',
           '\'$taskName\' 완벽하게 하려고 하니, 시작 전부터 지치는 거다냥. 딱 5분어치만 하자냥.',
         ];
-        return lines[Random().nextInt(lines.length)];
+        return lines[_pickIndexAvoidingLast(
+          prefs,
+          _nyangPerfectionismTaskLineIndexKey,
+          lines.length,
+        )];
       }
     }
 
@@ -7338,9 +7384,30 @@ class _ChatScreenState extends State<ChatScreen>
     return nextCount;
   }
 
+  /// 직전에 나온 번호를 피해서 무작위로 하나를 고른다.
+  /// 그냥 뽑으면 어제 본 문구가 오늘 또 걸려서 문구가 몇 개 없어 보인다.
+  int _pickIndexAvoidingLast(
+    SharedPreferences prefs,
+    String key,
+    int length,
+  ) {
+    if (length <= 1) return 0;
+    final lastIndex = prefs.getInt(key);
+    var index = Random().nextInt(length);
+    if (index == lastIndex) {
+      // 나머지 후보 중에서 고르게 한 칸 이상 밀어준다.
+      index = (index + 1 + Random().nextInt(length - 1)) % length;
+    }
+    unawaited(prefs.setInt(key, index));
+    return index;
+  }
+
   String _pickNyangPerfectionismInsight(SharedPreferences prefs) {
-    final index = Random().nextInt(_nyangPerfectionismInsights.length);
-    unawaited(prefs.setInt(_nyangPerfectionismLineIndexKey, index));
+    final index = _pickIndexAvoidingLast(
+      prefs,
+      _nyangPerfectionismLineIndexKey,
+      _nyangPerfectionismInsights.length,
+    );
     return _nyangPerfectionismInsights[index];
   }
 
