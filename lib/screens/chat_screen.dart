@@ -10355,6 +10355,19 @@ $timerOutputRule
   @override
   Widget build(BuildContext context) {
     final keyboardOpen = MediaQuery.of(context).viewInsets.bottom > 0;
+    final showVacationSuggestBubble =
+        !_suppressDefaultChips &&
+        _dynamicChips.contains('오늘은 쉬어가기') &&
+        _dynamicChips.contains('오늘은 조금만 하기') &&
+        _dynamicChips.length == 2;
+    final showQuickChips =
+        !_suppressDefaultChips &&
+        !showVacationSuggestBubble &&
+        _coachSwitchTarget == null &&
+        ((_dynamicChips.contains('오늘은 쉬어가기') &&
+                _dynamicChips.contains('오늘은 조금만 하기')) ||
+            _coach.isMaster ||
+            (_dynamicChips.isNotEmpty || _coach.chips.isNotEmpty));
     if (keyboardOpen && _cheatKeyOpen) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) setState(() => _cheatKeyOpen = false);
@@ -10396,35 +10409,26 @@ $timerOutputRule
               child: Container(
                 color: _chatAreaBackgroundColor,
                 width: double.infinity,
-                child: Column(
+                child: Stack(
                   children: [
-                    Expanded(
-                      child: Column(
-                        children: [
-                          Expanded(
-                            child: _messages.isEmpty
-                                ? _buildEmptyState()
-                                : _buildMessageList(),
-                          ),
-                          if (!_suppressDefaultChips &&
-                              _dynamicChips.contains('오늘은 쉬어가기') &&
-                              _dynamicChips.contains('오늘은 조금만 하기') &&
-                              _dynamicChips.length == 2)
-                            _buildVacationSuggestBubble(),
-                        ],
-                      ),
+                    Column(
+                      children: [
+                        Expanded(
+                          child: _messages.isEmpty
+                              ? _buildEmptyState()
+                              : _buildMessageList(),
+                        ),
+                        if (showVacationSuggestBubble)
+                          _buildVacationSuggestBubble(),
+                      ],
                     ),
-                    if (!_suppressDefaultChips &&
-                        !((_dynamicChips.contains('오늘은 쉬어가기') &&
-                            _dynamicChips.contains('오늘은 조금만 하기') &&
-                            _dynamicChips.length == 2)) &&
-                        _coachSwitchTarget == null &&
-                        ((_dynamicChips.contains('오늘은 쉬어가기') &&
-                                _dynamicChips.contains('오늘은 조금만 하기')) ||
-                            _coach.isMaster ||
-                            (_dynamicChips.isNotEmpty ||
-                                _coach.chips.isNotEmpty)))
-                      _buildChips(),
+                    if (showQuickChips)
+                      Positioned(
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        child: _buildChips(),
+                      ),
                   ],
                 ),
               ),
@@ -13254,18 +13258,6 @@ $timerOutputRule
   }
 
   BoxDecoration get _quickChipRailDecoration {
-    if (_coach.isMaster) {
-      return BoxDecoration(
-        color: AppDesignTokens.brandSurface.withValues(alpha: 0.92),
-        border: const Border(top: BorderSide(color: AppDesignTokens.divider)),
-      );
-    }
-    if (_isSimpleChatBackground) {
-      return BoxDecoration(
-        color: AppDesignTokens.brandSurface.withValues(alpha: 0.82),
-        border: const Border(top: BorderSide(color: AppDesignTokens.divider)),
-      );
-    }
     return const BoxDecoration(color: Colors.transparent);
   }
 
@@ -13319,7 +13311,7 @@ $timerOutputRule
         },
         borderRadius: BorderRadius.circular(15),
         child: Container(
-          height: 38,
+          height: 40,
           padding: const EdgeInsets.symmetric(horizontal: 15),
           decoration: BoxDecoration(
             color: _quickChipBackgroundColor.withValues(alpha: 0.96),
@@ -13334,7 +13326,7 @@ $timerOutputRule
               Text(
                 chip,
                 style: GoogleFonts.notoSansKr(
-                  fontSize: 12,
+                  fontSize: 13,
                   fontWeight: FontWeight.w900,
                   color: chipInk,
                   letterSpacing: 0,
@@ -13355,7 +13347,7 @@ $timerOutputRule
     }
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
+      padding: const EdgeInsets.fromLTRB(16, 5, 16, 5),
       child: Row(mainAxisSize: MainAxisSize.min, children: items),
     );
   }
@@ -13365,7 +13357,7 @@ $timerOutputRule
       return DecoratedBox(
         decoration: _quickChipRailDecoration,
         child: SizedBox(
-          height: 54,
+          height: 50,
           child: Align(
             alignment: Alignment.centerLeft,
             child: _buildMasterChipRow(),
@@ -13378,7 +13370,7 @@ $timerOutputRule
         : (_dynamicChips.isNotEmpty ? _dynamicChips : _coach.chips);
     final chips = _displayChipsForCoach(baseChips);
     return Container(
-      height: 44,
+      height: 46,
       decoration: _quickChipRailDecoration,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
@@ -13402,6 +13394,7 @@ $timerOutputRule
             foregroundColor: _quickChipForegroundColor,
             borderColor: _quickChipBorderColor,
             boxShadow: _quickChipShadow,
+            fontSize: 12,
             onTap: () {
               if (chip == '오늘은 쉬어가기') {
                 _activateRestDay();

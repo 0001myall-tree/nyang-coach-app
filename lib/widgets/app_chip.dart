@@ -16,6 +16,7 @@ class AppChip extends StatelessWidget {
     this.selectedForegroundColor,
     this.borderColor,
     this.boxShadow,
+    this.fontSize,
     this.onTap,
   });
 
@@ -29,6 +30,7 @@ class AppChip extends StatelessWidget {
   final Color? selectedForegroundColor;
   final Color? borderColor;
   final List<BoxShadow>? boxShadow;
+  final double? fontSize;
   final VoidCallback? onTap;
 
   @override
@@ -82,7 +84,7 @@ class AppChip extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: GoogleFonts.notoSansKr(
-                  fontSize: AppDesignTokens.textMeta,
+                  fontSize: fontSize ?? AppDesignTokens.textMeta,
                   fontWeight: FontWeight.w900,
                   color: enabled
                       ? effectiveForeground
