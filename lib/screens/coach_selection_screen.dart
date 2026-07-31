@@ -307,7 +307,7 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen>
       builder: (context) {
         return AlertDialog(
           title: Text(
-            '개발자용 플랜 시뮬레이터 🛠️',
+            '개발자용 플랜 시뮬레이터',
             style: GoogleFonts.notoSansKr(fontWeight: FontWeight.w900),
           ),
           content: Column(
@@ -413,7 +413,6 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen>
       _showDebugPlanSelector();
     }
   }
-
 
   @override
   void initState() {
@@ -566,17 +565,17 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen>
       ],
       'features': [
         {
-          'icon': '🗺️',
+          'svgPath': 'assets/icons/fa-map-location-dot-solid.svg',
           'title': '스마트 일정 케어',
           'sub': '목표와 연관된 중요한 일을 상기시키고 자주 미루는 일을 살펴 최적의 시간대를 잡아드려요.',
         },
         {
-          'icon': '🌙',
+          'svgPath': 'assets/icons/fa-moon-solid.svg',
           'title': '수면·컨디션 케어',
           'sub': '수면 패턴을 살펴 피로가 쌓이기 전에 휴식과 하루 마무리 시점을 알려드려요.',
         },
         {
-          'icon': '💌',
+          'svgPath': 'assets/icons/fa-envelope-solid.svg',
           'title': '주간 코치 리포트',
           'sub': '지난 7일의 완료 기록과 목표를 분석해 애정 어린 맞춤 피드백을 드려요.',
         },
@@ -596,17 +595,17 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen>
       ],
       'features': [
         {
-          'icon': '🗺️',
+          'svgPath': 'assets/icons/fa-map-location-dot-solid.svg',
           'title': '스마트 일정 케어',
           'sub': '목표와 연관된 중요한 일을 상기시키고 자주 미루는 일을 살펴 최적의 시간대를 잡아드려요.',
         },
         {
-          'icon': '🌙',
+          'svgPath': 'assets/icons/fa-moon-solid.svg',
           'title': '수면·컨디션 케어',
           'sub': '수면 패턴을 살펴 피로가 쌓이기 전에 휴식과 하루 마무리 시점을 알려드려요.',
         },
         {
-          'icon': '💌',
+          'svgPath': 'assets/icons/fa-envelope-solid.svg',
           'title': '주간 코치 리포트',
           'sub': '지난 7일의 완료 기록과 목표를 분석해 애정 어린 맞춤 피드백을 드려요.',
         },

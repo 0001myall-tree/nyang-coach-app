@@ -1789,7 +1789,7 @@ class _ChatScreenState extends State<ChatScreen>
       _messages.add(
         ChatMessage(text: restOfferMsg, isUser: false, time: DateTime.now()),
       );
-      _dynamicChips = ['🌙 오늘은 쉬어가기', '🐾 오늘은 조금만 하기'];
+      _dynamicChips = ['오늘은 쉬어가기', '오늘은 조금만 하기'];
       _suppressDefaultChips = false;
       _isLoading = false;
     });
@@ -1851,7 +1851,7 @@ class _ChatScreenState extends State<ChatScreen>
     setState(() {
       _messages.add(
         ChatMessage(
-          text: userMessage ?? '🌙 오늘은 쉬어가기',
+          text: userMessage ?? '오늘은 쉬어가기',
           isUser: true,
           time: DateTime.now(),
         ),
@@ -1882,7 +1882,7 @@ class _ChatScreenState extends State<ChatScreen>
     if (!mounted) return;
     setState(() {
       _messages.add(
-        ChatMessage(text: '🐾 오늘은 조금만 하기', isUser: true, time: DateTime.now()),
+        ChatMessage(text: '오늘은 조금만 하기', isUser: true, time: DateTime.now()),
       );
       _messages.add(
         ChatMessage(text: lightDayMsg, isUser: false, time: DateTime.now()),
@@ -1895,8 +1895,8 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   bool get _hasPendingRestOffer {
-    return _dynamicChips.contains('🌙 오늘은 쉬어가기') &&
-        _dynamicChips.contains('🐾 오늘은 조금만 하기');
+    return _dynamicChips.contains('오늘은 쉬어가기') &&
+        _dynamicChips.contains('오늘은 조금만 하기');
   }
 
   Future<void> _maybeStartRestDeclineRiskControl(String userText) async {
@@ -2958,7 +2958,8 @@ class _ChatScreenState extends State<ChatScreen>
   /// 소요 시간이 정해진 일정(0)을 먼저 권하고, 시간 표시가 없는 일정(1)이 다음,
   /// 특정 시각이 잡힌 일정(2)은 그 시각에 하기로 한 것이니 맨 뒤로 보낸다.
   int _pendingTaskChipRank(Map<String, dynamic> task) {
-    final time = task['timeStart']?.toString() ?? task['time']?.toString() ?? '';
+    final time =
+        task['timeStart']?.toString() ?? task['time']?.toString() ?? '';
     if (time.isNotEmpty) return 2;
     final duration = task['duration']?.toString() ?? '';
     return duration.isEmpty ? 1 : 0;
@@ -7388,11 +7389,7 @@ class _ChatScreenState extends State<ChatScreen>
 
   /// 직전에 나온 번호를 피해서 무작위로 하나를 고른다.
   /// 그냥 뽑으면 어제 본 문구가 오늘 또 걸려서 문구가 몇 개 없어 보인다.
-  int _pickIndexAvoidingLast(
-    SharedPreferences prefs,
-    String key,
-    int length,
-  ) {
+  int _pickIndexAvoidingLast(SharedPreferences prefs, String key, int length) {
     if (length <= 1) return 0;
     final lastIndex = prefs.getInt(key);
     var index = Random().nextInt(length);
@@ -10372,13 +10369,27 @@ $timerOutputRule
             if (widget.vacationInfo != null)
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
-                child: Text(
-                  '🌙 오늘은 컨디션이 먼저입니다.',
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.85),
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                  ),
+                child: Row(
+                  children: [
+                    SvgPicture.asset(
+                      'assets/icons/fa-moon-solid.svg',
+                      width: 14,
+                      height: 14,
+                      colorFilter: ColorFilter.mode(
+                        Colors.white.withValues(alpha: 0.82),
+                        BlendMode.srcIn,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      '오늘은 컨디션이 먼저입니다.',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.85),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             Expanded(
@@ -10396,20 +10407,20 @@ $timerOutputRule
                                 : _buildMessageList(),
                           ),
                           if (!_suppressDefaultChips &&
-                              _dynamicChips.contains('🌙 오늘은 쉬어가기') &&
-                              _dynamicChips.contains('🐾 오늘은 조금만 하기') &&
+                              _dynamicChips.contains('오늘은 쉬어가기') &&
+                              _dynamicChips.contains('오늘은 조금만 하기') &&
                               _dynamicChips.length == 2)
                             _buildVacationSuggestBubble(),
                         ],
                       ),
                     ),
                     if (!_suppressDefaultChips &&
-                        !((_dynamicChips.contains('🌙 오늘은 쉬어가기') &&
-                            _dynamicChips.contains('🐾 오늘은 조금만 하기') &&
+                        !((_dynamicChips.contains('오늘은 쉬어가기') &&
+                            _dynamicChips.contains('오늘은 조금만 하기') &&
                             _dynamicChips.length == 2)) &&
                         _coachSwitchTarget == null &&
-                        ((_dynamicChips.contains('🌙 오늘은 쉬어가기') &&
-                                _dynamicChips.contains('🐾 오늘은 조금만 하기')) ||
+                        ((_dynamicChips.contains('오늘은 쉬어가기') &&
+                                _dynamicChips.contains('오늘은 조금만 하기')) ||
                             _coach.isMaster ||
                             (_dynamicChips.isNotEmpty ||
                                 _coach.chips.isNotEmpty)))
@@ -12940,14 +12951,25 @@ $timerOutputRule
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: accent.withOpacity(0.18)),
                 ),
-                child: Text(
-                  '🌙 오늘은 쉬어가기',
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.notoSansKr(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: accent,
-                  ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    SvgPicture.asset(
+                      'assets/icons/fa-moon-solid.svg',
+                      width: 14,
+                      height: 14,
+                      colorFilter: ColorFilter.mode(accent, BlendMode.srcIn),
+                    ),
+                    const SizedBox(width: 7),
+                    Text(
+                      '오늘은 쉬어가기',
+                      style: GoogleFonts.notoSansKr(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: accent,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -12961,14 +12983,25 @@ $timerOutputRule
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: accent.withOpacity(0.18)),
                 ),
-                child: Text(
-                  '🐾 오늘은 조금만 하기',
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.notoSansKr(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: accent,
-                  ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    SvgPicture.asset(
+                      'assets/icons/paw.svg',
+                      width: 14,
+                      height: 14,
+                      colorFilter: ColorFilter.mode(accent, BlendMode.srcIn),
+                    ),
+                    const SizedBox(width: 7),
+                    Text(
+                      '오늘은 조금만 하기',
+                      style: GoogleFonts.notoSansKr(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: accent,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -13163,6 +13196,8 @@ $timerOutputRule
       '타이머 띄워줘' => 'assets/icons/fa-stopwatch-solid.svg',
       '수면 도우미' => 'assets/icons/fa-moon-solid.svg',
       '잠이 안 와' => 'assets/icons/fa-moon-solid.svg',
+      '오늘은 쉬어가기' => 'assets/icons/fa-moon-solid.svg',
+      '오늘은 조금만 하기' => 'assets/icons/paw.svg',
       '돌아가기' => 'assets/icons/fa-arrow-rotate-left-solid.svg',
       _ => null,
     };
@@ -13182,8 +13217,60 @@ $timerOutputRule
     );
   }
 
+  bool get _isSimpleChatBackground => widget.chatBgStyle == 'simple';
+
+  Color get _quickChipBackgroundColor {
+    if (_coach.isMaster) return AppDesignTokens.brandSurface;
+    if (_isSimpleChatBackground) return AppDesignTokens.brandChip;
+    return Colors.white.withValues(alpha: 0.86);
+  }
+
+  Color get _quickChipBorderColor {
+    if (_coach.isMaster) return AppDesignTokens.brandCardBorder;
+    if (_isSimpleChatBackground) {
+      return _coach.accentColor.withValues(alpha: 0.22);
+    }
+    return Colors.white.withValues(alpha: 0.58);
+  }
+
+  Color get _quickChipForegroundColor {
+    if (_coach.isMaster) return AppDesignTokens.brandMuted;
+    return _coach.accentColor;
+  }
+
+  List<BoxShadow> get _quickChipShadow {
+    final shadowColor = _coach.isMaster
+        ? AppDesignTokens.brand
+        : _coach.accentColor;
+    return [
+      BoxShadow(
+        color: shadowColor.withValues(
+          alpha: _isSimpleChatBackground ? 0.08 : 0.12,
+        ),
+        blurRadius: _isSimpleChatBackground ? 10 : 14,
+        offset: const Offset(0, 4),
+      ),
+    ];
+  }
+
+  BoxDecoration get _quickChipRailDecoration {
+    if (_coach.isMaster) {
+      return BoxDecoration(
+        color: AppDesignTokens.brandSurface.withValues(alpha: 0.92),
+        border: const Border(top: BorderSide(color: AppDesignTokens.divider)),
+      );
+    }
+    if (_isSimpleChatBackground) {
+      return BoxDecoration(
+        color: AppDesignTokens.brandSurface.withValues(alpha: 0.82),
+        border: const Border(top: BorderSide(color: AppDesignTokens.divider)),
+      );
+    }
+    return const BoxDecoration(color: Colors.transparent);
+  }
+
   Widget _buildMasterQuickChip(String chip) {
-    const chipInk = AppDesignTokens.brandMuted;
+    final chipInk = _quickChipForegroundColor;
     final icon = _chipIcon(chip, color: chipInk);
     return Material(
       color: Colors.transparent,
@@ -13235,21 +13322,10 @@ $timerOutputRule
           height: 38,
           padding: const EdgeInsets.symmetric(horizontal: 15),
           decoration: BoxDecoration(
-            color: AppDesignTokens.brandSurface.withValues(alpha: 0.96),
+            color: _quickChipBackgroundColor.withValues(alpha: 0.96),
             borderRadius: BorderRadius.circular(15),
-            boxShadow: [
-              BoxShadow(
-                color: AppDesignTokens.brand.withValues(alpha: 0.14),
-                blurRadius: 18,
-                spreadRadius: 1,
-                offset: const Offset(0, 6),
-              ),
-              BoxShadow(
-                color: AppDesignTokens.brandAccent.withValues(alpha: 0.18),
-                blurRadius: 10,
-                offset: const Offset(0, 2),
-              ),
-            ],
+            border: Border.all(color: _quickChipBorderColor),
+            boxShadow: _quickChipShadow,
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -13279,18 +13355,22 @@ $timerOutputRule
     }
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
+      padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
       child: Row(mainAxisSize: MainAxisSize.min, children: items),
     );
   }
 
   Widget _buildChips() {
     if (_coach.isMaster) {
-      return Container(
-        height: 48,
-        margin: const EdgeInsets.only(top: 8, bottom: 8),
-        alignment: Alignment.centerLeft,
-        child: _buildMasterChipRow(),
+      return DecoratedBox(
+        decoration: _quickChipRailDecoration,
+        child: SizedBox(
+          height: 54,
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: _buildMasterChipRow(),
+          ),
+        ),
       );
     }
     final baseChips = _suppressDefaultChips
@@ -13298,13 +13378,13 @@ $timerOutputRule
         : (_dynamicChips.isNotEmpty ? _dynamicChips : _coach.chips);
     final chips = _displayChipsForCoach(baseChips);
     return Container(
-      height: 52,
-      margin: const EdgeInsets.only(top: 8),
+      height: 44,
+      decoration: _quickChipRailDecoration,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
+        padding: const EdgeInsets.fromLTRB(16, 7, 16, 7),
         itemCount: chips.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        separatorBuilder: (_, __) => const SizedBox(width: 7),
         itemBuilder: (ctx, i) {
           final chip = chips[i];
           final displayLabel = _resistanceChipLabel(
@@ -13317,16 +13397,17 @@ $timerOutputRule
           );
           return AppChip(
             label: displayLabel,
-            icon: _chipIcon(chip),
-            backgroundColor: AppDesignTokens.surface,
-            foregroundColor: _coach.accentColor,
-            borderColor: _coach.accentColor.withValues(alpha: 0.30),
+            icon: _chipIcon(chip, color: _quickChipForegroundColor),
+            backgroundColor: _quickChipBackgroundColor,
+            foregroundColor: _quickChipForegroundColor,
+            borderColor: _quickChipBorderColor,
+            boxShadow: _quickChipShadow,
             onTap: () {
-              if (chip == '🌙 오늘은 쉬어가기') {
+              if (chip == '오늘은 쉬어가기') {
                 _activateRestDay();
                 return;
               }
-              if (chip == '🐾 오늘은 조금만 하기') {
+              if (chip == '오늘은 조금만 하기') {
                 _chooseLightDay();
                 return;
               }

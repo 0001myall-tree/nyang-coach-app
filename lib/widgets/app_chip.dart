@@ -15,6 +15,7 @@ class AppChip extends StatelessWidget {
     this.selectedBackgroundColor,
     this.selectedForegroundColor,
     this.borderColor,
+    this.boxShadow,
     this.onTap,
   });
 
@@ -27,6 +28,7 @@ class AppChip extends StatelessWidget {
   final Color? selectedBackgroundColor;
   final Color? selectedForegroundColor;
   final Color? borderColor;
+  final List<BoxShadow>? boxShadow;
   final VoidCallback? onTap;
 
   @override
@@ -56,6 +58,7 @@ class AppChip extends StatelessWidget {
           border: Border.all(
             color: enabled ? effectiveBorder : AppDesignTokens.divider,
           ),
+          boxShadow: enabled ? boxShadow : null,
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,

@@ -14,14 +14,17 @@ import '../services/tasks_sync_service.dart';
 import '../models/user_data.dart';
 import '../services/widget_sync_service.dart';
 import '../services/apple_calendar_sync_service.dart';
+import '../theme/app_design_tokens.dart';
 
 class SettingsScreen extends StatefulWidget {
   final String coachId;
   final bool autoOpenPremiumLearnSettings;
+  final ValueChanged<String>? onChatBgStyleChanged;
   const SettingsScreen({
     super.key,
     required this.coachId,
     this.autoOpenPremiumLearnSettings = false,
+    this.onChatBgStyleChanged,
   });
 
   @override
@@ -1918,6 +1921,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             'nyang_chat_bg_style',
                             selectedStyle,
                           );
+                          widget.onChatBgStyleChanged?.call(selectedStyle);
                           if (context.mounted) Navigator.pop(context);
                         },
                         child: Text(
@@ -3055,13 +3059,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                     ],
                   ),
-                  Text(
-                    '✨ 입력할수록 비서가 생활 패턴을 정확히 파악해요.',
-                    style: GoogleFonts.notoSansKr(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                      color: const Color(0xFF9593A5),
-                    ),
+                  Row(
+                    children: [
+                      SvgPicture.asset(
+                        'assets/icons/wand-magic-sparkles.svg',
+                        width: 13,
+                        height: 13,
+                        colorFilter: const ColorFilter.mode(
+                          AppDesignTokens.brandMuted,
+                          BlendMode.srcIn,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          '입력할수록 비서가 생활 패턴을 정확히 파악해요.',
+                          style: GoogleFonts.notoSansKr(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            color: const Color(0xFF9593A5),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 24),
 
@@ -3152,7 +3172,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
                         // 1. 수면
                         _buildLearnField(
-                          icon: '🌙',
+                          icon: SvgPicture.asset(
+                            'assets/icons/fa-moon-solid.svg',
+                            width: 17,
+                            height: 17,
+                            colorFilter: const ColorFilter.mode(
+                              AppDesignTokens.brand,
+                              BlendMode.srcIn,
+                            ),
+                          ),
                           title: '컨디션 수면 기준',
                           subtitle: '다음 날 무리없는 수면 기준을 알려주세요.',
                           child: Column(
@@ -3344,13 +3372,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             children: [
                               buildSyncGoalList(visions, 'vision'),
                               const SizedBox(height: 8),
-                              Text(
-                                '💡 세부적인 마일스톤은 목표 탭에서 작성해 주세요!',
-                                style: GoogleFonts.notoSansKr(
-                                  fontSize: 11,
-                                  color: const Color(0xFF8B7CFF),
-                                  fontWeight: FontWeight.w500,
-                                ),
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  SvgPicture.asset(
+                                    'assets/icons/fa-lightbulb-solid.svg',
+                                    width: 12,
+                                    height: 12,
+                                    colorFilter: const ColorFilter.mode(
+                                      AppDesignTokens.brand,
+                                      BlendMode.srcIn,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 5),
+                                  Expanded(
+                                    child: Text(
+                                      '세부적인 마일스톤은 목표 탭에서 작성해 주세요!',
+                                      style: GoogleFonts.notoSansKr(
+                                        fontSize: 11,
+                                        color: const Color(0xFF8B7CFF),
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ],
                           ),
@@ -3358,7 +3403,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
                         // 4. 이번 달 목표
                         _buildLearnField(
-                          icon: '🎯',
+                          icon: SvgPicture.asset(
+                            'assets/icons/bullseye.svg',
+                            width: 18,
+                            height: 18,
+                            colorFilter: const ColorFilter.mode(
+                              AppDesignTokens.brand,
+                              BlendMode.srcIn,
+                            ),
+                          ),
                           title: '이번 달 목표',
                           subtitle: '이번 달에 집중할 목표를 설정하세요.',
                           child: buildSyncGoalList(monthGoals, 'month'),
@@ -3366,7 +3419,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
                         // 5. 이번 주 목표
                         _buildLearnField(
-                          icon: '🔥',
+                          icon: SvgPicture.asset(
+                            'assets/icons/fa-fire-solid.svg',
+                            width: 17,
+                            height: 17,
+                            colorFilter: const ColorFilter.mode(
+                              AppDesignTokens.brand,
+                              BlendMode.srcIn,
+                            ),
+                          ),
                           title: '이번 주 목표',
                           subtitle: '이번 주에 달성할 작은 목표들을 적어보세요.',
                           child: buildSyncGoalList(weekGoals, 'week'),
@@ -3446,19 +3507,37 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         );
                       },
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF8B7CFF),
+                        backgroundColor: AppDesignTokens.brand,
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
+                          borderRadius: BorderRadius.circular(
+                            AppDesignTokens.radiusMedium,
+                          ),
                         ),
                         elevation: 0,
                       ),
-                      child: Text(
-                        '⚡ 비서 학습시키기',
-                        style: GoogleFonts.notoSansKr(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w800,
-                          color: Colors.white,
-                        ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          SvgPicture.asset(
+                            'assets/icons/bolt.svg',
+                            width: 16,
+                            height: 16,
+                            colorFilter: const ColorFilter.mode(
+                              Colors.white,
+                              BlendMode.srcIn,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            '비서 학습시키기',
+                            style: GoogleFonts.notoSansKr(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
@@ -3481,12 +3560,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border.all(color: const Color(0xFFF0EEF8)),
-        borderRadius: BorderRadius.circular(20),
+        color: AppDesignTokens.surface,
+        border: Border.all(color: AppDesignTokens.brandBorder),
+        borderRadius: BorderRadius.circular(AppDesignTokens.radiusLarge),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF8B7CFF).withOpacity(0.03),
+            color: AppDesignTokens.brand.withValues(alpha: 0.04),
             blurRadius: 20,
             offset: const Offset(0, 4),
           ),
@@ -3501,7 +3580,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 width: 36,
                 height: 36,
                 decoration: const BoxDecoration(
-                  color: Color(0xFFFAF9FF),
+                  color: AppDesignTokens.brandSoftAlt,
                   shape: BoxShape.circle,
                 ),
                 alignment: Alignment.center,
@@ -3518,7 +3597,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 style: GoogleFonts.notoSansKr(
                   fontSize: 15,
                   fontWeight: FontWeight.w800,
-                  color: const Color(0xFF3D3A4E),
+                  color: AppDesignTokens.textPrimary,
                 ),
               ),
             ],
@@ -3531,7 +3610,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               style: GoogleFonts.notoSansKr(
                 fontSize: 11,
                 fontWeight: FontWeight.w500,
-                color: const Color(0xFF9593A5),
+                color: AppDesignTokens.textMuted,
               ),
             ),
           ),

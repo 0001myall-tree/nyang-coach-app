@@ -33,7 +33,11 @@ class ChatPlaceholderScreen extends StatelessWidget {
     child: Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text('💬', style: TextStyle(fontSize: 48)),
+        Icon(
+          Icons.chat_bubble_outline_rounded,
+          size: 48,
+          color: AppDesignTokens.brand,
+        ),
         SizedBox(height: 12),
         Text(
           '채팅 화면',
@@ -56,7 +60,7 @@ class TasksPlaceholderScreen extends StatelessWidget {
     child: Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text('📋', style: TextStyle(fontSize: 48)),
+        Icon(Icons.checklist_rounded, size: 48, color: AppDesignTokens.brand),
         SizedBox(height: 12),
         Text(
           '할 일 화면',
@@ -79,7 +83,7 @@ class RecordPlaceholderScreen extends StatelessWidget {
     child: Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text('📊', style: TextStyle(fontSize: 48)),
+        Icon(Icons.bar_chart_rounded, size: 48, color: AppDesignTokens.brand),
         SizedBox(height: 12),
         Text(
           '기록 화면',
@@ -102,7 +106,7 @@ class SettingsPlaceholderScreen extends StatelessWidget {
     child: Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text('⚙️', style: TextStyle(fontSize: 48)),
+        Icon(Icons.settings_outlined, size: 48, color: AppDesignTokens.brand),
         SizedBox(height: 12),
         Text(
           '설정 화면',
@@ -153,6 +157,7 @@ class MainTabScreen extends StatefulWidget {
   final int initialPlannerTabIndex;
   final String? initialPlannerDateKey;
   final String? initialPlannerItemId;
+  final String? initialChatBgStyle;
   const MainTabScreen({
     super.key,
     required this.coachId,
@@ -163,6 +168,7 @@ class MainTabScreen extends StatefulWidget {
     this.initialPlannerTabIndex = 0,
     this.initialPlannerDateKey,
     this.initialPlannerItemId,
+    this.initialChatBgStyle,
   });
 
   @override
@@ -193,7 +199,7 @@ class _MainTabScreenState extends State<MainTabScreen>
       builder: (context) {
         return AlertDialog(
           title: Text(
-            '개발자용 플랜 시뮬레이터 🛠️',
+            '개발자용 플랜 시뮬레이터',
             style: GoogleFonts.notoSansKr(fontWeight: FontWeight.w900),
           ),
           content: Column(
@@ -291,6 +297,7 @@ class _MainTabScreenState extends State<MainTabScreen>
         builder: (_) => MainTabScreen(
           coachId: coachId,
           handoffFromCoachId: handoffFromCoachId,
+          initialChatBgStyle: _chatBgStyle,
         ),
       ),
     );
@@ -365,7 +372,10 @@ class _MainTabScreenState extends State<MainTabScreen>
                 Navigator.pushReplacement(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => MainTabScreen(coachId: c.id),
+                    builder: (_) => MainTabScreen(
+                      coachId: c.id,
+                      initialChatBgStyle: _chatBgStyle,
+                    ),
                   ),
                 );
               }
@@ -462,7 +472,8 @@ class _MainTabScreenState extends State<MainTabScreen>
   String? _lastMorningCallDate;
   final Set<String> _firedCoreReminders = {};
   StreamSubscription? _reminderAudioSub;
-  String _chatBgStyle = 'simple';
+  late String _chatBgStyle;
+  bool _chatBgStyleLoaded = false;
   StreamSubscription<User?>? _authSubscription;
 
   Future<void> _loadBgStyle() async {
@@ -470,6 +481,7 @@ class _MainTabScreenState extends State<MainTabScreen>
     if (mounted) {
       setState(() {
         _chatBgStyle = prefs.getString('nyang_chat_bg_style') ?? 'simple';
+        _chatBgStyleLoaded = true;
       });
     }
   }
@@ -477,6 +489,8 @@ class _MainTabScreenState extends State<MainTabScreen>
   @override
   void initState() {
     super.initState();
+    _chatBgStyle = widget.initialChatBgStyle ?? 'simple';
+    _chatBgStyleLoaded = widget.initialChatBgStyle != null;
     _loadBgStyle();
     _openDrawerIndex = widget.initialDrawerIndex;
     _widgetIntentDrawerMode = widget.initialDrawerIndex != 0;
@@ -1269,7 +1283,13 @@ class _MainTabScreenState extends State<MainTabScreen>
     ),
     const TasksPlaceholderScreen(),
     RecordsScreen(coachId: widget.coachId),
-    SettingsScreen(coachId: widget.coachId),
+    SettingsScreen(
+      coachId: widget.coachId,
+      onChatBgStyleChanged: (style) {
+        if (style == _chatBgStyle) return;
+        setState(() => _chatBgStyle = style);
+      },
+    ),
   ];
 
   static const _tabLabels = ['채팅', '할 일', '기록', '설정'];
@@ -1362,7 +1382,7 @@ class _MainTabScreenState extends State<MainTabScreen>
 
   @override
   Widget build(BuildContext context) {
-    if (!_coachAccessChecked) {
+    if (!_coachAccessChecked || !_chatBgStyleLoaded) {
       return const Scaffold(
         backgroundColor: Colors.white,
         body: Center(child: CircularProgressIndicator()),
@@ -1479,9 +1499,7 @@ class _MainTabScreenState extends State<MainTabScreen>
               // 커스텀 뒤로가기 옆에 겹쳐 나오지 않게 한다.
               automaticallyImplyLeading: false,
               title: _buildAppBarTitle(isImmersive: true),
-              actions: [
-                _buildPlannerHelpAction(),
-              ],
+              actions: [_buildPlannerHelpAction()],
             ),
             body: AnimatedSwitcher(
               duration: const Duration(milliseconds: 180),
