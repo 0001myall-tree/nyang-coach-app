@@ -1300,8 +1300,9 @@ class _ChatScreenState extends State<ChatScreen>
         if (task['done'] == true) {
           completed++;
         } else {
+          // 진행 중인 일도 후보엔 넣되, 정렬에서 맨 뒤로 밀린다.
+          pendingChipCandidates.add(task);
           if (!_isInProgressTask(task)) {
-            pendingChipCandidates.add(task);
             final deferredCount = (task['deferredCount'] as num?)?.toInt() ?? 0;
             if (deferredCount >= 2) {
               repeatedlyDeferredCandidates.add(task);
@@ -2965,8 +2966,9 @@ class _ChatScreenState extends State<ChatScreen>
 
   void _sortPendingTaskCandidates(List<Map<String, dynamic>> tasks) {
     tasks.sort((a, b) {
-      final aInProgress = a['inProgress'] == true ? 0 : 1;
-      final bInProgress = b['inProgress'] == true ? 0 : 1;
+      // 이미 하고 있는 일한테 "시작하자"고 할 수는 없으니 맨 뒤로 보낸다.
+      final aInProgress = _isInProgressTask(a) ? 1 : 0;
+      final bInProgress = _isInProgressTask(b) ? 1 : 0;
       if (aInProgress != bInProgress) return aInProgress.compareTo(bInProgress);
 
       final aRank = _pendingTaskChipRank(a);
