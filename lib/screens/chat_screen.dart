@@ -7282,11 +7282,17 @@ class _ChatScreenState extends State<ChatScreen>
 
   static const List<String> _nyangPerfectionismInsights = [
     '완벽하게 못 해서 속상한 마음, 그거 너무 기준이 높아서 생긴 상처일 수 있다냥. 오늘은 잘하는 나 말고, 시작하는 나만 데려오면 된다냥.',
-    '완벽하게 해내야만 괜찮은 사람이 되는 건 아니다냥. 지금은 완성보다 첫 걸음 하나가 더 중요하다냥.',
+    '완벽하게 하려다가 시작도 제대로 못한 적, 수두룩하지 않냥? 오늘부터 어설픈 시도를 수없이 쌓으면 일 년 뒤엔 어떨까 생각해보라냥.',
     '자꾸 완벽하게 하려 들면 시작이 제일 무거워진다냥. 오늘은 못난 초안이어도 좋으니, 아주 작게 하나만 건드려보자냥.',
-    '완벽주의는 일을 잘하고 싶다는 마음에서 오지만, 가끔은 그 마음이 발목을 잡는다냥. 지금은 잘하려 하지 말고, 멈춰 있던 걸음만 살짝 움직이면 된다냥.',
+    '완벽하게 해낸 날은 마음이 편했냥? 아마 그 다음 날 기준이 또 한 칸 올라갔을 거다냥. 이건 도착점이 없는 길이라냥.',
     '죽어도 해내야 하는 일은 없다냥. 오늘은 "안 되면 말지" 하는 마음으로 가볍게 한 번만 건드려보자냥.',
-    '혼자 쓰는 계획표 앞에서도 마음이 무겁다면, 내 안의 기준이 너무 엄격해진 걸 수도 있다냥. 좀 못하면 어때? 첫 걸음만 작게 떼보자냥.',
+    '냥이가 쥐 열 마리를 한꺼번에 노리면 한 마리도 못 잡는다냥. 근데 한 마리만 노리고 있으면, 어느새 다섯 마리가 발밑에 굴러와 있더라냥.',
+    '속상하지? 그 마음 없애려 하지 말고 딱 5분만 그대로 둬보자냥. 고치고 싶은 걸 안 고친 채로 그냥 있는 것, 그게 견디는 연습이라냥. 그거 하나로 완벽주의는 슬슬 힘이 빠진다냥.',
+    '완벽하지 않은 나도 받아들이는 건 어떨까냥? 물론 마음은 안 좋겠지. 근데 그 텁텁한 기분을 끝까지 느끼고 나면 비로소 한 걸음 나아갈 수 있을지도 모른다냥',
+    '완벽하지 않으면 어때? 나 자체가 특별한데. 이 우주엔 오직 하나밖에 없는 나인데 좀 봐주라냥.',
+    '완벽주의는 어쩌면\n두려움으로부터 스스로를 지키려는 마음일지도 모른다냥.\n\n두려움은 피할수록 커지는 법이지.\n불쾌하더라도 없애려 하지 말고\n잠시 그대로 느껴보라냥.\n\n그 기분을 견딜 수 있다는 걸 언젠가 알게 되면,\n완벽하지 않아도 한 걸음 내디딜 수 있다냥.',
+    '모든 일을 예술가의 혼으로 완벽하게 하려고 하지 말고, 툭, 툭, 해내는 연습을 해보라냥. 어때, 마음이 불편해지냥? 그럼 그 불편함을 견디는 연습을 5분이라도 해보라냥.',
+    '완벽주의는 부족한 나를 견디지 못해서 만들어낸 허상일 뿐이라냥. 완벽이라는 개념은 모두 가짜라냥. 완벽하지 못한 나를 견디게 되면 완벽주의도 없어진다냥.',
   ];
 
   Future<String?> _buildNyangPerfectionismLocalReply() async {
@@ -7303,7 +7309,13 @@ class _ChatScreenState extends State<ChatScreen>
     if (clickCount == 2) {
       final taskName = await _pickSmallPendingTaskName();
       if (taskName != null) {
-        return '흠.. 지금은 \'$taskName\'을 전부 끝내려 하지 말고, 첫 조각 하나만 잡아보자냥.';
+        // 같은 문장이 매번 반복되지 않도록 표현만 바꾼 변형들 중 하나를 고른다.
+        final lines = [
+          '\'$taskName\' 통째로 하려니 목이 막히는 거다냥. 한 입부터 시작하자냥.',
+          '흠.. \'$taskName\' 전부 끝내려니 손이 안 나가는 거다냥. 첫 조각만 잡자냥.',
+          '\'$taskName\' 완벽하게 하려고 하니, 시작 전부터 지치는 거다냥. 딱 5분어치만 하자냥.',
+        ];
+        return lines[Random().nextInt(lines.length)];
       }
     }
 
@@ -10310,7 +10322,7 @@ $timerOutputRule
                       child: Column(
                         children: [
                           Expanded(
-                            child: _messages.isEmpty && !_coach.isMaster
+                            child: _messages.isEmpty
                                 ? _buildEmptyState()
                                 : _buildMessageList(),
                           ),
@@ -10327,10 +10339,9 @@ $timerOutputRule
                             _dynamicChips.contains('🐾 오늘은 조금만 하기') &&
                             _dynamicChips.length == 2)) &&
                         _coachSwitchTarget == null &&
-                        !_coach.isMaster &&
-                        !_shouldShowFriendInlineChips &&
                         ((_dynamicChips.contains('🌙 오늘은 쉬어가기') &&
                                 _dynamicChips.contains('🐾 오늘은 조금만 하기')) ||
+                            _coach.isMaster ||
                             (_dynamicChips.isNotEmpty ||
                                 _coach.chips.isNotEmpty)))
                       _buildChips(),
@@ -11650,8 +11661,6 @@ $timerOutputRule
 
     if (_isLoading) items.add(_buildTypingIndicator());
     if (_coachSwitchTarget != null) items.add(_buildNyangSwitchBubble());
-    if (_shouldShowMasterInlineChips) items.add(_buildMasterInlineChips());
-    if (_shouldShowFriendInlineChips) items.add(_buildFriendInlineChips());
 
     final list = ListView.builder(
       controller: _scrollCtrl,
@@ -13193,9 +13202,7 @@ $timerOutputRule
     );
   }
 
-  Widget _buildMasterChipRow({
-    EdgeInsets padding = const EdgeInsets.fromLTRB(16, 0, 16, 6),
-  }) {
+  Widget _buildMasterChipRow() {
     final List<Widget> items = [];
     for (final chip in _masterQuickChips) {
       items.add(_buildMasterQuickChip(chip));
@@ -13203,54 +13210,12 @@ $timerOutputRule
     }
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
-      padding: padding,
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
       child: Row(mainAxisSize: MainAxisSize.min, children: items),
     );
   }
 
-  bool get _shouldShowMasterInlineChips {
-    if (!_coach.isMaster) return false;
-    if (_suppressDefaultChips || _coachSwitchTarget != null) return false;
-    if (_dynamicChips.contains('🌙 오늘은 쉬어가기') &&
-        _dynamicChips.contains('🐾 오늘은 조금만 하기') &&
-        _dynamicChips.length == 2) {
-      return false;
-    }
-    return _masterQuickChips.isNotEmpty;
-  }
-
-  Widget _buildMasterInlineChips() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(0, 6, 0, 2),
-      child: Align(
-        alignment: Alignment.centerLeft,
-        child: _buildMasterChipRow(
-          padding: const EdgeInsets.fromLTRB(0, 0, 0, 6),
-        ),
-      ),
-    );
-  }
-
-  bool get _shouldShowFriendInlineChips {
-    if (_coach.isMaster || _messages.isEmpty) return false;
-    if (widget.chatBgStyle != 'simple') return false;
-    if (_suppressDefaultChips || _coachSwitchTarget != null) return false;
-    if (_dynamicChips.contains('🌙 오늘은 쉬어가기') &&
-        _dynamicChips.contains('🐾 오늘은 조금만 하기') &&
-        _dynamicChips.length == 2) {
-      return false;
-    }
-    return _dynamicChips.isNotEmpty || _coach.chips.isNotEmpty;
-  }
-
-  Widget _buildFriendInlineChips() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(0, 6, 0, 2),
-      child: _buildChips(chipPadding: EdgeInsets.zero),
-    );
-  }
-
-  Widget _buildChips({EdgeInsets? chipPadding}) {
+  Widget _buildChips() {
     if (_coach.isMaster) {
       return Container(
         height: 48,
@@ -13268,7 +13233,7 @@ $timerOutputRule
       margin: const EdgeInsets.only(top: 8),
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
-        padding: chipPadding ?? const EdgeInsets.symmetric(horizontal: 16),
+        padding: const EdgeInsets.symmetric(horizontal: 16),
         itemCount: chips.length,
         separatorBuilder: (_, __) => const SizedBox(width: 8),
         itemBuilder: (ctx, i) {
