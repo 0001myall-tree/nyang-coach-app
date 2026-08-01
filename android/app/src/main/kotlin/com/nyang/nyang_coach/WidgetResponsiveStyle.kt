@@ -15,6 +15,7 @@ object WidgetResponsiveStyle {
         widgetId: Int,
         views: RemoteViews,
         hasTwoLineText: Boolean = false,
+        hasCompactTimedSchedule: Boolean = false,
     ) {
         val options = appWidgetManager.getAppWidgetOptions(widgetId)
         val minWidthDp = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 120)
@@ -27,7 +28,9 @@ object WidgetResponsiveStyle {
         val bottomPadding = lerp(24f, 30f, scale).roundToInt()
         // 2줄(시간/일정명) 텍스트가 뜰 때는 iOS처럼 냥냥이를 살짝 줄여
         // 텍스트와 겹치지 않게 한다.
-        val imageSize = lerp(132f, 142f, scale) - if (hasTwoLineText) 12f else 0f
+        val baseImageSize = lerp(132f, 142f, scale)
+        val imageSize = baseImageSize - if (hasTwoLineText) 12f else 0f
+        val compactImageSize = baseImageSize + if (hasCompactTimedSchedule) 2f else 0f
 
         views.setViewPadding(
             R.id.widget_root,
@@ -40,6 +43,8 @@ object WidgetResponsiveStyle {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             views.setViewLayoutWidth(R.id.mini_cat_image, imageSize, TypedValue.COMPLEX_UNIT_DIP)
             views.setViewLayoutHeight(R.id.mini_cat_image, imageSize, TypedValue.COMPLEX_UNIT_DIP)
+            views.setViewLayoutWidth(R.id.mini_cat_image_compact, compactImageSize, TypedValue.COMPLEX_UNIT_DIP)
+            views.setViewLayoutHeight(R.id.mini_cat_image_compact, compactImageSize, TypedValue.COMPLEX_UNIT_DIP)
         }
     }
 

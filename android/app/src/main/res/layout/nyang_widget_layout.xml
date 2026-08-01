@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- iOS 미니 위젯(systemSmall)과 동일한 구성:
-     위쪽에 냥냥이 얼굴, 아래에 [시계+시간 / 일정명] 2줄(좌측 정렬) 또는
-     "남은 일정 N개" 등 한 줄(가운데 정렬). -->
+     위쪽에 냥냥이 얼굴, 아래에 [시계+시간 / 일정명] 2줄(좌측 정렬),
+     짧은 일정은 [시계+시간+일정명] 1줄(가운데 정렬),
+     일정/핵심이 없으면 발자국 완료 그래프. -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_root"
     android:layout_width="match_parent"
@@ -24,6 +25,18 @@
         android:scaleType="fitCenter"
         android:src="@drawable/iphonecatwidget1" />
 
+    <ImageView
+        android:id="@+id/mini_cat_image_compact"
+        android:layout_width="138dp"
+        android:layout_height="138dp"
+        android:layout_gravity="top|center_horizontal"
+        android:layout_marginTop="14dp"
+        android:adjustViewBounds="true"
+        android:contentDescription="@null"
+        android:scaleType="fitCenter"
+        android:src="@drawable/iphonecatwidget1"
+        android:visibility="gone" />
+
     <!-- 시간 일정이 있을 때: 2줄 좌측 정렬 블록 -->
     <LinearLayout
         android:id="@+id/mini_schedule_block"
@@ -40,6 +53,7 @@
             android:orientation="horizontal">
 
             <ImageView
+                android:id="@+id/mini_schedule_status_icon"
                 android:layout_width="12dp"
                 android:layout_height="12dp"
                 android:contentDescription="@null"
@@ -70,6 +84,90 @@
             android:textColor="#262429"
             android:textSize="16sp"
             android:textStyle="bold" />
+    </LinearLayout>
+
+    <!-- 짧은 시간 일정이 있을 때: 한 줄 가운데 정렬 블록 -->
+    <LinearLayout
+        android:id="@+id/mini_schedule_compact_block"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|center_horizontal"
+        android:gravity="center"
+        android:orientation="horizontal"
+        android:visibility="gone">
+
+        <ImageView
+            android:layout_width="12dp"
+            android:layout_height="12dp"
+            android:contentDescription="@null"
+            android:src="@drawable/ic_fa_clock" />
+
+        <TextView
+            android:id="@+id/mini_schedule_compact_text"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="5dp"
+            android:autoSizeMaxTextSize="16sp"
+            android:autoSizeMinTextSize="13sp"
+            android:autoSizeStepGranularity="1sp"
+            android:autoSizeTextType="uniform"
+            android:ellipsize="end"
+            android:includeFontPadding="false"
+            android:maxLines="1"
+            android:text="17:00 약속"
+            android:textColor="#8B7CFF"
+            android:textSize="16sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <!-- 일정/핵심이 없을 때: 발자국 완료 그래프 -->
+    <LinearLayout
+        android:id="@+id/mini_paw_row"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|center_horizontal"
+        android:gravity="center"
+        android:orientation="horizontal"
+        android:visibility="gone">
+
+        <ImageView
+            android:id="@+id/mini_paw_1"
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:contentDescription="@null"
+            android:src="@drawable/ic_widget_paw_outline" />
+
+        <ImageView
+            android:id="@+id/mini_paw_2"
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:layout_marginStart="6dp"
+            android:contentDescription="@null"
+            android:src="@drawable/ic_widget_paw_outline" />
+
+        <ImageView
+            android:id="@+id/mini_paw_3"
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:layout_marginStart="6dp"
+            android:contentDescription="@null"
+            android:src="@drawable/ic_widget_paw_outline" />
+
+        <ImageView
+            android:id="@+id/mini_paw_4"
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:layout_marginStart="6dp"
+            android:contentDescription="@null"
+            android:src="@drawable/ic_widget_paw_outline" />
+
+        <ImageView
+            android:id="@+id/mini_paw_5"
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:layout_marginStart="6dp"
+            android:contentDescription="@null"
+            android:src="@drawable/ic_widget_paw_outline" />
     </LinearLayout>
 
     <!-- 일정이 없을 때: 한 줄 가운데 정렬.
