@@ -123,7 +123,8 @@
                     android:text="0%"
                     android:textColor="#C7A6FF"
                     android:textSize="@dimen/cat_character_percent_text_size"
-                    android:textStyle="bold" />
+                    android:textStyle="bold"
+                    android:visibility="gone" />
             </LinearLayout>
         </LinearLayout>
 

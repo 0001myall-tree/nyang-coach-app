@@ -479,6 +479,7 @@ class _MainTabScreenState extends State<MainTabScreen>
   late String _chatBgStyle;
   bool _chatBgStyleLoaded = false;
   bool _showRecordsNewBadge = false;
+  bool _hasMasterPlanForRecordsBadge = false;
   StreamSubscription<User?>? _authSubscription;
 
   Future<void> _loadBgStyle() async {
@@ -525,8 +526,11 @@ class _MainTabScreenState extends State<MainTabScreen>
     final data = userData ?? await UserDataService.load();
     final hasMasterPlan = data.isPlanActive && data.planType == 'master';
     if (!hasMasterPlan) {
-      if (mounted && _showRecordsNewBadge) {
-        setState(() => _showRecordsNewBadge = false);
+      if (mounted && (_showRecordsNewBadge || _hasMasterPlanForRecordsBadge)) {
+        setState(() {
+          _showRecordsNewBadge = false;
+          _hasMasterPlanForRecordsBadge = false;
+        });
       }
       return;
     }
@@ -537,22 +541,39 @@ class _MainTabScreenState extends State<MainTabScreen>
     );
     final seenSignature = prefs.getString(_recordsFeedbackSeenSignatureKey);
     final shouldShow = seenSignature != signature && _openDrawerIndex != 2;
-    if (mounted && _showRecordsNewBadge != shouldShow) {
-      setState(() => _showRecordsNewBadge = shouldShow);
+    if (mounted &&
+        (_showRecordsNewBadge != shouldShow ||
+            !_hasMasterPlanForRecordsBadge)) {
+      setState(() {
+        _showRecordsNewBadge = shouldShow;
+        _hasMasterPlanForRecordsBadge = true;
+      });
     }
   }
 
   Future<void> _markRecordsFeedbackSeen() async {
     final data = await UserDataService.load();
-    if (!data.isPlanActive || data.planType != 'master') return;
+    final hasMasterPlan = data.isPlanActive && data.planType == 'master';
+    if (!hasMasterPlan) {
+      if (mounted && (_showRecordsNewBadge || _hasMasterPlanForRecordsBadge)) {
+        setState(() {
+          _showRecordsNewBadge = false;
+          _hasMasterPlanForRecordsBadge = false;
+        });
+      }
+      return;
+    }
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(
       _recordsFeedbackSeenSignatureKey,
       _recordsFeedbackSignature(_recordsFeedbackWeekMonday(prefs)),
     );
-    if (mounted && _showRecordsNewBadge) {
-      setState(() => _showRecordsNewBadge = false);
+    if (mounted && (_showRecordsNewBadge || !_hasMasterPlanForRecordsBadge)) {
+      setState(() {
+        _showRecordsNewBadge = false;
+        _hasMasterPlanForRecordsBadge = true;
+      });
     }
   }
 
@@ -1398,7 +1419,12 @@ class _MainTabScreenState extends State<MainTabScreen>
     _gearIcon(active: true, color: _tabActiveColor),
   ];
 
-  List<bool> get _tabNewBadges => [false, false, _showRecordsNewBadge, false];
+  List<bool> get _tabNewBadges => [
+    false,
+    false,
+    _hasMasterPlanForRecordsBadge && _showRecordsNewBadge,
+    false,
+  ];
 
   bool get _isMaster => _isMasterCoach(widget.coachId);
 

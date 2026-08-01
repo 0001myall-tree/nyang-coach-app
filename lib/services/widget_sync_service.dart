@@ -290,7 +290,8 @@ class WidgetSyncService {
     }
 
     for (final task in tasks) {
-      if (task['category'] != 'schedule') continue;
+      final category = task['category']?.toString();
+      if (category != 'schedule' && category != 'today') continue;
       final candidate = _scheduleCandidateFromMap(task);
       if (candidate != null &&
           !candidates.any(
@@ -322,7 +323,7 @@ class WidgetSyncService {
       );
     }
 
-    final coreTask = _firstIncompleteCoreTask(prefs);
+    final coreTask = _firstIncompleteCoreTaskTitle(prefs);
     if (coreTask != null) {
       return _CharacterWidgetDisplay(
         kind: 'core',
@@ -355,7 +356,7 @@ class WidgetSyncService {
     );
   }
 
-  static String? _firstIncompleteCoreTask(SharedPreferences prefs) {
+  static String? _firstIncompleteCoreTaskTitle(SharedPreferences prefs) {
     final rawCoreTasks = prefs.getString('nyang_core_tasks');
     if (rawCoreTasks == null) return null;
 
@@ -365,7 +366,12 @@ class WidgetSyncService {
       for (final item in decoded) {
         if (item is! Map || item['done'] == true) continue;
         final title = _taskTitle(item);
-        if (title != null) return title;
+        if (title == null) continue;
+        final parsedTime =
+            _parseStoredTime(item['timeStart']?.toString()) ??
+            _parseStoredTime(item['time']?.toString());
+        if (parsedTime != null) return '${parsedTime.label} $title';
+        return title;
       }
     } catch (_) {
       return null;
@@ -424,10 +430,15 @@ class WidgetSyncService {
     if (source.isEmpty) return null;
 
     // "09:00 ~ 10:00"처럼 표시용 범위가 저장된 경우 시작 시간만 쓴다.
+    source = source
+        .replaceAll('：', ':')
+        .replaceAll('．', '.')
+        .replaceAll('분', '')
+        .trim();
     source = source.split(RegExp(r'\s*[~-]\s*')).first.trim();
 
     final koreanMatch = RegExp(
-      r'^(오전|오후)\s*(\d{1,2})(?::|시\s*)?(\d{1,2})?',
+      r'^(오전|오후)\s*(\d{1,2})(?::|\.|시\s*)?(\d{1,2})?',
     ).firstMatch(source);
     if (koreanMatch != null) {
       final period = koreanMatch.group(1);
@@ -446,7 +457,7 @@ class WidgetSyncService {
       );
     }
 
-    final match = RegExp(r'^(\d{1,2}):(\d{1,2})$').firstMatch(source);
+    final match = RegExp(r'^(\d{1,2})(?::|\.)(\d{1,2})$').firstMatch(source);
     if (match == null) return null;
 
     final hour = int.tryParse(match.group(1)!);
