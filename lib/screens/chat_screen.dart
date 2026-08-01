@@ -1234,6 +1234,8 @@ class _ChatScreenState extends State<ChatScreen>
   int _completedTasks = 0;
   int _totalTasks = 0;
   String? _resistanceChipTaskName;
+  String? _appointmentPrepChipTaskName;
+  String? _appointmentPrepChipTimeLabel;
   String? _repeatedlyDeferredTaskName;
   int _attendanceStreak = 0;
 
@@ -1320,10 +1322,12 @@ class _ChatScreenState extends State<ChatScreen>
       }
       _sortPendingTaskCandidates(pendingChipCandidates);
       String? resistanceChipTaskName;
+      Map<String, dynamic>? resistanceChipTask;
       for (final task in pendingChipCandidates) {
         final text = _taskText(task);
         if (text != null) {
           resistanceChipTaskName = text;
+          resistanceChipTask = task;
           break;
         }
       }
@@ -1342,6 +1346,12 @@ class _ChatScreenState extends State<ChatScreen>
           _totalTasks = total;
           _completedTasks = completed;
           _resistanceChipTaskName = resistanceChipTaskName;
+          _appointmentPrepChipTaskName = _appointmentPrepChipTaskNameFor(
+            resistanceChipTask,
+          );
+          _appointmentPrepChipTimeLabel = _appointmentPrepChipTimeLabelFor(
+            resistanceChipTask,
+          );
           _repeatedlyDeferredTaskName = repeatedlyDeferredTaskName;
         });
       }
@@ -2932,6 +2942,36 @@ class _ChatScreenState extends State<ChatScreen>
     return task['inProgress'] == true;
   }
 
+  String? _appointmentPrepChipTaskNameFor(Map<String, dynamic>? task) {
+    if (task == null || task['done'] == true || _isInProgressTask(task)) {
+      return null;
+    }
+    final text = _taskText(task);
+    if (text == null) return null;
+    if (!text.contains('약속') && !text.contains('모임')) return null;
+    if (_appointmentPrepChipTimeLabelFor(task) == null) return null;
+    return text;
+  }
+
+  String? _appointmentPrepChipTimeLabelFor(Map<String, dynamic>? task) {
+    if (task == null) return null;
+    final rawTime =
+        task['timeStart']?.toString() ?? task['time']?.toString() ?? '';
+    return _formatAppointmentPrepChipTime(rawTime);
+  }
+
+  String? _formatAppointmentPrepChipTime(String rawTime) {
+    final minutes = _taskTimeInMinutes(rawTime);
+    if (minutes < 0) return null;
+
+    final hour = minutes ~/ 60;
+    final minute = minutes % 60;
+    final period = hour < 12 ? '오전' : '오후';
+    final displayHour = hour % 12 == 0 ? 12 : hour % 12;
+    if (minute == 0) return '$period $displayHour시';
+    return '$period $displayHour시 $minute분';
+  }
+
   /// 정렬용 시각을 분 단위로 바꾼다. 못 읽으면 -1.
   /// timeStart는 "9:5"처럼 0 패딩 없는 24시간제, time은 "오전 9:05"처럼 표시용
   /// 문자열이라 그대로 비교하면 10시가 9시보다 앞서 버린다.
@@ -2940,11 +2980,40 @@ class _ChatScreenState extends State<ChatScreen>
     final isMorning = head.startsWith('오전');
     final isAfternoon = head.startsWith('오후');
 
-    final clock = head.replaceAll('오전', '').replaceAll('오후', '').trim();
+    var clock = head.replaceAll('오전', '').replaceAll('오후', '').trim();
+    final koreanTimeMatch = RegExp(
+      r'^(\d{1,2})\s*시(?:\s*(\d{1,2})\s*분?)?$',
+    ).firstMatch(clock);
+    if (koreanTimeMatch != null) {
+      final hour = int.tryParse(koreanTimeMatch.group(1) ?? '');
+      final minute = int.tryParse(koreanTimeMatch.group(2) ?? '0') ?? 0;
+      return _normalizeTaskTimeInMinutes(
+        hour: hour,
+        minute: minute,
+        isMorning: isMorning,
+        isAfternoon: isAfternoon,
+      );
+    }
+
+    clock = clock.split(RegExp(r'\s+')).first.trim();
     final parts = clock.split(':');
     if (parts.length != 2) return -1;
     final hour = int.tryParse(parts[0].trim());
     final minute = int.tryParse(parts[1].trim());
+    return _normalizeTaskTimeInMinutes(
+      hour: hour,
+      minute: minute,
+      isMorning: isMorning,
+      isAfternoon: isAfternoon,
+    );
+  }
+
+  int _normalizeTaskTimeInMinutes({
+    required int? hour,
+    required int? minute,
+    required bool isMorning,
+    required bool isAfternoon,
+  }) {
     if (hour == null || minute == null) return -1;
     if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return -1;
 
@@ -13034,7 +13103,10 @@ $timerOutputRule
   List<String> get _masterQuickChips {
     final focusChip = _coach.id == 'nyang_halbae'
         ? _nyangHalbaeSmallStartChipLabel(truncateTaskName: true)
-        : '마음 비우고 하게 해줘';
+        : (_coach.id == 'sec_female'
+              ? _appointmentPrepChipLabel(truncateTaskName: true) ??
+                    '마음 비우고 하게 해줘'
+              : '마음 비우고 하게 해줘');
     final decisionChip = _masterDecisionChipLabel(truncateTaskName: true);
     if (_coach.id == 'nyang_halbae') {
       if (_isNyangMorningStartChipTime) {
@@ -13072,9 +13144,34 @@ $timerOutputRule
     return '${taskName.substring(0, _resistanceChipTaskDisplayMaxLength)}...';
   }
 
+  String? _appointmentPrepChipLabel({required bool truncateTaskName}) {
+    final taskName = _appointmentPrepChipTaskName?.trim();
+    final timeLabel = _appointmentPrepChipTimeLabel?.trim();
+    if (taskName == null ||
+        taskName.isEmpty ||
+        timeLabel == null ||
+        timeLabel.isEmpty) {
+      return null;
+    }
+    final displayTaskName = truncateTaskName
+        ? _truncateResistanceChipTaskName(taskName)
+        : taskName;
+    return '$timeLabel $displayTaskName 준비 같이 해줘';
+  }
+
+  bool _isAppointmentPrepChip(String chip) {
+    final displayLabel = _appointmentPrepChipLabel(truncateTaskName: true);
+    return displayLabel != null && chip == displayLabel;
+  }
+
   String _resistanceChipLabel(String chip, {required bool truncateTaskName}) {
     if (_coach.id != 'cat' && _coach.id != 'boyfriend') return chip;
     if (chip != '하기 싫다' && chip != '하기 싫어') return chip;
+
+    final appointmentPrepChip = _appointmentPrepChipLabel(
+      truncateTaskName: truncateTaskName,
+    );
+    if (appointmentPrepChip != null) return appointmentPrepChip;
 
     final taskName = _resistanceChipTaskName?.trim();
     if (taskName == null || taskName.isEmpty) {
@@ -13092,6 +13189,11 @@ $timerOutputRule
   static const String _nyangHalbaeSmallStartFallbackChip = '지금 조금만 해볼까?';
 
   String _nyangHalbaeSmallStartChipLabel({required bool truncateTaskName}) {
+    final appointmentPrepChip = _appointmentPrepChipLabel(
+      truncateTaskName: truncateTaskName,
+    );
+    if (appointmentPrepChip != null) return appointmentPrepChip;
+
     final taskName = _resistanceChipTaskName?.trim();
     if (taskName == null || taskName.isEmpty) {
       return _nyangHalbaeSmallStartFallbackChip;
@@ -13109,6 +13211,11 @@ $timerOutputRule
   }
 
   String _nyangHalbaeSmallStartApiInput() {
+    final appointmentPrepChip = _appointmentPrepChipLabel(
+      truncateTaskName: false,
+    );
+    if (appointmentPrepChip != null) return appointmentPrepChip;
+
     final taskName = _resistanceChipTaskName?.trim();
     if (taskName == null || taskName.isEmpty) {
       return '지금 할 일을 하기 싫어. 조금만 해볼까?';
@@ -13206,12 +13313,16 @@ $timerOutputRule
       _ => null,
     };
     if (asset == null &&
+        !_isAppointmentPrepChip(chip) &&
         !_isNyangHalbaeSmallStartChip(chip) &&
         !_isRepeatedlyDeferredMasterChip(chip)) {
       return null;
     }
     return SvgPicture.asset(
-      asset ?? 'assets/icons/fa-hourglass-half-solid.svg',
+      asset ??
+          (_isAppointmentPrepChip(chip)
+              ? 'assets/icons/fa-clock-regular.svg'
+              : 'assets/icons/fa-hourglass-half-solid.svg'),
       width: 14,
       height: 14,
       colorFilter: ColorFilter.mode(
@@ -13290,6 +13401,13 @@ $timerOutputRule
       boxShadow: _quickChipShadow,
       fontSize: 12,
       onTap: () {
+        if (_coach.id == 'sec_female' && _isAppointmentPrepChip(chip)) {
+          _send(
+            _appointmentPrepChipLabel(truncateTaskName: false) ?? chip,
+            masterModelPolicy: _MasterModelPolicy.forceGpt4oMini,
+          );
+          return;
+        }
         if (chip == '마음 비우고 시작' || chip == '마음 비우고 하게 해줘') {
           _openCountdownFocusMode();
           return;
