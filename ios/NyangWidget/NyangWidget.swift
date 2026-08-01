@@ -392,6 +392,14 @@ struct NyangCompactWidgetView: View {
         !entry.characterTitle.isEmpty
     }
 
+    private var hasCorePrompt: Bool {
+        !hasTimedSchedule &&
+        !hasCoreTask &&
+        !hasInProgressTask &&
+        entry.characterKind == "core_prompt" &&
+        !entry.characterTitle.isEmpty
+    }
+
     private var usesCompactInProgress: Bool {
         hasInProgressTask && entry.characterStatus.count <= 3
     }
@@ -487,6 +495,13 @@ struct NyangCompactWidgetView: View {
                 compactStatusText("\(entry.characterStatus) \(entry.characterTitle)")
             } else if hasInProgressTask {
                 twoLineStatusText(status: entry.characterStatus, title: entry.characterTitle)
+            } else if hasCorePrompt {
+                Text(entry.characterTitle)
+                    .foregroundColor(Color(red: 0.15, green: 0.14, blue: 0.16))
+                    .font(.system(size: 18, weight: .semibold, design: .rounded))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.76)
+                    .multilineTextAlignment(.center)
             } else if isAwayOverDay(entry) {
                 Text("집사 보고싶다옹...")
                     .foregroundColor(Color(red: 0.15, green: 0.14, blue: 0.16))
@@ -503,12 +518,12 @@ struct NyangCompactWidgetView: View {
     private func miniPawProgressRow() -> some View {
         HStack(alignment: .center, spacing: 6) {
             ForEach(0..<5, id: \.self) { index in
-                Image(index < miniPawCount ? "fa_paw_solid" : "fa_paw_outline")
+                Image("fa_paw_solid")
                     .renderingMode(.template)
                     .resizable()
                     .scaledToFit()
                     .frame(width: 20, height: 20)
-                    .foregroundColor(index < miniPawCount ? compactWidgetAccent : Color(red: 0.72, green: 0.68, blue: 1.0))
+                    .foregroundColor(index < miniPawCount ? compactWidgetAccent : Color(red: 0.91, green: 0.90, blue: 0.93))
             }
         }
     }

@@ -31,6 +31,11 @@ class NyangWidgetProvider : HomeWidgetProvider() {
                     characterKind == "in_progress" &&
                     characterStatus.isNotEmpty() &&
                     characterTitle.isNotEmpty()
+                val hasCorePrompt = !hasTimedSchedule &&
+                    !hasCoreTask &&
+                    !hasInProgressTask &&
+                    characterKind == "core_prompt" &&
+                    characterTitle.isNotEmpty()
                 val usesCompactInProgress = hasInProgressTask && characterStatus.length <= 3
                 val usesCompactLayout = usesCompactSchedule || usesCompactInProgress
 
@@ -71,6 +76,12 @@ class NyangWidgetProvider : HomeWidgetProvider() {
                     setTextViewText(R.id.mini_schedule_time, characterStatus)
                     setTextViewText(R.id.mini_schedule_title, characterTitle)
                     setTextViewText(R.id.mini_schedule_compact_text, "$characterStatus $characterTitle")
+                } else if (hasCorePrompt) {
+                    setViewVisibility(R.id.mini_schedule_block, View.GONE)
+                    setViewVisibility(R.id.mini_schedule_compact_block, View.GONE)
+                    setViewVisibility(R.id.mini_info_text, View.VISIBLE)
+                    setViewVisibility(R.id.mini_paw_row, View.GONE)
+                    setTextViewText(R.id.mini_info_text, characterTitle)
                 } else {
                     setViewVisibility(R.id.mini_schedule_block, View.GONE)
                     setViewVisibility(R.id.mini_schedule_compact_block, View.GONE)
