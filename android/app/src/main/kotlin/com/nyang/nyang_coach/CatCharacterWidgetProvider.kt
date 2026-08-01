@@ -20,10 +20,16 @@ class CatCharacterWidgetProvider : HomeWidgetProvider() {
                 val title = widgetData.getString("character_widget_title", "")?.trim().orEmpty()
                 val progress = NyangWidgetMood.readInt(widgetData, "progress").coerceIn(0, 100)
                 val pawCount = NyangWidgetMood.readInt(widgetData, "character_widget_paws").coerceIn(0, 5)
+                val showsCompletionMessage = progress >= 100
                 val showsStatusRow = status.isNotEmpty() && (displayKind == "timed" || displayKind == "core" || displayKind == "in_progress")
                 val showsMissYouMessage = displayKind != "timed" && NyangWidgetMood.isAwayOverDay(widgetData)
 
-                if (showsMissYouMessage) {
+                if (showsCompletionMessage) {
+                    setViewVisibility(R.id.cat_character_status_row, View.GONE)
+                    setViewVisibility(R.id.cat_character_paw_row, View.VISIBLE)
+                    setTextViewText(R.id.cat_character_text, "할 일 다했다냥!\n우리 집사가 최고!")
+                    setPawProgress(this, pawCount, progress)
+                } else if (showsMissYouMessage) {
                     setViewVisibility(R.id.cat_character_status_row, View.GONE)
                     setViewVisibility(R.id.cat_character_paw_row, View.GONE)
                     setTextViewText(R.id.cat_character_text, "집사,\n보고싶다옹....")

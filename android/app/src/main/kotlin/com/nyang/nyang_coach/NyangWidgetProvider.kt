@@ -112,7 +112,7 @@ class NyangWidgetProvider : HomeWidgetProvider() {
         pawIds.forEachIndexed { index, viewId ->
             views.setImageViewResource(
                 viewId,
-                if (index < pawCount) R.drawable.ic_widget_paw_filled else R.drawable.ic_widget_paw_outline
+                if (index < pawCount) R.drawable.ic_widget_paw_mini_filled else R.drawable.ic_widget_paw_mini_outline
             )
         }
     }

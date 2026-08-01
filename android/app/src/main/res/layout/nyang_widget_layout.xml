@@ -136,7 +136,7 @@
             android:layout_width="20dp"
             android:layout_height="20dp"
             android:contentDescription="@null"
-            android:src="@drawable/ic_widget_paw_outline" />
+            android:src="@drawable/ic_widget_paw_mini_outline" />
 
         <ImageView
             android:id="@+id/mini_paw_2"
@@ -144,7 +144,7 @@
             android:layout_height="20dp"
             android:layout_marginStart="6dp"
             android:contentDescription="@null"
-            android:src="@drawable/ic_widget_paw_outline" />
+            android:src="@drawable/ic_widget_paw_mini_outline" />
 
         <ImageView
             android:id="@+id/mini_paw_3"
@@ -152,7 +152,7 @@
             android:layout_height="20dp"
             android:layout_marginStart="6dp"
             android:contentDescription="@null"
-            android:src="@drawable/ic_widget_paw_outline" />
+            android:src="@drawable/ic_widget_paw_mini_outline" />
 
         <ImageView
             android:id="@+id/mini_paw_4"
@@ -160,7 +160,7 @@
             android:layout_height="20dp"
             android:layout_marginStart="6dp"
             android:contentDescription="@null"
-            android:src="@drawable/ic_widget_paw_outline" />
+            android:src="@drawable/ic_widget_paw_mini_outline" />
 
         <ImageView
             android:id="@+id/mini_paw_5"
@@ -168,7 +168,7 @@
             android:layout_height="20dp"
             android:layout_marginStart="6dp"
             android:contentDescription="@null"
-            android:src="@drawable/ic_widget_paw_outline" />
+            android:src="@drawable/ic_widget_paw_mini_outline" />
     </LinearLayout>
 
     <!-- 일정이 없을 때: 한 줄 가운데 정렬.

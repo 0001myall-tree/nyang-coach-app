@@ -118,10 +118,6 @@ struct NyangProvider: TimelineProvider {
     }
 }
 
-private func truncatedScheduleTitle(_ title: String, limit: Int = 10) -> String {
-    title.count > limit ? String(title.prefix(limit)) + "…" : title
-}
-
 private let compactWidgetTitle = "냥냥코치 미니 위젯"
 private let compactWidgetDescription = "오늘 목표와 남은 할 일을 냥냥코치 위젯으로 확인합니다."
 private let compactWidgetAccent = Color(red: 0.55, green: 0.49, blue: 1.0)
@@ -192,12 +188,12 @@ struct NyangCharacterWidgetView: View {
         nyangCatImageName(for: entry)
     }
 
-    private var progressPercent: Int {
-        min(max(entry.progress, 0), 100)
-    }
-
     private var pawCount: Int {
         min(max(entry.characterPaws, 0), 5)
+    }
+
+    private var showsCompletionMessage: Bool {
+        min(max(entry.progress, 0), 100) >= 100
     }
 
     private var showsStatusRow: Bool {
@@ -260,7 +256,7 @@ struct NyangCharacterWidgetView: View {
 
             GeometryReader { proxy in
                 let metrics = makeMetrics(for: proxy.size)
-                let contentSpacing: CGFloat = showsMissYouMessage ? 14 : 13
+                let contentSpacing: CGFloat = (showsCompletionMessage || showsMissYouMessage) ? 14 : 13
 
                 ZStack(alignment: .bottomTrailing) {
                     HStack {
@@ -300,7 +296,15 @@ struct NyangCharacterWidgetView: View {
     @ViewBuilder
     private func widgetText(timeFontSize: CGFloat, titleFontSize: CGFloat) -> some View {
         Group {
-            if showsMissYouMessage {
+            if showsCompletionMessage {
+                Text("할 일 다했다냥!\n우리 집사가 최고!")
+                    .foregroundColor(.white)
+                    .font(.system(size: titleFontSize, weight: .bold, design: .rounded))
+                    .lineLimit(2)
+                    .lineSpacing(3)
+                    .multilineTextAlignment(.leading)
+                    .minimumScaleFactor(0.82)
+            } else if showsMissYouMessage {
                 Text("집사,\n보고싶다옹....")
                     .foregroundColor(.white)
                     .font(.system(size: titleFontSize, weight: .bold, design: .rounded))
@@ -324,11 +328,13 @@ struct NyangCharacterWidgetView: View {
                             .lineLimit(1)
                     }
 
-                    Text(truncatedScheduleTitle(entry.characterTitle))
+                    Text(entry.characterTitle.isEmpty ? "오늘도 한 걸음씩 가보자냥!" : entry.characterTitle)
                         .foregroundColor(.white)
                         .font(.system(size: titleFontSize, weight: .bold, design: .rounded))
-                        .lineLimit(1)
+                        .lineLimit(2)
+                        .lineSpacing(3)
                         .minimumScaleFactor(0.82)
+                        .truncationMode(.tail)
                 }
             } else {
                 Text(entry.characterTitle.isEmpty ? "오늘도 한 걸음씩 가보자냥!" : entry.characterTitle)
@@ -352,12 +358,6 @@ struct NyangCharacterWidgetView: View {
                     .frame(width: pawSize, height: pawSize)
                     .foregroundColor(index < pawCount ? .white : Color(red: 0.86, green: 0.83, blue: 1.0).opacity(0.26))
             }
-
-            Text("\(progressPercent)%")
-                .foregroundColor(Color(red: 0.78, green: 0.65, blue: 1.0))
-                .font(.system(size: pawSize * 0.72, weight: .bold, design: .rounded))
-                .lineLimit(1)
-                .padding(.leading, 6)
         }
     }
 }
@@ -369,8 +369,55 @@ struct NyangCompactWidgetView: View {
         !entry.scheduleTime.isEmpty && !entry.scheduleTitle.isEmpty
     }
 
+    private var miniPawCount: Int {
+        min(max(entry.characterPaws, 0), 5)
+    }
+
+    private var usesCompactSchedule: Bool {
+        hasTimedSchedule && entry.scheduleTitle.count <= 6
+    }
+
+    private var hasCoreTask: Bool {
+        !hasTimedSchedule &&
+        entry.characterKind == "core" &&
+        !entry.characterStatus.isEmpty &&
+        !entry.characterTitle.isEmpty
+    }
+
+    private var hasInProgressTask: Bool {
+        !hasTimedSchedule &&
+        !hasCoreTask &&
+        entry.characterKind == "in_progress" &&
+        !entry.characterStatus.isEmpty &&
+        !entry.characterTitle.isEmpty
+    }
+
+    private var usesCompactInProgress: Bool {
+        hasInProgressTask && entry.characterStatus.count <= 3
+    }
+
+    private var usesCompactLayout: Bool {
+        usesCompactSchedule || usesCompactInProgress
+    }
+
+    private var hasTwoLineText: Bool {
+        (hasTimedSchedule && !usesCompactSchedule) ||
+        hasCoreTask ||
+        (hasInProgressTask && !usesCompactInProgress)
+    }
+
     private var catImageName: String {
         nyangCatImageName(for: entry)
+    }
+
+    private var miniStatusIconName: String {
+        if hasCoreTask {
+            return "fa_star_solid"
+        }
+        if hasInProgressTask {
+            return "fa_arrows_rotate_solid"
+        }
+        return "fa_clock_solid"
     }
 
     var body: some View {
@@ -384,18 +431,19 @@ struct NyangCompactWidgetView: View {
             NyangCompactWidgetBackground()
 
             GeometryReader { proxy in
-                // 시간 일정이 있으면 시간/일정명을 두 줄로 쌓아 보여준다.
-                let textHeight: CGFloat = hasTimedSchedule ? 40 : 26
+                // Android 미니 위젯과 동일하게 짧은 일정/진행 중 상태는 한 줄,
+                // 긴 일정과 핵심 할 일은 두 줄로 배치한다.
+                let textHeight: CGFloat = hasTwoLineText ? 40 : 26
                 let topPadding: CGFloat = 4
                 let imageTextGap: CGFloat = 3
                 let bottomPadding: CGFloat = 18
                 let horizontalPadding = min(max(proxy.size.width * 0.08, 12), 16)
                 let textCenterY = proxy.size.height - bottomPadding - textHeight / 2
                 let imageAreaHeight = max(textCenterY - textHeight / 2 - imageTextGap - topPadding, 1)
-                // 냥냥이를 살짝 키우고(5%) 조금 아래로 내려서 텍스트와의
-                // 간격이 휑해 보이지 않게 한다. (이미지 여백 덕에 글자와는 안 겹침)
-                let imageSize = min(proxy.size.width * 0.96, imageAreaHeight * 1.05)
-                let imageCenterY = topPadding + imageSize / 2 + 2
+                let imageScale: CGFloat = hasTwoLineText ? 0.96 : (usesCompactLayout ? 1.08 : 1.05)
+                let imageSize = min(proxy.size.width * 0.96, imageAreaHeight * imageScale)
+                let imageCenterOffset: CGFloat = usesCompactLayout ? 10 : 2
+                let imageCenterY = topPadding + imageSize / 2 + imageCenterOffset
 
                 Image(catImageName, bundle: .main)
                     .renderingMode(.original)
@@ -412,7 +460,7 @@ struct NyangCompactWidgetView: View {
                 miniText
                     .frame(
                         maxWidth: .infinity,
-                        alignment: hasTimedSchedule ? .leading : .center
+                        alignment: hasTwoLineText ? .leading : .center
                     )
                     .frame(height: textHeight)
                     .padding(.horizontal, horizontalPadding)
@@ -429,30 +477,16 @@ struct NyangCompactWidgetView: View {
 
     private var miniText: some View {
         Group {
-            if hasTimedSchedule {
-                VStack(alignment: .leading, spacing: 3) {
-                    HStack(alignment: .center, spacing: 5) {
-                        Image("fa_clock_solid")
-                            .renderingMode(.template)
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 11, height: 11)
-                            .foregroundColor(Color(red: 0.63, green: 0.55, blue: 1.0))
-
-                        Text(entry.scheduleTime)
-                            .foregroundColor(compactWidgetAccent)
-                            .font(.system(size: 14, weight: .bold, design: .rounded))
-                            .lineLimit(1)
-                    }
-
-                    // 글자 수 대신 좌우 여백에 맞춰 자연스럽게 잘리고
-                    // 말줄임(…)이 붙도록 폭 기준으로 자른다.
-                    Text(entry.scheduleTitle)
-                        .foregroundColor(Color(red: 0.15, green: 0.14, blue: 0.16))
-                        .font(.system(size: 15, weight: .semibold, design: .rounded))
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                }
+            if hasTimedSchedule && usesCompactSchedule {
+                compactStatusText("\(entry.scheduleTime) \(entry.scheduleTitle)")
+            } else if hasTimedSchedule {
+                twoLineStatusText(status: entry.scheduleTime, title: entry.scheduleTitle)
+            } else if hasCoreTask {
+                twoLineStatusText(status: entry.characterStatus, title: entry.characterTitle)
+            } else if hasInProgressTask && usesCompactInProgress {
+                compactStatusText("\(entry.characterStatus) \(entry.characterTitle)")
+            } else if hasInProgressTask {
+                twoLineStatusText(status: entry.characterStatus, title: entry.characterTitle)
             } else if isAwayOverDay(entry) {
                 Text("집사 보고싶다옹...")
                     .foregroundColor(Color(red: 0.15, green: 0.14, blue: 0.16))
@@ -461,17 +495,63 @@ struct NyangCompactWidgetView: View {
                     .minimumScaleFactor(0.78)
                     .multilineTextAlignment(.center)
             } else {
-                (Text("남은 일정 ")
-                    .foregroundColor(Color(red: 0.15, green: 0.14, blue: 0.16))
-                 + Text("\(entry.remainingCount)")
-                    .foregroundColor(compactWidgetAccent)
-                 + Text("개")
-                    .foregroundColor(Color(red: 0.15, green: 0.14, blue: 0.16)))
-                    .font(.system(size: 18, weight: .semibold, design: .rounded))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.78)
-                    .multilineTextAlignment(.center)
+                miniPawProgressRow()
             }
+        }
+    }
+
+    private func miniPawProgressRow() -> some View {
+        HStack(alignment: .center, spacing: 6) {
+            ForEach(0..<5, id: \.self) { index in
+                Image(index < miniPawCount ? "fa_paw_solid" : "fa_paw_outline")
+                    .renderingMode(.template)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 20, height: 20)
+                    .foregroundColor(index < miniPawCount ? compactWidgetAccent : Color(red: 0.72, green: 0.68, blue: 1.0))
+            }
+        }
+    }
+
+    private func twoLineStatusText(status: String, title: String) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(alignment: .center, spacing: 5) {
+                Image(miniStatusIconName)
+                    .renderingMode(.template)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 11, height: 11)
+                    .foregroundColor(Color(red: 0.63, green: 0.55, blue: 1.0))
+
+                Text(status)
+                    .foregroundColor(compactWidgetAccent)
+                    .font(.system(size: 14, weight: .bold, design: .rounded))
+                    .lineLimit(1)
+            }
+
+            Text(title)
+                .foregroundColor(Color(red: 0.15, green: 0.14, blue: 0.16))
+                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                .lineLimit(1)
+                .truncationMode(.tail)
+        }
+    }
+
+    private func compactStatusText(_ text: String) -> some View {
+        HStack(alignment: .center, spacing: 5) {
+            Image(miniStatusIconName)
+                .renderingMode(.template)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 11, height: 11)
+                .foregroundColor(Color(red: 0.63, green: 0.55, blue: 1.0))
+
+            Text(text)
+                .foregroundColor(compactWidgetAccent)
+                .font(.system(size: 16, weight: .bold, design: .rounded))
+                .lineLimit(1)
+                .minimumScaleFactor(0.82)
+                .truncationMode(.tail)
         }
     }
 }
