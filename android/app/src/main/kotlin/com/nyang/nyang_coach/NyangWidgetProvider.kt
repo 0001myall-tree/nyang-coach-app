@@ -31,13 +31,15 @@ class NyangWidgetProvider : HomeWidgetProvider() {
                     characterKind == "in_progress" &&
                     characterStatus.isNotEmpty() &&
                     characterTitle.isNotEmpty()
+                val usesCompactInProgress = hasInProgressTask && characterStatus.length <= 3
+                val usesCompactLayout = usesCompactSchedule || usesCompactInProgress
 
                 val pawCount = NyangWidgetMood.readInt(widgetData, "character_widget_paws").coerceIn(0, 5)
 
                 setImageViewResource(R.id.mini_cat_image, NyangWidgetMood.catImageRes(widgetData))
                 setImageViewResource(R.id.mini_cat_image_compact, NyangWidgetMood.catImageRes(widgetData))
-                setViewVisibility(R.id.mini_cat_image_compact, if (usesCompactSchedule) View.VISIBLE else View.GONE)
-                setViewVisibility(R.id.mini_cat_image, if (usesCompactSchedule) View.GONE else View.VISIBLE)
+                setViewVisibility(R.id.mini_cat_image_compact, if (usesCompactLayout) View.VISIBLE else View.GONE)
+                setViewVisibility(R.id.mini_cat_image, if (usesCompactLayout) View.GONE else View.VISIBLE)
 
                 if (hasTimedSchedule) {
                     // 짧은 일정은 한 줄로 압축해 휑한 느낌을 줄이고,
@@ -47,6 +49,7 @@ class NyangWidgetProvider : HomeWidgetProvider() {
                     setViewVisibility(R.id.mini_info_text, View.GONE)
                     setViewVisibility(R.id.mini_paw_row, View.GONE)
                     setImageViewResource(R.id.mini_schedule_status_icon, R.drawable.ic_fa_clock)
+                    setImageViewResource(R.id.mini_schedule_compact_icon, R.drawable.ic_fa_clock)
                     setTextViewText(R.id.mini_schedule_time, scheduleTime)
                     setTextViewText(R.id.mini_schedule_title, scheduleTitle)
                     setTextViewText(R.id.mini_schedule_compact_text, "$scheduleTime $scheduleTitle")
@@ -59,13 +62,15 @@ class NyangWidgetProvider : HomeWidgetProvider() {
                     setTextViewText(R.id.mini_schedule_time, characterStatus)
                     setTextViewText(R.id.mini_schedule_title, characterTitle)
                 } else if (hasInProgressTask) {
-                    setViewVisibility(R.id.mini_schedule_block, View.VISIBLE)
-                    setViewVisibility(R.id.mini_schedule_compact_block, View.GONE)
+                    setViewVisibility(R.id.mini_schedule_block, if (usesCompactInProgress) View.GONE else View.VISIBLE)
+                    setViewVisibility(R.id.mini_schedule_compact_block, if (usesCompactInProgress) View.VISIBLE else View.GONE)
                     setViewVisibility(R.id.mini_info_text, View.GONE)
                     setViewVisibility(R.id.mini_paw_row, View.GONE)
                     setImageViewResource(R.id.mini_schedule_status_icon, R.drawable.ic_fa_rotate_widget)
+                    setImageViewResource(R.id.mini_schedule_compact_icon, R.drawable.ic_fa_rotate_widget)
                     setTextViewText(R.id.mini_schedule_time, characterStatus)
                     setTextViewText(R.id.mini_schedule_title, characterTitle)
+                    setTextViewText(R.id.mini_schedule_compact_text, "$characterStatus $characterTitle")
                 } else {
                     setViewVisibility(R.id.mini_schedule_block, View.GONE)
                     setViewVisibility(R.id.mini_schedule_compact_block, View.GONE)
@@ -78,8 +83,8 @@ class NyangWidgetProvider : HomeWidgetProvider() {
                     appWidgetManager,
                     widgetId,
                     this,
-                    hasTwoLineText = (hasTimedSchedule && !usesCompactSchedule) || hasCoreTask || hasInProgressTask,
-                    hasCompactTimedSchedule = usesCompactSchedule
+                    hasTwoLineText = (hasTimedSchedule && !usesCompactSchedule) || hasCoreTask || (hasInProgressTask && !usesCompactInProgress),
+                    hasCompactTimedSchedule = usesCompactLayout
                 )
 
                 val intentRemaining = Intent(context, MainActivity::class.java).apply {

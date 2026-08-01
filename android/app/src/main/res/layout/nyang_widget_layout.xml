@@ -97,6 +97,7 @@
         android:visibility="gone">
 
         <ImageView
+            android:id="@+id/mini_schedule_compact_icon"
             android:layout_width="12dp"
             android:layout_height="12dp"
             android:contentDescription="@null"
