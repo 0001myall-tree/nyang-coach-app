@@ -8,6 +8,8 @@
     <dimen name="cat_character_title_margin_top">4dp</dimen>
     <dimen name="cat_character_button_margin_top">12dp</dimen>
     <dimen name="cat_character_button_text_size">14sp</dimen>
+    <dimen name="cat_character_paw_size">25dp</dimen>
+    <dimen name="cat_character_percent_text_size">17sp</dimen>
     <dimen name="cat_character_image_size">150dp</dimen>
     <dimen name="cat_character_image_margin_end">10dp</dimen>
 </resources>

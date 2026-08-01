@@ -62,6 +62,15 @@ class WidgetSyncService {
     final remainingCount = remainingTasks.length;
     final totalCount = doneCount + remainingCount;
     final progress = totalCount == 0 ? 0.0 : doneCount / totalCount;
+    final progressInt = (progress * 100).round();
+    final characterDisplay = _characterWidgetDisplay(
+      prefs: prefs,
+      tasks: tasks,
+      allItems: allItems,
+      timedSchedule: timedSchedule,
+      remainingCount: remainingCount,
+      progressInt: progressInt,
+    );
 
     await syncData(
       progressPercentage: progress,
@@ -72,6 +81,10 @@ class WidgetSyncService {
       remainingTasksText: _buildTaskPreview(remainingTasks),
       widgetScheduleTime: timedSchedule?.time,
       widgetScheduleTitle: timedSchedule?.title,
+      characterWidgetKind: characterDisplay.kind,
+      characterWidgetStatus: characterDisplay.status,
+      characterWidgetTitle: characterDisplay.title,
+      characterWidgetPaws: _progressPawCount(progressInt),
     );
   }
 
@@ -118,6 +131,10 @@ class WidgetSyncService {
     required String remainingTasksText,
     String? widgetScheduleTime,
     String? widgetScheduleTitle,
+    String? characterWidgetKind,
+    String? characterWidgetStatus,
+    String? characterWidgetTitle,
+    int? characterWidgetPaws,
   }) async {
     await _configureIOSAppGroup();
     print(
@@ -165,6 +182,24 @@ class WidgetSyncService {
     await HomeWidget.saveWidgetData<String>(
       'widget_schedule_title',
       widgetScheduleTitle ?? '',
+    );
+    await HomeWidget.saveWidgetData<String>(
+      'character_widget_kind',
+      characterWidgetKind ?? 'cheer',
+    );
+    await HomeWidget.saveWidgetData<String>(
+      'character_widget_status',
+      characterWidgetStatus ?? '',
+    );
+    await HomeWidget.saveWidgetData<String>(
+      'character_widget_title',
+      characterWidgetTitle ?? '오늘도 한 걸음씩 가보자냥!',
+    );
+    await HomeWidget.saveWidgetData<int>(
+      'character_widget_paws',
+      (characterWidgetPaws ?? _progressPawCount(progressInt))
+          .clamp(0, 5)
+          .toInt(),
     );
 
     // Save coach-specific messages
@@ -271,13 +306,109 @@ class WidgetSyncService {
     return candidates.isEmpty ? null : candidates.first;
   }
 
+  static _CharacterWidgetDisplay _characterWidgetDisplay({
+    required SharedPreferences prefs,
+    required List<Map<String, dynamic>> tasks,
+    required List<Map<String, dynamic>> allItems,
+    required _WidgetScheduleItem? timedSchedule,
+    required int remainingCount,
+    required int progressInt,
+  }) {
+    if (timedSchedule != null) {
+      return _CharacterWidgetDisplay(
+        kind: 'timed',
+        status: timedSchedule.time,
+        title: timedSchedule.title,
+      );
+    }
+
+    final coreTask = _firstIncompleteCoreTask(prefs);
+    if (coreTask != null) {
+      return _CharacterWidgetDisplay(
+        kind: 'core',
+        status: '오늘의 핵심',
+        title: coreTask,
+      );
+    }
+
+    final inProgressTask = _firstInProgressTask(tasks);
+    if (inProgressTask != null) {
+      return _CharacterWidgetDisplay(
+        kind: 'in_progress',
+        status: inProgressTask,
+        title: '진행 중...',
+      );
+    }
+
+    if (remainingCount > 0 || allItems.isNotEmpty) {
+      return const _CharacterWidgetDisplay(
+        kind: 'core_prompt',
+        status: '',
+        title: '오늘의 핵심을 정해볼까냥?',
+      );
+    }
+
+    return _CharacterWidgetDisplay(
+      kind: 'cheer',
+      status: '',
+      title: _dailyCheerMessage(progressInt),
+    );
+  }
+
+  static String? _firstIncompleteCoreTask(SharedPreferences prefs) {
+    final rawCoreTasks = prefs.getString('nyang_core_tasks');
+    if (rawCoreTasks == null) return null;
+
+    try {
+      final decoded = jsonDecode(rawCoreTasks);
+      if (decoded is! List) return null;
+      for (final item in decoded) {
+        if (item is! Map || item['done'] == true) continue;
+        final title = _taskTitle(item);
+        if (title != null) return title;
+      }
+    } catch (_) {
+      return null;
+    }
+    return null;
+  }
+
+  static String? _firstInProgressTask(List<Map<String, dynamic>> tasks) {
+    for (final task in tasks) {
+      if (task['done'] == true || task['inProgress'] != true) continue;
+      final title = _taskTitle(task);
+      if (title != null) return title;
+    }
+    return null;
+  }
+
+  static String? _taskTitle(Map item) {
+    final title = item['text']?.toString().trim();
+    if (title == null || title.isEmpty) return null;
+    return title;
+  }
+
+  static int _progressPawCount(int progressInt) {
+    final progress = progressInt.clamp(0, 100);
+    if (progress >= 100) return 5;
+    return progress ~/ 20;
+  }
+
+  static String _dailyCheerMessage(int progressInt) {
+    const messages = ['오늘도 한 걸음씩 가보자냥!', '작은 실행도 충분하다냥.', '오늘도 응원하고 있다냥!'];
+    final now = DateTime.now();
+    return messages[(now.day + progressInt) % messages.length];
+  }
+
   static _WidgetScheduleItem? _scheduleCandidateFromMap(Map item) {
     if (item['done'] == true) return null;
 
     final title = item['text']?.toString().trim();
     if (title == null || title.isEmpty) return null;
 
-    final parsedTime = _parseStoredTime(item['timeStart']?.toString());
+    final parsedTime =
+        _parseStoredTime(item['timeStart']?.toString()) ??
+        _parseStoredTime(item['time']?.toString());
     if (parsedTime == null) return null;
 
     return _WidgetScheduleItem(
@@ -289,7 +420,33 @@ class WidgetSyncService {
 
   static _ParsedWidgetTime? _parseStoredTime(String? raw) {
     if (raw == null) return null;
-    final match = RegExp(r'^(\d{1,2}):(\d{1,2})$').firstMatch(raw.trim());
+    var source = raw.trim();
+    if (source.isEmpty) return null;
+
+    // "09:00 ~ 10:00"처럼 표시용 범위가 저장된 경우 시작 시간만 쓴다.
+    source = source.split(RegExp(r'\s*[~-]\s*')).first.trim();
+
+    final koreanMatch = RegExp(
+      r'^(오전|오후)\s*(\d{1,2})(?::|시\s*)?(\d{1,2})?',
+    ).firstMatch(source);
+    if (koreanMatch != null) {
+      final period = koreanMatch.group(1);
+      final parsedHour = int.tryParse(koreanMatch.group(2)!);
+      final minute = int.tryParse(koreanMatch.group(3) ?? '0');
+      if (parsedHour == null || minute == null) return null;
+      if (parsedHour < 1 || parsedHour > 12 || minute < 0 || minute > 59) {
+        return null;
+      }
+      var hour = parsedHour % 12;
+      if (period == '오후') hour += 12;
+      return _ParsedWidgetTime(
+        label:
+            '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}',
+        minutes: hour * 60 + minute,
+      );
+    }
+
+    final match = RegExp(r'^(\d{1,2}):(\d{1,2})$').firstMatch(source);
     if (match == null) return null;
 
     final hour = int.tryParse(match.group(1)!);
@@ -359,6 +516,18 @@ class _WidgetScheduleItem {
     required this.time,
     required this.title,
     required this.timeMinutes,
+  });
+}
+
+class _CharacterWidgetDisplay {
+  final String kind;
+  final String status;
+  final String title;
+
+  const _CharacterWidgetDisplay({
+    required this.kind,
+    required this.status,
+    required this.title,
   });
 }
 

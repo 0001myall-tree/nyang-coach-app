@@ -15,37 +15,42 @@ class CatCharacterWidgetProvider : HomeWidgetProvider() {
     override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray, widgetData: SharedPreferences) {
         appWidgetIds.forEach { widgetId ->
             val views = RemoteViews(context.packageName, R.layout.cat_character_widget_layout).apply {
-                val scheduleTime = widgetData.getString("widget_schedule_time", "")?.trim().orEmpty()
-                val scheduleTitle = widgetData.getString("widget_schedule_title", "")?.trim().orEmpty()
-                val hasTimedSchedule = scheduleTime.isNotEmpty() && scheduleTitle.isNotEmpty()
-
-                val remainingCount = NyangWidgetMood.readInt(widgetData, "remaining_count")
+                val displayKind = widgetData.getString("character_widget_kind", "cheer")?.trim().orEmpty()
+                val status = widgetData.getString("character_widget_status", "")?.trim().orEmpty()
+                val title = widgetData.getString("character_widget_title", "")?.trim().orEmpty()
                 val progress = NyangWidgetMood.readInt(widgetData, "progress").coerceIn(0, 100)
-                val hasNoTodayItems = remainingCount == 0 && progress == 0
+                val pawCount = NyangWidgetMood.readInt(widgetData, "character_widget_paws").coerceIn(0, 5)
+                val showsStatusRow = status.isNotEmpty() && (displayKind == "timed" || displayKind == "core" || displayKind == "in_progress")
+                val showsMissYouMessage = displayKind != "timed" && NyangWidgetMood.isAwayOverDay(widgetData)
 
-                // 시간 일정 없이 24시간 이상 미접속이면 "집사, 보고싶다옹...."을
-                // 띄우고 일정 보기 버튼을 숨긴다. (iOS 가로 위젯과 동일)
-                val showsMissYouMessage = !hasTimedSchedule && NyangWidgetMood.isAwayOverDay(widgetData)
-
-                if (hasTimedSchedule) {
-                    setViewVisibility(R.id.cat_character_time_row, View.VISIBLE)
-                    setTextViewText(R.id.cat_character_time, scheduleTime)
-                    setTextViewText(R.id.cat_character_text, scheduleTitle)
+                if (showsMissYouMessage) {
+                    setViewVisibility(R.id.cat_character_status_row, View.GONE)
+                    setViewVisibility(R.id.cat_character_paw_row, View.GONE)
+                    setTextViewText(R.id.cat_character_text, "집사,\n보고싶다옹....")
                 } else {
-                    setViewVisibility(R.id.cat_character_time_row, View.GONE)
+                    if (showsStatusRow) {
+                        setViewVisibility(R.id.cat_character_status_row, View.VISIBLE)
+                        setTextViewText(R.id.cat_character_status_text, status)
+                        setImageViewResource(
+                            R.id.cat_character_status_icon,
+                            when (displayKind) {
+                                "core" -> R.drawable.ic_fa_star_widget
+                                "in_progress" -> R.drawable.ic_fa_rotate_widget
+                                else -> R.drawable.ic_fa_clock
+                            }
+                        )
+                    } else {
+                        setViewVisibility(R.id.cat_character_status_row, View.GONE)
+                    }
+
                     setTextViewText(
                         R.id.cat_character_text,
-                        when {
-                            showsMissYouMessage -> "집사,\n보고싶다옹...."
-                            hasNoTodayItems -> WidgetTextFormatter.formatCharacterEmptyPrompt()
-                            else -> WidgetTextFormatter.formatCharacterRemainingCount(remainingCount, "#8B7CFF")
-                        }
+                        title.ifEmpty { "오늘도 한 걸음씩 가보자냥!" }
                     )
+                    setViewVisibility(R.id.cat_character_paw_row, View.VISIBLE)
+                    setPawProgress(this, pawCount, progress)
                 }
-                setViewVisibility(
-                    R.id.cat_character_button,
-                    if (showsMissYouMessage) View.GONE else View.VISIBLE
-                )
+
                 setImageViewResource(R.id.cat_character_image, NyangWidgetMood.catImageRes(widgetData))
 
                 val intent = Intent(context, MainActivity::class.java).apply {
@@ -65,5 +70,22 @@ class CatCharacterWidgetProvider : HomeWidgetProvider() {
             }
             appWidgetManager.updateAppWidget(widgetId, views)
         }
+    }
+
+    private fun setPawProgress(views: RemoteViews, pawCount: Int, progress: Int) {
+        val pawIds = intArrayOf(
+            R.id.cat_character_paw_1,
+            R.id.cat_character_paw_2,
+            R.id.cat_character_paw_3,
+            R.id.cat_character_paw_4,
+            R.id.cat_character_paw_5
+        )
+        pawIds.forEachIndexed { index, viewId ->
+            views.setImageViewResource(
+                viewId,
+                if (index < pawCount) R.drawable.ic_widget_paw_filled else R.drawable.ic_widget_paw_outline
+            )
+        }
+        views.setTextViewText(R.id.cat_character_progress_text, "$progress%")
     }
 }

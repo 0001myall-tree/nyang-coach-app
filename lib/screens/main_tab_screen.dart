@@ -138,9 +138,9 @@ bool isPlannerOverlayRoute(String? route) {
 
 int plannerOverlayTabIndexForRoute(String? route) {
   return switch (route) {
-    'schedule' || 'recurring_schedule' => 2,
+    'schedule' || 'recurring_schedule' => 1,
     'habit' => 3,
-    'vision' || 'milestone' => 1,
+    'vision' || 'milestone' => 2,
     _ => 0,
   };
 }
@@ -177,6 +177,10 @@ class MainTabScreen extends StatefulWidget {
 
 class _MainTabScreenState extends State<MainTabScreen>
     with TickerProviderStateMixin, WidgetsBindingObserver {
+  static const int _recordsFeedbackCacheVersion = 3;
+  static const String _recordsFeedbackSeenSignatureKey =
+      'nyang_records_feedback_seen_signature';
+
   late int _openDrawerIndex; // 0: 채팅, 1: 할일, 2: 기록, 3: 설정
   Map<String, dynamic>? _vacationInfo;
   late TabController _tabCtrl;
@@ -474,6 +478,7 @@ class _MainTabScreenState extends State<MainTabScreen>
   StreamSubscription? _reminderAudioSub;
   late String _chatBgStyle;
   bool _chatBgStyleLoaded = false;
+  bool _showRecordsNewBadge = false;
   StreamSubscription<User?>? _authSubscription;
 
   Future<void> _loadBgStyle() async {
@@ -483,6 +488,71 @@ class _MainTabScreenState extends State<MainTabScreen>
         _chatBgStyle = prefs.getString('nyang_chat_bg_style') ?? 'simple';
         _chatBgStyleLoaded = true;
       });
+    }
+  }
+
+  String _dateKey(DateTime date) {
+    return '${date.year.toString().padLeft(4, '0')}-'
+        '${date.month.toString().padLeft(2, '0')}-'
+        '${date.day.toString().padLeft(2, '0')}';
+  }
+
+  String _recordsFeedbackWeekMonday(SharedPreferences prefs) {
+    final lastDate = prefs.getString('nyang_last_date') ?? '';
+    final parts = lastDate.split('-');
+    DateTime baseDate;
+    if (parts.length >= 3) {
+      final y = int.tryParse(parts[0]) ?? DateTime.now().year;
+      final m = int.tryParse(parts[1]) ?? DateTime.now().month;
+      final d = int.tryParse(parts[2]) ?? DateTime.now().day;
+      baseDate = DateTime(y, m, d);
+    } else {
+      final now = DateTime.now();
+      baseDate = DateTime(now.year, now.month, now.day);
+      if (now.hour < 3) {
+        baseDate = baseDate.subtract(const Duration(days: 1));
+      }
+    }
+    final monday = baseDate.subtract(Duration(days: baseDate.weekday - 1));
+    return _dateKey(monday);
+  }
+
+  String _recordsFeedbackSignature(String weekMonday) {
+    return '$weekMonday:v$_recordsFeedbackCacheVersion';
+  }
+
+  Future<void> _refreshRecordsNewBadge({UserData? userData}) async {
+    final data = userData ?? await UserDataService.load();
+    final hasMasterPlan = data.isPlanActive && data.planType == 'master';
+    if (!hasMasterPlan) {
+      if (mounted && _showRecordsNewBadge) {
+        setState(() => _showRecordsNewBadge = false);
+      }
+      return;
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+    final signature = _recordsFeedbackSignature(
+      _recordsFeedbackWeekMonday(prefs),
+    );
+    final seenSignature = prefs.getString(_recordsFeedbackSeenSignatureKey);
+    final shouldShow = seenSignature != signature && _openDrawerIndex != 2;
+    if (mounted && _showRecordsNewBadge != shouldShow) {
+      setState(() => _showRecordsNewBadge = shouldShow);
+    }
+  }
+
+  Future<void> _markRecordsFeedbackSeen() async {
+    final data = await UserDataService.load();
+    if (!data.isPlanActive || data.planType != 'master') return;
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      _recordsFeedbackSeenSignatureKey,
+      _recordsFeedbackSignature(_recordsFeedbackWeekMonday(prefs)),
+    );
+    if (mounted && _showRecordsNewBadge) {
+      setState(() => _showRecordsNewBadge = false);
     }
   }
 
@@ -512,6 +582,10 @@ class _MainTabScreenState extends State<MainTabScreen>
     _startCoreReminderEngine();
     AnalyticsService.logAppOpen();
     _ensureCurrentCoachAccess();
+    unawaited(_refreshRecordsNewBadge());
+    if (_openDrawerIndex == 2) {
+      unawaited(_markRecordsFeedbackSeen());
+    }
     if (widget.openTasksOverlayOnStart) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
@@ -583,6 +657,7 @@ class _MainTabScreenState extends State<MainTabScreen>
     }
     final canContinue = await _ensureCurrentCoachAccess(syncCloud: _isMaster);
     if (canContinue) {
+      await _refreshRecordsNewBadge();
       await _checkWidgetIntent();
     }
   }
@@ -609,6 +684,7 @@ class _MainTabScreenState extends State<MainTabScreen>
     final canAccess = data.canAccessCoach(widget.coachId);
 
     if (canAccess) {
+      unawaited(_refreshRecordsNewBadge(userData: data));
       if (mounted && !_coachAccessChecked) {
         setState(() => _coachAccessChecked = true);
       }
@@ -639,12 +715,13 @@ class _MainTabScreenState extends State<MainTabScreen>
   void _openFeatureLocationFromChat(String location) {
     final taskTabByLocation = {
       'today': 0,
-      'goals': 1,
-      'schedule': 2,
+      'schedule': 1,
+      'goals': 2,
       'habit': 3,
     };
 
     if (location == 'records') {
+      unawaited(_markRecordsFeedbackSeen());
       setState(() {
         _openDrawerIndex = 2;
         _widgetIntentDrawerMode = false;
@@ -1321,6 +1398,8 @@ class _MainTabScreenState extends State<MainTabScreen>
     _gearIcon(active: true, color: _tabActiveColor),
   ];
 
+  List<bool> get _tabNewBadges => [false, false, _showRecordsNewBadge, false];
+
   bool get _isMaster => _isMasterCoach(widget.coachId);
 
   Color get _activeColor =>
@@ -1346,6 +1425,9 @@ class _MainTabScreenState extends State<MainTabScreen>
     }
     if (_openDrawerIndex == index) return;
     HapticFeedback.lightImpact();
+    if (index == 2) {
+      unawaited(_markRecordsFeedbackSeen());
+    }
     setState(() {
       _openDrawerIndex = index;
       _widgetIntentDrawerMode = false;
@@ -1513,6 +1595,7 @@ class _MainTabScreenState extends State<MainTabScreen>
               labels: _tabLabels,
               inactiveIcons: _inactiveIcons,
               activeIcons: _activeIcons,
+              showNewBadges: _tabNewBadges,
               activeColor: _activeColor,
               bgColor: isSimple
                   ? const Color(0xFFFFFCFF)
@@ -1667,6 +1750,7 @@ class _MainTabScreenState extends State<MainTabScreen>
         labels: _tabLabels,
         inactiveIcons: _inactiveIcons,
         activeIcons: _activeIcons,
+        showNewBadges: _tabNewBadges,
         activeColor: AppDesignTokens.brand, // 마스터도 활성은 연보라
         bgColor: isVacation ? Colors.black.withOpacity(0.35) : Colors.white,
         inactiveColor: isVacation
@@ -2257,6 +2341,7 @@ class _NyangBottomTabBar extends StatelessWidget {
   final List<String> labels;
   final List<Widget> inactiveIcons;
   final List<Widget> activeIcons;
+  final List<bool> showNewBadges;
   final Color activeColor;
   final Color bgColor;
   final Color inactiveColor;
@@ -2269,6 +2354,7 @@ class _NyangBottomTabBar extends StatelessWidget {
     required this.labels,
     required this.inactiveIcons,
     required this.activeIcons,
+    required this.showNewBadges,
     required this.activeColor,
     required this.bgColor,
     required this.inactiveColor,
@@ -2292,6 +2378,9 @@ class _NyangBottomTabBar extends StatelessWidget {
                   label: labels[i],
                   inactiveIcon: inactiveIcons[i],
                   activeIcon: activeIcons[i],
+                  showNewBadge: showNewBadges.length > i
+                      ? showNewBadges[i]
+                      : false,
                   isActive: isActive,
                   activeColor: activeColor,
                   inactiveColor: inactiveColor,
@@ -2324,6 +2413,7 @@ class _TabItem extends StatefulWidget {
   final String label;
   final Widget inactiveIcon;
   final Widget activeIcon;
+  final bool showNewBadge;
   final bool isActive;
   final Color activeColor;
   final Color inactiveColor;
@@ -2333,6 +2423,7 @@ class _TabItem extends StatefulWidget {
     required this.label,
     required this.inactiveIcon,
     required this.activeIcon,
+    required this.showNewBadge,
     required this.isActive,
     required this.activeColor,
     required this.inactiveColor,
@@ -2392,24 +2483,62 @@ class _TabItemState extends State<_TabItem>
           final color = widget.isActive
               ? widget.activeColor
               : widget.inactiveColor;
+          final icon = Transform.scale(
+            scale: _scale.value,
+            child: widget.isActive
+                ? ColorFiltered(
+                    colorFilter: ColorFilter.mode(
+                      widget.activeColor,
+                      BlendMode.srcIn,
+                    ),
+                    child: widget.inactiveIcon,
+                  )
+                : widget.inactiveIcon,
+          );
           return Opacity(
             opacity: _opacity.value,
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // 아이콘 (활성화 시 outlined 상태에서 색상만 변경)
-                Transform.scale(
-                  scale: _scale.value,
-                  child: widget.isActive
-                      ? ColorFiltered(
-                          colorFilter: ColorFilter.mode(
-                            widget.activeColor,
-                            BlendMode.srcIn,
+                Stack(
+                  clipBehavior: Clip.none,
+                  alignment: Alignment.center,
+                  children: [
+                    icon,
+                    if (widget.showNewBadge)
+                      Positioned(
+                        top: -10,
+                        right: -11,
+                        child: Container(
+                          width: 21,
+                          height: 21,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFE5391E),
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 1.5),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(
+                                  0xFFE5391E,
+                                ).withValues(alpha: 0.24),
+                                blurRadius: 8,
+                                offset: const Offset(0, 3),
+                              ),
+                            ],
                           ),
-                          child: widget
-                              .inactiveIcon, // Use inactive (outline) icon
-                        )
-                      : widget.inactiveIcon,
+                          alignment: Alignment.center,
+                          child: Text(
+                            '1',
+                            style: GoogleFonts.notoSansKr(
+                              fontSize: 12,
+                              height: 1,
+                              fontWeight: FontWeight.w900,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
                 const SizedBox(height: 2),
                 // 레이블

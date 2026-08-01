@@ -13224,13 +13224,17 @@ $timerOutputRule
   bool get _isSimpleChatBackground => widget.chatBgStyle == 'simple';
 
   Color get _quickChipBackgroundColor {
-    if (_coach.isMaster) return AppDesignTokens.brandSurface;
+    if (_coach.isMaster) {
+      return AppDesignTokens.brandChip.withValues(alpha: 0.86);
+    }
     if (_isSimpleChatBackground) return AppDesignTokens.brandChip;
     return Colors.white.withValues(alpha: 0.86);
   }
 
   Color get _quickChipBorderColor {
-    if (_coach.isMaster) return AppDesignTokens.brandCardBorder;
+    if (_coach.isMaster) {
+      return AppDesignTokens.brandCardBorder.withValues(alpha: 0.74);
+    }
     if (_isSimpleChatBackground) {
       return _coach.accentColor.withValues(alpha: 0.22);
     }
@@ -13238,7 +13242,7 @@ $timerOutputRule
   }
 
   Color get _quickChipForegroundColor {
-    if (_coach.isMaster) return AppDesignTokens.brandMuted;
+    if (_coach.isMaster) return AppDesignTokens.brandPressed;
     return _coach.accentColor;
   }
 
@@ -13246,6 +13250,20 @@ $timerOutputRule
     final shadowColor = _coach.isMaster
         ? AppDesignTokens.brand
         : _coach.accentColor;
+    if (_coach.isMaster) {
+      return [
+        BoxShadow(
+          color: shadowColor.withValues(alpha: 0.12),
+          blurRadius: 18,
+          offset: const Offset(0, 5),
+        ),
+        BoxShadow(
+          color: Colors.white.withValues(alpha: 0.55),
+          blurRadius: 8,
+          offset: const Offset(0, -1),
+        ),
+      ];
+    }
     return [
       BoxShadow(
         color: shadowColor.withValues(
@@ -13263,79 +13281,56 @@ $timerOutputRule
 
   Widget _buildMasterQuickChip(String chip) {
     final chipInk = _quickChipForegroundColor;
-    final icon = _chipIcon(chip, color: chipInk);
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () {
-          if (chip == '마음 비우고 시작' || chip == '마음 비우고 하게 해줘') {
-            _openCountdownFocusMode();
-            return;
-          }
-          if (_isNyangHalbaeSmallStartChip(chip)) {
-            _send(
-              _nyangHalbaeSmallStartChipLabel(truncateTaskName: false),
-              apiInputOverride: _nyangHalbaeSmallStartApiInput(),
-              masterModelPolicy: _MasterModelPolicy.forceGpt4oMini,
-            );
-            return;
-          }
-          if (_isRepeatedlyDeferredMasterChip(chip)) {
-            _send(
-              _masterDecisionChipLabel(truncateTaskName: false),
-              apiInputOverride: _repeatedlyDeferredMasterChipApiInput(),
-              masterModelPolicy: _MasterModelPolicy.forceGpt4oMini,
-            );
-            return;
-          }
-          if (_coach.id == 'nyang_halbae' && chip == '시작하기가 힘들어') {
-            _handleStartDifficultyChip();
-            return;
-          }
-          if (_coach.id == 'nyang_halbae' && chip == '완벽하게 못 해서 속상해') {
-            _handlePerfectionismDistressChip();
-            return;
-          }
-          if (chip == '수면 도우미' || chip == '잠이 안 와') {
-            _openSleepAssistMode();
-            return;
-          }
-          if (chip == '지금 뭐하지?') {
-            _send(
-              '지금 뭐하지?',
-              masterModelPolicy: _MasterModelPolicy.forceGpt4oMini,
-            );
-            return;
-          }
-          _send(chip, masterModelPolicy: _MasterModelPolicy.forceGpt4oMini);
-        },
-        borderRadius: BorderRadius.circular(15),
-        child: Container(
-          height: 40,
-          padding: const EdgeInsets.symmetric(horizontal: 15),
-          decoration: BoxDecoration(
-            color: _quickChipBackgroundColor.withValues(alpha: 0.96),
-            borderRadius: BorderRadius.circular(15),
-            border: Border.all(color: _quickChipBorderColor),
-            boxShadow: _quickChipShadow,
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (icon != null) ...[icon, const SizedBox(width: 7)],
-              Text(
-                chip,
-                style: GoogleFonts.notoSansKr(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w900,
-                  color: chipInk,
-                  letterSpacing: 0,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+    return AppChip(
+      label: chip,
+      icon: _chipIcon(chip, color: chipInk),
+      backgroundColor: _quickChipBackgroundColor,
+      foregroundColor: chipInk,
+      borderColor: _quickChipBorderColor,
+      boxShadow: _quickChipShadow,
+      fontSize: 12,
+      onTap: () {
+        if (chip == '마음 비우고 시작' || chip == '마음 비우고 하게 해줘') {
+          _openCountdownFocusMode();
+          return;
+        }
+        if (_isNyangHalbaeSmallStartChip(chip)) {
+          _send(
+            _nyangHalbaeSmallStartChipLabel(truncateTaskName: false),
+            apiInputOverride: _nyangHalbaeSmallStartApiInput(),
+            masterModelPolicy: _MasterModelPolicy.forceGpt4oMini,
+          );
+          return;
+        }
+        if (_isRepeatedlyDeferredMasterChip(chip)) {
+          _send(
+            _masterDecisionChipLabel(truncateTaskName: false),
+            apiInputOverride: _repeatedlyDeferredMasterChipApiInput(),
+            masterModelPolicy: _MasterModelPolicy.forceGpt4oMini,
+          );
+          return;
+        }
+        if (_coach.id == 'nyang_halbae' && chip == '시작하기가 힘들어') {
+          _handleStartDifficultyChip();
+          return;
+        }
+        if (_coach.id == 'nyang_halbae' && chip == '완벽하게 못 해서 속상해') {
+          _handlePerfectionismDistressChip();
+          return;
+        }
+        if (chip == '수면 도우미' || chip == '잠이 안 와') {
+          _openSleepAssistMode();
+          return;
+        }
+        if (chip == '지금 뭐하지?') {
+          _send(
+            '지금 뭐하지?',
+            masterModelPolicy: _MasterModelPolicy.forceGpt4oMini,
+          );
+          return;
+        }
+        _send(chip, masterModelPolicy: _MasterModelPolicy.forceGpt4oMini);
+      },
     );
   }
 
@@ -13343,11 +13338,11 @@ $timerOutputRule
     final List<Widget> items = [];
     for (final chip in _masterQuickChips) {
       items.add(_buildMasterQuickChip(chip));
-      items.add(const SizedBox(width: 12));
+      items.add(const SizedBox(width: 7));
     }
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.fromLTRB(16, 5, 16, 5),
+      padding: const EdgeInsets.fromLTRB(16, 7, 16, 7),
       child: Row(mainAxisSize: MainAxisSize.min, children: items),
     );
   }
@@ -13357,7 +13352,7 @@ $timerOutputRule
       return DecoratedBox(
         decoration: _quickChipRailDecoration,
         child: SizedBox(
-          height: 50,
+          height: 46,
           child: Align(
             alignment: Alignment.centerLeft,
             child: _buildMasterChipRow(),

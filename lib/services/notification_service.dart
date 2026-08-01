@@ -32,21 +32,26 @@ class NotificationService {
   static const int _morningCallRepeatCount = 3;
   static const int _maxScheduledCoreReminders = 50;
   static const Set<int> _coreReminderSoundMinutes = {10, 30};
-  static const int _inactiveReturnNotificationId = 889;
-  static const Duration _inactiveReturnDelay = Duration(days: 3);
-  static const Duration _inactiveReturnCooldown = Duration(days: 5);
+  static const int _dailyPlannerNudgeNotificationId = 889;
+  static const int _dailyPlannerNudgeHour = 12;
+  static const int _dailyPlannerNudgeMinute = 5;
   static const String _androidMorningChannelVersion = 'v10';
   static const String _androidCoreReminderChannelVersion = 'v4';
   static const String _androidPushChannelId = 'nyang_push_channel';
-  static const String _staleScheduleCleanupKey = 'nyang_stale_schedule_cleanup_v1';
+  static const String _staleScheduleCleanupKey =
+      'nyang_stale_schedule_cleanup_v1';
   static const String _androidFocusTimerChannelId =
       'nyang_focus_timer_channel_v3';
-  static const List<String> _inactiveReturnMessages = [
+  static const List<String> _dailyPlannerNudgeMessages = [
     '집사야, 오늘 뭐할지 하나만 같이 정해볼까?',
     '집사야, 하기 싫을 땐 냥냥코치를 기억해달라냥.',
     '집사야, 오늘 할 일 하나만 가볍게 골라보자냥.',
     '오늘 100점 말고 3분만 하자냥. 같이 시작해보자냥.',
     '하기 싫은 거 있으면 나한테 던져달라냥. 작게 줄여주겠다냥.',
+    '집사, 오늘 할 일 같이 정해볼까냥?',
+    '집사, 오늘 하루 냥이랑 가볍게 생각해볼까냥?',
+    '집사, 오늘 할 일을 함께 정해볼까냥?',
+    '집사, 냥이가 기다리고 있다냥. 1분이면 된다냥',
   ];
   String? _lastMorningPayload;
   DateTime? _lastMorningOpenedAt;
@@ -155,14 +160,14 @@ class NotificationService {
     }
   }
 
-  Future<void> _openInactiveReturn(String payload) async {
+  Future<void> _openDailyPlannerNudge(String payload) async {
     final parts = payload.split(':');
     final coachId = CoachIdService.normalize(
       parts.length > 1 && parts[1].isNotEmpty ? parts[1] : 'cat',
     );
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(
-      'nyang_inactive_return_last_opened_at',
+      'nyang_daily_planner_nudge_last_opened_at',
       DateTime.now().toIso8601String(),
     );
     await prefs.setString(
@@ -170,10 +175,14 @@ class NotificationService {
       DateTime.now().toIso8601String(),
     );
     await UserDataService.setSelectedCoach(coachId);
-    AnalyticsService.logFeatureUsage('inactive_return_push');
+    AnalyticsService.logFeatureUsage('daily_planner_nudge_push');
+    await recordPlannerOpened();
 
     navigatorKey.currentState?.pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => MainTabScreen(coachId: coachId)),
+      MaterialPageRoute(
+        builder: (_) =>
+            MainTabScreen(coachId: coachId, openTasksOverlayOnStart: true),
+      ),
       (route) => false,
     );
   }
@@ -217,8 +226,9 @@ class NotificationService {
           await _openMorningCall(payload);
           return;
         }
-        if (payload.startsWith('inactive_return:')) {
-          await _openInactiveReturn(payload);
+        if (payload.startsWith('daily_planner_nudge:') ||
+            payload.startsWith('inactive_return:')) {
+          await _openDailyPlannerNudge(payload);
         }
       },
     );
@@ -417,8 +427,9 @@ class NotificationService {
         _openCoreReminder(payload);
       } else if (payload.startsWith('morning:')) {
         _openMorningCall(payload);
-      } else if (payload.startsWith('inactive_return:')) {
-        _openInactiveReturn(payload);
+      } else if (payload.startsWith('daily_planner_nudge:') ||
+          payload.startsWith('inactive_return:')) {
+        _openDailyPlannerNudge(payload);
       }
     });
   }
@@ -430,32 +441,65 @@ class NotificationService {
       'nyang_last_app_active_at',
       DateTime.now().toIso8601String(),
     );
-    await _plugin.cancel(id: _inactiveReturnNotificationId);
+    await syncDailyPlannerNudge();
   }
 
-  Future<void> scheduleInactiveReturnReminder() async {
+  String _dateKey(DateTime date) {
+    return '${date.year.toString().padLeft(4, '0')}-'
+        '${date.month.toString().padLeft(2, '0')}-'
+        '${date.day.toString().padLeft(2, '0')}';
+  }
+
+  DateTime _nextPlannerNudgeTime(DateTime now) {
+    var scheduled = DateTime(
+      now.year,
+      now.month,
+      now.day,
+      _dailyPlannerNudgeHour,
+      _dailyPlannerNudgeMinute,
+    );
+    if (!scheduled.isAfter(now)) {
+      scheduled = DateTime(
+        now.year,
+        now.month,
+        now.day + 1,
+        _dailyPlannerNudgeHour,
+        _dailyPlannerNudgeMinute,
+      );
+    }
+    return scheduled;
+  }
+
+  Future<void> recordPlannerOpened() async {
+    if (kIsWeb) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      'nyang_last_planner_open_date',
+      _dateKey(DateTime.now()),
+    );
+    await syncDailyPlannerNudge();
+  }
+
+  Future<void> syncDailyPlannerNudge() async {
     if (kIsWeb) return;
 
     final now = DateTime.now();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('nyang_last_app_active_at', now.toIso8601String());
 
-    final lastOpenedRaw = prefs.getString(
-      'nyang_inactive_return_last_opened_at',
-    );
-    if (lastOpenedRaw != null) {
-      final lastOpened = DateTime.tryParse(lastOpenedRaw);
-      if (lastOpened != null &&
-          now.difference(lastOpened) < _inactiveReturnCooldown) {
-        await _plugin.cancel(id: _inactiveReturnNotificationId);
-        return;
-      }
+    final scheduled = _nextPlannerNudgeTime(now);
+    final scheduledDateKey = _dateKey(scheduled);
+    final lastPlannerOpenDate = prefs.getString('nyang_last_planner_open_date');
+    if (lastPlannerOpenDate == scheduledDateKey) {
+      await _plugin.cancel(id: _dailyPlannerNudgeNotificationId);
+      return;
     }
 
     const androidDetails = AndroidNotificationDetails(
-      'nyang_inactive_return_v1',
-      '냥냥코치 재방문 알림',
-      channelDescription: '며칠 동안 앱에 접속하지 않았을 때 냥냥코치가 안부를 전합니다.',
+      'nyang_daily_planner_nudge_v1',
+      '냥냥코치 플래너 알림',
+      channelDescription: '낮까지 플래너에 들어오지 않았을 때 냥냥코치가 가볍게 부릅니다.',
       importance: Importance.high,
       priority: Priority.high,
       playSound: true,
@@ -474,22 +518,19 @@ class NotificationService {
     );
 
     final message =
-        _inactiveReturnMessages[Random().nextInt(
-          _inactiveReturnMessages.length,
+        _dailyPlannerNudgeMessages[Random().nextInt(
+          _dailyPlannerNudgeMessages.length,
         )];
 
-    await _plugin.cancel(id: _inactiveReturnNotificationId);
+    await _plugin.cancel(id: _dailyPlannerNudgeNotificationId);
     await _plugin.zonedSchedule(
-      id: _inactiveReturnNotificationId,
+      id: _dailyPlannerNudgeNotificationId,
       title: '냥냥코치',
       body: message,
-      scheduledDate: tz.TZDateTime.from(
-        now.add(_inactiveReturnDelay),
-        tz.local,
-      ),
+      scheduledDate: tz.TZDateTime.from(scheduled, tz.local),
       notificationDetails: details,
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-      payload: 'inactive_return:cat',
+      payload: 'daily_planner_nudge:cat',
     );
   }
 

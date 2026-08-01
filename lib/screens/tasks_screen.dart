@@ -684,7 +684,7 @@ class _TasksScreenState extends State<TasksScreen>
     final initialPlannerDate = DateTime.tryParse(
       widget.initialPlannerDateKey ?? '',
     );
-    if (initialPlannerDate != null && widget.initialTabIndex == 2) {
+    if (initialPlannerDate != null && widget.initialTabIndex == 1) {
       _calSelectedDay = DateTime(
         initialPlannerDate.year,
         initialPlannerDate.month,
@@ -699,6 +699,7 @@ class _TasksScreenState extends State<TasksScreen>
     );
     _tabCtrl.addListener(_handleTaskTabChanged);
     widget.controller?._attach(this);
+    NotificationService().recordPlannerOpened();
     _loadAll().then((_) => _handleInitialPlannerTarget());
   }
 
@@ -864,7 +865,7 @@ class _TasksScreenState extends State<TasksScreen>
     if (_handledInitialPlannerTarget || !mounted) return;
     _handledInitialPlannerTarget = true;
 
-    if (widget.initialTabIndex == 1) {
+    if (widget.initialTabIndex == 2) {
       final visionId = _visionIdFromPlannerItemId(widget.initialPlannerItemId);
       if (visionId != null) {
         _openGoalVision(highlightVisionIds: [visionId]);
@@ -1009,7 +1010,7 @@ class _TasksScreenState extends State<TasksScreen>
         recurringOnly: true,
       );
       if (matches.isEmpty) {
-        _openTab(2);
+        _openTab(1);
         return _deleteCommandReply(
           'recurringNotFound',
           target,
@@ -1061,7 +1062,7 @@ class _TasksScreenState extends State<TasksScreen>
         ? _findScheduleMatches(target, dateKey: dateKey, recurringOnly: true)
         : _findTaskAndScheduleMatches(target, dateKey: dateKey);
     if (matches.isEmpty) {
-      _openTab(2);
+      _openTab(1);
       return _editCommandReply(
         kind == 'recurring_schedule' ? 'recurringNotFound' : 'notFound',
         target,
@@ -1395,7 +1396,7 @@ class _TasksScreenState extends State<TasksScreen>
       _calSelectedDay = targetDate;
       _calFocusedDay = targetDate;
     });
-    _openTab(2);
+    _openTab(1);
     await Future.delayed(const Duration(milliseconds: 360));
     if (!mounted) return;
     if (recurring || schedule.isRecurring) {
@@ -1429,7 +1430,7 @@ class _TasksScreenState extends State<TasksScreen>
       _calSelectedDay = targetDate;
       _calFocusedDay = targetDate;
     });
-    _openTab(2);
+    _openTab(1);
     await Future.delayed(const Duration(milliseconds: 360));
     if (!mounted) return;
     _showEditItemModal(
@@ -1458,8 +1459,8 @@ class _TasksScreenState extends State<TasksScreen>
 
   void _openGoalVision({List<String> highlightVisionIds = const []}) {
     if (!mounted) return;
-    if (_tabCtrl.index != 1) {
-      _tabCtrl.animateTo(1);
+    if (_tabCtrl.index != 2) {
+      _tabCtrl.animateTo(2);
     }
 
     Future.delayed(const Duration(milliseconds: 280), () async {
@@ -3770,15 +3771,15 @@ class _TasksScreenState extends State<TasksScreen>
                   : Colors.transparent,
               child: Column(
                 children: [
-                  // 탭바 (오늘 / 목표 / 일정 / 습관)
+                  // 탭바 (오늘 / 일정 / 목표 / 습관)
                   _buildTabBar(),
                   Expanded(
                     child: TabBarView(
                       controller: _tabCtrl,
                       children: [
                         _buildTodayTab(),
-                        _buildGoalTab(),
                         _buildScheduleTab(),
+                        _buildGoalTab(),
                         _buildHabitTab(),
                       ],
                     ),
@@ -4464,8 +4465,8 @@ class _TasksScreenState extends State<TasksScreen>
     final isVacation = _isViewingActualToday && vacationInfo != null;
     const tabs = [
       {'icon': Icons.assignment_outlined, 'label': '오늘'},
-      {'icon': Icons.track_changes_outlined, 'label': '목표'},
       {'icon': Icons.calendar_month_outlined, 'label': '일정'},
+      {'icon': Icons.track_changes_outlined, 'label': '목표'},
       {'icon': Icons.wb_sunny_outlined, 'label': '습관'},
     ];
     return Container(

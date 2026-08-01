@@ -9,6 +9,10 @@ struct NyangEntry: TimelineEntry {
     let scheduleTitle: String
     let remainingCount: Int
     let progress: Int
+    let characterKind: String
+    let characterStatus: String
+    let characterTitle: String
+    let characterPaws: Int
     let catMessage: String
     let isVacation: Bool
     let lastOpenedAt: Date?
@@ -61,6 +65,10 @@ struct NyangProvider: TimelineProvider {
             scheduleTitle: "운동",
             remainingCount: 2,
             progress: 34,
+            characterKind: "timed",
+            characterStatus: "17:00",
+            characterTitle: "운동",
+            characterPaws: 1,
             catMessage: "차근차근 간다냥!",
             isVacation: false,
             lastOpenedAt: Date()
@@ -83,6 +91,10 @@ struct NyangProvider: TimelineProvider {
         let scheduleTitle = defaults.string(forKey: "widget_schedule_title")?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let remainingCount = defaults.object(forKey: "remaining_count") as? Int ?? Int(defaults.string(forKey: "remaining_count") ?? "") ?? 0
         let progress = defaults.object(forKey: "progress") as? Int ?? Int(defaults.string(forKey: "progress") ?? "") ?? 0
+        let characterKind = defaults.string(forKey: "character_widget_kind")?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "cheer"
+        let characterStatus = defaults.string(forKey: "character_widget_status")?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let characterTitle = defaults.string(forKey: "character_widget_title")?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "오늘도 한 걸음씩 가보자냥!"
+        let characterPaws = defaults.object(forKey: "character_widget_paws") as? Int ?? Int(defaults.string(forKey: "character_widget_paws") ?? "") ?? 0
         let catMessage = defaults.string(forKey: "coach_message_cat") ?? "오늘도 시작해보자냥!"
         let isVacation = defaults.bool(forKey: "vacation_mode")
         let lastOpenedMillis = defaults.object(forKey: "last_opened_at") as? Double
@@ -95,6 +107,10 @@ struct NyangProvider: TimelineProvider {
             scheduleTitle: scheduleTitle,
             remainingCount: remainingCount,
             progress: progress,
+            characterKind: characterKind,
+            characterStatus: characterStatus,
+            characterTitle: characterTitle,
+            characterPaws: characterPaws,
             catMessage: catMessage,
             isVacation: isVacation,
             lastOpenedAt: lastOpenedAt
@@ -169,24 +185,43 @@ struct NyangCharacterWidgetView: View {
         let imageCenterYRatio: CGFloat
         let timeFontSize: CGFloat
         let titleFontSize: CGFloat
-    }
-
-    private var hasTimedSchedule: Bool {
-        !entry.scheduleTime.isEmpty && !entry.scheduleTitle.isEmpty
-    }
-
-    private var hasNoTodayItems: Bool {
-        entry.remainingCount == 0 && min(max(entry.progress, 0), 100) == 0
-    }
-
-    /// 시간 일정 없이 24시간 이상 미접속이라 "집사, 보고싶다옹...."을 띄우는 상태.
-    /// 이때는 일정 보기 버튼도 숨긴다.
-    private var showsMissYouMessage: Bool {
-        !hasTimedSchedule && isAwayOverDay(entry)
+        let pawSize: CGFloat
     }
 
     private var catImageName: String {
         nyangCatImageName(for: entry)
+    }
+
+    private var progressPercent: Int {
+        min(max(entry.progress, 0), 100)
+    }
+
+    private var pawCount: Int {
+        min(max(entry.characterPaws, 0), 5)
+    }
+
+    private var showsStatusRow: Bool {
+        !entry.characterStatus.isEmpty &&
+        (entry.characterKind == "timed" ||
+         entry.characterKind == "core" ||
+         entry.characterKind == "in_progress")
+    }
+
+    /// 시간 일정이 없는 상태로 24시간 이상 앱을 열지 않았을 때는
+    /// 정보형 발자국 대신 예전의 기다림 문구만 보여준다.
+    private var showsMissYouMessage: Bool {
+        entry.characterKind != "timed" && isAwayOverDay(entry)
+    }
+
+    private var statusIconName: String {
+        switch entry.characterKind {
+        case "core":
+            return "fa_star_solid"
+        case "in_progress":
+            return "fa_arrows_rotate_solid"
+        default:
+            return "fa_clock_solid"
+        }
     }
 
     private func makeMetrics(for size: CGSize) -> Metrics {
@@ -203,7 +238,8 @@ struct NyangCharacterWidgetView: View {
             imageTrailing: compact ? 30 : 42,
             imageCenterYRatio: 0.5,
             timeFontSize: compact ? 18 : 20,
-            titleFontSize: compact ? 16 : 18
+            titleFontSize: compact ? 16 : 18,
+            pawSize: compact ? 20 : 23
         )
     }
 
@@ -224,16 +260,17 @@ struct NyangCharacterWidgetView: View {
 
             GeometryReader { proxy in
                 let metrics = makeMetrics(for: proxy.size)
+                let contentSpacing: CGFloat = showsMissYouMessage ? 14 : 13
 
                 ZStack(alignment: .bottomTrailing) {
                     HStack {
-                        VStack(alignment: .leading, spacing: 14) {
+                        VStack(alignment: .leading, spacing: contentSpacing) {
                             widgetText(
                                 timeFontSize: metrics.timeFontSize,
                                 titleFontSize: metrics.titleFontSize
                             )
                             if !showsMissYouMessage {
-                                scheduleButton
+                                pawProgressRow(pawSize: metrics.pawSize)
                             }
                         }
                             .padding(.leading, metrics.textLeading)
@@ -263,83 +300,65 @@ struct NyangCharacterWidgetView: View {
     @ViewBuilder
     private func widgetText(timeFontSize: CGFloat, titleFontSize: CGFloat) -> some View {
         Group {
-            if hasTimedSchedule {
+            if showsMissYouMessage {
+                Text("집사,\n보고싶다옹....")
+                    .foregroundColor(.white)
+                    .font(.system(size: titleFontSize, weight: .bold, design: .rounded))
+                    .lineLimit(2)
+                    .lineSpacing(3)
+                    .multilineTextAlignment(.leading)
+                    .minimumScaleFactor(0.82)
+            } else if showsStatusRow {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(alignment: .center, spacing: 5) {
-                        Image("fa_clock_solid")
+                        Image(statusIconName)
                             .renderingMode(.template)
                             .resizable()
                             .scaledToFit()
                             .frame(width: timeFontSize * 0.78, height: timeFontSize * 0.78)
                             .foregroundColor(Color(red: 0.63, green: 0.55, blue: 1.0))
 
-                        Text(entry.scheduleTime)
+                        Text(entry.characterStatus)
                             .foregroundColor(Color(red: 0.55, green: 0.49, blue: 1.0))
                             .font(.system(size: timeFontSize, weight: .bold, design: .rounded))
                             .lineLimit(1)
                     }
 
-                    Text(truncatedScheduleTitle(entry.scheduleTitle))
+                    Text(truncatedScheduleTitle(entry.characterTitle))
                         .foregroundColor(.white)
                         .font(.system(size: titleFontSize, weight: .bold, design: .rounded))
                         .lineLimit(1)
                         .minimumScaleFactor(0.82)
                 }
             } else {
-                if isAwayOverDay(entry) {
-                    Text("집사,\n보고싶다옹....")
-                        .foregroundColor(.white)
-                        .font(.system(size: titleFontSize, weight: .bold, design: .rounded))
-                        .lineLimit(2)
-                        .lineSpacing(3)
-                        .multilineTextAlignment(.leading)
-                        .minimumScaleFactor(0.82)
-                } else if hasNoTodayItems {
-                    Text("집사야 오늘 뭐할까?")
-                        .foregroundColor(.white)
-                        .font(.system(size: titleFontSize, weight: .bold, design: .rounded))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.82)
-                } else {
-                    (Text("오늘 할 일 ")
-                        .foregroundColor(.white)
-                     + Text("\(entry.remainingCount)")
-                        .foregroundColor(Color(red: 0.55, green: 0.49, blue: 1.0))
-                     + Text("개 남음")
-                        .foregroundColor(.white))
-                        .font(.system(size: titleFontSize, weight: .bold, design: .rounded))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.82)
-                }
+                Text(entry.characterTitle.isEmpty ? "오늘도 한 걸음씩 가보자냥!" : entry.characterTitle)
+                    .foregroundColor(.white)
+                    .font(.system(size: titleFontSize, weight: .bold, design: .rounded))
+                    .lineLimit(2)
+                    .lineSpacing(3)
+                    .multilineTextAlignment(.leading)
+                    .minimumScaleFactor(0.82)
             }
         }
     }
 
-    private var scheduleButton: some View {
-        HStack(spacing: 7) {
-            Text("+")
-                .font(.system(size: 19, weight: .regular, design: .rounded))
-                .offset(y: -1)
+    private func pawProgressRow(pawSize: CGFloat) -> some View {
+        HStack(alignment: .center, spacing: 7) {
+            ForEach(0..<5, id: \.self) { index in
+                Image("fa_paw_solid")
+                    .renderingMode(.template)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: pawSize, height: pawSize)
+                    .foregroundColor(index < pawCount ? .white : Color(red: 0.86, green: 0.83, blue: 1.0).opacity(0.26))
+            }
 
-            Text("일정 보기")
-                .font(.system(size: 14, weight: .bold, design: .rounded))
+            Text("\(progressPercent)%")
+                .foregroundColor(Color(red: 0.78, green: 0.65, blue: 1.0))
+                .font(.system(size: pawSize * 0.72, weight: .bold, design: .rounded))
                 .lineLimit(1)
-                .minimumScaleFactor(0.82)
-
-            Text("›")
-                .font(.system(size: 22, weight: .bold, design: .rounded))
-                .offset(y: -1)
+                .padding(.leading, 6)
         }
-        .foregroundColor(.white)
-        .frame(width: 116, height: 32)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(Color.white.opacity(0.36), lineWidth: 1.4)
-                .background(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(Color.white.opacity(0.06))
-                )
-        )
     }
 }
 

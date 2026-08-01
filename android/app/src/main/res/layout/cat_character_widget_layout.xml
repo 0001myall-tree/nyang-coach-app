@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- iOS 가로 위젯(systemMedium)과 동일한 구성:
-     왼쪽에 시계+시간 / 일정명 / 일정 보기 버튼, 오른쪽에 냥냥이 얼굴. -->
+     왼쪽에 상태 / 일정명 / 완료율 발자국, 오른쪽에 냥냥이 얼굴. -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/cat_character_widget_root"
     android:layout_width="match_parent"
@@ -26,20 +26,21 @@
             android:orientation="vertical">
 
             <LinearLayout
-                android:id="@+id/cat_character_time_row"
+                android:id="@+id/cat_character_status_row"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:gravity="center_vertical"
                 android:orientation="horizontal">
 
                 <ImageView
+                    android:id="@+id/cat_character_status_icon"
                     android:layout_width="@dimen/cat_character_clock_size"
                     android:layout_height="@dimen/cat_character_clock_size"
                     android:contentDescription="@null"
                     android:src="@drawable/ic_fa_clock" />
 
                 <TextView
-                    android:id="@+id/cat_character_time"
+                    android:id="@+id/cat_character_status_text"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginStart="5dp"
@@ -65,22 +66,65 @@
                 android:textSize="@dimen/cat_character_title_text_size"
                 android:textStyle="bold" />
 
-            <TextView
-                android:id="@+id/cat_character_button"
+            <LinearLayout
+                android:id="@+id/cat_character_paw_row"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="@dimen/cat_character_button_margin_top"
-                android:background="@drawable/widget_btn_schedule"
-                android:includeFontPadding="false"
-                android:maxLines="1"
-                android:paddingStart="14dp"
-                android:paddingTop="7dp"
-                android:paddingEnd="14dp"
-                android:paddingBottom="7dp"
-                android:text="+  일정 보기  ›"
-                android:textColor="#FFFFFF"
-                android:textSize="@dimen/cat_character_button_text_size"
-                android:textStyle="bold" />
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <ImageView
+                    android:id="@+id/cat_character_paw_1"
+                    android:layout_width="@dimen/cat_character_paw_size"
+                    android:layout_height="@dimen/cat_character_paw_size"
+                    android:contentDescription="@null"
+                    android:src="@drawable/ic_widget_paw_outline" />
+
+                <ImageView
+                    android:id="@+id/cat_character_paw_2"
+                    android:layout_width="@dimen/cat_character_paw_size"
+                    android:layout_height="@dimen/cat_character_paw_size"
+                    android:layout_marginStart="7dp"
+                    android:contentDescription="@null"
+                    android:src="@drawable/ic_widget_paw_outline" />
+
+                <ImageView
+                    android:id="@+id/cat_character_paw_3"
+                    android:layout_width="@dimen/cat_character_paw_size"
+                    android:layout_height="@dimen/cat_character_paw_size"
+                    android:layout_marginStart="7dp"
+                    android:contentDescription="@null"
+                    android:src="@drawable/ic_widget_paw_outline" />
+
+                <ImageView
+                    android:id="@+id/cat_character_paw_4"
+                    android:layout_width="@dimen/cat_character_paw_size"
+                    android:layout_height="@dimen/cat_character_paw_size"
+                    android:layout_marginStart="7dp"
+                    android:contentDescription="@null"
+                    android:src="@drawable/ic_widget_paw_outline" />
+
+                <ImageView
+                    android:id="@+id/cat_character_paw_5"
+                    android:layout_width="@dimen/cat_character_paw_size"
+                    android:layout_height="@dimen/cat_character_paw_size"
+                    android:layout_marginStart="7dp"
+                    android:contentDescription="@null"
+                    android:src="@drawable/ic_widget_paw_outline" />
+
+                <TextView
+                    android:id="@+id/cat_character_progress_text"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="12dp"
+                    android:includeFontPadding="false"
+                    android:maxLines="1"
+                    android:text="0%"
+                    android:textColor="#C7A6FF"
+                    android:textSize="@dimen/cat_character_percent_text_size"
+                    android:textStyle="bold" />
+            </LinearLayout>
         </LinearLayout>
 
         <ImageView
