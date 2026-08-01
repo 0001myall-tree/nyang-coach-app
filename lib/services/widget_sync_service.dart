@@ -345,7 +345,7 @@ class WidgetSyncService {
       return const _CharacterWidgetDisplay(
         kind: 'core_prompt',
         status: '',
-        title: '오늘의 핵심을 정해볼까냥?',
+        title: '핵심 정해볼까냥?',
       );
     }
 
