@@ -401,11 +401,19 @@ struct NyangCompactWidgetView: View {
     }
 
     private var usesCompactInProgress: Bool {
-        hasInProgressTask && entry.characterStatus.count <= 3
+        hasInProgressTask && entry.characterTitle.count <= 5
     }
 
     private var usesCompactLayout: Bool {
-        usesCompactSchedule || usesCompactInProgress
+        usesCompactSchedule || usesCompactInProgress || showsCompletionText
+    }
+
+    private var showsCompletionText: Bool {
+        entry.progress >= 100 &&
+        !hasTimedSchedule &&
+        !hasCoreTask &&
+        !hasInProgressTask &&
+        !hasCorePrompt
     }
 
     private var hasTwoLineText: Bool {
@@ -504,6 +512,13 @@ struct NyangCompactWidgetView: View {
                     .multilineTextAlignment(.center)
             } else if isAwayOverDay(entry) {
                 Text("집사 보고싶다옹...")
+                    .foregroundColor(Color(red: 0.15, green: 0.14, blue: 0.16))
+                    .font(.system(size: 20, weight: .semibold, design: .rounded))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.78)
+                    .multilineTextAlignment(.center)
+            } else if showsCompletionText {
+                Text("다했다냥!")
                     .foregroundColor(Color(red: 0.15, green: 0.14, blue: 0.16))
                     .font(.system(size: 20, weight: .semibold, design: .rounded))
                     .lineLimit(1)

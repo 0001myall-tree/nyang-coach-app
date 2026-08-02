@@ -1294,6 +1294,7 @@ class _ChatScreenState extends State<ChatScreen>
       int completed = 0;
       final pendingChipCandidates = <Map<String, dynamic>>[];
       final repeatedlyDeferredCandidates = <Map<String, dynamic>>[];
+      final appointmentPrepCandidates = <Map<String, dynamic>>[];
 
       for (final item in list) {
         if (item is! Map) continue;
@@ -1305,6 +1306,9 @@ class _ChatScreenState extends State<ChatScreen>
           // 진행 중인 일도 후보엔 넣되, 정렬에서 맨 뒤로 밀린다.
           pendingChipCandidates.add(task);
           if (!_isInProgressTask(task)) {
+            if (_appointmentPrepChipTaskNameFor(task) != null) {
+              appointmentPrepCandidates.add(task);
+            }
             final deferredCount = (task['deferredCount'] as num?)?.toInt() ?? 0;
             if (deferredCount >= 2) {
               repeatedlyDeferredCandidates.add(task);
@@ -1318,16 +1322,25 @@ class _ChatScreenState extends State<ChatScreen>
           completed++;
         } else {
           pendingChipCandidates.add(milestone);
+          if (_appointmentPrepChipTaskNameFor(milestone) != null) {
+            appointmentPrepCandidates.add(milestone);
+          }
         }
       }
       _sortPendingTaskCandidates(pendingChipCandidates);
       String? resistanceChipTaskName;
-      Map<String, dynamic>? resistanceChipTask;
       for (final task in pendingChipCandidates) {
         final text = _taskText(task);
         if (text != null) {
           resistanceChipTaskName = text;
-          resistanceChipTask = task;
+          break;
+        }
+      }
+      _sortAppointmentPrepChipCandidates(appointmentPrepCandidates);
+      Map<String, dynamic>? appointmentPrepTask;
+      for (final task in appointmentPrepCandidates) {
+        if (_appointmentPrepChipTaskNameFor(task) != null) {
+          appointmentPrepTask = task;
           break;
         }
       }
@@ -1347,10 +1360,10 @@ class _ChatScreenState extends State<ChatScreen>
           _completedTasks = completed;
           _resistanceChipTaskName = resistanceChipTaskName;
           _appointmentPrepChipTaskName = _appointmentPrepChipTaskNameFor(
-            resistanceChipTask,
+            appointmentPrepTask,
           );
           _appointmentPrepChipTimeLabel = _appointmentPrepChipTimeLabelFor(
-            resistanceChipTask,
+            appointmentPrepTask,
           );
           _repeatedlyDeferredTaskName = repeatedlyDeferredTaskName;
         });
@@ -3078,6 +3091,24 @@ class _ChatScreenState extends State<ChatScreen>
       if (aTime.isNotEmpty && bTime.isNotEmpty) return aTime.compareTo(bTime);
       if (aTime.isNotEmpty) return -1;
       if (bTime.isNotEmpty) return 1;
+
+      final aText = _taskText(a) ?? '';
+      final bText = _taskText(b) ?? '';
+      return aText.length.compareTo(bText.length);
+    });
+  }
+
+  void _sortAppointmentPrepChipCandidates(List<Map<String, dynamic>> tasks) {
+    tasks.sort((a, b) {
+      final aTime = _taskTimeInMinutes(
+        a['timeStart']?.toString() ?? a['time']?.toString() ?? '',
+      );
+      final bTime = _taskTimeInMinutes(
+        b['timeStart']?.toString() ?? b['time']?.toString() ?? '',
+      );
+      if (aTime >= 0 && bTime >= 0 && aTime != bTime) {
+        return aTime.compareTo(bTime);
+      }
 
       final aText = _taskText(a) ?? '';
       final bText = _taskText(b) ?? '';
@@ -6376,10 +6407,61 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   String _completedMilestonePraise(List<String> names) {
+    if (CoachConfigs.isNyangHalbae(_coach.id)) {
+      if (names.length == 1) {
+        return '최근 일정이었던 ‘${names.first}’을 잘 마무리했구나. 중요한 매듭 하나를 넘긴 셈이다냥.';
+      }
+      return '최근 일정이었던 ${_quotedMilestoneNames(names)}를 잘 마무리했구나. 중요한 매듭들을 하나씩 넘기고 있다냥.';
+    }
     if (names.length == 1) {
       return '최근 일정이었던 ‘${names.first}’을 잘 마무리하셨네요. 중요한 단계를 잘 넘기셨어요.';
     }
     return '최근 일정이었던 ${_quotedMilestoneNames(names)}를 잘 마무리하셨네요. 중요한 단계들을 잘 넘기셨어요.';
+  }
+
+  String _noVisionMilestoneMessage() {
+    if (CoachConfigs.isNyangHalbae(_coach.id)) {
+      return '아직 적어둔 장기 비전이 없구나. 목표 탭에 장기 비전과 마일스톤 예정일을 하나 잡아두면, 길을 잃지 않게 같이 살펴두겠다냥.';
+    }
+    return '작성된 장기 비전이 없네요. 목표 탭에서 장기 비전과 마일스톤 예정일을 정해두시면 제가 챙겨드리겠습니다.';
+  }
+
+  String _noDatedMilestoneMessage() {
+    if (CoachConfigs.isNyangHalbae(_coach.id)) {
+      return '예정일이 잡힌 마일스톤이 아직 없구나. 중요한 비전 하나에 날짜를 붙여두면, 막연한 길도 조금 또렷해진다냥.';
+    }
+    return '예정일이 설정된 마일스톤이 없네요. 목표 탭에서 중요한 장기 비전의 마일스톤 예정일을 정해두시면 제가 챙겨드리겠습니다.';
+  }
+
+  String _milestoneStatusMessage({
+    required int overdueCount,
+    required int upcomingCount,
+    required List<String> overdueNames,
+    required List<String> upcomingNames,
+  }) {
+    if (CoachConfigs.isNyangHalbae(_coach.id)) {
+      if (overdueCount > 0 && upcomingCount > 0) {
+        return '예정일이 지난 마일스톤 $overdueCount개,\n일주일 안에 다가오는 마일스톤 $upcomingCount개가 있구나.\n\n목표 탭에서 한번 살펴보자냥.';
+      }
+      if (overdueCount > 0) {
+        return '예정일이 지난 마일스톤이\n$overdueCount개 있구나.\n\n${_quotedMilestoneNames(overdueNames)} 등을\n목표 탭에서 확인해보자냥.';
+      }
+      if (upcomingCount > 0) {
+        return '일주일 안에 다가오는 마일스톤이\n$upcomingCount개 있구나.\n\n${_quotedMilestoneNames(upcomingNames)} 등을\n목표 탭에서 확인해보자냥.';
+      }
+      return '지금 당장 확인이 필요한 마일스톤은 없구나. 길이 제법 잘 정리되어 있다냥.';
+    }
+
+    if (overdueCount > 0 && upcomingCount > 0) {
+      return '예정일이 지난 마일스톤 $overdueCount개,\n일주일 안에 예정된 마일스톤 $upcomingCount개가 있어요.\n\n목표 탭에서 확인해보시겠습니까?';
+    }
+    if (overdueCount > 0) {
+      return '예정일이 지난 마일스톤이\n$overdueCount개 있어요.\n\n${_quotedMilestoneNames(overdueNames)} 등을\n목표 탭에서 확인해보시겠습니까?';
+    }
+    if (upcomingCount > 0) {
+      return '일주일 안에 예정된 마일스톤이\n$upcomingCount개 있어요.\n\n${_quotedMilestoneNames(upcomingNames)} 등을\n목표 탭에서 확인해보시겠습니까?';
+    }
+    return '지금 확인이 필요한 마일스톤은 없어요. 일정이 잘 정리되어 있습니다.';
   }
 
   Future<_MilestoneCheckResult> _buildMilestoneCheckResult() async {
@@ -6433,16 +6515,15 @@ class _ChatScreenState extends State<ChatScreen>
     }
 
     if (!hasVision) {
-      return const _MilestoneCheckResult(
-        message: '작성된 장기 비전이 없네요. 목표 탭에서 장기 비전과 마일스톤 예정일을 정해두시면 제가 챙겨드리겠습니다.',
+      return _MilestoneCheckResult(
+        message: _noVisionMilestoneMessage(),
         needsDeadlineSetup: true,
       );
     }
 
     if (!hasDatedMilestone) {
       return _MilestoneCheckResult(
-        message:
-            '예정일이 설정된 마일스톤이 없네요. 목표 탭에서 중요한 장기 비전의 마일스톤 예정일을 정해두시면 제가 챙겨드리겠습니다.',
+        message: _noDatedMilestoneMessage(),
         needsDeadlineSetup: true,
         highlightVisionIds: visionIds,
       );
@@ -6463,21 +6544,14 @@ class _ChatScreenState extends State<ChatScreen>
 
     final overdueCount = overdue.length;
     final upcomingCount = upcoming.length;
-    if (overdueCount > 0 && upcomingCount > 0) {
-      lines.add(
-        '예정일이 지난 마일스톤 $overdueCount개,\n일주일 안에 예정된 마일스톤 $upcomingCount개가 있어요.\n\n목표 탭에서 확인해보시겠습니까?',
-      );
-    } else if (overdueCount > 0) {
-      lines.add(
-        '예정일이 지난 마일스톤이\n$overdueCount개 있어요.\n\n${_quotedMilestoneNames(overdue.map((item) => item.name).toList())} 등을\n목표 탭에서 확인해보시겠습니까?',
-      );
-    } else if (upcomingCount > 0) {
-      lines.add(
-        '일주일 안에 예정된 마일스톤이\n$upcomingCount개 있어요.\n\n${_quotedMilestoneNames(upcoming.map((item) => item.name).toList())} 등을\n목표 탭에서 확인해보시겠습니까?',
-      );
-    } else {
-      lines.add('지금 확인이 필요한 마일스톤은 없어요. 일정이 잘 정리되어 있습니다.');
-    }
+    lines.add(
+      _milestoneStatusMessage(
+        overdueCount: overdueCount,
+        upcomingCount: upcomingCount,
+        overdueNames: overdue.map((item) => item.name).toList(),
+        upcomingNames: upcoming.map((item) => item.name).toList(),
+      ),
+    );
 
     return _MilestoneCheckResult(
       message: lines.join('\n\n'),
@@ -13101,13 +13175,20 @@ $timerOutputRule
   }
 
   List<String> get _masterQuickChips {
+    final appointmentPrepChip = _appointmentPrepChipLabel(
+      truncateTaskName: true,
+    );
     final focusChip = _coach.id == 'nyang_halbae'
         ? _nyangHalbaeSmallStartChipLabel(truncateTaskName: true)
         : (_coach.id == 'sec_female'
-              ? _appointmentPrepChipLabel(truncateTaskName: true) ??
-                    '마음 비우고 하게 해줘'
+              ? appointmentPrepChip ?? '마음 비우고 하게 해줘'
               : '마음 비우고 하게 해줘');
-    final decisionChip = _masterDecisionChipLabel(truncateTaskName: true);
+    var decisionChip = _masterDecisionChipLabel(truncateTaskName: true);
+    if (_coach.id == 'nyang_halbae' &&
+        decisionChip == '지금 뭐하지?' &&
+        appointmentPrepChip != null) {
+      decisionChip = appointmentPrepChip;
+    }
     if (_coach.id == 'nyang_halbae') {
       if (_isNyangMorningStartChipTime) {
         return ['시작하기가 힘들어', focusChip, '오늘 핵심 정리해줘'];
@@ -13168,11 +13249,6 @@ $timerOutputRule
     if (_coach.id != 'cat' && _coach.id != 'boyfriend') return chip;
     if (chip != '하기 싫다' && chip != '하기 싫어') return chip;
 
-    final appointmentPrepChip = _appointmentPrepChipLabel(
-      truncateTaskName: truncateTaskName,
-    );
-    if (appointmentPrepChip != null) return appointmentPrepChip;
-
     final taskName = _resistanceChipTaskName?.trim();
     if (taskName == null || taskName.isEmpty) {
       if (_coach.id == 'boyfriend' && chip == '하기 싫어') {
@@ -13189,11 +13265,6 @@ $timerOutputRule
   static const String _nyangHalbaeSmallStartFallbackChip = '지금 조금만 해볼까?';
 
   String _nyangHalbaeSmallStartChipLabel({required bool truncateTaskName}) {
-    final appointmentPrepChip = _appointmentPrepChipLabel(
-      truncateTaskName: truncateTaskName,
-    );
-    if (appointmentPrepChip != null) return appointmentPrepChip;
-
     final taskName = _resistanceChipTaskName?.trim();
     if (taskName == null || taskName.isEmpty) {
       return _nyangHalbaeSmallStartFallbackChip;
@@ -13211,11 +13282,6 @@ $timerOutputRule
   }
 
   String _nyangHalbaeSmallStartApiInput() {
-    final appointmentPrepChip = _appointmentPrepChipLabel(
-      truncateTaskName: false,
-    );
-    if (appointmentPrepChip != null) return appointmentPrepChip;
-
     final taskName = _resistanceChipTaskName?.trim();
     if (taskName == null || taskName.isEmpty) {
       return '지금 할 일을 하기 싫어. 조금만 해볼까?';
@@ -13274,6 +13340,21 @@ $timerOutputRule
   }
 
   List<String> _displayChipsForCoach(List<String> chips) {
+    final appointmentPrepChip = _appointmentPrepChipLabel(
+      truncateTaskName: true,
+    );
+    if (appointmentPrepChip != null) {
+      final replacementChip = switch (_coach.id) {
+        'cat' => '오늘 뭐부터 할까',
+        'boyfriend' => '오늘 컨디션이 별로야',
+        _ => null,
+      };
+      if (replacementChip != null && chips.contains(replacementChip)) {
+        return chips
+            .map((chip) => chip == replacementChip ? appointmentPrepChip : chip)
+            .toList(growable: false);
+      }
+    }
     if (_coach.id != 'bro') return chips;
     if (!chips.contains('지금 할 운동')) return chips;
     final result = chips.where((chip) => chip != '지금 할 운동').toList();
@@ -13287,6 +13368,9 @@ $timerOutputRule
   }
 
   String _sendTextForChip(String chip, String fallback) {
+    if (_isAppointmentPrepChip(chip)) {
+      return _appointmentPrepChipLabel(truncateTaskName: false) ?? fallback;
+    }
     if (_coach.id == 'bro') {
       final workoutMessage = _broQuickWorkoutChipMessages[chip];
       if (workoutMessage != null) return workoutMessage;
@@ -13399,9 +13483,9 @@ $timerOutputRule
       foregroundColor: chipInk,
       borderColor: _quickChipBorderColor,
       boxShadow: _quickChipShadow,
-      fontSize: 12,
+      fontSize: AppDesignTokens.textBody,
       onTap: () {
-        if (_coach.id == 'sec_female' && _isAppointmentPrepChip(chip)) {
+        if (_coach.isMaster && _isAppointmentPrepChip(chip)) {
           _send(
             _appointmentPrepChipLabel(truncateTaskName: false) ?? chip,
             masterModelPolicy: _MasterModelPolicy.forceGpt4oMini,
@@ -13507,7 +13591,7 @@ $timerOutputRule
             foregroundColor: _quickChipForegroundColor,
             borderColor: _quickChipBorderColor,
             boxShadow: _quickChipShadow,
-            fontSize: 12,
+            fontSize: AppDesignTokens.textBody,
             onTap: () {
               if (chip == '오늘은 쉬어가기') {
                 _activateRestDay();

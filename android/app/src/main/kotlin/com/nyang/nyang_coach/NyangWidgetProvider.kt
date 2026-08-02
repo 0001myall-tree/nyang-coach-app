@@ -36,15 +36,21 @@ class NyangWidgetProvider : HomeWidgetProvider() {
                     !hasInProgressTask &&
                     characterKind == "core_prompt" &&
                     characterTitle.isNotEmpty()
-                val usesCompactInProgress = hasInProgressTask && characterStatus.length <= 3
+                val usesCompactInProgress = hasInProgressTask && characterTitle.length <= 5
                 val usesCompactLayout = usesCompactSchedule || usesCompactInProgress
 
+                val progress = NyangWidgetMood.readInt(widgetData, "progress").coerceIn(0, 100)
                 val pawCount = NyangWidgetMood.readInt(widgetData, "character_widget_paws").coerceIn(0, 5)
+                val showsCompletionText = progress >= 100 &&
+                    !hasTimedSchedule &&
+                    !hasCoreTask &&
+                    !hasInProgressTask &&
+                    !hasCorePrompt
 
                 setImageViewResource(R.id.mini_cat_image, NyangWidgetMood.catImageRes(widgetData))
                 setImageViewResource(R.id.mini_cat_image_compact, NyangWidgetMood.catImageRes(widgetData))
-                setViewVisibility(R.id.mini_cat_image_compact, if (usesCompactLayout) View.VISIBLE else View.GONE)
-                setViewVisibility(R.id.mini_cat_image, if (usesCompactLayout) View.GONE else View.VISIBLE)
+                setViewVisibility(R.id.mini_cat_image_compact, if (usesCompactLayout || showsCompletionText) View.VISIBLE else View.GONE)
+                setViewVisibility(R.id.mini_cat_image, if (usesCompactLayout || showsCompletionText) View.GONE else View.VISIBLE)
 
                 if (hasTimedSchedule) {
                     // 짧은 일정은 한 줄로 압축해 휑한 느낌을 줄이고,
@@ -85,9 +91,13 @@ class NyangWidgetProvider : HomeWidgetProvider() {
                 } else {
                     setViewVisibility(R.id.mini_schedule_block, View.GONE)
                     setViewVisibility(R.id.mini_schedule_compact_block, View.GONE)
-                    setViewVisibility(R.id.mini_info_text, View.GONE)
-                    setViewVisibility(R.id.mini_paw_row, View.VISIBLE)
-                    setMiniPawProgress(this, pawCount)
+                    setViewVisibility(R.id.mini_info_text, if (showsCompletionText) View.VISIBLE else View.GONE)
+                    setViewVisibility(R.id.mini_paw_row, if (showsCompletionText) View.GONE else View.VISIBLE)
+                    if (showsCompletionText) {
+                        setTextViewText(R.id.mini_info_text, "다했다냥!")
+                    } else {
+                        setMiniPawProgress(this, pawCount)
+                    }
                 }
                 WidgetResponsiveStyle.applyMini(
                     context,
@@ -95,7 +105,7 @@ class NyangWidgetProvider : HomeWidgetProvider() {
                     widgetId,
                     this,
                     hasTwoLineText = (hasTimedSchedule && !usesCompactSchedule) || hasCoreTask || (hasInProgressTask && !usesCompactInProgress),
-                    hasCompactTimedSchedule = usesCompactLayout
+                    hasCompactTimedSchedule = usesCompactLayout || showsCompletionText
                 )
 
                 val intentRemaining = Intent(context, MainActivity::class.java).apply {

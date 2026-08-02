@@ -336,8 +336,8 @@ class WidgetSyncService {
     if (inProgressTask != null) {
       return _CharacterWidgetDisplay(
         kind: 'in_progress',
-        status: inProgressTask,
-        title: '진행 중...',
+        status: '진행 중...',
+        title: inProgressTask,
       );
     }
 
