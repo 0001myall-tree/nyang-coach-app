@@ -192,13 +192,18 @@ struct NyangCharacterWidgetView: View {
         min(max(entry.characterPaws, 0), 5)
     }
 
+    private var showsCoreDoneMessage: Bool {
+        entry.characterKind == "core_done"
+    }
+
     private var showsCompletionMessage: Bool {
-        min(max(entry.progress, 0), 100) >= 100
+        entry.characterKind == "cheer" && min(max(entry.progress, 0), 100) >= 100
     }
 
     private var showsStatusRow: Bool {
         !entry.characterStatus.isEmpty &&
         (entry.characterKind == "timed" ||
+         entry.characterKind == "habit" ||
          entry.characterKind == "core" ||
          entry.characterKind == "in_progress")
     }
@@ -304,6 +309,13 @@ struct NyangCharacterWidgetView: View {
                     .lineSpacing(3)
                     .multilineTextAlignment(.leading)
                     .minimumScaleFactor(0.82)
+            } else if showsCoreDoneMessage {
+                Text("핵심 완료했다냥!")
+                    .foregroundColor(.white)
+                    .font(.system(size: titleFontSize, weight: .bold, design: .rounded))
+                    .lineLimit(1)
+                    .multilineTextAlignment(.leading)
+                    .minimumScaleFactor(0.82)
             } else if showsMissYouMessage {
                 Text("집사,\n보고싶다옹....")
                     .foregroundColor(.white)
@@ -392,10 +404,29 @@ struct NyangCompactWidgetView: View {
         !entry.characterTitle.isEmpty
     }
 
+    private var hasHabitTask: Bool {
+        !hasTimedSchedule &&
+        !hasCoreTask &&
+        !hasInProgressTask &&
+        entry.characterKind == "habit" &&
+        !entry.characterStatus.isEmpty &&
+        !entry.characterTitle.isEmpty
+    }
+
+    private var hasCoreDone: Bool {
+        !hasTimedSchedule &&
+        !hasCoreTask &&
+        !hasInProgressTask &&
+        !hasHabitTask &&
+        entry.characterKind == "core_done"
+    }
+
     private var hasCorePrompt: Bool {
         !hasTimedSchedule &&
         !hasCoreTask &&
         !hasInProgressTask &&
+        !hasHabitTask &&
+        !hasCoreDone &&
         entry.characterKind == "core_prompt" &&
         !entry.characterTitle.isEmpty
     }
@@ -404,22 +435,30 @@ struct NyangCompactWidgetView: View {
         hasInProgressTask && entry.characterTitle.count <= 5
     }
 
+    private var usesCompactHabit: Bool {
+        hasHabitTask && entry.characterTitle.count <= 6
+    }
+
     private var usesCompactLayout: Bool {
-        usesCompactSchedule || usesCompactInProgress || showsCompletionText
+        usesCompactSchedule || usesCompactInProgress || usesCompactHabit || hasCoreDone || showsCompletionText
     }
 
     private var showsCompletionText: Bool {
+        entry.characterKind == "cheer" &&
         entry.progress >= 100 &&
         !hasTimedSchedule &&
         !hasCoreTask &&
         !hasInProgressTask &&
+        !hasHabitTask &&
+        !hasCoreDone &&
         !hasCorePrompt
     }
 
     private var hasTwoLineText: Bool {
         (hasTimedSchedule && !usesCompactSchedule) ||
         hasCoreTask ||
-        (hasInProgressTask && !usesCompactInProgress)
+        (hasInProgressTask && !usesCompactInProgress) ||
+        (hasHabitTask && !usesCompactHabit)
     }
 
     private var catImageName: String {
@@ -503,6 +542,17 @@ struct NyangCompactWidgetView: View {
                 compactStatusText("\(entry.characterStatus) \(entry.characterTitle)")
             } else if hasInProgressTask {
                 twoLineStatusText(status: entry.characterStatus, title: entry.characterTitle)
+            } else if hasHabitTask && usesCompactHabit {
+                compactStatusText("\(entry.characterStatus) \(entry.characterTitle)")
+            } else if hasHabitTask {
+                twoLineStatusText(status: entry.characterStatus, title: entry.characterTitle)
+            } else if hasCoreDone {
+                Text("핵심 완료!")
+                    .foregroundColor(Color(red: 0.15, green: 0.14, blue: 0.16))
+                    .font(.system(size: 20, weight: .semibold, design: .rounded))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.78)
+                    .multilineTextAlignment(.center)
             } else if hasCorePrompt {
                 Text(entry.characterTitle)
                     .foregroundColor(Color(red: 0.15, green: 0.14, blue: 0.16))

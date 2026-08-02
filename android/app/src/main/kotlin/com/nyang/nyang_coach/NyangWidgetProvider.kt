@@ -31,20 +31,37 @@ class NyangWidgetProvider : HomeWidgetProvider() {
                     characterKind == "in_progress" &&
                     characterStatus.isNotEmpty() &&
                     characterTitle.isNotEmpty()
+                val hasHabitTask = !hasTimedSchedule &&
+                    !hasCoreTask &&
+                    !hasInProgressTask &&
+                    characterKind == "habit" &&
+                    characterStatus.isNotEmpty() &&
+                    characterTitle.isNotEmpty()
+                val hasCoreDone = !hasTimedSchedule &&
+                    !hasCoreTask &&
+                    !hasInProgressTask &&
+                    !hasHabitTask &&
+                    characterKind == "core_done"
                 val hasCorePrompt = !hasTimedSchedule &&
                     !hasCoreTask &&
                     !hasInProgressTask &&
+                    !hasHabitTask &&
+                    !hasCoreDone &&
                     characterKind == "core_prompt" &&
                     characterTitle.isNotEmpty()
                 val usesCompactInProgress = hasInProgressTask && characterTitle.length <= 5
-                val usesCompactLayout = usesCompactSchedule || usesCompactInProgress
+                val usesCompactHabit = hasHabitTask && characterTitle.length <= 6
+                val usesCompactLayout = usesCompactSchedule || usesCompactInProgress || usesCompactHabit || hasCoreDone
 
                 val progress = NyangWidgetMood.readInt(widgetData, "progress").coerceIn(0, 100)
                 val pawCount = NyangWidgetMood.readInt(widgetData, "character_widget_paws").coerceIn(0, 5)
-                val showsCompletionText = progress >= 100 &&
+                val showsCompletionText = characterKind == "cheer" &&
+                    progress >= 100 &&
                     !hasTimedSchedule &&
                     !hasCoreTask &&
                     !hasInProgressTask &&
+                    !hasHabitTask &&
+                    !hasCoreDone &&
                     !hasCorePrompt
 
                 setImageViewResource(R.id.mini_cat_image, NyangWidgetMood.catImageRes(widgetData))
@@ -82,6 +99,22 @@ class NyangWidgetProvider : HomeWidgetProvider() {
                     setTextViewText(R.id.mini_schedule_time, characterStatus)
                     setTextViewText(R.id.mini_schedule_title, characterTitle)
                     setTextViewText(R.id.mini_schedule_compact_text, "$characterStatus $characterTitle")
+                } else if (hasHabitTask) {
+                    setViewVisibility(R.id.mini_schedule_block, if (usesCompactHabit) View.GONE else View.VISIBLE)
+                    setViewVisibility(R.id.mini_schedule_compact_block, if (usesCompactHabit) View.VISIBLE else View.GONE)
+                    setViewVisibility(R.id.mini_info_text, View.GONE)
+                    setViewVisibility(R.id.mini_paw_row, View.GONE)
+                    setImageViewResource(R.id.mini_schedule_status_icon, R.drawable.ic_fa_clock)
+                    setImageViewResource(R.id.mini_schedule_compact_icon, R.drawable.ic_fa_clock)
+                    setTextViewText(R.id.mini_schedule_time, characterStatus)
+                    setTextViewText(R.id.mini_schedule_title, characterTitle)
+                    setTextViewText(R.id.mini_schedule_compact_text, "$characterStatus $characterTitle")
+                } else if (hasCoreDone) {
+                    setViewVisibility(R.id.mini_schedule_block, View.GONE)
+                    setViewVisibility(R.id.mini_schedule_compact_block, View.GONE)
+                    setViewVisibility(R.id.mini_info_text, View.VISIBLE)
+                    setViewVisibility(R.id.mini_paw_row, View.GONE)
+                    setTextViewText(R.id.mini_info_text, "핵심 완료!")
                 } else if (hasCorePrompt) {
                     setViewVisibility(R.id.mini_schedule_block, View.GONE)
                     setViewVisibility(R.id.mini_schedule_compact_block, View.GONE)
@@ -104,7 +137,7 @@ class NyangWidgetProvider : HomeWidgetProvider() {
                     appWidgetManager,
                     widgetId,
                     this,
-                    hasTwoLineText = (hasTimedSchedule && !usesCompactSchedule) || hasCoreTask || (hasInProgressTask && !usesCompactInProgress),
+                    hasTwoLineText = (hasTimedSchedule && !usesCompactSchedule) || hasCoreTask || (hasInProgressTask && !usesCompactInProgress) || (hasHabitTask && !usesCompactHabit),
                     hasCompactTimedSchedule = usesCompactLayout || showsCompletionText
                 )
 

@@ -930,6 +930,7 @@ class _ParsedReply {
   final int? timerConfirmMinutes;
   final String? timerConfirmTaskName;
   final String? visionSourceId;
+  final String? ultraLowResistanceFollowup;
   final bool startCountdown;
   final List<_SuggestedTask> suggestedTasks;
   _ParsedReply({
@@ -940,6 +941,7 @@ class _ParsedReply {
     this.timerConfirmMinutes,
     this.timerConfirmTaskName,
     this.visionSourceId,
+    this.ultraLowResistanceFollowup,
     this.startCountdown = false,
     List<_SuggestedTask>? suggestedTasks,
   }) : suggestedTasks = suggestedTasks ?? [];
@@ -1258,6 +1260,10 @@ class _ChatScreenState extends State<ChatScreen>
   bool _awaitingResistanceCause = false;
   // 카운트다운을 제안한 직후, 사용자의 동의 여부를 기다리는 상태
   bool _awaitingCountdownConsent = false;
+  // 반복 거부 뒤 사용자가 직접 고른 가장 작은 행동을 기다리는 상태
+  bool _awaitingSelfSelectedTinyAction = false;
+  // 무기력/저에너지 상태에서 몸 시동 행동 완료 여부를 기다리는 상태
+  bool _awaitingLowEnergyStarterAction = false;
   // 이번 턴에 주입한 원인 확인 질문 (실제로 물었을 때만 하루 1회를 소진 처리)
   String? _pendingDiagnosisQuestion;
 
@@ -1622,6 +1628,127 @@ class _ChatScreenState extends State<ChatScreen>
     return signals.any(normalized.contains);
   }
 
+  bool _containsSleepResistanceSignal(String text) {
+    final normalized = text.replaceAll(RegExp(r'\s+'), '').toLowerCase();
+    const signals = [
+      '자기싫',
+      '자기귀찮',
+      '잠들기싫',
+      '잠들기무서',
+      '잠이안와',
+      '잠안와',
+      '자러가기싫',
+      '자러가기귀찮',
+      '눕기싫',
+      '눕기귀찮',
+    ];
+    return signals.any(normalized.contains);
+  }
+
+  bool _containsDecisionFatigueSignal(String text) {
+    final normalized = text.replaceAll(RegExp(r'\s+'), '').toLowerCase();
+    const signals = [
+      '뭐부터',
+      '뭘먼저',
+      '뭘해야',
+      '뭐해야',
+      '무엇부터',
+      '못고르',
+      '못정하',
+      '정하지못',
+      '결정못',
+      '결정하기힘',
+      '결정하기어려',
+      '선택못',
+      '선택지가많',
+      '선택이너무많',
+      '어떻게해야할지모르',
+      '어떡해야할지모르',
+      '모르겠어뭘',
+      '고민돼',
+      '고민이많',
+    ];
+    return signals.any(normalized.contains);
+  }
+
+  bool _containsResultAnxietySignal(String text) {
+    final normalized = text.replaceAll(RegExp(r'\s+'), '').toLowerCase();
+    const signals = [
+      '실패할까봐',
+      '망할까봐',
+      '망할까봐무서',
+      '결과보는게무서',
+      '결과가무서',
+      '결과확인',
+      '결과보기무서',
+      '결과를보기무서',
+      '결과를확인하기무서',
+      '잘안될까봐',
+      '안될까봐',
+    ];
+    return signals.any(normalized.contains);
+  }
+
+  bool _containsLowEnergyStarterSignal(String text) {
+    final normalized = text.replaceAll(RegExp(r'\s+'), '').toLowerCase();
+    const signals = [
+      '무기력',
+      '기력이없',
+      '기운이없',
+      '에너지가없',
+      '에너지없',
+      '힘이없',
+      '몸에힘이없',
+      '축처',
+      '방전',
+      '완전방전',
+      '몸이안움직',
+      '일어날힘',
+      '누워만있',
+      '아무것도못하',
+    ];
+    return signals.any(normalized.contains);
+  }
+
+  bool _hasRepeatedRecentActionRefusal(String currentText) {
+    if (!ExecutionResistanceService.isResistanceExpression(currentText)) {
+      return false;
+    }
+
+    final recentMessages = _messages.length > 10
+        ? _messages.sublist(_messages.length - 10)
+        : _messages;
+    final recentUserResistanceCount = recentMessages
+        .where(
+          (message) =>
+              message.isUser &&
+              ExecutionResistanceService.isResistanceExpression(message.text),
+        )
+        .length;
+    if (recentUserResistanceCount < 2) return false;
+
+    final recentAssistantText = recentMessages
+        .where((message) => !message.isUser)
+        .map((message) => message.text.replaceAll(RegExp(r'\s+'), ''))
+        .join(' ');
+    const actionSuggestionSignals = [
+      '하나만',
+      '해보',
+      '하자',
+      '시작',
+      '5분',
+      '오분',
+      '옮겨',
+      '바라봐',
+      '잡아',
+      '열어',
+      '물틀',
+      '일어나',
+      '움직',
+    ];
+    return actionSuggestionSignals.any(recentAssistantText.contains);
+  }
+
   bool _containsExecutionIntent(String text) {
     final normalized = _normalizeRestText(text);
     if (normalized.contains('아무것도하기싫')) return false;
@@ -1713,6 +1840,21 @@ class _ChatScreenState extends State<ChatScreen>
   bool _containsSelfHarmRiskSignal(String text) {
     final normalized = text.replaceAll(RegExp(r'\s+'), '').toLowerCase();
     return normalized.contains('자살') || normalized.contains('자해');
+  }
+
+  bool _isSelfHarmRiskTurn(String userText) {
+    if (_containsSelfHarmRiskSignal(userText)) return true;
+    final recentAssistantMessages = _messages
+        .where((message) => !message.isUser)
+        .toList(growable: false)
+        .reversed
+        .take(3);
+    return recentAssistantMessages.any((message) {
+      final text = message.text.replaceAll(RegExp(r'\s+'), '');
+      return text.contains('스스로를해치거나목숨을끊을생각') ||
+          text.contains('구체적인계획이나준비해둔수단') ||
+          text.contains('지금119에전화');
+    });
   }
 
   Future<bool> _maybeOfferRest(String userText) async {
@@ -3711,6 +3853,9 @@ class _ChatScreenState extends State<ChatScreen>
     final coachSwitchRegex = RegExp(r'\[COACH_SWITCH:\s*([a-z_]+)\s*\]');
     final timerConfirmRegex = RegExp(r'\[TIMER_CONFIRM:(\d+)(?::([^\]]+))?\]');
     final countdownStartRegex = RegExp(r'\[COUNTDOWN_START\]');
+    final ultraLowResistanceFollowupRegex = RegExp(
+      r'\[ULTRA_LOW_RESISTANCE_FOLLOWUP:\s*([^\]]+)\]',
+    );
     final taskRegex = RegExp(r'\[TASK:\s*(.+?)\]');
     final visionSourceRegex = RegExp(r'\[VISION_SOURCE:\s*([^\]]+)\]');
     // CORE_REC 태그 파싱: [CORE_REC:{...}]
@@ -3721,6 +3866,7 @@ class _ChatScreenState extends State<ChatScreen>
     int? timerConfirmMinutes;
     String? timerConfirmTaskName;
     String? visionSourceId;
+    String? ultraLowResistanceFollowup;
     bool startCountdown = false;
     List<_SuggestedTask> suggestedTasks = [];
     String text = raw;
@@ -3790,6 +3936,19 @@ class _ChatScreenState extends State<ChatScreen>
       text = text.replaceAll(countdownStartRegex, '').trim();
     }
 
+    final ultraLowResistanceFollowupMatch = ultraLowResistanceFollowupRegex
+        .firstMatch(text);
+    if (ultraLowResistanceFollowupMatch != null) {
+      ultraLowResistanceFollowup = ultraLowResistanceFollowupMatch
+          .group(1)
+          ?.trim();
+      text = text
+          .replaceAll(ultraLowResistanceFollowupMatch.group(0)!, '')
+          .trim();
+      suppressDefaultChips = true;
+      chips = [];
+    }
+
     final visionSourceMatch = visionSourceRegex.firstMatch(text);
     if (visionSourceMatch != null) {
       visionSourceId = visionSourceMatch.group(1)?.trim();
@@ -3814,6 +3973,7 @@ class _ChatScreenState extends State<ChatScreen>
       timerConfirmMinutes = null;
       timerConfirmTaskName = null;
       startCountdown = false;
+      ultraLowResistanceFollowup = null;
       suggestedTasks = [];
     }
 
@@ -3825,6 +3985,7 @@ class _ChatScreenState extends State<ChatScreen>
       timerConfirmMinutes: timerConfirmMinutes,
       timerConfirmTaskName: timerConfirmTaskName,
       visionSourceId: visionSourceId,
+      ultraLowResistanceFollowup: ultraLowResistanceFollowup,
       startCountdown: startCountdown,
       suggestedTasks: suggestedTasks,
     );
@@ -8301,6 +8462,18 @@ class _ChatScreenState extends State<ChatScreen>
       }
       _scrollToBottom();
       await _saveHistory();
+      final followup = parsed.ultraLowResistanceFollowup;
+      if (followup != null && followup.isNotEmpty) {
+        await Future.delayed(const Duration(seconds: 3));
+        if (!mounted || widget.coachId != currentId) return;
+        setState(() {
+          _messages.add(
+            ChatMessage(text: followup, isUser: false, time: DateTime.now()),
+          );
+        });
+        _scrollToBottom();
+        await _saveHistory();
+      }
       if (_coach.isMaster && parsed.startCountdown && mounted) {
         _openCountdownFocusMode();
       }
@@ -8326,6 +8499,8 @@ class _ChatScreenState extends State<ChatScreen>
       // 응답을 못 받았으면 이번 턴에 잡아둔 실행 저항 흐름 상태는 흘려보낸다.
       _awaitingResistanceCause = false;
       _awaitingCountdownConsent = false;
+      _awaitingSelfSelectedTinyAction = false;
+      _awaitingLowEnergyStarterAction = false;
       _pendingDiagnosisQuestion = null;
       if (!mounted || widget.coachId != currentId) return;
       setState(() => _isLoading = false);
@@ -9850,6 +10025,28 @@ class _ChatScreenState extends State<ChatScreen>
     final resistanceTurnDirective = await _buildResistanceTurnDirective(
       userText,
     );
+    final isResistanceTurn = ExecutionResistanceService.isResistanceExpression(
+      userText,
+    );
+    final isSleepResistanceTurn = _containsSleepResistanceSignal(userText);
+    final isSelfHarmRiskTurn = _isSelfHarmRiskTurn(userText);
+    final isDecisionFatigueTurn = _containsDecisionFatigueSignal(userText);
+    final isLowEnergyStarterFollowup = _awaitingLowEnergyStarterAction;
+    _awaitingLowEnergyStarterAction = false;
+    final shouldOfferLowEnergyStarter =
+        _containsLowEnergyStarterSignal(userText) &&
+        !isLowEnergyStarterFollowup &&
+        !isSelfHarmRiskTurn &&
+        !isSleepResistanceTurn;
+    final isSelfSelectedTinyActionFollowup = _awaitingSelfSelectedTinyAction;
+    _awaitingSelfSelectedTinyAction = false;
+    final shouldInviteSelfSelectedTinyAction =
+        isResistanceTurn &&
+        !isSelfHarmRiskTurn &&
+        !shouldOfferLowEnergyStarter &&
+        !_containsResultAnxietySignal(userText) &&
+        !isSelfSelectedTinyActionFollowup &&
+        _hasRepeatedRecentActionRefusal(userText);
     // 시작 의식은 원인이 불명확할 때만 쓰는 장치라 마스터 코치에게만 흐름 규칙을 준다.
     final resistanceFlowRule = _coach.isMaster
         ? '''
@@ -9863,40 +10060,70 @@ class _ChatScreenState extends State<ChatScreen>
 - "마음 비우고 시작" 제안에 사용자가 동의했거나 사용자가 직접 요청한 경우에만, 짧게 한 문장으로 답한 뒤 답변 맨 끝에 [COUNTDOWN_START] 태그를 붙입니다. 코치가 먼저 붙이지 않습니다.
 - 원인 확인 질문은 하루에 한 번만 합니다. 이미 물어본 날에는 다시 묻지 말고 바로 작은 실행 제안으로 연결해 대화가 길어지지 않게 합니다.'''
         : '';
-
-    final customTitle = await UserTitleService.getTitle();
-    // 최종 조립된 프롬프트 전체에 호칭 치환을 한 번에 적용하므로
-    // (systemPromptWithChips), 여기서는 원문 프롬프트를 그대로 사용한다.
-    final baseSystemPrompt = _coach.systemPrompt;
-
-    final useVisionNewActionContext = userText == '미래를 위한 오늘 - 새 행동 추천받기';
-    final contextString = useVisionNewActionContext
-        ? await _buildVisionNewActionContextString()
-        : await _buildContextString(userText);
-    final timerOutputRule = _coach.isMaster
-        ? '''4. [TIMER_START] 태그는 절대 사용 금지.
-   - 사용자가 직접 "타이머 띄워줘", "15분 타이머 켜줘"처럼 명시적으로 요청한 경우에는 짧게 응답한 뒤 [TIMER_CONFIRM:분] 태그를 붙입니다. 시간이 없으면 15분을 기본값으로 사용합니다.
-   - 직전 답변에서 타이머가 필요한지 현재 코치의 말투로 물었고 사용자가 동의했다면 [TIMER_CONFIRM:분:할일이름]을 출력합니다.
-   - 코치가 먼저 [TIMER_CONFIRM] 태그를 출력하지 마세요. 코치가 먼저 권하는 장치는 타이머가 아니라 "마음 비우고 시작"입니다. [오늘 할 일 현황]에 "앱 기록상 미루기 2회 이상"으로 표시된 미완료 할 일을 사용자가 계속 시작하지 못하면, 짧게 공감한 뒤 현재 코치의 말투로 "마음 비우고 시작"을 제안하세요. [COUNTDOWN_START] 태그는 사용자가 동의한 다음 턴에만 붙입니다.'''
-        : '''4. [TIMER_START] 태그는 절대 사용 금지. [TIMER_CONFIRM]은 사용자가 직접 "타이머 띄워줘", "15분 타이머 켜줘", "집중모드 시작해줘"처럼 타이머 실행을 명시적으로 요청한 경우에만 붙입니다. 시간이 없으면 15분을 기본값으로 사용합니다. 구체적인 과업이 있어도 타이머로 바로 넘어가지 말고 기존 코칭 프롬프트를 따르세요. 코치가 먼저 타이머를 제안할 때는 말로만 "필요하면 말해"라고 하고 [TIMER_CONFIRM] 태그를 붙이지 마세요.''';
-    // 냥냥이 연결(COACH_SWITCH)은 장기 목표 압박을 주는 마스터 코치(냥할배/여비서) 전용 탈출구다.
-    // 프렌즈 코치는 이미 압박 없는 오늘 하루 중심이라 서로 스위치될 이유가 없다.
-    final coachSwitchRule = _coach.isMaster
+    final resistanceStrategyDetailRule = isResistanceTurn
         ? '''
-   사용자가 우울함, 무기력함, 감정적 고통을 토로하고 그 감정이 2회 이상 반복되거나 깊어지고 있다면, 냥냥코치가 사용자를 걱정하고 있다는 뉘앙스로 자연스럽게 연결하세요. 팀으로서 함께 챙기는 느낌을 주되, 현재 코치의 말투를 반드시 유지하세요. 답변 끝에 [COACH_SWITCH:cat]만 붙이세요. 단 한 번의 가벼운 감정 표현에는 붙이지 마세요.'''
+- 사용자가 "망할까 봐 무섭다", "결과 보는 게 무섭다", "실패할까 봐 시작을 못 하겠다"처럼 결과 확인을 두려워하면, 단순히 "작게 시작해보자"로 바로 밀지 마세요. 먼저 "결과를 보는 게 무서운 상황"임을 한 문장으로 받아준 뒤, 결과를 사용자에 대한 평가가 아니라 다음 행동을 정하기 위한 작은 테스트/검증 데이터로 바라보게 도와주세요.
+- 이때 핵심은 "실패해도 괜찮다"로 포장하는 것이 아니라, "작게 테스트하면 큰 실패를 피할 수 있다"입니다. 성공/실패 판정보다 작은 테스트, 작은 검증, 참고 결과 하나 얻기를 목표로 잡게 하세요.
+- 결과 불안 대응에서는 큰 결론을 내리게 하지 말고, 잃을 것이 적은 확인 단위 하나만 제안하세요. 예: "오늘 목표는 성공이 아니라 참고 결과 하나 얻기", "작게 확인하면 아쉬운 결과가 나와도 손실은 작고 다음 조정이 쉬워진다"는 방향. 단, 문장을 그대로 베끼지 말고 현재 코치의 말투로 자연스럽게 바꾸세요.
+- 사용자가 "하기 싫다", "귀찮다", "기력이 없다", "몸이 안 움직인다"는 말을 반복하거나, 아주 작은 행동 제안에도 계속 거부하는 등 실행 저항이 매우 커 보이면 [초저항 시작 모드]를 사용하세요. 단, 결과 불안형 저항에는 이 모드를 쓰지 말고 위의 결과 불안 대응을 우선하세요.
+- [초저항 시작 모드]의 1순위는 행동이 아니라 화면 밖 현실 공간으로 시선을 옮기는 것입니다. 첫 말풍선에는 행동 제안을 넣지 말고, "지금은 하려고 하지 말고 화면 밖으로 시선만 옮기기 → 주변에서 가장 거슬리는 물건/지점 하나 찾기 → 숨을 한 번 내쉬기 → 3초만 바라보기"까지만 현재 코치 말투로 짧게 안내하세요.
+- 사용자가 특정 행동을 언급했다면, 시선 이동 대상은 그 행동과 연결된 현실 단서로 잡으세요.
+- [초저항 시작 모드]에서 마지막 행동 제안은 본문에 쓰지 말고, 답변 끝에 [ULTRA_LOW_RESISTANCE_FOLLOWUP: 후속문장] 태그로 분리하세요. 후속문장에는 "가능하면 생각 더 붙이지 말고 그 하나만 제자리로 옮기기/만져보기/첫 동작만 하기"처럼 가장 작은 행동 하나만 현재 코치 말투로 넣으세요. 앱이 이 태그를 3초 뒤 별도 코치 말풍선으로 보여줍니다.
+- [ULTRA_LOW_RESISTANCE_FOLLOWUP] 태그는 사용자에게 보이지 않는 시스템 태그입니다. 태그 안 문장은 1문장만 쓰고, 대괄호 ']'를 포함하지 마세요. 이 태그를 쓰는 턴에는 앱이 빠른 답장 버튼을 숨기므로 첫 말풍선이 너무 길어지지 않게 하세요.'''
         : '';
-    final masterStyleRule = _coach.id == 'nyang_halbae'
+    final selfSelectedTinyActionRule = shouldInviteSelfSelectedTinyAction
         ? '''
 
-[냥할배 말투 우선 규칙]
-- 아래 공통 지침에 존댓말 표현이나 비서식 표현이 있더라도, 최종 답변은 반드시 냥할배의 반말 기반 말투로 바꾼다.
-- "추천드립니다", "말씀해 주세요", "확인해 주세요", "하시죠", "해볼까요", "도와드리겠습니다"처럼 높임말과 냥 말투를 섞지 않는다.
-- 행동 추천은 "지금은 운동 30분이 괜찮겠구나냥", "이것부터 잡아보자냥"처럼 말한다.'''
+[자기선택 최소 행동 모드]
+- 이 모드는 사용자가 작은 행동 제안도 반복해서 거부할 때만 적용합니다. 이 턴에서는 코치가 행동을 더 정해주며 밀어붙이지 말고, 사용자가 가장 쉬워 보이는 행동을 고르게 하세요.
+- 먼저 "내가 제안한 것도 지금은 부담스럽구나"처럼 코치의 제안 자체가 부담이었음을 짧게 공감하세요. 현재 코치 말투로 자연스럽게 바꾸되, 사용자가 의지가 없다고 평가하지 마세요.
+- 완전 자유형 질문은 피하세요. 사용자가 새 행동을 창의적으로 생각해야 하면 인지 부담이 생기므로, 현재 상황과 사용자가 언급한 행동에 맞는 아주 쉬운 선택지 2개와 "기타"를 빠른 답장으로 제시하세요.
+- 선택지는 항상 그 행동과 연결된 현실 단서나 첫 진입 동작이어야 합니다. 청소·정리 맥락이면 "물건 3초 보기", 샤워 맥락이면 "욕실 앞에 서기"나 "물 틀기", 공부·작업 맥락이면 "파일 열기"나 "제목만 보기"처럼 상황에 맞게 바꾸세요. 특정 맥락이 없을 때만 "자리에서 일어나기", "화면 밖 보기", "손 하나 움직이기"처럼 범용 선택지를 쓰세요.
+- 단, 직전 코치 답변에서 이미 "3초 보기", "바라보기", "쳐다보기", "화면 밖 보기"처럼 보기/시선 이동 계열을 제안했는데 사용자가 거부한 경우에는 이번 선택지에서 보기 계열 후보를 제외하세요. 그 대신 손 대기, 앞에 서기, 열기, 켜기, 한 번 누르기처럼 다른 감각이나 첫 동작 후보를 제시하세요.
+- 답변 끝에 반드시 [CHIPS: 선택지1|선택지2|기타] 형식으로 붙이세요. 선택지 문구는 짧게 유지하고, 물건 관련 선택지를 모든 상황에 고정하지 마세요.
+- 본문에서는 "그럼 이 중에서 지금 제일 쉬운 것 하나만 골라볼래?"처럼 제한된 선택지를 고르게 하세요. 설득·분석·목표 설명·추가 행동 제안은 붙이지 마세요.'''
+        : isSelfSelectedTinyActionFollowup
+        ? '''
+
+[자기선택 최소 행동 후속]
+- 직전 턴에서 사용자가 제한된 선택지 중 가장 쉬운 행동을 고르도록 물었습니다.
+- 사용자가 선택지나 직접 고른 작은 행동을 말하면, 그 행동을 오늘의 유일한 목표로 확정하고 지지하세요. 다음 단계는 행동을 한 뒤에 같이 생각하자고만 말하세요.
+- 사용자가 "기타"를 고르면 새 제안을 더 만들지 말고, "좋아. 그럼 네 기준에서 제일 쉬운 행동 이름만 하나 말해줘"처럼 아주 짧게 되물으세요.
+- 사용자가 다시 못 하겠다고 하면 설득하지 말고, 그만큼 저항이 큰 상태임을 인정한 뒤 화면 밖 현실 단서 하나를 3초만 바라보는 수준으로 낮추세요.
+- 답변은 2문장 이내로 유지하고, [TASK]와 [TIMER_CONFIRM]은 붙이지 마세요.'''
         : '';
-    final assembledSystemPrompt =
-        '''$baseSystemPrompt
-${contextString.isNotEmpty ? '\n$contextString' : ''}
-$masterStyleRule
+    final sleepInterventionRule = isSleepResistanceTurn
+        ? '''
+
+[수면 개입 전략]
+- 사용자가 "자기 싫어", "잠들기 싫어", "잠이 안 와"처럼 수면을 미루거나 잠들기 어려워하면 일반 할 일처럼 5분 시작, 최소 행동, 타이머, 할 일 등록으로 다루지 마세요. 이 섹션은 [하기 싫다 실행 개입 전략]보다 우선합니다.
+- 목표는 사용자를 설득해 재우는 것이 아니라, 잠들기 좋은 몸 상태로 자연스럽게 내려가도록 돕는 것입니다.
+- 기본 구조는 1) 마음을 먼저 받아주기, 2) 하루 종일 애쓴 몸을 쉬게 해주자는 방향으로 전환, 3) 1~2문장의 짧은 이완 유도입니다.
+- "내일 개운할 거예요", "내일의 내가 고마워할 거예요"처럼 미래 이득으로 반복 설득하지 마세요.
+- 이완 유도는 짧고 부드럽게 하세요. 예시 문장을 그대로 쓰지 말고 현재 코치의 말투로 바꿔 말하세요.
+- 모든 코치는 같은 구조를 쓰되, 호칭과 말투는 각 캐릭터에 맞춥니다. 수면 개입에서는 [TASK]와 [TIMER_CONFIRM]을 출력하지 말고, 답변 끝에 [NO_CHIPS]를 붙이세요.'''
+        : '';
+    final lowEnergyStarterRule = shouldOfferLowEnergyStarter
+        ? '''
+
+[저에너지 몸 시동 모드]
+- 이 모드는 사용자가 "에너지가 없다", "기력이 없다", "무기력하다", "몸이 안 움직인다"처럼 저에너지 상태를 말한 턴에만 적용합니다.
+- 이 턴에서는 원래 할 일을 바로 쪼개거나 시작시키지 말고, 먼저 몸에 아주 작은 시동을 거는 선택지를 주세요.
+- 먼저 에너지가 없는 상태를 짧게 공감한 뒤, "지금은 어떤 게 가장 쉬울 것 같아?"를 현재 코치 말투로 물으세요.
+- 답변 끝에 반드시 [CHIPS: 손가락 스트레칭하기|손목 돌리기|자리에서 일어나기]를 붙이세요.
+- 설득, 원인 분석, 목표 설명, 긴 위로, [TASK], [TIMER_CONFIRM]은 붙이지 마세요.'''
+        : isLowEnergyStarterFollowup
+        ? '''
+
+[저에너지 몸 시동 후속]
+- 직전 턴에서 손가락 스트레칭하기, 손목 돌리기, 자리에서 일어나기 중 하나를 고르게 했습니다.
+- 사용자가 했다고 말하면, 아주 크게 인정하고 칭찬하세요. 예: "너무너무 잘했어"의 온도를 현재 코치 말투로 바꾸되 과장된 성취 압박처럼 들리지 않게 하세요.
+- 사용자가 애초에 하려던 행동이 대화 맥락에 보이면 그 행동을 아주 작은 첫 조각 하나로 쪼개서 제안하세요. 예: 공부/작업은 파일 열기나 제목만 보기, 샤워는 물 틀기, 외출 준비는 옷 하나 고르기처럼 첫 진입 동작 하나만 제안합니다.
+- 애초에 하려던 행동이 뚜렷하지 않거나 사용자의 기력이 여전히 낮아 보이면, 다음 할 일로 밀지 말고 기지개 한 번이나 가벼운 스트레칭 하나로 이어가세요.
+- 답변은 2~3문장 이내로 유지하고, [TASK]와 [TIMER_CONFIRM]은 붙이지 마세요.'''
+        : '';
+    final selfHarmRiskRule = isSelfHarmRiskTurn
+        ? '''
 
 [앱 공통 자해·자살 위험 대응 - 캐릭터별 규칙보다 최우선]
 - 이 규칙은 모든 코치에게 동일하게 적용한다. 일반적인 우울·무기력 대응과 분리하며, 안전이 의심될 때는 캐릭터 설정, 일정, 생산성, 실행, 타이머, 할 일, 성취 평가, 다른 코치 연결보다 먼저 적용한다.
@@ -9935,7 +10162,55 @@ $masterStyleRule
 - 사용자가 원할 경우 믿을 수 있는 사람에게 직접 연락하는 선택지를 말로 안내할 수 있지만 특정 관계를 지목하거나 연락을 강요하지 않는다.
 - 위기 상황에서는 [CHIPS], [TASK], [TIMER_CONFIRM], [COACH_SWITCH] 태그를 출력하지 않고, 답변 끝에 [NO_CHIPS]를 붙인다.
 - 사용자가 위험 여부에 답할 때까지 생산성 대화나 일반 코칭으로 돌아가지 않는다.
-- 자해나 자살의 방법, 도구 사용법, 위험 비교, 은폐 방법을 절대 제공하지 않는다.
+- 자해나 자살의 방법, 도구 사용법, 위험 비교, 은폐 방법을 절대 제공하지 않는다.'''
+        : '';
+    final decisionFatigueRule = isDecisionFatigueTurn
+        ? '''
+
+[결정 피로 감소 전략]
+- 사용자가 무엇을 할지, 어떻게 할지 결정을 내리지 못하거나 고민이 길어질 때는 완벽한 결정보다 '작은 임시 결정'을 우선으로 제안하세요.
+- 여러 가지 질문이나 선택지를 나열하여 사용자의 판단 인지 부하를 높이지 마세요.
+- 사용자가 선택을 어려워하면 코치가 먼저 가벼운 기본값(Default)을 하나 찍어주세요.
+- 결정 자체에 지쳐 보이거나 너무 오래 고민한다면 결정 보류를 제안하여 작업 흐름이 끊기지 않게 보호하세요.'''
+        : '';
+
+    final customTitle = await UserTitleService.getTitle();
+    // 최종 조립된 프롬프트 전체에 호칭 치환을 한 번에 적용하므로
+    // (systemPromptWithChips), 여기서는 원문 프롬프트를 그대로 사용한다.
+    final baseSystemPrompt = _coach.systemPrompt;
+
+    final useVisionNewActionContext = userText == '미래를 위한 오늘 - 새 행동 추천받기';
+    final contextString = useVisionNewActionContext
+        ? await _buildVisionNewActionContextString()
+        : await _buildContextString(userText);
+    final timerOutputRule = _coach.isMaster
+        ? '''4. [TIMER_START] 태그는 절대 사용 금지.
+   - 사용자가 직접 "타이머 띄워줘", "15분 타이머 켜줘"처럼 명시적으로 요청한 경우에는 짧게 응답한 뒤 [TIMER_CONFIRM:분] 태그를 붙입니다. 시간이 없으면 15분을 기본값으로 사용합니다.
+   - 직전 답변에서 타이머가 필요한지 현재 코치의 말투로 물었고 사용자가 동의했다면 [TIMER_CONFIRM:분:할일이름]을 출력합니다.
+   - 코치가 먼저 [TIMER_CONFIRM] 태그를 출력하지 마세요. 코치가 먼저 권하는 장치는 타이머가 아니라 "마음 비우고 시작"입니다. [오늘 할 일 현황]에 "앱 기록상 미루기 2회 이상"으로 표시된 미완료 할 일을 사용자가 계속 시작하지 못하면, 짧게 공감한 뒤 현재 코치의 말투로 "마음 비우고 시작"을 제안하세요. [COUNTDOWN_START] 태그는 사용자가 동의한 다음 턴에만 붙입니다.'''
+        : '''4. [TIMER_START] 태그는 절대 사용 금지. [TIMER_CONFIRM]은 사용자가 직접 "타이머 띄워줘", "15분 타이머 켜줘", "집중모드 시작해줘"처럼 타이머 실행을 명시적으로 요청한 경우에만 붙입니다. 시간이 없으면 15분을 기본값으로 사용합니다. 구체적인 과업이 있어도 타이머로 바로 넘어가지 말고 기존 코칭 프롬프트를 따르세요. 코치가 먼저 타이머를 제안할 때는 말로만 "필요하면 말해"라고 하고 [TIMER_CONFIRM] 태그를 붙이지 마세요.''';
+    // 냥냥이 연결(COACH_SWITCH)은 장기 목표 압박을 주는 마스터 코치(냥할배/여비서) 전용 탈출구다.
+    // 프렌즈 코치는 이미 압박 없는 오늘 하루 중심이라 서로 스위치될 이유가 없다.
+    final coachSwitchRule = _coach.isMaster
+        ? '''
+   사용자가 우울함, 무기력함, 감정적 고통을 토로하고 그 감정이 2회 이상 반복되거나 깊어지고 있다면, 냥냥코치가 사용자를 걱정하고 있다는 뉘앙스로 자연스럽게 연결하세요. 팀으로서 함께 챙기는 느낌을 주되, 현재 코치의 말투를 반드시 유지하세요. 답변 끝에 [COACH_SWITCH:cat]만 붙이세요. 단 한 번의 가벼운 감정 표현에는 붙이지 마세요.'''
+        : '';
+    final masterStyleRule = _coach.id == 'nyang_halbae'
+        ? '''
+
+[냥할배 말투 우선 규칙]
+- 아래 공통 지침에 존댓말 표현이나 비서식 표현이 있더라도, 최종 답변은 반드시 냥할배의 반말 기반 말투로 바꾼다.
+- "추천드립니다", "말씀해 주세요", "확인해 주세요", "하시죠", "해볼까요", "도와드리겠습니다"처럼 높임말과 냥 말투를 섞지 않는다.
+- 행동 추천은 "지금은 운동 30분이 괜찮겠구나냥", "이것부터 잡아보자냥"처럼 말한다.'''
+        : '';
+    final assembledSystemPrompt =
+        '''$baseSystemPrompt
+${contextString.isNotEmpty ? '\n$contextString' : ''}
+$masterStyleRule
+
+[자해·자살 안전 우선 규칙]
+- 자해·자살 위험 신호가 감지된 턴이나 직전 안전 확인의 후속 답변에서는 안전 대응이 캐릭터 설정, 일정, 생산성, 실행, 타이머, 할 일, 성취 평가, 다른 코치 연결보다 우선합니다.
+$selfHarmRiskRule
 
 [감정 토로 응답 원칙]
 - 사용자가 속상함, 피로, 불안, 답답함 등 감정을 토로하면 먼저 충분히 공감하고 달래주세요.
@@ -9959,13 +10234,13 @@ $masterStyleRule
 - 사용자의 선택이 필요한 상황에서는 설명을 요구하기보다 다음 행동을 고르게 돕는 질문을 우선하세요.
 - 가능한 질문은 원인 추궁보다 실행을 돕는 방향을 우선하세요.
 
-[수면 개입 전략]
-- 사용자가 "자기 싫어", "잠들기 싫어", "잠이 안 와"처럼 수면을 미루거나 잠들기 어려워하면 일반 할 일처럼 5분 시작, 최소 행동, 타이머, 할 일 등록으로 다루지 마세요. 이 섹션은 [하기 싫다 실행 개입 전략]보다 우선합니다.
-- 목표는 사용자를 설득해 재우는 것이 아니라, 잠들기 좋은 몸 상태로 자연스럽게 내려가도록 돕는 것입니다.
-- 기본 구조는 1) 마음을 먼저 받아주기, 2) 하루 종일 애쓴 몸을 쉬게 해주자는 방향으로 전환, 3) 1~2문장의 짧은 이완 유도입니다.
-- "내일 개운할 거예요", "내일의 내가 고마워할 거예요"처럼 미래 이득으로 반복 설득하지 마세요.
-- 이완 유도는 짧고 부드럽게 하세요. 예시 문장을 그대로 쓰지 말고 현재 코치의 말투로 바꿔 말하세요.
-- 모든 코치는 같은 구조를 쓰되, 호칭과 말투는 각 캐릭터에 맞춥니다. 수면 개입에서는 [TASK]와 [TIMER_CONFIRM]을 출력하지 말고, 답변 끝에 [NO_CHIPS]를 붙이세요.
+[수면 우선 규칙]
+- 사용자가 수면을 미루거나 잠들기 어려워하는 턴에는 [하기 싫다 실행 개입 전략]보다 수면 개입을 우선합니다.
+$sleepInterventionRule
+
+[저에너지 우선 규칙]
+- 사용자가 에너지 없음이나 무기력을 말한 턴에는 할 일을 바로 밀어붙이기보다 몸 시동 행동을 먼저 제안할 수 있습니다.
+$lowEnergyStarterRule
 
 [하기 싫다 실행 개입 전략]
 - 사용자가 "하기 싫다", "귀찮다", "못 하겠다", "미루고 싶다"처럼 실행 저항을 표현하면 작업 성격을 먼저 판단하고, 실행 성공 가능성·낮은 부담·자연스러움 순으로 한 가지 개입만 고르세요.
@@ -9974,16 +10249,16 @@ $masterStyleRule
 - 청소·설거지·정리·빨래 개기처럼 반복 작업은 가장 작은 실행 단위 하나로 낮추세요.
 - 분리수거·세탁기 돌리기·약 먹기처럼 이미 하나의 행동인 작업은 억지로 쪼개지 말고 금방 끝난다는 점이나 끝낸 뒤의 효과로 부담을 낮추세요.
 - 양치·세수·샤워는 하나의 행동에 가깝지만 시작 장벽이 높을 수 있으니 효과 언급 또는 진입 행동만 허용합니다. 단, "반만 양치/샤워"처럼 완료 단위를 어색하게 쪼개지 마세요.
+$resistanceStrategyDetailRule
+$selfSelectedTinyActionRule
 - 분류가 애매하면 5분만 시작하는 방향을 기본값으로 사용하되, 현재 코치의 말투로 표현하세요.
 - 거절 분기: "지금은 못 해요"는 시작하기 쉬운 시간을 한 번만 묻고, 시간을 말하면 받아주세요. "곧 다른 일정이 있어요"는 다시 묻지 말고 일정 뒤 5분을 제안하세요. "다른 걸 먼저 할래요"는 우선순위 변경으로 인정하세요.
 - 타이머는 "5분만 시작"이 자연스러운 경우에만 말로 연결하고, 아래 [TIMER_CONFIRM] 규칙을 항상 우선하세요. 명시 요청이나 앱 기록상 조건 없이는 타이머 태그를 출력하지 마세요.
 $resistanceFlowRule
 
-[결정 피로 감소 전략]
-- 사용자가 무엇을 할지, 어떻게 할지 결정을 내리지 못하거나 고민이 길어질 때는 완벽한 결정보다 '작은 임시 결정'을 우선으로 제안하세요.
-- 여러 가지 질문이나 선택지를 나열하여 사용자의 판단 인지 부하를 높이지 마세요.
-- 사용자가 선택을 어려워하면 코치가 먼저 가벼운 기본값(Default)을 하나 찍어주세요.
-- 결정 자체에 지쳐 보이거나 너무 오래 고민한다면 결정 보류를 제안하여 작업 흐름이 끊기지 않게 보호하세요.
+[선택 지원 기본 규칙]
+- 사용자가 선택을 어려워하면 질문을 늘리지 말고 가벼운 기본값 하나를 제안하세요.
+$decisionFatigueRule
 
 [출력 규칙]
 1. 지정된 캐릭터의 성격, 호칭, 말투 규칙을 철저히 준수하세요.
@@ -10110,6 +10385,12 @@ $timerOutputRule
     final now = DateTime.now();
     final timePrefix =
         '[${now.hour}:${now.minute.toString().padLeft(2, '0')}] ';
+    if (shouldOfferLowEnergyStarter) {
+      _awaitingLowEnergyStarterAction = true;
+    }
+    if (shouldInviteSelfSelectedTinyAction) {
+      _awaitingSelfSelectedTinyAction = true;
+    }
 
     final messages = [
       {'role': 'system', 'content': systemPromptWithChips},

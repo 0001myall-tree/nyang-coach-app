@@ -52,6 +52,7 @@ class WidgetSyncService {
         ? <Map<String, dynamic>>[]
         : _decodeTasks(rawTasks);
     final timedSchedule = _todayWidgetSchedule(prefs, tasks);
+    final habitSchedule = _todayHabitWidgetSchedule(tasks);
 
     final allItems = [...tasks, ..._todayMilestoneTasks(prefs)];
     final doneTasks = allItems.where((task) => task['done'] == true).toList();
@@ -68,6 +69,7 @@ class WidgetSyncService {
       tasks: tasks,
       allItems: allItems,
       timedSchedule: timedSchedule,
+      habitSchedule: habitSchedule,
       remainingCount: remainingCount,
       progressInt: progressInt,
     );
@@ -307,11 +309,26 @@ class WidgetSyncService {
     return candidates.isEmpty ? null : candidates.first;
   }
 
+  static _WidgetScheduleItem? _todayHabitWidgetSchedule(
+    List<Map<String, dynamic>> tasks,
+  ) {
+    final candidates = <_WidgetScheduleItem>[];
+    for (final task in tasks) {
+      if (task['category']?.toString() != 'habit') continue;
+      final candidate = _scheduleCandidateFromMap(task);
+      if (candidate != null) candidates.add(candidate);
+    }
+
+    candidates.sort((a, b) => a.timeMinutes.compareTo(b.timeMinutes));
+    return candidates.isEmpty ? null : candidates.first;
+  }
+
   static _CharacterWidgetDisplay _characterWidgetDisplay({
     required SharedPreferences prefs,
     required List<Map<String, dynamic>> tasks,
     required List<Map<String, dynamic>> allItems,
     required _WidgetScheduleItem? timedSchedule,
+    required _WidgetScheduleItem? habitSchedule,
     required int remainingCount,
     required int progressInt,
   }) {
@@ -338,6 +355,22 @@ class WidgetSyncService {
         kind: 'in_progress',
         status: '진행 중...',
         title: inProgressTask,
+      );
+    }
+
+    if (habitSchedule != null) {
+      return _CharacterWidgetDisplay(
+        kind: 'habit',
+        status: habitSchedule.time,
+        title: habitSchedule.title,
+      );
+    }
+
+    if (_hasCompletedAllCoreTasks(prefs)) {
+      return const _CharacterWidgetDisplay(
+        kind: 'core_done',
+        status: '',
+        title: '핵심 완료했다냥!',
       );
     }
 
@@ -377,6 +410,28 @@ class WidgetSyncService {
       return null;
     }
     return null;
+  }
+
+  static bool _hasCompletedAllCoreTasks(SharedPreferences prefs) {
+    final rawCoreTasks = prefs.getString('nyang_core_tasks');
+    if (rawCoreTasks == null) return false;
+
+    try {
+      final decoded = jsonDecode(rawCoreTasks);
+      if (decoded is! List || decoded.isEmpty) return false;
+
+      var hasCoreTask = false;
+      for (final item in decoded) {
+        if (item is! Map) continue;
+        final title = _taskTitle(item);
+        if (title == null) continue;
+        hasCoreTask = true;
+        if (item['done'] != true) return false;
+      }
+      return hasCoreTask;
+    } catch (_) {
+      return false;
+    }
   }
 
   static String? _firstInProgressTask(List<Map<String, dynamic>> tasks) {
