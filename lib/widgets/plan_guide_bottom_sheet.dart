@@ -3,6 +3,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../theme/app_design_tokens.dart';
+import '../services/purchase_service.dart';
 import 'app_bottom_sheet.dart';
 import 'app_button.dart';
 import 'app_card.dart';
@@ -10,6 +11,7 @@ import 'app_card.dart';
 Future<void> showPlanGuideBottomSheet(
   BuildContext context, {
   VoidCallback? onLearnMore,
+  Future<void> Function()? onPurchaseCompleted,
   String checkoutLabel = '플랜 시작하기',
 }) {
   return showAppBottomSheet<void>(
@@ -17,6 +19,7 @@ Future<void> showPlanGuideBottomSheet(
     builder: (sheetContext) {
       return _PlanGuideBottomSheet(
         onLearnMore: onLearnMore,
+        onPurchaseCompleted: onPurchaseCompleted,
         checkoutLabel: checkoutLabel,
       );
     },
@@ -24,9 +27,14 @@ Future<void> showPlanGuideBottomSheet(
 }
 
 class _PlanGuideBottomSheet extends StatefulWidget {
-  const _PlanGuideBottomSheet({this.onLearnMore, required this.checkoutLabel});
+  const _PlanGuideBottomSheet({
+    this.onLearnMore,
+    this.onPurchaseCompleted,
+    required this.checkoutLabel,
+  });
 
   final VoidCallback? onLearnMore;
+  final Future<void> Function()? onPurchaseCompleted;
   final String checkoutLabel;
 
   @override
@@ -35,7 +43,64 @@ class _PlanGuideBottomSheet extends StatefulWidget {
 
 class _PlanGuideBottomSheetState extends State<_PlanGuideBottomSheet> {
   bool _isSixMonth = false;
+  bool _isPurchasing = false;
+  bool _isRestoring = false;
   String? _selectedPlanId;
+
+  Future<void> _handleCheckout() async {
+    final selectedPlanId = _selectedPlanId;
+    if (selectedPlanId == null || _isPurchasing || _isRestoring) return;
+
+    final plan = PurchaseService.instance.planForSelection(
+      selectedPlanId,
+      _isSixMonth,
+    );
+    if (plan == null) {
+      _showSnackBar('선택한 플랜을 찾지 못했어요.');
+      return;
+    }
+
+    setState(() => _isPurchasing = true);
+    final result = await PurchaseService.instance.purchase(plan);
+    if (!mounted) return;
+
+    setState(() => _isPurchasing = false);
+    _showSnackBar(result.message);
+    if (!result.success) return;
+
+    await widget.onPurchaseCompleted?.call();
+    if (mounted) {
+      Navigator.pop(context);
+    }
+  }
+
+  Future<void> _handleRestore() async {
+    if (_isPurchasing || _isRestoring) return;
+
+    setState(() => _isRestoring = true);
+    await PurchaseService.instance.restorePurchases();
+    await widget.onPurchaseCompleted?.call();
+    if (!mounted) return;
+
+    setState(() => _isRestoring = false);
+    _showSnackBar('구매 복원을 요청했어요. 잠시 후 권한이 반영됩니다.');
+  }
+
+  void _showSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          message,
+          style: GoogleFonts.notoSansKr(fontWeight: FontWeight.w700),
+        ),
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: const Color(0xFF1A1A2E),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppDesignTokens.radiusMedium),
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -144,6 +209,10 @@ class _PlanGuideBottomSheetState extends State<_PlanGuideBottomSheet> {
       footer: _PlanCheckoutBar(
         selectedPlanId: _selectedPlanId,
         checkoutLabel: widget.checkoutLabel,
+        isProcessing: _isPurchasing,
+        isRestoring: _isRestoring,
+        onCheckout: _handleCheckout,
+        onRestore: _handleRestore,
       ),
     );
   }
@@ -725,37 +794,55 @@ class _PlanCheckoutBar extends StatelessWidget {
   const _PlanCheckoutBar({
     required this.selectedPlanId,
     required this.checkoutLabel,
+    required this.isProcessing,
+    required this.isRestoring,
+    required this.onCheckout,
+    required this.onRestore,
   });
 
   final String? selectedPlanId;
   final String checkoutLabel;
+  final bool isProcessing;
+  final bool isRestoring;
+  final VoidCallback onCheckout;
+  final VoidCallback onRestore;
 
   @override
   Widget build(BuildContext context) {
-    return AppButton(
-      label: selectedPlanId == null ? '플랜을 선택해주세요' : checkoutLabel,
-      icon: const Icon(Icons.pets),
-      backgroundColor: AppDesignTokens.brandAccent,
-      disabledBackgroundColor: AppDesignTokens.brandDisabled,
-      onPressed: selectedPlanId == null
-          ? null
-          : () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    '결제 화면은 곧 연결할게요.',
-                    style: GoogleFonts.notoSansKr(fontWeight: FontWeight.w700),
-                  ),
-                  behavior: SnackBarBehavior.floating,
-                  backgroundColor: const Color(0xFF1A1A2E),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(
-                      AppDesignTokens.radiusMedium,
-                    ),
-                  ),
-                ),
-              );
-            },
+    final disabled = selectedPlanId == null || isProcessing || isRestoring;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        AppButton(
+          label: selectedPlanId == null
+              ? '플랜을 선택해주세요'
+              : isProcessing
+              ? '결제 확인 중...'
+              : checkoutLabel,
+          icon: const Icon(Icons.pets),
+          backgroundColor: AppDesignTokens.brandAccent,
+          disabledBackgroundColor: AppDesignTokens.brandDisabled,
+          onPressed: disabled ? null : onCheckout,
+        ),
+        const SizedBox(height: 10),
+        TextButton(
+          onPressed: isProcessing || isRestoring ? null : onRestore,
+          style: TextButton.styleFrom(
+            foregroundColor: AppDesignTokens.brandPressed,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            minimumSize: Size.zero,
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+          child: Text(
+            isRestoring ? '복원 확인 중...' : '이미 구매했다면 복원하기',
+            style: GoogleFonts.notoSansKr(
+              fontSize: AppDesignTokens.textCaption + 1,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

@@ -57,6 +57,12 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen>
     showPlanGuideBottomSheet(
       context,
       onLearnMore: _showNyangCoachTeamIntro,
+      onPurchaseCompleted: () async {
+        final updated = await UserDataService.load();
+        if (mounted) {
+          setState(() => _userData = updated);
+        }
+      },
       checkoutLabel: '코치들과 함께하기',
     );
   }

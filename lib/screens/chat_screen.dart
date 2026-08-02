@@ -2503,7 +2503,15 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   void _showPlanGuideBottomSheet() {
-    showPlanGuideBottomSheet(context);
+    showPlanGuideBottomSheet(
+      context,
+      onPurchaseCompleted: () async {
+        final updated = await UserDataService.load();
+        if (mounted) {
+          setState(() => _userData = updated);
+        }
+      },
+    );
   }
 
   // ── 냥냥코치 팀 소개 팝업 ──────────────────────────────────
