@@ -85,7 +85,7 @@ class AppChip extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: GoogleFonts.notoSansKr(
                   fontSize: fontSize ?? AppDesignTokens.textMeta,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w600,
                   color: enabled
                       ? effectiveForeground
                       : AppDesignTokens.textDisabled,
