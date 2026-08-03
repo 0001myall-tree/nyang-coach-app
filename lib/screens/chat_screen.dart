@@ -10337,6 +10337,25 @@ class _ChatScreenState extends State<ChatScreen>
     final decisionSupportSection = decisionFatigueRule.isNotEmpty
         ? decisionFatigueRule
         : '';
+    final shouldIncludeResistanceInterventionSection =
+        isResistanceTurn || resistanceTurnDirective.trim().isNotEmpty;
+    final resistanceInterventionSection =
+        shouldIncludeResistanceInterventionSection
+        ? '''
+
+[하기 싫다 실행 개입 전략]
+- 사용자가 "하기 싫다", "귀찮다", "못 하겠다", "미루고 싶다"처럼 실행 저항을 표현하면 작업 성격을 먼저 판단하고, 실행 성공 가능성·낮은 부담·자연스러움 순으로 한 가지 개입만 고르세요.
+- 창작·기획·공부·개발·글쓰기처럼 인지 부담이 큰 작업은 결과물 요구보다 짧은 시간 시작을 권하세요. 단, 창작 작업에 "한 문장만" 같은 산출물 요구는 기본적으로 피하세요.
+- 청소·설거지·정리·빨래 개기처럼 반복 작업은 가장 작은 실행 단위 하나로 낮추세요.
+- 분리수거·세탁기 돌리기·약 먹기처럼 이미 하나의 행동인 작업은 억지로 쪼개지 말고 금방 끝난다는 점이나 끝낸 뒤의 효과로 부담을 낮추세요.
+- 양치·세수·샤워는 하나의 행동에 가깝지만 시작 장벽이 높을 수 있으니 효과 언급 또는 진입 행동만 허용합니다. 단, "반만 양치/샤워"처럼 완료 단위를 어색하게 쪼개지 마세요.
+$resistanceStrategyDetailRule
+$selfSelectedTinyActionRule
+- 분류가 애매하면 5분만 시작하는 방향을 기본값으로 사용하되, 현재 코치의 말투로 표현하세요.
+- 거절 분기: "지금은 못 해요"는 시작하기 쉬운 시간을 한 번만 묻고, 시간을 말하면 받아주세요. "곧 다른 일정이 있어요"는 다시 묻지 말고 일정 뒤 5분을 제안하세요. "다른 걸 먼저 할래요"는 우선순위 변경으로 인정하세요.
+- 타이머는 "5분만 시작"이 자연스러운 경우에만 말로 연결하고, 아래 [TIMER_CONFIRM] 규칙을 항상 우선하세요. 명시 요청이나 앱 기록상 조건 없이는 타이머 태그를 출력하지 마세요.
+$resistanceFlowRule'''
+        : '';
 
     final customTitle = await UserTitleService.getTitle();
     // 최종 조립된 프롬프트 전체에 호칭 치환을 한 번에 적용하므로
@@ -10400,19 +10419,7 @@ $selfHarmRiskRule
 
 $sleepPrioritySection
 $lowEnergyPrioritySection
-
-[하기 싫다 실행 개입 전략]
-- 사용자가 "하기 싫다", "귀찮다", "못 하겠다", "미루고 싶다"처럼 실행 저항을 표현하면 작업 성격을 먼저 판단하고, 실행 성공 가능성·낮은 부담·자연스러움 순으로 한 가지 개입만 고르세요.
-- 창작·기획·공부·개발·글쓰기처럼 인지 부담이 큰 작업은 결과물 요구보다 짧은 시간 시작을 권하세요. 단, 창작 작업에 "한 문장만" 같은 산출물 요구는 기본적으로 피하세요.
-- 청소·설거지·정리·빨래 개기처럼 반복 작업은 가장 작은 실행 단위 하나로 낮추세요.
-- 분리수거·세탁기 돌리기·약 먹기처럼 이미 하나의 행동인 작업은 억지로 쪼개지 말고 금방 끝난다는 점이나 끝낸 뒤의 효과로 부담을 낮추세요.
-- 양치·세수·샤워는 하나의 행동에 가깝지만 시작 장벽이 높을 수 있으니 효과 언급 또는 진입 행동만 허용합니다. 단, "반만 양치/샤워"처럼 완료 단위를 어색하게 쪼개지 마세요.
-$resistanceStrategyDetailRule
-$selfSelectedTinyActionRule
-- 분류가 애매하면 5분만 시작하는 방향을 기본값으로 사용하되, 현재 코치의 말투로 표현하세요.
-- 거절 분기: "지금은 못 해요"는 시작하기 쉬운 시간을 한 번만 묻고, 시간을 말하면 받아주세요. "곧 다른 일정이 있어요"는 다시 묻지 말고 일정 뒤 5분을 제안하세요. "다른 걸 먼저 할래요"는 우선순위 변경으로 인정하세요.
-- 타이머는 "5분만 시작"이 자연스러운 경우에만 말로 연결하고, 아래 [TIMER_CONFIRM] 규칙을 항상 우선하세요. 명시 요청이나 앱 기록상 조건 없이는 타이머 태그를 출력하지 마세요.
-$resistanceFlowRule
+$resistanceInterventionSection
 
 $decisionSupportSection
 
