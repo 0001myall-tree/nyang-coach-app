@@ -20,7 +20,7 @@ class RecordsScreen extends StatefulWidget {
 }
 
 class _RecordsScreenState extends State<RecordsScreen> {
-  static const int _weeklyFeedbackCacheVersion = 3;
+  static const int _weeklyFeedbackCacheVersion = 4;
 
   bool _isLoading = true;
   List<Map<String, dynamic>> _history = [];
@@ -103,21 +103,29 @@ class _RecordsScreenState extends State<RecordsScreen> {
       _isMaster ? CoachConfigs.get('sec_female') : _coach;
 
   // ── 최근 7일(또는 30일) 데이터 계산 ─────────────────────
-  List<Map<String, dynamic>> _getLast7Records() {
+  DateTime _feedbackBaseDate() {
     final baseDateParts = _lastDate.split('-');
-    DateTime baseDate;
     if (baseDateParts.length >= 3) {
       final y = int.tryParse(baseDateParts[0]) ?? DateTime.now().year;
       final m = int.tryParse(baseDateParts[1]) ?? DateTime.now().month;
       final d = int.tryParse(baseDateParts[2]) ?? DateTime.now().day;
-      baseDate = DateTime(y, m, d);
-    } else {
-      final n = DateTime.now();
-      baseDate = DateTime(n.year, n.month, n.day);
-      if (n.hour < 3) {
-        baseDate = baseDate.subtract(const Duration(days: 1));
-      }
+      return DateTime(y, m, d);
     }
+
+    final n = DateTime.now();
+    var baseDate = DateTime(n.year, n.month, n.day);
+    if (n.hour < 3) {
+      baseDate = baseDate.subtract(const Duration(days: 1));
+    }
+    return baseDate;
+  }
+
+  List<Map<String, dynamic>> _getLast7Records({
+    bool includeCurrentAppDate = true,
+  }) {
+    final baseDate = includeCurrentAppDate
+        ? _feedbackBaseDate()
+        : _feedbackBaseDate().subtract(const Duration(days: 1));
 
     final List<Map<String, dynamic>> last7 = [];
     for (int i = 6; i >= 0; i--) {
@@ -147,20 +155,7 @@ class _RecordsScreenState extends State<RecordsScreen> {
   }
 
   String _getWeekMondayStr() {
-    final baseDateParts = _lastDate.split('-');
-    DateTime baseDate;
-    if (baseDateParts.length >= 3) {
-      final y = int.tryParse(baseDateParts[0]) ?? DateTime.now().year;
-      final m = int.tryParse(baseDateParts[1]) ?? DateTime.now().month;
-      final d = int.tryParse(baseDateParts[2]) ?? DateTime.now().day;
-      baseDate = DateTime(y, m, d);
-    } else {
-      final n = DateTime.now();
-      baseDate = DateTime(n.year, n.month, n.day);
-      if (n.hour < 3) {
-        baseDate = baseDate.subtract(const Duration(days: 1));
-      }
-    }
+    final baseDate = _feedbackBaseDate();
     final monday = baseDate.subtract(Duration(days: baseDate.weekday - 1));
     return '${monday.year}-${monday.month.toString().padLeft(2, '0')}-${monday.day.toString().padLeft(2, '0')}';
   }
@@ -358,7 +353,9 @@ class _RecordsScreenState extends State<RecordsScreen> {
       debugPrint('주간 코치 피드백 생성 실패: $e');
       if (!mounted) return;
       setState(() {
-        _weeklyFeedbackText = _getMasterPatternFeedback(_getLast7Records());
+        _weeklyFeedbackText = _getMasterPatternFeedback(
+          _getLast7Records(includeCurrentAppDate: false),
+        );
       });
     } finally {
       _isGeneratingWeeklyFeedback = false;
@@ -367,7 +364,7 @@ class _RecordsScreenState extends State<RecordsScreen> {
 
   Future<String> _buildWeeklyFeedbackPrompt(int feedbackType) async {
     final prefs = await SharedPreferences.getInstance();
-    final records = _getLast7Records();
+    final records = _getLast7Records(includeCurrentAppDate: false);
     final visibleVisions = _formatVisionText(prefs.getString('nyang_visions'));
     final hasVisibleVisions = visibleVisions != '없음';
     final weekGoalText = _formatGoalText(prefs.getString('nyang_week_goals'));
@@ -627,9 +624,10 @@ class _RecordsScreenState extends State<RecordsScreen> {
     }
 
     return '''당신은 사용자의 한 주간 성과를 분석하는 수석 비서이자 전문 코치입니다.
-사용자의 지난 7일간의 실제 할 일 완료 내역과 현재 설정된 목표/비전을 바탕으로, $title께 드리는 주간 코칭 한마디를 격식 있게 작성해 주세요.
+사용자의 오늘 전날까지 최근 7일간의 실제 할 일 완료 내역과 현재 설정된 목표/비전을 바탕으로, $title께 드리는 주간 코칭 한마디를 격식 있게 작성해 주세요.
+오늘은 아직 진행 중인 하루이므로 오늘 완료율, 오늘 미완료, 오늘 아직 안 했다는 식의 평가는 절대 하지 마세요.
 
-[사용자의 지난 7일간 할 일 완료 현황]
+[사용자의 오늘 전날까지 최근 7일간 할 일 완료 현황]
 $recordBuffer
 
 [주간 완료율 요약]
