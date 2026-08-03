@@ -8757,6 +8757,7 @@ class _ChatScreenState extends State<ChatScreen>
         text.contains('비서학습') ||
         text.contains('일정') ||
         text.contains('캘린더') ||
+        text.contains('달력') ||
         text.contains('습관') ||
         text.contains('루틴') ||
         text.contains('기록') ||
@@ -8894,7 +8895,10 @@ class _ChatScreenState extends State<ChatScreen>
                 text.contains('이번주') ||
                 text.contains('다음주')));
 
-    if (text.contains('일정') || text.contains('캘린더') || asksDatedPlan) {
+    if (text.contains('일정') ||
+        text.contains('캘린더') ||
+        text.contains('달력') ||
+        asksDatedPlan) {
       return _FeatureLocationReply(
         _featureLocationMessage('schedule'),
         'schedule',
@@ -9052,7 +9056,7 @@ class _ChatScreenState extends State<ChatScreen>
     if (RegExp(r'(아까|방금|이전|저번|지난번|그일정|그미팅|그회의|그약속|meetup)').hasMatch(compact)) {
       return false;
     }
-    if (RegExp(r'(일정|스케줄|캘린더)').hasMatch(compact) &&
+    if (RegExp(r'(일정|스케줄|캘린더|달력)').hasMatch(compact) &&
         RegExp(r'(확인|알려|보여|열어|정리|조회|봐줘|볼래|보고싶)').hasMatch(compact)) {
       return true;
     }
@@ -9064,6 +9068,7 @@ class _ChatScreenState extends State<ChatScreen>
       '오늘뭐있냐',
       '오늘뭐있나요',
       '캘린더',
+      '달력',
     ].contains(compact);
   }
 
