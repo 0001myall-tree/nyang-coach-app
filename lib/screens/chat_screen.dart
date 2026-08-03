@@ -4428,6 +4428,7 @@ class _ChatScreenState extends State<ChatScreen>
   bool _isSimpleMasterStatusRequest(String normalized, bool isQuestion) {
     final asksStatus =
         normalized.contains('오늘상태') ||
+        normalized.contains('오늘할일확인') ||
         normalized.contains('진행상황') ||
         normalized.contains('얼마나했') ||
         normalized.contains('몇개했') ||
@@ -4446,6 +4447,134 @@ class _ChatScreenState extends State<ChatScreen>
     return asksStatus &&
         !asksAnalysis &&
         (isQuestion || normalized.length <= 12);
+  }
+
+  bool _isTodayTaskOverviewRequest(String input) {
+    final compact = input.trim().toLowerCase().replaceAll(
+      RegExp(r'[\s.。!！?？~〜]+'),
+      '',
+    );
+    if (compact.isEmpty) return false;
+    if (_isDeletionCommand(input) ||
+        _isEditCommand(input) ||
+        _isScheduleRegistrationCommand(input) ||
+        _isHabitRegistrationCommand(input)) {
+      return false;
+    }
+    return [
+          '오늘할일확인해줘',
+          '오늘할일확인',
+          '오늘할일뭐야',
+          '오늘할일알려줘',
+          '오늘할일',
+          '할일확인해줘',
+          '할일확인',
+        ].contains(compact) ||
+        (compact.contains('오늘') &&
+            compact.contains('할일') &&
+            RegExp(r'(확인|알려|보여|열어|뭐)').hasMatch(compact));
+  }
+
+  String _todayTaskOverviewOpenMessage({
+    required bool hasAnyTask,
+    required String? coreTask,
+    required List<String> habitNames,
+  }) {
+    if (!hasAnyTask) {
+      return switch (widget.coachId) {
+        'nyang_halbae' || 'cat' => '계획을 짜야 한다냥. 뭐할지 같이 정해볼까?\n냥이가 할 일 탭 열어줄게.',
+        'bro' => '계획부터 짜야겠다. 뭐할지 같이 정해보자. 할 일 탭 열어준다.',
+        'sec_female' => '오늘 할 일이 아직 비어 있어요. 무엇을 할지 함께 정해볼게요. 할 일 탭을 열어드릴게요.',
+        _ => '오늘 할 일이 아직 비어 있어. 뭐할지 같이 정해볼까? 할 일 탭 열어줄게.',
+      };
+    }
+
+    final buffer = StringBuffer(switch (widget.coachId) {
+      'nyang_halbae' || 'cat' => '냥이가 할 일 탭 열어줄게.',
+      'bro' => '할 일 탭 열어준다.',
+      'sec_female' => '오늘 할 일 탭을 열어드릴게요.',
+      _ => '오늘 할 일 탭 열어줄게.',
+    });
+    if (coreTask != null && coreTask.trim().isNotEmpty) {
+      buffer.write(switch (widget.coachId) {
+        'nyang_halbae' || 'cat' => '\n오늘의 핵심은 "$coreTask"다냥.',
+        'bro' => '\n오늘 핵심은 "$coreTask"다.',
+        'sec_female' => '\n오늘의 핵심은 "$coreTask"예요.',
+        _ => '\n오늘의 핵심은 "$coreTask"야.',
+      });
+    }
+    if (habitNames.isNotEmpty) {
+      final names = habitNames.take(2).join(', ');
+      buffer.write(switch (widget.coachId) {
+        'nyang_halbae' || 'cat' => '\n습관도 "$names" 챙기면 좋겠다냥.',
+        'bro' => '\n습관은 "$names" 챙기면 된다.',
+        'sec_female' => '\n습관은 "$names"도 함께 확인해 주세요.',
+        _ => '\n습관은 "$names"도 같이 챙기면 좋겠어.',
+      });
+    }
+    return buffer.toString();
+  }
+
+  Future<bool> _tryOpenTodayTaskOverview(String input) async {
+    if (!_isTodayTaskOverviewRequest(input)) return false;
+
+    final prefs = await SharedPreferences.getInstance();
+    final tasks = _decodeMapList(prefs.getString('nyang_tasks'));
+    final todayTasks = tasks
+        .where((task) {
+          final category = task['category']?.toString();
+          return category == 'today' ||
+              category == 'habit' ||
+              category == 'schedule';
+        })
+        .toList(growable: false);
+    final pending = todayTasks
+        .where((task) => task['done'] != true)
+        .toList(growable: false);
+    final coreTask = _taskText(
+      _decodeMapList(prefs.getString('nyang_core_tasks'))
+          .cast<Map<String, dynamic>?>()
+          .firstWhere((task) => task?['done'] != true, orElse: () => null),
+    );
+    final habitNames = pending
+        .where((task) {
+          final category = task['category']?.toString();
+          return category == 'habit' || task['isHabit'] == true;
+        })
+        .map(_taskText)
+        .whereType<String>()
+        .where((text) => text.trim().isNotEmpty)
+        .toList(growable: false);
+
+    final reply = await UserTitleService.applyForCoach(
+      _todayTaskOverviewOpenMessage(
+        hasAnyTask: todayTasks.isNotEmpty,
+        coreTask: coreTask,
+        habitNames: habitNames,
+      ),
+      widget.coachId,
+    );
+    setState(() {
+      _messages.add(
+        ChatMessage(text: input, isUser: true, time: DateTime.now()),
+      );
+      _messages.add(
+        ChatMessage(text: reply, isUser: false, time: DateTime.now()),
+      );
+      _suggestedTasks = [];
+      _dynamicChips = [];
+      _suppressDefaultChips = false;
+      _coachSwitchTarget = null;
+    });
+    _scrollToBottom();
+    await _saveHistory();
+    await AnalyticsService.logConversationMessage(
+      coachId: widget.coachId,
+      usedApi: false,
+    );
+    await Future.delayed(const Duration(milliseconds: 260));
+    widget.onOpenFeatureLocation?.call('today');
+    return true;
   }
 
   Future<String> _buildLocalMasterStatusReply() async {
@@ -7924,6 +8053,8 @@ class _ChatScreenState extends State<ChatScreen>
       );
       return;
     }
+
+    if (await _tryOpenTodayTaskOverview(trimmed)) return;
 
     if (await _tryOpenScheduleOverview(trimmed)) return;
 

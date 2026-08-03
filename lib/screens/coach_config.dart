@@ -59,7 +59,7 @@ class CoachConfigs {
       tier: 'friends',
       accentColor: Color(0xFF8B7CFF),
       accentLight: Color(0xFFF3F0FF),
-      chips: ['오늘 뭐부터 할까', '하기 싫다', '일정 확인해줘'],
+      chips: ['오늘 뭐부터 할까', '하기 싫다', '오늘 할 일 확인해줘'],
       voiceCount: 5, // 목소리 파일 5개
       flirtOne: [
         '오! 완료했다냥! 집사 방금 진짜 잘했다냥 🐾',
