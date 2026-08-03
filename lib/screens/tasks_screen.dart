@@ -1199,22 +1199,21 @@ class _TasksScreenState extends State<TasksScreen>
         return switch (key) {
           'emptyTarget' => '어떤 일정을 수정할지 이름까지 같이 말해줘.',
           'recurringNotFound' =>
-            '$datePrefix$quoted 반복 일정은 못 찾았어. 일정 탭에서 한번 확인해줘.',
+            '$datePrefix$quoted 반복 일정은 못 찾았어. 캘린더에서 한번 확인해줘.',
           'recurringMultiple' =>
             '$quoted 비슷한 반복 일정이 여러 개야. 날짜나 이름을 조금만 더 정확히 말해줘.',
           'recurringOpened' => '$quoted 반복 일정 수정창 열어둘게. 바꿀 내용은 확인해서 직접 조정해줘.',
-          'notFound' => '$datePrefix$quoted 항목은 못 찾았어. 일정 탭에서 한번 확인해줘.',
+          'notFound' => '$datePrefix$quoted 항목은 못 찾았어. 캘린더에서 한번 확인해줘.',
           'multiple' => '$quoted 비슷한 항목이 여러 개야. 날짜나 이름을 조금만 더 정확히 말해줘.',
           _ => '$quoted 수정창 열어둘게. 바꿀 내용은 확인해서 직접 조정해줘.',
         };
       case 'bro':
         return switch (key) {
           'emptyTarget' => '뭘 수정할지 이름까지 같이 말해라.',
-          'recurringNotFound' =>
-            '$datePrefix$quoted 반복 일정은 안 보인다. 일정 탭에서 확인해라.',
+          'recurringNotFound' => '$datePrefix$quoted 반복 일정은 안 보인다. 캘린더에서 확인해라.',
           'recurringMultiple' => '$quoted 비슷한 반복 일정이 여러 개다. 날짜나 이름 더 정확히 말해라.',
           'recurringOpened' => '$quoted 반복 일정 수정창 열어뒀다. 바꿀 건 직접 보고 조정해라.',
-          'notFound' => '$datePrefix$quoted 항목은 안 보인다. 일정 탭에서 확인해라.',
+          'notFound' => '$datePrefix$quoted 항목은 안 보인다. 캘린더에서 확인해라.',
           'multiple' => '$quoted 비슷한 항목이 여러 개다. 날짜나 이름 더 정확히 말해라.',
           _ => '$quoted 수정창 열어뒀다. 바꿀 건 직접 보고 조정해라.',
         };
@@ -1222,10 +1221,10 @@ class _TasksScreenState extends State<TasksScreen>
         return switch (key) {
           'emptyTarget' => '뭘 고칠지 이름까지 말해줘야 한다, 우리 새끼.',
           'recurringNotFound' =>
-            '$datePrefix$quoted 반복 일정은 못 찾았다. 일정 탭에서 다시 봐라.',
+            '$datePrefix$quoted 반복 일정은 못 찾았다. 캘린더에서 다시 봐라.',
           'recurringMultiple' => '$quoted 비슷한 반복 일정이 여러 개다. 조금 더 자세히 말해줘라.',
           'recurringOpened' => '$quoted 반복 일정 수정창 열어뒀다. 바꿀 건 네가 보고 고쳐라.',
-          'notFound' => '$datePrefix$quoted 항목은 못 찾았다. 일정 탭에서 다시 봐라.',
+          'notFound' => '$datePrefix$quoted 항목은 못 찾았다. 캘린더에서 다시 봐라.',
           'multiple' => '$quoted 비슷한 항목이 여러 개다. 조금 더 자세히 말해줘라.',
           _ => '$quoted 수정창 열어뒀다. 바꿀 건 네가 보고 고쳐라.',
         };
@@ -1233,12 +1232,12 @@ class _TasksScreenState extends State<TasksScreen>
         return switch (key) {
           'emptyTarget' => '수정할 항목명을 함께 말씀해 주세요.',
           'recurringNotFound' =>
-            '$datePrefix$quoted 반복 일정은 찾지 못했습니다. 일정 탭에서 확인해 주세요.',
+            '$datePrefix$quoted 반복 일정은 찾지 못했습니다. 캘린더에서 확인해 주세요.',
           'recurringMultiple' =>
             '$quoted와 유사한 반복 일정이 여러 개입니다. 날짜나 항목명을 더 구체적으로 말씀해 주세요.',
           'recurringOpened' =>
             '$quoted 반복 일정 수정창을 열어두었습니다. 변경 내용은 확인 후 조정해 주세요.',
-          'notFound' => '$datePrefix$quoted 항목은 찾지 못했습니다. 일정 탭에서 확인해 주세요.',
+          'notFound' => '$datePrefix$quoted 항목은 찾지 못했습니다. 캘린더에서 확인해 주세요.',
           'multiple' => '$quoted와 유사한 항목이 여러 개입니다. 날짜나 항목명을 더 구체적으로 말씀해 주세요.',
           _ => '$quoted 수정창을 열어두었습니다. 변경 내용은 확인 후 조정해 주세요.',
         };
@@ -1246,12 +1245,12 @@ class _TasksScreenState extends State<TasksScreen>
         return switch (key) {
           'emptyTarget' => '수정할 항목명을 함께 말씀해 주세요.',
           'recurringNotFound' =>
-            '$datePrefix$quoted 반복 일정은 찾지 못했어요. 일정 탭에서 확인해 주세요.',
+            '$datePrefix$quoted 반복 일정은 찾지 못했어요. 캘린더에서 확인해 주세요.',
           'recurringMultiple' =>
             '$quoted와 비슷한 반복 일정이 여러 개예요. 날짜나 항목명을 더 구체적으로 말씀해 주세요.',
           'recurringOpened' =>
             '$quoted 반복 일정 수정창을 열어두었어요. 변경 내용은 확인 후 조정해 주세요.',
-          'notFound' => '$datePrefix$quoted 항목은 찾지 못했어요. 일정 탭에서 확인해 주세요.',
+          'notFound' => '$datePrefix$quoted 항목은 찾지 못했어요. 캘린더에서 확인해 주세요.',
           'multiple' => '$quoted와 비슷한 항목이 여러 개예요. 날짜나 항목명을 더 구체적으로 말씀해 주세요.',
           _ => '$quoted 수정창을 열어두었어요. 변경 내용은 확인 후 조정해 주세요.',
         };
@@ -1259,11 +1258,11 @@ class _TasksScreenState extends State<TasksScreen>
         return switch (key) {
           'emptyTarget' => '어떤 일정을 수정할지 이름까지 같이 말해달라냥.',
           'recurringNotFound' =>
-            '$datePrefix$quoted 반복 일정은 못 찾았다냥. 일정 탭에서 확인해달라냥.',
+            '$datePrefix$quoted 반복 일정은 못 찾았다냥. 캘린더에서 확인해달라냥.',
           'recurringMultiple' =>
             '$quoted 비슷한 반복 일정이 여러 개다냥. 날짜나 이름을 더 정확히 말해달라냥.',
           'recurringOpened' => '$quoted 반복 일정 수정창 열어둘게냥. 바꿀 내용은 확인해서 조정해달라냥.',
-          'notFound' => '$datePrefix$quoted 항목은 못 찾았다냥. 일정 탭에서 확인해달라냥.',
+          'notFound' => '$datePrefix$quoted 항목은 못 찾았다냥. 캘린더에서 확인해달라냥.',
           'multiple' => '$quoted 비슷한 항목이 여러 개다냥. 날짜나 이름을 더 정확히 말해달라냥.',
           _ => '$quoted 수정창 열어둘게냥. 바꿀 내용은 확인해서 조정해달라냥.',
         };
@@ -2994,7 +2993,7 @@ class _TasksScreenState extends State<TasksScreen>
     }
   }
 
-  /// 일정 탭에서 등록된 일정(ScheduleItem)을 지우거나 다른 날짜로 옮길 때,
+  /// 캘린더 탭에서 등록된 일정(ScheduleItem)을 지우거나 다른 날짜로 옮길 때,
   /// 오늘 탭과 동일하게 확인 다이얼로그를 먼저 띄운다.
   Future<void> _showScheduleDeleteOptions(
     ScheduleItem item,
@@ -3024,7 +3023,7 @@ class _TasksScreenState extends State<TasksScreen>
     return null;
   }
 
-  /// 일정 탭의 일정을 다른 날짜로 옮긴다. 오늘 탭의 이동 모달을 재사용하고,
+  /// 캘린더 탭의 일정을 다른 날짜로 옮긴다. 오늘 탭의 이동 모달을 재사용하고,
   /// 이동이 끝나면 원래 날짜에서 id로 안전하게 제거한다.
   void _moveScheduleToAnotherDate(ScheduleItem item) {
     final dateKey = _dateKeyForScheduleItem(item);
@@ -4465,7 +4464,7 @@ class _TasksScreenState extends State<TasksScreen>
     final isVacation = _isViewingActualToday && vacationInfo != null;
     const tabs = [
       {'icon': Icons.assignment_outlined, 'label': '오늘'},
-      {'icon': Icons.calendar_month_outlined, 'label': '일정'},
+      {'icon': Icons.calendar_month_outlined, 'label': '캘린더'},
       {'icon': Icons.track_changes_outlined, 'label': '목표'},
       {'icon': Icons.wb_sunny_outlined, 'label': '습관'},
     ];
@@ -6550,7 +6549,7 @@ class _TasksScreenState extends State<TasksScreen>
                                 return;
                               }
                               if (onDelete != null) {
-                                // 일정 탭의 일정은 바로 지우지 않고 오늘 탭과 동일한
+                                // 캘린더 탭의 일정은 바로 지우지 않고 오늘 탭과 동일한
                                 // 확인 다이얼로그(삭제 / 다른 날짜로 옮기기)를 먼저 띄운다.
                                 if (isScheduleItem) {
                                   final deleteCallback = onDelete;
@@ -9497,7 +9496,7 @@ class _TasksScreenState extends State<TasksScreen>
     );
   }
 
-  // ── 일정 탭 ────────────────────────────────
+  // ── 캘린더 탭 ───────────────────────────────
   String _dateKey(DateTime day) {
     return "${day.year}-${day.month.toString().padLeft(2, '0')}-${day.day.toString().padLeft(2, '0')}";
   }
@@ -10367,7 +10366,7 @@ class _TasksScreenState extends State<TasksScreen>
     cleaned = _cleanRegistrationTitle(cleaned);
 
     return ParsedVoiceRegistration(
-      title: cleaned.isEmpty ? "새 일정" : cleaned,
+      title: cleaned.isEmpty ? "새 캘린더 일정" : cleaned,
       date: parsedDate,
       time: parsedTime,
       hasDate: hasDate,
@@ -10427,7 +10426,7 @@ class _TasksScreenState extends State<TasksScreen>
                             ),
                             const SizedBox(width: 6),
                             Text(
-                              '일정 등록 제안',
+                              '캘린더 일정 등록 제안',
                               style: GoogleFonts.notoSansKr(
                                 fontSize: 15,
                                 fontWeight: FontWeight.w800,
@@ -11403,7 +11402,7 @@ class _TasksScreenState extends State<TasksScreen>
             child: Padding(
               padding: const EdgeInsets.all(20),
               child: Text(
-                '등록된 일정이 없습니다.',
+                '등록된 캘린더 일정이 없습니다.',
                 style: GoogleFonts.notoSansKr(
                   fontSize: 13,
                   color: const Color(0xFFA0A0B0),
@@ -12223,7 +12222,7 @@ class _TasksScreenState extends State<TasksScreen>
                     Row(
                       children: [
                         Text(
-                          '일정 옵션',
+                          '캘린더 일정 옵션',
                           style: GoogleFonts.notoSansKr(
                             fontSize: 18,
                             fontWeight: FontWeight.w900,
@@ -12553,7 +12552,7 @@ class _TasksScreenState extends State<TasksScreen>
                         color: const Color(0xFF3D3A4E),
                       ),
                       decoration: InputDecoration(
-                        hintText: '일정 입력...',
+                        hintText: '캘린더 일정 입력...',
                         hintStyle: GoogleFonts.notoSansKr(
                           fontSize: 14,
                           color: const Color(0xFFA0A0B0),
@@ -14719,7 +14718,7 @@ $content
                 _buildConversionOption(
                   icon: Icons.today,
                   title: '오늘 할 일로 추가',
-                  subtitle: '오늘 일정에 즉시 추가됩니다.',
+                  subtitle: '오늘 캘린더에 즉시 추가됩니다.',
                   onTap: () {
                     Navigator.pop(ctx);
                     widget.onConvertAction!(action, 'task_today');

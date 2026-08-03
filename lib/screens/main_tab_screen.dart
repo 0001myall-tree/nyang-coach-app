@@ -2276,12 +2276,12 @@ class _MainTabScreenState extends State<MainTabScreen>
                       children: [
                         _buildPlannerHelpSection(
                           iconPath: 'assets/icons/planner-microphone.svg',
-                          title: '음성으로 일정 등록하기',
+                          title: '음성으로 캘린더 일정 등록하기',
                           body:
                               '마이크를 누르고\n'
                               '"내일 오후 3시 회의 추가해줘"\n'
                               '"저녁 7시에 운동 등록해줘"\n'
-                              '처럼 \'추가해줘\' 또는 \'등록해줘\'를 붙여 말하면 바로 일정을 등록할 수 있어요.',
+                              '처럼 \'추가해줘\' 또는 \'등록해줘\'를 붙여 말하면 바로 캘린더 일정을 등록할 수 있어요.',
                           highlightTerms: const ['추가해줘', '등록해줘'],
                         ),
                         const SizedBox(height: 18),
