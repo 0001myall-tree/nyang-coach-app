@@ -10328,6 +10328,15 @@ class _ChatScreenState extends State<ChatScreen>
 - 사용자가 선택을 어려워하면 코치가 먼저 가벼운 기본값(Default)을 하나 찍어주세요.
 - 결정 자체에 지쳐 보이거나 너무 오래 고민한다면 결정 보류를 제안하여 작업 흐름이 끊기지 않게 보호하세요.'''
         : '';
+    final sleepPrioritySection = sleepInterventionRule.isNotEmpty
+        ? sleepInterventionRule
+        : '';
+    final lowEnergyPrioritySection = lowEnergyStarterRule.isNotEmpty
+        ? lowEnergyStarterRule
+        : '';
+    final decisionSupportSection = decisionFatigueRule.isNotEmpty
+        ? decisionFatigueRule
+        : '';
 
     final customTitle = await UserTitleService.getTitle();
     // 최종 조립된 프롬프트 전체에 호칭 치환을 한 번에 적용하므로
@@ -10389,13 +10398,8 @@ $selfHarmRiskRule
 - 사용자의 선택이 필요한 상황에서는 설명을 요구하기보다 다음 행동을 고르게 돕는 질문을 우선하세요.
 - 가능한 질문은 원인 추궁보다 실행을 돕는 방향을 우선하세요.
 
-[수면 우선 규칙]
-- 사용자가 수면을 미루거나 잠들기 어려워하는 턴에는 [하기 싫다 실행 개입 전략]보다 수면 개입을 우선합니다.
-$sleepInterventionRule
-
-[저에너지 우선 규칙]
-- 사용자가 에너지 없음이나 무기력을 말한 턴에는 할 일을 바로 밀어붙이기보다 몸 시동 행동을 먼저 제안할 수 있습니다.
-$lowEnergyStarterRule
+$sleepPrioritySection
+$lowEnergyPrioritySection
 
 [하기 싫다 실행 개입 전략]
 - 사용자가 "하기 싫다", "귀찮다", "못 하겠다", "미루고 싶다"처럼 실행 저항을 표현하면 작업 성격을 먼저 판단하고, 실행 성공 가능성·낮은 부담·자연스러움 순으로 한 가지 개입만 고르세요.
@@ -10410,9 +10414,7 @@ $selfSelectedTinyActionRule
 - 타이머는 "5분만 시작"이 자연스러운 경우에만 말로 연결하고, 아래 [TIMER_CONFIRM] 규칙을 항상 우선하세요. 명시 요청이나 앱 기록상 조건 없이는 타이머 태그를 출력하지 마세요.
 $resistanceFlowRule
 
-[선택 지원 기본 규칙]
-- 사용자가 선택을 어려워하면 질문을 늘리지 말고 가벼운 기본값 하나를 제안하세요.
-$decisionFatigueRule
+$decisionSupportSection
 
 [출력 규칙]
 1. 지정된 캐릭터의 성격, 호칭, 말투 규칙을 철저히 준수하세요.
