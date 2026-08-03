@@ -4477,6 +4477,7 @@ class _ChatScreenState extends State<ChatScreen>
 
   String _todayTaskOverviewOpenMessage({
     required bool hasAnyTask,
+    required int totalCount,
     required String? coreTask,
     required List<String> habitNames,
   }) {
@@ -4490,10 +4491,10 @@ class _ChatScreenState extends State<ChatScreen>
     }
 
     final buffer = StringBuffer(switch (widget.coachId) {
-      'nyang_halbae' || 'cat' => '냥이가 할 일 탭 열어줄게.',
-      'bro' => '할 일 탭 열어준다.',
-      'sec_female' => '오늘 할 일 탭을 열어드릴게요.',
-      _ => '오늘 할 일 탭 열어줄게.',
+      'nyang_halbae' || 'cat' => '오늘 할 일은 총 $totalCount가지다냥.',
+      'bro' => '오늘 할 일은 총 $totalCount가지다.',
+      'sec_female' => '오늘 할 일은 총 $totalCount가지예요.',
+      _ => '오늘 할 일은 총 $totalCount가지야.',
     });
     if (coreTask != null && coreTask.trim().isNotEmpty) {
       buffer.write(switch (widget.coachId) {
@@ -4506,12 +4507,18 @@ class _ChatScreenState extends State<ChatScreen>
     if (habitNames.isNotEmpty) {
       final names = habitNames.take(2).join(', ');
       buffer.write(switch (widget.coachId) {
-        'nyang_halbae' || 'cat' => '\n습관도 "$names" 챙기면 좋겠다냥.',
-        'bro' => '\n습관은 "$names" 챙기면 된다.',
-        'sec_female' => '\n습관은 "$names"도 함께 확인해 주세요.',
-        _ => '\n습관은 "$names"도 같이 챙기면 좋겠어.',
+        'nyang_halbae' || 'cat' => '\n습관으로는 "$names"이 보인다냥.',
+        'bro' => '\n습관으로는 "$names"이 보인다.',
+        'sec_female' => '\n습관으로는 "$names"이 보여요.',
+        _ => '\n습관으로는 "$names"이 보여.',
       });
     }
+    buffer.write(switch (widget.coachId) {
+      'nyang_halbae' || 'cat' => '\n냥이가 할 일 탭 열어줄게.',
+      'bro' => '\n할 일 탭 열어준다.',
+      'sec_female' => '\n오늘 할 일 탭을 열어드릴게요.',
+      _ => '\n오늘 할 일 탭 열어줄게.',
+    });
     return buffer.toString();
   }
 
@@ -4549,6 +4556,7 @@ class _ChatScreenState extends State<ChatScreen>
     final reply = await UserTitleService.applyForCoach(
       _todayTaskOverviewOpenMessage(
         hasAnyTask: todayTasks.isNotEmpty,
+        totalCount: todayTasks.length,
         coreTask: coreTask,
         habitNames: habitNames,
       ),
