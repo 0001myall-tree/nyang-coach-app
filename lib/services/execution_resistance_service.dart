@@ -122,6 +122,26 @@ class ExecutionResistanceService {
     '완료',
   ];
 
+  /// 부분 실행 보고 표현. 전체 완료로 단정하지 않고 "시작/진행"으로 받아야
+  /// 하는 턴에만 [완료/부분 실행 반응 원칙]을 프롬프트에 넣기 위해 쓴다.
+  static const List<String> _partialExecutionSignals = [
+    '시작했',
+    '시작함',
+    '해봤',
+    '해보았',
+    '조금했',
+    '좀했',
+    '살짝했',
+    '반쯤',
+    '절반',
+    '진행했',
+    '진행중',
+    '손댔',
+    '손댐',
+    '열었',
+    '켜봤',
+  ];
+
   static int _firstIndexOf(String text, List<String> signals) {
     var found = -1;
     for (final signal in signals) {
@@ -157,6 +177,14 @@ class ExecutionResistanceService {
     if (completionIndex > signalIndex) return false;
 
     return true;
+  }
+
+  /// 사용자가 어떤 일을 완료했거나 일부 실행했다고 보고하는 턴인지 판정.
+  static bool isCompletionOrPartialExecutionReport(String text) {
+    final normalized = _normalize(text);
+    if (normalized.isEmpty) return false;
+    if (_completionSignals.any(normalized.contains)) return true;
+    return _partialExecutionSignals.any(normalized.contains);
   }
 
   /// 원인을 특정하지 못한 답변인지 판정. 여기서 걸러지지 않으면 구체적인 원인으로 본다.
