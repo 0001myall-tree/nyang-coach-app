@@ -7925,6 +7925,8 @@ class _ChatScreenState extends State<ChatScreen>
       return;
     }
 
+    if (await _tryOpenScheduleOverview(trimmed)) return;
+
     final navigationReply = _featureLocationReply(trimmed);
     if (navigationReply != null) {
       final navMessage = await UserTitleService.applyForCoach(
@@ -8892,6 +8894,79 @@ class _ChatScreenState extends State<ChatScreen>
         _ => '${base(' 화면에 있어. 바로 열어줄게.')}',
       },
     };
+  }
+
+  bool _isSimpleScheduleOverviewRequest(String input) {
+    final compact = input.trim().toLowerCase().replaceAll(
+      RegExp(r'[\s.。!！?？~〜]+'),
+      '',
+    );
+    if (compact.isEmpty) return false;
+    if (_isDeletionCommand(input) ||
+        _isEditCommand(input) ||
+        _isScheduleRegistrationCommand(input) ||
+        _isHabitRegistrationCommand(input)) {
+      return false;
+    }
+    if (compact.contains('반복')) return false;
+    if (RegExp(r'(아까|방금|이전|저번|지난번|그일정|그미팅|그회의|그약속|meetup)').hasMatch(compact)) {
+      return false;
+    }
+    if (RegExp(r'(일정|스케줄|캘린더)').hasMatch(compact) &&
+        RegExp(r'(확인|알려|보여|열어|정리|조회|봐줘|볼래|보고싶)').hasMatch(compact)) {
+      return true;
+    }
+    return [
+      '일정',
+      '오늘일정',
+      '오늘뭐있어',
+      '오늘뭐있지',
+      '오늘뭐있냐',
+      '오늘뭐있나요',
+      '캘린더',
+    ].contains(compact);
+  }
+
+  String _scheduleOverviewOpenMessage() {
+    return switch (widget.coachId) {
+      'cat' => '오늘 일정 열어줄게냥.',
+      'nyang_halbae' => '오늘 일정 열어줄게냥.',
+      'boyfriend' => '오늘 일정 열어줄게.',
+      'bro' => '오늘 일정 열어준다.',
+      'halmae' => '오늘 일정 열어줄게.',
+      'sec_female' => '오늘 일정을 열어드릴게요.',
+      _ => '오늘 일정 열어줄게냥.',
+    };
+  }
+
+  Future<bool> _tryOpenScheduleOverview(String input) async {
+    if (!_isSimpleScheduleOverviewRequest(input)) return false;
+
+    final reply = await UserTitleService.applyForCoach(
+      _scheduleOverviewOpenMessage(),
+      widget.coachId,
+    );
+    setState(() {
+      _messages.add(
+        ChatMessage(text: input, isUser: true, time: DateTime.now()),
+      );
+      _messages.add(
+        ChatMessage(text: reply, isUser: false, time: DateTime.now()),
+      );
+      _suggestedTasks = [];
+      _dynamicChips = [];
+      _suppressDefaultChips = false;
+      _coachSwitchTarget = null;
+    });
+    _scrollToBottom();
+    await _saveHistory();
+    await AnalyticsService.logConversationMessage(
+      coachId: widget.coachId,
+      usedApi: false,
+    );
+    await Future.delayed(const Duration(milliseconds: 260));
+    widget.onOpenFeatureLocation?.call('schedule');
+    return true;
   }
 
   // ── 웹앱 buildMemoryContext() 이식 (전 코치 등급) ───────
