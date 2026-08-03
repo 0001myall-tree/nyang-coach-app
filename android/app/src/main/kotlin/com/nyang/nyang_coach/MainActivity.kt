@@ -2,7 +2,9 @@ package com.coscene.nyangcoach
 
 import android.Manifest
 import android.app.AlarmManager
+import android.appwidget.AppWidgetManager
 import android.app.NotificationManager
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -24,6 +26,7 @@ import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterFragmentActivity() {
     private val morningAlarmChannel = "nyang_coach/morning_alarm"
+    private val widgetStatusChannel = "nyang_coach/widget_status"
     private var morningAlarmPlayer: MediaPlayer? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -87,6 +90,27 @@ class MainActivity : FlutterFragmentActivity() {
                     else -> result.notImplemented()
                 }
             }
+
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, widgetStatusChannel)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "hasInstalledCatHomeWidget" -> {
+                        result.success(hasInstalledCatHomeWidget())
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+    }
+
+    private fun hasInstalledCatHomeWidget(): Boolean {
+        val appWidgetManager = AppWidgetManager.getInstance(this)
+        val miniWidgetIds = appWidgetManager.getAppWidgetIds(
+            ComponentName(this, NyangWidgetProvider::class.java)
+        )
+        val characterWidgetIds = appWidgetManager.getAppWidgetIds(
+            ComponentName(this, CatCharacterWidgetProvider::class.java)
+        )
+        return miniWidgetIds.isNotEmpty() || characterWidgetIds.isNotEmpty()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {

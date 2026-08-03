@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:async';
+import 'dart:io';
 import 'dart:math';
 import 'dart:ui';
 import 'package:flutter/material.dart';
@@ -24,6 +25,8 @@ import 'tasks_screen.dart';
 import 'records_screen.dart';
 import 'settings_screen.dart';
 import '../theme/app_design_tokens.dart';
+import '../widgets/app_bottom_sheet.dart';
+import '../widgets/app_button.dart';
 
 // 각 탭 화면 플레이스홀더
 class ChatPlaceholderScreen extends StatelessWidget {
@@ -180,6 +183,14 @@ class _MainTabScreenState extends State<MainTabScreen>
   static const int _recordsFeedbackCacheVersion = 3;
   static const String _recordsFeedbackSeenSignatureKey =
       'nyang_records_feedback_seen_signature';
+  static const String _catWidgetPromptHiddenKey =
+      'cat_widget_prompt_hidden_forever';
+  static const String _catWidgetPromptFirstSeenAtKey =
+      'cat_widget_prompt_first_seen_at';
+  static const String _catWidgetPromptLastShownAtKey =
+      'cat_widget_prompt_last_shown_at';
+  static const Duration _catWidgetPromptFirstDelay = Duration(days: 1);
+  static const Duration _catWidgetPromptCooldown = Duration(days: 7);
 
   late int _openDrawerIndex; // 0: 채팅, 1: 할일, 2: 기록, 3: 설정
   Map<String, dynamic>? _vacationInfo;
@@ -193,6 +204,7 @@ class _MainTabScreenState extends State<MainTabScreen>
   // 이미 열려 있으면 새로 덮어 띄우지 않는다.
   static bool _isPlannerOverlayOpen = false;
   bool _redirectingForCoachAccess = false;
+  bool _catWidgetPromptShowing = false;
 
   int _logoTapCount = 0;
   Timer? _logoTapTimer;
@@ -617,6 +629,10 @@ class _MainTabScreenState extends State<MainTabScreen>
           initialItemId: widget.initialPlannerItemId,
         );
       });
+    } else {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        unawaited(_maybeShowCatWidgetPrompt());
+      });
     }
 
     // 냥냥코치 웹 앱(Nyang Insight) 연동 등을 통해 실시간으로 Firebase에 추가된 할 일 동기화
@@ -680,6 +696,7 @@ class _MainTabScreenState extends State<MainTabScreen>
     if (canContinue) {
       await _refreshRecordsNewBadge();
       await _checkWidgetIntent();
+      await _maybeShowCatWidgetPrompt();
     }
   }
 
@@ -720,6 +737,191 @@ class _MainTabScreenState extends State<MainTabScreen>
       (route) => false,
     );
     return false;
+  }
+
+  Future<void> _maybeShowCatWidgetPrompt() async {
+    if (!mounted ||
+        _catWidgetPromptShowing ||
+        widget.coachId != 'cat' ||
+        widget.openTasksOverlayOnStart ||
+        _openDrawerIndex != 0) {
+      return;
+    }
+
+    final data = await UserDataService.load();
+    if (!data.isPlanActive || !data.canAccessCoach('cat')) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.getBool(_catWidgetPromptHiddenKey) ?? false) return;
+
+    final now = DateTime.now();
+    final firstSeenAt = prefs.getInt(_catWidgetPromptFirstSeenAtKey);
+    if (firstSeenAt == null) {
+      await prefs.setInt(
+        _catWidgetPromptFirstSeenAtKey,
+        now.millisecondsSinceEpoch,
+      );
+      return;
+    }
+    final firstSeen = DateTime.fromMillisecondsSinceEpoch(firstSeenAt);
+    if (now.difference(firstSeen) < _catWidgetPromptFirstDelay) return;
+
+    final lastShownAt = prefs.getInt(_catWidgetPromptLastShownAtKey);
+    if (lastShownAt != null) {
+      final lastShown = DateTime.fromMillisecondsSinceEpoch(lastShownAt);
+      if (now.difference(lastShown) < _catWidgetPromptCooldown) {
+        return;
+      }
+    }
+
+    final hasWidget = await WidgetSyncService.hasInstalledCatHomeWidget();
+    if (hasWidget || !mounted) return;
+
+    await prefs.setInt(
+      _catWidgetPromptLastShownAtKey,
+      now.millisecondsSinceEpoch,
+    );
+    _catWidgetPromptShowing = true;
+    try {
+      await _showCatWidgetPromptSheet(prefs);
+    } finally {
+      _catWidgetPromptShowing = false;
+    }
+  }
+
+  Future<void> _showCatWidgetPromptSheet(SharedPreferences prefs) {
+    return showAppBottomSheet<void>(
+      context: context,
+      builder: (sheetContext) {
+        Future<void> chooseWidget(String widgetId) async {
+          final isMini = widgetId == 'cat';
+          await prefs.setBool('widget_nyang_enabled', isMini);
+          await prefs.setBool('widget_cat_character_enabled', !isMini);
+          await prefs.setBool('widget_nyang_halbae_enabled', false);
+          await prefs.setBool('widget_sec_female_enabled', false);
+          await prefs.setBool('nyang_home_widget_enabled', true);
+          await WidgetSyncService.syncFromStoredTasks();
+
+          if (sheetContext.mounted) Navigator.pop(sheetContext);
+
+          if (Platform.isIOS) {
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('홈 화면을 길게 누른 뒤 + 버튼에서 냥냥코치 위젯을 추가해 주세요.'),
+              ),
+            );
+            return;
+          }
+
+          final didRequestPin = await WidgetSyncService.requestPinWidget(
+            widgetId,
+          );
+          if (!mounted || didRequestPin) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('이 기기에서는 앱에서 위젯 추가 요청을 띄울 수 없어요.')),
+          );
+        }
+
+        Future<void> hideForever() async {
+          await prefs.setBool(_catWidgetPromptHiddenKey, true);
+          if (sheetContext.mounted) Navigator.pop(sheetContext);
+        }
+
+        return AppBottomSheetScaffold(
+          maxHeightFactor: 0.76,
+          body: ListView(
+            shrinkWrap: true,
+            padding: EdgeInsets.zero,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: AppDesignTokens.brandSoft,
+                      borderRadius: BorderRadius.circular(
+                        AppDesignTokens.radiusMedium,
+                      ),
+                      border: Border.all(color: AppDesignTokens.brandBorder),
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(
+                        AppDesignTokens.radiusMedium,
+                      ),
+                      child: Image.asset(
+                        'assets/images/iphonecatwidget1.png',
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '냥이가 홈 화면에서도 기다릴까?',
+                          style: GoogleFonts.notoSansKr(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w900,
+                            color: AppDesignTokens.textPrimary,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '앱을 열지 않아도 오늘 할 일을 살짝 볼 수 있다냥.',
+                          style: GoogleFonts.notoSansKr(
+                            fontSize: 13,
+                            height: 1.4,
+                            fontWeight: FontWeight.w600,
+                            color: AppDesignTokens.brandTextMuted,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              _CatWidgetPromptOption(
+                title: '미니 위젯',
+                subtitle: '작게 올려두고 남은 할 일을 바로 보기',
+                imagePath: 'assets/images/iphonecatwidget1.png',
+                onTap: () => chooseWidget('cat'),
+              ),
+              const SizedBox(height: 10),
+              _CatWidgetPromptOption(
+                title: '가로 위젯',
+                subtitle: '냥이랑 오늘 진행 상황을 더 넓게 보기',
+                imagePath: 'assets/images/cat_widget2.png',
+                onTap: () => chooseWidget('cat_character'),
+              ),
+            ],
+          ),
+          footer: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AppButton(
+                label: '나중에',
+                variant: AppButtonVariant.secondary,
+                onPressed: () => Navigator.pop(sheetContext),
+              ),
+              const SizedBox(height: 8),
+              AppButton(
+                label: '다시는 보지 않기',
+                variant: AppButtonVariant.outline,
+                backgroundColor: Colors.transparent,
+                foregroundColor: AppDesignTokens.textSecondary,
+                borderColor: AppDesignTokens.divider,
+                onPressed: hideForever,
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   void _openTasksGoalVisionDrawer(List<String> highlightVisionIds) {
@@ -2354,6 +2556,94 @@ class _MainTabScreenState extends State<MainTabScreen>
       active ? Icons.settings_rounded : Icons.settings_outlined,
       size: 24,
       color: color,
+    );
+  }
+}
+
+class _CatWidgetPromptOption extends StatelessWidget {
+  const _CatWidgetPromptOption({
+    required this.title,
+    required this.subtitle,
+    required this.imagePath,
+    required this.onTap,
+  });
+
+  final String title;
+  final String subtitle;
+  final String imagePath;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppDesignTokens.surfaceSubtle,
+      borderRadius: BorderRadius.circular(AppDesignTokens.radiusMedium),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppDesignTokens.radiusMedium),
+        child: Container(
+          constraints: const BoxConstraints(
+            minHeight: AppDesignTokens.minTouchTarget,
+          ),
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(AppDesignTokens.radiusMedium),
+            border: Border.all(color: AppDesignTokens.divider),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: AppDesignTokens.brandBorder),
+                ),
+                child: ClipOval(
+                  child: Image.asset(imagePath, fit: BoxFit.cover),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.notoSansKr(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w900,
+                        color: AppDesignTokens.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      subtitle,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.notoSansKr(
+                        fontSize: 12,
+                        height: 1.35,
+                        fontWeight: FontWeight.w600,
+                        color: AppDesignTokens.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Icon(
+                Icons.arrow_forward_ios_rounded,
+                size: 16,
+                color: AppDesignTokens.brandMuted,
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

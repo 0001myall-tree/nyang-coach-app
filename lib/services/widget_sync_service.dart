@@ -1,10 +1,15 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/services.dart';
 import 'package:home_widget/home_widget.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class WidgetSyncService {
+  static const MethodChannel _widgetChannel = MethodChannel(
+    'nyang_coach/widget_status',
+  );
+
   static const String androidWidgetNyang = 'NyangWidgetProvider';
   static const String androidWidgetCatCharacter = 'CatCharacterWidgetProvider';
 
@@ -245,6 +250,23 @@ class WidgetSyncService {
       return true;
     }
     return false;
+  }
+
+  static Future<bool> hasInstalledCatHomeWidget() async {
+    try {
+      final installed = await _widgetChannel.invokeMethod<bool>(
+        'hasInstalledCatHomeWidget',
+      );
+      if (installed != null) return installed;
+    } catch (_) {
+      // Native widget detection is best-effort. Fall back to the user's saved
+      // widget preference so unsupported platforms do not block the app flow.
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+    return (prefs.getBool('widget_nyang_enabled') ?? false) ||
+        (prefs.getBool('widget_cat_character_enabled') ?? false) ||
+        (prefs.getBool('nyang_home_widget_enabled') ?? false);
   }
 
   static Future<void> _configureIOSAppGroup() async {

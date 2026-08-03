@@ -5,6 +5,8 @@ import WidgetKit
 
 @main
 @objc class AppDelegate: FlutterAppDelegate {
+  private let widgetStatusChannel = "nyang_coach/widget_status"
+
   private func reloadWidgetsIfAvailable() {
     if #available(iOS 14.0, *) {
       WidgetCenter.shared.reloadAllTimelines()
@@ -37,6 +39,19 @@ import WidgetKit
   ) -> Bool {
     UNUserNotificationCenter.current().delegate = self
     GeneratedPluginRegistrant.register(with: self)
+    if let controller = window?.rootViewController as? FlutterViewController {
+      let channel = FlutterMethodChannel(
+        name: widgetStatusChannel,
+        binaryMessenger: controller.binaryMessenger
+      )
+      channel.setMethodCallHandler { call, result in
+        if call.method == "hasInstalledCatHomeWidget" {
+          self.hasInstalledCatHomeWidget(result: result)
+        } else {
+          result(FlutterMethodNotImplemented)
+        }
+      }
+    }
     if let url = launchOptions?[.url] as? URL {
       storeWidgetIntent(from: url)
     }
@@ -51,5 +66,28 @@ import WidgetKit
   ) -> Bool {
     storeWidgetIntent(from: url)
     return super.application(app, open: url, options: options)
+  }
+
+  private func hasInstalledCatHomeWidget(result: @escaping FlutterResult) {
+    guard #available(iOS 14.0, *) else {
+      result(false)
+      return
+    }
+
+    WidgetCenter.shared.getCurrentConfigurations { configurationsResult in
+      switch configurationsResult {
+      case .success(let widgets):
+        let hasCatWidget = widgets.contains { info in
+          info.kind == "NyangWidget" || info.kind == "NyangCompactWidget"
+        }
+        DispatchQueue.main.async {
+          result(hasCatWidget)
+        }
+      case .failure:
+        DispatchQueue.main.async {
+          result(false)
+        }
+      }
+    }
   }
 }
