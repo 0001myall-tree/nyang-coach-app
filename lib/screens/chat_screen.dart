@@ -10362,10 +10362,15 @@ class _ChatScreenState extends State<ChatScreen>
     required _MasterModelPolicy masterModelPolicy,
   }) async {
     final historyLimit = 6;
-    final promptHistory = _messages
+    final now = DateTime.now();
+    final previousMessages = _messages.isNotEmpty && _messages.last.isUser
+        ? _messages.take(_messages.length - 1)
+        : _messages;
+    final promptHistory = previousMessages
         .where((message) {
           if (message.kind == 'vision_choice') return false;
           if (message.text.trim().isEmpty) return false;
+          if (!_isSameDay(message.time, now)) return false;
           return true;
         })
         .toList(growable: false);
@@ -10614,6 +10619,11 @@ $resistanceFlowRule'''
 ${contextString.isNotEmpty ? '\n$contextString' : ''}
 $masterStyleRule
 
+[연속 대화 맥락 기준]
+- 직전 대화처럼 이어받아도 되는 말은 오늘 같은 날짜에 오간 대화뿐입니다.
+- 날짜가 다른 과거 대화는 사용자가 "전에 말한 것", "예전에 말했던 것", "그때 이야기"처럼 명확히 지칭할 때만 참고 대상으로 보세요.
+- 사용자가 "일정 확인", "오늘 할 일", "뭐 하지?"처럼 새 조회나 새 판단을 요청하면 과거 대화보다 현재 날짜의 최신 앱 기록과 현재 입력을 우선하세요.
+
 [자해·자살 안전 우선 규칙]
 - 자해·자살 위험 신호가 감지된 턴이나 직전 안전 확인의 후속 답변에서는 안전 대응이 캐릭터 설정, 일정, 생산성, 실행, 타이머, 할 일, 성취 평가, 다른 코치 연결보다 우선합니다.
 $selfHarmRiskRule
@@ -10761,7 +10771,6 @@ $timerOutputRule
 4. 단순 시간표나 전체 일정 배치는 하지 마세요.]''';
     }
 
-    final now = DateTime.now();
     final timePrefix =
         '[${now.hour}:${now.minute.toString().padLeft(2, '0')}] ';
     if (shouldOfferLowEnergyStarter) {
