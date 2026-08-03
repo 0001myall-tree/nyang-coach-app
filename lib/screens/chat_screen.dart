@@ -13952,56 +13952,29 @@ $timerOutputRule
     );
   }
 
-  bool get _isSimpleChatBackground => widget.chatBgStyle == 'simple';
-
   Color get _quickChipBackgroundColor {
-    if (_coach.isMaster) {
-      return AppDesignTokens.brandChip.withValues(alpha: 0.86);
-    }
-    if (_isSimpleChatBackground) return AppDesignTokens.brandChip;
-    return Colors.white.withValues(alpha: 0.86);
+    return AppDesignTokens.brandChip.withValues(alpha: 0.9);
   }
 
   Color get _quickChipBorderColor {
-    if (_coach.isMaster) {
-      return AppDesignTokens.brandCardBorder.withValues(alpha: 0.74);
-    }
-    if (_isSimpleChatBackground) {
-      return _coach.accentColor.withValues(alpha: 0.22);
-    }
-    return Colors.white.withValues(alpha: 0.58);
+    return AppDesignTokens.brandCardBorder.withValues(alpha: 0.82);
   }
 
   Color get _quickChipForegroundColor {
-    if (_coach.isMaster) return AppDesignTokens.brandPressed;
-    return _coach.accentColor;
+    return AppDesignTokens.brandPressed;
   }
 
   List<BoxShadow> get _quickChipShadow {
-    final shadowColor = _coach.isMaster
-        ? AppDesignTokens.brand
-        : _coach.accentColor;
-    if (_coach.isMaster) {
-      return [
-        BoxShadow(
-          color: shadowColor.withValues(alpha: 0.12),
-          blurRadius: 18,
-          offset: const Offset(0, 5),
-        ),
-        BoxShadow(
-          color: Colors.white.withValues(alpha: 0.55),
-          blurRadius: 8,
-          offset: const Offset(0, -1),
-        ),
-      ];
-    }
     return [
       BoxShadow(
-        color: shadowColor.withValues(
-          alpha: _isSimpleChatBackground ? 0.08 : 0.12,
-        ),
-        blurRadius: _isSimpleChatBackground ? 10 : 14,
-        offset: const Offset(0, 4),
+        color: AppDesignTokens.brand.withValues(alpha: 0.12),
+        blurRadius: 18,
+        offset: const Offset(0, 5),
+      ),
+      BoxShadow(
+        color: Colors.white.withValues(alpha: 0.55),
+        blurRadius: 8,
+        offset: const Offset(0, -1),
       ),
     ];
   }
