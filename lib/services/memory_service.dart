@@ -23,6 +23,15 @@ class MemoryService {
         'communication_protocol': '',
         'intervention_rules': '',
       },
+      'execution_resistance_profile': {
+        'frequent_resisted_task_types': [],
+        'common_blockers': [],
+        'effective_interventions': [],
+        'rejected_interventions': [],
+        'preferred_choice_count': null,
+        'task_specific_notes': [],
+        'last_updated': '',
+      },
       'mid_change': {
         'chapter': {'title': '', 'description': ''},
         'keywords_axis': [],
@@ -43,6 +52,19 @@ class MemoryService {
   List<dynamic> dailySummaries = [];
   List<dynamic> longTermMemory = [];
 
+  void _ensureMasterProfileShape() {
+    final defaults = _defaultMasterProfile();
+    for (final entry in defaults.entries) {
+      masterProfile.putIfAbsent(entry.key, () => entry.value);
+      if (entry.value is Map && masterProfile[entry.key] is Map) {
+        final target = masterProfile[entry.key] as Map;
+        for (final nested in (entry.value as Map).entries) {
+          target.putIfAbsent(nested.key, () => nested.value);
+        }
+      }
+    }
+  }
+
   Future<void> loadMemoryData() async {
     final prefs = await SharedPreferences.getInstance();
 
@@ -52,6 +74,7 @@ class MemoryService {
         masterProfile = jsonDecode(mpStr);
       } catch (_) {}
     }
+    _ensureMasterProfileShape();
 
     final dsStr = prefs.getString('nyang_daily_summaries');
     if (dsStr != null && dsStr.isNotEmpty) {
@@ -105,6 +128,7 @@ class MemoryService {
           final memoryData = doc.data()!['memory'];
           if (memoryData['masterProfile'] != null) {
             masterProfile = memoryData['masterProfile'];
+            _ensureMasterProfileShape();
           }
           if (memoryData['dailySummaries'] != null) {
             dailySummaries = List<dynamic>.from(memoryData['dailySummaries']);
@@ -145,24 +169,53 @@ class MemoryService {
     String formatMidItem(dynamic item) {
       if (item == null) return '';
       if (item is String) return item;
-      if (item is Map && item.containsKey('value'))
+      if (item is Map && item.containsKey('value')) {
         return item['value'].toString();
+      }
       return item.toString();
     }
 
     final highChange = masterProfile['high_change'] ?? {};
     final midChange = masterProfile['mid_change'] ?? {};
     final lowChange = masterProfile['low_change'] ?? {};
+    final resistanceProfile =
+        masterProfile['execution_resistance_profile'] as Map? ?? {};
+
+    String formatList(dynamic value) {
+      if (value is! List || value.isEmpty) return '기록 전';
+      final text = value
+          .map((e) {
+            if (e is Map && e.containsKey('value')) return e['value'];
+            return e;
+          })
+          .where((e) => e != null && e.toString().trim().isNotEmpty)
+          .join(', ');
+      return text.trim().isEmpty ? '기록 전' : text;
+    }
+
+    String resistanceCtx() {
+      final preferredChoiceCount = resistanceProfile['preferred_choice_count']
+          ?.toString()
+          .trim();
+      return '''\n[실행 저항 개인화]
+- 자주 막히는 과업: ${formatList(resistanceProfile['frequent_resisted_task_types'])}
+- 자주 보이는 막힘: ${formatList(resistanceProfile['common_blockers'])}
+- 잘 먹힌 개입: ${formatList(resistanceProfile['effective_interventions'])}
+- 거부/부담이 컸던 개입: ${formatList(resistanceProfile['rejected_interventions'])}
+- 적정 선택지 수: ${preferredChoiceCount == null || preferredChoiceCount.isEmpty ? '기록 전' : preferredChoiceCount}
+- 과업별 메모: ${formatList(resistanceProfile['task_specific_notes'])}''';
+    }
 
     if (coachTier == 'friends') {
       profileCtx +=
           '''\n- 실시간 상태: ${highChange['energy_fatigue'] ?? '관찰 중'} / ${highChange['mood_condition'] ?? '기록 전'}
-- 오늘의 장애물: ${highChange['obstacles'] ?? '없음'}''';
+- 오늘의 장애물: ${highChange['obstacles'] ?? '없음'}${resistanceCtx()}''';
     } else if (coachTier == 'pro') {
       profileCtx +=
           '''\n[실시간 상태]\n- 에너지/기분: ${highChange['energy_fatigue']} / ${highChange['mood_condition']}
 \n[현재 챕터]\n- 챕터: ${midChange['chapter']?['title']}
 - 상세: ${midChange['chapter']?['description']}
+\n${resistanceCtx()}
 \n[관찰된 패턴]\n- 의사결정 패턴: ${lowChange['decision_pattern']}
 - 성공/실패 공식: ${lowChange['success_failure_formula']}''';
     } else {
@@ -172,9 +225,10 @@ class MemoryService {
               .join(', ') ??
           '';
       profileCtx +=
-          '''\n[고변화 - 실시간]\n- 상태: ${highChange['energy_fatigue']} / ${highChange['mood_condition']}\n- 장애물: ${highChange['obstacles']}
-\n[중변화 - 최근 맥락]\n- 챕터: ${midChange['chapter']?['title']} (${midChange['chapter']?['description']})\n- 관심 축: $keywords
-\n[저변화 - 본질/패턴]\n- 정체성: ${lowChange['identity']}\n- 의사결정 패턴: ${lowChange['decision_pattern']}\n- 소통 프로토콜: ${lowChange['communication_protocol']}\n- 성공/실패 공식: ${lowChange['success_failure_formula']}
+          '''\n${resistanceCtx()}
+\n[현재 상태]\n- 상태: ${highChange['energy_fatigue']} / ${highChange['mood_condition']}\n- 장애물: ${highChange['obstacles']}
+\n[최근 맥락]\n- 챕터: ${midChange['chapter']?['title']} (${midChange['chapter']?['description']})\n- 관심 축: $keywords
+\n[장기 성향 참고]\n- 정체성: ${lowChange['identity']}\n- 의사결정 패턴: ${lowChange['decision_pattern']}\n- 소통 프로토콜: ${lowChange['communication_protocol']}\n- 성공/실패 공식: ${lowChange['success_failure_formula']}
 - 개입 규칙: ${lowChange['intervention_rules']}''';
 
       final scenes = highChange['scenes_insights'] as List?;
@@ -190,7 +244,7 @@ class MemoryService {
 
       final candidates = masterProfile['low_change_candidates'] as List?;
       if (candidates != null && candidates.isNotEmpty) {
-        profileCtx += '\n[저변화 승급 후보 (30일 지속 패턴 - 승인 요청 필요)]\n';
+        profileCtx += '\n[장기 성향 후보 (30일 지속 패턴 - 승인 요청 필요)]\n';
         for (var c in candidates) {
           if (c is Map) {
             profileCtx +=
@@ -211,10 +265,13 @@ $profileCtx
    - [사용자 고유 표현]을 문장 속에 자연스럽게 섞어서 사용하세요. (주 1~2회 빈도 제한)
    - "지난번에 ~라고 하셨잖아요"라는 직접 회상보다는, 사용자의 감정이 담긴 표현을 오늘 상황에 녹여내세요. (예: "오늘도 '숨 쉬는 느낌'이 드는 평온한 하루면 좋겠네요.")
 2. 맥락 기반 제언 (Contextual Advice): 
-   - [중변화]의 [관심 축]을 활용해 현재 상황의 원인을 짚어주세요. (예: "오늘 피로도가 높은 게, 혹시 요즘 몰입 중인 일본 진출 준비 때문일까요?")
+   - [최근 맥락]의 [관심 축]을 활용해 현재 상황의 원인을 짚어주세요. (예: "오늘 피로도가 높은 게, 혹시 요즘 몰입 중인 일본 진출 준비 때문일까요?")
 3. 자연스러운 패턴 브레이킹 (Pattern Breaking): 
-   - [저변화]의 [성공/실패 공식] 감지 시, 진단적인 말투 대신 상황 묘사형으로 부드럽게 개입하세요. (예: "지금 보니까 완벽주의 때문에 오히려 행동이 조금 느려진 상황인 것 같아요. 조금만 힘을 빼볼까요?")
-4. 실시간(Lite) 모드: 대화 중에는 위 프로필을 '읽기 전용'으로만 참조하며, 직접 프로필 수정을 언급하지 마세요.''';
+   - [장기 성향 참고]의 [성공/실패 공식] 감지 시, 진단적인 말투 대신 상황 묘사형으로 부드럽게 개입하세요. (예: "지금 보니까 완벽주의 때문에 오히려 행동이 조금 느려진 상황인 것 같아요. 조금만 힘을 빼볼까요?")
+4. 실행 저항 개인화:
+   - 실행 저항 상황에서는 [실행 저항 개인화]의 잘 먹힌 개입과 거부/부담이 컸던 개입을 우선 참고하세요.
+   - 특정 개입이 싫다고 명시되어 있거나 반복 거부된 경우, 그 방식을 반복하지 말고 더 작은 선택지나 다른 감각 채널로 바꾸세요.
+5. 실시간(Lite) 모드: 대화 중에는 위 프로필을 '읽기 전용'으로만 참조하며, 직접 프로필 수정을 언급하지 마세요.''';
 
     if (longTermMemory.isNotEmpty) {
       ctx += '\n\n[이 사용자의 장기 패턴]\n';
@@ -270,6 +327,7 @@ $textLogs
 - 컨디션: 신체적, 정신적 피로도나 에너지 레벨
 - 고민: 오늘 사용자가 토로한 고민이나 막힌 부분
 - 감정: 오늘의 지배적인 감정 키워드
+- 실행저항: 사용자가 하기 싫어하거나 미룬 과업, 막힌 이유, 수락/거부한 개입이 있으면 행동 기반으로 간결하게 기록. ADHD 등 진단명은 붙이지 말 것.
 
 반드시 아래 JSON 형식으로 응답하세요:
 {
@@ -277,7 +335,14 @@ $textLogs
   "missed": "문자열",
   "condition": "문자열",
   "concern": "문자열",
-  "emotion": "문자열"
+  "emotion": "문자열",
+  "execution_resistance": {
+    "resisted_task_types": ["cleaning|writing|reading|study|work|self_care|sleep|exercise|other"],
+    "blockers": ["task_switching|decision_overload|result_anxiety|low_energy|unclear_first_step|sensory_friction|time_pressure|other"],
+    "accepted_interventions": ["two_choice_microsteps|playful_mission|single_default|five_min_start|cause_question|countdown_start|body_activation|timer|other"],
+    "rejected_interventions": ["two_choice_microsteps|playful_mission|single_default|five_min_start|cause_question|countdown_start|body_activation|timer|other"],
+    "notes": ["문자열"]
+  }
 }''';
 
       final messages = [
@@ -375,7 +440,7 @@ $textLogs
       final recentSummaries = recent
           .map(
             (s) =>
-                '[${s['date']}] 달성:${s['achieved']} / 못함:${s['missed']} / 컨디션:${s['condition']} / 고민:${s['concern']} / 감정:${s['emotion']}',
+                '[${s['date']}] 달성:${s['achieved']} / 못함:${s['missed']} / 컨디션:${s['condition']} / 고민:${s['concern']} / 감정:${s['emotion']} / 실행저항:${jsonEncode(s['execution_resistance'] ?? {})}',
           )
           .join('\n');
 
@@ -389,17 +454,23 @@ $recentSummaries
 ${jsonEncode(masterProfile)}
 
 [분석 및 업데이트 지침]
-1. high_change: 
+1. 현재 상태:
    - 실시간 상태(에너지, 기분, 장애물)를 요약하세요.
    - 가장 의미 있었던 [장면/사용자 고유 표현/인사이트]를 최대 3개 추출하세요. (표현은 추후 '언어적 동기화'에 사용됨)
 
-2. 관찰 및 승급 (Promotion Logic):
-   - 최근 기록에서 '반복되는 패턴'을 탐지하세요.
-   - 2주(14일) 이상 지속된 패턴 -> mid_change_updates.add_or_update로 제안.
-   - 30일 이상 지속된 본질적 패턴 -> low_change_candidates로 제안 (사용자에게 승인 요청할 후보).
+2. 실행 저항 개인화:
+   - 사용자가 자주 저항하는 과업, 자주 보이는 막힘, 잘 먹힌 개입, 거부/부담이 컸던 개입을 행동 기반으로 갱신하세요.
+   - 단 한 번의 사건으로 단정하지 말고, 최근 기록에서 반복되거나 사용자가 명시적으로 말한 것만 강하게 반영하세요.
+   - "ADHD", "우울증" 같은 진단명은 저장하지 말고, "전환 어려움", "선택 과부하", "결과 확인 불안"처럼 관찰 가능한 실행 패턴으로만 저장하세요.
+   - 선택지 수 선호가 보이면 preferred_choice_count에 2 또는 3처럼 숫자로 저장하세요. 근거가 없으면 null로 두세요.
 
-3. 망각 및 가지치기 (Pruning & Decay):
-   - mid_change 항목 중 최근 14일간의 기록에서 전혀 언급되지 않거나 유효하지 않은 항목은 'remove'에 넣으세요.
+3. 반복 패턴 관찰:
+   - 최근 기록에서 '반복되는 패턴'을 탐지하세요.
+   - 2주(14일) 이상 지속된 최근 관심사/프로젝트 -> mid_change_updates.add_or_update로 제안.
+   - 30일 이상 지속된 장기 성향 -> low_change_candidates로 제안 (사용자에게 승인 요청할 후보).
+
+4. 망각 및 가지치기 (Pruning & Decay):
+   - 최근 관심사/프로젝트 중 최근 14일간의 기록에서 전혀 언급되지 않거나 유효하지 않은 항목은 'remove'에 넣으세요.
 
 반드시 아래 JSON 형식으로만 응답하세요:
 {
@@ -408,6 +479,15 @@ ${jsonEncode(masterProfile)}
     "mood_condition": "문자열",
     "obstacles": "문자열",
     "scenes_insights": [{"scene": "...", "expression": "사용자가 사용한 고유 표현", "insight": "...", "timestamp": "$todayStr"}]
+  },
+  "execution_resistance_profile": {
+    "frequent_resisted_task_types": ["cleaning|writing|reading|study|work|self_care|sleep|exercise|other"],
+    "common_blockers": ["task_switching|decision_overload|result_anxiety|low_energy|unclear_first_step|sensory_friction|time_pressure|other"],
+    "effective_interventions": ["two_choice_microsteps|playful_mission|single_default|five_min_start|cause_question|countdown_start|body_activation|timer|other"],
+    "rejected_interventions": ["two_choice_microsteps|playful_mission|single_default|five_min_start|cause_question|countdown_start|body_activation|timer|other"],
+    "preferred_choice_count": 2,
+    "task_specific_notes": ["문자열"],
+    "last_updated": "$todayStr"
   },
   "mid_change_updates": {
     "add_or_update": [{"type": "keywords_axis|focus_projects", "value": "...", "reason": "..."}],
@@ -475,6 +555,11 @@ ${jsonEncode(masterProfile)}
 
       masterProfile['high_change'] =
           update['high_change'] ?? masterProfile['high_change'];
+
+      if (update['execution_resistance_profile'] is Map) {
+        masterProfile['execution_resistance_profile'] =
+            update['execution_resistance_profile'];
+      }
 
       final midUpdates = update['mid_change_updates'];
       if (midUpdates != null) {

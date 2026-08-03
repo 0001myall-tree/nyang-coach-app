@@ -8857,37 +8857,72 @@ class _ChatScreenState extends State<ChatScreen>
         final hc = (mp['high_change'] as Map<String, dynamic>?) ?? {};
         final mc = (mp['mid_change'] as Map<String, dynamic>?) ?? {};
         final lc = (mp['low_change'] as Map<String, dynamic>?) ?? {};
+        final rp =
+            (mp['execution_resistance_profile'] as Map<String, dynamic>?) ?? {};
         final chapter = (mc['chapter'] as Map<String, dynamic>?) ?? {};
         final keywords =
             (mc['keywords_axis'] as List?)
                 ?.map((e) => e is Map ? (e['value'] ?? e) : e)
                 .join(', ') ??
             '';
+        String formatProfileList(dynamic value) {
+          if (value is! List || value.isEmpty) return '기록 전';
+          final text = value
+              .map((e) => e is Map && e.containsKey('value') ? e['value'] : e)
+              .where((e) => e != null && e.toString().trim().isNotEmpty)
+              .join(', ');
+          return text.trim().isEmpty ? '기록 전' : text;
+        }
 
         sb.writeln('\n[사용자 마스터 프로필]');
 
         if (tier == 'friends') {
-          // friends: high_change 기본 정보만
+          // friends: 현재 상태와 실행 저항 개인화만 가볍게 주입
           sb.writeln(
             '- 실시간 상태: ${hc['energy_fatigue'] ?? '관찰 중'} / ${hc['mood_condition'] ?? '기록 전'}',
           );
           sb.writeln('- 오늘의 장애물: ${hc['obstacles'] ?? '없음'}');
+          sb.writeln('[실행 저항 개인화]');
+          sb.writeln(
+            '- 잘 먹힌 개입: ${formatProfileList(rp['effective_interventions'])}',
+          );
+          sb.writeln(
+            '- 거부/부담이 컸던 개입: ${formatProfileList(rp['rejected_interventions'])}',
+          );
+          sb.writeln('- 적정 선택지 수: ${rp['preferred_choice_count'] ?? '기록 전'}');
         } else {
           // master: 전체
           fullMasterProfileInjected = true;
           final scenes = (hc['scenes_insights'] as List?) ?? [];
           final lcCandidates = (mp['low_change_candidates'] as List?) ?? [];
-          sb.writeln('[고변화 - 실시간]');
+          sb.writeln('[실행 저항 개인화]');
+          sb.writeln(
+            '- 자주 막히는 과업: ${formatProfileList(rp['frequent_resisted_task_types'])}',
+          );
+          sb.writeln(
+            '- 자주 보이는 막힘: ${formatProfileList(rp['common_blockers'])}',
+          );
+          sb.writeln(
+            '- 잘 먹힌 개입: ${formatProfileList(rp['effective_interventions'])}',
+          );
+          sb.writeln(
+            '- 거부/부담이 컸던 개입: ${formatProfileList(rp['rejected_interventions'])}',
+          );
+          sb.writeln('- 적정 선택지 수: ${rp['preferred_choice_count'] ?? '기록 전'}');
+          sb.writeln(
+            '- 과업별 메모: ${formatProfileList(rp['task_specific_notes'])}',
+          );
+          sb.writeln('\n[현재 상태]');
           sb.writeln(
             '- 상태: ${hc['energy_fatigue'] ?? '관찰 중'} / ${hc['mood_condition'] ?? '기록 전'}',
           );
           sb.writeln('- 장애물: ${hc['obstacles'] ?? '없음'}');
-          sb.writeln('\n[중변화 - 최근 맥락]');
+          sb.writeln('\n[최근 맥락]');
           sb.writeln(
             '- 챕터: ${chapter['title'] ?? ''} (${chapter['description'] ?? ''})',
           );
           sb.writeln('- 관심 축: $keywords');
-          sb.writeln('\n[저변화 - 본질/패턴]');
+          sb.writeln('\n[장기 성향 참고]');
           sb.writeln('- 정체성: ${lc['identity'] ?? ''}');
           sb.writeln('- 의사결정 패턴: ${lc['decision_pattern'] ?? ''}');
           sb.writeln('- 소통 프로토콜: ${lc['communication_protocol'] ?? ''}');
@@ -8902,7 +8937,7 @@ class _ChatScreenState extends State<ChatScreen>
             }
           }
           if (lcCandidates.isNotEmpty) {
-            sb.writeln('\n[저변화 승급 후보]');
+            sb.writeln('\n[장기 성향 후보]');
             for (final c in lcCandidates) {
               sb.writeln('- ${c['field']}: ${c['value']} (이유: ${c['reason']})');
             }
@@ -8918,9 +8953,10 @@ class _ChatScreenState extends State<ChatScreen>
       sb.writeln('''
 [코칭 개입 규칙 (매우 중요)]
 1. 언어적 동기화: [사용자 고유 표현]을 문장 속에 자연스럽게 섞어 사용하세요. (주 1~2회 빈도 제한)
-2. 맥락 기반 제언: [중변화]의 [관심 축]을 활용해 현재 상황의 원인을 짚어주세요.
-3. 패턴 브레이킹: [저변화]의 [성공/실패 공식] 감지 시, 상황 묘사형으로 부드럽게 개입하세요.
-4. 실시간 Lite 모드: 프로필을 읽기 전용으로만 참조하며, 직접 수정을 언급하지 마세요.''');
+2. 맥락 기반 제언: [최근 맥락]의 [관심 축]을 활용해 현재 상황의 원인을 짚어주세요.
+3. 실행 저항 개인화: 사용자가 하기 싫어하거나 미루는 턴에는 [실행 저항 개인화]의 잘 먹힌 개입과 거부/부담이 컸던 개입을 우선 참고하세요.
+4. 패턴 브레이킹: [장기 성향 참고]의 [성공/실패 공식] 감지 시, 상황 묘사형으로 부드럽게 개입하세요.
+5. 실시간 Lite 모드: 프로필을 읽기 전용으로만 참조하며, 직접 수정을 언급하지 마세요.''');
     }
 
     // 16. 휴식 모드 시 특별 코칭 지침
