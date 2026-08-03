@@ -2124,6 +2124,68 @@ class _ChatScreenState extends State<ChatScreen>
     return DateFormat('yyyy-MM-dd').format(date);
   }
 
+  Map<String, dynamic> _recentPlanExecutionStatsUntilYesterday(
+    SharedPreferences prefs, {
+    int days = 7,
+  }) {
+    final todayKey = _getTodayStrWithReset(prefs);
+    final today = DateTime.tryParse(todayKey) ?? DateTime.now();
+    final rawHistory = prefs.getString('nyang_history');
+    if (rawHistory == null || rawHistory.isEmpty) {
+      return {
+        'evaluatedDays': 0,
+        'totalCount': 0,
+        'doneCount': 0,
+        'averageRate': null,
+        'isVeryLow': false,
+      };
+    }
+
+    List<Map<String, dynamic>> history = [];
+    try {
+      final decoded = jsonDecode(rawHistory) as List;
+      history = decoded
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .toList();
+    } catch (_) {
+      return {
+        'evaluatedDays': 0,
+        'totalCount': 0,
+        'doneCount': 0,
+        'averageRate': null,
+        'isVeryLow': false,
+      };
+    }
+
+    final byDate = <String, Map<String, dynamic>>{
+      for (final record in history)
+        if (record['date'] is String) record['date'] as String: record,
+    };
+
+    var evaluatedDays = 0;
+    var totalCount = 0;
+    var doneCount = 0;
+    for (var offset = 1; offset <= days; offset++) {
+      final record = byDate[_dateKey(today.subtract(Duration(days: offset)))];
+      if (record == null || record['isVacation'] == true) continue;
+      final total = (record['totalCount'] as num?)?.toInt() ?? 0;
+      if (total <= 0) continue;
+      evaluatedDays++;
+      totalCount += total;
+      doneCount += (record['doneCount'] as num?)?.toInt() ?? 0;
+    }
+
+    final averageRate = totalCount > 0 ? doneCount / totalCount : null;
+    return {
+      'evaluatedDays': evaluatedDays,
+      'totalCount': totalCount,
+      'doneCount': doneCount,
+      'averageRate': averageRate,
+      'isVeryLow': averageRate != null && averageRate <= 0.3,
+    };
+  }
+
   DateTime? _latePlannerNightDate(
     DateTime now,
     String minSleepTime, {
@@ -8868,7 +8930,23 @@ class _ChatScreenState extends State<ChatScreen>
         String formatProfileList(dynamic value) {
           if (value is! List || value.isEmpty) return '기록 전';
           final text = value
-              .map((e) => e is Map && e.containsKey('value') ? e['value'] : e)
+              .map((e) {
+                if (e is Map && e.containsKey('value')) return e['value'];
+                if (e is Map && e.containsKey('intervention')) {
+                  final intervention = e['intervention'] ?? '';
+                  final taskType = e['task_type'] ?? '';
+                  final reason = e['reason'] ?? '';
+                  final rejectedAt = e['last_rejected_at'] ?? '';
+                  return [
+                    intervention,
+                    if (taskType.toString().trim().isNotEmpty) '과업:$taskType',
+                    if (reason.toString().trim().isNotEmpty) '이유:$reason',
+                    if (rejectedAt.toString().trim().isNotEmpty)
+                      '날짜:$rejectedAt',
+                  ].join(' / ');
+                }
+                return e;
+              })
               .where((e) => e != null && e.toString().trim().isNotEmpty)
               .join(', ');
           return text.trim().isEmpty ? '기록 전' : text;
@@ -8889,6 +8967,9 @@ class _ChatScreenState extends State<ChatScreen>
           sb.writeln(
             '- 거부/부담이 컸던 개입: ${formatProfileList(rp['rejected_interventions'])}',
           );
+          sb.writeln(
+            '- 최근 거부한 개입(최신순): ${formatProfileList(rp['recent_rejected_interventions'])}',
+          );
           sb.writeln('- 적정 선택지 수: ${rp['preferred_choice_count'] ?? '기록 전'}');
         } else {
           // master: 전체
@@ -8907,6 +8988,9 @@ class _ChatScreenState extends State<ChatScreen>
           );
           sb.writeln(
             '- 거부/부담이 컸던 개입: ${formatProfileList(rp['rejected_interventions'])}',
+          );
+          sb.writeln(
+            '- 최근 거부한 개입(최신순): ${formatProfileList(rp['recent_rejected_interventions'])}',
           );
           sb.writeln('- 적정 선택지 수: ${rp['preferred_choice_count'] ?? '기록 전'}');
           sb.writeln(
@@ -8954,7 +9038,7 @@ class _ChatScreenState extends State<ChatScreen>
 [코칭 개입 규칙 (매우 중요)]
 1. 언어적 동기화: [사용자 고유 표현]을 문장 속에 자연스럽게 섞어 사용하세요. (주 1~2회 빈도 제한)
 2. 맥락 기반 제언: [최근 맥락]의 [관심 축]을 활용해 현재 상황의 원인을 짚어주세요.
-3. 실행 저항 개인화: 사용자가 하기 싫어하거나 미루는 턴에는 [실행 저항 개인화]의 잘 먹힌 개입과 거부/부담이 컸던 개입을 우선 참고하세요.
+3. 실행 저항 개인화: 사용자가 하기 싫어하거나 미루는 턴에는 [실행 저항 개인화]의 잘 먹힌 개입과 거부/부담이 컸던 개입을 우선 참고하세요. 최근 거부한 개입은 최신 항목일수록 가장 후순위로 미루세요.
 4. 패턴 브레이킹: [장기 성향 참고]의 [성공/실패 공식] 감지 시, 상황 묘사형으로 부드럽게 개입하세요.
 5. 실시간 Lite 모드: 프로필을 읽기 전용으로만 참조하며, 직접 수정을 언급하지 마세요.''');
     }
@@ -9071,6 +9155,20 @@ class _ChatScreenState extends State<ChatScreen>
             );
           }
         } catch (_) {}
+      }
+      final stats = _recentPlanExecutionStatsUntilYesterday(prefs);
+      final averageRate = stats['averageRate'] as double?;
+      sb.writeln('\n[최근 7일 평균 실행률 - 오늘 제외, 어제까지]');
+      if (averageRate == null) {
+        sb.writeln('- 평가 가능한 완료 기록이 아직 충분하지 않음');
+      } else {
+        final pct = (averageRate * 100).round();
+        sb.writeln(
+          '- 평균 실행률: $pct% (${stats['doneCount']}/${stats['totalCount']}, 평가 대상 ${stats['evaluatedDays']}일)',
+        );
+        sb.writeln(
+          '- 초저항 우선 대상인가: ${stats['isVeryLow'] == true ? '예' : '아니오'}',
+        );
       }
     }
 
@@ -9966,6 +10064,23 @@ class _ChatScreenState extends State<ChatScreen>
     }
 
     if (!ExecutionResistanceService.isResistanceExpression(userText)) return '';
+
+    final prefs = await SharedPreferences.getInstance();
+    final executionStats = _recentPlanExecutionStatsUntilYesterday(prefs);
+    if (executionStats['isVeryLow'] == true) {
+      _awaitingResistanceCause = false;
+      _awaitingCountdownConsent = false;
+      final pct = ((executionStats['averageRate'] as double) * 100).round();
+      return '''
+
+[이번 턴 지시 - 최근 실행률 30% 이하, 초저항 우선]
+- 사용자의 오늘 제외 최근 7일 평균 실행률이 $pct%입니다. 오늘은 아직 진행 중이므로 오늘 완료율은 판단에 쓰지 않았습니다.
+- 원인 확인 질문을 하지 말고, [초저항 시작 모드] 중 현재 맥락에 맞는 선택지를 바로 제안하세요.
+- 구체적인 과업명이 있거나 실제 시작이 가능한 상황이면 [선택형 할 일 쪼개기]를 우선하고, 과업 자체가 너무 싫거나 몸이 멈춘 느낌이면 [탐색형 놀이 미션]을 우선하세요.
+- 후보는 2~3개만 제시하고, 사용자가 그중 하나만 고르게 하세요. 모든 후보를 다 하게 하거나 추가 설명을 길게 붙이지 마세요.
+- 최근에 거부한 개입이 [실행 저항 개인화]에 있으면 그 방식은 가장 후순위로 미루고 다른 방식부터 제안하세요.
+- 답변은 2문장 이내로 유지하고 [TASK], [TIMER_CONFIRM], [COUNTDOWN_START] 태그를 출력하지 마세요.''';
+    }
 
     // 하루 1회 제한: 이미 물어봤으면 대화를 늘리지 말고 바로 작은 제안으로 간다.
     if (await ExecutionResistanceService.hasAskedDiagnosisToday()) {

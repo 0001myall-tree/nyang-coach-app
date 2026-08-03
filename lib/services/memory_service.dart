@@ -28,6 +28,7 @@ class MemoryService {
         'common_blockers': [],
         'effective_interventions': [],
         'rejected_interventions': [],
+        'recent_rejected_interventions': [],
         'preferred_choice_count': null,
         'task_specific_notes': [],
         'last_updated': '',
@@ -186,6 +187,18 @@ class MemoryService {
       final text = value
           .map((e) {
             if (e is Map && e.containsKey('value')) return e['value'];
+            if (e is Map && e.containsKey('intervention')) {
+              final intervention = e['intervention'] ?? '';
+              final taskType = e['task_type'] ?? '';
+              final reason = e['reason'] ?? '';
+              final rejectedAt = e['last_rejected_at'] ?? '';
+              return [
+                intervention,
+                if (taskType.toString().trim().isNotEmpty) '과업:$taskType',
+                if (reason.toString().trim().isNotEmpty) '이유:$reason',
+                if (rejectedAt.toString().trim().isNotEmpty) '날짜:$rejectedAt',
+              ].join(' / ');
+            }
             return e;
           })
           .where((e) => e != null && e.toString().trim().isNotEmpty)
@@ -202,6 +215,7 @@ class MemoryService {
 - 자주 보이는 막힘: ${formatList(resistanceProfile['common_blockers'])}
 - 잘 먹힌 개입: ${formatList(resistanceProfile['effective_interventions'])}
 - 거부/부담이 컸던 개입: ${formatList(resistanceProfile['rejected_interventions'])}
+- 최근 거부한 개입(최신순): ${formatList(resistanceProfile['recent_rejected_interventions'])}
 - 적정 선택지 수: ${preferredChoiceCount == null || preferredChoiceCount.isEmpty ? '기록 전' : preferredChoiceCount}
 - 과업별 메모: ${formatList(resistanceProfile['task_specific_notes'])}''';
     }
@@ -271,6 +285,7 @@ $profileCtx
 4. 실행 저항 개인화:
    - 실행 저항 상황에서는 [실행 저항 개인화]의 잘 먹힌 개입과 거부/부담이 컸던 개입을 우선 참고하세요.
    - 특정 개입이 싫다고 명시되어 있거나 반복 거부된 경우, 그 방식을 반복하지 말고 더 작은 선택지나 다른 감각 채널로 바꾸세요.
+   - [최근 거부한 개입]에 있는 방식은 최신 항목일수록 가장 후순위로 미루고, 다른 방식부터 제안하세요.
 5. 실시간(Lite) 모드: 대화 중에는 위 프로필을 '읽기 전용'으로만 참조하며, 직접 프로필 수정을 언급하지 마세요.''';
 
     if (longTermMemory.isNotEmpty) {
@@ -341,6 +356,7 @@ $textLogs
     "blockers": ["task_switching|decision_overload|result_anxiety|low_energy|unclear_first_step|sensory_friction|time_pressure|other"],
     "accepted_interventions": ["two_choice_microsteps|playful_mission|single_default|five_min_start|cause_question|countdown_start|body_activation|timer|other"],
     "rejected_interventions": ["two_choice_microsteps|playful_mission|single_default|five_min_start|cause_question|countdown_start|body_activation|timer|other"],
+    "rejected_intervention_events": [{"intervention": "two_choice_microsteps|playful_mission|single_default|five_min_start|cause_question|countdown_start|body_activation|timer|other", "task_type": "cleaning|writing|reading|study|work|self_care|sleep|exercise|other", "reason": "문자열"}],
     "notes": ["문자열"]
   }
 }''';
@@ -463,6 +479,7 @@ ${jsonEncode(masterProfile)}
    - 단 한 번의 사건으로 단정하지 말고, 최근 기록에서 반복되거나 사용자가 명시적으로 말한 것만 강하게 반영하세요.
    - "ADHD", "우울증" 같은 진단명은 저장하지 말고, "전환 어려움", "선택 과부하", "결과 확인 불안"처럼 관찰 가능한 실행 패턴으로만 저장하세요.
    - 선택지 수 선호가 보이면 preferred_choice_count에 2 또는 3처럼 숫자로 저장하세요. 근거가 없으면 null로 두세요.
+   - recent_rejected_interventions는 최근 거부한 개입을 최신순으로 최대 5개 저장하세요. 각 항목은 {"intervention":"...", "task_type":"...", "reason":"...", "last_rejected_at":"$todayStr"} 형식으로 두고, 최신 항목일수록 코칭에서 가장 후순위가 됩니다.
 
 3. 반복 패턴 관찰:
    - 최근 기록에서 '반복되는 패턴'을 탐지하세요.
@@ -485,6 +502,7 @@ ${jsonEncode(masterProfile)}
     "common_blockers": ["task_switching|decision_overload|result_anxiety|low_energy|unclear_first_step|sensory_friction|time_pressure|other"],
     "effective_interventions": ["two_choice_microsteps|playful_mission|single_default|five_min_start|cause_question|countdown_start|body_activation|timer|other"],
     "rejected_interventions": ["two_choice_microsteps|playful_mission|single_default|five_min_start|cause_question|countdown_start|body_activation|timer|other"],
+    "recent_rejected_interventions": [{"intervention": "two_choice_microsteps|playful_mission|single_default|five_min_start|cause_question|countdown_start|body_activation|timer|other", "task_type": "cleaning|writing|reading|study|work|self_care|sleep|exercise|other", "reason": "문자열", "last_rejected_at": "$todayStr"}],
     "preferred_choice_count": 2,
     "task_specific_notes": ["문자열"],
     "last_updated": "$todayStr"
