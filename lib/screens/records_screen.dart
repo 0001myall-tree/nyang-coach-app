@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:nyang_coach/services/user_title_service.dart';
 import 'package:nyang_coach/services/analytics_service.dart';
 import 'package:nyang_coach/services/api_usage_limit_service.dart';
+import 'package:nyang_coach/services/task_resistance_service.dart';
 import 'package:nyang_coach/models/user_data.dart';
 import 'coach_config.dart';
 import 'tasks_screen.dart'; // for HabitItem, etc.
@@ -32,6 +33,8 @@ class _RecordsScreenState extends State<RecordsScreen> {
   bool _isGeneratingWeeklyFeedback = false;
   bool _hasMasterPlan = false;
   String _lastDate = '';
+  String _weeklyFavoriteCoachName = '-';
+  int _weeklyCompletedResistanceCount = 0;
   final HttpsCallable _chatProxy = FirebaseFunctions.instanceFor(
     region: 'asia-northeast3',
   ).httpsCallable('chatProxy');
@@ -90,6 +93,7 @@ class _RecordsScreenState extends State<RecordsScreen> {
       _lastDate =
           '${base.year}-${base.month.toString().padLeft(2, '0')}-${base.day.toString().padLeft(2, '0')}';
     }
+    await _loadWeeklyCompanionStats(prefs);
 
     setState(() => _isLoading = false);
     if (_isMaster) {
@@ -158,6 +162,68 @@ class _RecordsScreenState extends State<RecordsScreen> {
     final baseDate = _feedbackBaseDate();
     final monday = baseDate.subtract(Duration(days: baseDate.weekday - 1));
     return '${monday.year}-${monday.month.toString().padLeft(2, '0')}-${monday.day.toString().padLeft(2, '0')}';
+  }
+
+  DateTime _weekStartDate() => DateTime.parse(_getWeekMondayStr());
+
+  DateTime _weekEndExclusive() {
+    final base = _feedbackBaseDate();
+    final end = DateTime(base.year, base.month, base.day);
+    return end.add(const Duration(days: 1));
+  }
+
+  bool _isInCurrentWeek(DateTime date) {
+    final normalized = DateTime(date.year, date.month, date.day);
+    return !normalized.isBefore(_weekStartDate()) &&
+        normalized.isBefore(_weekEndExclusive());
+  }
+
+  Future<void> _loadWeeklyCompanionStats(SharedPreferences prefs) async {
+    final coachMessageCounts = <String, int>{};
+
+    for (final coachId in CoachConfigs.all.keys) {
+      final messages = <dynamic>[];
+      for (final key in [
+        'nyang_chat_history_$coachId',
+        'nyang_chat_archive_$coachId',
+      ]) {
+        final raw = prefs.getString(key);
+        if (raw == null) continue;
+        try {
+          messages.addAll(jsonDecode(raw) as List);
+        } catch (_) {}
+      }
+
+      final count = messages.where((message) {
+        if (message is! Map) return false;
+        if (message['isUser'] != true) return false;
+        final time = DateTime.tryParse(message['time']?.toString() ?? '');
+        return time != null && _isInCurrentWeek(time);
+      }).length;
+      if (count > 0) coachMessageCounts[coachId] = count;
+    }
+
+    String favoriteName = '-';
+    if (coachMessageCounts.isNotEmpty) {
+      final sorted = coachMessageCounts.entries.toList()
+        ..sort((a, b) {
+          final byCount = b.value.compareTo(a.value);
+          if (byCount != 0) return byCount;
+          return a.key.compareTo(b.key);
+        });
+      favoriteName = CoachConfigs.get(sorted.first.key).name;
+    }
+
+    final events = await TaskResistanceService.getAllEvents();
+    final completedResistanceCount = events.where((event) {
+      if (event.signalType != 'explicit') return false;
+      if (!event.completedEventually) return false;
+      final date = DateTime.tryParse(event.date);
+      return date != null && _isInCurrentWeek(date);
+    }).length;
+
+    _weeklyFavoriteCoachName = favoriteName;
+    _weeklyCompletedResistanceCount = completedResistanceCount;
   }
 
   List<Map<String, dynamic>> _visibleRecordTasks(Map<String, dynamic> record) {
@@ -1265,8 +1331,58 @@ ${feedbackType == 0
               );
             }).toList(),
           ),
+          const SizedBox(height: 16),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8F6FF),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFE8E3F8)),
+            ),
+            child: Column(
+              children: [
+                _buildWeeklyCompanionRow(
+                  '이번 주 애착 코치',
+                  _weeklyFavoriteCoachName,
+                ),
+                const SizedBox(height: 8),
+                _buildWeeklyCompanionRow(
+                  '미루다가 함께 완료한 일',
+                  '$_weeklyCompletedResistanceCount회',
+                ),
+              ],
+            ),
+          ),
         ],
       ),
+    );
+  }
+
+  Widget _buildWeeklyCompanionRow(String label, String value) {
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            label,
+            style: GoogleFonts.notoSansKr(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: const Color(0xFF7A748E),
+            ),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Text(
+          value,
+          textAlign: TextAlign.right,
+          style: GoogleFonts.notoSansKr(
+            fontSize: 13,
+            fontWeight: FontWeight.w900,
+            color: _recordCoach.accentColor,
+          ),
+        ),
+      ],
     );
   }
 
