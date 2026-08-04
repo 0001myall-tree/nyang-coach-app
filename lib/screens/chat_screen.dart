@@ -4551,8 +4551,8 @@ class _ChatScreenState extends State<ChatScreen>
     final text = _taskText(task) ?? '이름 없는 할 일';
     final timeLabel = _taskTimeLabelForPrompt(task);
     final doneLabel = task['done'] == true ? '완료한 ' : '';
-    if (timeLabel.isEmpty) return '$doneLabel"$text"';
-    return '$timeLabel $doneLabel"$text"';
+    if (timeLabel.isEmpty) return "$doneLabel'$text'";
+    return "$timeLabel $doneLabel'$text'";
   }
 
   Future<bool> _tryOpenTodayTaskOverview(String input) async {
