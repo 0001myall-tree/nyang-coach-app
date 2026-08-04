@@ -2874,6 +2874,7 @@ class _TasksScreenState extends State<TasksScreen>
       if (_isViewingActualToday) {
         TaskResistanceService.onTaskCompleted(
           taskId: t.id.toString(),
+          taskText: t.text,
           date: _getTodayStr(),
           completionOrder: doneCount,
           totalTasksThatDay: totalCount,

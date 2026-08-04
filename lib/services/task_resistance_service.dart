@@ -20,6 +20,33 @@ class TaskResistanceService {
   /// 태스크당 보관 상한. 같은 일을 며칠에 걸쳐 싫다고 해도 기록이 무한히 쌓이지 않게 한다.
   static const int maxEventsPerTask = 12;
 
+  static const Set<String> _weakTaskMatchTokens = {
+    '오늘',
+    '내일',
+    '오전',
+    '오후',
+    '하기',
+    '하다',
+    '읽기',
+    '보기',
+    '쓰기',
+    '정리',
+    '준비',
+    '확인',
+    '일정',
+    '할일',
+  };
+
+  static const List<String> _taskVerbSuffixes = [
+    '정리하기',
+    '준비하기',
+    '확인하기',
+    '하기',
+    '읽기',
+    '보기',
+    '쓰기',
+  ];
+
   static Future<List<TaskResistanceEvent>> _loadAll(
     SharedPreferences prefs,
   ) async {
@@ -76,6 +103,59 @@ class TaskResistanceService {
     return result;
   }
 
+  static String normalizeForTaskMatch(String text) =>
+      text.replaceAll(RegExp(r'[^가-힣a-zA-Z0-9]+'), '').toLowerCase();
+
+  static List<String> taskMatchTokens(String text) {
+    final rawTokens = text
+        .toLowerCase()
+        .split(RegExp(r'[^가-힣a-zA-Z0-9]+'))
+        .where((token) => token.trim().isNotEmpty);
+    final tokens = <String>{};
+
+    void addToken(String token) {
+      if (token.isEmpty || _weakTaskMatchTokens.contains(token)) return;
+      if (token.length >= 2) {
+        tokens.add(token);
+      } else if (RegExp(r'^[가-힣]$').hasMatch(token)) {
+        tokens.add(token);
+      }
+    }
+
+    for (final rawToken in rawTokens) {
+      final token = rawToken.trim();
+      addToken(token);
+      for (final suffix in _taskVerbSuffixes) {
+        if (token.endsWith(suffix) && token.length > suffix.length) {
+          addToken(token.substring(0, token.length - suffix.length));
+        }
+      }
+    }
+
+    return tokens.toList(growable: false);
+  }
+
+  static bool messageMentionsTask({
+    required String message,
+    required String taskText,
+  }) {
+    final normalizedMessage = normalizeForTaskMatch(message);
+    final normalizedTaskText = normalizeForTaskMatch(taskText);
+    if (normalizedMessage.isEmpty || normalizedTaskText.isEmpty) return false;
+    if (normalizedMessage.contains(normalizedTaskText) ||
+        normalizedTaskText.contains(normalizedMessage)) {
+      return true;
+    }
+
+    final tokens = taskMatchTokens(taskText);
+    if (tokens.isEmpty) return false;
+    final matchedCount = tokens
+        .where((token) => normalizedMessage.contains(token))
+        .length;
+    if (matchedCount >= 2) return true;
+    return tokens.length <= 2 && matchedCount >= 1;
+  }
+
   /// 명시적 저항신호 1건 기록. 같은 taskId+date 조합이 이미 있으면 무시(하루 중복 방지).
   static Future<void> recordExplicitSignal({
     required String taskId,
@@ -113,7 +193,7 @@ class TaskResistanceService {
   /// 계획에 없는 일("설거지 하기 싫어"인데 설거지가 목록에 없음)은 붙일 taskId가 없어
   /// 기록되지 않는다. 그 경우는 저녁 인사가 직접 물어본다(`eveningOffPlanAsk`).
   static Future<void> detectAndRecordFromMessage(String message) async {
-    final normalizedMessage = message.replaceAll(RegExp(r'\s+'), '');
+    final normalizedMessage = normalizeForTaskMatch(message);
     if (normalizedMessage.isEmpty) return;
 
     final prefs = await SharedPreferences.getInstance();
@@ -144,8 +224,7 @@ class TaskResistanceService {
         continue; // 너무 짧은 텍스트는 오탐 위험이 커서 스킵
       }
 
-      final normalizedTaskText = taskText.replaceAll(RegExp(r'\s+'), '');
-      if (normalizedMessage.contains(normalizedTaskText)) {
+      if (messageMentionsTask(message: message, taskText: taskText)) {
         await recordExplicitSignal(
           taskId: taskId,
           taskText: taskText,
@@ -159,6 +238,7 @@ class TaskResistanceService {
   /// tasks_screen.dart `_toggleTask`의 완료 처리 지점에 연결돼 있다.
   static Future<void> onTaskCompleted({
     required String taskId,
+    required String taskText,
     required String date,
     required int completionOrder,
     required int totalTasksThatDay,
@@ -168,7 +248,10 @@ class TaskResistanceService {
 
     var changed = false;
     final updated = events.map((e) {
-      if (e.taskId == taskId && e.date == date && !e.completedEventually) {
+      final isSameTask =
+          e.taskId == taskId ||
+          messageMentionsTask(message: e.taskText, taskText: taskText);
+      if (isSameTask && e.date == date && !e.completedEventually) {
         changed = true;
         return TaskResistanceEvent(
           id: e.id,

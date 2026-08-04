@@ -8,6 +8,7 @@ import 'package:nyang_coach/services/user_title_service.dart';
 import 'package:nyang_coach/services/analytics_service.dart';
 import 'package:nyang_coach/services/api_usage_limit_service.dart';
 import 'package:nyang_coach/services/task_resistance_service.dart';
+import 'package:nyang_coach/services/execution_resistance_service.dart';
 import 'package:nyang_coach/models/user_data.dart';
 import 'coach_config.dart';
 import 'tasks_screen.dart'; // for HabitItem, etc.
@@ -212,15 +213,25 @@ class _RecordsScreenState extends State<RecordsScreen> {
       });
 
     final events = await TaskResistanceService.getAllEvents();
-    final completedResistanceCount = events.where((event) {
-      if (event.signalType != 'explicit') return false;
-      if (!event.completedEventually) return false;
+    final completedResistanceKeys = <String>{};
+    for (final event in events) {
+      if (event.signalType != 'explicit') continue;
+      if (!event.completedEventually) continue;
       final date = DateTime.tryParse(event.date);
-      return date != null && _isInCurrentWeek(date);
-    }).length;
+      if (date == null || !_isInCurrentWeek(date)) continue;
+      completedResistanceKeys.add(
+        _resistanceTaskKey(event.date, event.taskText),
+      );
+    }
+    final completedResistanceCount =
+        completedResistanceKeys.length +
+        _inferCompletedResistanceCountFromChat(
+          prefs,
+          countedTaskKeys: completedResistanceKeys,
+        );
 
     _weeklyFavoriteCoachRanks = [
-      for (var i = 0; i < sortedFavoriteCoaches.length && i < 3; i++)
+      for (var i = 0; i < sortedFavoriteCoaches.length && i < 2; i++)
         _WeeklyCoachRank(
           rank: i + 1,
           coachName: CoachConfigs.get(sortedFavoriteCoaches[i].key).name,
@@ -228,6 +239,97 @@ class _RecordsScreenState extends State<RecordsScreen> {
     ];
     _weeklyCompletedResistanceCount = completedResistanceCount;
   }
+
+  int _inferCompletedResistanceCountFromChat(
+    SharedPreferences prefs, {
+    required Set<String> countedTaskKeys,
+  }) {
+    final resistanceMessagesByDate = <String, List<String>>{};
+    for (final coachId in CoachConfigs.all.keys) {
+      for (final key in [
+        'nyang_chat_history_$coachId',
+        'nyang_chat_archive_$coachId',
+      ]) {
+        final raw = prefs.getString(key);
+        if (raw == null) continue;
+        try {
+          final messages = jsonDecode(raw) as List;
+          for (final message in messages.whereType<Map>()) {
+            if (message['isUser'] != true) continue;
+            final text = message['text']?.toString() ?? '';
+            if (!ExecutionResistanceService.isResistanceExpression(text)) {
+              continue;
+            }
+            final time = DateTime.tryParse(message['time']?.toString() ?? '');
+            if (time == null || !_isInCurrentWeek(time)) continue;
+            final dateKey = _dateKey(time);
+            resistanceMessagesByDate
+                .putIfAbsent(dateKey, () => <String>[])
+                .add(text);
+          }
+        } catch (_) {}
+      }
+    }
+
+    final inferredKeys = <String>{};
+    var count = 0;
+
+    void countCompletedTasksForDate(
+      String date,
+      Iterable<Map<String, dynamic>> tasks,
+    ) {
+      final messages = resistanceMessagesByDate[date];
+      if (messages == null || messages.isEmpty) return;
+      for (final task in tasks) {
+        if (task['done'] != true) continue;
+        final taskText = task['text']?.toString() ?? '';
+        if (taskText.trim().isEmpty) continue;
+        final key = _resistanceTaskKey(date, taskText);
+        if (countedTaskKeys.contains(key) || inferredKeys.contains(key)) {
+          continue;
+        }
+        final mentioned = messages.any(
+          (message) => TaskResistanceService.messageMentionsTask(
+            message: message,
+            taskText: taskText,
+          ),
+        );
+        if (!mentioned) continue;
+        inferredKeys.add(key);
+        count++;
+      }
+    }
+
+    for (final record in _getLast7Records()) {
+      final date = record['date']?.toString() ?? '';
+      countCompletedTasksForDate(date, _visibleRecordTasks(record));
+    }
+
+    final rawTasks = prefs.getString('nyang_tasks');
+    if (rawTasks != null) {
+      try {
+        final tasks = (jsonDecode(rawTasks) as List)
+            .whereType<Map>()
+            .map((task) => Map<String, dynamic>.from(task))
+            .where(
+              (task) =>
+                  task['category'] == 'today' ||
+                  task['category'] == 'habit' ||
+                  task['category'] == 'schedule',
+            );
+        countCompletedTasksForDate(_dateKey(_feedbackBaseDate()), tasks);
+      } catch (_) {
+        // Ignore malformed local task snapshots.
+      }
+    }
+    return count;
+  }
+
+  String _dateKey(DateTime date) =>
+      '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+
+  String _resistanceTaskKey(String date, String taskText) =>
+      '$date|${TaskResistanceService.normalizeForTaskMatch(taskText)}';
 
   List<Map<String, dynamic>> _visibleRecordTasks(Map<String, dynamic> record) {
     final rawTasks = (record['tasks'] as List?) ?? [];
