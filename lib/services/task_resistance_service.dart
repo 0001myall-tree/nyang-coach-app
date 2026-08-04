@@ -47,6 +47,14 @@ class TaskResistanceService {
     '쓰기',
   ];
 
+  static const List<List<String>> _taskSynonymGroups = [
+    ['책', '책읽기', '독서', '독서하기'],
+    ['글쓰기', '글쓰', '소설', '소설쓰기', '에세이', '에세이쓰기', '원고', '집필', '작문'],
+    ['운동', '헬스', '스트레칭', '홈트', '러닝'],
+    ['청소', '방청소', '정리', '치우기'],
+    ['공부', '학습', '복습', '강의', '인강'],
+  ];
+
   static Future<List<TaskResistanceEvent>> _loadAll(
     SharedPreferences prefs,
   ) async {
@@ -135,6 +143,28 @@ class TaskResistanceService {
     return tokens.toList(growable: false);
   }
 
+  static bool _containsSynonymFromGroup(
+    String normalizedText,
+    List<String> group,
+  ) {
+    return group.any((term) {
+      final normalizedTerm = normalizeForTaskMatch(term);
+      return normalizedTerm.isNotEmpty &&
+          normalizedText.contains(normalizedTerm);
+    });
+  }
+
+  static bool _hasSharedTaskSynonym({
+    required String normalizedMessage,
+    required String normalizedTaskText,
+  }) {
+    return _taskSynonymGroups.any(
+      (group) =>
+          _containsSynonymFromGroup(normalizedMessage, group) &&
+          _containsSynonymFromGroup(normalizedTaskText, group),
+    );
+  }
+
   static bool messageMentionsTask({
     required String message,
     required String taskText,
@@ -144,6 +174,12 @@ class TaskResistanceService {
     if (normalizedMessage.isEmpty || normalizedTaskText.isEmpty) return false;
     if (normalizedMessage.contains(normalizedTaskText) ||
         normalizedTaskText.contains(normalizedMessage)) {
+      return true;
+    }
+    if (_hasSharedTaskSynonym(
+      normalizedMessage: normalizedMessage,
+      normalizedTaskText: normalizedTaskText,
+    )) {
       return true;
     }
 
@@ -262,6 +298,38 @@ class TaskResistanceService {
           completedEventually: true,
           completionOrder: completionOrder,
           totalTasksThatDay: totalTasksThatDay,
+        );
+      }
+      return e;
+    }).toList();
+
+    if (changed) await _saveAll(prefs, updated);
+  }
+
+  /// 완료 체크를 다시 해제했을 때, 해당 저항 이벤트도 미완료 상태로 되돌린다.
+  static Future<void> onTaskUncompleted({
+    required String taskId,
+    required String taskText,
+    required String date,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+    final events = await _loadAll(prefs);
+
+    var changed = false;
+    final updated = events.map((e) {
+      final isSameTask =
+          e.taskId == taskId ||
+          messageMentionsTask(message: e.taskText, taskText: taskText);
+      if (isSameTask && e.date == date && e.completedEventually) {
+        changed = true;
+        return TaskResistanceEvent(
+          id: e.id,
+          taskId: e.taskId,
+          taskText: e.taskText,
+          date: e.date,
+          signalType: e.signalType,
+          completedEventually: false,
+          totalTasksThatDay: e.totalTasksThatDay,
         );
       }
       return e;

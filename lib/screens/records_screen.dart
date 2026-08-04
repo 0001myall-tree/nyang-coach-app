@@ -1465,7 +1465,7 @@ ${feedbackType == 0
             const SizedBox(height: 12),
             _buildWeeklyCompanionHeader(
               iconPath: 'assets/icons/fa-handshake-solid.svg',
-              label: '미루다가 함께 완료한 일',
+              label: '귀찮았지만 함께 완료한 일',
               value: '$_weeklyCompletedResistanceCount회',
             ),
           ],

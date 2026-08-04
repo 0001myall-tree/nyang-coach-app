@@ -2748,6 +2748,11 @@ class _TasksScreenState extends State<TasksScreen>
         _saveHabitLogs();
         _saveCoreTasks();
         if (t.category == 'schedule') _saveSchedules();
+        await TaskResistanceService.onTaskUncompleted(
+          taskId: t.id.toString(),
+          taskText: t.text,
+          date: _getTodayStr(),
+        );
       }
       if (milestoneInfo != null && milestoneInfo.isMilestoneSelf) {
         _saveVisions();
