@@ -9114,6 +9114,19 @@ class _ChatScreenState extends State<ChatScreen>
     return true;
   }
 
+  String _taskTimeLabelForPrompt(Map<String, dynamic> task) {
+    final displayTime = task['time']?.toString().trim() ?? '';
+    if (displayTime.isNotEmpty) return displayTime;
+
+    final startTime = task['timeStart']?.toString().trim() ?? '';
+    if (startTime.isEmpty) return '';
+
+    final endTime = task['timeEnd']?.toString().trim() ?? '';
+    final startLabel = _formatTime12(startTime);
+    if (endTime.isEmpty) return startLabel;
+    return '$startLabel ~ ${_formatTime12(endTime)}';
+  }
+
   // ── 웹앱 buildMemoryContext() 이식 (전 코치 등급) ───────
   Future<String> _buildContextString(String userText) async {
     final tier = _coach.tier; // 'friends' | 'master'
@@ -9417,7 +9430,7 @@ class _ChatScreenState extends State<ChatScreen>
           for (final t in allTasks) {
             final done = t['done'] == true;
             final inProgress = !done && t['inProgress'] == true;
-            final timeStr = t['time'] != null ? '${t['time']}' : '';
+            final timeStr = _taskTimeLabelForPrompt(t);
             String durStr = '';
             if (t['duration'] != null) {
               String rawDur = t['duration'].toString();
