@@ -33,7 +33,7 @@ class _RecordsScreenState extends State<RecordsScreen> {
   bool _isGeneratingWeeklyFeedback = false;
   bool _hasMasterPlan = false;
   String _lastDate = '';
-  String _weeklyFavoriteCoachName = '-';
+  List<_WeeklyCoachRank> _weeklyFavoriteCoachRanks = const [];
   int _weeklyCompletedResistanceCount = 0;
   final HttpsCallable _chatProxy = FirebaseFunctions.instanceFor(
     region: 'asia-northeast3',
@@ -203,16 +203,13 @@ class _RecordsScreenState extends State<RecordsScreen> {
       if (count > 0) coachMessageCounts[coachId] = count;
     }
 
-    String favoriteName = '-';
-    if (coachMessageCounts.isNotEmpty) {
-      final sorted = coachMessageCounts.entries.toList()
-        ..sort((a, b) {
-          final byCount = b.value.compareTo(a.value);
-          if (byCount != 0) return byCount;
-          return a.key.compareTo(b.key);
-        });
-      favoriteName = CoachConfigs.get(sorted.first.key).name;
-    }
+    final coachOrder = CoachConfigs.all.keys.toList();
+    final sortedFavoriteCoaches = coachMessageCounts.entries.toList()
+      ..sort((a, b) {
+        final byCount = b.value.compareTo(a.value);
+        if (byCount != 0) return byCount;
+        return coachOrder.indexOf(a.key).compareTo(coachOrder.indexOf(b.key));
+      });
 
     final events = await TaskResistanceService.getAllEvents();
     final completedResistanceCount = events.where((event) {
@@ -222,7 +219,13 @@ class _RecordsScreenState extends State<RecordsScreen> {
       return date != null && _isInCurrentWeek(date);
     }).length;
 
-    _weeklyFavoriteCoachName = favoriteName;
+    _weeklyFavoriteCoachRanks = [
+      for (var i = 0; i < sortedFavoriteCoaches.length && i < 3; i++)
+        _WeeklyCoachRank(
+          rank: i + 1,
+          coachName: CoachConfigs.get(sortedFavoriteCoaches[i].key).name,
+        ),
+    ];
     _weeklyCompletedResistanceCount = completedResistanceCount;
   }
 
@@ -1332,36 +1335,58 @@ ${feedbackType == 0
             }).toList(),
           ),
           const SizedBox(height: 16),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF8F6FF),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFFE8E3F8)),
-            ),
-            child: Column(
-              children: [
-                _buildWeeklyCompanionRow(
-                  '이번 주 애착 코치',
-                  _weeklyFavoriteCoachName,
-                ),
-                const SizedBox(height: 8),
-                _buildWeeklyCompanionRow(
-                  '미루다가 함께 완료한 일',
-                  '$_weeklyCompletedResistanceCount회',
-                ),
-              ],
-            ),
+          _buildWeeklyCompanionSummary(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWeeklyCompanionSummary() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8F6FF),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE8E3F8)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildWeeklyCompanionHeader(
+            iconPath: 'assets/icons/fa-heart-solid.svg',
+            label: '이번 주 애착 코치',
+          ),
+          const SizedBox(height: 8),
+          _buildFavoriteCoachRanks(),
+          const SizedBox(height: 12),
+          _buildWeeklyCompanionHeader(
+            iconPath: 'assets/icons/fa-handshake-solid.svg',
+            label: '미루다가 함께 완료한 일',
+            value: '$_weeklyCompletedResistanceCount회',
           ),
         ],
       ),
     );
   }
 
-  Widget _buildWeeklyCompanionRow(String label, String value) {
+  Widget _buildWeeklyCompanionHeader({
+    required String iconPath,
+    required String label,
+    String? value,
+  }) {
     return Row(
       children: [
+        SvgPicture.asset(
+          iconPath,
+          width: 14,
+          height: 14,
+          colorFilter: ColorFilter.mode(
+            _recordCoach.accentColor,
+            BlendMode.srcIn,
+          ),
+        ),
+        const SizedBox(width: 7),
         Expanded(
           child: Text(
             label,
@@ -1372,17 +1397,57 @@ ${feedbackType == 0
             ),
           ),
         ),
-        const SizedBox(width: 10),
-        Text(
-          value,
-          textAlign: TextAlign.right,
-          style: GoogleFonts.notoSansKr(
-            fontSize: 13,
-            fontWeight: FontWeight.w900,
-            color: _recordCoach.accentColor,
+        if (value != null) ...[
+          const SizedBox(width: 10),
+          Text(
+            value,
+            textAlign: TextAlign.right,
+            style: GoogleFonts.notoSansKr(
+              fontSize: 13,
+              fontWeight: FontWeight.w900,
+              color: _recordCoach.accentColor,
+            ),
           ),
-        ),
+        ],
       ],
+    );
+  }
+
+  Widget _buildFavoriteCoachRanks() {
+    if (_weeklyFavoriteCoachRanks.isEmpty) {
+      return Text(
+        '아직 없음',
+        style: GoogleFonts.notoSansKr(
+          fontSize: 13,
+          fontWeight: FontWeight.w800,
+          color: const Color(0xFF9A94AA),
+        ),
+      );
+    }
+
+    return Wrap(
+      spacing: 6,
+      runSpacing: 6,
+      children: _weeklyFavoriteCoachRanks.map(_buildFavoriteCoachChip).toList(),
+    );
+  }
+
+  Widget _buildFavoriteCoachChip(_WeeklyCoachRank coachRank) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: const Color(0xFFE5DFF8)),
+      ),
+      child: Text(
+        '${coachRank.rank}위 ${coachRank.coachName}',
+        style: GoogleFonts.notoSansKr(
+          fontSize: 12,
+          fontWeight: FontWeight.w800,
+          color: const Color(0xFF5E5576),
+        ),
+      ),
     );
   }
 
@@ -1900,4 +1965,11 @@ ${feedbackType == 0
       ],
     );
   }
+}
+
+class _WeeklyCoachRank {
+  final int rank;
+  final String coachName;
+
+  const _WeeklyCoachRank({required this.rank, required this.coachName});
 }
