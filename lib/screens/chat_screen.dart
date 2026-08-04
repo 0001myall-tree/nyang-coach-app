@@ -4558,6 +4558,10 @@ class _ChatScreenState extends State<ChatScreen>
   bool _looksLikeTodayTaskTimeQuestion(String input) {
     final normalized = input.replaceAll(RegExp(r'\s+'), '').toLowerCase();
     if (!normalized.contains('오늘')) return false;
+    if (_asksTodoResetGuide(normalized) ||
+        _asksRepeatScheduleGuide(normalized)) {
+      return false;
+    }
     return RegExp(r'(몇시|언제|시간|몇시에|몇시부터|몇시쯤)').hasMatch(normalized);
   }
 
@@ -5962,6 +5966,10 @@ class _ChatScreenState extends State<ChatScreen>
 
   String? _calendarDateQuestionReply(String input) {
     final normalized = input.replaceAll(RegExp(r'\s+'), '');
+    if (_asksTodoResetGuide(normalized) ||
+        _asksRepeatScheduleGuide(normalized)) {
+      return null;
+    }
     final asksDate = RegExp(r'(몇일|며칠|몇월몇일|날짜|언제)').hasMatch(normalized);
     if (!asksDate) return null;
 
@@ -8992,6 +9000,61 @@ class _ChatScreenState extends State<ChatScreen>
     }
   }
 
+  bool _asksTodoResetGuide(String compactText) {
+    final text = compactText.toLowerCase().replaceAll(RegExp(r'\s+'), '');
+    final mentionsTodayTasks =
+        text.contains('할일') ||
+        text.contains('오늘할일') ||
+        text.contains('오늘의할일') ||
+        text.contains('하루') ||
+        text.contains('오늘');
+    final mentionsReset =
+        text.contains('초기화') ||
+        text.contains('리셋') ||
+        text.contains('reset') ||
+        text.contains('사라') ||
+        text.contains('없어지') ||
+        text.contains('비워지');
+    return text.contains('초기화시간') ||
+        text.contains('리셋시간') ||
+        text.contains('자정리셋') ||
+        text.contains('자정초기화') ||
+        (mentionsTodayTasks && mentionsReset) ||
+        (mentionsTodayTasks && text.contains('자정'));
+  }
+
+  bool _asksRepeatScheduleGuide(String compactText) {
+    final text = compactText.toLowerCase().replaceAll(RegExp(r'\s+'), '');
+    if (!text.contains('반복')) return false;
+
+    final mentionsRepeatTarget =
+        text.contains('일정') ||
+        text.contains('스케줄') ||
+        text.contains('캘린더') ||
+        text.contains('달력') ||
+        text.contains('매일') ||
+        text.contains('매주') ||
+        text.contains('매월');
+    if (!mentionsRepeatTarget) return false;
+
+    return text.contains('어떻게') ||
+        text.contains('어디') ||
+        text.contains('만들') ||
+        text.contains('등록') ||
+        text.contains('추가') ||
+        text.contains('삭제') ||
+        text.contains('지우') ||
+        text.contains('없애') ||
+        text.contains('수정') ||
+        text.contains('변경') ||
+        text.contains('바꾸') ||
+        text.contains('편집') ||
+        text.contains('설정') ||
+        text.contains('하고싶') ||
+        text.contains('되') ||
+        text.contains('가능');
+  }
+
   _FeatureLocationReply? _featureLocationReply(String rawText) {
     final text = rawText.trim().toLowerCase().replaceAll(' ', '');
     if (text.isEmpty) return null;
@@ -9025,33 +9088,8 @@ class _ChatScreenState extends State<ChatScreen>
         text.contains('기록') ||
         text.contains('리포트') ||
         text.contains('통계');
-    final asksTodoReset =
-        text.contains('초기화시간') ||
-        text.contains('리셋시간') ||
-        (((text.contains('할일') ||
-                text.contains('오늘할일') ||
-                text.contains('오늘의할일') ||
-                text.contains('하루') ||
-                text.contains('오늘')) &&
-            (text.contains('초기화') ||
-                text.contains('리셋') ||
-                text.contains('reset'))));
-    final asksRepeatScheduleGuide =
-        (text.contains('반복일정') ||
-            (text.contains('반복') && text.contains('일정'))) &&
-        (text.contains('어떻게') ||
-            text.contains('어디') ||
-            text.contains('만들') ||
-            text.contains('등록') ||
-            text.contains('추가') ||
-            text.contains('삭제') ||
-            text.contains('지우') ||
-            text.contains('없애') ||
-            text.contains('수정') ||
-            text.contains('변경') ||
-            text.contains('바꾸') ||
-            text.contains('편집') ||
-            text.contains('하고싶'));
+    final asksTodoReset = _asksTodoResetGuide(text);
+    final asksRepeatScheduleGuide = _asksRepeatScheduleGuide(text);
 
     final asksLocation =
         text.contains('어디') ||
@@ -9118,13 +9156,6 @@ class _ChatScreenState extends State<ChatScreen>
       );
     }
 
-    if (text.contains('오늘할일') ||
-        text.contains('오늘의할일') ||
-        text.contains('할일') ||
-        text.contains('태스크')) {
-      return _FeatureLocationReply(_featureLocationMessage('today'), 'today');
-    }
-
     if (asksRepeatScheduleGuide) {
       final repeatLocation =
           text.contains('삭제') ||
@@ -9143,6 +9174,13 @@ class _ChatScreenState extends State<ChatScreen>
         _featureLocationMessage(repeatLocation),
         'schedule',
       );
+    }
+
+    if (text.contains('오늘할일') ||
+        text.contains('오늘의할일') ||
+        text.contains('할일') ||
+        text.contains('태스크')) {
+      return _FeatureLocationReply(_featureLocationMessage('today'), 'today');
     }
 
     final asksDatedPlan =
