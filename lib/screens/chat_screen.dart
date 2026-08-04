@@ -4555,6 +4555,165 @@ class _ChatScreenState extends State<ChatScreen>
     return "$timeLabel $doneLabel'$text'";
   }
 
+  bool _looksLikeTodayTaskTimeQuestion(String input) {
+    final normalized = input.replaceAll(RegExp(r'\s+'), '').toLowerCase();
+    if (!normalized.contains('오늘')) return false;
+    return RegExp(r'(몇시|언제|시간|몇시에|몇시부터|몇시쯤)').hasMatch(normalized);
+  }
+
+  List<String> _quotedTaskTerms(String input) {
+    return RegExp(r"""['"‘’“”]([^'"‘’“”]{2,})['"‘’“”]""")
+        .allMatches(input)
+        .map((match) => match.group(1)?.trim() ?? '')
+        .where((term) => term.isNotEmpty)
+        .toList(growable: false);
+  }
+
+  String _taskMatchText(String value) {
+    return value.toLowerCase().replaceAll(
+      RegExp(r"""[\s'"‘’“”"?.。!！,，~〜]+"""),
+      '',
+    );
+  }
+
+  List<String> _taskQueryTokens(String input) {
+    const stopWords = {
+      '오늘',
+      '몇시',
+      '몇시에',
+      '몇시부터',
+      '언제',
+      '시간',
+      '부터',
+      '하기로',
+      '읽기로',
+      '했지',
+      '했냐',
+      '했어',
+      '읽냐고',
+      '하냐고',
+      '알려줘',
+      '확인해줘',
+    };
+    return input
+        .toLowerCase()
+        .replaceAll(RegExp(r"""['"‘’“”?.。!！,，~〜]"""), ' ')
+        .split(RegExp(r'\s+'))
+        .map((token) => token.trim())
+        .where((token) => token.length >= 2 && !stopWords.contains(token))
+        .toList(growable: false);
+  }
+
+  int _todayTaskTimeMatchScore(
+    Map<String, dynamic> task,
+    String input,
+    List<String> quotedTerms,
+    List<String> queryTokens,
+  ) {
+    final text = _taskText(task);
+    if (text == null) return 0;
+    final taskMatchText = _taskMatchText(text);
+    final inputMatchText = _taskMatchText(input);
+    var score = 0;
+
+    for (final term in quotedTerms) {
+      final termMatchText = _taskMatchText(term);
+      if (termMatchText.isEmpty) continue;
+      if (taskMatchText.contains(termMatchText)) score += 100;
+      if (termMatchText.contains(taskMatchText)) score += 60;
+    }
+
+    for (final token in queryTokens) {
+      final tokenMatchText = _taskMatchText(token);
+      if (tokenMatchText.isEmpty) continue;
+      if (taskMatchText.contains(tokenMatchText)) score += 12;
+    }
+
+    if (inputMatchText.contains(taskMatchText)) score += 40;
+    final category = task['category']?.toString();
+    if (score > 0 && category == 'schedule') score += 3;
+    return score;
+  }
+
+  String _todayTaskTimeReply(Map<String, dynamic> task) {
+    final text = _taskText(task) ?? '그 일정';
+    final timeLabel = _taskTimeLabelForPrompt(task);
+    if (timeLabel.isEmpty) {
+      return switch (widget.coachId) {
+        'cat' || 'nyang_halbae' => "오늘 '$text' 시간은 아직 안 잡혀 있다냥.",
+        'bro' => "오늘 '$text' 시간은 아직 안 잡혀 있다.",
+        'sec_female' => "오늘 '$text' 시간은 아직 정해져 있지 않아요.",
+        _ => "오늘 '$text' 시간은 아직 안 잡혀 있어.",
+      };
+    }
+    return switch (widget.coachId) {
+      'cat' || 'nyang_halbae' => "오늘 '$text'은 $timeLabel부터다냥.",
+      'bro' => "오늘 '$text'은 $timeLabel부터다.",
+      'sec_female' => "오늘 '$text'은 $timeLabel부터예요.",
+      _ => "오늘 '$text'은 $timeLabel부터야.",
+    };
+  }
+
+  Future<bool> _tryAnswerTodayTaskTimeQuestion(String input) async {
+    if (!_looksLikeTodayTaskTimeQuestion(input)) return false;
+
+    final prefs = await SharedPreferences.getInstance();
+    final tasks = _decodeMapList(prefs.getString('nyang_tasks'));
+    final todayTasks = tasks
+        .where((task) {
+          final category = task['category']?.toString();
+          return category == 'today' ||
+              category == 'habit' ||
+              category == 'schedule';
+        })
+        .toList(growable: false);
+    if (todayTasks.isEmpty) return false;
+
+    final quotedTerms = _quotedTaskTerms(input);
+    final queryTokens = _taskQueryTokens(input);
+    final scored =
+        todayTasks
+            .map(
+              (task) => (
+                task: task,
+                score: _todayTaskTimeMatchScore(
+                  task,
+                  input,
+                  quotedTerms,
+                  queryTokens,
+                ),
+              ),
+            )
+            .where((item) => item.score > 0)
+            .toList()
+          ..sort((a, b) => b.score.compareTo(a.score));
+    if (scored.isEmpty) return false;
+
+    final reply = await UserTitleService.applyForCoach(
+      _todayTaskTimeReply(scored.first.task),
+      widget.coachId,
+    );
+    setState(() {
+      _messages.add(
+        ChatMessage(text: input, isUser: true, time: DateTime.now()),
+      );
+      _messages.add(
+        ChatMessage(text: reply, isUser: false, time: DateTime.now()),
+      );
+      _suggestedTasks = [];
+      _dynamicChips = _coach.chips;
+      _suppressDefaultChips = false;
+      _coachSwitchTarget = null;
+    });
+    _scrollToBottom();
+    await _saveHistory();
+    await AnalyticsService.logConversationMessage(
+      coachId: widget.coachId,
+      usedApi: false,
+    );
+    return true;
+  }
+
   Future<bool> _tryOpenTodayTaskOverview(String input) async {
     if (!_isTodayTaskOverviewRequest(input)) return false;
 
@@ -8084,6 +8243,8 @@ class _ChatScreenState extends State<ChatScreen>
       );
       return;
     }
+
+    if (await _tryAnswerTodayTaskTimeQuestion(trimmed)) return;
 
     final dateQuestionReply =
         _weekdayQuestionReply(trimmed) ?? _calendarDateQuestionReply(trimmed);
