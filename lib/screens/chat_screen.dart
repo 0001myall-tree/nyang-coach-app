@@ -4478,8 +4478,9 @@ class _ChatScreenState extends State<ChatScreen>
   String _todayTaskOverviewOpenMessage({
     required bool hasAnyTask,
     required int totalCount,
-    required String? coreTask,
-    required List<String> habitNames,
+    required Map<String, dynamic>? coreTask,
+    required List<Map<String, dynamic>> habitTasks,
+    required List<Map<String, dynamic>> todayTasks,
   }) {
     if (!hasAnyTask) {
       return switch (widget.coachId) {
@@ -4490,28 +4491,48 @@ class _ChatScreenState extends State<ChatScreen>
       };
     }
 
+    final coreTaskText = _taskText(coreTask);
     final buffer = StringBuffer(switch (widget.coachId) {
       'nyang_halbae' || 'cat' => '오늘 할 일은 총 $totalCount가지다냥.',
       'bro' => '오늘 할 일은 총 $totalCount가지다.',
       'sec_female' => '오늘 할 일은 총 $totalCount가지예요.',
       _ => '오늘 할 일은 총 $totalCount가지야.',
     });
-    if (coreTask != null && coreTask.trim().isNotEmpty) {
+    if (coreTaskText != null && coreTaskText.trim().isNotEmpty) {
       buffer.write(switch (widget.coachId) {
-        'nyang_halbae' || 'cat' => '\n오늘의 핵심은 "$coreTask"다냥.',
-        'bro' => '\n오늘 핵심은 "$coreTask"다.',
-        'sec_female' => '\n오늘의 핵심은 "$coreTask"예요.',
-        _ => '\n오늘의 핵심은 "$coreTask"야.',
+        'nyang_halbae' ||
+        'cat' => '\n오늘의 핵심은 ${_taskOverviewLabel(coreTask!)}다냥.',
+        'bro' => '\n오늘 핵심은 ${_taskOverviewLabel(coreTask!)}다.',
+        'sec_female' => '\n오늘의 핵심은 ${_taskOverviewLabel(coreTask!)}예요.',
+        _ => '\n오늘의 핵심은 ${_taskOverviewLabel(coreTask!)}야.',
       });
     }
-    if (habitNames.isNotEmpty) {
-      final names = habitNames.take(2).join(', ');
+    if (habitTasks.isNotEmpty) {
+      final names = habitTasks.map(_taskOverviewLabel).join(', ');
       buffer.write(switch (widget.coachId) {
-        'nyang_halbae' || 'cat' => '\n습관으로는 "$names"이 보인다냥.',
-        'bro' => '\n습관으로는 "$names"이 보인다.',
-        'sec_female' => '\n습관으로는 "$names"이 보여요.',
-        _ => '\n습관으로는 "$names"이 보여.',
+        'nyang_halbae' || 'cat' => '\n습관은 $names 챙기면 된다냥.',
+        'bro' => '\n습관은 $names 챙기면 된다.',
+        'sec_female' => '\n습관은 $names 챙기시면 돼요.',
+        _ => '\n습관은 $names 챙기면 돼.',
       });
+    }
+    final highlightedKeys = {
+      if (coreTask != null) _taskOverviewKey(coreTask),
+      ...habitTasks.map(_taskOverviewKey),
+    };
+    final otherTasks = todayTasks
+        .where((task) => !highlightedKeys.contains(_taskOverviewKey(task)))
+        .toList(growable: false);
+    if (otherTasks.isNotEmpty) {
+      buffer.write(switch (widget.coachId) {
+        'nyang_halbae' || 'cat' => '\n나머지는 이거다냥.',
+        'bro' => '\n나머지는 이거다.',
+        'sec_female' => '\n나머지는 이렇게 있어요.',
+        _ => '\n나머지는 이렇게 있어.',
+      });
+      for (final task in otherTasks) {
+        buffer.write('\n${_taskOverviewLabel(task)}');
+      }
     }
     buffer.write(switch (widget.coachId) {
       'nyang_halbae' || 'cat' => '\n냥이가 할 일 탭 열어줄게.',
@@ -4520,6 +4541,18 @@ class _ChatScreenState extends State<ChatScreen>
       _ => '\n오늘 할 일 탭 열어줄게.',
     });
     return buffer.toString();
+  }
+
+  String _taskOverviewKey(Map<String, dynamic> task) {
+    return (task['id'] ?? _taskText(task) ?? '').toString();
+  }
+
+  String _taskOverviewLabel(Map<String, dynamic> task) {
+    final text = _taskText(task) ?? '이름 없는 할 일';
+    final timeLabel = _taskTimeLabelForPrompt(task);
+    final doneLabel = task['done'] == true ? '완료한 ' : '';
+    if (timeLabel.isEmpty) return '$doneLabel"$text"';
+    return '$timeLabel $doneLabel"$text"';
   }
 
   Future<bool> _tryOpenTodayTaskOverview(String input) async {
@@ -4538,19 +4571,15 @@ class _ChatScreenState extends State<ChatScreen>
     final pending = todayTasks
         .where((task) => task['done'] != true)
         .toList(growable: false);
-    final coreTask = _taskText(
-      _decodeMapList(prefs.getString('nyang_core_tasks'))
-          .cast<Map<String, dynamic>?>()
-          .firstWhere((task) => task?['done'] != true, orElse: () => null),
-    );
-    final habitNames = pending
+    final coreTaskRaw = _decodeMapList(prefs.getString('nyang_core_tasks'))
+        .cast<Map<String, dynamic>?>()
+        .firstWhere((task) => task?['done'] != true, orElse: () => null);
+    final coreTask = _matchingTodayTask(todayTasks, coreTaskRaw) ?? coreTaskRaw;
+    final habitTasks = pending
         .where((task) {
           final category = task['category']?.toString();
           return category == 'habit' || task['isHabit'] == true;
         })
-        .map(_taskText)
-        .whereType<String>()
-        .where((text) => text.trim().isNotEmpty)
         .toList(growable: false);
 
     final reply = await UserTitleService.applyForCoach(
@@ -4558,7 +4587,8 @@ class _ChatScreenState extends State<ChatScreen>
         hasAnyTask: todayTasks.isNotEmpty,
         totalCount: todayTasks.length,
         coreTask: coreTask,
-        habitNames: habitNames,
+        habitTasks: habitTasks,
+        todayTasks: todayTasks,
       ),
       widget.coachId,
     );
@@ -4583,6 +4613,26 @@ class _ChatScreenState extends State<ChatScreen>
     await Future.delayed(const Duration(milliseconds: 260));
     widget.onOpenFeatureLocation?.call('today');
     return true;
+  }
+
+  Map<String, dynamic>? _matchingTodayTask(
+    List<Map<String, dynamic>> todayTasks,
+    Map<String, dynamic>? source,
+  ) {
+    if (source == null) return null;
+    final sourceId = source['id']?.toString();
+    if (sourceId != null && sourceId.isNotEmpty) {
+      for (final task in todayTasks) {
+        if (task['id']?.toString() == sourceId) return task;
+      }
+    }
+
+    final sourceText = _taskText(source);
+    if (sourceText == null) return null;
+    for (final task in todayTasks) {
+      if (_taskText(task) == sourceText) return task;
+    }
+    return null;
   }
 
   Future<String> _buildLocalMasterStatusReply() async {
