@@ -21,6 +21,7 @@ import 'package:nyang_coach/services/tasks_sync_service.dart';
 import 'package:nyang_coach/services/user_title_service.dart';
 import 'package:nyang_coach/services/daily_reset_service.dart';
 import 'package:nyang_coach/services/coach_id_service.dart';
+import 'package:nyang_coach/services/local_reply_texts.dart';
 import 'package:nyang_coach/services/master_bedtime_offer_copy.dart';
 import 'package:nyang_coach/services/master_greeting.dart';
 import 'package:nyang_coach/services/task_resistance_service.dart';
@@ -4482,65 +4483,25 @@ class _ChatScreenState extends State<ChatScreen>
     required List<Map<String, dynamic>> habitTasks,
     required List<Map<String, dynamic>> todayTasks,
   }) {
-    if (!hasAnyTask) {
-      return switch (widget.coachId) {
-        'nyang_halbae' || 'cat' => '계획을 짜야 한다냥. 뭐할지 같이 정해볼까?\n냥이가 할 일 탭 열어줄게.',
-        'bro' => '계획부터 짜야겠다. 뭐할지 같이 정해보자. 할 일 탭 열어준다.',
-        'sec_female' => '오늘 할 일이 아직 비어 있어요. 무엇을 할지 함께 정해볼게요. 할 일 탭을 열어드릴게요.',
-        _ => '오늘 할 일이 아직 비어 있어. 뭐할지 같이 정해볼까? 할 일 탭 열어줄게.',
-      };
-    }
-
     final coreTaskText = _taskText(coreTask);
-    final buffer = StringBuffer(switch (widget.coachId) {
-      'nyang_halbae' || 'cat' => '오늘 할 일은 총 $totalCount가지다냥.',
-      'bro' => '오늘 할 일은 총 $totalCount가지다.',
-      'sec_female' => '오늘 할 일은 총 $totalCount가지예요.',
-      _ => '오늘 할 일은 총 $totalCount가지야.',
-    });
-    if (coreTaskText != null && coreTaskText.trim().isNotEmpty) {
-      buffer.write(switch (widget.coachId) {
-        'nyang_halbae' ||
-        'cat' => '\n오늘의 핵심은 ${_taskOverviewLabel(coreTask!)}다냥.',
-        'bro' => '\n오늘 핵심은 ${_taskOverviewLabel(coreTask!)}다.',
-        'sec_female' => '\n오늘의 핵심은 ${_taskOverviewLabel(coreTask!)}예요.',
-        _ => '\n오늘의 핵심은 ${_taskOverviewLabel(coreTask!)}야.',
-      });
-    }
-    if (habitTasks.isNotEmpty) {
-      final names = habitTasks.map(_taskOverviewLabel).join(', ');
-      buffer.write(switch (widget.coachId) {
-        'nyang_halbae' || 'cat' => '\n습관은 $names 챙기면 된다냥.',
-        'bro' => '\n습관은 $names 챙기면 된다.',
-        'sec_female' => '\n습관은 $names 챙기시면 돼요.',
-        _ => '\n습관은 $names 챙기면 돼.',
-      });
-    }
     final highlightedKeys = {
       if (coreTask != null) _taskOverviewKey(coreTask),
       ...habitTasks.map(_taskOverviewKey),
     };
-    final otherTasks = todayTasks
+    final otherTaskLabels = todayTasks
         .where((task) => !highlightedKeys.contains(_taskOverviewKey(task)))
+        .map(_taskOverviewLabel)
         .toList(growable: false);
-    if (otherTasks.isNotEmpty) {
-      buffer.write(switch (widget.coachId) {
-        'nyang_halbae' || 'cat' => '\n나머지는 이거다냥.',
-        'bro' => '\n나머지는 이거다.',
-        'sec_female' => '\n나머지는 이렇게 있어요.',
-        _ => '\n나머지는 이렇게 있어.',
-      });
-      for (final task in otherTasks) {
-        buffer.write('\n${_taskOverviewLabel(task)}');
-      }
-    }
-    buffer.write(switch (widget.coachId) {
-      'nyang_halbae' || 'cat' => '\n냥이가 할 일 탭 열어줄게.',
-      'bro' => '\n할 일 탭 열어준다.',
-      'sec_female' => '\n오늘 할 일 탭을 열어드릴게요.',
-      _ => '\n오늘 할 일 탭 열어줄게.',
-    });
-    return buffer.toString();
+    return LocalReplyTexts.todayTaskOverview(
+      coachId: widget.coachId,
+      hasAnyTask: hasAnyTask,
+      totalCount: totalCount,
+      coreTaskLabel: coreTaskText != null && coreTaskText.trim().isNotEmpty
+          ? _taskOverviewLabel(coreTask!)
+          : null,
+      habitLabels: habitTasks.map(_taskOverviewLabel).toList(growable: false),
+      otherTaskLabels: otherTaskLabels,
+    );
   }
 
   String _taskOverviewKey(Map<String, dynamic> task) {
@@ -4550,9 +4511,11 @@ class _ChatScreenState extends State<ChatScreen>
   String _taskOverviewLabel(Map<String, dynamic> task) {
     final text = _taskText(task) ?? '이름 없는 할 일';
     final timeLabel = _taskTimeLabelForPrompt(task);
-    final doneLabel = task['done'] == true ? '완료한 ' : '';
-    if (timeLabel.isEmpty) return "$doneLabel'$text'";
-    return "$timeLabel $doneLabel'$text'";
+    return LocalReplyTexts.taskOverviewLabel(
+      text: text,
+      timeLabel: timeLabel,
+      done: task['done'] == true,
+    );
   }
 
   bool _looksLikeTodayTaskTimeQuestion(String input) {
@@ -4642,29 +4605,15 @@ class _ChatScreenState extends State<ChatScreen>
   String _todayTaskTimeReply(Map<String, dynamic> task) {
     final text = _taskText(task) ?? '그 일정';
     final timeLabel = _taskTimeLabelForPrompt(task);
-    if (timeLabel.isEmpty) {
-      return switch (widget.coachId) {
-        'cat' || 'nyang_halbae' => "오늘 '$text' 시간은 아직 안 잡혀 있다냥.",
-        'bro' => "오늘 '$text' 시간은 아직 안 잡혀 있다.",
-        'sec_female' => "오늘 '$text' 시간은 아직 정해져 있지 않아요.",
-        _ => "오늘 '$text' 시간은 아직 안 잡혀 있어.",
-      };
-    }
-    return switch (widget.coachId) {
-      'cat' || 'nyang_halbae' => "오늘 '$text'은 $timeLabel부터다냥.",
-      'bro' => "오늘 '$text'은 $timeLabel부터다.",
-      'sec_female' => "오늘 '$text'은 $timeLabel부터예요.",
-      _ => "오늘 '$text'은 $timeLabel부터야.",
-    };
+    return LocalReplyTexts.todayTaskTimeReply(
+      coachId: widget.coachId,
+      text: text,
+      timeLabel: timeLabel,
+    );
   }
 
   String _todayTaskTimeNotFoundReply() {
-    return switch (widget.coachId) {
-      'cat' || 'nyang_halbae' => '오늘 할 일에서 그 일정은 바로 못 찾겠다냥.\n냥이가 할 일 탭 열어줄게.',
-      'bro' => '오늘 할 일에서 그 일정은 바로 못 찾겠다.\n할 일 탭 열어준다.',
-      'sec_female' => '오늘 할 일에서 해당 일정을 바로 찾지 못했어요.\n할 일 탭을 열어드릴게요.',
-      _ => '오늘 할 일에서 그 일정은 바로 못 찾겠어.\n할 일 탭 열어줄게.',
-    };
+    return LocalReplyTexts.todayTaskTimeNotFoundReply(widget.coachId);
   }
 
   bool _hasTaskTimeQueryCue(
@@ -9224,120 +9173,10 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   String _featureLocationMessage(String location) {
-    final target = switch (location) {
-      'today' => '오늘 할 일',
-      'goals' => '목표',
-      'vision' => '장기 비전',
-      'repeat_schedule' => '반복 일정',
-      'repeat_schedule_delete' => '반복 일정',
-      'repeat_schedule_edit' => '반복 일정',
-      'schedule' => '캘린더',
-      'habit' => '습관',
-      'records' => '기록',
-      'settings' => '설정',
-      'todo_reset' => '오늘 할 일 초기화',
-      _ => '',
-    };
-
-    String base(String suffix) => target.isEmpty ? suffix : '$target$suffix';
-
-    return switch (_coach.id) {
-      'cat' => switch (location) {
-        'picker' => '어떤 화면 찾는 거냥? 냥이가 바로 데려다주겠다냥.',
-        'settings' =>
-          '설정 탭에 있다냥. 모닝콜, 캘린더 알람, 위젯, 채팅 배경, 비서 학습 설정까지 거기서 바꾸면 된다냥.',
-        'todo_reset' =>
-          '오늘 할 일은 매일 자정에 자동으로 초기화된다냥. 초기화 시간을 따로 조절하는 기능은 지금은 없다냥.',
-        'vision' => '장기 비전은 목표 화면 아래쪽에 있다냥. 바로 열어주겠다냥.',
-        'repeat_schedule' =>
-          '반복 일정은 캘린더에서 만든다냥. 캘린더 일정을 입력하고 시계 버튼을 누른 다음 반복을 고르면 된다냥.',
-        'repeat_schedule_delete' =>
-          '반복 일정은 캘린더에서 해당 일정을 누르고 삭제하기를 누르면 된다냥. 반복으로 등록된 같은 일정이 같이 삭제된다냥.',
-        'repeat_schedule_edit' =>
-          '반복 일정 수정은 캘린더에서 해당 일정을 눌러서 하면 된다냥. 바로 캘린더로 데려다주겠다냥.',
-        _ => '${base(' 화면으로 바로 데려다주겠다냥.')}',
-      },
-      'boyfriend' => switch (location) {
-        'picker' => '어디 찾는지 말해줘. 내가 바로 데려다줄게.',
-        'settings' => '설정 탭에 있어. 모닝콜, 캘린더 알람, 위젯, 채팅 배경, 비서 학습 설정까지 거기서 바꾸면 돼.',
-        'todo_reset' => '오늘 할 일은 매일 자정에 자동으로 초기화돼. 초기화 시간은 따로 바꿀 수 없어.',
-        'vision' => '장기 비전은 목표 화면 아래쪽에 있어. 내가 바로 열어줄게.',
-        'repeat_schedule' =>
-          '반복 일정은 캘린더에서 만들면 돼. 캘린더 일정 입력하고 시계 버튼 누른 다음 반복을 고르면 돼.',
-        'repeat_schedule_delete' =>
-          '반복 일정은 캘린더에서 해당 일정을 누르고 삭제하기를 누르면 돼. 반복으로 등록된 같은 일정이 같이 삭제돼.',
-        'repeat_schedule_edit' => '반복 일정 수정은 캘린더에서 해당 일정을 눌러서 하면 돼. 바로 열어줄게.',
-        _ => '${base(' 화면에 있어. 바로 열어줄게.')}',
-      },
-      'halmae' => switch (location) {
-        'picker' => '뭘 찾는 게냐, 우리 새끼. 할미가 바로 데려다주마.',
-        'settings' =>
-          '설정 탭에 있다, 우리 새끼. 모닝콜이랑 알람, 위젯, 채팅 배경, 비서 학습 설정 다 거기서 바꾸면 된다.',
-        'todo_reset' =>
-          '오늘 할 일은 매일 자정에 자동으로 초기화된다, 우리 새끼. 초기화 시간은 따로 바꾸는 기능이 없다.',
-        'vision' => '장기 비전은 목표 화면 아래쪽에 있다. 할미가 바로 열어주마.',
-        'repeat_schedule' =>
-          '반복 일정은 캘린더에서 만든다, 우리 새끼. 캘린더 일정 적고 시계 버튼 누른 다음 반복을 고르면 된다.',
-        'repeat_schedule_delete' =>
-          '반복 일정은 캘린더에서 그 일정을 누르고 삭제하기를 누르면 된다. 반복으로 등록된 같은 일정이 같이 지워진다.',
-        'repeat_schedule_edit' =>
-          '반복 일정 수정은 캘린더에서 그 일정을 눌러서 하면 된다. 할미가 바로 열어주마.',
-        _ => '${base(' 화면에 있다. 할미가 바로 열어주마.')}',
-      },
-      'bro' => switch (location) {
-        'picker' => '어디 찾냐. 말만 해라, 바로 보내준다.',
-        'settings' => '설정 탭이다. 모닝콜, 캘린더 알람, 위젯, 채팅 배경, 비서 학습 설정 다 거기서 바꾸면 된다.',
-        'todo_reset' => '오늘 할 일은 매일 자정에 자동 초기화된다. 초기화 시간은 따로 못 바꾼다.',
-        'vision' => '장기 비전은 목표 화면 아래쪽이다. 바로 열어준다.',
-        'repeat_schedule' =>
-          '반복 일정은 캘린더에서 만든다. 캘린더 일정 입력하고 시계 버튼 누른 다음 반복을 고르면 된다.',
-        'repeat_schedule_delete' =>
-          '반복 일정은 캘린더에서 해당 일정 누르고 삭제하기 누르면 된다. 반복으로 등록된 같은 일정이 같이 삭제된다.',
-        'repeat_schedule_edit' => '반복 일정 수정은 캘린더에서 해당 일정 눌러서 하면 된다. 바로 열어준다.',
-        _ => '${base(' 화면이다. 바로 열어준다.')}',
-      },
-      'nyang_halbae' => switch (location) {
-        'picker' => '대표님, 찾으시는 화면을 선택해 주시면 바로 이동하겠습니다.',
-        'settings' =>
-          '대표님, 설정 탭에서 모닝콜, 캘린더 알람, 위젯, 채팅 배경, 비서 학습 설정을 변경하실 수 있습니다.',
-        'todo_reset' =>
-          '대표님, 오늘 할 일은 매일 자정에 자동으로 초기화됩니다. 초기화 시간을 별도로 조절하는 기능은 현재 제공하지 않습니다.',
-        'vision' => '대표님, 장기 비전은 목표 화면 하단에서 확인하실 수 있습니다. 바로 이동하겠습니다.',
-        'repeat_schedule' =>
-          '대표님, 반복 일정은 캘린더에서 생성하실 수 있습니다. 캘린더 일정을 입력한 뒤 시계 버튼을 누르고 반복을 선택해 주세요.',
-        'repeat_schedule_delete' =>
-          '대표님, 반복 일정은 캘린더에서 해당 일정을 누른 뒤 삭제하기를 선택하시면 됩니다. 반복으로 등록된 같은 일정이 함께 삭제됩니다.',
-        'repeat_schedule_edit' =>
-          '대표님, 반복 일정 수정은 캘린더에서 해당 일정을 선택해 진행하실 수 있습니다. 바로 이동하겠습니다.',
-        _ => '대표님, ${base(' 화면으로 바로 이동하겠습니다.')}',
-      },
-      'sec_female' => switch (location) {
-        'picker' => '대표님, 어떤 화면을 찾으세요? 제가 바로 열어드릴게요.',
-        'settings' => '대표님, 설정 탭에서 모닝콜, 캘린더 알람, 위젯, 채팅 배경, 비서 학습 설정을 바꿀 수 있어요.',
-        'todo_reset' =>
-          '대표님, 오늘 할 일은 매일 자정에 자동으로 초기화돼요. 초기화 시간을 따로 조절하는 기능은 현재 없어요.',
-        'vision' => '대표님, 장기 비전은 목표 화면 아래쪽에 있어요. 바로 열어드릴게요.',
-        'repeat_schedule' =>
-          '대표님, 반복 일정은 캘린더에서 만들 수 있어요. 캘린더 일정을 입력한 뒤 시계 버튼을 누르고 반복을 선택해 주세요.',
-        'repeat_schedule_delete' =>
-          '대표님, 반복 일정은 캘린더에서 해당 일정을 누른 뒤 삭제하기를 선택하면 돼요. 반복으로 등록된 같은 일정이 함께 삭제돼요.',
-        'repeat_schedule_edit' =>
-          '대표님, 반복 일정 수정은 캘린더에서 해당 일정을 선택해 진행할 수 있어요. 바로 이동할게요.',
-        _ => '대표님, ${base(' 화면으로 바로 이동할게요.')}',
-      },
-      _ => switch (location) {
-        'picker' => '어떤 화면을 찾고 있어? 바로 열어줄게.',
-        'settings' => '설정 탭에서 모닝콜, 캘린더 알람, 위젯, 채팅 배경, 비서 학습 설정을 바꿀 수 있어.',
-        'todo_reset' => '오늘 할 일은 매일 자정에 자동으로 초기화돼. 초기화 시간은 따로 바꿀 수 없어.',
-        'vision' => '장기 비전은 목표 화면 아래쪽에 있어. 바로 열어줄게.',
-        'repeat_schedule' =>
-          '반복 일정은 캘린더에서 만들 수 있어. 캘린더 일정을 입력하고 시계 버튼을 누른 다음 반복을 선택하면 돼.',
-        'repeat_schedule_delete' =>
-          '반복 일정은 캘린더에서 해당 일정을 누르고 삭제하기를 선택하면 돼. 반복으로 등록된 같은 일정이 함께 삭제돼.',
-        'repeat_schedule_edit' => '반복 일정 수정은 캘린더에서 해당 일정을 눌러서 하면 돼. 바로 열어줄게.',
-        _ => '${base(' 화면에 있어. 바로 열어줄게.')}',
-      },
-    };
+    return LocalReplyTexts.featureLocationMessage(
+      coachId: _coach.id,
+      location: location,
+    );
   }
 
   bool _isSimpleScheduleOverviewRequest(String input) {
