@@ -4654,10 +4654,30 @@ class _ChatScreenState extends State<ChatScreen>
     };
   }
 
+  String _todayTaskTimeNotFoundReply() {
+    return switch (widget.coachId) {
+      'cat' || 'nyang_halbae' => '오늘 할 일에서 그 일정은 바로 못 찾겠다냥.\n냥이가 할 일 탭 열어줄게.',
+      'bro' => '오늘 할 일에서 그 일정은 바로 못 찾겠다.\n할 일 탭 열어준다.',
+      'sec_female' => '오늘 할 일에서 해당 일정을 바로 찾지 못했어요.\n할 일 탭을 열어드릴게요.',
+      _ => '오늘 할 일에서 그 일정은 바로 못 찾겠어.\n할 일 탭 열어줄게.',
+    };
+  }
+
+  bool _hasTaskTimeQueryCue(
+    List<String> quotedTerms,
+    List<String> queryTokens,
+  ) {
+    return quotedTerms.isNotEmpty || queryTokens.isNotEmpty;
+  }
+
   Future<bool> _tryAnswerTodayTaskTimeQuestion(String input) async {
     if (!_looksLikeTodayTaskTimeQuestion(input)) return false;
 
     final prefs = await SharedPreferences.getInstance();
+    final quotedTerms = _quotedTaskTerms(input);
+    final queryTokens = _taskQueryTokens(input);
+    if (!_hasTaskTimeQueryCue(quotedTerms, queryTokens)) return false;
+
     final tasks = _decodeMapList(prefs.getString('nyang_tasks'));
     final todayTasks = tasks
         .where((task) {
@@ -4667,10 +4687,11 @@ class _ChatScreenState extends State<ChatScreen>
               category == 'schedule';
         })
         .toList(growable: false);
-    if (todayTasks.isEmpty) return false;
+    if (todayTasks.isEmpty) {
+      await _sendTodayTaskTimeNotFoundReply(input);
+      return true;
+    }
 
-    final quotedTerms = _quotedTaskTerms(input);
-    final queryTokens = _taskQueryTokens(input);
     final scored =
         todayTasks
             .map(
@@ -4687,7 +4708,10 @@ class _ChatScreenState extends State<ChatScreen>
             .where((item) => item.score > 0)
             .toList()
           ..sort((a, b) => b.score.compareTo(a.score));
-    if (scored.isEmpty) return false;
+    if (scored.isEmpty) {
+      await _sendTodayTaskTimeNotFoundReply(input);
+      return true;
+    }
 
     final reply = await UserTitleService.applyForCoach(
       _todayTaskTimeReply(scored.first.task),
@@ -4712,6 +4736,33 @@ class _ChatScreenState extends State<ChatScreen>
       usedApi: false,
     );
     return true;
+  }
+
+  Future<void> _sendTodayTaskTimeNotFoundReply(String input) async {
+    final reply = await UserTitleService.applyForCoach(
+      _todayTaskTimeNotFoundReply(),
+      widget.coachId,
+    );
+    setState(() {
+      _messages.add(
+        ChatMessage(text: input, isUser: true, time: DateTime.now()),
+      );
+      _messages.add(
+        ChatMessage(text: reply, isUser: false, time: DateTime.now()),
+      );
+      _suggestedTasks = [];
+      _dynamicChips = [];
+      _suppressDefaultChips = false;
+      _coachSwitchTarget = null;
+    });
+    _scrollToBottom();
+    await _saveHistory();
+    await AnalyticsService.logConversationMessage(
+      coachId: widget.coachId,
+      usedApi: false,
+    );
+    await Future.delayed(const Duration(milliseconds: 260));
+    widget.onOpenFeatureLocation?.call('today');
   }
 
   Future<bool> _tryOpenTodayTaskOverview(String input) async {
