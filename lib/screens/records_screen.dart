@@ -1359,12 +1359,14 @@ ${feedbackType == 0
           ),
           const SizedBox(height: 8),
           _buildFavoriteCoachRanks(),
-          const SizedBox(height: 12),
-          _buildWeeklyCompanionHeader(
-            iconPath: 'assets/icons/fa-handshake-solid.svg',
-            label: '미루다가 함께 완료한 일',
-            value: '$_weeklyCompletedResistanceCount회',
-          ),
+          if (_weeklyCompletedResistanceCount > 0) ...[
+            const SizedBox(height: 12),
+            _buildWeeklyCompanionHeader(
+              iconPath: 'assets/icons/fa-handshake-solid.svg',
+              label: '미루다가 함께 완료한 일',
+              value: '$_weeklyCompletedResistanceCount회',
+            ),
+          ],
         ],
       ),
     );
