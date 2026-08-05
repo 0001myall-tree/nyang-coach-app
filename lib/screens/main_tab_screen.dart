@@ -846,14 +846,10 @@ class _MainTabScreenState extends State<MainTabScreen>
                       ),
                       border: Border.all(color: AppDesignTokens.brandBorder),
                     ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(
-                        AppDesignTokens.radiusMedium,
-                      ),
-                      child: Image.asset(
-                        'assets/images/iphonecatwidget1.png',
-                        fit: BoxFit.cover,
-                      ),
+                    child: const Icon(
+                      Icons.widgets_rounded,
+                      color: AppDesignTokens.brand,
+                      size: 26,
                     ),
                   ),
                   const SizedBox(width: 12),
