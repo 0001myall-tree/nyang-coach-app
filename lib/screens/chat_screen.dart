@@ -1297,6 +1297,7 @@ class _ChatScreenState extends State<ChatScreen>
       final todayStr = _getTodayStrWithReset(prefs);
       final raw = prefs.getString('nyang_tasks') ?? '[]';
       final List<dynamic> list = jsonDecode(raw);
+      final habitFreqById = _habitFrequencyById(prefs);
       final milestones = _todayMilestoneProgressItems(prefs, todayStr);
 
       int total = 0;
@@ -1308,10 +1309,12 @@ class _ChatScreenState extends State<ChatScreen>
       for (final item in list) {
         if (item is! Map) continue;
         final task = Map<String, dynamic>.from(item);
-        total++;
-        if (task['done'] == true) {
+        final countable = _countsTowardDailyCompletion(task, habitFreqById);
+        if (countable) total++;
+        if (countable && task['done'] == true) {
           completed++;
-        } else {
+        }
+        if (task['done'] != true) {
           // 진행 중인 일도 후보엔 넣되, 정렬에서 맨 뒤로 밀린다.
           pendingChipCandidates.add(task);
           if (!_isInProgressTask(task)) {
@@ -1380,6 +1383,34 @@ class _ChatScreenState extends State<ChatScreen>
     } catch (e) {
       debugPrint('Error loading tasks: $e');
     }
+  }
+
+  Map<String, String> _habitFrequencyById(SharedPreferences prefs) {
+    final raw = prefs.getString('nyang_habits');
+    if (raw == null || raw.trim().isEmpty) return const {};
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! List) return const {};
+      final result = <String, String>{};
+      for (final item in decoded) {
+        if (item is! Map) continue;
+        final id = item['id']?.toString();
+        if (id == null) continue;
+        result[id] = item['freq']?.toString() ?? 'daily';
+      }
+      return result;
+    } catch (_) {
+      return const {};
+    }
+  }
+
+  bool _countsTowardDailyCompletion(
+    Map<String, dynamic> task,
+    Map<String, String> habitFreqById,
+  ) {
+    final habitId = task['habitId']?.toString();
+    if (habitId == null) return true;
+    return habitFreqById[habitId] != 'weekly_count' || task['done'] == true;
   }
 
   List<Map<String, dynamic>> _todayMilestoneProgressItems(
@@ -14892,7 +14923,15 @@ $timerOutputRule
       } catch (_) {}
     }
 
-    final doneTasks = tasksList.where((t) => t['done'] == true).toList();
+    final habitFreqById = _habitFrequencyById(prefs);
+    final countableTasks = tasksList.where((t) {
+      if (t is! Map) return false;
+      return _countsTowardDailyCompletion(
+        Map<String, dynamic>.from(t),
+        habitFreqById,
+      );
+    }).toList();
+    final doneTasks = countableTasks.where((t) => t['done'] == true).toList();
 
     // 밤 9시 이후 이월된 일정 로드
     final rawDeferred = prefs.getString('nyang_deferred_tasks_today');
@@ -14925,7 +14964,7 @@ $timerOutputRule
     final rawVacation = prefs.getString('nyang_vacation');
     final record = {
       'date': todayStr,
-      'totalCount': tasksList.length,
+      'totalCount': countableTasks.length,
       'doneCount': doneTasks.length,
       'success': doneTasks.isNotEmpty,
       'isVacation': rawVacation != null,

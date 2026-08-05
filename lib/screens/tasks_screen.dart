@@ -1974,7 +1974,8 @@ class _TasksScreenState extends State<TasksScreen>
     }
 
     final todayStr = _getTodayStr();
-    final doneTasks = tasks.where((t) => t.done).toList();
+    final countableTasks = tasks.where(_countsTowardDailyCompletion).toList();
+    final doneTasks = countableTasks.where((t) => t.done).toList();
     final todayMilestones = _todayMilestoneItems;
     final doneMilestones = todayMilestones.where((m) => m.done).toList();
 
@@ -2019,7 +2020,7 @@ class _TasksScreenState extends State<TasksScreen>
 
     final record = {
       'date': todayStr,
-      'totalCount': tasks.length + todayMilestones.length,
+      'totalCount': countableTasks.length + todayMilestones.length,
       'doneCount': doneTasks.length + doneMilestones.length,
       'success': doneTasks.isNotEmpty || doneMilestones.isNotEmpty,
       'isVacation': vacationInfo != null,
@@ -2461,22 +2462,49 @@ class _TasksScreenState extends State<TasksScreen>
     final today = DateTime.now();
     final weekStart = _startOfWeek(today);
     final logs = habitLogs[habit.id.toString()] ?? {};
-    var doneCount = 0;
+    var doneCount = 0.0;
 
     for (
       var cursor = weekStart;
       !cursor.isAfter(today);
       cursor = cursor.add(const Duration(days: 1))
     ) {
-      if (logs[_dateKeyFor(cursor)]?['done'] == true) doneCount++;
+      doneCount += _habitLogCompletionRatio(logs[_dateKeyFor(cursor)]);
     }
 
     final todayDone = logs[_dateKeyFor(today)]?['done'] == true || task.done;
     final displayCount = todayDone ? doneCount : doneCount + 1;
-    final safeDisplayCount = displayCount < 1
+    final roundedDisplayCount = displayCount.round();
+    final safeDisplayCount = roundedDisplayCount < 1
         ? 1
-        : (displayCount > target ? target : displayCount);
+        : (roundedDisplayCount > target ? target : roundedDisplayCount);
     return '습관 $safeDisplayCount/$target';
+  }
+
+  double _habitLogCompletionRatio(dynamic log) {
+    if (log is! Map || log['done'] != true) return 0;
+    final rawRatio = log['progressRatio'];
+    if (rawRatio is num) {
+      final ratio = rawRatio.toDouble();
+      return ratio < 0 ? 0 : (ratio > 1 ? 1 : ratio);
+    }
+    final count = (log['count'] as num?)?.toDouble();
+    final countGoal = (log['countGoal'] as num?)?.toDouble();
+    if (count != null && countGoal != null && countGoal > 0) {
+      final ratio = count / countGoal;
+      return ratio < 0 ? 0 : (ratio > 1 ? 1 : ratio);
+    }
+    return 1;
+  }
+
+  bool _countsTowardDailyCompletion(TaskItem task) {
+    if (task.habitId == null) return true;
+    final habitIndex = habits.indexWhere(
+      (h) => h.id.toString() == task.habitId.toString(),
+    );
+    if (habitIndex < 0) return true;
+    final habit = habits[habitIndex];
+    return habit.freq != 'weekly_count' || task.done;
   }
 
   bool _shouldShowWeeklyCountHabitOnDate(HabitItem habit, DateTime date) {
@@ -2484,18 +2512,99 @@ class _TasksScreenState extends State<TasksScreen>
     final target = rawTarget < 1 ? 1 : (rawTarget > 7 ? 7 : rawTarget);
     final weekStart = _startOfWeek(date);
     final logs = habitLogs[habit.id.toString()] ?? {};
-    var doneCountBeforeDate = 0;
+    var doneCountBeforeDate = 0.0;
 
     for (
       var cursor = weekStart;
       cursor.isBefore(DateTime(date.year, date.month, date.day));
       cursor = cursor.add(const Duration(days: 1))
     ) {
-      if (logs[_dateKeyFor(cursor)]?['done'] == true) doneCountBeforeDate++;
+      doneCountBeforeDate += _habitLogCompletionRatio(
+        logs[_dateKeyFor(cursor)],
+      );
     }
 
     final dateDone = logs[_dateKeyFor(date)]?['done'] == true;
     return dateDone || doneCountBeforeDate < target;
+  }
+
+  Future<({String label, double ratio})?> _pickHabitCompletionRatio(
+    HabitItem habit,
+  ) {
+    final unit = (habit.unit ?? '').trim();
+    final goalText = habit.countGoal != null
+        ? '${habit.countGoal}${unit.isEmpty ? '' : unit}'
+        : null;
+    final options = [
+      (label: '조금 했어', ratio: 0.25),
+      (label: '절반쯤 했어', ratio: 0.5),
+      (label: '목표만큼 했어', ratio: 1.0),
+    ];
+
+    return showModalBottomSheet<({String label, double ratio})>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => SafeArea(
+        child: Container(
+          margin: const EdgeInsets.all(16),
+          padding: const EdgeInsets.fromLTRB(18, 18, 18, 10),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(18),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.08),
+                blurRadius: 18,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                goalText == null ? '오늘 얼마나 했나요?' : '오늘 목표 $goalText 중 얼마나 했나요?',
+                style: GoogleFonts.notoSansKr(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w900,
+                  color: const Color(0xFF3D3A4E),
+                ),
+              ),
+              const SizedBox(height: 12),
+              ...options.map(
+                (option) => GestureDetector(
+                  onTap: () => Navigator.pop(ctx, option),
+                  child: Container(
+                    width: double.infinity,
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 13,
+                    ),
+                    decoration: BoxDecoration(
+                      color: _coach.accentColor.withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: _coach.accentColor.withOpacity(0.18),
+                      ),
+                    ),
+                    child: Text(
+                      option.label,
+                      style: GoogleFonts.notoSansKr(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                        color: _coach.accentColor,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   // ── injectTodaySchedules ──────────────────────────────
@@ -2840,15 +2949,21 @@ class _TasksScreenState extends State<TasksScreen>
       _showInProgressHintToastOnce();
     } else {
       HabitItem? habitInfo;
+      double habitCompletionRatio = 1.0;
+      String? habitCompletionLabel;
       if (t.habitId != null) {
         final hIdx = habits.indexWhere(
           (h) => h.id.toString() == t.habitId.toString(),
         );
         if (hIdx != -1) {
           habitInfo = habits[hIdx];
-          // 팝업 없이 바로 완료 처리: 달성치는 목표치로 자동 기록
           if (habitInfo.checkType == 'count' || habitInfo.checkType == 'both') {
-            t.achievedCount = habitInfo.countGoal ?? 0;
+            final selection = await _pickHabitCompletionRatio(habitInfo);
+            if (selection == null) return;
+            habitCompletionRatio = selection.ratio;
+            habitCompletionLabel = selection.label;
+            final countGoal = habitInfo.countGoal ?? 0;
+            t.achievedCount = (countGoal * habitCompletionRatio).round();
           }
           if (habitInfo.checkType == 'duration' ||
               habitInfo.checkType == 'both') {
@@ -2888,6 +3003,10 @@ class _TasksScreenState extends State<TasksScreen>
               logMap['count'] = t.achievedCount ?? habitInfo.countGoal ?? 0;
               logMap['countGoal'] = habitInfo.countGoal ?? 0;
               logMap['unit'] = habitInfo.unit ?? '';
+              logMap['progressRatio'] = habitCompletionRatio;
+              if (habitCompletionLabel != null) {
+                logMap['progressLabel'] = habitCompletionLabel;
+              }
             }
             if (habitInfo.checkType == 'duration' ||
                 habitInfo.checkType == 'both') {
@@ -2942,8 +3061,11 @@ class _TasksScreenState extends State<TasksScreen>
           coreTasks.any((ct) => ct.id.toString() == t.id.toString());
 
       // 로컬 칭찬 팝업 (Flirt)
-      final doneCount = currentTasks.where((ts) => ts.done).length;
-      final totalCount = currentTasks.length;
+      final countableCurrentTasks = currentTasks
+          .where(_countsTowardDailyCompletion)
+          .toList();
+      final doneCount = countableCurrentTasks.where((ts) => ts.done).length;
+      final totalCount = countableCurrentTasks.length;
 
       // 선제개입 저항예측 4일차: 완료 결과를 이벤트/상태머신에 반영 (6장 폐루프)
       if (_isViewingActualToday) {

@@ -56,10 +56,14 @@ class WidgetSyncService {
     final tasks = rawTasks == null
         ? <Map<String, dynamic>>[]
         : _decodeTasks(rawTasks);
+    final habits = _decodeList(prefs.getString('nyang_habits'));
     final timedSchedule = _todayWidgetSchedule(prefs, tasks);
     final habitSchedule = _todayHabitWidgetSchedule(tasks);
 
-    final allItems = [...tasks, ..._todayMilestoneTasks(prefs)];
+    final allItems = [
+      ...tasks.where((task) => _countsTowardDailyCompletion(task, habits)),
+      ..._todayMilestoneTasks(prefs),
+    ];
     final doneTasks = allItems.where((task) => task['done'] == true).toList();
     final remainingTasks = allItems
         .where((task) => task['done'] != true)
@@ -286,6 +290,33 @@ class WidgetSyncService {
     } catch (_) {
       return <Map<String, dynamic>>[];
     }
+  }
+
+  static List<dynamic> _decodeList(String? raw) {
+    if (raw == null || raw.trim().isEmpty) return const [];
+    try {
+      final decoded = jsonDecode(raw);
+      return decoded is List ? decoded : const [];
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  static bool _countsTowardDailyCompletion(
+    Map<String, dynamic> task,
+    List<dynamic> habits,
+  ) {
+    final habitId = task['habitId']?.toString();
+    if (habitId == null) return true;
+    Map<dynamic, dynamic>? habit;
+    for (final item in habits) {
+      if (item is Map && item['id']?.toString() == habitId) {
+        habit = item;
+        break;
+      }
+    }
+    if (habit == null) return true;
+    return habit['freq'] != 'weekly_count' || task['done'] == true;
   }
 
   static _WidgetScheduleItem? _todayWidgetSchedule(

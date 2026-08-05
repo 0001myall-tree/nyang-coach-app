@@ -1610,7 +1610,7 @@ ${feedbackType == 0
           ...trackingHabits.map((h) {
             // 임시로 달성률 계산 (habitLogs 사용)
             final days = _isMaster ? 30 : 7;
-            int hSuccess = 0;
+            double hSuccess = 0;
             int hTotal = 0;
             final logs = _habitLogs[h.id.toString()] ?? {};
 
@@ -1644,6 +1644,22 @@ ${feedbackType == 0
               );
             }
 
+            double logCompletionRatio(dynamic log) {
+              if (log is! Map || log['done'] != true) return 0;
+              final rawRatio = log['progressRatio'];
+              if (rawRatio is num) {
+                final ratio = rawRatio.toDouble();
+                return ratio < 0 ? 0 : (ratio > 1 ? 1 : ratio);
+              }
+              final count = (log['count'] as num?)?.toDouble();
+              final countGoal = (log['countGoal'] as num?)?.toDouble();
+              if (count != null && countGoal != null && countGoal > 0) {
+                final ratio = count / countGoal;
+                return ratio < 0 ? 0 : (ratio > 1 ? 1 : ratio);
+              }
+              return 1;
+            }
+
             String formatYYMMDD(DateTime d) {
               return '${d.year.toString().substring(2)}.${d.month.toString().padLeft(2, '0')}.${d.day.toString().padLeft(2, '0')}';
             }
@@ -1667,7 +1683,7 @@ ${feedbackType == 0
                   ? 1
                   : (rawTarget > 7 ? 7 : rawTarget);
               final weekTotals = <String, int>{};
-              final weekSuccesses = <String, int>{};
+              final weekSuccesses = <String, double>{};
 
               for (
                 var cursor = periodStart;
@@ -1676,9 +1692,9 @@ ${feedbackType == 0
               ) {
                 final weekKey = dateKey(weekStartOf(cursor));
                 weekTotals[weekKey] = (weekTotals[weekKey] ?? 0) + 1;
-                if (logs[dateKey(cursor)]?['done'] == true) {
-                  weekSuccesses[weekKey] = (weekSuccesses[weekKey] ?? 0) + 1;
-                }
+                weekSuccesses[weekKey] =
+                    (weekSuccesses[weekKey] ?? 0) +
+                    logCompletionRatio(logs[dateKey(cursor)]);
               }
 
               for (final entry in weekTotals.entries) {
@@ -1706,7 +1722,7 @@ ${feedbackType == 0
                 }
 
                 hTotal++;
-                if (logs[dateKey(d)]?['done'] == true) hSuccess++;
+                hSuccess += logCompletionRatio(logs[dateKey(d)]);
               }
             }
             final hPct = hTotal == 0 ? 0 : ((hSuccess / hTotal) * 100).round();

@@ -500,7 +500,7 @@ class DailyResetService {
 
     final normalizedDate = DateTime(date.year, date.month, date.day);
     final weekStart = _startOfWeek(normalizedDate);
-    var doneCountBeforeDate = 0;
+    var doneCountBeforeDate = 0.0;
 
     for (
       var cursor = weekStart;
@@ -508,12 +508,28 @@ class DailyResetService {
       cursor = cursor.add(const Duration(days: 1))
     ) {
       final log = logsForHabit[_dateKey(cursor)];
-      if (log is Map && log['done'] == true) doneCountBeforeDate++;
+      doneCountBeforeDate += _habitLogCompletionRatio(log);
     }
 
     final todayLog = logsForHabit[_dateKey(normalizedDate)];
     final dateDone = todayLog is Map && todayLog['done'] == true;
     return dateDone || doneCountBeforeDate < target;
+  }
+
+  static double _habitLogCompletionRatio(dynamic log) {
+    if (log is! Map || log['done'] != true) return 0;
+    final rawRatio = log['progressRatio'];
+    if (rawRatio is num) {
+      final ratio = rawRatio.toDouble();
+      return ratio < 0 ? 0 : (ratio > 1 ? 1 : ratio);
+    }
+    final count = (log['count'] as num?)?.toDouble();
+    final countGoal = (log['countGoal'] as num?)?.toDouble();
+    if (count != null && countGoal != null && countGoal > 0) {
+      final ratio = count / countGoal;
+      return ratio < 0 ? 0 : (ratio > 1 ? 1 : ratio);
+    }
+    return 1;
   }
 
   static Future<void> _saveTodayRecordDirectly(
@@ -530,7 +546,12 @@ class DailyResetService {
       } catch (_) {}
     }
 
-    final doneTasks = tasksList.where((t) => t['done'] == true).toList();
+    final rawHabits = prefs.getString('nyang_habits') ?? '[]';
+    final List<dynamic> habitsList = jsonDecode(rawHabits);
+    final countableTasks = tasksList
+        .where((t) => _countsTowardDailyCompletion(t, habitsList))
+        .toList();
+    final doneTasks = countableTasks.where((t) => t['done'] == true).toList();
 
     // 밤 9시 이후 이월된 일정 로드
     final rawDeferred = prefs.getString('nyang_deferred_tasks_today');
@@ -566,7 +587,7 @@ class DailyResetService {
     final rawVacation = prefs.getString('nyang_vacation');
     final record = {
       'date': todayStr,
-      'totalCount': tasksList.length,
+      'totalCount': countableTasks.length,
       'doneCount': doneTasks.length,
       'success': doneTasks.isNotEmpty,
       'isVacation': rawVacation != null,
@@ -585,5 +606,22 @@ class DailyResetService {
     if (history.length > 30) history = history.sublist(history.length - 30);
 
     await prefs.setString('nyang_history', jsonEncode(history));
+  }
+
+  static bool _countsTowardDailyCompletion(
+    Map<String, dynamic> task,
+    List<dynamic> habits,
+  ) {
+    final habitId = task['habitId']?.toString();
+    if (habitId == null) return true;
+    Map<dynamic, dynamic>? habit;
+    for (final item in habits) {
+      if (item is Map && item['id']?.toString() == habitId) {
+        habit = item;
+        break;
+      }
+    }
+    if (habit == null) return true;
+    return habit['freq'] != 'weekly_count' || task['done'] == true;
   }
 }

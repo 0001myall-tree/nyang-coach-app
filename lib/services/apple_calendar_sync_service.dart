@@ -1129,7 +1129,7 @@ class AppleCalendarSyncService {
 
     final normalizedDate = DateTime(date.year, date.month, date.day);
     final weekStart = _startOfWeek(normalizedDate);
-    var doneCountBeforeDate = 0;
+    var doneCountBeforeDate = 0.0;
 
     for (
       var cursor = weekStart;
@@ -1137,12 +1137,28 @@ class AppleCalendarSyncService {
       cursor = cursor.add(const Duration(days: 1))
     ) {
       final log = logsForHabit[_dateKey(cursor)];
-      if (log is Map && log['done'] == true) doneCountBeforeDate++;
+      doneCountBeforeDate += _habitLogCompletionRatio(log);
     }
 
     final dateLog = logsForHabit[_dateKey(normalizedDate)];
     final dateDone = dateLog is Map && dateLog['done'] == true;
     return dateDone || doneCountBeforeDate < target;
+  }
+
+  double _habitLogCompletionRatio(dynamic log) {
+    if (log is! Map || log['done'] != true) return 0;
+    final rawRatio = log['progressRatio'];
+    if (rawRatio is num) {
+      final ratio = rawRatio.toDouble();
+      return ratio < 0 ? 0 : (ratio > 1 ? 1 : ratio);
+    }
+    final count = (log['count'] as num?)?.toDouble();
+    final countGoal = (log['countGoal'] as num?)?.toDouble();
+    if (count != null && countGoal != null && countGoal > 0) {
+      final ratio = count / countGoal;
+      return ratio < 0 ? 0 : (ratio > 1 ? 1 : ratio);
+    }
+    return 1;
   }
 
   Map<String, dynamic> _decodeMap(String? raw) {
