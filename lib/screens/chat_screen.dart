@@ -1688,6 +1688,113 @@ class _ChatScreenState extends State<ChatScreen>
       '결과를확인하기무서',
       '잘안될까봐',
       '안될까봐',
+      '헛수고',
+      '물거품',
+      '아무것도아닌',
+      '아무것도아닌일',
+      '아무것도아니게',
+      '의미없어질까',
+      '소용없어질까',
+      '노력이사라질까',
+      '노력이날아갈까',
+      '노력이무너질까',
+      '노력이헛',
+    ];
+    return signals.any(normalized.contains);
+  }
+
+  bool _containsWritingConcernSignal(String text) {
+    final normalized = text.replaceAll(RegExp(r'\s+'), '').toLowerCase();
+    const writingSignals = [
+      '글쓰기',
+      '글쓰는거',
+      '글쓰는것',
+      '글쓰는게',
+      '글쓰기가',
+      '글을쓰',
+      '글이안',
+      '글못',
+      '집필',
+      '원고',
+      '웹소설',
+      '소설',
+      '도입부',
+      '첫문장',
+      '첫장면',
+      '본문',
+      '플롯',
+      '시놉',
+      '자료조사',
+      '퇴고',
+      '글자수',
+      '글진도',
+      '글진도가',
+      '글진도안',
+      '글진도막',
+      '글쓰는거진도',
+      '글쓰는것진도',
+      '글쓰기진도',
+      '원고진도',
+      '집필진도',
+      '연재진도',
+      '연재',
+      '원고마감',
+      '연재마감',
+      '문단',
+      '대사',
+      '초고',
+    ];
+    const concernSignals = [
+      '못쓰',
+      '안써',
+      '안쓰',
+      '막히',
+      '막혔',
+      '마음에안',
+      '고치기만',
+      '수정만',
+      '기력이없',
+      '기운이없',
+      '시작하기',
+      '시작이',
+      '부담',
+      '무서',
+      '불안',
+      '잘쓰고',
+      '잘써야',
+      '귀찮',
+      '하기싫',
+      '망할',
+      '자책',
+      '못채',
+      '도망',
+      '그만두',
+    ];
+    return writingSignals.any(normalized.contains) &&
+        concernSignals.any(normalized.contains);
+  }
+
+  bool _containsHabitAutomationSignal(String text) {
+    final normalized = text.replaceAll(RegExp(r'\s+'), '').toLowerCase();
+    const signals = [
+      '습관',
+      '루틴',
+      '꾸준',
+      '매일',
+      '재능',
+      '실력키우',
+      '연습',
+      '자동화',
+      '작심',
+      '첫4일',
+      '처음4일',
+      '4일동안',
+      '하루4번',
+      '여러번나눠',
+      '나눠서',
+      '짧게여러번',
+      '이미지트레이닝',
+      '상상훈련',
     ];
     return signals.any(normalized.contains);
   }
@@ -10555,20 +10662,27 @@ class _ChatScreenState extends State<ChatScreen>
     final isSleepResistanceTurn = _containsSleepResistanceSignal(userText);
     final isSelfHarmRiskTurn = _isSelfHarmRiskTurn(userText);
     final isDecisionFatigueTurn = _containsDecisionFatigueSignal(userText);
+    final isResultAnxietyTurn =
+        !isSelfHarmRiskTurn && _containsResultAnxietySignal(userText);
+    final isWritingConcernTurn =
+        !isSelfHarmRiskTurn && _containsWritingConcernSignal(userText);
+    final isHabitAutomationTurn =
+        !isSelfHarmRiskTurn && _containsHabitAutomationSignal(userText);
     final isLowEnergyStarterFollowup = _awaitingLowEnergyStarterAction;
     _awaitingLowEnergyStarterAction = false;
     final shouldOfferLowEnergyStarter =
         _containsLowEnergyStarterSignal(userText) &&
         !isLowEnergyStarterFollowup &&
         !isSelfHarmRiskTurn &&
-        !isSleepResistanceTurn;
+        !isSleepResistanceTurn &&
+        !isWritingConcernTurn;
     final isSelfSelectedTinyActionFollowup = _awaitingSelfSelectedTinyAction;
     _awaitingSelfSelectedTinyAction = false;
     final shouldInviteSelfSelectedTinyAction =
         isResistanceTurn &&
         !isSelfHarmRiskTurn &&
         !shouldOfferLowEnergyStarter &&
-        !_containsResultAnxietySignal(userText) &&
+        !isResultAnxietyTurn &&
         !isSelfSelectedTinyActionFollowup &&
         _hasRepeatedRecentActionRefusal(userText);
     // 시작 의식은 원인이 불명확할 때만 쓰는 장치라 마스터 코치에게만 흐름 규칙을 준다.
@@ -10584,11 +10698,16 @@ class _ChatScreenState extends State<ChatScreen>
 - "마음 비우고 시작" 제안에 사용자가 동의했거나 사용자가 직접 요청한 경우에만, 짧게 한 문장으로 답한 뒤 답변 맨 끝에 [COUNTDOWN_START] 태그를 붙입니다. 코치가 먼저 붙이지 않습니다.
 - 원인 확인 질문은 하루에 한 번만 합니다. 이미 물어본 날에는 다시 묻지 말고 바로 작은 실행 제안으로 연결해 대화가 길어지지 않게 합니다.'''
         : '';
-    final resistanceStrategyDetailRule = isResistanceTurn
+    final resistanceStrategyDetailRule = isResistanceTurn || isResultAnxietyTurn
         ? '''
-- 사용자가 "망할까 봐 무섭다", "결과 보는 게 무섭다", "실패할까 봐 시작을 못 하겠다"처럼 결과 확인을 두려워하면, 단순히 "작게 시작해보자"로 바로 밀지 마세요. 먼저 "결과를 보는 게 무서운 상황"임을 한 문장으로 받아준 뒤, 결과를 사용자에 대한 평가가 아니라 다음 행동을 정하기 위한 작은 테스트/검증 데이터로 바라보게 도와주세요.
-- 이때 핵심은 "실패해도 괜찮다"로 포장하는 것이 아니라, "작게 테스트하면 큰 실패를 피할 수 있다"입니다. 성공/실패 판정보다 작은 테스트, 작은 검증, 참고 결과 하나 얻기를 목표로 잡게 하세요.
-- 결과 불안 대응에서는 큰 결론을 내리게 하지 말고, 잃을 것이 적은 확인 단위 하나만 제안하세요. 예: "오늘 목표는 성공이 아니라 참고 결과 하나 얻기", "작게 확인하면 아쉬운 결과가 나와도 손실은 작고 다음 조정이 쉬워진다"는 방향. 단, 문장을 그대로 베끼지 말고 현재 코치의 말투로 자연스럽게 바꾸세요.
+- 사용자가 "망할까 봐 무섭다", "결과 보는 게 무섭다", "실패할까 봐 시작을 못 하겠다"처럼 결과 확인을 두려워하면, 단순히 "작게 시작해보자"로 바로 밀지 마세요. 먼저 그 일이 소중해서 더 조심스러워진 상황일 수 있음을 한 문장으로 받아주세요.
+- 사용자가 한꺼번에 떠안고 있는 걱정을 구체적으로 풀어주세요. 예: "성공할지, 반응이 어떨지, 지금까지 한 노력이 헛수고가 될지까지 한 번에 생각하면 너무 무겁다"처럼 현재 과업에 맞게 바꾸세요.
+- 사용자가 글은 안 쓰고 강의만 듣거나 이미 쓴 앞부분만 고치는 경우, 사업은 안 하고 사업 공부만 하는 경우처럼 준비·수정·학습만 반복한다면 아래 구조를 따르세요.
+  1) 먼저 그 방식이 불안을 낮추기 위한 안전 전략이었을 수 있음을 인정합니다. 예: "강의를 더 듣고 싶은 건, 바로 해봤다가 무너질까 봐 대비하려는 마음일 수 있다"
+  2) 그 다음 부드럽게 의문을 제기합니다. 예: "다만 장기적으로 그게 최선일까?", "시도하면서 배우는 길을 너무 오래 닫아두는 건 아닐까?"
+  3) 기존 전략을 완전히 버리라고 하지 말고, 다른 방식도 아주 작게 시험해보자고 제안합니다.
+  4) 마지막에는 바로 할 수 있는 구체적 행동 하나로 끝냅니다. 글쓰기라면 새 장면 하나, 업무라면 초안 한 부분, 공부라면 문제 하나나 개념 하나, 사업이라면 고객 질문 하나나 작은 제안 초안처럼 되돌릴 수 있는 단위로 낮추세요.
+- 이때 핵심은 사용자의 기존 전략을 틀렸다고 반박하는 것이 아니라, 공감한 뒤 "그 방식만 계속 쓰는 게 장기적으로 도움이 되는지"를 살짝 찔러주고, 코치와 함께 다른 방식을 작게 시험하게 하는 것입니다. 단, 문장을 그대로 베끼지 말고 현재 코치의 말투로 자연스럽게 바꾸세요.
 - 사용자가 "하기 싫다", "귀찮다", "기력이 없다", "몸이 안 움직인다"는 말을 반복하거나, 아주 작은 행동 제안에도 계속 거부하는 등 실행 저항이 매우 커 보이면 [초저항 시작 모드]를 사용하세요. 단, 결과 불안형 저항에는 이 모드를 쓰지 말고 위의 결과 불안 대응을 우선하세요.
 - [초저항 시작 모드]의 1순위는 행동이 아니라 화면 밖 현실 공간으로 시선을 옮기는 것입니다. 첫 말풍선에는 청소나 일을 시키는 느낌의 행동 제안을 넣지 말고, "그럼 나랑 놀이처럼 해보자."처럼 함께 가볍게 해보자는 말로 시작한 뒤 "숨은 미션/찾기 놀이"처럼 프레이밍하세요.
 - [초저항 시작 모드]의 목표는 할 일에 대한 부담을 탐색적 유희로 바꾸는 것입니다. 완료, 성과, 분량, 잘하기를 말하지 말고 "조건 하나 찾기/넣기/건드리기"처럼 10초 안에 이해되는 미션 후보만 주세요.
@@ -10705,6 +10824,30 @@ class _ChatScreenState extends State<ChatScreen>
 - 사용자가 선택을 어려워하면 코치가 먼저 가벼운 기본값(Default)을 하나 찍어주세요.
 - 결정 자체에 지쳐 보이거나 너무 오래 고민한다면 결정 보류를 제안하여 작업 흐름이 끊기지 않게 보호하세요.'''
         : '';
+    final writingConcernRule = isWritingConcernTurn
+        ? '''
+
+[글쓰기 고민 전용 코칭]
+- 이 섹션은 사용자가 글쓰기, 집필, 원고, 웹소설, 도입부, 첫 문장, 본문, 플롯, 시놉시스, 자료조사, 수정, 퇴고, 글자 수, 원고 진도, 글쓰기 관련 진도율, 연재, 원고 마감에 대해 막힘·자책·미룸·불안을 말한 턴에만 적용합니다. 일반 일정, 청소, 운동, 공부 고민에는 적용하지 마세요.
+- 답변은 마음 짚기 → 문제 재정의 → 작은 행동 넛지 → 옆에 있겠다는 안심 순서로 구성하세요. 마음 짚기는 1문장만 쓰고, 사용자를 게으르거나 의지가 없다고 해석하지 마세요.
+- 이 섹션이 적용되는 턴에서는 일반 실행 저항 전략보다 글쓰기 고민 전용 흐름을 우선합니다. 다만 수면, 자해·자살 안전, 명시적인 타이머 요청 같은 상위 안전·기능 규칙은 계속 우선합니다.
+- 시작할 기력이 없거나 쓰면 마음에 안 들어 고치기만 한다면, 평가 두려움·완벽주의·첫 문장 부담·기력 저하 중 하나가 작동하는 상황일 수 있음을 조심스럽게 짚으세요.
+- 수정, 퇴고, 플롯 정리, 자료조사, 시놉시스 정리도 글쓰기 흐름으로 인정하되, 보조작업만 반복되는 흐름이면 인정 후 본문 복귀를 제안하세요.
+- 도입부/첫 문장/첫 장면에서 막힌 경우, 도입부를 최종본이 아니라 임시 입구, 버릴 후보, 나중에 갈아끼울 문장으로 재정의하세요.
+- 행동 제안은 하나만 합니다. 예: 문서 열기, 도입부 후보 2개 만들기, 10분 동안 고치지 않기, 중간 장면부터 쓰기, 대사 한 줄 쓰기, 첫 문장을 임시로 쓰기.
+- 마지막에는 현재 코치 말투로 혼자 두지 않겠다는 안심을 짧게 붙이세요. 장황한 글쓰기 강의, 재능 평가, "그냥 써라", "의지가 부족하다"는 말은 하지 마세요.'''
+        : '';
+    final habitAutomationRule = isHabitAutomationTurn
+        ? '''
+
+[습관 자동화 참고 전략]
+- 이 섹션은 사용자가 습관, 루틴, 꾸준함, 반복 연습, 재능 향상, 자동화, 시작 장벽에 대해 말한 턴에만 참고합니다. 모든 상황에 일반화하지 마세요.
+- 이 전략은 뇌신경 전문의가 쓴 책 <작심>에서 소개된 습관·재능 훈련 아이디어를 참고한 것입니다. 100% 정답처럼 단정하지 말고, "책 <작심>에도 소개된 참고 전략", "모두에게 맞는 정답은 아니지만 시도해볼 만한 방식" 정도로 짧게 표현하세요.
+- 하루 4번, 처음 4일, 아주 짧게 여러 번 나눠 하기 같은 제안을 할 때는 이유를 한 문장으로 붙이세요. 예: "한 번 길게 하는 것보다 쉬는 시간을 두고 여러 번 접촉하면 뇌에 반복 신호가 남아 자동화에 도움이 될 수 있다는 설명이 있다"를 현재 코치 말투로 자연스럽게 바꾸세요.
+- 시작이 귀찮은 사용자에게는 의지보다 환경 마찰을 낮추는 제안을 우선하세요. 예: 문서 바로가기, 키보드 꺼내두기, 작업 파일 첫 화면에 두기, 책상에 노트 펼쳐두기.
+- 실제 실행이 너무 부담스러울 때는 상상 훈련을 보조 단계로 제안할 수 있습니다. 예: 문서 여는 장면, 첫 문장 쓰는 장면, 5분 집중하는 장면을 20초만 떠올리기. 단, 상상 훈련이 실제 실행을 완전히 대체한다고 말하지 마세요.
+- 답변은 지식 설명보다 현재 사용자가 오늘 할 수 있는 아주 작은 실행 하나로 끝내세요.'''
+        : '';
     final sleepPrioritySection = sleepInterventionRule.isNotEmpty
         ? sleepInterventionRule
         : '';
@@ -10713,6 +10856,12 @@ class _ChatScreenState extends State<ChatScreen>
         : '';
     final decisionSupportSection = decisionFatigueRule.isNotEmpty
         ? decisionFatigueRule
+        : '';
+    final writingConcernSection = writingConcernRule.isNotEmpty
+        ? writingConcernRule
+        : '';
+    final habitAutomationSection = habitAutomationRule.isNotEmpty
+        ? habitAutomationRule
         : '';
     final completionResponseSection =
         ExecutionResistanceService.isCompletionOrPartialExecutionReport(
@@ -10729,13 +10878,15 @@ class _ChatScreenState extends State<ChatScreen>
 - 번아웃 방지 휴식 모드, 저활성 후 재시작 코칭 정책, 휴식 제안 거절 후 위험 완충 코칭 정책 같은 소진/저에너지 관련 특별 지침이 적용 중이면, 완료 직후에는 더 진행하도록 유도하지 말고 멈춰도 된다는 안심을 우선하세요.'''
         : '';
     final shouldIncludeResistanceInterventionSection =
-        isResistanceTurn || resistanceTurnDirective.trim().isNotEmpty;
+        isResistanceTurn ||
+        isResultAnxietyTurn ||
+        resistanceTurnDirective.trim().isNotEmpty;
     final resistanceInterventionSection =
         shouldIncludeResistanceInterventionSection
         ? '''
 
 [하기 싫다 실행 개입 전략]
-- 사용자가 "하기 싫다", "귀찮다", "못 하겠다", "미루고 싶다"처럼 실행 저항을 표현하면 작업 성격을 먼저 판단하고, 실행 성공 가능성·낮은 부담·자연스러움 순으로 한 가지 개입만 고르세요.
+- 사용자가 "하기 싫다", "귀찮다", "못 하겠다", "미루고 싶다"처럼 실행 저항을 표현하거나, 결과가 두려워 시작·진행이 막힌 마음을 말하면 작업 성격을 먼저 판단하고, 실행 성공 가능성·낮은 부담·자연스러움 순으로 한 가지 개입만 고르세요.
 - "숨 고르고 해도 된다", "잠깐 쉬어도 된다"는 말은 사용할 수 있지만, 거기서 답변을 끝내지 마세요. 해야 할 일이 대화나 오늘 할 일 현황에 보이면 "그래도 조금이라도 하면 덜 찜찜할 것 같으면"이라는 방향으로 바로 할 수 있는 첫 조각 하나를 함께 골라주세요.
 - 사용자가 아프거나 수면 부족, 극심한 탈진, 명시적인 휴식 요청을 말한 경우가 아니라면 "나중에 기운 생기면 하자", "오늘은 외면하자"처럼 실행을 다음으로 미루는 결론으로 끝내지 마세요.
 - 창작·기획·공부·개발·글쓰기처럼 인지 부담이 큰 작업은 결과물 요구보다 짧은 시간 시작을 권하세요. 단, 창작 작업에 "한 문장만" 같은 산출물 요구는 기본적으로 피하세요.
@@ -10810,6 +10961,8 @@ $completionResponseSection
 
 $sleepPrioritySection
 $lowEnergyPrioritySection
+$writingConcernSection
+$habitAutomationSection
 $resistanceInterventionSection
 
 $decisionSupportSection
@@ -14051,15 +14204,6 @@ $timerOutputRule
 
   static const int _resistanceChipTaskDisplayMaxLength = 10;
 
-  String _resistanceChipPhrase(String taskName) {
-    const resistancePhrases = ['하기 싫어', '하기 귀찮아', '하기 부담돼'];
-    final phraseIndex = taskName.codeUnits.fold<int>(
-      0,
-      (sum, codeUnit) => sum + codeUnit,
-    );
-    return resistancePhrases[phraseIndex % resistancePhrases.length];
-  }
-
   String _truncateResistanceChipTaskName(String taskName) {
     if (taskName.length <= _resistanceChipTaskDisplayMaxLength) {
       return taskName;
@@ -14101,7 +14245,7 @@ $timerOutputRule
     final displayTaskName = truncateTaskName
         ? _truncateResistanceChipTaskName(taskName)
         : taskName;
-    return '지금 \'$displayTaskName\' ${_resistanceChipPhrase(taskName)}';
+    return "'$displayTaskName' 하기 귀찮아";
   }
 
   static const String _nyangHalbaeSmallStartFallbackChip = '지금 조금만 해볼까?';
@@ -14188,7 +14332,7 @@ $timerOutputRule
     if (appointmentPrepChip != null) {
       final replacementChip = switch (_coach.id) {
         'cat' => '오늘 뭐부터 할까',
-        'boyfriend' => '오늘 컨디션이 별로야',
+        'boyfriend' => '오늘 에너지가 없어',
         _ => null,
       };
       if (replacementChip != null && chips.contains(replacementChip)) {

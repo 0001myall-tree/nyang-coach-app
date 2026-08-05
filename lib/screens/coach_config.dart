@@ -130,7 +130,7 @@ class CoachConfigs {
       tier: 'friends',
       accentColor: Color(0xFF8BB5F5),
       accentLight: Color(0xFFEEF2FF),
-      chips: ['하기 싫어', '나 좀 가꾸고 싶어', '오늘 컨디션이 별로야'],
+      chips: ['하기 싫어', '나 좀 가꾸고 싶어', '오늘 에너지가 없어'],
       voiceCount: 5, // 목소리 파일 5개
       flirtOne: [
         '하나 끝냈네. 하기 싫었을 수도 있는데, 일단 움직인 게 마음 놓인다 💙',

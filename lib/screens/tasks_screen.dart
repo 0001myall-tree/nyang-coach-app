@@ -161,8 +161,9 @@ class ParsedVoiceRegistration {
 class HabitItem {
   final dynamic id;
   String name;
-  String freq; // 'daily' | 'weekly'
+  String freq; // 'daily' | 'weekly' | 'weekly_count'
   List<int> days; // 0=월~6=일
+  int? weeklyTargetCount;
   String checkType; // 'check' | 'count' | 'duration' | 'both'
   String timeType; // 'none' | 'single' | 'range' | 'duration'
   bool tracking;
@@ -180,6 +181,7 @@ class HabitItem {
     required this.name,
     this.freq = 'daily',
     this.days = const [],
+    this.weeklyTargetCount,
     this.checkType = 'check',
     this.timeType = 'none',
     this.tracking = true,
@@ -198,6 +200,7 @@ class HabitItem {
     'name': name,
     'freq': freq,
     'days': days,
+    if (weeklyTargetCount != null) 'weeklyTargetCount': weeklyTargetCount,
     'checkType': checkType,
     'timeType': timeType,
     'tracking': tracking,
@@ -216,6 +219,9 @@ class HabitItem {
     name: j['name'],
     freq: j['freq'] ?? 'daily',
     days: List<int>.from(j['days'] ?? []),
+    weeklyTargetCount: j['weeklyTargetCount'] is num
+        ? (j['weeklyTargetCount'] as num).toInt()
+        : int.tryParse('${j['weeklyTargetCount']}'),
     checkType: j['checkType'] ?? 'check',
     timeType: j['timeType'] ?? 'none',
     tracking: j['tracking'] ?? true,
@@ -2362,6 +2368,9 @@ class _TasksScreenState extends State<TasksScreen>
 
     final todayHabits = habits.where((h) {
       if (h.freq == 'daily') return true;
+      if (h.freq == 'weekly_count') {
+        return _shouldShowWeeklyCountHabitOnDate(h, DateTime.now());
+      }
       if (h.freq == 'weekly') return h.days.contains(dbDow);
       return false;
     }).toList();
@@ -2426,6 +2435,67 @@ class _TasksScreenState extends State<TasksScreen>
 
     setState(() {});
     _saveTasks();
+  }
+
+  DateTime _startOfWeek(DateTime date) {
+    final normalized = DateTime(date.year, date.month, date.day);
+    return normalized.subtract(Duration(days: normalized.weekday - 1));
+  }
+
+  String _dateKeyFor(DateTime date) {
+    return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+  }
+
+  String _habitTaskBadgeLabel(TaskItem task) {
+    if (task.habitId == null) return '습관';
+    final habitIndex = habits.indexWhere(
+      (h) => h.id.toString() == task.habitId.toString(),
+    );
+    if (habitIndex < 0) return '습관';
+
+    final habit = habits[habitIndex];
+    if (habit.freq != 'weekly_count') return '습관';
+
+    final rawTarget = habit.weeklyTargetCount ?? 5;
+    final target = rawTarget < 1 ? 1 : (rawTarget > 7 ? 7 : rawTarget);
+    final today = DateTime.now();
+    final weekStart = _startOfWeek(today);
+    final logs = habitLogs[habit.id.toString()] ?? {};
+    var doneCount = 0;
+
+    for (
+      var cursor = weekStart;
+      !cursor.isAfter(today);
+      cursor = cursor.add(const Duration(days: 1))
+    ) {
+      if (logs[_dateKeyFor(cursor)]?['done'] == true) doneCount++;
+    }
+
+    final todayDone = logs[_dateKeyFor(today)]?['done'] == true || task.done;
+    final displayCount = todayDone ? doneCount : doneCount + 1;
+    final safeDisplayCount = displayCount < 1
+        ? 1
+        : (displayCount > target ? target : displayCount);
+    return '습관 $safeDisplayCount/$target';
+  }
+
+  bool _shouldShowWeeklyCountHabitOnDate(HabitItem habit, DateTime date) {
+    final rawTarget = habit.weeklyTargetCount ?? 5;
+    final target = rawTarget < 1 ? 1 : (rawTarget > 7 ? 7 : rawTarget);
+    final weekStart = _startOfWeek(date);
+    final logs = habitLogs[habit.id.toString()] ?? {};
+    var doneCountBeforeDate = 0;
+
+    for (
+      var cursor = weekStart;
+      cursor.isBefore(DateTime(date.year, date.month, date.day));
+      cursor = cursor.add(const Duration(days: 1))
+    ) {
+      if (logs[_dateKeyFor(cursor)]?['done'] == true) doneCountBeforeDate++;
+    }
+
+    final dateDone = logs[_dateKeyFor(date)]?['done'] == true;
+    return dateDone || doneCountBeforeDate < target;
   }
 
   // ── injectTodaySchedules ──────────────────────────────
@@ -7038,7 +7108,7 @@ class _TasksScreenState extends State<TasksScreen>
                                             ),
                                           ),
                                           child: Text(
-                                            '습관',
+                                            _habitTaskBadgeLabel(t),
                                             style: GoogleFonts.notoSansKr(
                                               fontSize: 11,
                                               fontWeight: FontWeight.w800,
@@ -12690,6 +12760,8 @@ class _TasksScreenState extends State<TasksScreen>
     const dayNames = ['월', '화', '수', '목', '금', '토', '일'];
     final freqLabel = h.freq == 'daily'
         ? '매일'
+        : h.freq == 'weekly_count'
+        ? '주 ${h.weeklyTargetCount ?? 5}일'
         : h.days.map((d) => dayNames[d]).join('/');
     String checkLabel = '체크';
     if (h.checkType == 'count') {
@@ -12830,6 +12902,7 @@ class _TasksScreenState extends State<TasksScreen>
     final nameCtrl = TextEditingController(text: editHabit?.name ?? '');
     String freq = editHabit?.freq ?? 'daily';
     List<int> days = List.from(editHabit?.days ?? []);
+    int weeklyTargetCount = editHabit?.weeklyTargetCount ?? 5;
     bool countSettingEnabled =
         editHabit?.checkType == 'count' || editHabit?.checkType == 'both';
     bool tracking = editHabit?.tracking ?? true;
@@ -12968,6 +13041,13 @@ class _TasksScreenState extends State<TasksScreen>
                             freq,
                             (v) => setModalState(() => freq = v),
                           ),
+                          const SizedBox(width: 8),
+                          _freqBtn(
+                            'weekly_count',
+                            '주 n일',
+                            freq,
+                            (v) => setModalState(() => freq = v),
+                          ),
                         ],
                       ),
                       if (freq == 'weekly') ...[
@@ -13007,6 +13087,49 @@ class _TasksScreenState extends State<TasksScreen>
                                           ? Colors.white
                                           : const Color(0xFF6B7280),
                                     ),
+                                  ),
+                                ),
+                              ),
+                            );
+                          }),
+                        ),
+                      ],
+                      if (freq == 'weekly_count') ...[
+                        const SizedBox(height: 12),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: List.generate(6, (i) {
+                            final value = i + 1;
+                            final isSelected = weeklyTargetCount == value;
+                            return GestureDetector(
+                              onTap: () => setModalState(
+                                () => weeklyTargetCount = value,
+                              ),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 8,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: isSelected
+                                      ? _coach.accentColor
+                                      : Colors.white,
+                                  border: Border.all(
+                                    color: isSelected
+                                        ? _coach.accentColor
+                                        : const Color(0xFFE5E7EB),
+                                  ),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Text(
+                                  '주 $value일',
+                                  style: GoogleFonts.notoSansKr(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                    color: isSelected
+                                        ? Colors.white
+                                        : const Color(0xFF6B7280),
                                   ),
                                 ),
                               ),
@@ -13333,7 +13456,10 @@ class _TasksScreenState extends State<TasksScreen>
                           DateTime.now().millisecondsSinceEpoch,
                       name: name,
                       freq: freq,
-                      days: List.from(days),
+                      days: freq == 'weekly' ? List.from(days) : const [],
+                      weeklyTargetCount: freq == 'weekly_count'
+                          ? weeklyTargetCount
+                          : null,
                       checkType: countSettingEnabled ? 'count' : 'check',
                       timeType: effectiveHabitTimeType,
                       tracking: tracking,

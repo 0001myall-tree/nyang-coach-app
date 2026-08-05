@@ -32,15 +32,9 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  static final Uri _termsUrl = Uri.parse(
-    'https://example.com/nyang-coach/terms',
-  );
-  static final Uri _privacyUrl = Uri.parse(
-    'https://example.com/nyang-coach/privacy',
-  );
-  static final Uri _subscriptionUrl = Uri.parse(
-    'https://example.com/nyang-coach/subscription',
-  );
+  static final Uri _termsUrl = Uri.parse('https://joflowapp.com/terms');
+  static final Uri _privacyUrl = Uri.parse('https://joflowapp.com/privacy');
+  static final Uri _refundUrl = Uri.parse('https://joflowapp.com/refund');
 
   String _chatBgStyle = 'simple'; // 'simple' or 'emotional'
   bool _morningCallEnabled = true;
@@ -3665,7 +3659,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   icon: Icons.workspace_premium_outlined,
                   title: '환불 안내',
                   subtitle: '환불 기준을 확인하세요.',
-                  url: _subscriptionUrl,
+                  url: _refundUrl,
                 ),
               ],
             ),

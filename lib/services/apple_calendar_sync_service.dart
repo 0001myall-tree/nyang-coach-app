@@ -388,7 +388,10 @@ class AppleCalendarSyncService {
           final date = base.add(Duration(days: offset));
           final dbDow = date.weekday - 1;
           final matches =
-              freq == 'daily' || (freq == 'weekly' && days.contains(dbDow));
+              freq == 'daily' ||
+              (freq == 'weekly_count' &&
+                  _shouldShowWeeklyCountHabitOnDate(item, habitLogs, date)) ||
+              (freq == 'weekly' && days.contains(dbDow));
           if (!matches) continue;
           final dateKey = _dateKey(date);
           final logsForHabit = habitLogs[id];
@@ -1101,6 +1104,45 @@ class AppleCalendarSyncService {
 
   String _dateKey(DateTime date) {
     return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+  }
+
+  DateTime _startOfWeek(DateTime date) {
+    final normalized = DateTime(date.year, date.month, date.day);
+    return normalized.subtract(Duration(days: normalized.weekday - 1));
+  }
+
+  bool _shouldShowWeeklyCountHabitOnDate(
+    Map<dynamic, dynamic> habit,
+    Map<String, dynamic> habitLogs,
+    DateTime date,
+  ) {
+    final rawTarget = habit['weeklyTargetCount'];
+    final parsedTarget = rawTarget is num
+        ? rawTarget.toInt()
+        : int.tryParse('$rawTarget') ?? 5;
+    final target = parsedTarget < 1 ? 1 : (parsedTarget > 7 ? 7 : parsedTarget);
+    final habitId = habit['id']?.toString();
+    if (habitId == null) return true;
+
+    final logsForHabit = habitLogs[habitId];
+    if (logsForHabit is! Map) return true;
+
+    final normalizedDate = DateTime(date.year, date.month, date.day);
+    final weekStart = _startOfWeek(normalizedDate);
+    var doneCountBeforeDate = 0;
+
+    for (
+      var cursor = weekStart;
+      cursor.isBefore(normalizedDate);
+      cursor = cursor.add(const Duration(days: 1))
+    ) {
+      final log = logsForHabit[_dateKey(cursor)];
+      if (log is Map && log['done'] == true) doneCountBeforeDate++;
+    }
+
+    final dateLog = logsForHabit[_dateKey(normalizedDate)];
+    final dateDone = dateLog is Map && dateLog['done'] == true;
+    return dateDone || doneCountBeforeDate < target;
   }
 
   Map<String, dynamic> _decodeMap(String? raw) {

@@ -349,6 +349,13 @@ class DailyResetService {
       final days = List<int>.from(h['days'] ?? []);
       bool matches = false;
       if (freq == 'daily') matches = true;
+      if (freq == 'weekly_count') {
+        matches = _shouldShowWeeklyCountHabitOnDate(
+          h,
+          habitLogs,
+          DateTime.tryParse(today) ?? DateTime.now(),
+        );
+      }
       if (freq == 'weekly') matches = days.contains(dbDow);
 
       if (matches) {
@@ -464,6 +471,49 @@ class DailyResetService {
 
     await prefs.setString('nyang_tasks', jsonEncode(injectedTasks));
     await _saveTodayRecordDirectly(prefs, today, injectedTasks);
+  }
+
+  static DateTime _startOfWeek(DateTime date) {
+    final normalized = DateTime(date.year, date.month, date.day);
+    return normalized.subtract(Duration(days: normalized.weekday - 1));
+  }
+
+  static String _dateKey(DateTime date) {
+    return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+  }
+
+  static bool _shouldShowWeeklyCountHabitOnDate(
+    Map<dynamic, dynamic> habit,
+    Map<String, dynamic> habitLogs,
+    DateTime date,
+  ) {
+    final rawTarget = habit['weeklyTargetCount'];
+    final parsedTarget = rawTarget is num
+        ? rawTarget.toInt()
+        : int.tryParse('$rawTarget') ?? 5;
+    final target = parsedTarget < 1 ? 1 : (parsedTarget > 7 ? 7 : parsedTarget);
+    final habitId = habit['id']?.toString();
+    if (habitId == null) return true;
+
+    final logsForHabit = habitLogs[habitId];
+    if (logsForHabit is! Map) return true;
+
+    final normalizedDate = DateTime(date.year, date.month, date.day);
+    final weekStart = _startOfWeek(normalizedDate);
+    var doneCountBeforeDate = 0;
+
+    for (
+      var cursor = weekStart;
+      cursor.isBefore(normalizedDate);
+      cursor = cursor.add(const Duration(days: 1))
+    ) {
+      final log = logsForHabit[_dateKey(cursor)];
+      if (log is Map && log['done'] == true) doneCountBeforeDate++;
+    }
+
+    final todayLog = logsForHabit[_dateKey(normalizedDate)];
+    final dateDone = todayLog is Map && todayLog['done'] == true;
+    return dateDone || doneCountBeforeDate < target;
   }
 
   static Future<void> _saveTodayRecordDirectly(

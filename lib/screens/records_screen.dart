@@ -679,6 +679,8 @@ class _RecordsScreenState extends State<RecordsScreen> {
       for (final h in trackingHabits) {
         final freqLabel = h.freq == 'daily'
             ? '매일'
+            : h.freq == 'weekly_count'
+            ? '주 ${h.weeklyTargetCount ?? 5}일'
             : h.days.map((d) => dayNames[d]).join(', ');
         habitFreqBuffer.writeln('- ${h.name}: $freqLabel');
       }
@@ -1631,6 +1633,17 @@ ${feedbackType == 0
               periodStart = createdAtDate;
             }
 
+            String dateKey(DateTime d) {
+              return "${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}";
+            }
+
+            DateTime weekStartOf(DateTime d) {
+              final normalized = DateTime(d.year, d.month, d.day);
+              return normalized.subtract(
+                Duration(days: normalized.weekday - 1),
+              );
+            }
+
             String formatYYMMDD(DateTime d) {
               return '${d.year.toString().substring(2)}.${d.month.toString().padLeft(2, '0')}.${d.day.toString().padLeft(2, '0')}';
             }
@@ -1648,33 +1661,61 @@ ${feedbackType == 0
                   '${formatYYMMDD(periodStart)}~${formatYYMMDD(periodEnd)}';
             }
 
-            for (int i = 0; i < days; i++) {
-              final d = now.subtract(Duration(days: i));
-              final dNormalized = DateTime(d.year, d.month, d.day);
+            if (h.freq == 'weekly_count') {
+              final rawTarget = h.weeklyTargetCount ?? 5;
+              final target = rawTarget < 1
+                  ? 1
+                  : (rawTarget > 7 ? 7 : rawTarget);
+              final weekTotals = <String, int>{};
+              final weekSuccesses = <String, int>{};
 
-              // 생성일 이전은 카운트 제외
-              if (createdAtDate != null &&
-                  dNormalized.isBefore(createdAtDate)) {
-                continue;
-              }
-
-              // 요일 체크 (주간 반복일 경우 지정된 요일만 카운트)
-              if (h.freq == 'weekly' && h.days.isNotEmpty) {
-                if (!h.days.contains(d.weekday - 1)) {
-                  continue;
+              for (
+                var cursor = periodStart;
+                !cursor.isAfter(periodEnd);
+                cursor = cursor.add(const Duration(days: 1))
+              ) {
+                final weekKey = dateKey(weekStartOf(cursor));
+                weekTotals[weekKey] = (weekTotals[weekKey] ?? 0) + 1;
+                if (logs[dateKey(cursor)]?['done'] == true) {
+                  weekSuccesses[weekKey] = (weekSuccesses[weekKey] ?? 0) + 1;
                 }
               }
 
-              hTotal++;
-              final dateStr =
-                  "${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}";
-              if (logs[dateStr]?['done'] == true) hSuccess++;
+              for (final entry in weekTotals.entries) {
+                final weekTarget = entry.value < target ? entry.value : target;
+                final weekDone = weekSuccesses[entry.key] ?? 0;
+                hTotal += weekTarget;
+                hSuccess += weekDone > weekTarget ? weekTarget : weekDone;
+              }
+            } else {
+              for (int i = 0; i < days; i++) {
+                final d = now.subtract(Duration(days: i));
+                final dNormalized = DateTime(d.year, d.month, d.day);
+
+                // 생성일 이전은 카운트 제외
+                if (createdAtDate != null &&
+                    dNormalized.isBefore(createdAtDate)) {
+                  continue;
+                }
+
+                // 요일 체크 (주간 반복일 경우 지정된 요일만 카운트)
+                if (h.freq == 'weekly' && h.days.isNotEmpty) {
+                  if (!h.days.contains(d.weekday - 1)) {
+                    continue;
+                  }
+                }
+
+                hTotal++;
+                if (logs[dateKey(d)]?['done'] == true) hSuccess++;
+              }
             }
             final hPct = hTotal == 0 ? 0 : ((hSuccess / hTotal) * 100).round();
 
             const dayNames = ['월', '화', '수', '목', '금', '토', '일'];
             final freqLabel = h.freq == 'daily'
                 ? '매일'
+                : h.freq == 'weekly_count'
+                ? '주 ${h.weeklyTargetCount ?? 5}일'
                 : h.days.map((d) => dayNames[d]).join('/');
 
             return Padding(
