@@ -895,6 +895,9 @@ class _ParsedHabitRegistration {
   final String title;
   final String freq;
   final List<int> days;
+  final int? weeklyTargetCount;
+  final int? countGoal;
+  final String? unit;
   final TimeOfDay? time;
   final TimeOfDay? endTime;
   final String? habitDuration;
@@ -903,6 +906,9 @@ class _ParsedHabitRegistration {
     required this.title,
     required this.freq,
     required this.days,
+    this.weeklyTargetCount,
+    this.countGoal,
+    this.unit,
     this.time,
     this.endTime,
     this.habitDuration,
@@ -1119,6 +1125,9 @@ class ChatScreen extends StatefulWidget {
     String name, {
     String freq,
     List<int> days,
+    int? weeklyTargetCount,
+    int? countGoal,
+    String? unit,
     TimeOfDay? time,
     TimeOfDay? endTime,
     String? habitDuration,
@@ -5136,7 +5145,7 @@ class _ChatScreenState extends State<ChatScreen>
     final cleaned = _cleanScheduleRegistrationInput(input);
     if (!cleaned.contains('습관')) return false;
     final suffixRegex = RegExp(
-      r'\s*(등록해\s*(?:줘요?|주세요|달라)|추가해\s*(?:줘요?|주세요|달라)|넣어\s*(?:줘요?|주세요))$',
+      r'\s*(등록해\s*(?:줘요?|주세요|달라)|추가해\s*(?:줘요?|주세요|달라)|넣어\s*(?:줘요?|주세요)|만들\s*(?:고\s*싶어|고\s*싶어요|거야|거예요|게|래|어\s*줘요?|어\s*주세요))$',
     );
     return suffixRegex.hasMatch(cleaned);
   }
@@ -5144,7 +5153,7 @@ class _ChatScreenState extends State<ChatScreen>
   _ParsedHabitRegistration _parseHabitRegistration(String input) {
     var cleaned = _cleanScheduleRegistrationInput(input);
     final suffixRegex = RegExp(
-      r'\s*(등록해\s*(?:줘요?|주세요|달라)|추가해\s*(?:줘요?|주세요|달라)|넣어\s*(?:줘요?|주세요))$',
+      r'\s*(등록해\s*(?:줘요?|주세요|달라)|추가해\s*(?:줘요?|주세요|달라)|넣어\s*(?:줘요?|주세요)|만들\s*(?:고\s*싶어|고\s*싶어요|거야|거예요|게|래|어\s*줘요?|어\s*주세요))$',
     );
     cleaned = cleaned.replaceFirst(suffixRegex, '').trim();
     cleaned = cleaned.replaceAll(RegExp(r'습관\s*(?:탭|텝)\s*에'), ' ');
@@ -5155,6 +5164,9 @@ class _ChatScreenState extends State<ChatScreen>
 
     var parsedFreq = 'daily';
     var parsedDays = <int>[];
+    int? parsedWeeklyTargetCount;
+    int? parsedCountGoal;
+    String? parsedUnit;
     const weekdayByText = {
       '월': 0,
       '화': 1,
@@ -5184,6 +5196,18 @@ class _ChatScreenState extends State<ChatScreen>
     }
 
     if (parsedFreq == 'daily') {
+      final weeklyCountRegex = RegExp(
+        r'(?:^|\s)(?:주|일주일에)\s*([1-7])\s*(?:일|회|번)(?:\s*(?:씩|정도)?)?',
+      );
+      final weeklyCountMatch = weeklyCountRegex.firstMatch(cleaned);
+      if (weeklyCountMatch != null) {
+        parsedFreq = 'weekly_count';
+        parsedWeeklyTargetCount = int.tryParse(weeklyCountMatch.group(1)!);
+        cleaned = cleaned.replaceFirst(weeklyCountMatch.group(0)!, ' ').trim();
+      }
+    }
+
+    if (parsedFreq == 'daily') {
       final bareWeeklyRegex = RegExp(
         r'^\s*((?:[월화수목금토일](?:요일)?\s*(?:,|/|·|과|와|랑|하고|및)\s*)+[월화수목금토일](?:요일)?)\s*',
       );
@@ -5208,6 +5232,17 @@ class _ChatScreenState extends State<ChatScreen>
       RegExp(r'(?:^|\s)(?:매일|매일마다|날마다)(?:\s|$)'),
       ' ',
     );
+
+    final countRegex = RegExp(
+      r'(?:^|\s)(\d[\d,]*)\s*(자|글자|쪽|페이지|회|번)(?:\s*(?:정도|씩)?)?',
+    );
+    final countMatch = countRegex.firstMatch(cleaned);
+    if (countMatch != null) {
+      parsedCountGoal = int.tryParse(countMatch.group(1)!.replaceAll(',', ''));
+      parsedUnit = countMatch.group(2);
+      if (parsedUnit == '글자') parsedUnit = '자';
+      cleaned = cleaned.replaceFirst(countMatch.group(0)!, ' ').trim();
+    }
 
     TimeOfDay? parsedTime;
     TimeOfDay? parsedEndTime;
@@ -5313,11 +5348,15 @@ class _ChatScreenState extends State<ChatScreen>
       RegExp(r'(.+?)하는$'),
       (match) => match.group(1)!,
     );
+    cleaned = cleaned.replaceAll(RegExp(r'^글\s*쓰는$'), '글쓰기');
     cleaned = _cleanRegistrationTitle(cleaned);
     return _ParsedHabitRegistration(
       title: cleaned,
       freq: parsedFreq,
       days: parsedDays,
+      weeklyTargetCount: parsedWeeklyTargetCount,
+      countGoal: parsedCountGoal,
+      unit: parsedUnit,
       time: parsedTime,
       endTime: parsedEndTime,
       habitDuration: parsedHabitDuration,
@@ -8574,6 +8613,9 @@ class _ChatScreenState extends State<ChatScreen>
             parsed.title,
             freq: parsed.freq,
             days: parsed.days,
+            weeklyTargetCount: parsed.weeklyTargetCount,
+            countGoal: parsed.countGoal,
+            unit: parsed.unit,
             time: parsed.time,
             endTime: parsed.endTime,
             habitDuration: parsed.habitDuration,

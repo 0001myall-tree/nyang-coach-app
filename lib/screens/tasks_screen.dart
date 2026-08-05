@@ -554,6 +554,9 @@ class TasksScreenController {
     String name, {
     String freq = 'daily',
     List<int> days = const [],
+    int? weeklyTargetCount,
+    int? countGoal,
+    String? unit,
     TimeOfDay? time,
     TimeOfDay? endTime,
     String? habitDuration,
@@ -562,6 +565,9 @@ class TasksScreenController {
           name,
           freq: freq,
           days: days,
+          weeklyTargetCount: weeklyTargetCount,
+          countGoal: countGoal,
+          unit: unit,
           time: time,
           endTime: endTime,
           habitDuration: habitDuration,
@@ -940,6 +946,9 @@ class _TasksScreenState extends State<TasksScreen>
     String name, {
     String freq = 'daily',
     List<int> days = const [],
+    int? weeklyTargetCount,
+    int? countGoal,
+    String? unit,
     TimeOfDay? time,
     TimeOfDay? endTime,
     String? habitDuration,
@@ -952,12 +961,17 @@ class _TasksScreenState extends State<TasksScreen>
       id: DateTime.now().millisecondsSinceEpoch,
       name: trimmedName,
       freq: freq,
-      days: List.from(days),
-      checkType: 'check',
+      days: freq == 'weekly' ? List.from(days) : const [],
+      weeklyTargetCount: freq == 'weekly_count'
+          ? (weeklyTargetCount ?? 5)
+          : null,
+      checkType: countGoal != null ? 'count' : 'check',
       timeType: time == null
           ? 'duration'
           : (endTime == null ? 'single' : 'range'),
       tracking: true,
+      countGoal: countGoal,
+      unit: countGoal != null ? (unit ?? '번') : null,
       timeStart: time == null ? null : "${time.hour}:${time.minute}",
       timeEnd: endTime == null ? null : "${endTime.hour}:${endTime.minute}",
       habitDuration: time == null ? (habitDuration ?? '30분') : null,
