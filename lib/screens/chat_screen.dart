@@ -6367,7 +6367,8 @@ class _ChatScreenState extends State<ChatScreen>
     return '${date.year}년 ${date.month}월 ${date.day}일';
   }
 
-  String _storedTime(TimeOfDay time) => '${time.hour}:${time.minute}';
+  String _storedTime(TimeOfDay time) =>
+      '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
 
   String _formatTimeOfDay(TimeOfDay time) {
     final h = time.hour;
@@ -14306,12 +14307,10 @@ $timerOutputRule
     final appointmentPrepChip = _appointmentPrepChipLabel(
       truncateTaskName: true,
     );
-    final focusChip = _coach.id == 'nyang_halbae'
-        ? _nyangHalbaeSmallStartChipLabel(truncateTaskName: true)
-        : (_coach.id == 'sec_female'
-              ? appointmentPrepChip ??
-                    _thoughtOverloadChipLabel(truncateTaskName: true)
-              : _thoughtOverloadChipLabel(truncateTaskName: true));
+    final focusChip = _coach.id == 'sec_female'
+        ? appointmentPrepChip ??
+              _thoughtOverloadChipLabel(truncateTaskName: true)
+        : _thoughtOverloadChipLabel(truncateTaskName: true);
     var decisionChip = _masterDecisionChipLabel(truncateTaskName: true);
     if (_coach.id == 'nyang_halbae' &&
         decisionChip == '지금 뭐하지?' &&
@@ -14380,33 +14379,6 @@ $timerOutputRule
         ? _truncateResistanceChipTaskName(taskName)
         : taskName;
     return "'$displayTaskName' 하기 귀찮아";
-  }
-
-  static const String _nyangHalbaeSmallStartFallbackChip = '지금 조금만 해볼까?';
-
-  String _nyangHalbaeSmallStartChipLabel({required bool truncateTaskName}) {
-    final taskName = _resistanceChipTaskName?.trim();
-    if (taskName == null || taskName.isEmpty) {
-      return _nyangHalbaeSmallStartFallbackChip;
-    }
-    final displayTaskName = truncateTaskName
-        ? _truncateResistanceChipTaskName(taskName)
-        : taskName;
-    return '지금 \'$displayTaskName\' 조금만 해볼까?';
-  }
-
-  bool _isNyangHalbaeSmallStartChip(String chip) {
-    if (_coach.id != 'nyang_halbae') return false;
-    return chip == _nyangHalbaeSmallStartFallbackChip ||
-        chip == _nyangHalbaeSmallStartChipLabel(truncateTaskName: true);
-  }
-
-  String _nyangHalbaeSmallStartApiInput() {
-    final taskName = _resistanceChipTaskName?.trim();
-    if (taskName == null || taskName.isEmpty) {
-      return '지금 할 일을 하기 싫어. 조금만 해볼까?';
-    }
-    return '지금 \'$taskName\' 하기 싫어. 조금만 해볼까?';
   }
 
   static const String _thoughtOverloadFallbackChip = '머리가 복잡해서 시작이 안 돼';
@@ -14557,7 +14529,6 @@ $timerOutputRule
     };
     if (asset == null &&
         !_isAppointmentPrepChip(chip) &&
-        !_isNyangHalbaeSmallStartChip(chip) &&
         !_isThoughtOverloadMasterChip(chip) &&
         !_isRepeatedlyDeferredMasterChip(chip)) {
       return null;
@@ -14635,14 +14606,6 @@ $timerOutputRule
           _send(
             _thoughtOverloadChipLabel(truncateTaskName: false),
             apiInputOverride: _thoughtOverloadMasterChipApiInput(),
-            masterModelPolicy: _MasterModelPolicy.forceGpt4oMini,
-          );
-          return;
-        }
-        if (_isNyangHalbaeSmallStartChip(chip)) {
-          _send(
-            _nyangHalbaeSmallStartChipLabel(truncateTaskName: false),
-            apiInputOverride: _nyangHalbaeSmallStartApiInput(),
             masterModelPolicy: _MasterModelPolicy.forceGpt4oMini,
           );
           return;

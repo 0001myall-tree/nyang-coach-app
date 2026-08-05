@@ -972,8 +972,8 @@ class _TasksScreenState extends State<TasksScreen>
       tracking: true,
       countGoal: countGoal,
       unit: countGoal != null ? (unit ?? '번') : null,
-      timeStart: time == null ? null : "${time.hour}:${time.minute}",
-      timeEnd: endTime == null ? null : "${endTime.hour}:${endTime.minute}",
+      timeStart: time == null ? null : _storedTime(time),
+      timeEnd: endTime == null ? null : _storedTime(endTime),
       habitDuration: time == null ? (habitDuration ?? '30분') : null,
       createdAt: DateTime.now().toIso8601String(),
       isReminderEnabled: time != null && _isCoreReminderEnabledGlobally,
@@ -2401,11 +2401,14 @@ class _TasksScreenState extends State<TasksScreen>
     // 오늘 습관 주입
     for (final h in todayHabits) {
       String? tTime;
-      if (h.timeType == 'single' && h.timeStart != null) tTime = h.timeStart;
+      if (h.timeType == 'single' && h.timeStart != null) {
+        tTime = _displayTimeFromStored(timeStart: h.timeStart);
+      }
       if (h.timeType == 'range' && h.timeStart != null) {
-        tTime = h.timeEnd != null
-            ? "${h.timeStart} ~ ${h.timeEnd}"
-            : h.timeStart;
+        tTime = _displayTimeFromStored(
+          timeStart: h.timeStart,
+          timeEnd: h.timeEnd,
+        );
       }
 
       final existingIndex = tasks.indexWhere(
@@ -2457,6 +2460,30 @@ class _TasksScreenState extends State<TasksScreen>
     return normalized.subtract(Duration(days: normalized.weekday - 1));
   }
 
+  DateTime? _createdDateOfHabit(HabitItem habit) {
+    final createdAt = DateTime.tryParse(habit.createdAt);
+    if (createdAt == null) return null;
+    return DateTime(createdAt.year, createdAt.month, createdAt.day);
+  }
+
+  int _weeklyTargetForDate(HabitItem habit, DateTime date) {
+    final rawTarget = habit.weeklyTargetCount ?? 5;
+    final target = rawTarget < 1 ? 1 : (rawTarget > 7 ? 7 : rawTarget);
+    final normalizedDate = DateTime(date.year, date.month, date.day);
+    final weekStart = _startOfWeek(normalizedDate);
+    final createdDate = _createdDateOfHabit(habit);
+    if (createdDate == null ||
+        createdDate.isBefore(weekStart) ||
+        createdDate.isAfter(normalizedDate)) {
+      return target;
+    }
+
+    final remainingDaysInCreationWeek = 8 - createdDate.weekday;
+    return remainingDaysInCreationWeek < target
+        ? remainingDaysInCreationWeek
+        : target;
+  }
+
   String _dateKeyFor(DateTime date) {
     return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
   }
@@ -2471,16 +2498,23 @@ class _TasksScreenState extends State<TasksScreen>
     final habit = habits[habitIndex];
     if (habit.freq != 'weekly_count') return '습관';
 
-    final rawTarget = habit.weeklyTargetCount ?? 5;
-    final target = rawTarget < 1 ? 1 : (rawTarget > 7 ? 7 : rawTarget);
     final today = DateTime.now();
+    final target = _weeklyTargetForDate(habit, today);
     final weekStart = _startOfWeek(today);
+    final normalizedToday = DateTime(today.year, today.month, today.day);
+    final createdDate = _createdDateOfHabit(habit);
+    final countStart =
+        createdDate != null &&
+            !createdDate.isBefore(weekStart) &&
+            !createdDate.isAfter(normalizedToday)
+        ? createdDate
+        : weekStart;
     final logs = habitLogs[habit.id.toString()] ?? {};
     var doneCount = 0.0;
 
     for (
-      var cursor = weekStart;
-      !cursor.isAfter(today);
+      var cursor = countStart;
+      !cursor.isAfter(normalizedToday);
       cursor = cursor.add(const Duration(days: 1))
     ) {
       doneCount += _habitLogCompletionRatio(logs[_dateKeyFor(cursor)]);
@@ -2522,15 +2556,22 @@ class _TasksScreenState extends State<TasksScreen>
   }
 
   bool _shouldShowWeeklyCountHabitOnDate(HabitItem habit, DateTime date) {
-    final rawTarget = habit.weeklyTargetCount ?? 5;
-    final target = rawTarget < 1 ? 1 : (rawTarget > 7 ? 7 : rawTarget);
-    final weekStart = _startOfWeek(date);
+    final normalizedDate = DateTime(date.year, date.month, date.day);
+    final target = _weeklyTargetForDate(habit, normalizedDate);
+    final weekStart = _startOfWeek(normalizedDate);
+    final createdDate = _createdDateOfHabit(habit);
+    final countStart =
+        createdDate != null &&
+            !createdDate.isBefore(weekStart) &&
+            createdDate.isBefore(normalizedDate)
+        ? createdDate
+        : weekStart;
     final logs = habitLogs[habit.id.toString()] ?? {};
     var doneCountBeforeDate = 0.0;
 
     for (
-      var cursor = weekStart;
-      cursor.isBefore(DateTime(date.year, date.month, date.day));
+      var cursor = countStart;
+      cursor.isBefore(normalizedDate);
       cursor = cursor.add(const Duration(days: 1))
     ) {
       doneCountBeforeDate += _habitLogCompletionRatio(
@@ -9731,7 +9772,20 @@ class _TasksScreenState extends State<TasksScreen>
     String? timeStart,
     String? timeEnd,
   }) {
-    if (time != null && time.trim().isNotEmpty) return time;
+    final rawTime = time?.trim();
+    if (rawTime != null && rawTime.isNotEmpty) {
+      final rangeParts = rawTime.split('~').map((part) => part.trim()).toList();
+      if (rangeParts.length == 2) {
+        final start = _parseStoredTime(rangeParts[0]);
+        final end = _parseStoredTime(rangeParts[1]);
+        if (start != null && end != null) {
+          return '${_formatTime(start)} ~ ${_formatTime(end)}';
+        }
+      }
+      final parsed = _parseStoredTime(rawTime);
+      if (parsed != null) return _formatTime(parsed);
+      return rawTime;
+    }
 
     final start = _parseStoredTime(timeStart);
     if (start == null) return null;
@@ -10268,13 +10322,13 @@ class _TasksScreenState extends State<TasksScreen>
       );
 
       if (effectiveScheduleTimeType == 'single' && _schStartTime != null) {
-        entry.timeStart = "${_schStartTime!.hour}:${_schStartTime!.minute}";
+        entry.timeStart = _storedTime(_schStartTime!);
         entry.time = _formatTime(_schStartTime!);
       } else if (effectiveScheduleTimeType == 'range' &&
           _schStartTime != null) {
-        entry.timeStart = "${_schStartTime!.hour}:${_schStartTime!.minute}";
+        entry.timeStart = _storedTime(_schStartTime!);
         if (_schEndTime != null) {
-          entry.timeEnd = "${_schEndTime!.hour}:${_schEndTime!.minute}";
+          entry.timeEnd = _storedTime(_schEndTime!);
           entry.time =
               "${_formatTime(_schStartTime!)} ~ ${_formatTime(_schEndTime!)}";
         } else {
@@ -10966,8 +11020,9 @@ class _TasksScreenState extends State<TasksScreen>
                                   );
 
                                   if (confirmedTime != null) {
-                                    entry.timeStart =
-                                        "${confirmedTime!.hour}:${confirmedTime!.minute}";
+                                    entry.timeStart = _storedTime(
+                                      confirmedTime!,
+                                    );
                                     entry.time = _formatTime(confirmedTime!);
                                   }
 
@@ -13617,11 +13672,11 @@ class _TasksScreenState extends State<TasksScreen>
                           (effectiveHabitTimeType == 'single' ||
                                   effectiveHabitTimeType == 'range') &&
                               mStartTime != null
-                          ? "${mStartTime!.hour}:${mStartTime!.minute}"
+                          ? _storedTime(mStartTime!)
                           : null,
                       timeEnd:
                           effectiveHabitTimeType == 'range' && mEndTime != null
-                          ? "${mEndTime!.hour}:${mEndTime!.minute}"
+                          ? _storedTime(mEndTime!)
                           : null,
                       habitDuration: effectiveHabitTimeType == 'duration'
                           ? mDuration

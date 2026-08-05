@@ -314,10 +314,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
             Widget _buildWidgetToggle({
               required String title,
-              required String imagePath,
+              required String subtitle,
               required bool value,
               required ValueChanged<bool> onChanged,
               required bool isLocked,
+              bool isRecommended = false,
             }) {
               return Container(
                 margin: const EdgeInsets.only(bottom: 16),
@@ -331,50 +332,74 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
                 child: Row(
                   children: [
-                    Container(
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Colors.white,
-                        border: Border.all(
-                          color: const Color(0xFFE5E7EB),
-                          width: 1,
-                        ),
-                      ),
-                      child: ClipOval(
-                        child: Image.asset(imagePath, fit: BoxFit.cover),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
                     Expanded(
-                      child: Row(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Flexible(
-                            child: Text(
-                              title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: GoogleFonts.notoSansKr(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                                color: isLocked
-                                    ? const Color(0xFFC0C0D0)
-                                    : const Color(0xFF3D3A4E),
+                          Row(
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  title,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: GoogleFonts.notoSansKr(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w700,
+                                    color: isLocked
+                                        ? const Color(0xFFC0C0D0)
+                                        : const Color(0xFF3D3A4E),
+                                  ),
+                                ),
                               ),
+                              if (isRecommended) ...[
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 3,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFEDE9FF),
+                                    borderRadius: BorderRadius.circular(999),
+                                  ),
+                                  child: Text(
+                                    '추천',
+                                    style: GoogleFonts.notoSansKr(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w800,
+                                      color: const Color(0xFF6E5AE8),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                              if (isLocked) ...[
+                                const SizedBox(width: 6),
+                                const Icon(
+                                  Icons.lock_rounded,
+                                  size: 16,
+                                  color: Color(0xFFC0C0D0),
+                                ),
+                              ],
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            subtitle,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.notoSansKr(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: isLocked
+                                  ? const Color(0xFFC0C0D0)
+                                  : const Color(0xFF8E8D9B),
                             ),
                           ),
-                          if (isLocked) ...[
-                            const SizedBox(width: 6),
-                            const Icon(
-                              Icons.lock_rounded,
-                              size: 16,
-                              color: Color(0xFFC0C0D0),
-                            ),
-                          ],
                         ],
                       ),
                     ),
+                    const SizedBox(width: 12),
                     CupertinoSwitch(
                       value: value,
                       activeColor: const Color(0xFF8B7CFF),
@@ -447,7 +472,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       children: [
                         _buildWidgetToggle(
                           title: '냥냥코치 미니 위젯',
-                          imagePath: 'assets/images/iphonecatwidget1.png',
+                          subtitle: '남은 할 일을 작게 보기',
                           value: tempNyang,
                           isLocked: false,
                           onChanged: (val) {
@@ -461,7 +486,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ),
                         _buildWidgetToggle(
                           title: '냥냥코치 가로 위젯',
-                          imagePath: 'assets/images/cat_widget2.png',
+                          subtitle: '냥이와 진행 상황을 넓게 보기',
+                          isRecommended: true,
                           value: tempCatCharacter,
                           isLocked: false,
                           onChanged: (val) {

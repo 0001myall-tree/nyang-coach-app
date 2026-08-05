@@ -1111,6 +1111,34 @@ class AppleCalendarSyncService {
     return normalized.subtract(Duration(days: normalized.weekday - 1));
   }
 
+  DateTime? _createdDateOf(Map<dynamic, dynamic> habit) {
+    final rawCreatedAt = habit['createdAt']?.toString();
+    if (rawCreatedAt == null || rawCreatedAt.isEmpty) return null;
+    final createdAt = DateTime.tryParse(rawCreatedAt);
+    if (createdAt == null) return null;
+    return DateTime(createdAt.year, createdAt.month, createdAt.day);
+  }
+
+  int _effectiveWeeklyTargetForDate(
+    Map<dynamic, dynamic> habit,
+    int target,
+    DateTime date,
+  ) {
+    final normalizedDate = DateTime(date.year, date.month, date.day);
+    final weekStart = _startOfWeek(normalizedDate);
+    final createdDate = _createdDateOf(habit);
+    if (createdDate == null ||
+        createdDate.isBefore(weekStart) ||
+        createdDate.isAfter(normalizedDate)) {
+      return target;
+    }
+
+    final remainingDaysInCreationWeek = 8 - createdDate.weekday;
+    return remainingDaysInCreationWeek < target
+        ? remainingDaysInCreationWeek
+        : target;
+  }
+
   bool _shouldShowWeeklyCountHabitOnDate(
     Map<dynamic, dynamic> habit,
     Map<String, dynamic> habitLogs,
@@ -1120,7 +1148,10 @@ class AppleCalendarSyncService {
     final parsedTarget = rawTarget is num
         ? rawTarget.toInt()
         : int.tryParse('$rawTarget') ?? 5;
-    final target = parsedTarget < 1 ? 1 : (parsedTarget > 7 ? 7 : parsedTarget);
+    final rawClampedTarget = parsedTarget < 1
+        ? 1
+        : (parsedTarget > 7 ? 7 : parsedTarget);
+    final target = _effectiveWeeklyTargetForDate(habit, rawClampedTarget, date);
     final habitId = habit['id']?.toString();
     if (habitId == null) return true;
 
@@ -1129,10 +1160,17 @@ class AppleCalendarSyncService {
 
     final normalizedDate = DateTime(date.year, date.month, date.day);
     final weekStart = _startOfWeek(normalizedDate);
+    final createdDate = _createdDateOf(habit);
+    final countStart =
+        createdDate != null &&
+            !createdDate.isBefore(weekStart) &&
+            createdDate.isBefore(normalizedDate)
+        ? createdDate
+        : weekStart;
     var doneCountBeforeDate = 0.0;
 
     for (
-      var cursor = weekStart;
+      var cursor = countStart;
       cursor.isBefore(normalizedDate);
       cursor = cursor.add(const Duration(days: 1))
     ) {

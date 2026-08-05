@@ -367,12 +367,14 @@ class DailyResetService {
         final isDone = log != null && log['done'] == true;
         final taskId = 'habit_${habitId.replaceAll('.', '_')}_$today';
         String? tTime;
-        if (h['timeType'] == 'single' && h['timeStart'] != null)
-          tTime = h['timeStart'];
+        if (h['timeType'] == 'single' && h['timeStart'] != null) {
+          tTime = _displayTimeFromStored(timeStart: h['timeStart']);
+        }
         if (h['timeType'] == 'range' && h['timeStart'] != null) {
-          tTime = h['timeEnd'] != null
-              ? "${h['timeStart']} ~ ${h['timeEnd']}"
-              : h['timeStart'];
+          tTime = _displayTimeFromStored(
+            timeStart: h['timeStart'],
+            timeEnd: h['timeEnd'],
+          );
         }
 
         injectedTasks.add({
@@ -478,6 +480,59 @@ class DailyResetService {
     return normalized.subtract(Duration(days: normalized.weekday - 1));
   }
 
+  static String? _displayTimeFromStored({dynamic timeStart, dynamic timeEnd}) {
+    final start = _parseStoredTime(timeStart?.toString());
+    if (start == null) return timeStart?.toString();
+    final end = _parseStoredTime(timeEnd?.toString());
+    if (end == null) return _formatTimeParts(start.$1, start.$2);
+    return '${_formatTimeParts(start.$1, start.$2)} ~ ${_formatTimeParts(end.$1, end.$2)}';
+  }
+
+  static (int, int)? _parseStoredTime(String? value) {
+    if (value == null) return null;
+    final parts = value.split(':');
+    if (parts.length != 2) return null;
+    final hour = int.tryParse(parts[0]);
+    final minute = int.tryParse(parts[1]);
+    if (hour == null || minute == null) return null;
+    if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return null;
+    return (hour, minute);
+  }
+
+  static String _formatTimeParts(int hour, int minute) {
+    final ap = hour >= 12 ? '오후' : '오전';
+    final displayHour = hour == 0 ? 12 : (hour > 12 ? hour - 12 : hour);
+    return '$ap $displayHour:${minute.toString().padLeft(2, '0')}';
+  }
+
+  static DateTime? _createdDateOf(Map<dynamic, dynamic> habit) {
+    final rawCreatedAt = habit['createdAt']?.toString();
+    if (rawCreatedAt == null || rawCreatedAt.isEmpty) return null;
+    final createdAt = DateTime.tryParse(rawCreatedAt);
+    if (createdAt == null) return null;
+    return DateTime(createdAt.year, createdAt.month, createdAt.day);
+  }
+
+  static int _effectiveWeeklyTargetForDate(
+    Map<dynamic, dynamic> habit,
+    int target,
+    DateTime date,
+  ) {
+    final normalizedDate = DateTime(date.year, date.month, date.day);
+    final weekStart = _startOfWeek(normalizedDate);
+    final createdDate = _createdDateOf(habit);
+    if (createdDate == null ||
+        createdDate.isBefore(weekStart) ||
+        createdDate.isAfter(normalizedDate)) {
+      return target;
+    }
+
+    final remainingDaysInCreationWeek = 8 - createdDate.weekday;
+    return remainingDaysInCreationWeek < target
+        ? remainingDaysInCreationWeek
+        : target;
+  }
+
   static String _dateKey(DateTime date) {
     return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
   }
@@ -491,7 +546,10 @@ class DailyResetService {
     final parsedTarget = rawTarget is num
         ? rawTarget.toInt()
         : int.tryParse('$rawTarget') ?? 5;
-    final target = parsedTarget < 1 ? 1 : (parsedTarget > 7 ? 7 : parsedTarget);
+    final rawClampedTarget = parsedTarget < 1
+        ? 1
+        : (parsedTarget > 7 ? 7 : parsedTarget);
+    final target = _effectiveWeeklyTargetForDate(habit, rawClampedTarget, date);
     final habitId = habit['id']?.toString();
     if (habitId == null) return true;
 
@@ -500,10 +558,17 @@ class DailyResetService {
 
     final normalizedDate = DateTime(date.year, date.month, date.day);
     final weekStart = _startOfWeek(normalizedDate);
+    final createdDate = _createdDateOf(habit);
+    final countStart =
+        createdDate != null &&
+            !createdDate.isBefore(weekStart) &&
+            createdDate.isBefore(normalizedDate)
+        ? createdDate
+        : weekStart;
     var doneCountBeforeDate = 0.0;
 
     for (
-      var cursor = weekStart;
+      var cursor = countStart;
       cursor.isBefore(normalizedDate);
       cursor = cursor.add(const Duration(days: 1))
     ) {

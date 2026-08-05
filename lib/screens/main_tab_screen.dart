@@ -888,14 +888,13 @@ class _MainTabScreenState extends State<MainTabScreen>
               _CatWidgetPromptOption(
                 title: '미니 위젯',
                 subtitle: '작게 올려두고 남은 할 일을 바로 보기',
-                imagePath: 'assets/images/iphonecatwidget1.png',
                 onTap: () => chooseWidget('cat'),
               ),
               const SizedBox(height: 10),
               _CatWidgetPromptOption(
                 title: '가로 위젯',
                 subtitle: '냥이랑 오늘 진행 상황을 더 넓게 보기',
-                imagePath: 'assets/images/cat_widget2.png',
+                isRecommended: true,
                 onTap: () => chooseWidget('cat_character'),
               ),
             ],
@@ -2570,14 +2569,14 @@ class _CatWidgetPromptOption extends StatelessWidget {
   const _CatWidgetPromptOption({
     required this.title,
     required this.subtitle,
-    required this.imagePath,
     required this.onTap,
+    this.isRecommended = false,
   });
 
   final String title;
   final String subtitle;
-  final String imagePath;
   final VoidCallback onTap;
+  final bool isRecommended;
 
   @override
   Widget build(BuildContext context) {
@@ -2598,32 +2597,46 @@ class _CatWidgetPromptOption extends StatelessWidget {
           ),
           child: Row(
             children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: AppDesignTokens.brandBorder),
-                ),
-                child: ClipOval(
-                  child: Image.asset(imagePath, fit: BoxFit.cover),
-                ),
-              ),
-              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.notoSansKr(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w900,
-                        color: AppDesignTokens.textPrimary,
-                      ),
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.notoSansKr(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w900,
+                              color: AppDesignTokens.textPrimary,
+                            ),
+                          ),
+                        ),
+                        if (isRecommended) ...[
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 3,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppDesignTokens.brandSoft,
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: Text(
+                              '추천',
+                              style: GoogleFonts.notoSansKr(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w800,
+                                color: AppDesignTokens.brand,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                     const SizedBox(height: 3),
                     Text(
