@@ -2545,10 +2545,6 @@ class _TasksScreenState extends State<TasksScreen>
   Future<({String label, double ratio})?> _pickHabitCompletionRatio(
     HabitItem habit,
   ) {
-    final unit = (habit.unit ?? '').trim();
-    final goalText = habit.countGoal != null
-        ? '${habit.countGoal}${unit.isEmpty ? '' : unit}'
-        : null;
     final options = [
       (label: '조금 했어', ratio: 0.25),
       (label: '절반쯤 했어', ratio: 0.5),
@@ -2578,11 +2574,21 @@ class _TasksScreenState extends State<TasksScreen>
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                goalText == null ? '오늘 얼마나 했나요?' : '오늘 목표 $goalText 중 얼마나 했나요?',
+                '오늘 얼마나 했나요?',
                 style: GoogleFonts.notoSansKr(
                   fontSize: 15,
                   fontWeight: FontWeight.w900,
                   color: const Color(0xFF3D3A4E),
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                '정확하지 않아도 돼요. 준비, 정리, 수정처럼 이어지는 작업도 포함해도 돼요.',
+                style: GoogleFonts.notoSansKr(
+                  fontSize: 12,
+                  height: 1.45,
+                  fontWeight: FontWeight.w600,
+                  color: const Color(0xFFA0A0B0),
                 ),
               ),
               const SizedBox(height: 12),

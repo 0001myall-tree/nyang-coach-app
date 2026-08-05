@@ -331,7 +331,7 @@ class CoachConfigs {
       tier: 'friends',
       accentColor: Color(0xFF91B4F2),
       accentLight: Color(0xFFEEF2FF),
-      chips: ['집인데 운동 뭐하지?', '복부 운동 짜줘', '지금 할 운동'],
+      chips: ['집인데 운동 뭐하지?', '헬스장 가기 귀찮아', '지금 할 운동'],
       voiceCount: 5, // 목소리 파일 5개
       flirtOne: [
         '좋아, 확실히 끝냈다. 텐션 올리자 🔥',

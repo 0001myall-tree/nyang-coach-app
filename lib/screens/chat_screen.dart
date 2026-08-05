@@ -1251,6 +1251,7 @@ class _ChatScreenState extends State<ChatScreen>
   String? _appointmentPrepChipTaskName;
   String? _appointmentPrepChipTimeLabel;
   String? _repeatedlyDeferredTaskName;
+  String? _thoughtOverloadChipTaskName;
   int _attendanceStreak = 0;
 
   // 음성 인식 관련
@@ -1270,8 +1271,6 @@ class _ChatScreenState extends State<ChatScreen>
 
   // 실행 저항 원인 확인: 확인 질문을 던진 직후, 사용자의 원인 답변을 기다리는 상태
   bool _awaitingResistanceCause = false;
-  // 카운트다운을 제안한 직후, 사용자의 동의 여부를 기다리는 상태
-  bool _awaitingCountdownConsent = false;
   // 반복 거부 뒤 사용자가 직접 고른 가장 작은 행동을 기다리는 상태
   bool _awaitingSelfSelectedTinyAction = false;
   // 무기력/저에너지 상태에서 몸 시동 행동 완료 여부를 기다리는 상태
@@ -1308,6 +1307,7 @@ class _ChatScreenState extends State<ChatScreen>
       final List<dynamic> list = jsonDecode(raw);
       final habitFreqById = _habitFrequencyById(prefs);
       final milestones = _todayMilestoneProgressItems(prefs, todayStr);
+      final todayTasks = <Map<String, dynamic>>[];
 
       int total = 0;
       int completed = 0;
@@ -1318,6 +1318,7 @@ class _ChatScreenState extends State<ChatScreen>
       for (final item in list) {
         if (item is! Map) continue;
         final task = Map<String, dynamic>.from(item);
+        todayTasks.add(task);
         final countable = _countsTowardDailyCompletion(task, habitFreqById);
         if (countable) total++;
         if (countable && task['done'] == true) {
@@ -1338,6 +1339,7 @@ class _ChatScreenState extends State<ChatScreen>
         }
       }
       for (final milestone in milestones) {
+        todayTasks.add(milestone);
         total++;
         if (milestone['done'] == true) {
           completed++;
@@ -1374,6 +1376,11 @@ class _ChatScreenState extends State<ChatScreen>
           break;
         }
       }
+      final thoughtOverloadChipTaskName = _thoughtOverloadChipTaskNameFor(
+        prefs: prefs,
+        todayTasks: todayTasks,
+        fallbackCandidates: pendingChipCandidates,
+      );
 
       if (mounted) {
         setState(() {
@@ -1387,6 +1394,7 @@ class _ChatScreenState extends State<ChatScreen>
             appointmentPrepTask,
           );
           _repeatedlyDeferredTaskName = repeatedlyDeferredTaskName;
+          _thoughtOverloadChipTaskName = thoughtOverloadChipTaskName;
         });
       }
     } catch (e) {
@@ -1710,6 +1718,33 @@ class _ChatScreenState extends State<ChatScreen>
       '모르겠어뭘',
       '고민돼',
       '고민이많',
+    ];
+    return signals.any(normalized.contains);
+  }
+
+  bool _containsThoughtOverloadSignal(String text) {
+    final normalized = text.replaceAll(RegExp(r'\s+'), '').toLowerCase();
+    const signals = [
+      '생각이너무많',
+      '생각이많',
+      '생각이계속',
+      '생각이늘어',
+      '생각이꼬리',
+      '생각이복잡',
+      '머리가복잡',
+      '머릿속이복잡',
+      '머리복잡',
+      '정리가안',
+      '판단과부하',
+      '판단이안',
+      '판단못',
+      '고민이너무많',
+      '완벽하게하려',
+      '완벽하게해야',
+      '완벽주의',
+      '결과불안',
+      '결과가걱정',
+      '결과가불안',
     ];
     return signals.any(normalized.contains);
   }
@@ -2641,9 +2676,9 @@ class _ChatScreenState extends State<ChatScreen>
         _flirtVisible = false;
         _catFreeTrialStep = 0;
         _awaitingResistanceCause = false;
-        _awaitingCountdownConsent = false;
         _pendingDiagnosisQuestion = null;
         _pendingEveningSplitTask = null;
+        _thoughtOverloadChipTaskName = null;
         _greetedOnThisEntry = false;
       });
       _initAndLoad();
@@ -3309,6 +3344,42 @@ class _ChatScreenState extends State<ChatScreen>
 
   bool _isInProgressTask(Map<String, dynamic> task) {
     return task['inProgress'] == true;
+  }
+
+  bool _isPendingNotInProgressTask(Map<String, dynamic>? task) {
+    return task != null && task['done'] != true && !_isInProgressTask(task);
+  }
+
+  String? _thoughtOverloadChipTaskNameFor({
+    required SharedPreferences prefs,
+    required List<Map<String, dynamic>> todayTasks,
+    required List<Map<String, dynamic>> fallbackCandidates,
+  }) {
+    final coreTasks = _decodeMapList(prefs.getString('nyang_core_tasks'));
+    for (final coreTask in coreTasks) {
+      final matched = _matchingTodayTask(todayTasks, coreTask) ?? coreTask;
+      if (_isPendingNotInProgressTask(matched)) {
+        final text = _taskText(matched);
+        if (text != null) return text;
+      }
+    }
+
+    for (final task in todayTasks) {
+      final isHabit = task['isHabit'] == true || task['category'] == 'habit';
+      if (isHabit && _isPendingNotInProgressTask(task)) {
+        final text = _taskText(task);
+        if (text != null) return text;
+      }
+    }
+
+    for (final task in fallbackCandidates) {
+      if (_isPendingNotInProgressTask(task)) {
+        final text = _taskText(task);
+        if (text != null) return text;
+      }
+    }
+
+    return null;
   }
 
   String? _appointmentPrepChipTaskNameFor(Map<String, dynamic>? task) {
@@ -4528,7 +4599,7 @@ class _ChatScreenState extends State<ChatScreen>
 
   Future<String?> _tryBuildMasterLocalReply(String input) async {
     if (!_coach.isMaster) return null;
-    if (_timerConfirmMinutes != null || _awaitingCountdownConsent) return null;
+    if (_timerConfirmMinutes != null) return null;
 
     final raw = input.trim();
     if (raw.isEmpty) return null;
@@ -8745,7 +8816,6 @@ class _ChatScreenState extends State<ChatScreen>
         _timerConfirmTaskName = null;
         _timerActiveMinutes = null;
         _timerActiveInsertIndex = null;
-        _awaitingCountdownConsent = false;
         _dynamicChips = _coach.chips;
       });
       _scrollToBottom();
@@ -9050,14 +9120,6 @@ class _ChatScreenState extends State<ChatScreen>
       });
       // 프렌즈 코치의 타이머는 사용자의 명시 요청을 위 directTimerMinutes 분기에서만 시작한다.
       // 모델이 실수로 [TIMER_CONFIRM]을 붙여도 기존 코칭 단계를 건너뛰지 않도록 여기서는 무시한다.
-      if (_coach.isMaster) {
-        // 코치가 스스로 시작 의식을 권한 경우도 동의 대기 상태로 잡아둔다.
-        _awaitingCountdownConsent =
-            !parsed.startCountdown &&
-            (parsed.text.contains('마음 비우고 시작') ||
-                parsed.text.contains('머리를 비우고 시작') ||
-                parsed.text.contains('시작 의식'));
-      }
       _scrollToBottom();
       await _saveHistory();
       final followup = parsed.ultraLowResistanceFollowup;
@@ -9096,7 +9158,6 @@ class _ChatScreenState extends State<ChatScreen>
     } catch (e, stackTrace) {
       // 응답을 못 받았으면 이번 턴에 잡아둔 실행 저항 흐름 상태는 흘려보낸다.
       _awaitingResistanceCause = false;
-      _awaitingCountdownConsent = false;
       _awaitingSelfSelectedTinyAction = false;
       _awaitingLowEnergyStarterAction = false;
       _pendingDiagnosisQuestion = null;
@@ -9827,7 +9888,7 @@ class _ChatScreenState extends State<ChatScreen>
             //  프렌즈의 "타이머 먼저 제안 가능" 규칙과 모순이 생긴다)
             if (_coach.isMaster) {
               sb.writeln(
-                '*"앱 기록상 미루기 2회 이상"으로 표시된 미완료 할 일을 사용자가 계속 시작하지 못하면 "마음 비우고 시작"을 먼저 제안할 수 있음. 제안만 하고 [COUNTDOWN_START] 태그는 사용자가 동의한 다음 턴에만 붙일 것. 단, 사용자가 방금 실행 저항을 표현한 턴에는 [실행 저항 원인 추론 흐름]의 턴 지시가 항상 우선함.',
+                '*"앱 기록상 미루기 2회 이상"으로 표시된 미완료 할 일을 사용자가 계속 시작하지 못해도 "마음 비우고 시작"이나 카운트다운을 먼저 제안하지 말 것. 해당 기능은 사용자가 직접 버튼을 누르거나 명시적으로 요청했을 때만 시작함.',
               );
               sb.writeln(
                 '*타이머 확인 카드([TIMER_CONFIRM])는 사용자가 직접 요청했거나 "필요하면 타이머라도 띄워드릴까요?"에 동의했을 때만 출력할 것. 코치가 먼저 타이머 태그를 출력하지 말 것.',
@@ -10540,12 +10601,11 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   /// 실행 저항 흐름에서 이번 턴에만 적용할 지시문을 만든다.
-  /// 확인 질문과 시작 의식 제안 문장은 모델이 새로 만들지 않도록 앱이 골라서 넘긴다.
+  /// 확인 질문은 모델이 새로 만들지 않도록 앱이 골라서 넘긴다.
   /// (마스터 코치 전용. 확인 질문은 하루 1회만.)
   Future<String> _buildResistanceTurnDirective(String userText) async {
     if (!_coach.isMaster) {
       _awaitingResistanceCause = false;
-      _awaitingCountdownConsent = false;
       _pendingDiagnosisQuestion = null;
       _pendingEveningSplitTask = null;
       return '';
@@ -10562,7 +10622,6 @@ class _ChatScreenState extends State<ChatScreen>
     _pendingEveningSplitAt = null;
     if (splitTask != null) {
       _awaitingResistanceCause = false;
-      _awaitingCountdownConsent = false;
       final now = DateTime.now();
       final prefs = await SharedPreferences.getInstance();
       final remaining = (await _buildMasterGreetingContext(
@@ -10582,37 +10641,24 @@ class _ChatScreenState extends State<ChatScreen>
 - 답변은 2문장 이내로 유지하세요.''';
     }
 
-    // 카운트다운 제안 직후 턴: 동의 여부만 판정한다.
-    if (_awaitingCountdownConsent) {
-      _awaitingCountdownConsent = false;
-      return '''
-
-[이번 턴 지시 - 마음 비우고 시작 동의 확인]
-- 직전 답변에서 "마음 비우고 시작"을 제안했습니다. 사용자가 동의하면(응, 네, 좋아요, 해줘 등) 한 문장으로 짧게 답한 뒤 답변 맨 끝에 [COUNTDOWN_START]를 붙이세요.
-- 거절하거나 다른 이야기를 하면 태그를 붙이지 말고 다시 권하지 마세요.''';
-    }
-
     // 확인 질문 직후 턴: 원인이 구체적인지 불명확한지에 따라 분기한다.
     if (_awaitingResistanceCause) {
       _awaitingResistanceCause = false;
-      final offer = ExecutionResistanceService.pickCountdownOffer();
       if (ExecutionResistanceService.isVagueCauseAnswer(userText)) {
-        _awaitingCountdownConsent = true;
         return '''
 
-[이번 턴 지시 - 원인 불명확, 마음 비우고 시작 제안]
+[이번 턴 지시 - 원인 불명확, 최소 행동 제안]
 - 사용자가 실행 저항의 원인을 특정하지 못했습니다. 원인을 더 분석하거나 같은 질문을 다시 하지 마세요.
-- 짧게 한 문장으로 받아준 뒤, 아래 문장을 그대로 붙여 "마음 비우고 시작"을 제안하고 답변을 끝내세요. 호칭과 말투만 코치에 맞게 다듬고 내용은 바꾸지 마세요.
-  "$offer"
-- 이번 답변에는 [COUNTDOWN_START], [TASK], [TIMER_CONFIRM]을 붙이지 마세요. 사용자가 동의하면 다음 턴에 붙입니다.''';
+- "마음 비우고 시작", "시작 의식", 카운트다운은 제안하지 마세요. 해당 기능은 사용자가 직접 버튼을 누르거나 명시적으로 요청했을 때만 시작합니다.
+- 짧게 한 문장으로 받아준 뒤, 현재 과업에서 가장 작은 첫 조각 하나만 제안하고 답변을 끝내세요.
+- 이번 답변에는 [COUNTDOWN_START], [TASK], [TIMER_CONFIRM]을 붙이지 마세요.''';
       }
       return '''
 
 [이번 턴 지시 - 원인 확인 완료]
 - 사용자가 실행 저항의 원인을 이야기했습니다. 원인을 다시 묻지 말고, [하기 싫다 실행 개입 전략]에 따라 그 원인에 맞는 개입을 하나만 제안하세요.
 - 해결책으로 곧장 넘어가지 말고, 사용자가 짚어낸 병목을 한 문장으로 먼저 받아주세요. 언어화된 것을 인정받는 것만으로도 저항감이 낮아집니다. 예: "분량이 부담이셨군요." 단, 원인을 재해석하거나 분석을 덧붙이지는 마세요.
-- 원인이 여전히 불명확하다고 판단되면 더 캐묻지 말고 아래 문장으로 "마음 비우고 시작"을 제안하세요.
-  "$offer"''';
+- 원인이 여전히 불명확하다고 판단되면 더 캐묻지 말고 가장 작은 첫 조각 하나만 제안하세요. "마음 비우고 시작", "시작 의식", 카운트다운은 제안하지 마세요.''';
     }
 
     if (!ExecutionResistanceService.isResistanceExpression(userText)) return '';
@@ -10621,7 +10667,6 @@ class _ChatScreenState extends State<ChatScreen>
     final executionStats = _recentPlanExecutionStatsUntilYesterday(prefs);
     if (executionStats['isVeryLow'] == true) {
       _awaitingResistanceCause = false;
-      _awaitingCountdownConsent = false;
       final pct = ((executionStats['averageRate'] as double) * 100).round();
       return '''
 
@@ -10737,6 +10782,8 @@ class _ChatScreenState extends State<ChatScreen>
     final isDecisionFatigueTurn = _containsDecisionFatigueSignal(userText);
     final isResultAnxietyTurn =
         !isSelfHarmRiskTurn && _containsResultAnxietySignal(userText);
+    final isThoughtOverloadTurn =
+        !isSelfHarmRiskTurn && _containsThoughtOverloadSignal(userText);
     final isWritingConcernTurn =
         !isSelfHarmRiskTurn && _containsWritingConcernSignal(userText);
     final isHabitAutomationTurn =
@@ -10765,23 +10812,16 @@ class _ChatScreenState extends State<ChatScreen>
 [실행 저항 원인 추론 흐름 - 마스터 코치 전용]
 - 사용자가 실행 저항을 표현하면 질문부터 하지 말고, 먼저 사용자의 말과 현재 맥락에서 원인을 부드럽게 추론합니다. 원인을 어느 정도 추측할 수 있으면 [하기 싫다 실행 개입 전략]에 따라 개입을 하나만 제안합니다.
 - 원인을 추측하기 어렵거나 잘못 짚으면 부담이 큰 상황에서만 원인 확인 질문을 한 번 사용합니다. 확인 질문은 앱이 지정해준 문장만 쓰고, 새로 만들거나 두 번 반복하지 않습니다.
-- 사용자가 원인을 특정하지 못하면("생각이 너무 많아요", "나도 잘 모르겠어요", "그냥 귀찮아요", "다 하기 싫어요", "이유를 모르겠어요") 원인을 더 분석하거나 다시 묻지 말고 "마음 비우고 시작"을 제안합니다.
-- "마음 비우고 시작"은 모든 상황에서 쓰는 기본 해결책이 아닙니다. 원인이 불명확할 때, 또는 앱 기록상 미루기 2회 이상인 일을 계속 시작하지 못할 때 생각을 잠깐 내려놓고 실행으로 전환시키는 장치로 씁니다.
-- 사용자에게는 "카운트다운"이라는 기능명을 말하지 말고, "마음 비우고 시작", "머리를 잠깐 비우고 시작", "시작 의식"처럼 편안한 표현만 씁니다.
-- "마음 비우고 시작" 제안에 사용자가 동의했거나 사용자가 직접 요청한 경우에만, 짧게 한 문장으로 답한 뒤 답변 맨 끝에 [COUNTDOWN_START] 태그를 붙입니다. 코치가 먼저 붙이지 않습니다.
+- 사용자가 원인을 특정하지 못하면("생각이 너무 많아요", "나도 잘 모르겠어요", "그냥 귀찮아요", "다 하기 싫어요", "이유를 모르겠어요") 원인을 더 분석하거나 다시 묻지 말고 가장 작은 첫 조각 하나만 제안합니다.
+- "마음 비우고 시작", "머리를 잠깐 비우고 시작", "시작 의식", 카운트다운은 코치가 먼저 제안하지 않습니다. 해당 기능은 사용자가 직접 버튼을 누르거나 명시적으로 요청했을 때만 시작합니다.
+- 사용자가 직접 요청한 경우에만, 짧게 한 문장으로 답한 뒤 답변 맨 끝에 [COUNTDOWN_START] 태그를 붙입니다.
 - 원인 확인 질문은 하루에 한 번만 합니다. 이미 물어본 날에는 다시 묻지 말고 바로 작은 실행 제안으로 연결해 대화가 길어지지 않게 합니다.'''
         : '';
     final resistanceStrategyDetailRule = isResistanceTurn || isResultAnxietyTurn
         ? '''
-- 사용자가 "망할까 봐 무섭다", "결과 보는 게 무섭다", "실패할까 봐 시작을 못 하겠다"처럼 결과 확인을 두려워하면, 단순히 "작게 시작해보자"로 바로 밀지 마세요. 먼저 그 일이 소중해서 더 조심스러워진 상황일 수 있음을 한 문장으로 받아주세요.
-- 사용자가 한꺼번에 떠안고 있는 걱정을 구체적으로 풀어주세요. 예: "성공할지, 반응이 어떨지, 지금까지 한 노력이 헛수고가 될지까지 한 번에 생각하면 너무 무겁다"처럼 현재 과업에 맞게 바꾸세요.
-- 사용자가 글은 안 쓰고 강의만 듣거나 이미 쓴 앞부분만 고치는 경우, 사업은 안 하고 사업 공부만 하는 경우처럼 준비·수정·학습만 반복한다면 아래 구조를 따르세요.
-  1) 먼저 그 방식이 불안을 낮추기 위한 안전 전략이었을 수 있음을 인정합니다. 예: "강의를 더 듣고 싶은 건, 바로 해봤다가 무너질까 봐 대비하려는 마음일 수 있다"
-  2) 그 다음 부드럽게 의문을 제기합니다. 예: "다만 장기적으로 그게 최선일까?", "시도하면서 배우는 길을 너무 오래 닫아두는 건 아닐까?"
-  3) 기존 전략을 완전히 버리라고 하지 말고, 다른 방식도 아주 작게 시험해보자고 제안합니다.
-  4) 마지막에는 바로 할 수 있는 구체적 행동 하나로 끝냅니다. 글쓰기라면 새 장면 하나, 업무라면 초안 한 부분, 공부라면 문제 하나나 개념 하나, 사업이라면 고객 질문 하나나 작은 제안 초안처럼 되돌릴 수 있는 단위로 낮추세요.
-- 이때 핵심은 사용자의 기존 전략을 틀렸다고 반박하는 것이 아니라, 공감한 뒤 "그 방식만 계속 쓰는 게 장기적으로 도움이 되는지"를 살짝 찔러주고, 코치와 함께 다른 방식을 작게 시험하게 하는 것입니다. 단, 문장을 그대로 베끼지 말고 현재 코치의 말투로 자연스럽게 바꾸세요.
-- 사용자가 "하기 싫다", "귀찮다", "기력이 없다", "몸이 안 움직인다"는 말을 반복하거나, 아주 작은 행동 제안에도 계속 거부하는 등 실행 저항이 매우 커 보이면 [초저항 시작 모드]를 사용하세요. 단, 결과 불안형 저항에는 이 모드를 쓰지 말고 위의 결과 불안 대응을 우선하세요.
+- 결과 불안형 저항은 [생각 과부하 정리 전략]을 우선합니다. 단순히 "작게 시작해보자"로 바로 밀지 말고, 그 일이 소중해서 더 조심스러워진 상황일 수 있음을 먼저 한 문장으로 받아주세요.
+- 사용자가 준비·수정·학습만 반복한다면 그 방식이 불안을 낮추기 위한 안전 전략이었을 수 있음을 한 문장으로 인정한 뒤, [생각 과부하 정리 전략] 안에서 작은 실행으로 연결하세요.
+- 사용자가 "하기 싫다", "귀찮다", "기력이 없다", "몸이 안 움직인다"는 말을 반복하거나, 아주 작은 행동 제안에도 계속 거부하는 등 실행 저항이 매우 커 보이면 [초저항 시작 모드]를 사용하세요. 단, 결과 불안형 저항에는 이 모드를 쓰지 말고 [생각 과부하 정리 전략]을 우선하세요.
 - [초저항 시작 모드]의 1순위는 행동이 아니라 화면 밖 현실 공간으로 시선을 옮기는 것입니다. 첫 말풍선에는 청소나 일을 시키는 느낌의 행동 제안을 넣지 말고, "그럼 나랑 놀이처럼 해보자."처럼 함께 가볍게 해보자는 말로 시작한 뒤 "숨은 미션/찾기 놀이"처럼 프레이밍하세요.
 - [초저항 시작 모드]의 목표는 할 일에 대한 부담을 탐색적 유희로 바꾸는 것입니다. 완료, 성과, 분량, 잘하기를 말하지 말고 "조건 하나 찾기/넣기/건드리기"처럼 10초 안에 이해되는 미션 후보만 주세요.
 - [초저항 시작 모드]에서는 할 일을 작게 쪼개더라도 코치가 하나를 지정하지 말고, 아주 쉬운 후보 2~3개 중 사용자가 하나만 고르게 하세요. 단, 고른 뒤 실제로 할 행동은 하나뿐이어야 합니다. "이 중에서 제일 덜 싫은 거 하나만 골라보자"처럼 선택권을 주고, 모든 후보를 다 하게 만들지 마세요.
@@ -10897,13 +10937,29 @@ class _ChatScreenState extends State<ChatScreen>
 - 사용자가 선택을 어려워하면 코치가 먼저 가벼운 기본값(Default)을 하나 찍어주세요.
 - 결정 자체에 지쳐 보이거나 너무 오래 고민한다면 결정 보류를 제안하여 작업 흐름이 끊기지 않게 보호하세요.'''
         : '';
+    final thoughtOverloadRule = isThoughtOverloadTurn
+        ? '''
+
+[생각 과부하 정리 전략]
+- 이 전략은 사용자가 단순히 하기 싫거나 귀찮은 것이 아니라, 결과 불안·완벽주의·머리 복잡함·판단 과부하·생각이 너무 많음 때문에 실행이 멈춘 경우에만 적용합니다.
+- [하기 싫다 실행 개입 전략]으로 충분히 처리 가능한 일반 실행 저항에는 이 전략을 적용하지 않습니다.
+- 생각을 멈추라고 하거나 한 가지만 생각하라고 강요하지 않습니다. 생각이 많아진 상태를 먼저 자연스럽게 인정합니다.
+- 결과가 두렵거나 완벽하게 하고 싶은 마음이 보이면, 그 일이 소중해서 더 조심스러워진 상황일 수 있음을 먼저 한 문장으로 받아줍니다.
+- 사용자가 글은 안 쓰고 강의만 듣거나 이미 쓴 앞부분만 고치는 경우, 사업은 안 하고 사업 공부만 하는 경우, 개발·기획은 안 하고 자료조사나 레퍼런스만 반복하는 경우에는 그 방식이 불안을 낮추는 안전 전략이었을 수 있음을 인정합니다. 기존 전략을 틀렸다고 반박하지 말고, 그 방식만 계속 쓰는 게 지금 행동에 도움이 되는지 부드럽게 확인하세요.
+- 먼저 “지금 머릿속에서 생각이 계속 늘어나고 있는 것 같다. 그 생각들이 지금 행동하는 데 도움이 되고 있는지”를 현재 코치 말투로 부드럽게 묻습니다.
+- 사용자가 도움이 안 될 것 같다고 하거나, 생각이 이미 실행을 막고 있어 보이면 생각을 더 늘리지 말고 지금 할 수 있는 최소 행동 하나로 낮춥니다.
+- 최소 행동은 현재 맥락에 맞게 고릅니다. 예: 10분만 쓰기, 10문장 쓰기, 파일 열기, 다음 장면 제목만 적기, 자료 하나만 정리하기, 고객 질문 하나 적기, 레퍼런스 하나 보기, 오류 로그 하나 확인하기, 기획 제목만 붙이기.
+- 사용자가 도움이 되는 생각이라고 느낀다면, 머릿속으로만 붙잡지 말고 20분만 직접 써보게 합니다. 걱정, 불안, 의문, 판단 기준을 종이나 문서에 쭉 적으면 머릿속이 정리되고 실행할 힘이 생길 수 있다고 안내합니다.
+- 20분 검토가 끝나면 지금 가진 정보로 작은 결정 하나를 내리고 다시 움직이게 합니다.
+- 답변은 설문처럼 보이지 않게 자연스러운 말풍선 문장으로 작성합니다. 여러 선택지를 길게 나열하지 말고, 현재 상황에 맞는 한 방향만 가볍게 제안합니다.'''
+        : '';
     final writingConcernRule = isWritingConcernTurn
         ? '''
 
 [글쓰기 고민 전용 코칭]
 - 이 섹션은 사용자가 글쓰기, 집필, 원고, 웹소설, 도입부, 첫 문장, 본문, 플롯, 시놉시스, 자료조사, 수정, 퇴고, 글자 수, 원고 진도, 글쓰기 관련 진도율, 연재, 원고 마감에 대해 막힘·자책·미룸·불안을 말한 턴에만 적용합니다. 일반 일정, 청소, 운동, 공부 고민에는 적용하지 마세요.
 - 답변은 마음 짚기 → 문제 재정의 → 작은 행동 넛지 → 옆에 있겠다는 안심 순서로 구성하세요. 마음 짚기는 1문장만 쓰고, 사용자를 게으르거나 의지가 없다고 해석하지 마세요.
-- 이 섹션이 적용되는 턴에서는 일반 실행 저항 전략보다 글쓰기 고민 전용 흐름을 우선합니다. 다만 수면, 자해·자살 안전, 명시적인 타이머 요청 같은 상위 안전·기능 규칙은 계속 우선합니다.
+- 이 섹션은 글쓰기 맥락의 예시와 표현을 보조합니다. 수면, 자해·자살 안전, 저에너지, 생각 과부하, 일반 실행 저항 같은 상위 상태·실행 분기가 적용되는 턴에는 그 흐름을 우선하고, 글쓰기 예시는 필요한 만큼만 섞으세요.
 - 시작할 기력이 없거나 쓰면 마음에 안 들어 고치기만 한다면, 평가 두려움·완벽주의·첫 문장 부담·기력 저하 중 하나가 작동하는 상황일 수 있음을 조심스럽게 짚으세요.
 - 수정, 퇴고, 플롯 정리, 자료조사, 시놉시스 정리도 글쓰기 흐름으로 인정하되, 보조작업만 반복되는 흐름이면 인정 후 본문 복귀를 제안하세요.
 - 도입부/첫 문장/첫 장면에서 막힌 경우, 도입부를 최종본이 아니라 임시 입구, 버릴 후보, 나중에 갈아끼울 문장으로 재정의하세요.
@@ -10929,6 +10985,9 @@ class _ChatScreenState extends State<ChatScreen>
         : '';
     final decisionSupportSection = decisionFatigueRule.isNotEmpty
         ? decisionFatigueRule
+        : '';
+    final thoughtOverloadSection = thoughtOverloadRule.isNotEmpty
+        ? thoughtOverloadRule
         : '';
     final writingConcernSection = writingConcernRule.isNotEmpty
         ? writingConcernRule
@@ -10987,7 +11046,7 @@ $resistanceFlowRule'''
         ? '''4. [TIMER_START] 태그는 절대 사용 금지.
    - 사용자가 직접 "타이머 띄워줘", "15분 타이머 켜줘"처럼 명시적으로 요청한 경우에는 짧게 응답한 뒤 [TIMER_CONFIRM:분] 태그를 붙입니다. 시간이 없으면 15분을 기본값으로 사용합니다.
    - 직전 답변에서 타이머가 필요한지 현재 코치의 말투로 물었고 사용자가 동의했다면 [TIMER_CONFIRM:분:할일이름]을 출력합니다.
-   - 코치가 먼저 [TIMER_CONFIRM] 태그를 출력하지 마세요. 코치가 먼저 권하는 장치는 타이머가 아니라 "마음 비우고 시작"입니다. [오늘 할 일 현황]에 "앱 기록상 미루기 2회 이상"으로 표시된 미완료 할 일을 사용자가 계속 시작하지 못하면, 짧게 공감한 뒤 현재 코치의 말투로 "마음 비우고 시작"을 제안하세요. [COUNTDOWN_START] 태그는 사용자가 동의한 다음 턴에만 붙입니다.'''
+   - 코치가 먼저 [TIMER_CONFIRM] 태그를 출력하지 마세요. "마음 비우고 시작", "시작 의식", 카운트다운도 먼저 제안하지 마세요. 해당 기능은 사용자가 직접 버튼을 누르거나 명시적으로 요청했을 때만 시작합니다.'''
         : '''4. [TIMER_START] 태그는 절대 사용 금지. [TIMER_CONFIRM]은 사용자가 직접 "타이머 띄워줘", "15분 타이머 켜줘", "집중모드 시작해줘"처럼 타이머 실행을 명시적으로 요청한 경우에만 붙입니다. 시간이 없으면 15분을 기본값으로 사용합니다. 구체적인 과업이 있어도 타이머로 바로 넘어가지 말고 기존 코칭 프롬프트를 따르세요. 코치가 먼저 타이머를 제안할 때는 말로만 "필요하면 말해"라고 하고 [TIMER_CONFIRM] 태그를 붙이지 마세요.''';
     // 냥냥이 연결(COACH_SWITCH)은 장기 목표 압박을 주는 마스터 코치(냥할배/여비서) 전용 탈출구다.
     // 프렌즈 코치는 이미 압박 없는 오늘 하루 중심이라 서로 스위치될 이유가 없다.
@@ -11017,6 +11076,9 @@ $masterStyleRule
 - 자해·자살 위험 신호가 감지된 턴이나 직전 안전 확인의 후속 답변에서는 안전 대응이 캐릭터 설정, 일정, 생산성, 실행, 타이머, 할 일, 성취 평가, 다른 코치 연결보다 우선합니다.
 $selfHarmRiskRule
 
+$sleepPrioritySection
+$lowEnergyPrioritySection
+
 [감정 토로 응답 원칙]
 - 사용자가 속상함, 피로, 불안, 답답함 등 감정을 토로하면 먼저 충분히 공감하고 달래주세요.
 - 정서적 여유가 낮아 보이거나 사용자가 단순히 감정을 표현한 상황에서는, 해결 가능한 문제가 보여도 행동 제안을 자동으로 붙이지 마세요.
@@ -11032,13 +11094,11 @@ $completionResponseSection
 - 사용자의 선택이 필요한 상황에서는 설명을 요구하기보다 다음 행동을 고르게 돕는 질문을 우선하세요.
 - 가능한 질문은 원인 추궁보다 실행을 돕는 방향을 우선하세요.
 
-$sleepPrioritySection
-$lowEnergyPrioritySection
+$thoughtOverloadSection
+$resistanceInterventionSection
+$decisionSupportSection
 $writingConcernSection
 $habitAutomationSection
-$resistanceInterventionSection
-
-$decisionSupportSection
 
 [출력 규칙]
 1. 지정된 캐릭터의 성격, 호칭, 말투 규칙을 철저히 준수하세요.
@@ -14249,8 +14309,9 @@ $timerOutputRule
     final focusChip = _coach.id == 'nyang_halbae'
         ? _nyangHalbaeSmallStartChipLabel(truncateTaskName: true)
         : (_coach.id == 'sec_female'
-              ? appointmentPrepChip ?? '마음 비우고 하게 해줘'
-              : '마음 비우고 하게 해줘');
+              ? appointmentPrepChip ??
+                    _thoughtOverloadChipLabel(truncateTaskName: true)
+              : _thoughtOverloadChipLabel(truncateTaskName: true));
     var decisionChip = _masterDecisionChipLabel(truncateTaskName: true);
     if (_coach.id == 'nyang_halbae' &&
         decisionChip == '지금 뭐하지?' &&
@@ -14348,6 +14409,33 @@ $timerOutputRule
     return '지금 \'$taskName\' 하기 싫어. 조금만 해볼까?';
   }
 
+  static const String _thoughtOverloadFallbackChip = '머리가 복잡해서 시작이 안 돼';
+
+  String _thoughtOverloadChipLabel({required bool truncateTaskName}) {
+    final taskName = _thoughtOverloadChipTaskName?.trim();
+    if (taskName == null || taskName.isEmpty) {
+      return _thoughtOverloadFallbackChip;
+    }
+    final displayTaskName = truncateTaskName
+        ? _truncateResistanceChipTaskName(taskName)
+        : taskName;
+    return '\'$displayTaskName\' 하려니 머리가 복잡해';
+  }
+
+  bool _isThoughtOverloadMasterChip(String chip) {
+    if (!_coach.isMaster) return false;
+    return chip == _thoughtOverloadFallbackChip ||
+        chip == _thoughtOverloadChipLabel(truncateTaskName: true);
+  }
+
+  String _thoughtOverloadMasterChipApiInput() {
+    final taskName = _thoughtOverloadChipTaskName?.trim();
+    if (taskName == null || taskName.isEmpty) {
+      return _thoughtOverloadFallbackChip;
+    }
+    return '\'$taskName\' 하려니 머리가 복잡해';
+  }
+
   String _deferredResistancePhrase(String taskName) {
     const phrases = ['하기가 자꾸 귀찮아', '하기가 자꾸 부담돼'];
     final phraseIndex = taskName.codeUnits.fold<int>(
@@ -14390,6 +14478,12 @@ $timerOutputRule
 
   bool get _isBroBedtimeWorkoutChipTime => DateTime.now().hour >= 22;
 
+  String get _broReluctantMovementChipLabel {
+    final hour = DateTime.now().hour;
+    if (hour >= 10 && hour < 17) return '산책하러 나가기 귀찮아';
+    return '헬스장 가기 귀찮아';
+  }
+
   String _pickBroQuickWorkoutChipLabel() {
     if (_isBroBedtimeWorkoutChipTime) return '자기 전에 운동 뭐하지?';
     final labels = _broQuickWorkoutChipMessages.keys
@@ -14416,7 +14510,13 @@ $timerOutputRule
     }
     if (_coach.id != 'bro') return chips;
     if (!chips.contains('지금 할 운동')) return chips;
-    final result = chips.where((chip) => chip != '지금 할 운동').toList();
+    final result = chips
+        .map(
+          (chip) =>
+              chip == '헬스장 가기 귀찮아' ? _broReluctantMovementChipLabel : chip,
+        )
+        .where((chip) => chip != '지금 할 운동')
+        .toList();
     result.insert(
       0,
       _isBroBedtimeWorkoutChipTime
@@ -14458,6 +14558,7 @@ $timerOutputRule
     if (asset == null &&
         !_isAppointmentPrepChip(chip) &&
         !_isNyangHalbaeSmallStartChip(chip) &&
+        !_isThoughtOverloadMasterChip(chip) &&
         !_isRepeatedlyDeferredMasterChip(chip)) {
       return null;
     }
@@ -14465,6 +14566,8 @@ $timerOutputRule
       asset ??
           (_isAppointmentPrepChip(chip)
               ? 'assets/icons/fa-clock-regular.svg'
+              : _isThoughtOverloadMasterChip(chip)
+              ? 'assets/icons/fa-lightbulb-solid.svg'
               : 'assets/icons/fa-hourglass-half-solid.svg'),
       width: 14,
       height: 14,
@@ -14526,6 +14629,14 @@ $timerOutputRule
         }
         if (chip == '마음 비우고 시작' || chip == '마음 비우고 하게 해줘') {
           _openCountdownFocusMode();
+          return;
+        }
+        if (_isThoughtOverloadMasterChip(chip)) {
+          _send(
+            _thoughtOverloadChipLabel(truncateTaskName: false),
+            apiInputOverride: _thoughtOverloadMasterChipApiInput(),
+            masterModelPolicy: _MasterModelPolicy.forceGpt4oMini,
+          );
           return;
         }
         if (_isNyangHalbaeSmallStartChip(chip)) {
@@ -14635,6 +14746,14 @@ $timerOutputRule
               }
               if (_coach.isMaster && chip == '마음 비우고 시작') {
                 _openCountdownFocusMode();
+                return;
+              }
+              if (_coach.isMaster && _isThoughtOverloadMasterChip(chip)) {
+                _send(
+                  _thoughtOverloadChipLabel(truncateTaskName: false),
+                  apiInputOverride: _thoughtOverloadMasterChipApiInput(),
+                  masterModelPolicy: _MasterModelPolicy.forceGpt4oMini,
+                );
                 return;
               }
               if (_coach.isMaster && chip == '마음 비우고 하게 해줘') {
