@@ -513,7 +513,11 @@ class DailyResetService {
     return DateTime(createdAt.year, createdAt.month, createdAt.day);
   }
 
-  static int _effectiveWeeklyTargetForDate(
+  static String _dateKey(DateTime date) {
+    return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+  }
+
+  static int _weeklyVisibleTargetForDate(
     Map<dynamic, dynamic> habit,
     int target,
     DateTime date,
@@ -533,10 +537,6 @@ class DailyResetService {
         : target;
   }
 
-  static String _dateKey(DateTime date) {
-    return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
-  }
-
   static bool _shouldShowWeeklyCountHabitOnDate(
     Map<dynamic, dynamic> habit,
     Map<String, dynamic> habitLogs,
@@ -549,7 +549,7 @@ class DailyResetService {
     final rawClampedTarget = parsedTarget < 1
         ? 1
         : (parsedTarget > 7 ? 7 : parsedTarget);
-    final target = _effectiveWeeklyTargetForDate(habit, rawClampedTarget, date);
+    final target = _weeklyVisibleTargetForDate(habit, rawClampedTarget, date);
     final habitId = habit['id']?.toString();
     if (habitId == null) return true;
 

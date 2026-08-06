@@ -2466,9 +2466,13 @@ class _TasksScreenState extends State<TasksScreen>
     return DateTime(createdAt.year, createdAt.month, createdAt.day);
   }
 
-  int _weeklyTargetForDate(HabitItem habit, DateTime date) {
+  int _weeklyTargetForHabit(HabitItem habit) {
     final rawTarget = habit.weeklyTargetCount ?? 5;
-    final target = rawTarget < 1 ? 1 : (rawTarget > 7 ? 7 : rawTarget);
+    return rawTarget < 1 ? 1 : (rawTarget > 7 ? 7 : rawTarget);
+  }
+
+  int _weeklyVisibleTargetForDate(HabitItem habit, DateTime date) {
+    final target = _weeklyTargetForHabit(habit);
     final normalizedDate = DateTime(date.year, date.month, date.day);
     final weekStart = _startOfWeek(normalizedDate);
     final createdDate = _createdDateOfHabit(habit);
@@ -2499,7 +2503,7 @@ class _TasksScreenState extends State<TasksScreen>
     if (habit.freq != 'weekly_count') return '습관';
 
     final today = DateTime.now();
-    final target = _weeklyTargetForDate(habit, today);
+    final target = _weeklyTargetForHabit(habit);
     final weekStart = _startOfWeek(today);
     final normalizedToday = DateTime(today.year, today.month, today.day);
     final createdDate = _createdDateOfHabit(habit);
@@ -2557,7 +2561,7 @@ class _TasksScreenState extends State<TasksScreen>
 
   bool _shouldShowWeeklyCountHabitOnDate(HabitItem habit, DateTime date) {
     final normalizedDate = DateTime(date.year, date.month, date.day);
-    final target = _weeklyTargetForDate(habit, normalizedDate);
+    final target = _weeklyVisibleTargetForDate(habit, normalizedDate);
     final weekStart = _startOfWeek(normalizedDate);
     final createdDate = _createdDateOfHabit(habit);
     final countStart =
@@ -13727,11 +13731,10 @@ class _TasksScreenState extends State<TasksScreen>
                   onTap: () async {
                     // 구독 체크
                     final userData = await UserDataService.load();
+                    if (!mounted || !ctx.mounted) return;
                     if (!userData.isPlanActive) {
                       Navigator.pop(ctx); // 모달 닫기
-                      if (context.mounted) {
-                        _showSubscriptionNotice(context);
-                      }
+                      _showSubscriptionNotice(context);
                       return;
                     }
 
@@ -13782,6 +13785,11 @@ class _TasksScreenState extends State<TasksScreen>
                           DateTime.now().toIso8601String(),
                       isReminderEnabled: mReminderEnabled,
                     );
+                    final showCreationWeekNotice =
+                        editHabit == null &&
+                        habit.freq == 'weekly_count' &&
+                        _weeklyVisibleTargetForDate(habit, DateTime.now()) <
+                            _weeklyTargetForHabit(habit);
 
                     setState(() {
                       if (editHabit != null) {
@@ -13796,6 +13804,16 @@ class _TasksScreenState extends State<TasksScreen>
                     _saveHabits();
                     _injectTodayHabits();
                     Navigator.pop(ctx);
+                    if (showCreationWeekNotice && mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            '이번 주는 남은 날짜에 맞춰 보여주고, 다음 주부터 주 ${_weeklyTargetForHabit(habit)}일로 진행돼요.',
+                          ),
+                          duration: const Duration(seconds: 3),
+                        ),
+                      );
+                    }
                   },
                   child: Container(
                     width: double.infinity,

@@ -1119,7 +1119,7 @@ class AppleCalendarSyncService {
     return DateTime(createdAt.year, createdAt.month, createdAt.day);
   }
 
-  int _effectiveWeeklyTargetForDate(
+  int _weeklyVisibleTargetForDate(
     Map<dynamic, dynamic> habit,
     int target,
     DateTime date,
@@ -1151,7 +1151,7 @@ class AppleCalendarSyncService {
     final rawClampedTarget = parsedTarget < 1
         ? 1
         : (parsedTarget > 7 ? 7 : parsedTarget);
-    final target = _effectiveWeeklyTargetForDate(habit, rawClampedTarget, date);
+    final target = _weeklyVisibleTargetForDate(habit, rawClampedTarget, date);
     final habitId = habit['id']?.toString();
     if (habitId == null) return true;
 
