@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 import 'dart:ui';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -1280,6 +1281,8 @@ class _ChatScreenState extends State<ChatScreen>
       'nyang_domain_resistance_strategy_history';
   // 이번 턴에 주입한 원인 확인 질문 (실제로 물었을 때만 하루 1회를 소진 처리)
   String? _pendingDiagnosisQuestion;
+
+  bool get _canOpenSubscriptionGuide => kDebugMode;
 
   // Firebase Cloud Functions chatProxy (웹앱과 동일한 서버 사용)
   static final _chatProxy =
@@ -3042,10 +3045,15 @@ class _ChatScreenState extends State<ChatScreen>
                   ),
                   elevation: 0,
                 ),
-                onPressed: () {
-                  Navigator.pop(ctx);
-                  Future.delayed(Duration.zero, _showPlanGuideBottomSheet);
-                },
+                onPressed: _canOpenSubscriptionGuide
+                    ? () {
+                        Navigator.pop(ctx);
+                        Future.delayed(
+                          Duration.zero,
+                          _showPlanGuideBottomSheet,
+                        );
+                      }
+                    : null,
                 child: const Text(
                   '플랜 보기',
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
@@ -3112,6 +3120,7 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   void _showPlanGuideBottomSheet() {
+    if (!_canOpenSubscriptionGuide) return;
     showPlanGuideBottomSheet(
       context,
       onPurchaseCompleted: () async {
@@ -12232,10 +12241,15 @@ $timerOutputRule
                   width: double.infinity,
                   height: 52,
                   child: ElevatedButton(
-                    onPressed: () {
-                      Navigator.pop(sheetContext);
-                      Future.delayed(Duration.zero, _showPlanGuideBottomSheet);
-                    },
+                    onPressed: _canOpenSubscriptionGuide
+                        ? () {
+                            Navigator.pop(sheetContext);
+                            Future.delayed(
+                              Duration.zero,
+                              _showPlanGuideBottomSheet,
+                            );
+                          }
+                        : null,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: _coach.accentColor,
                       foregroundColor: Colors.white,

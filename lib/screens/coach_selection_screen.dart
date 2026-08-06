@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:ui';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -37,6 +38,9 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen>
 
   int _logoTapCount = 0;
   Timer? _logoTapTimer;
+
+  bool get _canOpenSubscriptionGuide => kDebugMode;
+
   void _goBack() {
     final destination = widget.returnCoachId == null
         ? const LandingScreen()
@@ -54,6 +58,7 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen>
   }
 
   void _showPlanGuidePlaceholder() {
+    if (!_canOpenSubscriptionGuide) return;
     showPlanGuideBottomSheet(
       context,
       onLearnMore: _showNyangCoachTeamIntro,
@@ -623,6 +628,7 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen>
     BuildContext context,
     Map<String, dynamic> coach,
   ) async {
+    if (!_canOpenSubscriptionGuide) return;
     // TODO: 실제 결제 연동 시 여기에 IAP 로직 추가
     // 결제 성공 가정 후 owned_coaches에 추가
     await UserDataService.addOwnedCoach(coach['id']);
@@ -1043,18 +1049,23 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen>
                                                         : (isFriendsCoach
                                                               ? '1년 이용 / 2,900원'
                                                               : '플랜 업그레이드'),
-                                                    onPressed: () {
-                                                      if (!planActive ||
-                                                          !isFriendsCoach) {
-                                                        Navigator.pop(context);
-                                                        _showPlanGuidePlaceholder();
-                                                      } else {
-                                                        _purchaseCoach(
-                                                          context,
-                                                          coach,
-                                                        );
-                                                      }
-                                                    },
+                                                    onPressed:
+                                                        _canOpenSubscriptionGuide
+                                                        ? () {
+                                                            if (!planActive ||
+                                                                !isFriendsCoach) {
+                                                              Navigator.pop(
+                                                                context,
+                                                              );
+                                                              _showPlanGuidePlaceholder();
+                                                            } else {
+                                                              _purchaseCoach(
+                                                                context,
+                                                                coach,
+                                                              );
+                                                            }
+                                                          }
+                                                        : null,
                                                     backgroundColor:
                                                         AppDesignTokens
                                                             .brandAccent,
@@ -1234,7 +1245,9 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen>
                       children: [
                         const SizedBox.shrink(),
                         TextButton(
-                          onPressed: _showPlanGuidePlaceholder,
+                          onPressed: _canOpenSubscriptionGuide
+                              ? _showPlanGuidePlaceholder
+                              : null,
                           style: TextButton.styleFrom(
                             foregroundColor: AppDesignTokens.brandAccent,
                             padding: const EdgeInsets.symmetric(
