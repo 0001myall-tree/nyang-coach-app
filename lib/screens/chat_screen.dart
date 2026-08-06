@@ -3911,6 +3911,46 @@ class _ChatScreenState extends State<ChatScreen>
     return true;
   }
 
+  Future<bool> _tryShowCatComebackGreeting(
+    DateTime? lastVisit,
+    DateTime now,
+  ) async {
+    if (widget.coachId != 'cat') return false;
+    if (lastVisit == null) return false;
+
+    final lastVisitDay = DateTime(
+      lastVisit.year,
+      lastVisit.month,
+      lastVisit.day,
+    );
+    final today = DateTime(now.year, now.month, now.day);
+    if (today.difference(lastVisitDay).inDays < 3) return false;
+
+    const greets = [
+      '냥! 왤케 오랜만이다냥! 보고 싶었다냥!',
+      '오랜만이다냥. 냥냥이 기다리고 있었다냥.',
+      '냥~ 그동안 어디 갔었냥. 다시 와줘서 좋다냥.',
+    ];
+    final greet = greets[Random().nextInt(greets.length)];
+    await Future.delayed(const Duration(milliseconds: 450));
+    if (!mounted) return true;
+    setState(() {
+      _messages.add(
+        ChatMessage(
+          text: greet,
+          isUser: false,
+          time: DateTime.now(),
+          kind: 'auto_greeting',
+        ),
+      );
+      _dynamicChips = _coach.chips;
+      _suppressDefaultChips = false;
+    });
+    await _saveHistory();
+    _scrollToBottom();
+    return true;
+  }
+
   Future<bool> _tryShowCatNoonStartTip(
     SharedPreferences prefs,
     DateTime now,
@@ -4014,6 +4054,13 @@ class _ChatScreenState extends State<ChatScreen>
       }
     }
 
+    if (await _tryShowCatComebackGreeting(lastVisit, now)) {
+      await prefs.setString(
+        'last_visit_${widget.coachId}',
+        now.toIso8601String(),
+      );
+      return;
+    }
     if (await _tryShowCatEveningReturnGreeting(prefs, now)) {
       await prefs.setString(
         'last_visit_${widget.coachId}',
