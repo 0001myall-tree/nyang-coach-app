@@ -4212,7 +4212,7 @@ class _TasksScreenState extends State<TasksScreen>
               _buildStatusGuideArrow(),
               _buildStatusGuideStep(Icons.pause_rounded, '진행 중'),
               _buildStatusGuideArrow(),
-              _buildStatusGuideStep(Icons.check_rounded, '완료'),
+              _buildStatusGuideStep(Icons.check_rounded, '완료', filled: true),
             ],
           ),
           const SizedBox(height: 12),
@@ -4265,7 +4265,11 @@ class _TasksScreenState extends State<TasksScreen>
     );
   }
 
-  Widget _buildStatusGuideStep(IconData icon, String label) {
+  Widget _buildStatusGuideStep(
+    IconData icon,
+    String label, {
+    bool filled = false,
+  }) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -4274,10 +4278,19 @@ class _TasksScreenState extends State<TasksScreen>
           height: 44,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: _coach.accentColor.withValues(alpha: 0.07),
-            shape: BoxShape.circle,
+            color: filled
+                ? _coach.accentColor.withValues(alpha: 0.34)
+                : Colors.white,
+            borderRadius: BorderRadius.circular(filled ? 999 : 12),
+            border: filled
+                ? null
+                : Border.all(color: _coach.accentColor.withValues(alpha: 0.16)),
           ),
-          child: Icon(icon, size: 25, color: _coach.accentColor),
+          child: Icon(
+            icon,
+            size: filled ? 27 : 25,
+            color: filled ? Colors.white : _coach.accentColor,
+          ),
         ),
         const SizedBox(height: 7),
         Text(
@@ -7120,9 +7133,11 @@ class _TasksScreenState extends State<TasksScreen>
         : isActive
         ? Icons.pause_rounded
         : Icons.play_arrow_rounded;
-    final foreground = accent.withValues(alpha: isDone ? 0.9 : 0.86);
-    final background = accent.withValues(alpha: isDone ? 0.065 : 0.055);
-    final borderColor = accent.withValues(alpha: isActive ? 0.12 : 0.07);
+    final foreground = isDone ? Colors.white : accent.withValues(alpha: 0.9);
+    final background = isDone ? accent.withValues(alpha: 0.34) : Colors.white;
+    final borderColor = isDone
+        ? Colors.transparent
+        : accent.withValues(alpha: isActive ? 0.2 : 0.16);
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 180),
@@ -7130,7 +7145,7 @@ class _TasksScreenState extends State<TasksScreen>
       height: 46,
       decoration: BoxDecoration(
         color: background,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(isDone ? 12 : 10),
         border: Border.all(color: borderColor),
       ),
       child: Stack(
