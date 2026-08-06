@@ -5247,6 +5247,14 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   Future<String> _buildCatAfternoonCheckInText(SharedPreferences prefs) async {
+    final random = Random();
+    String pick(List<String> lines) => lines[random.nextInt(lines.length)];
+    final opener = pick([
+      '벌써 오후 중간까지 왔다냥.',
+      '오후가 반쯤 지나왔다냥.',
+      '지금쯤 한 번 숨 고를 시간이다냥.',
+      '냥냥이가 오후 상태를 살짝 보러 왔다냥.',
+    ]);
     final todayTasks = _decodeMapList(prefs.getString('nyang_tasks'))
         .where((task) {
           final category = task['category']?.toString();
@@ -5283,39 +5291,94 @@ class _ChatScreenState extends State<ChatScreen>
     );
 
     if (total == 0) {
-      return '벌써 오후 중간까지 왔다냥.\n'
+      final question = pick([
+        '오늘 꼭 끝내야 하는 일이 있을까?',
+        '지금 하나만 적는다면 뭐가 제일 덜 부담스럽냥?',
+        '냥냥이랑 오늘 할 일 하나만 같이 잡아볼까?',
+      ]);
+      return '$opener\n'
           '오늘 등록된 할 일은 아직 없다냥. 지금 하나만 아주 작게 잡아봐도 충분하다냥.\n'
-          '오늘 꼭 끝내야 하는 일이 있을까?';
+          '$question';
     }
     if (remaining == 0) {
-      return '벌써 오후 중간까지 왔다냥.\n'
-          '오늘 할 일 $total개를 다 끝냈다냥. 이건 그냥 끝난 게 아니라 하루를 이미 잘 굴린 거다냥.\n'
-          '혹시 마음에 남은 일이 하나 있을까, 아니면 이제 쉬어도 되냥?';
+      final praise = pick([
+        '이건 그냥 끝난 게 아니라 하루를 이미 잘 굴린 거다냥.',
+        '성취감을 밤까지 미뤄둘 필요 없다냥. 지금 봐도 충분히 잘했다냥.',
+        '오늘 할 일을 눈으로 다 지운 거라 꽤 든든하다냥.',
+      ]);
+      final question = pick([
+        '혹시 마음에 남은 일이 하나 있을까, 아니면 이제 쉬어도 되냥?',
+        '이제 더 벌릴까, 아니면 오늘은 여기서 가볍게 닫을까?',
+        '남은 기운은 쉬는 데 써도 괜찮겠냥?',
+      ]);
+      return '$opener\n'
+          '오늘 할 일 $total개를 다 끝냈다냥. $praise\n'
+          '$question';
     }
     if (inProgress != null) {
       if (done == 0) {
-        return '벌써 오후 중간까지 왔다냥.\n'
+        final question = pick([
+          '혹시 이 일에서 유독 귀찮거나 막히는 부분 있었냥?',
+          '이걸 이어가려면 제일 작은 다음 행동이 뭐가 좋겠냥?',
+          '지금은 이 일을 조금 더 볼까, 아니면 다른 걸 먼저 가볍게 볼까?',
+        ]);
+        return '$opener\n'
             '아직 완료로 찍힌 일은 없어도, "$inProgress"는 이미 시작해뒀다냥. 시작해둔 것도 흐름이다냥.\n'
-            '혹시 이 일에서 유독 귀찮거나 막히는 부분 있었냥?';
+            '$question';
       }
-      return '벌써 오후 중간까지 왔다냥.\n'
-          '오늘 $done개는 끝냈고, "$inProgress"는 이미 시작해뒀다냥. 남은 건 $remaining개지만 흐름은 살아 있다냥.\n'
-          '혹시 지금 유독 귀찮거나 힘든 일 있었냥?';
+      final reassurance = pick([
+        '남은 건 $remaining개지만 흐름은 살아 있다냥.',
+        '다 끝난 건 아니어도 이미 하루가 움직이고 있다냥.',
+        '지금은 시작해둔 게 있어서 다시 붙기 좋은 상태다냥.',
+      ]);
+      final question = pick([
+        '혹시 지금 유독 귀찮거나 힘든 일 있었냥?',
+        '이 흐름에서 다음으로 아주 작게 볼 건 뭐냥?',
+        '지금 "$inProgress"를 마저 볼까, 아니면 남은 것 중 하나를 같이 고를까?',
+      ]);
+      return '$opener\n'
+          '오늘 $done개는 끝냈고, "$inProgress"는 이미 시작해뒀다냥. $reassurance\n'
+          '$question';
     }
     if (done == 0) {
       final nudge = core != null ? '"$core"부터 봐도 좋고, ' : '';
-      return '벌써 오후 중간까지 왔다냥.\n'
+      final question = pick([
+        '오늘 꼭 끝내야 하는 일이 있을까?',
+        '하기 유독 귀찮은 일이 하나 있냥?',
+        '지금 하나만 잡는다면 뭐부터 보는 게 좋겠냥?',
+      ]);
+      return '$opener\n'
           '아직 완료로 찍힌 일은 없어도 괜찮다냥. $nudge지금 하나만 아주 작게 잡아보면 된다냥.\n'
-          '오늘 꼭 끝내야 하는 일이 있을까?';
+          '$question';
     }
     if (core != null) {
-      return '벌써 오후 중간까지 왔다냥.\n'
-          '오늘 $done개 끝냈고 $remaining개 남았다냥. 이미 해낸 게 있으니까 남은 것도 다 한꺼번에 볼 필요 없다냥.\n'
-          '지금은 "$core"가 제일 걸리는 일일까?';
+      final reassurance = pick([
+        '이미 해낸 게 있으니까 남은 것도 다 한꺼번에 볼 필요 없다냥.',
+        '지금까지 해낸 걸 먼저 봐도 된다냥.',
+        '하루가 0에서 멈춘 게 아니라 이미 움직였다냥.',
+      ]);
+      final question = pick([
+        '지금은 "$core"가 제일 걸리는 일일까?',
+        '"$core"를 아주 작게 쪼개보면 이어가기 괜찮을까?',
+        '혹시 "$core"가 오늘 꼭 끝내야 하는 일이냥?',
+      ]);
+      return '$opener\n'
+          '오늘 $done개 끝냈고 $remaining개 남았다냥. $reassurance\n'
+          '$question';
     }
-    return '벌써 오후 중간까지 왔다냥.\n'
-        '오늘 $done개 끝냈고 $remaining개 남았다냥. 지금까지 해낸 걸 먼저 봐도 된다냥.\n'
-        '남은 것 중 유독 귀찮거나 힘든 일 있었냥?';
+    final reassurance = pick([
+      '지금까지 해낸 걸 먼저 봐도 된다냥.',
+      '남은 게 보여도 오늘 해낸 것도 같이 봐야 한다냥.',
+      '아직 오후니까 하나만 다시 잡아도 충분하다냥.',
+    ]);
+    final question = pick([
+      '남은 것 중 유독 귀찮거나 힘든 일 있었냥?',
+      '오늘 꼭 끝내야 하는 일이 하나 있을까?',
+      '남은 것 중 하나만 같이 골라볼까?',
+    ]);
+    return '$opener\n'
+        '오늘 $done개 끝냈고 $remaining개 남았다냥. $reassurance\n'
+        '$question';
   }
 
   int _conversationAvoidanceCountForTask(
