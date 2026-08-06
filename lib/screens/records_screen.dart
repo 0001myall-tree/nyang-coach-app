@@ -2063,12 +2063,14 @@ ${feedbackType == 0
             'assets/icons/fa-clock-regular.svg',
             '성공 시작 시간',
             bestTimeStr,
+            iconColor: const Color(0xFF63C7B2),
           ),
           const SizedBox(height: 6),
           _patternRow(
             'assets/icons/calendar-week.svg',
             '주로 완료한 요일',
             bestDayStr,
+            iconColor: const Color(0xFF63C7B2),
           ),
           if (bestPriorTask != null) ...[
             const SizedBox(height: 6),
@@ -2076,6 +2078,7 @@ ${feedbackType == 0
               'assets/icons/fa-arrow-rotate-left-solid.svg',
               '습관 전에 자주 한 일',
               bestPriorTask!,
+              iconColor: const Color(0xFF9CA3AF),
             ),
           ],
           const SizedBox(height: 12),
@@ -2093,7 +2096,7 @@ ${feedbackType == 0
                   width: 14,
                   height: 14,
                   colorFilter: ColorFilter.mode(
-                    _recordCoach.accentColor.withValues(alpha: 0.72),
+                    const Color(0xFFF2B84B),
                     BlendMode.srcIn,
                   ),
                 ),
@@ -2117,7 +2120,12 @@ ${feedbackType == 0
     );
   }
 
-  Widget _patternRow(String iconPath, String label, String value) {
+  Widget _patternRow(
+    String iconPath,
+    String label,
+    String value, {
+    required Color iconColor,
+  }) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -2130,10 +2138,7 @@ ${feedbackType == 0
               iconPath,
               width: 12,
               height: 12,
-              colorFilter: ColorFilter.mode(
-                _recordCoach.accentColor.withValues(alpha: 0.62),
-                BlendMode.srcIn,
-              ),
+              colorFilter: ColorFilter.mode(iconColor, BlendMode.srcIn),
             ),
           ),
         ),
