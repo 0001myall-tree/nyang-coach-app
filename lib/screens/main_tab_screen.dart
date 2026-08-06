@@ -2336,6 +2336,17 @@ class _MainTabScreenState extends State<MainTabScreen>
                               '혼자 고민하지 말고, 코치와 의논하세요.\n'
                               '특히 마스터 코치(비서 코치)들은 사용자의 장기 목표와 관련된 할 일과 미룬 항목 등을 알아서 파악하면서 더 똑똑하게 대답해줍니다.',
                         ),
+                        const SizedBox(height: 18),
+                        _buildPlannerHelpSection(
+                          iconPath: 'assets/icons/planner-clipboard-check.svg',
+                          title: '계획만 세우고 떠나지 마세요',
+                          body:
+                              '냥냥코치는 아침에 계획을 적고, 밤에 완료만 체크하는 플래너가 아닙니다.\n'
+                              '할 일을 시작할 때는 시작, 끝냈을 때는 마치기를 눌러보세요. 중간중간 할 일을 해낼 때마다 냥냥코치의 칭찬도 받아보세요.\n\n'
+                              '작은 완료를 그때그때 확인하면 성취감이 하루 끝까지 미뤄지지 않습니다. 지금까지 해낸 일을 눈으로 확인하면서, 남은 일도 조금 더 가볍게 이어갈 수 있습니다.\n\n'
+                              '계획을 세우는 순간뿐 아니라, 실행하는 하루를 냥냥코치와 함께해 보세요.',
+                          highlightTerms: const ['시작', '마치기', '작은 완료'],
+                        ),
                       ],
                     ),
                   ),

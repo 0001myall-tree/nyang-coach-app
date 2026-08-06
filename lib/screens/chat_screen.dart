@@ -1253,6 +1253,7 @@ class _ChatScreenState extends State<ChatScreen>
   String? _repeatedlyDeferredTaskName;
   String? _thoughtOverloadChipTaskName;
   int _attendanceStreak = 0;
+  int _catTodayEntryCount = 1;
 
   // 음성 인식 관련
   final SpeechToText _speechToText = SpeechToText();
@@ -1466,6 +1467,9 @@ class _ChatScreenState extends State<ChatScreen>
     await _loadTaskProgress();
     final prefs = await SharedPreferences.getInstance();
     final todayStr = _getTodayStrWithReset(prefs);
+    if (_coach.id == 'cat') {
+      await _recordCatChatEntry(prefs, todayStr);
+    }
     final plannerAwayDays = _plannerAwayDays(prefs, todayStr);
     if (prefs.getString('nyang_vacation') == null) {
       await RecoveryInsightService.startMasterLowActivationRestartIfEligible(
@@ -1479,6 +1483,24 @@ class _ChatScreenState extends State<ChatScreen>
     await _restoreActiveFocusTimer();
     await _checkBedtimeMoveOffer();
     _initSpeech();
+  }
+
+  Future<void> _recordCatChatEntry(
+    SharedPreferences prefs,
+    String todayStr,
+  ) async {
+    const dateKey = 'nyang_cat_chat_entry_date';
+    const countKey = 'nyang_cat_chat_entry_count';
+    final savedDate = prefs.getString(dateKey);
+    final nextCount = savedDate == todayStr ? prefs.getInt(countKey) ?? 0 : 0;
+    final count = nextCount + 1;
+    await prefs.setString(dateKey, todayStr);
+    await prefs.setInt(countKey, count);
+    if (!mounted) {
+      _catTodayEntryCount = count;
+      return;
+    }
+    setState(() => _catTodayEntryCount = count);
   }
 
   /// 마지막으로 '활동한 날'로부터 며칠 지났는지 계산한다.
@@ -3836,6 +3858,55 @@ class _ChatScreenState extends State<ChatScreen>
     });
   }
 
+  static const _catEveningReturnGreetingDateKey =
+      'nyang_cat_evening_return_greeting_date';
+  static const _catEveningReturnGreetingCooldown = Duration(days: 7);
+
+  Future<bool> _tryShowCatEveningReturnGreeting(
+    SharedPreferences prefs,
+    DateTime now,
+  ) async {
+    if (widget.coachId != 'cat') return false;
+    if (!_userData.isPlanActive) return false;
+    if (_catTodayEntryCount != 1) return false;
+    if (now.hour < 18) return false;
+    if (widget.handoffFromCoachId == 'nyang_halbae' ||
+        widget.handoffFromCoachId == 'sec_female') {
+      return false;
+    }
+
+    final lastShown = DateTime.tryParse(
+      prefs.getString(_catEveningReturnGreetingDateKey) ?? '',
+    );
+    if (lastShown != null &&
+        now.difference(lastShown) < _catEveningReturnGreetingCooldown) {
+      return false;
+    }
+
+    await prefs.setString(_catEveningReturnGreetingDateKey, _dateKey(now));
+    await Future.delayed(const Duration(milliseconds: 450));
+    if (!mounted) return true;
+    setState(() {
+      _messages.add(
+        ChatMessage(
+          text:
+              '이제 왔냥? 냥냥이 기다리고 있었다냥.\n'
+              '냥냥코치는 계획만 적어두는 플래너가 아니다냥.\n'
+              '할 일을 시작할 때랑 마쳤을 때도 알려줘.\n'
+              '중간중간 하나씩 해낸 걸 확인하고 냥냥이한테 칭찬받으면, 남은 일도 조금 더 힘내서 이어갈 수 있다냥.',
+          isUser: false,
+          time: DateTime.now(),
+          kind: 'auto_greeting',
+        ),
+      );
+      _dynamicChips = _coach.chips;
+      _suppressDefaultChips = false;
+    });
+    await _saveHistory();
+    _scrollToBottom();
+    return true;
+  }
+
   Future<void> _loadHistoryAndGreet() async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString('nyang_chat_history_${widget.coachId}');
@@ -3854,6 +3925,14 @@ class _ChatScreenState extends State<ChatScreen>
         });
         _scrollToBottom();
       }
+    }
+
+    if (await _tryShowCatEveningReturnGreeting(prefs, now)) {
+      await prefs.setString(
+        'last_visit_${widget.coachId}',
+        now.toIso8601String(),
+      );
+      return;
     }
 
     // 냥할배/여비서의 정서적 동행 연결로 소환된 경우에만 냥냥이가 먼저 인사한다.
@@ -4662,6 +4741,17 @@ class _ChatScreenState extends State<ChatScreen>
     return UserTitleService.applyForCoach(reply, _coach.id);
   }
 
+  Future<String?> _tryBuildCatLocalReply(String input) async {
+    if (_coach.id != 'cat') return null;
+    if (_timerConfirmMinutes != null) return null;
+
+    final raw = input.trim();
+    if (raw == '오늘 어디까지 왔지?') {
+      return _buildLocalMasterStatusReply();
+    }
+    return null;
+  }
+
   bool _isSimpleMasterStatusRequest(String normalized, bool isQuestion) {
     final asksStatus =
         normalized.contains('오늘상태') ||
@@ -5083,6 +5173,18 @@ class _ChatScreenState extends State<ChatScreen>
         return '오늘 할 일 $total개 중 $done개 완료, $remaining개 남았다냥. 핵심은 "$core" 쪽을 먼저 보면 된다냥.';
       }
       return '오늘 할 일 $total개 중 $done개 완료, $remaining개 남았다냥. 하나만 고르면 흐름은 다시 붙는다냥.';
+    }
+
+    if (_coach.id == 'cat') {
+      if (total == 0) return '오늘 등록된 할 일은 아직 없다냥. 하나만 가볍게 잡아도 충분하다냥.';
+      if (remaining == 0) return '오늘 할 일 $total개 다 끝났다냥. 더 벌리지 말고 이제 쉬어도 된다냥.';
+      if (inProgress != null) {
+        return '오늘 $done개는 끝냈고, "$inProgress"는 이미 시작해뒀다냥. 남은 건 $remaining개지만 지금은 흐름이 있는 상태다냥.';
+      }
+      if (core != null) {
+        return '오늘 $done개 끝냈고 $remaining개 남았다냥. 아직 시동 걸 일이 필요하면 "$core"부터 보면 좋겠다냥.';
+      }
+      return '오늘 $done개 끝냈고 $remaining개 남았다냥. 다 보려고 하지 말고 하나만 잡으면 된다냥.';
     }
 
     if (total == 0) return '오늘 등록된 할 일은 아직 없어요. 먼저 하나만 가볍게 잡아도 충분합니다.';
@@ -8432,7 +8534,9 @@ class _ChatScreenState extends State<ChatScreen>
         (apiInputOverride?.startsWith('미래를 위한 오늘 - ') ?? false);
     final isVisionNewActionFlow = apiInputOverride == '미래를 위한 오늘 - 새 행동 추천받기';
     final isNextActionFlow =
-        trimmed == '지금 뭐하지?' || apiInputOverride == '지금 뭐하지?';
+        trimmed == '지금 뭐하지?' ||
+        trimmed == '남은 것 중 뭐하지?' ||
+        apiInputOverride == '지금 뭐하지?';
     if (!_coach.isMaster && _isListening) {
       await _stopListening();
       if (!mounted) return;
@@ -8879,6 +8983,9 @@ class _ChatScreenState extends State<ChatScreen>
     }
 
     var apiInput = apiInputOverride ?? trimmed;
+    if (widget.coachId == 'cat' && trimmed == '남은 것 중 뭐하지?') {
+      apiInput = '지금 뭐하지?';
+    }
     var skipBroWorkoutLocalReply = false;
 
     if (widget.coachId == 'bro') {
@@ -8966,6 +9073,29 @@ class _ChatScreenState extends State<ChatScreen>
           ),
         );
         _dynamicChips = _coach.chips;
+      });
+      _scrollToBottom();
+      await _saveHistory();
+      await AnalyticsService.logConversationMessage(
+        coachId: widget.coachId,
+        usedApi: false,
+      );
+      return;
+    }
+
+    final catLocalReply = await _tryBuildCatLocalReply(trimmed);
+    if (catLocalReply != null) {
+      setState(() {
+        _messages.add(
+          ChatMessage(text: trimmed, isUser: true, time: DateTime.now()),
+        );
+        _messages.add(
+          ChatMessage(text: catLocalReply, isUser: false, time: DateTime.now()),
+        );
+        _suggestedTasks = [];
+        _dynamicChips = _coach.chips;
+        _suppressDefaultChips = false;
+        _coachSwitchTarget = null;
       });
       _scrollToBottom();
       await _saveHistory();
@@ -14551,6 +14681,11 @@ $timerOutputRule
             .toList(growable: false);
       }
     }
+    if (_coach.id == 'cat' && chips.contains('오늘 뭐부터 할까')) {
+      return chips
+          .map((chip) => chip == '오늘 뭐부터 할까' ? _catPlanningChipLabel : chip)
+          .toList(growable: false);
+    }
     if (_coach.id != 'bro') return chips;
     if (!chips.contains('지금 할 운동')) return chips;
     final result = chips
@@ -14567,6 +14702,14 @@ $timerOutputRule
           : _broQuickWorkoutChipLabel,
     );
     return result;
+  }
+
+  String get _catPlanningChipLabel {
+    if (_catTodayEntryCount < 3) return '오늘 뭐부터 할까';
+    final hour = DateTime.now().hour;
+    if (hour >= 18) return '남은 것 중 뭐하지?';
+    if (hour >= 15) return '오늘 어디까지 왔지?';
+    return '오늘 뭐부터 할까';
   }
 
   String _sendTextForChip(String chip, String fallback) {
