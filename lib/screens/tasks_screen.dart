@@ -4161,8 +4161,8 @@ class _TasksScreenState extends State<TasksScreen>
 
   Widget _buildTaskStatusGuideCard() {
     return Container(
-      margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-      padding: const EdgeInsets.fromLTRB(14, 14, 12, 12),
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+      padding: const EdgeInsets.fromLTRB(12, 12, 10, 10),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
@@ -4175,8 +4175,8 @@ class _TasksScreenState extends State<TasksScreen>
             children: [
               SvgPicture.asset(
                 'assets/icons/planner-lightbulb-regular.svg',
-                width: 18,
-                height: 18,
+                width: 16,
+                height: 16,
                 colorFilter: ColorFilter.mode(
                   _coach.accentColor,
                   BlendMode.srcIn,
@@ -4187,10 +4187,10 @@ class _TasksScreenState extends State<TasksScreen>
                 child: Text(
                   '상태 안내',
                   style: GoogleFonts.notoSansKr(
-                    fontSize: 14,
+                    fontSize: 13,
                     height: 1.3,
-                    fontWeight: FontWeight.w800,
-                    color: const Color(0xFF3D3A4E),
+                    fontWeight: FontWeight.w600,
+                    color: const Color(0xFF8F8C9E),
                   ),
                 ),
               ),
@@ -4201,14 +4201,14 @@ class _TasksScreenState extends State<TasksScreen>
                   padding: EdgeInsets.all(4),
                   child: Icon(
                     Icons.close_rounded,
-                    size: 22,
+                    size: 20,
                     color: Color(0xFFA4A2B2),
                   ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 10),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -4219,7 +4219,7 @@ class _TasksScreenState extends State<TasksScreen>
               _buildStatusGuideStep(Icons.check_rounded, '완료', filled: true),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
           GestureDetector(
             onTap: () =>
                 _setTaskStatusGuideNeverShow(!_taskStatusGuideNeverShow),
@@ -4229,8 +4229,8 @@ class _TasksScreenState extends State<TasksScreen>
               children: [
                 AnimatedContainer(
                   duration: const Duration(milliseconds: 150),
-                  width: 18,
-                  height: 18,
+                  width: 16,
+                  height: 16,
                   decoration: BoxDecoration(
                     color: _taskStatusGuideNeverShow
                         ? _coach.accentColor
@@ -4246,7 +4246,7 @@ class _TasksScreenState extends State<TasksScreen>
                   child: _taskStatusGuideNeverShow
                       ? const Icon(
                           Icons.check_rounded,
-                          size: 14,
+                          size: 12,
                           color: Colors.white,
                         )
                       : null,
@@ -4255,7 +4255,7 @@ class _TasksScreenState extends State<TasksScreen>
                 Text(
                   '다시 보지 않기',
                   style: GoogleFonts.notoSansKr(
-                    fontSize: 12,
+                    fontSize: 11,
                     height: 1.3,
                     fontWeight: FontWeight.w600,
                     color: const Color(0xFF8F8C9E),
@@ -4278,8 +4278,8 @@ class _TasksScreenState extends State<TasksScreen>
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
-          width: 44,
-          height: 44,
+          width: 34,
+          height: 34,
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: filled
@@ -4292,15 +4292,15 @@ class _TasksScreenState extends State<TasksScreen>
           ),
           child: Icon(
             icon,
-            size: filled ? 27 : 25,
+            size: filled ? 22 : 20,
             color: filled ? Colors.white : _coach.accentColor,
           ),
         ),
-        const SizedBox(height: 7),
+        const SizedBox(height: 5),
         Text(
           label,
           style: GoogleFonts.notoSansKr(
-            fontSize: 12,
+            fontSize: 11,
             height: 1.2,
             fontWeight: FontWeight.w600,
             color: const Color(0xFFA0A0B0),
@@ -4312,10 +4312,10 @@ class _TasksScreenState extends State<TasksScreen>
 
   Widget _buildStatusGuideArrow() {
     return const Padding(
-      padding: EdgeInsets.fromLTRB(20, 0, 20, 21),
+      padding: EdgeInsets.fromLTRB(16, 0, 16, 17),
       child: Icon(
         Icons.arrow_forward_rounded,
-        size: 19,
+        size: 16,
         color: Color(0xFFA4A2B2),
       ),
     );

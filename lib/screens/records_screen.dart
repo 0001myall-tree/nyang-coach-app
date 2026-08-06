@@ -2059,12 +2059,24 @@ ${feedbackType == 0
             ],
           ),
           const SizedBox(height: 12),
-          _patternRow('🕒', '성공 시작 시간', bestTimeStr),
+          _patternRow(
+            'assets/icons/fa-clock-regular.svg',
+            '성공 시작 시간',
+            bestTimeStr,
+          ),
           const SizedBox(height: 6),
-          _patternRow('📅', '주로 완료한 요일', bestDayStr),
+          _patternRow(
+            'assets/icons/calendar-week.svg',
+            '주로 완료한 요일',
+            bestDayStr,
+          ),
           if (bestPriorTask != null) ...[
             const SizedBox(height: 6),
-            _patternRow('🔄', '습관 전에 자주 한 일', bestPriorTask!),
+            _patternRow(
+              'assets/icons/fa-arrow-rotate-left-solid.svg',
+              '습관 전에 자주 한 일',
+              bestPriorTask!,
+            ),
           ],
           const SizedBox(height: 12),
           Container(
@@ -2076,7 +2088,15 @@ ${feedbackType == 0
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('💡', style: TextStyle(fontSize: 14)),
+                SvgPicture.asset(
+                  'assets/icons/fa-lightbulb-solid.svg',
+                  width: 14,
+                  height: 14,
+                  colorFilter: ColorFilter.mode(
+                    _recordCoach.accentColor.withValues(alpha: 0.72),
+                    BlendMode.srcIn,
+                  ),
+                ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -2097,11 +2117,26 @@ ${feedbackType == 0
     );
   }
 
-  Widget _patternRow(String emoji, String label, String value) {
+  Widget _patternRow(String iconPath, String label, String value) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(emoji, style: const TextStyle(fontSize: 12)),
+        SizedBox(
+          width: 14,
+          height: 18,
+          child: Align(
+            alignment: Alignment.center,
+            child: SvgPicture.asset(
+              iconPath,
+              width: 12,
+              height: 12,
+              colorFilter: ColorFilter.mode(
+                _recordCoach.accentColor.withValues(alpha: 0.62),
+                BlendMode.srcIn,
+              ),
+            ),
+          ),
+        ),
         const SizedBox(width: 6),
         Text(
           label,
