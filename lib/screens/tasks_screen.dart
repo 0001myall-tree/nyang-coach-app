@@ -4169,10 +4169,14 @@ class _TasksScreenState extends State<TasksScreen>
         children: [
           Row(
             children: [
-              Icon(
-                Icons.lightbulb_outline_rounded,
-                size: 20,
-                color: _coach.accentColor,
+              SvgPicture.asset(
+                'assets/icons/planner-lightbulb-regular.svg',
+                width: 18,
+                height: 18,
+                colorFilter: ColorFilter.mode(
+                  _coach.accentColor,
+                  BlendMode.srcIn,
+                ),
               ),
               const SizedBox(width: 10),
               Expanded(
