@@ -655,16 +655,16 @@ class _TasksScreenState extends State<TasksScreen>
   TimeOfDay? _todayEndTime;
   String? _todayDuration;
   static const _taskCheckboxHintSeenKey = 'nyang_hint_seen_task_checkbox';
-  static const _inProgressToastSeenKey = 'nyang_hint_seen_in_progress_toast';
+  static const _taskStatusGuideNeverShowKey =
+      'nyang_task_status_guide_never_show';
   static const _lightenPlanCardDismissedDateKey =
       'nyang_lighten_plan_card_dismissed_date';
   bool _taskCheckboxHintSeen = false;
-  bool _inProgressToastSeen = false;
+  bool _taskStatusGuideNeverShow = false;
+  bool _taskStatusGuideDismissed = false;
   String? _lightenPlanCardDismissedDate;
   bool _taskCheckboxHintPulseStarted = false;
-  bool _inProgressHintPopupVisible = false;
   late final AnimationController _taskCheckboxHintPulseCtrl;
-  Timer? _inProgressHintPopupTimer;
 
   // 오늘 탭 입력
   final _todayInputCtrl = TextEditingController();
@@ -719,7 +719,6 @@ class _TasksScreenState extends State<TasksScreen>
   void dispose() {
     widget.controller?._detach();
     _visionHighlightTimer?.cancel();
-    _inProgressHintPopupTimer?.cancel();
     _taskCheckboxHintPulseCtrl.dispose();
     _tabCtrl.removeListener(_handleTaskTabChanged);
     _tabCtrl.dispose();
@@ -746,7 +745,8 @@ class _TasksScreenState extends State<TasksScreen>
     final rawVacation = prefs.getString('nyang_vacation');
     final taskCheckboxHintSeen =
         prefs.getBool(_taskCheckboxHintSeenKey) ?? false;
-    final inProgressToastSeen = prefs.getBool(_inProgressToastSeenKey) ?? false;
+    final taskStatusGuideNeverShow =
+        prefs.getBool(_taskStatusGuideNeverShowKey) ?? false;
     final lightenPlanCardDismissedDate = prefs.getString(
       _lightenPlanCardDismissedDateKey,
     );
@@ -761,7 +761,7 @@ class _TasksScreenState extends State<TasksScreen>
     setState(() {
       _isCoreReminderEnabledGlobally = coreEnabled;
       _taskCheckboxHintSeen = taskCheckboxHintSeen;
-      _inProgressToastSeen = inProgressToastSeen;
+      _taskStatusGuideNeverShow = taskStatusGuideNeverShow;
       _lightenPlanCardDismissedDate = lightenPlanCardDismissedDate;
       _todayReminderEnabled = false;
       if (rawTasks != null) {
@@ -3007,7 +3007,6 @@ class _TasksScreenState extends State<TasksScreen>
             : null;
       });
       _saveTasks();
-      _showInProgressHintToastOnce();
     } else {
       HabitItem? habitInfo;
       double habitCompletionRatio = 1.0;
@@ -4046,76 +4045,7 @@ class _TasksScreenState extends State<TasksScreen>
               ),
             ),
           ),
-          Positioned(
-            left: 20,
-            right: 20,
-            top: 86,
-            child: IgnorePointer(
-              child: AnimatedOpacity(
-                opacity: _inProgressHintPopupVisible ? 1 : 0,
-                duration: const Duration(milliseconds: 180),
-                curve: Curves.easeOut,
-                child: AnimatedSlide(
-                  offset: _inProgressHintPopupVisible
-                      ? Offset.zero
-                      : const Offset(0, -0.08),
-                  duration: const Duration(milliseconds: 180),
-                  curve: Curves.easeOut,
-                  child: _buildInProgressHintPopup(),
-                ),
-              ),
-            ),
-          ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildInProgressHintPopup() {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: _coach.accentColor.withValues(alpha: 0.22)),
-        boxShadow: [
-          BoxShadow(
-            color: _coach.accentColor.withValues(alpha: 0.18),
-            blurRadius: 24,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
-        child: Row(
-          children: [
-            Container(
-              width: 30,
-              height: 30,
-              decoration: BoxDecoration(
-                color: _coach.accentColor.withValues(alpha: 0.11),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                Icons.timelapse_rounded,
-                size: 18,
-                color: _coach.accentColor,
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                '시작했어요. 다 했으면 Ⅱ 마치기를 눌러 완료해요.',
-                style: GoogleFonts.notoSansKr(
-                  fontSize: 12.8,
-                  height: 1.35,
-                  fontWeight: FontWeight.w800,
-                  color: const Color(0xFF3D3A4E),
-                ),
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -4217,6 +4147,172 @@ class _TasksScreenState extends State<TasksScreen>
         ],
       ),
     );
+  }
+
+  bool _shouldShowTaskStatusGuide() {
+    return _isViewingActualToday &&
+        !_taskStatusGuideNeverShow &&
+        !_taskStatusGuideDismissed;
+  }
+
+  Widget _buildTaskStatusGuideCard() {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      padding: const EdgeInsets.fromLTRB(14, 14, 12, 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: _coach.accentColor.withValues(alpha: 0.16)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.lightbulb_outline_rounded,
+                size: 20,
+                color: _coach.accentColor,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  '상태 안내',
+                  style: GoogleFonts.notoSansKr(
+                    fontSize: 14,
+                    height: 1.3,
+                    fontWeight: FontWeight.w800,
+                    color: const Color(0xFF3D3A4E),
+                  ),
+                ),
+              ),
+              GestureDetector(
+                onTap: _dismissTaskStatusGuide,
+                behavior: HitTestBehavior.opaque,
+                child: const Padding(
+                  padding: EdgeInsets.all(4),
+                  child: Icon(
+                    Icons.close_rounded,
+                    size: 22,
+                    color: Color(0xFFA4A2B2),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              _buildStatusGuideStep(Icons.play_arrow_rounded, '시작'),
+              _buildStatusGuideArrow(),
+              _buildStatusGuideStep(Icons.pause_rounded, '진행 중'),
+              _buildStatusGuideArrow(),
+              _buildStatusGuideStep(Icons.check_rounded, '완료'),
+            ],
+          ),
+          const SizedBox(height: 12),
+          GestureDetector(
+            onTap: () =>
+                _setTaskStatusGuideNeverShow(!_taskStatusGuideNeverShow),
+            behavior: HitTestBehavior.opaque,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 150),
+                  width: 18,
+                  height: 18,
+                  decoration: BoxDecoration(
+                    color: _taskStatusGuideNeverShow
+                        ? _coach.accentColor
+                        : Colors.white,
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(
+                      color: _taskStatusGuideNeverShow
+                          ? _coach.accentColor
+                          : const Color(0xFFA4A2B2),
+                      width: 1.4,
+                    ),
+                  ),
+                  child: _taskStatusGuideNeverShow
+                      ? const Icon(
+                          Icons.check_rounded,
+                          size: 14,
+                          color: Colors.white,
+                        )
+                      : null,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  '다시 보지 않기',
+                  style: GoogleFonts.notoSansKr(
+                    fontSize: 12,
+                    height: 1.3,
+                    fontWeight: FontWeight.w600,
+                    color: const Color(0xFF8F8C9E),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatusGuideStep(IconData icon, String label) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 44,
+          height: 44,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: _coach.accentColor.withValues(alpha: 0.07),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(icon, size: 25, color: _coach.accentColor),
+        ),
+        const SizedBox(height: 7),
+        Text(
+          label,
+          style: GoogleFonts.notoSansKr(
+            fontSize: 12,
+            height: 1.2,
+            fontWeight: FontWeight.w600,
+            color: const Color(0xFFA0A0B0),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStatusGuideArrow() {
+    return const Padding(
+      padding: EdgeInsets.fromLTRB(20, 0, 20, 21),
+      child: Icon(
+        Icons.arrow_forward_rounded,
+        size: 19,
+        color: Color(0xFFA4A2B2),
+      ),
+    );
+  }
+
+  Future<void> _dismissTaskStatusGuide() async {
+    if (!mounted) return;
+    setState(() => _taskStatusGuideDismissed = true);
+  }
+
+  Future<void> _setTaskStatusGuideNeverShow(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_taskStatusGuideNeverShowKey, value);
+    if (!mounted) return;
+    setState(() {
+      _taskStatusGuideNeverShow = value;
+      if (value) _taskStatusGuideDismissed = true;
+    });
   }
 
   bool _isCoreTaskDone(TaskItem coreTask) {
@@ -4822,6 +4918,7 @@ class _TasksScreenState extends State<TasksScreen>
           else ...[
             // 핵심 할 일 (Core Tasks)
             if (_isViewingActualToday) _buildCoreSection(),
+            if (_shouldShowTaskStatusGuide()) _buildTaskStatusGuideCard(),
             // 태스크 목록
             Expanded(child: _buildTaskList()),
             // 입력 영역
@@ -5855,22 +5952,6 @@ class _TasksScreenState extends State<TasksScreen>
     if (!mounted) return;
     setState(() {
       _taskCheckboxHintSeen = true;
-    });
-  }
-
-  Future<void> _showInProgressHintToastOnce() async {
-    if (_inProgressToastSeen || !mounted) return;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_inProgressToastSeenKey, true);
-    if (!mounted) return;
-    _inProgressHintPopupTimer?.cancel();
-    setState(() {
-      _inProgressToastSeen = true;
-      _inProgressHintPopupVisible = true;
-    });
-    _inProgressHintPopupTimer = Timer(const Duration(seconds: 3), () {
-      if (!mounted) return;
-      setState(() => _inProgressHintPopupVisible = false);
     });
   }
 
@@ -7035,50 +7116,29 @@ class _TasksScreenState extends State<TasksScreen>
         : isActive
         ? Icons.pause_rounded
         : Icons.play_arrow_rounded;
-    final label = isDone
-        ? '완료'
-        : isActive
-        ? '마치기'
-        : '시작';
-    final foreground = isDone || isActive ? Colors.white : accent;
-    final background = isDone || isActive
-        ? accent
-        : accent.withValues(alpha: 0.06);
-    final borderColor = isDone || isActive
-        ? accent
-        : accent.withValues(alpha: 0.42);
+    final foreground = accent.withValues(alpha: isDone ? 0.9 : 0.86);
+    final background = accent.withValues(alpha: isDone ? 0.065 : 0.055);
+    final borderColor = accent.withValues(alpha: isActive ? 0.12 : 0.07);
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 180),
-      width: 76,
-      height: 32,
-      padding: const EdgeInsets.symmetric(horizontal: 8),
+      width: 46,
+      height: 46,
       decoration: BoxDecoration(
         color: background,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: borderColor, width: 1.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: borderColor),
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        mainAxisSize: MainAxisSize.min,
+      child: Stack(
+        alignment: Alignment.center,
         children: [
-          Icon(icon, size: 18, color: foreground),
-          const SizedBox(width: 3),
-          Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.clip,
-            style: GoogleFonts.notoSansKr(
-              fontSize: 13,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 0,
-              color: foreground,
+          Icon(icon, size: 27, color: foreground),
+          if (showTapHint && !isDone && !isActive)
+            Positioned(
+              right: 7,
+              top: 7,
+              child: _buildCheckboxTapHintDot(size: 5),
             ),
-          ),
-          if (showTapHint && !isDone && !isActive) ...[
-            const SizedBox(width: 3),
-            _buildCheckboxTapHintDot(size: 5),
-          ],
         ],
       ),
     );
@@ -7146,8 +7206,8 @@ class _TasksScreenState extends State<TasksScreen>
                   _toggleTask(t.id);
                 },
                 child: SizedBox(
-                  width: 90,
-                  height: 52,
+                  width: 72,
+                  height: 58,
                   child: Center(
                     child: _buildTaskStatusButton(
                       task: t,
