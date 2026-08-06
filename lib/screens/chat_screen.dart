@@ -5250,9 +5250,9 @@ class _ChatScreenState extends State<ChatScreen>
     final random = Random();
     String pick(List<String> lines) => lines[random.nextInt(lines.length)];
     final opener = pick([
-      '벌써 오후 중간까지 왔다냥.',
+      '오후 중간까지 왔다냥.',
       '오후가 반쯤 지나왔다냥.',
-      '지금쯤 한 번 숨 고를 시간이다냥.',
+      '냥냥이 보러 왔구냥. 얼마나 했는지 어디 볼까?',
       '냥냥이가 오후 상태를 살짝 보러 왔다냥.',
     ]);
     final todayTasks = _decodeMapList(prefs.getString('nyang_tasks'))
