@@ -4105,7 +4105,7 @@ class _TasksScreenState extends State<TasksScreen>
             const SizedBox(width: 10),
             Expanded(
               child: Text(
-                '시작했어요. 다 했으면 마치기를 눌러 완료해요.',
+                '시작했어요. 다 했으면 Ⅱ 마치기를 눌러 완료해요.',
                 style: GoogleFonts.notoSansKr(
                   fontSize: 12.8,
                   height: 1.35,
@@ -5797,7 +5797,7 @@ class _TasksScreenState extends State<TasksScreen>
                 border: Border.all(color: const Color(0xFFE4DAFF)),
               ),
               child: Text(
-                '시작을 누르면 마치기로 바뀌어요. 다 했을 때 한 번 더 눌러 완료해요.',
+                '▶ 시작을 누르면 Ⅱ 마치기로 바뀌어요. 다 했을 때 한 번 더 눌러 완료해요.',
                 style: GoogleFonts.notoSansKr(
                   fontSize: 12.5,
                   height: 1.35,
