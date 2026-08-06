@@ -1276,6 +1276,8 @@ class _ChatScreenState extends State<ChatScreen>
   bool _awaitingSelfSelectedTinyAction = false;
   // 무기력/저에너지 상태에서 몸 시동 행동 완료 여부를 기다리는 상태
   bool _awaitingLowEnergyStarterAction = false;
+  static const _domainResistanceStrategyHistoryKey =
+      'nyang_domain_resistance_strategy_history';
   // 이번 턴에 주입한 원인 확인 질문 (실제로 물었을 때만 하루 1회를 소진 처리)
   String? _pendingDiagnosisQuestion;
 
@@ -1869,6 +1871,208 @@ class _ChatScreenState extends State<ChatScreen>
     ];
     return writingSignals.any(normalized.contains) &&
         concernSignals.any(normalized.contains);
+  }
+
+  bool _containsCreativeWritingTaskSignal(String text) {
+    final normalized = text.replaceAll(RegExp(r'\s+'), '').toLowerCase();
+    const signals = [
+      '소설',
+      '웹소설',
+      '시나리오',
+      '대본',
+      '원고',
+      '글쓰기',
+      '글쓰',
+      '집필',
+      '장면',
+      '플롯',
+      '시놉',
+      '퇴고',
+      '연재',
+    ];
+    return signals.any(normalized.contains);
+  }
+
+  bool _containsCleaningTaskSignal(String text) {
+    final normalized = text.replaceAll(RegExp(r'\s+'), '').toLowerCase();
+    const signals = [
+      '청소',
+      '정리',
+      '치우',
+      '방청소',
+      '책상정리',
+      '집정리',
+      '옷정리',
+      '설거지',
+      '빨래',
+    ];
+    return signals.any(normalized.contains);
+  }
+
+  Future<String> _pickDomainResistanceStrategyRule({
+    required bool isCreativeWritingTask,
+    required bool isCleaningTask,
+    required String userText,
+  }) async {
+    final domain = isCreativeWritingTask
+        ? 'writing'
+        : isCleaningTask
+        ? 'cleaning'
+        : 'general';
+    final strategies = domain == 'writing'
+        ? const [
+            (
+              id: 'reframe',
+              rule: '''
+[이번 턴 도메인 실행 저항 전략: 과제 이미지 재정의]
+- 창작/글쓰기가 큰 에너지를 써야 하는 일처럼 느껴질 수도 있다고 1문장만 짚기.
+- 잘하고 싶은 마음은 유지. 가볍게 하나 만들고 덧대는 쪽이 더 빠른 길일 수도 있다고 재정의.
+- 재정의 뒤 작은 행동 1개만 제안.''',
+            ),
+            (
+              id: 'first_contact',
+              rule: '''
+[이번 턴 도메인 실행 저항 전략: 첫 접촉]
+- 글을 쓰게 하기보다 문서 열기, 커서 보기, 장면 제목 보기처럼 첫 접촉 1개만 제안.
+- 잘 쓰기/분량/완성도 언급 금지. 접촉 뒤 더 할지는 나중에 정하게 하기.''',
+            ),
+            (
+              id: 'rough_draft',
+              rule: '''
+[이번 턴 도메인 실행 저항 전략: 러프 쓰기]
+- 완성본을 요구하지 말고 10분 동안 고치지 않는 러프 쓰기나 대사 두 줄처럼 낮은 품질 초안 1개만 제안.
+- 중간 퀄리티와 완성 퀄리티는 다르다는 점을 짧게 안심시키기.''',
+            ),
+          ]
+        : const [
+            (
+              id: 'reframe',
+              rule: '''
+[이번 턴 도메인 실행 저항 전략: 과제 이미지 재정의]
+- 청소/정리가 집 전체를 완벽히 치우는 일이 아니라 필요한 부분부터 조금씩 정돈하는 일이라고 1문장만 낮추기.
+- 깨끗하게 하고 싶은 마음은 유지. 재정의 뒤 작은 행동 1개만 제안.''',
+            ),
+            (
+              id: 'first_contact',
+              rule: '''
+[이번 턴 도메인 실행 저항 전략: 첫 접촉]
+- 바로 치우게 하지 말고 거슬리는 물건 하나 보기, 컵 하나 보기처럼 첫 접촉 1개만 제안.
+- 더러운 곳 전체를 훑게 하지 말기.''',
+            ),
+            (
+              id: 'one_item',
+              rule: '''
+[이번 턴 도메인 실행 저항 전략: 물건 하나]
+- 전체 정리 금지. 물건 하나 줍기/옮기기/버리기 중 현재 가장 쉬운 행동 1개만 제안.
+- 여러 구역을 동시에 벌리지 않기.''',
+            ),
+          ];
+    final prefs = await SharedPreferences.getInstance();
+    final todayStr = _getTodayStrWithReset(prefs);
+    final history = _decodeDomainResistanceStrategyHistory(
+      prefs.getString(_domainResistanceStrategyHistoryKey),
+    );
+    final lowPriorityIds = _lowPriorityDomainResistanceStrategyIds(
+      prefs: prefs,
+      history: history,
+      domain: domain,
+      todayStr: todayStr,
+    );
+
+    final weighted = [
+      for (final strategy in strategies)
+        ...List.filled(lowPriorityIds.contains(strategy.id) ? 1 : 3, strategy),
+    ];
+    final selected = weighted[Random().nextInt(weighted.length)];
+
+    history.add({
+      'date': todayStr,
+      'domain': domain,
+      'strategyId': selected.id,
+      'userText': userText.trim(),
+      'createdAt': DateTime.now().toIso8601String(),
+    });
+    final trimmed = history.length > 40
+        ? history.sublist(history.length - 40)
+        : history;
+    await prefs.setString(
+      _domainResistanceStrategyHistoryKey,
+      jsonEncode(trimmed),
+    );
+    return selected.rule;
+  }
+
+  List<Map<String, dynamic>> _decodeDomainResistanceStrategyHistory(
+    String? raw,
+  ) {
+    if (raw == null) return [];
+    try {
+      return (jsonDecode(raw) as List)
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .where((item) {
+            final date = item['date']?.toString() ?? '';
+            final domain = item['domain']?.toString() ?? '';
+            final strategyId = item['strategyId']?.toString() ?? '';
+            return date.isNotEmpty &&
+                domain.isNotEmpty &&
+                strategyId.isNotEmpty;
+          })
+          .toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  Set<String> _lowPriorityDomainResistanceStrategyIds({
+    required SharedPreferences prefs,
+    required List<Map<String, dynamic>> history,
+    required String domain,
+    required String todayStr,
+  }) {
+    final isLowPriorityByStrategy = <String, bool>{};
+    for (final item in history) {
+      final date = item['date']?.toString() ?? '';
+      if (date.isEmpty || date.compareTo(todayStr) >= 0) continue;
+      if (item['domain']?.toString() != domain) continue;
+      final strategyId = item['strategyId']?.toString() ?? '';
+      if (strategyId.isEmpty) continue;
+      isLowPriorityByStrategy[strategyId] = !_domainTaskCompletedOnDate(
+        prefs,
+        date: date,
+        domain: domain,
+      );
+    }
+    return isLowPriorityByStrategy.entries
+        .where((entry) => entry.value)
+        .map((entry) => entry.key)
+        .toSet();
+  }
+
+  bool _domainTaskCompletedOnDate(
+    SharedPreferences prefs, {
+    required String date,
+    required String domain,
+  }) {
+    final rawHistory = prefs.getString('nyang_history');
+    if (rawHistory == null) return false;
+    try {
+      final records = (jsonDecode(rawHistory) as List).whereType<Map>();
+      final record = records.cast<Map?>().firstWhere(
+        (item) => item?['date']?.toString() == date,
+        orElse: () => null,
+      );
+      final tasks = (record?['tasks'] as List?) ?? const [];
+      return tasks.whereType<Map>().any((task) {
+        if (task['done'] != true) return false;
+        final text = task['text']?.toString() ?? '';
+        return domain == 'writing'
+            ? _containsCreativeWritingTaskSignal(text)
+            : _containsCleaningTaskSignal(text);
+      });
+    } catch (_) {
+      return false;
+    }
   }
 
   bool _containsHabitAutomationSignal(String text) {
@@ -11284,8 +11488,26 @@ class _ChatScreenState extends State<ChatScreen>
         !isSelfHarmRiskTurn && _containsThoughtOverloadSignal(userText);
     final isWritingConcernTurn =
         !isSelfHarmRiskTurn && _containsWritingConcernSignal(userText);
+    final isCreativeWritingTaskTurn =
+        !isSelfHarmRiskTurn && _containsCreativeWritingTaskSignal(userText);
+    final isCleaningTaskTurn =
+        !isSelfHarmRiskTurn && _containsCleaningTaskSignal(userText);
     final isHabitAutomationTurn =
         !isSelfHarmRiskTurn && _containsHabitAutomationSignal(userText);
+    final shouldUseDomainResistanceStrategy =
+        !isSelfHarmRiskTurn &&
+        (isCreativeWritingTaskTurn || isCleaningTaskTurn) &&
+        (isResistanceTurn ||
+            isThoughtOverloadTurn ||
+            isResultAnxietyTurn ||
+            isWritingConcernTurn);
+    final domainResistanceStrategyRule = shouldUseDomainResistanceStrategy
+        ? await _pickDomainResistanceStrategyRule(
+            isCreativeWritingTask: isCreativeWritingTaskTurn,
+            isCleaningTask: isCleaningTaskTurn,
+            userText: userText,
+          )
+        : '';
     final isLowEnergyStarterFollowup = _awaitingLowEnergyStarterAction;
     _awaitingLowEnergyStarterAction = false;
     final shouldOfferLowEnergyStarter =
@@ -11308,45 +11530,34 @@ class _ChatScreenState extends State<ChatScreen>
         ? '''
 
 [실행 저항 원인 추론 흐름 - 마스터 코치 전용]
-- 사용자가 실행 저항을 표현하면 질문부터 하지 말고, 먼저 사용자의 말과 현재 맥락에서 원인을 부드럽게 추론합니다. 원인을 어느 정도 추측할 수 있으면 [하기 싫다 실행 개입 전략]에 따라 개입을 하나만 제안합니다.
-- 원인을 추측하기 어렵거나 잘못 짚으면 부담이 큰 상황에서만 원인 확인 질문을 한 번 사용합니다. 확인 질문은 앱이 지정해준 문장만 쓰고, 새로 만들거나 두 번 반복하지 않습니다.
-- 사용자가 원인을 특정하지 못하면("생각이 너무 많아요", "나도 잘 모르겠어요", "그냥 귀찮아요", "다 하기 싫어요", "이유를 모르겠어요") 원인을 더 분석하거나 다시 묻지 말고 가장 작은 첫 조각 하나만 제안합니다.
-- "마음 비우고 시작", "머리를 잠깐 비우고 시작", "시작 의식", 카운트다운은 코치가 먼저 제안하지 않습니다. 해당 기능은 사용자가 직접 버튼을 누르거나 명시적으로 요청했을 때만 시작합니다.
-- 사용자가 직접 요청한 경우에만, 짧게 한 문장으로 답한 뒤 답변 맨 끝에 [COUNTDOWN_START] 태그를 붙입니다.
-- 원인 확인 질문은 하루에 한 번만 합니다. 이미 물어본 날에는 다시 묻지 말고 바로 작은 실행 제안으로 연결해 대화가 길어지지 않게 합니다.'''
+- 질문보다 추론 우선. 원인이 보이면 1문장으로 짚고 [하기 싫다 실행 개입 전략]의 개입 1개만 제안.
+- 원인 불명확/오해 위험이 큰 경우만 앱 지정 질문 1회. 질문을 새로 만들거나 반복하지 않기.
+- 원인 모름/그냥 싫음/생각 많음 → 재질문·분석 금지, 가장 작은 첫 조각 1개.
+- "마음 비우고 시작", "시작 의식", 카운트다운은 사용자 명시 요청 때만. 요청 시 짧게 답하고 끝에 [COUNTDOWN_START].
+- 원인 확인 질문은 하루 1회. 이미 물어본 날은 바로 작은 실행 제안.'''
         : '';
     final resistanceStrategyDetailRule = isResistanceTurn || isResultAnxietyTurn
         ? '''
 - 결과 불안형 저항은 [생각 과부하 정리 전략]을 우선합니다. 단순히 "작게 시작해보자"로 바로 밀지 말고, 그 일이 소중해서 더 조심스러워진 상황일 수 있음을 먼저 한 문장으로 받아주세요.
 - 사용자가 준비·수정·학습만 반복한다면 그 방식이 불안을 낮추기 위한 안전 전략이었을 수 있음을 한 문장으로 인정한 뒤, [생각 과부하 정리 전략] 안에서 작은 실행으로 연결하세요.
 - 사용자가 "하기 싫다", "귀찮다", "기력이 없다", "몸이 안 움직인다"는 말을 반복하거나, 아주 작은 행동 제안에도 계속 거부하는 등 실행 저항이 매우 커 보이면 [초저항 시작 모드]를 사용하세요. 단, 결과 불안형 저항에는 이 모드를 쓰지 말고 [생각 과부하 정리 전략]을 우선하세요.
-- [초저항 시작 모드]의 1순위는 행동이 아니라 화면 밖 현실 공간이나 작업 화면의 구체적 대상 하나로 시선을 옮기는 것입니다. 첫 말풍선에는 청소나 일을 시키는 느낌의 행동 제안을 넣지 말고, "그럼 나랑 아주 작게 해보자."처럼 함께 가볍게 해보자는 말로 시작하세요.
-- 이 모드에서 보기/바라보기 계열을 쓸 때는 "관련 물건 하나"처럼 뭉뚱그리지 말고, 과업에 맞는 대상 하나를 코치가 콕 지정하세요. 예: 글쓰기 → 노트북의 빈 문서창이나 커서 자리, 공부 → 펼친 책의 첫 문장, 설거지 → 컵 하나, 청소 → 제일 거슬리는 물건 하나, 약 먹기 → 약통 하나.
-- 첫 말풍선은 사용자가 그 대상을 보는 것까지만 요청하고, 실제 움직임은 본문에 쓰지 마세요. 사용자가 말풍선 안의 "응 했어" 버튼을 누르면 앱이 [ULTRA_LOW_RESISTANCE_FOLLOWUP]의 후속문장을 별도 말풍선으로 보여줍니다.
-- [초저항 시작 모드]의 목표는 할 일에 대한 부담을 탐색적 유희로 바꾸는 것입니다. 완료, 성과, 분량, 잘하기를 말하지 말고 "하나 보기/하나 찾기/하나 건드리기"처럼 10초 안에 이해되는 첫 접촉만 주세요.
-- [초저항 시작 모드]에서는 시작 대상을 코치가 하나 지정하는 흐름을 우선하세요. 사용자가 반복해서 거부해 선택권이 꼭 필요할 때만 아주 쉬운 후보 2개와 기타를 빠른 답장으로 제시하세요.
-- [초저항 시작 모드]의 선택지는 두 종류 중 현재 맥락에 맞는 쪽을 고르세요. 사용자가 구체적인 과업명을 말했거나 실제 시작이 가능한 상황이면 [선택형 할 일 쪼개기]를 우선하고, 과업 자체가 너무 싫거나 몸이 멈춘 느낌이면 [탐색형 놀이 미션]을 우선하세요.
-- [선택형 할 일 쪼개기]는 과업의 첫 진입 대상을 먼저 지정합니다. 예: 글쓰기 싫음 → "노트북에서 문서창만 켜고 커서 자리만 보기", 독서 싫음 → "책을 펼쳐 첫 문장만 보기", 청소 싫음 → "지금 제일 거슬리는 물건 하나만 골라 보기". 실제 행동은 [ULTRA_LOW_RESISTANCE_FOLLOWUP]으로 분리하세요.
-- [탐색형 놀이 미션]은 할 일 자체를 시키지 않고 주변 단서나 문장 재료를 찾게 합니다. 색, 모양, 흔적, 소리, 감정 단어처럼 찾기 쉬운 조건 후보 2~3개를 주세요.
-- [탐색형 놀이 미션]을 쓰는 첫 말풍선은 "그럼 나랑 놀이처럼 해보자."처럼 시작한 뒤, "지금은 하려고 하지 말고 밝은색 하나만 찾아서 3초만 봐봐"처럼 화면 밖 현실 단서 하나를 지정하세요. 청소 맥락에서 사용자가 집이 많이 더럽다고 느끼는 경우에는 "제일 거슬리는 물건 하나"를 허용하되, 더러운 곳 전체를 훑게 하지 마세요.
-- 사용자가 특정 행동을 언급했다면, 그 행동 안에서 가능한 후보 2~3개로 바꾸세요. 독서 맥락이면 "감정 단어 찾기 / 낯선 단어 찾기 / 대화문 하나 찾기", 글쓰기 맥락이면 "의성어 하나 넣기 / 푸른색이 떠오르는 단어 하나 넣기 / 손으로 만질 수 있는 물건 하나 넣기", 청소·정리 맥락이면 "지문이 남았을 것 같은 곳 하나 찾기 / 비누 거품 자국 하나 찾기 / 머리카락 뭉친 곳 하나 찾기"처럼 고르게 하세요.
-- 글쓰기 미션은 숨은그림찾기보다 "작은 재료 넣기"로 다루세요. 좋은 문장, 긴 문단, 완성본을 요구하지 말고 푸른색/초록색/노란색처럼 구체적으로 지정한 색, 소리, 감정 단어, 움직임 동사, 손으로 만질 수 있는 물건 중 하나만 넣으면 성공으로 처리하세요.
-- 청소·정리 미션은 더러운 곳 전체를 보게 하지 말고 흔적 하나를 찾게 하세요. 찾은 뒤 행동은 닦기/줍기/옮기기 중 하나만 허용하고, 여러 곳을 동시에 벌리게 하지 마세요.
-- 외출 준비처럼 변수가 큰 과업도 질문으로 되묻기보다 가장 흔한 첫 단계 하나만 가정해 기본값으로 찍어주세요. 예: "제일 먼저 해야 하는 게 옷 입는 거면, 그냥 옷장 있는 쪽에 가서 옷장만 보고 서 있어봐."처럼 말하세요. 선택지처럼 여러 가능성을 나열하지 말고, 틀렸을 때만 사용자가 자연스럽게 고칠 수 있게 짧게 여지를 주세요. [ULTRA_LOW_RESISTANCE_FOLLOWUP]에는 그 가정한 물건과 연결되는 가장 작은 행동 하나만 넣으세요.
-- [초저항 시작 모드]에서 마지막 행동 제안은 본문에 쓰지 말고, 답변 끝에 [ULTRA_LOW_RESISTANCE_FOLLOWUP: 후속문장] 태그로 분리하세요. 후속문장에는 "가능하면 생각 더 붙이지 말고 그 물건만 손으로 톡 건드리기/하나만 옮기기/빈 문서에 아무 단어 하나만 넣기/찾은 흔적 하나만 닦기"처럼 가장 작은 행동 하나만 현재 코치 말투로 넣으세요.
-- [ULTRA_LOW_RESISTANCE_FOLLOWUP] 태그는 사용자에게 보이지 않는 시스템 태그입니다. 태그 안 문장은 1문장만 쓰고, 대괄호 ']'를 포함하지 마세요. 이 태그가 있으면 앱이 같은 말풍선 안에 "응 했어"와 "지금은 안 할래" 버튼을 보여줍니다. 이 턴에는 [CHIPS]를 붙이지 마세요.'''
+- [초저항 시작 모드]는 실행보다 첫 접촉 우선. 첫 말풍선은 "같이 아주 작게 해보자" 톤으로 시작하고, 완료·성과·분량·잘하기 언급 금지.
+- 구체 과업이 있으면 첫 진입 대상 1개 지정. 예: 글쓰기=빈 문서/커서, 공부=첫 문장, 설거지=컵 하나, 청소=거슬리는 물건 하나, 약=약통.
+- 과업 자체가 너무 싫거나 몸이 멈춘 느낌이면 놀이 미션. 색·모양·흔적·소리·감정 단어처럼 찾기 쉬운 단서 1개를 지정.
+- 글쓰기는 좋은 문장/긴 문단/완성본 요구 금지. 색·소리·감정·움직임·물건 중 하나만 넣으면 성공.
+- 청소·정리는 더러운 곳 전체 보기 금지. 물건/흔적/구역 하나만 지정하고, 후속 행동도 닦기·줍기·옮기기 중 하나만.
+- 외출 준비처럼 변수가 큰 과업은 가장 흔한 첫 단계 하나를 기본값으로 찍고, 틀렸을 때만 사용자가 고칠 여지를 짧게 남김.
+- 실제 움직임은 본문에 쓰지 말고 [ULTRA_LOW_RESISTANCE_FOLLOWUP: 후속문장] 1문장으로 분리. 태그 문장에는 대괄호 ']' 금지. 이 턴에는 [CHIPS] 금지.'''
         : '';
     final selfSelectedTinyActionRule = shouldInviteSelfSelectedTinyAction
         ? '''
 
 [자기선택 최소 행동 모드]
-- 이 모드는 사용자가 작은 행동 제안도 반복해서 거부할 때만 적용합니다. 이 턴에서는 코치가 행동을 더 정해주며 밀어붙이지 말고, 사용자가 가장 쉬워 보이는 행동을 고르게 하세요.
-- 먼저 "내가 제안한 것도 지금은 부담스럽구나"처럼 코치의 제안 자체가 부담이었음을 짧게 공감하세요. 현재 코치 말투로 자연스럽게 바꾸되, 사용자가 의지가 없다고 평가하지 마세요.
-- 완전 자유형 질문은 피하세요. 사용자가 새 행동을 창의적으로 생각해야 하면 인지 부담이 생기므로, 현재 상황과 사용자가 언급한 행동에 맞는 아주 쉬운 선택지 2개와 "기타"를 빠른 답장으로 제시하세요.
-- 선택지는 항상 그 행동과 연결된 현실 단서나 첫 진입 동작이어야 합니다. 청소·정리 맥락이면 "밝은 물건 찾기", "흔적 하나 닦기", "하나만 톡 건드리기", 독서 맥락이면 "감정 단어 찾기", 글쓰기 맥락이면 "소리 단어 넣기", "푸른색 단어 넣기", 샤워 맥락이면 "욕실 앞에 서기"나 "물 틀기", 공부·작업 맥락이면 "파일 열기"나 "제목만 보기"처럼 상황에 맞게 바꾸세요. 색 관련 선택지는 "색 단어"라고 추상적으로 말하지 말고 "푸른색", "초록색", "노란색"처럼 하나를 구체적으로 지정하세요. 특정 맥락이 없을 때만 "자리에서 일어나기", "화면 밖 보기", "손 하나 움직이기"처럼 범용 선택지를 쓰세요.
-- 단, 직전 코치 답변에서 이미 "3초 보기", "바라보기", "쳐다보기", "화면 밖 보기"처럼 보기/시선 이동 계열을 제안했는데 사용자가 거부한 경우에는 이번 선택지에서 보기 계열 후보를 제외하세요. 그 대신 손 대기, 앞에 서기, 열기, 켜기, 한 번 누르기처럼 다른 감각이나 첫 동작 후보를 제시하세요.
-- 답변 끝에 반드시 [CHIPS: 선택지1|선택지2|기타] 형식으로 붙이세요. 선택지 문구는 짧게 유지하고, 물건 관련 선택지를 모든 상황에 고정하지 마세요.
-- 본문에서는 "그럼 이 중에서 지금 제일 쉬운 것 하나만 골라볼래?"처럼 제한된 선택지를 고르게 하세요. 설득·분석·목표 설명·추가 행동 제안은 붙이지 마세요.'''
+- 작은 행동 제안도 반복 거부할 때만. 코치 제안이 부담이었음을 1문장 공감하고, 의지 부족으로 평가하지 않기.
+- 자유형 질문 금지. 현재 과업과 연결된 아주 쉬운 선택지 2개 + 기타를 제시하고 사용자가 고르게 하기.
+- 선택지는 현실 단서/첫 진입 동작으로 짧게. 예: 청소=하나 톡 건드리기/흔적 하나 닦기, 글쓰기=소리 단어 넣기/푸른색 단어 넣기, 공부=파일 열기/제목만 보기, 샤워=욕실 앞에 서기/물 틀기.
+- 직전 보기/바라보기 계열을 거부했다면 보기 후보 제외. 손대기, 앞에 서기, 열기, 켜기, 한 번 누르기처럼 다른 감각으로 바꾸기.
+- 끝에 [CHIPS: 선택지1|선택지2|기타]. 설득·분석·목표 설명·추가 행동 제안 금지.'''
         : isSelfSelectedTinyActionFollowup
         ? '''
 
@@ -11442,17 +11653,13 @@ class _ChatScreenState extends State<ChatScreen>
         ? '''
 
 [생각 과부하 정리 전략]
-- 이 전략은 사용자가 단순히 하기 싫거나 귀찮은 것이 아니라, 결과 불안·완벽주의·머리 복잡함·판단 과부하·생각이 너무 많음 때문에 실행이 멈춘 경우에만 적용합니다.
-- [하기 싫다 실행 개입 전략]으로 충분히 처리 가능한 일반 실행 저항에는 이 전략을 적용하지 않습니다.
-- 생각을 멈추라고 하거나 한 가지만 생각하라고 강요하지 않습니다. 생각이 많아진 상태를 먼저 자연스럽게 인정합니다.
-- 결과가 두렵거나 완벽하게 하고 싶은 마음이 보이면, 그 일이 소중해서 더 조심스러워진 상황일 수 있음을 먼저 한 문장으로 받아줍니다.
-- 사용자가 글은 안 쓰고 강의만 듣거나 이미 쓴 앞부분만 고치는 경우, 사업은 안 하고 사업 공부만 하는 경우, 개발·기획은 안 하고 자료조사나 레퍼런스만 반복하는 경우에는 그 방식이 불안을 낮추는 안전 전략이었을 수 있음을 인정합니다. 기존 전략을 틀렸다고 반박하지 말고, 그 방식만 계속 쓰는 게 지금 행동에 도움이 되는지 부드럽게 확인하세요.
-- 먼저 “지금 머릿속에서 생각이 계속 늘어나고 있는 것 같다. 그 생각들이 지금 행동하는 데 도움이 되고 있는지”를 현재 코치 말투로 부드럽게 묻습니다.
-- 사용자가 도움이 안 될 것 같다고 하거나, 생각이 이미 실행을 막고 있어 보이면 생각을 더 늘리지 말고 지금 할 수 있는 최소 행동 하나로 낮춥니다.
-- 최소 행동은 현재 맥락에 맞게 고릅니다. 예: 10분만 쓰기, 10문장 쓰기, 파일 열기, 다음 장면 제목만 적기, 자료 하나만 정리하기, 고객 질문 하나 적기, 레퍼런스 하나 보기, 오류 로그 하나 확인하기, 기획 제목만 붙이기.
-- 사용자가 도움이 되는 생각이라고 느낀다면, 머릿속으로만 붙잡지 말고 20분만 직접 써보게 합니다. 걱정, 불안, 의문, 판단 기준을 종이나 문서에 쭉 적으면 머릿속이 정리되고 실행할 힘이 생길 수 있다고 안내합니다.
-- 20분 검토가 끝나면 지금 가진 정보로 작은 결정 하나를 내리고 다시 움직이게 합니다.
-- 답변은 설문처럼 보이지 않게 자연스러운 말풍선 문장으로 작성합니다. 여러 선택지를 길게 나열하지 말고, 현재 상황에 맞는 한 방향만 가볍게 제안합니다.'''
+- 단순 귀찮음이 아니라 결과 불안·완벽주의·머리 복잡함·판단 과부하로 멈춘 경우만 적용. 생각을 멈추라고 강요하지 않기.
+- 결과가 두렵거나 완벽하게 하고 싶어 보이면, 그 일이 소중해서 조심스러워진 상황일 수 있음을 1문장 인정.
+- 준비·수정·학습·자료조사만 반복 중이면 불안을 낮추는 안전 전략이었을 수 있음을 인정하고, 지금 행동에 도움이 되는지 부드럽게 확인.
+- 먼저 "지금 생각이 계속 늘어나는 것 같은데, 그 생각들이 지금 행동하는 데 도움이 되고 있어?"를 현재 코치 말투로 자연스럽게 묻기.
+- 도움이 안 되거나 실행을 막고 있어 보이면 생각을 더 늘리지 말고 최소 행동 1개로 낮추기. 예: 10분 쓰기, 파일 열기, 제목만 적기, 자료/레퍼런스/오류 로그 하나만 보기.
+- 도움이 되는 생각이면 머릿속에 붙잡지 말고 20분만 걱정·불안·의문·판단 기준을 직접 쓰게 하기. 끝나면 작은 결정 1개를 내리고 다시 움직이게 하기.
+- 설문처럼 보이지 않게 말풍선 문장으로 쓰고, 여러 선택지를 길게 나열하지 않기.'''
         : '';
     final writingConcernRule = isWritingConcernTurn
         ? '''
@@ -11490,7 +11697,12 @@ class _ChatScreenState extends State<ChatScreen>
     final thoughtOverloadSection = thoughtOverloadRule.isNotEmpty
         ? thoughtOverloadRule
         : '';
-    final writingConcernSection = writingConcernRule.isNotEmpty
+    final domainResistanceStrategySection =
+        domainResistanceStrategyRule.isNotEmpty
+        ? domainResistanceStrategyRule
+        : '';
+    final writingConcernSection =
+        writingConcernRule.isNotEmpty && !shouldUseDomainResistanceStrategy
         ? writingConcernRule
         : '';
     final habitAutomationSection = habitAutomationRule.isNotEmpty
@@ -11526,6 +11738,8 @@ class _ChatScreenState extends State<ChatScreen>
 - 청소·설거지·정리·빨래 개기처럼 반복 작업은 가장 작은 실행 단위 하나로 낮추세요.
 - 분리수거·세탁기 돌리기·약 먹기처럼 이미 하나의 행동인 작업은 억지로 쪼개지 말고 금방 끝난다는 점이나 끝낸 뒤의 효과로 부담을 낮추세요.
 - 양치·세수·샤워는 하나의 행동에 가깝지만 시작 장벽이 높을 수 있으니 효과 언급 또는 진입 행동만 허용합니다. 단, "반만 양치/샤워"처럼 완료 단위를 어색하게 쪼개지 마세요.
+- 과업 진입이 무거우면 5분 시작 대신 첫 접촉(보기/열기/손대기) 1개 가능. 예: 문서 열기, 커서 보기, 컵 하나 보기, 운동복 보기.
+- 초저항에서는 첫 접촉까지만 요청하고 실제 행동은 [ULTRA_LOW_RESISTANCE_FOLLOWUP]으로 분리.
 $resistanceStrategyDetailRule
 $selfSelectedTinyActionRule
 - 분류가 애매하면 5분만 시작하는 방향을 기본값으로 사용하되, 현재 코치의 말투로 표현하세요.
@@ -11596,6 +11810,7 @@ $completionResponseSection
 - 가능한 질문은 원인 추궁보다 실행을 돕는 방향을 우선하세요.
 
 $thoughtOverloadSection
+$domainResistanceStrategySection
 $resistanceInterventionSection
 $decisionSupportSection
 $writingConcernSection
