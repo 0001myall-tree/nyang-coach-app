@@ -302,6 +302,7 @@ class _MainTabScreenState extends State<MainTabScreen>
     if (!userData.canAccessCoach(coachId)) return;
 
     await UserDataService.setSelectedCoach(coachId);
+    final chatBgStyle = await _savedChatBgStyle();
     if (!mounted) return;
     final isFromSecretary =
         widget.coachId == 'nyang_halbae' || widget.coachId == 'sec_female';
@@ -313,7 +314,7 @@ class _MainTabScreenState extends State<MainTabScreen>
         builder: (_) => MainTabScreen(
           coachId: coachId,
           handoffFromCoachId: handoffFromCoachId,
-          initialChatBgStyle: _chatBgStyle,
+          initialChatBgStyle: chatBgStyle,
         ),
       ),
     );
@@ -385,15 +386,19 @@ class _MainTabScreenState extends State<MainTabScreen>
               if (!isOwned) return;
               Navigator.pop(context);
               if (!isSelected) {
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => MainTabScreen(
-                      coachId: c.id,
-                      initialChatBgStyle: _chatBgStyle,
+                () async {
+                  final chatBgStyle = await _savedChatBgStyle();
+                  if (!mounted) return;
+                  Navigator.pushReplacement(
+                    this.context,
+                    MaterialPageRoute(
+                      builder: (_) => MainTabScreen(
+                        coachId: c.id,
+                        initialChatBgStyle: chatBgStyle,
+                      ),
                     ),
-                  ),
-                );
+                  );
+                }();
               }
             },
           );
@@ -494,11 +499,17 @@ class _MainTabScreenState extends State<MainTabScreen>
   bool _hasMasterPlanForRecordsBadge = false;
   StreamSubscription<User?>? _authSubscription;
 
-  Future<void> _loadBgStyle() async {
+  Future<String> _savedChatBgStyle() async {
     final prefs = await SharedPreferences.getInstance();
+    final savedStyle = prefs.getString('nyang_chat_bg_style');
+    return savedStyle == 'emotional' ? 'emotional' : 'simple';
+  }
+
+  Future<void> _loadBgStyle() async {
+    final savedStyle = await _savedChatBgStyle();
     if (mounted) {
       setState(() {
-        _chatBgStyle = prefs.getString('nyang_chat_bg_style') ?? 'simple';
+        _chatBgStyle = savedStyle;
         _chatBgStyleLoaded = true;
       });
     }
@@ -2470,7 +2481,13 @@ class _MainTabScreenState extends State<MainTabScreen>
     } else if (_openDrawerIndex == 2) {
       drawerContent = RecordsScreen(coachId: widget.coachId);
     } else if (_openDrawerIndex == 3) {
-      drawerContent = SettingsScreen(coachId: widget.coachId);
+      drawerContent = SettingsScreen(
+        coachId: widget.coachId,
+        onChatBgStyleChanged: (style) {
+          if (style == _chatBgStyle) return;
+          setState(() => _chatBgStyle = style);
+        },
+      );
     } else {
       drawerContent = const SizedBox.shrink();
     }

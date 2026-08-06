@@ -1899,7 +1899,7 @@ ${feedbackType == 0
           borderRadius: BorderRadius.circular(12),
         ),
         child: Text(
-          '아직 분석하기에 충분한 기록이 쌓이지 않았어요.\n조금만 더 이어가시면 습관 패턴을 찾아드릴게요.',
+          '아직은 분석할 기록이 조금 부족해요.\n조금만 더 이어가면 습관 패턴을 찾아드릴게요.',
           style: GoogleFonts.notoSansKr(
             fontSize: 12,
             fontWeight: FontWeight.w500,

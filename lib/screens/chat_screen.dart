@@ -3350,6 +3350,17 @@ class _ChatScreenState extends State<ChatScreen>
     return task != null && task['done'] != true && !_isInProgressTask(task);
   }
 
+  bool _isHabitTask(Map<String, dynamic> task) {
+    return task['isHabit'] == true || task['category'] == 'habit';
+  }
+
+  bool _hasCountGoal(Map<String, dynamic> task) {
+    final rawCountGoal = task['countGoal'];
+    if (rawCountGoal is num) return rawCountGoal > 0;
+    final parsedCountGoal = int.tryParse(rawCountGoal?.toString() ?? '');
+    return parsedCountGoal != null && parsedCountGoal > 0;
+  }
+
   String? _thoughtOverloadChipTaskNameFor({
     required SharedPreferences prefs,
     required List<Map<String, dynamic>> todayTasks,
@@ -3365,8 +3376,16 @@ class _ChatScreenState extends State<ChatScreen>
     }
 
     for (final task in todayTasks) {
-      final isHabit = task['isHabit'] == true || task['category'] == 'habit';
-      if (isHabit && _isPendingNotInProgressTask(task)) {
+      if (_isHabitTask(task) &&
+          _hasCountGoal(task) &&
+          _isPendingNotInProgressTask(task)) {
+        final text = _taskText(task);
+        if (text != null) return text;
+      }
+    }
+
+    for (final task in todayTasks) {
+      if (_isHabitTask(task) && _isPendingNotInProgressTask(task)) {
         final text = _taskText(task);
         if (text != null) return text;
       }
@@ -4250,7 +4269,6 @@ class _ChatScreenState extends State<ChatScreen>
       timerConfirmMinutes = null;
       timerConfirmTaskName = null;
       startCountdown = false;
-      ultraLowResistanceFollowup = null;
       suggestedTasks = [];
     }
 
@@ -9093,7 +9111,21 @@ class _ChatScreenState extends State<ChatScreen>
       if (!mounted || widget.coachId != currentId) return;
       setState(() {
         _messages.add(
-          ChatMessage(text: parsed.text, isUser: false, time: DateTime.now()),
+          ChatMessage(
+            text: parsed.text,
+            isUser: false,
+            time: DateTime.now(),
+            kind:
+                parsed.ultraLowResistanceFollowup != null &&
+                    parsed.ultraLowResistanceFollowup!.isNotEmpty
+                ? 'ultra_low_resistance_check'
+                : null,
+            choices:
+                parsed.ultraLowResistanceFollowup != null &&
+                    parsed.ultraLowResistanceFollowup!.isNotEmpty
+                ? [parsed.ultraLowResistanceFollowup!]
+                : const [],
+          ),
         );
         _suppressDefaultChips = parsed.suppressDefaultChips;
         _dynamicChips = parsed.chips.isNotEmpty
@@ -9123,18 +9155,6 @@ class _ChatScreenState extends State<ChatScreen>
       // 모델이 실수로 [TIMER_CONFIRM]을 붙여도 기존 코칭 단계를 건너뛰지 않도록 여기서는 무시한다.
       _scrollToBottom();
       await _saveHistory();
-      final followup = parsed.ultraLowResistanceFollowup;
-      if (followup != null && followup.isNotEmpty) {
-        await Future.delayed(const Duration(seconds: 3));
-        if (!mounted || widget.coachId != currentId) return;
-        setState(() {
-          _messages.add(
-            ChatMessage(text: followup, isUser: false, time: DateTime.now()),
-          );
-        });
-        _scrollToBottom();
-        await _saveHistory();
-      }
       if (_coach.isMaster && parsed.startCountdown && mounted) {
         _openCountdownFocusMode();
       }
@@ -10823,18 +10843,21 @@ class _ChatScreenState extends State<ChatScreen>
 - 결과 불안형 저항은 [생각 과부하 정리 전략]을 우선합니다. 단순히 "작게 시작해보자"로 바로 밀지 말고, 그 일이 소중해서 더 조심스러워진 상황일 수 있음을 먼저 한 문장으로 받아주세요.
 - 사용자가 준비·수정·학습만 반복한다면 그 방식이 불안을 낮추기 위한 안전 전략이었을 수 있음을 한 문장으로 인정한 뒤, [생각 과부하 정리 전략] 안에서 작은 실행으로 연결하세요.
 - 사용자가 "하기 싫다", "귀찮다", "기력이 없다", "몸이 안 움직인다"는 말을 반복하거나, 아주 작은 행동 제안에도 계속 거부하는 등 실행 저항이 매우 커 보이면 [초저항 시작 모드]를 사용하세요. 단, 결과 불안형 저항에는 이 모드를 쓰지 말고 [생각 과부하 정리 전략]을 우선하세요.
-- [초저항 시작 모드]의 1순위는 행동이 아니라 화면 밖 현실 공간으로 시선을 옮기는 것입니다. 첫 말풍선에는 청소나 일을 시키는 느낌의 행동 제안을 넣지 말고, "그럼 나랑 놀이처럼 해보자."처럼 함께 가볍게 해보자는 말로 시작한 뒤 "숨은 미션/찾기 놀이"처럼 프레이밍하세요.
-- [초저항 시작 모드]의 목표는 할 일에 대한 부담을 탐색적 유희로 바꾸는 것입니다. 완료, 성과, 분량, 잘하기를 말하지 말고 "조건 하나 찾기/넣기/건드리기"처럼 10초 안에 이해되는 미션 후보만 주세요.
-- [초저항 시작 모드]에서는 할 일을 작게 쪼개더라도 코치가 하나를 지정하지 말고, 아주 쉬운 후보 2~3개 중 사용자가 하나만 고르게 하세요. 단, 고른 뒤 실제로 할 행동은 하나뿐이어야 합니다. "이 중에서 제일 덜 싫은 거 하나만 골라보자"처럼 선택권을 주고, 모든 후보를 다 하게 만들지 마세요.
+- [초저항 시작 모드]의 1순위는 행동이 아니라 화면 밖 현실 공간이나 작업 화면의 구체적 대상 하나로 시선을 옮기는 것입니다. 첫 말풍선에는 청소나 일을 시키는 느낌의 행동 제안을 넣지 말고, "그럼 나랑 아주 작게 해보자."처럼 함께 가볍게 해보자는 말로 시작하세요.
+- 이 모드에서 보기/바라보기 계열을 쓸 때는 "관련 물건 하나"처럼 뭉뚱그리지 말고, 과업에 맞는 대상 하나를 코치가 콕 지정하세요. 예: 글쓰기 → 노트북의 빈 문서창이나 커서 자리, 공부 → 펼친 책의 첫 문장, 설거지 → 컵 하나, 청소 → 제일 거슬리는 물건 하나, 약 먹기 → 약통 하나.
+- 첫 말풍선은 사용자가 그 대상을 보는 것까지만 요청하고, 실제 움직임은 본문에 쓰지 마세요. 사용자가 말풍선 안의 "응 했어" 버튼을 누르면 앱이 [ULTRA_LOW_RESISTANCE_FOLLOWUP]의 후속문장을 별도 말풍선으로 보여줍니다.
+- [초저항 시작 모드]의 목표는 할 일에 대한 부담을 탐색적 유희로 바꾸는 것입니다. 완료, 성과, 분량, 잘하기를 말하지 말고 "하나 보기/하나 찾기/하나 건드리기"처럼 10초 안에 이해되는 첫 접촉만 주세요.
+- [초저항 시작 모드]에서는 시작 대상을 코치가 하나 지정하는 흐름을 우선하세요. 사용자가 반복해서 거부해 선택권이 꼭 필요할 때만 아주 쉬운 후보 2개와 기타를 빠른 답장으로 제시하세요.
 - [초저항 시작 모드]의 선택지는 두 종류 중 현재 맥락에 맞는 쪽을 고르세요. 사용자가 구체적인 과업명을 말했거나 실제 시작이 가능한 상황이면 [선택형 할 일 쪼개기]를 우선하고, 과업 자체가 너무 싫거나 몸이 멈춘 느낌이면 [탐색형 놀이 미션]을 우선하세요.
-- [선택형 할 일 쪼개기]는 과업의 첫 진입 동작 2~3개를 제시합니다. 예: 글쓰기 싫음 → "글 쓸 수 있는 프로그램 열기 / 글 쓸 수 있는 장소에 가서 앉기 / 딱 3문장만 쓰기", 독서 싫음 → "책 펼치기 / 한 문단만 눈으로 훑기 / 감정 단어 하나 찾기", 청소 싫음 → "휴지 하나 줍기 / 닦을 곳 하나 고르기 / 물건 하나만 제자리로 옮기기". 사용자가 고른 하나만 하게 하세요.
+- [선택형 할 일 쪼개기]는 과업의 첫 진입 대상을 먼저 지정합니다. 예: 글쓰기 싫음 → "노트북에서 문서창만 켜고 커서 자리만 보기", 독서 싫음 → "책을 펼쳐 첫 문장만 보기", 청소 싫음 → "지금 제일 거슬리는 물건 하나만 골라 보기". 실제 행동은 [ULTRA_LOW_RESISTANCE_FOLLOWUP]으로 분리하세요.
 - [탐색형 놀이 미션]은 할 일 자체를 시키지 않고 주변 단서나 문장 재료를 찾게 합니다. 색, 모양, 흔적, 소리, 감정 단어처럼 찾기 쉬운 조건 후보 2~3개를 주세요.
-- [탐색형 놀이 미션]을 쓰는 첫 말풍선은 "그럼 나랑 놀이처럼 해보자."처럼 시작한 뒤, "지금은 하려고 하지 말고 이 중 하나만 골라보자: 밝은색 하나 찾기 / 동그란 것 하나 찾기 / 손에 닿는 것 하나 찾기"처럼 화면 밖 현실 단서 후보 2~3개를 짧게 제시하세요. 찾았으면 숨을 한 번 내쉬고 3초만 바라보는 정도까지만 안내하세요. '가장 거슬리는 것'처럼 부담이나 평가가 생기는 표현은 피하세요.
+- [탐색형 놀이 미션]을 쓰는 첫 말풍선은 "그럼 나랑 놀이처럼 해보자."처럼 시작한 뒤, "지금은 하려고 하지 말고 밝은색 하나만 찾아서 3초만 봐봐"처럼 화면 밖 현실 단서 하나를 지정하세요. 청소 맥락에서 사용자가 집이 많이 더럽다고 느끼는 경우에는 "제일 거슬리는 물건 하나"를 허용하되, 더러운 곳 전체를 훑게 하지 마세요.
 - 사용자가 특정 행동을 언급했다면, 그 행동 안에서 가능한 후보 2~3개로 바꾸세요. 독서 맥락이면 "감정 단어 찾기 / 낯선 단어 찾기 / 대화문 하나 찾기", 글쓰기 맥락이면 "의성어 하나 넣기 / 푸른색이 떠오르는 단어 하나 넣기 / 손으로 만질 수 있는 물건 하나 넣기", 청소·정리 맥락이면 "지문이 남았을 것 같은 곳 하나 찾기 / 비누 거품 자국 하나 찾기 / 머리카락 뭉친 곳 하나 찾기"처럼 고르게 하세요.
 - 글쓰기 미션은 숨은그림찾기보다 "작은 재료 넣기"로 다루세요. 좋은 문장, 긴 문단, 완성본을 요구하지 말고 푸른색/초록색/노란색처럼 구체적으로 지정한 색, 소리, 감정 단어, 움직임 동사, 손으로 만질 수 있는 물건 중 하나만 넣으면 성공으로 처리하세요.
 - 청소·정리 미션은 더러운 곳 전체를 보게 하지 말고 흔적 하나를 찾게 하세요. 찾은 뒤 행동은 닦기/줍기/옮기기 중 하나만 허용하고, 여러 곳을 동시에 벌리게 하지 마세요.
-- [초저항 시작 모드]에서 마지막 행동 제안은 본문에 쓰지 말고, 답변 끝에 [ULTRA_LOW_RESISTANCE_FOLLOWUP: 후속문장] 태그로 분리하세요. 후속문장에는 "가능하면 생각 더 붙이지 말고 그 하나를 손으로 톡 건드리기/하나만 옮기기/한 문장에 재료 하나만 넣기/찾은 흔적 하나만 닦기"처럼 가장 작은 행동 하나만 현재 코치 말투로 넣으세요. 앱이 이 태그를 3초 뒤 별도 코치 말풍선으로 보여줍니다.
-- [ULTRA_LOW_RESISTANCE_FOLLOWUP] 태그는 사용자에게 보이지 않는 시스템 태그입니다. 태그 안 문장은 1문장만 쓰고, 대괄호 ']'를 포함하지 마세요. 이 태그를 쓰는 턴에는 앱이 빠른 답장 버튼을 숨기므로 첫 말풍선이 너무 길어지지 않게 하세요.'''
+- 외출 준비처럼 변수가 큰 과업도 질문으로 되묻기보다 가장 흔한 첫 단계 하나만 가정해 기본값으로 찍어주세요. 예: "제일 먼저 해야 하는 게 옷 입는 거면, 그냥 옷장 있는 쪽에 가서 옷장만 보고 서 있어봐."처럼 말하세요. 선택지처럼 여러 가능성을 나열하지 말고, 틀렸을 때만 사용자가 자연스럽게 고칠 수 있게 짧게 여지를 주세요. [ULTRA_LOW_RESISTANCE_FOLLOWUP]에는 그 가정한 물건과 연결되는 가장 작은 행동 하나만 넣으세요.
+- [초저항 시작 모드]에서 마지막 행동 제안은 본문에 쓰지 말고, 답변 끝에 [ULTRA_LOW_RESISTANCE_FOLLOWUP: 후속문장] 태그로 분리하세요. 후속문장에는 "가능하면 생각 더 붙이지 말고 그 물건만 손으로 톡 건드리기/하나만 옮기기/빈 문서에 아무 단어 하나만 넣기/찾은 흔적 하나만 닦기"처럼 가장 작은 행동 하나만 현재 코치 말투로 넣으세요.
+- [ULTRA_LOW_RESISTANCE_FOLLOWUP] 태그는 사용자에게 보이지 않는 시스템 태그입니다. 태그 안 문장은 1문장만 쓰고, 대괄호 ']'를 포함하지 마세요. 이 태그가 있으면 앱이 같은 말풍선 안에 "응 했어"와 "지금은 안 할래" 버튼을 보여줍니다. 이 턴에는 [CHIPS]를 붙이지 마세요.'''
         : '';
     final selfSelectedTinyActionRule = shouldInviteSelfSelectedTinyAction
         ? '''
@@ -13115,6 +13138,9 @@ $timerOutputRule
     if (msg.kind == 'grooming_care_followup') {
       return _buildGroomingCareFollowupCard(msg);
     }
+    if (msg.kind == 'ultra_low_resistance_check') {
+      return _buildUltraLowResistanceCheckCard(msg);
+    }
     if (msg.kind == 'feature_location_picker') {
       return _buildFeatureLocationPickerCard(msg);
     }
@@ -13980,12 +14006,57 @@ $timerOutputRule
     ]);
   }
 
+  Widget _buildUltraLowResistanceCheckCard(ChatMessage msg) {
+    final followup = msg.choices.isNotEmpty ? msg.choices.first : '';
+    return _buildGroomingChoiceCard(msg, [
+      ('응 했어', () => _answerUltraLowResistanceCheck(followup, didIt: true)),
+      (
+        '지금은 안 할래',
+        () => _answerUltraLowResistanceCheck(followup, didIt: false),
+      ),
+    ], messageFontWeight: FontWeight.w500);
+  }
+
+  Future<void> _answerUltraLowResistanceCheck(
+    String followup, {
+    required bool didIt,
+  }) async {
+    if (_isLoading) return;
+    HapticFeedback.lightImpact();
+    final userText = didIt ? '응 했어' : '지금은 안 할래';
+    final reply = didIt
+        ? followup.trim()
+        : (_coach.id == 'nyang_halbae'
+              ? '알겠다냥. 지금은 안 하는 걸로 두고, 마음만 너무 몰아붙이지 말자냥.'
+              : '알겠어요. 지금은 안 하는 걸로 두고, 마음만 너무 몰아붙이지 말아요.');
+    setState(() {
+      _messages.add(
+        ChatMessage(text: userText, isUser: true, time: DateTime.now()),
+      );
+      if (reply.isNotEmpty) {
+        _messages.add(
+          ChatMessage(text: reply, isUser: false, time: DateTime.now()),
+        );
+      }
+      _suggestedTasks = [];
+      _dynamicChips = _coach.chips;
+      _suppressDefaultChips = false;
+    });
+    _scrollToBottom();
+    await _saveHistory();
+    await AnalyticsService.logConversationMessage(
+      coachId: widget.coachId,
+      usedApi: false,
+    );
+  }
+
   /// 가꾸기 플로우의 선택지 말풍선. 되묻기·집밖·수락거절이 생김새가 같아서
   /// 한 군데서 만든다 — 버튼 문구와 눌렀을 때 할 일만 다르다.
   Widget _buildGroomingChoiceCard(
     ChatMessage msg,
-    List<(String, VoidCallback)> options,
-  ) {
+    List<(String, VoidCallback)> options, {
+    FontWeight messageFontWeight = FontWeight.w800,
+  }) {
     final time = DateFormat('a h:mm', 'ko').format(msg.time);
     final accent = _coach.accentColor;
 
@@ -14065,7 +14136,7 @@ $timerOutputRule
                       msg.text,
                       style: GoogleFonts.notoSansKr(
                         fontSize: 14,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: messageFontWeight,
                         height: 1.45,
                         color: const Color(0xFF1A1A2E),
                       ),

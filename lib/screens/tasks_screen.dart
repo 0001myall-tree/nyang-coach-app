@@ -4105,7 +4105,7 @@ class _TasksScreenState extends State<TasksScreen>
             const SizedBox(width: 10),
             Expanded(
               child: Text(
-                '진행 중으로 바뀌었어요. 한 번 더 누르면 완료예요.',
+                '시작했어요. 다 했으면 마치기를 눌러 완료해요.',
                 style: GoogleFonts.notoSansKr(
                   fontSize: 12.8,
                   height: 1.35,
@@ -5749,13 +5749,34 @@ class _TasksScreenState extends State<TasksScreen>
           Column(
             children: [
               Container(
-                width: 22,
-                height: 22,
+                width: 54,
+                height: 28,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: Colors.white,
-                  border: Border.all(color: const Color(0xFFB7A5FF), width: 2),
-                  borderRadius: BorderRadius.circular(6),
+                  color: const Color(0xFFF8F5FF),
+                  border: Border.all(
+                    color: const Color(0xFFB7A5FF),
+                    width: 1.2,
+                  ),
+                  borderRadius: BorderRadius.circular(9),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(
+                      Icons.play_arrow_rounded,
+                      size: 16,
+                      color: Color(0xFF7B61FF),
+                    ),
+                    Text(
+                      '시작',
+                      style: GoogleFonts.notoSansKr(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        color: const Color(0xFF7B61FF),
+                      ),
+                    ),
+                  ],
                 ),
               ),
               CustomPaint(
@@ -5776,7 +5797,7 @@ class _TasksScreenState extends State<TasksScreen>
                 border: Border.all(color: const Color(0xFFE4DAFF)),
               ),
               child: Text(
-                '한 번 누르면 진행 중, 한 번 더 누르면 완료예요.',
+                '시작을 누르면 마치기로 바뀌어요. 다 했을 때 한 번 더 눌러 완료해요.',
                 style: GoogleFonts.notoSansKr(
                   fontSize: 12.5,
                   height: 1.35,
@@ -5791,7 +5812,7 @@ class _TasksScreenState extends State<TasksScreen>
     );
   }
 
-  Widget _buildCheckboxTapHintDot() {
+  Widget _buildCheckboxTapHintDot({double size = 7}) {
     return AnimatedBuilder(
       animation: _taskCheckboxHintPulseCtrl,
       builder: (context, child) {
@@ -5810,8 +5831,8 @@ class _TasksScreenState extends State<TasksScreen>
         );
       },
       child: Container(
-        width: 7,
-        height: 7,
+        width: size,
+        height: size,
         decoration: BoxDecoration(
           color: _coach.accentColor,
           shape: BoxShape.circle,
@@ -7001,6 +7022,68 @@ class _TasksScreenState extends State<TasksScreen>
     TasksSyncService.scheduleSyncToCloud();
   }
 
+  Widget _buildTaskStatusButton({
+    required TaskItem task,
+    required bool isMilestone,
+    required bool showTapHint,
+  }) {
+    final isDone = task.done;
+    final isActive = task.inProgress && !isDone;
+    final accent = isMilestone ? const Color(0xFF5AD7B0) : _coach.accentColor;
+    final icon = isDone
+        ? Icons.check_rounded
+        : isActive
+        ? Icons.pause_rounded
+        : Icons.play_arrow_rounded;
+    final label = isDone
+        ? '완료'
+        : isActive
+        ? '마치기'
+        : '시작';
+    final foreground = isDone || isActive ? Colors.white : accent;
+    final background = isDone || isActive
+        ? accent
+        : accent.withValues(alpha: 0.06);
+    final borderColor = isDone || isActive
+        ? accent
+        : accent.withValues(alpha: 0.42);
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
+      width: 76,
+      height: 32,
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: borderColor, width: 1.1),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 18, color: foreground),
+          const SizedBox(width: 3),
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.clip,
+            style: GoogleFonts.notoSansKr(
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0,
+              color: foreground,
+            ),
+          ),
+          if (showTapHint && !isDone && !isActive) ...[
+            const SizedBox(width: 3),
+            _buildCheckboxTapHintDot(size: 5),
+          ],
+        ],
+      ),
+    );
+  }
+
   Widget _buildTaskItem(TaskItem t, {bool showCheckboxTapHint = false}) {
     final milestoneInfo = _getMilestoneInfoForTask(t);
     final isMilestone = milestoneInfo != null;
@@ -7056,45 +7139,21 @@ class _TasksScreenState extends State<TasksScreen>
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // 체크버튼
+              // 상태 버튼: 시작 전 -> 진행 중 -> 완료를 한 자리에서 처리한다.
               GestureDetector(
                 onTap: () {
                   _markTaskCheckboxHintSeen();
                   _toggleTask(t.id);
                 },
-                child: Container(
-                  width: 48,
+                child: SizedBox(
+                  width: 90,
                   height: 52,
-                  alignment: Alignment.center,
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    width: 22,
-                    height: 22,
-                    decoration: BoxDecoration(
-                      color: t.done
-                          ? (isMilestone
-                                ? const Color(0xFF5AD7B0)
-                                : _coach.accentColor)
-                          : Colors.transparent,
-                      border: Border.all(
-                        color: t.done
-                            ? (isMilestone
-                                  ? const Color(0xFF5AD7B0)
-                                  : _coach.accentColor)
-                            : t.inProgress
-                            ? _coach.accentColor
-                            : (isMilestone
-                                  ? const Color(0xFF8B7CFF)
-                                  : const Color(0xFFD1D5DB)),
-                        width: 2,
-                      ),
-                      borderRadius: BorderRadius.circular(6),
+                  child: Center(
+                    child: _buildTaskStatusButton(
+                      task: t,
+                      isMilestone: isMilestone,
+                      showTapHint: showCheckboxTapHint,
                     ),
-                    child: t.done
-                        ? const Icon(Icons.check, color: Colors.white, size: 14)
-                        : showCheckboxTapHint
-                        ? _buildCheckboxTapHintDot()
-                        : null,
                   ),
                 ),
               ),
@@ -7225,8 +7284,7 @@ class _TasksScreenState extends State<TasksScreen>
                                 ],
                               ),
                             ),
-                            if (t.inProgress ||
-                                t.isHabit ||
+                            if (t.isHabit ||
                                 isInsightTask ||
                                 isRecurringSchedule ||
                                 (isMilestone &&
@@ -7236,48 +7294,7 @@ class _TasksScreenState extends State<TasksScreen>
                                 padding: const EdgeInsets.only(right: 12),
                                 child: Align(
                                   alignment: Alignment.centerRight,
-                                  child: t.inProgress
-                                      ? Container(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 9,
-                                            vertical: 4,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: _coach.accentColor
-                                                .withValues(alpha: 0.08),
-                                            borderRadius: BorderRadius.circular(
-                                              999,
-                                            ),
-                                            border: Border.all(
-                                              color: _coach.accentColor
-                                                  .withValues(alpha: 0.28),
-                                            ),
-                                          ),
-                                          child: Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              Container(
-                                                width: 5,
-                                                height: 5,
-                                                decoration: BoxDecoration(
-                                                  color: _coach.accentColor
-                                                      .withValues(alpha: 0.55),
-                                                  shape: BoxShape.circle,
-                                                ),
-                                              ),
-                                              const SizedBox(width: 4),
-                                              Text(
-                                                '진행중',
-                                                style: GoogleFonts.notoSansKr(
-                                                  fontSize: 10,
-                                                  fontWeight: FontWeight.w800,
-                                                  color: _coach.accentColor,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        )
-                                      : t.isHabit
+                                  child: t.isHabit
                                       ? Container(
                                           padding: const EdgeInsets.symmetric(
                                             horizontal: 9,
@@ -9406,7 +9423,7 @@ class _TasksScreenState extends State<TasksScreen>
                                                     const SizedBox(width: 4),
                                                     Text(
                                                       m.done
-                                                          ? '완료 취소 (다시 진행 중으로)'
+                                                          ? '완료 취소 (시작 전으로)'
                                                           : '완료 표시',
                                                       style:
                                                           GoogleFonts.notoSansKr(

@@ -187,8 +187,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   VoidCallback _paidSettingsTap(VoidCallback action) {
-    return () {
-      if (_isFreeUser) {
+    return () async {
+      final userData = _userData ?? await UserDataService.load();
+      if (!mounted) return;
+      if (_userData == null) {
+        setState(() => _userData = userData);
+      }
+      if (!userData.isPlanActive) {
         _showFreeSettingsLockedNotice();
         return;
       }
@@ -459,49 +464,43 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    '바탕화면에 꺼내둘 위젯을 선택해 주세요.',
+                    '앱을 열지 않아도 오늘 할 일과 진행 상황을 바탕화면에서 바로 확인할 수 있어요.',
                     style: GoogleFonts.notoSansKr(
                       fontSize: 14,
                       color: const Color(0xFF8E8D9B),
                     ),
                   ),
                   const SizedBox(height: 32),
-                  Expanded(
-                    child: ListView(
-                      padding: EdgeInsets.zero,
-                      children: [
-                        _buildWidgetToggle(
-                          title: '냥냥코치 미니 위젯',
-                          subtitle: '남은 할 일을 작게 보기',
-                          value: tempNyang,
-                          isLocked: false,
-                          onChanged: (val) {
-                            setModalState(() {
-                              tempNyang = val;
-                              if (val) {
-                                tempCatCharacter = false;
-                              }
-                            });
-                          },
-                        ),
-                        _buildWidgetToggle(
-                          title: '냥냥코치 가로 위젯',
-                          subtitle: '냥이와 진행 상황을 넓게 보기',
-                          isRecommended: true,
-                          value: tempCatCharacter,
-                          isLocked: false,
-                          onChanged: (val) {
-                            setModalState(() {
-                              tempCatCharacter = val;
-                              if (val) {
-                                tempNyang = false;
-                              }
-                            });
-                          },
-                        ),
-                      ],
-                    ),
+                  _buildWidgetToggle(
+                    title: '냥냥코치 미니 위젯',
+                    subtitle: '남은 할 일을 작게 보기',
+                    value: tempNyang,
+                    isLocked: false,
+                    onChanged: (val) {
+                      setModalState(() {
+                        tempNyang = val;
+                        if (val) {
+                          tempCatCharacter = false;
+                        }
+                      });
+                    },
                   ),
+                  _buildWidgetToggle(
+                    title: '냥냥코치 가로 위젯',
+                    subtitle: '냥이와 진행 상황을 넓게 보기',
+                    isRecommended: true,
+                    value: tempCatCharacter,
+                    isLocked: false,
+                    onChanged: (val) {
+                      setModalState(() {
+                        tempCatCharacter = val;
+                        if (val) {
+                          tempNyang = false;
+                        }
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 8),
                   SizedBox(
                     width: double.infinity,
                     height: 56,
@@ -567,6 +566,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                     ),
                   ),
+                  const Spacer(),
                 ],
               ),
             );
