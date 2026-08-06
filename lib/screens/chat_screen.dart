@@ -3860,9 +3860,11 @@ class _ChatScreenState extends State<ChatScreen>
 
   static const _catEveningReturnGreetingDateKey =
       'nyang_cat_evening_return_greeting_date';
+  static const _catNoonStartTipDateKey = 'nyang_cat_noon_start_tip_date';
   static const _catAfternoonCheckInDateKey =
       'nyang_cat_afternoon_check_in_date';
   static const _catEveningReturnGreetingCooldown = Duration(days: 7);
+  static const _catNoonStartTipCooldown = Duration(days: 14);
 
   Future<bool> _tryShowCatEveningReturnGreeting(
     SharedPreferences prefs,
@@ -3902,6 +3904,51 @@ class _ChatScreenState extends State<ChatScreen>
         ),
       );
       _dynamicChips = _coach.chips;
+      _suppressDefaultChips = false;
+    });
+    await _saveHistory();
+    _scrollToBottom();
+    return true;
+  }
+
+  Future<bool> _tryShowCatNoonStartTip(
+    SharedPreferences prefs,
+    DateTime now,
+  ) async {
+    if (widget.coachId != 'cat') return false;
+    if (!_userData.isPlanActive || _userData.planType != 'master') {
+      return false;
+    }
+    if (now.hour < 13 || now.hour >= 15) return false;
+    if (widget.handoffFromCoachId == 'nyang_halbae' ||
+        widget.handoffFromCoachId == 'sec_female') {
+      return false;
+    }
+
+    final lastShown = DateTime.tryParse(
+      prefs.getString(_catNoonStartTipDateKey) ?? '',
+    );
+    if (lastShown != null &&
+        now.difference(lastShown) < _catNoonStartTipCooldown) {
+      return false;
+    }
+
+    final todayKey = _dateKey(now);
+    final text = await _buildCatNoonStartTipText(prefs);
+    await prefs.setString(_catNoonStartTipDateKey, todayKey);
+    await prefs.setString(_catAfternoonCheckInDateKey, todayKey);
+    await Future.delayed(const Duration(milliseconds: 450));
+    if (!mounted) return true;
+    setState(() {
+      _messages.add(
+        ChatMessage(
+          text: text,
+          isUser: false,
+          time: DateTime.now(),
+          kind: 'auto_greeting',
+        ),
+      );
+      _dynamicChips = const ['오늘 뭐부터 할까', '하기 싫은 일 있어', '오늘 꼭 끝낼 일 있어'];
       _suppressDefaultChips = false;
     });
     await _saveHistory();
@@ -3968,6 +4015,13 @@ class _ChatScreenState extends State<ChatScreen>
     }
 
     if (await _tryShowCatEveningReturnGreeting(prefs, now)) {
+      await prefs.setString(
+        'last_visit_${widget.coachId}',
+        now.toIso8601String(),
+      );
+      return;
+    }
+    if (await _tryShowCatNoonStartTip(prefs, now)) {
       await prefs.setString(
         'last_visit_${widget.coachId}',
         now.toIso8601String(),
@@ -5379,6 +5433,70 @@ class _ChatScreenState extends State<ChatScreen>
     return '$opener\n'
         '오늘 $done개 끝냈고 $remaining개 남았다냥. $reassurance\n'
         '$question';
+  }
+
+  Future<String> _buildCatNoonStartTipText(SharedPreferences prefs) async {
+    final todayTasks = _decodeMapList(prefs.getString('nyang_tasks'))
+        .where((task) {
+          final category = task['category']?.toString();
+          return category == 'today' ||
+              category == 'habit' ||
+              category == 'schedule';
+        })
+        .toList(growable: false);
+    final incomplete = todayTasks
+        .where((task) => task['done'] != true)
+        .toList(growable: false);
+    final total = todayTasks.length;
+    final remaining = incomplete.length;
+    final done = total - remaining;
+
+    final inProgressSchedule = incomplete
+        .cast<Map<String, dynamic>?>()
+        .firstWhere(
+          (task) =>
+              task?['category'] == 'schedule' && task?['inProgress'] == true,
+          orElse: () => null,
+        );
+    final inProgress = _taskText(
+      inProgressSchedule ??
+          incomplete.cast<Map<String, dynamic>?>().firstWhere(
+            (task) => task?['inProgress'] == true,
+            orElse: () => null,
+          ),
+    );
+    final core = _taskText(
+      _decodeMapList(prefs.getString('nyang_core_tasks'))
+          .cast<Map<String, dynamic>?>()
+          .firstWhere((task) => task?['done'] != true, orElse: () => null),
+    );
+
+    final status = () {
+      if (total == 0) {
+        return '오늘 등록된 할 일은 아직 없다냥. 그래도 하나만 적어두면 냥냥이가 흐름을 같이 봐줄 수 있다냥.';
+      }
+      if (remaining == 0) {
+        return '오늘 할 일 $total개를 다 끝냈다냥. 이미 하루를 꽤 잘 굴리고 있다냥.';
+      }
+      if (inProgress != null) {
+        if (done == 0) {
+          return '아직 완료로 찍힌 일은 없어도, "$inProgress"는 이미 시작해뒀다냥. 시작해둔 것도 흐름이다냥.';
+        }
+        return '오늘 $done개 끝냈고, "$inProgress"는 진행 중이다냥. 이미 해낸 것도 있고 이어가는 것도 있다냥.';
+      }
+      if (done == 0) {
+        final nudge = core != null ? '"$core"부터 봐도 좋고, ' : '';
+        return '아직 완료로 찍힌 건 없어도 괜찮다냥. $nudge시작만 눌러둬도 오늘 흐름이 남는다냥.';
+      }
+      if (core != null) {
+        return '오늘 $done개 끝냈고 $remaining개 남았다냥. "$core"만 너무 크게 보지 말고 작게 시작해도 된다냥.';
+      }
+      return '오늘 $done개 끝냈고 $remaining개 남았다냥. 지금까지 해낸 것도 같이 봐야 한다냥.';
+    }();
+
+    return '오! 왔구나.\n'
+        '$status\n'
+        '맞다! 오늘 탭에서 할 일을 시작할 때 ▶ 시작을 누르면, 습관 트래킹할 때 그 시간까지 감안해서 패턴도 분석해주니까 참고하면 좋을 것 같다냥.';
   }
 
   int _conversationAvoidanceCountForTask(
