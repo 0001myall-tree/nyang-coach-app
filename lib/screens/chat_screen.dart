@@ -1260,6 +1260,7 @@ class _ChatScreenState extends State<ChatScreen>
   List<String> _repeatedlyDeferredTaskNameOptions = [];
   String? _thoughtOverloadChipTaskName;
   List<String> _thoughtOverloadChipTaskNameOptions = [];
+  List<String> _inProgressChipTaskNameOptions = [];
   Map<String, String> _quickChipSendOverrides = {};
   Map<String, String> _quickChipApiOverrides = {};
   Map<String, String> _quickChipKindOverrides = {};
@@ -1330,6 +1331,7 @@ class _ChatScreenState extends State<ChatScreen>
       final pendingChipCandidates = <Map<String, dynamic>>[];
       final repeatedlyDeferredCandidates = <Map<String, dynamic>>[];
       final appointmentPrepCandidates = <Map<String, dynamic>>[];
+      final inProgressChipCandidates = <Map<String, dynamic>>[];
 
       for (final item in list) {
         if (item is! Map) continue;
@@ -1343,7 +1345,9 @@ class _ChatScreenState extends State<ChatScreen>
         if (task['done'] != true) {
           // 진행 중인 일도 후보엔 넣되, 정렬에서 맨 뒤로 밀린다.
           pendingChipCandidates.add(task);
-          if (!_isInProgressTask(task)) {
+          if (_isInProgressTask(task)) {
+            inProgressChipCandidates.add(task);
+          } else {
             if (_appointmentPrepChipTaskNameFor(task) != null) {
               appointmentPrepCandidates.add(task);
             }
@@ -1409,6 +1413,11 @@ class _ChatScreenState extends State<ChatScreen>
         todayTasks: todayTasks,
         fallbackCandidates: pendingChipCandidates,
       );
+      _sortPendingTaskCandidates(inProgressChipCandidates);
+      final inProgressChipTaskNameOptions = inProgressChipCandidates
+          .map(_taskText)
+          .whereType<String>()
+          .toList(growable: false);
 
       if (mounted) {
         setState(() {
@@ -1425,6 +1434,7 @@ class _ChatScreenState extends State<ChatScreen>
           _thoughtOverloadChipTaskName = thoughtOverloadChipTaskName;
           _thoughtOverloadChipTaskNameOptions =
               thoughtOverloadChipTaskNameOptions;
+          _inProgressChipTaskNameOptions = inProgressChipTaskNameOptions;
         });
       }
     } catch (e) {
@@ -15225,6 +15235,8 @@ $timerOutputRule
     _quickChipKindOverrides = {};
 
     final usedTaskNames = <String>{};
+    const focusSlot = '__master_focus_chip__';
+    const decisionSlot = '__master_decision_chip__';
 
     String appointmentPrepChip() {
       final option = _pickUnusedAppointmentPrepOption(usedTaskNames);
@@ -15252,7 +15264,7 @@ $timerOutputRule
     }
 
     String thoughtOverloadChip() {
-      final taskName = _pickUnusedTaskName(
+      final taskName = _pickTaskChipNameWithInProgressFallback(
         _thoughtOverloadChipTaskNameOptions,
         usedTaskNames,
       );
@@ -15273,10 +15285,10 @@ $timerOutputRule
     }
 
     String deferredDecisionChip() {
-      final taskName = _pickUnusedTaskName(
-        _repeatedlyDeferredTaskNameOptions,
-        usedTaskNames,
-      );
+      final taskName = _pickTaskChipNameWithInProgressFallback([
+        ..._repeatedlyDeferredTaskNameOptions,
+        ..._resistanceChipTaskNameOptions,
+      ], usedTaskNames);
       final label = _masterDecisionChipLabelForTask(
         taskName: taskName,
         truncateTaskName: true,
@@ -15292,33 +15304,61 @@ $timerOutputRule
       return label;
     }
 
-    final focusChip = _coach.id == 'sec_female'
-        ? (_appointmentPrepChipOptions.isNotEmpty
-              ? appointmentPrepChip()
-              : thoughtOverloadChip())
-        : thoughtOverloadChip();
-    var decisionChip = deferredDecisionChip();
-    if (_coach.id == 'nyang_halbae' &&
-        decisionChip == '지금 뭐하지?' &&
-        _appointmentPrepChipOptions.isNotEmpty) {
-      decisionChip = appointmentPrepChip();
+    String focusChip() {
+      return _coach.id == 'sec_female' &&
+              _pickUnusedAppointmentPrepOption(
+                    usedTaskNames,
+                    fallbackToFirst: false,
+                  ) !=
+                  null
+          ? appointmentPrepChip()
+          : thoughtOverloadChip();
     }
+
+    String decisionChip() {
+      final label = deferredDecisionChip();
+      if (_coach.id == 'nyang_halbae' &&
+          label == '지금 뭐하지?' &&
+          _appointmentPrepChipOptions.isNotEmpty) {
+        return appointmentPrepChip();
+      }
+      return label;
+    }
+
+    String resolveChip(String chip) {
+      return switch (chip) {
+        focusSlot => focusChip(),
+        decisionSlot => decisionChip(),
+        _ => chip,
+      };
+    }
+
+    List<String> resolveChips(List<String> chips) {
+      return chips.map(resolveChip).toList(growable: false);
+    }
+
     if (_coach.id == 'nyang_halbae') {
       if (_isNyangMorningStartChipTime) {
-        return ['시작하기가 힘들어', focusChip, '오늘 핵심 정리해줘'];
+        return resolveChips(['시작하기가 힘들어', focusSlot, '오늘 핵심 정리해줘']);
       }
       if (_isNyangPerfectionismChipTime) {
-        return _isMasterChipNightTime
-            ? ['완벽하게 못 해서 속상해', focusChip, '내일로 미뤄도 돼?']
-            : ['완벽하게 못 해서 속상해', focusChip, '오늘 핵심 정리해줘'];
+        return resolveChips(
+          _isMasterChipNightTime
+              ? ['완벽하게 못 해서 속상해', focusSlot, '내일로 미뤄도 돼?']
+              : ['완벽하게 못 해서 속상해', focusSlot, '오늘 핵심 정리해줘'],
+        );
       }
-      return _isMasterChipNightTime
-          ? [focusChip, '잠이 안 와', '내일로 미뤄도 돼?']
-          : [focusChip, decisionChip, '오늘 핵심 정리해줘'];
+      return resolveChips(
+        _isMasterChipNightTime
+            ? [focusSlot, '잠이 안 와', '내일로 미뤄도 돼?']
+            : [focusSlot, decisionSlot, '오늘 핵심 정리해줘'],
+      );
     }
-    return _isMasterChipNightTime
-        ? ['잠이 안 와', focusChip, '내일로 미뤄도 돼?']
-        : [decisionChip, focusChip, '오늘 핵심 정리해줘'];
+    return resolveChips(
+      _isMasterChipNightTime
+          ? ['오늘 핵심 정리해줘', '잠이 안 와', focusSlot, '내일로 미뤄도 돼?']
+          : ['오늘 핵심 정리해줘', decisionSlot, focusSlot],
+    );
   }
 
   static const int _resistanceChipTaskDisplayMaxLength = 10;
@@ -15460,15 +15500,6 @@ $timerOutputRule
     );
   }
 
-  String _deferredResistancePhrase(String taskName) {
-    const phrases = ['하기가 자꾸 귀찮아', '하기가 자꾸 부담돼'];
-    final phraseIndex = taskName.codeUnits.fold<int>(
-      0,
-      (sum, codeUnit) => sum + codeUnit,
-    );
-    return phrases[phraseIndex % phrases.length];
-  }
-
   String _masterDecisionChipLabelForTask({
     required String? taskName,
     required bool truncateTaskName,
@@ -15480,7 +15511,7 @@ $timerOutputRule
     final displayTaskName = truncateTaskName
         ? _truncateResistanceChipTaskName(normalizedTaskName)
         : normalizedTaskName;
-    return '\'$displayTaskName\' ${_deferredResistancePhrase(normalizedTaskName)}';
+    return '\'$displayTaskName\' 하려는데 걸리는 게 있어';
   }
 
   String _masterDecisionChipLabel({required bool truncateTaskName}) {
@@ -15503,7 +15534,7 @@ $timerOutputRule
     if (normalizedTaskName == null || normalizedTaskName.isEmpty) {
       return '지금 뭐하지?';
     }
-    return '\'$normalizedTaskName\' ${_deferredResistancePhrase(normalizedTaskName)}. 하기 싫어.';
+    return '\'$normalizedTaskName\' 하려는데 걸리는 게 있어';
   }
 
   String _repeatedlyDeferredMasterChipApiInput() {
@@ -15541,7 +15572,11 @@ $timerOutputRule
     return taskName.trim().replaceAll(RegExp(r'\s+'), ' ');
   }
 
-  String? _pickUnusedTaskName(List<String> candidates, Set<String> usedNames) {
+  String? _pickUnusedTaskName(
+    List<String> candidates,
+    Set<String> usedNames, {
+    bool fallbackToFirst = true,
+  }) {
     final cleaned = candidates
         .map((name) => name.trim())
         .where((name) => name.isNotEmpty)
@@ -15550,17 +15585,34 @@ $timerOutputRule
     for (final name in cleaned) {
       if (!usedNames.contains(_taskChipDedupKey(name))) return name;
     }
-    return cleaned.first;
+    return fallbackToFirst ? cleaned.first : null;
   }
 
-  Map<String, String>? _pickUnusedAppointmentPrepOption(Set<String> usedNames) {
+  String? _pickTaskChipNameWithInProgressFallback(
+    List<String> candidates,
+    Set<String> usedNames,
+  ) {
+    return _pickUnusedTaskName(candidates, usedNames, fallbackToFirst: false) ??
+        _pickUnusedTaskName(
+          _inProgressChipTaskNameOptions,
+          usedNames,
+          fallbackToFirst: false,
+        ) ??
+        _pickUnusedTaskName(candidates, usedNames) ??
+        _pickUnusedTaskName(_inProgressChipTaskNameOptions, usedNames);
+  }
+
+  Map<String, String>? _pickUnusedAppointmentPrepOption(
+    Set<String> usedNames, {
+    bool fallbackToFirst = true,
+  }) {
     if (_appointmentPrepChipOptions.isEmpty) return null;
     for (final option in _appointmentPrepChipOptions) {
       final taskName = option['taskName']?.trim();
       if (taskName == null || taskName.isEmpty) continue;
       if (!usedNames.contains(_taskChipDedupKey(taskName))) return option;
     }
-    return _appointmentPrepChipOptions.first;
+    return fallbackToFirst ? _appointmentPrepChipOptions.first : null;
   }
 
   void _reserveTaskChipName(String? taskName, Set<String> usedNames) {
@@ -15615,7 +15667,7 @@ $timerOutputRule
 
       if ((_coach.id == 'cat' && chip == '하기 싫다') ||
           (_coach.id == 'boyfriend' && chip == '하기 싫어')) {
-        final taskName = _pickUnusedTaskName(
+        final taskName = _pickTaskChipNameWithInProgressFallback(
           _resistanceChipTaskNameOptions,
           usedTaskNames,
         );
@@ -15661,7 +15713,7 @@ $timerOutputRule
     final hour = DateTime.now().hour;
     if (hour >= 18) return '남은 것 중 뭐하지?';
     if (hour >= 15) {
-      final taskName = _pickUnusedTaskName(
+      final taskName = _pickTaskChipNameWithInProgressFallback(
         _resistanceChipTaskNameOptions,
         usedTaskNames,
       );

@@ -2336,8 +2336,9 @@ class _MainTabScreenState extends State<MainTabScreen>
                           title: '귀찮거나 막힐 땐 코치에게 말하기',
                           body:
                               '하기 싫은 건 물론, 하다가 걸리는 게 생겨도 그냥 말해보세요.\n'
-                              '“스트레칭 해야 하는데 거실이 너무 더워”, “외출해야 하는데 뭐부터 준비할지 모르겠어”처럼 사소한 것도 괜찮아요.\n'
-                              '코치가 지금 상황에서 할 수 있는 방법을 같이 찾아드릴게요.',
+                              '“스트레칭 해야 하는데 거실이 너무 더워”처럼 사소한 것도 괜찮아요.\n'
+                              '코치가 지금 상황에서 할 수 있는 방법을 찾아줘요.',
+                          highlightTerms: const ['스트레칭 해야 하는데 거실이 너무 더워'],
                         ),
                         const SizedBox(height: 18),
                         _buildPlannerHelpSection(
