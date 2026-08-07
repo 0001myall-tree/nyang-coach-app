@@ -800,6 +800,31 @@ class _MainTabScreenState extends State<MainTabScreen>
     }
   }
 
+  Future<void> _openCatWidgetPromptFromChat() async {
+    if (!mounted || _catWidgetPromptShowing) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    final hasWidget = await WidgetSyncService.hasInstalledCatHomeWidget();
+    if (hasWidget) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('이미 냥냥코치 위젯이 활성화되어 있어요.')));
+      return;
+    }
+
+    await prefs.setInt(
+      _catWidgetPromptLastShownAtKey,
+      DateTime.now().millisecondsSinceEpoch,
+    );
+    _catWidgetPromptShowing = true;
+    try {
+      await _showCatWidgetPromptSheet(prefs);
+    } finally {
+      _catWidgetPromptShowing = false;
+    }
+  }
+
   Future<void> _showCatWidgetPromptSheet(SharedPreferences prefs) {
     return showAppBottomSheet<void>(
       context: context,
@@ -1587,6 +1612,7 @@ class _MainTabScreenState extends State<MainTabScreen>
       onDeleteCommand: _handleDeleteCommandFromChat,
       onEditCommand: _handleEditCommandFromChat,
       onSwitchCoach: _switchCoachFromChat,
+      onOpenCatWidgetPrompt: _openCatWidgetPromptFromChat,
       onVacationChanged: () {
         _loadVacation();
       },
@@ -2307,10 +2333,11 @@ class _MainTabScreenState extends State<MainTabScreen>
                         const SizedBox(height: 18),
                         _buildPlannerHelpSection(
                           iconPath: 'assets/icons/planner-comments.svg',
-                          title: '하기 싫을 땐 코치에게 말하기',
+                          title: '귀찮거나 막힐 땐 코치에게 말하기',
                           body:
-                              '하기 싫은 일이 있을 때 코치에게 언제든 투정해도 돼요.\n'
-                              '어떤 일이 하기 싫은지 솔직히 말해주면 코치가 더 잘 도와줄 수 있어요.',
+                              '하기 싫은 건 물론, 하다가 걸리는 게 생겨도 그냥 말해보세요.\n'
+                              '“스트레칭 해야 하는데 거실이 너무 더워”, “외출해야 하는데 뭐부터 준비할지 모르겠어”처럼 사소한 것도 괜찮아요.\n'
+                              '코치가 지금 상황에서 할 수 있는 방법을 같이 찾아드릴게요.',
                         ),
                         const SizedBox(height: 18),
                         _buildPlannerHelpSection(

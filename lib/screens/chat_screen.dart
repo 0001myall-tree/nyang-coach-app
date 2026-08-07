@@ -28,6 +28,7 @@ import 'package:nyang_coach/services/master_greeting.dart';
 import 'package:nyang_coach/services/task_resistance_service.dart';
 import 'package:nyang_coach/services/execution_resistance_service.dart';
 import 'package:nyang_coach/services/recovery_insight_service.dart';
+import 'package:nyang_coach/services/widget_sync_service.dart';
 import 'coach_config.dart';
 import 'focus_timer_widget.dart';
 import 'cat_preview/cat_preview_intro_dialog.dart';
@@ -1137,6 +1138,7 @@ class ChatScreen extends StatefulWidget {
   final Future<String> Function(Map<String, dynamic> command)? onDeleteCommand;
   final Future<String> Function(Map<String, dynamic> command)? onEditCommand;
   final ValueChanged<String>? onSwitchCoach;
+  final Future<void> Function()? onOpenCatWidgetPrompt;
   final VoidCallback? onVacationChanged;
   final String? handoffFromCoachId;
   final dynamic vacationInfo;
@@ -1152,6 +1154,7 @@ class ChatScreen extends StatefulWidget {
     this.onDeleteCommand,
     this.onEditCommand,
     this.onSwitchCoach,
+    this.onOpenCatWidgetPrompt,
     this.onVacationChanged,
     this.handoffFromCoachId,
     this.vacationInfo,
@@ -4073,11 +4076,11 @@ class _ChatScreenState extends State<ChatScreen>
 
   static const _catEveningReturnGreetingDateKey =
       'nyang_cat_evening_return_greeting_date';
+  static const _catEveningCheckInDateKey = 'nyang_cat_evening_check_in_date';
   static const _catNoonStartTipDateKey = 'nyang_cat_noon_start_tip_date';
   static const _catAfternoonCheckInDateKey =
       'nyang_cat_afternoon_check_in_date';
-  static const _catEveningReturnGreetingCooldown = Duration(days: 7);
-  static const _catNoonStartTipCooldown = Duration(days: 14);
+  static const _catEveningReturnGreetingCooldown = Duration(days: 3);
 
   Future<bool> _tryShowCatEveningReturnGreeting(
     SharedPreferences prefs,
@@ -4085,37 +4088,82 @@ class _ChatScreenState extends State<ChatScreen>
   ) async {
     if (widget.coachId != 'cat') return false;
     if (!_userData.isPlanActive) return false;
-    if (_catTodayEntryCount != 1) return false;
     if (now.hour < 18) return false;
     if (widget.handoffFromCoachId == 'nyang_halbae' ||
         widget.handoffFromCoachId == 'sec_female') {
       return false;
     }
 
-    final lastShown = DateTime.tryParse(
+    final todayKey = _dateKey(now);
+    if (prefs.getString(_catEveningCheckInDateKey) == todayKey) return false;
+
+    final lastSpecialShown = DateTime.tryParse(
       prefs.getString(_catEveningReturnGreetingDateKey) ?? '',
     );
-    if (lastShown != null &&
-        now.difference(lastShown) < _catEveningReturnGreetingCooldown) {
-      return false;
-    }
+    final canShowSpecialGreeting =
+        lastSpecialShown == null ||
+        now.difference(lastSpecialShown) >= _catEveningReturnGreetingCooldown;
 
-    await prefs.setString(_catEveningReturnGreetingDateKey, _dateKey(now));
     await Future.delayed(const Duration(milliseconds: 450));
     if (!mounted) return true;
-    setState(() {
-      _messages.add(
+    final timeLabel =
+        '${now.hour >= 12 ? '오후' : '오전'} ${now.hour == 0
+            ? 12
+            : now.hour > 12
+            ? now.hour - 12
+            : now.hour}시 ${now.minute.toString().padLeft(2, '0')}분';
+    final greetings = <(ChatMessage, bool)>[
+      (
         ChatMessage(
           text:
-              '이제 왔냥? 냥냥이 기다리고 있었다냥.\n'
-              '냥냥코치는 계획만 적어두는 플래너가 아니다냥.\n'
-              '할 일을 시작할 때랑 마쳤을 때도 알려줘.\n'
-              '중간중간 하나씩 해낸 걸 확인하고 냥냥이한테 칭찬받으면, 남은 일도 조금 더 힘내서 이어갈 수 있다냥.',
+              '집사 하이. 지금 시간이 $timeLabel이네.\n'
+              '괜찮아. 지금 하나라도 하면 된다냥. 냥냥이랑 뭐할지 정해볼까?',
           isUser: false,
           time: DateTime.now(),
           kind: 'auto_greeting',
         ),
+        false,
+      ),
+    ];
+    if (canShowSpecialGreeting) {
+      greetings.add((
+        ChatMessage(
+          text:
+              '이제 왔냥? 기다리고 있었는데ㅜ\n'
+              '냥냥코치는 계획만 적는 곳이 아니라, 실행하다 막힐 때마다 불러도 되는 곳이다냥. 언제든 냥냥이를 불러주라냥.',
+          isUser: false,
+          time: DateTime.now(),
+          kind: 'auto_greeting',
+        ),
+        true,
+      ));
+      final hasWidget = await WidgetSyncService.hasInstalledCatHomeWidget();
+      if (!hasWidget) {
+        greetings.add((
+          ChatMessage(
+            text:
+                '집사 안녕.\n'
+                '혹시 냥냥코치 들어오는 거 자꾸 잊어버리면 위젯을 깔아보는 거 어때? 위젯은 설정에 들어가서 설치할 수 있다냥.',
+            isUser: false,
+            time: DateTime.now(),
+            kind: 'cat_widget_prompt_choice',
+            choices: const ['지금 위젯 설치하기', '지금은 안 할래'],
+          ),
+          true,
+        ));
+      }
+    }
+    final selected = greetings[Random().nextInt(greetings.length)];
+    if (selected.$2) {
+      await prefs.setString(
+        _catEveningReturnGreetingDateKey,
+        now.toIso8601String(),
       );
+    }
+    await prefs.setString(_catEveningCheckInDateKey, todayKey);
+    final greeting = selected.$1;
+    setState(() {
+      _messages.add(greeting);
       _dynamicChips = _coach.chips;
       _suppressDefaultChips = false;
     });
@@ -4172,24 +4220,16 @@ class _ChatScreenState extends State<ChatScreen>
     if (!_userData.isPlanActive || _userData.planType != 'master') {
       return false;
     }
-    if (now.hour < 13 || now.hour >= 15) return false;
+    if (now.hour < 7 || now.hour >= 15) return false;
     if (widget.handoffFromCoachId == 'nyang_halbae' ||
         widget.handoffFromCoachId == 'sec_female') {
       return false;
     }
 
-    final lastShown = DateTime.tryParse(
-      prefs.getString(_catNoonStartTipDateKey) ?? '',
-    );
-    if (lastShown != null &&
-        now.difference(lastShown) < _catNoonStartTipCooldown) {
-      return false;
-    }
-
     final todayKey = _dateKey(now);
+    if (prefs.getString(_catNoonStartTipDateKey) == todayKey) return false;
     final text = await _buildCatNoonStartTipText(prefs);
     await prefs.setString(_catNoonStartTipDateKey, todayKey);
-    await prefs.setString(_catAfternoonCheckInDateKey, todayKey);
     await Future.delayed(const Duration(milliseconds: 450));
     if (!mounted) return true;
     setState(() {
@@ -5696,6 +5736,15 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   Future<String> _buildCatNoonStartTipText(SharedPreferences prefs) async {
+    final random = Random();
+    String pick(List<String> lines) => lines[random.nextInt(lines.length)];
+    String opener() => pick([
+      '집사 하이.',
+      '집사 왔냥.',
+      '집사 반가워.',
+      DateTime.now().hour < 12 ? '굿모닝. 집사.' : '굿 애프터눈. 집사.',
+    ]);
+
     final todayTasks = _decodeMapList(prefs.getString('nyang_tasks'))
         .where((task) {
           final category = task['category']?.toString();
@@ -5703,6 +5752,9 @@ class _ChatScreenState extends State<ChatScreen>
               category == 'habit' ||
               category == 'schedule';
         })
+        .toList(growable: false);
+    final completed = todayTasks
+        .where((task) => task['done'] == true)
         .toList(growable: false);
     final incomplete = todayTasks
         .where((task) => task['done'] != true)
@@ -5731,32 +5783,92 @@ class _ChatScreenState extends State<ChatScreen>
           .firstWhere((task) => task?['done'] != true, orElse: () => null),
     );
 
-    final status = () {
-      if (total == 0) {
-        return '오늘 등록된 할 일은 아직 없다냥. 그래도 하나만 적어두면 냥냥이가 흐름을 같이 봐줄 수 있다냥.';
+    String currentTimeLabel() {
+      final now = DateTime.now();
+      final prefix = now.hour < 12 ? '오전' : '오후';
+      final hour12 = now.hour == 0
+          ? 12
+          : now.hour > 12
+          ? now.hour - 12
+          : now.hour;
+      return '$prefix $hour12시 ${now.minute.toString().padLeft(2, '0')}분';
+    }
+
+    String completedBriefing() {
+      final completedNames = completed
+          .map(_taskText)
+          .whereType<String>()
+          .take(2)
+          .toList(growable: false);
+      final time = currentTimeLabel();
+      if (completedNames.isEmpty) {
+        return '${opener()}\n'
+            '오늘 남은 일정은 $remaining개라냥. 제일 만만한 것부터 하나만 볼까?';
       }
-      if (remaining == 0) {
-        return '오늘 할 일 $total개를 다 끝냈다냥. 이미 하루를 꽤 잘 굴리고 있다냥.';
+      if (completedNames.length == 1) {
+        return '${opener()} 지금은 $time이네.\n'
+            '오늘 "${completedNames[0]}" 끝냈고, 남은 일정은 $remaining개라냥. 잘하고 있다냥.';
+      }
+      if (done == 2) {
+        return '${opener()} 지금은 $time이네.\n'
+            '오늘 "${completedNames[0]}"이랑 "${completedNames[1]}" 끝냈고, 남은 일정은 $remaining개라냥. 잘하고 있다냥.';
+      }
+      return '${opener()} 지금은 $time이네.\n'
+          '오늘 "${completedNames[0]}"이랑 "${completedNames[1]}" 포함해서 $done개 끝냈고, 남은 일정은 $remaining개라냥. 잘하고 있다냥.';
+    }
+
+    String statusBriefing() {
+      if (total == 0) {
+        return '${opener()}\n'
+            '오늘 등록된 일정은 아직 없다냥. 지금 하나만 같이 잡아볼까?';
+      }
+      if (done > 0) {
+        return completedBriefing();
       }
       if (inProgress != null) {
-        if (done == 0) {
-          return '아직 완료로 찍힌 일은 없어도, "$inProgress"는 이미 시작해뒀다냥. 시작해둔 것도 흐름이다냥.';
-        }
-        return '오늘 $done개 끝냈고, "$inProgress"는 진행 중이다냥. 이미 해낸 것도 있고 이어가는 것도 있다냥.';
-      }
-      if (done == 0) {
-        final nudge = core != null ? '"$core"부터 봐도 좋고, ' : '';
-        return '아직 완료로 찍힌 건 없어도 괜찮다냥. $nudge시작만 눌러둬도 오늘 흐름이 남는다냥.';
+        return '${opener()}\n'
+            '지금 "$inProgress" 하는 중이네. 막히는 거 있으면 냥냥이한테 말해주라냥.';
       }
       if (core != null) {
-        return '오늘 $done개 끝냈고 $remaining개 남았다냥. "$core"만 너무 크게 보지 말고 작게 시작해도 된다냥.';
+        return '${opener()}\n'
+            '오늘 남은 일정은 $remaining개라냥. "$core"부터 작게 봐도 좋겠다냥.';
       }
-      return '오늘 $done개 끝냈고 $remaining개 남았다냥. 지금까지 해낸 것도 같이 봐야 한다냥.';
-    }();
+      return '${opener()}\n'
+          '오늘 남은 일정은 $remaining개라냥. 제일 만만한 것부터 하나만 볼까?';
+    }
 
-    return '오! 왔구나.\n'
-        '$status\n'
-        '맞다! 오늘 탭에서 할 일을 시작할 때 ▶ 시작을 누르면, 습관 트래킹할 때 그 시간까지 감안해서 패턴도 분석해주니까 참고하면 좋을 것 같다냥.';
+    if (total == 0) {
+      return '${opener()}\n'
+          '${pick(['냥냥이랑 오늘 뭐할지 같이 얘기해볼까?', '오늘 뭐할지 얘기해보면 좋겠다냥.', '냥냥이가 도와줄 거 있으면 이야기해달라냥.', '오늘도 파이팅해보자냥.'])}';
+    }
+
+    final completionCheckTip = pick([
+      '${opener()}\n'
+          '하나 끝낼 때마다 들어와서 체크해줘. 칭찬받으면 남은 일도 더 힘내서 할 수 있을 거라냥.',
+      '${opener()}\n'
+          '끝낸 걸 바로 체크해주면 남은 일 중 뭐할지 냥냥이가 더 잘 골라줄 수 있다냥.',
+    ]);
+    final blockedTip = pick([
+      '실행하다 막히는 거 있으면 작은 것도 냥냥코치들한테 바로 말해주라냥.',
+      '하다가 걸리는 거 있으면 언제든 말해줘. 우린 항상 집사를 도와줄 준비가 돼있다냥.',
+      '귀찮거나 막히면 냥냥이한테 던져줘. 같이 작게 바꿔보자냥.',
+    ]);
+
+    final greetingCandidates = [
+      '${opener()}\n'
+          '$blockedTip',
+      completionCheckTip,
+      statusBriefing(),
+    ];
+    if (done == 0 && inProgress != null) {
+      greetingCandidates.add(
+        '${opener()}\n'
+        '"$inProgress"은 이미 시작해뒀네. 시작해둔 것도 흐름이다냥.\n'
+        '오늘 탭에서 진행 중인 상태 표시를 해두면 마스터 코치들이 기록 탭에서 실행 패턴을 자세히 알려준다냥.',
+      );
+    }
+
+    return pick(greetingCandidates);
   }
 
   int _conversationAvoidanceCountForTask(
@@ -13847,6 +13959,9 @@ $timerOutputRule
     if (msg.kind == 'ultra_low_resistance_check') {
       return _buildUltraLowResistanceCheckCard(msg);
     }
+    if (msg.kind == 'cat_widget_prompt_choice') {
+      return _buildCatWidgetPromptChoiceCard(msg);
+    }
     if (msg.kind == 'feature_location_picker') {
       return _buildFeatureLocationPickerCard(msg);
     }
@@ -14754,6 +14869,35 @@ $timerOutputRule
       coachId: widget.coachId,
       usedApi: false,
     );
+  }
+
+  Widget _buildCatWidgetPromptChoiceCard(ChatMessage msg) {
+    return _buildGroomingChoiceCard(msg, [
+      ('지금 위젯 설치하기', () => _handleCatWidgetPromptChoice('지금 위젯 설치하기')),
+      ('지금은 안 할래', () => _handleCatWidgetPromptChoice('지금은 안 할래')),
+    ], messageFontWeight: FontWeight.w500);
+  }
+
+  Future<void> _handleCatWidgetPromptChoice(String label) async {
+    if (_isLoading) return;
+    HapticFeedback.lightImpact();
+
+    setState(() {
+      _messages.add(
+        ChatMessage(text: label, isUser: true, time: DateTime.now()),
+      );
+      _dynamicChips = _coach.chips;
+      _suppressDefaultChips = false;
+    });
+    _scrollToBottom();
+    await _saveHistory();
+
+    if (label == '지금 위젯 설치하기') {
+      await widget.onOpenCatWidgetPrompt?.call();
+      return;
+    }
+
+    _injectAiMessage('알겠다냥. 필요하면 설정에서 언제든 위젯을 설치할 수 있다냥.');
   }
 
   /// 가꾸기 플로우의 선택지 말풍선. 되묻기·집밖·수락거절이 생김새가 같아서
