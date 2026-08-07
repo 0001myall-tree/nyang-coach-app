@@ -946,7 +946,7 @@ class _LandingScreenState extends State<LandingScreen>
                                   color: AppDesignTokens.brand,
                                   borderRadius: BorderRadius.circular(
                                     24,
-                                  ), // 둘러보기 버튼과 통일
+                                  ),
                                   boxShadow: [
                                     BoxShadow(
                                       color: Colors.black.withValues(
@@ -1034,25 +1034,6 @@ class _LandingScreenState extends State<LandingScreen>
                               ),
                             ],
                           ),
-                        ),
-                        const SizedBox(height: 16),
-                        // 로그인 없이 둘러보기 버튼
-                        AppButton(
-                          label: '로그인 없이 둘러보기',
-                          icon: const Icon(Icons.visibility_outlined),
-                          onPressed: () {
-                            Navigator.of(context).pushReplacement(
-                              MaterialPageRoute(
-                                builder: (context) =>
-                                    const MainTabScreen(coachId: 'cat'),
-                              ),
-                            );
-                          },
-                          variant: AppButtonVariant.outline,
-                          backgroundColor: AppDesignTokens.surface,
-                          foregroundColor: AppDesignTokens.brandPressed,
-                          borderColor: AppDesignTokens.brandBorder,
-                          height: 64,
                         ),
                       ],
                     ),
