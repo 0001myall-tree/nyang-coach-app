@@ -3764,52 +3764,21 @@ class _TasksScreenState extends State<TasksScreen>
                     if (moveTimeType == 'single' || moveTimeType == 'range')
                       Padding(
                         padding: const EdgeInsets.only(top: 8),
-                        child: GestureDetector(
-                          onTap: () async {
-                            final enabled =
-                                await _ensureCoreReminderEnabledFromHere();
-                            if (!enabled) return;
-                            setModalState(
-                              () => moveReminderEnabled = !moveReminderEnabled,
-                            );
-                          },
-                          child: Row(
-                            children: [
-                              Icon(
-                                !_isCoreReminderEnabledGlobally
-                                    ? Icons.notifications_off
-                                    : (moveReminderEnabled
-                                          ? Icons.notifications_active
-                                          : Icons.notifications_none_outlined),
-                                size: 18,
-                                color:
-                                    (_isCoreReminderEnabledGlobally &&
-                                        moveReminderEnabled)
-                                    ? _coach.accentColor
-                                    : const Color(0xFFB0B0C8),
-                              ),
-                              const SizedBox(width: 6),
-                              Text(
-                                !_isCoreReminderEnabledGlobally
-                                    ? '알림 꺼짐'
-                                    : (moveReminderEnabled
-                                          ? '알림 켜짐 (자동 추가)'
-                                          : '알림 끄기'),
-                                style: GoogleFonts.notoSansKr(
-                                  fontSize: 12,
-                                  color:
-                                      (_isCoreReminderEnabledGlobally &&
-                                          moveReminderEnabled)
-                                      ? _coach.accentColor
-                                      : const Color(0xFFB0B0C8),
-                                  fontWeight:
-                                      (_isCoreReminderEnabledGlobally &&
-                                          moveReminderEnabled)
-                                      ? FontWeight.w600
-                                      : FontWeight.w400,
-                                ),
-                              ),
-                            ],
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: _timeReminderButton(
+                            active:
+                                _isCoreReminderEnabledGlobally &&
+                                moveReminderEnabled,
+                            onTap: () async {
+                              final enabled =
+                                  await _ensureCoreReminderEnabledFromHere();
+                              if (!enabled) return;
+                              setModalState(
+                                () =>
+                                    moveReminderEnabled = !moveReminderEnabled,
+                              );
+                            },
                           ),
                         ),
                       ),
@@ -6343,20 +6312,10 @@ class _TasksScreenState extends State<TasksScreen>
                                   ),
                                 ),
                               ),
-                              if (summary != null && hasClockTime) ...[
-                                SvgPicture.asset(
-                                  reminderActive
-                                      ? 'assets/icons/bell.svg'
-                                      : 'assets/icons/bell-slash.svg',
-                                  width: 16,
-                                  height: 16,
-                                  colorFilter: ColorFilter.mode(
-                                    reminderActive
-                                        ? _coach.accentColor
-                                        : const Color(0xFFB0B0C8),
-                                    BlendMode.srcIn,
-                                  ),
-                                ),
+                              if (summary != null &&
+                                  hasClockTime &&
+                                  reminderActive) ...[
+                                _timeReminderActiveBadge(),
                                 const SizedBox(width: 8),
                               ],
                               Icon(
@@ -6494,13 +6453,6 @@ class _TasksScreenState extends State<TasksScreen>
                         padding: const EdgeInsets.only(top: 12),
                         child: Row(
                           children: [
-                            Text(
-                              '시작: ',
-                              style: GoogleFonts.notoSansKr(
-                                fontSize: 13,
-                                color: const Color(0xFF6B7280),
-                              ),
-                            ),
                             GestureDetector(
                               onTap: () async {
                                 final t = await showTimePicker(
@@ -6516,38 +6468,22 @@ class _TasksScreenState extends State<TasksScreen>
                                   });
                                 }
                               },
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                  vertical: 6,
-                                ),
-                                decoration: BoxDecoration(
-                                  border: Border.all(
-                                    color: const Color(0xFFE5E7EB),
-                                  ),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Text(
-                                  mStartTime != null
-                                      ? _formatTime(mStartTime!)
-                                      : '선택',
-                                  style: GoogleFonts.notoSansKr(
-                                    fontSize: 13,
-                                    color: mStartTime != null
-                                        ? _coach.accentColor
-                                        : const Color(0xFFA0A0B0),
-                                  ),
-                                ),
+                              child: _timeValueChip(
+                                mStartTime != null
+                                    ? _formatTime(mStartTime!)
+                                    : '시작 시간',
+                                active: mStartTime != null,
                               ),
                             ),
                             const SizedBox(width: 8),
                             Text(
-                              '~ 종료: ',
+                              '~',
                               style: GoogleFonts.notoSansKr(
                                 fontSize: 13,
                                 color: const Color(0xFF6B7280),
                               ),
                             ),
+                            const SizedBox(width: 8),
                             GestureDetector(
                               onTap: () async {
                                 final t = await showTimePicker(
@@ -6557,33 +6493,21 @@ class _TasksScreenState extends State<TasksScreen>
                                 if (t != null)
                                   setModalState(() => mEndTime = t);
                               },
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                  vertical: 6,
-                                ),
-                                decoration: BoxDecoration(
-                                  border: Border.all(
-                                    color: const Color(0xFFE5E7EB),
-                                  ),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Text(
-                                  mEndTime != null
-                                      ? _formatTime(mEndTime!)
-                                      : '선택',
-                                  style: GoogleFonts.notoSansKr(
-                                    fontSize: 13,
-                                    color: mEndTime != null
-                                        ? _coach.accentColor
-                                        : const Color(0xFFA0A0B0),
-                                  ),
-                                ),
+                              child: _timeValueChip(
+                                mEndTime != null
+                                    ? _formatTime(mEndTime!)
+                                    : '종료 시간',
+                                active: mEndTime != null,
                               ),
                             ),
                             const SizedBox(width: 8),
                             if (isScheduleItem || item is TaskItem)
-                              GestureDetector(
+                              _timeReminderButton(
+                                active: _resolvedTimeReminderEnabled(
+                                  mTimeType,
+                                  mStartTime,
+                                  mReminderEnabled,
+                                ),
                                 onTap: () async {
                                   if (mStartTime == null) {
                                     _showSelectTimeBeforeReminderSnackBar();
@@ -6596,42 +6520,6 @@ class _TasksScreenState extends State<TasksScreen>
                                     () => mReminderEnabled = !mReminderEnabled,
                                   );
                                 },
-                                child: AnimatedContainer(
-                                  duration: const Duration(milliseconds: 200),
-                                  width: 28,
-                                  height: 28,
-                                  decoration: BoxDecoration(
-                                    color:
-                                        _resolvedTimeReminderEnabled(
-                                          mTimeType,
-                                          mStartTime,
-                                          mReminderEnabled,
-                                        )
-                                        ? _coach.accentColor.withOpacity(0.12)
-                                        : Colors.transparent,
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: Icon(
-                                    !_isCoreReminderEnabledGlobally
-                                        ? Icons.notifications_off
-                                        : (_resolvedTimeReminderEnabled(
-                                                mTimeType,
-                                                mStartTime,
-                                                mReminderEnabled,
-                                              )
-                                              ? Icons.notifications_active
-                                              : Icons.notifications_off),
-                                    size: 18,
-                                    color:
-                                        _resolvedTimeReminderEnabled(
-                                          mTimeType,
-                                          mStartTime,
-                                          mReminderEnabled,
-                                        )
-                                        ? _coach.accentColor
-                                        : const Color(0xFFB0B0C8),
-                                  ),
-                                ),
                               ),
                           ],
                         ),
@@ -7570,13 +7458,6 @@ class _TasksScreenState extends State<TasksScreen>
                               padding: const EdgeInsets.only(top: 12),
                               child: Row(
                                 children: [
-                                  Text(
-                                    '시작: ',
-                                    style: GoogleFonts.notoSansKr(
-                                      fontSize: 13,
-                                      color: const Color(0xFF6B7280),
-                                    ),
-                                  ),
                                   GestureDetector(
                                     onTap: () async {
                                       final t = await showTimePicker(
@@ -7592,28 +7473,11 @@ class _TasksScreenState extends State<TasksScreen>
                                         });
                                       }
                                     },
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 10,
-                                        vertical: 6,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        border: Border.all(
-                                          color: const Color(0xFFE5E7EB),
-                                        ),
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      child: Text(
-                                        _todayStartTime != null
-                                            ? _formatTime(_todayStartTime!)
-                                            : '선택',
-                                        style: GoogleFonts.notoSansKr(
-                                          fontSize: 13,
-                                          color: _todayStartTime != null
-                                              ? _coach.accentColor
-                                              : const Color(0xFFA0A0B0),
-                                        ),
-                                      ),
+                                    child: _timeValueChip(
+                                      _todayStartTime != null
+                                          ? _formatTime(_todayStartTime!)
+                                          : '시작 시간',
+                                      active: _todayStartTime != null,
                                     ),
                                   ),
                                   const SizedBox(width: 8),
@@ -7625,13 +7489,6 @@ class _TasksScreenState extends State<TasksScreen>
                                     ),
                                   ),
                                   const SizedBox(width: 8),
-                                  Text(
-                                    '종료: ',
-                                    style: GoogleFonts.notoSansKr(
-                                      fontSize: 13,
-                                      color: const Color(0xFF6B7280),
-                                    ),
-                                  ),
                                   GestureDetector(
                                     onTap: () async {
                                       final t = await showTimePicker(
@@ -7642,32 +7499,20 @@ class _TasksScreenState extends State<TasksScreen>
                                       if (t != null)
                                         setState(() => _todayEndTime = t);
                                     },
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 10,
-                                        vertical: 6,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        border: Border.all(
-                                          color: const Color(0xFFE5E7EB),
-                                        ),
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      child: Text(
-                                        _todayEndTime != null
-                                            ? _formatTime(_todayEndTime!)
-                                            : '선택',
-                                        style: GoogleFonts.notoSansKr(
-                                          fontSize: 13,
-                                          color: _todayEndTime != null
-                                              ? _coach.accentColor
-                                              : const Color(0xFFA0A0B0),
-                                        ),
-                                      ),
+                                    child: _timeValueChip(
+                                      _todayEndTime != null
+                                          ? _formatTime(_todayEndTime!)
+                                          : '종료 시간',
+                                      active: _todayEndTime != null,
                                     ),
                                   ),
                                   const SizedBox(width: 8),
-                                  GestureDetector(
+                                  _timeReminderButton(
+                                    active: _resolvedTimeReminderEnabled(
+                                      _todayTimeType,
+                                      _todayStartTime,
+                                      _todayReminderEnabled,
+                                    ),
                                     onTap: () async {
                                       if (_todayStartTime == null) {
                                         _showSelectTimeBeforeReminderSnackBar();
@@ -7681,46 +7526,6 @@ class _TasksScreenState extends State<TasksScreen>
                                             !_todayReminderEnabled,
                                       );
                                     },
-                                    child: AnimatedContainer(
-                                      duration: const Duration(
-                                        milliseconds: 200,
-                                      ),
-                                      width: 28,
-                                      height: 28,
-                                      decoration: BoxDecoration(
-                                        color:
-                                            _resolvedTimeReminderEnabled(
-                                              _todayTimeType,
-                                              _todayStartTime,
-                                              _todayReminderEnabled,
-                                            )
-                                            ? _coach.accentColor.withOpacity(
-                                                0.12,
-                                              )
-                                            : Colors.transparent,
-                                        shape: BoxShape.circle,
-                                      ),
-                                      child: Icon(
-                                        !_isCoreReminderEnabledGlobally
-                                            ? Icons.notifications_off
-                                            : (_resolvedTimeReminderEnabled(
-                                                    _todayTimeType,
-                                                    _todayStartTime,
-                                                    _todayReminderEnabled,
-                                                  )
-                                                  ? Icons.notifications_active
-                                                  : Icons.notifications_off),
-                                        size: 18,
-                                        color:
-                                            _resolvedTimeReminderEnabled(
-                                              _todayTimeType,
-                                              _todayStartTime,
-                                              _todayReminderEnabled,
-                                            )
-                                            ? _coach.accentColor
-                                            : const Color(0xFFB0B0C8),
-                                      ),
-                                    ),
                                   ),
                                 ],
                               ),
@@ -9925,10 +9730,95 @@ class _TasksScreenState extends State<TasksScreen>
     return requested && _canEnableTimeReminder(timeType, startTime);
   }
 
+  Widget _timeValueChip(String label, {required bool active}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: GoogleFonts.notoSansKr(
+          fontSize: 13,
+          fontWeight: FontWeight.w700,
+          color: active ? _coach.accentColor : const Color(0xFFA0A0B0),
+        ),
+      ),
+    );
+  }
+
+  Widget _timeReminderButton({
+    required bool active,
+    Future<void> Function()? onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        decoration: BoxDecoration(
+          color: active
+              ? _coach.accentColor.withValues(alpha: 0.12)
+              : const Color(0xFFF8F7FF),
+          border: Border.all(
+            color: active ? _coach.accentColor : const Color(0xFFE5E7EB),
+          ),
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              active ? Icons.notifications_active : Icons.notifications_off,
+              size: 16,
+              color: active ? _coach.accentColor : const Color(0xFF9CA3AF),
+            ),
+            const SizedBox(width: 4),
+            Text(
+              active ? '알림 켜짐' : '알림 켜기',
+              style: GoogleFonts.notoSansKr(
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+                color: active ? _coach.accentColor : const Color(0xFF9CA3AF),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _timeReminderActiveBadge() {
+    return Container(
+      width: 28,
+      height: 28,
+      decoration: BoxDecoration(
+        color: _coach.accentColor.withValues(alpha: 0.12),
+        shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(
+            color: _coach.accentColor.withValues(alpha: 0.18),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Icon(
+        Icons.notifications_active,
+        size: 17,
+        color: _coach.accentColor,
+      ),
+    );
+  }
+
   void _showSelectTimeBeforeReminderSnackBar() {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('알람을 켜려면 시간을 먼저 선택해주세요.'),
+        content: Text('알림을 켜려면 시간을 먼저 선택해주세요.'),
         duration: Duration(seconds: 2),
       ),
     );
@@ -10060,13 +9950,6 @@ class _TasksScreenState extends State<TasksScreen>
             padding: const EdgeInsets.only(top: 12),
             child: Row(
               children: [
-                Text(
-                  '시작: ',
-                  style: GoogleFonts.notoSansKr(
-                    fontSize: 13,
-                    color: const Color(0xFF6B7280),
-                  ),
-                ),
                 GestureDetector(
                   onTap: () async {
                     final t = await showTimePicker(
@@ -10075,34 +9958,20 @@ class _TasksScreenState extends State<TasksScreen>
                     );
                     if (t != null) setStartTime(t);
                   },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      border: Border.all(color: const Color(0xFFE5E7EB)),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      startTime != null ? _formatTime(startTime) : '선택',
-                      style: GoogleFonts.notoSansKr(
-                        fontSize: 13,
-                        color: startTime != null
-                            ? _coach.accentColor
-                            : const Color(0xFFA0A0B0),
-                      ),
-                    ),
+                  child: _timeValueChip(
+                    startTime != null ? _formatTime(startTime) : '시작 시간',
+                    active: startTime != null,
                   ),
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  '~ 종료: ',
+                  '~',
                   style: GoogleFonts.notoSansKr(
                     fontSize: 13,
                     color: const Color(0xFF6B7280),
                   ),
                 ),
+                const SizedBox(width: 8),
                 GestureDetector(
                   onTap: () async {
                     final t = await showTimePicker(
@@ -10111,24 +9980,9 @@ class _TasksScreenState extends State<TasksScreen>
                     );
                     if (t != null) setEndTime(t);
                   },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      border: Border.all(color: const Color(0xFFE5E7EB)),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      endTime != null ? _formatTime(endTime) : '선택',
-                      style: GoogleFonts.notoSansKr(
-                        fontSize: 13,
-                        color: endTime != null
-                            ? _coach.accentColor
-                            : const Color(0xFFA0A0B0),
-                      ),
-                    ),
+                  child: _timeValueChip(
+                    endTime != null ? _formatTime(endTime) : '종료 시간',
+                    active: endTime != null,
                   ),
                 ),
               ],
@@ -12626,15 +12480,6 @@ class _TasksScreenState extends State<TasksScreen>
                         padding: const EdgeInsets.only(top: 16),
                         child: Row(
                           children: [
-                            Text(
-                              '시작',
-                              style: GoogleFonts.notoSansKr(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w700,
-                                color: const Color(0xFF6B7280),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
                             GestureDetector(
                               onTap: () async {
                                 final picked = await showTimePicker(
@@ -12653,20 +12498,18 @@ class _TasksScreenState extends State<TasksScreen>
                               child: _scheduleOptionValueChip(
                                 _schStartTime != null
                                     ? _formatTime(_schStartTime!)
-                                    : '선택',
+                                    : '시작 시간',
                                 active: _schStartTime != null,
                               ),
                             ),
-                            const SizedBox(width: 10),
                             Text(
-                              '종료',
+                              ' ~ ',
                               style: GoogleFonts.notoSansKr(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w700,
                                 color: const Color(0xFF6B7280),
                               ),
                             ),
-                            const SizedBox(width: 8),
                             GestureDetector(
                               onTap: () async {
                                 final picked = await showTimePicker(
@@ -12680,12 +12523,17 @@ class _TasksScreenState extends State<TasksScreen>
                               child: _scheduleOptionValueChip(
                                 _schEndTime != null
                                     ? _formatTime(_schEndTime!)
-                                    : '선택',
+                                    : '종료 시간',
                                 active: _schEndTime != null,
                               ),
                             ),
                             const SizedBox(width: 8),
-                            GestureDetector(
+                            _timeReminderButton(
+                              active: _resolvedTimeReminderEnabled(
+                                _schTimeType,
+                                _schStartTime,
+                                _schReminderEnabled,
+                              ),
                               onTap: () async {
                                 if (_schStartTime == null) {
                                   _showSelectTimeBeforeReminderSnackBar();
@@ -12699,44 +12547,6 @@ class _TasksScreenState extends State<TasksScreen>
                                       !_schReminderEnabled,
                                 );
                               },
-                              child: AnimatedContainer(
-                                duration: const Duration(milliseconds: 180),
-                                width: 32,
-                                height: 32,
-                                decoration: BoxDecoration(
-                                  color:
-                                      _resolvedTimeReminderEnabled(
-                                        _schTimeType,
-                                        _schStartTime,
-                                        _schReminderEnabled,
-                                      )
-                                      ? _coach.accentColor.withValues(
-                                          alpha: 0.12,
-                                        )
-                                      : Colors.transparent,
-                                  shape: BoxShape.circle,
-                                ),
-                                child: Icon(
-                                  !_isCoreReminderEnabledGlobally
-                                      ? Icons.notifications_off
-                                      : (_resolvedTimeReminderEnabled(
-                                              _schTimeType,
-                                              _schStartTime,
-                                              _schReminderEnabled,
-                                            )
-                                            ? Icons.notifications_active
-                                            : Icons.notifications_off),
-                                  size: 18,
-                                  color:
-                                      _resolvedTimeReminderEnabled(
-                                        _schTimeType,
-                                        _schStartTime,
-                                        _schReminderEnabled,
-                                      )
-                                      ? _coach.accentColor
-                                      : const Color(0xFFB0B0C8),
-                                ),
-                              ),
                             ),
                           ],
                         ),
@@ -13495,7 +13305,7 @@ class _TasksScreenState extends State<TasksScreen>
                                   child: Text(
                                     mStartTime != null
                                         ? _formatTime(mStartTime!)
-                                        : '시작 시간 선택',
+                                        : '시작 시간',
                                     style: GoogleFonts.notoSansKr(
                                       fontSize: 13,
                                       color: mStartTime != null
@@ -13537,7 +13347,7 @@ class _TasksScreenState extends State<TasksScreen>
                                   child: Text(
                                     mEndTime != null
                                         ? _formatTime(mEndTime!)
-                                        : '종료 시간 선택',
+                                        : '종료 시간',
                                     style: GoogleFonts.notoSansKr(
                                       fontSize: 13,
                                       color: mEndTime != null
@@ -13548,7 +13358,10 @@ class _TasksScreenState extends State<TasksScreen>
                                 ),
                               ),
                               const SizedBox(width: 8),
-                              GestureDetector(
+                              _timeReminderButton(
+                                active:
+                                    _isCoreReminderEnabledGlobally &&
+                                    mReminderEnabled,
                                 onTap: () async {
                                   final enabled =
                                       await _ensureCoreReminderEnabledFromHere();
@@ -13557,32 +13370,6 @@ class _TasksScreenState extends State<TasksScreen>
                                     () => mReminderEnabled = !mReminderEnabled,
                                   );
                                 },
-                                child: AnimatedContainer(
-                                  duration: const Duration(milliseconds: 200),
-                                  width: 28,
-                                  height: 28,
-                                  decoration: BoxDecoration(
-                                    color:
-                                        (_isCoreReminderEnabledGlobally &&
-                                            mReminderEnabled)
-                                        ? _coach.accentColor.withOpacity(0.12)
-                                        : Colors.transparent,
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: Icon(
-                                    !_isCoreReminderEnabledGlobally
-                                        ? Icons.notifications_off
-                                        : (mReminderEnabled
-                                              ? Icons.notifications_active
-                                              : Icons.notifications_off),
-                                    size: 18,
-                                    color:
-                                        (_isCoreReminderEnabledGlobally &&
-                                            mReminderEnabled)
-                                        ? _coach.accentColor
-                                        : const Color(0xFFB0B0C8),
-                                  ),
-                                ),
                               ),
                             ],
                           ),

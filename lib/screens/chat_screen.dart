@@ -5246,46 +5246,14 @@ class _ChatScreenState extends State<ChatScreen>
             RegExp(r'(확인|알려|보여|열어|뭐)').hasMatch(compact));
   }
 
-  String _todayTaskOverviewOpenMessage({
-    required bool hasAnyTask,
-    required int totalCount,
-    required Map<String, dynamic>? coreTask,
-    required List<Map<String, dynamic>> habitTasks,
-    required List<Map<String, dynamic>> todayTasks,
-  }) {
-    final coreTaskText = _taskText(coreTask);
-    final highlightedKeys = {
-      if (coreTask != null) _taskOverviewKey(coreTask),
-      ...habitTasks.map(_taskOverviewKey),
+  String _todayTaskOverviewOpenMessage() {
+    return switch (widget.coachId) {
+      'cat' => '냥이가 할 일 탭 열어줄게.',
+      'nyang_halbae' => '할 일 탭 열어줄게냥.',
+      'bro' => '할 일 탭 열어준다.',
+      'sec_female' => '할 일 탭을 열어드릴게요.',
+      _ => '할 일 탭 열어줄게.',
     };
-    final otherTaskLabels = todayTasks
-        .where((task) => !highlightedKeys.contains(_taskOverviewKey(task)))
-        .map(_taskOverviewLabel)
-        .toList(growable: false);
-    return LocalReplyTexts.todayTaskOverview(
-      coachId: widget.coachId,
-      hasAnyTask: hasAnyTask,
-      totalCount: totalCount,
-      coreTaskLabel: coreTaskText != null && coreTaskText.trim().isNotEmpty
-          ? _taskOverviewLabel(coreTask!)
-          : null,
-      habitLabels: habitTasks.map(_taskOverviewLabel).toList(growable: false),
-      otherTaskLabels: otherTaskLabels,
-    );
-  }
-
-  String _taskOverviewKey(Map<String, dynamic> task) {
-    return (task['id'] ?? _taskText(task) ?? '').toString();
-  }
-
-  String _taskOverviewLabel(Map<String, dynamic> task) {
-    final text = _taskText(task) ?? '이름 없는 할 일';
-    final timeLabel = _taskTimeLabelForPrompt(task);
-    return LocalReplyTexts.taskOverviewLabel(
-      text: text,
-      timeLabel: timeLabel,
-      done: task['done'] == true,
-    );
   }
 
   bool _looksLikeTodayTaskTimeQuestion(String input) {
@@ -5491,38 +5459,8 @@ class _ChatScreenState extends State<ChatScreen>
   Future<bool> _tryOpenTodayTaskOverview(String input) async {
     if (!_isTodayTaskOverviewRequest(input)) return false;
 
-    final prefs = await SharedPreferences.getInstance();
-    final tasks = _decodeMapList(prefs.getString('nyang_tasks'));
-    final todayTasks = tasks
-        .where((task) {
-          final category = task['category']?.toString();
-          return category == 'today' ||
-              category == 'habit' ||
-              category == 'schedule';
-        })
-        .toList(growable: false);
-    final pending = todayTasks
-        .where((task) => task['done'] != true)
-        .toList(growable: false);
-    final coreTaskRaw = _decodeMapList(prefs.getString('nyang_core_tasks'))
-        .cast<Map<String, dynamic>?>()
-        .firstWhere((task) => task?['done'] != true, orElse: () => null);
-    final coreTask = _matchingTodayTask(todayTasks, coreTaskRaw) ?? coreTaskRaw;
-    final habitTasks = pending
-        .where((task) {
-          final category = task['category']?.toString();
-          return category == 'habit' || task['isHabit'] == true;
-        })
-        .toList(growable: false);
-
     final reply = await UserTitleService.applyForCoach(
-      _todayTaskOverviewOpenMessage(
-        hasAnyTask: todayTasks.isNotEmpty,
-        totalCount: todayTasks.length,
-        coreTask: coreTask,
-        habitTasks: habitTasks,
-        todayTasks: todayTasks,
-      ),
+      _todayTaskOverviewOpenMessage(),
       widget.coachId,
     );
     setState(() {
@@ -9151,6 +9089,7 @@ class _ChatScreenState extends State<ChatScreen>
     '완벽하게 하려다가 시작도 제대로 못한 적, 수두룩하지 않냥? 오늘부터 어설픈 시도를 수없이 쌓으면 일 년 뒤엔 어떨까 생각해보라냥.',
     '자꾸 완벽하게 하려 들면 시작이 제일 무거워진다냥. 오늘은 못난 초안이어도 좋으니, 아주 작게 하나만 건드려보자냥.',
     '완벽하게 해낸 날은 마음이 편했냥? 아마 그 다음 날 기준이 또 한 칸 올라갔을 거다냥. 이건 도착점이 없는 길이라냥.',
+    '너무 완벽해질 때까지 붙잡고 있으면, 오히려 배움이 늦어진다냥. 오늘은 완성보다 한번 내보내고 배워오는 쪽으로 가보자냥.',
     '죽어도 해내야 하는 일은 없다냥. 오늘은 "안 되면 말지" 하는 마음으로 가볍게 한 번만 건드려보자냥.',
     '냥이가 쥐 열 마리를 한꺼번에 노리면 한 마리도 못 잡는다냥. 근데 한 마리만 노리고 있으면, 어느새 다섯 마리가 발밑에 굴러와 있더라냥.',
     '속상하지? 그 마음 없애려 하지 말고 딱 5분만 그대로 둬보자냥. 고치고 싶은 걸 안 고친 채로 그냥 있는 것, 그게 견디는 연습이라냥. 그거 하나로 완벽주의는 슬슬 힘이 빠진다냥.',

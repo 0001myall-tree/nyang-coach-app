@@ -2361,7 +2361,7 @@ class _MainTabScreenState extends State<MainTabScreen>
                           title: '오늘 뭐부터 할지 모르겠다면',
                           body:
                               '혼자 고민하지 말고, 코치와 의논하세요.\n'
-                              '특히 마스터 코치(비서 코치)들은 사용자의 장기 목표와 관련된 할 일과 미룬 항목 등을 알아서 파악하면서 더 똑똑하게 대답해줍니다.',
+                              '특히 마스터 코치(비서 코치, 냥할배)들은 사용자의 장기 목표와 관련된 할 일과 미룬 항목 등을 알아서 파악하면서 더 똑똑하게 대답해줍니다.',
                         ),
                         const SizedBox(height: 18),
                         _buildPlannerHelpSection(
