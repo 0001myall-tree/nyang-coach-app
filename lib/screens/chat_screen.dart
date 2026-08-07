@@ -4145,12 +4145,22 @@ class _ChatScreenState extends State<ChatScreen>
     final todayKey = _dateKey(now);
     if (prefs.getString(_catEveningCheckInDateKey) == todayKey) return false;
 
+    if (_completedTasks > 0) {
+      // 21시 넘으면 취침 제안과 겹치니 그때는 비워둔다.
+      if (now.hour >= 21) return false;
+      if (_completedTasks >= _totalTasks) return false;
+      return _showCatEveningProgressGreeting(prefs, todayKey);
+    }
+
     final lastSpecialShown = DateTime.tryParse(
       prefs.getString(_catEveningReturnGreetingDateKey) ?? '',
     );
     final canShowSpecialGreeting =
         lastSpecialShown == null ||
         now.difference(lastSpecialShown) >= _catEveningReturnGreetingCooldown;
+    // 21시 넘으면 '지금 하나라도 하면 된다'는 접고 반가움 인사만 남긴다.
+    final canShowStartNudge = now.hour < 21;
+    if (!canShowStartNudge && !canShowSpecialGreeting) return false;
 
     await Future.delayed(const Duration(milliseconds: 450));
     if (!mounted) return true;
@@ -4160,8 +4170,9 @@ class _ChatScreenState extends State<ChatScreen>
             : now.hour > 12
             ? now.hour - 12
             : now.hour}시 ${now.minute.toString().padLeft(2, '0')}분';
-    final greetings = <(ChatMessage, bool)>[
-      (
+    final greetings = <(ChatMessage, bool)>[];
+    if (canShowStartNudge) {
+      greetings.add((
         ChatMessage(
           text:
               '집사 하이. 지금 시간이 $timeLabel이네.\n'
@@ -4171,8 +4182,8 @@ class _ChatScreenState extends State<ChatScreen>
           kind: 'auto_greeting',
         ),
         false,
-      ),
-    ];
+      ));
+    }
     if (canShowSpecialGreeting) {
       greetings.add((
         ChatMessage(
@@ -4212,6 +4223,105 @@ class _ChatScreenState extends State<ChatScreen>
     final greeting = selected.$1;
     setState(() {
       _messages.add(greeting);
+      _dynamicChips = _coach.chips;
+      _suppressDefaultChips = false;
+    });
+    await _saveHistory();
+    _scrollToBottom();
+    return true;
+  }
+
+  /// 오늘 핵심 일정 중 [test]를 만족하는 첫 항목.
+  Map<String, dynamic>? _findCoreTask(
+    SharedPreferences prefs,
+    bool Function(Map<String, dynamic>) test,
+  ) {
+    final todayTasks = _decodeMapList(prefs.getString('nyang_tasks'));
+    for (final coreTask in _decodeMapList(
+      prefs.getString('nyang_core_tasks'),
+    )) {
+      final matched = _matchingTodayTask(todayTasks, coreTask) ?? coreTask;
+      if (test(matched)) return matched;
+    }
+    return null;
+  }
+
+  /// 문장에 따옴표로 넣기 너무 길면 이름을 쓰지 않는다.
+  String? _shortTaskName(Map<String, dynamic>? task) {
+    final name = _taskText(task);
+    if (name == null || name.length > MasterGreetingCopy.doneLabelMaxLength) {
+      return null;
+    }
+    return name;
+  }
+
+  /// 오늘 일부만 끝낸 집사에게 18~21시에 건네는 인사.
+  /// 이미 한 게 있으니 새로 시키지 않고, 한 것을 짚어주기만 한다.
+  Future<bool> _showCatEveningProgressGreeting(
+    SharedPreferences prefs,
+    String todayKey,
+  ) async {
+    // 아직 손도 안 댄 핵심이 있으면 그쪽이 먼저다. 끝낸 핵심을 두고 '여유롭게'라고
+    // 하면, 정작 더 중요한 게 남아 있는 날에 어긋난다.
+    final notStartedCore = _shortTaskName(
+      _findCoreTask(prefs, _isPendingNotInProgressTask),
+    );
+    final inProgressCore = notStartedCore != null
+        ? null
+        : _shortTaskName(
+            _findCoreTask(
+              prefs,
+              (task) => task['done'] != true && _isInProgressTask(task),
+            ),
+          );
+    final hasPendingCore =
+        _findCoreTask(prefs, (task) => task['done'] != true) != null;
+    final doneCore = hasPendingCore
+        ? null
+        : _shortTaskName(_findCoreTask(prefs, (task) => task['done'] == true));
+    final List<String> texts;
+    if (notStartedCore != null) {
+      texts = [
+        '오늘 $_completedTasks개는 해뒀네냥. 그런데 핵심 \'$notStartedCore\'가 아직 남았다냥.\n'
+            '지금 조금만 손대볼까냥? 혹시 시작하기 부담스러운 이유 있으면 알려줘.',
+        '집사, 핵심으로 잡아둔 \'$notStartedCore\'는 아직 손을 안 댔다냥.\n'
+            '괜찮아. 뭐가 걸리는지 말해주면 냥이가 같이 고민해줄게. 5분만 시작해보는 거 어때?',
+      ];
+    } else if (inProgressCore != null) {
+      texts = [
+        '오 집사 오늘의 핵심 \'$inProgressCore\' 시작했네. 좋아.\n'
+            '냥이가 방해 안 할 테니까 기죽지 말고 끝까지 해보는 거다냥.',
+        '집사 \'$inProgressCore\' 시작했구나.\n'
+            '냥이 방해 안 할 테니까 하다가 힘든 점 있으면 얼마든지 말하라냥.',
+      ];
+    } else if (doneCore != null) {
+      texts = [
+        '오! 집사 오늘 핵심 일정 \'$doneCore\' 해냈네.\n'
+            '남은 일정은 여유롭게 해도 되겠다냥.',
+        '집사, 오늘 제일 중요한 \'$doneCore\'을 끝냈다냥.\n'
+            '나머지는 천천히 해도 된다냥.',
+      ];
+    } else {
+      texts = [
+        '벌써 저녁이다냥. 오늘 $_completedTasks개는 해뒀네냥.\n'
+            '하나만 더 해볼까냥? 여기서 접어도 괜찮다냥 🐾',
+        '집사 오늘 $_completedTasks개 해뒀다냥.\n'
+            '남은 건 지금 해도 되고, 내일로 넘겨도 된다냥 😼',
+      ];
+    }
+
+    await Future.delayed(const Duration(milliseconds: 450));
+    if (!mounted) return true;
+    await prefs.setString(_catEveningCheckInDateKey, todayKey);
+    setState(() {
+      _messages.add(
+        ChatMessage(
+          text: texts[Random().nextInt(texts.length)],
+          isUser: false,
+          time: DateTime.now(),
+          kind: 'auto_greeting',
+        ),
+      );
       _dynamicChips = _coach.chips;
       _suppressDefaultChips = false;
     });
@@ -4265,9 +4375,7 @@ class _ChatScreenState extends State<ChatScreen>
     DateTime now,
   ) async {
     if (widget.coachId != 'cat') return false;
-    if (!_userData.isPlanActive || _userData.planType != 'master') {
-      return false;
-    }
+    if (!_userData.isPlanActive) return false;
     if (now.hour < 7 || now.hour >= 15) return false;
     if (widget.handoffFromCoachId == 'nyang_halbae' ||
         widget.handoffFromCoachId == 'sec_female') {
@@ -5615,20 +5723,15 @@ class _ChatScreenState extends State<ChatScreen>
     final remaining = incomplete.length;
     final done = total - remaining;
 
-    final inProgressSchedule = incomplete
-        .cast<Map<String, dynamic>?>()
-        .firstWhere(
-          (task) =>
-              task?['category'] == 'schedule' && task?['inProgress'] == true,
-          orElse: () => null,
-        );
-    final inProgress = _taskText(
-      inProgressSchedule ??
-          incomplete.cast<Map<String, dynamic>?>().firstWhere(
-            (task) => task?['inProgress'] == true,
-            orElse: () => null,
-          ),
-    );
+    // 일정(schedule)을 앞에 세우고 진행 중인 것들을 순서대로 모은다.
+    final inProgressNames = [
+      ...incomplete.where(
+        (task) => task['category'] == 'schedule' && task['inProgress'] == true,
+      ),
+      ...incomplete.where(
+        (task) => task['category'] != 'schedule' && task['inProgress'] == true,
+      ),
+    ].map(_taskText).whereType<String>().toList(growable: false);
     final core = _taskText(
       _decodeMapList(prefs.getString('nyang_core_tasks'))
           .cast<Map<String, dynamic>?>()
@@ -5657,33 +5760,29 @@ class _ChatScreenState extends State<ChatScreen>
         '남은 기운은 쉬는 데 써도 괜찮겠냥?',
       ]);
       return '$opener\n'
-          '오늘 할 일 $total개를 다 끝냈다냥. $praise\n'
+          '오늘 할 일 다 끝냈다냥. $praise\n'
           '$question';
     }
-    if (inProgress != null) {
-      if (done == 0) {
-        final question = pick([
-          '혹시 이 일에서 유독 귀찮거나 막히는 부분 있었냥?',
-          '이걸 이어가려면 제일 작은 다음 행동이 뭐가 좋겠냥?',
-          '지금은 이 일을 조금 더 볼까, 아니면 다른 걸 먼저 가볍게 볼까?',
-        ]);
+    if (inProgressNames.isNotEmpty) {
+      final count = inProgressNames.length;
+      // 셋 이상을 동시에 붙들고 있으면 이름을 세는 것보다 집중을 돕는 게 낫다.
+      if (count >= 3) {
         return '$opener\n'
-            '아직 완료로 찍힌 일은 없어도, "$inProgress"는 이미 시작해뒀다냥. 시작해둔 것도 흐름이다냥.\n'
-            '$question';
+            '지금 할 일 여러 개를 동시에 하고 있구냥. 멋져. 혹시 집중 필요하면 냥이가 타이머 켜줄 수 있어.';
       }
-      final reassurance = pick([
-        '남은 건 $remaining개지만 흐름은 살아 있다냥.',
-        '다 끝난 건 아니어도 이미 하루가 움직이고 있다냥.',
-        '지금은 시작해둔 게 있어서 다시 붙기 좋은 상태다냥.',
-      ]);
-      final question = pick([
-        '혹시 지금 유독 귀찮거나 힘든 일 있었냥?',
-        '이 흐름에서 다음으로 아주 작게 볼 건 뭐냥?',
-        '지금 "$inProgress"를 마저 볼까, 아니면 남은 것 중 하나를 같이 고를까?',
-      ]);
-      return '$opener\n'
-          '오늘 $done개는 끝냈고, "$inProgress"는 이미 시작해뒀다냥. $reassurance\n'
-          '$question';
+      // 이름이 길면 나열 대신 개수로 말한다.
+      final fitsInline = inProgressNames.every(
+        (name) => name.length <= MasterGreetingCopy.doneLabelMaxLength,
+      );
+      final subject = fitsInline
+          ? inProgressNames.map((name) => '"$name"').join('랑 ')
+          : count == 1
+          ? '할 일 하나'
+          : '할 일 $count개';
+      final tail = count == 1
+          ? '잘하고 있다냥. 냥냥이가 방해 안 할게.'
+          : '냥이가 방해 안 할게.';
+      return '$opener\n지금 $subject 하고 있구냥. $tail';
     }
     if (done == 0) {
       final nudge = core != null ? '"$core"부터 봐도 좋고, ' : '';
@@ -5708,21 +5807,21 @@ class _ChatScreenState extends State<ChatScreen>
         '혹시 "$core"가 오늘 꼭 끝내야 하는 일이냥?',
       ]);
       return '$opener\n'
-          '오늘 $done개 끝냈고 $remaining개 남았다냥. $reassurance\n'
+          '$reassurance\n'
           '$question';
     }
     final reassurance = pick([
-      '지금까지 해낸 걸 먼저 봐도 된다냥.',
-      '남은 게 보여도 오늘 해낸 것도 같이 봐야 한다냥.',
-      '아직 오후니까 하나만 다시 잡아도 충분하다냥.',
+      '아까 하나 해낸 기세가 아직 남아 있다냥.',
+      '오늘 이미 움직였으니 흐름은 살아 있다냥.',
+      '한 번 해낸 다음이라 다시 붙기 좋은 때다냥.',
     ]);
     final question = pick([
-      '남은 것 중 유독 귀찮거나 힘든 일 있었냥?',
-      '오늘 꼭 끝내야 하는 일이 하나 있을까?',
-      '남은 것 중 하나만 같이 골라볼까?',
+      '그 흐름으로 하나만 더 이어볼까? 뭐 고를지 어려우면 냥냥이한테 말하라냥.',
+      '이어서 하나만 더 볼까? 뭐가 좋을지 모르겠으면 같이 정해도 된다냥.',
+      '지금 이어가기 제일 만만한 게 뭐냥?',
     ]);
     return '$opener\n'
-        '오늘 $done개 끝냈고 $remaining개 남았다냥. $reassurance\n'
+        '$reassurance\n'
         '$question';
   }
 
