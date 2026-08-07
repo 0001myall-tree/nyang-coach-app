@@ -14,6 +14,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "912621917226-p4m2v68qpihtjdg4flkfcohrj2vltebj.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.coscene.nyangcoach",
+            "certificate_hash": "974e53af5e72db47a371c4bd5de126b32a587c58"
+          }
+        },
+        {
           "client_id": "912621917226-rvofnb0qmpajoekttcsrs9n9tbcjpaot.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
