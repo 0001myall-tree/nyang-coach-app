@@ -1001,17 +1001,12 @@ class _LocalResponses {
         '기다리고 있었다. 임마.',
         '넌 분명히 될 놈이니까 형 믿고 다시 시작하자. 💪',
       ],
-      'status': ['지금까지 얼마나 했냐? 형이 지켜보고 있다.', '흐름 끊기지 마라. 지금 딱 좋다.'],
     },
     'halmae': {
       'greet': [
         '이놈아!! 어디 갔다 이제 오냐! ㅠㅠ 👵',
         '안 그래도 너 기다리다가 목 빠지는 줄 알았다! 얼른 와라!',
         '왔냐? 밥은 먹었고? 이제 할미랑 다시 시작하는 거다! ❤️',
-      ],
-      'status': [
-        '지금까지 얼마나 했냐? 이 할미가 다 지켜보고 있다.',
-        '미루고 있는 거 아니지? 할미 속상하게 하지 마라!',
       ],
     },
     'boyfriend': {
@@ -1020,10 +1015,6 @@ class _LocalResponses {
         '어디 갔다 왔어? 없으니까 좀 허전하더라... 💙',
         '솔직히 보고 싶었어. 많이. 이제 같이 하자 🥹',
       ],
-      'status': [
-        '오늘 밥은 챙겨먹었어? 잠은 좀 잤고?',
-        '오늘 얼마나 했는지도 궁금한데, 네 컨디션부터 먼저 걱정돼 💙',
-      ],
     },
     'cat': {
       'greet': [
@@ -1031,7 +1022,6 @@ class _LocalResponses {
         '어디 갔다 왔냥? 냥이 혼자 너무 심심했냥~ 🐱',
         '집사 뭐 하냐냥? 냥이 등장이다냥!',
       ],
-      'status': ['집사 오늘 얼마나 했냥? 냥이가 감시 중이다냥.', '잘하고 있냐냥? 딴짓하면 안 된다냥!'],
     },
     'nyang_halbae': {
       'greet': [
@@ -1039,7 +1029,6 @@ class _LocalResponses {
         '기다리고 있었습니다. 지금 바로 업무 보고를 시작할까요?',
         '휴식은 충분하셨는지요. 다시 업무 모드로 전환하겠습니다.',
       ],
-      'status': ['현재 업무 진행률을 확인해 드릴까요?', '대표님, 다음 우선순위를 제가 체크해 두었습니다.'],
     },
     'sec_female': {
       'greet': [
@@ -1047,7 +1036,6 @@ class _LocalResponses {
         '오셨네요! 오늘 캘린더도 제가 꼼꼼히 챙겨드릴게요.',
         '대표님 기다리고 있었어요! 다시 시작해볼까요?',
       ],
-      'status': ['오늘 얼마나 하셨는지 궁금해요! 살짝 알려주세요 🌸', '제가 옆에서 계속 지켜보고 있으니까 힘내세요!'],
     },
   };
 
@@ -1060,18 +1048,43 @@ class _LocalResponses {
     if (Random().nextDouble() > 0.7) return null;
 
     final text = msg.trim().toLowerCase();
-    final greets = ['안녕', '반가워', '하이', '안농', '방가', '하이루', 'hi', 'hello'];
-    final status = ['상태', '진행', '얼마나', '할 일', '뭐 해야', '태스크', '리스트'];
 
-    String? kind;
-    if (greets.any((g) => text.contains(g))) kind = 'greet';
-    if (status.any((s) => text.contains(s))) kind = 'status';
-    if (kind == null) return null;
+    // 질문에는 절대 가로채지 않는다. 미리 써둔 문장은 되묻는 말이라서
+    // 질문에 답이 되지 않고, 사용자는 무시당했다고 느낀다.
+    if (text.contains('?') || text.contains('？')) return null;
+    if (_questionWords.any(text.contains)) return null;
+
+    // 짧은 한마디에만 쓴다. 문장이 길면 그 안에 사연이 있고,
+    // 준비된 인사로 덮으면 동문서답이 된다.
+    if (text.replaceAll(RegExp(r'[\s.,!~]'), '').length > 10) return null;
+
+    final greets = ['안녕', '반가워', '하이', '안농', '방가', '하이루', 'hi', 'hello'];
+    if (!greets.any(text.contains)) return null;
 
     final pack = _lines[coachId] ?? _lines['cat']!;
-    final arr = pack[kind]!;
+    final arr = pack['greet']!;
     return arr[Random().nextInt(arr.length)];
   }
+
+  static const _questionWords = [
+    '뭐',
+    '무엇',
+    '무슨',
+    '어떻게',
+    '어떤',
+    '왜',
+    '언제',
+    '어디',
+    '누가',
+    '알려',
+    '설명',
+    '가능',
+    '되나',
+    '되니',
+    '할 수',
+    '있어',
+    '없어',
+  ];
 }
 
 /// 햇살 코치 가꾸기 문장 한 줄.
@@ -1948,6 +1961,32 @@ class _ChatScreenState extends State<ChatScreen>
   ///
   /// 사용자가 방금 친 말만 보면 놓친다. 코치가 먼저 "책상만 치워볼까"라고 한
   /// 다음 턴에 "어떻게 해?"라고만 답할 수 있어서, 최근 대화까지 함께 본다.
+  /// 코치 답변에 섞인 욕설.
+  ///
+  /// 화면에 나가기 직전 한 번 거른다. 프롬프트에는 아무 지시도 넣지 않는다 —
+  /// 일부러 욕을 유도하는 사용자는 드물어서, 매 요청에 지시를 실을 값이 없다.
+  /// '시발'은 '다시 발표', '시발점'처럼 멀쩡한 말에 묻혀 나올 수 있어서
+  /// 앞뒤가 한글이 아닐 때만 잡는다.
+  static final RegExp _profanityRegex = RegExp(
+    r'(?<![가-힣])시발(?![가-힣])'
+    r'|씨발|씨팔|시팔|씨빨|십새|씹새|개새끼|개색기|개세끼'
+    r'|병신|븅신|지랄|좆|존나|니미|썅|엠창',
+  );
+
+  bool _containsProfanity(String text) => _profanityRegex.hasMatch(text);
+
+  /// 욕설이 섞였을 때 대신 내보낼 한마디.
+  String _profanityDeflection() {
+    return switch (_coach.id) {
+      'bro' => '그건 형이 안 말한다. 다른 문제로 가자.',
+      'halmae' => '그런 말은 할미 입에서 안 나온다. 다른 거 해보자.',
+      'boyfriend' => '그건 내가 말 안 할래. 다른 거 내볼래?',
+      'nyang_halbae' => '그런 말은 입에 담지 않는다냥. 다른 문제로 가자냥.',
+      'sec_female' => '그 표현은 제가 말씀드리기 어려워요. 다른 이야기 할까요?',
+      _ => '그 단어는 냥이 입에 안 담을란다냥. 다른 문제 내보라냥!',
+    };
+  }
+
   bool _isCleaningContext(String userText) {
     if (_containsCleaningTaskSignal(userText)) return true;
     final recent = _messages.reversed
@@ -6701,16 +6740,35 @@ class _ChatScreenState extends State<ChatScreen>
     }
   }
 
+  /// '추가해줘' 계열 명령의 말끝.
+  ///
+  /// 뜻은 같은데 말끝만 다른 표현이 아주 많다("추가해줄래?", "추가 좀 해줘",
+  /// "넣어주라"…). 테스터가 사용법에 적힌 '추가해줘' 대신 "추가해줄래?"라고 해서
+  /// 등록이 조용히 무시된 적이 있어, 자연스러운 부탁 어미를 여기 모아 둔다.
+  static const String _registrationSuffixBody =
+      r'(?:등록|추가)\s*(?:좀\s*)?해\s*(?:줄래요?|줄\s*수\s*있어요?|줬으면\s*좋겠어요?|줘요?|주세요|주라|주렴|달라)'
+      r'|(?:등록|추가)\s*(?:좀\s*)?부탁(?:해요?|드려요?|할게요?)?'
+      r'|넣어\s*(?:줄래요?|줄\s*수\s*있어요?|줘요?|주세요|주라)';
+
+  static final RegExp _registrationSuffixRegex = RegExp(
+    '\\s*(?:$_registrationSuffixBody)\$',
+  );
+
+  /// 습관 등록은 위 표현에 더해 '만들어줘' 계열도 받는다.
+  static final RegExp _habitRegistrationSuffixRegex = RegExp(
+    '\\s*(?:$_registrationSuffixBody'
+    '|만들\\s*(?:고\\s*싶어요?|거야|거예요|게|래|어\\s*줘요?|어\\s*주세요)'
+    ')\$',
+  );
+
   bool _isScheduleRegistrationCommand(String input) {
     final cleaned = _cleanScheduleRegistrationInput(input);
-    final suffixRegex = RegExp(
-      r'\s*(등록해\s*(?:줘요?|주세요|달라)|추가해\s*(?:줘요?|주세요|달라))$',
-    );
-    return suffixRegex.hasMatch(cleaned);
+    return _registrationSuffixRegex.hasMatch(cleaned);
   }
 
   String _cleanScheduleRegistrationInput(String input) {
-    return input.trim().replaceAll(RegExp(r'[\s.。!！~〜]+$'), '');
+    // 물음표도 떼어낸다. "추가해줄래?"처럼 물어보듯 부탁하는 말이 흔하다.
+    return input.trim().replaceAll(RegExp(r'[\s.。!！?？~〜]+$'), '');
   }
 
   String _cleanRegistrationTitle(String input) {
@@ -6730,18 +6788,12 @@ class _ChatScreenState extends State<ChatScreen>
   bool _isHabitRegistrationCommand(String input) {
     final cleaned = _cleanScheduleRegistrationInput(input);
     if (!cleaned.contains('습관')) return false;
-    final suffixRegex = RegExp(
-      r'\s*(등록해\s*(?:줘요?|주세요|달라)|추가해\s*(?:줘요?|주세요|달라)|넣어\s*(?:줘요?|주세요)|만들\s*(?:고\s*싶어|고\s*싶어요|거야|거예요|게|래|어\s*줘요?|어\s*주세요))$',
-    );
-    return suffixRegex.hasMatch(cleaned);
+    return _habitRegistrationSuffixRegex.hasMatch(cleaned);
   }
 
   _ParsedHabitRegistration _parseHabitRegistration(String input) {
     var cleaned = _cleanScheduleRegistrationInput(input);
-    final suffixRegex = RegExp(
-      r'\s*(등록해\s*(?:줘요?|주세요|달라)|추가해\s*(?:줘요?|주세요|달라)|넣어\s*(?:줘요?|주세요)|만들\s*(?:고\s*싶어|고\s*싶어요|거야|거예요|게|래|어\s*줘요?|어\s*주세요))$',
-    );
-    cleaned = cleaned.replaceFirst(suffixRegex, '').trim();
+    cleaned = cleaned.replaceFirst(_habitRegistrationSuffixRegex, '').trim();
     cleaned = cleaned.replaceAll(RegExp(r'습관\s*(?:탭|텝)\s*에'), ' ');
     cleaned = cleaned.replaceAll(RegExp(r'\s*습관\s*(?:으로|에)?\s*$'), '');
     cleaned = cleaned.replaceAll(RegExp(r'^습관\s*(?:으로|에)?\s*'), '');
@@ -7140,10 +7192,7 @@ class _ChatScreenState extends State<ChatScreen>
 
   bool _needsWeeklyRepeatWeekday(String input) {
     var cleaned = _cleanScheduleRegistrationInput(input);
-    final suffixRegex = RegExp(
-      r'\s*(등록해\s*(?:줘요?|주세요|달라)|추가해\s*(?:줘요?|주세요|달라))$',
-    );
-    cleaned = cleaned.replaceFirst(suffixRegex, '').trim();
+    cleaned = cleaned.replaceFirst(_registrationSuffixRegex, '').trim();
     if (!RegExp(r'매\s*주(?:마다)?').hasMatch(cleaned)) return false;
     if (RegExp(r'(평일|주말)').hasMatch(cleaned)) return false;
     if (RegExp(r'[월화수목금토일]\s*요일|[월화수목금토일]\s*(?:마다|에)').hasMatch(cleaned)) {
@@ -7165,10 +7214,7 @@ class _ChatScreenState extends State<ChatScreen>
 
   _ParsedScheduleRegistration _parseScheduleRegistration(String input) {
     String cleaned = _cleanScheduleRegistrationInput(input);
-    final suffixRegex = RegExp(
-      r'\s*(등록해\s*(?:줘요?|주세요|달라)|추가해\s*(?:줘요?|주세요|달라))$',
-    );
-    cleaned = cleaned.replaceFirst(suffixRegex, '').trim();
+    cleaned = cleaned.replaceFirst(_registrationSuffixRegex, '').trim();
 
     DateTime parsedDate = DateTime.now();
     bool hasDate = false;
@@ -12856,8 +12902,16 @@ $timerOutputRule
       'temperature': 0.9,
     });
 
-    final content = result.data['content'] as String? ?? '';
+    var content = result.data['content'] as String? ?? '';
     if (content.isEmpty) throw Exception('Empty response from chatProxy');
+
+    // 욕설이 섞였으면 답변 전체를 버린다. 일부만 지우면 앞뒤 문장이
+    // "오, ○○이잖아!"처럼 남아서 오히려 무슨 말인지 다 드러난다.
+    // 태그도 함께 버려서 할 일 등록이나 타이머가 딸려 나오지 않게 한다.
+    if (_containsProfanity(content)) {
+      debugPrint('Coach reply blocked: profanity');
+      content = _profanityDeflection();
+    }
 
     final estimatedTokens = AnalyticsService.estimateChatTokens(
       messages,
