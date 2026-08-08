@@ -179,6 +179,10 @@ List<String> allTemplates(GreetingVoice v) => [
   ...v.eveningNoPlan,
   ...v.eveningOffPlanAsk,
   ...v.offPlanDoneReply,
+  ...v.coreAsk,
+  ...v.coreAskStartedReply,
+  ...v.coreAskAlreadyReply,
+  ...v.coreAskBusyReply,
   ...v.comeback,
   ...v.comebackSupport,
   ...v.afterLateNight,
@@ -683,6 +687,70 @@ void main() {
       random: Random(7),
     ).build(cases['오전-계획있음']!);
     expect(run().text, run().text);
+  });
+
+  group('핵심 일정을 시작했는지 묻는 말', () {
+    for (final voice in voices.entries) {
+      test('${voice.key} / 일정 이름을 따옴표로 넣어 묻는다', () {
+        for (var seed = 0; seed < 50; seed++) {
+          final text = MasterGreetingBuilder(
+            voice: voice.value,
+            random: Random(seed),
+          ).buildCoreAsk('글쓰기');
+          expect(text, contains("'글쓰기'"), reason: text);
+          // 치환이 새면 말풍선에 {{task}}가 그대로 뜬다.
+          expect(text, isNot(contains('task')), reason: text);
+        }
+      });
+
+      test('${voice.key} / 갈래 표기가 새어 나가지 않는다', () {
+        for (var seed = 0; seed < 50; seed++) {
+          for (final text in [
+            MasterGreetingBuilder(
+              voice: voice.value,
+              random: Random(seed),
+            ).buildCoreAsk('글쓰기'),
+            for (final pool in [
+              voice.value.coreAskStartedReply,
+              voice.value.coreAskAlreadyReply,
+              voice.value.coreAskBusyReply,
+            ])
+              MasterGreetingBuilder(
+                voice: voice.value,
+                random: Random(seed),
+              ).pickLine(pool),
+          ]) {
+            expect(text, isNot(contains('{')), reason: text);
+            expect(text, isNot(contains('|')), reason: text);
+            expect(text, isNot(contains('}')), reason: text);
+          }
+        }
+      });
+
+      test('${voice.key} / 한 가지로 굳어 있지 않다', () {
+        final seen = <String>{};
+        for (var seed = 0; seed < 100; seed++) {
+          seen.add(
+            MasterGreetingBuilder(
+              voice: voice.value,
+              random: Random(seed),
+            ).buildCoreAsk('글쓰기'),
+          );
+        }
+        expect(seen.length, greaterThan(5), reason: '${seen.length}가지');
+      });
+
+      // 표시를 대신 켰을 때와 이미 켜져 있을 때는 서로 다른 말이어야 한다.
+      // 안 한 일을 했다고 하거나, 한 일을 또 했다고 하면 신뢰가 깨진다.
+      test('${voice.key} / 표시를 켠 답과 이미 켜져 있던 답이 겹치지 않는다', () {
+        expect(
+          voice.value.coreAskStartedReply.toSet().intersection(
+            voice.value.coreAskAlreadyReply.toSet(),
+          ),
+          isEmpty,
+        );
+      });
+    }
   });
 
   test('코치 id로 문구를 고른다', () {

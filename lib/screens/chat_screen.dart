@@ -3586,12 +3586,19 @@ class _ChatScreenState extends State<ChatScreen>
   bool _isSameDay(DateTime a, DateTime b) =>
       a.year == b.year && a.month == b.month && a.day == b.day;
 
-  bool _alreadySpokeInSlot(GreetingSlot slot, DateTime now) {
-    final kind = _greetingKind(slot);
+  /// 오늘 이 종류의 자동 발화를 이미 냈는지. 판정 근거는 채팅 기록이다.
+  ///
+  /// prefs에 '오늘 인사했음' 날짜를 적어두면 안 된다. nyang_ 키는 클라우드
+  /// 실시간 동기화가 통째로 되돌려서, 방금 적은 오늘 날짜가 다시 어제로 바뀐다.
+  /// 그러면 1분 뒤 재진입에도 가드가 뚫려 인사가 또 나간다.
+  bool _spokeKindToday(Set<String> kinds, DateTime now) {
     return _messages.any(
-      (m) => !m.isUser && m.kind == kind && _isSameDay(m.time, now),
+      (m) => !m.isUser && kinds.contains(m.kind) && _isSameDay(m.time, now),
     );
   }
+
+  bool _alreadySpokeInSlot(GreetingSlot slot, DateTime now) =>
+      _spokeKindToday({_greetingKind(slot)}, now);
 
   List<Map<String, dynamic>> _decodeMapList(String? raw) {
     if (raw == null || raw.isEmpty) return [];
@@ -4049,12 +4056,44 @@ class _ChatScreenState extends State<ChatScreen>
     );
   }
 
+  /// 마스터 코치가 핵심 일정을 물어보는 시간대. 점심을 지나 오전이 어떻게
+  /// 흘렀는지는 결론이 났고, 오후는 통째로 남아 있는 구간이다. 15시부터는
+  /// 냥냥이가 같은 질문을 맡으므로 여기서 끝낸다.
+  static const _masterCoreAskFromHour = 12;
+  static const _masterCoreAskUntilHour = 15;
+
+  /// 핵심 일정을 물어봤으면 true. 슬롯 인사와 예산이 따로라 아침에 인사를
+  /// 받았어도 이 질문은 나갈 수 있다. 다만 한 번 진입에 하나만 말한다.
+  Future<bool> _startMasterCoreAsk(
+    SharedPreferences prefs,
+    DateTime now,
+  ) async {
+    if (now.hour < _masterCoreAskFromHour ||
+        now.hour >= _masterCoreAskUntilHour) {
+      return false;
+    }
+    if (_spokeKindToday({_masterCoreGreetingKind}, now)) return false;
+    final core = _coreTaskDueForAsk(prefs, now);
+    if (core == null) return false;
+    if (!mounted) return false;
+
+    _injectAiMessage(
+      _greetingBuilder.buildCoreAsk(core),
+      kind: _masterCoreGreetingKind,
+      choices: _masterCoreAskLabels,
+    );
+    unawaited(AnalyticsService.logFeatureUsage('master_core_ask'));
+    return true;
+  }
+
   /// 발화했으면 true. 같은 진입에서 미뤄둔 할 일 리마인드를 겹쳐 내지 않으려고 쓴다.
   Future<bool> _startMasterGreeting({
     required SharedPreferences prefs,
     required DateTime now,
     required DateTime? lastVisit,
   }) async {
+    if (await _startMasterCoreAsk(prefs, now)) return true;
+
     final context = await _buildMasterGreetingContext(
       prefs: prefs,
       now: now,
@@ -4124,11 +4163,50 @@ class _ChatScreenState extends State<ChatScreen>
 
   static const _catEveningReturnGreetingDateKey =
       'nyang_cat_evening_return_greeting_date';
-  static const _catEveningCheckInDateKey = 'nyang_cat_evening_check_in_date';
-  static const _catNoonStartTipDateKey = 'nyang_cat_noon_start_tip_date';
-  static const _catAfternoonCheckInDateKey =
-      'nyang_cat_afternoon_check_in_date';
   static const _catEveningReturnGreetingCooldown = Duration(days: 3);
+
+  // 냥냥코치 슬롯별 자동 발화의 하루 1회 가드. 마스터 코치와 같은 이유로
+  // prefs 날짜 키가 아니라 메시지 kind로 판정한다([_spokeKindToday] 참고).
+  static const _catMiddayGreetingKind = 'auto:cat_midday';
+  static const _catAfternoonGreetingKind = 'auto:cat_afternoon';
+  static const _catEveningGreetingKind = 'auto:cat_evening';
+
+  /// 오후에 핵심 일정을 시작했는지 물어본 발화. 일반 오후 인사와 kind를 나눠두는
+  /// 이유는 저녁이다 — 오후에 이미 물었으면 저녁에 같은 걸 또 캐묻지 않는다.
+  static const _catAfternoonCoreGreetingKind = 'auto:cat_afternoon_core';
+  static const _catAfternoonGreetingKinds = {
+    _catAfternoonGreetingKind,
+    _catAfternoonCoreGreetingKind,
+  };
+
+  /// 마스터 코치가 핵심 일정을 물어보는 발화. 낮 슬롯 인사와 kind를 나눠서
+  /// 따로 센다 — 아침에 인사를 받았어도 오후에 이 질문은 나갈 수 있어야 한다.
+  static const _masterCoreGreetingKind = 'auto:master_core';
+
+  /// 핵심 일정을 시작했는지 물었을 때 누르는 버튼. 세 갈래로 나눈 이유는
+  /// 못 한 이유가 부담인지 상황인지에 따라 이어갈 말이 완전히 다르기 때문이다.
+  /// 부담이면 붙잡고 낮춰줘야 하고, 상황이면 붙잡는 게 오히려 부담이 된다.
+  ///
+  /// 마스터 코치에만 붙인다. 냥냥이는 물어보기만 하고 답은 대화로 받는다 —
+  /// 버튼은 눌러서 처리되는 게 있을 때 값을 하는데, 냥이는 시작 표시를
+  /// 건드리지 않으니 누를 이유가 없다.
+  /// (버튼은 사용자가 하는 말이라 여비서/냥할배까지 가르지는 않는다.)
+  static const _masterCoreStartedLabel = '시작은 했어요';
+  static const _masterCoreBurdenLabel = '부담돼서 못하겠어요';
+  static const _masterCoreBusyLabel = '일이 있어서 못했어요';
+  static const _masterCoreAskLabels = [
+    _masterCoreStartedLabel,
+    _masterCoreBurdenLabel,
+    _masterCoreBusyLabel,
+  ];
+
+  /// 위젯 설치 권유도 저녁 슬롯의 한 갈래다. 다만 이 kind는 선택 카드를 그리는
+  /// 쪽에서 보고 있어 바꿀 수 없으므로, 가드에서만 저녁 인사와 함께 센다.
+  static const _catWidgetPromptKind = 'cat_widget_prompt_choice';
+  static const _catEveningGreetingKinds = {
+    _catEveningGreetingKind,
+    _catWidgetPromptKind,
+  };
 
   Future<bool> _tryShowCatEveningReturnGreeting(
     SharedPreferences prefs,
@@ -4142,14 +4220,13 @@ class _ChatScreenState extends State<ChatScreen>
       return false;
     }
 
-    final todayKey = _dateKey(now);
-    if (prefs.getString(_catEveningCheckInDateKey) == todayKey) return false;
+    if (_spokeKindToday(_catEveningGreetingKinds, now)) return false;
 
     if (_completedTasks > 0) {
       // 21시 넘으면 취침 제안과 겹치니 그때는 비워둔다.
       if (now.hour >= 21) return false;
       if (_completedTasks >= _totalTasks) return false;
-      return _showCatEveningProgressGreeting(prefs, todayKey);
+      return _showCatEveningProgressGreeting(prefs);
     }
 
     final lastSpecialShown = DateTime.tryParse(
@@ -4179,7 +4256,7 @@ class _ChatScreenState extends State<ChatScreen>
               '괜찮아. 지금 하나라도 하면 된다냥. 냥냥이랑 뭐할지 정해볼까?',
           isUser: false,
           time: DateTime.now(),
-          kind: 'auto_greeting',
+          kind: _catEveningGreetingKind,
         ),
         false,
       ));
@@ -4192,7 +4269,7 @@ class _ChatScreenState extends State<ChatScreen>
               '냥냥코치는 계획만 적는 곳이 아니라, 실행하다 막힐 때마다 불러도 되는 곳이다냥. 언제든 냥냥이를 불러주라냥.',
           isUser: false,
           time: DateTime.now(),
-          kind: 'auto_greeting',
+          kind: _catEveningGreetingKind,
         ),
         true,
       ));
@@ -4205,7 +4282,7 @@ class _ChatScreenState extends State<ChatScreen>
                 '혹시 냥냥코치 들어오는 거 자꾸 잊어버리면 위젯을 깔아보는 거 어때? 위젯은 설정에 들어가서 설치할 수 있다냥.',
             isUser: false,
             time: DateTime.now(),
-            kind: 'cat_widget_prompt_choice',
+            kind: _catWidgetPromptKind,
             choices: const ['지금 위젯 설치하기', '지금은 안 할래'],
           ),
           true,
@@ -4219,7 +4296,6 @@ class _ChatScreenState extends State<ChatScreen>
         now.toIso8601String(),
       );
     }
-    await prefs.setString(_catEveningCheckInDateKey, todayKey);
     final greeting = selected.$1;
     setState(() {
       _messages.add(greeting);
@@ -4246,6 +4322,132 @@ class _ChatScreenState extends State<ChatScreen>
     return null;
   }
 
+  /// 핵심 일정을 "슬슬 늦었다"고 볼 수 있는 시점이 지났는지.
+  ///
+  /// 시계만 보고 물으면 방금 계획을 세운 사람에게도 늦었다고 하게 된다. 12시에
+  /// 플래너를 열어 오늘 할 일을 적고 바로 코치에게 온 사람이 "아직 시작 안
+  /// 하셨네요"를 듣는 식이다. 그래서 시각이 아니라 그 일정이 언제부터 밀린
+  /// 것인지를 본다 — 할 시각을 정해뒀으면 그 시각, 아니면 적어둔 지 [_coreAskGrace].
+  static const _coreAskGrace = Duration(hours: 3);
+
+  bool _coreTaskLooksOverdue(Map<String, dynamic> task, DateTime now) {
+    final startAt = _todayTimeOf(task['timeStart']?.toString(), now);
+    if (startAt != null) return now.isAfter(startAt);
+    final createdAt = DateTime.tryParse(task['createdAt']?.toString() ?? '');
+    // 언제 적었는지 모르는 일정은 예전 것일 가능성이 크니 막지 않는다.
+    if (createdAt == null) return true;
+    return now.difference(createdAt) >= _coreAskGrace;
+  }
+
+  /// 'HH:mm'을 오늘 날짜의 시각으로 읽는다.
+  DateTime? _todayTimeOf(String? hhmm, DateTime now) {
+    if (hhmm == null || hhmm.isEmpty) return null;
+    final parts = hhmm.split(':');
+    if (parts.length < 2) return null;
+    final hour = int.tryParse(parts[0]);
+    final minute = int.tryParse(parts[1]);
+    if (hour == null || minute == null) return null;
+    return DateTime(now.year, now.month, now.day, hour, minute);
+  }
+
+  /// 물어볼 만한 핵심 일정. 아직 시작 표시가 없고, 물어도 될 만큼 밀린 것.
+  String? _coreTaskDueForAsk(SharedPreferences prefs, DateTime now) {
+    return _shortTaskName(
+      _findCoreTask(
+        prefs,
+        (task) =>
+            _isPendingNotInProgressTask(task) &&
+            _coreTaskLooksOverdue(task, now),
+      ),
+    );
+  }
+
+  /// 오늘 마스터 코치가 이미 핵심 일정을 물었는지.
+  ///
+  /// 코치가 달라도 사용자에게는 같은 일을 두 번 묻는 것이다. 마스터가 먼저
+  /// (12~15시) 묻고 냥냥이가 나중(15~18시)이라 한 방향만 본다.
+  Future<bool> _masterAskedCoreToday(DateTime now) async {
+    final prefs = await SharedPreferences.getInstance();
+    for (final coachId in const [
+      CoachIdService.secretaryChiefId,
+      CoachIdService.nyangHalbaeId,
+    ]) {
+      final raw = prefs.getString('nyang_chat_history_$coachId');
+      if (raw == null || raw.isEmpty) continue;
+      for (final item in _decodeMapList(raw)) {
+        if (item['isUser'] == true) continue;
+        if (item['kind'] != _masterCoreGreetingKind) continue;
+        final time = DateTime.tryParse(item['time']?.toString() ?? '');
+        if (time != null && _isSameDay(time, now)) return true;
+      }
+    }
+    return false;
+  }
+
+  /// 아직 시작 표시가 없는 핵심 일정에 시작 표시를 켠다. 켠 일정 이름을
+  /// 돌려주고, 켤 게 없으면(이미 켜져 있거나 완료됐으면) null.
+  ///
+  /// 부르는 곳은 마스터 코치의 버튼뿐이다. 냥냥이는 물어보기만 하고 표시를
+  /// 건드리지 않는다 — 대신 처리해주는 건 비서 역할이라서다. 채팅에 "시작했어"라고
+  /// 친 것으로도 켜지 않는다. 표시를 켜는 건 데이터를 바꾸는 일이라, 말을
+  /// 해석해서 하기에는 애매한 문장이 너무 많다.
+  ///
+  /// 오늘 할 일과 핵심 일정 양쪽을 함께 고친다. 한쪽만 고치면 할 일 화면과
+  /// 핵심 일정 카드가 서로 다른 상태를 보여준다. 저장 뒤에 하는 일들은 할 일
+  /// 화면의 시작 버튼이 하던 것과 같다 — 오늘 기록, 위젯, 클라우드, 진행률.
+  Future<String?> _markCoreTaskStarted(SharedPreferences prefs) async {
+    final target = _findCoreTask(prefs, _isPendingNotInProgressTask);
+    final targetText = _taskText(target);
+    if (target == null || targetText == null) return null;
+    final targetId = target['id']?.toString();
+
+    bool matches(Map<String, dynamic> task) {
+      final id = task['id']?.toString();
+      if (targetId != null &&
+          targetId.isNotEmpty &&
+          id != null &&
+          id.isNotEmpty) {
+        return id == targetId;
+      }
+      return _taskText(task) == targetText;
+    }
+
+    // 시작 시각은 습관에만 남긴다 — 할 일 화면의 시작 버튼과 같은 규칙이다.
+    void markStarted(Map<String, dynamic> task) {
+      task['inProgress'] = true;
+      if (_isHabitTask(task)) {
+        task['inProgressAt'] = DateTime.now().toIso8601String();
+      }
+    }
+
+    var changed = false;
+    final tasks = _decodeMapList(prefs.getString('nyang_tasks'));
+    for (final task in tasks) {
+      if (!matches(task)) continue;
+      markStarted(task);
+      changed = true;
+    }
+    if (changed) await prefs.setString('nyang_tasks', jsonEncode(tasks));
+
+    var coreChanged = false;
+    final coreTasks = _decodeMapList(prefs.getString('nyang_core_tasks'));
+    for (final task in coreTasks) {
+      if (!matches(task)) continue;
+      markStarted(task);
+      coreChanged = true;
+    }
+    if (coreChanged) {
+      await prefs.setString('nyang_core_tasks', jsonEncode(coreTasks));
+    }
+    if (!changed && !coreChanged) return null;
+
+    await _updateTodayRecord(prefs);
+    await WidgetSyncService.syncFromStoredTasks();
+    TasksSyncService.scheduleSyncToCloud();
+    await _loadTaskProgress();
+    return targetText;
+  }
+
   /// 문장에 따옴표로 넣기 너무 길면 이름을 쓰지 않는다.
   String? _shortTaskName(Map<String, dynamic>? task) {
     final name = _taskText(task);
@@ -4257,10 +4459,7 @@ class _ChatScreenState extends State<ChatScreen>
 
   /// 오늘 일부만 끝낸 집사에게 18~21시에 건네는 인사.
   /// 이미 한 게 있으니 새로 시키지 않고, 한 것을 짚어주기만 한다.
-  Future<bool> _showCatEveningProgressGreeting(
-    SharedPreferences prefs,
-    String todayKey,
-  ) async {
+  Future<bool> _showCatEveningProgressGreeting(SharedPreferences prefs) async {
     // 아직 손도 안 댄 핵심이 있으면 그쪽이 먼저다. 끝낸 핵심을 두고 '여유롭게'라고
     // 하면, 정작 더 중요한 게 남아 있는 날에 어긋난다.
     final notStartedCore = _shortTaskName(
@@ -4281,12 +4480,22 @@ class _ChatScreenState extends State<ChatScreen>
         : _shortTaskName(_findCoreTask(prefs, (task) => task['done'] == true));
     final List<String> texts;
     if (notStartedCore != null) {
-      texts = [
-        '오늘 $_completedTasks개는 해뒀네냥. 그런데 핵심 \'$notStartedCore\'가 아직 남았다냥.\n'
-            '지금 조금만 손대볼까냥? 혹시 시작하기 부담스러운 이유 있으면 알려줘.',
-        '집사, 핵심으로 잡아둔 \'$notStartedCore\'는 아직 손을 안 댔다냥.\n'
-            '괜찮아. 뭐가 걸리는지 말해주면 냥이가 같이 고민해줄게. 5분만 시작해보는 거 어때?',
-      ];
+      // 오후에 이미 같은 일로 물어봤으면 두 번 캐묻지 않는다. 하루에 두 번
+      // 같은 일을 찔리면 도움이 아니라 잔소리가 된다. 이때는 답을 요구하지 않고
+      // 접어도 된다는 쪽으로만 말한다.
+      texts = _spokeKindToday({_catAfternoonCoreGreetingKind}, DateTime.now())
+          ? [
+              '\'$notStartedCore\'는 오늘 접어도 괜찮다냥. 아까도 물어봤으니 더 안 캐물을게.\n'
+                  '딱 5분만 손대도 되고, 내일 아침의 집사한테 넘겨도 된다냥. 집사가 정하면 된다냥.',
+              '아까 물어본 \'$notStartedCore\', 오늘은 여기까지여도 괜찮다냥.\n'
+                  '오늘 안 되는 날이었던 거지 집사가 못한 게 아니다냥. 내일 다시 보면 된다냥.',
+            ]
+          : [
+              '오늘 $_completedTasks개는 해뒀네냥. 그런데 핵심 \'$notStartedCore\'가 아직 남았다냥.\n'
+                  '지금 조금만 손대볼까냥? 혹시 시작하기 부담스러운 이유 있으면 알려줘.',
+              '집사, 핵심으로 잡아둔 \'$notStartedCore\'는 아직 손을 안 댔다냥.\n'
+                  '괜찮아. 뭐가 걸리는지 말해주면 냥이가 같이 고민해줄게. 5분만 시작해보는 거 어때?',
+            ];
     } else if (inProgressCore != null) {
       texts = [
         '오 집사 오늘의 핵심 \'$inProgressCore\' 시작했네. 좋아.\n'
@@ -4312,14 +4521,13 @@ class _ChatScreenState extends State<ChatScreen>
 
     await Future.delayed(const Duration(milliseconds: 450));
     if (!mounted) return true;
-    await prefs.setString(_catEveningCheckInDateKey, todayKey);
     setState(() {
       _messages.add(
         ChatMessage(
           text: texts[Random().nextInt(texts.length)],
           isUser: false,
           time: DateTime.now(),
-          kind: 'auto_greeting',
+          kind: _catEveningGreetingKind,
         ),
       );
       _dynamicChips = _coach.chips;
@@ -4382,10 +4590,8 @@ class _ChatScreenState extends State<ChatScreen>
       return false;
     }
 
-    final todayKey = _dateKey(now);
-    if (prefs.getString(_catNoonStartTipDateKey) == todayKey) return false;
+    if (_spokeKindToday({_catMiddayGreetingKind}, now)) return false;
     final text = await _buildCatNoonStartTipText(prefs);
-    await prefs.setString(_catNoonStartTipDateKey, todayKey);
     await Future.delayed(const Duration(milliseconds: 450));
     if (!mounted) return true;
     setState(() {
@@ -4394,7 +4600,7 @@ class _ChatScreenState extends State<ChatScreen>
           text: text,
           isUser: false,
           time: DateTime.now(),
-          kind: 'auto_greeting',
+          kind: _catMiddayGreetingKind,
         ),
       );
       _dynamicChips = const ['오늘 뭐부터 할까', '하기 싫은 일 있어', '오늘 꼭 끝낼 일 있어'];
@@ -4417,13 +4623,18 @@ class _ChatScreenState extends State<ChatScreen>
       return false;
     }
 
-    final todayKey = _dateKey(now);
-    if (prefs.getString(_catAfternoonCheckInDateKey) == todayKey) {
-      return false;
-    }
+    if (_spokeKindToday(_catAfternoonGreetingKinds, now)) return false;
 
-    final text = await _buildCatAfternoonCheckInText(prefs);
-    await prefs.setString(_catAfternoonCheckInDateKey, todayKey);
+    // 핵심으로 찍어둔 일이 아직 시작 표시도 없으면 그게 오후의 이야기다.
+    // 다른 일을 붙들고 있어도 이쪽을 먼저 본다 — 진행 중인 일 얘기로 넘어가면
+    // 정작 오늘 제일 중요한 일이 언급조차 안 된 채 오후가 지나간다.
+    // 단, 오늘 마스터가 이미 물었으면 빠진다.
+    final notStartedCore = await _masterAskedCoreToday(now)
+        ? null
+        : _coreTaskDueForAsk(prefs, now);
+    final text = notStartedCore != null
+        ? _buildCatAfternoonCoreAskText(notStartedCore)
+        : await _buildCatAfternoonCheckInText(prefs);
     await Future.delayed(const Duration(milliseconds: 450));
     if (!mounted) return true;
     setState(() {
@@ -4432,7 +4643,9 @@ class _ChatScreenState extends State<ChatScreen>
           text: text,
           isUser: false,
           time: DateTime.now(),
-          kind: 'auto_greeting',
+          kind: notStartedCore != null
+              ? _catAfternoonCoreGreetingKind
+              : _catAfternoonGreetingKind,
         ),
       );
       _dynamicChips = const ['하기 싫은 일 있어', '오늘 꼭 끝낼 일 있어', '남은 것 중 뭐하지?'];
@@ -5667,10 +5880,10 @@ class _ChatScreenState extends State<ChatScreen>
       if (remaining == 0)
         return '오늘 할 일 $total개 중 $done개 완료다냥. 다 끝냈으니 더 벌리지 말고 쉬어도 된다냥.';
       if (inProgress != null) {
-        return '오늘 할 일 $total개 중 $done개 완료, $remaining개 남았다냥. 지금은 "$inProgress" 마무리만 보면 되겠다냥.';
+        return '오늘 할 일 $total개 중 $done개 완료, $remaining개 남았다냥. 지금은 \'$inProgress\' 마무리만 보면 되겠다냥.';
       }
       if (core != null) {
-        return '오늘 할 일 $total개 중 $done개 완료, $remaining개 남았다냥. 핵심은 "$core" 쪽을 먼저 보면 된다냥.';
+        return '오늘 할 일 $total개 중 $done개 완료, $remaining개 남았다냥. 핵심은 \'$core\' 쪽을 먼저 보면 된다냥.';
       }
       return '오늘 할 일 $total개 중 $done개 완료, $remaining개 남았다냥. 하나만 고르면 흐름은 다시 붙는다냥.';
     }
@@ -5679,10 +5892,10 @@ class _ChatScreenState extends State<ChatScreen>
       if (total == 0) return '오늘 등록된 할 일은 아직 없다냥. 하나만 가볍게 잡아도 충분하다냥.';
       if (remaining == 0) return '오늘 할 일 $total개 다 끝났다냥. 더 벌리지 말고 이제 쉬어도 된다냥.';
       if (inProgress != null) {
-        return '오늘 $done개는 끝냈고, "$inProgress"는 이미 시작해뒀다냥. 남은 건 $remaining개지만 지금은 흐름이 있는 상태다냥.';
+        return '오늘 $done개는 끝냈고, \'$inProgress\'는 이미 시작해뒀다냥. 남은 건 $remaining개지만 지금은 흐름이 있는 상태다냥.';
       }
       if (core != null) {
-        return '오늘 $done개 끝냈고 $remaining개 남았다냥. 아직 시동 걸 일이 필요하면 "$core"부터 보면 좋겠다냥.';
+        return '오늘 $done개 끝냈고 $remaining개 남았다냥. 아직 시동 걸 일이 필요하면 \'$core\'부터 보면 좋겠다냥.';
       }
       return '오늘 $done개 끝냈고 $remaining개 남았다냥. 다 보려고 하지 말고 하나만 잡으면 된다냥.';
     }
@@ -5691,12 +5904,32 @@ class _ChatScreenState extends State<ChatScreen>
     if (remaining == 0)
       return '오늘 할 일 $total개 중 $done개 완료예요. 다 끝내셨으니 더 벌리지 말고 쉬셔도 됩니다.';
     if (inProgress != null) {
-      return '오늘 할 일 $total개 중 $done개 완료, $remaining개 남았어요. 지금은 "$inProgress" 마무리만 보시면 좋겠습니다.';
+      return '오늘 할 일 $total개 중 $done개 완료, $remaining개 남았어요. 지금은 \'$inProgress\' 마무리만 보시면 좋겠습니다.';
     }
     if (core != null) {
-      return '오늘 할 일 $total개 중 $done개 완료, $remaining개 남았어요. 핵심은 "$core" 쪽을 먼저 보시면 됩니다.';
+      return '오늘 할 일 $total개 중 $done개 완료, $remaining개 남았어요. 핵심은 \'$core\' 쪽을 먼저 보시면 됩니다.';
     }
     return '오늘 할 일 $total개 중 $done개 완료, $remaining개 남았어요. 하나만 고르면 흐름은 다시 붙습니다.';
+  }
+
+  /// 오후에 핵심 일정을 아직 시작 안 한 것 같을 때 건네는 말.
+  ///
+  /// 시작 표시가 없다고 안 한 것으로 단정하지 않는다 — 이미 했는데 버튼만 안
+  /// 눌렀을 수 있다. 그래서 묻되, 왜 묻는지(시작 표시가 비어 있다는 것)를 같이
+  /// 밝힌다. 근거 없이 물으면 형식적인 질문으로 들린다.
+  ///
+  /// 답은 말풍선 안 버튼으로 받으므로 문장에서 답을 재촉하지 않는다.
+  String _buildCatAfternoonCoreAskText(String core) {
+    final random = Random();
+    final texts = [
+      '집사, 오늘 핵심으로 잡아둔 \'$core\'는 시작했냥?\n'
+          '시작 표시가 아직 비어 있길래 물어보는 거다냥.',
+      '오후가 반쯤 지나갔는데 \'$core\'는 어떻게 됐냥?\n'
+          '냥이가 보기엔 시작 표시가 그대로다냥. 했는데 안 눌렀을 수도 있으니까 물어본다냥.',
+      '\'$core\' 손댔냥?\n'
+          '시작 표시가 안 보여서 물어보는 거다냥. 아직이어도 괜찮다냥.',
+    ];
+    return texts[random.nextInt(texts.length)];
   }
 
   Future<String> _buildCatAfternoonCheckInText(SharedPreferences prefs) async {
@@ -5775,7 +6008,7 @@ class _ChatScreenState extends State<ChatScreen>
         (name) => name.length <= MasterGreetingCopy.doneLabelMaxLength,
       );
       final subject = fitsInline
-          ? inProgressNames.map((name) => '"$name"').join('랑 ')
+          ? inProgressNames.map((name) => '\'$name\'').join('랑 ')
           : count == 1
           ? '할 일 하나'
           : '할 일 $count개';
@@ -5785,7 +6018,7 @@ class _ChatScreenState extends State<ChatScreen>
       return '$opener\n지금 $subject 하고 있구냥. $tail';
     }
     if (done == 0) {
-      final nudge = core != null ? '"$core"부터 봐도 좋고, ' : '';
+      final nudge = core != null ? '\'$core\'부터 봐도 좋고, ' : '';
       final question = pick([
         '오늘 꼭 끝내야 하는 일이 있을까?',
         '하기 유독 귀찮은 일이 하나 있냥?',
@@ -5802,9 +6035,9 @@ class _ChatScreenState extends State<ChatScreen>
         '하루가 0에서 멈춘 게 아니라 이미 움직였다냥.',
       ]);
       final question = pick([
-        '지금은 "$core"가 제일 걸리는 일일까?',
-        '"$core"를 아주 작게 쪼개보면 이어가기 괜찮을까?',
-        '혹시 "$core"가 오늘 꼭 끝내야 하는 일이냥?',
+        '지금은 \'$core\'가 제일 걸리는 일일까?',
+        '\'$core\'를 아주 작게 쪼개보면 이어가기 괜찮을까?',
+        '혹시 \'$core\'가 오늘 꼭 끝내야 하는 일이냥?',
       ]);
       return '$opener\n'
           '$reassurance\n'
@@ -5906,14 +6139,14 @@ class _ChatScreenState extends State<ChatScreen>
       }
       if (completedNames.length == 1) {
         return '${opener()} 지금은 $time이네.\n'
-            '오늘 "${completedNames[0]}" 끝냈고, 남은 건 $remaining개라냥. $praise';
+            '오늘 \'${completedNames[0]}\' 끝냈고, 남은 건 $remaining개라냥. $praise';
       }
       if (done == 2) {
         return '${opener()} 지금은 $time이네.\n'
-            '오늘 "${completedNames[0]}"이랑 "${completedNames[1]}" 끝냈고, 남은 건 $remaining개라냥. $praise';
+            '오늘 \'${completedNames[0]}\'이랑 \'${completedNames[1]}\' 끝냈고, 남은 건 $remaining개라냥. $praise';
       }
       return '${opener()} 지금은 $time이네.\n'
-          '오늘 "${completedNames[0]}"이랑 "${completedNames[1]}" 포함해서 $done개 끝냈고, 남은 건 $remaining개라냥. $praise';
+          '오늘 \'${completedNames[0]}\'이랑 \'${completedNames[1]}\' 포함해서 $done개 끝냈고, 남은 건 $remaining개라냥. $praise';
     }
 
     String statusBriefing() {
@@ -5926,7 +6159,7 @@ class _ChatScreenState extends State<ChatScreen>
       }
       if (inProgress != null) {
         return '${opener()}\n'
-            '지금 "$inProgress" 하는 중이네. 막히는 거 있으면 냥냥이한테 말해주라냥.';
+            '지금 \'$inProgress\' 하는 중이네. 막히는 거 있으면 냥냥이한테 말해주라냥.';
       }
       if (remaining == 1) {
         return '${opener()}\n'
@@ -5934,7 +6167,7 @@ class _ChatScreenState extends State<ChatScreen>
       }
       if (core != null) {
         return '${opener()}\n'
-            '오늘 남은 건 $remaining개지만, 다 볼 필요 없다냥. "$core"부터 작게 봐도 좋겠다냥.';
+            '오늘 남은 건 $remaining개지만, 다 볼 필요 없다냥. \'$core\'부터 작게 봐도 좋겠다냥.';
       }
       return '${opener()}\n'
           '오늘 남은 건 $remaining개지만, 다 볼 필요 없다냥. 제일 만만한 것 하나만 볼까?';
@@ -5966,7 +6199,7 @@ class _ChatScreenState extends State<ChatScreen>
     if (done == 0 && inProgress != null) {
       greetingCandidates.add(
         '${opener()}\n'
-        '"$inProgress"은 이미 시작해뒀네. 시작해둔 것도 흐름이다냥.\n'
+        '\'$inProgress\'은 이미 시작해뒀네. 시작해둔 것도 흐름이다냥.\n'
         '오늘 탭에서 진행 중 표시를 해두면, 나중에 마스터 코치들이 집사가 덜 힘들게 움직이는 패턴을 같이 찾아줄 수 있다냥.',
       );
     }
@@ -12702,7 +12935,7 @@ $timerOutputRule
     final timeLabel = task.time != null
         ? ' (${_formatTime12(task.time!)})'
         : '';
-    final confirmMsg = '"${task.text}"$timeLabel 오늘 할 일에 추가했어요 ✓';
+    final confirmMsg = '\'${task.text}\'$timeLabel 오늘 할 일에 추가했어요 ✓';
     setState(() {
       _suggestedTasks.removeAt(idx);
       _messages.add(
@@ -14043,7 +14276,13 @@ $timerOutputRule
     if ((msg.kind == 'evening_pending_choice' ||
             msg.kind == _greetingKind(GreetingSlot.evening)) &&
         msg.choices.isNotEmpty) {
-      return _buildEveningPendingChoiceCard(msg);
+      return _buildChoiceBubbleCard(
+        msg,
+        (label) => _handleEveningPendingChoice(label, msg.choices),
+      );
+    }
+    if (msg.kind == _masterCoreGreetingKind && msg.choices.isNotEmpty) {
+      return _buildChoiceBubbleCard(msg, _handleMasterCoreAskChoice);
     }
     if (msg.kind == 'grooming_care_choice') {
       return _buildGroomingCareChoiceCard(msg);
@@ -14280,10 +14519,10 @@ $timerOutputRule
                   Text(
                     msg.text,
                     style: GoogleFonts.notoSansKr(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w900,
-                      height: 1.45,
-                      color: const Color(0xFF2C2742),
+                      fontSize: AppDesignTokens.textBody,
+                      fontWeight: FontWeight.w500,
+                      height: 1.6,
+                      color: AppDesignTokens.textPrimary,
                     ),
                   ),
                   const SizedBox(height: 10),
@@ -14360,10 +14599,10 @@ $timerOutputRule
 
     Widget highlightedText() {
       final baseStyle = GoogleFonts.notoSansKr(
-        fontSize: 14,
-        fontWeight: FontWeight.w600,
-        height: 1.62,
-        color: const Color(0xFF252235),
+        fontSize: AppDesignTokens.textBody,
+        fontWeight: FontWeight.w500,
+        height: 1.6,
+        color: AppDesignTokens.textPrimary,
       );
       final highlightStyle = baseStyle.copyWith(
         fontWeight: FontWeight.w900,
@@ -14675,10 +14914,10 @@ $timerOutputRule
                   Text(
                     msg.text,
                     style: GoogleFonts.notoSansKr(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w800,
-                      height: 1.45,
-                      color: const Color(0xFF1A1A2E),
+                      fontSize: AppDesignTokens.textBody,
+                      fontWeight: FontWeight.w500,
+                      height: 1.6,
+                      color: AppDesignTokens.textPrimary,
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -14714,7 +14953,12 @@ $timerOutputRule
   /// 저녁 발화에서 "귀찮았던 일"을 고르는 카드.
   /// 버튼 라벨은 메시지에 박아둔 것을 그대로 쓴다 — 그릴 때마다 할 일 목록을
   /// 다시 읽으면 지나간 카드의 버튼까지 뒤늦게 바뀐다.
-  Widget _buildEveningPendingChoiceCard(ChatMessage msg) {
+  /// 말풍선 안에 세로 버튼을 붙인 카드. 어떤 발화든 [ChatMessage.choices]만
+  /// 채우면 되고, 누른 뒤의 처리는 [onChoice]가 맡는다.
+  Widget _buildChoiceBubbleCard(
+    ChatMessage msg,
+    void Function(String label) onChoice,
+  ) {
     final time = DateFormat('a h:mm', 'ko').format(msg.time);
     final accent = _coach.accentColor;
 
@@ -14800,10 +15044,7 @@ $timerOutputRule
                   ),
                   for (final label in msg.choices) ...[
                     const SizedBox(height: 8),
-                    choiceButton(
-                      label,
-                      () => _handleEveningPendingChoice(label, msg.choices),
-                    ),
+                    choiceButton(label, () => onChoice(label)),
                   ],
                 ],
               ),
@@ -14821,6 +15062,47 @@ $timerOutputRule
           ),
         ],
       ),
+    );
+  }
+
+  /// 마스터 코치가 "핵심 일정 시작하셨냐"고 물은 뒤 누른 버튼을 처리한다.
+  ///
+  /// 세 갈래를 다르게 받는 게 이 질문의 전부다. 부담이라고 답했을 때만 붙잡고,
+  /// 상황 때문이라고 답하면 붙잡지 않는다 — 바빠서 못 한 사람에게 부담을
+  /// 낮춰주겠다고 하면 못 알아들은 대답이 된다.
+  Future<void> _handleMasterCoreAskChoice(String label) async {
+    if (_isLoading) return;
+    HapticFeedback.lightImpact();
+
+    if (label == _masterCoreStartedLabel) {
+      // 표시를 안 누른 게 귀찮아서였을 텐데 또 누르라고 하면 똑같다.
+      final prefs = await SharedPreferences.getInstance();
+      final started = await _markCoreTaskStarted(prefs);
+      _injectAiMessage(
+        _greetingBuilder.pickLine(
+          started != null
+              ? _greetingVoice.coreAskStartedReply
+              : _greetingVoice.coreAskAlreadyReply,
+        ),
+      );
+      await AnalyticsService.logFeatureUsage('master_core_ask_started');
+      return;
+    }
+
+    if (label == _masterCoreBusyLabel) {
+      // 못 한 게 아니라 못 할 상황이었던 것이다. 다음 행동을 밀지 않는다.
+      _injectAiMessage(
+        _greetingBuilder.pickLine(_greetingVoice.coreAskBusyReply),
+      );
+      await AnalyticsService.logFeatureUsage('master_core_ask_busy');
+      return;
+    }
+
+    // 부담이라고 답한 경우만 실행 저항 흐름을 태운다.
+    await AnalyticsService.logFeatureUsage('master_core_ask_burden');
+    await _send(
+      label,
+      apiInputOverride: '오늘 핵심으로 잡은 일이 부담돼서 아직 시작을 못 하고 있어',
     );
   }
 
@@ -14939,7 +15221,7 @@ $timerOutputRule
         '지금은 안 할래',
         () => _answerUltraLowResistanceCheck(followup, didIt: false),
       ),
-    ], messageFontWeight: FontWeight.w500);
+    ]);
   }
 
   Future<void> _answerUltraLowResistanceCheck(
@@ -14979,7 +15261,7 @@ $timerOutputRule
     return _buildGroomingChoiceCard(msg, [
       ('지금 위젯 설치하기', () => _handleCatWidgetPromptChoice('지금 위젯 설치하기')),
       ('지금은 안 할래', () => _handleCatWidgetPromptChoice('지금은 안 할래')),
-    ], messageFontWeight: FontWeight.w500);
+    ]);
   }
 
   Future<void> _handleCatWidgetPromptChoice(String label) async {
@@ -15008,9 +15290,8 @@ $timerOutputRule
   /// 한 군데서 만든다 — 버튼 문구와 눌렀을 때 할 일만 다르다.
   Widget _buildGroomingChoiceCard(
     ChatMessage msg,
-    List<(String, VoidCallback)> options, {
-    FontWeight messageFontWeight = FontWeight.w800,
-  }) {
+    List<(String, VoidCallback)> options,
+  ) {
     final time = DateFormat('a h:mm', 'ko').format(msg.time);
     final accent = _coach.accentColor;
 
@@ -15089,10 +15370,10 @@ $timerOutputRule
                     Text(
                       msg.text,
                       style: GoogleFonts.notoSansKr(
-                        fontSize: 14,
-                        fontWeight: messageFontWeight,
-                        height: 1.45,
-                        color: const Color(0xFF1A1A2E),
+                        fontSize: AppDesignTokens.textBody,
+                        fontWeight: FontWeight.w500,
+                        height: 1.6,
+                        color: AppDesignTokens.textPrimary,
                       ),
                     ),
                     const SizedBox(height: 12),
