@@ -2218,6 +2218,47 @@ class _ChatScreenState extends State<ChatScreen>
     };
   }
 
+  /// 계획이 하나도 없는 날 "뭐 하지?"라고 물었을 때 붙이는 지침.
+  ///
+  /// 지금은 코치가 바로 산책이나 독서를 던지는데, 사용자 머릿속에 이미 마음
+  /// 쓰이는 일이 있는 경우가 많다. 한 번 물어보고, 없다고 하면 그때 가벼운
+  /// 행동을 권한다. 되묻는 건 딱 한 번이다.
+  Future<String> _emptyPlanAskSection(String userText) async {
+    // '지금 뭐하지?' 치트키는 하루 횟수가 정해져 있고 "묻지 말고 바로 추천"이
+    // 그 기능의 약속이라 건드리지 않는다. 되물으면 한 번을 그냥 쓰게 된다.
+    if (userText == '지금 뭐하지?') return '';
+    if (!_isWhatToDoQuestion(userText)) return '';
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString('nyang_tasks');
+    if (raw != null && raw.trim().isNotEmpty) {
+      try {
+        if ((jsonDecode(raw) as List).isNotEmpty) return '';
+      } catch (_) {
+        return '';
+      }
+    }
+    // 마스터는 최근 7일 미완료 목록을 프롬프트에서 이미 보고 있다. 오늘 목록이
+    // 비었다고 아무것도 없는 게 아니라, 미뤄둔 일이 남아 있을 수 있다.
+    final deferredFirst = _coach.isMaster
+        ? '\n- [최근 7일간 실제 완료/미완료 할 일 목록]에 미완료로 남은 일이 있으면 그것부터 짚으세요. 이름을 그대로 부르며 오늘 할 생각이 있는지 물으세요. 없을 때만 아래 순서로 가세요.'
+        : '';
+
+    return '''
+[계획이 비어 있을 때]$deferredFirst
+- 오늘 등록된 할 일이 하나도 없습니다. 가벼운 행동을 바로 던지지 말고, 먼저 오늘 꼭 해야 하는 일이 있는지, 미뤄둔 것 중에 신경 쓰이는 게 있는지 한 번 물으세요.
+- 주간·월간 목표나 비전이 있으면 그걸 근거로 구체적으로 물으세요. 예: "이번 달 목표가 '살 빼기'던데, 오늘 그쪽으로 하나 해볼까?"
+- 사용자가 하나라도 말하면 그 일을 중심으로 이어가고, 오늘 할 일로 등록할 만하면 [TASK] 태그를 붙이세요.
+- 없다고 하거나 모르겠다고 하면 더 캐묻지 말고, 물 마시기·스트레칭·산책처럼 부담 없는 행동 하나만 권하세요.
+- 되묻는 건 한 번뿐입니다. 이미 물어본 뒤라면 바로 가벼운 행동을 권하세요.''';
+  }
+
+  bool _isWhatToDoQuestion(String text) {
+    final normalized = text.replaceAll(RegExp(r'\s+'), '').toLowerCase();
+    return RegExp(
+      r'뭐(하지|하냐|할까|해야|부터|라도)|무엇을할|뭘(하지|할까|해야)|할게없|할일이없|심심',
+    ).hasMatch(normalized);
+  }
+
   bool _isCleaningContext(String userText) {
     if (_containsCleaningTaskSignal(userText)) return true;
     final recent = _messages.reversed
@@ -12991,12 +13032,16 @@ $resistanceFlowRule'''
         ? bedtimeRule
         : '';
 
+    // 계획이 하나도 없는 날 "뭐 하지?"라고 물었을 때만 붙인다.
+    final emptyPlanAskSection = await _emptyPlanAskSection(userText);
+
     final assembledSystemPrompt =
         '''$baseSystemPrompt
 ${contextString.isNotEmpty ? '\n$contextString' : ''}
 $masterStyleRule
 $cleaningSection
 $bedtimeCarryOverSection
+$emptyPlanAskSection
 
 [연속 대화 맥락 기준]
 - 직전 대화처럼 이어받아도 되는 말은 오늘 같은 날짜에 오간 대화뿐입니다.
