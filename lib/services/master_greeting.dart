@@ -24,6 +24,12 @@ class MasterGreetingContext {
   final int planTotal;
   final int planDone;
 
+  /// 오늘 몫인 습관. 완료율에는 이쪽도 넣는다 — 습관도 세워둔 계획이라,
+  /// 일정만 끝내고 습관이 통째로 남았는데 "전부 마치셨습니다"라고 할 수 없다.
+  /// 계획 유무는 위 [planTotal]로만 보므로 "계획 없음" 분기는 그대로 걸린다.
+  final int habitTotal;
+  final int habitDone;
+
   /// 격려 기준이 되는 완료 개수(습관 포함). 완료율이 아니라 개수를 쓰는 이유도
   /// 같다 — 자동 주입된 습관이 분모를 오염시킨다.
   final int doneCount;
@@ -67,6 +73,8 @@ class MasterGreetingContext {
     required this.daysSinceLastVisit,
     required this.planTotal,
     required this.planDone,
+    this.habitTotal = 0,
+    this.habitDone = 0,
     required this.doneCount,
     required this.doneLabel,
     required this.pendingPlans,
@@ -83,7 +91,11 @@ class MasterGreetingContext {
 
   bool get hasPlan => planTotal > 0;
 
-  double get planRate => planTotal == 0 ? 0 : planDone / planTotal;
+  /// 완료율. 일정과 습관을 함께 센다.
+  double get planRate {
+    final total = planTotal + habitTotal;
+    return total == 0 ? 0 : (planDone + habitDone) / total;
+  }
 
   bool get isComeback => daysSinceLastVisit != null && daysSinceLastVisit! >= 2;
 
@@ -844,7 +856,8 @@ class MasterGreetingBuilder {
           // 지금 시작해도 늦지 않았다고 말한다.
           parts.add(
             pickLine(
-              isEarlyEvening && context.planDone == 0
+              // 습관이라도 하나 했으면 "아직 아무것도 안 했다"가 아니다.
+              isEarlyEvening && context.doneCount == 0
                   ? voice.earlyEveningNone
                   : voice.eveningLow,
             ),

@@ -4042,6 +4042,8 @@ class _ChatScreenState extends State<ChatScreen>
       daysSinceLastVisit: daysSinceLastVisit,
       planTotal: plans.length,
       planDone: donePlans.length,
+      habitTotal: habits.length,
+      habitDone: doneHabits.length,
       doneCount: doneCount,
       doneLabel: doneLabel,
       pendingPlans: pendingPlans,
@@ -4214,6 +4216,48 @@ class _ChatScreenState extends State<ChatScreen>
 
   /// 위젯 설치를 권하기 전에 지켜보는 사용 일수.
   static const _catWidgetPromptAfterDays = 3;
+
+  /// 오늘 해야 하는데 시작 표시조차 없는 습관 이름.
+  ///
+  /// 시작 표시가 있는 습관은 빼둔다 — 이미 붙잡고 있는 사람에게 아직 안 했다고
+  /// 하면 하고 있는 걸 못 본 셈이 된다. 핵심 일정을 묻는 자리와 같은 기준이다.
+  ///
+  /// 주 몇 회짜리 습관(`weekly_count`)도 뺀다. 오늘 안 해도 되는 날이 있어서,
+  /// 오늘 몫이 아닌 걸 짚으면 하지도 않은 일을 빠뜨린 것처럼 들린다.
+  List<String> _pendingDailyHabits(SharedPreferences prefs) {
+    final freqById = _habitFrequencyById(prefs);
+    final names = <String>[];
+    for (final task in _decodeMapList(prefs.getString('nyang_tasks'))) {
+      if (!_isPendingNotInProgressTask(task)) continue;
+      if (!_isHabitTask(task) && task['habitId'] == null) continue;
+      if (!_countsTowardDailyCompletion(task, freqById)) continue;
+      final name = _shortTaskName(task);
+      if (name != null) names.add(name);
+    }
+    return names;
+  }
+
+  /// 아직 체크 안 된 습관을 짚어주는 오후 인사. 재촉하지 않는다 — 이미 했는데
+  /// 체크만 안 했을 수도 있어서 양쪽을 다 열어둔다.
+  String _buildCatHabitCheckText(List<String> habits) {
+    final random = Random();
+    final first = habits.first;
+    final rest = habits.length - 1;
+    if (rest > 0) {
+      return [
+        '집사, 오늘 습관 중에 \'$first\' 포함해서 $rest개 더 체크가 비어 있다냥.\n'
+            '이미 한 거면 눌러주고, 아직이면 하나만 골라도 충분하다냥.',
+        '\'$first\' 말고도 $rest개가 아직 체크 전이다냥.\n'
+            '다 하라는 건 아니고, 지금 제일 만만한 걸로 하나만 봐도 된다냥.',
+      ][random.nextInt(2)];
+    }
+    return [
+      '집사, 오늘 \'$first\' 아직 체크가 안 됐다냥.\n'
+          '이미 했으면 눌러주고, 아직이면 지금 해도 늦지 않다냥.',
+      '\'$first\' 하나가 아직 비어 있다냥.\n'
+          '했는데 안 눌렀을 수도 있으니 확인만 해보라냥.',
+    ][random.nextInt(2)];
+  }
 
   /// 앱을 며칠이나 써봤는지. 날짜별 기록에 남은 날 수로 센다.
   /// 기록은 앱을 열 때마다 그날 자리로 하나씩 쌓인다.
@@ -4938,8 +4982,24 @@ class _ChatScreenState extends State<ChatScreen>
     if (notStartedCore == null && await _otherCoachGreetedRecently(now)) {
       return false;
     }
+    // 핵심 일정 다음 순위로 습관을 본다. 핵심을 제쳐두고 습관부터 짚으면
+    // 정작 오늘 제일 중요한 게 뒤로 밀린다.
+    //
+    // 핵심 일정을 붙잡고 있는 중이면 습관도 꺼내지 않는다. 지금 제일 중요한
+    // 일을 하고 있는 사람에게 다른 할 일을 들이미는 게 되어서다.
+    final coreInProgress =
+        _findCoreTask(
+          prefs,
+          (task) => task['done'] != true && _isInProgressTask(task),
+        ) !=
+        null;
+    final pendingHabits = notStartedCore == null && !coreInProgress
+        ? _pendingDailyHabits(prefs)
+        : const <String>[];
     final text = notStartedCore != null
         ? _buildCatAfternoonCoreAskText(notStartedCore)
+        : pendingHabits.isNotEmpty
+        ? _buildCatHabitCheckText(pendingHabits)
         : await _buildCatAfternoonCheckInText(prefs);
     await Future.delayed(const Duration(milliseconds: 450));
     if (!mounted) return true;
@@ -12582,7 +12642,7 @@ $lowEnergyPrioritySection
 
 [감정 토로 응답 원칙]
 - 사용자가 속상함, 피로, 불안, 답답함 등 감정을 토로하면 먼저 충분히 공감하고 달래주세요.
-- 뜻 없는 의성어나 장난("우땨", "웅냐냐")을 힘든 일로 추측하지 마세요. 장난은 장난으로 받되, "ㅜㅜ"처럼 힘든 기색이 조금이라도 읽히면 감정 토로로 봅니다.
+- 뜻 없는 의성어나 장난("우땨", "웅냐냐")은 감정을 단정하지 말고 무슨 뜻인지 물으세요.
 - 상태 판단은 사용자가 한 말만 근거로 하세요. 코치가 앞서 한 추측은 근거가 아닙니다.
 - 정서적 여유가 낮아 보이거나 사용자가 단순히 감정을 표현한 상황에서는, 해결 가능한 문제가 보여도 행동 제안을 자동으로 붙이지 마세요.
 - 행동 제안은 사용자가 행동을 원한다는 의사를 분명히 밝혔을 때만 하나 제안하세요.

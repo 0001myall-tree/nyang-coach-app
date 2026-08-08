@@ -693,6 +693,80 @@ void main() {
     expect(run().text, run().text);
   });
 
+  group('습관도 완료율에 넣는다', () {
+    MasterGreetingContext eveningWith({
+      required int planTotal,
+      required int planDone,
+      required int habitTotal,
+      required int habitDone,
+    }) => MasterGreetingContext(
+      now: DateTime(2026, 8, 8, 21, 0),
+      daysSinceLastVisit: null,
+      planTotal: planTotal,
+      planDone: planDone,
+      habitTotal: habitTotal,
+      habitDone: habitDone,
+      doneCount: planDone + habitDone,
+      doneLabel: null,
+      pendingPlans: const [],
+      lateNight: false,
+      feltSick: false,
+    );
+
+    for (final voice in voices.entries) {
+      // 일정만 끝내고 습관이 통째로 남았는데 "전부 마치셨다"고 할 수 없다.
+      test('${voice.key} / 습관이 남았으면 다 마쳤다고 하지 않는다', () {
+        final text = MasterGreetingBuilder(voice: voice.value, random: Random(1))
+            .build(
+              eveningWith(
+                planTotal: 2,
+                planDone: 2,
+                habitTotal: 5,
+                habitDone: 0,
+              ),
+            )
+            .text;
+        final builder = MasterGreetingBuilder(voice: voice.value);
+        for (final line in voice.value.eveningAll) {
+          expect(text, isNot(contains(builder.anchor(line))), reason: text);
+        }
+      });
+
+      test('${voice.key} / 일정과 습관을 다 끝내면 완주로 본다', () {
+        final text = MasterGreetingBuilder(voice: voice.value, random: Random(1))
+            .build(
+              eveningWith(
+                planTotal: 2,
+                planDone: 2,
+                habitTotal: 3,
+                habitDone: 3,
+              ),
+            )
+            .text;
+        final builder = MasterGreetingBuilder(voice: voice.value);
+        expect(
+          voice.value.eveningAll.any(
+            (line) => text.contains(builder.anchor(line)),
+          ),
+          isTrue,
+          reason: text,
+        );
+      });
+    }
+
+    // 습관은 자정 리셋이 자동으로 채워 넣는다. 완료율에만 넣고 계획 유무에는
+    // 넣지 않아야 "오늘 계획이 없네요" 분기가 살아 있다.
+    test('습관만 있는 날은 여전히 계획 없음으로 본다', () {
+      final context = eveningWith(
+        planTotal: 0,
+        planDone: 0,
+        habitTotal: 3,
+        habitDone: 1,
+      );
+      expect(context.hasPlan, isFalse);
+    });
+  });
+
   group('늦은 밤에는 아무 말도 하지 않는다', () {
     for (final voice in voices.entries) {
       test('${voice.key} / 22시부터 자정까지는 조용하다', () {
