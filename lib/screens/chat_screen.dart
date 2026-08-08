@@ -1930,6 +1930,19 @@ class _ChatScreenState extends State<ChatScreen>
     return signals.any(normalized.contains);
   }
 
+  /// 지금 청소·정리 얘기를 하고 있는지.
+  ///
+  /// 사용자가 방금 친 말만 보면 놓친다. 코치가 먼저 "책상만 치워볼까"라고 한
+  /// 다음 턴에 "어떻게 해?"라고만 답할 수 있어서, 최근 대화까지 함께 본다.
+  bool _isCleaningContext(String userText) {
+    if (_containsCleaningTaskSignal(userText)) return true;
+    final recent = _messages.reversed
+        .take(4)
+        .map((message) => message.text)
+        .join(' ');
+    return _containsCleaningTaskSignal(recent);
+  }
+
   bool _containsCleaningTaskSignal(String text) {
     final normalized = text.replaceAll(RegExp(r'\s+'), '').toLowerCase();
     const signals = [
@@ -2799,6 +2812,31 @@ class _ChatScreenState extends State<ChatScreen>
     }
   }
 
+  /// 취침 예정 시각 2시간 전부터 그 시각까지인지. 해당하면 그 취침 시각을,
+  /// 아니면 null을 돌려준다. 취침 제안과 프롬프트 규칙이 같은 창을 쓴다.
+  DateTime? _bedtimeWindow(SharedPreferences prefs, DateTime now) {
+    final minSleepTime = prefs.getString('nyang_premium_min_sleep_time');
+    if (minSleepTime == null) return null;
+
+    final parts = minSleepTime.split(':');
+    if (parts.length < 2) return null;
+    final hour = int.tryParse(parts[0]);
+    final minute = int.tryParse(parts[1]);
+    if (hour == null || minute == null) return null;
+
+    final baseBedtime = DateTime(now.year, now.month, now.day, hour, minute);
+    // 취침 시각이 자정을 걸치면 어제/내일 것도 후보가 된다.
+    for (final bedtime in [
+      baseBedtime.subtract(const Duration(days: 1)),
+      baseBedtime,
+      baseBedtime.add(const Duration(days: 1)),
+    ]) {
+      final startThreshold = bedtime.subtract(const Duration(hours: 2));
+      if (now.isAfter(startThreshold) && !now.isAfter(bedtime)) return bedtime;
+    }
+    return null;
+  }
+
   Future<void> _checkBedtimeMoveOffer() async {
     if (!CoachIdService.isMaster(widget.coachId)) {
       return;
@@ -2808,31 +2846,8 @@ class _ChatScreenState extends State<ChatScreen>
     final minSleepTime = prefs.getString('nyang_premium_min_sleep_time');
     if (minSleepTime == null) return;
 
-    final parts = minSleepTime.split(':');
-    if (parts.length < 2) return;
-    final hour = int.tryParse(parts[0]);
-    final minute = int.tryParse(parts[1]);
-    if (hour == null || minute == null) return;
-
     final now = DateTime.now();
-    final baseBedtime = DateTime(now.year, now.month, now.day, hour, minute);
-    final candidates = [
-      baseBedtime.subtract(const Duration(days: 1)),
-      baseBedtime,
-      baseBedtime.add(const Duration(days: 1)),
-    ];
-
-    DateTime? matchedBedtime;
-    for (final bedtime in candidates) {
-      final startThreshold = bedtime.subtract(const Duration(hours: 2));
-      // User requested window: 2 hours before bedtime up to the bedtime itself (inclusive)
-      if (now.isAfter(startThreshold) && !now.isAfter(bedtime)) {
-        matchedBedtime = bedtime;
-        break;
-      }
-    }
-
-    if (matchedBedtime == null) return;
+    if (_bedtimeWindow(prefs, now) == null) return;
 
     // Check 7-day cooldown
     final lastFiredStr = prefs.getString('nyang_last_bedtime_offer_time');
@@ -4088,6 +4103,32 @@ class _ChatScreenState extends State<ChatScreen>
     return true;
   }
 
+  /// 시작해두고 멈춘 것 같은 일을 물어봤으면 true.
+  ///
+  /// 저녁에만 묻는다. 낮에 3시간이면 아직 붙잡고 있을 때가 많아 방해가 되지만,
+  /// 하루가 저물도록 그대로면 멈췄거나 완료를 안 누른 쪽일 가능성이 크다.
+  Future<bool> _startMasterStalledAsk(
+    SharedPreferences prefs,
+    DateTime now,
+  ) async {
+    if (now.hour < 18 || now.hour >= MasterGreetingContext.quietFromHour) {
+      return false;
+    }
+    if (_spokeKindToday({_masterStalledGreetingKind}, now)) return false;
+    final task = _stalledTask(prefs, now);
+    final name = _shortTaskName(task);
+    if (name == null) return false;
+    if (!mounted) return false;
+
+    _injectAiMessage(
+      _greetingBuilder.buildStalledAsk(name),
+      kind: _masterStalledGreetingKind,
+      choices: _masterStalledAskLabels,
+    );
+    unawaited(AnalyticsService.logFeatureUsage('master_stalled_ask'));
+    return true;
+  }
+
   /// 발화했으면 true. 같은 진입에서 미뤄둔 할 일 리마인드를 겹쳐 내지 않으려고 쓴다.
   Future<bool> _startMasterGreeting({
     required SharedPreferences prefs,
@@ -4095,6 +4136,7 @@ class _ChatScreenState extends State<ChatScreen>
     required DateTime? lastVisit,
   }) async {
     if (await _startMasterCoreAsk(prefs, now)) return true;
+    if (await _startMasterStalledAsk(prefs, now)) return true;
 
     // 다른 방에서 방금 인사를 받았으면 슬롯 인사는 쉰다.
     if (await _otherCoachGreetedRecently(now)) return false;
@@ -4203,6 +4245,18 @@ class _ChatScreenState extends State<ChatScreen>
     _masterCoreStartedLabel,
     _masterCoreBurdenLabel,
     _masterCoreBusyLabel,
+  ];
+
+  /// 시작해두고 완료가 안 된 일을 저녁에 물어보는 발화.
+  static const _masterStalledGreetingKind = 'auto:master_stalled';
+
+  static const _masterStalledDoneLabel = '완료 누르는 걸 깜빡했어요';
+  static const _masterStalledBurdenLabel = '부담돼서 멈췄어요';
+  static const _masterStalledBusyLabel = '일 때문에 멈췄어요';
+  static const _masterStalledAskLabels = [
+    _masterStalledDoneLabel,
+    _masterStalledBurdenLabel,
+    _masterStalledBusyLabel,
   ];
 
   /// 위젯 설치 권유도 저녁 슬롯의 한 갈래다. 다만 이 kind는 선택 카드를 그리는
@@ -4443,6 +4497,162 @@ class _ChatScreenState extends State<ChatScreen>
       }
     }
     return false;
+  }
+
+  /// 시작 표시를 켠 뒤 이만큼 지나도록 완료가 안 되면 한번 물어본다.
+  static const _stalledAfter = Duration(hours: 3);
+
+  /// 완료할 때 되물을 것이 없는 습관인지. 'count'/'duration'/'both'는 몇 개
+  /// 했는지, 얼마나 했는지를 사용자에게 물어야 해서 코치가 대신 못 끝낸다.
+  bool _isSimpleCheckHabit(SharedPreferences prefs, Map<String, dynamic> task) {
+    if (_hasCountGoal(task)) return false;
+    final habitId = task['habitId']?.toString();
+    if (habitId == null || habitId.isEmpty) return false;
+    final raw = prefs.getString('nyang_habits');
+    if (raw == null || raw.trim().isEmpty) return false;
+    for (final habit in _decodeMapList(raw)) {
+      if (habit['id']?.toString() != habitId) continue;
+      return (habit['checkType']?.toString() ?? 'check') == 'check';
+    }
+    return false;
+  }
+
+  /// 시작해두고 멈춘 것으로 보이는 일. 없으면 null.
+  ///
+  /// 사용자가 챙기겠다고 표시한 것(습관, 핵심 일정)만 본다. 아무 할 일이나
+  /// 붙잡고 물으면 하루에 걸릴 게 너무 많아진다.
+  Map<String, dynamic>? _stalledTask(SharedPreferences prefs, DateTime now) {
+    final coreIds = <String>{};
+    final coreTexts = <String>{};
+    for (final core in _decodeMapList(prefs.getString('nyang_core_tasks'))) {
+      final id = core['id']?.toString();
+      if (id != null && id.isNotEmpty) coreIds.add(id);
+      final text = _taskText(core);
+      if (text != null) coreTexts.add(text);
+    }
+
+    for (final task in _decodeMapList(prefs.getString('nyang_tasks'))) {
+      if (task['done'] == true) continue;
+      if (!_isInProgressTask(task)) continue;
+
+      final isHabit = _isHabitTask(task) || task['habitId'] != null;
+      final id = task['id']?.toString();
+      final text = _taskText(task);
+      final isCore =
+          (id != null && coreIds.contains(id)) ||
+          (text != null && coreTexts.contains(text));
+      if (!isHabit && !isCore) continue;
+      // 되물어야 끝낼 수 있는 습관은 대신 처리하지 못하니 묻지도 않는다.
+      if (isHabit && !_isSimpleCheckHabit(prefs, task)) continue;
+
+      final startedAt = DateTime.tryParse(
+        task['inProgressAt']?.toString() ?? '',
+      );
+      // 시작 시각이 없으면 예전에 켜둔 것이다. 얼마나 됐는지 알 수 없으니 둔다.
+      if (startedAt == null) continue;
+      if (now.difference(startedAt) < _stalledAfter) continue;
+      if (_shortTaskName(task) == null) continue;
+      return task;
+    }
+    return null;
+  }
+
+  /// 멈춘 것으로 보이던 일을 완료로 바꾼다. 바꾼 이름을 돌려주고, 바꿀 게
+  /// 없으면 null. 켜는 쪽([_markCoreTaskStarted])과 같은 자리를 손본다.
+  Future<String?> _markTaskDone(
+    SharedPreferences prefs,
+    Map<String, dynamic> target,
+  ) async {
+    final targetText = _taskText(target);
+    if (targetText == null) return null;
+    final targetId = target['id']?.toString();
+
+    bool matches(Map<String, dynamic> task) {
+      final id = task['id']?.toString();
+      if (targetId != null &&
+          targetId.isNotEmpty &&
+          id != null &&
+          id.isNotEmpty) {
+        return id == targetId;
+      }
+      return _taskText(task) == targetText;
+    }
+
+    final completedAt = DateTime.now().toIso8601String();
+    void markDone(Map<String, dynamic> task) {
+      task['done'] = true;
+      task['inProgress'] = false;
+      task['completedAt'] = completedAt;
+    }
+
+    var changed = false;
+    final tasks = _decodeMapList(prefs.getString('nyang_tasks'));
+    for (final task in tasks) {
+      if (!matches(task) || task['done'] == true) continue;
+      markDone(task);
+      changed = true;
+    }
+    if (changed) await prefs.setString('nyang_tasks', jsonEncode(tasks));
+
+    var coreChanged = false;
+    final coreTasks = _decodeMapList(prefs.getString('nyang_core_tasks'));
+    for (final task in coreTasks) {
+      if (!matches(task) || task['done'] == true) continue;
+      markDone(task);
+      coreChanged = true;
+    }
+    if (coreChanged) {
+      await prefs.setString('nyang_core_tasks', jsonEncode(coreTasks));
+    }
+    if (!changed && !coreChanged) return null;
+
+    // 습관은 할 일 목록과 별도로 기록이 쌓인다. 여기를 빼먹으면 완료로 보이는데
+    // 기록 탭 습관 패턴에는 안 남아 두 화면이 어긋난다.
+    final habitId = target['habitId']?.toString();
+    if (habitId != null && habitId.isNotEmpty) {
+      await _appendHabitDoneLog(
+        prefs,
+        habitId: habitId,
+        completedAt: completedAt,
+        startedAt: target['inProgressAt']?.toString(),
+      );
+    }
+
+    await _updateTodayRecord(prefs);
+    await _refreshAttendanceStreak(prefs);
+    await WidgetSyncService.syncFromStoredTasks();
+    TasksSyncService.scheduleSyncToCloud();
+    await _loadTaskProgress();
+    return targetText;
+  }
+
+  /// 습관 기록에 오늘 완료를 적는다. 할 일 화면이 남기는 것과 같은 모양이다.
+  Future<void> _appendHabitDoneLog(
+    SharedPreferences prefs, {
+    required String habitId,
+    required String completedAt,
+    String? startedAt,
+  }) async {
+    final raw = prefs.getString('nyang_habit_logs');
+    Map<String, dynamic> logs;
+    try {
+      final decoded = raw == null || raw.isEmpty ? null : jsonDecode(raw);
+      logs = decoded is Map ? Map<String, dynamic>.from(decoded) : {};
+    } catch (_) {
+      return; // 읽을 수 없는 기록을 덮어써서 통째로 날리지 않는다.
+    }
+
+    final forHabit = logs[habitId] is Map
+        ? Map<String, dynamic>.from(logs[habitId] as Map)
+        : <String, dynamic>{};
+    forHabit[_dateKey(DateTime.now())] = {
+      'done': true,
+      'status': 'done',
+      'completedAt': completedAt,
+      if (startedAt != null && startedAt.isNotEmpty) 'startedAt': startedAt,
+    };
+    logs[habitId] = forHabit;
+    await prefs.setString('nyang_habit_logs', jsonEncode(logs));
   }
 
   /// 오늘 핵심 일정을 물어봐도 되는지. 하루 걸러 묻는다.
@@ -12314,10 +12524,30 @@ $resistanceFlowRule'''
 - "추천드립니다", "말씀해 주세요", "확인해 주세요", "하시죠", "해볼까요", "도와드리겠습니다"처럼 높임말과 냥 말투를 섞지 않는다.
 - 행동 추천은 "지금은 운동 30분이 괜찮겠구나냥", "이것부터 잡아보자냥"처럼 말한다.'''
         : '';
+    // 청소 얘기가 오갈 때만 청소 지침을 붙인다.
+    final cleaningSection = _isCleaningContext(userText)
+        ? '${CoachConfigs.commonCleaningRules}${_coach.cleaningPlaybook ?? ''}'
+        : '';
+
+    // 취침 무렵에만 쓰는 규칙이라 그 시간대에만 붙인다. 늘 붙이면 하루에 한 번
+    // 쓸까 말까 한 지시가 매 요청마다 실려 나가고, 정작 중요한 지시가 묻힌다.
+    final bedtimeRule = _coach.bedtimeCarryOverRule;
+    final bedtimeCarryOverSection = bedtimeRule == null
+        ? ''
+        : _bedtimeWindow(
+                await SharedPreferences.getInstance(),
+                DateTime.now(),
+              ) !=
+              null
+        ? bedtimeRule
+        : '';
+
     final assembledSystemPrompt =
         '''$baseSystemPrompt
 ${contextString.isNotEmpty ? '\n$contextString' : ''}
 $masterStyleRule
+$cleaningSection
+$bedtimeCarryOverSection
 
 [연속 대화 맥락 기준]
 - 직전 대화처럼 이어받아도 되는 말은 오늘 같은 날짜에 오간 대화뿐입니다.
@@ -14363,6 +14593,9 @@ $timerOutputRule
     if (msg.kind == _masterCoreGreetingKind && msg.choices.isNotEmpty) {
       return _buildChoiceBubbleCard(msg, _handleMasterCoreAskChoice);
     }
+    if (msg.kind == _masterStalledGreetingKind && msg.choices.isNotEmpty) {
+      return _buildChoiceBubbleCard(msg, _handleMasterStalledAskChoice);
+    }
     if (msg.kind == 'grooming_care_choice') {
       return _buildGroomingCareChoiceCard(msg);
     }
@@ -15182,6 +15415,45 @@ $timerOutputRule
     await _send(
       label,
       apiInputOverride: '오늘 핵심으로 잡은 일이 부담돼서 아직 시작을 못 하고 있어',
+    );
+  }
+
+  /// 시작해두고 멈춘 것 같은 일을 물은 뒤 누른 버튼을 처리한다.
+  ///
+  /// 완료를 깜빡했다고 하면 코치가 대신 완료로 바꾼다. 시작 표시를 대신 켜주는
+  /// 것과 같은 이유다 — 누르는 걸 잊은 사람에게 다시 누르라고 하면 똑같다.
+  Future<void> _handleMasterStalledAskChoice(String label) async {
+    if (_isLoading) return;
+    HapticFeedback.lightImpact();
+
+    if (label == _masterStalledDoneLabel) {
+      final prefs = await SharedPreferences.getInstance();
+      final task = _stalledTask(prefs, DateTime.now());
+      final done = task == null ? null : await _markTaskDone(prefs, task);
+      _injectAiMessage(
+        _greetingBuilder.pickLine(
+          done != null
+              ? _greetingVoice.stalledDoneReply
+              : _greetingVoice.stalledAlreadyDoneReply,
+        ),
+      );
+      await AnalyticsService.logFeatureUsage('master_stalled_done');
+      return;
+    }
+
+    if (label == _masterStalledBusyLabel) {
+      _injectAiMessage(
+        _greetingBuilder.pickLine(_greetingVoice.stalledBusyReply),
+      );
+      await AnalyticsService.logFeatureUsage('master_stalled_busy');
+      return;
+    }
+
+    // 부담이라고 답한 경우만 실행 저항 흐름을 태운다.
+    await AnalyticsService.logFeatureUsage('master_stalled_burden');
+    await _send(
+      label,
+      apiInputOverride: '시작은 했는데 부담돼서 중간에 멈췄어',
     );
   }
 

@@ -3005,10 +3005,9 @@ class _TasksScreenState extends State<TasksScreen>
       // 1단계: 진행 중으로 전환 (한 번 더 누르면 완료)
       setState(() {
         t.inProgress = true;
-        t.inProgressAt =
-            (t.isHabit || t.category == 'habit' || t.habitId != null)
-            ? DateTime.now().toIso8601String()
-            : null;
+        // 예전에는 습관만 시각을 남겼다. 이제 전부 남긴다 — 저녁에 "시작해두고
+        // 멈춘 것 같은데 괜찮으신가요"를 물으려면 언제 시작했는지 알아야 한다.
+        t.inProgressAt = DateTime.now().toIso8601String();
       });
       _saveTasks();
     } else {

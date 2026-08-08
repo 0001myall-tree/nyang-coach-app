@@ -183,6 +183,10 @@ List<String> allTemplates(GreetingVoice v) => [
   ...v.coreAskStartedReply,
   ...v.coreAskAlreadyReply,
   ...v.coreAskBusyReply,
+  ...v.stalledAsk,
+  ...v.stalledDoneReply,
+  ...v.stalledAlreadyDoneReply,
+  ...v.stalledBusyReply,
   ...v.comeback,
   ...v.comebackSupport,
   ...v.afterLateNight,
@@ -689,6 +693,51 @@ void main() {
     expect(run().text, run().text);
   });
 
+  group('늦은 밤에는 아무 말도 하지 않는다', () {
+    for (final voice in voices.entries) {
+      test('${voice.key} / 22시부터 자정까지는 조용하다', () {
+        for (var hour = 22; hour <= 23; hour++) {
+          for (var seed = 0; seed < 20; seed++) {
+            final result = MasterGreetingBuilder(
+              voice: voice.value,
+              random: Random(seed),
+            ).build(
+              ctx(hour: hour, planTotal: 5, planDone: 2, doneCount: 2),
+            );
+            expect(result.text, isEmpty, reason: '$hour시: ${result.text}');
+            expect(result.choices, isEmpty);
+          }
+        }
+      });
+
+      // 반가움은 하루를 관리하는 말이 아니라서 늦은 시간에도 나간다.
+      test('${voice.key} / 오래 만에 돌아온 날은 늦은 밤에도 반긴다', () {
+        final result = MasterGreetingBuilder(
+          voice: voice.value,
+          random: Random(1),
+        ).build(ctx(hour: 23, daysSinceLastVisit: 5));
+        expect(result.text, isNotEmpty);
+      });
+
+      test('${voice.key} / 21시까지는 저녁 인사가 나온다', () {
+        final result = MasterGreetingBuilder(
+          voice: voice.value,
+          random: Random(1),
+        ).build(ctx(hour: 21, planTotal: 5, planDone: 4, doneCount: 4));
+        expect(result.text, isNotEmpty);
+      });
+
+      // 자정을 넘기면 새벽 문구가 받는다. 그때는 재우는 말이라 나가는 게 맞다.
+      test('${voice.key} / 자정 넘으면 다시 말을 건다', () {
+        final result = MasterGreetingBuilder(
+          voice: voice.value,
+          random: Random(1),
+        ).build(ctx(hour: 1));
+        expect(result.text, isNotEmpty);
+      });
+    }
+  });
+
   group('핵심 일정을 시작했는지 묻는 말', () {
     for (final voice in voices.entries) {
       test('${voice.key} / 일정 이름을 따옴표로 넣어 묻는다', () {
@@ -746,6 +795,56 @@ void main() {
         expect(
           voice.value.coreAskStartedReply.toSet().intersection(
             voice.value.coreAskAlreadyReply.toSet(),
+          ),
+          isEmpty,
+        );
+      });
+    }
+  });
+
+  group('시작해두고 멈춘 것 같은 일을 묻는 말', () {
+    for (final voice in voices.entries) {
+      test('${voice.key} / 일정 이름을 따옴표로 넣어 묻는다', () {
+        for (var seed = 0; seed < 50; seed++) {
+          final text = MasterGreetingBuilder(
+            voice: voice.value,
+            random: Random(seed),
+          ).buildStalledAsk('보고서 정리');
+          expect(text, contains("'보고서 정리'"), reason: text);
+          expect(text, isNot(contains('task')), reason: text);
+        }
+      });
+
+      test('${voice.key} / 갈래 표기가 새어 나가지 않는다', () {
+        for (var seed = 0; seed < 50; seed++) {
+          for (final text in [
+            MasterGreetingBuilder(
+              voice: voice.value,
+              random: Random(seed),
+            ).buildStalledAsk('보고서 정리'),
+            for (final pool in [
+              voice.value.stalledDoneReply,
+              voice.value.stalledAlreadyDoneReply,
+              voice.value.stalledBusyReply,
+            ])
+              MasterGreetingBuilder(
+                voice: voice.value,
+                random: Random(seed),
+              ).pickLine(pool),
+          ]) {
+            expect(text, isNot(contains('{')), reason: text);
+            expect(text, isNot(contains('|')), reason: text);
+            expect(text, isNot(contains('}')), reason: text);
+          }
+        }
+      });
+
+      // 완료로 바꿔준 날과 이미 완료였던 날은 서로 다른 말이어야 한다.
+      // 안 바꿨는데 바꿨다고 하면 사용자가 기록을 못 믿게 된다.
+      test('${voice.key} / 바꿔준 답과 이미 완료였던 답이 겹치지 않는다', () {
+        expect(
+          voice.value.stalledDoneReply.toSet().intersection(
+            voice.value.stalledAlreadyDoneReply.toSet(),
           ),
           isEmpty,
         );

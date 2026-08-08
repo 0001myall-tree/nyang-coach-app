@@ -87,6 +87,15 @@ class MasterGreetingContext {
 
   bool get isComeback => daysSinceLastVisit != null && daysSinceLastVisit! >= 2;
 
+  /// 이 시각부터는 아무 말도 하지 않는다.
+  ///
+  /// 저녁 인사는 하루를 정리하는 말이라 이 시간엔 늦었고, 그렇다고 재우는 말을
+  /// 하기도 어렵다 — 늦게 자는 사람에게는 참견이 된다. 자정을 넘겨 들어오면
+  /// 그때는 새벽 문구가 받는다.
+  static const quietFromHour = 22;
+
+  bool get isQuietHour => now.hour >= quietFromHour;
+
   GreetingSlot get slot {
     if (now.hour < 7) return GreetingSlot.dawn;
     if (now.hour < 18) return GreetingSlot.day;
@@ -169,6 +178,22 @@ class GreetingVoice {
   /// 상황 때문에 못 했다고 답했을 때. 다음 행동을 밀지 않는다.
   final List<String> coreAskBusyReply;
 
+  /// 시작해두고 한참 지나도록 완료가 안 된 일을 저녁에 물어보는 말.
+  /// `{{task}}`는 일정 이름.
+  ///
+  /// 멈췄다고 단정하지 않는다 — 아직 붙잡고 있을 수도, 끝내놓고 누르는 걸
+  /// 잊었을 수도 있다. 그래서 상태를 묻되 답하기 편한 쪽으로 연다.
+  final List<String> stalledAsk;
+
+  /// 완료를 누르는 걸 잊었다고 답했을 때. 코치가 대신 완료로 바꿔준다.
+  final List<String> stalledDoneReply;
+
+  /// 대신 바꿔줄 것이 없었을 때(이미 완료로 되어 있음).
+  final List<String> stalledAlreadyDoneReply;
+
+  /// 상황 때문에 멈췄다고 답했을 때.
+  final List<String> stalledBusyReply;
+
   final String otherChoiceLabel;
 
   const GreetingVoice({
@@ -204,6 +229,10 @@ class GreetingVoice {
     required this.coreAskStartedReply,
     required this.coreAskAlreadyReply,
     required this.coreAskBusyReply,
+    required this.stalledAsk,
+    required this.stalledDoneReply,
+    required this.stalledAlreadyDoneReply,
+    required this.stalledBusyReply,
     required this.otherChoiceLabel,
   });
 }
@@ -445,6 +474,30 @@ class MasterGreetingCopy {
       '아, {어쩐지 바쁘셨군요|바쁘셨군요}. {상황 정리되시고 준비되시면|여유가 생기시면} 오늘 탭에서 시작 표시만 {눌러주세요|찍어주세요}.\n'
           '제가 옆에서 {응원하겠습니다|지켜보며 응원하겠습니다}.',
     ],
+    stalledAsk: [
+      '{{task}} 시작하신 지 꽤 됐는데 아직 완료 표시가 없네요.\n'
+          '{혹시 막히는 부분이 있으실까요|어디쯤에서 걸리셨을까요}? 아직 하고 계신 거면 그대로 두셔도 됩니다.',
+      '{{task}} 시작 표시가 {한참째 그대로입니다|아직 그대로네요}.\n'
+          '{끝내놓고 누르는 걸 잊으셨을 수도 있고|중간에 멈추셨을 수도 있고}, 아직 붙잡고 계실 수도 있겠네요. 어느 쪽일까요?',
+      '{{task}} 어디까지 {오셨을까요|가셨을까요}?\n'
+          '시작만 찍혀 있고 완료가 없어서 여쭤봅니다. {막히는 데가 있으면 같이 보시죠|걸리는 게 있으면 말씀만 주세요}.',
+    ],
+    stalledDoneReply: [
+      '{역시 끝내셨군요|다 하신 거였군요}! 완료로 {바꿔두었습니다|옮겨두었습니다}^^\n'
+          '{눌러야 할 게 하나 줄었네요|이런 건 제가 챙기겠습니다}.',
+      '{그러실 것 같았습니다|끝내신 거였네요}. 제가 완료로 {바꿔두었으니|처리해두었으니} 신경 쓰지 않으셔도 됩니다.\n'
+          '{하나 마무리하셨네요|오늘 하나 더 지우셨습니다}.',
+    ],
+    stalledAlreadyDoneReply: [
+      '{확인해보니 이미 완료로 되어 있습니다|이미 완료로 정리되어 있네요}. {잘 마무리하셨습니다|그럼 된 겁니다}^^',
+      '{벌써 완료로 바뀌어 있네요|이미 처리되어 있습니다}. 제가 {거들 게 없었습니다|손댈 것이 없었네요}.',
+    ],
+    stalledBusyReply: [
+      '{그러셨군요|알겠습니다}. {중간에 끊기는 날이 있죠|하던 걸 놓게 되는 날이 있습니다}.\n'
+          '{시작하신 것까지는 남아 있으니|손대신 흔적은 남아 있으니} 다음에 이어가시면 됩니다.',
+      '{알겠습니다|그러셨겠네요}. 시작까지 하셨는데 {아쉽게 됐습니다|끊기셨군요}.\n'
+          '{이어서 하실 때 말씀 주시면 거들겠습니다|다시 잡으실 때 불러주세요}.',
+    ],
     otherChoiceLabel: '그 외에 있어요',
   );
 
@@ -639,6 +692,30 @@ class MasterGreetingCopy {
       '{오, 어쩐지 바빴구나냥|바빴구나냥}. {상황 정리되고 준비되면|여유 생기면} 오늘 탭에서 시작 표시만 {눌러주라냥|찍어주라냥}.\n'
           '내가 옆에서 {응원하겠다냥|지켜보며 응원하겠다냥}.',
     ],
+    stalledAsk: [
+      '{{task}} 시작한 지 꽤 됐는데 아직 완료 표시가 없구나냥.\n'
+          '{혹시 막히는 데가 있냥|어디쯤에서 걸렸냥}? 아직 하고 있는 거면 그대로 둬도 된다냥.',
+      '{{task}} 시작 표시가 {한참째 그대로다냥|아직 그대로구나냥}.\n'
+          '{끝내놓고 누르는 걸 잊었을 수도 있고|중간에 멈췄을 수도 있고}, 아직 붙잡고 있을 수도 있겠구나냥. 어느 쪽이냥?',
+      '{{task}} 어디까지 {왔냥|갔냥}?\n'
+          '시작만 찍혀 있고 완료가 없어서 물어본다냥. {막히는 데 있으면 같이 보자냥|걸리는 게 있으면 말만 하라냥}.',
+    ],
+    stalledDoneReply: [
+      '{역시 끝냈구나냥|다 한 거였구나냥}! 완료로 {바꿔뒀다냥|옮겨뒀다냥}.\n'
+          '{눌러야 할 게 하나 줄었구나냥|이런 건 내가 챙기겠다냥}.',
+      '{그럴 것 같았다냥|끝낸 거였구나냥}. 내가 완료로 {바꿔뒀으니|처리해뒀으니} 신경 쓰지 말라냥.\n'
+          '{하나 마무리했구나냥|오늘 하나 더 지웠다냥}.',
+    ],
+    stalledAlreadyDoneReply: [
+      '{확인해보니 이미 완료로 되어 있다냥|이미 완료로 정리돼 있구나냥}. {잘 마무리했다냥|그럼 된 거다냥}.',
+      '{벌써 완료로 바뀌어 있구나냥|이미 처리돼 있다냥}. 내가 {거들 게 없었다냥|손댈 게 없었구나냥}.',
+    ],
+    stalledBusyReply: [
+      '{그랬구나냥|알겠다냥}. {중간에 끊기는 날이 있다냥|하던 걸 놓게 되는 날이 있다냥}.\n'
+          '{시작한 것까지는 남아 있으니|손댄 흔적은 남아 있으니} 다음에 이어가면 된다냥.',
+      '{알겠다냥|그랬겠구나냥}. 시작까지 했는데 {아쉽게 됐다냥|끊겼구나냥}.\n'
+          '{이어서 할 때 말하면 거들겠다냥|다시 잡을 때 부르라냥}.',
+    ],
     otherChoiceLabel: '그 외에 있다냥',
   );
 }
@@ -663,6 +740,13 @@ class MasterGreetingBuilder {
 
   /// 한 발화는 최대 2문장(복귀 인사가 붙으면 그 앞에 한 문장 더).
   MasterGreetingResult build(MasterGreetingContext context) {
+    // 늦은 밤은 비운다. 빈 문장을 돌려주면 화면이 발화를 건너뛴다.
+    // 오래 비웠다 돌아온 날만 예외다. 그건 하루를 관리하는 말이 아니라
+    // 반가움이라, 늦은 시간에도 하는 편이 낫다.
+    if (context.isQuietHour && !context.isComeback) {
+      return const MasterGreetingResult('');
+    }
+
     final hour = context.now.hour;
     final parts = <String>[];
     if (context.isComeback) {
@@ -794,6 +878,9 @@ class MasterGreetingBuilder {
   /// 거치지 않는다 — 발화 조건(몇 시인지, 얼마나 밀렸는지)은 화면이 판단하고,
   /// 여기서는 이름만 받아 문장으로 옮긴다.
   String buildCoreAsk(String taskName) => _fill(voice.coreAsk, taskName);
+
+  /// 시작해두고 완료가 안 된 일을 물어보는 말.
+  String buildStalledAsk(String taskName) => _fill(voice.stalledAsk, taskName);
 
   String _fill(List<String> pool, String taskName) => pickLine(
     pool
