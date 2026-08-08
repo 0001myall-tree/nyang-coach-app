@@ -4212,6 +4212,22 @@ class _ChatScreenState extends State<ChatScreen>
       'nyang_cat_evening_return_greeting_date';
   static const _catEveningReturnGreetingCooldown = Duration(days: 3);
 
+  /// 위젯 설치를 권하기 전에 지켜보는 사용 일수.
+  static const _catWidgetPromptAfterDays = 3;
+
+  /// 앱을 며칠이나 써봤는지. 날짜별 기록에 남은 날 수로 센다.
+  /// 기록은 앱을 열 때마다 그날 자리로 하나씩 쌓인다.
+  int _usedDayCount(SharedPreferences prefs) {
+    final raw = prefs.getString('nyang_history');
+    if (raw == null || raw.isEmpty) return 0;
+    final days = <String>{};
+    for (final record in _decodeMapList(raw)) {
+      final date = record['date']?.toString();
+      if (date != null && date.isNotEmpty) days.add(date);
+    }
+    return days.length;
+  }
+
   // 냥냥코치 슬롯별 자동 발화의 하루 1회 가드. 마스터 코치와 같은 이유로
   // prefs 날짜 키가 아니라 메시지 kind로 판정한다([_spokeKindToday] 참고).
   static const _catMiddayGreetingKind = 'auto:cat_midday';
@@ -4333,8 +4349,11 @@ class _ChatScreenState extends State<ChatScreen>
         ),
         true,
       ));
+      // 위젯 권유는 며칠 써본 사람에게만 한다. "들어오는 거 자꾸 잊어버리면"이
+      // 성립하려면 잊어볼 날이 있어야 하는데, 막 설치한 사람에게는 첫 대화가
+      // 설치 권유가 되어버린다.
       final hasWidget = await WidgetSyncService.hasInstalledCatHomeWidget();
-      if (!hasWidget) {
+      if (!hasWidget && _usedDayCount(prefs) >= _catWidgetPromptAfterDays) {
         greetings.add((
           ChatMessage(
             text:
