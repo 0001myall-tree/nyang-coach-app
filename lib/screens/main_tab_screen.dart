@@ -603,6 +603,7 @@ class _MainTabScreenState extends State<MainTabScreen>
   @override
   void initState() {
     super.initState();
+    _loadPlannerHelpSeen();
     _chatBgStyle = widget.initialChatBgStyle ?? 'simple';
     _chatBgStyleLoaded = widget.initialChatBgStyle != null;
     _loadBgStyle();
@@ -2162,6 +2163,26 @@ class _MainTabScreenState extends State<MainTabScreen>
     );
   }
 
+  /// 플래너 활용법을 한 번이라도 열어봤는지. 안 열어본 사람에게만 NEW를 띄운다.
+  /// 기록이 쌓였는지로 판단하면, 며칠 쓰는 동안 한 번도 안 본 사람에게서
+  /// 표시가 사라진다 — 정작 알려줘야 할 사람이다.
+  static const _plannerHelpSeenKey = 'nyang_planner_help_seen';
+  bool _plannerHelpSeen = true;
+
+  Future<void> _loadPlannerHelpSeen() async {
+    final prefs = await SharedPreferences.getInstance();
+    final seen = prefs.getBool(_plannerHelpSeenKey) ?? false;
+    if (!mounted || seen == _plannerHelpSeen) return;
+    setState(() => _plannerHelpSeen = seen);
+  }
+
+  Future<void> _markPlannerHelpSeen() async {
+    if (_plannerHelpSeen) return;
+    if (mounted) setState(() => _plannerHelpSeen = true);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_plannerHelpSeenKey, true);
+  }
+
   Widget _buildPlannerHelpAction({bool isVacation = false}) {
     final foreground = isVacation ? Colors.white : AppDesignTokens.brandMuted;
     final border = isVacation
@@ -2176,73 +2197,108 @@ class _MainTabScreenState extends State<MainTabScreen>
       child: Tooltip(
         message: '플래너 활용법',
         child: InkWell(
-          onTap: _showPlannerHelpDialog,
+          onTap: () {
+            _markPlannerHelpSeen();
+            _showPlannerHelpDialog();
+          },
           borderRadius: BorderRadius.circular(26),
           child: SizedBox(
             width: 50,
             height: 50,
-            child: Center(
-              child: Container(
-                width: 35,
-                height: 35,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: isVacation
-                        ? [
-                            Colors.white.withOpacity(0.30),
-                            AppDesignTokens.brand.withOpacity(0.32),
-                            AppDesignTokens.brand.withOpacity(0.46),
-                          ]
-                        : const [
-                            Color(0xFFFFFEFF),
-                            Color(0xFFF5F0FF),
-                            Color(0xFFE9DFFF),
-                          ],
-                    stops: const [0.0, 0.55, 1.0],
+            child: Stack(
+              clipBehavior: Clip.none,
+              alignment: Alignment.center,
+              children: [
+                Container(
+                  width: 35,
+                  height: 35,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: isVacation
+                          ? [
+                              Colors.white.withOpacity(0.30),
+                              AppDesignTokens.brand.withOpacity(0.32),
+                              AppDesignTokens.brand.withOpacity(0.46),
+                            ]
+                          : const [
+                              Color(0xFFFFFEFF),
+                              Color(0xFFF5F0FF),
+                              Color(0xFFE9DFFF),
+                            ],
+                      stops: const [0.0, 0.55, 1.0],
+                    ),
+                    border: Border.all(color: border, width: 1.1),
+                    boxShadow: [
+                      BoxShadow(
+                        color: shadowColor,
+                        blurRadius: 14,
+                        offset: const Offset(0, 6),
+                      ),
+                      BoxShadow(
+                        color: Colors.white.withOpacity(
+                          isVacation ? 0.14 : 0.70,
+                        ),
+                        blurRadius: 8,
+                        offset: const Offset(-3, -3),
+                      ),
+                    ],
                   ),
-                  border: Border.all(color: border, width: 1.1),
-                  boxShadow: [
-                    BoxShadow(
-                      color: shadowColor,
-                      blurRadius: 14,
-                      offset: const Offset(0, 6),
-                    ),
-                    BoxShadow(
-                      color: Colors.white.withOpacity(isVacation ? 0.14 : 0.70),
-                      blurRadius: 8,
-                      offset: const Offset(-3, -3),
-                    ),
-                  ],
-                ),
-                child: Stack(
-                  children: [
-                    Positioned(
-                      top: 6,
-                      left: 8,
-                      child: Container(
-                        width: 12,
-                        height: 6,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(
-                            isVacation ? 0.20 : 0.74,
+                  child: Stack(
+                    children: [
+                      Positioned(
+                        top: 6,
+                        left: 8,
+                        child: Container(
+                          width: 12,
+                          height: 6,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(
+                              isVacation ? 0.20 : 0.74,
+                            ),
+                            borderRadius: BorderRadius.circular(999),
                           ),
-                          borderRadius: BorderRadius.circular(999),
+                        ),
+                      ),
+                      Center(
+                        child: Icon(
+                          Icons.question_mark_rounded,
+                          color: foreground,
+                          size: 18,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                // 도움말을 한 번도 누른 적 없는 사용자에게만 NEW 배지를 띄운다.
+                if (!_plannerHelpSeen)
+                  Positioned(
+                    top: 0,
+                    right: -6,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 5,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF43F3F),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        'NEW',
+                        style: GoogleFonts.notoSansKr(
+                          fontSize: 9,
+                          height: 1.0,
+                          letterSpacing: 0.2,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
                         ),
                       ),
                     ),
-                    Center(
-                      child: Icon(
-                        Icons.question_mark_rounded,
-                        color: foreground,
-                        size: 18,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+                  ),
+              ],
             ),
           ),
         ),
@@ -2348,10 +2404,7 @@ class _MainTabScreenState extends State<MainTabScreen>
                               '"타이머 좀 띄워줘" 라고 하면 바로 타이머가 튀어나와요.\n'
                               '특별히 집중하고픈 시간이 있다면 "30분 타이머 좀 띄워줘"처럼 말해보세요.',
                           // 긴 쪽을 앞에 둬야 짧은 쪽이 먼저 걸려 반만 칠해지지 않는다.
-                          highlightTerms: const [
-                            '30분 타이머 좀 띄워줘',
-                            '타이머 좀 띄워줘',
-                          ],
+                          highlightTerms: const ['30분 타이머 좀 띄워줘', '타이머 좀 띄워줘'],
                         ),
                         const SizedBox(height: 18),
                         _buildPlannerHelpSection(
