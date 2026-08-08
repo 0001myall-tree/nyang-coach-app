@@ -1235,6 +1235,10 @@ class _ChatScreenState extends State<ChatScreen>
   List<_SuggestedTask> _suggestedTasks = [];
   // 활성 타이머
   int? _timerActiveMinutes;
+
+  /// 지금 도는 타이머가 생각 정리용인지. 마스터 방에서 생각 정리 얘기가 오간
+  /// 뒤 "좋아, 띄워줘"를 눌렀을 때만 켜진다.
+  bool _timerActiveIsMind = false;
   int? _timerActiveInsertIndex;
   String? _usageLimitBanner;
   bool _awaitingBroWorkoutPreference = false;
@@ -1781,6 +1785,16 @@ class _ChatScreenState extends State<ChatScreen>
       '고민이많',
     ];
     return signals.any(normalized.contains);
+  }
+
+  /// 최근 대화가 생각 정리 흐름이었는지. 사용자가 "머리가 복잡하다"고 말한
+  /// 뒤 코치가 30분 쓰기를 권하는 흐름이라, 그 말이 몇 턴 전에 있어도 잡는다.
+  bool _isThoughtOverloadContext() {
+    final recent = _messages.reversed
+        .take(6)
+        .map((message) => message.text)
+        .join(' ');
+    return _containsThoughtOverloadSignal(recent);
   }
 
   bool _containsThoughtOverloadSignal(String text) {
@@ -2949,6 +2963,7 @@ class _ChatScreenState extends State<ChatScreen>
         _timerConfirmMinutes = null;
         _timerConfirmTaskName = null;
         _timerActiveMinutes = null;
+        _timerActiveIsMind = false;
         _timerActiveInsertIndex = null;
         _suggestedTasks = [];
         _flirtVisible = false;
@@ -10319,6 +10334,7 @@ class _ChatScreenState extends State<ChatScreen>
         _timerConfirmMinutes = null;
         _timerConfirmTaskName = null;
         _timerActiveMinutes = null;
+        _timerActiveIsMind = false;
         _timerActiveInsertIndex = null;
         _dynamicChips = _coach.chips;
       });
@@ -10654,6 +10670,8 @@ class _ChatScreenState extends State<ChatScreen>
           _timerConfirmMinutes = null;
           _timerConfirmTaskName = null;
           _timerActiveMinutes = null;
+          _timerActiveIsMind = false;
+        _timerActiveIsMind = false;
           _timerActiveInsertIndex = null;
         }
         if (!isFutureTodayFlow && parsed.suggestedTasks.isNotEmpty) {
@@ -12488,7 +12506,7 @@ class _ChatScreenState extends State<ChatScreen>
 - 준비·수정·학습·자료조사만 반복 중이면 불안을 낮추는 안전 전략이었을 수 있음을 인정하고, 지금 행동에 도움이 되는지 부드럽게 확인.
 - 먼저 "지금 생각이 계속 늘어나는 것 같은데, 그 생각들이 지금 행동하는 데 도움이 되고 있어?"를 현재 코치 말투로 자연스럽게 묻기.
 - 도움이 안 되거나 실행을 막고 있어 보이면 생각을 더 늘리지 말고 최소 행동 1개로 낮추기. 예: 10분 쓰기, 파일 열기, 제목만 적기, 자료/레퍼런스/오류 로그 하나만 보기.
-- 도움이 되는 생각이면 머릿속에 붙잡지 말고 20분만 걱정·불안·의문·판단 기준을 직접 쓰게 하기. 끝나면 작은 결정 1개를 내리고 다시 움직이게 하기.
+- 도움이 되는 생각이면 머릿속에 붙잡지 말고 30분만 걱정·불안·의문·판단 기준을 직접 쓰게 하기. 끝나면 작은 결정 1개를 내리고 다시 움직이게 하기.
 - 설문처럼 보이지 않게 말풍선 문장으로 쓰고, 여러 선택지를 길게 나열하지 않기.'''
         : '';
     final writingConcernRule = isWritingConcernTurn
@@ -12591,7 +12609,8 @@ $resistanceFlowRule'''
         ? '''4. [TIMER_START] 태그는 절대 사용 금지.
    - 사용자가 직접 "타이머 띄워줘", "15분 타이머 켜줘"처럼 명시적으로 요청한 경우에는 짧게 응답한 뒤 [TIMER_CONFIRM:분] 태그를 붙입니다. 시간이 없으면 15분을 기본값으로 사용합니다.
    - 직전 답변에서 타이머가 필요한지 현재 코치의 말투로 물었고 사용자가 동의했다면 [TIMER_CONFIRM:분:할일이름]을 출력합니다.
-   - 코치가 먼저 [TIMER_CONFIRM] 태그를 출력하지 마세요. "마음 비우고 시작", "시작 의식", 카운트다운도 먼저 제안하지 마세요. 해당 기능은 사용자가 직접 버튼을 누르거나 명시적으로 요청했을 때만 시작합니다.'''
+   - 코치가 먼저 [TIMER_CONFIRM] 태그를 출력하지 마세요. "마음 비우고 시작", "시작 의식", 카운트다운도 먼저 제안하지 마세요. 해당 기능은 사용자가 직접 버튼을 누르거나 명시적으로 요청했을 때만 시작합니다.
+   - 예외: [생각 과부하 정리 전략]으로 30분 글쓰기를 권한 턴에서는 "원하시면 30분 타이머를 띄워드릴까요?"처럼 물으며 [TIMER_CONFIRM:30]을 붙여도 됩니다.'''
         : '''4. [TIMER_START] 태그는 절대 사용 금지.
    - [TIMER_CONFIRM]은 사용자가 직접 "타이머 띄워줘", "집중모드 시작해줘"처럼 타이머 실행을 명시적으로 요청한 경우에만 붙입니다.
    - 태그의 분은 사용자가 말한 시간을 그대로 씁니다. 시간을 말하지 않았을 때만 15분으로 합니다.
@@ -13564,11 +13583,13 @@ $timerOutputRule
                 alignment: Alignment.centerLeft,
                 child: Text(
                   leadMessage,
+                  // 코치가 하는 말이라 일반 말풍선과 같은 굵기로 둔다. 굵게
+                  // 쓰면 안내문처럼 읽혀서 사람이 하는 말 같지 않다.
                   style: GoogleFonts.notoSansKr(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: const Color(0xFF3D3A4E),
-                    height: 1.45,
+                    fontSize: AppDesignTokens.textBody,
+                    fontWeight: FontWeight.w500,
+                    color: AppDesignTokens.textPrimary,
+                    height: 1.6,
                   ),
                 ),
               ),
@@ -13578,10 +13599,17 @@ $timerOutputRule
             GestureDetector(
               onTap: () async {
                 final mins = _timerConfirmMinutes ?? 5;
+                // 생각 정리 타이머로 볼 조건은 셋 다 맞아야 한다: 마스터 방,
+                // 특정 할 일이 아닌 타이머, 그리고 방금 생각 정리 얘기를 한 흐름.
+                final isMind =
+                    _coach.isMaster &&
+                    (_timerConfirmTaskName ?? '').isEmpty &&
+                    _isThoughtOverloadContext();
                 int timerInsertIndex = 0;
                 setState(() {
                   _timerConfirmMinutes = null;
                   _timerConfirmTaskName = null;
+                  _timerActiveIsMind = isMind;
                   _timerActiveMinutes = mins;
                   _timerActiveInsertIndex = _messages.length;
                   timerInsertIndex = _timerActiveInsertIndex!;
@@ -13598,7 +13626,11 @@ $timerOutputRule
                 ),
                 child: Center(
                   child: Text(
-                    '▶ 지금 잠깐이라도 해볼게',
+                    // 특정 할 일이 아니라 그냥 타이머를 띄우는 자리(생각 정리
+                    // 30분 등)에서는 "해볼게"가 어긋나므로 라벨을 나눈다.
+                    (_timerConfirmTaskName ?? '').isEmpty
+                        ? '▶ 좋아, 띄워줘'
+                        : '▶ 지금 잠깐이라도 해볼게',
                     style: GoogleFonts.notoSansKr(
                       fontSize: 14,
                       fontWeight: FontWeight.w800,
@@ -13628,9 +13660,16 @@ $timerOutputRule
                     }),
                   );
                 }
-                final rawMsg = _coach.id == 'nyang_halbae'
-                    ? '알겠다냥. 일 끝나고 돌아올 때 다시 떠올려주겠다.'
-                    : '네, 알겠어요 대표님. 일 끝나고 돌아오실 때 다시 리마인드 해드릴게요 😊';
+                // 할 일이 걸린 타이머가 아니면 미뤄둘 것도 없다. 리마인드를
+                // 약속하면 하지도 않을 일을 하겠다고 하는 셈이다.
+                final isMale = _coach.id == 'nyang_halbae';
+                final rawMsg = taskName.isEmpty
+                    ? (isMale
+                          ? '알겠다냥. 필요하면 그때 말하라냥.'
+                          : '알겠습니다. 필요하실 때 말씀해 주세요.')
+                    : (isMale
+                          ? '알겠다냥. 일 끝나고 돌아올 때 다시 떠올려주겠다.'
+                          : '네, 알겠어요 대표님. 일 끝나고 돌아오실 때 다시 리마인드 해드릴게요 😊');
                 final msg = await UserTitleService.applyForCoach(
                   rawMsg,
                   _coach.id,
@@ -13658,7 +13697,9 @@ $timerOutputRule
                 ),
                 child: Center(
                   child: Text(
-                    '일 끝나고 할게',
+                    (_timerConfirmTaskName ?? '').isEmpty
+                        ? '지금은 괜찮아'
+                        : '일 끝나고 할게',
                     style: GoogleFonts.notoSansKr(
                       fontSize: 13,
                       fontWeight: FontWeight.w700,
@@ -14575,6 +14616,7 @@ $timerOutputRule
             child: FocusTimerWidget(
               coachId: widget.coachId,
               initialMinutes: _timerActiveMinutes!,
+              isMindTimer: _timerActiveIsMind,
               onMessage: (msg) {
                 setState(() {
                   _messages.add(

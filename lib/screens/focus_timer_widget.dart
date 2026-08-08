@@ -179,11 +179,17 @@ class FocusTimerWidget extends StatefulWidget {
   final int initialMinutes;
   final void Function(String) onMessage;
 
+  /// 생각 정리용으로 켠 타이머인지. 시간을 재는 일은 같지만 하는 일이 달라서
+  /// (일을 붙잡는 게 아니라 머릿속을 종이로 옮기는 것) 이름과 버튼만 갈아입힌다.
+  /// 화면을 따로 만들면 타이머 고칠 때마다 두 곳을 손봐야 한다.
+  final bool isMindTimer;
+
   const FocusTimerWidget({
     super.key,
     required this.coachId,
     required this.initialMinutes,
     required this.onMessage,
+    this.isMindTimer = false,
   });
 
   @override
@@ -833,7 +839,7 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
                     Icon(Icons.timer_rounded, size: 15, color: timerAccent),
                     const SizedBox(width: 6),
                     Text(
-                      'FOCUS TIMER',
+                      widget.isMindTimer ? 'MIND TIMER' : 'FOCUS TIMER',
                       style: GoogleFonts.notoSansKr(
                         fontSize: 12,
                         fontWeight: FontWeight.w900,
@@ -950,6 +956,8 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
                               ? '완료'
                               : _manager.running
                               ? '일시정지'
+                              : widget.isMindTimer
+                              ? '생각 시작'
                               : '집중 시작',
                           style: GoogleFonts.notoSansKr(
                             fontSize: 14,
