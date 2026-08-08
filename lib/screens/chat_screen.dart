@@ -53,6 +53,10 @@ class ChatMessage {
   /// 지금 할 일 목록을 다시 읽으면 지나간 카드의 버튼까지 뒤늦게 바뀌기 때문이다.
   final List<String> choices;
 
+  /// 카드가 눌렸을 때 쓸 원문. 등록 확인 카드는 여기에 등록할 이름을 담아둔다.
+  /// 화면에 보이는 문장에서 다시 뽑아내면 문구를 손볼 때마다 깨진다.
+  final String? payload;
+
   ChatMessage({
     required this.text,
     required this.isUser,
@@ -60,6 +64,7 @@ class ChatMessage {
     this.kind,
     this.highlightVisionIds = const [],
     this.choices = const [],
+    this.payload,
   });
 
   Map<String, dynamic> toJson() => {
@@ -69,6 +74,7 @@ class ChatMessage {
     if (kind != null) 'kind': kind,
     if (highlightVisionIds.isNotEmpty) 'highlightVisionIds': highlightVisionIds,
     if (choices.isNotEmpty) 'choices': choices,
+    if (payload != null) 'payload': payload,
   };
 
   factory ChatMessage.fromJson(Map<String, dynamic> j) => ChatMessage(
@@ -81,6 +87,7 @@ class ChatMessage {
         const [],
     choices:
         (j['choices'] as List?)?.map((e) => e.toString()).toList() ?? const [],
+    payload: j['payload'] as String?,
   );
 }
 
@@ -944,6 +951,12 @@ class _ParsedReply {
   final String? ultraLowResistanceFollowup;
   final bool startCountdown;
   final List<_SuggestedTask> suggestedTasks;
+
+  /// 코치가 등록하자고 짚은 일정·습관. 바로 넣지 않고 확인 카드로 물어본다.
+  final String? scheduleToConfirm;
+  final String? habitToConfirm;
+  final String? goalToConfirm;
+
   _ParsedReply({
     required this.text,
     required this.chips,
@@ -954,6 +967,9 @@ class _ParsedReply {
     this.visionSourceId,
     this.ultraLowResistanceFollowup,
     this.startCountdown = false,
+    this.scheduleToConfirm,
+    this.habitToConfirm,
+    this.goalToConfirm,
     List<_SuggestedTask>? suggestedTasks,
   }) : suggestedTasks = suggestedTasks ?? [];
 }
@@ -1148,6 +1164,9 @@ class ChatScreen extends StatefulWidget {
     String? habitDuration,
   })?
   onRegisterHabit;
+
+  /// 주간·월간 목표 등록. type은 'week' 또는 'month'.
+  final Future<bool> Function(String type, String text)? onRegisterGoal;
   final Future<String> Function(Map<String, dynamic> command)? onDeleteCommand;
   final Future<String> Function(Map<String, dynamic> command)? onEditCommand;
   final ValueChanged<String>? onSwitchCoach;
@@ -1164,6 +1183,7 @@ class ChatScreen extends StatefulWidget {
     this.onOpenGoalVisionDrawer,
     this.onOpenFeatureLocation,
     this.onRegisterHabit,
+    this.onRegisterGoal,
     this.onDeleteCommand,
     this.onEditCommand,
     this.onSwitchCoach,
@@ -1961,6 +1981,217 @@ class _ChatScreenState extends State<ChatScreen>
   ///
   /// 사용자가 방금 친 말만 보면 놓친다. 코치가 먼저 "책상만 치워볼까"라고 한
   /// 다음 턴에 "어떻게 해?"라고만 답할 수 있어서, 최근 대화까지 함께 본다.
+  // ── 코치가 짚어준 일정·습관 등록 확인 카드 ──
+  //
+  // 등록 명령은 정규식이 먼저 잡는다(즉시 등록, API 안 씀). 거기서 놓친 말투는
+  // 코치가 [SCHEDULE:]/[HABIT:] 태그로 대신 짚어주는데, 잘못 알아들었을 수
+  // 있으니 바로 넣지 않고 이 카드로 한 번 물어본다.
+  static const String _registerConfirmKind = 'register_confirm';
+  static const String _registerConfirmYes = '등록해줘';
+  static const String _registerConfirmNo = '아니야';
+
+  static const String _goalWeekLabel = '주간 목표';
+  static const String _goalMonthLabel = '월 목표';
+
+  String _registerConfirmQuestion(String title, {required String type}) {
+    // 목표는 주간인지 월간인지를 사용자가 골라야 해서 묻는 말이 다르다.
+    if (type == 'goal') {
+      return switch (_coach.id) {
+        'bro' => "'$title' 어디에 넣을까?",
+        'halmae' => "'$title' 어디에 넣어줄까?",
+        'boyfriend' => "'$title' 어디에 넣을까?",
+        'nyang_halbae' => "'$title' 어디에 넣을까냥?",
+        'sec_female' => "'$title' 어느 쪽에 넣어 드릴까요?",
+        _ => "'$title' 어디에 넣을까냥?",
+      };
+    }
+    final what = type == 'habit' ? '습관' : '일정';
+    return switch (_coach.id) {
+      'bro' => "'$title' $what으로 넣어줄까?",
+      'halmae' => "'$title' $what으로 넣어줄까?",
+      'boyfriend' => "'$title' $what으로 넣을까?",
+      'nyang_halbae' => "'$title' $what으로 등록할까냥?",
+      'sec_female' => "'$title' $what으로 등록해 드릴까요?",
+      _ => "'$title' $what으로 넣을까냥?",
+    };
+  }
+
+  String _registerDeclinedReply() {
+    return switch (_coach.id) {
+      'bro' => '알겠다. 안 넣는다.',
+      'halmae' => '알겠다. 안 넣으마.',
+      'boyfriend' => '오케이, 안 넣을게.',
+      'nyang_halbae' => '알겠다냥. 넣지 않겠다냥.',
+      'sec_female' => '네, 등록하지 않을게요.',
+      _ => '알겠다냥. 안 넣을게냥.',
+    };
+  }
+
+  /// 코치가 짚어준 이름을 확인 카드로 띄운다.
+  ///
+  /// 이미 정규식이 잡아 등록한 턴이면 카드를 띄우지 않는다. 같은 항목을
+  /// 두 번 물어보게 된다.
+  void _offerRegistrationConfirm(_ParsedReply parsed) {
+    if (!_userData.isPlanActive) return;
+
+    // 한 턴에 하나만 물어본다. 카드가 겹치면 뭘 고르는 건지 알기 어렵다.
+    final String type;
+    final String? title;
+    if ((parsed.goalToConfirm ?? '').isNotEmpty) {
+      type = 'goal';
+      title = parsed.goalToConfirm;
+    } else if ((parsed.habitToConfirm ?? '').isNotEmpty) {
+      type = 'habit';
+      title = parsed.habitToConfirm;
+    } else {
+      type = 'schedule';
+      title = parsed.scheduleToConfirm;
+    }
+    if (title == null || title.isEmpty) return;
+
+    // 같은 이름이 이미 할 일 제안으로 떠 있으면 카드를 겹쳐 띄우지 않는다.
+    if (type == 'schedule' &&
+        parsed.suggestedTasks.any((task) => task.text.trim() == title)) {
+      return;
+    }
+
+    // 목표는 주간·월간 중 어디에 넣을지를 사용자가 고른다. 코치가 찍으면
+    // 반은 틀리고, 틀리면 사용자가 지우러 가야 한다.
+    final choices = type == 'goal'
+        ? const [_goalWeekLabel, _goalMonthLabel, _registerConfirmNo]
+        : const [_registerConfirmYes, _registerConfirmNo];
+
+    setState(() {
+      _messages.add(
+        ChatMessage(
+          text: _registerConfirmQuestion(title!, type: type),
+          isUser: false,
+          time: DateTime.now(),
+          kind: _registerConfirmKind,
+          choices: choices,
+          payload: '$type|$title',
+        ),
+      );
+    });
+    _scrollToBottom();
+  }
+
+  Future<void> _handleRegisterConfirmChoice(
+    ChatMessage msg,
+    String label,
+  ) async {
+    if (_isLoading) return;
+    HapticFeedback.lightImpact();
+
+    // 버튼을 지워서 두 번 눌리지 않게 한다. 지운 상태가 그대로 저장되니
+    // 앱을 다시 켜도 지나간 카드가 다시 눌리지 않는다.
+    await _consumeChoiceCard(msg);
+
+    final payload = msg.payload ?? '';
+    final sep = payload.indexOf('|');
+    if (sep <= 0) return;
+    final type = payload.substring(0, sep);
+    final title = payload.substring(sep + 1).trim();
+
+    if (label == _registerConfirmNo || title.isEmpty) {
+      _injectAiMessage(_registerDeclinedReply());
+      return;
+    }
+
+    await AnalyticsService.logFeatureUsage('coach_${type}_confirm');
+
+    if (type == 'goal') {
+      await _registerGoalByTitle(
+        label == _goalMonthLabel ? 'month' : 'week',
+        title,
+      );
+      return;
+    }
+    if (type == 'habit') {
+      await _registerHabitByTitle(title);
+      return;
+    }
+    // 날짜·반복 해석은 기존 등록 흐름이 이미 하고 있으니 그대로 태운다.
+    await _showScheduleRegistrationDialog('$title 추가해줘');
+  }
+
+  Future<void> _registerGoalByTitle(String type, String title) async {
+    final registered = await widget.onRegisterGoal?.call(type, title) ?? false;
+    if (!mounted) return;
+    final where = type == 'month' ? _goalMonthLabel : _goalWeekLabel;
+    setState(() {
+      _messages.add(
+        ChatMessage(
+          text: registered
+              ? _goalRegistrationReply(title, where)
+              : '목표 탭을 여는 중 문제가 생겼어요. 잠시 후 다시 시도해 주세요.',
+          isUser: false,
+          time: DateTime.now(),
+        ),
+      );
+    });
+    _scrollToBottom();
+    await _saveHistory();
+  }
+
+  String _goalRegistrationReply(String title, String where) {
+    return switch (_coach.id) {
+      'bro' => "'$title' $where에 넣었다. 이제 해보자.",
+      'halmae' => "'$title' $where에 넣어뒀다. 잘해보자꾸나.",
+      'boyfriend' => "'$title' $where에 넣어뒀어. 같이 가보자.",
+      'nyang_halbae' => "'$title' $where에 넣어두었다냥. 세부 내용은 목표 탭에서 살펴보자냥.",
+      'sec_female' => "'$title' 항목을 $where에 넣어두었어요. 세부 내용은 목표 탭에서 확인해 주세요.",
+      _ => "'$title' $where에 넣어뒀다냥. 목표 탭에서 확인해달라냥.",
+    };
+  }
+
+  /// 확인 카드의 버튼만 걷어낸다. 문장은 그대로 둬서 무슨 대화였는지 남긴다.
+  Future<void> _consumeChoiceCard(ChatMessage msg) async {
+    final index = _messages.indexOf(msg);
+    if (index < 0) return;
+    setState(() {
+      _messages[index] = ChatMessage(
+        text: msg.text,
+        isUser: msg.isUser,
+        time: msg.time,
+        highlightVisionIds: msg.highlightVisionIds,
+      );
+    });
+    await _saveHistory();
+  }
+
+  Future<void> _registerHabitByTitle(String title) async {
+    final parsed = _parseHabitRegistration('$title 습관 추가해줘');
+    final name = parsed.title.isNotEmpty ? parsed.title : title;
+    final registered =
+        await widget.onRegisterHabit?.call(
+          name,
+          freq: parsed.freq,
+          days: parsed.days,
+          weeklyTargetCount: parsed.weeklyTargetCount,
+          countGoal: parsed.countGoal,
+          unit: parsed.unit,
+          time: parsed.time,
+          endTime: parsed.endTime,
+          habitDuration: parsed.habitDuration,
+        ) ??
+        false;
+    if (!mounted) return;
+    setState(() {
+      _messages.add(
+        ChatMessage(
+          text: registered
+              ? _habitRegistrationReply(name)
+              : '습관 탭을 여는 중 문제가 생겼어요. 잠시 후 다시 시도해 주세요.',
+          isUser: false,
+          time: DateTime.now(),
+        ),
+      );
+    });
+    _scrollToBottom();
+    await _saveHistory();
+  }
+
   /// 코치 답변에 섞인 욕설.
   ///
   /// 화면에 나가기 직전 한 번 거른다. 프롬프트에는 아무 지시도 넣지 않는다 —
@@ -4452,8 +4683,7 @@ class _ChatScreenState extends State<ChatScreen>
       // 며칠 전까지는 같이 있자는 쪽으로만 말한다.
       final hasWidget = await WidgetSyncService.hasInstalledCatHomeWidget();
       if (!hasWidget) {
-        final knowsTheHabit =
-            _usedDayCount(prefs) >= _catWidgetPromptAfterDays;
+        final knowsTheHabit = _usedDayCount(prefs) >= _catWidgetPromptAfterDays;
         greetings.add((
           ChatMessage(
             text: knowsTheHabit
@@ -5426,6 +5656,9 @@ class _ChatScreenState extends State<ChatScreen>
       r'\[ULTRA_LOW_RESISTANCE_FOLLOWUP:\s*([^\]]+)\]',
     );
     final taskRegex = RegExp(r'\[TASK:\s*(.+?)\]');
+    final scheduleRegex = RegExp(r'\[SCHEDULE:\s*(.+?)\]');
+    final habitRegex = RegExp(r'\[HABIT:\s*(.+?)\]');
+    final goalRegex = RegExp(r'\[GOAL:\s*(.+?)\]');
     final visionSourceRegex = RegExp(r'\[VISION_SOURCE:\s*([^\]]+)\]');
     // CORE_REC 태그 파싱: [CORE_REC:{...}]
     final coreRecRegex = RegExp(r'\[CORE_REC:(\{.*?\})\]');
@@ -5438,6 +5671,9 @@ class _ChatScreenState extends State<ChatScreen>
     String? ultraLowResistanceFollowup;
     bool startCountdown = false;
     List<_SuggestedTask> suggestedTasks = [];
+    String? scheduleToConfirm;
+    String? habitToConfirm;
+    String? goalToConfirm;
     String text = raw;
 
     // ── CORE_REC 태그를 읽기 좋은 텍스트로 변환 ──
@@ -5537,12 +5773,39 @@ class _ChatScreenState extends State<ChatScreen>
       text = text.replaceAll(m.group(0)!, '').trim();
     }
 
+    // [SCHEDULE: ...] / [HABIT: ...] — 정규식이 놓친 말투를 코치가 대신 잡아준다.
+    // 여기서 바로 등록하지 않고 이름만 챙긴다. 잘못 알아들었을 수 있어서다.
+    final scheduleMatch = scheduleRegex.firstMatch(raw);
+    if (scheduleMatch != null) {
+      scheduleToConfirm = scheduleMatch.group(1)!.trim();
+    }
+    final habitMatch = habitRegex.firstMatch(raw);
+    if (habitMatch != null) {
+      habitToConfirm = habitMatch.group(1)!.trim();
+    }
+    final goalMatch = goalRegex.firstMatch(raw);
+    if (goalMatch != null) {
+      goalToConfirm = goalMatch.group(1)!.trim();
+    }
+    for (final m in [
+      ...scheduleRegex.allMatches(raw),
+      ...habitRegex.allMatches(raw),
+      ...goalRegex.allMatches(raw),
+    ]) {
+      text = text.replaceAll(m.group(0)!, '').trim();
+    }
+    // 문장 사이에 있던 태그를 떼면 공백이 두 칸 남는다. 줄바꿈은 건드리지 않는다.
+    text = text.replaceAll(RegExp(r'[ \t]{2,}'), ' ');
+
     // 감정 보호·위기 응답에서는 모델이 실수로 행동 태그를 섞어도 UI에 노출하지 않는다.
     if (suppressDefaultChips) {
       timerConfirmMinutes = null;
       timerConfirmTaskName = null;
       startCountdown = false;
       suggestedTasks = [];
+      scheduleToConfirm = null;
+      habitToConfirm = null;
+      goalToConfirm = null;
     }
 
     return _ParsedReply(
@@ -5556,6 +5819,9 @@ class _ChatScreenState extends State<ChatScreen>
       ultraLowResistanceFollowup: ultraLowResistanceFollowup,
       startCountdown: startCountdown,
       suggestedTasks: suggestedTasks,
+      scheduleToConfirm: scheduleToConfirm,
+      habitToConfirm: habitToConfirm,
+      goalToConfirm: goalToConfirm,
     );
   }
 
@@ -6436,9 +6702,7 @@ class _ChatScreenState extends State<ChatScreen>
           : count == 1
           ? '할 일 하나'
           : '할 일 $count개';
-      final tail = count == 1
-          ? '잘하고 있다냥. 냥냥이가 방해 안 할게.'
-          : '냥이가 방해 안 할게.';
+      final tail = count == 1 ? '잘하고 있다냥. 냥냥이가 방해 안 할게.' : '냥이가 방해 안 할게.';
       return '$opener\n지금 $subject 하고 있구냥. $tail';
     }
     if (done == 0) {
@@ -6999,6 +7263,20 @@ class _ChatScreenState extends State<ChatScreen>
       endTime: parsedEndTime,
       habitDuration: parsedHabitDuration,
     );
+  }
+
+  /// 습관 이름 없이 "습관 설정해줘"라고만 했을 때.
+  ///
+  /// 양식에 없는 걸 되묻지 않도록 실제 칸(이름, 매일·요일·주 몇 일)만 짚는다.
+  String _habitFormGuideReply() {
+    return switch (_coach.id) {
+      'bro' => '습관 탭 열어준다. 이름이랑 매일 할지 무슨 요일에 할지만 정하면 된다.',
+      'halmae' => '습관 탭 열어주마. 이름이랑, 매일 할지 무슨 요일에 할지만 정하면 된다.',
+      'boyfriend' => '습관 탭 열어줄게. 이름이랑 매일 할지 무슨 요일에 할지만 정하면 돼.',
+      'nyang_halbae' => '습관 탭을 열어두겠다냥. 이름과 매일 할지 무슨 요일에 할지만 정하면 된다냥.',
+      'sec_female' => '습관 탭을 열어 드릴게요. 이름과 매일 할지, 무슨 요일에 할지만 정하시면 돼요.',
+      _ => '냥이가 습관 탭 열어줄게냥. 이름이랑 매일 할지 무슨 요일에 할지만 정하면 된다냥.',
+    };
   }
 
   String _habitRegistrationReply(String habitName) {
@@ -10230,11 +10508,13 @@ class _ChatScreenState extends State<ChatScreen>
         usedApi: false,
         coachReplied: false,
       );
+      // "습관 설정해줘"처럼 이름이 없으면 말로 캐묻지 말고 습관 탭을 열어준다.
+      // 양식에 어떤 칸이 있는지는 화면이 직접 보여주는 게 제일 빠르다.
       if (parsed.title.isEmpty) {
         setState(() {
           _messages.add(
             ChatMessage(
-              text: '어떤 습관을 등록할지 이름을 같이 말해줘.',
+              text: _habitFormGuideReply(),
               isUser: false,
               time: DateTime.now(),
             ),
@@ -10242,6 +10522,7 @@ class _ChatScreenState extends State<ChatScreen>
         });
         _scrollToBottom();
         await _saveHistory();
+        widget.onOpenFeatureLocation?.call('habit');
         return;
       }
       final registered =
@@ -10717,7 +10998,7 @@ class _ChatScreenState extends State<ChatScreen>
           _timerConfirmTaskName = null;
           _timerActiveMinutes = null;
           _timerActiveIsMind = false;
-        _timerActiveIsMind = false;
+          _timerActiveIsMind = false;
           _timerActiveInsertIndex = null;
         }
         if (!isFutureTodayFlow && parsed.suggestedTasks.isNotEmpty) {
@@ -10730,6 +11011,10 @@ class _ChatScreenState extends State<ChatScreen>
       // 모델이 실수로 [TIMER_CONFIRM]을 붙여도 기존 코칭 단계를 건너뛰지 않도록 여기서는 무시한다.
       _scrollToBottom();
       await _saveHistory();
+      if (mounted) {
+        _offerRegistrationConfirm(parsed);
+        await _saveHistory();
+      }
       if (_coach.isMaster && parsed.startCountdown && mounted) {
         _openCountdownFocusMode();
       }
@@ -12746,7 +13031,10 @@ $habitAutomationSection
    단, 정서적 여유가 낮은 사용자의 순수 감정 토로에는 [CHIPS]를 쓰지 말고 답변 끝에 [NO_CHIPS]를 붙이세요.$coachSwitchRule
    자해·자살 위험을 확인하거나 긴급 도움을 안내하는 상황에서는 [CHIPS]와 [COACH_SWITCH]를 붙이지 말고 [NO_CHIPS]만 붙이세요.
 $timerOutputRule
-5. 사용자가 특정 할 일을 언급하거나 해결 가능한 문제가 드러나고, 그걸 오늘 할 일로 등록할 만한 상황이라면 답변에 [TASK: 할일명] 태그를 포함하세요. 예: "5시에 청소해야지" → [TASK: 5시에 청소], "오후 3시에 회의가 있어" → [TASK: 오후 3시 회의], "SNS 반응이 안 좋아" → [TASK: SNS 콘텐츠 분석하기]. 억지로 추가하지 마세요. 정서적 여유가 낮거나 순수 감정 토로인 상황에는 사용자가 행동 지원을 명시적으로 요청하지 않는 한 [TASK]와 [TIMER_CONFIRM]을 출력하지 마세요. 자해·자살 위험 상황에서는 두 태그를 절대 출력하지 마세요.$halmaeHint$resistanceTurnDirective''';
+5. 사용자가 특정 할 일을 언급하거나 해결 가능한 문제가 드러나고, 그걸 오늘 할 일로 등록할 만한 상황이라면 답변에 [TASK: 할일명] 태그를 포함하세요. 예: "5시에 청소해야지" → [TASK: 5시에 청소], "오후 3시에 회의가 있어" → [TASK: 오후 3시 회의], "SNS 반응이 안 좋아" → [TASK: SNS 콘텐츠 분석하기]. 억지로 추가하지 마세요. 정서적 여유가 낮거나 순수 감정 토로인 상황에는 사용자가 행동 지원을 명시적으로 요청하지 않는 한 [TASK]와 [TIMER_CONFIRM]을 출력하지 마세요. 자해·자살 위험 상황에서는 두 태그를 절대 출력하지 마세요.
+6. 사용자가 캘린더 일정이나 습관으로 넣어달라고 부탁하면 [SCHEDULE: 일정명] 또는 [HABIT: 습관명] 태그를 답변에 포함하세요. 예: "산책 일정에 추가해줄래?" → [SCHEDULE: 산책], "매일 아침 물 마시는 거 습관으로 걸어줘" → [HABIT: 매일 아침 물 마시기]. 사용자가 말한 시간·요일·횟수는 태그 안에 그대로 남기세요. 부탁하지 않았는데 넣지 마세요. 태그를 붙인 턴에는 등록했다고 말하지 말고, 확인 카드가 따로 뜨니 답변 본문에서 태그를 언급하지 마세요.
+   습관 양식에 있는 칸은 이름, 반복(매일 / 무슨 요일 / 주 몇 일), 목표 수량과 단위(예: 5000보, 2리터), 시각뿐입니다. 정보가 모자라면 이 중에서만 물으세요. "하루에 몇 번 할지"는 양식에 없으니 묻지 마세요.
+7. 사용자가 목표를 세우고 싶다고 하면 [GOAL: 목표명] 태그를 포함하세요. 예: "살 빼는 거 목표로 하고 싶어" → [GOAL: 살 빼기]. 목표명은 짧은 명사형으로 다듬으세요. 주간인지 월간인지는 카드에서 사용자가 고르니 되묻지 마세요. 장기 비전은 이 태그로 만들 수 없으니, 사용자가 인생 목표나 장기 비전을 말하면 목표 탭에서 직접 만들도록 안내하세요.$halmaeHint$resistanceTurnDirective''';
 
     // 마스터 코치는 하드코딩된 "대표님"을 사용자가 지정한 호칭으로 치환한다.
     // baseSystemPrompt 뒤에 이어붙인 coachSwitchRule 등 모든 조각까지 함께 반영된다.
@@ -14776,6 +15064,12 @@ $timerOutputRule
         (label) => _handleEveningPendingChoice(label, msg.choices),
       );
     }
+    if (msg.kind == _registerConfirmKind && msg.choices.isNotEmpty) {
+      return _buildChoiceBubbleCard(
+        msg,
+        (label) => _handleRegisterConfirmChoice(msg, label),
+      );
+    }
     if (msg.kind == _masterCoreGreetingKind && msg.choices.isNotEmpty) {
       return _buildChoiceBubbleCard(msg, _handleMasterCoreAskChoice);
     }
@@ -15598,10 +15892,7 @@ $timerOutputRule
 
     // 부담이라고 답한 경우만 실행 저항 흐름을 태운다.
     await AnalyticsService.logFeatureUsage('master_core_ask_burden');
-    await _send(
-      label,
-      apiInputOverride: '오늘 핵심으로 잡은 일이 부담돼서 아직 시작을 못 하고 있어',
-    );
+    await _send(label, apiInputOverride: '오늘 핵심으로 잡은 일이 부담돼서 아직 시작을 못 하고 있어');
   }
 
   /// 시작해두고 멈춘 것 같은 일을 물은 뒤 누른 버튼을 처리한다.
@@ -15637,10 +15928,7 @@ $timerOutputRule
 
     // 부담이라고 답한 경우만 실행 저항 흐름을 태운다.
     await AnalyticsService.logFeatureUsage('master_stalled_burden');
-    await _send(
-      label,
-      apiInputOverride: '시작은 했는데 부담돼서 중간에 멈췄어',
-    );
+    await _send(label, apiInputOverride: '시작은 했는데 부담돼서 중간에 멈췄어');
   }
 
   /// '그 외'를 누르면 남은 일정을 다시 버튼으로 보여주고, 일정을 고르면

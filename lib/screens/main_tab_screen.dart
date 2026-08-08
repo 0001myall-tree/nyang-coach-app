@@ -1039,6 +1039,18 @@ class _MainTabScreenState extends State<MainTabScreen>
     );
   }
 
+  /// 채팅에서 말로 등록한 주간·월간 목표. 습관과 같은 방식으로 서랍을 열어
+  /// 들어간 자리를 바로 보여준다.
+  Future<bool> _registerGoalFromChat(String type, String text) async {
+    setState(() {
+      _openDrawerIndex = 1;
+      _widgetIntentDrawerMode = false;
+    });
+    await Future.delayed(const Duration(milliseconds: 320));
+    if (!mounted) return false;
+    return _tasksController.addGoalFromChat(type, text);
+  }
+
   Future<String> _handleDeleteCommandFromChat(
     Map<String, dynamic> command,
   ) async {
@@ -1610,6 +1622,7 @@ class _MainTabScreenState extends State<MainTabScreen>
       onOpenGoalVisionDrawer: _openTasksGoalVisionDrawer,
       onOpenFeatureLocation: _openFeatureLocationFromChat,
       onRegisterHabit: _registerHabitFromChat,
+      onRegisterGoal: _registerGoalFromChat,
       onDeleteCommand: _handleDeleteCommandFromChat,
       onEditCommand: _handleEditCommandFromChat,
       onSwitchCoach: _switchCoachFromChat,

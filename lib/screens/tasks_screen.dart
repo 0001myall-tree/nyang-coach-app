@@ -550,6 +550,10 @@ class TasksScreenController {
     _state?._openTab(index);
   }
 
+  Future<bool> addGoalFromChat(String type, String text) async {
+    return await _state?._addGoalFromChat(type, text) ?? false;
+  }
+
   Future<bool> addHabitFromChat(
     String name, {
     String freq = 'daily',
@@ -2076,6 +2080,33 @@ class _TasksScreenState extends State<TasksScreen>
     }
     await WidgetSyncService.syncFromStoredTasks();
     TasksSyncService.scheduleSyncToCloud();
+  }
+
+  /// 채팅에서 말로 등록하는 주간·월간 목표.
+  ///
+  /// 장기 비전은 마일스톤과 기한이 함께 있어야 뜻이 서기 때문에 여기로 받지
+  /// 않는다. 비전은 목표 탭에서 직접 만든다.
+  Future<bool> _addGoalFromChat(String type, String text) async {
+    if (!await _hasActivePlan()) return false;
+    final trimmed = text.trim();
+    if (trimmed.isEmpty) return false;
+    if (type != 'week' && type != 'month') return false;
+
+    final goal = GoalItem(
+      id:
+          DateTime.now().millisecondsSinceEpoch +
+          DateTime.now().microsecond % 1000,
+      text: trimmed,
+    );
+    setState(() {
+      if (type == 'week') {
+        weekGoals.add(goal);
+      } else {
+        monthGoals.add(goal);
+      }
+    });
+    await _saveGoals(type);
+    return true;
   }
 
   Future<void> _saveGoals(String type) async {
