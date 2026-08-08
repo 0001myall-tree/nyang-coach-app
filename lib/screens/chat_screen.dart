@@ -2252,6 +2252,50 @@ class _ChatScreenState extends State<ChatScreen>
 - 되묻는 건 한 번뿐입니다. 이미 물어본 뒤라면 바로 가벼운 행동을 권하세요.''';
   }
 
+  /// "넌 뭘 해줄 수 있어?"를 물었을 때만 붙이는 지침.
+  ///
+  /// 코치가 자기 능력을 몰라서 "추가해줄게"라고 해놓고 나중에 "못 해"라고 말을
+  /// 바꾼 적이 있다. 못하는 것보다 말 바꾸는 게 신뢰를 더 빨리 깎는다.
+  /// 고정 답변으로 박지 않는 이유는, 오늘 처음 깐 사람과 한 달 쓴 사람에게
+  /// 할 말이 다르기 때문이다.
+  String _capabilityAnswerSection(String userText) {
+    if (!_isCapabilityQuestion(userText)) return '';
+
+    final role = _coach.isMaster
+        ? '- 목표와 계획에서 오늘 할 일을 뽑아주고, 미뤄둔 일을 짚어주고, 주간 회고를 해준다.'
+        : '- 오늘 뭐부터 할지 골라주고, 하기 싫을 때 옆에 있어주고, 습관을 챙겨준다.';
+
+    return '''
+[할 수 있는 일을 물었을 때]
+- 사용자가 "넌 뭘 해줄 수 있어", "네가 하는 일이 뭐야"처럼 물으면 아래 내용만 코치 말투로 짧게 답하세요. 없는 기능을 지어내지 말고, 여기 적힌 것을 못 한다고도 하지 마세요.
+$role
+- 말로 일정·습관·목표를 넣고, 고치고, 지울 수 있다. 타이머도 띄워준다.
+- 사용자가 뭘 해왔는지 계속 보고 있어서, 오래 쓸수록 그 사람에게 맞게 말할 수 있다.
+- 기능을 나열하지 말고 두세 가지만 골라 말하세요. 설명서처럼 들리면 안 됩니다.
+- 장기 비전은 목표 탭에서 직접 만들어야 한다고만 덧붙이세요.''';
+  }
+
+  bool _isCapabilityQuestion(String text) {
+    final normalized = text.replaceAll(RegExp(r'\s+'), '').toLowerCase();
+    // "내가 할 수 있는 게 뭐가 있을까"는 자기 얘기지 코치 능력을 묻는 게 아니다.
+    // 코치를 함께 가리키지 않으면 이 지침을 붙이지 않는다.
+    final aboutSelf = RegExp(r'내가|나는|제가|저는|우리가').hasMatch(normalized);
+    final aboutCoach = RegExp(r'넌|너는|네가|니가|당신|코치|냥이').hasMatch(normalized);
+    if (aboutSelf && !aboutCoach) return false;
+
+    // "이거 할 수 있을까 걱정돼"처럼 능력을 말하는 평범한 문장이 걸리지 않도록,
+    // "무엇"을 묻는 형태이거나 코치를 직접 가리킬 때만 잡는다.
+    return RegExp(
+      r'수있는(게|건|것|거)(뭐|무엇)'
+      r'|하는(일|게|것)(이|은)?(뭐|무엇)'
+      r'|해주는(게|건|것)(이|은)?(뭐|무엇)'
+      r'|(뭘|뭐|무엇을|어떤걸).{0,8}(해줄|도와줄|해주는)'
+      r'|(넌|너는|네가|니가|당신).{0,15}(해줄수있|도와줄수있)'
+      r'|무슨일을해'
+      r'|기능이뭐|어떤기능|무슨기능',
+    ).hasMatch(normalized);
+  }
+
   bool _isWhatToDoQuestion(String text) {
     final normalized = text.replaceAll(RegExp(r'\s+'), '').toLowerCase();
     return RegExp(
@@ -13035,6 +13079,9 @@ $resistanceFlowRule'''
     // 계획이 하나도 없는 날 "뭐 하지?"라고 물었을 때만 붙인다.
     final emptyPlanAskSection = await _emptyPlanAskSection(userText);
 
+    // "넌 뭘 해줄 수 있어?"를 물었을 때만 붙인다.
+    final capabilitySection = _capabilityAnswerSection(userText);
+
     final assembledSystemPrompt =
         '''$baseSystemPrompt
 ${contextString.isNotEmpty ? '\n$contextString' : ''}
@@ -13042,6 +13089,7 @@ $masterStyleRule
 $cleaningSection
 $bedtimeCarryOverSection
 $emptyPlanAskSection
+$capabilitySection
 
 [연속 대화 맥락 기준]
 - 직전 대화처럼 이어받아도 되는 말은 오늘 같은 날짜에 오간 대화뿐입니다.
