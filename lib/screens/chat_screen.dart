@@ -4072,7 +4072,9 @@ class _ChatScreenState extends State<ChatScreen>
         now.hour >= _masterCoreAskUntilHour) {
       return false;
     }
-    if (_spokeKindToday({_masterCoreGreetingKind}, now)) return false;
+    // 자기 방 기록만 보면 여비서에서 물어본 걸 냥할배가 또 묻는다. 코치 전체를
+    // 보고, 어제 물었으면 오늘은 쉰다.
+    if (!await _canAskCoreToday(now)) return false;
     final core = _coreTaskDueForAsk(prefs, now);
     if (core == null) return false;
     if (!mounted) return false;
@@ -4093,6 +4095,9 @@ class _ChatScreenState extends State<ChatScreen>
     required DateTime? lastVisit,
   }) async {
     if (await _startMasterCoreAsk(prefs, now)) return true;
+
+    // 다른 방에서 방금 인사를 받았으면 슬롯 인사는 쉰다.
+    if (await _otherCoachGreetedRecently(now)) return false;
 
     final context = await _buildMasterGreetingContext(
       prefs: prefs,
@@ -4221,6 +4226,7 @@ class _ChatScreenState extends State<ChatScreen>
     }
 
     if (_spokeKindToday(_catEveningGreetingKinds, now)) return false;
+    if (await _otherCoachGreetedRecently(now)) return false;
 
     if (_completedTasks > 0) {
       // 21시 넘으면 취침 제안과 겹치니 그때는 비워둔다.
@@ -4362,26 +4368,91 @@ class _ChatScreenState extends State<ChatScreen>
     );
   }
 
-  /// 오늘 마스터 코치가 이미 핵심 일정을 물었는지.
+  // ── 코치 간 인사 쿨다운 ─────────────────────────────────
+  // 인사가 상태를 짚어주는 쪽으로 바뀌면서, 방을 옮길 때마다 관리를 받는 꼴이
+  // 됐다. 코치를 여러 개 열어둘수록 잔소리가 늘면 코치가 많은 게 단점이 된다.
+  // 그래서 한동안은 한 코치한테만 듣는다.
+  //
+  // 나중에 사용자가 고르게 할 수도 있어 값을 여기 모아둔다("자주 말 걸어주세요"
+  // / "필요할 때만 부를게요"). 지금은 고정값으로 두고 반응을 먼저 본다.
+
+  /// 여비서와 냥할배 사이. 둘은 문구 틀을 통째로 공유해서 같은 상황이면
+  /// 자리도 문장 구조도 같고 말투만 갈린다("오늘 흐름이 괜찮으셨네요" /
+  /// "오늘 흐름이 괜찮았다냥"). 그래서 더 길게 쉰다.
+  static const _masterGreetingCooldown = Duration(hours: 1);
+
+  /// 등급이 다른 코치 사이(냥냥이 ↔ 마스터). 역할이 달라 각도가 갈리기도 하니
+  /// 마스터끼리보다는 짧게 둔다.
+  static const _crossCoachGreetingCooldown = Duration(minutes: 30);
+
+  /// 다른 코치 방에서 최근에 자동 인사가 나갔는지.
   ///
-  /// 코치가 달라도 사용자에게는 같은 일을 두 번 묻는 것이다. 마스터가 먼저
-  /// (12~15시) 묻고 냥냥이가 나중(15~18시)이라 한 방향만 본다.
-  Future<bool> _masterAskedCoreToday(DateTime now) async {
+  /// 핵심 일정을 물어보는 발화는 이 검사를 거치지 않는다. 그건 이미 하루
+  /// 한 번으로 묶여 있고, 다른 코치가 상태를 짚은 뒤에 "그런데 그건 아직
+  /// 안 건드리셨네요"가 이어지는 건 반복이 아니라 다른 각도여서다.
+  Future<bool> _otherCoachGreetedRecently(DateTime now) async {
     final prefs = await SharedPreferences.getInstance();
-    for (final coachId in const [
-      CoachIdService.secretaryChiefId,
-      CoachIdService.nyangHalbaeId,
-    ]) {
+    final myId = CoachIdService.normalize(widget.coachId);
+    final iAmMaster = CoachIdService.isMaster(myId);
+    for (final coachId in DailyResetService.coachIds) {
+      if (coachId == myId) continue;
       final raw = prefs.getString('nyang_chat_history_$coachId');
       if (raw == null || raw.isEmpty) continue;
+      final window = iAmMaster && CoachIdService.isMaster(coachId)
+          ? _masterGreetingCooldown
+          : _crossCoachGreetingCooldown;
       for (final item in _decodeMapList(raw)) {
         if (item['isUser'] == true) continue;
-        if (item['kind'] != _masterCoreGreetingKind) continue;
+        // 자동 발화만 센다. 사용자가 말을 걸어 나온 답까지 세면, 대화를 나눈
+        // 뒤 다른 방에 갔을 때 인사가 사라진다.
+        if (item['kind']?.toString().startsWith('auto:') != true) continue;
         final time = DateTime.tryParse(item['time']?.toString() ?? '');
-        if (time != null && _isSameDay(time, now)) return true;
+        if (time == null) continue;
+        if (now.difference(time) < window) return true;
       }
     }
     return false;
+  }
+
+  /// 핵심 일정을 물어보는 발화들. 코치가 달라도 사용자에게는 같은 질문이라
+  /// 한 묶음으로 센다.
+  static const _coreAskKinds = {
+    _masterCoreGreetingKind,
+    _catAfternoonCoreGreetingKind,
+  };
+
+  /// [day]에 핵심 일정을 물어봤는지.
+  ///
+  /// 채팅은 자정에 보관함으로 옮겨지므로 어제 기록은 현재 기록에 없다. 그래서
+  /// 두 곳을 함께 본다. 보관함은 7일치를 들고 있어 하루 전을 보기엔 넉넉하다.
+  Future<bool> _coreAskedOnDay(DateTime day) async {
+    final prefs = await SharedPreferences.getInstance();
+    for (final coachId in DailyResetService.coachIds) {
+      for (final key in [
+        'nyang_chat_history_$coachId',
+        '${DailyResetService.chatArchivePrefix}$coachId',
+      ]) {
+        final raw = prefs.getString(key);
+        if (raw == null || raw.isEmpty) continue;
+        for (final item in _decodeMapList(raw)) {
+          if (item['isUser'] == true) continue;
+          if (!_coreAskKinds.contains(item['kind'])) continue;
+          final time = DateTime.tryParse(item['time']?.toString() ?? '');
+          if (time != null && _isSameDay(time, day)) return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  /// 오늘 핵심 일정을 물어봐도 되는지. 하루 걸러 묻는다.
+  ///
+  /// 매일 물으면 못 하는 날이 이어질 때 같은 질문을 매일 받게 되고, 그건
+  /// 도움이 아니라 실패를 매일 확인시키는 일이 된다. 잘 된 날은 시작 표시가
+  /// 켜져 조건에서 저절로 빠지므로, 이 규칙은 사실상 못 한 날에만 걸린다.
+  Future<bool> _canAskCoreToday(DateTime now) async {
+    if (await _coreAskedOnDay(now)) return false;
+    return !await _coreAskedOnDay(now.subtract(const Duration(days: 1)));
   }
 
   /// 아직 시작 표시가 없는 핵심 일정에 시작 표시를 켠다. 켠 일정 이름을
@@ -4591,6 +4662,7 @@ class _ChatScreenState extends State<ChatScreen>
     }
 
     if (_spokeKindToday({_catMiddayGreetingKind}, now)) return false;
+    if (await _otherCoachGreetedRecently(now)) return false;
     final text = await _buildCatNoonStartTipText(prefs);
     await Future.delayed(const Duration(milliseconds: 450));
     if (!mounted) return true;
@@ -4629,9 +4701,14 @@ class _ChatScreenState extends State<ChatScreen>
     // 다른 일을 붙들고 있어도 이쪽을 먼저 본다 — 진행 중인 일 얘기로 넘어가면
     // 정작 오늘 제일 중요한 일이 언급조차 안 된 채 오후가 지나간다.
     // 단, 오늘 마스터가 이미 물었으면 빠진다.
-    final notStartedCore = await _masterAskedCoreToday(now)
-        ? null
-        : _coreTaskDueForAsk(prefs, now);
+    final notStartedCore = await _canAskCoreToday(now)
+        ? _coreTaskDueForAsk(prefs, now)
+        : null;
+    // 핵심 일정을 묻는 자리는 쿨다운을 타지 않는다. 다른 코치가 상태를 짚은
+    // 뒤에 아직 안 건드린 일을 물어보는 건 반복이 아니라 다른 각도다.
+    if (notStartedCore == null && await _otherCoachGreetedRecently(now)) {
+      return false;
+    }
     final text = notStartedCore != null
         ? _buildCatAfternoonCoreAskText(notStartedCore)
         : await _buildCatAfternoonCheckInText(prefs);
