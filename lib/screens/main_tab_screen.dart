@@ -2344,7 +2344,14 @@ class _MainTabScreenState extends State<MainTabScreen>
                         _buildPlannerHelpSection(
                           iconPath: 'assets/icons/planner-clock.svg',
                           title: '집중 타이머 시작하기',
-                          body: '"타이머 좀 띄워줘" 라고 하면 바로 타이머가 튀어나와요.',
+                          body:
+                              '"타이머 좀 띄워줘" 라고 하면 바로 타이머가 튀어나와요.\n'
+                              '특별히 집중하고픈 시간이 있다면 "30분 타이머 좀 띄워줘"처럼 말해보세요.',
+                          // 긴 쪽을 앞에 둬야 짧은 쪽이 먼저 걸려 반만 칠해지지 않는다.
+                          highlightTerms: const [
+                            '30분 타이머 좀 띄워줘',
+                            '타이머 좀 띄워줘',
+                          ],
                         ),
                         const SizedBox(height: 18),
                         _buildPlannerHelpSection(
