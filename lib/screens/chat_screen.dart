@@ -12729,7 +12729,9 @@ $role
     String userText, {
     required _MasterModelPolicy masterModelPolicy,
   }) async {
-    final historyLimit = 6;
+    // 코치가 참고하는 최근 대화 수. 6이면 세 번만 주고받아도 앞말이 밀려나서,
+    // 사용자가 방금 한 이야기를 코치가 다시 묻는 일이 생긴다.
+    const historyLimit = 10;
     final now = DateTime.now();
     final previousMessages = _messages.isNotEmpty && _messages.last.isUser
         ? _messages.take(_messages.length - 1)
