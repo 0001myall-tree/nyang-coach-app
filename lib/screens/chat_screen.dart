@@ -7043,7 +7043,19 @@ class _ChatScreenState extends State<ChatScreen>
       RegExp(r'\s*(?:할\s*건데|할건데|할\s*건대|할\s*거야|할거야|할게|하려고|하려구|할래|할\s*래|하기)$'),
       '',
     );
-    cleaned = cleaned.replaceAll(RegExp(r'\s*(?:일정|스케줄)$'), '');
+    // "산책 일정에", "할 일에 산책"처럼 어디에 넣을지 가리키는 말은 제목이 아니다.
+    // 조사가 붙은 형태까지 떼어낸다. 떼고 나면 아무것도 안 남는 경우
+    // ("일정 추가해줘")는 원래 이름이 그것뿐이라는 뜻이라 되돌린다.
+    const container = r'(?:일정|스케줄|캘린더|할\s*일|할일|투두|목표)';
+    final withoutTrailing = cleaned
+        .replaceFirst(RegExp('\\s*$container\\s*(?:에다가|에다|으로|로|안에|에)?\$'), '')
+        .trim();
+    if (withoutTrailing.isNotEmpty) cleaned = withoutTrailing;
+    final withoutLeading = cleaned
+        .replaceFirst(RegExp('^$container\\s*(?:에다가|에다|으로|로|안에|에)\\s+'), '')
+        .trim();
+    if (withoutLeading.isNotEmpty) cleaned = withoutLeading;
+
     cleaned = cleaned.replaceAll(RegExp(r'\s+'), ' ').trim();
     cleaned = cleaned.replaceFirst(RegExp(r'(?:을|를|은|는|이|가)$'), '').trim();
     return cleaned;
