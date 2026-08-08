@@ -54,6 +54,7 @@ void main() {
 
     await TaskResistanceService.onTaskCompleted(
       taskId: '1',
+      taskText: '설거지',
       date: today(),
       completionOrder: 1,
       totalTasksThatDay: 1,
@@ -69,6 +70,7 @@ void main() {
 
     await TaskResistanceService.onTaskCompleted(
       taskId: '2',
+      taskText: '빨래',
       date: today(),
       completionOrder: 1,
       totalTasksThatDay: 2,
