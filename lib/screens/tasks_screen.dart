@@ -78,9 +78,9 @@ class TaskItem {
     'category': category,
     'done': done,
     if (inProgress) 'inProgress': inProgress,
-    if (inProgressAt != null &&
-        (isHabit || category == 'habit' || habitId != null))
-      'inProgressAt': inProgressAt,
+    // 습관이 아니어도 시작 시각을 남긴다. 저녁에 "시작해두고 멈춘 것 같은데"를
+    // 물으려면 언제 눌렀는지가 필요한데, 예전엔 여기서 버려져서 물을 수가 없었다.
+    if (inProgressAt != null) 'inProgressAt': inProgressAt,
     if (habitId != null) 'habitId': habitId,
     'isHabit': isHabit,
     if (time != null) 'time': time,
@@ -103,12 +103,7 @@ class TaskItem {
     category: j['category'] ?? 'today',
     done: j['done'] ?? false,
     inProgress: j['inProgress'] ?? false,
-    inProgressAt:
-        (j['isHabit'] == true ||
-            j['category'] == 'habit' ||
-            j['habitId'] != null)
-        ? j['inProgressAt']
-        : null,
+    inProgressAt: j['inProgressAt'],
     habitId: j['habitId']?.toString(),
     isHabit: j['isHabit'] ?? false,
     time: j['time'],
