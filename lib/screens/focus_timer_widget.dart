@@ -207,7 +207,6 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
   // 집중 소리
   final AudioPlayer _audioPlayer = AudioPlayer();
   bool _soundOn = false;
-  Timer? _soundTimer;
 
   // 별/사운드바 애니메이션
   late AnimationController _waveCtrl;
@@ -363,7 +362,6 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _ticker?.cancel();
-    _soundTimer?.cancel();
     _waveCtrl.dispose();
     _audioPlayer.dispose();
     super.dispose();
@@ -461,35 +459,22 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
     if (_soundOn) {
       await _stopSound();
     } else {
-      await _startSound(limitToStage: true);
+      await _startSound();
     }
     if (mounted) setState(() {});
   }
 
-  Future<void> _startSound({bool limitToStage = true}) async {
-    _soundTimer?.cancel();
-    _soundOn = true;
-    await _audioPlayer.setReleaseMode(ReleaseMode.loop);
-    await _audioPlayer.play(AssetSource('sounds/focus_sound.mp3'));
-    if (limitToStage) {
-      final stopAfterMs = _manager.stage * 60 * 1000;
-      _soundTimer = Timer(Duration(milliseconds: stopAfterMs), () async {
-        await _stopSound();
-        if (mounted) setState(() {});
-      });
-    }
-  }
-
-  Future<void> _startSoundInfinite() async {
-    _soundTimer?.cancel();
+  /// 켜두면 끝까지 돈다. 멈추는 건 두 곳뿐이다 — 타이머가 끝날 때([_onTimerDone])와
+  /// 사용자가 직접 끌 때. 예전에는 "켠 시점부터 타이머 길이만큼" 세는 별도
+  /// 타이머가 같이 돌았는데, 실제 남은 시간과 어긋나서 일시정지 후 재개하면
+  /// 소리가 먼저 끊겼다.
+  Future<void> _startSound() async {
     _soundOn = true;
     await _audioPlayer.setReleaseMode(ReleaseMode.loop);
     await _audioPlayer.play(AssetSource('sounds/focus_sound.mp3'));
   }
 
   Future<void> _stopSound() async {
-    _soundTimer?.cancel();
-    _soundTimer = null;
     _soundOn = false;
     await _audioPlayer.stop();
   }
@@ -1017,14 +1002,20 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
+                            // 켜짐/꺼짐을 색으로만 나누면 처음 보는 사람은
+                            // 어느 쪽인지 모른다. 아이콘 모양으로도 갈라둔다.
                             Icon(
-                              Icons.headphones_rounded,
+                              _soundOn
+                                  ? Icons.headphones_rounded
+                                  : Icons.headset_off_rounded,
                               size: 17,
                               color: _soundOn ? _soundActiveColor : timerAccent,
                             ),
                             const SizedBox(width: 4),
                             Text(
-                              _soundOn ? 'ON' : 'OFF',
+                              // 라벨은 늘 같게 둔다. "켜기/끄기"로 쓰면 지금
+                              // 상태인지 누르면 될 일인지 읽는 사람마다 갈린다.
+                              '백색소음',
                               style: GoogleFonts.notoSansKr(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w900,
@@ -1240,7 +1231,7 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
                   // 집중 소리만 계속 듣기 버튼
                   GestureDetector(
                     onTap: () async {
-                      await _startSoundInfinite();
+                      await _startSound();
                       if (mounted) {
                         setState(() {
                           _view = _TimerView.soundOnly;
