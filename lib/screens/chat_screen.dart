@@ -27,6 +27,8 @@ import 'package:nyang_coach/services/master_bedtime_offer_copy.dart';
 import 'package:nyang_coach/services/master_greeting.dart';
 import 'package:nyang_coach/services/task_resistance_service.dart';
 import 'package:nyang_coach/services/execution_resistance_service.dart';
+import 'package:nyang_coach/services/focus_fatigue_service.dart';
+import 'package:nyang_coach/services/resistance_intervention_service.dart';
 import 'package:nyang_coach/prompts/coach_prompt.dart';
 import 'package:nyang_coach/services/prep_time_service.dart';
 import 'package:nyang_coach/services/recovery_insight_service.dart';
@@ -1327,6 +1329,18 @@ class _ChatScreenState extends State<ChatScreen>
   bool _awaitingSelfSelectedTinyAction = false;
   // 무기력/저에너지 상태에서 몸 시동 행동 완료 여부를 기다리는 상태
   bool _awaitingLowEnergyStarterAction = false;
+  // 이번 대화에서 이미 꺼낸 실행 저항 개입. 거부당하면 여기 없는 것 중
+  // 다음 것을 고른다. 같은 제안을 다시 밀지 않기 위한 유일한 근거다.
+  final List<String> _offeredInterventionIds = [];
+  // 직전 턴에 꺼낸 개입. 지금 말이 거부인지 판단할 때 기준이 된다.
+  String? _lastOfferedInterventionId;
+  // 집중력 저하: "얼마나 했어?"를 묻고 답을 기다리는 상태
+  bool _awaitingFocusWorkHistory = false;
+  // 작업 시간을 물어본 날짜. 하루 한 번만 묻는다.
+  String? _focusWorkHistoryAskedDate;
+  // 환기를 권한 시각. 같은 대화에서 "환기하고 와"를 반복하지 않게 잠근다.
+  DateTime? _focusRefreshOfferedAt;
+  static const _focusRefreshCooldown = Duration(hours: 2);
   static const _domainResistanceStrategyHistoryKey =
       'nyang_domain_resistance_strategy_history';
   // 이번 턴에 주입한 원인 확인 질문 (실제로 물었을 때만 하루 1회를 소진 처리)
@@ -2276,13 +2290,17 @@ class _ChatScreenState extends State<ChatScreen>
 
     final departure = plan.resolvedDeparture;
     if (plan.appointment != null) {
-      lines.add('- 약속 시각: ${formatClock(plan.appointment!, withMeridiem: withMeridiem)}');
+      lines.add(
+        '- 약속 시각: ${formatClock(plan.appointment!, withMeridiem: withMeridiem)}',
+      );
     }
     if (plan.travelMinutes != null) {
       lines.add('- 이동: ${formatDuration(plan.travelMinutes!)}');
     }
     if (departure != null) {
-      lines.add('- 나가는 시각: ${formatClock(departure, withMeridiem: withMeridiem)}');
+      lines.add(
+        '- 나가는 시각: ${formatClock(departure, withMeridiem: withMeridiem)}',
+      );
     }
     if (plan.prepMinutes != null) {
       lines.add('- 준비: ${formatDuration(plan.prepMinutes!)}');
@@ -2458,32 +2476,14 @@ $role
         : 'general';
     final strategies = domain == 'writing'
         ? const [
-            (
-              id: 'reframe',
-              rule: Prompts.domainWritingReframe,
-            ),
-            (
-              id: 'first_contact',
-              rule: Prompts.domainWritingFirstTouch,
-            ),
-            (
-              id: 'rough_draft',
-              rule: Prompts.domainWritingRoughDraft,
-            ),
+            (id: 'reframe', rule: Prompts.domainWritingReframe),
+            (id: 'first_contact', rule: Prompts.domainWritingFirstTouch),
+            (id: 'rough_draft', rule: Prompts.domainWritingRoughDraft),
           ]
         : const [
-            (
-              id: 'reframe',
-              rule: Prompts.domainCleaningReframe,
-            ),
-            (
-              id: 'first_contact',
-              rule: Prompts.domainCleaningFirstTouch,
-            ),
-            (
-              id: 'one_item',
-              rule: Prompts.domainCleaningOneItem,
-            ),
+            (id: 'reframe', rule: Prompts.domainCleaningReframe),
+            (id: 'first_contact', rule: Prompts.domainCleaningFirstTouch),
+            (id: 'one_item', rule: Prompts.domainCleaningOneItem),
           ];
     final prefs = await SharedPreferences.getInstance();
     final todayStr = _getTodayStrWithReset(prefs);
@@ -2639,43 +2639,60 @@ $role
     return signals.any(normalized.contains);
   }
 
-  bool _hasRepeatedRecentActionRefusal(String currentText) {
-    if (!ExecutionResistanceService.isResistanceExpression(currentText)) {
-      return false;
+  /// 집중력 저하 턴에만 붙인다. 앱에 남은 작업 흔적을 사실만 적어 준다.
+  ///
+  /// 흔적이 없는 건 "작업을 안 했다"가 아니라 "모른다"다. 기록을 꼬박꼬박
+  /// 남기는 사용자가 오히려 드물어서, 흔적이 비었다고 실행 저항으로 넘기면
+  /// 대부분을 틀리게 된다. 그래서 없을 때도 그 뜻을 같이 적어 보낸다.
+  ({bool hasTrace, String section}) _focusWorkTrace(SharedPreferences prefs) {
+    final tasks = _decodeMapList(prefs.getString('nyang_tasks'));
+    final lines = <String>[];
+
+    final inProgress = tasks
+        .where((task) => task['done'] != true && _isInProgressTask(task))
+        .map(_taskText)
+        .whereType<String>()
+        .toList(growable: false);
+    if (inProgress.isNotEmpty) {
+      lines.add("- '${inProgress.first}'이(가) 진행 중으로 표시되어 있습니다.");
     }
 
-    final recentMessages = _messages.length > 10
-        ? _messages.sublist(_messages.length - 10)
-        : _messages;
-    final recentUserResistanceCount = recentMessages
-        .where(
-          (message) =>
-              message.isUser &&
-              ExecutionResistanceService.isResistanceExpression(message.text),
-        )
-        .length;
-    if (recentUserResistanceCount < 2) return false;
+    final doneTimes =
+        tasks
+            .where((task) => task['done'] == true)
+            .map(
+              (task) =>
+                  DateTime.tryParse(task['completedAt']?.toString() ?? ''),
+            )
+            .whereType<DateTime>()
+            .toList()
+          ..sort();
+    if (doneTimes.isNotEmpty) {
+      final last = doneTimes.last;
+      final stamp =
+          '${last.hour.toString().padLeft(2, '0')}:${last.minute.toString().padLeft(2, '0')}';
+      lines.add('- 오늘 완료 처리한 일이 ${doneTimes.length}개 있고, 마지막 완료는 $stamp입니다.');
+    }
 
-    final recentAssistantText = recentMessages
-        .where((message) => !message.isUser)
-        .map((message) => message.text.replaceAll(RegExp(r'\s+'), ''))
-        .join(' ');
-    const actionSuggestionSignals = [
-      '하나만',
-      '해보',
-      '하자',
-      '시작',
-      '5분',
-      '오분',
-      '옮겨',
-      '바라봐',
-      '잡아',
-      '열어',
-      '물틀',
-      '일어나',
-      '움직',
-    ];
-    return actionSuggestionSignals.any(recentAssistantText.contains);
+    if (lines.isEmpty) {
+      return (
+        hasTrace: false,
+        section: '''
+
+[앱이 아는 작업 흔적]
+- 앱에 남은 흔적이 없습니다. 기록을 남기지 않는 경우가 훨씬 많아서 작업을 안 했다는 뜻은 아닙니다.
+- 대화 맥락을 먼저 보고, 그래도 모르겠을 때만 짧게 한 번 물으세요.''',
+      );
+    }
+    return (
+      hasTrace: true,
+      section:
+          '''
+
+[앱이 아는 작업 흔적]
+${lines.join('\n')}
+- 흔적은 참고만 하세요. 사용자가 방금 한 말이 앱 기록보다 우선입니다.''',
+    );
   }
 
   bool _containsExecutionIntent(String text) {
@@ -12733,7 +12750,7 @@ $role
 [이번 턴 지시 - 최근 실행률 30% 이하, 초저항 우선]
 - 사용자의 오늘 제외 최근 7일 평균 실행률이 $pct%입니다. 오늘은 아직 진행 중이므로 오늘 완료율은 판단에 쓰지 않았습니다.
 - 원인 확인 질문을 하지 말고, [초저항 시작 모드] 중 현재 맥락에 맞는 선택지를 바로 제안하세요.
-- 구체적인 과업명이 있거나 실제 시작이 가능한 상황이면 [선택형 할 일 쪼개기]를 우선하고, 과업 자체가 너무 싫거나 몸이 멈춘 느낌이면 [탐색형 놀이 미션]을 우선하세요.
+- 하고 나면 일이 실제로 한 칸 진행되는 작은 행동으로 제안하세요.
 - 후보는 2~3개만 제시하고, 사용자가 그중 하나만 고르게 하세요. 모든 후보를 다 하게 하거나 추가 설명을 길게 붙이지 마세요.
 - 최근에 거부한 개입이 [실행 저항 개인화]에 있으면 그 방식은 가장 후순위로 미루고 다른 방식부터 제안하세요.
 - 답변은 2문장 이내로 유지하고 [TASK], [TIMER_CONFIRM], [COUNTDOWN_START] 태그를 출력하지 마세요.''';
@@ -12873,25 +12890,38 @@ $role
         !isSelfHarmRiskTurn &&
         !isSleepResistanceTurn &&
         !isWritingConcernTurn;
-    final isSelfSelectedTinyActionFollowup = _awaitingSelfSelectedTinyAction;
-    _awaitingSelfSelectedTinyAction = false;
-    final shouldInviteSelfSelectedTinyAction =
-        isResistanceTurn &&
+    // 집중력 저하는 "이미 붙잡고 있었는데 흐트러진" 상태다. 아직 못 붙은
+    // 실행 저항과 대응이 반대라 따로 세운다. 자해·수면·저에너지는 더 급하고
+    // 결과 불안·생각 과부하는 더 구체적인 진단이라 전부 그쪽에 양보한다.
+    // 되묻고 받은 답으로 볼 수 있을 때만 후속 턴으로 친다. 사용자가 화제를
+    // 바꿔 버린 턴까지 후속으로 세면 엉뚱한 말에 이 전략이 실린다.
+    final awaitedFocusWorkHistory = _awaitingFocusWorkHistory;
+    _awaitingFocusWorkHistory = false;
+    final isFocusFatigueFollowup =
+        awaitedFocusWorkHistory &&
+        FocusFatigueService.looksLikeWorkHistoryAnswer(userText);
+    // "아직 시작도 못 했어"는 되돌리는 신호다. 여기서 놓치면 시작조차 못 한
+    // 사람에게 "환기하고 와"를 권하게 된다.
+    final saysNotStartedYet =
+        isFocusFatigueFollowup &&
+        FocusFatigueService.saysNotStartedYet(userText);
+    final isFocusFatigueTurn =
         !isSelfHarmRiskTurn &&
+        !isSleepResistanceTurn &&
         !shouldOfferLowEnergyStarter &&
         !isResultAnxietyTurn &&
-        !isSelfSelectedTinyActionFollowup &&
-        _hasRepeatedRecentActionRefusal(userText);
+        !isThoughtOverloadTurn &&
+        !saysNotStartedYet &&
+        (FocusFatigueService.isFocusFatigueExpression(userText) ||
+            isFocusFatigueFollowup);
+
+    final isSelfSelectedTinyActionFollowup = _awaitingSelfSelectedTinyAction;
+    _awaitingSelfSelectedTinyAction = false;
     // 시작 의식은 원인이 불명확할 때만 쓰는 장치라 마스터 코치에게만 흐름 규칙을 준다.
     final resistanceFlowRule = _coach.isMaster
         ? Prompts.resistanceFlowMaster
         : '';
-    final resistanceStrategyDetailRule = isResistanceTurn || isResultAnxietyTurn
-        ? Prompts.resistanceStrategyDetail
-        : '';
-    final selfSelectedTinyActionRule = shouldInviteSelfSelectedTinyAction
-        ? Prompts.selfSelectedTinyAction
-        : isSelfSelectedTinyActionFollowup
+    final selfSelectedTinyActionRule = isSelfSelectedTinyActionFollowup
         ? Prompts.selfSelectedTinyActionFollowup
         : '';
     final sleepInterventionRule = isSleepResistanceTurn
@@ -12902,9 +12932,45 @@ $role
         : isLowEnergyStarterFollowup
         ? Prompts.lowEnergyStarterFollowup
         : '';
-    final selfHarmRiskRule = isSelfHarmRiskTurn
-        ? Prompts.selfHarmRisk
-        : '';
+    // 환기는 한 대화에 한 번이면 충분하다. 쿨다운이 없으면 "환기하고 와"가
+    // 매 턴 반복되는데, 그게 애초에 이 상태를 따로 만든 이유였다.
+    final focusRefreshRecentlyOffered =
+        _focusRefreshOfferedAt != null &&
+        now.difference(_focusRefreshOfferedAt!) <= _focusRefreshCooldown;
+    var focusFatigueSection = '';
+    var mayAskFocusWorkHistory = false;
+    if (isFocusFatigueTurn) {
+      final prefs = await SharedPreferences.getInstance();
+      final trace = _focusWorkTrace(prefs);
+      final askedToday =
+          _focusWorkHistoryAskedDate == _getTodayStrWithReset(prefs);
+      // 작업 시간 되묻기도 하루 한 번이다. 흔적이 있으면 아예 묻지 않는다.
+      mayAskFocusWorkHistory =
+          !isFocusFatigueFollowup &&
+          !focusRefreshRecentlyOffered &&
+          !trace.hasTrace &&
+          !askedToday;
+      final buffer = StringBuffer(Prompts.focusFatigue);
+      if (focusRefreshRecentlyOffered) {
+        buffer.write(Prompts.focusRefreshAlreadyOffered);
+      }
+      if (!mayAskFocusWorkHistory && !isFocusFatigueFollowup) {
+        buffer.write(Prompts.focusWorkHistoryAskUsed);
+      }
+      buffer.write(trace.section);
+      // 되묻고 나서 받은 답은 앱이 먼저 읽고 갈 길을 정해 준다. 모델이 매번
+      // 다시 판단하면 "얼마나 했어?"를 두 번 묻는 턴이 생긴다.
+      if (isFocusFatigueFollowup) {
+        buffer.write(
+          FocusFatigueService.saysWorkedLong(userText)
+              ? Prompts.focusWorkedLongAnswer
+              : Prompts.focusWorkHistoryUnclearAnswer,
+        );
+      }
+      focusFatigueSection = buffer.toString();
+    }
+
+    final selfHarmRiskRule = isSelfHarmRiskTurn ? Prompts.selfHarmRisk : '';
     final decisionFatigueRule = isDecisionFatigueTurn
         ? Prompts.decisionFatigue
         : '';
@@ -12933,12 +12999,17 @@ $role
     final thoughtOverloadSection = thoughtOverloadRule.isNotEmpty
         ? thoughtOverloadRule
         : '';
+    // 집중력 저하가 잡힌 턴에는 글쓰기·도메인 전략을 같이 싣지 않는다.
+    // "글이 안 써져"는 양쪽에 다 걸리는데, 두 지시가 함께 실리면 어느 쪽을
+    // 따를지가 그날 운이 된다.
     final domainResistanceStrategySection =
-        domainResistanceStrategyRule.isNotEmpty
+        domainResistanceStrategyRule.isNotEmpty && !isFocusFatigueTurn
         ? domainResistanceStrategyRule
         : '';
     final writingConcernSection =
-        writingConcernRule.isNotEmpty && !shouldUseDomainResistanceStrategy
+        writingConcernRule.isNotEmpty &&
+            !shouldUseDomainResistanceStrategy &&
+            !isFocusFatigueTurn
         ? writingConcernRule
         : '';
     final habitAutomationSection = habitAutomationRule.isNotEmpty
@@ -12950,29 +13021,58 @@ $role
         )
         ? Prompts.completionResponse
         : '';
+    // 집중력 저하는 이 전략의 반대편이라 같이 붙이면 안 된다. 다만 "아직
+    // 시작도 못 했다"고 답한 턴은 집중력 저하가 아니라 실행 저항이므로,
+    // 저항 신호 단어가 없더라도 이 전략을 붙여 되돌려 준다.
     final shouldIncludeResistanceInterventionSection =
-        isResistanceTurn ||
-        isResultAnxietyTurn ||
-        resistanceTurnDirective.trim().isNotEmpty;
+        !isFocusFatigueTurn &&
+        (isResistanceTurn ||
+            isResultAnxietyTurn ||
+            saysNotStartedYet ||
+            resistanceTurnDirective.trim().isNotEmpty);
+
+    // 이번 턴에 쓸 개입을 앱이 하나만 고른다.
+    //
+    // 직전에 꺼낸 게 있고 지금 말이 거부면 그건 이미 꺼낸 목록에 있으니 자동으로
+    // 다음 것이 나온다. 모델에게 여러 전략을 주고 고르게 하면 매번 가장 흔한
+    // 하나로 수렴하고, 사용자가 싫다고 해도 같은 걸 다시 밀게 된다.
+    var interventionSection = '';
+    if (shouldIncludeResistanceInterventionSection) {
+      final refusedLastOffer =
+          _lastOfferedInterventionId != null &&
+          ResistanceInterventionService.isRefusal(userText);
+      final next = ResistanceInterventionService.nextIntervention(
+        _offeredInterventionIds,
+      );
+      if (next == null) {
+        interventionSection = ResistanceInterventionService.exhaustedRule;
+        _lastOfferedInterventionId = null;
+      } else {
+        interventionSection = refusedLastOffer
+            ? '${ResistanceInterventionService.refusedPrefix}\n${next.rule}'
+            : next.rule;
+        _offeredInterventionIds.add(next.id);
+        _lastOfferedInterventionId = next.id;
+      }
+    }
     final resistanceInterventionSection =
         shouldIncludeResistanceInterventionSection
         ? '''
 
 [하기 싫다 실행 개입 전략]
-- 사용자가 "하기 싫다", "귀찮다", "못 하겠다", "미루고 싶다"처럼 실행 저항을 표현하거나, 결과가 두려워 시작·진행이 막힌 마음을 말하면 작업 성격을 먼저 판단하고, 실행 성공 가능성·낮은 부담·자연스러움 순으로 한 가지 개입만 고르세요.
-- "숨 고르고 해도 된다", "잠깐 쉬어도 된다"는 말은 사용할 수 있지만, 거기서 답변을 끝내지 마세요. 해야 할 일이 대화나 오늘 할 일 현황에 보이면 "그래도 조금이라도 하면 덜 찜찜할 것 같으면"이라는 방향으로 바로 할 수 있는 첫 조각 하나를 함께 골라주세요.
-- 사용자가 아프거나 수면 부족, 극심한 탈진, 명시적인 휴식 요청을 말한 경우가 아니라면 "나중에 기운 생기면 하자", "오늘은 외면하자"처럼 실행을 다음으로 미루는 결론으로 끝내지 마세요.
-- 창작·기획·공부·개발·글쓰기처럼 인지 부담이 큰 작업은 결과물 요구보다 짧은 시간 시작을 권하세요. 단, 창작 작업에 "한 문장만" 같은 산출물 요구는 기본적으로 피하세요.
-- 청소·설거지·정리·빨래 개기처럼 반복 작업은 가장 작은 실행 단위 하나로 낮추세요.
-- 분리수거·세탁기 돌리기·약 먹기처럼 이미 하나의 행동인 작업은 억지로 쪼개지 말고 금방 끝난다는 점이나 끝낸 뒤의 효과로 부담을 낮추세요.
-- 양치·세수·샤워는 하나의 행동에 가깝지만 시작 장벽이 높을 수 있으니 효과 언급 또는 진입 행동만 허용합니다. 단, "반만 양치/샤워"처럼 완료 단위를 어색하게 쪼개지 마세요.
-- 과업 진입이 무거우면 5분 시작 대신 첫 접촉(보기/열기/손대기) 1개 가능. 예: 문서 열기, 커서 보기, 컵 하나 보기, 운동복 보기.
-- 초저항에서는 첫 접촉까지만 요청하고 실제 행동은 [ULTRA_LOW_RESISTANCE_FOLLOWUP]으로 분리.
-$resistanceStrategyDetailRule
+- 사용자가 실행 저항을 표현했거나, 결과가 두려워 시작·진행이 막힌 마음을 말한 상황입니다.
+- "잠깐 쉬어도 된다"는 말은 쓸 수 있지만 거기서 답변을 끝내지 마세요.
+- 사용자가 아프거나 수면 부족, 극심한 탈진, 명시적인 휴식 요청을 말한 경우, 또는 이미 오래 작업해서 집중력이 소진된 경우가 아니라면 실행을 다음으로 미루는 결론으로 끝내지 마세요.
+- 제안하는 행동은 하고 나면 일이 실제로 한 칸 진행되는 행동이어야 합니다.
+- 결과 불안형 저항은 [생각 과부하 정리 전략]을 우선합니다. 그 일이 소중해서 조심스러워진 상황일 수 있음을 먼저 한 문장으로 받아주세요.
+- 준비·수정·학습만 반복한다면 불안을 낮추려는 안전 전략이었을 수 있음을 한 문장 인정한 뒤 작은 실행으로 연결하세요.
+
+[이번 턴에 쓸 개입]
+- 아래는 앱이 고른 방식 하나입니다. 다른 방식으로 바꾸거나 여러 개를 섞지 마세요.
+$interventionSection
 $selfSelectedTinyActionRule
-- 분류가 애매하면 5분만 시작하는 방향을 기본값으로 사용하되, 현재 코치의 말투로 표현하세요.
-- 거절 분기: "지금은 못 해요"는 시작하기 쉬운 시간을 한 번만 묻고, 시간을 말하면 받아주세요. "곧 다른 일정이 있어요"는 다시 묻지 말고 일정 뒤 5분을 제안하세요. "다른 걸 먼저 할래요"는 우선순위 변경으로 인정하세요.
-- 타이머는 "5분만 시작"이 자연스러운 경우에만 말로 연결하고, 아래 [TIMER_CONFIRM] 규칙을 항상 우선하세요. 명시 요청이나 앱 기록상 조건 없이는 타이머 태그를 출력하지 마세요.
+- 거절 분기: "지금은 못 해요"는 시작하기 쉬운 시간을 한 번만 묻고, 시간을 말하면 받아주세요. "곧 다른 일정이 있어요"는 다시 묻지 말고 일정 뒤 5분을 제안하세요.
+- 타이머는 사용자가 명시 요청했을 때만. 아래 [TIMER_CONFIRM] 규칙을 항상 우선하세요.
 $resistanceFlowRule'''
         : '';
 
@@ -12990,9 +13090,7 @@ $resistanceFlowRule'''
         : Prompts.timerOutputFriends;
     // 냥냥이 연결(COACH_SWITCH)은 장기 목표 압박을 주는 마스터 코치(냥할배/여비서) 전용 탈출구다.
     // 프렌즈 코치는 이미 압박 없는 오늘 하루 중심이라 서로 스위치될 이유가 없다.
-    final coachSwitchRule = _coach.isMaster
-        ? Prompts.coachSwitchToCat
-        : '';
+    final coachSwitchRule = _coach.isMaster ? Prompts.coachSwitchToCat : '';
     final masterStyleRule = _coach.id == 'nyang_halbae'
         ? Prompts.nyangHalbaeStyle
         : '';
@@ -13046,6 +13144,7 @@ $selfHarmRiskRule
 
 $sleepPrioritySection
 $lowEnergyPrioritySection
+$focusFatigueSection
 
 ${Prompts.emotionVentingRules}
 $completionResponseSection
@@ -13087,8 +13186,29 @@ ${Prompts.outputRulesTail}$halmaeHint$resistanceTurnDirective''';
     if (shouldOfferLowEnergyStarter) {
       _awaitingLowEnergyStarterAction = true;
     }
-    if (shouldInviteSelfSelectedTinyAction) {
+    // 선택권 주기를 꺼낸 턴이면 사용자가 고를 답을 기다린다.
+    if (_lastOfferedInterventionId == 'let_user_choose') {
       _awaitingSelfSelectedTinyAction = true;
+    }
+    // 실제로 뭔가 했다고 하면 개입 목록을 처음부터 다시 쓴다. 한 번 통한 뒤에도
+    // 목록이 소진된 채로 남아 있으면 다음 저항에서 바로 "오늘은 여기까지"가 된다.
+    if (ExecutionResistanceService.isCompletionOrPartialExecutionReport(
+      userText,
+    )) {
+      _offeredInterventionIds.clear();
+      _lastOfferedInterventionId = null;
+    }
+    if (mayAskFocusWorkHistory) {
+      _awaitingFocusWorkHistory = true;
+      _focusWorkHistoryAskedDate = _getTodayStrWithReset(
+        await SharedPreferences.getInstance(),
+      );
+    }
+    // 되묻는 턴이 아니면 이 턴에서 환기가 나갔다고 보고 쿨다운을 건다.
+    if (isFocusFatigueTurn &&
+        !mayAskFocusWorkHistory &&
+        !focusRefreshRecentlyOffered) {
+      _focusRefreshOfferedAt = now;
     }
 
     final messages = [
@@ -13553,31 +13673,22 @@ ${Prompts.outputRulesTail}$halmaeHint$resistanceTurnDirective''';
               child: Container(
                 color: _chatAreaBackgroundColor,
                 width: double.infinity,
-                child: Stack(
+                // 퀵 액션 칩은 대화 영역 위에 떠 있지 않고 하단 입력 영역 안으로
+                // 들어가 있다. 여기는 순수하게 말풍선만 그린다.
+                child: Column(
                   children: [
-                    Column(
-                      children: [
-                        Expanded(
-                          child: _messages.isEmpty
-                              ? _buildEmptyState()
-                              : _buildMessageList(),
-                        ),
-                        if (showVacationSuggestBubble)
-                          _buildVacationSuggestBubble(),
-                      ],
+                    Expanded(
+                      child: _messages.isEmpty
+                          ? _buildEmptyState()
+                          : _buildMessageList(),
                     ),
-                    if (showQuickChips)
-                      Positioned(
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        child: _buildChips(),
-                      ),
+                    if (showVacationSuggestBubble)
+                      _buildVacationSuggestBubble(),
                   ],
                 ),
               ),
             ),
-            _buildInputArea(),
+            _buildInputArea(showChips: showQuickChips),
           ],
         ),
         if (_coach.isMaster && _cheatKeyOpen && !keyboardOpen) ...[
@@ -14915,7 +15026,8 @@ ${Prompts.outputRulesTail}$halmaeHint$resistanceTurnDirective''';
 
     final list = ListView.builder(
       controller: _scrollCtrl,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      // 아래쪽 여백은 하단 조작 영역과 대화가 붙어 보이지 않게 조금 더 준다.
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 18),
       itemCount: items.length,
       itemBuilder: (ctx, i) => items[i],
     );
@@ -17126,222 +17238,260 @@ ${Prompts.outputRulesTail}$halmaeHint$resistanceTurnDirective''';
   }
 
   // ── 입력창 ───────────────────────────────────────────────
-  Widget _buildInputArea() {
+  // 퀵 액션 칩과 입력창은 하나의 하단 조작 영역이다. 칩이 말풍선처럼 대화 위에
+  // 떠 있으면 화면이 복잡해 보여서, 흰 판을 칩 위까지 끌어올려 함께 담는다.
+  Widget _buildInputArea({bool showChips = false}) {
     final isFriends = !_coach.isMaster;
     final isMasterVacation = _coach.isMaster && widget.vacationInfo != null;
     final isImmersiveInput = isFriends || isMasterVacation;
     final isNyang = widget.coachId == 'cat';
+    // 심플 배경(흰 바탕)에서는 프렌즈도 흰 판을 깔아야 칩이 하단 UI에 박혀 보인다.
+    // 감성 배경·휴식 배경은 배경 그림을 살려야 해서 투명을 유지한다.
+    final hasSolidPanel =
+        !isImmersiveInput || (isFriends && widget.chatBgStyle == 'simple');
     const masterLavenderBorder = AppDesignTokens.brandCardBorder;
     const masterLavenderIcon = AppDesignTokens.brandMuted;
     const masterLavenderShadow = AppDesignTokens.brand;
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
       decoration: BoxDecoration(
-        color: isImmersiveInput ? Colors.transparent : Colors.white,
-        border: isImmersiveInput
-            ? null
-            : const Border(top: BorderSide(color: AppDesignTokens.divider)),
+        color: hasSolidPanel ? Colors.white : Colors.transparent,
+        border: hasSolidPanel
+            ? const Border(top: BorderSide(color: AppDesignTokens.divider))
+            : null,
+        boxShadow: hasSolidPanel
+            ? [
+                BoxShadow(
+                  color: masterLavenderShadow.withValues(alpha: 0.05),
+                  blurRadius: 12,
+                  offset: const Offset(0, -3),
+                ),
+              ]
+            : null,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 220),
-            child: _usageLimitBanner == null
-                ? const SizedBox.shrink()
-                : _buildUsageLimitBanner(),
-          ),
-          Row(
-            children: [
-              // 마이크 버튼
-              GestureDetector(
-                onTap: () {
-                  if (!_speechEnabled) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('기기에서 음성 인식을 지원하지 않거나 권한이 없습니다.'),
+          if (showChips)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: _buildChips(),
+            ),
+          Padding(
+            padding: EdgeInsets.fromLTRB(16, showChips ? 2 : 10, 16, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 220),
+                  child: _usageLimitBanner == null
+                      ? const SizedBox.shrink()
+                      : _buildUsageLimitBanner(),
+                ),
+                Row(
+                  children: [
+                    // 마이크 버튼
+                    GestureDetector(
+                      onTap: () {
+                        if (!_speechEnabled) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('기기에서 음성 인식을 지원하지 않거나 권한이 없습니다.'),
+                            ),
+                          );
+                          return;
+                        }
+                        if (_isListening) {
+                          _stopListening();
+                        } else {
+                          _startListening();
+                        }
+                      },
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: _isListening
+                              ? Colors.redAccent.withOpacity(0.15)
+                              : (widget.chatBgStyle == 'simple'
+                                    ? const Color(0xFFF5F3FF)
+                                    : (isNyang
+                                          ? Colors.white.withOpacity(0.3)
+                                          : (isImmersiveInput
+                                                ? Colors.white.withOpacity(0.2)
+                                                : Colors.white))),
+                          borderRadius: BorderRadius.circular(
+                            AppDesignTokens.radiusPill,
+                          ),
+                          border: Border.all(
+                            color: _isListening
+                                ? Colors.redAccent
+                                : (widget.chatBgStyle == 'simple'
+                                      ? _coach.accentColor.withOpacity(0.4)
+                                      : (isNyang
+                                            ? _coach.accentColor.withOpacity(
+                                                0.6,
+                                              )
+                                            : (isImmersiveInput
+                                                  ? Colors.white.withOpacity(
+                                                      isMasterVacation
+                                                          ? 0.6
+                                                          : 0.3,
+                                                    )
+                                                  : masterLavenderBorder))),
+                            width: _isListening ? 2.0 : 1.2,
+                          ),
+                          boxShadow: isImmersiveInput
+                              ? null
+                              : [
+                                  BoxShadow(
+                                    color: masterLavenderShadow.withOpacity(
+                                      0.08,
+                                    ),
+                                    blurRadius: 10,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                        ),
+                        child: Icon(
+                          _isListening
+                              ? Icons.stop_rounded
+                              : Icons.mic_none_rounded,
+                          color: _isListening
+                              ? Colors.redAccent
+                              : (widget.chatBgStyle == 'simple'
+                                    ? _coach.accentColor
+                                    : (isNyang
+                                          ? _coach.accentColor
+                                          : (isFriends
+                                                ? Colors.white
+                                                : masterLavenderIcon))),
+                          size: 20,
+                        ),
                       ),
-                    );
-                    return;
-                  }
-                  if (_isListening) {
-                    _stopListening();
-                  } else {
-                    _startListening();
-                  }
-                },
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: _isListening
-                        ? Colors.redAccent.withOpacity(0.15)
-                        : (widget.chatBgStyle == 'simple'
-                              ? const Color(0xFFF5F3FF)
-                              : (isNyang
-                                    ? Colors.white.withOpacity(0.3)
-                                    : (isImmersiveInput
-                                          ? Colors.white.withOpacity(0.2)
-                                          : Colors.white))),
-                    borderRadius: BorderRadius.circular(
-                      AppDesignTokens.radiusPill,
                     ),
-                    border: Border.all(
-                      color: _isListening
-                          ? Colors.redAccent
-                          : (widget.chatBgStyle == 'simple'
+                    const SizedBox(width: 10),
+                    // 텍스트 필드
+                    Expanded(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        decoration: BoxDecoration(
+                          color: widget.chatBgStyle == 'simple'
+                              ? Colors.white
+                              : (isFriends
+                                    ? Colors.white.withOpacity(0.25)
+                                    : (isMasterVacation
+                                          ? Colors.white.withOpacity(
+                                              AppDesignTokens.lightGlassOpacity,
+                                            )
+                                          : Colors.white)),
+                          borderRadius: BorderRadius.circular(
+                            AppDesignTokens.radiusPill,
+                          ),
+                          border: Border.all(
+                            color: widget.chatBgStyle == 'simple'
                                 ? _coach.accentColor.withOpacity(0.4)
                                 : (isNyang
-                                      ? _coach.accentColor.withOpacity(0.6)
-                                      : (isImmersiveInput
-                                            ? Colors.white.withOpacity(
-                                                isMasterVacation ? 0.6 : 0.3,
-                                              )
-                                            : masterLavenderBorder))),
-                      width: _isListening ? 2.0 : 1.2,
-                    ),
-                    boxShadow: isImmersiveInput
-                        ? null
-                        : [
-                            BoxShadow(
-                              color: masterLavenderShadow.withOpacity(0.08),
-                              blurRadius: 10,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
-                  ),
-                  child: Icon(
-                    _isListening ? Icons.stop_rounded : Icons.mic_none_rounded,
-                    color: _isListening
-                        ? Colors.redAccent
-                        : (widget.chatBgStyle == 'simple'
-                              ? _coach.accentColor
-                              : (isNyang
-                                    ? _coach.accentColor
-                                    : (isFriends
-                                          ? Colors.white
-                                          : masterLavenderIcon))),
-                    size: 20,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              // 텍스트 필드
-              Expanded(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  decoration: BoxDecoration(
-                    color: widget.chatBgStyle == 'simple'
-                        ? Colors.white
-                        : (isFriends
-                              ? Colors.white.withOpacity(0.25)
-                              : (isMasterVacation
-                                    ? Colors.white.withOpacity(
-                                        AppDesignTokens.lightGlassOpacity,
-                                      )
-                                    : Colors.white)),
-                    borderRadius: BorderRadius.circular(
-                      AppDesignTokens.radiusPill,
-                    ),
-                    border: Border.all(
-                      color: widget.chatBgStyle == 'simple'
-                          ? _coach.accentColor.withOpacity(0.4)
-                          : (isNyang
-                                ? _coach.accentColor.withOpacity(0.5)
-                                : (isFriends
-                                      ? Colors.white.withOpacity(0.3)
-                                      : (isMasterVacation
-                                            ? Colors.white.withOpacity(
-                                                AppDesignTokens
-                                                    .lightGlassBorderOpacity,
-                                              )
-                                            : masterLavenderBorder))),
-                      width: 1.2,
-                    ),
-                  ),
-                  child: TextField(
-                    controller: _ctrl,
-                    maxLines: null,
-                    textInputAction: TextInputAction.send,
-                    onSubmitted: _send,
-                    style: GoogleFonts.notoSansKr(
-                      fontSize: AppDesignTokens.textBody,
-                      color: widget.chatBgStyle == 'simple'
-                          ? const Color(0xFF3D3A4E)
-                          : (isNyang
-                                ? AppDesignTokens.textPrimary
-                                : (isFriends
-                                      ? Colors.white
-                                      : AppDesignTokens.textPrimary)),
-                    ),
-                    decoration: InputDecoration(
-                      hintText: '메시지를 입력하세요...',
-                      hintStyle: GoogleFonts.notoSansKr(
-                        fontSize: AppDesignTokens.textBody,
-                        color: widget.chatBgStyle == 'simple'
-                            ? const Color(0xFF9A96A8)
-                            : (isNyang
-                                  ? AppDesignTokens.textPrimary.withValues(
-                                      alpha: 0.62,
-                                    )
-                                  : (isFriends
-                                        ? Colors.white.withOpacity(0.6)
-                                        : AppDesignTokens.textDisabled)),
-                      ),
-                      border: InputBorder.none,
-                      contentPadding: const EdgeInsets.symmetric(vertical: 12),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              // 전송 버튼
-              GestureDetector(
-                onTap: () => _send(_ctrl.text),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    gradient: isFriends
-                        ? null
-                        : const LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [
-                              AppDesignTokens.brand,
-                              AppDesignTokens.brandMuted,
-                            ],
-                          ),
-                    color: isFriends ? _coach.accentColor : null,
-                    borderRadius: BorderRadius.circular(
-                      AppDesignTokens.radiusPill,
-                    ),
-                    border: isFriends
-                        ? null
-                        : Border.all(
-                            color: const Color(0xFFE6DCFF),
+                                      ? _coach.accentColor.withOpacity(0.5)
+                                      : (isFriends
+                                            ? Colors.white.withOpacity(0.3)
+                                            : (isMasterVacation
+                                                  ? Colors.white.withOpacity(
+                                                      AppDesignTokens
+                                                          .lightGlassBorderOpacity,
+                                                    )
+                                                  : masterLavenderBorder))),
                             width: 1.2,
                           ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: isFriends
-                            ? _coach.accentColor.withOpacity(0.35)
-                            : AppDesignTokens.brand.withValues(alpha: 0.28),
-                        blurRadius: isFriends ? 10 : 15,
-                        offset: const Offset(0, 4),
+                        ),
+                        child: TextField(
+                          controller: _ctrl,
+                          maxLines: null,
+                          textInputAction: TextInputAction.send,
+                          onSubmitted: _send,
+                          style: GoogleFonts.notoSansKr(
+                            fontSize: AppDesignTokens.textBody,
+                            color: widget.chatBgStyle == 'simple'
+                                ? const Color(0xFF3D3A4E)
+                                : (isNyang
+                                      ? AppDesignTokens.textPrimary
+                                      : (isFriends
+                                            ? Colors.white
+                                            : AppDesignTokens.textPrimary)),
+                          ),
+                          decoration: InputDecoration(
+                            hintText: '메시지를 입력하세요...',
+                            hintStyle: GoogleFonts.notoSansKr(
+                              fontSize: AppDesignTokens.textBody,
+                              color: widget.chatBgStyle == 'simple'
+                                  ? const Color(0xFF9A96A8)
+                                  : (isNyang
+                                        ? AppDesignTokens.textPrimary
+                                              .withValues(alpha: 0.62)
+                                        : (isFriends
+                                              ? Colors.white.withOpacity(0.6)
+                                              : AppDesignTokens.textDisabled)),
+                            ),
+                            border: InputBorder.none,
+                            contentPadding: const EdgeInsets.symmetric(
+                              vertical: 12,
+                            ),
+                          ),
+                        ),
                       ),
-                    ],
-                  ),
-                  child: Icon(
-                    Icons.send_rounded,
-                    color: Colors.white,
-                    size: 20,
-                  ),
+                    ),
+                    const SizedBox(width: 10),
+                    // 전송 버튼
+                    GestureDetector(
+                      onTap: () => _send(_ctrl.text),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          gradient: isFriends
+                              ? null
+                              : const LinearGradient(
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                  colors: [
+                                    AppDesignTokens.brand,
+                                    AppDesignTokens.brandMuted,
+                                  ],
+                                ),
+                          color: isFriends ? _coach.accentColor : null,
+                          borderRadius: BorderRadius.circular(
+                            AppDesignTokens.radiusPill,
+                          ),
+                          border: isFriends
+                              ? null
+                              : Border.all(
+                                  color: const Color(0xFFE6DCFF),
+                                  width: 1.2,
+                                ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: isFriends
+                                  ? _coach.accentColor.withOpacity(0.35)
+                                  : AppDesignTokens.brand.withValues(
+                                      alpha: 0.28,
+                                    ),
+                              blurRadius: isFriends ? 10 : 15,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: Icon(
+                          Icons.send_rounded,
+                          color: Colors.white,
+                          size: 20,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ],
       ),

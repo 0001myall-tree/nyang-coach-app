@@ -1,0 +1,170 @@
+/// 실행 저항 개입을 종류별로 나누고, 거부당하면 다음 종류로 넘기는 로직.
+///
+/// 전에는 개입 전략 여러 개를 한 프롬프트에 다 실어놓고 모델이 고르게 했다.
+/// 그러면 매번 가장 흔한 하나로 수렴하고, 사용자가 싫다고 해도 같은 제안을
+/// 다시 밀면서 설득하는 일이 생긴다. 실제로 "커서 봐" → "싫어" → 또 "커서 봐"가
+/// 반복됐다.
+///
+/// 그래서 고르는 일을 앱이 한다. 한 대화 안에서 이미 꺼낸 개입을 기억하고,
+/// 거부당하면 아직 안 쓴 것 중 다음 것을 골라 그 하나만 프롬프트에 넣는다.
+/// 모델에게는 선택지를 주지 않는다.
+///
+/// [interventions]의 rule 문구는 기존 프롬프트에 흩어져 있던 지시를 옮겨 담은
+/// 것이다. 문구는 갈아끼워도 되고 순서를 바꿔도 되지만, id는 기록에 남으니
+/// 한번 정한 뒤에는 바꾸지 않는 게 좋다.
+library;
+
+class ResistanceIntervention {
+  const ResistanceIntervention({
+    required this.id,
+    required this.label,
+    required this.rule,
+  });
+
+  /// 기록에 남는 식별자. 한번 정하면 바꾸지 않는다.
+  final String id;
+
+  /// 사람이 읽는 이름. 프롬프트에는 안 들어간다.
+  final String label;
+
+  /// 프롬프트에 그대로 들어가는 지시문.
+  final String rule;
+}
+
+class ResistanceInterventionService {
+  const ResistanceInterventionService._();
+
+  /// 꺼내는 순서. 위에서부터 쓰고, 거부당하면 다음으로 내려간다.
+  ///
+  /// 부담이 낮고 대부분의 과업에 통하는 것을 앞에 뒀다. 선택권 주기는 코치가
+  /// 정해주는 방식이 연달아 먹히지 않았다는 뜻이라 뒤쪽에 있다.
+  static const List<ResistanceIntervention> interventions = [
+    ResistanceIntervention(
+      id: 'shorten_time',
+      label: '시간 낮추기',
+      rule: '''[시간 낮추기]
+- 할 일의 범위는 그대로 두고 붙잡는 시간만 낮추세요. 5~15분 사이에서 고르고 같은 숫자를 반복하지 마세요.
+- 그 시간이 지나면 그만둬도 된다고 분명히 하세요.''',
+    ),
+    ResistanceIntervention(
+      id: 'narrow_scope',
+      label: '범위 좁히기',
+      rule: '''[범위 좁히기]
+- 전체를 다 하려 하지 말고, 하고 나면 일이 한 칸 진행되는 작은 단위 하나만 정해주세요.
+- 예: 청소=물건 하나 치우기, 설거지=컵 하나 씻기, 글쓰기=한 줄만 쓰기, 공부=한 문제만 풀기.
+- 분리수거·약 먹기처럼 이미 하나의 행동인 일, 양치·샤워처럼 완료 단위가 정해진 일은 쪼개지 마세요.''',
+    ),
+    ResistanceIntervention(
+      id: 'imagine_doing',
+      label: '하고 있는 장면 떠올리기',
+      rule: '''[하고 있는 장면 떠올리기]
+- 지금 움직이라고 하지 말고, 그 일을 하고 있는 자기 모습을 20초만 떠올려보게 하세요.
+- 잘하고 있는 모습이 아니라 어설퍼도 이미 하고 있는 모습입니다. 결과가 좋은 장면은 그리게 하지 마세요.
+- 장면은 하나만. 예: 글쓰기=앉아서 어설프게라도 문장을 쓰고 있는 모습, 청소=뭔가 들고 옮기고 있는 모습.
+- 떠올린 것까지가 이번 턴입니다. 이어서 실제로 하라고 밀지 마세요.''',
+    ),
+    ResistanceIntervention(
+      id: 'connect_purpose',
+      label: '목적 연결',
+      rule: '''[목적 연결]
+- 이걸 끝내면 뭐가 나아지는지 하나만 구체적으로 짚어주세요. 예: 눈앞이 덜 복잡해짐, 내일 아침이 덜 정신없음.
+- 목표나 비전의 중요성을 설명하지 마세요. 오늘 체감되는 변화면 됩니다.''',
+    ),
+    ResistanceIntervention(
+      id: 'reframe_task',
+      label: '과제 이미지 재정의',
+      rule: '''[과제 이미지 재정의]
+- 그 일이 실제보다 크게 느껴지고 있을 수 있다고 한 문장만 짚으세요. 예: 청소는 집 전체를 완벽히 치우는 일처럼.
+- 잘하고 싶은 마음은 인정한 채로 원래 크기만 다시 그려주세요. 행동 제안은 붙이지 마세요.''',
+    ),
+    ResistanceIntervention(
+      id: 'allow_rough',
+      label: '품질 기준 낮추기',
+      rule: '''[품질 기준 낮추기]
+- 잘하지 않아도 되고 고치지 않아도 된다는 쪽으로 기준을 내려주세요.
+- 중간 퀄리티와 완성 퀄리티는 다르다고 짧게 안심시키세요. 분량이나 완성본을 요구하지 마세요.''',
+    ),
+    ResistanceIntervention(
+      id: 'reorder',
+      label: '순서 바꾸기',
+      rule: '''[순서 바꾸기]
+- 이 일을 밀지 말고, 오늘 할 일 중 지금 마음이 가장 덜 무거운 다른 일을 먼저 하자고 하세요.
+- 미루는 게 아니라 순서를 바꾸는 것입니다. 원래 일을 언제 할지 다시 묻지 마세요.''',
+    ),
+    ResistanceIntervention(
+      id: 'let_user_choose',
+      label: '선택권 주기',
+      rule: '''[선택권 주기]
+- 코치가 정해준 방식이 연달아 부담이었음을 한 문장 인정하세요. 의지 부족으로 평가하지 마세요.
+- 현재 과업과 연결된 쉬운 선택지 2개 + 기타를 주고 고르게 하세요. 자유형 질문 금지.
+- 끝에 [CHIPS: 선택지1|선택지2|기타]. 설득·분석·목표 설명 금지.''',
+    ),
+  ];
+
+  /// 준비한 방식을 한 대화에서 모두 꺼내 쓴 뒤. 더 밀지 않고 닫는다.
+  static const String exhaustedRule =
+      '''- 이번 대화에서 쓸 방식을 모두 꺼냈고 사용자는 전부 내키지 않아 했습니다.
+- 새 방식을 지어내거나 이미 꺼낸 방식을 다시 밀지 마세요.
+- 오늘 이 일이 그만큼 무겁다는 뜻임을 한 문장 인정하고 여기까지 두자고 닫으세요.
+- 2문장 이내. [TASK], [TIMER_CONFIRM], [CHIPS] 금지.''';
+
+  /// 직전 제안이 거부당한 턴에 덧붙인다. 설득을 막는 자리다.
+  static const String refusedPrefix =
+      '''- 직전 제안을 사용자가 거부했습니다. 같은 제안을 다시 하거나 설득하지 말고, 이유도 캐묻지 마세요.
+- 짧게 받아준 뒤 아래 방식으로 넘어가세요.''';
+
+  static String _normalize(String text) =>
+      text.replaceAll(RegExp(r'\s+'), '').toLowerCase();
+
+  /// 코치 제안에 대한 거부 표현.
+  ///
+  /// 실행 저항 표현("하기 싫다")과 겹치지만, 이쪽은 직전 제안을 향한 거절까지
+  /// 잡아야 해서 더 넓다. "그건 좀", "안 할래"처럼 저항 목록에 없는 말이 실제
+  /// 거절에서는 더 자주 나온다.
+  static const List<String> _refusalSignals = [
+    '그것도싫',
+    '그건싫',
+    '그거싫',
+    '그것도별로',
+    '그건별로',
+    '별로야',
+    '별론데',
+    '안할래',
+    '안하고싶',
+    '안내켜',
+    '내키지않',
+    '내키지가않',
+    '그건좀',
+    '그것도좀',
+    '그거말고',
+    '다른거',
+    '다른방법',
+    '싫어',
+    '싫은데',
+    '싫다',
+    '못하겠',
+    '하기싫',
+    '귀찮',
+    '지금은안',
+    '패스',
+  ];
+
+  static bool isRefusal(String text) =>
+      _refusalSignals.any(_normalize(text).contains);
+
+  /// 아직 안 꺼낸 것 중 다음 개입. 전부 꺼냈으면 null.
+  static ResistanceIntervention? nextIntervention(Iterable<String> offeredIds) {
+    final offered = offeredIds.toSet();
+    for (final intervention in interventions) {
+      if (!offered.contains(intervention.id)) return intervention;
+    }
+    return null;
+  }
+
+  static ResistanceIntervention? byId(String id) {
+    for (final intervention in interventions) {
+      if (intervention.id == id) return intervention;
+    }
+    return null;
+  }
+}
