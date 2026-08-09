@@ -27,6 +27,7 @@ import 'package:nyang_coach/services/master_bedtime_offer_copy.dart';
 import 'package:nyang_coach/services/master_greeting.dart';
 import 'package:nyang_coach/services/task_resistance_service.dart';
 import 'package:nyang_coach/services/execution_resistance_service.dart';
+import 'package:nyang_coach/services/prep_time_service.dart';
 import 'package:nyang_coach/services/recovery_insight_service.dart';
 import 'package:nyang_coach/services/widget_sync_service.dart';
 import 'coach_config.dart';
@@ -1330,6 +1331,13 @@ class _ChatScreenState extends State<ChatScreen>
   // 이번 턴에 주입한 원인 확인 질문 (실제로 물었을 때만 하루 1회를 소진 처리)
   String? _pendingDiagnosisQuestion;
 
+  // 약속 준비 역산에 모은 값. 출발 시각은 첫 턴에, 준비 시간은 몇 턴 뒤에
+  // 나오는 게 보통이라 대화 사이에 들고 있어야 한다.
+  PrepPlan? _prepPlan;
+  // 직전 턴에 이동 시간을 물었는지 준비 시간을 물었는지. "40분쯤" 같은 답에는
+  // 무엇에 대한 답인지가 안 붙어 있어서, 물어본 쪽으로 넣는다.
+  PrepMissing? _prepLastAsked;
+
   bool get _canOpenSubscriptionGuide => kDebugMode;
 
   // Firebase Cloud Functions chatProxy (웹앱과 동일한 서버 사용)
@@ -2250,6 +2258,109 @@ class _ChatScreenState extends State<ChatScreen>
 - 사용자가 하나라도 말하면 그 일을 중심으로 이어가고, 오늘 할 일로 등록할 만하면 [TASK] 태그를 붙이세요.
 - 없다고 하거나 모르겠다고 하면 더 캐묻지 말고, 물 마시기·스트레칭·산책처럼 부담 없는 행동 하나만 권하세요.
 - 되묻는 건 한 번뿐입니다. 이미 물어본 뒤라면 바로 가벼운 행동을 권하세요.''';
+  }
+
+  /// 약속 준비 역산 대화일 때만 붙이는 지침.
+  ///
+  /// 시각 뺄셈은 앱이 하고 모델은 결과를 말하기만 한다. 모델에게 계산을
+  /// 맡기면 자기가 앞서 말한 시각에서 또 빼면서 오답을 쌓는다.
+  ///
+  /// 대화 여러 턴에 걸쳐 값이 하나씩 나오므로 [_prepPlan]에 모아 둔다.
+  Future<String> _prepTimeSection(String userText) async {
+    final plan = await _updatePrepPlan(userText);
+    if (plan == null) return '';
+
+    final withMeridiem = plan.meridiemKnown;
+    final lines = <String>[];
+
+    final departure = plan.resolvedDeparture;
+    if (plan.appointment != null) {
+      lines.add('- 약속 시각: ${formatClock(plan.appointment!, withMeridiem: withMeridiem)}');
+    }
+    if (plan.travelMinutes != null) {
+      lines.add('- 이동: ${formatDuration(plan.travelMinutes!)}');
+    }
+    if (departure != null) {
+      lines.add('- 나가는 시각: ${formatClock(departure, withMeridiem: withMeridiem)}');
+    }
+    if (plan.prepMinutes != null) {
+      lines.add('- 준비: ${formatDuration(plan.prepMinutes!)}');
+    }
+
+    final prepStart = plan.prepStart;
+    if (prepStart != null) {
+      lines.add(
+        '- 준비 시작(여유 ${plan.bufferMinutes}분 포함): '
+        '${formatClock(prepStart, withMeridiem: withMeridiem)}',
+      );
+    }
+
+    // 물어볼 건 한 턴에 하나뿐이다. 남은 걸 다 나열하면 설문지가 된다.
+    final missing = plan.missing;
+    _prepLastAsked = missing.isEmpty ? null : missing.first;
+    final ask = switch (_prepLastAsked) {
+      PrepMissing.anchorTime => '- 몇 시에 나가야 하는지, 혹은 약속이 몇 시인지 물으세요.',
+      PrepMissing.travel => '- 거기까지 얼마나 걸리는지 물으세요.',
+      PrepMissing.prep =>
+        '- 나가기 전에 꼭 해야 하는 게 뭔지 묻고, 보통 그걸 하고 나가기까지 얼마나 걸렸는지 물으세요. '
+            '항목마다 따로 묻지 말고 한꺼번에 물으세요.',
+      null => '',
+    };
+
+    final midnight = plan.crossesMidnight
+        ? '\n- 준비 시작은 전날 밤입니다. 그 점을 자연스럽게 짚어주세요.'
+        : '';
+
+    // 답이 나오기 전에 알람이며 여유 시간이며 앞서 말해두면, 모델이 그 자리를
+    // 채우려고 준비 시간을 스스로 지어낸다. 준비에 걸리는 시간은 사람마다
+    // 다르니 물어봐야 할 값이지 어림잡을 값이 아니다.
+    final closing = plan.prepStart != null
+        ? '''
+- 여유 ${plan.bufferMinutes}분을 계산에 넣었다고 짧게 밝히세요. 감추지 마세요.
+- 알람이나 일정으로 넣어줄지 한 번만 물어보세요.'''
+        : '''
+- 아직 준비 시작 시각을 계산할 수 없습니다. 몇 시부터 준비하라는 말을 하지 말고, 위에 적힌 것만 물어보세요.
+- 준비에 걸리는 시간을 사용자 대신 어림잡지 마세요. 사람마다 달라서 물어봐야 아는 값입니다.''';
+
+    return '''
+
+[약속 준비 시간 - 계산 결과]
+아래 숫자는 앱이 계산한 값입니다. 그대로 쓰고 직접 더하거나 빼지 마세요.
+${lines.isEmpty ? '- 아직 아는 값이 없습니다.' : lines.join('\n')}$midnight
+$ask
+- 시각을 말할 때는 위 값을 그대로 옮기세요. 어림잡거나 "한 시간 전"처럼 바꿔 말하지 마세요.
+$closing''';
+  }
+
+  /// 이번 발화에서 읽어낸 값을 [_prepPlan]에 합친다. 준비 대화가 아니면 null.
+  Future<PrepPlan?> _updatePrepPlan(String userText) async {
+    final plan = mergeUtterance(
+      plan: _prepPlan,
+      lastAsked: _prepLastAsked,
+      text: userText,
+      taskTimes: await _prepTaskTimes(),
+      now: DateTime.now(),
+    );
+    if (plan != null) _prepPlan = plan;
+    return plan;
+  }
+
+  /// 시각이 적힌 오늘 할 일들. 사용자가 "'약속' 준비"처럼 이름만 부를 때
+  /// 시각을 다시 묻지 않으려고 넘긴다.
+  Future<List<PrepTaskTime>> _prepTaskTimes() async {
+    final prefs = await SharedPreferences.getInstance();
+    final tasks = _decodeMapList(prefs.getString('nyang_tasks'));
+    final result = <PrepTaskTime>[];
+    for (final task in tasks) {
+      if (task['done'] == true) continue;
+      final name = (task['text'] ?? '').toString().trim();
+      final time = (task['time'] ?? task['timeStart'] ?? '').toString();
+      if (name.isEmpty || time.isEmpty) continue;
+      final parsed = parseClock(time);
+      if (parsed == null) continue;
+      result.add(PrepTaskTime(name: name, minutes: parsed.minutes));
+    }
+    return result;
   }
 
   /// "넌 뭘 해줄 수 있어?"를 물었을 때만 붙이는 지침.
@@ -13041,7 +13152,9 @@ $resistanceFlowRule'''
         : await _buildContextString(userText);
     final timerOutputRule = _coach.isMaster
         ? '''4. [TIMER_START] 태그는 절대 사용 금지.
-   - 사용자가 직접 "타이머 띄워줘", "15분 타이머 켜줘"처럼 명시적으로 요청한 경우에는 짧게 응답한 뒤 [TIMER_CONFIRM:분] 태그를 붙입니다. 시간이 없으면 15분을 기본값으로 사용합니다.
+   - 사용자가 직접 "타이머 띄워줘", "1시간 타이머 켜줘"처럼 명시적으로 요청한 경우에는 짧게 응답한 뒤 [TIMER_CONFIRM:분] 태그를 붙입니다.
+   - 태그의 분은 사용자가 말한 시간을 그대로 씁니다. 1시간이면 60, 45분이면 45입니다. 시간을 말하지 않았을 때만 15분으로 합니다.
+   - 답변에서 시간을 말할 때는 태그와 같은 값을 쓰세요. 1시간을 요청받고 "15분 타이머 띄워드릴게요"라고 하면 안 됩니다.
    - 직전 답변에서 타이머가 필요한지 현재 코치의 말투로 물었고 사용자가 동의했다면 [TIMER_CONFIRM:분:할일이름]을 출력합니다.
    - 코치가 먼저 [TIMER_CONFIRM] 태그를 출력하지 마세요. "마음 비우고 시작", "시작 의식", 카운트다운도 먼저 제안하지 마세요. 해당 기능은 사용자가 직접 버튼을 누르거나 명시적으로 요청했을 때만 시작합니다.
    - 예외: [생각 과부하 정리 전략]으로 30분 글쓰기를 권한 턴에서는 "원하시면 30분 타이머를 띄워드릴까요?"처럼 물으며 [TIMER_CONFIRM:30]을 붙여도 됩니다.'''
@@ -13094,6 +13207,9 @@ $resistanceFlowRule'''
     // "넌 뭘 해줄 수 있어?"를 물었을 때만 붙인다.
     final capabilitySection = _capabilityAnswerSection(userText);
 
+    // 약속 준비를 역산하는 대화일 때만 붙인다. 숫자는 앱이 낸다.
+    final prepTimeSection = await _prepTimeSection(userText);
+
     final assembledSystemPrompt =
         '''$baseSystemPrompt
 ${contextString.isNotEmpty ? '\n$contextString' : ''}
@@ -13103,6 +13219,7 @@ $cleaningSection
 $bedtimeCarryOverSection
 $emptyPlanAskSection
 $capabilitySection
+$prepTimeSection
 
 [연속 대화 맥락 기준]
 - 직전 대화처럼 이어받아도 되는 말은 오늘 같은 날짜에 오간 대화뿐입니다.
