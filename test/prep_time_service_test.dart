@@ -95,10 +95,11 @@ void main() {
       expect(const PrepPlan().missing, [PrepMissing.anchorTime]);
     });
 
-    test('약속만 알면 이동과 준비를 묻는다', () {
+    test('약속만 알면 준비를 먼저 묻고 이동을 묻는다', () {
+      // 계산은 이동이 먼저 필요하지만, 사람이 물은 순서는 준비가 먼저다.
       expect(PrepPlan(appointment: hm(10, 0)).missing, [
-        PrepMissing.travel,
         PrepMissing.prep,
+        PrepMissing.travel,
       ]);
     });
 
@@ -250,7 +251,7 @@ void main() {
       talk.say('내일 2시에 약속 있어');
       // 새벽 2시에 약속을 잡을 리는 없다.
       expect(talk.plan!.appointment, hm(14, 0));
-      expect(talk.lastAsked, PrepMissing.travel);
+      expect(talk.lastAsked, PrepMissing.prep);
 
       talk.say('거기까지 30분 걸려');
       expect(talk.plan!.resolvedDeparture, hm(13, 30));
@@ -292,11 +293,15 @@ void main() {
       expect(talk.plan, isNotNull, reason: '준비 역산 대화로 열려야 한다');
       expect(talk.plan!.appointment, hm(13, 0));
       expect(talk.plan!.departure, isNull, reason: '1시는 도착 시각이지 출발이 아니다');
+      // 준비를 물었으니 준비부터 묻는다.
+      expect(talk.lastAsked, PrepMissing.prep);
+
+      talk.say('씻고 밥 먹고 나가는 데 50분');
+      expect(talk.plan!.prepMinutes, 50);
       expect(talk.lastAsked, PrepMissing.travel);
 
       talk.say('신촌까지 40분 걸려');
       expect(talk.plan!.resolvedDeparture, hm(12, 20));
-      talk.say('씻고 밥 먹고 나가는 데 50분');
       expect(talk.plan!.prepStart, hm(11, 15));
     });
 
@@ -328,7 +333,7 @@ void main() {
 
       talk.say("몇시부터 '약속' 나갈 준비할까?");
       expect(talk.plan!.appointment, hm(18, 0), reason: '할 일 탭의 6시를 가져온다');
-      expect(talk.lastAsked, PrepMissing.travel);
+      expect(talk.lastAsked, PrepMissing.prep);
 
       talk.say('거기까지 30분');
       expect(talk.plan!.resolvedDeparture, hm(17, 30));
@@ -362,17 +367,20 @@ void main() {
     });
 
 
-    test('만나야 한다고 하면 도착 시각으로 읽고 이동부터 묻는다', () {
+    test('만나야 한다고 하면 도착 시각으로 읽는다', () {
       final talk = _Talk();
       talk.say('이따가 5시에 집 근처에서 맞선남 만나야 하는데 일하다가 몇시부터 준비할까?');
       expect(talk.plan!.appointment, hm(5, 0));
       // "집 근처에서"가 "집에서"로 잘못 읽히면 도착 시각이 출발 시각이 된다.
       expect(talk.plan!.departure, isNull);
+      expect(talk.lastAsked, PrepMissing.prep);
+
+      talk.say('씻고 옷 갈아입는 데 30분');
+      expect(talk.plan!.prepMinutes, 30);
       expect(talk.lastAsked, PrepMissing.travel);
 
       talk.say('집 근처라 10분이면 가');
       expect(talk.plan!.resolvedDeparture, hm(4, 50));
-      talk.say('씻고 옷 갈아입는 데 30분');
       expect(talk.plan!.prepStart, hm(4, 5));
     });
 
@@ -396,7 +404,32 @@ void main() {
       final talk = _Talk();
       talk.say('오후 3시에 약속 있어');
       expect(talk.plan!.resolvedDeparture, isNull);
+      expect(talk.plan!.missing, contains(PrepMissing.travel));
+    });
+
+
+    test('준비를 물으면 준비부터 묻는다', () {
+      final talk = _Talk(now: DateTime(2026, 8, 9, 13, 0));
+      talk.say('오후 5시 약속 준비 같이 해줘');
+      expect(talk.plan!.appointment, hm(17, 0));
+      // 사용자가 준비를 물었는데 이동부터 되물으면 딴소리로 들린다.
+      expect(talk.lastAsked, PrepMissing.prep);
+
+      talk.say('평소엔 40분쯤 걸려');
       expect(talk.lastAsked, PrepMissing.travel);
+
+      talk.say('집 앞이라 5분이면 가');
+      expect(talk.plan!.prepStart, hm(16, 0));
+    });
+
+    test('나가는 시각만 물으면 준비는 묻지 않는다', () {
+      final talk = _Talk(now: DateTime(2026, 8, 9, 13, 0));
+      talk.say('오후 5시 약속인데 몇시에 나가야 할까?');
+      expect(talk.lastAsked, PrepMissing.travel);
+
+      talk.say('30분 걸려');
+      expect(talk.plan!.resolvedDeparture, hm(16, 30));
+      expect(talk.lastAsked, isNull, reason: '묻지도 않은 준비까지 캐지 않는다');
     });
 
     test('준비와 무관한 대화에서는 켜지지 않는다', () {

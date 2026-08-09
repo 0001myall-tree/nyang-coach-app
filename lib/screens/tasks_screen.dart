@@ -4206,9 +4206,13 @@ class _TasksScreenState extends State<TasksScreen>
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              _buildStatusGuideStep(Icons.play_arrow_rounded, '시작'),
+              _buildStatusGuideStep(Icons.play_arrow_rounded, '시작 전'),
               _buildStatusGuideArrow(),
-              _buildStatusGuideStep(Icons.pause_rounded, '진행 중'),
+              _buildStatusGuideStep(
+                Icons.play_arrow_rounded,
+                '진행 중',
+                lit: true,
+              ),
               _buildStatusGuideArrow(),
               _buildStatusGuideStep(Icons.check_rounded, '완료', filled: true),
             ],
@@ -4263,10 +4267,13 @@ class _TasksScreenState extends State<TasksScreen>
     );
   }
 
+  /// [filled]는 완료, [lit]은 진행 중. 둘 다 아니면 아직 시작 전이다.
+  /// 실제 버튼과 같은 색을 써야 안내가 안내 노릇을 한다.
   Widget _buildStatusGuideStep(
     IconData icon,
     String label, {
     bool filled = false,
+    bool lit = false,
   }) {
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -4278,16 +4285,22 @@ class _TasksScreenState extends State<TasksScreen>
           decoration: BoxDecoration(
             color: filled
                 ? _coach.accentColor.withValues(alpha: 0.34)
-                : Colors.white,
+                : lit
+                ? _coach.accentColor.withValues(alpha: 0.14)
+                : const Color(0xFFF4F4F7),
             borderRadius: BorderRadius.circular(filled ? 999 : 12),
-            border: filled
+            border: filled || !lit
                 ? null
-                : Border.all(color: _coach.accentColor.withValues(alpha: 0.16)),
+                : Border.all(color: _coach.accentColor.withValues(alpha: 0.38)),
           ),
           child: Icon(
             icon,
             size: filled ? 22 : 20,
-            color: filled ? Colors.white : _coach.accentColor,
+            color: filled
+                ? Colors.white
+                : lit
+                ? _coach.accentColor
+                : const Color(0xFFB4B7C4),
           ),
         ),
         const SizedBox(height: 5),
@@ -7045,16 +7058,25 @@ class _TasksScreenState extends State<TasksScreen>
     final isDone = task.done;
     final isActive = task.inProgress && !isDone;
     final accent = isMilestone ? const Color(0xFF5AD7B0) : _coach.accentColor;
-    final icon = isDone
-        ? Icons.check_rounded
+    // 시작 전과 진행 중을 재생/일시정지로 나누면, 지금 버튼이 상태를 말하는지
+    // 누르면 할 일을 말하는지가 헷갈린다. 모양은 재생으로 두고 불이 들어오는
+    // 것으로만 구분한다. 꺼져 있으면 아직 안 한 것이다.
+    final icon = isDone ? Icons.check_rounded : Icons.play_arrow_rounded;
+    final foreground = isDone
+        ? Colors.white
         : isActive
-        ? Icons.pause_rounded
-        : Icons.play_arrow_rounded;
-    final foreground = isDone ? Colors.white : accent.withValues(alpha: 0.9);
-    final background = isDone ? accent.withValues(alpha: 0.34) : Colors.white;
+        ? accent
+        : const Color(0xFFB4B7C4);
+    final background = isDone
+        ? accent.withValues(alpha: 0.34)
+        : isActive
+        ? accent.withValues(alpha: 0.14)
+        : const Color(0xFFF4F4F7);
     final borderColor = isDone
         ? Colors.transparent
-        : accent.withValues(alpha: isActive ? 0.2 : 0.16);
+        : isActive
+        ? accent.withValues(alpha: 0.38)
+        : Colors.transparent;
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 180),

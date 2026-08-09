@@ -35,6 +35,9 @@ class PrepPlan {
   /// 시각에 오전/오후가 붙어 있었는지. 답할 때 같은 표현을 쓰려고 들고 있다.
   final bool meridiemKnown;
 
+  /// 사용자가 알고 싶어한 것. 물어볼 순서와 어디까지 물을지가 여기서 갈린다.
+  final PrepGoal goal;
+
   const PrepPlan({
     this.appointment,
     this.departure,
@@ -42,6 +45,7 @@ class PrepPlan {
     this.prepMinutes,
     this.bufferMinutes = 15,
     this.meridiemKnown = false,
+    this.goal = PrepGoal.prepStart,
   });
 
   PrepPlan copyWith({
@@ -51,6 +55,7 @@ class PrepPlan {
     int? prepMinutes,
     int? bufferMinutes,
     bool? meridiemKnown,
+    PrepGoal? goal,
   }) {
     return PrepPlan(
       appointment: appointment ?? this.appointment,
@@ -59,6 +64,7 @@ class PrepPlan {
       prepMinutes: prepMinutes ?? this.prepMinutes,
       bufferMinutes: bufferMinutes ?? this.bufferMinutes,
       meridiemKnown: meridiemKnown ?? this.meridiemKnown,
+      goal: goal ?? this.goal,
     );
   }
 
@@ -86,18 +92,28 @@ class PrepPlan {
     return start - prepMinutes! - bufferMinutes < 0;
   }
 
+  /// 사용자가 알고 싶어한 값이 나왔는지.
+  bool get isAnswered => goal == PrepGoal.departure
+      ? resolvedDeparture != null
+      : prepStart != null;
+
   /// 계산에 모자란 것. 코치가 물어볼 거리를 여기서 정한다.
   ///
-  /// 순서가 곧 물어볼 순서다. 이동을 먼저 알아야 출발 시각이 나오고,
-  /// 출발 시각이 있어야 준비 시작이 나온다.
+  /// 순서가 곧 물어볼 순서인데, 계산 순서가 아니라 사용자가 물은 순서를 따른다.
+  /// 준비를 언제 시작하냐고 물었는데 "거기까지 얼마나 걸려?"부터 되물으면
+  /// 딴소리로 들린다. 계산이야 값이 다 모이면 어느 순서로 받았든 똑같다.
+  ///
+  /// 나가는 시각만 물었으면 준비 시간은 아예 묻지 않는다. 안 물어본 걸
+  /// 캐내는 것도 대화를 늘리는 일이다.
   List<PrepMissing> get missing {
-    final result = <PrepMissing>[];
     if (appointment == null && departure == null) {
-      result.add(PrepMissing.anchorTime);
-      return result;
+      return const [PrepMissing.anchorTime];
+    }
+    final result = <PrepMissing>[];
+    if (goal == PrepGoal.prepStart && prepMinutes == null) {
+      result.add(PrepMissing.prep);
     }
     if (resolvedDeparture == null) result.add(PrepMissing.travel);
-    if (prepMinutes == null) result.add(PrepMissing.prep);
     return result;
   }
 
@@ -108,6 +124,15 @@ class PrepPlan {
       prepMinutes == null;
 
   static int _wrap(int minutes) => (minutes % 1440 + 1440) % 1440;
+}
+
+/// 사용자가 알고 싶어한 것.
+enum PrepGoal {
+  /// 집에서 몇 시에 나가야 하는지.
+  departure,
+
+  /// 몇 시부터 준비해야 하는지, 몇 시에 일어나야 하는지.
+  prepStart,
 }
 
 /// 계산에 모자란 값. 코치가 이것만 묻는다.
@@ -345,7 +370,8 @@ PrepPlan? mergeUtterance({
   final role = clock == null ? null : _clockRole(normalized, clock);
   final saysDeparture = role == _ClockRole.departure;
   final saysAppointment = role == _ClockRole.appointment;
-  final asksBackward = _askPattern.hasMatch(normalized);
+  final askMatch = _askPattern.firstMatch(normalized);
+  final asksBackward = askMatch != null;
 
   var current = plan;
   // 준비 대화를 새로 여는 조건. 아무 대화에서나 켜지면 안 된다.
@@ -355,6 +381,11 @@ PrepPlan? mergeUtterance({
     if (!opens) return null;
     current = const PrepPlan();
   }
+
+  // 무엇을 물었는지에 따라 어디까지 물어볼지가 달라진다. 나가는 시각만
+  // 궁금한 사람에게 준비 시간까지 캐물으면 대화가 길어지기만 한다.
+  final asked = _goalOf(normalized, askMatch);
+  if (asked != null) current = current.copyWith(goal: asked);
 
   if (clock != null) {
     if (saysDeparture) {
@@ -383,8 +414,10 @@ PrepPlan? mergeUtterance({
   }
 
   if (duration != null) {
-    final saysTravel = _travelPattern.hasMatch(normalized);
     final saysPrep = _prepPattern.hasMatch(normalized);
+    final saysTravel =
+        _travelPattern.hasMatch(normalized) ||
+        (!saysPrep && _weakTravelPattern.hasMatch(normalized));
     // 표시가 없으면 직전에 물어본 쪽으로 넣는다. 그것도 없으면 비어 있는 칸에
     // 넣되, 나가는 시각을 아직 모르면 이동부터 채운다.
     final target = saysTravel
@@ -470,17 +503,47 @@ PrepTaskTime? _namedTask(String normalized, List<PrepTaskTime> tasks) {
 ///
 /// 통짜 문구로 두면 "몇시부터 '약속' 나갈 준비할까?"처럼 사이에 말이 끼는
 /// 순간 못 알아듣는다. 묻는 말과 행동 사이는 비워둔다.
+/// 활용형을 같이 적어둔다. 한글은 어미가 붙으면 글자가 통째로 바뀐다.
+/// "나가야"에는 "나가"가 들어 있지만 "나갈까"는 나/갈/까라서 안 들어 있다.
 final _askPattern = RegExp(
-  r'(몇시|언제).{0,20}?(일어나|나가|나서|준비|출발)|안늦(을까|으려면)',
+  r'(몇시|언제).{0,20}?(일어나|일어날|나가|나갈|나서|나설|출발|준비)'
+  r'|안늦(을까|으려면)',
 );
+
+/// 물음에서 무엇을 알고 싶어하는지 읽는다. 못 읽으면 null이라 기존 값을 지킨다.
+///
+/// "몇 시에 나가야 해?"는 나가는 시각까지만 답하면 되고, "몇 시부터 준비해?"는
+/// 준비 시작까지 가야 한다. 같은 계산이지만 어디서 멈출지가 다르다.
+PrepGoal? _goalOf(String normalized, RegExpMatch? askMatch) {
+  // "나갈 준비"의 머리는 준비다. 앞에 나온 '나갈'만 보고 나가는 시각으로
+  // 읽으면, 준비를 물은 사람에게 준비 얘기를 빼고 답하게 된다.
+  if (normalized.contains('준비')) return PrepGoal.prepStart;
+  final verb = askMatch?.group(2);
+  if (verb != null) {
+    return switch (verb) {
+      '나가' || '나갈' || '나서' || '나설' || '출발' => PrepGoal.departure,
+      _ => PrepGoal.prepStart,
+    };
+  }
+  // "안 늦으려면"은 언제 나서야 하는지를 묻는 말이다.
+  if (askMatch != null) return PrepGoal.departure;
+  // 물음 형태가 아니어도 준비 얘기를 꺼냈으면 준비까지 보는 게 맞다.
+  if (normalized.contains('준비')) return PrepGoal.prepStart;
+  return null;
+}
 
 /// 이동 시간을 가리키는 말.
 ///
 /// "가는데"는 "나가는데"에도 들어 있다. "씻고 나가는데 40분"은 준비 시간인데
 /// 이동으로 새면 출발 시각이 통째로 틀어진다. 그래서 앞에 '나'가 오면 뺀다.
 final _travelPattern = RegExp(
-  r'이동|(?<!나)가는데|거기까지|버스|지하철|차로|걸어서|택시',
+  r'이동|(?<!나)가는데|거기까지|근처|버스|지하철|차로|걸어서|택시',
 );
+
+/// "신촌까지 40분"처럼 목적지에 붙는 '까지'. 혼자서는 약한 단서라 준비를
+/// 가리키는 말이 하나도 없을 때만 이동으로 본다. "10시까지 나가야 해"의
+/// '까지'는 마감이지 이동이 아니기 때문이다.
+final _weakTravelPattern = RegExp(r'까지');
 
 /// 준비 시간을 가리키는 말. "나가는데/나가기까지"는 나서기 전까지 걸리는
 /// 시간이라 준비 쪽이다.
