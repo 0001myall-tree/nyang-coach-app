@@ -5922,7 +5922,7 @@ class _TasksScreenState extends State<TasksScreen>
                 border: Border.all(color: const Color(0xFFE4DAFF)),
               ),
               child: Text(
-                '▶ 시작을 누르면 Ⅱ 마치기로 바뀌어요. 다 했을 때 한 번 더 눌러 완료해요.',
+                '▶ 를 누르면 불이 들어와요. 다 했을 때 한 번 더 누르면 완료돼요.',
                 style: GoogleFonts.notoSansKr(
                   fontSize: 12.5,
                   height: 1.35,
