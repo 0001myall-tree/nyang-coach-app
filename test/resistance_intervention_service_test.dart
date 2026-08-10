@@ -89,6 +89,28 @@ void main() {
     });
   });
 
+  group('제안에 붙는 이유', () {
+    test('거절당한 턴에는 이유를 붙이지 않는다', () {
+      // 거절한 사람에게 "그래도 이게 좋은 이유는"을 붙이면 설득이 된다.
+      expect(
+        ResistanceInterventionService.refusedPrefix,
+        contains('이유를 덧붙이지 마세요'),
+      );
+      expect(
+        ResistanceInterventionService.refusedPrefix,
+        contains('설득으로 들립니다'),
+      );
+    });
+
+    test('거절 규칙은 짧게 유지한다', () {
+      // 한 규칙이 여러 가지를 말하기 시작하면 어느 것도 안 지켜진다.
+      final lines = ResistanceInterventionService.refusedPrefix.trim().split(
+        '\n',
+      );
+      expect(lines.length, lessThanOrEqualTo(3));
+    });
+  });
+
   test('거부 표현 판정', () {
     for (final t in [
       '그것도 싫어',
