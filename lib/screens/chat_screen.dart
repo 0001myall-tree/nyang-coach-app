@@ -3067,6 +3067,9 @@ ${lines.join('\n')}
     return DateFormat('yyyy-MM-dd').format(date);
   }
 
+  /// 실행률이 낮다고 판단하기 전에 필요한 최소 일수.
+  static const int _minDaysForLowExecutionRate = 3;
+
   Map<String, dynamic> _recentPlanExecutionStatsUntilYesterday(
     SharedPreferences prefs, {
     int days = 7,
@@ -3125,7 +3128,12 @@ ${lines.join('\n')}
       'totalCount': totalCount,
       'doneCount': doneCount,
       'averageRate': averageRate,
-      'isVeryLow': averageRate != null && averageRate <= 0.3,
+      // 며칠은 쌓여야 "요즘 잘 안 되는 사람"이라고 볼 수 있다. 날 수를 안 보면
+      // 어제 처음 써보고 5개 중 1개 한 사람이 오늘 바로 만성 저조로 찍힌다.
+      'isVeryLow':
+          averageRate != null &&
+          averageRate <= 0.3 &&
+          evaluatedDays >= _minDaysForLowExecutionRate,
     };
   }
 
@@ -12671,9 +12679,9 @@ ${lines.join('\n')}
 
 [이번 턴 지시 - 최근 실행률 30% 이하, 초저항 우선]
 - 사용자의 오늘 제외 최근 7일 평균 실행률이 $pct%입니다. 오늘은 아직 진행 중이므로 오늘 완료율은 판단에 쓰지 않았습니다.
-- 원인 확인 질문을 하지 말고, [초저항 시작 모드] 중 현재 맥락에 맞는 선택지를 바로 제안하세요.
+- 원인 확인 질문을 하지 말고, [이번 턴에 쓸 개입]의 방식으로 바로 제안하세요.
 - 하고 나면 일이 실제로 한 칸 진행되는 작은 행동으로 제안하세요.
-- 후보는 2~3개만 제시하고, 사용자가 그중 하나만 고르게 하세요. 모든 후보를 다 하게 하거나 추가 설명을 길게 붙이지 마세요.
+- 그 방식 안에서 고를 수 있는 작은 행동을 2~3개까지 제시하고, 사용자가 그중 하나만 고르게 하세요. 모든 후보를 다 하게 하거나 추가 설명을 길게 붙이지 마세요.
 - 최근에 거부한 개입이 [실행 저항 개인화]에 있으면 그 방식은 가장 후순위로 미루고 다른 방식부터 제안하세요.
 - 답변은 2문장 이내로 유지하고 [TASK], [TIMER_CONFIRM], [COUNTDOWN_START] 태그를 출력하지 마세요.''';
     }
