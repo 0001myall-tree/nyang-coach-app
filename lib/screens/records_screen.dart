@@ -1590,8 +1590,10 @@ ${feedbackType == 0
 
   Widget _buildFavoriteCoachRanks() {
     if (_weeklyFavoriteCoachRanks.isEmpty) {
+      // "아직 없음"은 사용자가 뭘 안 한 것처럼 읽힌다. 실제로는 앱이 아직
+      // 셀 만큼 못 모은 것이다.
       return Text(
-        '아직 없음',
+        '아직 정보가 부족합니다',
         style: GoogleFonts.notoSansKr(
           fontSize: 13,
           fontWeight: FontWeight.w800,
