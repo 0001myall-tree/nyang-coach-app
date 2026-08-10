@@ -36,6 +36,16 @@ void main() {
     expect(Prompts.turnCauseUnclear, isNot(contains('COUNTDOWN_START')));
   });
 
+  test('최소 행동 예시에 바라보기만 하는 것이 없다', () {
+    // 보고 나도 일이 그대로인 행동은 압박만 주고 진행이 없다. 예시를 하나라도
+    // 남기면 모델이 그 모양을 따라가서, 전에는 "고치고 싶은 부분을 1분 동안
+    // 보기"까지 나왔다. 환기(창밖 보기)는 쉬는 행동이라 여기 해당하지 않는다.
+    for (final text in [Prompts.thoughtOverload, Prompts.resultAnxietyLight]) {
+      expect(text, isNot(contains('보기')));
+      expect(text, isNot(contains('바라보')));
+    }
+  });
+
   test('원인을 다시 캐묻지 말라는 본래 역할은 남아 있다', () {
     expect(Prompts.turnCauseUnclear, contains('다시 하지 마세요'));
     expect(Prompts.turnCauseConfirmed, contains('다시 묻지 말고'));

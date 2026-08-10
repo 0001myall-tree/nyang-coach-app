@@ -1635,6 +1635,10 @@ class _ChatScreenState extends State<ChatScreen>
     manager.running = false;
     manager.pausedRemainSec = null;
     manager.startTime = null;
+    // 사용자가 시간을 말했으니 그 시간으로 돈다. 저장해둔 반복 설정은 남겨두고
+    // 이번 판만 비켜간다. 돌던 구간이 남아 있으면 카드에 옛 회차가 뜨므로 지운다.
+    manager.cycleStep = null;
+    manager.oneOffMinutes = true;
     manager.sessionDate = await FocusTimerManager.todayKey();
     manager.insertIndex = insertIndex;
     await manager.saveState();

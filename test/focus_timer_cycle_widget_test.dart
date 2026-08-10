@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nyang_coach/screens/focus_timer_widget.dart';
+import 'package:nyang_coach/services/focus_cycle.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// 타이머 카드를 실제 화면 너비로 그려본다.
@@ -170,6 +171,59 @@ void main() {
       // 반복 설정은 마스터 코치 기능이다.
       expect(find.text('직접 설정'), findsNothing);
       expect(find.text('5분'), findsOneWidget);
+    });
+  });
+
+  group('말로 시간을 지정한 판', () {
+    // 반복 설정이 있으면 그게 요청한 시간을 이겨서, "5분 타이머 띄워줘"가
+    // 설정의 작업 시간으로 바뀌었다. 그래서 설정 시트에 있는 값
+    // (10·15·25·30·50·60·90)만 나오는 것처럼 보였다.
+    const oneOff = {'focus_timer_one_off': true};
+
+    testWidgets('요약 줄이 반복 대신 이번 판 시간을 적는다', (tester) async {
+      await pumpTimer(
+        tester,
+        coachId: 'nyang_halbae',
+        minutes: 5,
+        extraPrefs: {...savedPomodoro, ...oneOff},
+      );
+      expect(find.text('이번만 5분'), findsOneWidget);
+      expect(find.text('25분 집중 · 5분 휴식 · 4회 반복'), findsNothing);
+    });
+
+    testWidgets('설정 시트에 없는 값도 그대로 뜬다', (tester) async {
+      await pumpTimer(
+        tester,
+        coachId: 'nyang_halbae',
+        minutes: 20,
+        extraPrefs: {...savedPomodoro, ...oneOff},
+      );
+      expect(find.text('20:00'), findsOneWidget);
+      expect(find.text('이번만 20분'), findsOneWidget);
+    });
+
+    // 시작 버튼은 눌러볼 수 없다. 알림 플러그인을 부르는데 테스트에는 없다.
+    // 그래서 시작이 따르는 판단만 떼어내 확인한다.
+    test('시작은 반복을 비켜가고 지정한 시간으로 돈다', () {
+      final manager = FocusTimerManager()
+        ..cycleSetting = FocusCycleSetting.pomodoro
+        ..stage = 5
+        ..oneOffMinutes = true;
+      expect(manager.cycleSettingForStart, isNull);
+
+      manager.oneOffMinutes = false;
+      expect(manager.cycleSettingForStart, FocusCycleSetting.pomodoro);
+    });
+
+    testWidgets('설정을 안 걸어둔 판은 예전처럼 반복으로 돈다', (tester) async {
+      await pumpTimer(
+        tester,
+        coachId: 'nyang_halbae',
+        minutes: 5,
+        extraPrefs: savedPomodoro,
+      );
+      expect(find.text('25분 집중 · 5분 휴식 · 4회 반복'), findsOneWidget);
+      expect(find.textContaining('이번만'), findsNothing);
     });
   });
 

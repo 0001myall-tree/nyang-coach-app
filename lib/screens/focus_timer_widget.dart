@@ -44,6 +44,21 @@ class FocusTimerManager {
 
   bool get isCycleRunning => cycleStep != null;
 
+  /// 이번 판은 사용자가 말로 지정한 시간 하나로만 돈다.
+  ///
+  /// 반복 설정을 저장해두면 그게 항상 이겼다. 그래서 "5분 타이머 띄워줘"라고
+  /// 해도 설정의 작업 시간으로 시작했고, 결국 설정 시트에 있는 값(10·15·25·
+  /// 30·50·60·90)만 나오는 것처럼 보였다. 말로 지정한 시간이 더 구체적인
+  /// 요청이니 그 판만 반복을 비켜간다.
+  ///
+  /// 저장해둔 설정은 지우지 않는다. 이 판이 끝나거나 사용자가 설정을 다시
+  /// 만지면 원래 반복으로 돌아온다.
+  bool oneOffMinutes = false;
+
+  /// 시작 버튼이 따를 반복 설정. null이면 [stage] 하나로 한 번만 돈다.
+  FocusCycleSetting? get cycleSettingForStart =>
+      oneOffMinutes ? null : cycleSetting;
+
   static String _dateKey(DateTime date) {
     return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
   }
@@ -69,6 +84,7 @@ class FocusTimerManager {
     pausedRemainSec = prefs.getInt('focus_timer_paused_remain');
     sessionDate = prefs.getString('focus_timer_session_date');
     insertIndex = prefs.getInt('focus_timer_insert_index');
+    oneOffMinutes = prefs.getBool('focus_timer_one_off') ?? false;
     cycleSetting = _decodeSetting(prefs.getString(_cycleSettingKey));
     final phaseName = prefs.getString('focus_timer_cycle_phase');
     final round = prefs.getInt('focus_timer_cycle_round');
@@ -99,6 +115,8 @@ class FocusTimerManager {
   Future<void> saveCycleSetting(FocusCycleSetting? setting) async {
     cycleSetting = setting;
     cycleStep = null;
+    // 설정을 직접 만졌으면 그게 지금 원하는 것이다. 말로 걸어둔 한 판은 접는다.
+    oneOffMinutes = false;
     final prefs = await SharedPreferences.getInstance();
     if (setting == null) {
       await prefs.remove(_cycleSettingKey);
@@ -141,6 +159,7 @@ class FocusTimerManager {
     } else {
       await prefs.remove('focus_timer_insert_index');
     }
+    await prefs.setBool('focus_timer_one_off', oneOffMinutes);
     final step = cycleStep;
     if (step != null) {
       await prefs.setString('focus_timer_cycle_phase', step.phase.name);
@@ -491,6 +510,8 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
 
     await _manager.incrementTodayCount();
     await AnalyticsService.logFeatureUsage('timer');
+    // 말로 걸어둔 한 판이 끝났다. 다음에 그냥 시작하면 저장해둔 반복으로 돌아간다.
+    _manager.oneOffMinutes = false;
 
     if (showMsg) {
       final msg = await _getDoneMsg();
@@ -526,7 +547,10 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
         if (isFirst) {
           // 저장해둔 설정이 있으면 그 첫 구간부터 시작한다. 5·15·25를 눌러
           // 쓰던 사람은 설정이 없으니 예전 그대로 한 번만 돈다.
-          final setting = _cycleSetting;
+          //
+          // 단, 사용자가 말로 시간을 지정한 판은 그 시간으로 돈다. 반복이
+          // 이기면 "5분 타이머 띄워줘"가 설정의 작업 시간으로 바뀐다.
+          final setting = _canUseCycle ? _manager.cycleSettingForStart : null;
           if (setting != null && !_manager.isCycleRunning) {
             final first = FocusCycle.first(setting);
             _manager.cycleStep = first;
@@ -557,6 +581,7 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
     // 소리가 켜져 있으면 끄고 재설정 (단계 변경 시 타이머 불일치 방지)
     if (_soundOn) _stopSound();
     _manager.cycleStep = null;
+    _manager.oneOffMinutes = false;
     _manager.reset(min).then((_) {
       if (mounted) setState(() {});
     });
@@ -601,7 +626,11 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
     required Color border,
   }) {
     final step = _manager.cycleStep;
-    final label = step != null
+    // 말로 걸어둔 판이면 저장해둔 반복이 아니라 그 시간을 적는다. 시계는
+    // 5분인데 밑에 반복 요약이 붙어 있으면 어느 쪽으로 도는지 알 수 없다.
+    final label = _manager.oneOffMinutes
+        ? '이번만 ${_manager.stage}분'
+        : step != null
         ? '${FocusCycle.progressLabel(setting, step)} · ${step.minutes}분'
         : setting.summary;
     return Row(
