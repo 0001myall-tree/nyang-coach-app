@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/analytics_service.dart';
@@ -560,6 +562,31 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
     });
   }
 
+  /// 타이머만 크게 보는 화면으로 넘어간다.
+  ///
+  /// 조작은 이 위젯이 그대로 들고 있고 화면은 껍데기만 빌려준다. 상태를
+  /// 양쪽에 두면 한쪽에서 멈춘 게 다른 쪽에 안 보인다.
+  void _openFocusScreen() {
+    Navigator.of(context)
+        .push(
+          PageRouteBuilder<void>(
+            pageBuilder: (_, _, _) => MasterTimerFocusScreen(
+              onToggle: () async => _toggle(),
+              onStop: () async => _reset(),
+              onToggleSound: () async => _toggleSound(),
+              isSoundOn: () => _soundOn,
+            ),
+            transitionsBuilder: (_, animation, _, child) =>
+                FadeTransition(opacity: animation, child: child),
+            transitionDuration: const Duration(milliseconds: 220),
+            reverseTransitionDuration: const Duration(milliseconds: 180),
+          ),
+        )
+        .then((_) {
+          if (mounted) setState(() {});
+        });
+  }
+
   // ── 반복 설정 (마스터 전용) ──────────────────────────────
 
   /// 저장해둔 설정을 타이머 카드에 한 줄로 보여준다.
@@ -1034,13 +1061,61 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
                   ],
                 ),
                 const SizedBox(height: 12),
-                Text(
-                  _timeDisplay,
-                  style: GoogleFonts.notoSansKr(
-                    fontSize: 42,
-                    fontWeight: FontWeight.w900,
-                    color: timerInk,
-                  ),
+                // 시계와 전체 보기를 나란히 둔다. 시계는 가운데를 지키고
+                // 버튼만 오른쪽에 붙게 하려고 양쪽에 같은 폭을 준다.
+                Row(
+                  children: [
+                    const SizedBox(width: 52),
+                    Expanded(
+                      child: Text(
+                        _timeDisplay,
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.notoSansKr(
+                          fontSize: 42,
+                          fontWeight: FontWeight.w900,
+                          color: timerInk,
+                        ),
+                      ),
+                    ),
+                    SizedBox(
+                      width: 52,
+                      child: GestureDetector(
+                        onTap: _openFocusScreen,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 34,
+                              height: 34,
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(11),
+                                border: Border.all(
+                                  color: timerBorder,
+                                  width: 1.2,
+                                ),
+                              ),
+                              child: Icon(
+                                Icons.open_in_full_rounded,
+                                size: 16,
+                                color: timerAccent,
+                              ),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              '전체 보기',
+                              style: GoogleFonts.notoSansKr(
+                                fontSize: 9.5,
+                                fontWeight: FontWeight.w700,
+                                color: timerAccent,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
                 if (!isMaster) ...[
                   const SizedBox(height: 2),
@@ -2070,6 +2145,385 @@ class _CycleSettingSheetState extends State<_CycleSettingSheet> {
                   if (v != null) onPick(v);
                 },
               ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// 전체 보기 (집중 모드)
+// ─────────────────────────────────────────────────────────────
+
+/// 남은 시간을 발자국으로 두른 원.
+///
+/// 숫자만 보면 얼마나 남았는지 머리로 계산해야 한다. 원을 두른 발자국이
+/// 하나씩 사라지면 눈으로 바로 읽힌다. 12시 자리에서 시계 방향으로 지워진다.
+class PawRing extends StatelessWidget {
+  const PawRing({
+    super.key,
+    required this.progress,
+    required this.size,
+    this.pawCount = 28,
+    this.activeColor = const Color(0xFF7C6BE0),
+    this.fadedColor = const Color(0xFFE3DCFA),
+    this.child,
+  });
+
+  /// 남은 비율. 1이면 전부 찍혀 있고 0이면 다 사라진다.
+  final double progress;
+  final double size;
+  final int pawCount;
+  final Color activeColor;
+  final Color fadedColor;
+  final Widget? child;
+
+  @override
+  Widget build(BuildContext context) {
+    final clamped = progress.clamp(0.0, 1.0);
+    // 반올림하지 않는다. 0.9개 남았을 때 하나로 올려버리면 시간이 다 됐는데도
+    // 발자국이 남아 있다.
+    final remaining = (clamped * pawCount).floor();
+    final radius = size / 2 - 18;
+
+    return SizedBox(
+      width: size,
+      height: size,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          for (var i = 0; i < pawCount; i++)
+            _paw(index: i, radius: radius, isOn: i < remaining),
+          // 가운데 내용은 원 안쪽을 넘지 않게 묶는다. 안 묶으면 시계가
+          // 발자국을 뚫고 나간다.
+          if (child != null) SizedBox(width: radius * 1.4, child: child),
+        ],
+      ),
+    );
+  }
+
+  Widget _paw({
+    required int index,
+    required double radius,
+    required bool isOn,
+  }) {
+    // 12시에서 시작해 시계 방향으로 돈다.
+    final angle = (index / pawCount) * 2 * math.pi - math.pi / 2;
+    return Transform.translate(
+      offset: Offset(radius * math.cos(angle), radius * math.sin(angle)),
+      child: Transform.rotate(
+        // 발끝이 원 바깥을 보게 돌린다. 그냥 두면 전부 같은 방향이라
+        // 원을 두른 느낌이 안 난다.
+        angle: angle + math.pi / 2,
+        child: Opacity(
+          opacity: isOn ? 1 : 0.45,
+          child: SvgPicture.asset(
+            'assets/icons/paw.svg',
+            width: 15,
+            height: 15,
+            colorFilter: ColorFilter.mode(
+              isOn ? activeColor : fadedColor,
+              BlendMode.srcIn,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 타이머만 크게 보는 화면.
+///
+/// 채팅창 안의 카드는 작아서 곁눈질용이다. 실제로 집중하는 동안에는 화면을
+/// 통째로 내주는 편이 낫다. 여기서도 멈추고 되돌릴 수 있어야 카드로 돌아가지
+/// 않는다.
+class MasterTimerFocusScreen extends StatefulWidget {
+  const MasterTimerFocusScreen({
+    super.key,
+    required this.onToggle,
+    required this.onStop,
+    required this.onToggleSound,
+    required this.isSoundOn,
+  });
+
+  final Future<void> Function() onToggle;
+  final Future<void> Function() onStop;
+  final Future<void> Function() onToggleSound;
+  final bool Function() isSoundOn;
+
+  @override
+  State<MasterTimerFocusScreen> createState() => _MasterTimerFocusScreenState();
+}
+
+class _MasterTimerFocusScreenState extends State<MasterTimerFocusScreen> {
+  final FocusTimerManager _manager = FocusTimerManager();
+  Timer? _ticker;
+
+  static const Color _ink = Color(0xFF2F266C);
+  static const Color _main = Color(0xFF7C6BE0);
+  static const Color _accent = Color(0xFF9B8AF0);
+
+  @override
+  void initState() {
+    super.initState();
+    _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _ticker?.cancel();
+    super.dispose();
+  }
+
+  String get _timeDisplay {
+    final remain = _manager.getRemainSeconds();
+    final m = (remain ~/ 60).toString().padLeft(2, '0');
+    final s = (remain % 60).toString().padLeft(2, '0');
+    return '$m:$s';
+  }
+
+  double get _progress {
+    final total = _manager.duration;
+    if (total <= 0) return 0;
+    return _manager.getRemainSeconds() / total;
+  }
+
+  /// 지금 무엇을 하는 중인지. 반복 설정 없이 한 번만 재는 중이면 회차가 없다.
+  String get _phaseLabel {
+    final step = _manager.cycleStep;
+    if (step == null) return '집중 중';
+    return step.phase.isWork ? '집중 중' : '휴식 중';
+  }
+
+  String? get _roundLabel {
+    final setting = _manager.cycleSetting;
+    final step = _manager.cycleStep;
+    if (setting == null || step == null) return null;
+    return '${step.round} / ${setting.rounds}회차';
+  }
+
+  String? get _nextLabel {
+    final setting = _manager.cycleSetting;
+    final step = _manager.cycleStep;
+    if (setting == null || step == null) return null;
+    final next = FocusCycle.next(setting, step);
+    if (next == null) return '다음: 마지막 구간';
+    return next.phase.isWork
+        ? '다음: 집중 ${next.minutes}분'
+        : '다음: 휴식 ${next.minutes}분';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+    final ringSize = (width * 0.78).clamp(240.0, 340.0);
+    final round = _roundLabel;
+    final next = _nextLabel;
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFFBFAFF),
+      body: SafeArea(
+        child: Column(
+          children: [
+            Align(
+              alignment: Alignment.centerRight,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(0, 8, 8, 0),
+                child: IconButton(
+                  onPressed: () => Navigator.of(context).maybePop(),
+                  icon: const Icon(Icons.close_fullscreen_rounded),
+                  color: _accent,
+                  tooltip: '작게 보기',
+                ),
+              ),
+            ),
+            const Spacer(),
+            PawRing(
+              progress: _progress,
+              size: ringSize,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SvgPicture.asset(
+                        'assets/icons/paw.svg',
+                        width: 13,
+                        height: 13,
+                        colorFilter: const ColorFilter.mode(
+                          _accent,
+                          BlendMode.srcIn,
+                        ),
+                      ),
+                      const SizedBox(width: 5),
+                      Text(
+                        _phaseLabel,
+                        style: GoogleFonts.notoSansKr(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w800,
+                          color: _accent,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      _timeDisplay,
+                      maxLines: 1,
+                      style: GoogleFonts.notoSansKr(
+                        fontSize: 52,
+                        fontWeight: FontWeight.w900,
+                        height: 1.05,
+                        color: _ink,
+                      ),
+                    ),
+                  ),
+                  if (round != null) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      round,
+                      style: GoogleFonts.notoSansKr(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                        color: _main,
+                      ),
+                    ),
+                  ],
+                  if (next != null) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      next,
+                      style: GoogleFonts.notoSansKr(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: _accent,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const Spacer(),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 22),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _circleAction(
+                    icon: Icons.close_rounded,
+                    label: '종료',
+                    onTap: () async {
+                      await widget.onStop();
+                      if (context.mounted) Navigator.of(context).maybePop();
+                    },
+                  ),
+                  const SizedBox(width: 14),
+                  _wideAction(),
+                  const SizedBox(width: 14),
+                  _circleAction(
+                    icon: widget.isSoundOn()
+                        ? Icons.volume_up_rounded
+                        : Icons.volume_off_rounded,
+                    label: '백색소음',
+                    onTap: () async {
+                      await widget.onToggleSound();
+                      if (mounted) setState(() {});
+                    },
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 14),
+              child: Text(
+                '집중 시간이 흐를수록 발자국이 하나씩 사라져요',
+                style: GoogleFonts.notoSansKr(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w600,
+                  color: _accent,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _wideAction() {
+    final running = _manager.running;
+    return GestureDetector(
+      onTap: () async {
+        await widget.onToggle();
+        if (mounted) setState(() {});
+      },
+      child: Container(
+        width: 150,
+        height: 52,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(26),
+          border: Border.all(color: const Color(0xFFE7E0FA), width: 1.4),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              running ? Icons.pause_rounded : Icons.play_arrow_rounded,
+              size: 20,
+              color: _main,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              running ? '일시정지' : '다시 시작',
+              style: GoogleFonts.notoSansKr(
+                fontSize: 13.5,
+                fontWeight: FontWeight.w800,
+                color: _ink,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _circleAction({
+    required IconData icon,
+    required String label,
+    required Future<void> Function() onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 46,
+            height: 46,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              shape: BoxShape.circle,
+              border: Border.all(color: const Color(0xFFE7E0FA), width: 1.4),
+            ),
+            child: Icon(icon, size: 20, color: _accent),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: GoogleFonts.notoSansKr(
+              fontSize: 10.5,
+              fontWeight: FontWeight.w700,
+              color: _accent,
             ),
           ),
         ],
