@@ -1,9 +1,11 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/analytics_service.dart';
+import '../services/focus_cycle.dart';
 import '../services/notification_service.dart';
 import '../services/user_title_service.dart';
 
@@ -28,6 +30,17 @@ class FocusTimerManager {
   int stage = 25;
   String? sessionDate;
   int? insertIndex;
+
+  /// 사용자가 저장해둔 작업·휴식·반복 설정. 없으면 5·15·25 버튼만 쓴다.
+  ///
+  /// 타이머가 끝나도 지우지 않는다. 한 번 자기 리듬을 정해둔 사람은 다음에도
+  /// 같은 값으로 시작하고 싶어 한다.
+  FocusCycleSetting? cycleSetting;
+
+  /// 지금 돌고 있는 구간. 설정이 있어도 시작 전에는 null이다.
+  FocusCycleStep? cycleStep;
+
+  bool get isCycleRunning => cycleStep != null;
 
   static String _dateKey(DateTime date) {
     return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
@@ -54,6 +67,43 @@ class FocusTimerManager {
     pausedRemainSec = prefs.getInt('focus_timer_paused_remain');
     sessionDate = prefs.getString('focus_timer_session_date');
     insertIndex = prefs.getInt('focus_timer_insert_index');
+    cycleSetting = _decodeSetting(prefs.getString(_cycleSettingKey));
+    final phaseName = prefs.getString('focus_timer_cycle_phase');
+    final round = prefs.getInt('focus_timer_cycle_round');
+    if (cycleSetting != null && phaseName != null && round != null) {
+      cycleStep = FocusCycleStep(
+        phase: phaseName == 'rest' ? FocusPhase.rest : FocusPhase.work,
+        round: round,
+        minutes: stage,
+      );
+    } else {
+      cycleStep = null;
+    }
+  }
+
+  static const String _cycleSettingKey = 'focus_timer_cycle_setting';
+
+  static FocusCycleSetting? _decodeSetting(String? raw) {
+    if (raw == null || raw.isEmpty) return null;
+    try {
+      return FocusCycleSetting.fromJson(
+        jsonDecode(raw) as Map<String, dynamic>,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> saveCycleSetting(FocusCycleSetting? setting) async {
+    cycleSetting = setting;
+    cycleStep = null;
+    final prefs = await SharedPreferences.getInstance();
+    if (setting == null) {
+      await prefs.remove(_cycleSettingKey);
+    } else {
+      await prefs.setString(_cycleSettingKey, jsonEncode(setting.toJson()));
+    }
+    await saveState();
   }
 
   Future<void> saveState() async {
@@ -88,6 +138,14 @@ class FocusTimerManager {
       await prefs.setInt('focus_timer_insert_index', insertIndex!);
     } else {
       await prefs.remove('focus_timer_insert_index');
+    }
+    final step = cycleStep;
+    if (step != null) {
+      await prefs.setString('focus_timer_cycle_phase', step.phase.name);
+      await prefs.setInt('focus_timer_cycle_round', step.round);
+    } else {
+      await prefs.remove('focus_timer_cycle_phase');
+      await prefs.remove('focus_timer_cycle_round');
     }
   }
 
@@ -140,6 +198,7 @@ class FocusTimerManager {
 
   Future<void> reset(int min) async {
     running = false;
+    cycleStep = null;
     stage = min;
     duration = min * 60;
     pausedRemainSec = null;
@@ -268,6 +327,13 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
   bool get _isMasterTimer =>
       widget.coachId == 'nyang_halbae' || widget.coachId == 'sec_female';
 
+  /// 반복 설정은 마스터 코치 타이머에만 있다. 생각 정리용 타이머는 한 번
+  /// 재고 끝나는 게 그 기능의 전부라 반복이 낄 자리가 없다.
+  bool get _canUseCycle => _isMasterTimer && !widget.isMindTimer;
+
+  FocusCycleSetting? get _cycleSetting =>
+      _canUseCycle ? _manager.cycleSetting : null;
+
   Color get _soundActiveColor => const Color(0xFF7C3AED);
 
   static const _darkBg = Color(0xFF1A1A2E);
@@ -390,6 +456,37 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
   Future<void> _onTimerDone({required bool showMsg}) async {
     _completedStage = _manager.stage;
     await _stopSound();
+
+    // 반복 설정으로 도는 중이면 다음 구간으로 이어간다. 마지막 작업이 끝나면
+    // next가 null이라 아래 평소 흐름으로 떨어진다.
+    final setting = _cycleSetting;
+    final step = _manager.cycleStep;
+    if (setting != null && step != null) {
+      if (step.phase.isWork) await _manager.incrementTodayCount();
+      final next = FocusCycle.next(setting, step);
+      if (next != null) {
+        _manager.cycleStep = next;
+        await _manager.start(next.minutes, widget.coachId);
+        if (mounted) setState(() {});
+        _startTicker();
+        return;
+      }
+      _manager.cycleStep = null;
+      await AnalyticsService.logFeatureUsage('timer_cycle_done');
+      if (showMsg) {
+        final done = await _getDoneMsg();
+        Future.delayed(const Duration(milliseconds: 400), () {
+          if (mounted) widget.onMessage(done);
+        });
+      }
+      if (mounted) {
+        await _manager.reset(setting.workMinutes);
+        if (!mounted) return;
+        setState(() => _view = _TimerView.timer);
+      }
+      return;
+    }
+
     await _manager.incrementTodayCount();
     await AnalyticsService.logFeatureUsage('timer');
 
@@ -425,7 +522,16 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
       } else {
         final isFirst = (_manager.pausedRemainSec == null);
         if (isFirst) {
-          await _manager.start(_manager.stage, widget.coachId);
+          // 저장해둔 설정이 있으면 그 첫 구간부터 시작한다. 5·15·25를 눌러
+          // 쓰던 사람은 설정이 없으니 예전 그대로 한 번만 돈다.
+          final setting = _cycleSetting;
+          if (setting != null && !_manager.isCycleRunning) {
+            final first = FocusCycle.first(setting);
+            _manager.cycleStep = first;
+            await _manager.start(first.minutes, widget.coachId);
+          } else {
+            await _manager.start(_manager.stage, widget.coachId);
+          }
         } else {
           await _manager.resume();
         }
@@ -448,9 +554,100 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
     if (_manager.running) return;
     // 소리가 켜져 있으면 끄고 재설정 (단계 변경 시 타이머 불일치 방지)
     if (_soundOn) _stopSound();
+    _manager.cycleStep = null;
     _manager.reset(min).then((_) {
       if (mounted) setState(() {});
     });
+  }
+
+  // ── 반복 설정 (마스터 전용) ──────────────────────────────
+
+  /// 저장해둔 설정을 타이머 카드에 한 줄로 보여준다.
+  ///
+  /// 돌고 있는 중에는 지금 몇 회차인지로 바꾼다. 25분이 네 번 도는데 화면에
+  /// 남은 시간만 보이면 몇 번째인지 알 길이 없다.
+  Widget _buildCycleSummaryRow(
+    FocusCycleSetting setting, {
+    required Color main,
+    required Color accent,
+    required Color ink,
+    required Color border,
+  }) {
+    final step = _manager.cycleStep;
+    final label = step != null
+        ? '${FocusCycle.progressLabel(setting, step)} · ${step.minutes}분'
+        : setting.summary;
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Flexible(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: main.withValues(alpha: 0.07),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: border, width: 1.2),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.repeat_rounded, size: 14, color: main),
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Text(
+                    label,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.notoSansKr(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w800,
+                      color: ink,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(width: 6),
+        GestureDetector(
+          onTap: _manager.running ? null : _openCycleSheet,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: border, width: 1.2),
+            ),
+            child: Text(
+              '설정 변경',
+              style: GoogleFonts.notoSansKr(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w800,
+                color: _manager.running ? border : accent,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _openCycleSheet() async {
+    if (_manager.running) return;
+    final result = await showModalBottomSheet<_CycleSheetResult>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _CycleSettingSheet(
+        initial: _cycleSetting ?? FocusCycleSetting.pomodoro,
+        canClear: _cycleSetting != null,
+      ),
+    );
+    if (result == null || !mounted) return;
+    await _manager.saveCycleSetting(result.setting);
+    // 저장한 값이 바로 시계에 뜨게 맞춰둔다. 시작을 누르면 여기서부터 돈다.
+    await _manager.reset(result.setting?.workMinutes ?? _manager.stage);
+    if (mounted) setState(() {});
   }
 
   // ── 집중 소리 로직 ──────────────────────────────────────
@@ -824,7 +1021,9 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
                     Icon(Icons.timer_rounded, size: 15, color: timerAccent),
                     const SizedBox(width: 6),
                     Text(
-                      widget.isMindTimer ? 'MIND TIMER' : 'FOCUS TIMER',
+                      // 이 화면은 마스터 코치만 쓴다. 프렌즈 타이머는 따로
+                      // 그려지고 '집중 시간'이라고 적는다.
+                      widget.isMindTimer ? 'MIND TIMER' : 'MASTER TIMER',
                       style: GoogleFonts.notoSansKr(
                         fontSize: 12,
                         fontWeight: FontWeight.w900,
@@ -860,43 +1059,90 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
                   ),
                 ],
                 const SizedBox(height: 14),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [5, 15, 25].map((m) {
-                    final isActive = _manager.stage == m;
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 4),
-                      child: GestureDetector(
-                        onTap: () => _setStage(m),
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 180),
-                          constraints: const BoxConstraints(minWidth: 58),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 13,
-                            vertical: 7,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(18),
-                            border: Border.all(
-                              color: isActive ? timerMain : timerBorder,
-                              width: isActive ? 1.8 : 1.2,
+                // 저장해둔 반복 설정이 있으면 그 요약이 빠른 선택 자리를
+                // 대신한다. 둘을 같이 두면 어느 값으로 시작하는지 헷갈린다.
+                if (_cycleSetting != null)
+                  _buildCycleSummaryRow(
+                    _cycleSetting!,
+                    main: timerMain,
+                    accent: timerAccent,
+                    ink: timerInk,
+                    border: timerBorder,
+                  )
+                else
+                  // 셋을 균등하게 나눈다. 가운데 정렬로 두면 "직접 설정"만
+                  // 글자가 길어서 줄이 한쪽으로 쏠려 보인다.
+                  Row(
+                    children: [
+                      // 마스터는 5분 자리를 직접 설정에 내준다. 세밀하게 쓸
+                      // 사람은 그쪽에서 더 짧은 값도 고를 수 있다.
+                      ...(_canUseCycle ? [15, 25] : [5, 15, 25]).map((m) {
+                        final isActive = _manager.stage == m;
+                        return Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 4),
+                            child: GestureDetector(
+                              onTap: () => _setStage(m),
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 180),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 7,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(18),
+                                  border: Border.all(
+                                    color: isActive ? timerMain : timerBorder,
+                                    width: isActive ? 1.8 : 1.2,
+                                  ),
+                                ),
+                                child: Text(
+                                  '$m분',
+                                  textAlign: TextAlign.center,
+                                  style: GoogleFonts.notoSansKr(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w800,
+                                    color: isActive ? timerInk : timerAccent,
+                                  ),
+                                ),
+                              ),
                             ),
                           ),
-                          child: Text(
-                            '$m분',
-                            textAlign: TextAlign.center,
-                            style: GoogleFonts.notoSansKr(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w800,
-                              color: isActive ? timerInk : timerAccent,
+                        );
+                      }),
+                      if (_canUseCycle)
+                        Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 4),
+                            child: GestureDetector(
+                              onTap: _openCycleSheet,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 7,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(18),
+                                  border: Border.all(
+                                    color: timerMain.withValues(alpha: 0.55),
+                                    width: 1.2,
+                                  ),
+                                ),
+                                child: Text(
+                                  '직접 설정',
+                                  textAlign: TextAlign.center,
+                                  style: GoogleFonts.notoSansKr(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w800,
+                                    color: timerMain,
+                                  ),
+                                ),
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                    );
-                  }).toList(),
-                ),
+                    ],
+                  ),
                 const SizedBox(height: 14),
                 GestureDetector(
                   onTap: isDone ? null : _toggle,
@@ -1540,6 +1786,294 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: mirror ? bars.reversed.toList() : bars,
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// 반복 설정 바텀시트
+// ─────────────────────────────────────────────────────────────
+
+class _CycleSheetResult {
+  const _CycleSheetResult(this.setting);
+
+  /// null이면 반복을 끄고 5·15·25로 돌아간다.
+  final FocusCycleSetting? setting;
+}
+
+/// 작업·휴식·반복 횟수를 고르는 시트.
+///
+/// 숫자를 직접 입력받지 않고 목록에서 고르게 한다. 0분이나 300분이 저장되면
+/// 타이머가 시작하자마자 끝나거나 하루를 통째로 잡아먹는다.
+class _CycleSettingSheet extends StatefulWidget {
+  const _CycleSettingSheet({required this.initial, required this.canClear});
+
+  final FocusCycleSetting initial;
+  final bool canClear;
+
+  @override
+  State<_CycleSettingSheet> createState() => _CycleSettingSheetState();
+}
+
+class _CycleSettingSheetState extends State<_CycleSettingSheet> {
+  late int _work = widget.initial.workMinutes;
+  late int _rest = widget.initial.restMinutes;
+  late int _rounds = widget.initial.rounds;
+
+  static const Color _main = Color(0xFF9B8AF0);
+  static const Color _accent = Color(0xFFA99AE8);
+  static const Color _ink = Color(0xFF2F266C);
+  static const Color _border = Color(0xFFE7E0FA);
+
+  FocusCycleSetting get _setting => FocusCycleSetting(
+    workMinutes: _work,
+    restMinutes: _rest,
+    rounds: _rounds,
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      top: false,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(20, 10, 20, 16),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 38,
+              height: 4,
+              decoration: BoxDecoration(
+                color: _border,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    '시간 설정 변경',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.notoSansKr(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w900,
+                      color: _ink,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            _row(
+              label: '작업 시간',
+              hint: '집중해서 일하는 시간',
+              value: _work,
+              unit: '분',
+              choices: FocusCycleSetting.workChoices,
+              onPick: (v) => setState(() => _work = v),
+            ),
+            _divider(),
+            _row(
+              label: '쉬는 시간',
+              hint: '짧게 휴식하는 시간',
+              value: _rest,
+              unit: '분',
+              choices: FocusCycleSetting.restChoices,
+              onPick: (v) => setState(() => _rest = v),
+            ),
+            _divider(),
+            _row(
+              label: '반복 횟수',
+              hint: '몇 번 반복할지 설정',
+              value: _rounds,
+              unit: '회',
+              choices: FocusCycleSetting.roundChoices,
+              onPick: (v) => setState(() => _rounds = v),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              decoration: BoxDecoration(
+                color: _main.withValues(alpha: 0.07),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Column(
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(
+                        Icons.timer_outlined,
+                        size: 13,
+                        color: _accent,
+                      ),
+                      const SizedBox(width: 5),
+                      Text(
+                        '총 예상 시간',
+                        style: GoogleFonts.notoSansKr(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w800,
+                          color: _accent,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 5),
+                  Text(
+                    _setting.totalLabel,
+                    style: GoogleFonts.notoSansKr(
+                      fontSize: 19,
+                      fontWeight: FontWeight.w900,
+                      color: _ink,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    _setting.hasRest
+                        ? '(작업 $_work분 + 휴식 $_rest분) × $_rounds회'
+                        : '작업 $_work분 한 번',
+                    style: GoogleFonts.notoSansKr(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: _accent,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+            GestureDetector(
+              onTap: () => Navigator.pop(context, _CycleSheetResult(_setting)),
+              child: Container(
+                width: double.infinity,
+                height: 50,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [_main, _accent],
+                  ),
+                  borderRadius: BorderRadius.circular(15),
+                ),
+                child: Text(
+                  '이 설정으로 저장',
+                  style: GoogleFonts.notoSansKr(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w900,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ),
+            // 반복을 쓰다가 그만두고 싶을 때 빠져나갈 길. 없으면 한 번 저장한
+            // 사람은 5·15·25 버튼을 다시 볼 수 없다.
+            if (widget.canClear) ...[
+              const SizedBox(height: 8),
+              GestureDetector(
+                onTap: () =>
+                    Navigator.pop(context, const _CycleSheetResult(null)),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Text(
+                    '반복 끄고 5 · 15 · 25분으로 돌아가기',
+                    style: GoogleFonts.notoSansKr(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: _accent,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _divider() => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 4),
+    child: Container(height: 1, color: _border.withValues(alpha: 0.7)),
+  );
+
+  Widget _row({
+    required String label,
+    required String hint,
+    required int value,
+    required String unit,
+    required List<int> choices,
+    required ValueChanged<int> onPick,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: GoogleFonts.notoSansKr(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w800,
+                    color: _ink,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  hint,
+                  style: GoogleFonts.notoSansKr(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                    color: _accent,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: _border, width: 1.2),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<int>(
+                value: value,
+                isDense: true,
+                borderRadius: BorderRadius.circular(12),
+                icon: const Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  color: _accent,
+                ),
+                style: GoogleFonts.notoSansKr(
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w800,
+                  color: _ink,
+                ),
+                items: [
+                  for (final choice in choices)
+                    DropdownMenuItem(
+                      value: choice,
+                      child: Text('$choice$unit'),
+                    ),
+                ],
+                onChanged: (v) {
+                  if (v != null) onPick(v);
+                },
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
