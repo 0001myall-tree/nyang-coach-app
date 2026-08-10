@@ -41,6 +41,7 @@ class AnalyticsService {
       debugPrint('Firebase Analytics event failed ($name): $e');
     }
   }
+
   static const double _krwPerUsd = 1400;
   static const double _gpt4oMiniBlendedUsdPerMillionTokens = 0.285;
 
@@ -93,6 +94,17 @@ class AnalyticsService {
     return null;
   }
 
+  /// 글자당 토큰 수의 역수.
+  ///
+  /// 3.2였다. 영어 기준으로는 얼추 맞는 값이지만 이 앱의 프롬프트와 대화는
+  /// 거의 전부 한국어다. o200k(gpt-4o-mini, gpt-4.1-mini의 토크나이저)로 실제
+  /// 프롬프트를 재보니 한국어는 글자당 0.57~0.68토큰이 나왔고, 3.2로 나눈
+  /// 값은 실제의 절반쯤(1.8~2.1배 과소)이었다. 짧은 발화일수록 더 벌어진다.
+  ///
+  /// 1.7은 그 측정치의 역수다. 영어가 섞이면 실제보다 많게 잡히는데, 한도를
+  /// 거는 쪽에 쓰는 값이라 넘치는 방향으로 틀리는 편이 안전하다.
+  static const double _charsPerToken = 1.7;
+
   static int estimateChatTokens(
     List<Map<String, String>> messages,
     String reply,
@@ -103,7 +115,7 @@ class AnalyticsService {
           (total, item) => total + (item['content'] ?? '').length,
         ) +
         reply.length;
-    return (totalChars / 3.2).ceil();
+    return (totalChars / _charsPerToken).ceil();
   }
 
   static Future<void> _safeSet(
