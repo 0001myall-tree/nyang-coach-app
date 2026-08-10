@@ -11881,7 +11881,7 @@ ${lines.join('\n')}
             //  프렌즈의 "타이머 먼저 제안 가능" 규칙과 모순이 생긴다)
             if (_coach.isMaster) {
               sb.writeln(
-                '*"앱 기록상 미루기 2회 이상"으로 표시된 미완료 할 일을 사용자가 계속 시작하지 못해도 "마음 비우고 시작"이나 카운트다운을 먼저 제안하지 말 것. 해당 기능은 사용자가 직접 버튼을 누르거나 명시적으로 요청했을 때만 시작함.',
+                '*"앱 기록상 미루기 2회 이상"으로 표시된 미완료 할 일을 사용자가 계속 시작하지 못해도 "마음 비우고 시작"이나 카운트다운을 코치가 먼저 띄우지 말 것. 권하는 것은 괜찮지만 실행은 사용자가 버튼을 누르거나 동의했을 때만 함.',
               );
               sb.writeln(
                 '*타이머 확인 카드([TIMER_CONFIRM])는 사용자가 직접 요청했거나 "필요하면 타이머라도 띄워드릴까요?"에 동의했을 때만 출력할 것. 코치가 먼저 타이머 태그를 출력하지 말 것.',
@@ -12961,6 +12961,7 @@ ${lines.join('\n')}
           ResistanceInterventionService.isRefusal(userText);
       final next = ResistanceInterventionService.nextIntervention(
         _offeredInterventionIds,
+        isMaster: _coach.isMaster,
       );
       if (next == null) {
         interventionSection = ResistanceInterventionService.exhaustedRule;

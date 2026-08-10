@@ -19,6 +19,7 @@ class ResistanceIntervention {
     required this.id,
     required this.label,
     required this.rule,
+    this.masterOnly = false,
   });
 
   /// 기록에 남는 식별자. 한번 정하면 바꾸지 않는다.
@@ -29,6 +30,12 @@ class ResistanceIntervention {
 
   /// 프롬프트에 그대로 들어가는 지시문.
   final String rule;
+
+  /// 마스터 코치에게만 꺼낼 개입인지.
+  ///
+  /// 앱 기능을 가리키는 개입은 그 기능이 없는 코치에게 주면 안 된다. 없는
+  /// 버튼을 누르라고 안내하게 된다.
+  final bool masterOnly;
 }
 
 class ResistanceInterventionService {
@@ -90,6 +97,19 @@ class ResistanceInterventionService {
       rule: '''[순서 바꾸기]
 - 이 일을 밀지 말고, 오늘 할 일 중 지금 마음이 가장 덜 무거운 다른 일을 먼저 하자고 하세요.
 - 미루는 게 아니라 순서를 바꾸는 것입니다. 원래 일을 언제 할지 다시 묻지 마세요.''',
+    ),
+    // 앱 기능을 가리키는 유일한 개입이라 뒤쪽에 뒀다. 앞의 방식들이 말로
+    // 푸는 것인 데 반해 이건 화면을 하나 띄우는 일이라, 처음부터 꺼내면
+    // 맥락 없이 튀어나온 것처럼 받는다. 여러 번 막힌 뒤라야 이유가 선다.
+    ResistanceIntervention(
+      id: 'start_signal',
+      label: '시작 신호 만들기',
+      masterOnly: true,
+      rule: '''[시작 신호 만들기]
+- 앞의 방식들이 연달아 안 먹혔습니다. 이번에는 할 일을 더 낮추지 말고, 시작 자체에 신호를 만드는 쪽으로 가세요.
+- 정해진 신호가 행동을 시작하는 데 도움이 될 수 있다는 연구가 있다고 한 문장만 짚으세요. 효과를 길게 설명하거나 설득하지 마세요.
+- 채팅창 위 빠른 실행의 '숫자 세고 시작'을 눌러도 된다고 알려주고, 대신 띄워줄지 한 번만 물으세요.
+- 사용자가 띄워달라고 하면 그때 답변 끝에 [COUNTDOWN_START]를 붙이세요. 묻기도 전에 먼저 붙이지 마세요.''',
     ),
     ResistanceIntervention(
       id: 'let_user_choose',
@@ -153,9 +173,13 @@ class ResistanceInterventionService {
       _refusalSignals.any(_normalize(text).contains);
 
   /// 아직 안 꺼낸 것 중 다음 개입. 전부 꺼냈으면 null.
-  static ResistanceIntervention? nextIntervention(Iterable<String> offeredIds) {
+  static ResistanceIntervention? nextIntervention(
+    Iterable<String> offeredIds, {
+    required bool isMaster,
+  }) {
     final offered = offeredIds.toSet();
     for (final intervention in interventions) {
+      if (intervention.masterOnly && !isMaster) continue;
       if (!offered.contains(intervention.id)) return intervention;
     }
     return null;

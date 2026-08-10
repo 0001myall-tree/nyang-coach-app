@@ -5,14 +5,23 @@ void main() {
   test('거부하면 같은 방식이 다시 나오지 않는다', () {
     // "커서 봐" → "싫어" → 또 "커서 봐"가 반복되던 게 이 로직을 만든 이유다.
     final offered = <String>[];
-    final first = ResistanceInterventionService.nextIntervention(offered)!;
+    final first = ResistanceInterventionService.nextIntervention(
+      offered,
+      isMaster: true,
+    )!;
     offered.add(first.id);
 
-    final second = ResistanceInterventionService.nextIntervention(offered)!;
+    final second = ResistanceInterventionService.nextIntervention(
+      offered,
+      isMaster: true,
+    )!;
     expect(second.id, isNot(first.id));
     offered.add(second.id);
 
-    final third = ResistanceInterventionService.nextIntervention(offered)!;
+    final third = ResistanceInterventionService.nextIntervention(
+      offered,
+      isMaster: true,
+    )!;
     expect(third.id, isNot(first.id));
     expect(third.id, isNot(second.id));
   });
@@ -21,7 +30,10 @@ void main() {
     final offered = <String>[];
     final seen = <String>[];
     while (true) {
-      final next = ResistanceInterventionService.nextIntervention(offered);
+      final next = ResistanceInterventionService.nextIntervention(
+        offered,
+        isMaster: true,
+      );
       if (next == null) break;
       seen.add(next.id);
       offered.add(next.id);
@@ -34,8 +46,47 @@ void main() {
     final allIds = ResistanceInterventionService.interventions
         .map((i) => i.id)
         .toList();
-    expect(ResistanceInterventionService.nextIntervention(allIds), isNull);
+    expect(
+      ResistanceInterventionService.nextIntervention(allIds, isMaster: true),
+      isNull,
+    );
     expect(ResistanceInterventionService.exhaustedRule, contains('다시 밀지 마세요'));
+  });
+
+  group('코치가 못 쓰는 기능은 안내하지 않는다', () {
+    // 빠른 실행은 마스터 코치 화면에만 있다. 프렌즈 코치가 이걸 권하면
+    // 사용자는 있지도 않은 버튼을 찾게 된다.
+    test('프렌즈에게는 마스터 전용 개입이 나오지 않는다', () {
+      final offered = <String>[];
+      while (true) {
+        final next = ResistanceInterventionService.nextIntervention(
+          offered,
+          isMaster: false,
+        );
+        if (next == null) break;
+        expect(next.masterOnly, isFalse, reason: next.id);
+        offered.add(next.id);
+      }
+      expect(offered, isNot(contains('start_signal')));
+    });
+
+    test('마스터에게는 나온다', () {
+      final offered = ResistanceInterventionService.interventions
+          .where((i) => i.id != 'start_signal')
+          .map((i) => i.id)
+          .toList();
+      final next = ResistanceInterventionService.nextIntervention(
+        offered,
+        isMaster: true,
+      );
+      expect(next?.id, 'start_signal');
+    });
+
+    test('시작 신호는 묻기 전에 띄우지 않는다', () {
+      final signal = ResistanceInterventionService.byId('start_signal')!;
+      expect(signal.rule, contains('한 번만 물으세요'));
+      expect(signal.rule, contains('묻기도 전에 먼저 붙이지 마세요'));
+    });
   });
 
   test('거부 표현 판정', () {
