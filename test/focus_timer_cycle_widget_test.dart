@@ -50,9 +50,12 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('마스터 타이머', () {
-    testWidgets('제목이 MASTER TIMER다', (tester) async {
+    testWidgets('제목 없이 시계만 있다', (tester) async {
+      // 가운데 'MASTER TIMER'와 오른쪽 '전체 보기'가 좁은 기기에서 서로
+      // 파고들었다. 카드 안에 시계가 큼직해서 제목 없이도 뭔지 안다.
       await pumpTimer(tester, coachId: 'nyang_halbae');
-      expect(find.text('MASTER TIMER'), findsOneWidget);
+      expect(find.text('MASTER TIMER'), findsNothing);
+      expect(find.text('MIND TIMER'), findsNothing);
     });
 
     testWidgets('시계가 한 줄로 나온다', (tester) async {
@@ -68,12 +71,17 @@ void main() {
       expect(clock.height, lessThan(70), reason: '두 줄로 쪼개졌다');
     });
 
-    testWidgets('전체 보기는 제목 줄에 있다', (tester) async {
-      await pumpTimer(tester, coachId: 'nyang_halbae');
-      final title = tester.getCenter(find.text('MASTER TIMER'));
-      final button = tester.getCenter(find.text('전체 보기'));
-      expect((button.dy - title.dy).abs(), lessThan(12), reason: '같은 줄');
-      expect(button.dx, greaterThan(title.dx), reason: '오른쪽 끝');
+    testWidgets('전체 보기는 시계 위 오른쪽 끝에 혼자 있다', (tester) async {
+      // 좁은 기기에서 제목과 겹치던 자리다. 이제 그 줄에 다른 글자가 없다.
+      await pumpTimer(
+        tester,
+        coachId: 'nyang_halbae',
+        size: const Size(320, 700),
+      );
+      final button = tester.getRect(find.text('전체 보기'));
+      final clock = tester.getRect(find.text('15:00'));
+      expect(button.bottom, lessThan(clock.top), reason: '시계 위');
+      expect(button.center.dx, greaterThan(clock.center.dx), reason: '오른쪽 끝');
     });
 
     testWidgets('시작 전에는 전체 화면 버튼이 집중 시작이다', (tester) async {

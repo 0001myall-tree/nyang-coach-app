@@ -1042,53 +1042,36 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // 제목은 가운데를 지키고 전체 보기만 오른쪽 끝에 앉힌다.
-                // 시계 옆에 두면 시계 폭을 빼앗아 "24:40"이 두 줄로 쪼개진다.
-                Stack(
-                  alignment: Alignment.center,
+                // 전체 보기만 오른쪽 끝에 앉힌다.
+                //
+                // 전에는 'MASTER TIMER'를 가운데 두고 그 위에 전체 보기를
+                // 겹쳐 올렸다. 자간까지 넣은 제목이라 폭이 넓어서 좁은 기기에서
+                // 두 글자가 서로 파고들었다. 카드 안에 시계가 이미 큼직하게
+                // 있어서 무슨 화면인지는 제목 없이도 안다.
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
                   children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.timer_rounded, size: 15, color: timerAccent),
-                        const SizedBox(width: 6),
-                        Text(
-                          // 이 화면은 마스터 코치만 쓴다. 프렌즈 타이머는 따로
-                          // 그려지고 '집중 시간'이라고 적는다.
-                          widget.isMindTimer ? 'MIND TIMER' : 'MASTER TIMER',
-                          style: GoogleFonts.notoSansKr(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 1.6,
+                    GestureDetector(
+                      onTap: _openFocusScreen,
+                      behavior: HitTestBehavior.opaque,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.open_in_full_rounded,
+                            size: 13,
                             color: timerAccent,
                           ),
-                        ),
-                      ],
-                    ),
-                    Positioned(
-                      right: 0,
-                      child: GestureDetector(
-                        onTap: _openFocusScreen,
-                        behavior: HitTestBehavior.opaque,
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.open_in_full_rounded,
-                              size: 13,
+                          const SizedBox(width: 3),
+                          Text(
+                            '전체 보기',
+                            style: GoogleFonts.notoSansKr(
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w700,
                               color: timerAccent,
                             ),
-                            const SizedBox(width: 3),
-                            Text(
-                              '전체 보기',
-                              style: GoogleFonts.notoSansKr(
-                                fontSize: 10.5,
-                                fontWeight: FontWeight.w700,
-                                color: timerAccent,
-                              ),
-                            ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
