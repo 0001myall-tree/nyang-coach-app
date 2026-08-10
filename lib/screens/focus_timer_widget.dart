@@ -2161,14 +2161,19 @@ class _CycleSettingSheetState extends State<_CycleSettingSheet> {
 ///
 /// 숫자만 보면 얼마나 남았는지 머리로 계산해야 한다. 원을 두른 발자국이
 /// 하나씩 사라지면 눈으로 바로 읽힌다. 12시 자리에서 시계 방향으로 지워진다.
+///
+/// 스무 개다. 더 촘촘하면 하나 사라진 게 눈에 안 띄어서 줄어드는 맛이 없고,
+/// 25분짜리 한 구간에서 대략 1분 15초에 하나씩 빠지는 속도가 된다.
 class PawRing extends StatelessWidget {
   const PawRing({
     super.key,
     required this.progress,
     required this.size,
-    this.pawCount = 28,
+    this.pawCount = 20,
     this.activeColor = const Color(0xFF7C6BE0),
     this.fadedColor = const Color(0xFFE3DCFA),
+    this.wave,
+    this.showWater = true,
     this.child,
   });
 
@@ -2178,6 +2183,14 @@ class PawRing extends StatelessWidget {
   final int pawCount;
   final Color activeColor;
   final Color fadedColor;
+
+  /// 물결을 흔드는 애니메이션. 0에서 1로 돌면 한 주기다.
+  ///
+  /// 값이 아니라 애니메이션 자체를 받는다. 값으로 받으면 물결이 한 프레임
+  /// 움직일 때마다 발자국 스물여덟 개까지 통째로 다시 만들어진다.
+  final Animation<double>? wave;
+
+  final bool showWater;
   final Widget? child;
 
   @override
@@ -2194,6 +2207,22 @@ class PawRing extends StatelessWidget {
       child: Stack(
         alignment: Alignment.center,
         children: [
+          if (showWater)
+            RepaintBoundary(
+              child: SizedBox(
+                width: radius * 1.72,
+                height: radius * 1.72,
+                child: AnimatedBuilder(
+                  animation: wave ?? const AlwaysStoppedAnimation(0.0),
+                  builder: (_, _) => CustomPaint(
+                    painter: _WaterPainter(
+                      level: clamped,
+                      phase: wave?.value ?? 0,
+                    ),
+                  ),
+                ),
+              ),
+            ),
           for (var i = 0; i < pawCount; i++)
             _paw(index: i, radius: radius, isOn: i < remaining),
           // 가운데 내용은 원 안쪽을 넘지 않게 묶는다. 안 묶으면 시계가
@@ -2257,9 +2286,11 @@ class MasterTimerFocusScreen extends StatefulWidget {
   State<MasterTimerFocusScreen> createState() => _MasterTimerFocusScreenState();
 }
 
-class _MasterTimerFocusScreenState extends State<MasterTimerFocusScreen> {
+class _MasterTimerFocusScreenState extends State<MasterTimerFocusScreen>
+    with SingleTickerProviderStateMixin {
   final FocusTimerManager _manager = FocusTimerManager();
   Timer? _ticker;
+  late final AnimationController _waveCtrl;
 
   static const Color _ink = Color(0xFF2F266C);
   static const Color _main = Color(0xFF7C6BE0);
@@ -2268,6 +2299,10 @@ class _MasterTimerFocusScreenState extends State<MasterTimerFocusScreen> {
   @override
   void initState() {
     super.initState();
+    _waveCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 4),
+    )..repeat();
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) setState(() {});
     });
@@ -2276,6 +2311,7 @@ class _MasterTimerFocusScreenState extends State<MasterTimerFocusScreen> {
   @override
   void dispose() {
     _ticker?.cancel();
+    _waveCtrl.dispose();
     super.dispose();
   }
 
@@ -2345,6 +2381,7 @@ class _MasterTimerFocusScreenState extends State<MasterTimerFocusScreen> {
             PawRing(
               progress: _progress,
               size: ringSize,
+              wave: _waveCtrl,
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -2530,4 +2567,68 @@ class _MasterTimerFocusScreenState extends State<MasterTimerFocusScreen> {
       ),
     );
   }
+}
+
+/// 원 안에 고인 물. 남은 시간만큼 차 있고 줄면서 빠진다.
+///
+/// 발자국이 정확한 눈금이고 이쪽은 분위기다. 그래서 가득 찼을 때도 원을 다
+/// 채우지 않는다 — 꽉 찬 원은 시계처럼 읽히려 들어서, 발자국과 서로 다른
+/// 값을 말하는 것처럼 보인다.
+class _WaterPainter extends CustomPainter {
+  const _WaterPainter({required this.level, required this.phase});
+
+  /// 남은 비율 0~1.
+  final double level;
+
+  /// 물결 위상 0~1.
+  final double phase;
+
+  /// 가득 찼을 때 원 높이의 몇 할까지 차오르는지.
+  static const double _maxFill = 0.46;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (level <= 0) return;
+    final radius = size.width / 2;
+    final center = Offset(radius, radius);
+    canvas.save();
+    canvas.clipPath(
+      Path()..addOval(Rect.fromCircle(center: center, radius: radius)),
+    );
+
+    final fill = size.height * _maxFill * level;
+    final surfaceY = size.height - fill;
+    // 물이 얕아질수록 물결도 잔잔해진다. 한 방울 남았는데 크게 출렁이면
+    // 남은 양이 실제보다 많아 보인다.
+    final amplitude = (6.0 * level).clamp(1.0, 6.0);
+
+    final path = Path()..moveTo(0, surfaceY);
+    for (double x = 0; x <= size.width; x += 4) {
+      final t = x / size.width;
+      final y =
+          surfaceY +
+          math.sin((t * 2 + phase) * 2 * math.pi) * amplitude +
+          math.sin((t * 3.3 + phase * 1.6) * 2 * math.pi) * amplitude * 0.35;
+      path.lineTo(x, y);
+    }
+    path
+      ..lineTo(size.width, size.height)
+      ..lineTo(0, size.height)
+      ..close();
+
+    canvas.drawPath(
+      path,
+      Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0x66A99AE8), Color(0x997C6BE0)],
+        ).createShader(Rect.fromLTWH(0, surfaceY, size.width, fill + 1)),
+    );
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(_WaterPainter old) =>
+      old.level != level || old.phase != phase;
 }
