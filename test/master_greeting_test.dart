@@ -54,7 +54,13 @@ final cases = <String, MasterGreetingContext>{
     doneCount: 3,
     doneLabel: "'설거지' 외 2개",
   ),
-  '오후-진척있음': ctx(hour: 14, planTotal: 4, planDone: 2, doneCount: 2, doneLabel: "'운동'"),
+  '오후-진척있음': ctx(
+    hour: 14,
+    planTotal: 4,
+    planDone: 2,
+    doneCount: 2,
+    doneLabel: "'운동'",
+  ),
   '오후-완료0': ctx(hour: 14, planTotal: 4),
   '오후-계획없음': ctx(hour: 14),
   '낮-어제늦게잠': ctx(hour: 10, planTotal: 3, lateNight: true),
@@ -68,11 +74,7 @@ final cases = <String, MasterGreetingContext>{
     pendingPlans: ['설거지', '빨래', '운동'],
   ),
   // 저녁 초입(18~20시)은 하루가 아직 열려 있는 것으로 본다.
-  '저녁초입-완료0': ctx(
-    hour: 18,
-    planTotal: 4,
-    pendingPlans: ['설거지', '빨래', '운동'],
-  ),
+  '저녁초입-완료0': ctx(hour: 18, planTotal: 4, pendingPlans: ['설거지', '빨래', '운동']),
   '저녁초입-거의다': ctx(
     hour: 19,
     planTotal: 10,
@@ -88,7 +90,13 @@ final cases = <String, MasterGreetingContext>{
     doneCount: 1,
     pendingPlans: ['설거지', '빨래', '운동'],
   ),
-  '저녁-중간': ctx(hour: 20, planTotal: 4, planDone: 3, doneCount: 3, doneLabel: "'운동' 외 2개"),
+  '저녁-중간': ctx(
+    hour: 20,
+    planTotal: 4,
+    planDone: 3,
+    doneCount: 3,
+    doneLabel: "'운동' 외 2개",
+  ),
   '저녁-거의다': ctx(
     hour: 20,
     planTotal: 10,
@@ -497,7 +505,11 @@ void main() {
             reason: '씨앗 $seed: ${early.text}',
           );
           // 뒤에 격려가 한 문장 더 붙으므로 여기서 늘어지면 세 문장이 된다.
-          expect(sentenceCount(early.text), 2, reason: '씨앗 $seed: ${early.text}');
+          expect(
+            sentenceCount(early.text),
+            2,
+            reason: '씨앗 $seed: ${early.text}',
+          );
 
           final late = MasterGreetingBuilder(
             voice: voice.value,
@@ -681,8 +693,11 @@ void main() {
       recentLines: pool.map(plain.expand).toList(growable: false),
     );
     final line = builder.pickLine(pool);
-    expect(pool.any((t) => line.contains(plain.anchor(t))), isTrue,
-        reason: line);
+    expect(
+      pool.any((t) => line.contains(plain.anchor(t))),
+      isTrue,
+      reason: line,
+    );
   });
 
   test('씨앗이 같으면 같은 문장이 나온다', () {
@@ -716,16 +731,17 @@ void main() {
     for (final voice in voices.entries) {
       // 일정만 끝내고 습관이 통째로 남았는데 "전부 마치셨다"고 할 수 없다.
       test('${voice.key} / 습관이 남았으면 다 마쳤다고 하지 않는다', () {
-        final text = MasterGreetingBuilder(voice: voice.value, random: Random(1))
-            .build(
-              eveningWith(
-                planTotal: 2,
-                planDone: 2,
-                habitTotal: 5,
-                habitDone: 0,
-              ),
-            )
-            .text;
+        final text =
+            MasterGreetingBuilder(voice: voice.value, random: Random(1))
+                .build(
+                  eveningWith(
+                    planTotal: 2,
+                    planDone: 2,
+                    habitTotal: 5,
+                    habitDone: 0,
+                  ),
+                )
+                .text;
         final builder = MasterGreetingBuilder(voice: voice.value);
         for (final line in voice.value.eveningAll) {
           expect(text, isNot(contains(builder.anchor(line))), reason: text);
@@ -733,16 +749,17 @@ void main() {
       });
 
       test('${voice.key} / 일정과 습관을 다 끝내면 완주로 본다', () {
-        final text = MasterGreetingBuilder(voice: voice.value, random: Random(1))
-            .build(
-              eveningWith(
-                planTotal: 2,
-                planDone: 2,
-                habitTotal: 3,
-                habitDone: 3,
-              ),
-            )
-            .text;
+        final text =
+            MasterGreetingBuilder(voice: voice.value, random: Random(1))
+                .build(
+                  eveningWith(
+                    planTotal: 2,
+                    planDone: 2,
+                    habitTotal: 3,
+                    habitDone: 3,
+                  ),
+                )
+                .text;
         final builder = MasterGreetingBuilder(voice: voice.value);
         expect(
           voice.value.eveningAll.any(
@@ -775,9 +792,7 @@ void main() {
             final result = MasterGreetingBuilder(
               voice: voice.value,
               random: Random(seed),
-            ).build(
-              ctx(hour: hour, planTotal: 5, planDone: 2, doneCount: 2),
-            );
+            ).build(ctx(hour: hour, planTotal: 5, planDone: 2, doneCount: 2));
             expect(result.text, isEmpty, reason: '$hour시: ${result.text}');
             expect(result.choices, isEmpty);
           }

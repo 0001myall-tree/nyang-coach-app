@@ -12874,8 +12874,12 @@ ${lines.join('\n')}
         // 환기까지 써본 뒤에도 또 걸린 턴에만 세 번째 갈래를 연다. 처음부터
         // 주면 "오늘은 안 되니 시간대를 바꿔라"가 첫 대답이 된다.
         //
-        // 기록 탭의 습관 패턴을 가리키는 대응이라 마스터에만 붙인다.
-        if (_coach.isMaster) buffer.write(Prompts.focusBestStartTime);
+        // 시간대를 찾자는 말 자체는 코치를 가리지 않는다. 기록 탭이 찾아준다는
+        // 안내만 마스터 것이다 — 습관 패턴이 그 화면에만 있다.
+        buffer.write(Prompts.focusBestStartTime);
+        if (_coach.isMaster) {
+          buffer.write(Prompts.focusBestStartTimeTracking);
+        }
       }
       if (!mayAskFocusWorkHistory && !isFocusFatigueFollowup) {
         buffer.write(Prompts.focusWorkHistoryAskUsed);

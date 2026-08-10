@@ -23,11 +23,7 @@ void main() {
     });
 
     test('한 시간을 빼도 자기가 앞서 말한 시각이 아니라 출발 시각에서 뺀다', () {
-      final plan = PrepPlan(
-        departure: 610,
-        prepMinutes: 60,
-        bufferMinutes: 0,
-      );
+      final plan = PrepPlan(departure: 610, prepMinutes: 60, bufferMinutes: 0);
       expect(plan.prepStart, hm(9, 10));
     });
 
@@ -108,10 +104,7 @@ void main() {
     });
 
     test('다 알면 더 묻지 않는다', () {
-      expect(
-        PrepPlan(departure: hm(10, 10), prepMinutes: 40).missing,
-        isEmpty,
-      );
+      expect(PrepPlan(departure: hm(10, 10), prepMinutes: 40).missing, isEmpty);
     });
   });
 
@@ -187,7 +180,6 @@ void main() {
     });
   });
 
-
   group('오전 오후 가려내기', () {
     test('지금에서 가장 가까운 쪽으로 읽는다', () {
       // 오후 2시에 "이따가 5시"라고 하면 오후 5시다.
@@ -227,7 +219,10 @@ void main() {
       talk.say('준비 30분');
       // 예전엔 여기서 "0시 15분"이 나왔다.
       expect(talk.plan!.prepStart, hm(12, 5));
-      expect(formatClock(talk.plan!.prepStart!, withMeridiem: true), '오후 12시 5분');
+      expect(
+        formatClock(talk.plan!.prepStart!, withMeridiem: true),
+        '오후 12시 5분',
+      );
     });
   });
 
@@ -286,7 +281,6 @@ void main() {
       expect(talk.plan!.travelMinutes, isNull);
     });
 
-
     test('까지 가야 한다고 말하면 도착 시각으로 읽는다', () {
       final talk = _Talk();
       talk.say('내일 오후 1시까지 신촌 가야 하는데 몇시부터 준비해야 할까?');
@@ -308,8 +302,11 @@ void main() {
     test('한 문장에 도착 시각과 출발을 묻는 말이 같이 있어도 헷갈리지 않는다', () {
       final talk = _Talk();
       talk.say('내일 오후 1시까지 신촌가야 하는데 집에서 몇시에 나갈까?');
-      expect(talk.plan!.appointment, hm(13, 0),
-          reason: '뒤에 나오는 "집에서 나갈까"에 끌려가면 안 된다');
+      expect(
+        talk.plan!.appointment,
+        hm(13, 0),
+        reason: '뒤에 나오는 "집에서 나갈까"에 끌려가면 안 된다',
+      );
       expect(talk.plan!.departure, isNull);
       expect(talk.lastAsked, PrepMissing.travel);
 
@@ -324,9 +321,10 @@ void main() {
       expect(talk.plan!.appointment, isNull);
     });
 
-
     test('시각을 말 안 하고 할 일 이름만 불러도 할 일 탭 시각을 쓴다', () {
-      final talk = _Talk(tasks: [PrepTaskTime(name: '약속', minutes: hm(18, 0))]);
+      final talk = _Talk(
+        tasks: [PrepTaskTime(name: '약속', minutes: hm(18, 0))],
+      );
 
       talk.say("'약속' 준비하기 귀찮아..");
       expect(talk.plan, isNull, reason: '푸념만으로 역산을 시작하지 않는다');
@@ -366,7 +364,6 @@ void main() {
       expect(talk.lastAsked, PrepMissing.anchorTime);
     });
 
-
     test('만나야 한다고 하면 도착 시각으로 읽는다', () {
       final talk = _Talk();
       talk.say('이따가 5시에 집 근처에서 맞선남 만나야 하는데 일하다가 몇시부터 준비할까?');
@@ -383,7 +380,6 @@ void main() {
       expect(talk.plan!.resolvedDeparture, hm(4, 50));
       expect(talk.plan!.prepStart, hm(4, 5));
     });
-
 
     test('준비 시간을 안 들으면 어떤 시각도 내놓지 않는다', () {
       // 준비에 걸리는 시간은 사람마다 다르다. 기본값을 두면 안 물어보고 답한다.
@@ -406,7 +402,6 @@ void main() {
       expect(talk.plan!.resolvedDeparture, isNull);
       expect(talk.plan!.missing, contains(PrepMissing.travel));
     });
-
 
     test('준비를 물으면 준비부터 묻는다', () {
       final talk = _Talk(now: DateTime(2026, 8, 9, 13, 0));

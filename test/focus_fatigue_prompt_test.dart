@@ -17,19 +17,39 @@ void main() {
 
     test('시간대를 찾는 쪽으로 옮긴다', () {
       expect(rule, contains('잘 붙는 시간대'));
-      expect(rule, contains('기록 탭'));
     });
 
-    test('등록을 재촉하지 않는다', () {
-      expect(rule, contains('한 번만 안내'));
-      expect(rule, contains('재촉하지 말 것'));
-      // 태그는 사용자가 부탁했을 때만. 출력 규칙과 어긋나면 안 된다.
-      expect(rule, contains('걸어달라고 하면 그때 [HABIT: 습관명]'));
+    test('기능 얘기는 빼둔다', () {
+      // 이 갈래의 통찰은 코치를 가리지 않는다. 프렌즈도 받는 문구라
+      // 마스터에만 있는 화면을 여기서 가리키면 안 된다.
+      expect(rule, isNot(contains('기록 탭')));
+      expect(rule, isNot(contains('[HABIT')));
+    });
+
+    test('짚이는 시각이 있으면 거기서 해보자고 한다', () {
+      // 기능 없이도 줄 수 있는 실행 하나는 남겨둔다.
+      expect(rule, contains('다음엔 거기서 해보자고 한 번만'));
     });
 
     test('오늘 다시 밀지 않는다', () {
       // 이 갈래로 왔다는 건 오늘은 안 붙는다는 뜻이다.
       expect(rule, contains('다시 밀지 말 것'));
+    });
+  });
+
+  group('마스터에만 붙는 안내', () {
+    const tracking = Prompts.focusBestStartTimeTracking;
+
+    test('기록 탭이 시작 시간대를 찾아준다고 알린다', () {
+      expect(tracking, contains('기록 탭'));
+      expect(tracking, contains('완료로 이어진 적이 많았던 시작 시간대'));
+    });
+
+    test('등록을 재촉하지 않는다', () {
+      expect(tracking, contains('한 번만 안내'));
+      expect(tracking, contains('재촉하지 말 것'));
+      // 태그는 사용자가 부탁했을 때만. 출력 규칙과 어긋나면 안 된다.
+      expect(tracking, contains('걸어달라고 하면 그때 [HABIT: 습관명]'));
     });
   });
 

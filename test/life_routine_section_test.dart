@@ -43,7 +43,13 @@ void main() {
     });
 
     test('시간대 지침이 없는 코치에게는 아무것도 붙이지 않는다', () {
-      for (final id in ['cat', 'boyfriend', 'bro', 'nyang_halbae', 'sec_female']) {
+      for (final id in [
+        'cat',
+        'boyfriend',
+        'bro',
+        'nyang_halbae',
+        'sec_female',
+      ]) {
         expect(
           CoachConfigs.lifeRoutineSection(
             CoachConfigs.all[id]!,
