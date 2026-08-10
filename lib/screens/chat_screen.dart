@@ -33,7 +33,6 @@ import 'package:nyang_coach/services/focus_fatigue_service.dart';
 import 'package:nyang_coach/services/resistance_intervention_service.dart';
 import 'package:nyang_coach/prompts/coach_prompt.dart';
 import 'package:nyang_coach/services/prep_time_service.dart';
-import 'package:nyang_coach/services/recovery_insight_service.dart';
 import 'package:nyang_coach/services/widget_sync_service.dart';
 import 'coach_config.dart';
 import 'focus_timer_widget.dart';
@@ -1568,13 +1567,6 @@ class _ChatScreenState extends State<ChatScreen>
     if (_coach.id == 'cat') {
       await _recordCatChatEntry(prefs, todayStr);
     }
-    final plannerAwayDays = _plannerAwayDays(prefs, todayStr);
-    if (prefs.getString('nyang_vacation') == null) {
-      await RecoveryInsightService.startMasterLowActivationRestartIfEligible(
-        isMasterCoach: _coach.isMaster,
-        plannerAwayDays: plannerAwayDays,
-      );
-    }
     await _updateTodayRecord(prefs);
     await _refreshAttendanceStreak(prefs);
     await _loadHistoryAndGreet();
@@ -1599,44 +1591,6 @@ class _ChatScreenState extends State<ChatScreen>
       return;
     }
     setState(() => _catTodayEntryCount = count);
-  }
-
-  /// 마지막으로 '활동한 날'로부터 며칠 지났는지 계산한다.
-  ///
-  /// 기기 로컬 방문 기록(nyang_last_planner_visit_date)은 기기마다 따로 저장돼,
-  /// 안드로이드에서 매일 써도 아이폰에서는 '오래 부재'로 잡히는 크로스 기기
-  /// 오판정을 일으켰다. 대신 모든 기기의 활동이 동기화되는 nyang_history의
-  /// 마지막 활동일을 기준으로 삼는다. 오늘은 아직 진행 중이므로 후보에서 제외한다.
-  int? _plannerAwayDays(SharedPreferences prefs, String todayStr) {
-    final today = DateTime.tryParse(todayStr);
-    if (today == null) return null;
-    final todayDate = DateTime(today.year, today.month, today.day);
-
-    final rawHistory = prefs.getString('nyang_history');
-    if (rawHistory == null) return null;
-
-    DateTime? lastActive;
-    try {
-      final decoded = jsonDecode(rawHistory);
-      if (decoded is! List) return null;
-      for (final item in decoded) {
-        if (item is! Map) continue;
-        final parsed = DateTime.tryParse(item['date']?.toString() ?? '');
-        if (parsed == null) continue;
-        final day = DateTime(parsed.year, parsed.month, parsed.day);
-        // 오늘(진행 중)은 부재일수 기준에서 제외하고, 오늘 이전의 마지막 활동일을 찾는다.
-        if (!day.isBefore(todayDate)) continue;
-        if (lastActive == null || day.isAfter(lastActive)) {
-          lastActive = day;
-        }
-      }
-    } catch (_) {
-      return null;
-    }
-
-    if (lastActive == null) return null;
-    final days = todayDate.difference(lastActive).inDays;
-    return days > 0 ? days : 0;
   }
 
   Future<void> _restoreActiveFocusTimer() async {
@@ -2694,60 +2648,6 @@ ${lines.join('\n')}
     );
   }
 
-  bool _containsExecutionIntent(String text) {
-    final normalized = _normalizeRestText(text);
-    if (normalized.contains('아무것도하기싫')) return false;
-    const signals = [
-      '그래도할',
-      '그래도하고싶',
-      '그래도해야',
-      '해야해',
-      '해야돼',
-      '해야겠',
-      '해야하는데',
-      '할래',
-      '할거야',
-      '해볼래',
-      '해볼게',
-      '시작할게',
-      '시작하고싶',
-      '끝내고싶',
-      '마무리하고싶',
-      '이것만은',
-      '조금이라도할',
-      '5분만',
-      '오분만',
-      '뭐부터할',
-      '도와주면할',
-    ];
-    return signals.any(normalized.contains);
-  }
-
-  Future<bool> _hasRepeatedRecentRestSignals(String currentText) async {
-    if (!_containsAnyRestSignal(currentText)) return false;
-    return RecoveryInsightService.hasRecentConditionDeclineSignalBurst();
-  }
-
-  bool get _canProactivelyOfferRest => const {
-    'cat',
-    'boyfriend',
-    'halmae',
-    'bro',
-    'nyang_halbae',
-    'sec_female',
-  }.contains(widget.coachId);
-
-  String _restOfferMessage() {
-    return switch (widget.coachId) {
-      'boyfriend' => '요 며칠 진짜 열심히 한 거 내가 다 봤어.\n계속 달리면 나도 걱정돼.',
-      'halmae' => '우리 새끼 요 며칠 애쓴 거 할미가 다 봤다.\n계속 그러다 몸 상할까 걱정이다.',
-      'bro' => '야, 요 며칠 빡세게 달린 거 내가 다 봤다.\n계속 밀어붙이면 퍼진다.',
-      'nyang_halbae' => '요 며칠 꾸준히 걸어온 게 보이는구나냥.\n계속 무리하면 몸이 먼저 신호를 보낼 수도 있다냥.',
-      'sec_female' => '대표님, 요 며칠 꾸준히 달려오신 것 제가 확인했어요.\n계속 무리하시면 컨디션이 걱정됩니다.',
-      _ => '요 며칠 열심히 한 거 냥이가 다 봤다냥.\n계속 달리면 냥이도 걱정된다냥.',
-    };
-  }
-
   String _vacationActivatedMessage() {
     return switch (widget.coachId) {
       'boyfriend' => '오늘은 휴식 모드로 하자. 오늘은 할 일 체크 안 할 테니까 아무 걱정하지 말고 푹 쉬어.',
@@ -2800,116 +2700,6 @@ ${lines.join('\n')}
           text.contains('구체적인계획이나준비해둔수단') ||
           text.contains('지금119에전화');
     });
-  }
-
-  Future<bool> _maybeOfferRest(String userText) async {
-    final hasExecutionIntent = _containsExecutionIntent(userText);
-    final isRepeatedRest =
-        await _hasRepeatedRecentRestSignals(userText) && !hasExecutionIntent;
-
-    if (!_canProactivelyOfferRest ||
-        widget.vacationInfo != null ||
-        !isRepeatedRest ||
-        _containsSelfHarmRiskSignal(userText)) {
-      return false;
-    }
-
-    final prefs = await SharedPreferences.getInstance();
-    if (prefs.getString('nyang_vacation') != null) return false;
-    if (await RecoveryInsightService.isRecoveryStrategyActive()) return false;
-
-    final todayStr = _getTodayStrWithReset(prefs);
-    final today = DateTime.tryParse(todayStr) ?? DateTime.now();
-    final lastOfferDate = DateTime.tryParse(
-      prefs.getString('nyang_rest_offer_date') ??
-          prefs.getString('nyang_cat_rest_offer_date') ??
-          '',
-    );
-    if (lastOfferDate != null) {
-      final daysSinceOffer = DateTime(today.year, today.month, today.day)
-          .difference(
-            DateTime(
-              lastOfferDate.year,
-              lastOfferDate.month,
-              lastOfferDate.day,
-            ),
-          )
-          .inDays;
-      if (daysSinceOffer >= 0 && daysSinceOffer < 7) return false;
-    }
-
-    List<Map<String, dynamic>> history = [];
-    try {
-      final decoded = jsonDecode(prefs.getString('nyang_history') ?? '[]');
-      history = (decoded as List)
-          .whereType<Map>()
-          .map((item) => Map<String, dynamic>.from(item))
-          .toList();
-    } catch (_) {}
-
-    final byDate = <String, Map<String, dynamic>>{
-      for (final record in history)
-        if (record['date'] is String) record['date'] as String: record,
-    };
-
-    var streak = 0;
-    for (var offset = 0; offset < 14; offset++) {
-      final date = today.subtract(Duration(days: offset));
-      final record = byDate[_dateKey(date)];
-      if (record == null) {
-        if (offset == 0) continue;
-        break;
-      }
-      if (record['isVacation'] == true) continue;
-      final doneCount = (record['doneCount'] as num?)?.toInt() ?? 0;
-      if (doneCount <= 0) {
-        if (offset == 0) continue;
-        break;
-      }
-      streak++;
-    }
-
-    var totalCount = 0;
-    var doneCount = 0;
-    for (var offset = 1; offset <= 5; offset++) {
-      final record = byDate[_dateKey(today.subtract(Duration(days: offset)))];
-      if (record == null || record['isVacation'] == true) continue;
-      totalCount += (record['totalCount'] as num?)?.toInt() ?? 0;
-      doneCount += (record['doneCount'] as num?)?.toInt() ?? 0;
-    }
-    final hasSustainedEffort =
-        streak >= 5 && totalCount > 0 && doneCount / totalCount >= 0.6;
-    final hasRecentPerformanceDrop =
-        RecoveryInsightService.hasRecentPerformanceDrop(
-          history,
-          referenceDate: today,
-        );
-    if (!hasSustainedEffort && !hasRecentPerformanceDrop) return false;
-
-    await prefs.setString('nyang_rest_offer_date', todayStr);
-    final restOfferMsg = await UserTitleService.applyForCoach(
-      _restOfferMessage(),
-      widget.coachId,
-    );
-    if (!mounted) return true;
-    setState(() {
-      _messages.add(
-        ChatMessage(text: userText, isUser: true, time: DateTime.now()),
-      );
-      _messages.add(
-        ChatMessage(text: restOfferMsg, isUser: false, time: DateTime.now()),
-      );
-      _dynamicChips = ['오늘은 쉬어가기', '오늘은 조금만 하기'];
-      _suppressDefaultChips = false;
-      _isLoading = false;
-    });
-    await _saveHistory();
-    _scrollToBottom();
-    await AnalyticsService.logConversationMessage(
-      coachId: widget.coachId,
-      usedApi: false,
-    );
-    return true;
   }
 
   bool _isVacationActivationRequest(String text) {
@@ -2982,9 +2772,6 @@ ${lines.join('\n')}
   }
 
   Future<void> _chooseLightDay() async {
-    await RecoveryInsightService.startMasterRestDeclineRiskControlIfEligible(
-      isMasterCoach: _coach.isMaster,
-    );
     final lightDayMsg = await UserTitleService.applyForCoach(
       _lightDayMessage(),
       widget.coachId,
@@ -3002,20 +2789,6 @@ ${lines.join('\n')}
     });
     await _saveHistory();
     _scrollToBottom();
-  }
-
-  bool get _hasPendingRestOffer {
-    return _dynamicChips.contains('오늘은 쉬어가기') &&
-        _dynamicChips.contains('오늘은 조금만 하기');
-  }
-
-  Future<void> _maybeStartRestDeclineRiskControl(String userText) async {
-    if (!_hasPendingRestOffer) return;
-    if (_containsSelfHarmRiskSignal(userText)) return;
-    if (!_containsExecutionIntent(userText)) return;
-    await RecoveryInsightService.startMasterRestDeclineRiskControlIfEligible(
-      isMasterCoach: _coach.isMaster,
-    );
   }
 
   bool _isVacationCancelRequest(String text) {
@@ -3067,9 +2840,6 @@ ${lines.join('\n')}
     return DateFormat('yyyy-MM-dd').format(date);
   }
 
-  /// 실행률이 낮다고 판단하기 전에 필요한 최소 일수.
-  static const int _minDaysForLowExecutionRate = 3;
-
   Map<String, dynamic> _recentPlanExecutionStatsUntilYesterday(
     SharedPreferences prefs, {
     int days = 7,
@@ -3083,7 +2853,6 @@ ${lines.join('\n')}
         'totalCount': 0,
         'doneCount': 0,
         'averageRate': null,
-        'isVeryLow': false,
       };
     }
 
@@ -3100,7 +2869,6 @@ ${lines.join('\n')}
         'totalCount': 0,
         'doneCount': 0,
         'averageRate': null,
-        'isVeryLow': false,
       };
     }
 
@@ -3128,12 +2896,6 @@ ${lines.join('\n')}
       'totalCount': totalCount,
       'doneCount': doneCount,
       'averageRate': averageRate,
-      // 며칠은 쌓여야 "요즘 잘 안 되는 사람"이라고 볼 수 있다. 날 수를 안 보면
-      // 어제 처음 써보고 5개 중 1개 한 사람이 오늘 바로 만성 저조로 찍힌다.
-      'isVeryLow':
-          averageRate != null &&
-          averageRate <= 0.3 &&
-          evaluatedDays >= _minDaysForLowExecutionRate,
     };
   }
 
@@ -10766,14 +10528,10 @@ ${lines.join('\n')}
       }
     }
 
-    if (_containsAnyRestSignal(trimmed)) {
-      await RecoveryInsightService.recordConditionDeclineSignalToday();
-    }
+    if (_containsAnyRestSignal(trimmed)) {}
 
     if (await _tryCancelVacation(trimmed)) return;
     if (await _tryActivateRequestedVacation(trimmed)) return;
-    await _maybeStartRestDeclineRiskControl(trimmed);
-    if (await _maybeOfferRest(trimmed)) return;
 
     // 오늘 미완료 태스크를 두고 한 저항 표현을 기록한다. 저녁에 "하기 싫다던 그 일을
     // 결국 하셨네요"라고 짚는 근거가 이것뿐이다.
@@ -11690,13 +11448,6 @@ ${lines.join('\n')}
       }
     }
 
-    final recoveryPrompt = _coach.isMaster
-        ? await RecoveryInsightService.buildMasterRecoveryPromptGuidance()
-        : null;
-    if (!isVacation && recoveryPrompt != null) {
-      sb.writeln(recoveryPrompt);
-    }
-
     // 2. 장기 패턴 (마스터 전용 — 메모리 시스템이 저장하는 실제 키로 읽는다)
     final ltRaw = prefs.getString('nyang_long_term_memory');
     if (ltRaw != null && _coach.isMaster && needsGoalContext) {
@@ -11784,9 +11535,6 @@ ${lines.join('\n')}
         final pct = (averageRate * 100).round();
         sb.writeln(
           '- 평균 실행률: $pct% (${stats['doneCount']}/${stats['totalCount']}, 평가 대상 ${stats['evaluatedDays']}일)',
-        );
-        sb.writeln(
-          '- 초저항 우선 대상인가: ${stats['isVeryLow'] == true ? '예' : '아니오'}',
         );
       }
     }
@@ -12672,20 +12420,6 @@ ${lines.join('\n')}
 
     final prefs = await SharedPreferences.getInstance();
     final executionStats = _recentPlanExecutionStatsUntilYesterday(prefs);
-    if (executionStats['isVeryLow'] == true) {
-      _awaitingResistanceCause = false;
-      final pct = ((executionStats['averageRate'] as double) * 100).round();
-      return '''
-
-[이번 턴 지시 - 최근 실행률 30% 이하, 초저항 우선]
-- 사용자의 오늘 제외 최근 7일 평균 실행률이 $pct%입니다. 오늘은 아직 진행 중이므로 오늘 완료율은 판단에 쓰지 않았습니다.
-- 원인 확인 질문을 하지 말고, [이번 턴에 쓸 개입]의 방식으로 바로 제안하세요.
-- 하고 나면 일이 실제로 한 칸 진행되는 작은 행동으로 제안하세요.
-- 그 방식 안에서 고를 수 있는 작은 행동을 2~3개까지 제시하고, 사용자가 그중 하나만 고르게 하세요. 모든 후보를 다 하게 하거나 추가 설명을 길게 붙이지 마세요.
-- 최근에 거부한 개입이 [실행 저항 개인화]에 있으면 그 방식은 가장 후순위로 미루고 다른 방식부터 제안하세요.
-- 답변은 2문장 이내로 유지하고 [TASK], [TIMER_CONFIRM], [COUNTDOWN_START] 태그를 출력하지 마세요.''';
-    }
-
     // 하루 1회 제한: 이미 물어봤으면 대화를 늘리지 말고 바로 작은 제안으로 간다.
     if (await ExecutionResistanceService.hasAskedDiagnosisToday()) {
       return Prompts.turnSkipCauseQuestion;
