@@ -12423,8 +12423,6 @@ ${lines.join('\n')}
 
     if (!ExecutionResistanceService.isResistanceExpression(userText)) return '';
 
-    final prefs = await SharedPreferences.getInstance();
-    final executionStats = _recentPlanExecutionStatsUntilYesterday(prefs);
     // 하루 1회 제한: 이미 물어봤으면 대화를 늘리지 말고 바로 작은 제안으로 간다.
     if (await ExecutionResistanceService.hasAskedDiagnosisToday()) {
       return Prompts.turnSkipCauseQuestion;
@@ -12436,11 +12434,11 @@ ${lines.join('\n')}
     return '''
 
 [이번 턴 지시 - 하기 싫음/귀찮음 대응]
-- 사용자가 할 일을 하기 싫어하거나 귀찮다고 했습니다. 질문부터 하지 말고, 보이는 원인을 한 문장으로 짚은 뒤 작은 실행 제안 하나로 연결하세요.
+- 사용자가 할 일을 하기 싫어하거나 귀찮다고 했습니다. 질문부터 하지 말고, 보이는 원인을 한 문장으로 짚은 뒤 [이번 턴에 쓸 개입]에 적힌 방식으로 연결하세요.
 - 해결책을 여러 개 나열하거나 목표·비전의 중요성을 길게 설명하지 마세요.
 - 원인이 불명확할 때만, 짧게 공감하는 한 문장 뒤에 아래 질문을 문장 그대로 한 번만 물으세요. 문장을 새로 만들거나 다른 질문을 덧붙이지 마세요.
   "$question"
-- 답변은 2문장 이내로 유지하고 [TASK], [TIMER_CONFIRM], [COUNTDOWN_START] 태그를 출력하지 마세요.''';
+- 답변은 2문장 이내로 유지하고 [TASK], [TIMER_CONFIRM] 태그를 출력하지 마세요.''';
   }
 
   /// 한 대화에서 개입을 몇 번째 꺼낼 때부터 좋은 모델로 올릴지.
