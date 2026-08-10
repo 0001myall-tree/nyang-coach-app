@@ -1476,7 +1476,7 @@ ${feedbackType == 0
             iconPath: 'assets/icons/fa-hourglass-start-solid.svg',
             // "시작시간"만 적으면 어떤 일의 시작인지 헷갈린다. 이건 그날 첫
             // 일과를 언제 잡았느냐이지, 특정 할 일 얘기가 아니다.
-            label: isEstablished ? '나의 첫 시작 패턴' : '나의 좋은 첫 시작 시간',
+            label: isEstablished ? '내 첫 시작 패턴' : '내게 좋은 첫 시작시간',
           ),
           const SizedBox(height: 8),
           if (!pattern.hasResult)
