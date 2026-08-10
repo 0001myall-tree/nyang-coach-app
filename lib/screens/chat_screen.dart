@@ -21,6 +21,7 @@ import 'package:nyang_coach/services/apple_calendar_sync_service.dart';
 import 'package:nyang_coach/services/tasks_sync_service.dart';
 import 'package:nyang_coach/services/user_title_service.dart';
 import 'package:nyang_coach/services/daily_reset_service.dart';
+import 'package:nyang_coach/services/chat_bubble_format.dart';
 import 'package:nyang_coach/services/coach_context_scope.dart';
 import 'package:nyang_coach/services/coach_id_service.dart';
 import 'package:nyang_coach/services/local_reply_texts.dart';
@@ -5987,6 +5988,10 @@ ${lines.join('\n')}
     }
     // 문장 사이에 있던 태그를 떼면 공백이 두 칸 남는다. 줄바꿈은 건드리지 않는다.
     text = text.replaceAll(RegExp(r'[ \t]{2,}'), ' ');
+
+    // 긴 문장 뒤에는 줄을 바꾼다. 태그를 다 떼어낸 뒤라야 문장 끝을 제대로
+    // 찾는다 — [CHIPS: …]가 붙어 있으면 그게 마지막 문장에 매달려 있다.
+    text = ChatBubbleFormat.wrap(text);
 
     // 감정 보호·위기 응답에서는 모델이 실수로 행동 태그를 섞어도 UI에 노출하지 않는다.
     if (suppressDefaultChips) {
