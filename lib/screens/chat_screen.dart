@@ -12710,7 +12710,7 @@ ${lines.join('\n')}
 - 답변은 2문장 이내로 유지하고 [TASK], [TIMER_CONFIRM], [COUNTDOWN_START] 태그를 출력하지 마세요.''';
   }
 
-  static const int _masterGpt41DailyLimit = 12;
+  static const int _masterGpt41DailyLimit = 20;
   static const String _masterGpt41UsageKey = 'nyang_master_gpt41_usage_history';
 
   /// 한 대화에서 개입을 몇 번째 꺼낼 때부터 좋은 모델로 올릴지.
