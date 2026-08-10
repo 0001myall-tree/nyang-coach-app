@@ -109,7 +109,7 @@ void main() {
   group('저장과 복원', () {
     test('저장했다 읽으면 같은 설정', () {
       const setting = FocusCycleSetting(
-        workMinutes: 45,
+        workMinutes: 50,
         restMinutes: 10,
         rounds: 3,
       );
@@ -129,6 +129,15 @@ void main() {
         FocusCycleSetting.fromJson({'work': 25, 'rest': 5, 'rounds': 99}),
         isNull,
       );
+      // 목록에서 뺀 값으로 저장해둔 사람이 있으면 조용히 버리고 빠른 선택으로
+      // 돌아간다. 없는 값이 화면에 뜨면 드롭다운이 터진다.
+      for (final gone in [20, 40, 45]) {
+        expect(
+          FocusCycleSetting.fromJson({'work': gone, 'rest': 5, 'rounds': 4}),
+          isNull,
+          reason: '$gone분',
+        );
+      }
     });
   });
 
