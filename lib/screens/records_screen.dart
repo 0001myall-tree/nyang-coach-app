@@ -9,6 +9,7 @@ import 'package:nyang_coach/services/analytics_service.dart';
 import 'package:nyang_coach/services/api_usage_limit_service.dart';
 import 'package:nyang_coach/services/task_resistance_service.dart';
 import 'package:nyang_coach/services/execution_resistance_service.dart';
+import 'package:nyang_coach/services/start_pattern_service.dart';
 import 'package:nyang_coach/models/user_data.dart';
 import 'coach_config.dart';
 import 'tasks_screen.dart'; // for HabitItem, etc.
@@ -1440,6 +1441,74 @@ ${feedbackType == 0
           ),
           const SizedBox(height: 16),
           _buildWeeklyCompanionSummary(),
+          const SizedBox(height: 10),
+          _buildStartPatternSummary(),
+        ],
+      ),
+    );
+  }
+
+  /// 하루를 언제 시작했을 때 그날이 잘 풀렸는지.
+  ///
+  /// 위 차트가 "어느 날 잘했나"라면 이건 "몇 시에 시작한 날 잘했나"다.
+  /// 프렌즈와 마스터 모두에게 보여준다.
+  Widget _buildStartPatternSummary() {
+    // 30일치까지 본다. 며칠 안 쌓였을 때 단정하지 않는 건 서비스가 판단한다.
+    final recent = _history.length > 30
+        ? _history.sublist(_history.length - 30)
+        : _history;
+    final pattern = StartPatternService.analyze(recent);
+    final isEstablished =
+        pattern.confidence == StartPatternConfidence.established;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8F6FF),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE8E3F8)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildWeeklyCompanionHeader(
+            iconPath: 'assets/icons/fa-hourglass-start-solid.svg',
+            label: isEstablished ? '나의 시작 패턴' : '나의 좋은 시작시간',
+          ),
+          const SizedBox(height: 8),
+          if (!pattern.hasResult)
+            Text(
+              '조금 더 기록하면 하루가 잘 풀리는 시작 시간대를 알려드릴게요.',
+              style: GoogleFonts.notoSansKr(
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+                color: const Color(0xFF8A8A9E),
+                height: 1.5,
+              ),
+            )
+          else ...[
+            Text(
+              pattern.window!.label,
+              style: GoogleFonts.notoSansKr(
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+                color: _recordCoach.accentColor,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              isEstablished
+                  ? '이 시간에 첫 할 일을 시작한 날 완료율이 가장 높네요.'
+                  : '지금까지는 이 시간에 첫 할 일을 시작한 날 완료율이 높았어요.',
+              style: GoogleFonts.notoSansKr(
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+                color: const Color(0xFF8A8A9E),
+                height: 1.5,
+              ),
+            ),
+          ],
         ],
       ),
     );
