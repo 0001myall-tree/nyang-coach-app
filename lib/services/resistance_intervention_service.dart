@@ -130,7 +130,7 @@ class ResistanceInterventionService {
 
   /// 직전 제안이 거부당한 턴에 덧붙인다. 설득을 막는 자리다.
   static const String refusedPrefix =
-      '''- 직전 제안을 사용자가 거부했습니다. 같은 제안을 다시 하거나 설득하지 말고, 이유도 캐묻지 마세요.
+      '''- 사용자가 거부하면 같은 종류의 제안을 다시 하지 마세요.
 - 짧게 받아준 뒤 아래 방식으로 넘어가세요.''';
 
   static String _normalize(String text) =>
