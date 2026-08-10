@@ -55,6 +55,37 @@ void main() {
       expect(find.text('MASTER TIMER'), findsOneWidget);
     });
 
+    testWidgets('시계가 한 줄로 나온다', (tester) async {
+      // 전체 보기를 시계 옆에 뒀을 때 폭을 빼앗겨 "24:40"이 두 줄로 쪼개졌다.
+      await pumpTimer(
+        tester,
+        coachId: 'nyang_halbae',
+        minutes: 25,
+        size: const Size(320, 700),
+      );
+      expect(find.text('25:00'), findsOneWidget);
+      final clock = tester.getSize(find.text('25:00'));
+      expect(clock.height, lessThan(70), reason: '두 줄로 쪼개졌다');
+    });
+
+    testWidgets('전체 보기는 제목 줄에 있다', (tester) async {
+      await pumpTimer(tester, coachId: 'nyang_halbae');
+      final title = tester.getCenter(find.text('MASTER TIMER'));
+      final button = tester.getCenter(find.text('전체 보기'));
+      expect((button.dy - title.dy).abs(), lessThan(12), reason: '같은 줄');
+      expect(button.dx, greaterThan(title.dx), reason: '오른쪽 끝');
+    });
+
+    testWidgets('시작 전에는 전체 화면 버튼이 집중 시작이다', (tester) async {
+      // 눌러본 적 없는 타이머에 "다시 시작"이라고 하면 자기가 뭘 멈춘 줄 안다.
+      await pumpTimer(tester, coachId: 'nyang_halbae');
+      await tester.tap(find.text('전체 보기'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.text('집중 시작'), findsOneWidget);
+      expect(find.text('다시 시작'), findsNothing);
+    });
+
     testWidgets('15분·25분·직접 설정 셋만 나온다', (tester) async {
       await pumpTimer(tester, coachId: 'nyang_halbae');
       expect(find.text('15분'), findsOneWidget);

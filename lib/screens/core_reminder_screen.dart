@@ -40,9 +40,7 @@ class _CoreReminderScreenState extends State<CoreReminderScreen> {
               contentType: AndroidContentType.music,
               audioFocus: AndroidAudioFocus.gainTransientExclusive,
             ),
-            iOS: AudioContextIOS(
-              category: AVAudioSessionCategory.playback,
-            ),
+            iOS: AudioContextIOS(category: AVAudioSessionCategory.playback),
           ),
         );
         await _audioPlayer.setVolume(1.0);
@@ -160,7 +158,10 @@ class _CoreReminderScreenState extends State<CoreReminderScreen> {
                     ),
                     const SizedBox(height: 24),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 16,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(16),

@@ -146,15 +146,15 @@ void main() {
       final steps = runAll(FocusCycleSetting.pomodoro);
       expect(
         FocusCycle.progressLabel(FocusCycleSetting.pomodoro, steps[0]),
-        '1회차 집중 (1/4)',
+        '1회차 집중',
       );
       expect(
         FocusCycle.progressLabel(FocusCycleSetting.pomodoro, steps[1]),
-        '1회차 휴식 (1/4)',
+        '1회차 휴식',
       );
       expect(
         FocusCycle.progressLabel(FocusCycleSetting.pomodoro, steps[6]),
-        '4회차 집중 (4/4)',
+        '4회차 집중',
       );
     });
   });

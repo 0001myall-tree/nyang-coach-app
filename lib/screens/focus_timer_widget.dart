@@ -1042,71 +1042,47 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
+                // 제목은 가운데를 지키고 전체 보기만 오른쪽 끝에 앉힌다.
+                // 시계 옆에 두면 시계 폭을 빼앗아 "24:40"이 두 줄로 쪼개진다.
+                Stack(
+                  alignment: Alignment.center,
                   children: [
-                    Icon(Icons.timer_rounded, size: 15, color: timerAccent),
-                    const SizedBox(width: 6),
-                    Text(
-                      // 이 화면은 마스터 코치만 쓴다. 프렌즈 타이머는 따로
-                      // 그려지고 '집중 시간'이라고 적는다.
-                      widget.isMindTimer ? 'MIND TIMER' : 'MASTER TIMER',
-                      style: GoogleFonts.notoSansKr(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 1.6,
-                        color: timerAccent,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                // 시계와 전체 보기를 나란히 둔다. 시계는 가운데를 지키고
-                // 버튼만 오른쪽에 붙게 하려고 양쪽에 같은 폭을 준다.
-                Row(
-                  children: [
-                    const SizedBox(width: 52),
-                    Expanded(
-                      child: Text(
-                        _timeDisplay,
-                        textAlign: TextAlign.center,
-                        style: GoogleFonts.notoSansKr(
-                          fontSize: 42,
-                          fontWeight: FontWeight.w900,
-                          color: timerInk,
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.timer_rounded, size: 15, color: timerAccent),
+                        const SizedBox(width: 6),
+                        Text(
+                          // 이 화면은 마스터 코치만 쓴다. 프렌즈 타이머는 따로
+                          // 그려지고 '집중 시간'이라고 적는다.
+                          widget.isMindTimer ? 'MIND TIMER' : 'MASTER TIMER',
+                          style: GoogleFonts.notoSansKr(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 1.6,
+                            color: timerAccent,
+                          ),
                         ),
-                      ),
+                      ],
                     ),
-                    SizedBox(
-                      width: 52,
+                    Positioned(
+                      right: 0,
                       child: GestureDetector(
                         onTap: _openFocusScreen,
-                        child: Column(
+                        behavior: HitTestBehavior.opaque,
+                        child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Container(
-                              width: 34,
-                              height: 34,
-                              alignment: Alignment.center,
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(11),
-                                border: Border.all(
-                                  color: timerBorder,
-                                  width: 1.2,
-                                ),
-                              ),
-                              child: Icon(
-                                Icons.open_in_full_rounded,
-                                size: 16,
-                                color: timerAccent,
-                              ),
+                            Icon(
+                              Icons.open_in_full_rounded,
+                              size: 13,
+                              color: timerAccent,
                             ),
-                            const SizedBox(height: 3),
+                            const SizedBox(width: 3),
                             Text(
                               '전체 보기',
                               style: GoogleFonts.notoSansKr(
-                                fontSize: 9.5,
+                                fontSize: 10.5,
                                 fontWeight: FontWeight.w700,
                                 color: timerAccent,
                               ),
@@ -1116,6 +1092,16 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
                       ),
                     ),
                   ],
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  _timeDisplay,
+                  maxLines: 1,
+                  style: GoogleFonts.notoSansKr(
+                    fontSize: 42,
+                    fontWeight: FontWeight.w900,
+                    color: timerInk,
+                  ),
                 ),
                 if (!isMaster) ...[
                   const SizedBox(height: 2),
@@ -2496,6 +2482,14 @@ class _MasterTimerFocusScreenState extends State<MasterTimerFocusScreen>
 
   Widget _wideAction() {
     final running = _manager.running;
+    // 멈춘 데는 두 가지가 있다. 눌렀다가 잠깐 세운 것과 아직 시작도 안 한 것.
+    // 둘 다 "다시 시작"이라고 하면, 처음 여는 사람은 자기가 뭘 멈춘 줄 안다.
+    final paused = _manager.pausedRemainSec != null;
+    final label = running
+        ? '일시정지'
+        : paused
+        ? '다시 시작'
+        : '집중 시작';
     return GestureDetector(
       onTap: () async {
         await widget.onToggle();
@@ -2520,7 +2514,7 @@ class _MasterTimerFocusScreenState extends State<MasterTimerFocusScreen>
             ),
             const SizedBox(width: 6),
             Text(
-              running ? '일시정지' : '다시 시작',
+              label,
               style: GoogleFonts.notoSansKr(
                 fontSize: 13.5,
                 fontWeight: FontWeight.w800,
@@ -2584,7 +2578,10 @@ class _WaterPainter extends CustomPainter {
   final double phase;
 
   /// 가득 찼을 때 원 높이의 몇 할까지 차오르는지.
-  static const double _maxFill = 0.46;
+  ///
+  /// 처음엔 절반만 채웠는데, 시작하자마자 반쯤 지난 것처럼 보였다. 가득 찬
+  /// 데서 줄어드는 편이 "이만큼 남았다"로 바로 읽힌다.
+  static const double _maxFill = 1.0;
 
   @override
   void paint(Canvas canvas, Size size) {

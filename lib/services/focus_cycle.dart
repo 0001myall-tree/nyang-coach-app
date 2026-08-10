@@ -171,9 +171,12 @@ class FocusCycle {
     );
   }
 
-  /// 화면에 띄우는 진행 표시. "2회차 집중 (2/4)"
+  /// 화면에 띄우는 진행 표시. "2회차 집중"
+  ///
+  /// 전체 몇 회차인지는 붙이지 않는다. 카드 안의 좁은 칸에서는 "(2/4)"가
+  /// 잘려서 여는 괄호만 남았고, 전체 보기에는 회차 줄이 따로 있다.
   static String progressLabel(FocusCycleSetting setting, FocusCycleStep step) {
     final what = step.phase.isWork ? '집중' : '휴식';
-    return '${step.round}회차 $what (${step.round}/${setting.rounds})';
+    return '${step.round}회차 $what';
   }
 }

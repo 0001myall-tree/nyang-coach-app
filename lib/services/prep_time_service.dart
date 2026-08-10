@@ -214,9 +214,9 @@ ClockReading? parseClock(String text, {DateTime? now}) {
   }
 
   // "10시 10분" / "10시반" / "10시"
-  final korean = RegExp(r'(\d{1,2})시(?:(\d{1,2})분|(반))?').firstMatch(
-    normalized,
-  );
+  final korean = RegExp(
+    r'(\d{1,2})시(?:(\d{1,2})분|(반))?',
+  ).firstMatch(normalized);
   if (korean == null) return null;
   final hour = int.parse(korean.group(1)!);
   if (hour > 23) return null;
@@ -399,15 +399,15 @@ PrepPlan? mergeUtterance({
         meridiemKnown: clock.meridiemKnown,
       );
     }
-  } else if (asksBackward && current.appointment == null &&
+  } else if (asksBackward &&
+      current.appointment == null &&
       current.departure == null) {
     // 시각을 말하지 않고 "몇시부터 '약속' 준비할까?"처럼 할 일 이름만 부를 때가
     // 있다. 그 시각은 할 일 탭에 이미 적혀 있으니 사용자에게 다시 묻지 않는다.
     final named = _namedTask(normalized, taskTimes);
     if (named != null) {
-      current = _departurePattern.hasMatch(
-            named.name.replaceAll(RegExp(r'\s+'), ''),
-          )
+      current =
+          _departurePattern.hasMatch(named.name.replaceAll(RegExp(r'\s+'), ''))
           ? current.copyWith(departure: named.minutes, meridiemKnown: true)
           : current.copyWith(appointment: named.minutes, meridiemKnown: true);
     }
@@ -487,10 +487,11 @@ class PrepTaskTime {
 ///
 /// 이름이 긴 것부터 본다. "약속"과 "약속 준비"가 둘 다 있으면 긴 쪽이 맞다.
 PrepTaskTime? _namedTask(String normalized, List<PrepTaskTime> tasks) {
-  final candidates = tasks
-      .where((t) => t.name.replaceAll(RegExp(r'\s+'), '').length >= 2)
-      .toList()
-    ..sort((a, b) => b.name.length.compareTo(a.name.length));
+  final candidates =
+      tasks
+          .where((t) => t.name.replaceAll(RegExp(r'\s+'), '').length >= 2)
+          .toList()
+        ..sort((a, b) => b.name.length.compareTo(a.name.length));
   for (final task in candidates) {
     if (normalized.contains(task.name.replaceAll(RegExp(r'\s+'), ''))) {
       return task;
@@ -536,9 +537,7 @@ PrepGoal? _goalOf(String normalized, RegExpMatch? askMatch) {
 ///
 /// "가는데"는 "나가는데"에도 들어 있다. "씻고 나가는데 40분"은 준비 시간인데
 /// 이동으로 새면 출발 시각이 통째로 틀어진다. 그래서 앞에 '나'가 오면 뺀다.
-final _travelPattern = RegExp(
-  r'이동|(?<!나)가는데|거기까지|근처|버스|지하철|차로|걸어서|택시',
-);
+final _travelPattern = RegExp(r'이동|(?<!나)가는데|거기까지|근처|버스|지하철|차로|걸어서|택시');
 
 /// "신촌까지 40분"처럼 목적지에 붙는 '까지'. 혼자서는 약한 단서라 준비를
 /// 가리키는 말이 하나도 없을 때만 이동으로 본다. "10시까지 나가야 해"의

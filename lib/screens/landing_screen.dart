@@ -944,9 +944,7 @@ class _LandingScreenState extends State<LandingScreen>
                                 height: 64,
                                 decoration: BoxDecoration(
                                   color: AppDesignTokens.brand,
-                                  borderRadius: BorderRadius.circular(
-                                    24,
-                                  ),
+                                  borderRadius: BorderRadius.circular(24),
                                   boxShadow: [
                                     BoxShadow(
                                       color: Colors.black.withValues(
