@@ -12756,10 +12756,16 @@ ${lines.join('\n')}
   /// 예전에는 마스터 코치의 모든 턴이 자리를 하나씩 예약했다. 선착순이라
   /// 아침 인사부터 순서대로 가져갔고, 정작 오후에 사용자가 벽에 부딪힌 턴에는
   /// 남은 게 없었다. 좋은 모델이 필요한 건 잡담이 아니라 그 자리다.
+  /// 한도를 비켜 가는 턴은 없다.
+  ///
+  /// 안전 확인 턴만 한도 밖에 두려다 말았다. 자해·자살이라는 말은 장난으로도
+  /// 나오고 판정은 단어로 하기 때문에, 한도 밖에 두면 그 말만 반복해서 하루
+  /// 비용을 끝없이 늘릴 수 있는 구멍이 된다. 안전 지시문은 물어볼 문장과
+  /// 단계별 안내를 그대로 적어주므로, 한도가 찬 뒤 약한 모델이 받더라도
+  /// 따라갈 대본은 남아 있다.
   Future<String> _pickChatModel({
     required _MasterModelPolicy masterModelPolicy,
     required bool needsDeepReasoning,
-    required bool isSafetyTurn,
   }) async {
     if (!_coach.isMaster) return 'gpt-4o-mini';
 
@@ -12771,10 +12777,6 @@ ${lines.join('\n')}
             ? 'gpt-4.1-mini'
             : 'gpt-4o-mini';
       case _MasterModelPolicy.generalLimited:
-        // 안전 확인 턴은 하루 한도를 세지 않는다. 여기서 아낀 값이 가장
-        // 비싸게 돌아오고, 한도가 찼다는 이유로 이 턴만 약한 모델이 받는 일은
-        // 없어야 한다.
-        if (isSafetyTurn) return 'gpt-4.1-mini';
         if (!needsDeepReasoning) return 'gpt-4o-mini';
         return await _tryReserveMasterGpt41Turn()
             ? 'gpt-4.1-mini'
@@ -13184,17 +13186,19 @@ ${Prompts.outputRulesTail}$halmaeHint$resistanceTurnDirective$contextRequestRule
     // 생각 과부하와 결과 불안도 같이 올린다. 둘 다 관점을 바꿔주는 개입이라
     // 정해진 문구를 읽어주는 것으로는 안 되고, 잘못 짚으면 사용자가 스스로를
     // 더 몰아붙이는 쪽으로 답이 나간다.
+    // 안전 확인 턴도 여기에 함께 둔다. 우선해서 좋은 모델을 받되, 하루 몫은
+    // 똑같이 쓴다.
     final needsDeepReasoning =
         _offeredInterventionIds.length >= _deepReasoningInterventionCount ||
         isThoughtOverloadTurn ||
-        isResultAnxietyTurn;
+        isResultAnxietyTurn ||
+        isSelfHarmRiskTurn;
 
     // 모델은 한 번만 고른다. gpt-4.1-mini 자리를 예약해서 쓰는 구조라,
     // 재시도할 때 다시 고르면 한 턴에 두 자리를 잡아먹는다.
     final model = await _pickChatModel(
       masterModelPolicy: masterModelPolicy,
       needsDeepReasoning: needsDeepReasoning,
-      isSafetyTurn: isSelfHarmRiskTurn,
     );
 
     Future<String> request(String systemPrompt) async {
