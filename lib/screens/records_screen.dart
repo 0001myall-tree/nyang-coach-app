@@ -1491,7 +1491,7 @@ ${feedbackType == 0
             Text(
               pattern.window!.label,
               style: GoogleFonts.notoSansKr(
-                fontSize: 16,
+                fontSize: 15,
                 fontWeight: FontWeight.w800,
                 color: _recordCoach.accentColor,
               ),
@@ -1499,8 +1499,8 @@ ${feedbackType == 0
             const SizedBox(height: 4),
             Text(
               isEstablished
-                  ? '이 시간에 첫 할 일을 시작한 날 완료율이 가장 높네요.'
-                  : '지금까지는 이 시간에 첫 할 일을 시작한 날 완료율이 높았어요.',
+                  ? "이 시간에 첫 할 일을 '시작'한 날 완료율이 가장 높네요."
+                  : "지금까지는 이 시간에 첫 할 일을 '시작'한 날 완료율이 높았어요.",
               style: GoogleFonts.notoSansKr(
                 fontSize: 11,
                 fontWeight: FontWeight.w500,
@@ -1592,11 +1592,14 @@ ${feedbackType == 0
     if (_weeklyFavoriteCoachRanks.isEmpty) {
       // "아직 없음"은 사용자가 뭘 안 한 것처럼 읽힌다. 실제로는 앱이 아직
       // 셀 만큼 못 모은 것이다.
+      //
+      // 코치 이름이 들어갈 자리라 원래는 굵고 컸는데, 안내 문장이 들어오면
+      // 바로 위 제목보다 커져서 위계가 뒤집힌다. 이 경우만 본문 크기로 쓴다.
       return Text(
         '아직 정보가 부족합니다',
         style: GoogleFonts.notoSansKr(
-          fontSize: 13,
-          fontWeight: FontWeight.w800,
+          fontSize: 12,
+          fontWeight: FontWeight.w500,
           color: const Color(0xFF9A94AA),
         ),
       );
