@@ -12871,6 +12871,11 @@ ${lines.join('\n')}
       final buffer = StringBuffer(Prompts.focusFatigue);
       if (focusRefreshRecentlyOffered) {
         buffer.write(Prompts.focusRefreshAlreadyOffered);
+        // 환기까지 써본 뒤에도 또 걸린 턴에만 세 번째 갈래를 연다. 처음부터
+        // 주면 "오늘은 안 되니 시간대를 바꿔라"가 첫 대답이 된다.
+        //
+        // 기록 탭의 습관 패턴을 가리키는 대응이라 마스터에만 붙인다.
+        if (_coach.isMaster) buffer.write(Prompts.focusBestStartTime);
       }
       if (!mayAskFocusWorkHistory && !isFocusFatigueFollowup) {
         buffer.write(Prompts.focusWorkHistoryAskUsed);
