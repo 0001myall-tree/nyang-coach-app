@@ -14762,6 +14762,11 @@ ${Prompts.outputRulesTail}$halmaeHint$resistanceTurnDirective$contextRequestRule
           Padding(
             padding: const EdgeInsets.only(bottom: 12),
             child: FocusTimerWidget(
+              // 키가 없으면 두 번째로 부른 타이머가 앞 판의 State를 물려받아
+              // 초기화를 건너뛴다. 부른 시간과 자리가 바뀌면 새 판이다.
+              key: ValueKey(
+                'focusTimer-$timerIndex-$_timerActiveMinutes-$_timerActiveIsMind',
+              ),
               coachId: widget.coachId,
               initialMinutes: _timerActiveMinutes!,
               isMindTimer: _timerActiveIsMind,

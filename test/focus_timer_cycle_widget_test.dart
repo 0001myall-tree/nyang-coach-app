@@ -174,6 +174,49 @@ void main() {
     });
   });
 
+  group('타이머를 다시 부를 때', () {
+    // 두 번째로 부르면 플러터가 같은 자리의 위젯으로 보고 State를 재사용한다.
+    // 그러면 초기화가 건너뛰어져 앞 판의 시간이 그대로 남는다. 실제로 "한 번
+    // 부르면 그 시간대로 고정되고 새 타이머가 안 나온다"는 증상이 나왔다.
+    // 앱과 같은 순서로 다시 부른다. 채팅이 먼저 새 시간을 저장하고
+    // (_saveFocusTimerAnchor) 그다음 위젯이 새 initialMinutes로 다시 그려진다.
+    // 키는 일부러 안 준다 — State가 재사용되는 최악의 경우를 확인하는 자리다.
+    Future<void> pumpAgain(
+      WidgetTester tester,
+      String coachId,
+      int minutes,
+    ) async {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt('focus_timer_stage', minutes);
+      await prefs.setInt('focus_timer_duration', minutes * 60);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: FocusTimerWidget(
+              coachId: coachId,
+              initialMinutes: minutes,
+              onMessage: (_) {},
+            ),
+          ),
+        ),
+      );
+    }
+
+    for (final coachId in ['nyang_halbae', 'cat']) {
+      testWidgets('$coachId: 새 시간으로 다시 부르면 그 시간이 뜬다', (tester) async {
+        await pumpTimer(tester, coachId: coachId, minutes: 15);
+        expect(find.text('15:00'), findsOneWidget);
+
+        await pumpAgain(tester, coachId, 40);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 400));
+
+        expect(find.text('40:00'), findsOneWidget);
+        expect(find.text('15:00'), findsNothing, reason: '앞 판이 남아 있다');
+      });
+    }
+  });
+
   group('말로 시간을 지정한 판', () {
     // 반복 설정이 있으면 그게 요청한 시간을 이겨서, "5분 타이머 띄워줘"가
     // 설정의 작업 시간으로 바뀌었다. 그래서 설정 시트에 있는 값

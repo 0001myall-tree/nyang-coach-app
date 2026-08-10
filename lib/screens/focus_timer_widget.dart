@@ -382,6 +382,25 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
     _initManager();
   }
 
+  /// 새 시간으로 타이머를 다시 부르면 처음부터 다시 잡는다.
+  ///
+  /// [_initManager]는 initState에서만 돈다. 채팅에서 타이머를 두 번째로 부르면
+  /// 플러터가 같은 자리의 위젯으로 보고 State를 재사용하는데, 그러면 초기화가
+  /// 건너뛰어져 앞 판의 시간·화면·틱이 그대로 남는다. 사용자가 본 "한 번 부르면
+  /// 그 시간대로 고정되고 새 타이머가 안 나온다"가 이것이다.
+  @override
+  void didUpdateWidget(FocusTimerWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initialMinutes == widget.initialMinutes &&
+        oldWidget.coachId == widget.coachId &&
+        oldWidget.isMindTimer == widget.isMindTimer) {
+      return;
+    }
+    _ticker?.cancel();
+    _view = _TimerView.timer;
+    _initManager();
+  }
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
@@ -511,7 +530,11 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
     await _manager.incrementTodayCount();
     await AnalyticsService.logFeatureUsage('timer');
     // 말로 걸어둔 한 판이 끝났다. 다음에 그냥 시작하면 저장해둔 반복으로 돌아간다.
-    _manager.oneOffMinutes = false;
+    // 저장까지 해야 앱을 껐다 켜도 풀린다 — 안 그러면 이 판정이 영영 남는다.
+    if (_manager.oneOffMinutes) {
+      _manager.oneOffMinutes = false;
+      await _manager.saveState();
+    }
 
     if (showMsg) {
       final msg = await _getDoneMsg();
@@ -581,6 +604,8 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
     // 소리가 켜져 있으면 끄고 재설정 (단계 변경 시 타이머 불일치 방지)
     if (_soundOn) _stopSound();
     _manager.cycleStep = null;
+    // 버튼으로 직접 고른 시간이다. 말로 걸어둔 판정은 여기서 풀린다.
+    // reset()이 이어서 저장하므로 여기서 따로 저장하지 않는다.
     _manager.oneOffMinutes = false;
     _manager.reset(min).then((_) {
       if (mounted) setState(() {});
