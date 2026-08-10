@@ -212,8 +212,31 @@ class CoachContextScopeService {
     '시작하기싫',
   ];
 
-  static bool hasGoalSignal(String text) =>
-      goalSignals.any(_normalize(text).contains);
+  /// 명사와 동사 사이에 끼어드는 조사·부사 자리.
+  ///
+  /// "계획 짜줘"와 "계획 좀 다시 짜줘"는 같은 말인데, 고정 문자열로 찾으면
+  /// 뒤쪽을 통째로 놓친다. 실제로 사용자가 쓰는 문장은 거의 뒤쪽이라
+  /// 여기를 비워두면 계획을 짜달라는 말 대부분이 빠져나간다.
+  static const String _particleGap =
+      r'(?:[을를은는이가도만]|좀|다시|한번|새로|대충|빨리|미리|어떻게|같이|함께|오늘|내일|이번주|이번달|하루|주간|월간|전체|조금|살짝)*';
+
+  /// 고정 문자열로는 못 잡는 목표 신호.
+  ///
+  /// 지금은 계획 세우기 계열만 있다. 이 계열은 "짜다"와 "세우다"가 섞여 쓰이고
+  /// 사이에 부사가 끼는 일이 잦아서 목록으로는 감당이 안 됐다.
+  ///
+  /// 어간도 여러 형태로 갈린다. "세울까"는 둘째 글자가 '울'이라 '세우'로는
+  /// 안 걸린다. 한글은 이렇게 받침이 붙으면 글자 자체가 달라져서, 활용형을
+  /// 하나씩 적어줘야 한다.
+  static final List<RegExp> _goalPatterns = [
+    RegExp('(?:계획|일정|스케줄|플랜)$_particleGap(?:짜|세우|세워|세울|세운|잡아|잡자|만들)'),
+  ];
+
+  static bool hasGoalSignal(String text) {
+    final normalized = _normalize(text);
+    if (goalSignals.any(normalized.contains)) return true;
+    return _goalPatterns.any((pattern) => pattern.hasMatch(normalized));
+  }
 
   static bool hasTaskSignal(String text) =>
       taskSignals.any(_normalize(text).contains);

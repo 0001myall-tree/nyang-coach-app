@@ -69,6 +69,37 @@ void main() {
     });
   });
 
+  group('계획 짜달라는 말', () {
+    // 고정 문자열로만 찾던 때는 "계획짜줘"만 걸리고 사이에 부사가 끼면 전부
+    // 빠져나갔다. 실제 문장은 거의 부사가 낀 쪽이라 대부분을 놓쳤다.
+    const asksForAPlan = [
+      '계획짜줘',
+      '계획 짜줘',
+      '계획 좀 짜줘',
+      '계획 다시 짜줘',
+      '오늘 계획 좀 짜줘',
+      '일정 좀 짜줘',
+      '스케줄 좀 짜줘',
+      '하루 계획 세워줘',
+      '오늘 계획 어떻게 세울까',
+      '계획 세우는 것 좀 도와줘',
+      '내일 일정 좀 잡아줘',
+    ];
+    for (final text in asksForAPlan) {
+      test('"$text"는 기록을 전부 싣는다', () {
+        expect(master(text).goal, GoalContextScope.full);
+      });
+    }
+
+    // 조회와 보고는 판단이 아니다. 여기까지 걸리면 흔한 말마다 기록이 다 실린다.
+    const doesNotAsk = ['오늘 일정 뭐야', '일정 잡았어', '오늘 할 일 확인해줘'];
+    for (final text in doesNotAsk) {
+      test('"$text"는 목표를 싣지 않는다', () {
+        expect(master(text).goal, GoalContextScope.none);
+      });
+    }
+  });
+
   group('직전 말 상속', () {
     test('직전이 목표 얘기였으면 제목만 싣는다', () {
       final scope = master('아 배고파', previous: '오늘 뭐부터 하지?');
