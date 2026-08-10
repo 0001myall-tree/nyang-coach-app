@@ -89,25 +89,22 @@ void main() {
     });
   });
 
-  group('제안에 붙는 이유', () {
-    test('거절당한 턴에는 이유를 붙이지 않는다', () {
-      // 거절한 사람에게 "그래도 이게 좋은 이유는"을 붙이면 설득이 된다.
-      expect(
-        ResistanceInterventionService.refusedPrefix,
-        contains('이유를 덧붙이지 마세요'),
-      );
-      expect(
-        ResistanceInterventionService.refusedPrefix,
-        contains('설득으로 들립니다'),
-      );
-    });
-
-    test('거절 규칙은 짧게 유지한다', () {
-      // 한 규칙이 여러 가지를 말하기 시작하면 어느 것도 안 지켜진다.
+  group('거절당한 턴', () {
+    test('규칙은 두 줄로 유지한다', () {
+      // 새 방식이 나가는 자리다. "거절당한 걸 변호하지 마라"까지 적을 필요가
+      // 없다 — 같은 종류를 다시 꺼내지 말라는 첫 줄이 이미 그걸 막는다.
+      // 새 제안에 이유를 붙이는 건 개입 머리말 규칙이 맡는다.
       final lines = ResistanceInterventionService.refusedPrefix.trim().split(
         '\n',
       );
-      expect(lines.length, lessThanOrEqualTo(3));
+      expect(lines.length, 2);
+    });
+
+    test('같은 종류를 다시 꺼내지 않는다', () {
+      expect(
+        ResistanceInterventionService.refusedPrefix,
+        contains('같은 종류의 제안을 다시 하지 마세요'),
+      );
     });
   });
 
