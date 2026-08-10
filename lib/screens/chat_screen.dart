@@ -1332,6 +1332,11 @@ class _ChatScreenState extends State<ChatScreen>
   final List<String> _offeredInterventionIds = [];
   // 직전 턴에 꺼낸 개입. 지금 말이 거부인지 판단할 때 기준이 된다.
   String? _lastOfferedInterventionId;
+  // 대화를 넘어 살아남는 로테이션 자리. 이 목록은 앱을 껐다 켜면 비는데,
+  // 시작 자리까지 같이 초기화되면 새 대화가 늘 '시간 낮추기'로 시작한다.
+  // 5분을 매번 다시 듣는 게 이 키를 만든 이유다.
+  static const _interventionRotationKey =
+      'nyang_resistance_intervention_rotation';
   // 집중력 저하: "얼마나 했어?"를 묻고 답을 기다리는 상태
   bool _awaitingFocusWorkHistory = false;
   // 작업 시간을 물어본 날짜. 하루 한 번만 묻는다.
@@ -12716,12 +12721,14 @@ ${lines.join('\n')}
     // 하나로 수렴하고, 사용자가 싫다고 해도 같은 걸 다시 밀게 된다.
     var interventionSection = '';
     if (shouldIncludeResistanceInterventionSection) {
+      final prefs = await SharedPreferences.getInstance();
       final refusedLastOffer =
           _lastOfferedInterventionId != null &&
           ResistanceInterventionService.isRefusal(userText);
       final next = ResistanceInterventionService.nextIntervention(
         _offeredInterventionIds,
         isMaster: _coach.isMaster,
+        startAfterId: prefs.getString(_interventionRotationKey),
       );
       if (next == null) {
         interventionSection = ResistanceInterventionService.exhaustedRule;
@@ -12732,6 +12739,9 @@ ${lines.join('\n')}
             : next.rule;
         _offeredInterventionIds.add(next.id);
         _lastOfferedInterventionId = next.id;
+        // 다음에 이 자리에 오면 여기서부터 이어간다. 대화가 끝나도, 앱을 껐다
+        // 켜도 남아야 하는 유일한 값이다.
+        await prefs.setString(_interventionRotationKey, next.id);
       }
     }
     final resistanceInterventionSection =

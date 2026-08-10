@@ -9,6 +9,10 @@
 /// 거부당하면 아직 안 쓴 것 중 다음 것을 골라 그 하나만 프롬프트에 넣는다.
 /// 모델에게는 선택지를 주지 않는다.
 ///
+/// 시작 자리는 대화마다 한 칸씩 밀린다. 목록 맨 위부터 다시 훑으면 새 대화는
+/// 늘 같은 방식으로 시작해서 금방 질린다. 마지막에 꺼낸 것 다음 자리를 기억해
+/// 두고 거기서 시작하며, 한 바퀴 돌면 처음으로 돌아온다.
+///
 /// [interventions]의 rule 문구는 기존 프롬프트에 흩어져 있던 지시를 옮겨 담은
 /// 것이다. 문구는 갈아끼워도 되고 순서를 바꿔도 되지만, id는 기록에 남으니
 /// 한번 정한 뒤에는 바꾸지 않는 게 좋다.
@@ -41,10 +45,11 @@ class ResistanceIntervention {
 class ResistanceInterventionService {
   const ResistanceInterventionService._();
 
-  /// 꺼내는 순서. 위에서부터 쓰고, 거부당하면 다음으로 내려간다.
+  /// 꺼내는 순서. 시작 자리에서부터 내려가고, 끝에 닿으면 위로 돌아온다.
   ///
-  /// 부담이 낮고 대부분의 과업에 통하는 것을 앞에 뒀다. 선택권 주기는 코치가
-  /// 정해주는 방식이 연달아 먹히지 않았다는 뜻이라 뒤쪽에 있다.
+  /// 여기 있는 것들은 서로 대등하다. 어느 것이 먼저 나와도 말이 되도록 rule을
+  /// 쓴다 — 앞이 막혔다는 걸 전제로 하는 문장을 넣으면 그게 첫 마디로 나올 때
+  /// 거짓말이 된다.
   static const List<ResistanceIntervention> interventions = [
     ResistanceIntervention(
       id: 'shorten_time',
@@ -98,15 +103,14 @@ class ResistanceInterventionService {
 - 이 일을 밀지 말고, 오늘 할 일 중 지금 마음이 가장 덜 무거운 다른 일을 먼저 하자고 하세요.
 - 미루는 게 아니라 순서를 바꾸는 것입니다. 원래 일을 언제 할지 다시 묻지 마세요.''',
     ),
-    // 앱 기능을 가리키는 유일한 개입이라 뒤쪽에 뒀다. 앞의 방식들이 말로
-    // 푸는 것인 데 반해 이건 화면을 하나 띄우는 일이라, 처음부터 꺼내면
-    // 맥락 없이 튀어나온 것처럼 받는다. 여러 번 막힌 뒤라야 이유가 선다.
+    // 앱 기능을 가리키는 유일한 개입이다. 다른 방식이 말로 푸는 것인 데 반해
+    // 이건 화면을 하나 띄우는 일이라, 띄워줄지 먼저 묻고 나서 움직인다.
     ResistanceIntervention(
       id: 'start_signal',
       label: '시작 신호 만들기',
       masterOnly: true,
       rule: '''[시작 신호 만들기]
-- 앞의 방식들이 연달아 안 먹혔습니다. 이번에는 할 일을 더 낮추지 말고, 시작 자체에 신호를 만드는 쪽으로 가세요.
+- 할 일을 더 낮추지 말고, 시작 자체에 신호를 만드는 쪽으로 가세요.
 - 정해진 신호가 행동을 시작하는 데 도움이 될 수 있다는 연구가 있다고 한 문장만 짚으세요. 효과를 길게 설명하거나 설득하지 마세요.
 - 채팅창 위 빠른 실행의 '숫자 세고 시작'을 눌러도 된다고 알려주고, 대신 띄워줄지 한 번만 물으세요.
 - 사용자가 띄워달라고 하면 그때 답변 끝에 [COUNTDOWN_START]를 붙이세요. 묻기도 전에 먼저 붙이지 마세요.''',
@@ -115,7 +119,7 @@ class ResistanceInterventionService {
       id: 'let_user_choose',
       label: '선택권 주기',
       rule: '''[선택권 주기]
-- 코치가 정해준 방식이 연달아 부담이었음을 한 문장 인정하세요. 의지 부족으로 평가하지 마세요.
+- 코치가 방식을 정해주지 말고 사용자가 고르게 하세요. 의지 부족으로 평가하지 마세요.
 - 현재 과업과 연결된 쉬운 선택지 2개 + 기타를 주고 고르게 하세요. 자유형 질문 금지.
 - 끝에 [CHIPS: 선택지1|선택지2|기타]. 설득·분석·목표 설명 금지.''',
     ),
@@ -172,14 +176,21 @@ class ResistanceInterventionService {
       _refusalSignals.any(_normalize(text).contains);
 
   /// 아직 안 꺼낸 것 중 다음 개입. 전부 꺼냈으면 null.
+  ///
+  /// [startAfterId]는 마지막으로 꺼냈던 개입이다. 그 다음 자리부터 훑어서,
+  /// 새 대화가 늘 같은 방식으로 시작하지 않게 한다. null이면 목록 맨 위부터.
   static ResistanceIntervention? nextIntervention(
     Iterable<String> offeredIds, {
     required bool isMaster,
+    String? startAfterId,
   }) {
     final offered = offeredIds.toSet();
-    for (final intervention in interventions) {
-      if (intervention.masterOnly && !isMaster) continue;
-      if (!offered.contains(intervention.id)) return intervention;
+    // 못 찾으면 -1 + 1 = 0이라 맨 위부터. 개입을 지운 뒤에도 안전하다.
+    final start = interventions.indexWhere((i) => i.id == startAfterId) + 1;
+    for (var step = 0; step < interventions.length; step++) {
+      final candidate = interventions[(start + step) % interventions.length];
+      if (candidate.masterOnly && !isMaster) continue;
+      if (!offered.contains(candidate.id)) return candidate;
     }
     return null;
   }

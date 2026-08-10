@@ -125,6 +125,88 @@ void main() {
     }
   });
 
+  group('대화를 넘어가면 시작 자리가 밀린다', () {
+    // 새 대화마다 목록 맨 위('시간 낮추기' = 5분)로 돌아가던 게 이 로테이션을
+    // 만든 이유다. 매번 같은 말로 시작하면 금방 질린다.
+    test('마지막에 꺼낸 것 다음부터 시작한다', () {
+      final all = ResistanceInterventionService.interventions;
+      for (var i = 0; i < all.length; i++) {
+        final next = ResistanceInterventionService.nextIntervention(
+          const [],
+          isMaster: true,
+          startAfterId: all[i].id,
+        );
+        expect(next?.id, all[(i + 1) % all.length].id, reason: all[i].id);
+      }
+    });
+
+    test('한 바퀴 돌면 처음으로 돌아온다', () {
+      final all = ResistanceInterventionService.interventions;
+      var cursor = all.first.id;
+      final seen = <String>[];
+      // 대화 하나에 개입 하나씩, 목록 길이만큼 새 대화를 연다.
+      for (var i = 0; i < all.length; i++) {
+        final next = ResistanceInterventionService.nextIntervention(
+          const [],
+          isMaster: true,
+          startAfterId: cursor,
+        )!;
+        seen.add(next.id);
+        cursor = next.id;
+      }
+      expect(seen.toSet().length, all.length, reason: '한 바퀴 안에 중복이 없어야 한다');
+      expect(seen.last, all.first.id, reason: '끝에 닿으면 위로 돌아온다');
+    });
+
+    test('시작 자리가 목록에 없으면 맨 위부터', () {
+      // 개입을 지우면 저장돼 있던 id가 목록에 없는 값이 된다.
+      final next = ResistanceInterventionService.nextIntervention(
+        const [],
+        isMaster: true,
+        startAfterId: 'removed_long_ago',
+      );
+      expect(next?.id, ResistanceInterventionService.interventions.first.id);
+    });
+
+    test('중간에서 시작해도 한 대화에서 모든 방식을 한 번씩 꺼낸다', () {
+      final offered = <String>[];
+      while (true) {
+        final next = ResistanceInterventionService.nextIntervention(
+          offered,
+          isMaster: true,
+          startAfterId: 'connect_purpose',
+        );
+        if (next == null) break;
+        offered.add(next.id);
+      }
+      expect(offered.length, ResistanceInterventionService.interventions.length);
+      expect(offered.toSet().length, offered.length);
+    });
+
+    test('프렌즈는 마스터 전용 자리에서 시작해도 그걸 건너뛴다', () {
+      final next = ResistanceInterventionService.nextIntervention(
+        const [],
+        isMaster: false,
+        startAfterId: 'reorder',
+      );
+      expect(next?.id, isNot('start_signal'));
+      expect(next?.masterOnly, isFalse);
+    });
+  });
+
+  test('어느 개입도 앞이 막혔다는 걸 전제로 말하지 않는다', () {
+    // 로테이션은 아무거나 첫 마디로 꺼낸다. "앞의 방식들이 안 먹혔습니다"가
+    // 들어 있으면 아무것도 제안하지 않은 대화의 첫 줄에서 거짓말이 된다.
+    for (final intervention in ResistanceInterventionService.interventions) {
+      expect(intervention.rule, isNot(contains('연달아')), reason: intervention.id);
+      expect(
+        intervention.rule,
+        isNot(contains('앞의 방식')),
+        reason: intervention.id,
+      );
+    }
+  });
+
   test('id는 서로 겹치지 않고 지시문은 비어 있지 않다', () {
     final ids = ResistanceInterventionService.interventions
         .map((i) => i.id)
