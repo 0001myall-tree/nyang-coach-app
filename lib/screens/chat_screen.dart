@@ -12710,15 +12710,20 @@ ${lines.join('\n')}
 - 답변은 2문장 이내로 유지하고 [TASK], [TIMER_CONFIRM], [COUNTDOWN_START] 태그를 출력하지 마세요.''';
   }
 
+  /// 하루에 고급 모델을 쓸 수 있는 횟수.
+  ///
+  /// 예전에는 평범한 대화도 이 자리를 하나씩 가져갔다. 그래서 아침 잡담 몇
+  /// 마디가 하루치를 다 먹고, 오후에 정작 어려운 턴이 오면 남은 게 없었다.
+  /// 지금은 깊게 봐야 하는 턴과 전용 기능만 쓴다. 그 자리를 위해 남겨둔 몫이다.
   static const int _masterGpt41DailyLimit = 20;
   static const String _masterGpt41UsageKey = 'nyang_master_gpt41_usage_history';
 
   /// 한 대화에서 개입을 몇 번째 꺼낼 때부터 좋은 모델로 올릴지.
   ///
-  /// 개입은 사용자가 밀어낼 때마다 다음 것이 나온다. 세 번째라는 건 앞의 둘이
-  /// 안 먹혔다는 뜻이고, 남은 목록에서 하나 더 꺼내 읽어주는 걸로는 안 풀리는
-  /// 자리다. 첫 번째부터 올리면 흔한 "아 귀찮아" 한마디에 한도가 다 나간다.
-  static const int _deepReasoningInterventionCount = 3;
+  /// 개입은 사용자가 밀어낼 때마다 다음 것이 나온다. 두 번째라는 건 첫 개입을
+  /// 이미 밀어냈다는 뜻이다. 세 번까지 버티는 사람은 거의 없어서, 세 번째를
+  /// 기다리면 정작 도와야 할 사람 대부분을 놓친다.
+  static const int _deepReasoningInterventionCount = 2;
 
   Future<bool> _tryReserveMasterGpt41Turn() async {
     final prefs = await SharedPreferences.getInstance();
@@ -12746,13 +12751,13 @@ ${lines.join('\n')}
     return true;
   }
 
-  /// 실행 저항 턴은 원래 전부 싼 모델로 내려보냈다. 지시문이 "2문장 이내,
-  /// 질문 하나만"까지 정해줘서 좋은 모델이 할 일이 없었기 때문이다. 그 판단은
-  /// 첫 저항에는 지금도 맞다. 다만 같은 대화에서 계속 막히는 중이면 정해진
-  /// 문구를 읽어주는 문제가 아니게 된다. 그때만 올린다.
+  /// 평범한 대화는 고급 모델을 쓰지 않는다.
+  ///
+  /// 예전에는 마스터 코치의 모든 턴이 자리를 하나씩 예약했다. 선착순이라
+  /// 아침 인사부터 순서대로 가져갔고, 정작 오후에 사용자가 벽에 부딪힌 턴에는
+  /// 남은 게 없었다. 좋은 모델이 필요한 건 잡담이 아니라 그 자리다.
   Future<String> _pickChatModel({
     required _MasterModelPolicy masterModelPolicy,
-    required String resistanceTurnDirective,
     required bool needsDeepReasoning,
     required bool isSafetyTurn,
   }) async {
@@ -12762,14 +12767,15 @@ ${lines.join('\n')}
       case _MasterModelPolicy.forceGpt4oMini:
         return 'gpt-4o-mini';
       case _MasterModelPolicy.premiumFeature:
+        return await _tryReserveMasterGpt41Turn()
+            ? 'gpt-4.1-mini'
+            : 'gpt-4o-mini';
       case _MasterModelPolicy.generalLimited:
         // 안전 확인 턴은 하루 한도를 세지 않는다. 여기서 아낀 값이 가장
         // 비싸게 돌아오고, 한도가 찼다는 이유로 이 턴만 약한 모델이 받는 일은
         // 없어야 한다.
         if (isSafetyTurn) return 'gpt-4.1-mini';
-        if (resistanceTurnDirective.trim().isNotEmpty && !needsDeepReasoning) {
-          return 'gpt-4o-mini';
-        }
+        if (!needsDeepReasoning) return 'gpt-4o-mini';
         return await _tryReserveMasterGpt41Turn()
             ? 'gpt-4.1-mini'
             : 'gpt-4o-mini';
@@ -13173,7 +13179,7 @@ ${Prompts.outputRulesTail}$halmaeHint$resistanceTurnDirective$contextRequestRule
     }
 
     // 깊게 봐야 하는 자리인지. 이 시점에는 이번 턴에 쓸 개입까지 목록에
-    // 들어가 있어서, 세 번째라는 건 앞의 둘을 사용자가 밀어냈다는 뜻이다.
+    // 들어가 있어서, 두 번째라는 건 첫 개입을 사용자가 밀어냈다는 뜻이다.
     //
     // 생각 과부하와 결과 불안도 같이 올린다. 둘 다 관점을 바꿔주는 개입이라
     // 정해진 문구를 읽어주는 것으로는 안 되고, 잘못 짚으면 사용자가 스스로를
@@ -13187,7 +13193,6 @@ ${Prompts.outputRulesTail}$halmaeHint$resistanceTurnDirective$contextRequestRule
     // 재시도할 때 다시 고르면 한 턴에 두 자리를 잡아먹는다.
     final model = await _pickChatModel(
       masterModelPolicy: masterModelPolicy,
-      resistanceTurnDirective: resistanceTurnDirective,
       needsDeepReasoning: needsDeepReasoning,
       isSafetyTurn: isSelfHarmRiskTurn,
     );
