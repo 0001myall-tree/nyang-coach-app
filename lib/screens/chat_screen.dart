@@ -12710,14 +12710,6 @@ ${lines.join('\n')}
 - 답변은 2문장 이내로 유지하고 [TASK], [TIMER_CONFIRM], [COUNTDOWN_START] 태그를 출력하지 마세요.''';
   }
 
-  /// 하루에 고급 모델을 쓸 수 있는 횟수.
-  ///
-  /// 예전에는 평범한 대화도 이 자리를 하나씩 가져갔다. 그래서 아침 잡담 몇
-  /// 마디가 하루치를 다 먹고, 오후에 정작 어려운 턴이 오면 남은 게 없었다.
-  /// 지금은 깊게 봐야 하는 턴과 전용 기능만 쓴다. 그 자리를 위해 남겨둔 몫이다.
-  static const int _masterGpt41DailyLimit = 20;
-  static const String _masterGpt41UsageKey = 'nyang_master_gpt41_usage_history';
-
   /// 한 대화에서 개입을 몇 번째 꺼낼 때부터 좋은 모델로 올릴지.
   ///
   /// 개입은 사용자가 밀어낼 때마다 다음 것이 나온다. 두 번째라는 건 첫 개입을
@@ -12725,31 +12717,13 @@ ${lines.join('\n')}
   /// 기다리면 정작 도와야 할 사람 대부분을 놓친다.
   static const int _deepReasoningInterventionCount = 2;
 
-  Future<bool> _tryReserveMasterGpt41Turn() async {
-    final prefs = await SharedPreferences.getInstance();
-    final now = DateTime.now();
-    const resetHour = 0.0;
-    final todayKey = _effectiveUsageDateKey(now, resetHour);
-    final history = await _loadFeatureUsageHistory(
-      prefs: prefs,
-      key: _masterGpt41UsageKey,
-      fallbackKey: 'nyang_master_general_gpt41_usage_history',
-    );
-    final todayUsage = history.where((item) {
-      final createdAt = DateTime.tryParse((item['createdAt'] ?? '').toString());
-      return createdAt != null &&
-          _effectiveUsageDateKey(createdAt, resetHour) == todayKey;
-    }).length;
-
-    if (todayUsage >= _masterGpt41DailyLimit) return false;
-
-    history.add({'createdAt': now.toIso8601String()});
-    final trimmed = history.length > 40
-        ? history.sublist(history.length - 40)
-        : history;
-    await prefs.setString(_masterGpt41UsageKey, jsonEncode(trimmed));
-    return true;
-  }
+  /// 하루 몫은 계정 단위로 센다. 세는 자리는 토큰 한도와 같은 문서다.
+  ///
+  /// 기기 안에 세던 때는 앱을 지웠다 깔면 0으로 돌아갔고 기기가 두 대면 두
+  /// 배가 됐다. 옛 기록(nyang_master_gpt41_usage_history)은 이제 아무도 읽지
+  /// 않는다. 지우지는 않는다 — 남아 있어도 하는 일이 없다.
+  Future<bool> _tryReserveMasterGpt41Turn() =>
+      ApiUsageLimitService.tryReserveMasterPremiumModelTurn();
 
   /// 평범한 대화는 고급 모델을 쓰지 않는다.
   ///

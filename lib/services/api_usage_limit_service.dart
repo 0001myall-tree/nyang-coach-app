@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/user_data.dart';
+import 'analytics_service.dart';
 
 class ApiUsageLimitResult {
   final bool allowed;
@@ -94,6 +95,51 @@ class ApiUsageLimitService {
       dailyUsed: dailyUsed,
       dailyLimit: limits.daily,
     );
+  }
+
+  /// 고급 모델(gpt-4.1-mini)을 하루에 몇 번 쓸 수 있는지.
+  static const int masterPremiumModelDailyLimit = 20;
+  static const String premiumModelFeatureName = 'master_premium_model';
+
+  /// 고급 모델 자리 하나를 잡는다. 잡았으면 true.
+  ///
+  /// 기기 안에 세던 것을 여기로 옮겼다. 로컬에 세면 앱을 지웠다 깔 때마다
+  /// 0으로 돌아가고, 기기가 두 대면 하루치가 두 배가 된다. 토큰 한도는 이미
+  /// 계정 단위로 세고 있어서 같은 문서에 나란히 둔다.
+  ///
+  /// 읽기에 실패하면 자리를 주지 않는다. 통신이 끊긴 사이 무제한으로 열리는
+  /// 쪽보다 그 턴만 싼 모델이 받는 쪽이 낫다. 답이 안 나가는 것도 아니다.
+  ///
+  /// 세고 나서 올리는 순서라, 같은 순간에 두 턴이 겹치면 하나쯤 더 나갈 수
+  /// 있다. 대화는 답을 받을 때까지 입력이 막혀서 실제로는 겹치지 않는다.
+  static Future<bool> tryReserveMasterPremiumModelTurn() async {
+    final user = _auth.currentUser;
+    if (user == null) return false;
+
+    final int used;
+    try {
+      final doc = await _userAnalyticsDailyDoc(user.uid, DateTime.now());
+      used = _readInt(doc?['features']?[premiumModelFeatureName]);
+    } catch (e) {
+      return false;
+    }
+    if (used >= masterPremiumModelDailyLimit) return false;
+
+    await AnalyticsService.logFeatureUsage(premiumModelFeatureName);
+    return true;
+  }
+
+  static Future<Map<String, dynamic>?> _userAnalyticsDailyDoc(
+    String uid,
+    DateTime date,
+  ) async {
+    final doc = await _firestore
+        .collection('users')
+        .doc(uid)
+        .collection('analytics_daily')
+        .doc(_dateKey(date))
+        .get();
+    return doc.data();
   }
 
   static Future<ApiUsageLimitResult> checkOrganizeAllowance() async {
