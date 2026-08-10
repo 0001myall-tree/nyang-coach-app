@@ -106,10 +106,24 @@ class StartPatternService {
   /// 이 날수부터 "패턴"이라고 부른다.
   static const int minDaysToTrust = 7;
 
+  /// 이 날짜 앞의 기록은 이 계산에 쓸 수 없다.
+  ///
+  /// 그전에는 습관에만 시작 시각을 남겼다. 일반 할 일은 눌러도 시각이 안
+  /// 남아서, 하루 중 가장 이른 시작을 찾으면 언제나 습관 시각이 나왔다.
+  /// 아침부터 일한 날도 밤에 한 운동이 "하루의 시작"으로 잡혔다는 뜻이다.
+  ///
+  /// 모든 할 일이 시각을 남기기 시작한 건 2026-08-08 배포부터이고, 기록에
+  /// 실제로 찍히기 시작한 첫날이 8월 9일이다. 그 앞은 세지 않는다. 데이터가
+  /// 늦게 쌓이더라도 없는 패턴을 지어내는 것보단 낫다.
+  static const String firstReliableDate = '2026-08-09';
+
   /// [records]는 nyang_history의 하루 기록들이다.
   static StartPatternResult analyze(List<Map<String, dynamic>> records) {
     final days = <_DayStart>[];
     for (final record in records) {
+      final date = (record['date'] ?? '').toString();
+      // 날짜 문자열이 YYYY-MM-DD라 사전순 비교가 곧 시간순 비교다.
+      if (date.isEmpty || date.compareTo(firstReliableDate) < 0) continue;
       final day = _readDay(record);
       if (day != null) days.add(day);
     }

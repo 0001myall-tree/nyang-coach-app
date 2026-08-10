@@ -34,7 +34,7 @@ List<Map<String, dynamic>> days({
   required int startHour,
   required int done,
   required int total,
-  int fromDay = 1,
+  int fromDay = 9,
 }) {
   return [
     for (var i = 0; i < count; i++)
@@ -90,7 +90,7 @@ void main() {
     test('완료율이 가장 높았던 구간을 고른다', () {
       final result = StartPatternService.analyze([
         ...days(count: 3, startHour: 8, done: 9, total: 10),
-        ...days(count: 3, startHour: 13, done: 3, total: 10, fromDay: 11),
+        ...days(count: 3, startHour: 13, done: 3, total: 10, fromDay: 20),
       ]);
       expect(result.window, const StartWindow(8));
       expect(result.completionPercent, 90);
@@ -100,7 +100,7 @@ void main() {
       // 8시 반과 9시 반은 같은 구간이다.
       final result = StartPatternService.analyze([
         ...days(count: 2, startHour: 8, done: 10, total: 10),
-        ...days(count: 2, startHour: 9, done: 10, total: 10, fromDay: 11),
+        ...days(count: 2, startHour: 9, done: 10, total: 10, fromDay: 20),
       ]);
       expect(result.window, const StartWindow(8));
       expect(result.dayCount, 4);
@@ -108,9 +108,9 @@ void main() {
 
     test('그날 가장 이른 시작을 하루의 시작으로 본다', () {
       final result = StartPatternService.analyze([
-        day(date: '2026-08-01', startHours: [15, 9, 20], done: 3),
-        day(date: '2026-08-02', startHours: [14, 9, 21], done: 3),
-        day(date: '2026-08-03', startHours: [16, 8, 22], done: 3),
+        day(date: '2026-08-09', startHours: [15, 9, 20], done: 3),
+        day(date: '2026-08-10', startHours: [14, 9, 21], done: 3),
+        day(date: '2026-08-21', startHours: [16, 8, 22], done: 3),
       ]);
       expect(result.window, const StartWindow(8));
     });
@@ -118,7 +118,7 @@ void main() {
     test('완료율이 같으면 더 여러 날 그랬던 구간을 고른다', () {
       final result = StartPatternService.analyze([
         ...days(count: 4, startHour: 8, done: 5, total: 10),
-        ...days(count: 1, startHour: 14, done: 5, total: 10, fromDay: 11),
+        ...days(count: 1, startHour: 14, done: 5, total: 10, fromDay: 20),
       ]);
       expect(result.window, const StartWindow(8));
     });
@@ -128,7 +128,7 @@ void main() {
     test('휴식 모드인 날은 평가하지 않는다', () {
       final result = StartPatternService.analyze([
         ...days(count: 3, startHour: 9, done: 5, total: 5),
-        day(date: '2026-08-11', startHours: [14], done: 0, vacation: true),
+        day(date: '2026-08-21', startHours: [14], done: 0, vacation: true),
       ]);
       expect(result.dayCount, 3);
     });
@@ -157,20 +157,48 @@ void main() {
     test('이월된 일은 그날 할 일로 세지 않는다', () {
       final result = StartPatternService.analyze([
         {
-          'date': '2026-08-01',
+          'date': '2026-08-09',
           'tasks': [
             {
               'text': '오늘 일',
               'done': true,
-              'startedAt': '2026-08-01T09:00:00.000',
+              'startedAt': '2026-08-09T09:00:00.000',
             },
             {'text': '어제 일', 'done': false, 'deferred': true},
           ],
         },
-        ...days(count: 2, startHour: 9, done: 1, total: 1, fromDay: 11),
+        ...days(count: 2, startHour: 9, done: 1, total: 1, fromDay: 20),
       ]);
       // 이월된 일까지 셌다면 완료율이 50%로 떨어진다.
       expect(result.completionPercent, 100);
+    });
+  });
+
+  group('믿을 수 없는 옛 기록', () {
+    // 2026-08-08 배포 전에는 습관에만 시작 시각이 남았다. 그래서 아침부터
+    // 일한 날도 밤에 한 운동이 "하루의 시작"으로 잡혔다.
+    test('기준일 앞의 날은 세지 않는다', () {
+      final result = StartPatternService.analyze([
+        day(date: '2026-08-03', startHours: [23], done: 1),
+        day(date: '2026-08-05', startHours: [23], done: 1),
+        day(date: '2026-08-06', startHours: [22], done: 1),
+        day(date: '2026-08-07', startHours: [23], done: 1),
+      ]);
+      expect(result.dayCount, 0);
+      expect(result.confidence, StartPatternConfidence.notEnough);
+    });
+
+    test('옛 기록이 섞여 있어도 새 기록만 본다', () {
+      final result = StartPatternService.analyze([
+        // 밤에 한 습관만 남은 옛날 기록
+        day(date: '2026-08-05', startHours: [23], done: 1),
+        day(date: '2026-08-06', startHours: [23], done: 1),
+        day(date: '2026-08-07', startHours: [23], done: 1),
+        // 모든 할 일이 시각을 남기기 시작한 뒤
+        ...days(count: 3, startHour: 9, done: 5, total: 5, fromDay: 9),
+      ]);
+      expect(result.dayCount, 3);
+      expect(result.window, const StartWindow(8));
     });
   });
 
