@@ -53,6 +53,38 @@ void main() {
     });
   });
 
+  group('결과 불안', () {
+    test('무거운 판에도 두 번째 걸음 얘기가 들어갔다', () {
+      expect(Prompts.thoughtOverload, contains('두 번째는 더 쉬워진다'));
+    });
+
+    group('프렌즈용 가벼운 판', () {
+      const light = Prompts.resultAnxietyLight;
+
+      test('결과를 붙잡을수록 불안해진다고 짚는다', () {
+        expect(light, contains('결과를 붙잡고 있을수록 불안이 커진다'));
+        // 조심스러워진 걸 게으름으로 읽지 않게 한 줄 받아준다.
+        expect(light, contains('소중해서 조심스러워진'));
+      });
+
+      test('오늘 할 수 있는 한 걸음으로 내린다', () {
+        expect(light, contains('딱 한 걸음'));
+        expect(light, contains('두 번째는 더 쉬워진다'));
+      });
+
+      test('무거운 처방은 빠져 있다', () {
+        // 30분 글쓰기와 판단 기준 적기는 마스터 판에만 있는 처방이다.
+        expect(light, isNot(contains('30분')));
+        expect(light, isNot(contains('판단 기준')));
+      });
+
+      test('짧게 끝내고 태그를 붙이지 않는다', () {
+        expect(light, contains('3문장 이내'));
+        expect(light, contains('[TASK]와 [TIMER_CONFIRM]은 붙이지 말 것'));
+      });
+    });
+  });
+
   group('앞의 두 갈래는 그대로', () {
     test('환기와 짧은 집중 단위가 남아 있다', () {
       expect(Prompts.focusFatigue, contains('인지적 환기'));

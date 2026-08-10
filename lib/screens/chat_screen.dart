@@ -12901,13 +12901,17 @@ ${lines.join('\n')}
     final decisionFatigueRule = isDecisionFatigueTurn
         ? Prompts.decisionFatigue
         : '';
-    // 마스터 코치 전용. 관점을 바꿔주고 30분 글쓰기까지 시키는 무거운 개입이라
-    // 오늘 하루 중심인 프렌즈 코치에게는 캐릭터에 안 맞는 말을 하게 만든다.
-    // 켜는 판정이 키워드라 "방 정리가 안 돼"처럼 뜻이 다른 말에도 걸리는데,
-    // 마스터로 좁히면 그 오탐이 닿는 범위도 함께 준다.
-    final thoughtOverloadRule = isThoughtOverloadTurn && _coach.isMaster
+    // 무거운 판은 마스터에만 준다. 관점을 바꿔주고 30분 글쓰기까지 시키는
+    // 개입이라 오늘 하루 중심인 프렌즈 캐릭터에는 안 맞는 말을 하게 된다.
+    //
+    // 그렇다고 프렌즈를 빈손으로 두면, 결과가 두려워 멈춘 사람만 아무 대응도
+    // 못 받는다 — 집중력 저하 쪽이 불안한 턴을 비켜가도록 되어 있어서다.
+    // 뼈대만 남긴 가벼운 판을 준다.
+    final thoughtOverloadRule = !isThoughtOverloadTurn
+        ? ''
+        : _coach.isMaster
         ? Prompts.thoughtOverload
-        : '';
+        : Prompts.resultAnxietyLight;
     final writingConcernRule = isWritingConcernTurn
         ? Prompts.writingConcern
         : '';
