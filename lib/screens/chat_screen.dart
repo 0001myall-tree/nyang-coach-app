@@ -21,6 +21,7 @@ import 'package:nyang_coach/services/apple_calendar_sync_service.dart';
 import 'package:nyang_coach/services/tasks_sync_service.dart';
 import 'package:nyang_coach/services/user_title_service.dart';
 import 'package:nyang_coach/services/daily_reset_service.dart';
+import 'package:nyang_coach/services/coach_context_scope.dart';
 import 'package:nyang_coach/services/coach_id_service.dart';
 import 'package:nyang_coach/services/local_reply_texts.dart';
 import 'package:nyang_coach/services/master_bedtime_offer_copy.dart';
@@ -6250,109 +6251,31 @@ ${lines.join('\n')}
     ].any(normalized.contains);
   }
 
-  bool _isAvoidanceMessage(String text) {
-    final normalized = text.replaceAll(RegExp(r'\s+'), '').toLowerCase();
-    return [
-      '귀찮',
-      '하기싫',
-      '못하겠',
-      '미루고싶',
-      '나중에할',
-      '손이안가',
-      '시작하기싫',
-    ].any(normalized.contains);
-  }
+  bool _isAvoidanceMessage(String text) =>
+      CoachContextScopeService.isAvoidanceMessage(text);
 
-  bool _needsMasterGoalContext(String userText) {
-    if (!_coach.isMaster) return false;
-
-    final recentUserTexts = _messages.reversed
-        .where((message) => message.isUser)
-        .take(2)
-        .map((message) => message.text);
-    final normalized = ([
-      userText,
-      ...recentUserTexts,
-    ].join(' ')).replaceAll(RegExp(r'\s+'), '').toLowerCase();
-
-    return [
-      '비전',
-      '마일스톤',
-      '장기목표',
-      '주간목표',
-      '월간목표',
-      '이번주목표',
-      '이번달목표',
-      '목표',
-      '우선순위',
-      '뭐부터',
-      '무엇부터',
-      '뭘먼저',
-      '뭐먼저',
-      '어디서부터',
-      '먼저해야',
-      '뭘해야',
-      '뭐해야',
-      '해야할지',
-      '어떻게해야',
-      '뭐하지',
-      '추천해',
-      '추천받',
-      '일정짜',
-      '스케줄짜',
-      '계획짜',
-      '정리해줘',
-      '방향잡',
-      '잘하고있',
-      '잘하고있는',
-      '제대로하고',
-      '잘해내고',
-      '가고있는',
-      '맞게가고',
-      '맞는방향',
-      '제자리',
-      '진행상황',
-      '성과',
-      '평가해',
-      '분석해',
-      '돌아봐',
-      '흐름어때',
-      '뒤처',
-      '감이안',
-    ].any(normalized.contains);
-  }
-
-  bool _needsMasterTaskContext(String userText, bool needsGoalContext) {
-    if (!_coach.isMaster) return true;
-    if (needsGoalContext ||
-        _isAvoidanceMessage(userText) ||
-        _isMasterTimerAuthorizationResponse(userText)) {
-      return true;
+  /// 이번 말을 뺀 직전 사용자 발화. 없으면 null.
+  ///
+  /// 이번 말은 API를 부르기 전에 이미 _messages에 들어가 있다. 그걸 모르고
+  /// "최근 사용자 발화 2개"를 꺼내면 하나는 이번 말 자신이라, 의도한 것보다
+  /// 창이 하나 짧아진다. 여기서 명시적으로 걷어낸다.
+  String? _previousUserText() {
+    final upto = _messages.isNotEmpty && _messages.last.isUser
+        ? _messages.length - 1
+        : _messages.length;
+    for (int i = upto - 1; i >= 0; i--) {
+      if (_messages[i].isUser) return _messages[i].text;
     }
-
-    final normalized = userText.replaceAll(RegExp(r'\s+'), '').toLowerCase();
-    return [
-      '할일',
-      '일정',
-      '스케줄',
-      '습관',
-      '타이머',
-      '미완료',
-      '완료했',
-      '끝냈',
-      '해야돼',
-      '해야해',
-    ].any(normalized.contains);
+    return null;
   }
 
-  bool _needsMasterLightGoalContext(String userText) {
-    if (!_coach.isMaster) return false;
-    if (_isAvoidanceMessage(userText)) return true;
-
-    return _messages.reversed
-        .where((message) => message.isUser)
-        .take(2)
-        .any((message) => _isAvoidanceMessage(message.text));
+  CoachContextScope _resolveContextScope(String userText) {
+    return CoachContextScopeService.resolve(
+      isMaster: _coach.isMaster,
+      currentText: userText,
+      previousUserText: _previousUserText(),
+      timerAuthorization: _isMasterTimerAuthorizationResponse(userText),
+    );
   }
 
   Future<String?> _tryBuildMasterLocalReply(String input) async {
@@ -11602,18 +11525,19 @@ ${lines.join('\n')}
   }
 
   // ── 웹앱 buildMemoryContext() 이식 (전 코치 등급) ───────
-  Future<String> _buildContextString(String userText) async {
+  Future<String> _buildContextString(
+    String userText, {
+    CoachContextScope? scope,
+  }) async {
     final tier = _coach.tier; // 'friends' | 'master'
     final prefs = await SharedPreferences.getInstance();
     final sb = StringBuffer();
     final now = DateTime.now();
-    final needsGoalContext = _needsMasterGoalContext(userText);
-    final needsTaskContext = _needsMasterTaskContext(
-      userText,
-      needsGoalContext,
-    );
-    final needsLightGoalContext =
-        !needsGoalContext && _needsMasterLightGoalContext(userText);
+    // 코치가 정보가 모자라다고 알려온 재시도 턴에는 넓힌 범위가 넘어온다.
+    final resolvedScope = scope ?? _resolveContextScope(userText);
+    final needsGoalContext = resolvedScope.needsFullGoal;
+    final needsTaskContext = resolvedScope.tasks;
+    final needsLightGoalContext = resolvedScope.needsLightGoal;
 
     // 1. 마스터 프로필 (tier별 분기)
     final mpRaw = prefs.getString('nyang_master_profile');
@@ -11987,8 +11911,12 @@ ${lines.join('\n')}
       } catch (_) {}
     }
 
-    // 6. 오늘의 핵심 (master only)
-    if (_coach.isMaster && needsGoalContext) {
+    // 6. 오늘의 핵심
+    //
+    // 오늘 할 일 중 사용자가 직접 1~3위로 꼽은 것이라, 목표가 아니라 오늘에
+    // 붙는 정보다. 그래서 목표 범위가 아니라 할 일 범위를 따른다. 프렌즈
+    // 코치도 오늘 할 일은 보므로 어느 게 중요한지까지 같이 본다.
+    if (needsTaskContext) {
       final coreRaw = prefs.getString('nyang_core_tasks');
       if (coreRaw != null) {
         try {
@@ -12010,7 +11938,7 @@ ${lines.join('\n')}
               sb.writeln('${i + 1}위: [$statusLabel] ${c['text']}');
             }
             sb.writeln(
-              '*위 핵심 할 일은 사용자가 오늘 가장 중요하게 생각하는 우선순위입니다. 비서로서 우선순위에 집중할 수 있도록 가이드해주세요.',
+              '*위 핵심 할 일은 사용자가 오늘 가장 중요하게 생각하는 우선순위입니다. 우선순위에 집중할 수 있도록 도와주세요.',
             );
             sb.writeln('*완료된 핵심 항목은 절대 다시 하라고 언급하지 말 것.');
           }
@@ -12103,10 +12031,18 @@ ${lines.join('\n')}
                 }
               }
             }
-            if (needsLightGoalContext) {
+            // 목표를 얇게 싣는 이유가 두 가지다. 귀찮다고 한 턴이면 그 일과
+            // 목표를 이어줄 수 있고, 직전 말이 목표 얘기였을 뿐이면 참고만
+            // 시킨다. 후자에 귀찮음 규칙을 붙이면 없는 감정을 있다고 치고 말을 건다.
+            if (resolvedScope.avoidanceLink) {
               sb.writeln('\n[귀찮음 상황의 목표 연결 규칙]');
               sb.writeln(
                 '*사용자가 귀찮아하는 일이 위 목표와 자연스럽게 연결될 때만 그 의미를 짧게 짚어주세요. 억지로 연결하거나 길게 분석하지 마세요. 원인 확인 질문을 하는 턴에는 목표 이야기를 꺼내지 말고, 원인을 들은 뒤 개입을 제안할 때 한 문장으로만 곁들이세요.',
+              );
+            } else if (needsLightGoalContext) {
+              sb.writeln('\n[목표 참고 규칙]');
+              sb.writeln(
+                '*직전 대화가 목표 이야기였어서 제목만 실었습니다. 이번 말이 목표와 직접 이어질 때만 짧게 참고하세요. 사용자가 다른 이야기로 넘어갔다면 목표를 먼저 꺼내지 마세요.',
               );
             } else {
               sb.writeln('\n비전과 마일스톤의 진행 상황을 대화 중에 자연스럽게 확인하거나 응원해주세요.');
@@ -13082,9 +13018,11 @@ $resistanceFlowRule'''
     final baseSystemPrompt = _coach.systemPrompt;
 
     final useVisionNewActionContext = userText == '미래를 위한 오늘 - 새 행동 추천받기';
-    final contextString = useVisionNewActionContext
+    // 이번 턴에 어디까지 실을지. 코치가 모자라다고 알려오면 넓혀서 다시 만든다.
+    var contextScope = _resolveContextScope(userText);
+    var contextString = useVisionNewActionContext
         ? await _buildVisionNewActionContextString()
-        : await _buildContextString(userText);
+        : await _buildContextString(userText, scope: contextScope);
     final timerOutputRule = _coach.isMaster
         ? Prompts.timerOutputMaster
         : Prompts.timerOutputFriends;
@@ -13127,9 +13065,12 @@ $resistanceFlowRule'''
     // 약속 준비를 역산하는 대화일 때만 붙인다. 숫자는 앱이 낸다.
     final prepTimeSection = await _prepTimeSection(userText);
 
-    final assembledSystemPrompt =
-        '''$baseSystemPrompt
-${contextString.isNotEmpty ? '\n$contextString' : ''}
+    // 실린 기록만 바꿔서 두 번 조립할 수 있게 묶어둔다. 나머지 조각은 재시도
+    // 턴에도 그대로 쓴다. 코치가 요청한 건 정보지 다른 지침이 아니다.
+    String assemble(String context, String contextRequestRule) {
+      final assembledSystemPrompt =
+          '''$baseSystemPrompt
+${context.isNotEmpty ? '\n$context' : ''}
 $masterStyleRule
 $lifeRoutineSection
 $cleaningSection
@@ -13161,16 +13102,17 @@ $habitAutomationSection
 ${Prompts.outputRulesHead}$coachSwitchRule
    자해·자살 위험을 확인하거나 긴급 도움을 안내하는 상황에서는 [CHIPS]와 [COACH_SWITCH]를 붙이지 말고 [NO_CHIPS]만 붙이세요.
 $timerOutputRule
-${Prompts.outputRulesTail}$halmaeHint$resistanceTurnDirective''';
+${Prompts.outputRulesTail}$halmaeHint$resistanceTurnDirective$contextRequestRule''';
 
-    // 마스터 코치는 하드코딩된 "대표님"을 사용자가 지정한 호칭으로 치환한다.
-    // baseSystemPrompt 뒤에 이어붙인 coachSwitchRule 등 모든 조각까지 함께 반영된다.
-    final systemPromptWithChips = _coach.isMaster
-        ? assembledSystemPrompt.replaceAll(
-            UserTitleService.defaultTitle,
-            customTitle,
-          )
-        : assembledSystemPrompt;
+      // 마스터 코치는 하드코딩된 "대표님"을 사용자가 지정한 호칭으로 치환한다.
+      // baseSystemPrompt 뒤에 이어붙인 coachSwitchRule 등 모든 조각까지 함께 반영된다.
+      return _coach.isMaster
+          ? assembledSystemPrompt.replaceAll(
+              UserTitleService.defaultTitle,
+              customTitle,
+            )
+          : assembledSystemPrompt;
+    }
 
     String effectiveUserText = userText;
     if (userText == '지금 뭐하지?') {
@@ -13211,75 +13153,117 @@ ${Prompts.outputRulesTail}$halmaeHint$resistanceTurnDirective''';
       _focusRefreshOfferedAt = now;
     }
 
-    final messages = [
-      {'role': 'system', 'content': systemPromptWithChips},
-      ...history.map(
-        (m) => {
-          'role': m.isUser ? 'user' : 'assistant',
-          'content': m.isUser
-              ? '[${m.time.hour}:${m.time.minute.toString().padLeft(2, '0')}] ${m.text}'
-              : m.text,
-        },
-      ),
-      {'role': 'user', 'content': '$timePrefix$effectiveUserText'},
-    ];
-
-    final estimatedPromptTokens = AnalyticsService.estimateChatTokens(
-      messages,
-      '',
-    );
-    await ApiUsageLimitService.ensureChatAllowed(
-      estimatedTokens: estimatedPromptTokens,
-    );
-
+    // 모델은 한 번만 고른다. gpt-4.1-mini 자리를 예약해서 쓰는 구조라,
+    // 재시도할 때 다시 고르면 한 턴에 두 자리를 잡아먹는다.
     final model = await _pickChatModel(
       masterModelPolicy: masterModelPolicy,
       resistanceTurnDirective: resistanceTurnDirective,
     );
 
-    // Firebase Cloud Functions chatProxy 호출 (웹앱과 동일한 Gemini AI 서버)
-    final result = await _chatProxy.call({
-      'messages': messages,
-      'model': model,
-      'temperature': 0.9,
-    });
+    Future<String> request(String systemPrompt) async {
+      final messages = [
+        {'role': 'system', 'content': systemPrompt},
+        ...history.map(
+          (m) => {
+            'role': m.isUser ? 'user' : 'assistant',
+            'content': m.isUser
+                ? '[${m.time.hour}:${m.time.minute.toString().padLeft(2, '0')}] ${m.text}'
+                : m.text,
+          },
+        ),
+        {'role': 'user', 'content': '$timePrefix$effectiveUserText'},
+      ];
 
-    var content = result.data['content'] as String? ?? '';
-    if (content.isEmpty) throw Exception('Empty response from chatProxy');
+      final estimatedPromptTokens = AnalyticsService.estimateChatTokens(
+        messages,
+        '',
+      );
+      await ApiUsageLimitService.ensureChatAllowed(
+        estimatedTokens: estimatedPromptTokens,
+      );
 
-    // 욕설이 섞였으면 답변 전체를 버린다. 일부만 지우면 앞뒤 문장이
-    // "오, ○○이잖아!"처럼 남아서 오히려 무슨 말인지 다 드러난다.
-    // 태그도 함께 버려서 할 일 등록이나 타이머가 딸려 나오지 않게 한다.
-    if (_containsProfanity(content)) {
-      debugPrint('Coach reply blocked: profanity');
-      content = _profanityDeflection();
+      // Firebase Cloud Functions chatProxy 호출 (웹앱과 동일한 Gemini AI 서버)
+      final result = await _chatProxy.call({
+        'messages': messages,
+        'model': model,
+        'temperature': 0.9,
+      });
+
+      var content = result.data['content'] as String? ?? '';
+      if (content.isEmpty) throw Exception('Empty response from chatProxy');
+
+      // 욕설이 섞였으면 답변 전체를 버린다. 일부만 지우면 앞뒤 문장이
+      // "오, ○○이잖아!"처럼 남아서 오히려 무슨 말인지 다 드러난다.
+      // 태그도 함께 버려서 할 일 등록이나 타이머가 딸려 나오지 않게 한다.
+      if (_containsProfanity(content)) {
+        debugPrint('Coach reply blocked: profanity');
+        content = _profanityDeflection();
+      }
+
+      final estimatedTokens = AnalyticsService.estimateChatTokens(
+        messages,
+        content,
+      );
+      final usageData = result.data is Map ? result.data as Map : const {};
+      final actualTokens = AnalyticsService.readIntValue(usageData, [
+        'totalTokens',
+        'total_tokens',
+        'tokens',
+        'usage.totalTokens',
+        'usage.total_tokens',
+      ]);
+      final actualCostWon = AnalyticsService.readIntValue(usageData, [
+        'costWon',
+        'cost_won',
+        'estimatedCostWon',
+        'estimated_cost_won',
+        'usage.costWon',
+      ]);
+      // 재시도한 턴은 호출이 두 번이라 사용량도 두 번 쌓인다. 실제로 두 번
+      // 나갔으니 맞다.
+      await AnalyticsService.logApiUsage(
+        coachId: widget.coachId,
+        estimatedTokens: estimatedTokens,
+        actualTokens: actualTokens,
+        actualCostWon: actualCostWon,
+      );
+      return content;
     }
 
-    final estimatedTokens = AnalyticsService.estimateChatTokens(
-      messages,
-      content,
-    );
-    final usageData = result.data is Map ? result.data as Map : const {};
-    final actualTokens = AnalyticsService.readIntValue(usageData, [
-      'totalTokens',
-      'total_tokens',
-      'tokens',
-      'usage.totalTokens',
-      'usage.total_tokens',
-    ]);
-    final actualCostWon = AnalyticsService.readIntValue(usageData, [
-      'costWon',
-      'cost_won',
-      'estimatedCostWon',
-      'estimated_cost_won',
-      'usage.costWon',
-    ]);
-    await AnalyticsService.logApiUsage(
-      coachId: widget.coachId,
-      estimatedTokens: estimatedTokens,
-      actualTokens: actualTokens,
-      actualCostWon: actualCostWon,
-    );
+    // 앱이 고른 범위에서 빠진 게 있을 때만 요청 규칙을 붙인다. 이미 다 실어놓고
+    // "모자라면 말해"라고 하면, 모델이 있는 정보를 다시 달라고 하는 턴이 생긴다.
+    // 새 행동 추천은 전용 컨텍스트를 따로 만들어 쓰므로 이 흐름에서 뺀다.
+    final canRequestContext = !useVisionNewActionContext;
+    final contextRequestRule = canRequestContext
+        ? Prompts.contextRequestRule(
+            goalsMissing: _coach.isMaster && !contextScope.needsFullGoal,
+            tasksMissing: !contextScope.tasks,
+          )
+        : '';
+
+    var content = await request(assemble(contextString, contextRequestRule));
+
+    // 코치가 정보가 모자라다고 알려오면 그만큼만 채워서 한 번 더 부른다.
+    // 재시도는 한 번뿐이다. 채워준 뒤에도 또 요청하면 답이 영영 안 나온다.
+    if (contextRequestRule.isNotEmpty) {
+      final requested = CoachContextRequest.parse(content);
+      if (requested.isNotEmpty) {
+        debugPrint('Coach requested more context: $requested');
+        contextScope = contextScope.escalated(
+          goals: requested.goals,
+          tasks: requested.tasks,
+        );
+        contextString = await _buildContextString(
+          userText,
+          scope: contextScope,
+        );
+        content = await request(assemble(contextString, ''));
+      }
+    }
+
+    // 재시도 뒤에도 태그가 남아 있으면 사용자 화면에 그대로 보인다.
+    content = CoachContextRequest.strip(content);
+    if (content.isEmpty) throw Exception('Empty response after context retry');
 
     // 마크다운 포맷 제거 (웹앱과 동일)
     return content
