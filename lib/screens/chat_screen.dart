@@ -949,7 +949,6 @@ class _ParsedReply {
   final String text;
   final List<String> chips;
   final bool suppressDefaultChips;
-  final String? coachSwitchTarget;
   final int? timerConfirmMinutes;
   final String? timerConfirmTaskName;
   final String? visionSourceId;
@@ -966,7 +965,6 @@ class _ParsedReply {
     required this.text,
     required this.chips,
     this.suppressDefaultChips = false,
-    this.coachSwitchTarget,
     this.timerConfirmMinutes,
     this.timerConfirmTaskName,
     this.visionSourceId,
@@ -1256,7 +1254,6 @@ class _ChatScreenState extends State<ChatScreen>
   List<ChatMessage> _pastMessages = [];
   List<String> _dynamicChips = [];
   bool _suppressDefaultChips = false;
-  String? _coachSwitchTarget;
   bool _isLoading = false;
   late CoachConfig _coach;
 
@@ -5849,11 +5846,10 @@ ${lines.join('\n')}
     return '$prefix $hour12:$mStr';
   }
 
-  // ── AI 응답 파싱 ([CHIPS], [NO_CHIPS], [COACH_SWITCH], [TIMER_CONFIRM]) ────
+  // ── AI 응답 파싱 ([CHIPS], [NO_CHIPS], [TIMER_CONFIRM]) ────
   _ParsedReply _parseReply(String raw) {
     final chipRegex = RegExp(r'\[CHIPS:\s*(.+?)\]');
     final noChipsRegex = RegExp(r'\[NO_CHIPS\]');
-    final coachSwitchRegex = RegExp(r'\[COACH_SWITCH:\s*([a-z_]+)\s*\]');
     final timerConfirmRegex = RegExp(r'\[TIMER_CONFIRM:(\d+)(?::([^\]]+))?\]');
     final countdownStartRegex = RegExp(r'\[COUNTDOWN_START\]');
     final ultraLowResistanceFollowupRegex = RegExp(
@@ -5868,7 +5864,6 @@ ${lines.join('\n')}
     final coreRecRegex = RegExp(r'\[CORE_REC:(\{.*?\})\]');
     List<String> chips = [];
     bool suppressDefaultChips = false;
-    String? coachSwitchTarget;
     int? timerConfirmMinutes;
     String? timerConfirmTaskName;
     String? visionSourceId;
@@ -5923,14 +5918,6 @@ ${lines.join('\n')}
       suppressDefaultChips = true;
       chips = [];
       text = text.replaceAll(noChipsRegex, '').trim();
-    }
-
-    final coachSwitchMatch = coachSwitchRegex.firstMatch(text);
-    if (coachSwitchMatch != null) {
-      coachSwitchTarget = coachSwitchMatch.group(1)?.trim();
-      text = text.replaceAll(coachSwitchMatch.group(0)!, '').trim();
-      suppressDefaultChips = true;
-      chips = [];
     }
 
     final timerMatch = timerConfirmRegex.firstMatch(text);
@@ -6016,7 +6003,6 @@ ${lines.join('\n')}
       text: text,
       chips: chips,
       suppressDefaultChips: suppressDefaultChips,
-      coachSwitchTarget: coachSwitchTarget,
       timerConfirmMinutes: timerConfirmMinutes,
       timerConfirmTaskName: timerConfirmTaskName,
       visionSourceId: visionSourceId,
@@ -6565,7 +6551,6 @@ ${lines.join('\n')}
       _suggestedTasks = [];
       _dynamicChips = _coach.chips;
       _suppressDefaultChips = false;
-      _coachSwitchTarget = null;
     });
     _scrollToBottom();
     await _saveHistory();
@@ -6591,7 +6576,6 @@ ${lines.join('\n')}
       _suggestedTasks = [];
       _dynamicChips = [];
       _suppressDefaultChips = false;
-      _coachSwitchTarget = null;
     });
     _scrollToBottom();
     await _saveHistory();
@@ -6620,7 +6604,6 @@ ${lines.join('\n')}
       _suggestedTasks = [];
       _dynamicChips = [];
       _suppressDefaultChips = false;
-      _coachSwitchTarget = null;
     });
     _scrollToBottom();
     await _saveHistory();
@@ -10957,7 +10940,6 @@ ${lines.join('\n')}
         _suggestedTasks = [];
         _dynamicChips = _coach.chips;
         _suppressDefaultChips = false;
-        _coachSwitchTarget = null;
       });
       _scrollToBottom();
       await _saveHistory();
@@ -11032,7 +11014,6 @@ ${lines.join('\n')}
       _messages.add(userMsg);
       _dynamicChips = [];
       _suppressDefaultChips = false;
-      _coachSwitchTarget = null;
       _isLoading = true;
     });
     _scrollToBottom();
@@ -11123,7 +11104,6 @@ ${lines.join('\n')}
         _dynamicChips = parsed.chips.isNotEmpty
             ? parsed.chips
             : (_suppressDefaultChips ? [] : _coach.chips);
-        _coachSwitchTarget = parsed.coachSwitchTarget;
         if (_coach.isMaster) {
           _timerConfirmMinutes = masterTimerEligible
               ? parsed.timerConfirmMinutes
@@ -11500,7 +11480,6 @@ ${lines.join('\n')}
       _suggestedTasks = [];
       _dynamicChips = [];
       _suppressDefaultChips = false;
-      _coachSwitchTarget = null;
     });
     _scrollToBottom();
     await _saveHistory();
@@ -13029,9 +13008,6 @@ $resistanceFlowRule'''
     final timerOutputRule = _coach.isMaster
         ? Prompts.timerOutputMaster
         : Prompts.timerOutputFriends;
-    // 냥냥이 연결(COACH_SWITCH)은 장기 목표 압박을 주는 마스터 코치(냥할배/여비서) 전용 탈출구다.
-    // 프렌즈 코치는 이미 압박 없는 오늘 하루 중심이라 서로 스위치될 이유가 없다.
-    final coachSwitchRule = _coach.isMaster ? Prompts.coachSwitchToCat : '';
     final masterStyleRule = _coach.id == 'nyang_halbae'
         ? Prompts.nyangHalbaeStyle
         : '';
@@ -13102,13 +13078,13 @@ $decisionSupportSection
 $writingConcernSection
 $habitAutomationSection
 
-${Prompts.outputRulesHead}$coachSwitchRule
-   자해·자살 위험을 확인하거나 긴급 도움을 안내하는 상황에서는 [CHIPS]와 [COACH_SWITCH]를 붙이지 말고 [NO_CHIPS]만 붙이세요.
+${Prompts.outputRulesHead}
+   자해·자살 위험을 확인하거나 긴급 도움을 안내하는 상황에서는 [CHIPS]를 붙이지 말고 [NO_CHIPS]만 붙이세요.
 $timerOutputRule
 ${Prompts.outputRulesTail}$halmaeHint$resistanceTurnDirective$contextRequestRule''';
 
       // 마스터 코치는 하드코딩된 "대표님"을 사용자가 지정한 호칭으로 치환한다.
-      // baseSystemPrompt 뒤에 이어붙인 coachSwitchRule 등 모든 조각까지 함께 반영된다.
+      // baseSystemPrompt 뒤에 이어붙인 모든 조각까지 함께 반영된다.
       return _coach.isMaster
           ? assembledSystemPrompt.replaceAll(
               UserTitleService.defaultTitle,
@@ -13639,7 +13615,6 @@ ${Prompts.outputRulesTail}$halmaeHint$resistanceTurnDirective$contextRequestRule
     final showQuickChips =
         !_suppressDefaultChips &&
         !showVacationSuggestBubble &&
-        _coachSwitchTarget == null &&
         ((_dynamicChips.contains('오늘은 쉬어가기') &&
                 _dynamicChips.contains('오늘은 조금만 하기')) ||
             _coach.isMaster ||
@@ -15034,7 +15009,6 @@ ${Prompts.outputRulesTail}$halmaeHint$resistanceTurnDirective$contextRequestRule
     }
 
     if (_isLoading) items.add(_buildTypingIndicator());
-    if (_coachSwitchTarget != null) items.add(_buildNyangSwitchBubble());
 
     final list = ListView.builder(
       controller: _scrollCtrl,
@@ -16329,54 +16303,6 @@ ${Prompts.outputRulesTail}$halmaeHint$resistanceTurnDirective$contextRequestRule
   }
 
   // ── 빠른 답장 칩 (동적) ──────────────────────────────────
-
-  // 냥냥코치 연결 말풍선 (switchTarget 있을 때)
-  Widget _buildNyangSwitchBubble() {
-    final switchTarget = _coachSwitchTarget;
-    if (switchTarget == null) return const SizedBox.shrink();
-    const lavender = Color(0xFF8B7CF6);
-    const lavenderLight = Color(0xFFF0ECFF);
-    const lavenderBorder = Color(0xFFCFC5FF);
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: Container(
-        margin: const EdgeInsets.fromLTRB(16, 4, 60, 8),
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: lavenderLight,
-          borderRadius: BorderRadius.circular(22),
-          border: Border.all(color: lavenderBorder, width: 1.2),
-          boxShadow: [
-            BoxShadow(
-              color: lavender.withOpacity(0.16),
-              blurRadius: 14,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: GestureDetector(
-          onTap: () => widget.onSwitchCoach?.call(switchTarget),
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
-            decoration: BoxDecoration(
-              color: lavender,
-              borderRadius: BorderRadius.circular(15),
-            ),
-            child: Text(
-              '🐱 냥냥코치와 이야기하기',
-              textAlign: TextAlign.center,
-              style: GoogleFonts.notoSansKr(
-                fontSize: 14,
-                fontWeight: FontWeight.w800,
-                color: Colors.white,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
 
   // 휴무 제안 말풍선 카드 (새로 추가)
   Widget _buildVacationSuggestBubble() {
