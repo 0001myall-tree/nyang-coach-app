@@ -2435,7 +2435,9 @@ class _MasterTimerFocusScreenState extends State<MasterTimerFocusScreen>
             ),
             const Spacer(),
             Padding(
-              padding: const EdgeInsets.only(bottom: 22),
+              // 설명 문구를 뺀 자리만큼 아래 여백을 준다. 발자국이 줄어드는
+              // 건 보면 알게 되는 일이라, 굳이 적어두면 화면만 어수선해진다.
+              padding: const EdgeInsets.only(bottom: 36),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -2461,17 +2463,6 @@ class _MasterTimerFocusScreenState extends State<MasterTimerFocusScreen>
                     },
                   ),
                 ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.only(bottom: 14),
-              child: Text(
-                '집중 시간이 흐를수록 발자국이 하나씩 사라져요',
-                style: GoogleFonts.notoSansKr(
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.w600,
-                  color: _accent,
-                ),
               ),
             ),
           ],
