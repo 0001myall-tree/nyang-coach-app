@@ -430,8 +430,12 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
 
     if (shouldStartFresh) {
       _ticker?.cancel();
-      await _stopSound();
-      await NotificationService().cancelFocusTimerNotification();
+      // 소리와 알림 정리는 기다리지 않는다. 앞선 판을 치우는 뒷일일 뿐인데,
+      // 여기서 await로 막으면 플러그인이 늦거나 답이 없을 때 아래 _loaded가
+      // false로 남고 build가 빈 상자를 돌려준다. 그러면 새 카드가 안 그려져
+      // 앞 타이머가 그대로 버티고 있는 것처럼 보인다.
+      unawaited(_stopSound());
+      unawaited(NotificationService().cancelFocusTimerNotification());
       _manager.running = false;
       _manager.coachId = widget.coachId;
       _manager.stage = widget.initialMinutes;

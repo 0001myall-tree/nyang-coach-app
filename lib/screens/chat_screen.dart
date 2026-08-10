@@ -10582,7 +10582,13 @@ ${lines.join('\n')}
     final directTimerMinutes = _directTimerRequestMinutes(trimmed);
     if (directTimerMinutes != null) {
       final reply = _directTimerStartMessage(directTimerMinutes);
-      int timerInsertIndex = 0;
+      // 저장이 먼저다. setState가 앞서면 새 카드가 초기화될 때 저장소에는 아직
+      // 앞 판의 시간이 들어 있어서, 카드가 "처음부터 다시" 경로를 탄다. 그 경로는
+      // 알림 취소를 부르고 그게 끝나야 화면을 그리기 때문에, 실패하거나 늦으면
+      // 새 카드가 아예 안 그려지고 앞 타이머가 그대로 남는다.
+      final timerInsertIndex = _messages.length + 2;
+      await _saveFocusTimerAnchor(directTimerMinutes, timerInsertIndex);
+      if (!mounted) return;
       setState(() {
         _messages.add(
           ChatMessage(text: trimmed, isUser: true, time: DateTime.now()),
@@ -10593,11 +10599,9 @@ ${lines.join('\n')}
         _timerConfirmMinutes = null;
         _timerConfirmTaskName = null;
         _timerActiveMinutes = directTimerMinutes;
-        _timerActiveInsertIndex = _messages.length;
-        timerInsertIndex = _timerActiveInsertIndex!;
+        _timerActiveInsertIndex = timerInsertIndex;
         _dynamicChips = _coach.chips;
       });
-      await _saveFocusTimerAnchor(directTimerMinutes, timerInsertIndex);
       _scrollToBottom();
       await _saveHistory();
       await AnalyticsService.logConversationMessage(
@@ -13753,16 +13757,17 @@ ${Prompts.outputRulesTail}$halmaeHint$resistanceTurnDirective$contextRequestRule
                     _coach.isMaster &&
                     (_timerConfirmTaskName ?? '').isEmpty &&
                     _isThoughtOverloadContext();
-                int timerInsertIndex = 0;
+                // 채팅에서 직접 부를 때와 같은 이유로 저장이 먼저다.
+                final timerInsertIndex = _messages.length;
+                await _saveFocusTimerAnchor(mins, timerInsertIndex);
+                if (!mounted) return;
                 setState(() {
                   _timerConfirmMinutes = null;
                   _timerConfirmTaskName = null;
                   _timerActiveIsMind = isMind;
                   _timerActiveMinutes = mins;
-                  _timerActiveInsertIndex = _messages.length;
-                  timerInsertIndex = _timerActiveInsertIndex!;
+                  _timerActiveInsertIndex = timerInsertIndex;
                 });
-                await _saveFocusTimerAnchor(mins, timerInsertIndex);
                 _scrollToBottom();
               },
               child: Container(
