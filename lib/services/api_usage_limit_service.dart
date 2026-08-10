@@ -44,7 +44,10 @@ class ApiUsageNotice {
 
 class ApiUsageLimitService {
   static const int friendsDailyTokenLimit = 100000;
-  static const int masterDailyTokenLimit = 200000;
+
+  /// 20만이었다. 한 턴에 4천 토큰쯤 나가니 하루 50턴에서 막혔는데, 마스터 코치는
+  /// 목표와 기록까지 실어서 턴당 소모가 프렌즈보다 크다. 30만이면 75턴쯤 된다.
+  static const int masterDailyTokenLimit = 300000;
   static const int masterDailyOrganizeLimit = 7;
 
   static final _firestore = FirebaseFirestore.instance;
