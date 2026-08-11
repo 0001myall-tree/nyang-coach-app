@@ -499,6 +499,126 @@ class VisionItem {
 // ─────────────────────────────────────────────────────────────
 // 할 일 화면
 // ─────────────────────────────────────────────────────────────
+/// 진행 중인 카드의 가장자리.
+///
+/// 색만 바꿔 두면 목록을 훑을 때 어느 게 도는지 안 보인다. 그렇다고 진하게
+/// 칠하면 카드가 시끄러워져서, 테두리 바로 바깥에만 아주 옅게 번지는 빛을
+/// 두고 그것만 느리게 오르내리게 한다. 색이 아니라 움직임이 신호가 된다.
+///
+/// 처음 켜질 때는 빛이 가장자리를 한 바퀴 돈다. 시작을 눌렀을 때 일어나는 일이
+/// 색 바뀜 하나뿐이라 누른 맛이 없었다 — 이 앱이 제일 원하는 동작인데도.
+class _ActiveCardEdge extends StatefulWidget {
+  const _ActiveCardEdge({required this.accent, required this.radius});
+
+  final Color accent;
+  final double radius;
+
+  @override
+  State<_ActiveCardEdge> createState() => _ActiveCardEdgeState();
+}
+
+class _ActiveCardEdgeState extends State<_ActiveCardEdge>
+    with TickerProviderStateMixin {
+  late final AnimationController _sweep = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 620),
+  )..forward();
+
+  late final AnimationController _pulse = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1600),
+  )..repeat(reverse: true);
+
+  @override
+  void dispose() {
+    _sweep.dispose();
+    _pulse.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: Listenable.merge([_sweep, _pulse]),
+      builder: (context, _) => CustomPaint(
+        painter: _ActiveCardEdgePainter(
+          accent: widget.accent,
+          radius: widget.radius,
+          pulse: Curves.easeInOut.transform(_pulse.value),
+          // 한 바퀴 돌고 나면 다시 그리지 않는다.
+          sweep: _sweep.isCompleted ? null : _sweep.value,
+        ),
+      ),
+    );
+  }
+}
+
+class _ActiveCardEdgePainter extends CustomPainter {
+  const _ActiveCardEdgePainter({
+    required this.accent,
+    required this.radius,
+    required this.pulse,
+    required this.sweep,
+  });
+
+  final Color accent;
+  final double radius;
+
+  /// 0~1. 옅은 빛이 오르내리는 정도.
+  final double pulse;
+
+  /// 0~1. 한 바퀴 도는 빛의 위치. 다 돌았으면 null.
+  final double? sweep;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    final rrect = RRect.fromRectAndRadius(
+      rect.deflate(0.5),
+      Radius.circular(radius),
+    );
+
+    // BlurStyle.outer라 선 바깥쪽으로만 번진다. 카드 안쪽은 그대로 깨끗하다.
+    canvas.drawRRect(
+      rrect,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.4
+        ..color = accent.withValues(alpha: 0.10 + 0.12 * pulse)
+        ..maskFilter = MaskFilter.blur(BlurStyle.outer, 3 + 2.5 * pulse),
+    );
+
+    final at = sweep;
+    if (at == null) return;
+    // 밝은 구간 하나를 가진 원형 그라데이션을 돌린다. 나머지는 투명해서
+    // 짧은 빛줄기가 가장자리를 따라 흐르는 것처럼 보인다.
+    final head = Curves.easeInOut.transform(at);
+    // 끝에서 빛이 툭 끊기지 않게 마지막 구간에서 잦아들게 한다.
+    final fade = at < 0.75 ? 1.0 : 1 - (at - 0.75) / 0.25;
+    canvas.drawRRect(
+      rrect,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.8
+        ..shader = SweepGradient(
+          transform: GradientRotation(2 * pi * head - pi / 2),
+          colors: [
+            accent.withValues(alpha: 0),
+            accent.withValues(alpha: 0),
+            accent.withValues(alpha: 0.75 * fade),
+            accent.withValues(alpha: 0),
+          ],
+          stops: const [0, 0.7, 0.86, 1],
+        ).createShader(rect)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 1.2),
+    );
+  }
+
+  @override
+  bool shouldRepaint(_ActiveCardEdgePainter old) =>
+      old.pulse != pulse || old.sweep != sweep || old.accent != accent;
+}
+
 class TasksScreen extends StatefulWidget {
   final String coachId;
   final void Function(String message)? onCoreTaskSet;
@@ -7116,6 +7236,19 @@ class _TasksScreenState extends State<TasksScreen>
         ? accent.withValues(alpha: 0.38)
         : Colors.transparent;
 
+    // 아직 안 누른 버튼에만 그림자를 깐다. 눌러야 할 것이 튀어나와 보이는 게
+    // 이 화면에서 제일 자주 하는 동작이다. 진행 중과 완료는 이미 끝난 조작이라
+    // 평평하게 두어 눌러야 할 것과 구분한다.
+    final shadow = isDone || isActive
+        ? null
+        : const [
+            BoxShadow(
+              color: Color(0x1F9A9AB5),
+              blurRadius: 8,
+              offset: Offset(0, 2),
+            ),
+          ];
+
     return AnimatedContainer(
       duration: const Duration(milliseconds: 180),
       width: 46,
@@ -7124,6 +7257,7 @@ class _TasksScreenState extends State<TasksScreen>
         color: background,
         borderRadius: BorderRadius.circular(isDone ? 12 : 10),
         border: Border.all(color: borderColor),
+        boxShadow: shadow,
       ),
       child: Stack(
         alignment: Alignment.center,
@@ -7174,15 +7308,9 @@ class _TasksScreenState extends State<TasksScreen>
                         : const Color(0xFFE8E3F8),
                   )
                 : null,
-            boxShadow: t.inProgress
-                ? [
-                    BoxShadow(
-                      color: _coach.accentColor.withOpacity(0.25),
-                      blurRadius: 8,
-                      spreadRadius: 1,
-                    ),
-                  ]
-                : t.done
+            // 진행 중일 때 깔던 진한 glow는 걷었다. 가장자리 빛은 이제
+            // [_ActiveCardEdge]가 그리고, 그쪽은 훨씬 옅게 번진다.
+            boxShadow: (t.inProgress || t.done)
                 ? null
                 : [
                     BoxShadow(
@@ -7436,6 +7564,17 @@ class _TasksScreenState extends State<TasksScreen>
             ],
           ),
         ),
+        // 카드 아래 8은 여백이라 빛이 거기까지 내려오면 안 된다.
+        if (t.inProgress)
+          Positioned(
+            left: 0,
+            right: 0,
+            top: 0,
+            bottom: 8,
+            child: IgnorePointer(
+              child: _ActiveCardEdge(accent: _coach.accentColor, radius: 14),
+            ),
+          ),
       ],
     );
   }
