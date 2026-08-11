@@ -12827,10 +12827,19 @@ ${Prompts.outputRulesTail}$halmaeHint$resistanceTurnDirective$contextRequestRule
       );
 
       // Firebase Cloud Functions chatProxy 호출 (웹앱과 동일한 Gemini AI 서버)
+      //
+      // 온도가 0.9였다. 그러면 낮은 확률의 단어도 자주 골라서 문장이 무너진다.
+      // "냥이랑 있을 땐 좀 더 귀여워 보여야 한다냥"처럼 주체가 뒤집힌 말이
+      // 그래서 나왔다. 한국어는 주어를 생략하고 어순이 자유로워 더 잘 깨지고,
+      // "~냥" 어미를 맞추려 문장을 비틀면서 한 번 더 꼬인다.
+      //
+      // 캐릭터는 프롬프트가 만든다. 온도를 올린다고 더 귀여워지지 않고 더
+      // 랜덤해질 뿐이라, 지금은 그 랜덤함이 캐릭터를 깨고 있었다.
+      // 그래도 흔들리면 0.6까지 내려볼 것.
       final result = await _chatProxy.call({
         'messages': messages,
         'model': model,
-        'temperature': 0.9,
+        'temperature': 0.7,
       });
 
       var content = result.data['content'] as String? ?? '';
