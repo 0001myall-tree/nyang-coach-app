@@ -55,12 +55,17 @@ class ApiUsageLimitService {
   // 조여야 할 때는 고급 모델 횟수보다 이 토큰 한도를 먼저 건드린다. 비용의 절반
   // 이상이 평범한 대화가 쌓여서 나오고, 답이 나빠지는 건 모델을 내릴 때가 크다.
 
+  // 아래 둘은 코치가 아니라 플랜에 걸리는 한도다. 쓴 양도 사용자 한 명의 하루
+  // 총합으로 세므로, 어느 코치와 대화하든 같은 통에서 빠져나간다. 마스터 플랜
+  // 사용자가 냥냥이와 20만을 쓰면 마스터 코치에게 남는 것도 그만큼 줄어든다.
+
   /// 10만 → 20만. 하루 50턴쯤.
-  static const int friendsDailyTokenLimit = 200000;
+  static const int friendsPlanDailyTokenLimit = 200000;
 
   /// 20만 → 30만 → 40만. 마스터 코치는 목표와 기록까지 실어서 턴당 소모가
-  /// 프렌즈보다 크다. 40만이면 100턴쯤 된다.
-  static const int masterDailyTokenLimit = 400000;
+  /// 크고, 이 플랜은 그 코치를 쓸 수 있어 한도를 두 배로 준다. 40만이면
+  /// 100턴쯤 된다.
+  static const int masterPlanDailyTokenLimit = 400000;
   static const int masterDailyOrganizeLimit = 7;
 
   static final _firestore = FirebaseFirestore.instance;
@@ -195,10 +200,10 @@ class ApiUsageLimitService {
   static _TokenLimits? _tokenLimitsFor(UserData userData) {
     if (!userData.isPlanActive) return null;
     if (userData.planType == 'friends') {
-      return const _TokenLimits(daily: friendsDailyTokenLimit);
+      return const _TokenLimits(daily: friendsPlanDailyTokenLimit);
     }
     if (userData.planType == 'master') {
-      return const _TokenLimits(daily: masterDailyTokenLimit);
+      return const _TokenLimits(daily: masterPlanDailyTokenLimit);
     }
     return null;
   }
