@@ -4881,12 +4881,14 @@ ${lines.join('\n')}
       return _taskText(task) == targetText;
     }
 
-    // 시작 시각은 습관에만 남긴다 — 할 일 화면의 시작 버튼과 같은 규칙이다.
+    // 시작 시각은 전부 남긴다 — 할 일 화면의 시작 버튼과 같은 규칙이다.
+    //
+    // 한동안 습관에만 남겼다. 할 일 화면이 그랬기 때문인데, 그쪽은 8월 8일
+    // 배포부터 전부 남기게 바뀌었고 이 경로만 옛 규칙에 남아 있었다. 그래서
+    // 채팅으로 시작한 일반 할 일은 하루 시작 패턴 계산에서 통째로 빠졌다.
     void markStarted(Map<String, dynamic> task) {
       task['inProgress'] = true;
-      if (_isHabitTask(task)) {
-        task['inProgressAt'] = DateTime.now().toIso8601String();
-      }
+      task['inProgressAt'] = DateTime.now().toIso8601String();
     }
 
     var changed = false;

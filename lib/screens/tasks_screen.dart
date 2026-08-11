@@ -2199,7 +2199,8 @@ class _TasksScreenState extends State<TasksScreen>
     TasksSyncService.scheduleSyncToCloud();
   }
 
-  String _fallbackHabitStartedAt(DateTime completedAt) {
+  /// 시작 시각을 못 믿을 때 대신 쓸 값. 완료 30분 전으로 잡되 그날을 넘지 않는다.
+  String _fallbackStartedAt(DateTime completedAt) {
     final fallback = completedAt.subtract(const Duration(minutes: 30));
     final dayStart = DateTime(
       completedAt.year,
@@ -2210,16 +2211,24 @@ class _TasksScreenState extends State<TasksScreen>
         .toIso8601String();
   }
 
-  String? _habitStartedAtForCompletion({
+  /// 기록에 남길 시작 시각.
+  ///
+  /// 누르자마자 완료한 건 진짜 시작이 아니다. 시작 버튼을 거치지 않고 체크만
+  /// 한 경우와 다를 게 없어서, 1분도 안 걸린 시각은 버리고 대신 값을 넣는다.
+  ///
+  /// 원래 습관에만 걸던 방어막인데 일반 할 일에도 건다. 하루 시작 패턴이 그날
+  /// 가장 이른 시작 시각을 쓰기 때문에, 심심해서 눌러본 한 번이 그날 전체의
+  /// 시작으로 잡히면 없는 리듬을 만들어 낸다.
+  String? _startedAtForCompletion({
     required String? currentStartedAt,
     required DateTime completedAt,
   }) {
-    if (currentStartedAt == null) return _fallbackHabitStartedAt(completedAt);
+    if (currentStartedAt == null) return _fallbackStartedAt(completedAt);
     final parsedStartedAt = DateTime.tryParse(currentStartedAt);
-    if (parsedStartedAt == null) return _fallbackHabitStartedAt(completedAt);
+    if (parsedStartedAt == null) return _fallbackStartedAt(completedAt);
     final elapsed = completedAt.difference(parsedStartedAt).abs();
     if (elapsed < const Duration(minutes: 1)) {
-      return _fallbackHabitStartedAt(completedAt);
+      return _fallbackStartedAt(completedAt);
     }
     return currentStartedAt;
   }
@@ -3063,18 +3072,16 @@ class _TasksScreenState extends State<TasksScreen>
 
       final completedAtTime = DateTime.now();
       final completedAtIso = completedAtTime.toIso8601String();
-      final habitStartedAt = t.habitId != null
-          ? _habitStartedAtForCompletion(
-              currentStartedAt: t.inProgressAt,
-              completedAt: completedAtTime,
-            )
-          : t.inProgressAt;
+      final recordedStartedAt = _startedAtForCompletion(
+        currentStartedAt: t.inProgressAt,
+        completedAt: completedAtTime,
+      );
 
       // 완료 처리
       setState(() {
         t.done = true;
         t.inProgress = false;
-        t.inProgressAt = habitStartedAt;
+        t.inProgressAt = recordedStartedAt;
         t.completedAt = completedAtIso;
         final completedAt = DateTime.tryParse(t.completedAt!);
         if (_isViewingActualToday && t.habitId != null) {
