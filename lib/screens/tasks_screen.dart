@@ -1851,7 +1851,14 @@ class _TasksScreenState extends State<TasksScreen>
     }
   }
 
-  Future<bool> _showConfirmDeleteDialog(String title, String message) async {
+  /// 이 화면의 확인창은 전부 이 모양이다 — 제목, 설명 한 줄, 취소와 실행 버튼.
+  /// 삭제가 아닌 확인도 여기를 쓰고 버튼 글자와 색만 바꾼다.
+  Future<bool> _showConfirmDialog(
+    String title,
+    String message, {
+    String confirmLabel = '삭제',
+    Color confirmColor = Colors.red,
+  }) async {
     final result = await showDialog<bool>(
       context: context,
       builder: (BuildContext context) {
@@ -1864,13 +1871,16 @@ class _TasksScreenState extends State<TasksScreen>
               color: const Color(0xFF3D3A4E),
             ),
           ),
-          content: Text(
-            message,
-            style: GoogleFonts.notoSansKr(
-              fontSize: 14,
-              color: const Color(0xFF6B7280),
-            ),
-          ),
+          // 제목만으로 충분한 확인은 설명을 비워 부른다.
+          content: message.isEmpty
+              ? null
+              : Text(
+                  message,
+                  style: GoogleFonts.notoSansKr(
+                    fontSize: 14,
+                    color: const Color(0xFF6B7280),
+                  ),
+                ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
@@ -1885,9 +1895,9 @@ class _TasksScreenState extends State<TasksScreen>
             TextButton(
               onPressed: () => Navigator.pop(context, true),
               child: Text(
-                '삭제',
+                confirmLabel,
                 style: GoogleFonts.notoSansKr(
-                  color: Colors.red,
+                  color: confirmColor,
                   fontWeight: FontWeight.bold,
                 ),
               ),
@@ -2231,6 +2241,24 @@ class _TasksScreenState extends State<TasksScreen>
       return _fallbackStartedAt(completedAt);
     }
     return currentStartedAt;
+  }
+
+  /// 완료를 되돌리기 전에 한 번 묻는다.
+  ///
+  /// 시작과 완료는 하루에도 여러 번 누르는 동작이라 한 번 터치 그대로 둔다.
+  /// 되돌리기만 막는 건 실수로 눌렸을 때 잃는 게 있어서다 — 완료 표시뿐 아니라
+  /// 완료 시각과 시작 시각이 함께 지워지고, 습관이면 그날 기록도 빠진다.
+  ///
+  /// 삭제와 달리 되돌릴 수 있는 일이라 빨간색을 쓰지 않는다. 방금 누른 체크
+  /// 버튼과 같은 코치 색을 써서 무엇에 대한 확인인지 눈으로 이어지게 한다.
+  Future<bool> _confirmUncomplete() async {
+    final confirmed = await _showConfirmDialog(
+      '완료를 취소할까요?',
+      '',
+      confirmLabel: '완료 취소',
+      confirmColor: _coach.accentColor,
+    );
+    return mounted && confirmed;
   }
 
   // ── getTodayStr ───────────────────────────────────────────
@@ -2956,6 +2984,7 @@ class _TasksScreenState extends State<TasksScreen>
         for (final m in v.milestones) {
           final mId = _milestoneTaskId(v, m);
           if (mId == idStr) {
+            if (m.done && !await _confirmUncomplete()) return;
             setState(() {
               _setMilestoneCompletion(m, !m.done);
             });
@@ -2980,6 +3009,7 @@ class _TasksScreenState extends State<TasksScreen>
           daySchedules?.indexWhere((schedule) => schedule.id == scheduleId) ??
           -1;
       if (daySchedules == null || idx < 0) return;
+      if (daySchedules[idx].done && !await _confirmUncomplete()) return;
       setState(() {
         daySchedules[idx].done = !daySchedules[idx].done;
       });
@@ -2988,7 +3018,8 @@ class _TasksScreenState extends State<TasksScreen>
     }
     final milestoneInfo = _getMilestoneInfoForTask(t);
     if (t.done) {
-      // 완료 취소
+      // 완료 취소 — 시작·완료와 달리 여기만 한 번 묻는다.
+      if (!await _confirmUncomplete()) return;
       setState(() {
         t.done = false;
         t.completedAt = null;
@@ -9047,7 +9078,7 @@ class _TasksScreenState extends State<TasksScreen>
                                                 GestureDetector(
                                                   onTap: () async {
                                                     final confirm =
-                                                        await _showConfirmDeleteDialog(
+                                                        await _showConfirmDialog(
                                                           '마일스톤 삭제',
                                                           '이 마일스톤을 정말 삭제하시겠습니까?\n삭제된 내용은 복구할 수 없습니다.',
                                                         );
@@ -9419,7 +9450,7 @@ class _TasksScreenState extends State<TasksScreen>
                               flex: 1,
                               child: GestureDetector(
                                 onTap: () async {
-                                  final confirm = await _showConfirmDeleteDialog(
+                                  final confirm = await _showConfirmDialog(
                                     '장기 비전 삭제',
                                     '이 비전을 정말 삭제하시겠습니까?\\n하위 마일스톤들도 모두 함께 삭제됩니다.',
                                   );
@@ -13026,7 +13057,7 @@ class _TasksScreenState extends State<TasksScreen>
   }
 
   Future<void> _deleteHabit(dynamic id) async {
-    final confirm = await _showConfirmDeleteDialog(
+    final confirm = await _showConfirmDialog(
       '습관 항목 삭제',
       '이 습관을 정말 삭제하시겠습니까?\\n연결된 오늘의 할 일도 함께 삭제됩니다.',
     );
