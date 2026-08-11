@@ -42,6 +42,9 @@ class MorningAlarmReceiver : BroadcastReceiver() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
         ) {
+            // 알림을 못 띄우더라도 내일 알람은 반드시 다시 걸어둔다.
+            // 여기서 그냥 돌아가면 알람 체인이 끊겨, 앱을 열기 전까지 영영 울리지 않는다.
+            MorningAlarmScheduler.rescheduleFromPrefs(context)
             return
         }
 

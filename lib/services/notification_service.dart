@@ -19,6 +19,12 @@ import 'tasks_sync_service.dart';
 import 'user_title_service.dart';
 import '../models/user_data.dart';
 
+/// 모닝콜이 실제로 울릴 수 있는지를 막고 있는 권한.
+/// [notifications]가 없으면 알람 시각에 백그라운드에서 아무 소리도 나지 않는다.
+/// (네이티브 수신부가 알림을 못 만들고 그대로 종료되기 때문에, 나중에 앱을 열어야
+///  밀린 모닝콜이 그제서야 울린다.) 나머지 둘은 소리는 나지만 화면 표시가 제한된다.
+enum MorningCallPermissionIssue { none, notifications, exactAlarm, fullScreen }
+
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
   factory NotificationService() => _instance;
@@ -387,6 +393,42 @@ class NotificationService {
 
   Future<bool> canUseMorningCallFullScreen() async {
     return _invokeAndroidAlarmPermissionCheck('canUseFullScreenIntent');
+  }
+
+  /// 모닝콜을 막고 있는 권한을 하나 찾아 돌려준다. 설정 화면은 열지 않는다.
+  /// 여러 개가 없을 수 있으므로 가장 치명적인 것(알림 권한)부터 확인한다.
+  Future<MorningCallPermissionIssue> checkMorningCallPermission() async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
+      return MorningCallPermissionIssue.none;
+    }
+    if (!await _invokeAndroidAlarmPermissionCheck('canPostNotifications')) {
+      return MorningCallPermissionIssue.notifications;
+    }
+    if (!await _invokeAndroidAlarmPermissionCheck('canScheduleExactAlarms')) {
+      return MorningCallPermissionIssue.exactAlarm;
+    }
+    if (!await canUseMorningCallFullScreen()) {
+      return MorningCallPermissionIssue.fullScreen;
+    }
+    return MorningCallPermissionIssue.none;
+  }
+
+  /// [checkMorningCallPermission]이 찾아낸 권한의 시스템 설정 화면을 연다.
+  Future<void> openMorningCallPermissionSettings(
+    MorningCallPermissionIssue issue,
+  ) async {
+    switch (issue) {
+      case MorningCallPermissionIssue.notifications:
+        await _openAndroidAlarmPermissionSettings('openNotificationSettings');
+      case MorningCallPermissionIssue.exactAlarm:
+        await _openAndroidAlarmPermissionSettings('openExactAlarmSettings');
+      case MorningCallPermissionIssue.fullScreen:
+        await _openAndroidAlarmPermissionSettings(
+          'openFullScreenIntentSettings',
+        );
+      case MorningCallPermissionIssue.none:
+        break;
+    }
   }
 
   Future<bool> ensureMorningCallPresentationPermission({
