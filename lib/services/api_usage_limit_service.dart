@@ -3,7 +3,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/user_data.dart';
-import 'analytics_service.dart';
 
 class ApiUsageLimitResult {
   final bool allowed;
@@ -44,11 +43,24 @@ class ApiUsageNotice {
 }
 
 class ApiUsageLimitService {
-  static const int friendsDailyTokenLimit = 100000;
+  // 한도를 정할 때 비용을 실제보다 훨씬 크게 잡고 있었다. 테스터 5명이 15일간
+  // 쓴 API 비용이 550원, 1인당 하루 7원꼴이다. 그래서 한 번 올렸다.
+  //
+  // 다만 한도는 최악의 경우에 얼마까지 나갈 수 있는가를 정하는 값이다. 한 턴에
+  // 4천 토큰으로 잡으면 아래 숫자에서 나오는 월 최대 비용은 프렌즈 4천 원,
+  // 마스터 7천 2백 원쯤이다. 정상가(8,900원) 아래이되, 얼리버드 1년권(월 5,900원)
+  // 사용자가 마스터 한도를 매일 꽉 채우면 적자다. 실사용의 20배가 넘는 경우라
+  // 현실성은 낮지만, 더 올리려면 이 계산부터 다시 할 것.
+  //
+  // 조여야 할 때는 고급 모델 횟수보다 이 토큰 한도를 먼저 건드린다. 비용의 절반
+  // 이상이 평범한 대화가 쌓여서 나오고, 답이 나빠지는 건 모델을 내릴 때가 크다.
 
-  /// 20만이었다. 한 턴에 4천 토큰쯤 나가니 하루 50턴에서 막혔는데, 마스터 코치는
-  /// 목표와 기록까지 실어서 턴당 소모가 프렌즈보다 크다. 30만이면 75턴쯤 된다.
-  static const int masterDailyTokenLimit = 300000;
+  /// 10만 → 20만. 하루 50턴쯤.
+  static const int friendsDailyTokenLimit = 200000;
+
+  /// 20만 → 30만 → 40만. 마스터 코치는 목표와 기록까지 실어서 턴당 소모가
+  /// 프렌즈보다 크다. 40만이면 100턴쯤 된다.
+  static const int masterDailyTokenLimit = 400000;
   static const int masterDailyOrganizeLimit = 7;
 
   static final _firestore = FirebaseFirestore.instance;
@@ -97,50 +109,12 @@ class ApiUsageLimitService {
     );
   }
 
-  /// 고급 모델(gpt-4.1-mini)을 하루에 몇 번 쓸 수 있는지.
-  static const int masterPremiumModelDailyLimit = 20;
-  static const String premiumModelFeatureName = 'master_premium_model';
-
-  /// 고급 모델 자리 하나를 잡는다. 잡았으면 true.
-  ///
-  /// 기기 안에 세던 것을 여기로 옮겼다. 로컬에 세면 앱을 지웠다 깔 때마다
-  /// 0으로 돌아가고, 기기가 두 대면 하루치가 두 배가 된다. 토큰 한도는 이미
-  /// 계정 단위로 세고 있어서 같은 문서에 나란히 둔다.
-  ///
-  /// 읽기에 실패하면 자리를 주지 않는다. 통신이 끊긴 사이 무제한으로 열리는
-  /// 쪽보다 그 턴만 싼 모델이 받는 쪽이 낫다. 답이 안 나가는 것도 아니다.
-  ///
-  /// 세고 나서 올리는 순서라, 같은 순간에 두 턴이 겹치면 하나쯤 더 나갈 수
-  /// 있다. 대화는 답을 받을 때까지 입력이 막혀서 실제로는 겹치지 않는다.
-  static Future<bool> tryReserveMasterPremiumModelTurn() async {
-    final user = _auth.currentUser;
-    if (user == null) return false;
-
-    final int used;
-    try {
-      final doc = await _userAnalyticsDailyDoc(user.uid, DateTime.now());
-      used = _readInt(doc?['features']?[premiumModelFeatureName]);
-    } catch (e) {
-      return false;
-    }
-    if (used >= masterPremiumModelDailyLimit) return false;
-
-    await AnalyticsService.logFeatureUsage(premiumModelFeatureName);
-    return true;
-  }
-
-  static Future<Map<String, dynamic>?> _userAnalyticsDailyDoc(
-    String uid,
-    DateTime date,
-  ) async {
-    final doc = await _firestore
-        .collection('users')
-        .doc(uid)
-        .collection('analytics_daily')
-        .doc(_dateKey(date))
-        .get();
-    return doc.data();
-  }
+  // 고급 모델 자리를 하루 몇 번으로 세던 층이 여기 있었다.
+  //
+  // 무거운 턴만 좋은 모델에 태우고 잡담은 싼 모델이 받게 했더니, 코치가 어떤
+  // 답은 멀쩡하고 어떤 답은 어색해졌다. 캐릭터가 들쭉날쭉한 게 조금 아끼는
+  // 것보다 손해라, 모든 턴을 같은 모델이 받게 하고 이 층을 걷어냈다.
+  // 총량은 위의 하루 토큰 한도가 묶는다.
 
   static Future<ApiUsageLimitResult> checkOrganizeAllowance() async {
     final user = _auth.currentUser;

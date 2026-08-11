@@ -43,7 +43,18 @@ class AnalyticsService {
   }
 
   static const double _krwPerUsd = 1400;
-  static const double _gpt4oMiniBlendedUsdPerMillionTokens = 0.285;
+
+  /// 0.285였다. 기록된 추정치가 실제 청구액보다 23% 높게 나와서 그만큼 낮췄다.
+  /// 입력이 출력보다 훨씬 많은데(대화 이력과 긴 지시문이 매번 실린다) 혼합 비율을
+  /// 출력 쪽으로 무겁게 잡고 있었던 것으로 보인다.
+  static const double _gpt4oMiniBlendedUsdPerMillionTokens = 0.22;
+
+  /// gpt-4.1-mini 혼합 단가. 4o-mini의 두 배 반쯤 든다.
+  ///
+  /// 위와 같은 비율로 낮췄다. 다만 이 값은 아직 실측으로 맞춰본 적이 없는
+  /// 어림값이다. 프렌즈 코치까지 이 모델을 쓰기 시작했으니, 다음 청구서가
+  /// 나오면 대시보드 금액과 비교해서 여기부터 맞출 것.
+  static const double _gpt41MiniBlendedUsdPerMillionTokens = 0.59;
 
   static String _dateKey(DateTime date) {
     return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
@@ -70,9 +81,13 @@ class AnalyticsService {
         .doc(dateKey);
   }
 
-  static int _estimateCostWonFromTokens(int tokenCount) {
+  /// [model]을 모르면 싼 모델로 친다. 부르는 쪽 대부분이 4o-mini다.
+  static int _estimateCostWonFromTokens(int tokenCount, {String? model}) {
     if (tokenCount <= 0) return 0;
-    final usdCost = tokenCount / 1000000 * _gpt4oMiniBlendedUsdPerMillionTokens;
+    final rate = (model != null && model.startsWith('gpt-4.1'))
+        ? _gpt41MiniBlendedUsdPerMillionTokens
+        : _gpt4oMiniBlendedUsdPerMillionTokens;
+    final usdCost = tokenCount / 1000000 * rate;
     return (usdCost * _krwPerUsd).round();
   }
 
@@ -294,14 +309,17 @@ class AnalyticsService {
     int? actualCostWon,
     String usageSource = 'chat',
     bool countAsUserUsage = true,
+    String? model,
   }) async {
     final user = _auth.currentUser;
     if (user == null) return;
 
     final dateKey = _dateKey(DateTime.now());
     final tokenCount = actualTokens ?? estimatedTokens;
-    // 서버에서 실제 비용을 내려주지 않으면 최근 OpenAI 대시보드 비용에 맞춘 GPT-4o-mini 혼합 단가로 추정합니다.
-    final costWon = actualCostWon ?? _estimateCostWonFromTokens(tokenCount);
+    // 서버에서 실제 비용을 내려주지 않으면 최근 OpenAI 대시보드 비용에 맞춘 혼합 단가로 추정합니다.
+    // 모델마다 단가가 달라서 어느 모델이 받았는지를 함께 넘겨야 맞게 적힙니다.
+    final costWon =
+        actualCostWon ?? _estimateCostWonFromTokens(tokenCount, model: model);
     final commonCounters = {
       'allApiTokens': FieldValue.increment(tokenCount),
       'allEstimatedCostWon': FieldValue.increment(costWon),

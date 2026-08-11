@@ -12314,45 +12314,23 @@ ${lines.join('\n')}
   /// 기다리면 정작 도와야 할 사람 대부분을 놓친다.
   static const int _deepReasoningInterventionCount = 2;
 
-  /// 하루 몫은 계정 단위로 센다. 세는 자리는 토큰 한도와 같은 문서다.
+  /// 모든 턴을 같은 모델이 받는다.
   ///
-  /// 기기 안에 세던 때는 앱을 지웠다 깔면 0으로 돌아갔고 기기가 두 대면 두
-  /// 배가 됐다. 옛 기록(nyang_master_gpt41_usage_history)은 이제 아무도 읽지
-  /// 않는다. 지우지는 않는다 — 남아 있어도 하는 일이 없다.
-  Future<bool> _tryReserveMasterGpt41Turn() =>
-      ApiUsageLimitService.tryReserveMasterPremiumModelTurn();
-
-  /// 평범한 대화는 고급 모델을 쓰지 않는다.
+  /// 예전에는 무거운 턴만 골라 좋은 모델에 태우고 나머지는 싼 모델이 받았다.
+  /// 그랬더니 코치가 어떤 답은 멀쩡하고 어떤 답은 어색해졌다. 사용자는 앱이
+  /// 어느 모델을 썼는지 모르니, 그냥 "얘 왜 이러지" 하고 신뢰를 거둔다.
+  /// 캐릭터가 들쭉날쭉한 손해가 아끼는 돈보다 크다.
   ///
-  /// 예전에는 마스터 코치의 모든 턴이 자리를 하나씩 예약했다. 선착순이라
-  /// 아침 인사부터 순서대로 가져갔고, 정작 오후에 사용자가 벽에 부딪힌 턴에는
-  /// 남은 게 없었다. 좋은 모델이 필요한 건 잡담이 아니라 그 자리다.
-  /// 한도를 비켜 가는 턴은 없다.
+  /// 아끼던 액수는 실사용 기준 한 사람당 월 600원 남짓이었다. 총량은 하루 토큰
+  /// 한도가 묶으므로, 이 함수가 한도를 비켜 가게 만드는 일은 없다.
   ///
-  /// 안전 확인 턴만 한도 밖에 두려다 말았다. 자해·자살이라는 말은 장난으로도
-  /// 나오고 판정은 단어로 하기 때문에, 한도 밖에 두면 그 말만 반복해서 하루
-  /// 비용을 끝없이 늘릴 수 있는 구멍이 된다. 안전 지시문은 물어볼 문장과
-  /// 단계별 안내를 그대로 적어주므로, 한도가 찬 뒤 약한 모델이 받더라도
-  /// 따라갈 대본은 남아 있다.
+  /// [masterModelPolicy]와 [needsDeepReasoning]은 부르는 쪽 배선을 그대로 두려고
+  /// 남겨둔 자리다. 다시 모델을 나눌 일이 생기면 여기서 갈라 쓰면 된다.
   Future<String> _pickChatModel({
     required _MasterModelPolicy masterModelPolicy,
     required bool needsDeepReasoning,
   }) async {
-    if (!_coach.isMaster) return 'gpt-4o-mini';
-
-    switch (masterModelPolicy) {
-      case _MasterModelPolicy.forceGpt4oMini:
-        return 'gpt-4o-mini';
-      case _MasterModelPolicy.premiumFeature:
-        return await _tryReserveMasterGpt41Turn()
-            ? 'gpt-4.1-mini'
-            : 'gpt-4o-mini';
-      case _MasterModelPolicy.generalLimited:
-        if (!needsDeepReasoning) return 'gpt-4o-mini';
-        return await _tryReserveMasterGpt41Turn()
-            ? 'gpt-4.1-mini'
-            : 'gpt-4o-mini';
-    }
+    return 'gpt-4.1-mini';
   }
 
   Future<String> _callOpenAI(
@@ -12892,6 +12870,7 @@ ${Prompts.outputRulesTail}$halmaeHint$resistanceTurnDirective$contextRequestRule
         estimatedTokens: estimatedTokens,
         actualTokens: actualTokens,
         actualCostWon: actualCostWon,
+        model: model,
       );
       return content;
     }
