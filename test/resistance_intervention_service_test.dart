@@ -1,6 +1,11 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nyang_coach/services/resistance_intervention_service.dart';
 
+/// 순번을 도는 개입만. 앱이 지목했을 때만 나오는 것은 여기서 빠진다.
+final rotating = ResistanceInterventionService.interventions
+    .where((i) => !i.preferredOnly)
+    .toList();
+
 void main() {
   test('거부하면 같은 방식이 다시 나오지 않는다', () {
     // "커서 봐" → "싫어" → 또 "커서 봐"가 반복되던 게 이 로직을 만든 이유다.
@@ -38,7 +43,7 @@ void main() {
       seen.add(next.id);
       offered.add(next.id);
     }
-    expect(seen.length, ResistanceInterventionService.interventions.length);
+    expect(seen.length, rotating.length);
     expect(seen.toSet().length, seen.length, reason: '중복 없이 나와야 한다');
   });
 
@@ -129,23 +134,25 @@ void main() {
     // 새 대화마다 목록 맨 위('시간 낮추기' = 5분)로 돌아가던 게 이 로테이션을
     // 만든 이유다. 매번 같은 말로 시작하면 금방 질린다.
     test('마지막에 꺼낸 것 다음부터 시작한다', () {
-      final all = ResistanceInterventionService.interventions;
-      for (var i = 0; i < all.length; i++) {
+      for (var i = 0; i < rotating.length; i++) {
         final next = ResistanceInterventionService.nextIntervention(
           const [],
           isMaster: true,
-          startAfterId: all[i].id,
+          startAfterId: rotating[i].id,
         );
-        expect(next?.id, all[(i + 1) % all.length].id, reason: all[i].id);
+        expect(
+          next?.id,
+          rotating[(i + 1) % rotating.length].id,
+          reason: rotating[i].id,
+        );
       }
     });
 
     test('한 바퀴 돌면 처음으로 돌아온다', () {
-      final all = ResistanceInterventionService.interventions;
-      var cursor = all.first.id;
+      var cursor = rotating.first.id;
       final seen = <String>[];
       // 대화 하나에 개입 하나씩, 목록 길이만큼 새 대화를 연다.
-      for (var i = 0; i < all.length; i++) {
+      for (var i = 0; i < rotating.length; i++) {
         final next = ResistanceInterventionService.nextIntervention(
           const [],
           isMaster: true,
@@ -154,8 +161,8 @@ void main() {
         seen.add(next.id);
         cursor = next.id;
       }
-      expect(seen.toSet().length, all.length, reason: '한 바퀴 안에 중복이 없어야 한다');
-      expect(seen.last, all.first.id, reason: '끝에 닿으면 위로 돌아온다');
+      expect(seen.toSet().length, rotating.length, reason: '한 바퀴 안에 중복이 없어야 한다');
+      expect(seen.last, rotating.first.id, reason: '끝에 닿으면 위로 돌아온다');
     });
 
     test('시작 자리가 목록에 없으면 맨 위부터', () {
@@ -179,7 +186,7 @@ void main() {
         if (next == null) break;
         offered.add(next.id);
       }
-      expect(offered.length, ResistanceInterventionService.interventions.length);
+      expect(offered.length, rotating.length);
       expect(offered.toSet().length, offered.length);
     });
 
@@ -224,9 +231,80 @@ void main() {
     }
   });
 
-  test('상상 훈련은 잘하는 모습이 아니라 하고 있는 모습이다', () {
+  group('코치 노하우를 붙일 자리', () {
+    // 노하우(할매의 청소 세분화 팁)는 행동을 고르는 개입에만 붙는다. 붙을
+    // 자리를 잘못 잡으면 "행동 제안은 붙이지 마세요"라고 적힌 개입 안에
+    // 행동 목록이 들어앉는다.
+    test('행동을 고르는 개입에만 표시가 있다', () {
+      final marked = ResistanceInterventionService.interventions
+          .where((i) => i.picksConcreteAction)
+          .map((i) => i.id)
+          .toSet();
+      expect(marked, {'narrow_scope', 'let_user_choose'});
+    });
+
+    test('행동 제안을 금지한 개입에는 표시가 없다', () {
+      final reframe = ResistanceInterventionService.byId('reframe_task')!;
+      expect(reframe.rule, contains('행동 제안은 붙이지 마세요'));
+      expect(reframe.picksConcreteAction, isFalse);
+      expect(
+        ResistanceInterventionService.byId('allow_rough')!.picksConcreteAction,
+        isFalse,
+      );
+    });
+  });
+
+  group('앱이 지목하는 개입', () {
+    test('지목하면 순번을 건너뛰고 그것부터 나온다', () {
+      final next = ResistanceInterventionService.nextIntervention(
+        const [],
+        isMaster: false,
+        startAfterId: 'connect_purpose',
+        preferredId: 'wake_body',
+      );
+      expect(next?.id, 'wake_body');
+    });
+
+    test('지목하지 않으면 순번에서 나오지 않는다', () {
+      // 기운이 없다고 하지 않은 사람에게 "손목 돌려봐"가 나오면 뜬금없다.
+      final offered = <String>[];
+      while (true) {
+        final next = ResistanceInterventionService.nextIntervention(
+          offered,
+          isMaster: true,
+        );
+        if (next == null) break;
+        offered.add(next.id);
+      }
+      expect(offered, isNot(contains('wake_body')));
+    });
+
+    test('이미 꺼냈으면 지목해도 순번대로 돌아간다', () {
+      // 한 번 권해서 안 통했으면 같은 걸 다시 밀지 않고 다른 길로 간다.
+      final next = ResistanceInterventionService.nextIntervention(
+        const ['wake_body'],
+        isMaster: false,
+        preferredId: 'wake_body',
+      );
+      expect(next?.id, isNot('wake_body'));
+      expect(next, isNotNull);
+    });
+
+    test('몸 시동은 일이 아니라 몸을 깨우는 것이다', () {
+      final wake = ResistanceInterventionService.byId('wake_body')!;
+      expect(wake.rule, contains('그 일이 아니라 몸을 깨우는 것'));
+      expect(wake.rule, contains('CHIPS'));
+      // 청소 노하우가 여기 붙으면 몸 시동 자리에 걸레질이 들어온다.
+      expect(wake.picksConcreteAction, isFalse);
+    });
+  });
+
+  test('상상 훈련은 떠올린 데서 끝난다', () {
+    // 금지 문구를 여럿 달아두면 20초짜리 장면 하나를 권하는 데 "~하지 마세요"가
+    // 세 번 나온다. 남길 건 이 하나다 — 이어서 실제로 하라고 밀면 부담을 낮추려
+    // 꺼낸 장면이 곧바로 실행 압박이 된다.
     final imagine = ResistanceInterventionService.byId('imagine_doing')!;
-    expect(imagine.rule, contains('이미 하고 있는 모습'));
-    expect(imagine.rule, contains('결과가 좋은 장면은 그리게 하지 마세요'));
+    expect(imagine.rule, contains('떠올린 것까지가 이번 턴'));
+    expect(imagine.rule, contains('실제로 하라고 밀지 마세요'));
   });
 }

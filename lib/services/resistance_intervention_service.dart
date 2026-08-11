@@ -24,6 +24,8 @@ class ResistanceIntervention {
     required this.label,
     required this.rule,
     this.masterOnly = false,
+    this.picksConcreteAction = false,
+    this.preferredOnly = false,
   });
 
   /// 기록에 남는 식별자. 한번 정하면 바꾸지 않는다.
@@ -40,6 +42,22 @@ class ResistanceIntervention {
   /// 앱 기능을 가리키는 개입은 그 기능이 없는 코치에게 주면 안 된다. 없는
   /// 버튼을 누르라고 안내하게 된다.
   final bool masterOnly;
+
+  /// 사용자가 지금 할 행동 하나를 골라주는 개입인지.
+  ///
+  /// 코치가 가진 분야별 노하우(할매의 청소 세분화 팁 같은 것)를 어디에 붙일지
+  /// 가르는 값이다. 행동을 고르는 개입에는 그 목록이 곧 답이 되지만, 재정의나
+  /// 품질 기준 낮추기처럼 "행동 제안은 붙이지 마세요"라고 못박은 개입에 붙이면
+  /// 서로 반대되는 지시를 한 자리에 두는 꼴이 된다.
+  final bool picksConcreteAction;
+
+  /// 앱이 지목했을 때만 꺼내는 개입인지.
+  ///
+  /// 나머지는 어느 턴에 나와도 말이 되지만, 상태를 보고 꺼내야 하는 것도 있다.
+  /// 몸 먼저 깨우기가 그렇다 — 기운이 없다고 하지 않은 사람에게 "손목 돌려봐"가
+  /// 나오면 뜬금없고, 하고 나도 일이 한 칸 진행되지 않아 이 전략의 원칙과도
+  /// 어긋난다. 순번에서는 빼두고 그 상태가 잡힌 턴에만 지목해서 꺼낸다.
+  final bool preferredOnly;
 }
 
 class ResistanceInterventionService {
@@ -61,6 +79,7 @@ class ResistanceInterventionService {
     ResistanceIntervention(
       id: 'narrow_scope',
       label: '범위 좁히기',
+      picksConcreteAction: true,
       rule: '''[범위 좁히기]
 - 전체를 다 하려 하지 말고, 하고 나면 일이 한 칸 진행되는 작은 단위 하나만 정해주세요.
 - 예: 청소=물건 하나 치우기, 설거지=컵 하나 씻기, 글쓰기=한 줄만 쓰기, 공부=한 문제만 풀기.
@@ -70,9 +89,8 @@ class ResistanceInterventionService {
       id: 'imagine_doing',
       label: '하고 있는 장면 떠올리기',
       rule: '''[하고 있는 장면 떠올리기]
-- 지금 움직이라고 하지 말고, 그 일을 하고 있는 자기 모습을 20초만 떠올려보게 하세요.
-- 잘하고 있는 모습이 아니라 어설퍼도 이미 하고 있는 모습입니다. 결과가 좋은 장면은 그리게 하지 마세요.
-- 장면은 하나만. 예: 글쓰기=앉아서 어설프게라도 문장을 쓰고 있는 모습, 청소=뭔가 들고 옮기고 있는 모습.
+- 지금 움직이라고 하지 말고, 그 일을 자연스럽게 하고 있는 자기 모습을 20초만 떠올려보게 하세요.
+- 장면은 하나만. 예: 글쓰기=책상 앞에 앉아 수월하게 글을 쓰고 있는 모습, 청소=뭔가 들고 옮기고 있는 모습.
 - 떠올린 것까지가 이번 턴입니다. 이어서 실제로 하라고 밀지 마세요.''',
     ),
     ResistanceIntervention(
@@ -86,7 +104,7 @@ class ResistanceInterventionService {
       id: 'reframe_task',
       label: '과제 이미지 재정의',
       rule: '''[과제 이미지 재정의]
-- 그 일이 실제보다 크게 느껴지고 있을 수 있다고 한 문장만 짚으세요. 예: 청소는 집 전체를 완벽히 치우는 일처럼.
+- 그 일이 실제보다 크게 느껴지고 있을 수 있다고 한 문장만 짚으세요. 예: 청소는 집 전체를 완벽히 치우는 일처럼, 글쓰기는 한 번에 다 써내야 하는 일처럼.
 - 잘하고 싶은 마음은 인정한 채로 원래 크기만 다시 그려주세요. 행동 제안은 붙이지 마세요.''',
     ),
     ResistanceIntervention(
@@ -118,10 +136,31 @@ class ResistanceInterventionService {
     ResistanceIntervention(
       id: 'let_user_choose',
       label: '선택권 주기',
+      picksConcreteAction: true,
       rule: '''[선택권 주기]
 - 코치가 방식을 정해주지 말고 사용자가 고르게 하세요. 의지 부족으로 평가하지 마세요.
 - 현재 과업과 연결된 쉬운 선택지 2개 + 기타를 주고 고르게 하세요. 자유형 질문 금지.
 - 끝에 [CHIPS: 선택지1|선택지2|기타]. 설득·분석·목표 설명 금지.''',
+    ),
+    // 순번에서 빠져 있는 하나. 기운이 없다고 말한 턴에만 앱이 지목해서 꺼낸다.
+    //
+    // 나머지 여덟은 전부 그 일을 어떻게 다룰지의 얘기라, 제일 작게 줄여도
+    // 사용자가 하는 건 그 일의 한 조각이다. 몸이 안 움직이는 사람에게는 컵
+    // 하나도 무거울 수 있어서 그 아래 층이 하나 필요하다.
+    //
+    // 커서만 보기 같은 것을 걷어낸 것과는 다르다. 그쪽은 일하는 척이라 하고
+    // 나서 아무것도 안 변한 게 자책으로 돌아왔다. 이건 처음부터 그 일이 아니라
+    // 몸을 깨우는 것이라고 선을 긋고 시작해서, 일이 그대로인 게 어긋나지 않는다.
+    ResistanceIntervention(
+      id: 'wake_body',
+      label: '몸 먼저 깨우기',
+      preferredOnly: true,
+      rule: '''[몸 먼저 깨우기]
+- 할 일을 쪼개거나 시작시키지 말고, 몸에 아주 작은 시동을 거는 것 하나만 권하세요.
+- 기운이 없는 상태를 한 문장으로 짧게 받아준 뒤, "지금은 어떤 게 가장 쉬울 것 같아?"를 현재 코치 말투로 물으세요.
+- 끝에 [CHIPS: 손가락 스트레칭하기|손목 돌리기|자리에서 일어나기]를 붙이세요.
+- 이건 그 일이 아니라 몸을 깨우는 것입니다. 하고 나서 일이 얼마나 진행됐는지 묻지 마세요.
+- 설득·원인 분석·목표 설명·긴 위로 금지. [TASK]와 [TIMER_CONFIRM]도 붙이지 마세요.''',
     ),
   ];
 
@@ -179,17 +218,29 @@ class ResistanceInterventionService {
   ///
   /// [startAfterId]는 마지막으로 꺼냈던 개입이다. 그 다음 자리부터 훑어서,
   /// 새 대화가 늘 같은 방식으로 시작하지 않게 한다. null이면 목록 맨 위부터.
+  ///
+  /// [preferredId]는 앱이 이번 턴에 지목한 개입이다. 아직 안 꺼냈으면 순번을
+  /// 건너뛰고 그것부터 나간다. 이미 꺼냈으면 순번대로 돌아간다 — 같은 대화에서
+  /// 두 번 권할 것은 아니고, 한 번 권해서 안 통했으면 다른 길로 가야 한다.
   static ResistanceIntervention? nextIntervention(
     Iterable<String> offeredIds, {
     required bool isMaster,
     String? startAfterId,
+    String? preferredId,
   }) {
     final offered = offeredIds.toSet();
+    if (preferredId != null && !offered.contains(preferredId)) {
+      final preferred = byId(preferredId);
+      if (preferred != null && (!preferred.masterOnly || isMaster)) {
+        return preferred;
+      }
+    }
     // 못 찾으면 -1 + 1 = 0이라 맨 위부터. 개입을 지운 뒤에도 안전하다.
     final start = interventions.indexWhere((i) => i.id == startAfterId) + 1;
     for (var step = 0; step < interventions.length; step++) {
       final candidate = interventions[(start + step) % interventions.length];
       if (candidate.masterOnly && !isMaster) continue;
+      if (candidate.preferredOnly) continue;
       if (!offered.contains(candidate.id)) return candidate;
     }
     return null;

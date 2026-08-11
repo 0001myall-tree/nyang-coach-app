@@ -85,16 +85,32 @@ class ExecutionResistanceService {
     '몸이안움직',
   ];
 
+  /// 동사 자리를 비워 둔 저항 표현.
+  ///
+  /// "하기 싫어"를 통문자열로 찾고 있었다. 그래서 '하다'로 끝나는 동사만 걸렸다
+  /// — 청소하기 싫어는 잡히고 방 치우기 싫어는 빠져나갔다. 하필 앱이 만들어 준
+  /// 칩이 뒤쪽이었고, 원고 쓰기 싫어도 글 쓰기 싫어도 전부 통과했다.
+  ///
+  /// '~기 싫다'와 '못 ~겠다'는 어느 동사에나 붙는 자리라 목록으로는 못 채운다.
+  /// 집중력 저하 쪽에서 부사 자리를 비워 둔 것과 같은 처방이다.
+  static final List<RegExp> _resistancePatterns = [
+    RegExp(r'[가-힣]기(?:가|는|도|를)?싫'),
+    RegExp(r'못[가-힣]{1,3}겠'),
+  ];
+
   /// 저항 단어를 부정하는 표현. ("안 귀찮아", "미루지 않았어")
   static const List<String> _negatedResistanceSignals = [
     '안귀찮',
     '귀찮지않',
     '하나도귀찮',
     '별로귀찮',
-    '하기싫지않',
-    '하기싫진않',
     '미루지않',
     '안미루',
+  ];
+
+  /// 위 패턴을 부정하는 형태. ("치우기 싫지 않아")
+  static final List<RegExp> _negatedResistancePatterns = [
+    RegExp(r'[가-힣]기(?:가|는|도|를)?싫(?:지|진|은|던)?않'),
   ];
 
   /// 완료 보고 표현. 저항 단어보다 뒤에 나오면 "미루던 걸 해냈다"는 뜻이다.
@@ -142,6 +158,18 @@ class ExecutionResistanceService {
     return found;
   }
 
+  /// 저항 표현이 처음 나오는 자리. 없으면 -1.
+  static int _firstResistanceIndex(String text) {
+    var found = _firstIndexOf(text, _resistanceSignals);
+    for (final pattern in _resistancePatterns) {
+      final match = pattern.firstMatch(text);
+      if (match != null && (found < 0 || match.start < found)) {
+        found = match.start;
+      }
+    }
+    return found;
+  }
+
   static int _lastIndexOf(String text, List<String> signals) {
     var found = -1;
     for (final signal in signals) {
@@ -157,8 +185,11 @@ class ExecutionResistanceService {
     if (normalized.isEmpty) return false;
     if (_sleepContextSignals.any(normalized.contains)) return false;
     if (_negatedResistanceSignals.any(normalized.contains)) return false;
+    if (_negatedResistancePatterns.any((p) => p.hasMatch(normalized))) {
+      return false;
+    }
 
-    final signalIndex = _firstIndexOf(normalized, _resistanceSignals);
+    final signalIndex = _firstResistanceIndex(normalized);
     if (signalIndex < 0) return false;
 
     // 저항 표현 뒤에 완료 표현이 오면 이미 해낸 일에 대한 회고다.

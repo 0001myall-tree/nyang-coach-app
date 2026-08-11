@@ -26,6 +26,55 @@ void main() {
     }
   });
 
+  group('동사가 바뀌어도 알아본다', () {
+    // '하기 싫어'를 통문자열로 찾던 시절에는 '하다'로 끝나는 동사만 걸렸다.
+    // 앱이 만들어 준 칩이 '방 치우기 싫어'인데 그게 안 잡혔다.
+    test('~기 싫다', () {
+      for (final t in [
+        '방 치우기 싫어',
+        '원고 쓰기 싫어',
+        '글 쓰기가 싫어',
+        '운동 가기 싫어',
+        '빨래 널기 싫어',
+        '일어나기 싫어',
+        '밥 차리기도 싫어',
+        '청소하기 싫어',
+      ]) {
+        expect(
+          ExecutionResistanceService.isResistanceExpression(t),
+          isTrue,
+          reason: t,
+        );
+      }
+    });
+
+    test('못 ~겠다', () {
+      for (final t in ['원고 못 쓰겠어', '청소 못 하겠어', '파일을 못 열겠어']) {
+        expect(
+          ExecutionResistanceService.isResistanceExpression(t),
+          isTrue,
+          reason: t,
+        );
+      }
+    });
+
+    test('부정과 수면은 그대로 걸러진다', () {
+      for (final t in [
+        '치우기 싫지 않아',
+        '쓰기 싫진 않은데',
+        // 수면 미루기는 수면 개입이 맡는다.
+        '자기 싫어',
+        '눕기 싫어',
+      ]) {
+        expect(
+          ExecutionResistanceService.isResistanceExpression(t),
+          isFalse,
+          reason: t,
+        );
+      }
+    });
+  });
+
   test('완료 보고와 부정 표현은 저항으로 보지 않는다', () {
     for (final t in [
       '미루던 보고서 드디어 다 했어요',

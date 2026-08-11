@@ -1344,8 +1344,6 @@ class _ChatScreenState extends State<ChatScreen>
   // 환기를 권한 시각. 같은 대화에서 "환기하고 와"를 반복하지 않게 잠근다.
   DateTime? _focusRefreshOfferedAt;
   static const _focusRefreshCooldown = Duration(hours: 2);
-  static const _domainResistanceStrategyHistoryKey =
-      'nyang_domain_resistance_strategy_history';
   // 이번 턴에 주입한 원인 확인 질문 (실제로 물었을 때만 하루 1회를 소진 처리)
   String? _pendingDiagnosisQuestion;
 
@@ -1931,35 +1929,22 @@ class _ChatScreenState extends State<ChatScreen>
       '잘쓰고',
       '잘써야',
       '귀찮',
-      '하기싫',
+      // '하기싫'만 두면 '하다' 동사에서만 걸린다. 원고 쓰기 싫어, 글 쓰기가
+      // 싫어가 전부 빠져나갔다. 앞에 글쓰기 단어가 함께 있어야 하는 판정이라
+      // 한 글자로 줄여도 엉뚱한 턴에 걸리지 않는다.
+      '싫',
       '망할',
       '자책',
       '못채',
       '도망',
       '그만두',
+      // 보조작업만 반복하는 흐름. 퇴고만 계속하고 있어, 자료조사만 하고 있어.
+      '만하고',
+      '만계속',
+      '만반복',
     ];
     return writingSignals.any(normalized.contains) &&
         concernSignals.any(normalized.contains);
-  }
-
-  bool _containsCreativeWritingTaskSignal(String text) {
-    final normalized = text.replaceAll(RegExp(r'\s+'), '').toLowerCase();
-    const signals = [
-      '소설',
-      '웹소설',
-      '시나리오',
-      '대본',
-      '원고',
-      '글쓰기',
-      '글쓰',
-      '집필',
-      '장면',
-      '플롯',
-      '시놉',
-      '퇴고',
-      '연재',
-    ];
-    return signals.any(normalized.contains);
   }
 
   /// 지금 청소·정리 얘기를 하고 있는지.
@@ -2424,135 +2409,6 @@ $role
       '빨래',
     ];
     return signals.any(normalized.contains);
-  }
-
-  Future<String> _pickDomainResistanceStrategyRule({
-    required bool isCreativeWritingTask,
-    required bool isCleaningTask,
-    required String userText,
-  }) async {
-    final domain = isCreativeWritingTask
-        ? 'writing'
-        : isCleaningTask
-        ? 'cleaning'
-        : 'general';
-    final strategies = domain == 'writing'
-        ? const [
-            (id: 'reframe', rule: Prompts.domainWritingReframe),
-            (id: 'first_contact', rule: Prompts.domainWritingFirstTouch),
-            (id: 'rough_draft', rule: Prompts.domainWritingRoughDraft),
-          ]
-        : const [
-            (id: 'reframe', rule: Prompts.domainCleaningReframe),
-            (id: 'first_contact', rule: Prompts.domainCleaningFirstTouch),
-            (id: 'one_item', rule: Prompts.domainCleaningOneItem),
-          ];
-    final prefs = await SharedPreferences.getInstance();
-    final todayStr = _getTodayStrWithReset(prefs);
-    final history = _decodeDomainResistanceStrategyHistory(
-      prefs.getString(_domainResistanceStrategyHistoryKey),
-    );
-    final lowPriorityIds = _lowPriorityDomainResistanceStrategyIds(
-      prefs: prefs,
-      history: history,
-      domain: domain,
-      todayStr: todayStr,
-    );
-
-    final weighted = [
-      for (final strategy in strategies)
-        ...List.filled(lowPriorityIds.contains(strategy.id) ? 1 : 3, strategy),
-    ];
-    final selected = weighted[Random().nextInt(weighted.length)];
-
-    history.add({
-      'date': todayStr,
-      'domain': domain,
-      'strategyId': selected.id,
-      'userText': userText.trim(),
-      'createdAt': DateTime.now().toIso8601String(),
-    });
-    final trimmed = history.length > 40
-        ? history.sublist(history.length - 40)
-        : history;
-    await prefs.setString(
-      _domainResistanceStrategyHistoryKey,
-      jsonEncode(trimmed),
-    );
-    return selected.rule;
-  }
-
-  List<Map<String, dynamic>> _decodeDomainResistanceStrategyHistory(
-    String? raw,
-  ) {
-    if (raw == null) return [];
-    try {
-      return (jsonDecode(raw) as List)
-          .whereType<Map>()
-          .map((item) => Map<String, dynamic>.from(item))
-          .where((item) {
-            final date = item['date']?.toString() ?? '';
-            final domain = item['domain']?.toString() ?? '';
-            final strategyId = item['strategyId']?.toString() ?? '';
-            return date.isNotEmpty &&
-                domain.isNotEmpty &&
-                strategyId.isNotEmpty;
-          })
-          .toList();
-    } catch (_) {
-      return [];
-    }
-  }
-
-  Set<String> _lowPriorityDomainResistanceStrategyIds({
-    required SharedPreferences prefs,
-    required List<Map<String, dynamic>> history,
-    required String domain,
-    required String todayStr,
-  }) {
-    final isLowPriorityByStrategy = <String, bool>{};
-    for (final item in history) {
-      final date = item['date']?.toString() ?? '';
-      if (date.isEmpty || date.compareTo(todayStr) >= 0) continue;
-      if (item['domain']?.toString() != domain) continue;
-      final strategyId = item['strategyId']?.toString() ?? '';
-      if (strategyId.isEmpty) continue;
-      isLowPriorityByStrategy[strategyId] = !_domainTaskCompletedOnDate(
-        prefs,
-        date: date,
-        domain: domain,
-      );
-    }
-    return isLowPriorityByStrategy.entries
-        .where((entry) => entry.value)
-        .map((entry) => entry.key)
-        .toSet();
-  }
-
-  bool _domainTaskCompletedOnDate(
-    SharedPreferences prefs, {
-    required String date,
-    required String domain,
-  }) {
-    final rawHistory = prefs.getString('nyang_history');
-    if (rawHistory == null) return false;
-    try {
-      final records = (jsonDecode(rawHistory) as List).whereType<Map>();
-      final record = records.cast<Map?>().firstWhere(
-        (item) => item?['date']?.toString() == date,
-        orElse: () => null,
-      );
-      final tasks = (record?['tasks'] as List?) ?? const [];
-      return tasks.whereType<Map>().any((task) {
-        if (task['done'] != true) return false;
-        final text = task['text']?.toString() ?? '';
-        return domain == 'writing'
-            ? _containsCreativeWritingTaskSignal(text)
-            : _containsCleaningTaskSignal(text);
-      });
-    } catch (_) {
-      return false;
-    }
   }
 
   bool _containsHabitAutomationSignal(String text) {
@@ -12538,34 +12394,23 @@ ${lines.join('\n')}
         !isSelfHarmRiskTurn && _containsThoughtOverloadSignal(userText);
     final isWritingConcernTurn =
         !isSelfHarmRiskTurn && _containsWritingConcernSignal(userText);
-    final isCreativeWritingTaskTurn =
-        !isSelfHarmRiskTurn && _containsCreativeWritingTaskSignal(userText);
-    final isCleaningTaskTurn =
-        !isSelfHarmRiskTurn && _containsCleaningTaskSignal(userText);
     final isHabitAutomationTurn =
         !isSelfHarmRiskTurn && _containsHabitAutomationSignal(userText);
-    final shouldUseDomainResistanceStrategy =
-        !isSelfHarmRiskTurn &&
-        (isCreativeWritingTaskTurn || isCleaningTaskTurn) &&
-        (isResistanceTurn ||
-            isThoughtOverloadTurn ||
-            isResultAnxietyTurn ||
-            isWritingConcernTurn);
-    final domainResistanceStrategyRule = shouldUseDomainResistanceStrategy
-        ? await _pickDomainResistanceStrategyRule(
-            isCreativeWritingTask: isCreativeWritingTaskTurn,
-            isCleaningTask: isCleaningTaskTurn,
-            userText: userText,
-          )
-        : '';
     final isLowEnergyStarterFollowup = _awaitingLowEnergyStarterAction;
     _awaitingLowEnergyStarterAction = false;
+    // 기운이 없다고 한 턴에는 개입 순번을 건너뛰고 몸 먼저 깨우기를 지목한다.
+    //
+    // 전에는 이게 따로 선 층이라 실행 저항 전략과 나란히 실렸다. 둘 다 방식을
+    // 정하는 지시라 어느 쪽을 따를지가 그날 운이었다. 지금은 개입 하나가 됐다.
+    //
+    // 글쓰기 턴을 비켜가던 조건도 같이 걷었다. 그건 두 층이 부딪히는 걸 막으려
+    // 붙인 반창고였는데, 한 층이 된 지금은 "원고 쓸 기력이 없어"에도 몸부터
+    // 깨우는 게 맞다. 글쓰기 말투는 전용 코칭이 따로 입힌다.
     final shouldOfferLowEnergyStarter =
         _containsLowEnergyStarterSignal(userText) &&
         !isLowEnergyStarterFollowup &&
         !isSelfHarmRiskTurn &&
-        !isSleepResistanceTurn &&
-        !isWritingConcernTurn;
+        !isSleepResistanceTurn;
     // 집중력 저하는 "이미 붙잡고 있었는데 흐트러진" 상태다. 아직 못 붙은
     // 실행 저항과 대응이 반대라 따로 세운다. 자해·수면·저에너지는 더 급하고
     // 결과 불안·생각 과부하는 더 구체적인 진단이라 전부 그쪽에 양보한다.
@@ -12603,9 +12448,8 @@ ${lines.join('\n')}
     final sleepInterventionRule = isSleepResistanceTurn
         ? Prompts.sleepIntervention
         : '';
-    final lowEnergyStarterRule = shouldOfferLowEnergyStarter
-        ? Prompts.lowEnergyStarter
-        : isLowEnergyStarterFollowup
+    // 몸 시동을 건 다음 턴에만 붙는다. 시동 자체는 개입 목록이 맡는다.
+    final lowEnergyStarterRule = isLowEnergyStarterFollowup
         ? Prompts.lowEnergyStarterFollowup
         : '';
     // 환기는 한 대화에 한 번이면 충분하다. 쿨다운이 없으면 "환기하고 와"가
@@ -12688,17 +12532,10 @@ ${lines.join('\n')}
     final thoughtOverloadSection = thoughtOverloadRule.isNotEmpty
         ? thoughtOverloadRule
         : '';
-    // 집중력 저하가 잡힌 턴에는 글쓰기·도메인 전략을 같이 싣지 않는다.
-    // "글이 안 써져"는 양쪽에 다 걸리는데, 두 지시가 함께 실리면 어느 쪽을
-    // 따를지가 그날 운이 된다.
-    final domainResistanceStrategySection =
-        domainResistanceStrategyRule.isNotEmpty && !isFocusFatigueTurn
-        ? domainResistanceStrategyRule
-        : '';
+    // 집중력 저하가 잡힌 턴에는 글쓰기 지침을 같이 싣지 않는다. "글이 안 써져"는
+    // 양쪽에 다 걸리는데, 두 지시가 함께 실리면 어느 쪽을 따를지가 그날 운이 된다.
     final writingConcernSection =
-        writingConcernRule.isNotEmpty &&
-            !shouldUseDomainResistanceStrategy &&
-            !isFocusFatigueTurn
+        writingConcernRule.isNotEmpty && !isFocusFatigueTurn
         ? writingConcernRule
         : '';
     final habitAutomationSection = habitAutomationRule.isNotEmpty
@@ -12718,6 +12555,7 @@ ${lines.join('\n')}
         (isResistanceTurn ||
             isResultAnxietyTurn ||
             saysNotStartedYet ||
+            shouldOfferLowEnergyStarter ||
             resistanceTurnDirective.trim().isNotEmpty);
 
     // 이번 턴에 쓸 개입을 앱이 하나만 고른다.
@@ -12726,6 +12564,10 @@ ${lines.join('\n')}
     // 다음 것이 나온다. 모델에게 여러 전략을 주고 고르게 하면 매번 가장 흔한
     // 하나로 수렴하고, 사용자가 싫다고 해도 같은 걸 다시 밀게 된다.
     var interventionSection = '';
+    // 코치가 가진 청소 노하우를 이번 턴에 개입 안으로 넣었는지. 넣었으면 위쪽
+    // 청소 섹션에서는 뺀다 — 같은 목록이 한 프롬프트에 두 번 실리면, 읊으라는
+    // 쪽과 골라 쓰라는 쪽 두 벌이 생겨서 어느 규칙으로 읽을지 흔들린다.
+    var cleaningPlaybookMovedIntoIntervention = false;
     if (shouldIncludeResistanceInterventionSection) {
       final prefs = await SharedPreferences.getInstance();
       final refusedLastOffer =
@@ -12735,6 +12577,7 @@ ${lines.join('\n')}
         _offeredInterventionIds,
         isMaster: _coach.isMaster,
         startAfterId: prefs.getString(_interventionRotationKey),
+        preferredId: shouldOfferLowEnergyStarter ? 'wake_body' : null,
       );
       if (next == null) {
         interventionSection = ResistanceInterventionService.exhaustedRule;
@@ -12743,6 +12586,24 @@ ${lines.join('\n')}
         interventionSection = refusedLastOffer
             ? '${ResistanceInterventionService.refusedPrefix}\n${next.rule}'
             : next.rule;
+        // 행동을 고르는 개입에 한해, 청소 얘기라면 코치의 청소 노하우를 여기
+        // 붙인다. 노하우는 코치별 값이라 가진 코치(할매)에게만 붙는다.
+        //
+        // 원래는 프롬프트 위쪽에 따로 실렸는데, 모델이 행동을 정하는 자리는
+        // 여기다. 스무 줄 위에 좋은 목록이 있어도 "작은 단위 하나를 정해주세요"를
+        // 읽는 시점엔 멀리 있어서, 실려는 있고 쓰이지는 않았다.
+        final playbook = _coach.cleaningPlaybook;
+        if (playbook != null &&
+            next.picksConcreteAction &&
+            _isCleaningContext(userText)) {
+          // 이 한 줄이 없으면 노하우가 읊을 내용이 된다. 할매는 2~3문장으로
+          // 답하는 코치라 목록을 설명하기 시작하면 답변이 통째로 무너진다.
+          interventionSection =
+              '''$interventionSection
+- 행동은 아래 노하우에서 지금 상황에 맞는 것 하나만 골라 이름으로 말하세요. 목록을 설명하거나 여러 개를 늘어놓지 마세요.
+$playbook''';
+          cleaningPlaybookMovedIntoIntervention = true;
+        }
         _offeredInterventionIds.add(next.id);
         _lastOfferedInterventionId = next.id;
         // 다음에 이 자리에 오면 여기서부터 이어간다. 대화가 끝나도, 앱을 껐다
@@ -12790,8 +12651,13 @@ $resistanceFlowRule'''
         ? Prompts.nyangHalbaeStyle
         : '';
     // 청소 얘기가 오갈 때만 청소 지침을 붙인다.
+    //
+    // 노하우를 개입 안으로 옮긴 턴에는 여기서 뺀다. 공통 대응은 그대로 둔다 —
+    // 짧고, 하는 일도 다르다. 끝나고 느낄 보상을 붙이라는 쪽이라 행동 목록과
+    // 겹치지 않는다.
     final cleaningSection = _isCleaningContext(userText)
-        ? '${CoachConfigs.commonCleaningRules}${_coach.cleaningPlaybook ?? ''}'
+        ? '${CoachConfigs.commonCleaningRules}'
+              '${cleaningPlaybookMovedIntoIntervention ? '' : _coach.cleaningPlaybook ?? ''}'
         : '';
 
     // 시간대별 생활 루틴은 지금 구간 하나만 붙인다.
@@ -12850,7 +12716,6 @@ $completionResponseSection
 ${Prompts.coachQuestionRules}
 
 $thoughtOverloadSection
-$domainResistanceStrategySection
 $resistanceInterventionSection
 $decisionSupportSection
 $writingConcernSection
@@ -12882,7 +12747,9 @@ ${Prompts.outputRulesTail}$halmaeHint$resistanceTurnDirective$contextRequestRule
 
     final timePrefix =
         '[${now.hour}:${now.minute.toString().padLeft(2, '0')}] ';
-    if (shouldOfferLowEnergyStarter) {
+    // 몸 시동을 실제로 꺼낸 턴에만 후속을 기다린다. 기운이 없다고 해도 이미
+    // 꺼낸 뒤라면 순번대로 다른 개입이 나가므로, 신호가 아니라 나간 것을 본다.
+    if (_lastOfferedInterventionId == 'wake_body') {
       _awaitingLowEnergyStarterAction = true;
     }
     // 선택권 주기를 꺼낸 턴이면 사용자가 고를 답을 기다린다.
