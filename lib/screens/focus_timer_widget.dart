@@ -2595,11 +2595,10 @@ class _MasterTimerFocusScreenState extends State<MasterTimerFocusScreen>
   }
 }
 
-/// 원 안에 고인 물. 남은 시간만큼 차 있고 줄면서 빠진다.
+/// 고정된 원형 용기 안에 고인 물. 남은 시간만큼 차 있고 줄면서 빠진다.
 ///
-/// 발자국이 정확한 눈금이고 이쪽은 분위기다. 그래서 가득 찼을 때도 원을 다
-/// 채우지 않는다 — 꽉 찬 원은 시계처럼 읽히려 들어서, 발자국과 서로 다른
-/// 값을 말하는 것처럼 보인다.
+/// 바깥 원은 늘 정원으로 남고, 수면만 천천히 흔들린다. 그래야 보라색 덩어리
+/// 자체가 찌그러지는 애니메이션이 아니라 물을 담은 투명한 용기처럼 보인다.
 class _WaterPainter extends CustomPainter {
   const _WaterPainter({required this.level, required this.phase});
 
@@ -2609,52 +2608,80 @@ class _WaterPainter extends CustomPainter {
   /// 물결 위상 0~1.
   final double phase;
 
-  /// 가득 찼을 때 원 높이의 몇 할까지 차오르는지.
-  ///
-  /// 처음엔 절반만 채웠는데, 시작하자마자 반쯤 지난 것처럼 보였다. 가득 찬
-  /// 데서 줄어드는 편이 "이만큼 남았다"로 바로 읽힌다.
-  static const double _maxFill = 1.0;
+  /// 시작부터 수면이 보이도록 100%까지 채우지 않는다.
+  static const double _maxFill = 0.93;
+  static const double _minFill = 0.0;
 
   @override
   void paint(Canvas canvas, Size size) {
-    if (level <= 0) return;
+    if (size.isEmpty) return;
+    final clamped = level.clamp(0.0, 1.0);
     final radius = size.width / 2;
     final center = Offset(radius, radius);
-    canvas.save();
-    canvas.clipPath(
-      Path()..addOval(Rect.fromCircle(center: center, radius: radius)),
-    );
+    final circle = Rect.fromCircle(center: center, radius: radius);
+    final circlePath = Path()..addOval(circle);
 
-    final fill = size.height * _maxFill * level;
+    final fill = size.height * (_minFill + (_maxFill - _minFill) * clamped);
     final surfaceY = size.height - fill;
-    // 물이 얕아질수록 물결도 잔잔해진다. 한 방울 남았는데 크게 출렁이면
-    // 남은 양이 실제보다 많아 보인다.
-    final amplitude = (6.0 * level).clamp(1.0, 6.0);
+    final amplitude = (2.0 + 2.0 * clamped).clamp(2.0, 4.0);
+    final waveOffset = math.sin(phase * 2 * math.pi) * 2.0;
+    final crestA =
+        surfaceY + math.sin((phase + 0.08) * 2 * math.pi) * amplitude;
+    final crestB =
+        surfaceY - math.sin((phase + 0.36) * 2 * math.pi) * amplitude;
 
-    final path = Path()..moveTo(0, surfaceY);
-    for (double x = 0; x <= size.width; x += 4) {
-      final t = x / size.width;
-      final y =
-          surfaceY +
-          math.sin((t * 2 + phase) * 2 * math.pi) * amplitude +
-          math.sin((t * 3.3 + phase * 1.6) * 2 * math.pi) * amplitude * 0.35;
-      path.lineTo(x, y);
-    }
-    path
-      ..lineTo(size.width, size.height)
-      ..lineTo(0, size.height)
+    final surfacePath = Path()
+      ..moveTo(-size.width * 0.08, surfaceY + waveOffset)
+      ..cubicTo(
+        size.width * 0.20,
+        crestA - amplitude * 1.7,
+        size.width * 0.34,
+        crestA + amplitude * 1.6,
+        size.width * 0.52,
+        surfaceY + math.cos(phase * 2 * math.pi) * amplitude * 0.45,
+      )
+      ..cubicTo(
+        size.width * 0.68,
+        crestB - amplitude * 1.5,
+        size.width * 0.86,
+        crestB + amplitude * 1.4,
+        size.width * 1.08,
+        surfaceY - waveOffset,
+      );
+
+    final waterPath = Path.from(surfacePath)
+      ..lineTo(size.width * 1.08, size.height)
+      ..lineTo(-size.width * 0.08, size.height)
       ..close();
 
+    canvas.save();
+    canvas.clipPath(circlePath);
     canvas.drawPath(
-      path,
+      waterPath,
       Paint()
         ..shader = const LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [Color(0x66A99AE8), Color(0x997C6BE0)],
+          colors: [Color(0xB8BDB3F6), Color(0xC0AB9DEF)],
         ).createShader(Rect.fromLTWH(0, surfaceY, size.width, fill + 1)),
     );
+    canvas.drawPath(
+      surfacePath.shift(const Offset(0, -1.6)),
+      Paint()
+        ..color = Colors.white.withValues(alpha: 0.34)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.3
+        ..strokeCap = StrokeCap.round,
+    );
     canvas.restore();
+
+    canvas.drawOval(
+      circle,
+      Paint()
+        ..color = const Color(0xFFE1D9FA).withValues(alpha: 0.86)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.4,
+    );
   }
 
   @override
