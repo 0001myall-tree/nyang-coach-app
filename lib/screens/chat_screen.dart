@@ -12604,8 +12604,7 @@ ${lines.join('\n')}
           // 우선순위를 못박는 것도 이 줄의 몫이다. 개입의 청소 예시("물건 하나
           // 치우기")와 공통 대응의 "범위를 아주 작게"가 둘 다 짧고 위에 있어서,
           // 그냥 두면 노하우가 있어도 매번 제일 작은 쪽으로 수렴한다.
-          interventionSection =
-              '''$interventionSection
+          interventionSection = '''$interventionSection
 - 행동은 아래 노하우에서 고릅니다. 위 예시보다 이쪽이 우선이고, 이 대화에서 아직 말하지 않은 것 하나를 이름만 짧게 말하세요.
 $playbook''';
           cleaningPlaybookMovedIntoIntervention = true;
@@ -12614,7 +12613,13 @@ $playbook''';
         _lastOfferedInterventionId = next.id;
         // 다음에 이 자리에 오면 여기서부터 이어간다. 대화가 끝나도, 앱을 껐다
         // 켜도 남아야 하는 유일한 값이다.
-        await prefs.setString(_interventionRotationKey, next.id);
+        //
+        // 순번 밖에서 지목해 꺼낸 것은 자리를 옮기지 않는다. 목록 끝에 있어서
+        // 그걸 자리로 삼으면 다음 대화가 맨 위로 돌아가고, 기운 없다는 말을
+        // 자주 하는 사람은 그때마다 '시간 낮추기'부터 다시 듣게 된다.
+        if (!next.preferredOnly) {
+          await prefs.setString(_interventionRotationKey, next.id);
+        }
       }
     }
     final resistanceInterventionSection =
