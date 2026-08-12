@@ -51,6 +51,19 @@ class TaskItem {
   String? source;
   String? memo;
 
+  /// 일시정지까지 쌓인 실행 시간. 멈춘 동안에도 이 값은 그대로 남는다.
+  int elapsedSeconds;
+
+  /// 지금 돌고 있는 구간이 시작된 시각. 진행 중일 때만 값이 있다.
+  ///
+  /// [inProgressAt]과 나눠 둔다. 그쪽은 이 할 일을 맨 처음 시작한 시각이고
+  /// 저녁에 "시작해두고 멈춘 것 같은데"를 물을 때 쓰인다. 일시정지·재시작을
+  /// 할 때마다 덮어쓰면 그 질문이 방금 누른 시각을 보게 된다.
+  String? runStartedAt;
+
+  /// 완료 시점에 굳힌 최종 실행 시간. 완료 뒤에는 이 값만 보여준다.
+  int? actualSeconds;
+
   TaskItem({
     required this.id,
     required this.text,
@@ -70,7 +83,32 @@ class TaskItem {
     this.deferredCount = 0,
     this.source,
     this.memo,
+    this.elapsedSeconds = 0,
+    this.runStartedAt,
+    this.actualSeconds,
   });
+
+  /// 이 할 일이 시작·일시정지·밀어서 완료 흐름을 타는지.
+  ///
+  /// 처음에는 소요시간을 정한 할 일에만 붙였다가 전부로 넓혔다. 카드마다
+  /// 완료하는 법이 다르면 손이 기억할 동작이 둘이 되는데, 사용자는 그 차이를
+  /// 알아보려고 시간 표시를 확인하지 않는다.
+  ///
+  /// 목표의 이정표만 뺀다. 그건 오늘 하는 일이 아니라 달성 여부라서 잴 것이 없다.
+  bool get hasTimer => !id.toString().startsWith('milestone_');
+
+  /// 지금 화면에 보여줄 실행 시간. 진행 중이면 흐르는 구간까지 더한다.
+  int elapsedSecondsAt(DateTime now) {
+    if (actualSeconds != null) return actualSeconds!;
+    if (!inProgress || runStartedAt == null) return elapsedSeconds;
+    final started = DateTime.tryParse(runStartedAt!);
+    if (started == null) return elapsedSeconds;
+    final running = now.difference(started).inSeconds;
+    return elapsedSeconds + (running > 0 ? running : 0);
+  }
+
+  /// 시작한 적은 있으나 지금은 멈춰 있는 상태.
+  bool get isPaused => !done && !inProgress && elapsedSeconds > 0;
 
   Map<String, dynamic> toJson() => {
     'id': id,
@@ -95,6 +133,9 @@ class TaskItem {
     'deferredCount': deferredCount,
     if (source != null) 'source': source,
     if (memo != null && memo!.isNotEmpty) 'memo': memo,
+    if (elapsedSeconds > 0) 'elapsedSeconds': elapsedSeconds,
+    if (runStartedAt != null) 'runStartedAt': runStartedAt,
+    if (actualSeconds != null) 'actualSeconds': actualSeconds,
   };
 
   factory TaskItem.fromJson(Map<String, dynamic> j) => TaskItem(
@@ -116,6 +157,9 @@ class TaskItem {
     deferredCount: j['deferredCount'] ?? 0,
     source: j['source']?.toString(),
     memo: j['memo']?.toString(),
+    elapsedSeconds: (j['elapsedSeconds'] as num?)?.toInt() ?? 0,
+    runStartedAt: j['runStartedAt']?.toString(),
+    actualSeconds: (j['actualSeconds'] as num?)?.toInt(),
   );
 }
 
@@ -811,6 +855,10 @@ class _TasksScreenState extends State<TasksScreen>
       vsync: this,
       duration: const Duration(milliseconds: 1500),
     );
+    _swipeHintCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 220),
+    );
     _coach = CoachConfigs.get(widget.coachId);
     final initialPlannerDate = DateTime.tryParse(
       widget.initialPlannerDateKey ?? '',
@@ -831,13 +879,93 @@ class _TasksScreenState extends State<TasksScreen>
     _tabCtrl.addListener(_handleTaskTabChanged);
     widget.controller?._attach(this);
     NotificationService().recordPlannerOpened();
-    _loadAll().then((_) => _handleInitialPlannerTarget());
+    _loadAll().then((_) {
+      _handleInitialPlannerTarget();
+      // 앱을 껐다 켠 사이에도 진행 중이던 할 일이 있으면 시계를 다시 돌린다.
+      _syncTaskTicker();
+    });
+  }
+
+  /// 켜둔 채 잠든 할 일을 자정에 멈춰 세운다.
+  ///
+  /// 밤 11시에 시작하고 그대로 자면 아침에 "600:00 / 30분"이 뜬다. 시계는
+  /// 맞지만 그 사람이 열 시간을 한 건 아니다.
+  ///
+  /// 자정에 멈춘 것으로 치는 건, 할 일이 그날의 것이기 때문이다. 어차피 어느
+  /// 쪽으로 잡아도 짐작이라면 하루 경계에서 끊는 편이 설명하기 쉽다.
+  void _closeOvernightRuns(List<TaskItem> list) {
+    final now = DateTime.now();
+    final todayStart = DateTime(now.year, now.month, now.day);
+    for (final t in list) {
+      if (!t.inProgress || t.runStartedAt == null) continue;
+      final started = DateTime.tryParse(t.runStartedAt!);
+      if (started == null || !started.isBefore(todayStart)) continue;
+      final dayEnd = DateTime(started.year, started.month, started.day + 1);
+      final ran = dayEnd.difference(started).inSeconds;
+      t.elapsedSeconds += ran > 0 ? ran : 0;
+      t.inProgress = false;
+      t.runStartedAt = null;
+    }
+  }
+
+  /// 카드에 흐르는 시간을 보여줄지. 재는 것은 계속하고 표시만 감춘다.
+  ///
+  /// 끄면서 재는 것까지 멈추면 껐다 켠 사이가 비어서, 나중에 나오는 숫자가
+  /// 실제보다 적어진다. 믿을 수 없는 값이 되느니 계속 세고 감추기만 한다.
+  static const String _showTaskTimerKey = 'nyang_show_task_timer';
+  bool _showTaskTimer = true;
+
+  Future<void> _setShowTaskTimer(bool value) async {
+    setState(() => _showTaskTimer = value);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_showTaskTimerKey, value);
+  }
+
+  /// 길게 눌렀을 때 카드를 살짝 밀어 보이는 시늉.
+  ///
+  /// "밀어서 완료"라고 적어두어도 글자는 잘 안 읽힌다. 한 번 밀렸다 돌아오는
+  /// 것을 보면 손이 따라 한다. 완료시키지는 않고 방법만 보여준다.
+  late final AnimationController _swipeHintCtrl;
+  dynamic _swipeHintTaskId;
+
+  void _showSwipeHint(dynamic id) {
+    if (_swipeHintCtrl.isAnimating) return;
+    HapticFeedback.selectionClick();
+    setState(() => _swipeHintTaskId = id);
+    _swipeHintCtrl.forward(from: 0).then((_) async {
+      await _swipeHintCtrl.reverse();
+      if (mounted) setState(() => _swipeHintTaskId = null);
+    });
+  }
+
+  /// 진행 중인 할 일의 초를 화면에서만 올리는 시계.
+  ///
+  /// 1초마다 서버에 쓰면 하루에 수천 번을 쓰게 된다. 흐르는 숫자는 기기에서
+  /// 계산하고, 저장은 시작·일시정지·재시작·완료처럼 상태가 바뀔 때만 한다.
+  /// 돌고 있는 할 일이 하나도 없으면 시계도 멈춰 둔다.
+  Timer? _taskTicker;
+
+  void _syncTaskTicker() {
+    final running = _activeTodayTasksWithSchedules.any(
+      (t) => t.hasTimer && t.inProgress && !t.done,
+    );
+    if (running) {
+      _taskTicker ??= Timer.periodic(const Duration(seconds: 1), (_) {
+        if (!mounted) return;
+        setState(() {});
+      });
+    } else {
+      _taskTicker?.cancel();
+      _taskTicker = null;
+    }
   }
 
   @override
   void dispose() {
     widget.controller?._detach();
+    _taskTicker?.cancel();
     _visionHighlightTimer?.cancel();
+    _swipeHintCtrl.dispose();
     _taskCheckboxHintPulseCtrl.dispose();
     _tabCtrl.removeListener(_handleTaskTabChanged);
     _tabCtrl.dispose();
@@ -852,6 +980,7 @@ class _TasksScreenState extends State<TasksScreen>
   Future<void> _loadAll() async {
     final prefs = await SharedPreferences.getInstance();
 
+    _showTaskTimer = prefs.getBool(_showTaskTimerKey) ?? true;
     final rawTasks = prefs.getString('nyang_tasks');
     final rawCore = prefs.getString('nyang_core_tasks');
     final rawWeek = prefs.getString('nyang_week_goals');
@@ -887,11 +1016,13 @@ class _TasksScreenState extends State<TasksScreen>
         tasks = (jsonDecode(rawTasks) as List)
             .map((e) => TaskItem.fromJson(e))
             .toList();
+        _closeOvernightRuns(tasks);
       }
       if (rawCore != null) {
         coreTasks = (jsonDecode(rawCore) as List)
             .map((e) => TaskItem.fromJson(e))
             .toList();
+        _closeOvernightRuns(coreTasks);
       }
       if (rawWeek != null) {
         weekGoals = (jsonDecode(rawWeek) as List)
@@ -3097,7 +3228,11 @@ class _TasksScreenState extends State<TasksScreen>
   }
 
   // ── toggleTask (웹앱 그대로) ──────────────────────────────
-  Future<void> _toggleTask(dynamic id) async {
+  /// 카드 왼쪽 버튼과 밀어서 완료가 함께 쓰는 자리.
+  ///
+  /// [forceComplete]는 밀어서 완료가 켠다. 타이머형 할 일에서는 왼쪽 버튼이
+  /// 완료를 하지 않기 때문에, 완료로 곧장 가는 길이 따로 필요하다.
+  Future<void> _toggleTask(dynamic id, {bool forceComplete = false}) async {
     if (id.toString().startsWith('milestone_')) {
       final idStr = id.toString();
       for (final v in visions) {
@@ -3146,6 +3281,11 @@ class _TasksScreenState extends State<TasksScreen>
         t.achievedCount = null;
         t.achievedDuration = null;
         t.inProgressAt = null;
+        // 되돌리면 실행 시간도 처음으로. 남겨두면 다시 시작할 때 이어져서,
+        // 다시 한 시간이 지난 번 기록 위에 얹힌다.
+        t.actualSeconds = null;
+        t.elapsedSeconds = 0;
+        t.runStartedAt = null;
         if (_isViewingActualToday &&
             t.habitId != null &&
             habitLogs[t.habitId!] != null) {
@@ -3187,7 +3327,37 @@ class _TasksScreenState extends State<TasksScreen>
       if (milestoneInfo != null && milestoneInfo.isMilestoneSelf) {
         _saveVisions();
       }
-    } else if (!t.inProgress) {
+    } else if (!forceComplete && t.hasTimer) {
+      // 타이머형은 왼쪽 버튼이 시작·일시정지·재시작만 한다. 완료는 밀어야 한다.
+      //
+      // 한 버튼이 셋을 다 하면 마지막 한 번이 완료가 되어서, 잠깐 쉬려고 누른
+      // 것이 끝낸 것으로 기록된다. 그래서 완료를 다른 동작으로 떼어냈다.
+      final now = DateTime.now();
+      setState(() {
+        if (t.inProgress) {
+          // 일시정지: 흘러간 만큼만 누적에 얹고 구간을 닫는다.
+          t.elapsedSeconds = t.elapsedSecondsAt(now);
+          t.inProgress = false;
+          t.runStartedAt = null;
+        } else {
+          // 시작 또는 재시작. 누적은 건드리지 않아 이어서 흐른다.
+          final firstStart = t.elapsedSeconds == 0;
+          t.inProgress = true;
+          t.runStartedAt = now.toIso8601String();
+          t.inProgressAt ??= now.toIso8601String();
+          // 완료하려고 이 버튼을 누른 사람은 여기서 "왜 안 끝나지"를 만난다.
+          // 그 자리에서 카드를 한 번 밀어 보여주면 답을 찾으러 다니지 않는다.
+          if (firstStart) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) _showSwipeHint(t.id);
+            });
+          }
+        }
+      });
+      _syncTaskTicker();
+      // 저장은 상태가 바뀌는 이 순간에만 한다. 화면의 초는 기기에서 센다.
+      _saveTasks();
+    } else if (!forceComplete && !t.inProgress) {
       // 1단계: 진행 중으로 전환 (한 번 더 누르면 완료)
       setState(() {
         t.inProgress = true;
@@ -3231,6 +3401,10 @@ class _TasksScreenState extends State<TasksScreen>
       // 완료 처리
       setState(() {
         t.done = true;
+        // 여기서 실행 시간을 굳힌다. 돌고 있던 구간까지 더한 뒤 멈춘다.
+        t.actualSeconds = t.elapsedSecondsAt(completedAtTime);
+        t.elapsedSeconds = t.actualSeconds!;
+        t.runStartedAt = null;
         t.inProgress = false;
         t.inProgressAt = recordedStartedAt;
         t.completedAt = completedAtIso;
@@ -4366,14 +4540,28 @@ class _TasksScreenState extends State<TasksScreen>
             children: [
               _buildStatusGuideStep(Icons.play_arrow_rounded, '시작 전'),
               _buildStatusGuideArrow(),
+              _buildStatusGuideStep(Icons.pause_rounded, '진행 중', lit: true),
+              _buildStatusGuideArrow(),
               _buildStatusGuideStep(
                 Icons.play_arrow_rounded,
-                '진행 중',
-                lit: true,
+                '일시정지',
+                paused: true,
               ),
               _buildStatusGuideArrow(),
               _buildStatusGuideStep(Icons.check_rounded, '완료', filled: true),
             ],
+          ),
+          const SizedBox(height: 9),
+          // 왼쪽 버튼이 완료를 하지 않게 되면서, 완료하는 법을 따로 말해줘야
+          // 한다. 그림만으로는 마지막 칸으로 어떻게 넘어가는지 알 수 없다.
+          Text(
+            '완료는 카드를 오른쪽으로 미세요',
+            style: GoogleFonts.notoSansKr(
+              fontSize: 11.5,
+              height: 1.3,
+              fontWeight: FontWeight.w700,
+              color: const Color(0xFF8F8C9E),
+            ),
           ),
           const SizedBox(height: 8),
           GestureDetector(
@@ -4425,13 +4613,15 @@ class _TasksScreenState extends State<TasksScreen>
     );
   }
 
-  /// [filled]는 완료, [lit]은 진행 중. 둘 다 아니면 아직 시작 전이다.
+  /// [filled]는 완료, [lit]은 진행 중, [paused]는 일시정지.
+  /// 셋 다 아니면 아직 시작 전이다.
   /// 실제 버튼과 같은 색을 써야 안내가 안내 노릇을 한다.
   Widget _buildStatusGuideStep(
     IconData icon,
     String label, {
     bool filled = false,
     bool lit = false,
+    bool paused = false,
   }) {
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -4443,18 +4633,20 @@ class _TasksScreenState extends State<TasksScreen>
           decoration: BoxDecoration(
             color: filled
                 ? _coach.accentColor.withValues(alpha: 0.34)
+                : paused
+                ? _coach.accentColor
                 : lit
                 ? _coach.accentColor.withValues(alpha: 0.14)
                 : const Color(0xFFF4F4F7),
             borderRadius: BorderRadius.circular(filled ? 999 : 12),
-            border: filled || !lit
+            border: filled || paused || !lit
                 ? null
                 : Border.all(color: _coach.accentColor.withValues(alpha: 0.38)),
           ),
           child: Icon(
             icon,
             size: filled ? 22 : 20,
-            color: filled
+            color: filled || paused
                 ? Colors.white
                 : lit
                 ? _coach.accentColor
@@ -4476,8 +4668,9 @@ class _TasksScreenState extends State<TasksScreen>
   }
 
   Widget _buildStatusGuideArrow() {
+    // 칸이 셋에서 넷으로 늘어서 화살표 여백을 줄였다. 좁은 화면에서 넘친다.
     return const Padding(
-      padding: EdgeInsets.fromLTRB(16, 0, 16, 17),
+      padding: EdgeInsets.fromLTRB(9, 0, 9, 17),
       child: Icon(
         Icons.arrow_forward_rounded,
         size: 16,
@@ -6012,6 +6205,7 @@ class _TasksScreenState extends State<TasksScreen>
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (showCheckboxHint) _buildTaskCheckboxHint(),
+        _buildTaskTimerToggle(remainingTasks),
         ...remainingTasks.asMap().entries.map(
           (entry) => _buildTaskItem(
             entry.value,
@@ -6019,6 +6213,59 @@ class _TasksScreenState extends State<TasksScreen>
           ),
         ),
       ],
+    );
+  }
+
+  /// 흐르는 시간을 감추는 스위치. 목록 바로 위 오른쪽에 붙는다.
+  ///
+  /// 아무것도 시작하지 않은 아침에는 할 일이 없는 스위치라 감춘다. 진행 중인
+  /// 카드가 생기면 그 위에 나타나고, 다 끝나면 사라진다.
+  ///
+  /// 자리를 '오늘의 핵심' 줄이 아니라 목록 머리로 잡은 것은, 거기 붙이면
+  /// 핵심 일정에만 적용되는 것처럼 읽히기 때문이다.
+  Widget _buildTaskTimerToggle(List<TaskItem> tasks) {
+    final anyRunning = tasks.any((t) => t.hasTimer && t.inProgress && !t.done);
+    return AnimatedSize(
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeOutCubic,
+      alignment: Alignment.topCenter,
+      child: !anyRunning
+          ? const SizedBox(width: double.infinity)
+          : Align(
+              alignment: Alignment.centerRight,
+              child: GestureDetector(
+                onTap: () => _setShowTaskTimer(!_showTaskTimer),
+                behavior: HitTestBehavior.opaque,
+                // 글자 자체가 상태이자 버튼이다. 옆에 스위치까지 두면 같은 말을
+                // 두 번 하는 셈이라, 한 줄뿐인 자리가 번잡해진다.
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(10, 4, 6, 8),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.timer_outlined,
+                        size: 15,
+                        color: _showTaskTimer
+                            ? _coach.accentColor
+                            : const Color(0xFFB4B7C4),
+                      ),
+                      const SizedBox(width: 5),
+                      Text(
+                        _showTaskTimer ? '타이머 ON' : '타이머 OFF',
+                        style: GoogleFonts.notoSansKr(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                          color: _showTaskTimer
+                              ? _coach.accentColor
+                              : const Color(0xFFB4B7C4),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
     );
   }
 
@@ -7215,22 +7462,36 @@ class _TasksScreenState extends State<TasksScreen>
   }) {
     final isDone = task.done;
     final isActive = task.inProgress && !isDone;
+    // 잠깐 멈춘 것과 아직 시작도 안 한 것은 눈으로 갈라져야 한다. 둘 다 재생
+    // 모양이라, 색까지 같으면 어디까지 했는지 알 수 없다.
+    final isPaused = task.hasTimer && task.isPaused;
     final accent = isMilestone ? const Color(0xFF5AD7B0) : _coach.accentColor;
-    // 시작 전과 진행 중을 재생/일시정지로 나누면, 지금 버튼이 상태를 말하는지
-    // 누르면 할 일을 말하는지가 헷갈린다. 모양은 재생으로 두고 불이 들어오는
-    // 것으로만 구분한다. 꺼져 있으면 아직 안 한 것이다.
-    final icon = isDone ? Icons.check_rounded : Icons.play_arrow_rounded;
+    // 타이머가 없는 할 일은 예전 그대로다. 시작 전과 진행 중을 재생/일시정지로
+    // 나누면 버튼이 상태를 말하는지 할 일을 말하는지 헷갈려서, 모양은 재생으로
+    // 두고 불이 들어오는 것으로만 구분한다.
+    //
+    // 타이머가 붙은 할 일은 다르다. 누르면 멈춘다는 걸 미리 알려줘야 잠깐
+    // 쉬려는 사람이 마음 놓고 누른다. 그래서 진행 중에는 일시정지 모양을 낸다.
+    final icon = isDone
+        ? Icons.check_rounded
+        : (task.hasTimer && isActive)
+        ? Icons.pause_rounded
+        : Icons.play_arrow_rounded;
     final foreground = isDone
+        ? Colors.white
+        : isPaused
         ? Colors.white
         : isActive
         ? accent
         : const Color(0xFFB4B7C4);
     final background = isDone
         ? accent.withValues(alpha: 0.34)
+        : isPaused
+        ? accent
         : isActive
         ? accent.withValues(alpha: 0.14)
         : const Color(0xFFF4F4F7);
-    final borderColor = isDone
+    final borderColor = isDone || isPaused
         ? Colors.transparent
         : isActive
         ? accent.withValues(alpha: 0.38)
@@ -7239,7 +7500,7 @@ class _TasksScreenState extends State<TasksScreen>
     // 아직 안 누른 버튼에만 그림자를 깐다. 눌러야 할 것이 튀어나와 보이는 게
     // 이 화면에서 제일 자주 하는 동작이다. 진행 중과 완료는 이미 끝난 조작이라
     // 평평하게 두어 눌러야 할 것과 구분한다.
-    final shadow = isDone || isActive
+    final shadow = isDone || isActive || isPaused
         ? null
         : const [
             BoxShadow(
@@ -7274,6 +7535,24 @@ class _TasksScreenState extends State<TasksScreen>
     );
   }
 
+  /// 흐르는 동안에는 분:초로, 끝난 뒤에는 사람이 말하듯 적는다.
+  ///
+  /// 진행 중에 "24분"만 보이면 초가 멈춘 것처럼 보여서 재고 있는지 알 수 없다.
+  /// 반대로 끝난 뒤의 "24:13"은 시각처럼 읽혀서, 그때는 말로 풀어 쓴다.
+  String _formatElapsed(int seconds, {bool spelled = false}) {
+    final safe = seconds < 0 ? 0 : seconds;
+    if (spelled) {
+      final m = safe ~/ 60;
+      final s = safe % 60;
+      if (m == 0) return '$s초';
+      if (s == 0) return '$m분';
+      return '$m분 $s초';
+    }
+    final m = safe ~/ 60;
+    final s = safe % 60;
+    return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+  }
+
   Widget _buildTaskItem(TaskItem t, {bool showCheckboxTapHint = false}) {
     final milestoneInfo = _getMilestoneInfoForTask(t);
     final isMilestone = milestoneInfo != null;
@@ -7292,8 +7571,17 @@ class _TasksScreenState extends State<TasksScreen>
         _isCoreReminderEnabledGlobally &&
         displayTime != null;
     final isRecurringSchedule = _isRecurringScheduleTask(t);
+    // 시간 자리에 "실행 / 예정"을 보여준다. 아직 한 번도 누르지 않았으면 예정만
+    // 두어, 시작 전 카드가 예전과 똑같아 보이게 한다.
+    final showElapsed =
+        _showTaskTimer &&
+        t.hasTimer &&
+        (t.done || t.inProgress || t.elapsedSeconds > 0);
+    final elapsedLabel = showElapsed
+        ? _formatElapsed(t.elapsedSecondsAt(DateTime.now()))
+        : null;
 
-    return Stack(
+    final card = Stack(
       clipBehavior: Clip.none,
       children: [
         Container(
@@ -7415,7 +7703,8 @@ class _TasksScreenState extends State<TasksScreen>
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Row(
-                          crossAxisAlignment: timeInfo != null
+                          crossAxisAlignment:
+                              (timeInfo != null || elapsedLabel != null)
                               ? CrossAxisAlignment.start
                               : CrossAxisAlignment.center,
                           children: [
@@ -7435,7 +7724,8 @@ class _TasksScreenState extends State<TasksScreen>
                                       decoration: null,
                                     ),
                                   ),
-                                  if (timeInfo != null) ...[
+                                  if (timeInfo != null ||
+                                      elapsedLabel != null) ...[
                                     const SizedBox(height: 4),
                                     Row(
                                       mainAxisSize: MainAxisSize.min,
@@ -7454,14 +7744,48 @@ class _TasksScreenState extends State<TasksScreen>
                                           color: Color(0xFFA0A0B0),
                                         ),
                                         const SizedBox(width: 4),
-                                        Text(
-                                          timeInfo,
-                                          style: GoogleFonts.notoSansKr(
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.w700,
-                                            color: const Color(0xFFA0A0B0),
+                                        if (elapsedLabel != null && t.done) ...[
+                                          Text(
+                                            '실행 ${_formatElapsed(t.actualSeconds ?? 0, spelled: true)}',
+                                            style: GoogleFonts.notoSansKr(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w700,
+                                              color: const Color(0xFFA0A0B0),
+                                            ),
                                           ),
-                                        ),
+                                        ] else ...[
+                                          if (elapsedLabel != null)
+                                            Text(
+                                              elapsedLabel,
+                                              style: GoogleFonts.notoSansKr(
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w800,
+                                                color: _coach.accentColor,
+                                              ),
+                                            ),
+                                          // 예정시간이 없으면 흐르는 시간만 둔다.
+                                          // 빈 자리에 사선만 남으면 뭘 빼먹은
+                                          // 것처럼 보인다.
+                                          if (elapsedLabel != null &&
+                                              timeInfo != null)
+                                            Text(
+                                              ' / ',
+                                              style: GoogleFonts.notoSansKr(
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w700,
+                                                color: const Color(0xFFC4C4CE),
+                                              ),
+                                            ),
+                                          if (timeInfo != null)
+                                            Text(
+                                              timeInfo,
+                                              style: GoogleFonts.notoSansKr(
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w700,
+                                                color: const Color(0xFFA0A0B0),
+                                              ),
+                                            ),
+                                        ],
                                       ],
                                     ),
                                   ],
@@ -7576,6 +7900,83 @@ class _TasksScreenState extends State<TasksScreen>
             ),
           ),
       ],
+    );
+
+    if (!t.hasTimer || t.done) return card;
+    return _buildSwipeToCompleteCard(task: t, card: card);
+  }
+
+  /// 타이머형 카드를 오른쪽으로 밀면 완료되게 감싼다.
+  ///
+  /// 왼쪽 버튼이 시작·일시정지만 하게 되면서 완료할 자리가 없어졌다. 완료를
+  /// 버튼 하나 더로 두지 않고 밀기로 뺀 것은, 잠깐 멈추려다 끝내버리는 실수를
+  /// 없애려는 것이다. 두 동작이 손끝에서 완전히 다르면 헷갈리지 않는다.
+  Widget _buildSwipeToCompleteCard({
+    required TaskItem task,
+    required Widget card,
+  }) {
+    final accent = _coach.accentColor;
+    // 카드에 "밀어서 완료"를 상시로 붙여두면 목록이 안내문으로 지저분해진다.
+    // 그 말은 밀 때 드러나는 이 패널로 옮겼다. 처음 시작을 누르면 카드가 한 번
+    // 저절로 밀려서 이 패널을 보여주므로, 한 번은 반드시 읽히게 된다.
+    Widget completePanel() => Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: accent,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      alignment: Alignment.centerLeft,
+      padding: const EdgeInsets.only(left: 22),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.check_rounded, color: Colors.white, size: 24),
+          const SizedBox(width: 6),
+          Text(
+            '완료',
+            style: GoogleFonts.notoSansKr(
+              fontSize: 13,
+              fontWeight: FontWeight.w900,
+              color: Colors.white,
+            ),
+          ),
+        ],
+      ),
+    );
+
+    final isHinting = _swipeHintTaskId?.toString() == task.id.toString();
+
+    return Dismissible(
+      key: ValueKey('task-swipe-${task.id}'),
+      direction: DismissDirection.startToEnd,
+      // 끝까지 밀어야 완료된다. 스치듯 지나간 손짓으로 끝나버리면, 멈추려다
+      // 완료시키는 실수를 막으려고 밀기로 뺀 뜻이 없어진다.
+      dismissThresholds: const {DismissDirection.startToEnd: 0.55},
+      background: completePanel(),
+      confirmDismiss: (_) async {
+        await _toggleTask(task.id, forceComplete: true);
+        // 카드는 그 자리에 남고 완료 모양으로 바뀐다. 목록에서 사라지는 건
+        // 완료 목록으로 옮기는 쪽이 정하지, 이 제스처가 정하지 않는다.
+        return false;
+      },
+      child: GestureDetector(
+        onLongPress: () => _showSwipeHint(task.id),
+        child: AnimatedBuilder(
+          animation: _swipeHintCtrl,
+          builder: (context, child) {
+            final dx = isHinting
+                ? 54 * Curves.easeOutCubic.transform(_swipeHintCtrl.value)
+                : 0.0;
+            return Stack(
+              children: [
+                if (dx > 0) Positioned.fill(child: completePanel()),
+                Transform.translate(offset: Offset(dx, 0), child: child),
+              ],
+            );
+          },
+          child: card,
+        ),
+      ),
     );
   }
 
