@@ -998,6 +998,10 @@ ${feedbackType == 0
       if (_recordDoneCount(records[i]) > 0) {
         streak++;
       } else {
+        // 오늘은 아직 끝나지 않은 하루다. 아침에 연 사람에게 어제까지 쌓은
+        // 숫자를 0으로 되돌려 보여주면, 하루가 시작도 하기 전에 기운이 빠진다.
+        // 오늘이 그대로 지나가면 자정 뒤에 어제로서 끊긴다.
+        if (i == records.length - 1) continue;
         break;
       }
     }
@@ -1027,7 +1031,10 @@ ${feedbackType == 0
                       ),
                       const SizedBox(width: 6),
                       Text(
-                        '나의 기록',
+                        // 여기 숫자들은 최근 7일만 본다. 그냥 "나의 기록"이면
+                        // 시작부터 쌓인 값으로 읽혀서, 연속이 7에서 안 올라가는
+                        // 것이 고장처럼 보인다.
+                        '이번 주 기록',
                         style: GoogleFonts.notoSansKr(
                           fontSize: 18,
                           fontWeight: FontWeight.w900,
@@ -1101,7 +1108,9 @@ ${feedbackType == 0
       childAspectRatio: 1.15,
       children: [
         _summaryCard(
-          '연속 출석',
+          // 들어온 날이 아니라 할 일을 하나라도 끝낸 날을 센다. "출석"이라고
+          // 하면 매일 들어오는 사람이 0을 보고 고장인 줄 안다.
+          '연속 달성',
           '$streak일',
           '최고 -일',
           Icons.local_fire_department_outlined,
