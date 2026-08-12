@@ -3030,9 +3030,17 @@ ${lines.join('\n')}
     if (mounted) setState(() {});
   }
 
+  /// 이번 인식 구간이 시작될 때 입력창에 이미 받아 적혀 있던 글.
+  ///
+  /// 결과가 올 때마다 입력창을 통째로 덮어쓰던 때는, 말하다 잠깐 멈춰 구간이
+  /// 새로 열리면 그때까지 받아 적은 것이 빈 문자열에 지워졌다. 한 구간이
+  /// 끝날 때마다 여기에 굳혀 두고 다음 구간은 그 뒤에 이어 붙인다.
+  String _speechBaseText = '';
+
   void _startListening() async {
     // 혹시라도 이미 입력된 텍스트가 있다면 지우고 새로 녹음 시작
     _ctrl.clear();
+    _speechBaseText = '';
     await _speechToText.listen(
       listenMode: ListenMode.dictation,
       pauseFor: const Duration(seconds: 4),
@@ -3051,11 +3059,23 @@ ${lines.join('\n')}
   }
 
   void _onSpeechResult(SpeechRecognitionResult result) {
-    if (mounted) {
-      setState(() {
-        _ctrl.text = result.recognizedWords;
-      });
-    }
+    if (!mounted) return;
+    final words = result.recognizedWords.trim();
+    // 빈 결과로는 지우지 않는다. 구간이 닫히는 순간 빈 값이 한 번 오는데,
+    // 그걸 그대로 쓰면 말하다 멈춘 사람의 글이 통째로 사라진다.
+    final merged = _speechBaseText.isEmpty
+        ? words
+        : (words.isEmpty ? _speechBaseText : '$_speechBaseText $words');
+    setState(() {
+      _ctrl.text = merged;
+      // 글자를 넣으면 커서가 맨 앞으로 간다. 이어서 손으로 고치려는 사람이
+      // 문장 앞에 타이핑하게 되므로 끝으로 옮겨 둔다.
+      _ctrl.selection = TextSelection.fromPosition(
+        TextPosition(offset: merged.length),
+      );
+    });
+    // 구간이 확정되면 여기까지를 다음 구간의 바탕으로 삼는다.
+    if (result.finalResult) _speechBaseText = merged;
   }
 
   @override
@@ -13489,10 +13509,12 @@ ${Prompts.outputRulesTail}$halmaeHint$resistanceTurnDirective$contextRequestRule
     };
     list.add(newTask);
     await prefs.setString('nyang_tasks', jsonEncode(list));
-    await _updateTodayRecord(prefs);
-    await _refreshAttendanceStreak(prefs);
-    TasksSyncService.scheduleSyncToCloud();
 
+    // 할 일을 넣자마자 카드를 걷는다.
+    //
+    // 기록 갱신과 클라우드 동기화를 먼저 기다리던 때는, 그중 하나가 막히면
+    // 카드가 뜬 채로 남고 눌러도 아무 일이 없는 것처럼 보였다. 사용자에게
+    // 중요한 건 할 일이 들어갔다는 것이고, 그건 바로 윗줄에서 이미 끝났다.
     final timeLabel = task.time != null
         ? ' (${_formatTime12(task.time!)})'
         : '';
@@ -13505,6 +13527,15 @@ ${Prompts.outputRulesTail}$halmaeHint$resistanceTurnDirective$contextRequestRule
     });
     _scrollToBottom();
     await _saveHistory();
+
+    // 뒤따르는 기록 갱신은 실패해도 등록 자체를 되돌리지 않는다.
+    try {
+      await _updateTodayRecord(prefs);
+      await _refreshAttendanceStreak(prefs);
+      TasksSyncService.scheduleSyncToCloud();
+    } catch (e) {
+      debugPrint('할 일 추가 후 기록 갱신 실패: $e');
+    }
   }
 
   Widget _buildTaskSuggestCard() {
@@ -13566,15 +13597,23 @@ ${Prompts.outputRulesTail}$halmaeHint$resistanceTurnDirective$contextRequestRule
               ),
             ),
             // 시간 배지 (탭하면 타임피커)
-            if (task.time != null) ...[
+            //
+            // 시간이 있을 때만 보이던 자리다. 그러면 코치가 시간을 말하지 않은
+            // 할 일은 시각 없이 들어가고, 알림이 안 붙어 그대로 잊힌다.
+            // 비어 있을 때는 "시간 정하기"로 띄워 정할 길을 연다.
+            ...[
               const SizedBox(height: 6),
               GestureDetector(
                 onTap: () async {
-                  final parts = task.time!.split(':');
-                  final initTime = TimeOfDay(
-                    hour: int.parse(parts[0]),
-                    minute: int.parse(parts[1]),
-                  );
+                  var initTime = TimeOfDay.now();
+                  if (task.time != null && task.time!.contains(':')) {
+                    final parts = task.time!.split(':');
+                    final h = int.tryParse(parts[0]);
+                    final m = int.tryParse(parts[1]);
+                    if (h != null && m != null) {
+                      initTime = TimeOfDay(hour: h, minute: m);
+                    }
+                  }
                   final picked = await showTimePicker(
                     context: context,
                     initialTime: initTime,
@@ -13607,7 +13646,9 @@ ${Prompts.outputRulesTail}$halmaeHint$resistanceTurnDirective$contextRequestRule
                     children: [
                       const Text('🕐 ', style: TextStyle(fontSize: 11)),
                       Text(
-                        _formatTime12(task.time!),
+                        task.time != null
+                            ? _formatTime12(task.time!)
+                            : '시간 정하기',
                         style: GoogleFonts.notoSansKr(
                           fontSize: 11,
                           fontWeight: FontWeight.w700,
