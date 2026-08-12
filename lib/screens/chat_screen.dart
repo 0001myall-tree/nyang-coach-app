@@ -30,6 +30,7 @@ import 'package:nyang_coach/services/master_greeting.dart';
 import 'package:nyang_coach/services/task_resistance_service.dart';
 import 'package:nyang_coach/services/execution_resistance_service.dart';
 import 'package:nyang_coach/services/focus_fatigue_service.dart';
+import 'package:nyang_coach/services/goal_push_service.dart';
 import 'package:nyang_coach/services/resistance_intervention_service.dart';
 import 'package:nyang_coach/prompts/coach_prompt.dart';
 import 'package:nyang_coach/services/prep_time_service.dart';
@@ -1672,7 +1673,12 @@ class _ChatScreenState extends State<ChatScreen>
     var streak = 0;
     for (var i = records.length - 1; i >= 0; i--) {
       if (records[i]['isVacation'] == true) continue;
-      if ((records[i]['doneCount'] ?? 0) <= 0) break;
+      if ((records[i]['doneCount'] ?? 0) <= 0) {
+        // 오늘은 아직 끝나지 않은 하루라 연속을 끊지 않는다. 아침에 열 때마다
+        // 0을 보여주면 하루가 시작도 하기 전에 기운이 빠진다.
+        if (i == records.length - 1) continue;
+        break;
+      }
       streak++;
     }
 
@@ -3757,8 +3763,27 @@ ${lines.join('\n')}
     return task['inProgress'] == true;
   }
 
+  /// 한 번이라도 손을 댄 일. 지금 돌고 있거나, 돌리다 멈춰둔 것.
+  ///
+  /// 일시정지가 생기면서 "시작해두고 멈춘 것 같은데"가 멈춘 사람을 놓치게
+  /// 됐다. 멈추면 [_isInProgressTask]가 false가 되기 때문인데, 잠깐 쉬려다
+  /// 그대로 잊은 사람이 바로 물어봐야 할 사람이다.
+  ///
+  /// [_isInProgressTask]는 그대로 둔다. 그쪽은 "지금 돌고 있는가"를 묻는
+  /// 자리들이 쓰고 있어서, 멈춘 일까지 참으로 만들면 화면에 진행 중으로 뜬다.
+  bool _isStartedTask(Map<String, dynamic> task) {
+    if (_isInProgressTask(task)) return true;
+    final elapsed = (task['elapsedSeconds'] as num?)?.toInt() ?? 0;
+    return elapsed > 0;
+  }
+
+  /// 아직 손도 안 댄 일. "그건 아직 안 건드리셨네요"가 여기서 나온다.
+  ///
+  /// 돌고 있지 않은 것으로 판단하던 때는, 20분 하다 멈춰둔 일도 손도 안 댄
+  /// 것으로 셌다. 일시정지가 생기기 전에는 멈춘 상태가 없어서 같은 말이었지만
+  /// 이제는 다르다. 한 적이 있으면 빼야 그 문장이 맞는 말이 된다.
   bool _isPendingNotInProgressTask(Map<String, dynamic>? task) {
-    return task != null && task['done'] != true && !_isInProgressTask(task);
+    return task != null && task['done'] != true && !_isStartedTask(task);
   }
 
   bool _isHabitTask(Map<String, dynamic> task) {
@@ -4721,7 +4746,7 @@ ${lines.join('\n')}
 
     for (final task in _decodeMapList(prefs.getString('nyang_tasks'))) {
       if (task['done'] == true) continue;
-      if (!_isInProgressTask(task)) continue;
+      if (!_isStartedTask(task)) continue;
 
       final isHabit = _isHabitTask(task) || task['habitId'] != null;
       final id = task['id']?.toString();
@@ -4887,8 +4912,15 @@ ${lines.join('\n')}
     // 배포부터 전부 남기게 바뀌었고 이 경로만 옛 규칙에 남아 있었다. 그래서
     // 채팅으로 시작한 일반 할 일은 하루 시작 패턴 계산에서 통째로 빠졌다.
     void markStarted(Map<String, dynamic> task) {
+      // 이미 돌고 있으면 손대지 않는다. 다시 세팅하면 흐르던 구간이 끊겨서
+      // 지금까지 잰 시간이 사라진다.
+      if (task['inProgress'] == true && task['runStartedAt'] != null) return;
+      final now = DateTime.now().toIso8601String();
       task['inProgress'] = true;
-      task['inProgressAt'] = DateTime.now().toIso8601String();
+      task['inProgressAt'] ??= now;
+      // 할 일 화면의 타이머가 읽는 값이다. 이걸 안 넣으면 카드는 진행 중으로
+      // 보이는데 시간은 00:00에서 멈춰 있다.
+      task['runStartedAt'] = now;
     }
 
     var changed = false;
@@ -5881,9 +5913,6 @@ ${lines.join('\n')}
     ].any(normalized.contains);
   }
 
-  bool _isAvoidanceMessage(String text) =>
-      CoachContextScopeService.isAvoidanceMessage(text);
-
   /// 이번 말을 뺀 직전 사용자 발화. 없으면 null.
   ///
   /// 이번 말은 API를 부르기 전에 이미 _messages에 들어가 있다. 그걸 모르고
@@ -6648,42 +6677,9 @@ ${lines.join('\n')}
     return pick(greetingCandidates);
   }
 
-  int _conversationAvoidanceCountForTask(
-    String taskName, {
-    required bool allowGeneric,
-  }) {
-    final normalizedTask = _normalizeTaskSuggestionText(taskName);
-    final keywords = taskName
-        .split(RegExp(r'[\s/(),]+'))
-        .map(_normalizeTaskSuggestionText)
-        .map((word) => word.replaceFirst(RegExp(r'(하기|하다|해보기|하기로|할일)$'), ''))
-        .where((word) => word.length >= 2)
-        .toSet();
-
-    var count = 0;
-    final recentMessages = _messages.length > 30
-        ? _messages.sublist(_messages.length - 30)
-        : _messages;
-    for (int i = 0; i < recentMessages.length; i++) {
-      final message = recentMessages[i];
-      if (!message.isUser || !_isAvoidanceMessage(message.text)) continue;
-      final normalizedMessage = _normalizeTaskSuggestionText(message.text);
-      final explicitlyMatches =
-          normalizedTask.isNotEmpty &&
-          (normalizedMessage.contains(normalizedTask) ||
-              keywords.any(normalizedMessage.contains));
-      final previousCoachMentionedTask =
-          i > 0 &&
-          !recentMessages[i - 1].isUser &&
-          keywords.any(
-            _normalizeTaskSuggestionText(recentMessages[i - 1].text).contains,
-          );
-      if (explicitlyMatches || previousCoachMentionedTask || allowGeneric) {
-        count++;
-      }
-    }
-    return count;
-  }
+  // 최근 대화에서 그 일에 "귀찮다"고 한 횟수를 세던 함수가 여기 있었다.
+  // 세어서 프롬프트에 실어주던 자리를 없애면서 함께 걷어냈다. 필요하면
+  // 이 커밋에서 되살릴 것.
 
   bool _isYesterdayIncompleteQuery(String input) {
     final compact = input.replaceAll(RegExp(r'\s+'), '');
@@ -11148,6 +11144,51 @@ ${lines.join('\n')}
   }
 
   // ── 웹앱 buildMemoryContext() 이식 (전 코치 등급) ───────
+  /// 내일부터 [days]일치 일정을 한 줄씩. 잡힌 게 없는 날은 건너뛴다.
+  ///
+  /// 오늘은 뺀다. 오늘 몫은 [오늘 할 일 현황]에 이미 다 실려 있어서, 여기까지
+  /// 넣으면 같은 항목이 두 번 나온다.
+  List<String> _upcomingScheduleLines(
+    SharedPreferences prefs,
+    DateTime now, {
+    required int days,
+  }) {
+    final raw = prefs.getString('nyang_schedules');
+    if (raw == null || raw.trim().isEmpty) return const [];
+    final Map<String, dynamic> byDate;
+    try {
+      byDate = jsonDecode(raw) as Map<String, dynamic>;
+    } catch (_) {
+      return const [];
+    }
+
+    const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
+    final lines = <String>[];
+    for (var i = 1; i <= days; i++) {
+      final date = DateTime(now.year, now.month, now.day + i);
+      final key =
+          '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+      final items = byDate[key];
+      if (items is! List || items.isEmpty) continue;
+
+      final labels = <String>[];
+      for (final item in items) {
+        if (item is! Map) continue;
+        if (item['done'] == true) continue;
+        final text = item['text']?.toString();
+        if (text == null || text.trim().isEmpty) continue;
+        final time = _taskTimeLabelForPrompt(Map<String, dynamic>.from(item));
+        labels.add(time.isEmpty ? text : '$text($time)');
+      }
+      if (labels.isEmpty) continue;
+      lines.add(
+        '- ${date.month}월 ${date.day}일 (${dayNames[date.weekday % 7]}) '
+        '${labels.join(', ')}',
+      );
+    }
+    return lines;
+  }
+
   Future<String> _buildContextString(
     String userText, {
     CoachContextScope? scope,
@@ -11429,9 +11470,6 @@ ${lines.join('\n')}
                 ? '\n[새 활동일용 할 일 - 리셋 후 아직 시작 전]'
                 : '\n[오늘 할 일 현황]',
           );
-          final incompleteTasks = allTasks
-              .where((task) => task['done'] != true)
-              .toList();
           for (final t in allTasks) {
             final done = t['done'] == true;
             final inProgress = !done && t['inProgress'] == true;
@@ -11463,15 +11501,11 @@ ${lines.join('\n')}
             final deferredInfo = deferredCount > 0
                 ? ' / 앱 기록상 미루기 ${deferredCount}회'
                 : '';
-            final conversationAvoidanceCount = done
-                ? 0
-                : _conversationAvoidanceCountForTask(
-                    (t['text'] ?? '').toString(),
-                    allowGeneric: incompleteTasks.length == 1,
-                  );
-            final conversationAvoidanceInfo = conversationAvoidanceCount > 0
-                ? ' / 최근 대화상 귀찮음 표현 ${conversationAvoidanceCount}회'
-                : '';
+            // 귀찮다는 말을 몇 번 했는지도 함께 실었었다. 뺐다.
+            //
+            // 그 표현이 나온 자리에는 이미 실행 저항 개입이 붙는다. 같은 신호를
+            // 두 번 쓰는 셈인데, 미루기는 사용자가 직접 누른 것이라 본인도 아는
+            // 반면 이쪽은 대화를 세어둔 값이라 근거로 쓰이면 감시처럼 읽힌다.
             final inProgressInfo = inProgress ? ' / 진행중(시작만 하고 아직 완료 전)' : '';
             final typeLabel = isHabit
                 ? '습관'
@@ -11485,7 +11519,7 @@ ${lines.join('\n')}
                         ? 'V'
                         : inProgress
                         ? '~'
-                        : ' '}] [$typeLabel] ${t['text']}$timeInfo$deferredInfo$conversationAvoidanceInfo$inProgressInfo',
+                        : ' '}] [$typeLabel] ${t['text']}$timeInfo$deferredInfo$inProgressInfo',
             );
           }
           if (newActivityDayNotStarted) {
@@ -11507,6 +11541,12 @@ ${lines.join('\n')}
             sb.writeln('*[V] 표시된 항목은 완료됨. 완료 항목은 절대 다시 실행 유도하지 말 것.');
             sb.writeln(
               '*[~] 표시된 항목은 사용자가 이미 시작했지만 아직 완료 전인 상태. "아직 안 했네요"처럼 아예 안 한 것으로 말하지 말고, 이미 시작한 것을 인정하며 마무리를 자연스럽게 격려할 것.',
+            );
+            // 이 숫자는 무엇을 먼저 권할지 코치가 고르라고 주는 재료다.
+            // 그대로 옮기면 "두 번이나 미루셨네요"가 되는데, 미룬 사람은 이미
+            // 알고 있어서 정보가 아니라 지적이 된다.
+            sb.writeln(
+              '*"앱 기록상 미루기 N회"는 무엇을 먼저 권할지 고를 때만 쓰고 숫자로 말하지 말 것. 계속 미루고 있다는 것만 짚을 것.',
             );
             // 미루기 기반 개입과 타이머 확인 카드는 마스터 코치 전용 체계다.
             // (프렌즈에게 주면 카운트다운 없는 코치가 카운트다운을 권하거나,
@@ -11692,6 +11732,27 @@ ${lines.join('\n')}
       sb.writeln(
         '${now.year}년 ${now.month}월 ${now.day}일 (${dayNames[now.weekday % 7]}요일) $tod ${now.hour}시 ${now.minute}분',
       );
+    }
+
+    // 10-1. 앞으로 며칠의 일정 (마감·속도 턴에만)
+    //
+    // 며칠짜리 계획을 짜려면 그 날들이 비어 있는지 알아야 하는데, 프롬프트에는
+    // 오늘까지만 실려 있었다. 그래서 코치가 "그날 시간 되세요?"를 물어야 했고,
+    // 사용자는 자기 일정을 정확히 기억하지 못해 대충 답했다. 앱이 아는 것을
+    // 앱이 먼저 내놓는 편이 맞다.
+    //
+    // 평소에는 붙이지 않는다. 매 턴 실으면 지금과 무관한 날짜가 따라다닌다.
+    if (GoalPushService.mentionsDeadlineOrPlan(userText)) {
+      final upcoming = _upcomingScheduleLines(prefs, now, days: 7);
+      if (upcoming.isNotEmpty) {
+        sb.writeln('\n[앞으로 7일 일정 - 계획을 배치할 때 이 시간을 피할 것]');
+        for (final line in upcoming) {
+          sb.writeln(line);
+        }
+      } else {
+        sb.writeln('\n[앞으로 7일 일정]');
+        sb.writeln('- 잡혀 있는 일정이 없다. 날짜 배치는 자유롭게 해도 된다.');
+      }
     }
 
     // 11. 취침 시간 (master only)
@@ -12339,7 +12400,13 @@ ${lines.join('\n')}
   }) async {
     // 코치가 참고하는 최근 대화 수. 6이면 세 번만 주고받아도 앞말이 밀려나서,
     // 사용자가 방금 한 이야기를 코치가 다시 묻는 일이 생긴다.
-    const historyLimit = 10;
+    //
+    // 계획 상담에서는 앞말이 곧 계산의 근거다. "8화까지 초안이 있다"가 창
+    // 밖으로 밀려나면 코치가 이미 끝낸 2화부터 다시 쓰자고 한다. 규칙을 넣어도
+    // 안 보이는 것을 기억할 수는 없어서, 그 턴만 창을 넓힌다.
+    final historyLimit = GoalPushService.mentionsDeadlineOrPlan(userText)
+        ? 20
+        : 10;
     final now = DateTime.now();
     final previousMessages = _messages.isNotEmpty && _messages.last.isUser
         ? _messages.take(_messages.length - 1)
@@ -12416,6 +12483,21 @@ ${lines.join('\n')}
         (FocusFatigueService.isFocusFatigueExpression(userText) ||
             isFocusFatigueFollowup);
 
+    // 하고 싶은데 속도가 모자란 자리. 쪼개주는 대신 계산해서 밀어준다.
+    //
+    // 앞의 상태들보다 뒤에 둔다. 위험 신호나 잠, 집중력 저하가 함께 보이면
+    // 그쪽이 먼저다. 마감은 오늘 밀어붙일 이유가 되지만 그 셋보다 급하지 않다.
+    // 하기 싫은데 마감도 있는 자리. 저항 개입은 그대로 나가고, 그 위에 순서를
+    // 못박는 지시만 얹는다. 받아주고 나서 계산해 주는 순서라 둘이 부딪히지 않는다.
+    final isReluctantDeadlineTurn =
+        !isSelfHarmRiskTurn &&
+        !isSleepResistanceTurn &&
+        !shouldOfferLowEnergyStarter &&
+        !isResultAnxietyTurn &&
+        !isThoughtOverloadTurn &&
+        !isFocusFatigueTurn &&
+        GoalPushService.isReluctantDeadline(userText);
+
     final isSelfSelectedTinyActionFollowup = _awaitingSelfSelectedTinyAction;
     _awaitingSelfSelectedTinyAction = false;
     // 시작 의식은 원인이 불명확할 때만 쓰는 장치라 마스터 코치에게만 흐름 규칙을 준다.
@@ -12480,6 +12562,7 @@ ${lines.join('\n')}
     }
 
     final selfHarmRiskRule = isSelfHarmRiskTurn ? Prompts.selfHarmRisk : '';
+    // 프렌즈는 오늘과 이번 주까지, 마스터는 그 일이 어디로 가는 길인지까지 본다.
     final decisionFatigueRule = isDecisionFatigueTurn
         ? Prompts.decisionFatigue
         : '';
@@ -12537,6 +12620,41 @@ ${lines.join('\n')}
             saysNotStartedYet ||
             shouldOfferLowEnergyStarter ||
             resistanceTurnDirective.trim().isNotEmpty);
+
+    // 밀어줄 자리인지는 앱이 저항이라고 판정했는지로 가른다.
+    //
+    // 처음에는 밀기 쪽이 자기 단어 목록으로 저항을 걸러냈다. 그러면 앱이
+    // 저항이라고 본 말을 그 목록이 놓칠 때 "잘게 쪼개줘라"와 "크기를 줄이지
+    // 마라"가 한 프롬프트에 같이 실린다. 판정은 한 곳에서만 해야 한다.
+    final canPushThisTurn =
+        !shouldIncludeResistanceInterventionSection &&
+        !isSelfHarmRiskTurn &&
+        !isSleepResistanceTurn &&
+        !isThoughtOverloadTurn &&
+        !isFocusFatigueTurn;
+    final isGoalPushTurn =
+        canPushThisTurn && GoalPushService.isGoalPushExpression(userText);
+    // 마감이 없어도 하겠다는 마음이 보이면 크기를 줄이지 않는다.
+    // 마감 지시가 이미 붙는 턴에는 그쪽이 같은 말을 담고 있어 겹쳐 싣지 않는다.
+    final isDriveTurn =
+        canPushThisTurn &&
+        !isGoalPushTurn &&
+        !isReluctantDeadlineTurn &&
+        GoalPushService.showsDrive(userText);
+
+    // 프렌즈는 오늘과 이번 주까지, 마스터는 그 일이 어디로 가는 길인지까지 본다.
+    final goalPushSection = isReluctantDeadlineTurn
+        ? Prompts.goalPushWithResistance
+        : isGoalPushTurn
+        ? Prompts.goalPush +
+              (GoalPushService.wantsSpeed(userText)
+                  ? Prompts.goalPushUrge
+                  : '') +
+              (_coach.isMaster ? Prompts.goalPushMaster : '')
+        : isDriveTurn
+        ? Prompts.driveBoost +
+              (_coach.isMaster ? Prompts.driveBoostMaster : '')
+        : '';
 
     // 이번 턴에 쓸 개입을 앱이 하나만 고른다.
     //
@@ -12711,6 +12829,7 @@ $completionResponseSection
 ${Prompts.coachQuestionRules}
 
 $thoughtOverloadSection
+$goalPushSection
 $resistanceInterventionSection
 $decisionSupportSection
 $writingConcernSection
@@ -14479,7 +14598,9 @@ ${Prompts.outputRulesTail}$halmaeHint$resistanceTurnDirective$contextRequestRule
                         ),
                       ),
                       Text(
-                        '$_attendanceStreak일 출석',
+                        // 들어온 날이 아니라 할 일을 하나라도 끝낸 날을 센다.
+                        // 기록 탭의 '연속 달성'과 같은 값이라 말도 맞춰 둔다.
+                        '$_attendanceStreak일 달성',
                         style: GoogleFonts.notoSansKr(
                           fontSize: 12,
                           fontWeight: FontWeight.w900,
