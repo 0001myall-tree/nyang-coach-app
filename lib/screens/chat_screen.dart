@@ -2417,6 +2417,51 @@ $role
     return signals.any(normalized.contains);
   }
 
+  bool _isWorkoutContext(String userText) {
+    if (_containsWorkoutSignal(userText)) return true;
+    final recent = _messages.reversed
+        .take(4)
+        .map((message) => message.text)
+        .join(' ');
+    return _containsWorkoutSignal(recent);
+  }
+
+  // 운동 칩이 보내는 문장 중에는 '운동'이라는 말이 없는 것들이 있다.
+  // "앉은 상태로 뱃살 빠지는 법 없어?", "걸으면서 뱃살 빼는 법 있어?"처럼
+  // 부위와 목적으로만 말한다. 그 말들이 걸리도록 부위 이름까지 넣는다.
+  bool _containsWorkoutSignal(String text) {
+    final normalized = text.replaceAll(RegExp(r'\s+'), '').toLowerCase();
+    const signals = [
+      '운동',
+      '스트레칭',
+      '헬스',
+      '홈트',
+      '러닝',
+      '조깅',
+      '요가',
+      '필라테스',
+      '타바타',
+      '수영',
+      '산책',
+      '근력',
+      '유산소',
+      '스쿼트',
+      '플랭크',
+      '푸시업',
+      '팔굽혀',
+      '윗몸',
+      '뱃살',
+      '힙업',
+      '팔뚝살',
+      '살빼',
+      '다이어트',
+      '체지방',
+      '근육',
+      '몸매',
+    ];
+    return signals.any(normalized.contains);
+  }
+
   bool _containsHabitAutomationSignal(String text) {
     final normalized = text.replaceAll(RegExp(r'\s+'), '').toLowerCase();
     const signals = [
@@ -12709,7 +12754,7 @@ ${lines.join('\n')}
     // 코치가 가진 청소 노하우를 이번 턴에 개입 안으로 넣었는지. 넣었으면 위쪽
     // 청소 섹션에서는 뺀다 — 같은 목록이 한 프롬프트에 두 번 실리면, 읊으라는
     // 쪽과 골라 쓰라는 쪽 두 벌이 생겨서 어느 규칙으로 읽을지 흔들린다.
-    var cleaningPlaybookMovedIntoIntervention = false;
+    var cleaningSmallStepMovedIntoIntervention = false;
     if (shouldIncludeResistanceInterventionSection) {
       final prefs = await SharedPreferences.getInstance();
       final refusedLastOffer =
@@ -12728,26 +12773,37 @@ ${lines.join('\n')}
         interventionSection = refusedLastOffer
             ? '${ResistanceInterventionService.refusedPrefix}\n${next.rule}'
             : next.rule;
-        // 행동을 고르는 개입에 한해, 청소 얘기라면 코치의 청소 노하우를 여기
-        // 붙인다. 노하우는 코치별 값이라 가진 코치(할매)에게만 붙는다.
+        // 행동을 고르는 개입에 한해, 청소 얘기라면 코치가 아는 조각 목록을
+        // 여기 붙인다. 목록은 코치별 값이라 가진 코치(할매)에게만 붙는다.
         //
         // 원래는 프롬프트 위쪽에 따로 실렸는데, 모델이 행동을 정하는 자리는
         // 여기다. 스무 줄 위에 좋은 목록이 있어도 "작은 단위 하나를 정해주세요"를
         // 읽는 시점엔 멀리 있어서, 실려는 있고 쓰이지는 않았다.
-        final playbook = _coach.cleaningPlaybook;
-        if (playbook != null &&
-            next.picksConcreteAction &&
-            _isCleaningContext(userText)) {
-          // 이 한 줄이 없으면 노하우가 읊을 내용이 된다. 할매는 2~3문장으로
+        //
+        // 노하우(욕실 순서, 분류 기준)가 아니라 조각 쪽을 싣는다. 여기서 고르는
+        // 건 지금 할 하나라, 절차를 주면 읊을 내용이 될 뿐이다.
+        //
+        // 무슨 얘기인지에 따라 목록이 갈린다. 개입의 예시에는 청소·설거지·
+        // 글쓰기·공부만 있어서, 운동 얘기일 때는 코치가 참고할 것이 없었다.
+        final isCleaning = _isCleaningContext(userText);
+        final playbook = isCleaning
+            ? _coach.cleaningSmallStepPlaybook
+            : _isWorkoutContext(userText)
+            ? _coach.workoutSmallStepPlaybook
+            : null;
+        if (playbook != null && next.picksConcreteAction) {
+          // 이 한 줄이 없으면 목록이 읊을 내용이 된다. 할매는 2~3문장으로
           // 답하는 코치라 목록을 설명하기 시작하면 답변이 통째로 무너진다.
           //
           // 우선순위를 못박는 것도 이 줄의 몫이다. 개입의 청소 예시("물건 하나
           // 치우기")와 공통 대응의 "범위를 아주 작게"가 둘 다 짧고 위에 있어서,
-          // 그냥 두면 노하우가 있어도 매번 제일 작은 쪽으로 수렴한다.
+          // 그냥 두면 목록이 있어도 매번 제일 작은 쪽으로 수렴한다.
           interventionSection = '''$interventionSection
-- 행동은 아래 노하우에서 고릅니다. 위 예시보다 이쪽이 우선이고, 이 대화에서 아직 말하지 않은 것 하나를 이름만 짧게 말하세요.
+- 행동은 아래 목록에서 고릅니다. 위 예시보다 이쪽이 우선이고, 이 대화에서 아직 말하지 않은 것 하나를 이름만 짧게 말하세요.
 $playbook''';
-          cleaningPlaybookMovedIntoIntervention = true;
+          // 위쪽 청소 섹션에서 뺄지를 정하는 값이라, 청소 목록을 실은 턴에만
+          // 켠다. 운동 목록은 위쪽에 따로 실리는 것이 없어 뺄 것도 없다.
+          if (isCleaning) cleaningSmallStepMovedIntoIntervention = true;
         }
         _offeredInterventionIds.add(next.id);
         _lastOfferedInterventionId = next.id;
@@ -12812,9 +12868,20 @@ $resistanceFlowRule'''
     // 노하우를 개입 안으로 옮긴 턴에는 여기서 뺀다. 공통 대응은 그대로 둔다 —
     // 짧고, 하는 일도 다르다. 끝나고 느낄 보상을 붙이라는 쪽이라 행동 목록과
     // 겹치지 않는다.
+    //
+    // 조각 목록은 여기 붙이지 않는다. 개입이 행동을 고르는 자리에서만 쓴다.
+    // 그 자리에는 개입이 준 예시 하나("물건 하나 치우기")를 이겨야 할 이유가
+    // 있지만, 개입이 없는 턴에는 이길 대상도 없다. 목록만 놓아두면 코치가
+    // 아는 것을 말하지 못하고 그 안에서만 고른다.
     final cleaningSection = _isCleaningContext(userText)
         ? '${CoachConfigs.commonCleaningRules}'
-              '${cleaningPlaybookMovedIntoIntervention ? '' : _coach.cleaningPlaybook ?? ''}'
+              '${cleaningSmallStepMovedIntoIntervention ? '' : _coach.cleaningPlaybook ?? ''}'
+        : '';
+
+    // 운동 얘기가 오갈 때만 운동 지침을 붙인다. 청소와 같은 이유다 — 늘 실으면
+    // 무슨 얘기를 하든 스트레칭부터 하자는 말이 따라 나온다.
+    final workoutSection = _isWorkoutContext(userText)
+        ? _coach.workoutPlaybook ?? ''
         : '';
 
     // 시간대별 생활 루틴은 지금 구간 하나만 붙인다.
@@ -12854,6 +12921,7 @@ ${context.isNotEmpty ? '\n$context' : ''}
 $masterStyleRule
 $lifeRoutineSection
 $cleaningSection
+$workoutSection
 $bedtimeCarryOverSection
 $emptyPlanAskSection
 $capabilitySection
