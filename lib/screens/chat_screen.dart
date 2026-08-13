@@ -3036,6 +3036,7 @@ ${lines.join('\n')}
   /// 새로 열리면 그때까지 받아 적은 것이 빈 문자열에 지워졌다. 한 구간이
   /// 끝날 때마다 여기에 굳혀 두고 다음 구간은 그 뒤에 이어 붙인다.
   String _speechBaseText = '';
+  String _lastSpeechSegment = '';
 
   void _startListening() async {
     // 입력창을 비우지 않는다.
@@ -3044,6 +3045,7 @@ ${lines.join('\n')}
     // 다시 눌러야 하는데, 그때 비워버리면 그때까지 받아 적은 것이 사라진다.
     // 손으로 쳐둔 글도 마찬가지다. 이미 있는 글을 바탕으로 삼고 뒤에 잇는다.
     _speechBaseText = _ctrl.text.trim();
+    _lastSpeechSegment = '';
     await _speechToText.listen(
       listenMode: ListenMode.dictation,
       pauseFor: const Duration(seconds: 4),
@@ -3066,9 +3068,15 @@ ${lines.join('\n')}
     final words = result.recognizedWords.trim();
     // 빈 결과로는 지우지 않는다. 구간이 닫히는 순간 빈 값이 한 번 오는데,
     // 그걸 그대로 쓰면 말하다 멈춘 사람의 글이 통째로 사라진다.
-    final merged = _speechBaseText.isEmpty
-        ? words
-        : (words.isEmpty ? _speechBaseText : '$_speechBaseText $words');
+    if (words.isEmpty) return;
+
+    if (_lastSpeechSegment.isNotEmpty &&
+        !words.startsWith(_lastSpeechSegment) &&
+        !_lastSpeechSegment.startsWith(words)) {
+      _speechBaseText = _mergeSpeechText(_speechBaseText, _lastSpeechSegment);
+    }
+
+    final merged = _mergeSpeechText(_speechBaseText, words);
     setState(() {
       _ctrl.text = merged;
       // 글자를 넣으면 커서가 맨 앞으로 간다. 이어서 손으로 고치려는 사람이
@@ -3078,7 +3086,20 @@ ${lines.join('\n')}
       );
     });
     // 구간이 확정되면 여기까지를 다음 구간의 바탕으로 삼는다.
-    if (result.finalResult) _speechBaseText = merged;
+    if (result.finalResult) {
+      _speechBaseText = merged;
+      _lastSpeechSegment = '';
+    } else {
+      _lastSpeechSegment = words;
+    }
+  }
+
+  String _mergeSpeechText(String base, String segment) {
+    if (base.isEmpty) return segment;
+    if (segment.isEmpty) return base;
+    if (base == segment || base.endsWith(segment)) return base;
+    if (segment.startsWith(base)) return segment;
+    return '$base $segment';
   }
 
   @override
