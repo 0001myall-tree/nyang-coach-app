@@ -16359,11 +16359,10 @@ ${Prompts.outputRulesTail}$halmaeHint$resistanceTurnDirective$contextRequestRule
               : ['완벽하게 못 해서 속상해', focusSlot, '오늘 핵심 정리해줘'],
         );
       }
-      return resolveChips(
-        _isMasterChipNightTime
-            ? [focusSlot, '잠이 안 와', '내일로 미뤄도 돼?']
-            : [focusSlot, decisionSlot, '오늘 핵심 정리해줘'],
-      );
+      // 여기 오는 시간은 12~18시뿐이다. 아침(6~12)과 완벽주의(18~06)가 나머지를
+      // 다 가져가서 밤이 남지 않는다. 원래 야간 분기가 하나 더 있었는데 도달할
+      // 수 있는 시각이 없어서 걷어냈다 — 냥할배 밤은 완벽주의 쪽이 받는다.
+      return resolveChips([focusSlot, decisionSlot, '오늘 핵심 정리해줘']);
     }
     return resolveChips(
       _isMasterChipNightTime
