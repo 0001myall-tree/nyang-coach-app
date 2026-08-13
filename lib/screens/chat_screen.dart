@@ -1311,6 +1311,9 @@ class _ChatScreenState extends State<ChatScreen>
   final SpeechToText _speechToText = SpeechToText();
   bool _speechEnabled = false;
   bool _isListening = false;
+  bool _keepListeningRequested = false;
+  bool _isRestartingSpeech = false;
+  bool _discardSpeechResults = false;
 
   // 이번 진입에서 마스터 코치가 자동 발화를 했는지. 인사 직후에 미뤄둔 할 일
   // 리마인드까지 겹쳐 내면 부담스러워서, 리마인드는 다음 진입으로 미룬다.
@@ -3059,11 +3062,16 @@ ${lines.join('\n')}
     _speechEnabled = await _speechToText.initialize(
       onStatus: (status) {
         if (status == 'notListening' || status == 'done') {
-          if (mounted) setState(() => _isListening = false);
+          unawaited(_handleSpeechStopped());
         }
       },
       onError: (error) {
         debugPrint("Speech error: $error");
+        if (_keepListeningRequested && !error.permanent) {
+          unawaited(_restartListeningIfNeeded());
+          return;
+        }
+        _keepListeningRequested = false;
         if (mounted) {
           setState(() => _isListening = false);
           ScaffoldMessenger.of(context).showSnackBar(
@@ -3084,32 +3092,66 @@ ${lines.join('\n')}
   String _lastSpeechSegment = '';
 
   void _startListening() async {
+    _keepListeningRequested = true;
+    await _startSpeechSession(resetBase: true);
+  }
+
+  Future<void> _startSpeechSession({required bool resetBase}) async {
+    if (!_speechEnabled || _speechToText.isListening) return;
+    _discardSpeechResults = false;
     // 입력창을 비우지 않는다.
     //
     // 4초 넘게 말을 멈추면 인식이 통째로 끝난다. 이어서 말하려면 마이크를
     // 다시 눌러야 하는데, 그때 비워버리면 그때까지 받아 적은 것이 사라진다.
     // 손으로 쳐둔 글도 마찬가지다. 이미 있는 글을 바탕으로 삼고 뒤에 잇는다.
-    _speechBaseText = _ctrl.text.trim();
-    _lastSpeechSegment = '';
+    if (resetBase) {
+      _speechBaseText = _ctrl.text.trim();
+      _lastSpeechSegment = '';
+    }
     await _speechToText.listen(
       listenMode: ListenMode.dictation,
-      pauseFor: const Duration(seconds: 4),
-      listenFor: const Duration(minutes: 1),
+      pauseFor: const Duration(seconds: 10),
+      listenFor: const Duration(minutes: 5),
       onResult: _onSpeechResult,
       localeId: 'ko_KR',
       cancelOnError: false,
       partialResults: true,
     );
-    setState(() => _isListening = true);
+    if (mounted) setState(() => _isListening = true);
   }
 
-  Future<void> _stopListening() async {
+  Future<void> _stopListening({bool discardPendingResults = false}) async {
+    _keepListeningRequested = false;
+    if (discardPendingResults) _discardSpeechResults = true;
     await _speechToText.stop();
     if (mounted) setState(() => _isListening = false);
   }
 
+  Future<void> _handleSpeechStopped() async {
+    if (!_keepListeningRequested) {
+      if (mounted) setState(() => _isListening = false);
+      return;
+    }
+    await _restartListeningIfNeeded();
+  }
+
+  Future<void> _restartListeningIfNeeded() async {
+    if (_isRestartingSpeech || !_keepListeningRequested || !mounted) return;
+    _isRestartingSpeech = true;
+    try {
+      _speechBaseText = _ctrl.text.trim();
+      _lastSpeechSegment = '';
+      if (mounted) setState(() => _isListening = true);
+      await Future<void>.delayed(const Duration(milliseconds: 180));
+      if (!_keepListeningRequested || !mounted) return;
+      await _startSpeechSession(resetBase: false);
+    } finally {
+      _isRestartingSpeech = false;
+    }
+  }
+
   void _onSpeechResult(SpeechRecognitionResult result) {
-    if (!mounted) return;
+    if (!mounted || _discardSpeechResults) return;
     final words = result.recognizedWords.trim();
     // 빈 결과로는 지우지 않는다. 구간이 닫히는 순간 빈 값이 한 번 오는데,
     // 그걸 그대로 쓰면 말하다 멈춘 사람의 글이 통째로 사라진다.
@@ -10105,11 +10147,13 @@ ${lines.join('\n')}
         trimmed == '지금 뭐하지?' ||
         trimmed == '남은 것 중 뭐하지?' ||
         apiInputOverride == '지금 뭐하지?';
-    if (!_coach.isMaster && _isListening) {
-      await _stopListening();
+    if (_isListening || _keepListeningRequested) {
+      await _stopListening(discardPendingResults: true);
       if (!mounted) return;
     }
     _ctrl.clear();
+    _speechBaseText = '';
+    _lastSpeechSegment = '';
     HapticFeedback.lightImpact();
 
     if (widget.coachId == 'boyfriend' &&
