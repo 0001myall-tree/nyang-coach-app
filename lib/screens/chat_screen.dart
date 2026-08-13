@@ -3038,9 +3038,12 @@ ${lines.join('\n')}
   String _speechBaseText = '';
 
   void _startListening() async {
-    // 혹시라도 이미 입력된 텍스트가 있다면 지우고 새로 녹음 시작
-    _ctrl.clear();
-    _speechBaseText = '';
+    // 입력창을 비우지 않는다.
+    //
+    // 4초 넘게 말을 멈추면 인식이 통째로 끝난다. 이어서 말하려면 마이크를
+    // 다시 눌러야 하는데, 그때 비워버리면 그때까지 받아 적은 것이 사라진다.
+    // 손으로 쳐둔 글도 마찬가지다. 이미 있는 글을 바탕으로 삼고 뒤에 잇는다.
+    _speechBaseText = _ctrl.text.trim();
     await _speechToText.listen(
       listenMode: ListenMode.dictation,
       pauseFor: const Duration(seconds: 4),
@@ -12967,18 +12970,19 @@ ${Prompts.outputRulesTail}$halmaeHint$resistanceTurnDirective$contextRequestRule
 
       // Firebase Cloud Functions chatProxy 호출 (웹앱과 동일한 Gemini AI 서버)
       //
-      // 온도가 0.9였다. 그러면 낮은 확률의 단어도 자주 골라서 문장이 무너진다.
-      // "냥이랑 있을 땐 좀 더 귀여워 보여야 한다냥"처럼 주체가 뒤집힌 말이
-      // 그래서 나왔다. 한국어는 주어를 생략하고 어순이 자유로워 더 잘 깨지고,
-      // "~냥" 어미를 맞추려 문장을 비틀면서 한 번 더 꼬인다.
+      // 0.9 → 0.7로 내렸다가 되돌렸다.
       //
-      // 캐릭터는 프롬프트가 만든다. 온도를 올린다고 더 귀여워지지 않고 더
-      // 랜덤해질 뿐이라, 지금은 그 랜덤함이 캐릭터를 깨고 있었다.
-      // 그래도 흔들리면 0.6까지 내려볼 것.
+      // 문장이 무너지던 것은 냥냥이였다. 그때 냥냥이는 gpt-4o-mini를 쓰고
+      // 있었고, 그 모델이 온도 0.9에서 한국어 주어를 흘렸다. 그런데 같은 날
+      // 모든 코치를 gpt-4.1-mini로 올리면서 그 원인은 이미 사라진 뒤였다.
+      //
+      // 온도까지 내리자 잘 돌던 마스터 코치가 유탄을 맞았다. 할 일 등록
+      // 태그는 코치가 붙일지 말지 스스로 고르는 것이라, 안전한 쪽으로
+      // 기울면 아예 안 붙인다. 카드가 뜨지 않게 된 것이 그래서다.
       final result = await _chatProxy.call({
         'messages': messages,
         'model': model,
-        'temperature': 0.7,
+        'temperature': 0.9,
       });
 
       var content = result.data['content'] as String? ?? '';
