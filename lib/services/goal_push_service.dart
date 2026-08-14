@@ -118,10 +118,40 @@ class GoalPushService {
     '밤새서',
   ];
 
+  /// 하겠다는 어미. "대청소할래", "정리할 거야"처럼 의욕이 어미에만 실릴 때가
+  /// 많은데, 위의 목록은 전부 강도가 센 표현이라 그런 말을 다 놓쳤다.
+  ///
+  /// 하다 계열만 본다. '~려고'까지 넓히면 "쓰려고"를 잡는 대신 "자려고",
+  /// "쉬려고", "미루려고"까지 하겠다는 말로 읽는다. 못 잡는 것보다 잘못 잡는
+  /// 쪽이 나쁘다 — 자려는 사람을 밀어붙이게 된다.
+  static final RegExp _intentEnding = RegExp(r'할래|할거야|할게|해야지|하려고');
+
+  /// 같은 어미를 쓰면서 뜻은 정반대인 말들. 어미 바로 앞에 이것들이 붙는다.
+  /// "안 할래", "그만할래", "내일 할래"를 하겠다는 말로 읽으면 안 된다.
+  static const List<String> _intentReversers = [
+    '안',
+    '못',
+    '그만',
+    '포기',
+    '내일',
+    '나중에',
+    '이따',
+    '주말에',
+  ];
+
+  static bool _showsIntent(String normalized) {
+    for (final match in _intentEnding.allMatches(normalized)) {
+      final before = normalized.substring(0, match.start);
+      if (_intentReversers.any(before.endsWith)) continue;
+      return true;
+    }
+    return false;
+  }
+
   static bool showsDrive(String text) {
     final normalized = _normalize(text);
     if (_resistanceSignals.any(normalized.contains)) return false;
-    return _driveSignals.any(normalized.contains);
+    return _driveSignals.any(normalized.contains) || _showsIntent(normalized);
   }
 
   /// 하기 싫다는 말과 마감이 함께 있는 자리.
