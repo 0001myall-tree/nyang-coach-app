@@ -12774,7 +12774,9 @@ ${lines.join('\n')}
         : '';
     // 집중력 저하가 잡힌 턴에는 글쓰기 지침을 같이 싣지 않는다. "글이 안 써져"는
     // 양쪽에 다 걸리는데, 두 지시가 함께 실리면 어느 쪽을 따를지가 그날 운이 된다.
-    final writingConcernSection =
+    // 이름 규칙은 여기 붙일지 개입 안에 붙일지가 아래에서 갈린다. 그래서 여기서는
+    // 본문만 담고, 개입을 고른 뒤에 안 옮겨졌을 때만 뒤에 잇는다.
+    var writingConcernSection =
         writingConcernRule.isNotEmpty && !isFocusFatigueTurn
         ? writingConcernRule
         : '';
@@ -12843,6 +12845,8 @@ ${lines.join('\n')}
     // 청소 섹션에서는 뺀다 — 같은 목록이 한 프롬프트에 두 번 실리면, 읊으라는
     // 쪽과 골라 쓰라는 쪽 두 벌이 생겨서 어느 규칙으로 읽을지 흔들린다.
     var cleaningSmallStepMovedIntoIntervention = false;
+    // 글쓰기 이름 규칙도 같은 사정이라 같은 값을 하나 더 둔다.
+    var writingNamingMovedIntoIntervention = false;
     if (shouldIncludeResistanceInterventionSection) {
       final prefs = await SharedPreferences.getInstance();
       final refusedLastOffer =
@@ -12895,6 +12899,15 @@ $playbook''';
           // 켠다. 운동 목록은 위쪽에 따로 실리는 것이 없어 뺄 것도 없다.
           if (isCleaning) cleaningSmallStepMovedIntoIntervention = true;
         }
+        // 글쓰기는 고를 목록이 아니라 이름 붙이는 법이라 같은 자리에 붙이되
+        // "여기서 고르세요"는 붙이지 않는다. 고를 것을 주면 그 몇 개로 굳는다.
+        if (isWritingConcernTurn &&
+            writingConcernSection.isNotEmpty &&
+            next.picksConcreteAction) {
+          interventionSection =
+              '$interventionSection\n${Prompts.writingSmallStepNaming}';
+          writingNamingMovedIntoIntervention = true;
+        }
         _offeredInterventionIds.add(next.id);
         _lastOfferedInterventionId = next.id;
         // 다음에 이 자리에 오면 여기서부터 이어간다. 대화가 끝나도, 앱을 껐다
@@ -12907,6 +12920,13 @@ $playbook''';
           await prefs.setString(_interventionRotationKey, next.id);
         }
       }
+    }
+    // 개입 안으로 안 옮겨졌으면 원래 자리에 붙인다. 저항 턴이 아니어서 개입이
+    // 아예 없는 턴에도 글쓰기 조각에는 이름이 필요하다.
+    if (writingConcernSection.isNotEmpty &&
+        !writingNamingMovedIntoIntervention) {
+      writingConcernSection =
+          '$writingConcernSection\n${Prompts.writingSmallStepNaming}';
     }
     // [이번 턴에 쓸 개입]에 "제안할 때는 왜 그렇게 하자는 건지 짧은 한 마디를
     // 함께 말하세요"가 있었다. 이유를 대라고 하면 모델이 제일 쉽게 잡는 게
