@@ -1341,6 +1341,10 @@ class _ChatScreenState extends State<ChatScreen>
   // 5분을 매번 다시 듣는 게 이 키를 만든 이유다.
   static const _interventionRotationKey =
       'nyang_resistance_intervention_rotation';
+  // 청소 조각도 같은 이유로 자리를 저장한다. 이게 없으면 앱을 껐다 켤 때마다
+  // 목록 맨 위로 돌아가서, 어제도 오늘도 이불부터 듣게 된다.
+  static const _cleaningFragmentRotationKey =
+      'nyang_cleaning_fragment_rotation';
   // 집중력 저하: "얼마나 했어?"를 묻고 답을 기다리는 상태
   bool _awaitingFocusWorkHistory = false;
   // 작업 시간을 물어본 날짜. 하루 한 번만 묻는다.
@@ -2418,6 +2422,33 @@ $role
       '빨래',
     ];
     return signals.any(normalized.contains);
+  }
+
+  /// 이번 턴에 쓸 청소 조각 한 줄. 고르는 일은 앱이 한다.
+  ///
+  /// 사용자가 어디를 말했으면 그 줄을 준다. 순번은 건드리지 않는다 — 사용자가
+  /// 고른 것이지 차례가 온 것이 아니다.
+  ///
+  /// 어디라고 말하지 않았으면 순번대로 다음 줄을 주고 그 자리를 저장한다.
+  /// "청소하기 싫어"만 반복해도 이불 → 책상 → 화장대 순으로 넘어간다.
+  Future<String> _pickCleaningFragment(
+    SharedPreferences prefs,
+    String userText,
+  ) async {
+    final fragments = _coach.cleaningFragments;
+    if (fragments == null || fragments.isEmpty) return '';
+
+    final normalized = userText.replaceAll(RegExp(r'\s+'), '').toLowerCase();
+    for (final fragment in fragments) {
+      if (fragment.signals.any(normalized.contains)) {
+        return '\n${fragment.line}';
+      }
+    }
+
+    final last = prefs.getInt(_cleaningFragmentRotationKey) ?? -1;
+    final next = (last + 1) % fragments.length;
+    await prefs.setInt(_cleaningFragmentRotationKey, next);
+    return '\n${fragments[next].line}';
   }
 
   bool _isWorkoutContext(String userText) {
@@ -12831,11 +12862,13 @@ ${lines.join('\n')}
         // 글쓰기·공부만 있어서, 운동 얘기일 때는 코치가 참고할 것이 없었다.
         final isCleaning = _isCleaningContext(userText);
         final playbook = isCleaning
-            ? _coach.cleaningSmallStepPlaybook
+            ? await _pickCleaningFragment(prefs, userText)
             : _isWorkoutContext(userText)
             ? _coach.workoutSmallStepPlaybook
             : null;
-        if (playbook != null && next.picksConcreteAction) {
+        if (playbook != null &&
+            playbook.isNotEmpty &&
+            next.picksConcreteAction) {
           // 이 한 줄이 없으면 목록이 읊을 내용이 된다. 할매는 2~3문장으로
           // 답하는 코치라 목록을 설명하기 시작하면 답변이 통째로 무너진다.
           //
@@ -12843,7 +12876,7 @@ ${lines.join('\n')}
           // 치우기")와 공통 대응의 "범위를 아주 작게"가 둘 다 짧고 위에 있어서,
           // 그냥 두면 목록이 있어도 매번 제일 작은 쪽으로 수렴한다.
           interventionSection = '''$interventionSection
-- 행동은 아래 목록에서 고릅니다. 위 예시보다 이쪽이 우선이고, 이 대화에서 아직 말하지 않은 것 하나를 이름만 짧게 말하세요.
+- 행동은 아래에서 고릅니다. 위 예시보다 이쪽이 우선이고, 이 대화에서 아직 말하지 않은 것 하나를 이름만 짧게 말하세요.
 $playbook''';
           // 위쪽 청소 섹션에서 뺄지를 정하는 값이라, 청소 목록을 실은 턴에만
           // 켠다. 운동 목록은 위쪽에 따로 실리는 것이 없어 뺄 것도 없다.
