@@ -1956,7 +1956,20 @@ class _ChatScreenState extends State<ChatScreen>
       '만계속',
       '만반복',
     ];
-    return writingSignals.any(normalized.contains) &&
+    // 연재하는 사람은 '소설'이나 '원고'라는 말을 잘 안 쓴다. "오늘 1화 분량
+    // 써야 하는데"처럼 회차로 말하면 위 목록에 하나도 안 걸려 글쓰기 턴인 걸
+    // 놓쳤다. 회차 숫자는 매번 달라지니 고정 문자열로는 못 잡는다.
+    // 다만 회차도 분량도 운동·공부에 그대로 쓰는 말이라, 쓴다는 말이나 마감이
+    // 같이 있을 때만 센다. "운동 3회차 하기 싫어"가 글쓰기로 넘어가면 안 된다.
+    final saysWriting = RegExp(r'[쓰써]').hasMatch(normalized);
+    final episodeUnit =
+        (RegExp(r'\d+(화|회차)').hasMatch(normalized) &&
+            (saysWriting ||
+                normalized.contains('분량') ||
+                normalized.contains('마감'))) ||
+        normalized.contains('연재분') ||
+        (normalized.contains('분량') && saysWriting);
+    return (writingSignals.any(normalized.contains) || episodeUnit) &&
         concernSignals.any(normalized.contains);
   }
 
