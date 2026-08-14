@@ -33,8 +33,31 @@ const _masterGold = Color(0xFFE5B94A);
 class _CoachSelectionScreenState extends State<CoachSelectionScreen>
     with WidgetsBindingObserver {
   String _selectedCoachId = 'cat';
-  CoachTab _currentTab = CoachTab.friends;
+
+  /// 사용자가 직접 누른 탭. 누르기 전에는 비어 있다.
+  ///
+  /// 기본 탭을 변수에 담아두지 않는 이유는 하나다. 플랜 정보는 화면이 그려진
+  /// 뒤에 도착하는데, 그때 변수를 고쳐 넣는 방식은 도착 시점에 따라 되기도
+  /// 하고 안 되기도 한다. 그릴 때마다 계산하면 정보가 늦게 와도 그다음 그림에
+  /// 반영된다.
+  CoachTab? _pickedTab;
+
   UserData _userData = UserData();
+
+  /// 마스터 플랜이면 마스터 코치 탭을 왼쪽에 두고 그것부터 열어준다.
+  ///
+  /// 등급을 올리고도 버릇대로 냥냥 코치만 쓰는 경우가 많았다. 마스터 코치가
+  /// 두 번째 탭 뒤에 있으면 들어갈 일이 없다.
+  bool get _isMasterUser =>
+      _userData.isPlanActive && _userData.planType == 'master';
+
+  /// 지금 열려 있는 탭. 누른 것이 있으면 그것, 없으면 왼쪽 탭.
+  CoachTab get _currentTab => _pickedTab ?? _tabOrder.first;
+
+  /// 탭이 놓이는 순서. 마스터 플랜이면 마스터가 왼쪽에 온다.
+  List<CoachTab> get _tabOrder => _isMasterUser
+      ? const [CoachTab.master, CoachTab.friends]
+      : const [CoachTab.friends, CoachTab.master];
 
   int _logoTapCount = 0;
   Timer? _logoTapTimer;
@@ -1311,21 +1334,18 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen>
                 ),
                 child: Row(
                   children: [
-                    Expanded(
-                      child: _buildTabButton(
-                        tab: CoachTab.friends,
-                        title: '프렌즈 코치',
-                        color: _coachMint,
+                    for (final tab in _tabOrder) ...[
+                      if (tab != _tabOrder.first) const SizedBox(width: 8),
+                      Expanded(
+                        child: _buildTabButton(
+                          tab: tab,
+                          title: tab == CoachTab.friends ? '프렌즈 코치' : '마스터 코치',
+                          color: tab == CoachTab.friends
+                              ? _coachMint
+                              : _masterGold,
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: _buildTabButton(
-                        tab: CoachTab.master,
-                        title: '마스터 코치',
-                        color: _masterGold,
-                      ),
-                    ),
+                    ],
                   ],
                 ),
               ),
@@ -1541,7 +1561,7 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen>
     return GestureDetector(
       onTap: () {
         setState(() {
-          _currentTab = tab;
+          _pickedTab = tab;
           _selectedCoachId = tab == CoachTab.friends
               ? _friendsCoaches[0]['id']
               : _masterCoaches[0]['id'];
