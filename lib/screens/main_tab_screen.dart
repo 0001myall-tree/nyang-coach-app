@@ -27,6 +27,7 @@ import 'settings_screen.dart';
 import '../theme/app_design_tokens.dart';
 import '../widgets/app_bottom_sheet.dart';
 import '../widgets/app_button.dart';
+import '../widgets/master_unlock_notice.dart';
 
 // 각 탭 화면 플레이스홀더
 class ChatPlaceholderScreen extends StatelessWidget {
@@ -627,7 +628,9 @@ class _MainTabScreenState extends State<MainTabScreen>
     _startCoreReminderEngine();
     AnalyticsService.logAppOpen();
     _ensureCurrentCoachAccess();
-    unawaited(_maybeAnnounceMasterUnlock());
+    unawaited(
+      maybeShowMasterUnlockNotice(context, returnCoachId: widget.coachId),
+    );
     unawaited(_refreshRecordsNewBadge());
     if (_openDrawerIndex == 2) {
       unawaited(_markRecordsFeedbackSeen());
@@ -705,116 +708,19 @@ class _MainTabScreenState extends State<MainTabScreen>
       _chatController.refreshTaskProgress();
       setState(() {});
     }
+    // 스토어 결제창에 다녀오면 여기로 돌아온다. 앱 밖에서 결제가 반영된 경우를
+    // 받아주는 그물이라, 화면 진입 확인만으로는 못 잡는 길을 메운다.
+    if (mounted) {
+      unawaited(
+        maybeShowMasterUnlockNotice(context, returnCoachId: widget.coachId),
+      );
+    }
     final canContinue = await _ensureCurrentCoachAccess(syncCloud: _isMaster);
     if (canContinue) {
       await _refreshRecordsNewBadge();
       await _checkWidgetIntent();
       await _maybeShowCatWidgetPrompt();
     }
-  }
-
-  /// 마스터 코치가 열렸다는 걸 한 번만 알려준다.
-  ///
-  /// 등급을 올리고도 버릇대로 냥냥 코치만 쓰는 경우가 많았다. 열렸다는 사실을
-  /// 모르고 지나가는 것이다.
-  ///
-  /// 결제가 끝나는 순간에 띄우지 않는다. 결제 경로가 여럿이고 앱을 껐다 켜는
-  /// 사이에 반영되기도 해서, 그 순간을 잡으려 하면 새는 길이 생긴다. 대신
-  /// 화면에 들어올 때마다 "지금 마스터인데 아직 안 알렸는가"만 본다.
-  ///
-  /// 플래그는 'nyang_'으로 시작하지 않는 키에 둔다. 그 접두어를 쓰면 클라우드
-  /// 복원이 덮어써서 앱을 켤 때마다 같은 안내가 다시 뜬다.
-  static const _masterUnlockNoticeKey = 'master_unlock_notice_shown';
-
-  Future<void> _maybeAnnounceMasterUnlock() async {
-    final data = await UserDataService.load();
-    final prefs = await SharedPreferences.getInstance();
-
-    // 마스터가 아닌 동안에는 표시를 지워둔다. 해지했다가 다시 결제했을 때도
-    // 열렸다는 안내를 한 번 더 받는다.
-    if (!data.isPlanActive || data.planType != 'master') {
-      await prefs.remove(_masterUnlockNoticeKey);
-      return;
-    }
-
-    if (prefs.getBool(_masterUnlockNoticeKey) == true) return;
-    await prefs.setBool(_masterUnlockNoticeKey, true);
-
-    if (!mounted) return;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      _showMasterUnlockDialog();
-    });
-  }
-
-  void _showMasterUnlockDialog() {
-    showDialog<void>(
-      context: context,
-      // 그냥 닫고 지나치면 이 안내가 하는 일이 없다. 버튼을 누르게 한다.
-      barrierDismissible: false,
-      builder: (dialogContext) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppDesignTokens.radiusLarge),
-          ),
-          title: Text(
-            '마스터 코치가 열렸어요',
-            style: GoogleFonts.notoSansKr(
-              fontSize: 17,
-              fontWeight: FontWeight.w900,
-              color: AppDesignTokens.textPrimary,
-            ),
-          ),
-          content: Text(
-            '이제 냥할배와 비서 실장을 만날 수 있어요.\n'
-            '목표와 하루의 흐름을 함께 보면서, 지금 무엇부터 하면 좋을지 챙겨드립니다.',
-            style: GoogleFonts.notoSansKr(
-              fontSize: 13.5,
-              height: 1.5,
-              fontWeight: FontWeight.w500,
-              color: const Color(0xFF6B6676),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: Text(
-                '나중에',
-                style: GoogleFonts.notoSansKr(
-                  fontWeight: FontWeight.w900,
-                  color: const Color(0xFF9B96A8),
-                ),
-              ),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.pop(dialogContext);
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) =>
-                        CoachSelectionScreen(returnCoachId: widget.coachId),
-                  ),
-                );
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppDesignTokens.brand,
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-              child: Text(
-                '코치 보러 가기',
-                style: GoogleFonts.notoSansKr(
-                  fontWeight: FontWeight.w900,
-                  color: Colors.white,
-                ),
-              ),
-            ),
-          ],
-        );
-      },
-    );
   }
 
   Future<bool> _ensureCurrentCoachAccess({bool syncCloud = false}) async {
