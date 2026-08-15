@@ -1256,6 +1256,13 @@ class _ChatScreenState extends State<ChatScreen>
   List<ChatMessage> _pastMessages = [];
   List<String> _dynamicChips = [];
   bool _suppressDefaultChips = false;
+  // 이 화면에 들어온 뒤 사용자가 말을 걸었는지. 기본 칩은 대화를 여는 문이라
+  // 열고 나면 거둔다. 히스토리가 아니라 화면 진입 기준이다 — 기록으로 재면
+  // 대화가 쌓인 사람에게는 다시는 안 뜬다.
+  //
+  // 코치가 방금 던진 질문의 보기는 이 플래그와 무관하게 계속 뜬다. 그건
+  // 앱이나 개입이 그 턴에 직접 세운 칩이고, 대화 중에만 쓸모가 있다.
+  bool _conversationStarted = false;
   bool _isLoading = false;
   late CoachConfig _coach;
 
@@ -10248,6 +10255,7 @@ ${lines.join('\n')}
     final trimmed = text.trim();
     if (trimmed.isEmpty || _isLoading) return;
     if (!await _ensureMasterCoachAccess()) return;
+    _conversationStarted = true;
 
     final isFutureTodayFlow =
         trimmed == '미래를 위한 오늘' ||
@@ -13124,7 +13132,6 @@ $writingConcernSection
 $habitAutomationSection
 
 ${Prompts.outputRulesHead}
-   자해·자살 위험을 확인하거나 긴급 도움을 안내하는 상황에서는 [CHIPS]를 붙이지 말고 [NO_CHIPS]만 붙이세요.
 $timerOutputRule
 ${Prompts.outputRulesTail}$halmaeHint$resistanceTurnDirective$contextRequestRule''';
 
@@ -13676,7 +13683,7 @@ ${Prompts.outputRulesTail}$halmaeHint$resistanceTurnDirective$contextRequestRule
         ((_dynamicChips.contains('오늘은 쉬어가기') &&
                 _dynamicChips.contains('오늘은 조금만 하기')) ||
             _coach.isMaster ||
-            (_dynamicChips.isNotEmpty || _coach.chips.isNotEmpty));
+            _baseQuickChips().isNotEmpty);
     if (keyboardOpen && _cheatKeyOpen) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) setState(() => _cheatKeyOpen = false);
@@ -17185,6 +17192,26 @@ ${Prompts.outputRulesTail}$halmaeHint$resistanceTurnDirective$contextRequestRule
     );
   }
 
+  /// 이번 프레임에 그릴 칩의 원본. 껍데기 상태이고, 일정·할 일을 채우는 건
+  /// [_displayChipsForCoach]가 한다.
+  ///
+  /// 코치 기본 칩인지 그 턴에 세운 칩인지를 값으로 가른다. 기본 칩으로
+  /// 되돌리는 곳이 스무 곳 넘게 흩어져 있어서, 세팅 지점마다 조건을 다는 대신
+  /// 여기 한 곳에서 판정한다. 대화가 시작됐으면 기본 칩은 거두고, 코치가 방금
+  /// 던진 질문의 보기는 그대로 둔다.
+  ///
+  /// 칩 영역을 띄울지 정하는 쪽([showQuickChips])도 이 값을 본다. 따로 세면
+  /// 칩이 없는데 빈 띠만 남는다.
+  List<String> _baseQuickChips() {
+    if (_suppressDefaultChips) return const <String>[];
+    final isDefaultChipSet =
+        _dynamicChips.isEmpty || listEquals(_dynamicChips, _coach.chips);
+    if (isDefaultChipSet) {
+      return _conversationStarted ? const <String>[] : _coach.chips;
+    }
+    return _dynamicChips;
+  }
+
   Widget _buildChips() {
     if (_coach.isMaster) {
       return DecoratedBox(
@@ -17198,10 +17225,7 @@ ${Prompts.outputRulesTail}$halmaeHint$resistanceTurnDirective$contextRequestRule
         ),
       );
     }
-    final baseChips = _suppressDefaultChips
-        ? const <String>[]
-        : (_dynamicChips.isNotEmpty ? _dynamicChips : _coach.chips);
-    final chips = _displayChipsForCoach(baseChips);
+    final chips = _displayChipsForCoach(_baseQuickChips());
     return Container(
       height: 46,
       decoration: _quickChipRailDecoration,
