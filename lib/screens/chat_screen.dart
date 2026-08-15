@@ -13056,6 +13056,11 @@ $resistanceFlowRule'''
     final timerOutputRule = _coach.isMaster
         ? Prompts.timerOutputMaster
         : Prompts.timerOutputFriends;
+    // 먼저 할 일을 꺼내는 건 마스터의 역할이다. 프렌즈는 사용자가 자기 입으로
+    // 말한 일에만 카드를 띄운다.
+    final coachOfferTaskRule = _coach.isMaster
+        ? Prompts.taskTagFromCoachOffer
+        : '';
     final masterStyleRule = _coach.id == 'nyang_halbae'
         ? Prompts.nyangHalbaeStyle
         : '';
@@ -13145,7 +13150,7 @@ $habitAutomationSection
 
 ${Prompts.outputRulesHead}
 $timerOutputRule
-${Prompts.outputRulesTail}$halmaeHint$resistanceTurnDirective$contextRequestRule''';
+${Prompts.outputRulesTail}$coachOfferTaskRule$halmaeHint$resistanceTurnDirective$contextRequestRule''';
 
       // 마스터 코치는 하드코딩된 "대표님"을 사용자가 지정한 호칭으로 치환한다.
       // baseSystemPrompt 뒤에 이어붙인 모든 조각까지 함께 반영된다.
@@ -13269,7 +13274,10 @@ ${Prompts.outputRulesTail}$halmaeHint$resistanceTurnDirective$contextRequestRule
       //
       // 다시 0.7로 내린다. 태그가 묻히던 조건은 그때와 다르다 — 출력 규칙에서
       // 칩 3줄이 빠지면서 [TASK]와 [SCHEDULE] 지시가 훨씬 앞으로 나왔다.
-      // 그래도 같은 자리라, 할 일·일정 카드가 뜨는지 먼저 볼 것.
+      //
+      // 실기기에서 확인했다. 문장이 단단해졌고 마스터 코치의 카드도 그대로
+      // 뜬다. 앞의 "0.7에서 카드가 죽었다"는 기록만 보고 되돌리지 말 것 —
+      // 그 원인은 온도가 아니라 태그 지시가 긴 프롬프트에 묻힌 쪽이었다.
       final result = await _chatProxy.call({
         'messages': messages,
         'model': model,
@@ -13775,14 +13783,20 @@ ${Prompts.outputRulesTail}$halmaeHint$resistanceTurnDirective$contextRequestRule
         // 타이머 확인 버튼
         if (_coach.isMaster && _timerConfirmMinutes != null)
           _buildTimerConfirmCard(),
-        if (_coach.isMaster && _suggestedTasks.isNotEmpty)
-          _buildTaskSuggestCard(),
+        if (_suggestedTasks.isNotEmpty) _buildTaskSuggestCard(),
         if (_flirtVisible) _buildFlirtToast(),
       ],
     );
   }
 
-  // ── 할 일 추가 제안 카드 (마스터 전용) ───────────────────
+  // ── 할 일 추가 제안 카드 ─────────────────────────────
+  //
+  // 마스터 전용이었다. 프렌즈에게도 [TASK] 규칙은 매 턴 실렸는데 화면에서
+  // 버려져서, 사용자가 "오늘 청소해야지"라고 말해도 아무 일이 없었다.
+  //
+  // 열어주되 프렌즈는 사용자가 직접 말한 일에만 붙인다. 코치가 권한 것까지
+  // 태그를 달면 잡담 중에도 카드가 뜬다 — 일정·습관·목표 카드가 부탁받았을
+  // 때만 뜨는 것과 달리, 이건 코치가 먼저 꺼낼 수 있는 유일한 카드다.
   Future<void> _confirmSuggestTask(int idx) async {
     if (idx >= _suggestedTasks.length) return;
     final task = _suggestedTasks[idx];
