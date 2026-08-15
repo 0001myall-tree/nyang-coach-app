@@ -13263,10 +13263,17 @@ ${Prompts.outputRulesTail}$halmaeHint$resistanceTurnDirective$contextRequestRule
       // 온도까지 내리자 잘 돌던 마스터 코치가 유탄을 맞았다. 할 일 등록
       // 태그는 코치가 붙일지 말지 스스로 고르는 것이라, 안전한 쪽으로
       // 기울면 아예 안 붙인다. 카드가 뜨지 않게 된 것이 그래서다.
+      //
+      // 그런데 이번엔 0.9에서 문장이 흔들렸다. 프롬프트를 크게 줄인 뒤라
+      // 모델이 기댈 발판도 함께 줄어든 것으로 보인다.
+      //
+      // 다시 0.7로 내린다. 태그가 묻히던 조건은 그때와 다르다 — 출력 규칙에서
+      // 칩 3줄이 빠지면서 [TASK]와 [SCHEDULE] 지시가 훨씬 앞으로 나왔다.
+      // 그래도 같은 자리라, 할 일·일정 카드가 뜨는지 먼저 볼 것.
       final result = await _chatProxy.call({
         'messages': messages,
         'model': model,
-        'temperature': 0.9,
+        'temperature': 0.7,
       });
 
       var content = result.data['content'] as String? ?? '';
