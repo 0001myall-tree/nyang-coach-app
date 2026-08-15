@@ -17,6 +17,7 @@ MasterGreetingContext ctx({
   bool resistedDone = false,
   String? resistedDoneLabel,
   bool offPlanResistance = false,
+  String? startPatternLabel,
 }) {
   return MasterGreetingContext(
     now: DateTime(2026, 7, 30, hour, 30),
@@ -31,6 +32,7 @@ MasterGreetingContext ctx({
     resistedDone: resistedDone,
     resistedDoneLabel: resistedDoneLabel,
     offPlanResistance: offPlanResistance,
+    startPatternLabel: startPatternLabel,
   );
 }
 
@@ -63,6 +65,13 @@ final cases = <String, MasterGreetingContext>{
   ),
   '오후-완료0': ctx(hour: 14, planTotal: 4),
   '오후-계획없음': ctx(hour: 14),
+  // 주 1회 오전 인사. 계획이 있든 없든 이 이야기가 오전 문구를 대신한다.
+  '오전-시작패턴': ctx(hour: 8, startPatternLabel: '오전 8시~10시'),
+  '오전-시작패턴-계획있음': ctx(
+    hour: 10,
+    planTotal: 3,
+    startPatternLabel: '오전 8시~10시',
+  ),
   '낮-어제늦게잠': ctx(hour: 10, planTotal: 3, lateNight: true),
   '낮-어제아팠음': ctx(hour: 10, planTotal: 3, feltSick: true),
   '낮-아픔이늦밤보다우선': ctx(hour: 10, lateNight: true, feltSick: true),
@@ -163,6 +172,10 @@ final cases = <String, MasterGreetingContext>{
 /// 복귀한 날 낮·저녁에 붙는 문구. 슬롯 문구 대신 이걸로 끊는다.
 final comebackDayCases = ['복귀-낮', '복귀-아팠음', '복귀-저녁전부완료', '복귀-저녁절반이하'];
 
+/// 주 1회만 나가는 오전 인사. 다른 발화의 두세 문장 한도를 따르지 않는 유일한
+/// 자리다 — 인사·알려주기·마무리가 한 덩어리라 여기서 줄이면 셋 중 하나가 빠진다.
+final startPatternCases = ['오전-시작패턴', '오전-시작패턴-계획있음'];
+
 final voices = {
   '여비서': MasterGreetingCopy.secretary,
   '냥할배': MasterGreetingCopy.nyangHalbae,
@@ -176,6 +189,7 @@ List<String> allTemplates(GreetingVoice v) => [
   ...v.earlyQuestions,
   ...v.morningPlan,
   ...v.morningNoPlan,
+  ...v.startPatternMorning,
   ...v.afternoonBehind,
   ...v.afternoonNoPlan,
   ...v.eveningLow,
@@ -228,9 +242,10 @@ void main() {
             expect(result.text, isNot(contains('{{')), reason: where);
             expect(result.text, isNot(contains('  ')), reason: where);
             // 복귀 인사가 붙어도 세 문장을 넘지 않는다.
+            // 주 1회 시작 패턴 인사만 예외다([startPatternCases] 참고).
             expect(
               sentenceCount(result.text),
-              lessThanOrEqualTo(3),
+              lessThanOrEqualTo(startPatternCases.contains(entry.key) ? 5 : 3),
               reason: where,
             );
           }
@@ -259,6 +274,59 @@ void main() {
             expect(result.text, isNot(contains("'")), reason: where);
             expect(result.choices, isEmpty, reason: where);
             expect(sentenceCount(result.text), 2, reason: where);
+          }
+        }
+      });
+    }
+  });
+
+  group('주 1회 시작 패턴 인사', () {
+    for (final voice in voices.entries) {
+      test('${voice.key} / 시간대를 그대로 알려준다', () {
+        for (final name in startPatternCases) {
+          for (var seed = 0; seed < 50; seed++) {
+            final result = MasterGreetingBuilder(
+              voice: voice.value,
+              random: Random(seed),
+            ).build(cases[name]!);
+            final where = '$name 씨앗 $seed: ${result.text}';
+
+            expect(result.text, contains('오전 8시~10시'), reason: where);
+            // 화면은 이 값으로 주 1회를 센다. 꺼졌으면 다음 날 또 나간다.
+            expect(result.usedStartPattern, isTrue, reason: where);
+            // 시간대 이름은 앱이 계산해 붙인 것이라 인용부호로 묶지 않는다.
+            expect(result.text, isNot(contains("'오전")), reason: where);
+          }
+        }
+      });
+
+      // 컨디션이 앞선다. 아픈 날 아침에 완료율 이야기를 꺼낼 수는 없고,
+      // 오후에 "좋은 아침"이라고 할 수도 없다.
+      test('${voice.key} / 아픈 날과 오후에는 나오지 않는다', () {
+        final blocked = {
+          '아팠던 다음 날': ctx(
+            hour: 9,
+            feltSick: true,
+            startPatternLabel: '오전 8시~10시',
+          ),
+          '늦게 잔 다음 날': ctx(
+            hour: 9,
+            lateNight: true,
+            startPatternLabel: '오전 8시~10시',
+          ),
+          '오후': ctx(hour: 14, planTotal: 2, startPatternLabel: '오전 8시~10시'),
+        };
+        for (final entry in blocked.entries) {
+          for (var seed = 0; seed < 20; seed++) {
+            final result = MasterGreetingBuilder(
+              voice: voice.value,
+              random: Random(seed),
+            ).build(entry.value);
+            expect(
+              result.usedStartPattern,
+              isFalse,
+              reason: '${entry.key} 씨앗 $seed: ${result.text}',
+            );
           }
         }
       });
@@ -304,6 +372,7 @@ void main() {
           voice.value.earlyQuestions,
           voice.value.morningPlan,
           voice.value.morningNoPlan,
+          voice.value.startPatternMorning,
           voice.value.afternoonBehind,
           voice.value.afternoonNoPlan,
           voice.value.dawn,

@@ -32,6 +32,7 @@ import 'package:nyang_coach/services/execution_resistance_service.dart';
 import 'package:nyang_coach/services/focus_fatigue_service.dart';
 import 'package:nyang_coach/services/goal_push_service.dart';
 import 'package:nyang_coach/services/resistance_intervention_service.dart';
+import 'package:nyang_coach/services/start_pattern_service.dart';
 import 'package:nyang_coach/prompts/coach_prompt.dart';
 import 'package:nyang_coach/services/prep_time_service.dart';
 import 'package:nyang_coach/services/widget_sync_service.dart';
@@ -3913,8 +3914,65 @@ ${lines.join('\n')}
     );
   }
 
-  bool _alreadySpokeInSlot(GreetingSlot slot, DateTime now) =>
-      _spokeKindToday({_greetingKind(slot)}, now);
+  /// 주 1회 오전 인사. 낮 슬롯 자리를 대신 쓰므로 낮 슬롯 가드가 이 kind도 봐야
+  /// 한다 — 안 그러면 아침에 패턴 이야기를 듣고, 오후에 낮 인사를 또 듣는다.
+  static const _startPatternGreetingKind = 'auto:start_pattern';
+
+  bool _alreadySpokeInSlot(GreetingSlot slot, DateTime now) => _spokeKindToday(
+    slot == GreetingSlot.day
+        ? {_greetingKind(slot), _startPatternGreetingKind}
+        : {_greetingKind(slot)},
+    now,
+  );
+
+  /// 시작 패턴 이야기를 최근 일주일 안에 이미 했는지.
+  ///
+  /// 여비서와 냥할배를 한 묶음으로 센다. 둘 다 켜둔 사람에게 같은 이야기를
+  /// 이틀에 걸쳐 두 번 하면, 주 1회로 묶어둔 의미가 없다.
+  ///
+  /// 판정 근거는 prefs 날짜가 아니라 채팅 기록이다([_spokeKindToday] 참고).
+  /// 자정에 오늘 기록이 보관함으로 넘어가므로 두 곳을 함께 보고, 보관함이
+  /// 7일치를 들고 있어 일주일을 보기엔 딱 맞는다.
+  Future<bool> _spokeStartPatternThisWeek(DateTime now) async {
+    final prefs = await SharedPreferences.getInstance();
+    for (final coachId in DailyResetService.coachIds) {
+      for (final key in [
+        'nyang_chat_history_$coachId',
+        '${DailyResetService.chatArchivePrefix}$coachId',
+      ]) {
+        final raw = prefs.getString(key);
+        if (raw == null || raw.isEmpty) continue;
+        for (final item in _decodeMapList(raw)) {
+          if (item['isUser'] == true) continue;
+          if (item['kind'] != _startPatternGreetingKind) continue;
+          final time = DateTime.tryParse(item['time']?.toString() ?? '');
+          if (time == null) continue;
+          if (now.difference(time) < const Duration(days: 7)) return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  /// 오늘 아침 시작 패턴을 알려줄 수 있으면 그 시간대 이름.
+  ///
+  /// 기록이 모자라 시간대를 못 고르는 동안에는 이 인사를 통째로 건너뛴다.
+  /// 그런 날은 원래의 오전 인사가 대신 나간다.
+  Future<String?> _startPatternLabelForGreeting(
+    SharedPreferences prefs,
+    DateTime now,
+  ) async {
+    if (now.hour < 7 || now.hour >= 12) return null;
+    // 30일치까지 본다. 며칠 안 쌓였을 때 단정하지 않는 건 서비스가 판단한다.
+    final history = _decodeMapList(prefs.getString('nyang_history'));
+    final recent = history.length > 30
+        ? history.sublist(history.length - 30)
+        : history;
+    final pattern = StartPatternService.analyze(recent);
+    if (!pattern.hasResult) return null;
+    if (await _spokeStartPatternThisWeek(now)) return null;
+    return pattern.window!.label;
+  }
 
   List<Map<String, dynamic>> _decodeMapList(String? raw) {
     if (raw == null || raw.isEmpty) return [];
@@ -4210,6 +4268,8 @@ ${lines.join('\n')}
     required SharedPreferences prefs,
     required DateTime now,
     required DateTime? lastVisit,
+    // 인사를 낼 때만 넘어온다. 남은 일 개수만 세러 오는 자리에서는 필요 없다.
+    String? startPatternLabel,
   }) async {
     final tasks = _decodeMapList(prefs.getString('nyang_tasks'));
     bool isPlan(Map<String, dynamic> task) {
@@ -4390,6 +4450,7 @@ ${lines.join('\n')}
           ? "'$resistedNotStartedName'"
           : null,
       offPlanResistance: offPlanResistance,
+      startPatternLabel: startPatternLabel,
     );
   }
 
@@ -4467,6 +4528,7 @@ ${lines.join('\n')}
       prefs: prefs,
       now: now,
       lastVisit: lastVisit,
+      startPatternLabel: await _startPatternLabelForGreeting(prefs, now),
     );
     if (_alreadySpokeInSlot(context.slot, now)) return false;
 
@@ -4477,13 +4539,17 @@ ${lines.join('\n')}
 
     _injectAiMessage(
       text,
-      kind: _greetingKind(context.slot),
+      kind: greeting.usedStartPattern
+          ? _startPatternGreetingKind
+          : _greetingKind(context.slot),
       choices: greeting.choices,
     );
     // 슬롯별로 실제 몇 번 말했는지, 저녁 카드가 얼마나 뜨는지 나중에 볼 수 있게 남긴다.
     unawaited(
       AnalyticsService.logFeatureUsage(
-        greeting.choices.isEmpty
+        greeting.usedStartPattern
+            ? 'master_greeting_start_pattern'
+            : greeting.choices.isEmpty
             ? 'master_greeting_${context.slot.name}'
             : 'master_evening_card',
       ),

@@ -68,6 +68,12 @@ class MasterGreetingContext {
   /// 이때만 코치가 직접 물어본다 — 기록으로는 영영 알 수 없는 자리다.
   final bool offPlanResistance;
 
+  /// 첫 일정을 잡았을 때 그날이 잘 풀린 시간대("오전 8시~10시").
+  ///
+  /// 값이 있으면 오전(7~12시) 인사를 이 이야기로 바꾼다. 채워 넣을지는 화면이
+  /// 정한다 — 주 1회 제한과 기록이 충분한지가 여기서는 보이지 않는다.
+  final String? startPatternLabel;
+
   const MasterGreetingContext({
     required this.now,
     required this.daysSinceLastVisit,
@@ -87,6 +93,7 @@ class MasterGreetingContext {
     this.resistedNotStarted = false,
     this.resistedNotStartedLabel,
     this.offPlanResistance = false,
+    this.startPatternLabel,
   });
 
   bool get hasPlan => planTotal > 0;
@@ -121,7 +128,15 @@ class MasterGreetingResult {
   /// 비어 있지 않으면 저녁 ≤50% 선택 카드를 띄운다.
   final List<String> choices;
 
-  const MasterGreetingResult(this.text, {this.choices = const []});
+  /// 시작 패턴 이야기를 실제로 꺼냈는지. 컨텍스트에 패턴이 실려 있어도 컨디션
+  /// 문구처럼 앞서는 자리가 있어서, 화면은 이 값을 보고 주 1회를 센다.
+  final bool usedStartPattern;
+
+  const MasterGreetingResult(
+    this.text, {
+    this.choices = const [],
+    this.usedStartPattern = false,
+  });
 }
 
 /// 코치 한 명의 발화 문구 한 벌.
@@ -134,6 +149,15 @@ class GreetingVoice {
   // 질문만 홀로 던지면 부담이 되니, 부담을 코치가 가져간다는 말과 한 세트로 둔다.
   final List<String> morningPlan; // 09~12시, 계획 있음
   final List<String> morningNoPlan;
+
+  /// 주 1회만 나가는 오전 인사. `{{window}}`는 "오전 8시~10시" 같은 구간 이름.
+  ///
+  /// 다른 오전 문구가 오늘 뭘 할지 묻는 자리라면 여기는 지금까지의 기록에서
+  /// 보인 리듬을 한 번 알려주고 물러나는 자리다. 그래서 이 틀만 세 줄이다.
+  ///
+  /// 단정하지 않는다. 사흘치로도 나갈 수 있고, "그 시간에 시작해야 한다"는
+  /// 지시로 읽히면 그 시간을 놓친 날마다 하루가 이미 망한 것이 된다.
+  final List<String> startPatternMorning;
   final List<String> afternoonBehind; // 12~18시, 계획은 있는데 아직 완료 0
   final List<String> afternoonNoPlan;
   final List<String> eveningLow; // 완료 50% 이하
@@ -215,6 +239,7 @@ class GreetingVoice {
     required this.earlyQuestions,
     required this.morningPlan,
     required this.morningNoPlan,
+    required this.startPatternMorning,
     required this.afternoonBehind,
     required this.afternoonNoPlan,
     required this.eveningLow,
@@ -307,6 +332,14 @@ class MasterGreetingCopy {
       '오늘은 아직 {계획이|적어둔 일정이} 없는데, {하나만 같이 정해볼까요|제가 하나 골라드릴까요}?',
       '{비어 있는|아무것도 적히지 않은} 하루인데, 부담 없는 것으로 {하나만 잡아볼까요|하나 정해볼까요}?',
       '아직 {받아둔 일정이|적어둔 일이} 없으니 오늘은 {가벼운 것|작은 것} 하나만 {정해도 됩니다|잡아도 됩니다}.',
+    ],
+    startPatternMorning: [
+      '좋은 아침입니다. 지금 바쁘신가요, 여유 있으신가요?\n'
+          '참고로 최근엔 {{window}} 사이에 첫 일정을 시작한 날 완료율이 높았습니다. 그냥 참고만 하세요.\n'
+          '오늘도 좋은 하루 보내세요.',
+      '좋은 아침입니다. 오늘 아침은 {여유가 있으신가요|바쁘신가요}?\n'
+          '기록을 보니 {{window}}에 첫 일정을 손에 잡은 날들이 유독 잘 굴러갔더군요. 참고만 하시면 됩니다.\n'
+          '오늘도 {좋은 하루 보내세요|무리 없는 하루 되세요}.',
     ],
     afternoonBehind: [
       '하루의 절반이 지났으니 {가벼운 것부터|만만한 것부터} 하나만 {열어볼까요|잡아볼까요}?',
@@ -545,6 +578,14 @@ class MasterGreetingCopy {
       '오늘은 아직 {계획이|적어둔 일이} 없는데 {하나만 같이 정해볼까냥|내가 하나 골라줄까냥}.',
       '{비어 있는|아무것도 안 적힌} 하루인데, 부담 없는 걸로 {하나만 잡아볼까냥|하나 정해볼까냥}.',
       '아직 {받아둔 일정이|적어둔 일이} 없으니 오늘은 {가벼운 것|작은 것} 하나만 {정해도 된다냥|잡아도 된다냥}.',
+    ],
+    startPatternMorning: [
+      '좋은 아침이다냥. 지금 바쁘냥, 여유 있냥?\n'
+          '참고로 최근엔 {{window}} 사이에 첫 일정을 시작한 날 완료율이 높았더라냥. 그냥 참고하라냥.\n'
+          '오늘도 좋은 하루 보내라냥.',
+      '좋은 아침이다냥. 오늘 아침은 {여유 있냥|바쁘냥}?\n'
+          '기록을 보니 {{window}}에 첫 일정을 손에 잡은 날이 유독 잘 굴러갔더라냥. 참고만 하면 된다냥.\n'
+          '오늘도 {좋은 하루 보내라냥|무리 말고 다녀오라냥}.',
     ],
     afternoonBehind: [
       '하루가 절반 지났으니 {가벼운 것부터|만만한 것부터} 하나만 {열어볼까냥|잡아볼까냥}.',
@@ -785,6 +826,16 @@ class MasterGreetingBuilder {
           );
           return MasterGreetingResult(parts.join(' '));
         }
+        // 주 1회 자리. 오늘 뭘 할지 묻는 대신 내 리듬을 한 번 짚어준다.
+        // 컨디션보다는 뒤에 둔다 — 아픈 날 아침에 완료율 이야기를 꺼낼 수는 없다.
+        final startPattern = context.startPatternLabel;
+        if (startPattern != null && hour < 12) {
+          parts.add(_fillWindow(voice.startPatternMorning, startPattern));
+          return MasterGreetingResult(
+            parts.join(' '),
+            usedStartPattern: true,
+          );
+        }
         if (hour < 9) {
           // 9시 전에는 계획 유무를 따지지 않고 하루를 여는 인사만 한다.
           final encouragement = _dayEncouragement(context);
@@ -898,6 +949,14 @@ class MasterGreetingBuilder {
   String _fill(List<String> pool, String taskName) => pickLine(
     pool
         .map((line) => line.replaceAll('{{task}}', '\'$taskName\''))
+        .toList(growable: false),
+  );
+
+  /// 일 이름과 달리 시간대는 따옴표로 묶지 않는다. 사용자가 적은 말이 아니라
+  /// 앱이 계산해 붙인 이름이라, 묶으면 인용처럼 보인다.
+  String _fillWindow(List<String> pool, String windowLabel) => pickLine(
+    pool
+        .map((line) => line.replaceAll('{{window}}', windowLabel))
         .toList(growable: false),
   );
 
