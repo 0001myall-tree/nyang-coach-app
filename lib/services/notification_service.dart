@@ -15,6 +15,7 @@ import '../screens/main_tab_screen.dart';
 import 'analytics_service.dart';
 import 'coach_id_service.dart';
 import 'morning_call_alarm_session.dart';
+import 'preemptive_nudge_service.dart';
 import 'tasks_sync_service.dart';
 import 'user_title_service.dart';
 import '../models/user_data.dart';
@@ -48,17 +49,40 @@ class NotificationService {
       'nyang_stale_schedule_cleanup_v1';
   static const String _androidFocusTimerChannelId =
       'nyang_focus_timer_channel_v3';
-  static const List<String> _dailyPlannerNudgeMessages = [
-    '집사야, 오늘 뭐할지 하나만 같이 정해볼까?',
-    '집사야, 하기 싫을 땐 냥냥코치를 기억해달라냥.',
-    '집사야, 오늘 할 일 하나만 가볍게 골라보자냥.',
-    '오늘 100점 말고 3분만 하자냥. 같이 시작해보자냥.',
-    '하기 싫은 거 있으면 나한테 던져달라냥. 작게 줄여주겠다냥.',
-    '집사, 오늘 할 일 같이 정해볼까냥?',
-    '집사, 오늘 하루 냥이랑 가볍게 생각해볼까냥?',
-    '집사, 오늘 할 일을 함께 정해볼까냥?',
-    '집사, 냥이가 기다리고 있다냥. 1분이면 된다냥',
-  ];
+  /// 낮에 보낸 선제 메시지를 채팅으로 이어붙이려고 남겨두는 자리.
+  ///
+  /// 'nyang_'으로 시작하지 않는 키를 쓴다. 그 접두어는 클라우드 복원이
+  /// 덮어써서 기기마다 다른 값이 되어야 하는 것을 담기에 맞지 않는다.
+  static const String pendingNudgeKey = 'preemptive_nudge_pending';
+
+  /// 이미 울려서 채팅이 이어받을 차례인 선제 메시지.
+  static const String firedNudgeKey = 'preemptive_nudge_fired';
+
+  /// 예약해둔 선제 메시지가 이미 울렸으면 채팅이 이어받을 자리로 옮긴다.
+  ///
+  /// 울리는 순간에 코드가 도는 게 아니라서, 예약 시각이 지났다는 사실로 울린
+  /// 것을 안다. 옮겨두지 않으면 다음 예약이 그 위에 덮어써서, 푸시를 눌러
+  /// 들어온 사람에게 방금 받은 말이 사라진다.
+  ///
+  /// 예약을 갈아끼우는 쪽과 채팅 양쪽에서 부른다. 어느 쪽이 먼저 돌아도
+  /// 결과가 같아야 해서 여러 번 불러도 되게 두었다.
+  static Future<void> promoteFiredNudge(
+    SharedPreferences prefs,
+    DateTime now,
+  ) async {
+    final raw = prefs.getString(pendingNudgeKey);
+    if (raw == null) return;
+    DateTime? firesAt;
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is Map) {
+        firesAt = DateTime.tryParse(decoded['firesAt']?.toString() ?? '');
+      }
+    } catch (_) {}
+    if (firesAt == null || now.isBefore(firesAt)) return;
+    await prefs.setString(firedNudgeKey, raw);
+    await prefs.remove(pendingNudgeKey);
+  }
   String? _lastMorningPayload;
   DateTime? _lastMorningOpenedAt;
 
@@ -184,11 +208,11 @@ class NotificationService {
     AnalyticsService.logFeatureUsage('daily_planner_nudge_push');
     await recordPlannerOpened();
 
+    // 채팅으로 들여보낸다. 코치가 방금 건넨 말이 거기 떠 있고, 그 자리에서
+    // 바로 답할 수 있다. 할 일 창을 먼저 띄우면 그 말이 가려져서, 푸시와
+    // 채팅이 따로 노는 예전 모양으로 돌아간다.
     navigatorKey.currentState?.pushAndRemoveUntil(
-      MaterialPageRoute(
-        builder: (_) =>
-            MainTabScreen(coachId: coachId, openTasksOverlayOnStart: true),
-      ),
+      MaterialPageRoute(builder: (_) => MainTabScreen(coachId: coachId)),
       (route) => false,
     );
   }
@@ -523,20 +547,50 @@ class NotificationService {
     await syncDailyPlannerNudge();
   }
 
+  List<dynamic> _decodeList(String? raw) {
+    if (raw == null || raw.trim().isEmpty) return const [];
+    try {
+      final decoded = jsonDecode(raw);
+      return decoded is List ? decoded : const [];
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  /// 낮에 코치가 먼저 부를지 정하고, 부를 말까지 만들어 예약해둔다.
+  ///
+  /// 알림은 예약할 때 글자가 고정된다. 12시에 깨어나 상태를 조회할 수단이
+  /// 없으므로, 상태가 바뀔 만한 자리마다 이 함수를 다시 불러 예약을 갈아끼운다.
+  /// 오전에 일을 시작하면 그 순간 예약이 취소되는 것도 이 방식 덕이다.
   Future<void> syncDailyPlannerNudge() async {
     if (kIsWeb) return;
 
     final now = DateTime.now();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('nyang_last_app_active_at', now.toIso8601String());
+    await promoteFiredNudge(prefs, now);
 
     final scheduled = _nextPlannerNudgeTime(now);
-    final scheduledDateKey = _dateKey(scheduled);
-    final lastPlannerOpenDate = prefs.getString('nyang_last_planner_open_date');
-    if (lastPlannerOpenDate == scheduledDateKey) {
-      await _plugin.cancel(id: _dailyPlannerNudgeNotificationId);
-      return;
-    }
+
+    // 오늘 몫이 지나 내일로 잡히는 경우엔 내일 상태를 알 길이 없다. 자정이
+    // 지나면 오늘 할 일은 비워지므로, 계획을 세우자는 말로 걸어두고 내일 앱을
+    // 열 때 다시 계산한다.
+    final isForToday = _dateKey(scheduled) == _dateKey(now);
+    final nudge = isForToday
+        ? PreemptiveNudgeService.decide(
+            todayTasks: _decodeList(prefs.getString('nyang_tasks')),
+            coreTasks: _decodeList(prefs.getString('nyang_core_tasks')),
+            history: _decodeList(prefs.getString('nyang_history')),
+          )
+        : PreemptiveNudge(
+            kind: NudgeKind.noPlan,
+            message: PreemptiveNudgeService.noPlanMessages.first,
+          );
+
+    await _plugin.cancel(id: _dailyPlannerNudgeNotificationId);
+    await prefs.remove(pendingNudgeKey);
+    // 이미 움직이고 있는 사람에게는 보내지 않는다.
+    if (nudge == null) return;
 
     const androidDetails = AndroidNotificationDetails(
       'nyang_daily_planner_nudge_v1',
@@ -559,16 +613,17 @@ class NotificationService {
       iOS: iosDetails,
     );
 
-    final message =
-        _dailyPlannerNudgeMessages[Random().nextInt(
-          _dailyPlannerNudgeMessages.length,
-        )];
+    // 보낸 말을 남겨둔다. 푸시를 보고 곧바로 들어온 사람에게 채팅에서도 같은
+    // 말을 보여주려면, 무엇을 보냈는지와 언제 울렸는지가 필요하다.
+    await prefs.setString(
+      pendingNudgeKey,
+      jsonEncode({...nudge.toJson(), 'firesAt': scheduled.toIso8601String()}),
+    );
 
-    await _plugin.cancel(id: _dailyPlannerNudgeNotificationId);
     await _plugin.zonedSchedule(
       id: _dailyPlannerNudgeNotificationId,
       title: '냥냥코치',
-      body: message,
+      body: nudge.message.replaceAll('\n', ' '),
       scheduledDate: tz.TZDateTime.from(scheduled, tz.local),
       notificationDetails: details,
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,

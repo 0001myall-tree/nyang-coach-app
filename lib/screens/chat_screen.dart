@@ -28,6 +28,8 @@ import 'package:nyang_coach/services/local_reply_texts.dart';
 import 'package:nyang_coach/services/master_bedtime_offer_copy.dart';
 import 'package:nyang_coach/services/master_greeting.dart';
 import 'package:nyang_coach/services/memory_service.dart';
+import 'package:nyang_coach/services/notification_service.dart';
+import 'package:nyang_coach/services/preemptive_nudge_service.dart';
 import 'package:nyang_coach/services/repeat_keyword_service.dart';
 import 'package:nyang_coach/services/task_resistance_service.dart';
 import 'package:nyang_coach/services/execution_resistance_service.dart';
@@ -5520,6 +5522,73 @@ ${lines.join('\n')}
     return true;
   }
 
+  /// 낮에 푸시로 건넨 말을 채팅에서 이어받는 시간.
+  ///
+  /// 이보다 늦게 들어오면 그때 이야기가 아니다. 상황이 달라졌을 수 있으니
+  /// 지금 상태로 새로 인사한다.
+  static const _preemptiveNudgeHandoffWindow = Duration(minutes: 10);
+
+  static const _preemptiveNudgeGreetingKind = 'auto:preemptive_nudge';
+
+  /// 푸시로 먼저 건넨 말을 채팅에 그대로 띄운다. 띄웠으면 true.
+  ///
+  /// 푸시는 알림이고 채팅은 별개면, 사용자는 같은 이야기를 두 번 시작해야
+  /// 한다. 코치가 방금 한 말이 화면에 있어야 거기에 답을 하지, 빈 화면에
+  /// 대고 아까 그 얘기를 다시 꺼내지는 않는다.
+  Future<bool> _tryShowPreemptiveNudgeHandoff(
+    SharedPreferences prefs,
+    DateTime now,
+  ) async {
+    if (widget.coachId != 'cat') return false;
+
+    await NotificationService.promoteFiredNudge(prefs, now);
+    final raw = prefs.getString(NotificationService.firedNudgeKey);
+    if (raw == null) return false;
+
+    Map<String, dynamic>? stored;
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is Map) stored = Map<String, dynamic>.from(decoded);
+    } catch (_) {}
+
+    final nudge = PreemptiveNudge.fromJson(stored);
+    final firesAt = DateTime.tryParse(stored?['firesAt']?.toString() ?? '');
+    // 한 번 받은 말은 다시 쓰지 않는다. 이어붙이지 못했더라도 마찬가지다.
+    await prefs.remove(NotificationService.firedNudgeKey);
+    if (nudge == null || firesAt == null) return false;
+
+    if (now.difference(firesAt) > _preemptiveNudgeHandoffWindow) return false;
+
+    // 그 사이 상황이 달라졌으면 방금 한 말이 이미 틀린 말이 된다. 같은 판단이
+    // 다시 나올 때만 그대로 띄운다. 계획을 세웠거나 뭔가 시작했으면 여기서
+    // 걸러지고, 평소 인사 흐름으로 넘어간다.
+    final current = PreemptiveNudgeService.decide(
+      todayTasks: _decodeMapList(prefs.getString('nyang_tasks')),
+      coreTasks: _decodeMapList(prefs.getString('nyang_core_tasks')),
+      history: _decodeMapList(prefs.getString('nyang_history')),
+    );
+    if (current == null || current.kind != nudge.kind) return false;
+
+    if (!mounted) return false;
+    setState(() {
+      _messages.add(
+        ChatMessage(
+          text: nudge.message,
+          isUser: false,
+          time: now,
+          kind: _preemptiveNudgeGreetingKind,
+        ),
+      );
+      _dynamicChips = nudge.kind == NudgeKind.noPlan
+          ? const ['오늘 할 일 정해줘', '뭐부터 할지 모르겠어', '오늘은 쉬고 싶어']
+          : const ['하기 싫은 일 있어', '가볍게 줄여줘', '지금 뭐하지?'];
+      _suppressDefaultChips = false;
+    });
+    await _saveHistory();
+    _scrollToBottom();
+    return true;
+  }
+
   Future<void> _loadHistoryAndGreet() async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString('nyang_chat_history_${widget.coachId}');
@@ -5540,6 +5609,15 @@ ${lines.join('\n')}
       }
     }
 
+    // 푸시로 이미 말을 건넸으면 그게 오늘의 첫 마디다. 그 위에 새 인사를
+    // 얹으면 코치가 방금 한 말을 못 들은 것처럼 군다.
+    if (await _tryShowPreemptiveNudgeHandoff(prefs, now)) {
+      await prefs.setString(
+        'last_visit_${widget.coachId}',
+        now.toIso8601String(),
+      );
+      return;
+    }
     if (await _tryShowCatComebackGreeting(lastVisit, now)) {
       await prefs.setString(
         'last_visit_${widget.coachId}',
