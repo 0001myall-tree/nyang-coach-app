@@ -36,12 +36,9 @@ void main() {
     });
 
     test('함께 붙이면 안 되는 태그를 이름으로 막는다', () {
-      for (final tag in [
-        '[CHIPS]',
-        '[NO_CHIPS]',
-        '[TASK]',
-        '[TIMER_CONFIRM]',
-      ]) {
+      // [NO_CHIPS]는 목록에서 뺐다. 시키는 곳도 읽는 곳도 없어진 태그라
+      // 여기서 막을 것이 없다.
+      for (final tag in ['[CHIPS]', '[TASK]', '[TIMER_CONFIRM]']) {
         expect(text, contains(tag), reason: tag);
       }
     });

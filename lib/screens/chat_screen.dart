@@ -5857,10 +5857,13 @@ ${lines.join('\n')}
     return '$prefix $hour12:$mStr';
   }
 
-  // ── AI 응답 파싱 ([CHIPS], [NO_CHIPS], [TIMER_CONFIRM]) ────
+  // ── AI 응답 파싱 ([CHIPS], [TIMER_CONFIRM]) ────
+  //
+  // [NO_CHIPS]는 뺐다. 버튼을 끌 자리에서 "만들되 끄라고 표시해라"라고 시키던
+  // 태그인데, 그 판단이 사용자의 감정 상태를 읽는 데 매달려 있었다. 이제
+  // 수면·위기처럼 상황이 정해진 자리에서 [CHIPS]를 아예 안 만들게 한다.
   _ParsedReply _parseReply(String raw) {
     final chipRegex = RegExp(r'\[CHIPS:\s*(.+?)\]');
-    final noChipsRegex = RegExp(r'\[NO_CHIPS\]');
     final timerConfirmRegex = RegExp(r'\[TIMER_CONFIRM:(\d+)(?::([^\]]+))?\]');
     final countdownStartRegex = RegExp(r'\[COUNTDOWN_START\]');
     final ultraLowResistanceFollowupRegex = RegExp(
@@ -5923,12 +5926,6 @@ ${lines.join('\n')}
           .where((s) => s.isNotEmpty)
           .toList();
       text = text.replaceAll(chipMatch.group(0)!, '').trim();
-    }
-
-    if (noChipsRegex.hasMatch(text)) {
-      suppressDefaultChips = true;
-      chips = [];
-      text = text.replaceAll(noChipsRegex, '').trim();
     }
 
     final timerMatch = timerConfirmRegex.firstMatch(text);
