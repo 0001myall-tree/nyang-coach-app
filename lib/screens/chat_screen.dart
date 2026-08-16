@@ -27,6 +27,7 @@ import 'package:nyang_coach/services/coach_id_service.dart';
 import 'package:nyang_coach/services/local_reply_texts.dart';
 import 'package:nyang_coach/services/master_bedtime_offer_copy.dart';
 import 'package:nyang_coach/services/master_greeting.dart';
+import 'package:nyang_coach/services/memory_service.dart';
 import 'package:nyang_coach/services/task_resistance_service.dart';
 import 'package:nyang_coach/services/execution_resistance_service.dart';
 import 'package:nyang_coach/services/focus_fatigue_service.dart';
@@ -11654,8 +11655,10 @@ ${lines.join('\n')}
             sb.writeln('- 어제까지의 일일 요약이 아직 충분하지 않음');
           }
           for (final s in recent) {
+            final onMind = MemoryService.formatOnMind(s['on_mind']);
             sb.writeln(
-              '${s['date']}: 달성(${s['achieved']}) / 못함(${s['missed']}) / 컨디션(${s['condition']}) / 고민(${s['concern']})',
+              '${s['date']}: 달성(${s['achieved']}) / 못함(${s['missed']}) / 컨디션(${s['condition']}) / 고민(${s['concern']})'
+              '${onMind.isEmpty ? '' : ' / 신경($onMind)'}',
             );
           }
         }

@@ -164,6 +164,17 @@ class MemoryService {
     longTermMemory = [];
   }
 
+  /// 하루 요약의 '요즘 신경 쓰는 일'을 한 줄로 편다.
+  /// 이 칸이 생기기 전에 쌓인 요약에는 없으니 빈 값을 견뎌야 한다.
+  static String formatOnMind(dynamic value) {
+    if (value is String) return value.trim();
+    if (value is! List) return '';
+    return value
+        .map((e) => e?.toString().trim() ?? '')
+        .where((e) => e.isNotEmpty)
+        .join(', ');
+  }
+
   String buildMemoryContext(String coachTier) {
     String profileCtx = "\n[사용자 마스터 프로필]";
 
@@ -302,8 +313,10 @@ $profileCtx
       ctx += '\n[최근 7일 요약]\n';
       for (var s in recent) {
         if (s is Map) {
+          final onMind = formatOnMind(s['on_mind']);
           ctx +=
-              '${s['date']}: 달성(${s['achieved']}) / 못함(${s['missed']}) / 컨디션(${s['condition']}) / 고민(${s['concern']})\n';
+              '${s['date']}: 달성(${s['achieved']}) / 못함(${s['missed']}) / 컨디션(${s['condition']}) / 고민(${s['concern']})'
+              '${onMind.isEmpty ? '' : ' / 신경($onMind)'}\n';
         }
       }
     }
@@ -342,6 +355,10 @@ $textLogs
 - 컨디션: 신체적, 정신적 피로도나 에너지 레벨
 - 고민: 오늘 사용자가 토로한 고민이나 막힌 부분
 - 감정: 오늘의 지배적인 감정 키워드
+- 요즘 신경 쓰는 일: 오늘 사용자가 입으로 꺼낸 일만 이름으로 적는다. 대화에 없으면 빈 배열로 둔다.
+  ("공모전 준비해야 되는데" -> 공모전 / "알바 갔다 왔어" -> 알바 / "이사 짐 싸느라 늦었어" -> 이사 준비)
+  대부분의 날은 빈 배열이거나 한 개다. 많아도 두 개.
+  힘들다/지친다 같은 평가는 붙이지 않는다. 고민이 아니어도 일상이면 적는다.
 - 실행저항: 사용자가 하기 싫어하거나 미룬 과업, 막힌 이유, 수락/거부한 개입이 있으면 행동 기반으로 간결하게 기록. ADHD 등 진단명은 붙이지 말 것.
 
 반드시 아래 JSON 형식으로 응답하세요:
@@ -351,6 +368,7 @@ $textLogs
   "condition": "문자열",
   "concern": "문자열",
   "emotion": "문자열",
+  "on_mind": ["문자열"],
   "execution_resistance": {
     "resisted_task_types": ["cleaning|writing|reading|study|work|self_care|sleep|exercise|other"],
     "blockers": ["task_switching|decision_overload|result_anxiety|low_energy|unclear_first_step|sensory_friction|time_pressure|other"],
@@ -453,6 +471,8 @@ $textLogs
       final recent = dailySummaries.length > 14
           ? dailySummaries.sublist(dailySummaries.length - 14)
           : dailySummaries;
+      // on_mind는 일부러 뺀다. 한 주 반짝하는 일상까지 장기 성향으로 굳는 걸 막으려고
+      // 하루 요약에만 두는 칸이다. 여기 넣으면 그 문이 다시 열린다.
       final recentSummaries = recent
           .map(
             (s) =>
