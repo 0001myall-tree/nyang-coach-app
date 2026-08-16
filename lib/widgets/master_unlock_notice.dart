@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/user_data.dart';
 import '../screens/coach_selection_screen.dart';
+import '../services/coach_id_service.dart';
 import '../theme/app_design_tokens.dart';
 
 /// 마스터 코치가 열렸다는 걸 한 번만 알려준다.
@@ -35,6 +36,18 @@ Future<void> maybeShowMasterUnlockNotice(
   // 열렸다는 안내를 한 번 더 받는다.
   if (!data.isPlanActive || data.planType != 'master') {
     await prefs.remove(_masterUnlockNoticeKey);
+    return;
+  }
+
+  // 이미 마스터 코치와 있는 사람에게는 알릴 것이 없다.
+  //
+  // 열렸다는 걸 알고 들어온 사람인데, 여기서 띄우면 대화를 끊는다. 게다가
+  // 버튼이 코치 선택 화면으로 보내는 것이라, 누르면 방금까지 이야기하던
+  // 방에서 밀려난다. 안내가 하려던 일이 그대로 방해가 된다.
+  //
+  // 본 것으로 표시해두고 넘어간다. 이 사람에게는 나중에 띄워도 마찬가지다.
+  if (CoachIdService.isMaster(returnCoachId)) {
+    await prefs.setBool(_masterUnlockNoticeKey, true);
     return;
   }
 
