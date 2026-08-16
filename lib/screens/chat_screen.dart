@@ -1307,7 +1307,6 @@ class _ChatScreenState extends State<ChatScreen>
   String? _appointmentPrepChipTaskName;
   String? _appointmentPrepChipTimeLabel;
   List<Map<String, String>> _appointmentPrepChipOptions = [];
-  String? _repeatedlyDeferredTaskName;
   List<String> _repeatedlyDeferredTaskNameOptions = [];
   String? _thoughtOverloadChipTaskName;
   List<String> _thoughtOverloadChipTaskNameOptions = [];
@@ -1483,10 +1482,6 @@ class _ChatScreenState extends State<ChatScreen>
           .map(_taskText)
           .whereType<String>()
           .toList(growable: false);
-      final repeatedlyDeferredTaskName =
-          repeatedlyDeferredTaskNameOptions.isEmpty
-          ? null
-          : repeatedlyDeferredTaskNameOptions.first;
       final thoughtOverloadChipTaskNameOptions =
           _thoughtOverloadChipTaskNameOptionsFor(
             prefs: prefs,
@@ -1513,7 +1508,6 @@ class _ChatScreenState extends State<ChatScreen>
           _appointmentPrepChipTaskName = appointmentPrepTask?['taskName'];
           _appointmentPrepChipTimeLabel = appointmentPrepTask?['timeLabel'];
           _appointmentPrepChipOptions = appointmentPrepChipOptions;
-          _repeatedlyDeferredTaskName = repeatedlyDeferredTaskName;
           _repeatedlyDeferredTaskNameOptions =
               repeatedlyDeferredTaskNameOptions;
           _thoughtOverloadChipTaskName = thoughtOverloadChipTaskName;
@@ -16699,25 +16693,6 @@ ${Prompts.outputRulesTail}$coachOfferTaskRule$halmaeHint$resistanceTurnDirective
       return label;
     }
 
-    String deferredDecisionChip() {
-      final taskName = _pickTaskChipNameWithInProgressFallback([
-        ..._repeatedlyDeferredTaskNameOptions,
-        ..._resistanceChipTaskNameOptions,
-      ], usedTaskNames);
-      final label = _masterDecisionChipLabelForTask(
-        taskName: taskName,
-        truncateTaskName: true,
-      );
-      _quickChipSendOverrides[label] = _masterDecisionChipLabelForTask(
-        taskName: taskName,
-        truncateTaskName: false,
-      );
-      _quickChipApiOverrides[label] =
-          _repeatedlyDeferredMasterChipApiInputForTask(taskName);
-      _quickChipKindOverrides[label] = 'repeatedly_deferred';
-      _reserveTaskChipName(taskName, usedTaskNames);
-      return label;
-    }
 
     String focusChip() {
       return _coach.id == 'sec_female' &&
@@ -16730,14 +16705,25 @@ ${Prompts.outputRulesTail}$coachOfferTaskRule$halmaeHint$resistanceTurnDirective
           : thoughtOverloadChip();
     }
 
+    /// 미룬 일이 있어도 그 이름을 버튼에 박지 않는다.
+    ///
+    /// "'보고서' 하려는데 걸리는 게 있어"는 누르는 순간 막혔다고 자백하는
+    /// 버튼이라 손이 잘 가지 않는다. 대신 누르기 쉬운 '지금 뭐하지?'로 두고,
+    /// 미룬 일을 먼저 권하는 몫은 치트키 프롬프트가 이미 맡고 있다 — 미룬
+    /// 횟수에 가점을 주되 숫자로 말하지 않는 규칙이 거기 들어 있다.
     String decisionChip() {
-      final label = deferredDecisionChip();
+      final taskName = _pickTaskChipNameWithInProgressFallback([
+        ..._repeatedlyDeferredTaskNameOptions,
+        ..._resistanceChipTaskNameOptions,
+      ], usedTaskNames);
+      // 냥할배는 짚어줄 일이 없을 때만 약속 준비 쪽으로 간다. 이름을 쓰지 않게
+      // 됐어도 그 판단은 그대로 둔다.
       if (_coach.id == 'nyang_halbae' &&
-          label == '지금 뭐하지?' &&
+          taskName == null &&
           _appointmentPrepChipOptions.isNotEmpty) {
         return appointmentPrepChip();
       }
-      return label;
+      return '지금 뭐하지?';
     }
 
     String resolveChip(String chip) {
@@ -16911,49 +16897,6 @@ ${Prompts.outputRulesTail}$coachOfferTaskRule$halmaeHint$resistanceTurnDirective
   String _thoughtOverloadMasterChipApiInput() {
     return _thoughtOverloadMasterChipApiInputForTask(
       _thoughtOverloadChipTaskName,
-    );
-  }
-
-  String _masterDecisionChipLabelForTask({
-    required String? taskName,
-    required bool truncateTaskName,
-  }) {
-    final normalizedTaskName = taskName?.trim();
-    if (normalizedTaskName == null || normalizedTaskName.isEmpty) {
-      return '지금 뭐하지?';
-    }
-    final displayTaskName = truncateTaskName
-        ? _truncateResistanceChipTaskName(normalizedTaskName)
-        : normalizedTaskName;
-    return '\'$displayTaskName\' 하려는데 걸리는 게 있어';
-  }
-
-  String _masterDecisionChipLabel({required bool truncateTaskName}) {
-    return _masterDecisionChipLabelForTask(
-      taskName: _repeatedlyDeferredTaskName,
-      truncateTaskName: truncateTaskName,
-    );
-  }
-
-  bool _isRepeatedlyDeferredMasterChip(String chip) {
-    if (!_coach.isMaster) return false;
-    final taskName = _repeatedlyDeferredTaskName?.trim();
-    if (_quickChipKindOverrides[chip] == 'repeatedly_deferred') return true;
-    if (taskName == null || taskName.isEmpty) return false;
-    return chip == _masterDecisionChipLabel(truncateTaskName: true);
-  }
-
-  String _repeatedlyDeferredMasterChipApiInputForTask(String? taskName) {
-    final normalizedTaskName = taskName?.trim();
-    if (normalizedTaskName == null || normalizedTaskName.isEmpty) {
-      return '지금 뭐하지?';
-    }
-    return '\'$normalizedTaskName\' 하려는데 걸리는 게 있어';
-  }
-
-  String _repeatedlyDeferredMasterChipApiInput() {
-    return _repeatedlyDeferredMasterChipApiInputForTask(
-      _repeatedlyDeferredTaskName,
     );
   }
 
@@ -17187,9 +17130,7 @@ ${Prompts.outputRulesTail}$coachOfferTaskRule$halmaeHint$resistanceTurnDirective
         !_isAppointmentPrepChip(chip) &&
         _quickChipKindOverrides[chip] != 'appointment' &&
         !_isThoughtOverloadMasterChip(chip) &&
-        !_isRepeatedlyDeferredMasterChip(chip) &&
-        _quickChipKindOverrides[chip] != 'thought_overload' &&
-        _quickChipKindOverrides[chip] != 'repeatedly_deferred') {
+        _quickChipKindOverrides[chip] != 'thought_overload') {
       return null;
     }
     return SvgPicture.asset(
@@ -17274,15 +17215,6 @@ ${Prompts.outputRulesTail}$coachOfferTaskRule$halmaeHint$resistanceTurnDirective
             override ?? _thoughtOverloadChipLabel(truncateTaskName: false),
             apiInputOverride:
                 apiOverride ?? _thoughtOverloadMasterChipApiInput(),
-            masterModelPolicy: _MasterModelPolicy.forceGpt4oMini,
-          );
-          return;
-        }
-        if (_isRepeatedlyDeferredMasterChip(chip)) {
-          _send(
-            override ?? _masterDecisionChipLabel(truncateTaskName: false),
-            apiInputOverride:
-                apiOverride ?? _repeatedlyDeferredMasterChipApiInput(),
             masterModelPolicy: _MasterModelPolicy.forceGpt4oMini,
           );
           return;
