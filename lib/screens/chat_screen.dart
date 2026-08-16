@@ -4524,6 +4524,11 @@ ${lines.join('\n')}
       return false;
     }
     if (_spokeKindToday({_masterInProgressAckKind}, now)) return false;
+    // 위 검사는 자기 방 기록만 본다. 냥할배에서 듣고 곧장 비서로 넘어가면 같은
+    // 말이 한 번 더 나오므로, 코치 간 쿨다운도 함께 본다. 핵심 질문은 답을
+    // 받아야 하는 자리라 이 쿨다운을 건너뛰지만, 이쪽은 인정하고 물러나는
+    // 말이라 한 번이면 족하다.
+    if (await _otherCoachGreetedRecently(now)) return false;
 
     final current = _shortTaskName(
       _decodeMapList(prefs.getString('nyang_tasks')).firstWhere(
