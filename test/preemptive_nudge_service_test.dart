@@ -139,6 +139,22 @@ void main() {
       expect(nudge?.taskName, '4화 쓰기');
     });
 
+    test('이름을 부를 때는 자리를 채워서 내보낸다', () {
+      // 문구에 {{task}} 자리가 남아 있으면 그대로 사용자에게 나간다.
+      for (var i = 0; i < 30; i++) {
+        final named = decide(
+          todayTasks: [task('보고서')],
+          coreTasks: [task('보고서')],
+        );
+        expect(named!.message, isNot(contains('{{task}}')));
+        expect(named.message, contains('보고서'));
+
+        final deferred = decide(todayTasks: [task('보고서', deferredCount: 1)]);
+        expect(deferred!.message, isNot(contains('{{task}}')));
+        expect(deferred.message, contains('보고서'));
+      }
+    });
+
     test('부를 근거가 없으면 이름 없이 부른다', () {
       final nudge = decide(todayTasks: [task('장보기')]);
       expect(nudge?.kind, NudgeKind.notStarted);

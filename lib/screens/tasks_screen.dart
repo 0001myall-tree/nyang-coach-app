@@ -2194,6 +2194,10 @@ class _TasksScreenState extends State<TasksScreen>
     );
     await _saveTodayRecord();
     await WidgetSyncService.syncFromStoredTasks();
+    // 낮에 부를지 말지는 지금 상태로 정해진다. 일을 시작했거나 계획을 세운
+    // 순간 예약을 다시 계산해야, 이미 움직인 사람에게 12시에 "슬슬 시작해볼까"가
+    // 울리는 일이 없다.
+    unawaited(NotificationService().syncDailyPlannerNudge());
     widget.onProgressChanged?.call();
     TasksSyncService.scheduleSyncToCloud();
   }

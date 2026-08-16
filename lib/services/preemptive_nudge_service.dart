@@ -88,7 +88,26 @@ class PreemptiveNudgeService {
     ...notStartedMessages,
   ];
 
+  /// 미뤄놓고 다시 올린 일을 부를 때. `{{task}}`가 일정 이름 자리다.
+  static const List<String> deferredAgainMessages = [
+    '어제 미룬 \'{{task}}\', 오늘 다시 넣어뒀네.\n'
+        '시작하기 좀 부담되냥? 냥냥이가 가볍게 줄여줄까?',
+    '시작해! 시작해! \'{{task}}\' 시작해! 📣\n냥이가 응원한다냥!',
+  ];
+
+  /// 이름을 부르며 시작을 미는 말.
+  ///
+  /// 줄여주겠다는 말과 밀어주는 말을 섞어 둔다. 매번 부담을 낮춰주려 들면
+  /// 그 일이 늘 어려운 일로 굳고, 매번 밀기만 하면 재촉이 된다.
+  static const List<String> namedStartMessages = [
+    '\'{{task}}\' 오늘 냥이랑 슬슬 시작해볼까?',
+    '시작해! 시작해! \'{{task}}\' 시작해! 📣\n냥이가 응원한다냥!',
+  ];
+
   static String _pick(List<String> pool) => pool[Random().nextInt(pool.length)];
+
+  static String _fill(List<String> pool, String taskName) =>
+      _pick(pool).replaceAll('{{task}}', taskName);
 
   /// 오늘 무엇이든 손을 댔는지.
   ///
@@ -148,9 +167,7 @@ class PreemptiveNudgeService {
       if (name != null) {
         return PreemptiveNudge(
           kind: NudgeKind.deferredAgain,
-          message:
-              '어제 미룬 \'$name\', 오늘 다시 넣어뒀네.\n'
-              '시작하기 좀 부담되냥? 냥냥이가 가볍게 줄여줄까?',
+          message: _fill(deferredAgainMessages, name),
           taskName: name,
         );
       }
@@ -166,7 +183,7 @@ class PreemptiveNudgeService {
       kind: NudgeKind.notStarted,
       message: name == null
           ? _pick(notStartedMessages)
-          : '\'$name\' 오늘 냥이랑 슬슬 시작해볼까?',
+          : _fill(namedStartMessages, name),
       taskName: name,
     );
   }

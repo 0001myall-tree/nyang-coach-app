@@ -5145,6 +5145,7 @@ ${lines.join('\n')}
     await _updateTodayRecord(prefs);
     await _refreshAttendanceStreak(prefs);
     await WidgetSyncService.syncFromStoredTasks();
+    unawaited(NotificationService().syncDailyPlannerNudge());
     TasksSyncService.scheduleSyncToCloud();
     await _loadTaskProgress();
     return targetText;
@@ -5271,6 +5272,8 @@ ${lines.join('\n')}
 
     await _updateTodayRecord(prefs);
     await WidgetSyncService.syncFromStoredTasks();
+    // 시작 표시를 켠 순간 낮 예약도 다시 본다. 움직이기 시작한 사람이다.
+    unawaited(NotificationService().syncDailyPlannerNudge());
     TasksSyncService.scheduleSyncToCloud();
     await _loadTaskProgress();
     return targetText;
@@ -13997,6 +14000,8 @@ ${Prompts.outputRulesTail}$coachOfferTaskRule$halmaeHint$resistanceTurnDirective
     try {
       await _updateTodayRecord(prefs);
       await _refreshAttendanceStreak(prefs);
+      // 계획이 생겼으니 낮에 건넬 말도 달라진다.
+      unawaited(NotificationService().syncDailyPlannerNudge());
       TasksSyncService.scheduleSyncToCloud();
     } catch (e) {
       debugPrint('할 일 추가 후 기록 갱신 실패: $e');
