@@ -59,11 +59,17 @@ class PreemptiveNudge {
 }
 
 class PreemptiveNudgeService {
-  /// 아직 계획을 세우지 않은 날에 건네는 말.
-  ///
-  /// 상태를 보기 전부터 쓰던 문구들이다. 원래도 "오늘 뭐 할지 정해보자"는
-  /// 말이라 계획이 비어 있는 날에 그대로 맞는다.
-  static const List<String> noPlanMessages = [
+  /// 시작을 거드는 말. 계획을 세웠든 안 세웠든 통한다.
+  static const List<String> notStartedMessages = [
+    '오늘 냥이랑 하나라도 슬슬 시작해볼까?',
+    '오늘 100점 말고 3분만 하자냥. 같이 시작해보자냥.',
+    '하기 싫은 거 있으면 나한테 던져달라냥. 작게 줄여주겠다냥.',
+    '집사야, 하기 싫을 땐 냥냥코치를 기억해달라냥.',
+    '집사, 냥이가 기다리고 있다냥. 1분이면 된다냥',
+  ];
+
+  /// 계획을 세우자고 청하는 말. 계획이 비어 있을 때만 쓴다.
+  static const List<String> planMessages = [
     '집사, 오늘 계획 아직 안 세웠냥?\n하나만 가볍게 잡아볼까?',
     '집사야, 오늘 뭐할지 하나만 같이 정해볼까?',
     '집사야, 오늘 할 일 하나만 가볍게 골라보자냥.',
@@ -72,15 +78,14 @@ class PreemptiveNudgeService {
     '집사, 오늘 할 일을 함께 정해볼까냥?',
   ];
 
-  /// 일정은 있는데 아직 손을 못 댄 날에, 이름을 넣어 부를 일이 없을 때.
+  /// 계획이 비어 있는 날에 쓸 수 있는 말 전부.
   ///
-  /// 이쪽은 계획을 세우자는 말이 아니라 시작을 거드는 말이어야 한다.
-  static const List<String> notStartedMessages = [
-    '오늘 냥이랑 하나라도 슬슬 시작해볼까?',
-    '오늘 100점 말고 3분만 하자냥. 같이 시작해보자냥.',
-    '하기 싫은 거 있으면 나한테 던져달라냥. 작게 줄여주겠다냥.',
-    '집사야, 하기 싫을 땐 냥냥코치를 기억해달라냥.',
-    '집사, 냥이가 기다리고 있다냥. 1분이면 된다냥',
+  /// 계획을 청하는 말에 시작을 거드는 말까지 함께 쓴다. "3분만 하자"는 계획이
+  /// 없는 사람에게도 그대로 통하기 때문이다. 반대는 안 된다 — 계획을 세워둔
+  /// 사람에게 안 세웠냐고 물으면 그 순간 틀린 말이 된다.
+  static List<String> get noPlanMessages => [
+    ...planMessages,
+    ...notStartedMessages,
   ];
 
   static String _pick(List<String> pool) => pool[Random().nextInt(pool.length)];

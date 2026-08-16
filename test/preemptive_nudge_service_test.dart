@@ -69,6 +69,20 @@ void main() {
       expect(PreemptiveNudgeService.noPlanMessages, contains(nudge!.message));
     });
 
+    test('시작을 거드는 말도 계획 없는 날에 쓸 수 있다', () {
+      // "3분만 하자"는 계획이 없는 사람에게도 통한다. 반대로 계획을 청하는
+      // 말은 계획을 세워둔 사람에게 쓰면 틀린 말이 된다.
+      for (final message in PreemptiveNudgeService.notStartedMessages) {
+        expect(PreemptiveNudgeService.noPlanMessages, contains(message));
+      }
+      for (final message in PreemptiveNudgeService.planMessages) {
+        expect(
+          PreemptiveNudgeService.notStartedMessages,
+          isNot(contains(message)),
+        );
+      }
+    });
+
     test('습관만 채워져 있는 건 계획을 세운 게 아니다', () {
       final nudge = decide(
         todayTasks: [task('물 마시기', category: 'habit', habitId: 'h1')],
