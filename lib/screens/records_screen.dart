@@ -355,6 +355,20 @@ class _RecordsScreenState extends State<RecordsScreen> {
     return (record['doneCount'] as num?)?.toInt() ?? 0;
   }
 
+  /// 그날 손을 댄 할 일 수. 끝냈든 시작만 했든 센다.
+  ///
+  /// 시작 기록만 세면 안 된다. 타이머를 거치지 않고 체크만 해서 끝낸 일은
+  /// 시작 기록이 없어서, 손댄 수가 완료 수보다 작아지는 일이 생긴다.
+  int _recordTouchedCount(Map<String, dynamic> record) {
+    final visibleTasks = _visibleRecordTasks(record);
+    if (visibleTasks.isNotEmpty) {
+      return visibleTasks
+          .where((task) => task['done'] == true || _taskWasStarted(task))
+          .length;
+    }
+    return (record['doneCount'] as num?)?.toInt() ?? 0;
+  }
+
   int _selectFeedbackType(SharedPreferences prefs, String weekMonday) {
     final thisMonday = DateTime.parse(weekMonday);
     final lastWeekMonday = thisMonday.subtract(const Duration(days: 7));
@@ -1441,9 +1455,13 @@ ${feedbackType == 0
             children: records.map((r) {
               final isVacation = r['isVacation'] == true;
               final doneCount = _recordDoneCount(r);
+              final touchedCount = _recordTouchedCount(r);
               final totalCount = _recordTotalCount(r);
               final pct = totalCount > 0
                   ? ((doneCount / totalCount) * 100).round()
+                  : 0;
+              final touchedPct = totalCount > 0
+                  ? ((touchedCount / totalCount) * 100).round()
                   : 0;
               final isToday =
                   r['date'] ==
@@ -1472,15 +1490,33 @@ ${feedbackType == 0
                       borderRadius: BorderRadius.circular(6),
                     ),
                     alignment: Alignment.bottomCenter,
-                    child: Container(
-                      width: 24,
-                      height: isVacation ? 100 : 100.0 * (pct / 100.0),
-                      decoration: BoxDecoration(
-                        color: isVacation
-                            ? const Color(0xFF6EBF8B)
-                            : _recordCoach.accentColor,
-                        borderRadius: BorderRadius.circular(6),
-                      ),
+                    // 두 층으로 쌓는다. 뒤에 연한 층이 손댄 비율, 앞의 진한 층이
+                    // 완료율. 둘의 간격이 곧 붙잡고 있었지만 못 끝낸 몫이다.
+                    child: Stack(
+                      alignment: Alignment.bottomCenter,
+                      children: [
+                        if (!isVacation && touchedPct > pct)
+                          Container(
+                            width: 24,
+                            height: 100.0 * (touchedPct / 100.0),
+                            decoration: BoxDecoration(
+                              color: _recordCoach.accentColor.withValues(
+                                alpha: 0.32,
+                              ),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                          ),
+                        Container(
+                          width: 24,
+                          height: isVacation ? 100 : 100.0 * (pct / 100.0),
+                          decoration: BoxDecoration(
+                            color: isVacation
+                                ? const Color(0xFF6EBF8B)
+                                : _recordCoach.accentColor,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -1500,12 +1536,51 @@ ${feedbackType == 0
               );
             }).toList(),
           ),
+          if (records.any(
+            (r) =>
+                r['isVacation'] != true &&
+                _recordTouchedCount(r) > _recordDoneCount(r),
+          )) ...[
+            const SizedBox(height: 10),
+            _buildChartLegend(),
+          ],
           const SizedBox(height: 16),
           _buildWeeklyCompanionSummary(),
           const SizedBox(height: 10),
           _buildStartPatternSummary(),
         ],
       ),
+    );
+  }
+
+  /// 막대 두 층이 뭘 뜻하는지 한 줄로. 손댄 층이 보이는 주에만 붙인다.
+  Widget _buildChartLegend() {
+    Widget swatch(Color color) => Container(
+      width: 8,
+      height: 8,
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(2),
+      ),
+    );
+
+    final labelStyle = GoogleFonts.notoSansKr(
+      fontSize: 11,
+      fontWeight: FontWeight.w600,
+      color: const Color(0xFF8B8698),
+    );
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        swatch(_recordCoach.accentColor.withValues(alpha: 0.32)),
+        const SizedBox(width: 5),
+        Text('손댐', style: labelStyle),
+        const SizedBox(width: 14),
+        swatch(_recordCoach.accentColor),
+        const SizedBox(width: 5),
+        Text('완료', style: labelStyle),
+      ],
     );
   }
 
