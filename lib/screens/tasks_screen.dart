@@ -3929,6 +3929,9 @@ class _TasksScreenState extends State<TasksScreen>
           'category': task.category,
           'done': false,
           'deferred': true,
+          // 손을 댔다가 다음 날로 넘긴 일은 시작 기록을 데려가야 한다.
+          // 안 그러면 주간 회고에서 펼쳐보지도 않은 일과 같아진다.
+          if (task.inProgressAt != null) 'startedAt': task.inProgressAt,
         });
         await prefs.setString(
           'nyang_deferred_tasks_today',

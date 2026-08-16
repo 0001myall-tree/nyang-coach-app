@@ -534,6 +534,11 @@ class _RecordsScreenState extends State<RecordsScreen> {
     }
   }
 
+  /// 하루 기록에 남은 할 일 한 건이 시작 버튼을 거쳤는지.
+  /// 완료 도장만 보면 시작해서 붙잡고 있던 일이 기록에서 사라진다.
+  static bool _taskWasStarted(Map map) =>
+      map['startedAt'] != null || map['inProgress'] == true;
+
   Future<String> _buildWeeklyFeedbackPrompt(int feedbackType) async {
     final prefs = await SharedPreferences.getInstance();
     final records = _getLast7Records(includeCurrentAppDate: false);
@@ -553,38 +558,65 @@ class _RecordsScreenState extends State<RecordsScreen> {
     }
 
     final resumedTasks = <String>[];
+    final resumedStartTasks = <String>[];
     final consistentTasks = <String>[];
+    final consistentStartTasks = <String>[];
+    final activeRecords = records
+        .where((record) => record['isVacation'] != true)
+        .toList();
+
+    /// 3일 이상 비어 있다가 다시 걸린 적이 있는지.
+    bool resumedAfterGap(List<bool> status) {
+      var gap = 0;
+      var resumed = false;
+      for (final hit in status) {
+        if (!hit) {
+          gap++;
+        } else {
+          if (gap >= 3) resumed = true;
+          gap = 0;
+        }
+      }
+      return resumed;
+    }
+
     for (final text in allTaskTexts) {
-      final dailyStatus = records
-          .where((record) => record['isVacation'] != true)
-          .map((record) {
-            final tasks = (record['tasks'] as List?) ?? [];
-            return tasks.any((task) {
-              final map = task as Map?;
-              return map?['text'] == text && map?['done'] == true;
-            });
-          })
-          .toList();
+      List<bool> statusOf(bool Function(Map map) test) {
+        return activeRecords.map((record) {
+          final tasks = (record['tasks'] as List?) ?? [];
+          return tasks.any((task) {
+            final map = task as Map?;
+            if (map == null || map['text'] != text) return false;
+            return test(map);
+          });
+        }).toList();
+      }
+
+      final dailyStatus = statusOf((map) => map['done'] == true);
+      // 끝내지 못했어도 손을 댄 날. 완료만 세면 두 시간 붙잡고 있던 날이
+      // 손도 안 댄 날과 똑같아진다.
+      final dailyTouched = statusOf(
+        (map) => map['done'] == true || _taskWasStarted(map),
+      );
 
       if (dailyStatus.length >= 7 &&
           dailyStatus[4] &&
           dailyStatus[5] &&
           dailyStatus[6]) {
         consistentTasks.add(text);
+      } else if (dailyTouched.length >= 7 &&
+          dailyTouched[4] &&
+          dailyTouched[5] &&
+          dailyTouched[6]) {
+        consistentStartTasks.add(text);
       }
 
-      var currentFalseStreak = 0;
-      var doneAfterFalse = false;
-      for (final done in dailyStatus) {
-        if (!done) {
-          currentFalseStreak++;
-        } else {
-          if (currentFalseStreak >= 3) doneAfterFalse = true;
-          currentFalseStreak = 0;
-        }
-      }
-      if (doneAfterFalse && !consistentTasks.contains(text)) {
+      final alreadyListed =
+          consistentTasks.contains(text) || consistentStartTasks.contains(text);
+      if (resumedAfterGap(dailyStatus) && !consistentTasks.contains(text)) {
         resumedTasks.add(text);
+      } else if (resumedAfterGap(dailyTouched) && !alreadyListed) {
+        resumedStartTasks.add(text);
       }
     }
 
@@ -627,8 +659,12 @@ class _RecordsScreenState extends State<RecordsScreen> {
           .map((task) => (task as Map)['text'].toString())
           .where((text) => text.trim().isNotEmpty)
           .join(', ');
-      final undone = tasks
-          .where((task) => (task as Map?)?['done'] != true)
+      String undoneLabels({required bool started}) => tasks
+          .where((task) {
+            final map = task as Map?;
+            if (map == null || map['done'] == true) return false;
+            return _taskWasStarted(map) == started;
+          })
           .map((task) {
             final map = task as Map;
             final isDeferred = map['deferred'] == true;
@@ -636,8 +672,15 @@ class _RecordsScreenState extends State<RecordsScreen> {
           })
           .where((text) => text.trim().isNotEmpty)
           .join(', ');
+
+      // 미완료를 '하다 만 일'과 '손도 못 댄 일'로 나눈다. 한 덩어리로 주면
+      // 종일 붙잡고 있던 일이 펼쳐보지도 않은 일과 같은 취급을 받는다.
+      final startedUndone = undoneLabels(started: true);
+      final untouched = undoneLabels(started: false);
       recordBuffer.writeln(
-        '- ${record['date']}: 완료한 일[${done.isEmpty ? '없음' : done}], 완료하지 못한 일[${undone.isEmpty ? '없음' : undone}]',
+        '- ${record['date']}: 완료한 일[${done.isEmpty ? '없음' : done}], '
+        '시작했지만 끝내지 못한 일[${startedUndone.isEmpty ? '없음' : startedUndone}], '
+        '손대지 못한 일[${untouched.isEmpty ? '없음' : untouched}]',
       );
     }
 
@@ -809,7 +852,9 @@ ${completionSummaryBuffer.toString().trim()}
 
 [분석 참고 데이터]
 - 꾸준히 해낸 일 (3일 이상 연속 완료): ${consistentTasks.join(', ').isEmpty ? '없음' : consistentTasks.join(', ')}
-- 미루다 다시 시작한 일 (3일 이상 연속으로 미루다 최근 다시 시작): ${resumedTasks.join(', ').isEmpty ? '없음' : resumedTasks.join(', ')}
+- 꾸준히 손댄 일 (완료까지는 아니어도 3일 이상 연속으로 시작): ${consistentStartTasks.join(', ').isEmpty ? '없음' : consistentStartTasks.join(', ')}
+- 미루다 다시 완료한 일 (3일 이상 미루다 최근 다시 완료): ${resumedTasks.join(', ').isEmpty ? '없음' : resumedTasks.join(', ')}
+- 미루다 다시 시작한 일 (3일 이상 손대지 못하다 최근 다시 시작, 완료는 아직): ${resumedStartTasks.join(', ').isEmpty ? '없음' : resumedStartTasks.join(', ')}
 
 [사용자의 현재 목표 및 장기 비전]
 - 주간 목표: $weekGoalText
@@ -836,6 +881,7 @@ $chatSummarySection
 1. 어투: ${isMale ? '냥할배로서 부드럽고 느긋한 반말 기반 말투. 존댓말과 냥 말투를 섞지 말고, "$title" 호칭도 남발하지 마세요.' : '여비서로서 지적이고 부드러운 "$title" 호칭의 격식체 (~했어요, ~어떨까요).'}
 2. 공통 원칙:
    - 휴무일(회복일)은 미완료나 실패로 해석하지 말고, 필요한 회복을 일정에 포함한 것으로 자연스럽게 존중해 주세요.
+   - "시작했지만 끝내지 못한 일"과 "손대지 못한 일"을 한데 묶어 미완료로 말하지 마세요. 시작한 일은 아무것도 하지 않은 일이 아닙니다.
    - [현재 설정된 습관 트래킹 빈도]를 반드시 참고하세요. 특정 요일에만 하기로 한 습관이라면 그 빈도에 맞게 평가해 주세요.
    - [주간 완료율 요약]의 수치를 우선 기준으로 삼으세요. 100% 완료한 날이 대부분이고 저조한 날이 하루뿐이면 "계획대로 진행되지 않은 날이 많았다", "저조한 날이 많았다", "대부분 미완료였다" 같은 복수/다수 표현을 절대 쓰지 마세요.
    - 플래너 기록일이 적은 주(플래너 기록일이 적은 주인가: 예)에는 완료율을 강하게 평가하지 말고, 먼저 플래너로 돌아오는 리듬을 부드럽게 제안하세요.
@@ -845,8 +891,9 @@ ${feedbackType == 0
         ? '''   [실행 회고형]
    - 사용자가 실제로 무엇을 했고, 무엇을 미뤘으며, 무엇이 개선되었는지를 중심으로 회고합니다.
    - 완료한 일들 중 목표/비전과 연결되는 중요한 활동 1~2개를 콕 집어 구체적으로 칭찬하세요. (추상적 칭찬 금지)
-   - 3일 이상 미루다 다시 시작한 항목이 있다면 특별히 언급해 주세요.
-   - 반복적으로 밀린 중요한 일이 있다면 부드럽게 지적하고 다음 주 우선순위로 권유하세요.
+   - 미루다 다시 완료한 일이나 다시 시작한 일이 있다면 특별히 언급해 주세요. 완료까지 가지 못했어도 다시 손을 댄 것 자체를 인정해 주세요.
+   - 다시 시작은 했는데 완료 기록이 적다면, 의지나 성실함의 문제로 읽지 말고 하루에 실행 가능한 크기로 계획을 나누자고 제안해 주세요.
+   - 반복적으로 밀린 중요한 일이 있다면 부드럽게 지적하고 다음 주 우선순위로 권유하세요. 단, 시작 기록이 있는 일은 밀린 일로 지적하지 마세요. 손을 댄 일은 진행 중인 일입니다.
    - 단, [주간 완료율 요약]에서 "저조한 날이 많은 주인가: 예"인 경우에만 밀린 항목을 나열하거나 지적하지 말고 이 구조로 쓰세요: 수고 인정 → 원인 해석([지난 주 대화 기록 요약]이 있으면 그 근거로, 없으면 계획이 컨디션보다 컸을 가능성으로) → 다음 주에는 확실히 해낼 수 있는 만큼만 계획하자는 제안.
    - 플래너 기록일이 적은 주라면 아래 구조를 따르세요: "이번 주는 완료율보다 플래너에 다시 돌아오는 리듬을 먼저 잡는 것이 좋아 보입니다. 기록이 적었던 만큼 성과를 크게 판단하기는 어렵겠습니다. 해야 할 일이 있는데 하기 싫을 때는 냥냥코치를 기억해 주세요. 하기 싫은 마음까지 달래드리겠습니다." 성과 판단 보류 문장과 냥냥코치 안내 문장은 반드시 서로 다른 문장으로 분리하세요. "판단하기보다는, 냥냥코치를..."처럼 하나의 비교 문장으로 연결하지 마세요.
    - 저조한 날이 하루뿐이면 전체 주간은 긍정적으로 평가하고, 해당 날짜만 "토요일 하루 완료율이 낮았습니다"처럼 단수로 정확히 언급하세요.'''
@@ -863,7 +910,7 @@ ${feedbackType == 0
    - 실행이나 성장보다 이번 주의 컨디션 흐름에 초점을 맞춥니다.
    - 완료율, 휴무일 패턴, 할 일 밀도 등을 바탕으로 체력/휴식/회복 측면을 분석하세요.
    - 무리한 주였는지, 잘 쉰 주였는지, 회복이 더 필요한지를 부드럽게 짚어주세요.
-   - 꾸준히 해낸 일이 있다면 컨디션 속에서도 놓치지 않았다는 점을 자연스럽게 언급해 주세요.
+   - 꾸준히 해낸 일이나 꾸준히 손댄 일이 있다면 컨디션 속에서도 놓치지 않았다는 점을 자연스럽게 언급해 주세요. 완료까지 가지 못했더라도 매일 시작한 것은 그대로 인정해 주세요. (예: "그 와중에도 매일 손은 대고 계셨네요.")
    - 다음 주 컨디션 관리를 위한 한 가지 제안으로 마무리하세요.'''}
 4. 분량: 3~4문장으로 간결하게. JSON이나 마크다운 없이 순수 텍스트로만 답변해 주세요.
 5. 가독성: 문장 앞에 접속어가 올 때는 그 접속어 앞에서 한 줄을 비우고, 들여쓰기 없이 문단을 시작해 주세요. 예: "또한,", "특히,", "다만,", "하지만,", "그리고,", "앞으로,".''';
