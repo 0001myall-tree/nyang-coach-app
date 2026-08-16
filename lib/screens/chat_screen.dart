@@ -5055,6 +5055,13 @@ ${lines.join('\n')}
       if (text != null) coreTexts.add(text);
     }
 
+    // 낮에 반복 일감으로 짚어준 일도 여기서 받는다. 안 받으면 낮에 먼저 꺼낸
+    // 일을 저녁에는 모른 척하게 된다 — 시작했다는 이유로 낮에 빠지고, 핵심도
+    // 습관도 아니라는 이유로 저녁에 또 빠진다.
+    final repeats = RepeatKeywordService.analyze(
+      _decodeMapList(prefs.getString('nyang_history')),
+    );
+
     for (final task in _decodeMapList(prefs.getString('nyang_tasks'))) {
       if (task['done'] == true) continue;
       if (!_isStartedTask(task)) continue;
@@ -5065,7 +5072,10 @@ ${lines.join('\n')}
       final isCore =
           (id != null && coreIds.contains(id)) ||
           (text != null && coreTexts.contains(text));
-      if (!isHabit && !isCore) continue;
+      final isRepeating =
+          text != null &&
+          RepeatKeywordService.matchingKeyword(text, repeats) != null;
+      if (!isHabit && !isCore && !isRepeating) continue;
       // 되물어야 끝낼 수 있는 습관은 대신 처리하지 못하니 묻지도 않는다.
       if (isHabit && !_isSimpleCheckHabit(prefs, task)) continue;
 
