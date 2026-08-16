@@ -18,12 +18,18 @@ class RecordsScreen extends StatefulWidget {
   final String coachId;
   const RecordsScreen({super.key, required this.coachId});
 
+  /// 코치 한마디를 다시 뽑게 만들 때 올리는 번호.
+  ///
+  /// 기록탭의 캐시와 탭에 붙는 안 읽음 표시가 이 하나를 함께 본다. 따로 두었을
+  /// 때는 한마디를 새로 뽑게 해놓고 표시 쪽 번호를 안 올려서, 새 한마디가
+  /// 나왔는데 사용자는 모르는 일이 생겼다.
+  static const int weeklyFeedbackVersion = 5;
+
   @override
   State<RecordsScreen> createState() => _RecordsScreenState();
 }
 
 class _RecordsScreenState extends State<RecordsScreen> {
-  static const int _weeklyFeedbackCacheVersion = 5;
 
   bool _isLoading = true;
   List<Map<String, dynamic>> _history = [];
@@ -428,7 +434,7 @@ class _RecordsScreenState extends State<RecordsScreen> {
       if (cachedData != null) {
         final cached = jsonDecode(cachedData) as Map<String, dynamic>;
         if (cached['weekMonday'] == weekMonday &&
-            cached['version'] == _weeklyFeedbackCacheVersion &&
+            cached['version'] == RecordsScreen.weeklyFeedbackVersion &&
             (cached['text'] as String?)?.trim().isNotEmpty == true) {
           if (!mounted) return;
           setState(() {
@@ -523,7 +529,7 @@ class _RecordsScreenState extends State<RecordsScreen> {
           'weekMonday': weekMonday,
           'text': feedbackText,
           'type': feedbackType,
-          'version': _weeklyFeedbackCacheVersion,
+          'version': RecordsScreen.weeklyFeedbackVersion,
         }),
       );
       await prefs.setString(

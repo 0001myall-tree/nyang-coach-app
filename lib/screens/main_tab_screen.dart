@@ -180,7 +180,6 @@ class MainTabScreen extends StatefulWidget {
 
 class _MainTabScreenState extends State<MainTabScreen>
     with TickerProviderStateMixin, WidgetsBindingObserver {
-  static const int _recordsFeedbackCacheVersion = 3;
   static const String _recordsFeedbackSeenSignatureKey =
       'nyang_records_feedback_seen_signature';
   static const String _catWidgetPromptHiddenKey =
@@ -541,8 +540,12 @@ class _MainTabScreenState extends State<MainTabScreen>
     return _dateKey(monday);
   }
 
+  /// 안 읽음 표시가 보는 서명.
+  ///
+  /// 번호는 기록탭의 한마디 캐시와 같은 것을 쓴다. 한마디를 다시 뽑게 만들면
+  /// 표시도 저절로 다시 뜬다 — 따로 두면 한쪽만 올리고 잊게 된다.
   String _recordsFeedbackSignature(String weekMonday) {
-    return '$weekMonday:v$_recordsFeedbackCacheVersion';
+    return '$weekMonday:v${RecordsScreen.weeklyFeedbackVersion}';
   }
 
   Future<void> _refreshRecordsNewBadge({UserData? userData}) async {
