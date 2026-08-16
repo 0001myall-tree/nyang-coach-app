@@ -4530,12 +4530,11 @@ ${lines.join('\n')}
     // 말이라 한 번이면 족하다.
     if (await _otherCoachGreetedRecently(now)) return false;
 
-    final current = _shortTaskName(
-      _decodeMapList(prefs.getString('nyang_tasks')).firstWhere(
-        (task) => task['done'] != true && _isInProgressTask(task),
-        orElse: () => <String, dynamic>{},
-      ),
+    final task = _decodeMapList(prefs.getString('nyang_tasks')).firstWhere(
+      (task) => task['done'] != true && _isInProgressTask(task),
+      orElse: () => <String, dynamic>{},
     );
+    final current = _shortTaskName(task);
     if (current == null) return false;
     if (!mounted) return false;
 
@@ -4543,11 +4542,39 @@ ${lines.join('\n')}
       _greetingBuilder.buildInProgressAck(
         current,
         _nextTaskAfterCurrent(prefs, current),
+        spentLabel: _spentLabel(_elapsedOf(task, now)),
       ),
       kind: _masterInProgressAckKind,
     );
     unawaited(AnalyticsService.logFeatureUsage('master_in_progress_ack'));
     return true;
+  }
+
+  /// 그 일에 지금까지 들인 시간. 타이머가 돌고 있으면 흐르는 구간까지 더한다.
+  Duration _elapsedOf(Map<String, dynamic> task, DateTime now) {
+    final base = (task['elapsedSeconds'] as num?)?.toInt() ?? 0;
+    if (task['inProgress'] != true) return Duration(seconds: base);
+    final startedAt = DateTime.tryParse(
+      task['runStartedAt']?.toString() ?? '',
+    );
+    if (startedAt == null) return Duration(seconds: base);
+    final running = now.difference(startedAt).inSeconds;
+    return Duration(seconds: base + (running > 0 ? running : 0));
+  }
+
+  /// 말로 옮길 만큼 붙잡고 있었을 때만 시간을 말한다.
+  ///
+  /// 이제 막 시작한 사람에게 "5분이나 하셨네요"라고 하면 인정이 아니라
+  /// 놀리는 말이 된다.
+  static const _spentWorthMentioning = Duration(minutes: 30);
+
+  String? _spentLabel(Duration spent) {
+    if (spent < _spentWorthMentioning) return null;
+    final hours = spent.inHours;
+    final minutes = spent.inMinutes % 60;
+    if (hours == 0) return '$minutes분';
+    if (minutes == 0) return '$hours시간';
+    return '$hours시간 $minutes분';
   }
 
   /// 지금 것이 끝난 뒤에 볼 만한 일 하나. 없으면 null.

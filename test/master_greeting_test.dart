@@ -205,7 +205,12 @@ List<String> allTemplates(GreetingVoice v) => [
   ...v.coreAskStartedReply,
   ...v.coreAskAlreadyReply,
   ...v.coreAskBusyReply,
+  ...v.repeatingAsk,
   ...v.stalledAsk,
+  ...v.inProgressAck,
+  ...v.inProgressAckOnly,
+  ...v.inProgressAckSpent,
+  ...v.inProgressAckSpentOnly,
   ...v.stalledDoneReply,
   ...v.stalledAlreadyDoneReply,
   ...v.stalledBusyReply,
@@ -1006,6 +1011,38 @@ void main() {
           ),
           isEmpty,
         );
+      });
+    }
+  });
+
+  group('진행 중인 일을 인정하는 말', () {
+    for (final voice in voices.entries) {
+      test('${voice.key} / 자리를 남김없이 채운다', () {
+        final builder = MasterGreetingBuilder(voice: voice.value);
+        // 문구 풀에서 무엇이 뽑히든 자리표가 남아 있으면 안 된다.
+        for (var i = 0; i < 50; i++) {
+          for (final next in [null, '4화 쓰기']) {
+            for (final spent in [null, '2시간']) {
+              final text = builder.buildInProgressAck(
+                '보고서',
+                next,
+                spentLabel: spent,
+              );
+              expect(text, isNot(contains('{{')));
+              expect(text, contains('보고서'));
+              if (next != null) expect(text, contains(next));
+            }
+          }
+        }
+      });
+
+      test('${voice.key} / 남길 것이 없으면 다음 일을 지어내지 않는다', () {
+        final builder = MasterGreetingBuilder(voice: voice.value);
+        for (var i = 0; i < 50; i++) {
+          final text = builder.buildInProgressAck('보고서', null);
+          expect(text, isNot(contains('끝나시면')));
+          expect(text, isNot(contains('끝나면')));
+        }
       });
     }
   });

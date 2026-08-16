@@ -238,6 +238,15 @@ class GreetingVoice {
   /// 다음에 볼 것이 없을 때. 남겨둘 것이 없으면 인정만 하고 끝낸다.
   final List<String> inProgressAckOnly;
 
+  /// 붙잡고 있은 시간까지 말할 때. `{{spent}}`가 그 시간이다.
+  ///
+  /// 얼마나 했는지를 말해주면 인정이 구체적이 된다. 다만 짧게 하고 있을 때는
+  /// 쓰지 않는다 — 5분 하고 "5분이나 하셨네요"는 놀리는 말이 된다.
+  final List<String> inProgressAckSpent;
+
+  /// 시간은 말하되 다음에 볼 것이 없을 때.
+  final List<String> inProgressAckSpentOnly;
+
   /// 완료를 누르는 걸 잊었다고 답했을 때. 코치가 대신 완료로 바꿔준다.
   final List<String> stalledDoneReply;
 
@@ -287,6 +296,8 @@ class GreetingVoice {
     required this.stalledAsk,
     required this.inProgressAck,
     required this.inProgressAckOnly,
+    required this.inProgressAckSpent,
+    required this.inProgressAckSpentOnly,
     required this.stalledDoneReply,
     required this.stalledAlreadyDoneReply,
     required this.stalledBusyReply,
@@ -563,6 +574,16 @@ class MasterGreetingCopy {
       '{{task}} 하고 계시는군요. {방해 안 드리겠습니다|저는 조용히 있겠습니다}.\n'
           '{끝까지 응원드리겠습니다|다 하실 때까지 응원하고 있겠습니다}^^',
     ],
+    inProgressAckSpent: [
+      '{{task}} {{spent}}이나 하셨네요? 제가 다 뿌듯합니다.\n'
+          '끝나시면 {{next}} 건드려보셔도 좋을 것 같습니다.',
+      '{{task}} 벌써 {{spent}}째네요. {대단하십니다|고생 많으십니다}.\n'
+          '끝나시면 {{next}} 이어가셔도 좋겠어요^^',
+    ],
+    inProgressAckSpentOnly: [
+      '{{task}} {{spent}}이나 하셨네요? 제가 다 뿌듯합니다.\n'
+          '{남은 것도 편하게 하세요|끝까지 응원드리겠습니다}^^',
+    ],
     stalledDoneReply: [
       '{역시 끝내셨군요|다 하신 거였군요}! 완료로 {바꿔두었습니다|옮겨두었습니다}^^\n'
           '{눌러야 할 게 하나 줄었네요|이런 건 제가 챙기겠습니다}.',
@@ -805,6 +826,16 @@ class MasterGreetingCopy {
       '{{task}} 하고 있구나냥. {방해 안 하겠다냥|나는 조용히 있겠다냥}.\n'
           '{끝까지 응원한다냥|다 할 때까지 응원하고 있겠다냥}.',
     ],
+    inProgressAckSpent: [
+      '{{task}} {{spent}}이나 했구나냥? 내가 다 뿌듯하다냥.\n'
+          '끝나면 {{next}} 건드려봐도 좋겠구나냥.',
+      '{{task}} 벌써 {{spent}}째구나냥. {대단하다냥|고생한다냥}.\n'
+          '끝나면 {{next}} 이어가도 좋겠구나냥.',
+    ],
+    inProgressAckSpentOnly: [
+      '{{task}} {{spent}}이나 했구나냥? 내가 다 뿌듯하다냥.\n'
+          '{남은 것도 편하게 하라냥|끝까지 응원한다냥}.',
+    ],
     stalledDoneReply: [
       '{역시 끝냈구나냥|다 한 거였구나냥}! 완료로 {바꿔뒀다냥|옮겨뒀다냥}.\n'
           '{눌러야 할 게 하나 줄었구나냥|이런 건 내가 챙기겠다냥}.',
@@ -1006,16 +1037,27 @@ class MasterGreetingBuilder {
   ///
   /// [nextTaskName]이 있으면 끝난 뒤 볼 것으로 하나만 남긴다. 없으면 인정만
   /// 하고 끝낸다 — 남길 것이 없는데 억지로 붙이면 아무 일이나 집게 된다.
-  String buildInProgressAck(String taskName, String? nextTaskName) {
-    if (nextTaskName == null) {
-      return _fill(voice.inProgressAckOnly, taskName);
-    }
+  /// [spentLabel]이 있으면 시간을 말하는 문구도 후보에 넣는다. 없으면 기본
+  /// 문구만 쓴다 — 짧게 붙잡고 있을 때는 시간을 말하지 않는 편이 낫다.
+  String buildInProgressAck(
+    String taskName,
+    String? nextTaskName, {
+    String? spentLabel,
+  }) {
+    final pool = <String>[
+      ...(nextTaskName == null ? voice.inProgressAckOnly : voice.inProgressAck),
+      if (spentLabel != null)
+        ...(nextTaskName == null
+            ? voice.inProgressAckSpentOnly
+            : voice.inProgressAckSpent),
+    ];
     return pickLine(
-      voice.inProgressAck
+      pool
           .map(
             (line) => line
                 .replaceAll('{{task}}', '\'$taskName\'')
-                .replaceAll('{{next}}', '\'$nextTaskName\''),
+                .replaceAll('{{next}}', '\'${nextTaskName ?? ''}\'')
+                .replaceAll('{{spent}}', spentLabel ?? ''),
           )
           .toList(growable: false),
     );
