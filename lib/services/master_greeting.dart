@@ -227,6 +227,17 @@ class GreetingVoice {
   /// 잊었을 수도 있다. 그래서 상태를 묻되 답하기 편한 쪽으로 연다.
   final List<String> stalledAsk;
 
+  /// 지금 붙잡고 있는 일을 인정하는 말. `{{task}}`가 그 일, `{{next}}`는
+  /// 아직 손대지 않은 다음 일이다.
+  ///
+  /// 낮에 진행 중인 사람에게 다른 일을 들이밀면 그게 방해다. 그렇다고 아무
+  /// 말도 안 하면 하고 있는 걸 못 본 셈이 된다. 인정하고, 다음 것 하나만
+  /// 남겨두고 물러난다.
+  final List<String> inProgressAck;
+
+  /// 다음에 볼 것이 없을 때. 남겨둘 것이 없으면 인정만 하고 끝낸다.
+  final List<String> inProgressAckOnly;
+
   /// 완료를 누르는 걸 잊었다고 답했을 때. 코치가 대신 완료로 바꿔준다.
   final List<String> stalledDoneReply;
 
@@ -274,6 +285,8 @@ class GreetingVoice {
     required this.coreAskAlreadyReply,
     required this.coreAskBusyReply,
     required this.stalledAsk,
+    required this.inProgressAck,
+    required this.inProgressAckOnly,
     required this.stalledDoneReply,
     required this.stalledAlreadyDoneReply,
     required this.stalledBusyReply,
@@ -540,6 +553,16 @@ class MasterGreetingCopy {
       '{{task}} 어디까지 {오셨을까요|가셨을까요}?\n'
           '시작만 찍혀 있고 완료가 없어서 여쭤봅니다. {막히는 데가 있으면 같이 보시죠|걸리는 게 있으면 말씀만 주세요}.',
     ],
+    inProgressAck: [
+      '{{task}} 하고 계시는군요. {방해 안 드리겠습니다|저는 조용히 있겠습니다}.\n'
+          '끝나시면 {{next}} 시작하시면 좋을 것 같아요^^ 응원드리겠습니다.',
+      '{{task}} 진행 중이시네요. {끝까지 편하게 하세요|그대로 이어가세요}.\n'
+          '다 하시면 {{next}} 한번 보시면 어떨까요? 응원하고 있겠습니다.',
+    ],
+    inProgressAckOnly: [
+      '{{task}} 하고 계시는군요. {방해 안 드리겠습니다|저는 조용히 있겠습니다}.\n'
+          '{끝까지 응원드리겠습니다|다 하실 때까지 응원하고 있겠습니다}^^',
+    ],
     stalledDoneReply: [
       '{역시 끝내셨군요|다 하신 거였군요}! 완료로 {바꿔두었습니다|옮겨두었습니다}^^\n'
           '{눌러야 할 게 하나 줄었네요|이런 건 제가 챙기겠습니다}.',
@@ -772,6 +795,16 @@ class MasterGreetingCopy {
       '{{task}} 어디까지 {왔냥|갔냥}?\n'
           '시작만 찍혀 있고 완료가 없어서 물어본다냥. {막히는 데 있으면 같이 보자냥|걸리는 게 있으면 말만 하라냥}.',
     ],
+    inProgressAck: [
+      '{{task}} 하고 있구나냥. {방해 안 하겠다냥|나는 조용히 있겠다냥}.\n'
+          '끝나면 {{next}} 이어서 해보면 좋겠구나냥. 응원한다냥.',
+      '{{task}} 하는 중이구나냥. {끝까지 편하게 하라냥|그대로 이어가라냥}.\n'
+          '다 하면 {{next}} 한번 보면 어떻냥? 응원하고 있겠다냥.',
+    ],
+    inProgressAckOnly: [
+      '{{task}} 하고 있구나냥. {방해 안 하겠다냥|나는 조용히 있겠다냥}.\n'
+          '{끝까지 응원한다냥|다 할 때까지 응원하고 있겠다냥}.',
+    ],
     stalledDoneReply: [
       '{역시 끝냈구나냥|다 한 거였구나냥}! 완료로 {바꿔뒀다냥|옮겨뒀다냥}.\n'
           '{눌러야 할 게 하나 줄었구나냥|이런 건 내가 챙기겠다냥}.',
@@ -968,6 +1001,25 @@ class MasterGreetingBuilder {
 
   /// 시작해두고 완료가 안 된 일을 물어보는 말.
   String buildStalledAsk(String taskName) => _fill(voice.stalledAsk, taskName);
+
+  /// 지금 하고 있는 일을 인정하는 말.
+  ///
+  /// [nextTaskName]이 있으면 끝난 뒤 볼 것으로 하나만 남긴다. 없으면 인정만
+  /// 하고 끝낸다 — 남길 것이 없는데 억지로 붙이면 아무 일이나 집게 된다.
+  String buildInProgressAck(String taskName, String? nextTaskName) {
+    if (nextTaskName == null) {
+      return _fill(voice.inProgressAckOnly, taskName);
+    }
+    return pickLine(
+      voice.inProgressAck
+          .map(
+            (line) => line
+                .replaceAll('{{task}}', '\'$taskName\'')
+                .replaceAll('{{next}}', '\'$nextTaskName\''),
+          )
+          .toList(growable: false),
+    );
+  }
 
   String _fill(List<String> pool, String taskName) => pickLine(
     pool

@@ -4506,6 +4506,64 @@ ${lines.join('\n')}
     return true;
   }
 
+  /// 지금 붙잡고 있는 일을 인정했으면 true.
+  ///
+  /// 낮에 진행 중인 사람에게 다른 일을 들이밀면 그게 방해다. 그렇다고 아무
+  /// 말도 안 하면 하고 있는 걸 못 본 셈이 된다. 그래서 인정하고, 아직 손도
+  /// 대지 않은 다음 일 하나만 남겨두고 물러난다.
+  ///
+  /// 핵심 질문보다 먼저 본다. 지금 뭔가를 하고 있는 사람에게 "핵심은
+  /// 시작하셨나요"라고 묻는 건 하고 있는 걸 못 본 채로 재촉하는 말이 된다.
+  /// 그 핵심은 여기서 '끝나시면 볼 것'으로 대신 전해진다.
+  Future<bool> _startMasterInProgressAck(
+    SharedPreferences prefs,
+    DateTime now,
+  ) async {
+    if (now.hour < _masterCoreAskFromHour ||
+        now.hour >= _masterCoreAskUntilHour) {
+      return false;
+    }
+    if (_spokeKindToday({_masterInProgressAckKind}, now)) return false;
+
+    final current = _shortTaskName(
+      _decodeMapList(prefs.getString('nyang_tasks')).firstWhere(
+        (task) => task['done'] != true && _isInProgressTask(task),
+        orElse: () => <String, dynamic>{},
+      ),
+    );
+    if (current == null) return false;
+    if (!mounted) return false;
+
+    _injectAiMessage(
+      _greetingBuilder.buildInProgressAck(
+        current,
+        _nextTaskAfterCurrent(prefs, current),
+      ),
+      kind: _masterInProgressAckKind,
+    );
+    unawaited(AnalyticsService.logFeatureUsage('master_in_progress_ack'));
+    return true;
+  }
+
+  /// 지금 것이 끝난 뒤에 볼 만한 일 하나. 없으면 null.
+  ///
+  /// 핵심 → 습관 → 요즘 반복되는 일 순으로 본다. 코치가 먼저 짚는 자리의
+  /// 순서와 같다. 아직 손도 대지 않은 것만 고른다.
+  String? _nextTaskAfterCurrent(SharedPreferences prefs, String current) {
+    final core = _shortTaskName(
+      _findCoreTask(prefs, _isPendingNotInProgressTask),
+    );
+    if (core != null && core != current) return core;
+
+    for (final habit in _pendingDailyHabits(prefs)) {
+      if (habit != current) return habit;
+    }
+
+    final repeating = _repeatingTaskDueToday(prefs);
+    if (repeating != null && repeating != current) return repeating;
+    return null;
+  }
+
   /// 시작해두고 멈춘 것 같은 일을 물어봤으면 true.
   ///
   /// 저녁에만 묻는다. 낮에 3시간이면 아직 붙잡고 있을 때가 많아 방해가 되지만,
@@ -4538,6 +4596,7 @@ ${lines.join('\n')}
     required DateTime now,
     required DateTime? lastVisit,
   }) async {
+    if (await _startMasterInProgressAck(prefs, now)) return true;
     if (await _startMasterCoreAsk(prefs, now)) return true;
     if (await _startMasterStalledAsk(prefs, now)) return true;
 
@@ -4767,6 +4826,8 @@ ${lines.join('\n')}
 
   /// 시작해두고 완료가 안 된 일을 저녁에 물어보는 발화.
   static const _masterStalledGreetingKind = 'auto:master_stalled';
+
+  static const _masterInProgressAckKind = 'auto:master_in_progress';
 
   static const _masterStalledDoneLabel = '완료 누르는 걸 깜빡했어요';
   static const _masterStalledBurdenLabel = '부담돼서 멈췄어요';
