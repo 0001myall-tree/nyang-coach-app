@@ -3,8 +3,6 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/user_data.dart';
-import '../screens/coach_selection_screen.dart';
-import '../services/coach_id_service.dart';
 import '../theme/app_design_tokens.dart';
 
 /// 마스터 코치가 열렸다는 걸 한 번만 알려준다.
@@ -17,18 +15,19 @@ import '../theme/app_design_tokens.dart';
 /// 아직 안 알렸는가"만 보고, 그 확인을 여러 자리에서 부른다. 한 번만 뜨게
 /// 막아주는 플래그가 있으니 부르는 자리가 늘어도 두 번 뜨지 않는다.
 ///
-/// 원래 메인 탭 화면 안에만 있었다. 그런데 결제는 그 화면 위에 뜬 시트에서
-/// 일어나서, 결제를 마쳐도 화면이 새로 만들어지지 않아 안내가 안 떴다. 마스터
-/// 코치를 눌러 코치 선택 화면에 다녀와야 그제야 떴는데, 그건 이 안내가 하려던
-/// 일을 사용자가 이미 해버린 뒤다.
+/// 뜨는 자리는 코치 선택 화면 하나다.
+///
+/// 한동안 메인 탭과 채팅 화면에서도 불렀다. 그러다 마스터 코치와 이야기하는
+/// 중에 "마스터 코치가 열렸어요"가 튀어나오고, 확인을 누르면 그 방에서
+/// 밀려나는 일이 생겼다. 안내가 하려던 일이 그대로 방해가 된 것이다.
+///
+/// 결제가 실제로 일어나는 자리도 여기다. 채팅 화면의 구독 시트는 디버그
+/// 빌드에서만 열려서, 실기기에서는 그 경로로 결제가 되지 않는다.
 const String _masterUnlockNoticeKey = 'master_unlock_notice_shown';
 
 /// 플래그는 'nyang_'으로 시작하지 않는 키에 둔다. 그 접두어를 쓰면 클라우드
 /// 복원이 덮어써서 앱을 켤 때마다 같은 안내가 다시 뜬다.
-Future<void> maybeShowMasterUnlockNotice(
-  BuildContext context, {
-  required String returnCoachId,
-}) async {
+Future<void> maybeShowMasterUnlockNotice(BuildContext context) async {
   final data = await UserDataService.load();
   final prefs = await SharedPreferences.getInstance();
 
@@ -39,32 +38,17 @@ Future<void> maybeShowMasterUnlockNotice(
     return;
   }
 
-  // 이미 마스터 코치와 있는 사람에게는 알릴 것이 없다.
-  //
-  // 열렸다는 걸 알고 들어온 사람인데, 여기서 띄우면 대화를 끊는다. 게다가
-  // 버튼이 코치 선택 화면으로 보내는 것이라, 누르면 방금까지 이야기하던
-  // 방에서 밀려난다. 안내가 하려던 일이 그대로 방해가 된다.
-  //
-  // 본 것으로 표시해두고 넘어간다. 이 사람에게는 나중에 띄워도 마찬가지다.
-  if (CoachIdService.isMaster(returnCoachId)) {
-    await prefs.setBool(_masterUnlockNoticeKey, true);
-    return;
-  }
-
   if (prefs.getBool(_masterUnlockNoticeKey) == true) return;
   await prefs.setBool(_masterUnlockNoticeKey, true);
 
   if (!context.mounted) return;
   WidgetsBinding.instance.addPostFrameCallback((_) {
     if (!context.mounted) return;
-    _showMasterUnlockDialog(context, returnCoachId: returnCoachId);
+    _showMasterUnlockDialog(context);
   });
 }
 
-void _showMasterUnlockDialog(
-  BuildContext context, {
-  required String returnCoachId,
-}) {
+void _showMasterUnlockDialog(BuildContext context) {
   showDialog<void>(
     context: context,
     // 그냥 닫고 지나치면 이 안내가 하는 일이 없다. 버튼을 누르게 한다.
@@ -93,26 +77,10 @@ void _showMasterUnlockDialog(
           ),
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: Text(
-              '나중에',
-              style: GoogleFonts.notoSansKr(
-                fontWeight: FontWeight.w900,
-                color: const Color(0xFF9B96A8),
-              ),
-            ),
-          ),
+          // 이 화면이 이미 코치 선택 화면이고, 마스터 탭이 왼쪽에서 열려 있다.
+          // 보내줄 곳이 없으니 닫는 버튼 하나면 된다.
           ElevatedButton(
-            onPressed: () {
-              Navigator.pop(dialogContext);
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) =>
-                      CoachSelectionScreen(returnCoachId: returnCoachId),
-                ),
-              );
-            },
+            onPressed: () => Navigator.pop(dialogContext),
             style: ElevatedButton.styleFrom(
               backgroundColor: AppDesignTokens.brand,
               elevation: 0,
@@ -121,7 +89,7 @@ void _showMasterUnlockDialog(
               ),
             ),
             child: Text(
-              '코치 보러 가기',
+              '좋아요',
               style: GoogleFonts.notoSansKr(
                 fontWeight: FontWeight.w900,
                 color: Colors.white,

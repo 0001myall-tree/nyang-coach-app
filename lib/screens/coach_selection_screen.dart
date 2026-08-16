@@ -12,6 +12,7 @@ import '../models/user_data.dart';
 import '../theme/app_design_tokens.dart';
 import '../widgets/app_button.dart';
 import '../widgets/app_card.dart';
+import '../widgets/master_unlock_notice.dart';
 import '../widgets/plan_guide_bottom_sheet.dart';
 
 class CoachSelectionScreen extends StatefulWidget {
@@ -92,7 +93,12 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen>
         }
       },
       checkoutLabel: '코치들과 함께하기',
-    );
+    ).then((_) {
+      // 시트가 닫힌 뒤에 확인한다. 결제 콜백은 시트가 아직 열려 있을 때 돌아서,
+      // 거기서 띄우면 시트 위에 겹치고 곧이어 시트가 닫히며 어수선해진다.
+      if (!mounted) return;
+      unawaited(maybeShowMasterUnlockNotice(context));
+    });
   }
 
   void _showNyangCoachTeamIntro() {
@@ -454,6 +460,12 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen>
     WidgetsBinding.instance.addObserver(this);
     UserDataService.load().then((d) {
       if (mounted) setState(() => _userData = d);
+    });
+    // 앱 밖(스토어)에서 결제가 반영된 경우를 받아주는 자리이기도 하다.
+    // 마스터 코치를 쓰려면 결국 이 화면에 오게 되어 있다.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      unawaited(maybeShowMasterUnlockNotice(context));
     });
     // 접근 권한 실패로 채팅 화면에서 이 화면으로 넘어온 직후에도
     // 소비되지 않은 위젯 인텐트가 남아있을 수 있어 진입 시 한 번 확인한다.

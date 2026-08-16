@@ -46,7 +46,6 @@ import '../models/user_data.dart';
 import '../theme/app_design_tokens.dart';
 import '../widgets/app_chip.dart';
 import '../widgets/core_reminder_settings_sheet.dart';
-import '../widgets/master_unlock_notice.dart';
 import '../widgets/plan_guide_bottom_sheet.dart';
 
 // ─────────────────────────────────────────────────────────────
@@ -3489,18 +3488,7 @@ ${lines.join('\n')}
           setState(() => _userData = updated);
         }
       },
-    ).then((_) {
-      // 시트가 닫힌 뒤에 확인한다. 결제 콜백은 시트가 아직 열려 있을 때 돌아서
-      // 거기서 띄우면 시트 위에 겹치고, 곧이어 시트가 닫히며 어수선해진다.
-      //
-      // 그리고 여기가 결제의 주 경로다. 이 자리를 놓치면 안내는 메인 화면이
-      // 새로 만들어질 때까지 안 뜨는데, 그 계기가 대개 마스터 코치를 눌러
-      // 보고 오는 것이라 안내가 하려던 일을 사용자가 이미 한 뒤가 된다.
-      if (!mounted) return;
-      unawaited(
-        maybeShowMasterUnlockNotice(context, returnCoachId: widget.coachId),
-      );
-    });
+    );
   }
 
   // ── 냥냥코치 팀 소개 팝업 ──────────────────────────────────

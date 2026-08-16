@@ -27,7 +27,6 @@ import 'settings_screen.dart';
 import '../theme/app_design_tokens.dart';
 import '../widgets/app_bottom_sheet.dart';
 import '../widgets/app_button.dart';
-import '../widgets/master_unlock_notice.dart';
 
 // 각 탭 화면 플레이스홀더
 class ChatPlaceholderScreen extends StatelessWidget {
@@ -628,9 +627,6 @@ class _MainTabScreenState extends State<MainTabScreen>
     _startCoreReminderEngine();
     AnalyticsService.logAppOpen();
     _ensureCurrentCoachAccess();
-    unawaited(
-      maybeShowMasterUnlockNotice(context, returnCoachId: widget.coachId),
-    );
     unawaited(_refreshRecordsNewBadge());
     if (_openDrawerIndex == 2) {
       unawaited(_markRecordsFeedbackSeen());
@@ -707,13 +703,6 @@ class _MainTabScreenState extends State<MainTabScreen>
       _tasksController.refresh();
       _chatController.refreshTaskProgress();
       setState(() {});
-    }
-    // 스토어 결제창에 다녀오면 여기로 돌아온다. 앱 밖에서 결제가 반영된 경우를
-    // 받아주는 그물이라, 화면 진입 확인만으로는 못 잡는 길을 메운다.
-    if (mounted) {
-      unawaited(
-        maybeShowMasterUnlockNotice(context, returnCoachId: widget.coachId),
-      );
     }
     final canContinue = await _ensureCurrentCoachAccess(syncCloud: _isMaster);
     if (canContinue) {
