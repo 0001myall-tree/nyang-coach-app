@@ -4481,10 +4481,14 @@ ${lines.join('\n')}
   }
 
   /// 마스터 코치가 핵심 일정을 물어보는 시간대. 점심을 지나 오전이 어떻게
-  /// 흘렀는지는 결론이 났고, 오후는 통째로 남아 있는 구간이다. 15시부터는
-  /// 냥냥이가 같은 질문을 맡으므로 여기서 끝낸다.
+  /// 흘렀는지는 결론이 났고, 오후는 통째로 남아 있는 구간이다.
+  ///
+  /// 한동안 15시에서 끊고 그 뒤는 냥냥이에게 넘겼는데, 그러면 12~15시에 방을
+  /// 열지 않은 사람은 마스터에게 아무 말도 못 듣는 날이 된다. 이제 저녁 인사가
+  /// 시작되는 18시까지 본다. 냥냥이와 겹치는 구간은 같은 질문을 두 번 하지
+  /// 않도록 [_coreAskKinds]가 막는다.
   static const _masterCoreAskFromHour = 12;
-  static const _masterCoreAskUntilHour = 15;
+  static const _masterCoreAskUntilHour = 18;
 
   /// 핵심 일정을 물어봤으면 true. 슬롯 인사와 예산이 따로라 아침에 인사를
   /// 받았어도 이 질문은 나갈 수 있다. 다만 한 번 진입에 하나만 말한다.
@@ -5490,8 +5494,14 @@ ${lines.join('\n')}
         : const <String>[];
     // 핵심도 습관도 없는 사람을 위한 세 번째 순위. 지정해둔 게 없다고 해서
     // 챙길 것이 없는 건 아니다.
+    //
+    // 핵심 질문과 같은 예산을 쓴다. 사용자에게는 둘 다 "아직 안 한 일"을 짚는
+    // 말이라, 따로 세면 마스터가 낮에 묻고 냥냥이가 오후에 또 묻게 된다.
     final repeatingTask =
-        notStartedCore == null && !coreInProgress && pendingHabits.isEmpty
+        notStartedCore == null &&
+            !coreInProgress &&
+            pendingHabits.isEmpty &&
+            await _canAskCoreToday(now)
         ? _repeatingTaskDueToday(prefs)
         : null;
     final text = notStartedCore != null
@@ -5509,7 +5519,9 @@ ${lines.join('\n')}
           text: text,
           isUser: false,
           time: DateTime.now(),
-          kind: notStartedCore != null
+          // 반복 일감을 물은 것도 핵심 질문과 한 묶음으로 센다. 그래야 오늘
+          // 이미 물었다는 사실이 다른 코치에게도 전해진다.
+          kind: notStartedCore != null || repeatingTask != null
               ? _catAfternoonCoreGreetingKind
               : _catAfternoonGreetingKind,
         ),
