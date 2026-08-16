@@ -14536,10 +14536,13 @@ ${Prompts.outputRulesTail}$coachOfferTaskRule$halmaeHint$resistanceTurnDirective
   Map<String, String>? _memoSearchSelectedResult;
   List<dynamic> _memoSearchVisionsCache = [];
 
+  /// '숫자 세고 시작'을 맨 위에 둔다. 나머지 셋은 보고 정하는 것이고 이것만
+  /// 바로 실행으로 들어가는데, 지금 못 움직이는 사람이 여는 메뉴라 손이
+  /// 제일 먼저 닿아야 한다.
   List<Map<String, String>> get _cheatKeyItems => [
+    {'icon': 'assets/icons/fa-circle-play-solid.svg', 'label': '숫자 세고 시작'},
     {'icon': 'assets/icons/compass.svg', 'label': '미래를 위한 오늘'},
     {'icon': 'assets/icons/flag.svg', 'label': '마일스톤 확인'},
-    {'icon': 'assets/icons/fa-circle-play-solid.svg', 'label': '숫자 세고 시작'},
     {'icon': 'assets/icons/magnifying-glass.svg', 'label': '메모 검색'},
   ];
 
