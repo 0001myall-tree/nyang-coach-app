@@ -1303,8 +1303,9 @@ ${feedbackType == 0
     return '$bestDay요일에 제일 잘했어. 그 시간대나 환경을 다시 써먹으면 좋아.';
   }
 
+  /// 마스터 한마디를 API로 못 받았을 때 대신 내보내는 문장.
+  /// 마스터일 때만 불리고 화면도 마스터일 때만 그리므로 여비서 존댓말 하나면 된다.
   String _getMasterPatternFeedback(List<Map<String, dynamic>> records) {
-    final bool isMale = !_isMaster && widget.coachId == 'nyang_halbae';
     final activeRecords = records
         .where((r) => r['isVacation'] != true)
         .toList();
@@ -1321,38 +1322,22 @@ ${feedbackType == 0
     }
 
     if (total == 0) {
-      if (vacationCount > 0) {
-        final feedback = isMale
-            ? '이번 주에는 회복을 선택한 날이 있구나. 쉬는 날도 일정의 일부일 수 있다냥.'
-            : '이번 주에는 회복을 선택하신 날이 있어요. 잘 쉬는 것도 일정 관리의 일부예요, 대표님.';
-        return feedback.replaceAll(UserTitleService.defaultTitle, _userTitle);
-      }
-      final feedback = isMale
-          ? '아직 이번 주 기록은 없구나. 오늘 하나부터 시작하면 된다냥.'
+      final feedback = vacationCount > 0
+          ? '이번 주에는 회복을 선택하신 날이 있어요. 잘 쉬는 것도 일정 관리의 일부예요, 대표님.'
           : '아직 이번 주 기록이 없어요. 오늘 하나만 시작해보는 건 어떨까요, 대표님?';
       return feedback.replaceAll(UserTitleService.defaultTitle, _userTitle);
     }
 
     List<String> parts = [];
     if (successDays >= 5) {
-      parts.add(
-        isMale ? '이번 주도 꾸준히 걸어온 한 주였구나냥.' : '이번 주도 열심히 달리신 한 주였어요, 대표님!',
-      );
+      parts.add('이번 주도 열심히 달리신 한 주였어요, 대표님!');
     } else {
-      parts.add(
-        isMale
-            ? '장기 목표를 하나 적어두면, 오늘의 일이 어디로 가는지 조금 선명해질 수 있다냥.'
-            : '장기 목표를 설정해두시면 더 잘 챙겨드릴 수 있어요!',
-      );
+      parts.add('장기 목표를 설정해두시면 더 잘 챙겨드릴 수 있어요!');
     }
 
     bool isOverloaded = totalTaskCount >= 35;
     if (isOverloaded && successDays >= 4) {
-      parts.add(
-        isMale
-            ? '이번 주 할 일이 꽤 많았구나. 다음 주엔 체력도 일정 안에 같이 넣어보자냥.'
-            : '이번 주 할 일이 많으셨는데도 잘 해내셨어요. 다음 주엔 체력 관리도 함께 챙겨주세요.',
-      );
+      parts.add('이번 주 할 일이 많으셨는데도 잘 해내셨어요. 다음 주엔 체력 관리도 함께 챙겨주세요.');
     }
 
     return parts
