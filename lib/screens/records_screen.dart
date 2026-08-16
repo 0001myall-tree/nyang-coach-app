@@ -1439,7 +1439,9 @@ ${feedbackType == 0
               ),
               const SizedBox(width: 8),
               Text(
-                '이번 주 기록',
+                // 바깥 화면 제목이 이미 '이번 주 기록'이다. 같은 이름을 안에서
+                // 또 쓰면 어디를 보고 있는지 흐려진다.
+                '종합 기록',
                 style: GoogleFonts.notoSansKr(
                   fontSize: 15,
                   fontWeight: FontWeight.w800,
