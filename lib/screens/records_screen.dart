@@ -23,7 +23,7 @@ class RecordsScreen extends StatefulWidget {
 }
 
 class _RecordsScreenState extends State<RecordsScreen> {
-  static const int _weeklyFeedbackCacheVersion = 4;
+  static const int _weeklyFeedbackCacheVersion = 5;
 
   bool _isLoading = true;
   List<Map<String, dynamic>> _history = [];
@@ -561,6 +561,7 @@ class _RecordsScreenState extends State<RecordsScreen> {
     final resumedStartTasks = <String>[];
     final consistentTasks = <String>[];
     final consistentStartTasks = <String>[];
+    final heldOverDayCounts = <String, int>{};
     final activeRecords = records
         .where((record) => record['isVacation'] != true)
         .toList();
@@ -598,6 +599,16 @@ class _RecordsScreenState extends State<RecordsScreen> {
       final dailyTouched = statusOf(
         (map) => map['done'] == true || _taskWasStarted(map),
       );
+      final dailyCarried = statusOf(
+        (map) => map['done'] != true && _taskWasStarted(map),
+      );
+
+      // 그 주의 주력은 손댄 날이 많으면서 하루에 안 끝난 일이다.
+      // 손댄 날만 세면 3초짜리 습관이 매일 걸려서 1등을 차지한다.
+      final touchedDays = dailyTouched.where((hit) => hit).length;
+      if (touchedDays >= 2 && dailyCarried.any((hit) => hit)) {
+        heldOverDayCounts[text] = touchedDays;
+      }
 
       if (dailyStatus.length >= 7 &&
           dailyStatus[4] &&
@@ -619,6 +630,13 @@ class _RecordsScreenState extends State<RecordsScreen> {
         resumedStartTasks.add(text);
       }
     }
+
+    final heldOverRanked = heldOverDayCounts.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    final heldOverText = heldOverRanked
+        .take(3)
+        .map((e) => '${e.key}(${e.value}일)')
+        .join(', ');
 
     final recordBuffer = StringBuffer();
     final completionSummaryBuffer = StringBuffer();
@@ -853,6 +871,7 @@ ${completionSummaryBuffer.toString().trim()}
 [분석 참고 데이터]
 - 꾸준히 해낸 일 (3일 이상 연속 완료): ${consistentTasks.join(', ').isEmpty ? '없음' : consistentTasks.join(', ')}
 - 꾸준히 손댄 일 (완료까지는 아니어도 3일 이상 연속으로 시작): ${consistentStartTasks.join(', ').isEmpty ? '없음' : consistentStartTasks.join(', ')}
+- 이번 주 주력한 일 (하루에 끝나지 않아 여러 날 붙잡은 일, 괄호는 손댄 날 수): ${heldOverText.isEmpty ? '없음' : heldOverText}
 - 미루다 다시 완료한 일 (3일 이상 미루다 최근 다시 완료): ${resumedTasks.join(', ').isEmpty ? '없음' : resumedTasks.join(', ')}
 - 미루다 다시 시작한 일 (3일 이상 손대지 못하다 최근 다시 시작, 완료는 아직): ${resumedStartTasks.join(', ').isEmpty ? '없음' : resumedStartTasks.join(', ')}
 
@@ -890,7 +909,8 @@ $chatSummarySection
 ${feedbackType == 0
         ? '''   [실행 회고형]
    - 사용자가 실제로 무엇을 했고, 무엇을 미뤘으며, 무엇이 개선되었는지를 중심으로 회고합니다.
-   - 완료한 일들 중 목표/비전과 연결되는 중요한 활동 1~2개를 콕 집어 구체적으로 칭찬하세요. (추상적 칭찬 금지)
+   - 목표/비전과 연결되는 중요한 활동 1~2개를 콕 집어 구체적으로 칭찬하세요. (추상적 칭찬 금지) 후보는 [이번 주 주력한 일]과 완료한 일 양쪽에서 고르세요.
+   - 여러 날 붙잡은 일은 끝내지 못했어도 그 주의 주력으로 인정하고, 끝낸 일은 끝낸 것으로 칭찬하세요. (예: "이번 주는 보고서에 나흘을 쓰셨네요." / "수요일에 보고서를 끝내셨네요.")
    - 미루다 다시 완료한 일이나 다시 시작한 일이 있다면 특별히 언급해 주세요. 완료까지 가지 못했어도 다시 손을 댄 것 자체를 인정해 주세요.
    - 다시 시작은 했는데 완료 기록이 적다면, 의지나 성실함의 문제로 읽지 말고 하루에 실행 가능한 크기로 계획을 나누자고 제안해 주세요.
    - 반복적으로 밀린 중요한 일이 있다면 부드럽게 지적하고 다음 주 우선순위로 권유하세요. 단, 시작 기록이 있는 일은 밀린 일로 지적하지 마세요. 손을 댄 일은 진행 중인 일입니다.
