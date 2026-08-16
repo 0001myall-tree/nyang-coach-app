@@ -10,6 +10,7 @@ import 'package:nyang_coach/services/api_usage_limit_service.dart';
 import 'package:nyang_coach/services/task_resistance_service.dart';
 import 'package:nyang_coach/services/execution_resistance_service.dart';
 import 'package:nyang_coach/services/start_pattern_service.dart';
+import 'package:nyang_coach/services/tasks_sync_service.dart';
 import 'package:nyang_coach/models/user_data.dart';
 import 'coach_config.dart';
 import 'tasks_screen.dart'; // for HabitItem, etc.
@@ -536,6 +537,10 @@ class _RecordsScreenState extends State<RecordsScreen> {
         'nyang_feedback_prev_week',
         jsonEncode({'weekMonday': weekMonday, 'type': feedbackType}),
       );
+      // 클라우드에도 올린다. 이 키는 클라우드와 동기화되는데 올려두지 않으면
+      // 실시간 리스너가 옛 값으로 되돌리고, 그러면 기록탭에 들어갈 때마다
+      // 한마디를 다시 만든다. 만드는 데 API를 쓰므로 그때마다 비용이 나간다.
+      TasksSyncService.scheduleSyncToCloud();
 
       if (!mounted) return;
       setState(() {

@@ -22,6 +22,10 @@ class TasksSyncService {
     'nyang_premium_min_sleep_time',
     'nyang_premium_sleep_duration',
     'nyang_premium_routines',
+    // 주간 코치 한마디 캐시. 빠져 있던 동안에는 방금 만든 한마디를 실시간
+    // 리스너가 옛 값으로 되돌렸고, 기록탭에 들어갈 때마다 다시 만들어졌다.
+    // 만드는 데 API를 쓰기 때문에 들어갈 때마다 비용이 나갔다.
+    'nyang_coach_weekly_feedback_nyang_halbae',
   };
 
   /// 기기 로컬 전용 키. 클라우드에 백업/복원하지 않는다.
