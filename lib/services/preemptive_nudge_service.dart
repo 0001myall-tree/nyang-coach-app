@@ -95,6 +95,24 @@ class PreemptiveNudgeService {
     '시작해! 시작해! \'{{task}}\' 시작해! 📣\n냥이가 응원한다냥!',
   ];
 
+  /// 며칠째 넘어가고 있는 일을 부를 때.
+  ///
+  /// 여기서는 미는 말을 뺀다. 한 번 미룬 것과 며칠 미룬 것은 다른 상태다.
+  /// 이틀을 넘겼다는 건 마음이 없어서가 아니라 그 일이 지금 감당하기에 큰
+  /// 것이라, 응원은 부담 위에 부담을 얹는다. 대신 줄여주거나, 오늘은 넘겨도
+  /// 된다고 먼저 말해준다.
+  static const List<String> longDeferredMessages = [
+    '\'{{task}}\' 며칠째 넘어가고 있네.\n'
+        '오늘은 딱 3분만 해볼까? 그거면 충분하다냥.',
+    '\'{{task}}\'이 계속 미뤄지는 건 집사 탓이 아니다냥.\n'
+        '덩어리가 커서 그런 거니까, 냥이가 작게 잘라줄까?',
+    '\'{{task}}\' 아직 남아 있다냥. 오늘도 어려우면 넘겨도 된다냥.\n'
+        '대신 뭐가 걸리는지만 알려주라냥.',
+  ];
+
+  /// 이 횟수부터는 미는 말을 쓰지 않는다.
+  static const longDeferredThreshold = 2;
+
   /// 이름을 부르며 시작을 미는 말.
   ///
   /// 줄여주겠다는 말과 밀어주는 말을 섞어 둔다. 매번 부담을 낮춰주려 들면
@@ -159,15 +177,23 @@ class PreemptiveNudgeService {
 
     // 미뤄놓고 오늘 다시 올린 일이 있으면 그게 오늘의 이야기다. 다시 적었다는
     // 것 자체가 하려는 마음인데 손이 안 가는 상태라, 부담을 줄여주는 쪽이 맞다.
-    final deferred = planned.where(
-      (task) => ((task['deferredCount'] as num?)?.toInt() ?? 0) >= 1,
-    );
+    int deferredCount(Map task) =>
+        (task['deferredCount'] as num?)?.toInt() ?? 0;
+
+    // 여러 개면 제일 오래 넘어간 것부터 본다. 그게 제일 굳어 있는 일이다.
+    final deferred = planned.where((task) => deferredCount(task) >= 1).toList()
+      ..sort((a, b) => deferredCount(b).compareTo(deferredCount(a)));
     if (deferred.isNotEmpty) {
       final name = _text(deferred.first);
       if (name != null) {
+        final longDeferred =
+            deferredCount(deferred.first) >= longDeferredThreshold;
         return PreemptiveNudge(
           kind: NudgeKind.deferredAgain,
-          message: _fill(deferredAgainMessages, name),
+          message: _fill(
+            longDeferred ? longDeferredMessages : deferredAgainMessages,
+            name,
+          ),
           taskName: name,
         );
       }

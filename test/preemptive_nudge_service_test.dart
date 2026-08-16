@@ -101,6 +101,29 @@ void main() {
       expect(nudge?.message, contains('보고서'));
     });
 
+    test('며칠째 넘어간 일에는 미는 말을 쓰지 않는다', () {
+      for (var i = 0; i < 30; i++) {
+        final nudge = decide(todayTasks: [task('보고서', deferredCount: 2)]);
+        expect(
+          PreemptiveNudgeService.longDeferredMessages.map(
+            (m) => m.replaceAll('{{task}}', '보고서'),
+          ),
+          contains(nudge!.message),
+        );
+        expect(nudge.message, isNot(contains('시작해! 시작해!')));
+      }
+    });
+
+    test('여러 개면 제일 오래 넘어간 것을 부른다', () {
+      final nudge = decide(
+        todayTasks: [
+          task('청소', deferredCount: 1),
+          task('보고서', deferredCount: 4),
+        ],
+      );
+      expect(nudge?.taskName, '보고서');
+    });
+
     test('미룬 적 없으면 이 분기가 아니다', () {
       final nudge = decide(todayTasks: [task('보고서')]);
       expect(nudge?.kind, NudgeKind.notStarted);
