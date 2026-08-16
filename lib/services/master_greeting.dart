@@ -205,6 +205,12 @@ class GreetingVoice {
   /// 수 있다. 그래서 묻되, 왜 묻는지(표시가 비어 있다는 것)를 밝힌다.
   final List<String> coreAsk;
 
+  /// 핵심으로도 습관으로도 지정하지 않았지만 요즘 자주 하던 일을 묻는 말.
+  ///
+  /// 왜 하필 이 일인지 밝힌다. 사용자가 고른 것이 아니라 코치가 기록을 보고
+  /// 고른 자리라, 근거가 없으면 아무거나 집은 것으로 읽힌다.
+  final List<String> repeatingAsk;
+
   /// 시작은 했다고 답했을 때. 마스터 코치는 표시를 대신 켜주고 그 사실을 알린다.
   final List<String> coreAskStartedReply;
 
@@ -263,6 +269,7 @@ class GreetingVoice {
     required this.eveningOffPlanAsk,
     required this.offPlanDoneReply,
     required this.coreAsk,
+    required this.repeatingAsk,
     required this.coreAskStartedReply,
     required this.coreAskAlreadyReply,
     required this.coreAskBusyReply,
@@ -488,6 +495,12 @@ class MasterGreetingCopy {
           '표시가 그대로라 {여쭤보는 겁니다|확인차 여쭙습니다}. 이미 하고 계신데 누르는 걸 잊으셨을 수도 있으니까요.',
       '{{task}}는 {진행하고 계신가요|시작하셨나요}?\n'
           '{아직 시작 표시가 없어서요|시작 표시가 비어 있어서요}. 아직이셔도 괜찮습니다.',
+    ],
+    repeatingAsk: [
+      '{{task}}, 요즘 {꾸준히 이어오시던|자주 하시던} 일이더군요.\n'
+          '오늘 몫은 {아직 비어 있습니다|시작 표시가 그대로입니다}. 지금 짧게 손대보실까요?',
+      '요즘 {계속 이어오신|자주 올려두신} 일이라 {눈에 들어왔습니다|눈에 띄었습니다}. {{task}} 말입니다.\n'
+          '{아직이시라면|혹시 아직이시면} 오늘도 조금만 해두시는 건 어떨까요?',
     ],
     coreAskStartedReply: [
       '{이미 진행 중이셨군요|역시 하고 계셨군요}. {안심이 되네요|마음이 놓입니다}.\n'
@@ -723,6 +736,12 @@ class MasterGreetingCopy {
       '{{task}}는 {하고 있냥|시작했냥}?\n'
           '{아직 시작 표시가 없어서다냥|시작 표시가 비어 있어서다냥}. 아직이어도 괜찮다냥.',
     ],
+    repeatingAsk: [
+      '{{task}}, 요즘 {꾸준히 이어오던|자주 하던} 일이더구나냥.\n'
+          '오늘 몫은 {아직 비어 있다냥|시작 표시가 그대로다냥}. 지금 짧게 손대볼까냥?',
+      '요즘 {계속 이어오던|자주 올려두던} 일이라 {눈에 들어왔다냥|눈에 띄었다냥}. {{task}} 말이다냥.\n'
+          '{아직이면|혹시 아직이면} 오늘도 조금만 해두는 게 어떻냥?',
+    ],
     coreAskStartedReply: [
       '{이미 하는 중이었구나냥|역시 하고 있었구나냥}. {안심이 된다냥|마음이 놓인다냥}.\n'
           '시작 표시는 내가 {해뒀다냥|눌러뒀다냥}. 하던 것만 보면 된다냥.',
@@ -942,6 +961,10 @@ class MasterGreetingBuilder {
   /// 거치지 않는다 — 발화 조건(몇 시인지, 얼마나 밀렸는지)은 화면이 판단하고,
   /// 여기서는 이름만 받아 문장으로 옮긴다.
   String buildCoreAsk(String taskName) => _fill(voice.coreAsk, taskName);
+
+  /// 지정해둔 것은 없지만 요즘 자주 하던 일을 묻는 말.
+  String buildRepeatingAsk(String taskName) =>
+      _fill(voice.repeatingAsk, taskName);
 
   /// 시작해두고 완료가 안 된 일을 물어보는 말.
   String buildStalledAsk(String taskName) => _fill(voice.stalledAsk, taskName);

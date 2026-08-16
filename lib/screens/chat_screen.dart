@@ -28,6 +28,7 @@ import 'package:nyang_coach/services/local_reply_texts.dart';
 import 'package:nyang_coach/services/master_bedtime_offer_copy.dart';
 import 'package:nyang_coach/services/master_greeting.dart';
 import 'package:nyang_coach/services/memory_service.dart';
+import 'package:nyang_coach/services/repeat_keyword_service.dart';
 import 'package:nyang_coach/services/task_resistance_service.dart';
 import 'package:nyang_coach/services/execution_resistance_service.dart';
 import 'package:nyang_coach/services/focus_fatigue_service.dart';
@@ -1333,6 +1334,11 @@ class _ChatScreenState extends State<ChatScreen>
   // 들고 있다가 오래된 것은 버린다.
   String? _pendingEveningSplitTask;
   DateTime? _pendingEveningSplitAt;
+
+  /// 방금 물어본 일이 핵심이 아니라 '요즘 자주 하던 일'일 때 그 이름.
+  ///
+  /// 핵심을 물었을 때는 비워둔다. 그때는 핵심 목록에서 찾으면 되기 때문이다.
+  String? _pendingRepeatingAskTask;
   static const _eveningSplitTtl = Duration(minutes: 3);
 
   // 실행 저항 원인 확인: 확인 질문을 던진 직후, 사용자의 원인 답변을 기다리는 상태
@@ -4494,11 +4500,17 @@ ${lines.join('\n')}
     // 보고, 어제 물었으면 오늘은 쉰다.
     if (!await _canAskCoreToday(now)) return false;
     final core = _coreTaskDueForAsk(prefs, now);
-    if (core == null) return false;
+    // 핵심을 지정해두지 않은 사람에게는 요즘 자주 하던 일을 대신 묻는다.
+    // 질문의 모양이 같아서 뒤따르는 버튼과 처리도 그대로 쓴다.
+    final repeating = core == null ? _repeatingTaskDueToday(prefs) : null;
+    if (core == null && repeating == null) return false;
     if (!mounted) return false;
 
+    _pendingRepeatingAskTask = repeating;
     _injectAiMessage(
-      _greetingBuilder.buildCoreAsk(core),
+      core != null
+          ? _greetingBuilder.buildCoreAsk(core)
+          : _greetingBuilder.buildRepeatingAsk(repeating!),
       kind: _masterCoreGreetingKind,
       choices: _masterCoreAskLabels,
     );
@@ -4641,6 +4653,52 @@ ${lines.join('\n')}
       if (name != null) names.add(name);
     }
     return names;
+  }
+
+  /// 핵심으로도 습관으로도 지정하지 않았지만 요즘 자주 하던 일.
+  ///
+  /// 코치가 챙기는 세 번째 순위다. 사용자가 아무것도 지정해두지 않아도, 최근
+  /// 기록에서 반복되던 말이 오늘 다시 올라왔으면 그것부터 본다.
+  ///
+  /// 핵심과 습관은 여기서 뺀다. 앞의 두 순위가 이미 챙기는 것들이라 같은 일을
+  /// 두 번 짚게 된다.
+  String? _repeatingTaskDueToday(SharedPreferences prefs) {
+    final candidates = RepeatKeywordService.analyze(
+      _decodeMapList(prefs.getString('nyang_history')),
+    );
+    if (candidates.isEmpty) return null;
+
+    final coreTexts = _decodeMapList(prefs.getString('nyang_core_tasks'))
+        .map((task) => task['text']?.toString().trim() ?? '')
+        .where((text) => text.isNotEmpty)
+        .toSet();
+
+    for (final task in _decodeMapList(prefs.getString('nyang_tasks'))) {
+      if (!_isPendingNotInProgressTask(task)) continue;
+      if (_isHabitTask(task) || task['habitId'] != null) continue;
+      final text = task['text']?.toString().trim() ?? '';
+      if (text.isEmpty || coreTexts.contains(text)) continue;
+      if (RepeatKeywordService.matchingKeyword(text, candidates) == null) {
+        continue;
+      }
+      final name = _shortTaskName(task);
+      if (name != null) return name;
+    }
+    return null;
+  }
+
+  /// 요즘 자주 하던 일을 짚어주는 오후 인사.
+  ///
+  /// 왜 하필 이 일인지 밝힌다. 근거 없이 하나를 집으면 아무거나 고른 것으로
+  /// 읽혀서, 지켜보고 있었다는 느낌이 살지 않는다.
+  String _buildCatRepeatingTaskText(String task) {
+    final texts = [
+      '집사, \'$task\'는 요즘 자주 하던 거잖냥.\n'
+          '오늘 몫은 아직 안 건드렸다냥. 지금 짧게 손대볼까냥?',
+      '\'$task\' 보니까 요즘 계속 이어오던 거다냥.\n'
+          '오늘 것도 비어 있다냥. 5분만 해볼까냥?',
+    ];
+    return texts[Random().nextInt(texts.length)];
   }
 
   /// 아직 체크 안 된 습관을 짚어주는 오후 인사. 재촉하지 않는다 — 이미 했는데
@@ -5150,8 +5208,22 @@ ${lines.join('\n')}
   /// 오늘 할 일과 핵심 일정 양쪽을 함께 고친다. 한쪽만 고치면 할 일 화면과
   /// 핵심 일정 카드가 서로 다른 상태를 보여준다. 저장 뒤에 하는 일들은 할 일
   /// 화면의 시작 버튼이 하던 것과 같다 — 오늘 기록, 위젯, 클라우드, 진행률.
-  Future<String?> _markCoreTaskStarted(SharedPreferences prefs) async {
-    final target = _findCoreTask(prefs, _isPendingNotInProgressTask);
+  ///
+  /// [taskText]를 주면 핵심 목록 대신 그 이름의 할 일을 켠다. 핵심을 지정하지
+  /// 않은 사람에게 요즘 자주 하던 일을 물었을 때 쓰는 길이다. 이 경우 핵심
+  /// 목록에는 그 일이 없어서, 안 주면 켤 것을 못 찾고 빈손으로 돌아온다.
+  Future<String?> _markCoreTaskStarted(
+    SharedPreferences prefs, {
+    String? taskText,
+  }) async {
+    final target = taskText != null
+        ? _decodeMapList(prefs.getString('nyang_tasks')).firstWhere(
+            (task) =>
+                _taskText(task) == taskText &&
+                _isPendingNotInProgressTask(task),
+            orElse: () => <String, dynamic>{},
+          )
+        : _findCoreTask(prefs, _isPendingNotInProgressTask);
     final targetText = _taskText(target);
     if (target == null || targetText == null) return null;
     final targetId = target['id']?.toString();
@@ -5416,10 +5488,18 @@ ${lines.join('\n')}
     final pendingHabits = notStartedCore == null && !coreInProgress
         ? _pendingDailyHabits(prefs)
         : const <String>[];
+    // 핵심도 습관도 없는 사람을 위한 세 번째 순위. 지정해둔 게 없다고 해서
+    // 챙길 것이 없는 건 아니다.
+    final repeatingTask =
+        notStartedCore == null && !coreInProgress && pendingHabits.isEmpty
+        ? _repeatingTaskDueToday(prefs)
+        : null;
     final text = notStartedCore != null
         ? _buildCatAfternoonCoreAskText(notStartedCore)
         : pendingHabits.isNotEmpty
         ? _buildCatHabitCheckText(pendingHabits)
+        : repeatingTask != null
+        ? _buildCatRepeatingTaskText(repeatingTask)
         : await _buildCatAfternoonCheckInText(prefs);
     await Future.delayed(const Duration(milliseconds: 450));
     if (!mounted) return true;
@@ -16031,7 +16111,10 @@ ${Prompts.outputRulesTail}$coachOfferTaskRule$halmaeHint$resistanceTurnDirective
     if (label == _masterCoreStartedLabel) {
       // 표시를 안 누른 게 귀찮아서였을 텐데 또 누르라고 하면 똑같다.
       final prefs = await SharedPreferences.getInstance();
-      final started = await _markCoreTaskStarted(prefs);
+      final started = await _markCoreTaskStarted(
+        prefs,
+        taskText: _pendingRepeatingAskTask,
+      );
       _injectAiMessage(
         _greetingBuilder.pickLine(
           started != null
