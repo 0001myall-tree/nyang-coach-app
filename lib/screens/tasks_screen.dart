@@ -23,6 +23,7 @@ import '../services/api_usage_limit_service.dart';
 import '../services/widget_sync_service.dart';
 import '../services/daily_reset_service.dart';
 import '../services/apple_calendar_sync_service.dart';
+import '../services/routine_schedule.dart';
 import '../theme/app_design_tokens.dart';
 import '../widgets/core_reminder_settings_sheet.dart';
 
@@ -1251,7 +1252,7 @@ class _TasksScreenState extends State<TasksScreen>
     Map<String, dynamic> command,
   ) async {
     if (!await _hasActivePlan()) {
-      return '할 일, 일정, 습관 관리는 Friends 또는 Master 플랜에서 이용할 수 있어요.';
+      return '할 일, 일정, 루틴 관리는 Friends 또는 Master 플랜에서 이용할 수 있어요.';
     }
     final target = (command['target'] ?? '').toString().trim();
     final kind = (command['kind'] ?? 'task_or_schedule').toString();
@@ -1368,9 +1369,9 @@ class _TasksScreenState extends State<TasksScreen>
       case 'boyfriend':
         return switch (key) {
           'emptyTarget' => '어떤 걸 삭제할지 이름까지 같이 말해줘.',
-          'habitNotFound' => '습관 탭은 열어둘게. $quoted 습관은 못 찾았으니까 이름 한번만 확인해줘.',
-          'habitMultiple' => '습관 탭은 열어둘게. $quoted 비슷한 게 여러 개라 직접 보고 지워줘.',
-          'habitOpened' => '습관 탭 열어둘게. $quoted 옆 휴지통 버튼으로 확인하고 삭제해줘.',
+          'habitNotFound' => '루틴 탭은 열어둘게. $quoted 루틴은 못 찾았으니까 이름 한번만 확인해줘.',
+          'habitMultiple' => '루틴 탭은 열어둘게. $quoted 비슷한 게 여러 개라 직접 보고 지워줘.',
+          'habitOpened' => '루틴 탭 열어둘게. $quoted 옆 휴지통 버튼으로 확인하고 삭제해줘.',
           'recurringNotFound' =>
             '$datePrefix$quoted 반복 일정은 못 찾았어. 날짜나 이름 한번만 확인해줘.',
           'recurringMultiple' =>
@@ -1383,9 +1384,9 @@ class _TasksScreenState extends State<TasksScreen>
       case 'bro':
         return switch (key) {
           'emptyTarget' => '뭘 삭제할지 이름까지 같이 말해라.',
-          'habitNotFound' => '습관 탭은 열어둔다. $quoted 습관은 안 보이니까 이름 확인해라.',
-          'habitMultiple' => '습관 탭은 열어둔다. $quoted 비슷한 게 여러 개니까 직접 보고 지워라.',
-          'habitOpened' => '습관 탭 열어둔다. $quoted 옆 휴지통 눌러서 확인하고 삭제해라.',
+          'habitNotFound' => '루틴 탭은 열어둔다. $quoted 루틴은 안 보이니까 이름 확인해라.',
+          'habitMultiple' => '루틴 탭은 열어둔다. $quoted 비슷한 게 여러 개니까 직접 보고 지워라.',
+          'habitOpened' => '루틴 탭 열어둔다. $quoted 옆 휴지통 눌러서 확인하고 삭제해라.',
           'recurringNotFound' =>
             '$datePrefix$quoted 반복 일정은 안 보인다. 날짜나 이름 확인해라.',
           'recurringMultiple' => '$quoted 비슷한 반복 일정이 여러 개다. 날짜나 이름 더 정확히 말해라.',
@@ -1397,9 +1398,9 @@ class _TasksScreenState extends State<TasksScreen>
       case 'halmae':
         return switch (key) {
           'emptyTarget' => '뭘 지울지 이름까지 말해줘야 한다, 우리 새끼.',
-          'habitNotFound' => '습관 탭은 열어둘게. $quoted 습관은 못 찾았으니 이름을 다시 봐라.',
-          'habitMultiple' => '습관 탭은 열어둘게. $quoted 비슷한 게 여러 개니 네가 보고 지워라.',
-          'habitOpened' => '습관 탭 열어둘게. $quoted 옆 휴지통 버튼 눌러서 확인하고 지워라.',
+          'habitNotFound' => '루틴 탭은 열어둘게. $quoted 루틴은 못 찾았으니 이름을 다시 봐라.',
+          'habitMultiple' => '루틴 탭은 열어둘게. $quoted 비슷한 게 여러 개니 네가 보고 지워라.',
+          'habitOpened' => '루틴 탭 열어둘게. $quoted 옆 휴지통 버튼 눌러서 확인하고 지워라.',
           'recurringNotFound' =>
             '$datePrefix$quoted 반복 일정은 못 찾았다. 날짜나 이름을 다시 봐라.',
           'recurringMultiple' => '$quoted 비슷한 반복 일정이 여러 개다. 조금 더 똑바로 말해줘야 한다.',
@@ -1412,10 +1413,10 @@ class _TasksScreenState extends State<TasksScreen>
         return switch (key) {
           'emptyTarget' => '삭제할 항목명을 함께 말씀해 주세요.',
           'habitNotFound' =>
-            '습관 탭을 열어두겠습니다. $quoted 습관은 찾지 못했습니다. 항목명을 확인해 주세요.',
+            '루틴 탭을 열어두겠습니다. $quoted 루틴은 찾지 못했습니다. 항목명을 확인해 주세요.',
           'habitMultiple' =>
-            '습관 탭을 열어두겠습니다. $quoted와 유사한 습관이 여러 개라 직접 확인 후 삭제해 주세요.',
-          'habitOpened' => '습관 탭을 열어두겠습니다. $quoted 항목의 휴지통 버튼으로 확인 후 삭제해 주세요.',
+            '루틴 탭을 열어두겠습니다. $quoted와 유사한 루틴이 여러 개라 직접 확인 후 삭제해 주세요.',
+          'habitOpened' => '루틴 탭을 열어두겠습니다. $quoted 항목의 휴지통 버튼으로 확인 후 삭제해 주세요.',
           'recurringNotFound' =>
             '$datePrefix$quoted 반복 일정은 찾지 못했습니다. 날짜나 항목명을 확인해 주세요.',
           'recurringMultiple' =>
@@ -1429,10 +1430,10 @@ class _TasksScreenState extends State<TasksScreen>
       case 'sec_female':
         return switch (key) {
           'emptyTarget' => '삭제할 항목명을 함께 말씀해 주세요.',
-          'habitNotFound' => '습관 탭을 열어둘게요. $quoted 습관은 찾지 못했어요. 항목명을 확인해 주세요.',
+          'habitNotFound' => '루틴 탭을 열어둘게요. $quoted 루틴은 찾지 못했어요. 항목명을 확인해 주세요.',
           'habitMultiple' =>
-            '습관 탭을 열어둘게요. $quoted와 비슷한 습관이 여러 개라 직접 확인 후 삭제해 주세요.',
-          'habitOpened' => '습관 탭을 열어둘게요. $quoted 항목의 휴지통 버튼으로 확인 후 삭제해 주세요.',
+            '루틴 탭을 열어둘게요. $quoted와 비슷한 루틴이 여러 개라 직접 확인 후 삭제해 주세요.',
+          'habitOpened' => '루틴 탭을 열어둘게요. $quoted 항목의 휴지통 버튼으로 확인 후 삭제해 주세요.',
           'recurringNotFound' =>
             '$datePrefix$quoted 반복 일정은 찾지 못했어요. 날짜나 항목명을 확인해 주세요.',
           'recurringMultiple' =>
@@ -1446,9 +1447,9 @@ class _TasksScreenState extends State<TasksScreen>
       default:
         return switch (key) {
           'emptyTarget' => '어떤 걸 삭제할지 이름까지 같이 말해달라냥.',
-          'habitNotFound' => '습관 탭을 열어둘게냥. $quoted 습관은 못 찾았다냥. 이름을 확인해달라냥.',
-          'habitMultiple' => '습관 탭을 열어둘게냥. $quoted 비슷한 게 여러 개라 직접 보고 삭제해달라냥.',
-          'habitOpened' => '습관 탭 열어둘게냥. $quoted 옆 휴지통 버튼으로 확인하고 삭제해달라냥.',
+          'habitNotFound' => '루틴 탭을 열어둘게냥. $quoted 루틴은 못 찾았다냥. 이름을 확인해달라냥.',
+          'habitMultiple' => '루틴 탭을 열어둘게냥. $quoted 비슷한 게 여러 개라 직접 보고 삭제해달라냥.',
+          'habitOpened' => '루틴 탭 열어둘게냥. $quoted 옆 휴지통 버튼으로 확인하고 삭제해달라냥.',
           'recurringNotFound' =>
             '$datePrefix$quoted 반복 일정은 못 찾았다냥. 날짜나 이름을 확인해달라냥.',
           'recurringMultiple' =>
@@ -2773,98 +2774,50 @@ class _TasksScreenState extends State<TasksScreen>
     _saveTasks();
   }
 
-  DateTime _startOfWeek(DateTime date) {
-    final normalized = DateTime(date.year, date.month, date.day);
-    return normalized.subtract(Duration(days: normalized.weekday - 1));
-  }
+  DateTime? _createdDateOfHabit(HabitItem habit) =>
+      RoutineSchedule.createdDate(habit.createdAt);
 
-  DateTime? _createdDateOfHabit(HabitItem habit) {
-    final createdAt = DateTime.tryParse(habit.createdAt);
-    if (createdAt == null) return null;
-    return DateTime(createdAt.year, createdAt.month, createdAt.day);
-  }
-
-  int _weeklyTargetForHabit(HabitItem habit) {
-    final rawTarget = habit.weeklyTargetCount ?? 5;
-    return rawTarget < 1 ? 1 : (rawTarget > 7 ? 7 : rawTarget);
-  }
+  int _weeklyTargetForHabit(HabitItem habit) =>
+      RoutineSchedule.weeklyTarget(habit.weeklyTargetCount);
 
   int _weeklyVisibleTargetForDate(HabitItem habit, DateTime date) {
-    final target = _weeklyTargetForHabit(habit);
-    final normalizedDate = DateTime(date.year, date.month, date.day);
-    final weekStart = _startOfWeek(normalizedDate);
-    final createdDate = _createdDateOfHabit(habit);
-    if (createdDate == null ||
-        createdDate.isBefore(weekStart) ||
-        createdDate.isAfter(normalizedDate)) {
-      return target;
-    }
-
-    final remainingDaysInCreationWeek = 8 - createdDate.weekday;
-    return remainingDaysInCreationWeek < target
-        ? remainingDaysInCreationWeek
-        : target;
+    return RoutineSchedule.visibleWeeklyTarget(
+      target: _weeklyTargetForHabit(habit),
+      createdDate: _createdDateOfHabit(habit),
+      date: date,
+    );
   }
 
-  String _dateKeyFor(DateTime date) {
-    return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
-  }
 
   String _habitTaskBadgeLabel(TaskItem task) {
-    if (task.habitId == null) return '습관';
+    if (task.habitId == null) return '루틴';
     final habitIndex = habits.indexWhere(
       (h) => h.id.toString() == task.habitId.toString(),
     );
-    if (habitIndex < 0) return '습관';
+    if (habitIndex < 0) return '루틴';
 
     final habit = habits[habitIndex];
-    if (habit.freq != 'weekly_count') return '습관';
+    if (habit.freq != 'weekly_count') return '루틴';
 
     final today = DateTime.now();
     final target = _weeklyTargetForHabit(habit);
-    final weekStart = _startOfWeek(today);
-    final normalizedToday = DateTime(today.year, today.month, today.day);
-    final createdDate = _createdDateOfHabit(habit);
-    final countStart =
-        createdDate != null &&
-            !createdDate.isBefore(weekStart) &&
-            !createdDate.isAfter(normalizedToday)
-        ? createdDate
-        : weekStart;
     final logs = habitLogs[habit.id.toString()] ?? {};
-    var doneCount = 0.0;
+    // 배지는 오늘까지 포함해 센다. 목록에 올릴지 정할 때(어제까지)와 세는
+    // 범위가 다르다 — 이쪽은 "오늘 이걸 하면 몇 번째"를 보여주는 자리다.
+    final doneCount = RoutineSchedule.doneCount(
+      logs: logs,
+      createdDate: _createdDateOfHabit(habit),
+      date: today,
+      includeDate: true,
+    );
 
-    for (
-      var cursor = countStart;
-      !cursor.isAfter(normalizedToday);
-      cursor = cursor.add(const Duration(days: 1))
-    ) {
-      doneCount += _habitLogCompletionRatio(logs[_dateKeyFor(cursor)]);
-    }
-
-    final todayDone = logs[_dateKeyFor(today)]?['done'] == true || task.done;
+    final todayDone = RoutineSchedule.isDoneOn(logs, today) || task.done;
     final displayCount = todayDone ? doneCount : doneCount + 1;
     final roundedDisplayCount = displayCount.round();
     final safeDisplayCount = roundedDisplayCount < 1
         ? 1
         : (roundedDisplayCount > target ? target : roundedDisplayCount);
-    return '습관 $safeDisplayCount/$target';
-  }
-
-  double _habitLogCompletionRatio(dynamic log) {
-    if (log is! Map || log['done'] != true) return 0;
-    final rawRatio = log['progressRatio'];
-    if (rawRatio is num) {
-      final ratio = rawRatio.toDouble();
-      return ratio < 0 ? 0 : (ratio > 1 ? 1 : ratio);
-    }
-    final count = (log['count'] as num?)?.toDouble();
-    final countGoal = (log['countGoal'] as num?)?.toDouble();
-    if (count != null && countGoal != null && countGoal > 0) {
-      final ratio = count / countGoal;
-      return ratio < 0 ? 0 : (ratio > 1 ? 1 : ratio);
-    }
-    return 1;
+    return '루틴 $safeDisplayCount/$target';
   }
 
   bool _countsTowardDailyCompletion(TaskItem task) {
@@ -2878,31 +2831,12 @@ class _TasksScreenState extends State<TasksScreen>
   }
 
   bool _shouldShowWeeklyCountHabitOnDate(HabitItem habit, DateTime date) {
-    final normalizedDate = DateTime(date.year, date.month, date.day);
-    final target = _weeklyVisibleTargetForDate(habit, normalizedDate);
-    final weekStart = _startOfWeek(normalizedDate);
-    final createdDate = _createdDateOfHabit(habit);
-    final countStart =
-        createdDate != null &&
-            !createdDate.isBefore(weekStart) &&
-            createdDate.isBefore(normalizedDate)
-        ? createdDate
-        : weekStart;
-    final logs = habitLogs[habit.id.toString()] ?? {};
-    var doneCountBeforeDate = 0.0;
-
-    for (
-      var cursor = countStart;
-      cursor.isBefore(normalizedDate);
-      cursor = cursor.add(const Duration(days: 1))
-    ) {
-      doneCountBeforeDate += _habitLogCompletionRatio(
-        logs[_dateKeyFor(cursor)],
-      );
-    }
-
-    final dateDone = logs[_dateKeyFor(date)]?['done'] == true;
-    return dateDone || doneCountBeforeDate < target;
+    return RoutineSchedule.shouldShowWeeklyCountOnDate(
+      rawWeeklyTargetCount: habit.weeklyTargetCount,
+      rawCreatedAt: habit.createdAt,
+      logs: habitLogs[habit.id.toString()] ?? const {},
+      date: date,
+    );
   }
 
   Future<({String label, double ratio})?> _pickHabitCompletionRatio(
@@ -3236,6 +3170,19 @@ class _TasksScreenState extends State<TasksScreen>
   ///
   /// [forceComplete]는 밀어서 완료가 켠다. 타이머형 할 일에서는 왼쪽 버튼이
   /// 완료를 하지 않기 때문에, 완료로 곧장 가는 길이 따로 필요하다.
+  /// 시트나 다이얼로그를 기다린 뒤 같은 할 일을 다시 잡는다.
+  ///
+  /// 기다리는 동안 클라우드 동기화가 목록을 통째로 새로 읽어오면 항목이 전부
+  /// 새 객체로 갈린다. 그때까지 들고 있던 것은 화면에 없는 옛 객체라, 거기에
+  /// 완료를 적으면 화면에도 저장에도 남지 않는다. 사라진 항목이면 null.
+  TaskItem? _reacquireTask(TaskItem stale) {
+    final latest = _activeTodayTasksWithSchedules;
+    final idx = latest.indexWhere(
+      (item) => item.id.toString() == stale.id.toString(),
+    );
+    return idx < 0 ? null : latest[idx];
+  }
+
   Future<void> _toggleTask(dynamic id, {bool forceComplete = false}) async {
     if (id.toString().startsWith('milestone_')) {
       final idStr = id.toString();
@@ -3257,7 +3204,7 @@ class _TasksScreenState extends State<TasksScreen>
     }
 
     final currentTasks = _activeTodayTasksWithSchedules;
-    final t = currentTasks.firstWhere(
+    var t = currentTasks.firstWhere(
       (t) => t.id.toString() == id.toString(),
       orElse: () => currentTasks.first,
     );
@@ -3279,6 +3226,11 @@ class _TasksScreenState extends State<TasksScreen>
     if (t.done) {
       // 완료 취소 — 시작·완료와 달리 여기만 한 번 묻는다.
       if (!await _confirmUncomplete()) return;
+      // 묻는 동안 목록이 새로 읽혔을 수 있다. 옛 객체를 되돌려봐야 화면은
+      // 그대로다.
+      final reacquired = _reacquireTask(t);
+      if (reacquired == null) return;
+      t = reacquired;
       setState(() {
         t.done = false;
         t.completedAt = null;
@@ -3383,6 +3335,13 @@ class _TasksScreenState extends State<TasksScreen>
           if (habitInfo.checkType == 'count' || habitInfo.checkType == 'both') {
             final selection = await _pickHabitCompletionRatio(habitInfo);
             if (selection == null) return;
+            if (!mounted) return;
+            // 시트를 읽고 고르는 몇 초 사이에 목록이 통째로 새로 읽혀올 수 있다.
+            // 그러면 손에 든 t는 화면에 없는 옛 객체라, 여기에 완료를 적어봐야
+            // 화면도 저장도 그대로다. 민 것이 없던 일이 되는 자리가 여기였다.
+            final reacquired = _reacquireTask(t);
+            if (reacquired == null) return;
+            t = reacquired;
             habitCompletionRatio = selection.ratio;
             habitCompletionLabel = selection.label;
             final countGoal = habitInfo.countGoal ?? 0;
@@ -3486,7 +3445,8 @@ class _TasksScreenState extends State<TasksScreen>
           coreTasks.any((ct) => ct.id.toString() == t.id.toString());
 
       // 로컬 칭찬 팝업 (Flirt)
-      final countableCurrentTasks = currentTasks
+      // 목록이 새로 읽혔을 수 있으니 진행률도 지금 목록으로 센다.
+      final countableCurrentTasks = _activeTodayTasksWithSchedules
           .where(_countsTowardDailyCompletion)
           .toList();
       final doneCount = countableCurrentTasks.where((ts) => ts.done).length;
@@ -3603,7 +3563,7 @@ class _TasksScreenState extends State<TasksScreen>
       (label: '취소', value: 'cancel'),
     ];
     final action = await _showDeleteOptionsDialog(
-      title: isHabitTask ? '이 습관 할 일을 어떻게 할까요?' : '이 일정을 삭제할까요?',
+      title: isHabitTask ? '이 루틴 할 일을 어떻게 할까요?' : '이 일정을 삭제할까요?',
       actions: actions,
     );
 
@@ -5207,7 +5167,7 @@ class _TasksScreenState extends State<TasksScreen>
       {'icon': Icons.assignment_outlined, 'label': '오늘'},
       {'icon': Icons.calendar_month_outlined, 'label': '캘린더'},
       {'icon': Icons.track_changes_outlined, 'label': '목표'},
-      {'icon': Icons.wb_sunny_outlined, 'label': '습관'},
+      {'icon': Icons.wb_sunny_outlined, 'label': '루틴'},
     ];
     return Container(
       color: isVacation ? Colors.transparent : Colors.white,
@@ -13444,7 +13404,7 @@ class _TasksScreenState extends State<TasksScreen>
                         const Text('🌱', style: TextStyle(fontSize: 40)),
                         const SizedBox(height: 12),
                         Text(
-                          '습관을 추가해봐요!',
+                          '루틴을 추가해봐요!',
                           style: GoogleFonts.notoSansKr(
                             fontSize: 14,
                             color: const Color(0xFFA0A0B0),
@@ -13478,7 +13438,7 @@ class _TasksScreenState extends State<TasksScreen>
                     const Icon(Icons.add, color: Colors.white, size: 18),
                     const SizedBox(width: 6),
                     Text(
-                      '새 습관 추가',
+                      '새 루틴 추가',
                       style: GoogleFonts.notoSansKr(
                         fontSize: 14,
                         fontWeight: FontWeight.w800,
@@ -13605,8 +13565,8 @@ class _TasksScreenState extends State<TasksScreen>
 
   Future<void> _deleteHabit(dynamic id) async {
     final confirm = await _showConfirmDialog(
-      '습관 항목 삭제',
-      '이 습관을 정말 삭제하시겠습니까?\\n연결된 오늘의 할 일도 함께 삭제됩니다.',
+      '루틴 항목 삭제',
+      '이 루틴을 정말 삭제하시겠습니까?\\n연결된 오늘의 할 일도 함께 삭제됩니다.',
     );
     if (!confirm) return;
     setState(() => habits.removeWhere((h) => h.id.toString() == id.toString()));
@@ -13617,17 +13577,17 @@ class _TasksScreenState extends State<TasksScreen>
   String _habitRegistrationGuideText() {
     switch (widget.coachId) {
       case 'boyfriend':
-        return '습관 탭에 추가해뒀어. 세부 설정은 한번 확인하고 너한테 맞게 조정해줘.';
+        return '루틴 탭에 추가해뒀어. 세부 설정은 한번 확인하고 너한테 맞게 조정해줘.';
       case 'bro':
-        return '습관 탭에 추가해뒀다. 세부 설정은 한번 보고 너한테 맞게 손봐라.';
+        return '루틴 탭에 추가해뒀다. 세부 설정은 한번 보고 너한테 맞게 손봐라.';
       case 'halmae':
-        return '습관 탭에 추가해뒀다. 세부 설정은 잘 보고 네 생활에 맞게 고쳐라.';
+        return '루틴 탭에 추가해뒀다. 세부 설정은 잘 보고 네 생활에 맞게 고쳐라.';
       case 'nyang_halbae':
-        return '습관 탭에 추가해두었습니다. 세부 설정을 확인하신 뒤 필요에 맞게 조정해 주세요.';
+        return '루틴 탭에 추가해두었습니다. 세부 설정을 확인하신 뒤 필요에 맞게 조정해 주세요.';
       case 'sec_female':
-        return '습관 탭에 추가해두었어요. 세부 설정을 확인하신 뒤 편하신 방식으로 조정해 주세요.';
+        return '루틴 탭에 추가해두었어요. 세부 설정을 확인하신 뒤 편하신 방식으로 조정해 주세요.';
       default:
-        return '습관 탭에 추가해뒀다냥. 세부 설정은 잘 보고 맞게 조정해달라냥.';
+        return '루틴 탭에 추가해뒀다냥. 세부 설정은 잘 보고 맞게 조정해달라냥.';
     }
   }
 
@@ -13708,7 +13668,7 @@ class _TasksScreenState extends State<TasksScreen>
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      editHabit != null ? '습관 수정' : '새 습관 추가',
+                      editHabit != null ? '루틴 수정' : '새 루틴 추가',
                       style: GoogleFonts.notoSansKr(
                         fontSize: 18,
                         fontWeight: FontWeight.w900,
@@ -13754,7 +13714,7 @@ class _TasksScreenState extends State<TasksScreen>
                         const SizedBox(height: 18),
                       ],
                       // 습관 이름
-                      _modalLabel('습관 이름'),
+                      _modalLabel('루틴 이름'),
                       Material(
                         type: MaterialType.transparency,
                         child: TextField(
@@ -14116,7 +14076,7 @@ class _TasksScreenState extends State<TasksScreen>
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                '습관 트래킹',
+                                '루틴 트래킹',
                                 style: GoogleFonts.notoSansKr(
                                   fontSize: 14,
                                   fontWeight: FontWeight.w700,
@@ -14124,7 +14084,7 @@ class _TasksScreenState extends State<TasksScreen>
                                 ),
                               ),
                               Text(
-                                '매일 습관 달성률을 추적할까요?',
+                                '매일 루틴 달성률을 추적할까요?',
                                 style: GoogleFonts.notoSansKr(
                                   fontSize: 12,
                                   color: const Color(0xFFA0A0B0),
@@ -14277,7 +14237,7 @@ class _TasksScreenState extends State<TasksScreen>
             ),
           ),
           content: Text(
-            '할 일, 일정, 습관 등록은 Friends 또는 Master 플랜 구독자만 이용할 수 있다냥!',
+            '할 일, 일정, 루틴 등록은 Friends 또는 Master 플랜 구독자만 이용할 수 있다냥!',
             style: GoogleFonts.notoSansKr(
               fontSize: 14,
               fontWeight: FontWeight.w500,
@@ -15603,8 +15563,8 @@ $content
                 ),
                 _buildConversionOption(
                   icon: Icons.repeat,
-                  title: '습관 트래커로 추가',
-                  subtitle: '매일 실천하는 습관 목록에 추가합니다.',
+                  title: '루틴 트래커로 추가',
+                  subtitle: '매일 실천하는 루틴 목록에 추가합니다.',
                   onTap: () {
                     Navigator.pop(ctx);
                     widget.onConvertAction!(action, 'habit');
@@ -15783,7 +15743,7 @@ $content
             borderRadius: BorderRadius.circular(4),
           ),
           child: Text(
-            '습관으로 전환됨',
+            '루틴으로 전환됨',
             style: GoogleFonts.notoSansKr(
               fontSize: 10,
               fontWeight: FontWeight.w600,

@@ -193,6 +193,7 @@ class CoachContextScopeService {
     '일정',
     '스케줄',
     '습관',
+    '루틴',
     '타이머',
     '미완료',
     '완료했',

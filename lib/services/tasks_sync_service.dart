@@ -16,6 +16,11 @@ class TasksSyncService {
     'nyang_history',
     'nyang_visions',
     'nyang_today_tasks_by_date',
+    // 습관과 그 완료 기록. 빠져 있던 동안에는 습관을 완료할 때마다 실시간
+    // 리스너가 오늘 기록을 옛 값으로 되돌렸고, 그 되돌림이 목록 전체를 다시
+    // 읽게 만들어 방금 민 완료가 없던 일이 됐다.
+    'nyang_habits',
+    'nyang_habit_logs',
     'nyang_morning_call_enabled',
     'nyang_morning_call_time',
     'nyang_morning_call_coach',

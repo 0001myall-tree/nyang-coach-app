@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import 'memory_service.dart';
 import 'coach_id_service.dart';
+import 'routine_schedule.dart';
 import 'tasks_sync_service.dart';
 
 class DailyResetService {
@@ -475,11 +476,6 @@ class DailyResetService {
     await _saveTodayRecordDirectly(prefs, today, injectedTasks);
   }
 
-  static DateTime _startOfWeek(DateTime date) {
-    final normalized = DateTime(date.year, date.month, date.day);
-    return normalized.subtract(Duration(days: normalized.weekday - 1));
-  }
-
   static String? _displayTimeFromStored({dynamic timeStart, dynamic timeEnd}) {
     final start = _parseStoredTime(timeStart?.toString());
     if (start == null) return timeStart?.toString();
@@ -505,96 +501,22 @@ class DailyResetService {
     return '$ap $displayHour:${minute.toString().padLeft(2, '0')}';
   }
 
-  static DateTime? _createdDateOf(Map<dynamic, dynamic> habit) {
-    final rawCreatedAt = habit['createdAt']?.toString();
-    if (rawCreatedAt == null || rawCreatedAt.isEmpty) return null;
-    final createdAt = DateTime.tryParse(rawCreatedAt);
-    if (createdAt == null) return null;
-    return DateTime(createdAt.year, createdAt.month, createdAt.day);
-  }
-
-  static String _dateKey(DateTime date) {
-    return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
-  }
-
-  static int _weeklyVisibleTargetForDate(
-    Map<dynamic, dynamic> habit,
-    int target,
-    DateTime date,
-  ) {
-    final normalizedDate = DateTime(date.year, date.month, date.day);
-    final weekStart = _startOfWeek(normalizedDate);
-    final createdDate = _createdDateOf(habit);
-    if (createdDate == null ||
-        createdDate.isBefore(weekStart) ||
-        createdDate.isAfter(normalizedDate)) {
-      return target;
-    }
-
-    final remainingDaysInCreationWeek = 8 - createdDate.weekday;
-    return remainingDaysInCreationWeek < target
-        ? remainingDaysInCreationWeek
-        : target;
-  }
-
   static bool _shouldShowWeeklyCountHabitOnDate(
     Map<dynamic, dynamic> habit,
     Map<String, dynamic> habitLogs,
     DateTime date,
   ) {
-    final rawTarget = habit['weeklyTargetCount'];
-    final parsedTarget = rawTarget is num
-        ? rawTarget.toInt()
-        : int.tryParse('$rawTarget') ?? 5;
-    final rawClampedTarget = parsedTarget < 1
-        ? 1
-        : (parsedTarget > 7 ? 7 : parsedTarget);
-    final target = _weeklyVisibleTargetForDate(habit, rawClampedTarget, date);
     final habitId = habit['id']?.toString();
     if (habitId == null) return true;
-
     final logsForHabit = habitLogs[habitId];
     if (logsForHabit is! Map) return true;
 
-    final normalizedDate = DateTime(date.year, date.month, date.day);
-    final weekStart = _startOfWeek(normalizedDate);
-    final createdDate = _createdDateOf(habit);
-    final countStart =
-        createdDate != null &&
-            !createdDate.isBefore(weekStart) &&
-            createdDate.isBefore(normalizedDate)
-        ? createdDate
-        : weekStart;
-    var doneCountBeforeDate = 0.0;
-
-    for (
-      var cursor = countStart;
-      cursor.isBefore(normalizedDate);
-      cursor = cursor.add(const Duration(days: 1))
-    ) {
-      final log = logsForHabit[_dateKey(cursor)];
-      doneCountBeforeDate += _habitLogCompletionRatio(log);
-    }
-
-    final todayLog = logsForHabit[_dateKey(normalizedDate)];
-    final dateDone = todayLog is Map && todayLog['done'] == true;
-    return dateDone || doneCountBeforeDate < target;
-  }
-
-  static double _habitLogCompletionRatio(dynamic log) {
-    if (log is! Map || log['done'] != true) return 0;
-    final rawRatio = log['progressRatio'];
-    if (rawRatio is num) {
-      final ratio = rawRatio.toDouble();
-      return ratio < 0 ? 0 : (ratio > 1 ? 1 : ratio);
-    }
-    final count = (log['count'] as num?)?.toDouble();
-    final countGoal = (log['countGoal'] as num?)?.toDouble();
-    if (count != null && countGoal != null && countGoal > 0) {
-      final ratio = count / countGoal;
-      return ratio < 0 ? 0 : (ratio > 1 ? 1 : ratio);
-    }
-    return 1;
+    return RoutineSchedule.shouldShowWeeklyCountOnDate(
+      rawWeeklyTargetCount: habit['weeklyTargetCount'],
+      rawCreatedAt: habit['createdAt'],
+      logs: logsForHabit,
+      date: date,
+    );
   }
 
   static Future<void> _saveTodayRecordDirectly(
