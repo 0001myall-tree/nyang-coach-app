@@ -37,6 +37,7 @@ import 'package:nyang_coach/services/focus_fatigue_service.dart';
 import 'package:nyang_coach/services/goal_push_service.dart';
 import 'package:nyang_coach/services/resistance_intervention_service.dart';
 import 'package:nyang_coach/services/start_pattern_service.dart';
+import 'package:nyang_coach/services/time_expression.dart';
 import 'package:nyang_coach/prompts/coach_prompt.dart';
 import 'package:nyang_coach/services/prep_time_service.dart';
 import 'package:nyang_coach/services/widget_sync_service.dart';
@@ -901,12 +902,14 @@ class _ParsedScheduleRegistration {
   final String title;
   final DateTime date;
   final TimeOfDay? time;
+  final TimeOfDay? endTime;
   final Map<String, dynamic>? repeatRule;
 
   _ParsedScheduleRegistration({
     required this.title,
     required this.date,
     this.time,
+    this.endTime,
     this.repeatRule,
   });
 }
@@ -5985,18 +5988,20 @@ ${lines.join('\n')}
   // ── 한국어 시간 표현 추출 ─────────────────────────────────
   // null 반환 = 시간이 감지됐지만 오늘 안에 해당 시간이 없음 → 제안 건너뜀
   ({String cleanText, String? time})? _extractTimeFromTask(String rawText) {
-    final timeRegex = RegExp(
-      r'((?:오전|아침|오후|저녁|밤)\s*)?(\d{1,2})시(?:\s*(\d{1,2})분)?(?:\s*(?:에|쯤|경))?',
-    );
-    final match = timeRegex.firstMatch(rawText);
-    if (match == null) return (cleanText: rawText.trim(), time: null);
+    // "9시부터 10시까지"처럼 범위로 말했어도 할 일에는 끝 시각을 담을 자리가
+    // 없다. 시작만 쓰되 매치는 범위 전체로 잡아야 제목에 '10시까지'가 안 남는다.
+    final match =
+        kTimeRangeRegex.firstMatch(rawText) ??
+        kSingleTimeRegex.firstMatch(rawText);
+    if (match == null) return (cleanText: _taskTitle(rawText), time: null);
 
+    final segments = splitTimeRange(match.group(0)!);
     final prefix = (match.group(1) ?? '').replaceAll(RegExp(r'\s'), '');
     final rawHour = int.parse(match.group(2)!);
-    final minute = match.group(3) != null ? int.parse(match.group(3)!) : 0;
+    final minute = minuteFrom(match.group(3), segments.start);
 
     if (rawHour < 1 || rawHour > 12)
-      return (cleanText: rawText.trim(), time: null);
+      return (cleanText: _taskTitle(rawText), time: null);
 
     int hour24;
     if (prefix == '오전' || prefix == '아침') {
@@ -6023,14 +6028,23 @@ ${lines.join('\n')}
     final hStr = hour24.toString().padLeft(2, '0');
     final mStr = minute.toString().padLeft(2, '0');
     final time = '$hStr:$mStr';
-    final cleanText = rawText
-        .replaceFirst(match.group(0)!, '')
-        .replaceAll(RegExp(r'\s+'), ' ')
-        .trim();
+    final cleanText = _taskTitle(
+      rawText.replaceFirst(match.group(0)!, ''),
+      afterTime: true,
+    );
     return (
-      cleanText: cleanText.isEmpty ? rawText.trim() : cleanText,
+      cleanText: cleanText.isEmpty ? _taskTitle(rawText) : cleanText,
       time: time,
     );
+  }
+
+  /// 할 일 이름도 일정·루틴과 같은 손질을 거친다.
+  ///
+  /// 코치가 [TASK: …]에 말끝을 붙여 보내는 일이 있어서, 안 거치면 카드에
+  /// '운동 시작해야지'가 그대로 뜬다. 다 떼고 아무것도 안 남으면 원문을 쓴다.
+  String _taskTitle(String rawText, {bool afterTime = false}) {
+    final cleaned = _cleanRegistrationTitle(rawText, afterTime: afterTime);
+    return cleaned.isEmpty ? rawText.trim() : cleaned;
   }
 
   // HH:mm → "오전/오후 N:MM" 표시 변환
@@ -7332,14 +7346,27 @@ ${lines.join('\n')}
     return input.trim().replaceAll(RegExp(r'[\s.。!！?？~〜]+$'), '');
   }
 
-  String _cleanRegistrationTitle(String input) {
+  /// [afterTime]은 시각을 이미 읽어낸 뒤라는 뜻이다. 그때는 꼬리에 남은
+  /// '시작'을 뗀다 — "9시부터 운동 시작"에서 시작이 언제인지는 시각이 말해준다.
+  String _cleanRegistrationTitle(String input, {bool afterTime = false}) {
     var cleaned = input.replaceAll(RegExp(r'\s+'), ' ').trim();
     cleaned = cleaned.replaceAll(RegExp(r'^(?:나|나는|내가|저|저는)\s+'), '');
     cleaned = cleaned.replaceAll(RegExp(r'^(?:앞으로|이제)\s+'), '');
     cleaned = cleaned.replaceAll(
-      RegExp(r'\s*(?:할\s*건데|할건데|할\s*건대|할\s*거야|할거야|할게|하려고|하려구|할래|할\s*래|하기)$'),
+      RegExp(
+        r'\s*(?:할\s*건데|할건데|할\s*건대|할\s*거야|할거야|할\s*거임|할거임|할게|하려고|하려구|할래|할\s*래|하기'
+        r'|해야지|해야겠다|해야겠어|해야\s*돼|해야\s*해|해야\s*함|하자)$',
+      ),
       '',
     );
+    if (afterTime) {
+      // 떼고 나면 아무것도 안 남는 경우("9시부터 시작")는 그게 이름의 전부라는
+      // 뜻이라 되돌린다.
+      final withoutStart = cleaned
+          .replaceFirst(RegExp(r'\s*시작$'), '')
+          .trim();
+      if (withoutStart.isNotEmpty) cleaned = withoutStart;
+    }
     // "산책 일정에", "할 일에 산책"처럼 어디에 넣을지 가리키는 말은 제목이 아니다.
     // 조사가 붙은 형태까지 떼어낸다. 떼고 나면 아무것도 안 남는 경우
     // ("일정 추가해줘")는 원래 이름이 그것뿐이라는 뜻이라 되돌린다.
@@ -7483,7 +7510,7 @@ ${lines.join('\n')}
       String? rawPrefix,
       String rawHourText,
       String? rawMinuteText,
-      String fullMatch, {
+      String segment, {
       String fallbackPrefix = '',
     }) {
       final prefix = (rawPrefix ?? fallbackPrefix).replaceAll(
@@ -7491,12 +7518,7 @@ ${lines.join('\n')}
         '',
       );
       final rawHour = int.tryParse(rawHourText) ?? 0;
-      var minute = 0;
-      if (rawMinuteText != null) {
-        minute = int.tryParse(rawMinuteText) ?? 0;
-      } else if (fullMatch.contains('반')) {
-        minute = 30;
-      }
+      final minute = minuteFrom(rawMinuteText, segment);
 
       if (rawHour < 1 || rawHour > 24 || minute < 0 || minute > 59) {
         return null;
@@ -7511,23 +7533,21 @@ ${lines.join('\n')}
       return TimeOfDay(hour: hour24, minute: minute);
     }
 
-    final timeRangeRegex = RegExp(
-      r'((?:오전|아침|오후|저녁|밤)\s*)?(\d{1,2})시(?:\s*(\d{1,2})분|\s*반)?\s*(?:부터|에서|-|~)\s*((?:오전|아침|오후|저녁|밤)\s*)?(\d{1,2})시(?:\s*(\d{1,2})분|\s*반)?(?:\s*까지)?',
-    );
-    final rangeMatch = timeRangeRegex.firstMatch(cleaned);
+    final rangeMatch = kTimeRangeRegex.firstMatch(cleaned);
     if (rangeMatch != null) {
       final startPrefix = rangeMatch.group(1) ?? '';
+      final segments = splitTimeRange(rangeMatch.group(0)!);
       final start = parseHabitTime(
         startPrefix,
         rangeMatch.group(2)!,
         rangeMatch.group(3),
-        rangeMatch.group(0)!,
+        segments.start,
       );
       final end = parseHabitTime(
         rangeMatch.group(4),
         rangeMatch.group(5)!,
         rangeMatch.group(6),
-        rangeMatch.group(0)!,
+        segments.end,
         fallbackPrefix: startPrefix,
       );
       if (start != null && end != null) {
@@ -7538,10 +7558,7 @@ ${lines.join('\n')}
     }
 
     if (parsedTime == null) {
-      final timeRegex = RegExp(
-        r'((?:오전|아침|오후|저녁|밤)\s*)?(\d{1,2})시(?:\s*(\d{1,2})분|\s*반)?(?:\s*(?:에|쯤|경))?',
-      );
-      final timeMatch = timeRegex.firstMatch(cleaned);
+      final timeMatch = kSingleTimeRegex.firstMatch(cleaned);
       if (timeMatch != null) {
         final time = parseHabitTime(
           timeMatch.group(1),
@@ -7589,7 +7606,7 @@ ${lines.join('\n')}
       (match) => match.group(1)!,
     );
     cleaned = cleaned.replaceAll(RegExp(r'^글\s*쓰는$'), '글쓰기');
-    cleaned = _cleanRegistrationTitle(cleaned);
+    cleaned = _cleanRegistrationTitle(cleaned, afterTime: parsedTime != null);
     return _ParsedHabitRegistration(
       title: cleaned,
       freq: parsedFreq,
@@ -7917,43 +7934,98 @@ ${lines.join('\n')}
     }
 
     TimeOfDay? parsedTime;
-    final timeRegex = RegExp(
-      r'((?:오전|아침|오후|저녁|밤)\s*)?(\d{1,2})시(?:\s*(\d{1,2})분|\s*반)?(?:\s*(?:에|쯤|경|까지))?',
-    );
-    final timeMatch = timeRegex.firstMatch(cleaned);
-    if (timeMatch != null) {
-      final prefix = (timeMatch.group(1) ?? '').replaceAll(RegExp(r'\s'), '');
-      final rawHour = int.tryParse(timeMatch.group(2)!) ?? 0;
-      var minute = 0;
-      if (timeMatch.group(3) != null) {
-        minute = int.tryParse(timeMatch.group(3)!) ?? 0;
-      } else if (timeMatch.group(0)!.contains('반')) {
-        minute = 30;
-      }
+    TimeOfDay? parsedEndTime;
 
-      if (rawHour >= 1 && rawHour <= 24) {
-        var hour24 = rawHour;
-        if (prefix == '오전' || prefix == '아침') {
-          hour24 = rawHour == 12 ? 0 : rawHour;
-        } else if (prefix == '오후' || prefix == '저녁' || prefix == '밤') {
-          hour24 = rawHour == 12 ? 12 : rawHour + 12;
-        } else if (rawHour < 12) {
+    /// [notBefore]를 주면 그 시각보다 뒤로 민다. 끝 시각을 읽을 때 쓴다.
+    /// 주지 않으면 지금 기준으로 이미 지난 시각을 오후로 민다.
+    TimeOfDay? readTime(
+      String? rawPrefix,
+      String rawHourText,
+      String? rawMinuteText,
+      String segment, {
+      String fallbackPrefix = '',
+      TimeOfDay? notBefore,
+    }) {
+      final prefix = (rawPrefix ?? fallbackPrefix).replaceAll(
+        RegExp(r'\s'),
+        '',
+      );
+      final rawHour = int.tryParse(rawHourText) ?? 0;
+      final minute = minuteFrom(rawMinuteText, segment);
+      if (rawHour < 1 || rawHour > 24 || minute > 59) return null;
+
+      var hour24 = rawHour;
+      if (prefix == '오전' || prefix == '아침') {
+        hour24 = rawHour == 12 ? 0 : rawHour;
+      } else if (prefix == '오후' || prefix == '저녁' || prefix == '밤') {
+        hour24 = rawHour == 12 ? 12 : rawHour + 12;
+      } else if (rawHour < 12) {
+        if (notBefore != null) {
+          // "9시부터 5시까지"의 5시는 오후다. 끝이 시작보다 앞설 수는 없다.
+          final startTotal = notBefore.hour * 60 + notBefore.minute;
+          if (rawHour * 60 + minute <= startTotal) hour24 = rawHour + 12;
+        } else {
           final now = DateTime.now();
           if (now.hour > rawHour ||
               (now.hour == rawHour && now.minute >= minute)) {
             hour24 = rawHour + 12;
           }
         }
-        parsedTime = TimeOfDay(hour: hour24, minute: minute);
-        cleaned = cleaned.replaceFirst(timeMatch.group(0)!, '').trim();
+      }
+      if (hour24 > 23) return null;
+      return TimeOfDay(hour: hour24, minute: minute);
+    }
+
+    // "9시부터 10시까지"를 먼저 본다. 시작만 떼면 뒷시각이 제목에 남는다.
+    final rangeMatch = kTimeRangeRegex.firstMatch(cleaned);
+    if (rangeMatch != null) {
+      final startPrefix = rangeMatch.group(1) ?? '';
+      final segments = splitTimeRange(rangeMatch.group(0)!);
+      final start = readTime(
+        startPrefix,
+        rangeMatch.group(2)!,
+        rangeMatch.group(3),
+        segments.start,
+      );
+      final end = start == null
+          ? null
+          : readTime(
+              rangeMatch.group(4),
+              rangeMatch.group(5)!,
+              rangeMatch.group(6),
+              segments.end,
+              fallbackPrefix: startPrefix,
+              notBefore: start,
+            );
+      if (start != null && end != null) {
+        parsedTime = start;
+        parsedEndTime = end;
+        cleaned = cleaned.replaceFirst(rangeMatch.group(0)!, '').trim();
       }
     }
 
-    cleaned = _cleanRegistrationTitle(cleaned);
+    if (parsedTime == null) {
+      final timeMatch = kSingleTimeRegex.firstMatch(cleaned);
+      if (timeMatch != null) {
+        final time = readTime(
+          timeMatch.group(1),
+          timeMatch.group(2)!,
+          timeMatch.group(3),
+          timeMatch.group(0)!,
+        );
+        if (time != null) {
+          parsedTime = time;
+          cleaned = cleaned.replaceFirst(timeMatch.group(0)!, '').trim();
+        }
+      }
+    }
+
+    cleaned = _cleanRegistrationTitle(cleaned, afterTime: parsedTime != null);
     return _ParsedScheduleRegistration(
       title: cleaned.isEmpty ? '새 캘린더 일정' : cleaned,
       date: parsedDate,
       time: parsedTime,
+      endTime: parsedEndTime,
       repeatRule: repeatRule,
     );
   }
@@ -8573,6 +8645,7 @@ ${lines.join('\n')}
     String title,
     DateTime date,
     TimeOfDay? time,
+    TimeOfDay? endTime,
     bool reminderEnabled,
     Map<String, dynamic>? repeatRule,
   ) async {
@@ -8605,6 +8678,7 @@ ${lines.join('\n')}
           'recurrenceRule': {...repeatRule, 'startDate': _dateKey(date)},
         if (time != null) 'timeStart': _storedTime(time),
         if (time != null) 'time': _formatTimeOfDay(time),
+        if (time != null && endTime != null) 'timeEnd': _storedTime(endTime),
       };
       dayList.add(entry);
       schedules[dateStr] = dayList;
@@ -8629,6 +8703,7 @@ ${lines.join('\n')}
     final titleCtrl = TextEditingController(text: parsed.title);
     DateTime confirmedDate = parsed.date;
     TimeOfDay? confirmedTime = parsed.time;
+    TimeOfDay? confirmedEndTime = parsed.endTime;
     Map<String, dynamic>? confirmedRepeatRule = parsed.repeatRule;
     bool reminderEnabled = false;
 
@@ -8819,6 +8894,13 @@ ${lines.join('\n')}
                             if (t != null) {
                               setDialogState(() {
                                 confirmedTime = t;
+                                // 시작을 뒤로 미뤄 끝보다 늦어졌으면 끝은 버린다.
+                                final end = confirmedEndTime;
+                                if (end != null &&
+                                    end.hour * 60 + end.minute <=
+                                        t.hour * 60 + t.minute) {
+                                  confirmedEndTime = null;
+                                }
                                 reminderEnabled =
                                     prefs.getBool(
                                       'nyang_core_reminder_enabled',
@@ -8869,6 +8951,55 @@ ${lines.join('\n')}
                             ),
                           ),
                         ),
+                        // "9시부터 10시까지"처럼 끝까지 말했을 때만 나온다.
+                        if (confirmedTime != null && confirmedEndTime != null)
+                          GestureDetector(
+                            onTap: () async {
+                              final t = await showTimePicker(
+                                context: context,
+                                initialTime: confirmedEndTime!,
+                              );
+                              if (t != null) {
+                                setDialogState(() => confirmedEndTime = t);
+                              }
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
+                              decoration: BoxDecoration(
+                                color: _coach.accentColor.withValues(
+                                  alpha: 0.10,
+                                ),
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    '~ ${_formatTimeOfDay(confirmedEndTime!)}',
+                                    style: GoogleFonts.notoSansKr(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.bold,
+                                      color: _coach.accentColor,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  GestureDetector(
+                                    onTap: () => setDialogState(
+                                      () => confirmedEndTime = null,
+                                    ),
+                                    child: const Icon(
+                                      Icons.close_rounded,
+                                      size: 14,
+                                      color: Color(0xFFB8B5C8),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
                       ],
                     ),
                     const SizedBox(height: 16),
@@ -8964,6 +9095,7 @@ ${lines.join('\n')}
                                 finalTitle,
                                 confirmedDate,
                                 confirmedTime,
+                                confirmedEndTime,
                                 reminderEnabled && confirmedTime != null,
                                 confirmedRepeatRule,
                               );
