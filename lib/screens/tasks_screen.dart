@@ -23,6 +23,7 @@ import '../services/api_usage_limit_service.dart';
 import '../services/widget_sync_service.dart';
 import '../services/daily_reset_service.dart';
 import '../services/ongoing_task_nudge_service.dart';
+import '../services/task_completion_service.dart';
 import '../services/apple_calendar_sync_service.dart';
 import '../theme/app_design_tokens.dart';
 import '../widgets/core_reminder_settings_sheet.dart';
@@ -885,15 +886,13 @@ class _TasksScreenState extends State<TasksScreen>
       _handleInitialPlannerTarget();
       // 앱을 껐다 켠 사이에도 진행 중이던 할 일이 있으면 시계를 다시 돌린다.
       _syncTaskTicker();
-      // 앱 밖에서 냥냥이에게 답한 게 있으면 여기서 일정에 반영된다.
-      _applyPendingNudgeAnswer();
     });
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      _applyPendingNudgeAnswer();
+      _reloadIfStoreChanged();
     }
   }
 
@@ -988,9 +987,15 @@ class _TasksScreenState extends State<TasksScreen>
     super.dispose();
   }
 
+  /// 저장소를 마지막으로 읽어 온 시각. 밖에서 바뀐 게 있는지 이걸로 잰다.
+  DateTime _lastStoreLoadAt = DateTime.fromMillisecondsSinceEpoch(0);
+
   // ── 데이터 로드 ──────────────────────────────────────────
   Future<void> _loadAll() async {
     final prefs = await SharedPreferences.getInstance();
+    // 앱이 열려 있는 동안 밖에서(냥냥이 오버레이 등) 고친 값도 함께 읽는다.
+    await prefs.reload();
+    _lastStoreLoadAt = DateTime.now();
 
     _showTaskTimer = prefs.getBool(_showTaskTimerKey) ?? true;
     final rawTasks = prefs.getString('nyang_tasks');
@@ -2251,86 +2256,16 @@ class _TasksScreenState extends State<TasksScreen>
     );
   }
 
-  /// 앱 밖에서 냥냥이 카드로 고른 답을 일정에 반영한다.
+  /// 앱 밖에서 데이터가 바뀌었으면 다시 읽는다.
   ///
-  /// 앱이 꺼져 있는 동안 눌렀을 수도 있어서, 화면이 다시 살아날 때마다 확인한다.
-  Future<void> _applyPendingNudgeAnswer() async {
-    if (!OngoingTaskNudgeService.isSupported) return;
-    final answer = await OngoingTaskNudgeService.takeAnswer();
-    if (answer == null || !mounted) return;
-
-    final idx = tasks.indexWhere((t) => t.id.toString() == answer.taskId);
-    if (idx < 0) {
-      // 오늘 목록에 없다. 밤에 누르고 다음 날 앱을 열면 자정 정리가 이미
-      // 지나가서, 그 일정은 지난 날 보관함에 있다. 거기서 채워준다.
-      await _applyNudgeAnswerToPastDay(answer);
-      return;
+  /// 냥냥이 카드로 고른 답은 [TaskCompletionService]가 저장소에 바로 반영한다.
+  /// 이 화면은 그 사실을 모른 채 열려 있을 수 있는데, 그대로 두면 메모리에 든
+  /// 옛 목록을 다음 저장 때 덮어써서 방금 한 완료가 사라진다.
+  Future<void> _reloadIfStoreChanged() async {
+    if (await TaskCompletionService.changedSince(_lastStoreLoadAt)) {
+      await _loadAll();
+      if (mounted) _syncTaskTicker();
     }
-    final task = tasks[idx];
-    if (task.done) {
-      // 냥냥이가 이미 적어둔 경우다. 개수는 어림으로 올려뒀으니 여기서 정확히
-      // 다시 센다. 저장 한 번이면 그날 기록이 제자리를 찾는다.
-      await _persistTodayTasks();
-      return;
-    }
-
-    if (answer.isDone) {
-      // 앱 안에서 체크한 것과 똑같이 처리한다. 습관 도장, 핵심 일정, 기록까지
-      // 손대야 할 곳이 많아서 완료 경로를 그대로 태운다.
-      await _toggleTask(task.id, forceComplete: true);
-      return;
-    }
-
-    // 잠깐 멈춤. 타이머형은 흘러간 만큼만 누적에 얹고 구간을 닫는다.
-    final now = DateTime.now();
-    setState(() {
-      task.elapsedSeconds = task.elapsedSecondsAt(now);
-      task.inProgress = false;
-      task.runStartedAt = null;
-    });
-    _syncTaskTicker();
-    await _persistTodayTasks();
-  }
-
-  /// 자정을 넘겨 도착한 답을 그 일정이 있던 날에 채운다.
-  ///
-  /// 밤 11시에 "다 했어"를 누르고 이틀 뒤에 앱을 열면, 그 일정은 이미 오늘
-  /// 목록에 없다. 여기서 놓치면 완료 표시를 도우려던 기능이 오히려 하나를 잃는다.
-  ///
-  /// 그날 화면을 잠깐 통과시키면 완료 처리 경로가 그대로 돌아서, 습관 도장과
-  /// 그날 기록까지 알아서 맞춰진다. '잠깐 멈췄어'는 지나간 날에 뜻이 없어 넘긴다.
-  Future<void> _applyNudgeAnswerToPastDay(OngoingNudgeAnswer answer) async {
-    if (!answer.isDone) return;
-
-    String? foundKey;
-    TaskItem? task;
-    for (final entry in plannedTodayTasksByDate.entries) {
-      if (_dateFromKey(entry.key).isBefore(_archiveFloorDate)) continue;
-      for (final item in entry.value) {
-        if (item.id.toString() == answer.taskId) {
-          foundKey = entry.key;
-          task = item;
-          break;
-        }
-      }
-      if (task != null) break;
-    }
-    if (foundKey == null || task == null) return;
-
-    final restoreDate = _selectedTodayDate;
-    if (task.done) {
-      // 냥냥이가 이미 적어둔 경우. 그날 기록의 개수만 정확히 다시 센다.
-      setState(() => _selectedTodayDate = _dateFromKey(foundKey!));
-      await _saveRecordForPastDate(foundKey);
-      if (!mounted) return;
-      setState(() => _selectedTodayDate = restoreDate);
-      return;
-    }
-
-    setState(() => _selectedTodayDate = _dateFromKey(foundKey!));
-    await _toggleTask(task.id, forceComplete: true);
-    if (!mounted) return;
-    setState(() => _selectedTodayDate = restoreDate);
   }
 
   /// 저장소의 날짜별 계획을 메모리로 다시 읽는다.

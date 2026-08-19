@@ -4,6 +4,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'task_completion_service.dart';
+
 /// 냥냥이가 물어본 것에 사용자가 고른 답.
 class OngoingNudgeAnswer {
   const OngoingNudgeAnswer({required this.taskId, required this.action});
@@ -224,6 +226,20 @@ class OngoingTaskNudgeService {
     } on MissingPluginException {
       //
     }
+  }
+
+  /// 냥냥이 카드에서 고른 답을 일정에 반영한다.
+  ///
+  /// 플래너 화면이 열려 있든 말든 상관없다. 앱이 켜지는 순간 여기서 끝난다 —
+  /// 예전에는 그 화면이 열려야만 반영돼서, 채팅만 하다 나가면 코치가 계속
+  /// "그거 아직 안 했네요"라고 했다.
+  static Future<bool> applyPendingAnswer() async {
+    final answer = await takeAnswer();
+    if (answer == null) return false;
+    if (answer.isDone) {
+      return TaskCompletionService.completeStoredTask(taskId: answer.taskId);
+    }
+    return TaskCompletionService.pauseStoredTask(taskId: answer.taskId);
   }
 
   /// 냥냥이 카드에서 고른 답을 한 번만 꺼내온다.

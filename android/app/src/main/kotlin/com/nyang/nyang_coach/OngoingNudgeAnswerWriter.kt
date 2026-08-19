@@ -14,20 +14,33 @@ import java.util.Locale
  * 그동안 완료 표시가 안 채워진 채로 남는다. 완료 표시를 도우려고 만든 기능이
  * 정작 그걸 미루게 두면 안 된다.
  *
- * 그래서 여기서는 눈에 보이는 것부터 먼저 적는다 — 할 일의 완료 표시, 핵심 일정,
- * 습관 도장, 그날 기록의 숫자. 개수를 정확히 다시 세는 일(주간 습관이 오늘 세는
- * 대상인지 같은 판단)은 앱이 열릴 때 제자리를 찾으므로 여기서는 어림으로 둔다.
- * 쪽지도 그대로 남겨서, 앱이 열리면 정식 경로가 한 번 더 훑는다.
+ * 그래서 눈에 보이는 것은 여기서 바로 적는다 — 할 일의 완료 표시, 핵심 일정,
+ * 습관 도장. 그날 기록의 개수처럼 세어봐야 아는 것은 손대지 않는다. 주 n회 습관이
+ * 오늘 세는 대상인지 같은 판단이 필요한데 여기서는 알 수 없어서, 어림으로 적으면
+ * 오히려 틀린 숫자가 남는다. 그 몫은 앱이 켜질 때 TaskCompletionService가 맡는다.
+ *
+ * 쪽지도 그대로 남긴다. 앱이 열리면 그 서비스가 한 번 더 정확히 훑는다.
  */
 object OngoingNudgeAnswerWriter {
     private const val PREFS = "FlutterSharedPreferences"
     private const val KEY_TASKS = "flutter.nyang_tasks"
     private const val KEY_CORE_TASKS = "flutter.nyang_core_tasks"
     private const val KEY_HABIT_LOGS = "flutter.nyang_habit_logs"
-    private const val KEY_HISTORY = "flutter.nyang_history"
+    /**
+     * 저장소가 바뀐 시각.
+     *
+     * 앱이 백그라운드에 떠 있는 채로 여기서 데이터를 고칠 수 있다. 화면이 메모리에
+     * 든 옛 목록을 그대로 저장하면 방금 한 완료가 되돌아가므로, 돌아올 때 다시
+     * 읽으라고 표시를 남긴다. Dart의 TaskCompletionService가 같은 키를 본다.
+     */
+    private const val KEY_CHANGED_AT = "flutter.task_store_changed_at"
 
     /** 지금 담겨 있는 할 일이 어느 날의 것인지. 자정을 넘겨도 앱을 열기 전까지는 그 전날이다. */
     private const val KEY_LAST_DATE = "flutter.nyang_last_date"
+
+    private fun markStoreChanged(prefs: android.content.SharedPreferences) {
+        prefs.edit().putString(KEY_CHANGED_AT, isoOf(Date())).commit()
+    }
 
     fun apply(context: Context, taskId: String, done: Boolean) {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -57,6 +70,7 @@ object OngoingNudgeAnswerWriter {
             task.put("completedAt", isoOf(now))
         }
         prefs.edit().putString(KEY_TASKS, tasks.toString()).commit()
+        markStoreChanged(prefs)
 
         if (!done) return
 
@@ -65,7 +79,6 @@ object OngoingNudgeAnswerWriter {
         task.opt("habitId")?.toString()?.takeIf { it.isNotBlank() && it != "null" }?.let {
             markHabitDone(prefs, it, dateKey, isoOf(now))
         }
-        bumpHistoryRecord(prefs, dateKey, task.optString("text", ""))
     }
 
     /** 쌓인 시간 + 지금 돌고 있는 구간. */
@@ -121,44 +134,6 @@ object OngoingNudgeAnswerWriter {
         )
         logs.put(habitId, forHabit)
         prefs.edit().putString(KEY_HABIT_LOGS, logs.toString()).commit()
-    }
-
-    /**
-     * 그날 기록의 완료 개수를 하나 올린다.
-     *
-     * 기록 탭과 코치가 보는 "연속 달성"이 이 숫자에서 나온다. 정확한 재계산은
-     * 앱이 열릴 때 하고, 여기서는 하루가 통째로 실패로 남는 것만 막는다.
-     */
-    private fun bumpHistoryRecord(
-        prefs: android.content.SharedPreferences,
-        dateKey: String,
-        taskText: String,
-    ) {
-        val raw = prefs.getString(KEY_HISTORY, null) ?: return
-        val history = runCatching { JSONArray(raw) }.getOrNull() ?: return
-        for (i in 0 until history.length()) {
-            val record = history.optJSONObject(i) ?: continue
-            if (record.optString("date") != dateKey) continue
-
-            val entries = record.optJSONArray("tasks")
-            if (entries != null && taskText.isNotBlank()) {
-                for (j in 0 until entries.length()) {
-                    val entry = entries.optJSONObject(j) ?: continue
-                    if (entry.optString("text") != taskText) continue
-                    if (entry.optBoolean("done", false)) return
-                    entry.put("done", true)
-                    break
-                }
-            }
-
-            val total = record.optInt("totalCount", 0)
-            val doneCount = record.optInt("doneCount", 0) + 1
-            record.put("doneCount", if (total > 0) minOf(doneCount, total) else doneCount)
-            record.put("success", true)
-            record.put("updatedAt", isoOf(Date()))
-            prefs.edit().putString(KEY_HISTORY, history.toString()).commit()
-            return
-        }
     }
 
     private fun isoFormat() =
