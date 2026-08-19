@@ -49,7 +49,7 @@ void main() {
       expect(tracking, contains('한 번만 안내'));
       expect(tracking, contains('재촉하지 말 것'));
       // 태그는 사용자가 부탁했을 때만. 출력 규칙과 어긋나면 안 된다.
-      expect(tracking, contains('걸어달라고 하면 그때 [HABIT: 습관명]'));
+      expect(tracking, contains('걸어달라고 하면 그때 [HABIT: 루틴명]'));
     });
   });
 

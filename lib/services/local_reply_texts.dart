@@ -43,7 +43,7 @@ class LocalReplyTexts {
       'repeat_schedule_delete' => '반복 일정',
       'repeat_schedule_edit' => '반복 일정',
       'schedule' => '캘린더',
-      'habit' => '습관',
+      'habit' => '루틴',
       'records' => '기록',
       'settings' => '설정',
       'todo_reset' => '오늘 할 일 초기화',

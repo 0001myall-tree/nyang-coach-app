@@ -37,6 +37,7 @@ import 'package:nyang_coach/services/focus_fatigue_service.dart';
 import 'package:nyang_coach/services/goal_push_service.dart';
 import 'package:nyang_coach/services/resistance_intervention_service.dart';
 import 'package:nyang_coach/services/start_pattern_service.dart';
+import 'package:nyang_coach/services/time_expression.dart';
 import 'package:nyang_coach/prompts/coach_prompt.dart';
 import 'package:nyang_coach/services/prep_time_service.dart';
 import 'package:nyang_coach/services/widget_sync_service.dart';
@@ -901,12 +902,14 @@ class _ParsedScheduleRegistration {
   final String title;
   final DateTime date;
   final TimeOfDay? time;
+  final TimeOfDay? endTime;
   final Map<String, dynamic>? repeatRule;
 
   _ParsedScheduleRegistration({
     required this.title,
     required this.date,
     this.time,
+    this.endTime,
     this.repeatRule,
   });
 }
@@ -2012,7 +2015,7 @@ class _ChatScreenState extends State<ChatScreen>
         _ => "'$title' 어디에 넣을까냥?",
       };
     }
-    final what = type == 'habit' ? '습관' : '일정';
+    final what = type == 'habit' ? '루틴' : '일정';
     return switch (_coach.id) {
       'bro' => "'$title' $what으로 넣어줄까?",
       'halmae' => "'$title' $what으로 넣어줄까?",
@@ -2189,7 +2192,7 @@ class _ChatScreenState extends State<ChatScreen>
         ChatMessage(
           text: registered
               ? _habitRegistrationReply(name)
-              : '습관 탭을 여는 중 문제가 생겼어요. 잠시 후 다시 시도해 주세요.',
+              : '루틴 탭을 여는 중 문제가 생겼어요. 잠시 후 다시 시도해 주세요.',
           isUser: false,
           time: DateTime.now(),
         ),
@@ -2383,13 +2386,13 @@ $closing''';
 
     final role = _coach.isMaster
         ? '- 목표와 계획에서 오늘 할 일을 뽑아주고, 미뤄둔 일을 짚어주고, 주간 회고를 해준다.'
-        : '- 오늘 뭐부터 할지 골라주고, 하기 싫을 때 옆에 있어주고, 습관을 챙겨준다.';
+        : '- 오늘 뭐부터 할지 골라주고, 하기 싫을 때 옆에 있어주고, 루틴을 챙겨준다.';
 
     return '''
 [할 수 있는 일을 물었을 때]
 - 사용자가 "넌 뭘 해줄 수 있어", "네가 하는 일이 뭐야"처럼 물으면 아래 내용만 코치 말투로 짧게 답하세요. 없는 기능을 지어내지 말고, 여기 적힌 것을 못 한다고도 하지 마세요.
 $role
-- 말로 일정·습관·목표를 넣고, 고치고, 지울 수 있다. 타이머도 띄워준다.
+- 말로 일정·루틴·목표를 넣고, 고치고, 지울 수 있다. 타이머도 띄워준다.
 - 사용자가 뭘 해왔는지 계속 보고 있어서, 오래 쓸수록 그 사람에게 맞게 말할 수 있다.
 - 기능을 나열하지 말고 두세 가지만 골라 말하세요. 설명서처럼 들리면 안 됩니다.
 - 장기 비전은 목표 탭에서 직접 만들어야 한다고만 덧붙이세요.''';
@@ -4927,16 +4930,16 @@ ${lines.join('\n')}
     // 알 수가 없고, 사용자는 일반 할 일을 재촉당한 것처럼 받는다.
     if (rest > 0) {
       return [
-        '집사, 오늘 습관 중에 \'$first\' 포함해서 $rest개 더 체크가 비어 있다냥.\n'
+        '집사, 오늘 루틴 중에 \'$first\' 포함해서 $rest개 더 체크가 비어 있다냥.\n'
             '이미 한 거면 눌러주고, 아직이면 하나만 골라도 충분하다냥.',
-        '습관 \'$first\' 말고도 $rest개가 아직 체크 전이다냥.\n'
+        '루틴 \'$first\' 말고도 $rest개가 아직 체크 전이다냥.\n'
             '다 하라는 건 아니고, 지금 제일 만만한 걸로 하나만 봐도 된다냥.',
       ][random.nextInt(2)];
     }
     return [
-      '집사, 오늘 습관 \'$first\' 아직 체크가 안 됐다냥.\n'
+      '집사, 오늘 루틴 \'$first\' 아직 체크가 안 됐다냥.\n'
           '이미 했으면 눌러주고, 아직이면 지금 해도 늦지 않다냥.',
-      '습관 \'$first\' 하나가 아직 비어 있다냥.\n'
+      '루틴 \'$first\' 하나가 아직 비어 있다냥.\n'
           '했는데 안 눌렀을 수도 있으니 확인만 해보라냥.',
     ][random.nextInt(2)];
   }
@@ -5943,8 +5946,8 @@ ${lines.join('\n')}
         if (!mounted) return;
         const intro =
             '안녕! 나는 냥냥코치다냥 🐾\n'
-            '오늘 해야 할 일이나 습관, 목표들을 같이 챙겨주고 있어!\n'
-            '주변의 할 일창이나 습관 트래커도 자유롭게 눌러보라냥~';
+            '오늘 해야 할 일이나 루틴, 목표들을 같이 챙겨주고 있어!\n'
+            '주변의 할 일창이나 루틴 트래커도 자유롭게 눌러보라냥~';
         setState(() {
           _messages.add(
             ChatMessage(
@@ -6129,18 +6132,20 @@ ${lines.join('\n')}
   // ── 한국어 시간 표현 추출 ─────────────────────────────────
   // null 반환 = 시간이 감지됐지만 오늘 안에 해당 시간이 없음 → 제안 건너뜀
   ({String cleanText, String? time})? _extractTimeFromTask(String rawText) {
-    final timeRegex = RegExp(
-      r'((?:오전|아침|오후|저녁|밤)\s*)?(\d{1,2})시(?:\s*(\d{1,2})분)?(?:\s*(?:에|쯤|경))?',
-    );
-    final match = timeRegex.firstMatch(rawText);
-    if (match == null) return (cleanText: rawText.trim(), time: null);
+    // "9시부터 10시까지"처럼 범위로 말했어도 할 일에는 끝 시각을 담을 자리가
+    // 없다. 시작만 쓰되 매치는 범위 전체로 잡아야 제목에 '10시까지'가 안 남는다.
+    final match =
+        kTimeRangeRegex.firstMatch(rawText) ??
+        kSingleTimeRegex.firstMatch(rawText);
+    if (match == null) return (cleanText: _taskTitle(rawText), time: null);
 
+    final segments = splitTimeRange(match.group(0)!);
     final prefix = (match.group(1) ?? '').replaceAll(RegExp(r'\s'), '');
     final rawHour = int.parse(match.group(2)!);
-    final minute = match.group(3) != null ? int.parse(match.group(3)!) : 0;
+    final minute = minuteFrom(match.group(3), segments.start);
 
     if (rawHour < 1 || rawHour > 12)
-      return (cleanText: rawText.trim(), time: null);
+      return (cleanText: _taskTitle(rawText), time: null);
 
     int hour24;
     if (prefix == '오전' || prefix == '아침') {
@@ -6167,14 +6172,23 @@ ${lines.join('\n')}
     final hStr = hour24.toString().padLeft(2, '0');
     final mStr = minute.toString().padLeft(2, '0');
     final time = '$hStr:$mStr';
-    final cleanText = rawText
-        .replaceFirst(match.group(0)!, '')
-        .replaceAll(RegExp(r'\s+'), ' ')
-        .trim();
+    final cleanText = _taskTitle(
+      rawText.replaceFirst(match.group(0)!, ''),
+      afterTime: true,
+    );
     return (
-      cleanText: cleanText.isEmpty ? rawText.trim() : cleanText,
+      cleanText: cleanText.isEmpty ? _taskTitle(rawText) : cleanText,
       time: time,
     );
+  }
+
+  /// 할 일 이름도 일정·루틴과 같은 손질을 거친다.
+  ///
+  /// 코치가 [TASK: …]에 말끝을 붙여 보내는 일이 있어서, 안 거치면 카드에
+  /// '운동 시작해야지'가 그대로 뜬다. 다 떼고 아무것도 안 남으면 원문을 쓴다.
+  String _taskTitle(String rawText, {bool afterTime = false}) {
+    final cleaned = _cleanRegistrationTitle(rawText, afterTime: afterTime);
+    return cleaned.isEmpty ? rawText.trim() : cleaned;
   }
 
   // HH:mm → "오전/오후 N:MM" 표시 변환
@@ -7435,11 +7449,35 @@ ${lines.join('\n')}
     '\\s*(?:$_registrationSuffixBody)\$',
   );
 
-  /// 습관 등록은 위 표현에 더해 '만들어줘' 계열도 받는다.
+  /// 루틴 등록은 위 표현에 더해 '만들어줘'와 '반복하게 해줘' 계열도 받는다.
   static final RegExp _habitRegistrationSuffixRegex = RegExp(
     '\\s*(?:$_registrationSuffixBody'
     '|만들\\s*(?:고\\s*싶어요?|거야|거예요|게|래|어\\s*줘요?|어\\s*주세요)'
+    '|반복\\s*(?:하게|되게|해서)?\\s*해\\s*(?:줄래요?|줘요?|주세요|주라)'
     ')\$',
+  );
+
+  /// 루틴을 가리키는 말.
+  ///
+  /// 화면과 코치는 '루틴'으로 통일했지만 알아듣는 쪽은 둘 다 받는다. 오래 쓰던
+  /// 말을 못 알아들으면 이름이 바뀐 게 기능이 사라진 것처럼 읽힌다.
+  static final RegExp _routineWordRegex = RegExp('습관|루틴');
+
+  /// 이름을 안 붙이고 반복만 말해도 루틴이다.
+  /// ("매일 아침마다 운동 넣어줘", "매일 반복하게 해줘")
+  static final RegExp _routineRepeatSignalRegex = RegExp(
+    r'매일|날마다|매\s*주|주말마다|평일마다'
+    r'|주\s*[1-7]\s*(?:일|회|번)|일주일에\s*[1-7]\s*(?:일|회|번)'
+    r'|매\s*(?:아침|점심|저녁|밤)|(?:아침|점심|저녁|밤)\s*마다'
+    r'|반복',
+  );
+
+  /// 캘린더 일정이라고 못박은 말.
+  static final RegExp _scheduleWordRegex = RegExp(r'일정|스케줄|캘린더|달력');
+
+  /// 무엇을 가리키는지 앞말을 봐야 아는 이름.
+  static final RegExp _demonstrativeTitleRegex = RegExp(
+    r'^(?:이거|이걸|이것|그거|그걸|그것|저거|저걸|저것|얘|이|그|저)$',
   );
 
   bool _isScheduleRegistrationCommand(String input) {
@@ -7452,14 +7490,27 @@ ${lines.join('\n')}
     return input.trim().replaceAll(RegExp(r'[\s.。!！?？~〜]+$'), '');
   }
 
-  String _cleanRegistrationTitle(String input) {
+  /// [afterTime]은 시각을 이미 읽어낸 뒤라는 뜻이다. 그때는 꼬리에 남은
+  /// '시작'을 뗀다 — "9시부터 운동 시작"에서 시작이 언제인지는 시각이 말해준다.
+  String _cleanRegistrationTitle(String input, {bool afterTime = false}) {
     var cleaned = input.replaceAll(RegExp(r'\s+'), ' ').trim();
     cleaned = cleaned.replaceAll(RegExp(r'^(?:나|나는|내가|저|저는)\s+'), '');
     cleaned = cleaned.replaceAll(RegExp(r'^(?:앞으로|이제)\s+'), '');
     cleaned = cleaned.replaceAll(
-      RegExp(r'\s*(?:할\s*건데|할건데|할\s*건대|할\s*거야|할거야|할게|하려고|하려구|할래|할\s*래|하기)$'),
+      RegExp(
+        r'\s*(?:할\s*건데|할건데|할\s*건대|할\s*거야|할거야|할\s*거임|할거임|할게|하려고|하려구|할래|할\s*래|하기'
+        r'|해야지|해야겠다|해야겠어|해야\s*돼|해야\s*해|해야\s*함|하자)$',
+      ),
       '',
     );
+    if (afterTime) {
+      // 떼고 나면 아무것도 안 남는 경우("9시부터 시작")는 그게 이름의 전부라는
+      // 뜻이라 되돌린다.
+      final withoutStart = cleaned
+          .replaceFirst(RegExp(r'\s*시작$'), '')
+          .trim();
+      if (withoutStart.isNotEmpty) cleaned = withoutStart;
+    }
     // "산책 일정에", "할 일에 산책"처럼 어디에 넣을지 가리키는 말은 제목이 아니다.
     // 조사가 붙은 형태까지 떼어낸다. 떼고 나면 아무것도 안 남는 경우
     // ("일정 추가해줘")는 원래 이름이 그것뿐이라는 뜻이라 되돌린다.
@@ -7474,22 +7525,36 @@ ${lines.join('\n')}
     if (withoutLeading.isNotEmpty) cleaned = withoutLeading;
 
     cleaned = cleaned.replaceAll(RegExp(r'\s+'), ' ').trim();
-    cleaned = cleaned.replaceFirst(RegExp(r'(?:을|를|은|는|이|가)$'), '').trim();
+    // 조사는 '을·를·은·는'만 뗀다. '이'와 '가'는 명사의 끝 글자인 경우가 많아서
+    // ('요가', '고양이') 떼면 이름이 망가진다. 등록하는 말에 주격 조사가 붙는
+    // 일도 드물다. 덜 떼는 쪽이 잘못 떼는 쪽보다 낫다.
+    cleaned = cleaned.replaceFirst(RegExp(r'(?:을|를|은|는)$'), '').trim();
     return cleaned;
   }
 
   bool _isHabitRegistrationCommand(String input) {
     final cleaned = _cleanScheduleRegistrationInput(input);
-    if (!cleaned.contains('습관')) return false;
-    return _habitRegistrationSuffixRegex.hasMatch(cleaned);
+    if (!_habitRegistrationSuffixRegex.hasMatch(cleaned)) return false;
+    if (_routineWordRegex.hasMatch(cleaned)) return true;
+
+    // 여기서부터는 '루틴'이라는 말 없이 반복만 말한 경우다. 일정이라고 못박은
+    // 말은 일정으로 둔다 — "매주 화요일 팀 회의 일정 넣어줘"는 캘린더에 있어야
+    // 할 것이지 루틴이 아니다.
+    if (_scheduleWordRegex.hasMatch(input)) return false;
+    if (!_routineRepeatSignalRegex.hasMatch(cleaned)) return false;
+
+    // "이거 매일 반복하게 해줘"처럼 앞말을 봐야 무엇인지 아는 경우는 여기서
+    // 넘긴다. 이름을 못 알아낸 채로 등록하면 '이거'라는 루틴이 생긴다.
+    final title = _parseHabitRegistration(input).title;
+    return title.isNotEmpty && !_demonstrativeTitleRegex.hasMatch(title);
   }
 
   _ParsedHabitRegistration _parseHabitRegistration(String input) {
     var cleaned = _cleanScheduleRegistrationInput(input);
     cleaned = cleaned.replaceFirst(_habitRegistrationSuffixRegex, '').trim();
-    cleaned = cleaned.replaceAll(RegExp(r'습관\s*(?:탭|텝)\s*에'), ' ');
-    cleaned = cleaned.replaceAll(RegExp(r'\s*습관\s*(?:으로|에)?\s*$'), '');
-    cleaned = cleaned.replaceAll(RegExp(r'^습관\s*(?:으로|에)?\s*'), '');
+    cleaned = cleaned.replaceAll(RegExp(r'(?:습관|루틴)\s*(?:탭|텝)\s*에'), ' ');
+    cleaned = cleaned.replaceAll(RegExp(r'\s*(?:습관|루틴)\s*(?:으로|로|에)?\s*$'), '');
+    cleaned = cleaned.replaceAll(RegExp(r'^(?:습관|루틴)\s*(?:으로|로|에)?\s*'), '');
     cleaned = cleaned.replaceAll(RegExp(r'^(?:나|나는|내가|저|저는)\s+'), '');
     cleaned = cleaned.replaceAll(RegExp(r'^(?:앞으로|이제)\s+'), '');
 
@@ -7563,6 +7628,12 @@ ${lines.join('\n')}
       RegExp(r'(?:^|\s)(?:매일|매일마다|날마다)(?:\s|$)'),
       ' ',
     );
+    // '아침마다', '매 저녁'처럼 때를 가리키는 반복 표현도 이름이 아니다.
+    // "아침 7시"의 '아침'은 시각과 붙어 있어 여기 걸리지 않는다.
+    cleaned = cleaned.replaceAll(
+      RegExp(r'(?:^|\s)(?:매\s*(?:아침|점심|저녁|밤)|(?:아침|점심|저녁|밤)\s*마다)(?:\s|$)'),
+      ' ',
+    );
 
     final countRegex = RegExp(
       r'(?:^|\s)(\d[\d,]*)\s*(자|글자|쪽|페이지|회|번)(?:\s*(?:정도|씩)?)?',
@@ -7583,7 +7654,7 @@ ${lines.join('\n')}
       String? rawPrefix,
       String rawHourText,
       String? rawMinuteText,
-      String fullMatch, {
+      String segment, {
       String fallbackPrefix = '',
     }) {
       final prefix = (rawPrefix ?? fallbackPrefix).replaceAll(
@@ -7591,12 +7662,7 @@ ${lines.join('\n')}
         '',
       );
       final rawHour = int.tryParse(rawHourText) ?? 0;
-      var minute = 0;
-      if (rawMinuteText != null) {
-        minute = int.tryParse(rawMinuteText) ?? 0;
-      } else if (fullMatch.contains('반')) {
-        minute = 30;
-      }
+      final minute = minuteFrom(rawMinuteText, segment);
 
       if (rawHour < 1 || rawHour > 24 || minute < 0 || minute > 59) {
         return null;
@@ -7611,23 +7677,21 @@ ${lines.join('\n')}
       return TimeOfDay(hour: hour24, minute: minute);
     }
 
-    final timeRangeRegex = RegExp(
-      r'((?:오전|아침|오후|저녁|밤)\s*)?(\d{1,2})시(?:\s*(\d{1,2})분|\s*반)?\s*(?:부터|에서|-|~)\s*((?:오전|아침|오후|저녁|밤)\s*)?(\d{1,2})시(?:\s*(\d{1,2})분|\s*반)?(?:\s*까지)?',
-    );
-    final rangeMatch = timeRangeRegex.firstMatch(cleaned);
+    final rangeMatch = kTimeRangeRegex.firstMatch(cleaned);
     if (rangeMatch != null) {
       final startPrefix = rangeMatch.group(1) ?? '';
+      final segments = splitTimeRange(rangeMatch.group(0)!);
       final start = parseHabitTime(
         startPrefix,
         rangeMatch.group(2)!,
         rangeMatch.group(3),
-        rangeMatch.group(0)!,
+        segments.start,
       );
       final end = parseHabitTime(
         rangeMatch.group(4),
         rangeMatch.group(5)!,
         rangeMatch.group(6),
-        rangeMatch.group(0)!,
+        segments.end,
         fallbackPrefix: startPrefix,
       );
       if (start != null && end != null) {
@@ -7638,10 +7702,7 @@ ${lines.join('\n')}
     }
 
     if (parsedTime == null) {
-      final timeRegex = RegExp(
-        r'((?:오전|아침|오후|저녁|밤)\s*)?(\d{1,2})시(?:\s*(\d{1,2})분|\s*반)?(?:\s*(?:에|쯤|경))?',
-      );
-      final timeMatch = timeRegex.firstMatch(cleaned);
+      final timeMatch = kSingleTimeRegex.firstMatch(cleaned);
       if (timeMatch != null) {
         final time = parseHabitTime(
           timeMatch.group(1),
@@ -7673,14 +7734,23 @@ ${lines.join('\n')}
       RegExp(r'\s*(?:할\s*건데|할건데|할\s*건대|할\s*거야|할거야|할게|하려고|하려구|할래|할\s*래|하기)$'),
       '',
     );
-    cleaned = cleaned.replaceAll(RegExp(r'\s*습관\s*(?:좀|조금|하나|으로|로)?\s*$'), '');
+    cleaned = cleaned.replaceAll(
+      RegExp(r'\s*(?:습관|루틴)\s*(?:좀|조금|하나|으로|로)?\s*$'),
+      '',
+    );
+    // '매일 반복하게'처럼 반복을 가리키는 말은 이름이 아니다. 어미를 떼고 남은
+    // 자리에서 한 번 더 걷어낸다.
+    cleaned = cleaned
+        .replaceAll(RegExp(r'(?:^|\s)반복(?:해서|하게|되게|적으로)?(?:\s|$)'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
     cleaned = cleaned.replaceAll(RegExp(r'\s*(?:좀|조금|하나|부탁해|부탁할게)\s*$'), '');
     cleaned = cleaned.replaceAllMapped(
       RegExp(r'(.+?)하는$'),
       (match) => match.group(1)!,
     );
     cleaned = cleaned.replaceAll(RegExp(r'^글\s*쓰는$'), '글쓰기');
-    cleaned = _cleanRegistrationTitle(cleaned);
+    cleaned = _cleanRegistrationTitle(cleaned, afterTime: parsedTime != null);
     return _ParsedHabitRegistration(
       title: cleaned,
       freq: parsedFreq,
@@ -7699,23 +7769,23 @@ ${lines.join('\n')}
   /// 양식에 없는 걸 되묻지 않도록 실제 칸(이름, 매일·요일·주 몇 일)만 짚는다.
   String _habitFormGuideReply() {
     return switch (_coach.id) {
-      'bro' => '습관 탭 열어준다. 이름이랑 매일 할지 무슨 요일에 할지만 정하면 된다.',
-      'halmae' => '습관 탭 열어주마. 이름이랑, 매일 할지 무슨 요일에 할지만 정하면 된다.',
-      'boyfriend' => '습관 탭 열어줄게. 이름이랑 매일 할지 무슨 요일에 할지만 정하면 돼.',
-      'nyang_halbae' => '습관 탭을 열어두겠다냥. 이름과 매일 할지 무슨 요일에 할지만 정하면 된다냥.',
-      'sec_female' => '습관 탭을 열어 드릴게요. 이름과 매일 할지, 무슨 요일에 할지만 정하시면 돼요.',
-      _ => '냥이가 습관 탭 열어줄게냥. 이름이랑 매일 할지 무슨 요일에 할지만 정하면 된다냥.',
+      'bro' => '루틴 탭 열어준다. 이름이랑 매일 할지 무슨 요일에 할지만 정하면 된다.',
+      'halmae' => '루틴 탭 열어주마. 이름이랑, 매일 할지 무슨 요일에 할지만 정하면 된다.',
+      'boyfriend' => '루틴 탭 열어줄게. 이름이랑 매일 할지 무슨 요일에 할지만 정하면 돼.',
+      'nyang_halbae' => '루틴 탭을 열어두겠다냥. 이름과 매일 할지 무슨 요일에 할지만 정하면 된다냥.',
+      'sec_female' => '루틴 탭을 열어 드릴게요. 이름과 매일 할지, 무슨 요일에 할지만 정하시면 돼요.',
+      _ => '냥이가 루틴 탭 열어줄게냥. 이름이랑 매일 할지 무슨 요일에 할지만 정하면 된다냥.',
     };
   }
 
   String _habitRegistrationReply(String habitName) {
     return switch (widget.coachId) {
-      'boyfriend' => '$habitName, 습관 탭에 추가해뒀어. 세부 설정은 한번 확인해줘.',
-      'bro' => '$habitName 습관 탭에 추가해뒀다. 세부 설정은 한번 확인해라.',
-      'halmae' => '$habitName, 습관 탭에 추가해뒀다. 세부 설정은 잘 확인해라.',
-      'nyang_halbae' => '$habitName 습관 탭에 추가해두었다냥. 세부 설정은 한번 살펴보자냥.',
-      'sec_female' => '$habitName 항목을 습관 탭에 추가해두었어요. 세부 설정을 확인해 주세요.',
-      _ => '$habitName 습관을 습관 탭에 추가해뒀다냥. 세부 설정은 확인해달라냥.',
+      'boyfriend' => '$habitName, 루틴 탭에 추가해뒀어. 세부 설정은 한번 확인해줘.',
+      'bro' => '$habitName 루틴 탭에 추가해뒀다. 세부 설정은 한번 확인해라.',
+      'halmae' => '$habitName, 루틴 탭에 추가해뒀다. 세부 설정은 잘 확인해라.',
+      'nyang_halbae' => '$habitName 루틴 탭에 추가해두었다냥. 세부 설정은 한번 살펴보자냥.',
+      'sec_female' => '$habitName 항목을 루틴 탭에 추가해두었어요. 세부 설정을 확인해 주세요.',
+      _ => '$habitName 루틴 탭에 추가해뒀다냥. 세부 설정은 확인해달라냥.',
     };
   }
 
@@ -7747,8 +7817,10 @@ ${lines.join('\n')}
         .trim();
 
     String kind = 'task_or_schedule';
-    if (cleaned.contains('습관')) kind = 'habit';
     if (cleaned.contains('반복')) kind = 'recurring_schedule';
+    // '루틴'이라고 짚어 말했으면 그쪽이 우선이다. "매일 반복하는 운동 루틴"처럼
+    // 두 말이 같이 나와도 가리키는 것은 루틴 탭의 항목이다.
+    if (_routineWordRegex.hasMatch(cleaned)) kind = 'habit';
 
     DateTime? parsedDate;
     final now = DateTime.now();
@@ -7788,7 +7860,7 @@ ${lines.join('\n')}
     }
 
     cleaned = cleaned.replaceAll(RegExp(r'\s*(?:반복\s*)?일정\s*$'), '').trim();
-    cleaned = cleaned.replaceAll(RegExp(r'\s*습관\s*$'), '').trim();
+    cleaned = cleaned.replaceAll(RegExp(r'\s*(?:습관|루틴)\s*$'), '').trim();
     cleaned = cleaned.replaceAll(RegExp(r'\s+'), ' ').trim();
     cleaned = _cleanRegistrationTitle(cleaned);
     return _ParsedDeleteCommand(target: cleaned, kind: kind, date: parsedDate);
@@ -8006,43 +8078,98 @@ ${lines.join('\n')}
     }
 
     TimeOfDay? parsedTime;
-    final timeRegex = RegExp(
-      r'((?:오전|아침|오후|저녁|밤)\s*)?(\d{1,2})시(?:\s*(\d{1,2})분|\s*반)?(?:\s*(?:에|쯤|경|까지))?',
-    );
-    final timeMatch = timeRegex.firstMatch(cleaned);
-    if (timeMatch != null) {
-      final prefix = (timeMatch.group(1) ?? '').replaceAll(RegExp(r'\s'), '');
-      final rawHour = int.tryParse(timeMatch.group(2)!) ?? 0;
-      var minute = 0;
-      if (timeMatch.group(3) != null) {
-        minute = int.tryParse(timeMatch.group(3)!) ?? 0;
-      } else if (timeMatch.group(0)!.contains('반')) {
-        minute = 30;
-      }
+    TimeOfDay? parsedEndTime;
 
-      if (rawHour >= 1 && rawHour <= 24) {
-        var hour24 = rawHour;
-        if (prefix == '오전' || prefix == '아침') {
-          hour24 = rawHour == 12 ? 0 : rawHour;
-        } else if (prefix == '오후' || prefix == '저녁' || prefix == '밤') {
-          hour24 = rawHour == 12 ? 12 : rawHour + 12;
-        } else if (rawHour < 12) {
+    /// [notBefore]를 주면 그 시각보다 뒤로 민다. 끝 시각을 읽을 때 쓴다.
+    /// 주지 않으면 지금 기준으로 이미 지난 시각을 오후로 민다.
+    TimeOfDay? readTime(
+      String? rawPrefix,
+      String rawHourText,
+      String? rawMinuteText,
+      String segment, {
+      String fallbackPrefix = '',
+      TimeOfDay? notBefore,
+    }) {
+      final prefix = (rawPrefix ?? fallbackPrefix).replaceAll(
+        RegExp(r'\s'),
+        '',
+      );
+      final rawHour = int.tryParse(rawHourText) ?? 0;
+      final minute = minuteFrom(rawMinuteText, segment);
+      if (rawHour < 1 || rawHour > 24 || minute > 59) return null;
+
+      var hour24 = rawHour;
+      if (prefix == '오전' || prefix == '아침') {
+        hour24 = rawHour == 12 ? 0 : rawHour;
+      } else if (prefix == '오후' || prefix == '저녁' || prefix == '밤') {
+        hour24 = rawHour == 12 ? 12 : rawHour + 12;
+      } else if (rawHour < 12) {
+        if (notBefore != null) {
+          // "9시부터 5시까지"의 5시는 오후다. 끝이 시작보다 앞설 수는 없다.
+          final startTotal = notBefore.hour * 60 + notBefore.minute;
+          if (rawHour * 60 + minute <= startTotal) hour24 = rawHour + 12;
+        } else {
           final now = DateTime.now();
           if (now.hour > rawHour ||
               (now.hour == rawHour && now.minute >= minute)) {
             hour24 = rawHour + 12;
           }
         }
-        parsedTime = TimeOfDay(hour: hour24, minute: minute);
-        cleaned = cleaned.replaceFirst(timeMatch.group(0)!, '').trim();
+      }
+      if (hour24 > 23) return null;
+      return TimeOfDay(hour: hour24, minute: minute);
+    }
+
+    // "9시부터 10시까지"를 먼저 본다. 시작만 떼면 뒷시각이 제목에 남는다.
+    final rangeMatch = kTimeRangeRegex.firstMatch(cleaned);
+    if (rangeMatch != null) {
+      final startPrefix = rangeMatch.group(1) ?? '';
+      final segments = splitTimeRange(rangeMatch.group(0)!);
+      final start = readTime(
+        startPrefix,
+        rangeMatch.group(2)!,
+        rangeMatch.group(3),
+        segments.start,
+      );
+      final end = start == null
+          ? null
+          : readTime(
+              rangeMatch.group(4),
+              rangeMatch.group(5)!,
+              rangeMatch.group(6),
+              segments.end,
+              fallbackPrefix: startPrefix,
+              notBefore: start,
+            );
+      if (start != null && end != null) {
+        parsedTime = start;
+        parsedEndTime = end;
+        cleaned = cleaned.replaceFirst(rangeMatch.group(0)!, '').trim();
       }
     }
 
-    cleaned = _cleanRegistrationTitle(cleaned);
+    if (parsedTime == null) {
+      final timeMatch = kSingleTimeRegex.firstMatch(cleaned);
+      if (timeMatch != null) {
+        final time = readTime(
+          timeMatch.group(1),
+          timeMatch.group(2)!,
+          timeMatch.group(3),
+          timeMatch.group(0)!,
+        );
+        if (time != null) {
+          parsedTime = time;
+          cleaned = cleaned.replaceFirst(timeMatch.group(0)!, '').trim();
+        }
+      }
+    }
+
+    cleaned = _cleanRegistrationTitle(cleaned, afterTime: parsedTime != null);
     return _ParsedScheduleRegistration(
       title: cleaned.isEmpty ? '새 캘린더 일정' : cleaned,
       date: parsedDate,
       time: parsedTime,
+      endTime: parsedEndTime,
       repeatRule: repeatRule,
     );
   }
@@ -8662,6 +8789,7 @@ ${lines.join('\n')}
     String title,
     DateTime date,
     TimeOfDay? time,
+    TimeOfDay? endTime,
     bool reminderEnabled,
     Map<String, dynamic>? repeatRule,
   ) async {
@@ -8694,6 +8822,7 @@ ${lines.join('\n')}
           'recurrenceRule': {...repeatRule, 'startDate': _dateKey(date)},
         if (time != null) 'timeStart': _storedTime(time),
         if (time != null) 'time': _formatTimeOfDay(time),
+        if (time != null && endTime != null) 'timeEnd': _storedTime(endTime),
       };
       dayList.add(entry);
       schedules[dateStr] = dayList;
@@ -8718,6 +8847,7 @@ ${lines.join('\n')}
     final titleCtrl = TextEditingController(text: parsed.title);
     DateTime confirmedDate = parsed.date;
     TimeOfDay? confirmedTime = parsed.time;
+    TimeOfDay? confirmedEndTime = parsed.endTime;
     Map<String, dynamic>? confirmedRepeatRule = parsed.repeatRule;
     bool reminderEnabled = false;
 
@@ -8908,6 +9038,13 @@ ${lines.join('\n')}
                             if (t != null) {
                               setDialogState(() {
                                 confirmedTime = t;
+                                // 시작을 뒤로 미뤄 끝보다 늦어졌으면 끝은 버린다.
+                                final end = confirmedEndTime;
+                                if (end != null &&
+                                    end.hour * 60 + end.minute <=
+                                        t.hour * 60 + t.minute) {
+                                  confirmedEndTime = null;
+                                }
                                 reminderEnabled =
                                     prefs.getBool(
                                       'nyang_core_reminder_enabled',
@@ -8958,6 +9095,55 @@ ${lines.join('\n')}
                             ),
                           ),
                         ),
+                        // "9시부터 10시까지"처럼 끝까지 말했을 때만 나온다.
+                        if (confirmedTime != null && confirmedEndTime != null)
+                          GestureDetector(
+                            onTap: () async {
+                              final t = await showTimePicker(
+                                context: context,
+                                initialTime: confirmedEndTime!,
+                              );
+                              if (t != null) {
+                                setDialogState(() => confirmedEndTime = t);
+                              }
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
+                              decoration: BoxDecoration(
+                                color: _coach.accentColor.withValues(
+                                  alpha: 0.10,
+                                ),
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    '~ ${_formatTimeOfDay(confirmedEndTime!)}',
+                                    style: GoogleFonts.notoSansKr(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.bold,
+                                      color: _coach.accentColor,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  GestureDetector(
+                                    onTap: () => setDialogState(
+                                      () => confirmedEndTime = null,
+                                    ),
+                                    child: const Icon(
+                                      Icons.close_rounded,
+                                      size: 14,
+                                      color: Color(0xFFB8B5C8),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
                       ],
                     ),
                     const SizedBox(height: 16),
@@ -9053,6 +9239,7 @@ ${lines.join('\n')}
                                 finalTitle,
                                 confirmedDate,
                                 confirmedTime,
+                                confirmedEndTime,
                                 reminderEnabled && confirmedTime != null,
                                 confirmedRepeatRule,
                               );
@@ -10976,7 +11163,7 @@ ${lines.join('\n')}
           ChatMessage(
             text: registered
                 ? _habitRegistrationReply(parsed.title)
-                : '습관 탭을 여는 중 문제가 생겼어요. 잠시 후 다시 시도해 주세요.',
+                : '루틴 탭을 여는 중 문제가 생겼어요. 잠시 후 다시 시도해 주세요.',
             isUser: false,
             time: DateTime.now(),
           ),
@@ -12183,7 +12370,7 @@ ${lines.join('\n')}
             // 반면 이쪽은 대화를 세어둔 값이라 근거로 쓰이면 감시처럼 읽힌다.
             final inProgressInfo = inProgress ? ' / 진행중(시작만 하고 아직 완료 전)' : '';
             final typeLabel = isHabit
-                ? '습관'
+                ? '루틴'
                 : isSchedule
                 ? '일정'
                 : '일반 할 일';
@@ -15799,7 +15986,7 @@ ${Prompts.outputRulesTail}$coachOfferTaskRule$halmaeHint$resistanceTurnDirective
       ('목표', 'goals'),
       ('장기 비전', 'vision'),
       ('캘린더', 'schedule'),
-      ('습관', 'habit'),
+      ('루틴', 'habit'),
       ('기록', 'records'),
       ('설정', 'settings'),
     ];

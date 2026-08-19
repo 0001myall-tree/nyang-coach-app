@@ -760,7 +760,7 @@ class _RecordsScreenState extends State<RecordsScreen> {
     final trackingHabits = _habits.where((h) => h.tracking == true).toList();
     final habitFreqBuffer = StringBuffer();
     if (trackingHabits.isEmpty) {
-      habitFreqBuffer.writeln('설정된 습관 없음');
+      habitFreqBuffer.writeln('설정된 루틴 없음');
     } else {
       const dayNames = ['월', '화', '수', '목', '금', '토', '일'];
       for (final h in trackingHabits) {
@@ -911,7 +911,7 @@ ${completionSummaryBuffer.toString().trim()}
 - 가장 가까운 마감 예정 마일스톤: ${nearestUpcomingLabel ?? '없음'}
 - 마감일이 지난 미완료 마일스톤: ${overdueMilestones.isEmpty ? '없음' : overdueMilestones.join(', ')}
 
-[현재 설정된 습관 트래킹 빈도]
+[현재 설정된 루틴 트래킹 빈도]
 ${habitFreqBuffer.toString().trim()}
 $chatSummarySection
 
@@ -926,7 +926,7 @@ $chatSummarySection
 2. 공통 원칙:
    - 휴무일(회복일)은 미완료나 실패로 해석하지 말고, 필요한 회복을 일정에 포함한 것으로 자연스럽게 존중해 주세요.
    - "시작했지만 끝내지 못한 일"과 "손대지 못한 일"을 한데 묶어 미완료로 말하지 마세요. 시작한 일은 아무것도 하지 않은 일이 아닙니다.
-   - [현재 설정된 습관 트래킹 빈도]를 반드시 참고하세요. 특정 요일에만 하기로 한 습관이라면 그 빈도에 맞게 평가해 주세요.
+   - [현재 설정된 루틴 트래킹 빈도]를 반드시 참고하세요. 특정 요일에만 하기로 한 루틴이라면 그 빈도에 맞게 평가해 주세요.
    - [주간 완료율 요약]의 수치를 우선 기준으로 삼으세요. 100% 완료한 날이 대부분이고 저조한 날이 하루뿐이면 "계획대로 진행되지 않은 날이 많았다", "저조한 날이 많았다", "대부분 미완료였다" 같은 복수/다수 표현을 절대 쓰지 마세요.
    - 플래너 기록일이 적은 주(플래너 기록일이 적은 주인가: 예)에는 완료율을 강하게 평가하지 말고, 먼저 플래너로 돌아오는 리듬을 부드럽게 제안하세요.
    - 완료율이 저조한 주(저조한 날이 많은 주인가: 예)에는 원인을 추측으로 단정하지 말고, [지난 주 대화 기록 요약]이 있다면 거기 나타난 컨디션과 고민을 근거로 원인을 해석해 주세요. 요약에 없는 사정을 지어내지 마세요.
@@ -1812,7 +1812,7 @@ ${feedbackType == 0
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    '습관 트래킹',
+                    '루틴 트래킹',
                     style: GoogleFonts.notoSansKr(
                       fontSize: 15,
                       fontWeight: FontWeight.w800,
@@ -2067,7 +2067,7 @@ ${feedbackType == 0
                 const SizedBox(width: 4),
                 Expanded(
                   child: Text(
-                    '마스터 코치 기록탭에서는 30일치 습관 달성률과 습관 달성 패턴까지 확인할 수 있습니다.',
+                    '마스터 코치 기록탭에서는 30일치 루틴 달성률과 루틴 달성 패턴까지 확인할 수 있습니다.',
                     style: GoogleFonts.notoSansKr(
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
@@ -2124,7 +2124,7 @@ ${feedbackType == 0
           borderRadius: BorderRadius.circular(12),
         ),
         child: Text(
-          '아직은 분석할 기록이 조금 부족해요.\n조금만 더 이어가면 습관 패턴을 찾아드릴게요.',
+          '아직은 분석할 기록이 조금 부족해요.\n조금만 더 이어가면 루틴 패턴을 찾아드릴게요.',
           style: GoogleFonts.notoSansKr(
             fontSize: 12,
             fontWeight: FontWeight.w500,
@@ -2274,7 +2274,7 @@ ${feedbackType == 0
               ),
               const SizedBox(width: 6),
               Text(
-                '습관 패턴',
+                '루틴 패턴',
                 style: GoogleFonts.notoSansKr(
                   fontSize: 13,
                   fontWeight: FontWeight.w800,
@@ -2301,7 +2301,7 @@ ${feedbackType == 0
             const SizedBox(height: 6),
             _patternRow(
               'assets/icons/fa-arrow-rotate-left-solid.svg',
-              '습관 전에 자주 한 일',
+              '루틴 전에 자주 한 일',
               bestPriorTask!,
               iconColor: const Color(0xFF9CA3AF),
             ),
