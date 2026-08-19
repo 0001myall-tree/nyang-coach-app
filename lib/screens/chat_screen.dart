@@ -27,6 +27,7 @@ import 'package:nyang_coach/services/coach_id_service.dart';
 import 'package:nyang_coach/services/local_reply_texts.dart';
 import 'package:nyang_coach/services/master_bedtime_offer_copy.dart';
 import 'package:nyang_coach/services/master_greeting.dart';
+import 'package:nyang_coach/services/ongoing_task_nudge_service.dart';
 import 'package:nyang_coach/services/memory_service.dart';
 import 'package:nyang_coach/services/notification_service.dart';
 import 'package:nyang_coach/services/preemptive_nudge_service.dart';
@@ -5978,6 +5979,9 @@ ${lines.join('\n')}
           now: now,
           lastVisit: lastVisit,
         );
+        // 할 말이 없던 자리에서만 권한다. 한 번 들어올 때 두 마디 하지 않는다.
+        _greetedOnThisEntry =
+            _greetedOnThisEntry || await _tryOfferOngoingNudge(prefs, now);
         await prefs.setString(
           'last_visit_${widget.coachId}',
           now.toIso8601String(),
@@ -5988,6 +5992,15 @@ ${lines.join('\n')}
       // 냥냥이도 앱만 아는 사실 두 가지는 짚어준다. 슬롯 인사는 없지만
       // 곧 시작할 일정과 밤에 남은 계획은 대화가 대신할 수 없다.
       if (await _startCatAutoGreeting(prefs: prefs, now: now)) {
+        _greetedOnThisEntry = true;
+        await prefs.setString(
+          'last_visit_${widget.coachId}',
+          now.toIso8601String(),
+        );
+        return;
+      }
+
+      if (await _tryOfferOngoingNudge(prefs, now)) {
         _greetedOnThisEntry = true;
         await prefs.setString(
           'last_visit_${widget.coachId}',
@@ -15860,6 +15873,9 @@ ${Prompts.outputRulesTail}$coachOfferTaskRule$halmaeHint$resistanceTurnDirective
     if (msg.kind == 'cat_widget_prompt_choice') {
       return _buildCatWidgetPromptChoiceCard(msg);
     }
+    if (msg.kind == _nudgeOfferKind && msg.choices.isNotEmpty) {
+      return _buildOngoingNudgeOfferCard(msg);
+    }
     if (msg.kind == 'feature_location_picker') {
       return _buildFeatureLocationPickerCard(msg);
     }
@@ -16846,6 +16862,159 @@ ${Prompts.outputRulesTail}$coachOfferTaskRule$halmaeHint$resistanceTurnDirective
       coachId: widget.coachId,
       usedApi: false,
     );
+  }
+
+  /// 앱 밖에서 챙겨주는 기능을 한 번 권한다.
+  ///
+  /// 설정 안에 있는 스위치는 아무도 찾지 않는다. 그렇다고 처음 켠 날 권하면
+  /// 무슨 말인지 모른다 — 시작 버튼을 눌러본 적이 있어야 "딴 데로 샌다"는 말이
+  /// 자기 이야기가 된다. 그래서 ▶를 한 번이라도 눌러본 사람에게만, 딱 한 번 권한다.
+  static const _nudgeOfferKind = 'ongoing_nudge_offer';
+  static const _nudgeOfferShownKey = 'ongoing_nudge_offer_shown';
+  static const _nudgeOfferYesLabel = '좋아, 챙겨줘';
+  static const _nudgeOfferNoLabel = '괜찮아';
+
+  Future<bool> _tryOfferOngoingNudge(
+    SharedPreferences prefs,
+    DateTime now,
+  ) async {
+    if (!OngoingTaskNudgeService.isSupported) return false;
+    if (now.hour >= MasterGreetingContext.quietFromHour) return false;
+    if (prefs.getBool(_nudgeOfferShownKey) == true) return false;
+    if (await OngoingTaskNudgeService.isEnabled()) return false;
+    if (!_hasEverStartedATask(prefs)) return false;
+    if (!mounted) return false;
+
+    // 답을 무엇으로 하든 다시 묻지 않는다. 두 번 권하면 그때부터는 재촉이다.
+    await prefs.setBool(_nudgeOfferShownKey, true);
+    _injectAiMessage(
+      _ongoingNudgeOfferText,
+      kind: _nudgeOfferKind,
+      choices: const [_nudgeOfferYesLabel, _nudgeOfferNoLabel],
+    );
+    unawaited(AnalyticsService.logFeatureUsage('ongoing_nudge_offer'));
+    return true;
+  }
+
+  /// ▶를 눌러본 적이 있는지. 시작 시각이 남아 있거나 시간이 흐른 적이 있으면 그렇다.
+  bool _hasEverStartedATask(SharedPreferences prefs) {
+    for (final task in _decodeMapList(prefs.getString('nyang_tasks'))) {
+      if (task['inProgressAt'] != null) return true;
+      if (((task['elapsedSeconds'] as num?)?.toInt() ?? 0) > 0) return true;
+    }
+    return false;
+  }
+
+  String get _ongoingNudgeOfferText {
+    switch (_coach.id) {
+      case 'nyang_halbae':
+        return '자네, 시작해두고 딴 데로 새는 날이 있지냥.\n'
+            '앱 밖에 있을 때도 부담 안 되게 슬쩍 챙겨줄까냥?';
+      case 'sec_female':
+        return '시작해두고 다른 데로 새는 날이 있으시죠.\n'
+            '앱 밖에 계실 때도 부담 없이 살짝 챙겨드릴까요?';
+      case 'boyfriend':
+        return '시작해놓고 딴 데 새는 날 있잖아.\n'
+            '앱 밖에 있을 때도 부담 안 주게 살짝 챙겨줄까?';
+      case 'halmae':
+        return '시작해놓고 딴 데로 새는 날 있제?\n'
+            '앱 밖에 있을 때도 부담 없이 슬쩍 챙겨줄까잉?';
+      case 'bro':
+        return '시작해놓고 딴 데 새는 날 있지?\n'
+            '앱 밖에 있을 때도 부담 안 주게 살짝 챙겨줄까?';
+      default:
+        return '집사, 일 시작해두고 딴 데 새는 날 있지냥?\n'
+            '앱 밖에 있을 때도 부담 안 주게 살짝 챙겨줄까냥?';
+    }
+  }
+
+  Widget _buildOngoingNudgeOfferCard(ChatMessage msg) {
+    return _buildGroomingChoiceCard(msg, [
+      (
+        _nudgeOfferYesLabel,
+        () => _handleOngoingNudgeOfferChoice(_nudgeOfferYesLabel),
+      ),
+      (
+        _nudgeOfferNoLabel,
+        () => _handleOngoingNudgeOfferChoice(_nudgeOfferNoLabel),
+      ),
+    ]);
+  }
+
+  Future<void> _handleOngoingNudgeOfferChoice(String label) async {
+    if (_isLoading) return;
+    HapticFeedback.lightImpact();
+
+    setState(() {
+      _messages.add(
+        ChatMessage(text: label, isUser: true, time: DateTime.now()),
+      );
+      _dynamicChips = _coach.chips;
+      _suppressDefaultChips = false;
+    });
+    _scrollToBottom();
+    await _saveHistory();
+
+    if (label != _nudgeOfferYesLabel) {
+      unawaited(AnalyticsService.logFeatureUsage('ongoing_nudge_offer_no'));
+      _injectAiMessage(_ongoingNudgeDeclineText);
+      return;
+    }
+
+    unawaited(AnalyticsService.logFeatureUsage('ongoing_nudge_offer_yes'));
+    await OngoingTaskNudgeService.setEnabled(true);
+    final available = await OngoingTaskNudgeService.isAvailable();
+    if (!mounted) return;
+
+    if (!available) {
+      // 권한이 없으면 켜도 아무것도 나오지 않는다. 설정으로 데려다준다.
+      _injectAiMessage(_ongoingNudgePermissionText);
+      await OngoingTaskNudgeService.openSystemSettings();
+      return;
+    }
+    _injectAiMessage(_ongoingNudgeAcceptText);
+  }
+
+  String get _ongoingNudgeDeclineText {
+    switch (_coach.id) {
+      case 'nyang_halbae':
+        return '알겠다냥. 마음 바뀌면 설정에서 언제든 켜면 된다냥.';
+      case 'sec_female':
+        return '알겠습니다. 필요해지시면 설정에서 언제든 켜실 수 있어요.';
+      default:
+        return '알겠다냥. 나중에 생각나면 설정에서 켜면 된다냥.';
+    }
+  }
+
+  String get _ongoingNudgeAcceptText {
+    final onAndroid = defaultTargetPlatform == TargetPlatform.android;
+    switch (_coach.id) {
+      case 'nyang_halbae':
+        return onAndroid
+            ? '좋다냥. 일정 시작하고 30분쯤 지나서 폰으로 딴 걸 보고 있으면 화면 가장자리에 잠깐 나갈 거다냥.\n'
+                  '소리도 진동도 없으니 그냥 둬도 된다냥.'
+            : '좋다냥. 일정을 시작하면 잠금화면에 조용히 남아 있을 거다냥.\n'
+                  '완료하거나 멈추면 사라진다냥.';
+      case 'sec_female':
+        return onAndroid
+            ? '좋습니다. 일정을 시작하고 30분쯤 지난 뒤, 휴대폰으로 다른 걸 보고 계시면 화면 가장자리에 잠깐 나갑니다.\n'
+                  '소리도 진동도 없으니 그냥 두셔도 됩니다.'
+            : '좋습니다. 일정을 시작하면 잠금화면에 조용히 남아 있습니다.\n'
+                  '완료하거나 멈추시면 사라집니다.';
+      default:
+        return onAndroid
+            ? '좋았다냥! 일 시작하고 30분쯤 지나서 폰으로 딴 거 보고 있으면 화면 옆에 살짝 나타난다냥.\n'
+                  '소리도 진동도 없으니 무시해도 된다냥.'
+            : '좋았다냥! 일 시작하면 잠금화면에 조용히 있을 거다냥.\n'
+                  '다 하거나 멈추면 사라진다냥.';
+    }
+  }
+
+  String get _ongoingNudgePermissionText {
+    if (defaultTargetPlatform != TargetPlatform.android) {
+      return '설정 화면을 열었다냥. "실시간 활동"만 켜주면 준비 끝이다냥.';
+    }
+    return '설정 화면을 열었다냥. "다른 앱 위에 표시"만 켜주면 준비 끝이다냥.';
   }
 
   Widget _buildCatWidgetPromptChoiceCard(ChatMessage msg) {
