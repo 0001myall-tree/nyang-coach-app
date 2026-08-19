@@ -793,15 +793,21 @@ struct NyangTaskLiveActivity: Widget {
 }
 
 /// 어느 코치를 쓰든 밖으로 나가는 얼굴은 냥냥이 하나다. 앱의 상징이라서다.
+///
+/// 얼굴만 잘라낸 그림을 따로 쓴다. 다이내믹 아일랜드에서는 20pt까지 작아지는데,
+/// 몸통까지 든 그림을 그만큼 줄이면 얼굴이 뭉개져 무엇인지 알아볼 수 없다.
+/// 위젯의 다른 냥냥이 그림에는 완료를 뜻하는 체크가 붙어 있어 여기 쓸 수 없다 —
+/// 진행 중을 알리는 자리에서 뜻이 정반대가 된다.
 struct NyangLiveActivityCat: View {
     let size: CGFloat
 
     var body: some View {
-        Image("iphonecatwidget1")
+        // 동그랗게 오려내지 않는다. 배경이 없는 그림이라 그대로 두면 귀 끝까지
+        // 살아 있고, 다이내믹 아일랜드의 검은 바탕 위에 그대로 얹힌다.
+        Image("nyang_cat_face")
             .resizable()
-            .aspectRatio(contentMode: .fill)
+            .aspectRatio(contentMode: .fit)
             .frame(width: size, height: size)
-            .clipShape(Circle())
     }
 }
 
