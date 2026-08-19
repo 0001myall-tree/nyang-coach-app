@@ -250,8 +250,9 @@ void main() {
           .toList(growable: false);
       expect(texts, contains('어제 못한 것'));
       expect(texts, contains('1장 마치기'));
-      // 이월 완료 1 + 오늘 완료 1.
-      expect(today['doneCount'], 2);
+      // 이월 항목은 그날 계획이 아니라 넘어온 것이라 분모에도 분자에도 넣지 않는다.
+      // 오늘 것 하나만 센다.
+      expect(today['doneCount'], 1);
     });
   });
 
@@ -302,6 +303,78 @@ void main() {
 
       final byDate = readMap(prefs, DailyResetService.plannedTasksByDateKey);
       expect((byDate['2026-08-25'] as List).first['done'], isFalse);
+    });
+  });
+
+  // 하루치가 통째로 0이 된 적이 있다. 보관본이 모자란 채로 그날 기록을 덮었기
+  // 때문이다. 지난 날 기록은 줄어들 수 없어야 한다.
+  group('지난 날 기록은 줄어들지 않는다', () {
+    test('보관본에 없는 옛 항목은 남는다', () {
+      final kept = TaskCompletionService.preservedRecordEntries(
+        previous: [
+          {'text': '집필', 'done': true},
+          {'text': '청소', 'done': true},
+          {'text': '운동', 'done': false},
+        ],
+        fromList: [
+          {'text': '운동', 'done': true},
+        ],
+      );
+
+      expect(kept.map((e) => e['text']), containsAll(['집필', '청소']));
+      // 이름이 같은 것은 목록 쪽이 새 소식이다.
+      expect(kept.map((e) => e['text']), isNot(contains('운동')));
+    });
+
+    test('보관본이 비어 있어도 옛 기록이 그대로 남는다', () {
+      final kept = TaskCompletionService.preservedRecordEntries(
+        previous: [
+          {'text': '집필', 'done': true},
+        ],
+        fromList: const [],
+      );
+
+      expect(kept.length, 1);
+    });
+
+    test('지난 날에 하나를 채워도 그날 완료가 사라지지 않는다', () async {
+      SharedPreferences.setMockInitialValues({
+        TaskCompletionService.tasksKey: jsonEncode([task('9', '오늘 할 일')]),
+        DailyResetService.plannedTasksByDateKey: jsonEncode({
+          // 보관본에는 하나만 남아 있는 상태.
+          '2026-08-18': [task('1', '운동')],
+        }),
+        TaskCompletionService.historyKey: jsonEncode([
+          {
+            'date': '2026-08-18',
+            'totalCount': 3,
+            'doneCount': 2,
+            'success': true,
+            'tasks': [
+              {'text': '집필', 'done': true},
+              {'text': '청소', 'done': true},
+              {'text': '운동', 'done': false},
+            ],
+          },
+        ]),
+      });
+      final prefs = await SharedPreferences.getInstance();
+
+      await TaskCompletionService.completeStoredTask(
+        taskId: '1',
+        at: DateTime(2026, 8, 19, 9),
+      );
+
+      final past = readList(
+        prefs,
+        TaskCompletionService.historyKey,
+      ).firstWhere((h) => h['date'] == '2026-08-18');
+      final texts = (past['tasks'] as List).map((e) => e['text']).toList();
+
+      expect(texts, containsAll(['집필', '청소', '운동']));
+      // 원래 둘에 방금 채운 하나.
+      expect(past['doneCount'], 3);
+      expect(past['totalCount'], 3);
     });
   });
 }

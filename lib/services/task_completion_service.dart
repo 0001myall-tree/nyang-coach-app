@@ -211,6 +211,28 @@ class TaskCompletionService {
     await prefs.setString(habitLogsKey, jsonEncode(logs));
   }
 
+  /// 지난 날 기록을 다시 쓸 때, 목록에 없는 항목을 지우지 않는다.
+  ///
+  /// 지난 날에 대해 더 믿을 만한 쪽은 그날 기록이다. 목록(보관본)은 나중에
+  /// 완료를 채워 넣으라고 남겨둔 사본이라, 어떤 이유로든 모자랄 수 있다.
+  /// 모자란 사본으로 기록을 덮으면 그날 해낸 것이 통째로 사라진다 —
+  /// 실제로 그렇게 하루치가 0이 된 적이 있다.
+  ///
+  /// 그래서 목록에 없는 옛 항목은 그대로 남긴다. 이름이 같은 항목은 목록 쪽이
+  /// 새 소식이므로 목록이 이긴다.
+  static List<Map<String, dynamic>> preservedRecordEntries({
+    required List<Map<String, dynamic>> previous,
+    required List<Map<String, dynamic>> fromList,
+  }) {
+    final names = fromList
+        .map((entry) => entry['text']?.toString())
+        .whereType<String>()
+        .toSet();
+    return previous
+        .where((entry) => !names.contains(entry['text']?.toString()))
+        .toList(growable: false);
+  }
+
   /// 그날 기록을 목록에서 다시 센다.
   ///
   /// 기록 탭과 코치가 말하는 "연속 달성"이 이 숫자에서 나온다. 개수를 하나
@@ -231,31 +253,9 @@ class TaskCompletionService {
 
     final idx = history.indexWhere((h) => h['date'] == dateKey);
     final previous = idx >= 0 ? history[idx] : <String, dynamic>{};
-    final kept = _asList(previous['tasks'])
-        .where(
-          (entry) =>
-              entry['deferred'] == true || entry['category'] == 'milestone',
-        )
-        .toList(growable: false);
-    final keptDone = kept.where((entry) => entry['done'] == true).length;
 
-    final countable = tasks
-        .where((task) => _countsTowardDailyCompletion(prefs, task))
-        .toList(growable: false);
-    final doneCount = countable.where((task) => task['done'] == true).length;
-    final milestones = kept
-        .where((entry) => entry['category'] == 'milestone')
-        .length;
-
-    final record = <String, dynamic>{
-      'date': dateKey,
-      'totalCount': countable.length + milestones,
-      'doneCount': doneCount + keptDone,
-      'success': doneCount + keptDone > 0,
-      'isVacation': previous['isVacation'] ?? false,
-      'updatedAt': at.toIso8601String(),
-      'tasks': [
-        ...tasks.map(
+    final listEntries = tasks
+        .map(
           (task) => {
             'text': task['text'],
             'done': task['done'] == true,
@@ -265,9 +265,45 @@ class TaskCompletionService {
             'category': task['category'],
             'deferred': false,
           },
-        ),
-        ...kept,
-      ],
+        )
+        .toList(growable: false);
+
+    // 지난 날이면 목록에 없는 옛 항목을 지우지 않는다. 오늘은 목록이 곧 진실이라
+    // 지운 할 일이 되살아나면 안 되므로, 이월·마일스톤만 나른다.
+    final isPastDay = dateKey != _todayKey(at);
+    final kept = isPastDay
+        ? preservedRecordEntries(
+            previous: _asList(previous['tasks']),
+            fromList: listEntries,
+          )
+        : _asList(previous['tasks'])
+              .where(
+                (entry) =>
+                    entry['deferred'] == true ||
+                    entry['category'] == 'milestone',
+              )
+              .toList(growable: false);
+
+    // 이월 항목은 예전부터 분모에 넣지 않는다. 그날 계획이 아니라 넘어온 것이다.
+    final countedKept = kept
+        .where((entry) => entry['deferred'] != true)
+        .toList(growable: false);
+    final keptDone = countedKept.where((entry) => entry['done'] == true).length;
+
+    final countable = tasks
+        .where((task) => _countsTowardDailyCompletion(prefs, task))
+        .toList(growable: false);
+    final doneCount = countable.where((task) => task['done'] == true).length;
+    final milestones = countedKept.length;
+
+    final record = <String, dynamic>{
+      'date': dateKey,
+      'totalCount': countable.length + milestones,
+      'doneCount': doneCount + keptDone,
+      'success': doneCount + keptDone > 0,
+      'isVacation': previous['isVacation'] ?? false,
+      'updatedAt': at.toIso8601String(),
+      'tasks': [...listEntries, ...kept],
     };
 
     if (idx >= 0) {

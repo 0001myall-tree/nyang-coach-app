@@ -2455,10 +2455,6 @@ class _TasksScreenState extends State<TasksScreen>
 
     final idx = history.indexWhere((h) => h['date'] == dateKey);
     final previous = idx >= 0 ? history[idx] : <String, dynamic>{};
-    final carried = ((previous['tasks'] as List?) ?? [])
-        .whereType<Map>()
-        .where((entry) => entry['deferred'] == true)
-        .toList();
 
     final dayTasks = plannedTodayTasksByDate[dateKey] ?? <TaskItem>[];
     final countableTasks = dayTasks.where(_countsTowardDailyCompletion).toList();
@@ -2466,35 +2462,56 @@ class _TasksScreenState extends State<TasksScreen>
     final dayMilestones = _todayMilestoneItems;
     final doneMilestones = dayMilestones.where((m) => m.done).toList();
 
+    final listEntries = <Map<String, dynamic>>[
+      ...dayTasks.map(
+        (t) => {
+          'text': t.text,
+          'done': t.done,
+          'inProgress': t.inProgress,
+          if (t.inProgressAt != null) 'startedAt': t.inProgressAt,
+          if (t.completedAt != null) 'completedAt': t.completedAt,
+          'category': t.category,
+          'deferred': false,
+        },
+      ),
+      ...dayMilestones.map(
+        (m) => {
+          'text': m.text,
+          'done': m.done,
+          'category': 'milestone',
+          'deferred': false,
+        },
+      ),
+    ];
+
+    // 지난 날 기록은 줄어들 수 없다.
+    //
+    // 여기 쓰는 목록은 자정에 남겨둔 보관본이라 어떤 이유로든 모자랄 수 있는데,
+    // 그것으로 기록을 통째로 덮으면 그날 해낸 것이 사라진다. 실제로 하루치가
+    // 0이 된 적이 있다. 목록에 없는 옛 항목은 그대로 남긴다.
+    final kept = TaskCompletionService.preservedRecordEntries(
+      previous: ((previous['tasks'] as List?) ?? [])
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList(),
+      fromList: listEntries,
+    );
+    // 이월 항목은 그날 계획이 아니라 넘어온 것이라 분모에 넣지 않는다.
+    final countedKept = kept
+        .where((entry) => entry['deferred'] != true)
+        .toList(growable: false);
+    final keptDone = countedKept.where((entry) => entry['done'] == true).length;
+
     final record = {
       'date': dateKey,
-      'totalCount': countableTasks.length + dayMilestones.length,
-      'doneCount': doneTasks.length + doneMilestones.length,
-      'success': doneTasks.isNotEmpty || doneMilestones.isNotEmpty,
+      'totalCount':
+          countableTasks.length + dayMilestones.length + countedKept.length,
+      'doneCount': doneTasks.length + doneMilestones.length + keptDone,
+      'success':
+          doneTasks.isNotEmpty || doneMilestones.isNotEmpty || keptDone > 0,
       'isVacation': previous['isVacation'] ?? false,
       'updatedAt': DateTime.now().toIso8601String(),
-      'tasks': [
-        ...dayTasks.map(
-          (t) => {
-            'text': t.text,
-            'done': t.done,
-            'inProgress': t.inProgress,
-            if (t.inProgressAt != null) 'startedAt': t.inProgressAt,
-            if (t.completedAt != null) 'completedAt': t.completedAt,
-            'category': t.category,
-            'deferred': false,
-          },
-        ),
-        ...dayMilestones.map(
-          (m) => {
-            'text': m.text,
-            'done': m.done,
-            'category': 'milestone',
-            'deferred': false,
-          },
-        ),
-        ...carried,
-      ],
+      'tasks': [...listEntries, ...kept],
     };
 
     if (idx >= 0) {
