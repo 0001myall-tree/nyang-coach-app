@@ -7,6 +7,7 @@ import '../models/user_data.dart';
 import '../screens/coach_config.dart';
 import '../services/notification_service.dart';
 import '../services/tasks_sync_service.dart';
+import 'alarm_permission_notice.dart';
 
 Future<bool> showCoreReminderSettingsSheet(BuildContext context) async {
   final userData = await UserDataService.load();
@@ -23,6 +24,8 @@ Future<bool> showCoreReminderSettingsSheet(BuildContext context) async {
   var tempEnabled = true;
   var tempCoachId = prefs.getString('nyang_core_reminder_coach') ?? 'push';
   var tempAdvance = prefs.getInt('nyang_core_reminder_advance') ?? 10;
+  // 알람을 막고 있는 권한이 있으면 켜기 전에 보이게 한다.
+  var permissionIssue = await NotificationService().checkAlarmPermission();
 
   if (!context.mounted) return false;
   final saved = await showModalBottomSheet<bool>(
@@ -98,6 +101,22 @@ Future<bool> showCoreReminderSettingsSheet(BuildContext context) async {
                   ),
                 ),
                 const SizedBox(height: 24),
+                if (tempEnabled)
+                  buildAlarmPermissionBanner(
+                    issue: permissionIssue,
+                    alarmLabel: '일정 알람',
+                    onTap: () async {
+                      await showAlarmPermissionDialog(
+                        sheetContext,
+                        permissionIssue,
+                        alarmLabel: '일정 알람',
+                        emoji: '🔔',
+                      );
+                      final next = await NotificationService()
+                          .checkAlarmPermission();
+                      setModalState(() => permissionIssue = next);
+                    },
+                  ),
                 Opacity(
                   opacity: tempEnabled ? 1 : 0.5,
                   child: Padding(
@@ -279,7 +298,22 @@ Future<bool> showCoreReminderSettingsSheet(BuildContext context) async {
     },
   );
 
-  return saved == true;
+  if (saved != true) return false;
+
+  // 켠 직후에 실제로 울릴 수 있는 상태인지 확인하고, 막혀 있으면 설정으로 갈 길을 안내한다.
+  // 시트가 닫힌 뒤라 바깥 화면의 context로 띄운다.
+  await NotificationService().requestNotificationPermissions();
+  final issue = await NotificationService().checkAlarmPermission();
+  if (issue != AlarmPermissionIssue.none && context.mounted) {
+    await showAlarmPermissionDialog(
+      context,
+      issue,
+      alarmLabel: '일정 알람',
+      emoji: '🔔',
+    );
+  }
+
+  return true;
 }
 
 class _CoreReminderSectionHeader extends StatelessWidget {

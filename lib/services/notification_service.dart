@@ -20,11 +20,12 @@ import 'tasks_sync_service.dart';
 import 'user_title_service.dart';
 import '../models/user_data.dart';
 
-/// 모닝콜이 실제로 울릴 수 있는지를 막고 있는 권한.
+/// 알람(모닝콜·일정 알람)이 실제로 울릴 수 있는지를 막고 있는 권한.
+/// 둘 다 같은 시스템 권한을 쓰기 때문에 한 가지로 본다.
 /// [notifications]가 없으면 알람 시각에 백그라운드에서 아무 소리도 나지 않는다.
 /// (네이티브 수신부가 알림을 못 만들고 그대로 종료되기 때문에, 나중에 앱을 열어야
-///  밀린 모닝콜이 그제서야 울린다.) 나머지 둘은 소리는 나지만 화면 표시가 제한된다.
-enum MorningCallPermissionIssue { none, notifications, exactAlarm, fullScreen }
+///  밀린 알람이 그제서야 울린다.) 나머지 둘은 소리는 나지만 화면 표시가 제한된다.
+enum AlarmPermissionIssue { none, notifications, exactAlarm, fullScreen }
 
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
@@ -92,6 +93,18 @@ class NotificationService {
 
   String _coreReminderChannelId(String? soundName) {
     return 'nyang_core_reminder_${soundName ?? 'push'}_$_androidCoreReminderChannelVersion';
+  }
+
+  /// 일정 알람의 중복 발사를 막는 키.
+  /// payload를 ':'로 잘라 읽기 때문에 키 안에 ':'이 들어가면 안 된다
+  /// (시각의 ':'이 그대로 남으면 뒤쪽 일정 이름 자리로 밀려 들어간다).
+  static String coreReminderFireKey({
+    required Object? alarmId,
+    required DateTime targetDate,
+    required String dateKey,
+  }) {
+    final stamp = targetDate.toIso8601String().replaceAll(':', '-');
+    return 'reminder_${alarmId}_${stamp}_$dateKey';
   }
 
   String? _coreReminderSoundName(String coachId, int advanceMinutes) {
@@ -167,6 +180,13 @@ class NotificationService {
       } else {
         taskText = parts.sublist(3).join(':');
       }
+
+      // 예약 시각의 ':'을 그대로 담던 옛 payload가 남아 있으면
+      // 일정 이름 앞에 "50:00.000_2026-08-18:" 같은 찌꺼기가 붙는다. 떼어낸다.
+      taskText = taskText.replaceFirst(
+        RegExp(r'^\d{2}:\d{2}\.\d{3}_\d{4}-\d{2}-\d{2}:'),
+        '',
+      );
 
       if (fireKey.isNotEmpty) {
         final prefs = await SharedPreferences.getInstance();
@@ -419,38 +439,38 @@ class NotificationService {
     return _invokeAndroidAlarmPermissionCheck('canUseFullScreenIntent');
   }
 
-  /// 모닝콜을 막고 있는 권한을 하나 찾아 돌려준다. 설정 화면은 열지 않는다.
+  /// 알람(모닝콜·일정 알람)을 막고 있는 권한을 하나 찾아 돌려준다. 설정 화면은 열지 않는다.
   /// 여러 개가 없을 수 있으므로 가장 치명적인 것(알림 권한)부터 확인한다.
-  Future<MorningCallPermissionIssue> checkMorningCallPermission() async {
+  Future<AlarmPermissionIssue> checkAlarmPermission() async {
     if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
-      return MorningCallPermissionIssue.none;
+      return AlarmPermissionIssue.none;
     }
     if (!await _invokeAndroidAlarmPermissionCheck('canPostNotifications')) {
-      return MorningCallPermissionIssue.notifications;
+      return AlarmPermissionIssue.notifications;
     }
     if (!await _invokeAndroidAlarmPermissionCheck('canScheduleExactAlarms')) {
-      return MorningCallPermissionIssue.exactAlarm;
+      return AlarmPermissionIssue.exactAlarm;
     }
     if (!await canUseMorningCallFullScreen()) {
-      return MorningCallPermissionIssue.fullScreen;
+      return AlarmPermissionIssue.fullScreen;
     }
-    return MorningCallPermissionIssue.none;
+    return AlarmPermissionIssue.none;
   }
 
-  /// [checkMorningCallPermission]이 찾아낸 권한의 시스템 설정 화면을 연다.
-  Future<void> openMorningCallPermissionSettings(
-    MorningCallPermissionIssue issue,
+  /// [checkAlarmPermission]이 찾아낸 권한의 시스템 설정 화면을 연다.
+  Future<void> openAlarmPermissionSettings(
+    AlarmPermissionIssue issue,
   ) async {
     switch (issue) {
-      case MorningCallPermissionIssue.notifications:
+      case AlarmPermissionIssue.notifications:
         await _openAndroidAlarmPermissionSettings('openNotificationSettings');
-      case MorningCallPermissionIssue.exactAlarm:
+      case AlarmPermissionIssue.exactAlarm:
         await _openAndroidAlarmPermissionSettings('openExactAlarmSettings');
-      case MorningCallPermissionIssue.fullScreen:
+      case AlarmPermissionIssue.fullScreen:
         await _openAndroidAlarmPermissionSettings(
           'openFullScreenIntentSettings',
         );
-      case MorningCallPermissionIssue.none:
+      case AlarmPermissionIssue.none:
         break;
     }
   }
@@ -1112,8 +1132,11 @@ class NotificationService {
       final dateKey = alarm['dateKey'] as String;
       final tzScheduled = tz.TZDateTime.from(targetDate, tz.local);
 
-      final fireKey =
-          'reminder_${alarmId}_${targetDate.toIso8601String()}_$dateKey';
+      final fireKey = coreReminderFireKey(
+        alarmId: alarmId,
+        targetDate: targetDate,
+        dateKey: dateKey,
+      );
 
       await _plugin.zonedSchedule(
         id: notificationId,

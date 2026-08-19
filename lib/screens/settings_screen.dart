@@ -15,6 +15,7 @@ import '../models/user_data.dart';
 import '../services/widget_sync_service.dart';
 import '../services/apple_calendar_sync_service.dart';
 import '../theme/app_design_tokens.dart';
+import '../widgets/alarm_permission_notice.dart';
 
 class SettingsScreen extends StatefulWidget {
   final String coachId;
@@ -49,10 +50,9 @@ class _SettingsScreenState extends State<SettingsScreen>
   String? _expandedSettingsSection;
   bool _appleCalendarEnabled = false; // iOS 애플 캘린더 연동 여부
   bool _appleCalendarBusy = false; // 연동 켜기/끄기 진행 중
-  // 모닝콜을 막고 있는 권한. 사용자가 시스템 설정에서 직접 바꿀 수 있으므로
+  // 알람(모닝콜·일정 알람)을 막고 있는 권한. 사용자가 시스템 설정에서 직접 바꿀 수 있으므로
   // 화면에 돌아올 때마다 다시 확인한다.
-  MorningCallPermissionIssue _morningCallPermissionIssue =
-      MorningCallPermissionIssue.none;
+  AlarmPermissionIssue _alarmPermissionIssue = AlarmPermissionIssue.none;
 
   bool get _isMaster =>
       widget.coachId == 'nyang_halbae' || widget.coachId == 'sec_female';
@@ -65,7 +65,7 @@ class _SettingsScreenState extends State<SettingsScreen>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _loadSettings();
-    _refreshMorningCallPermission();
+    _refreshAlarmPermission();
     if (widget.autoOpenPremiumLearnSettings) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
@@ -84,26 +84,31 @@ class _SettingsScreenState extends State<SettingsScreen>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     // 시스템 설정 화면에서 권한을 켜고 돌아온 경우를 곧바로 반영한다.
     if (state == AppLifecycleState.resumed) {
-      _refreshMorningCallPermission();
+      _refreshAlarmPermission();
     }
   }
 
-  Future<void> _refreshMorningCallPermission() async {
-    final issue = await NotificationService().checkMorningCallPermission();
-    if (!mounted || issue == _morningCallPermissionIssue) return;
-    setState(() => _morningCallPermissionIssue = issue);
+  Future<void> _refreshAlarmPermission() async {
+    final issue = await NotificationService().checkAlarmPermission();
+    if (!mounted || issue == _alarmPermissionIssue) return;
+    setState(() => _alarmPermissionIssue = issue);
   }
 
-  /// 모닝콜이 켜져 있는데 알림 권한이 없으면 알람이 전혀 울리지 않는다.
-  bool get _morningCallBlocked =>
-      _morningCallEnabled &&
-      _morningCallPermissionIssue == MorningCallPermissionIssue.notifications;
+  /// 알람이 켜져 있는데 알림 권한이 없으면 알람이 전혀 울리지 않는다.
+  bool get _anyAlarmEnabled => _morningCallEnabled || _coreReminderEnabled;
+
+  bool get _alarmBlocked =>
+      _anyAlarmEnabled &&
+      _alarmPermissionIssue == AlarmPermissionIssue.notifications;
 
   /// 소리는 나지만 잠금화면 표시 등이 제한되는 상태.
-  bool get _morningCallLimited =>
-      _morningCallEnabled &&
-      _morningCallPermissionIssue != MorningCallPermissionIssue.none &&
-      _morningCallPermissionIssue != MorningCallPermissionIssue.notifications;
+  bool get _alarmLimited =>
+      _anyAlarmEnabled &&
+      _alarmPermissionIssue != AlarmPermissionIssue.none &&
+      _alarmPermissionIssue != AlarmPermissionIssue.notifications;
+
+  /// 배너·안내 문구에 쓸 알람 이름. 둘 다 켜져 있으면 모닝콜을 먼저 말한다.
+  String get _blockedAlarmLabel => _morningCallEnabled ? '모닝콜' : '일정 알람';
 
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
@@ -175,10 +180,7 @@ class _SettingsScreenState extends State<SettingsScreen>
     ).showSnackBar(const SnackBar(content: Text('무료 이용자는 모닝콜 설정만 이용할 수 있어요.')));
   }
 
-  /// 알람 설정 결과 안내.
-  /// 설정 서랍(모달 바텀시트)이 열린 상태에서 뜨기 때문에 스낵바는 서랍에 가려 보이지 않는다.
-  /// 게다가 모닝콜은 시스템 권한 설정 화면을 함께 열어서, 자동으로 사라지는 스낵바로는
-  /// 안내를 놓치게 된다. 그래서 사용자가 직접 닫아야 하는 팝업으로 띄운다.
+  /// 알람 설정 결과 안내. 실제 모양은 [showAlarmNoticeDialog]에 있다.
   Future<void> _showAlarmNoticeDialog({
     required String title,
     required String message,
@@ -186,102 +188,13 @@ class _SettingsScreenState extends State<SettingsScreen>
     VoidCallback? onAction,
     String closeLabel = '확인',
   }) {
-    return showDialog<void>(
-      context: context,
-      // 권한 안내는 그냥 닫고 지나치기 쉬우므로 바깥을 눌러서는 닫히지 않게 한다.
-      barrierDismissible: actionLabel == null,
-      builder: (ctx) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          title: Text(
-            title,
-            style: GoogleFonts.notoSansKr(
-              fontSize: 17,
-              fontWeight: FontWeight.w900,
-              color: const Color(0xFF3D3A4E),
-            ),
-          ),
-          content: Text(
-            message,
-            style: GoogleFonts.notoSansKr(
-              fontSize: 13.5,
-              height: 1.5,
-              fontWeight: FontWeight.w500,
-              color: const Color(0xFF6B6676),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: Text(
-                closeLabel,
-                style: GoogleFonts.notoSansKr(
-                  fontWeight: FontWeight.w900,
-                  color: actionLabel == null
-                      ? const Color(0xFF8B7CFF)
-                      : const Color(0xFF9B96A8),
-                ),
-              ),
-            ),
-            if (actionLabel != null)
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.pop(ctx);
-                  onAction?.call();
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF8B7CFF),
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                child: Text(
-                  actionLabel,
-                  style: GoogleFonts.notoSansKr(
-                    fontWeight: FontWeight.w900,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-          ],
-        );
-      },
-    );
-  }
-
-  /// 모닝콜 권한이 없을 때의 안내 팝업. 사용자가 직접 시스템 설정으로 갈 수 있게
-  /// 버튼을 함께 띄운다. 자동으로 설정 화면을 열어버리면 무슨 이유로 넘어왔는지
-  /// 모른 채 뒤로가기를 눌러버리기 때문에, 설명을 먼저 읽히고 나서 보낸다.
-  Future<void> _showMorningCallPermissionDialog(
-    MorningCallPermissionIssue issue,
-  ) async {
-    if (issue == MorningCallPermissionIssue.none) return;
-    final isBlocking = issue == MorningCallPermissionIssue.notifications;
-    await _showAlarmNoticeDialog(
-      title: isBlocking ? '⏰ 지금은 모닝콜이 울리지 않아요' : '⏰ 모닝콜이 조용히 울릴 수 있어요',
-      message: switch (issue) {
-        MorningCallPermissionIssue.notifications =>
-          '냥냥코치 알림이 꺼져 있어요. 알림을 켜지 않으면 모닝콜 시간이 되어도 소리가 나지 않고, '
-              '나중에 앱을 열었을 때에야 뒤늦게 울려요.\n\n'
-              '설정에서 냥냥코치 알림을 켜주세요.',
-        MorningCallPermissionIssue.exactAlarm =>
-          '알람을 정확한 시간에 울릴 수 있는 권한이 꺼져 있어요. '
-              '이대로 두면 모닝콜이 설정한 시간보다 늦게 울릴 수 있어요.\n\n'
-              '설정에서 "알람 및 리마인더"를 허용해주세요.',
-        MorningCallPermissionIssue.fullScreen =>
-          '잠금화면을 덮는 알람 화면 권한이 꺼져 있어요. '
-              '소리는 나지만 화면이 켜지지 않아 알람을 놓치기 쉬워요.\n\n'
-              '설정에서 전체화면 알림을 허용해주세요.',
-        MorningCallPermissionIssue.none => '',
-      },
-      actionLabel: '설정 열기',
-      closeLabel: isBlocking ? '나중에' : '괜찮아요',
-      onAction: () async {
-        await NotificationService().openMorningCallPermissionSettings(issue);
-      },
+    return showAlarmNoticeDialog(
+      context,
+      title: title,
+      message: message,
+      actionLabel: actionLabel,
+      onAction: onAction,
+      closeLabel: closeLabel,
     );
   }
 
@@ -699,7 +612,7 @@ class _SettingsScreenState extends State<SettingsScreen>
       coachName = CoachConfigs.get(coachId).name;
     }
 
-    var issue = MorningCallPermissionIssue.none;
+    var issue = AlarmPermissionIssue.none;
     if (enabled) {
       // 시스템 권한 창은 두 번 거절당하면 다시 뜨지 않는다. 그래서 요청 결과와
       // 별개로 실제 권한 상태를 다시 확인해, 없으면 설정으로 갈 길을 안내한다.
@@ -709,15 +622,15 @@ class _SettingsScreenState extends State<SettingsScreen>
         minute: time.minute,
         coachId: coachId,
       );
-      issue = await NotificationService().checkMorningCallPermission();
+      issue = await NotificationService().checkAlarmPermission();
     } else {
       await NotificationService().cancelAllMorningCalls();
     }
     if (!mounted) return;
-    setState(() => _morningCallPermissionIssue = issue);
+    setState(() => _alarmPermissionIssue = issue);
 
-    if (enabled && issue != MorningCallPermissionIssue.none) {
-      await _showMorningCallPermissionDialog(issue);
+    if (enabled && issue != AlarmPermissionIssue.none) {
+      await showAlarmPermissionDialog(context, issue, alarmLabel: '모닝콜');
       return;
     }
     await _showAlarmNoticeDialog(
@@ -726,79 +639,12 @@ class _SettingsScreenState extends State<SettingsScreen>
     );
   }
 
-  /// 모닝콜이 울리지 않는 상태를 설정 화면에 계속 띄워두는 배너.
-  /// 스위치만 켜져 있으면 사용자는 정상이라고 믿게 되므로, 켜진 동안 계속 보이게 한다.
-  Widget _buildMorningCallPermissionBanner({
-    required MorningCallPermissionIssue issue,
-    required VoidCallback onTap,
-  }) {
-    if (issue == MorningCallPermissionIssue.none) {
-      return const SizedBox.shrink();
-    }
-    final isBlocking = issue == MorningCallPermissionIssue.notifications;
-    final accent = isBlocking
-        ? const Color(0xFFD64545)
-        : const Color(0xFFCE8A2E);
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: double.infinity,
-        margin: const EdgeInsets.only(bottom: 16),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        decoration: BoxDecoration(
-          color: isBlocking ? const Color(0xFFFDECEC) : const Color(0xFFFDF4E4),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: accent.withValues(alpha: 0.35)),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(
-              isBlocking ? Icons.notifications_off : Icons.warning_amber_rounded,
-              size: 18,
-              color: accent,
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    isBlocking ? '지금은 모닝콜이 울리지 않아요' : '모닝콜 화면이 안 뜰 수 있어요',
-                    style: GoogleFonts.notoSansKr(
-                      fontSize: 13.5,
-                      fontWeight: FontWeight.w900,
-                      color: accent,
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    isBlocking
-                        ? '냥냥코치 알림이 꺼져 있어요. 눌러서 켜주세요.'
-                        : '알람 권한이 일부 꺼져 있어요. 눌러서 확인해주세요.',
-                    style: GoogleFonts.notoSansKr(
-                      fontSize: 12,
-                      height: 1.4,
-                      fontWeight: FontWeight.w600,
-                      color: const Color(0xFF6B6676),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Icon(Icons.chevron_right, size: 18, color: accent),
-          ],
-        ),
-      ),
-    );
-  }
-
   void _showMorningCallSettingsModal() {
     bool tempEnabled = _morningCallEnabled;
     TimeOfDay tempTime = _morningCallTime;
     String tempCoachId = _morningCallCoachId;
     bool isPickingTime = false;
-    MorningCallPermissionIssue modalIssue = _morningCallPermissionIssue;
+    AlarmPermissionIssue modalIssue = _alarmPermissionIssue;
 
     showModalBottomSheet(
       context: context,
@@ -860,14 +706,19 @@ class _SettingsScreenState extends State<SettingsScreen>
                   const SizedBox(height: 24),
 
                   if (tempEnabled)
-                    _buildMorningCallPermissionBanner(
+                    buildAlarmPermissionBanner(
                       issue: modalIssue,
+                      alarmLabel: '모닝콜',
                       onTap: () async {
-                        await _showMorningCallPermissionDialog(modalIssue);
+                        await showAlarmPermissionDialog(
+                          context,
+                          modalIssue,
+                          alarmLabel: '모닝콜',
+                        );
                         final next = await NotificationService()
-                            .checkMorningCallPermission();
+                            .checkAlarmPermission();
                         if (!mounted) return;
-                        setState(() => _morningCallPermissionIssue = next);
+                        setState(() => _alarmPermissionIssue = next);
                         setModalState(() => modalIssue = next);
                       },
                     ),
@@ -1108,14 +959,32 @@ class _SettingsScreenState extends State<SettingsScreen>
         ? '기본 푸쉬 알람'
         : CoachConfigs.get(coachId).name;
 
-    if (mounted) {
-      await _showAlarmNoticeDialog(
-        title: enabled ? '🔔 $coachName 일정 알람이 설정되었어요' : '🔔 일정 알람을 껐어요',
-        message: enabled
-            ? '일정 시작 $advanceMinutes분 전에 알려드릴게요!'
-            : '이제 일정 알람이 울리지 않아요.',
-      );
+    // 모닝콜과 똑같이, 켠 직후에 실제로 울릴 수 있는 상태인지 확인한다.
+    // 시스템 권한 창은 두 번 거절당하면 다시 뜨지 않으므로 요청 결과와 별개로 다시 본다.
+    var issue = AlarmPermissionIssue.none;
+    if (enabled) {
+      await NotificationService().requestNotificationPermissions();
+      issue = await NotificationService().checkAlarmPermission();
     }
+    if (!mounted) return;
+    setState(() => _alarmPermissionIssue = issue);
+
+    if (enabled && issue != AlarmPermissionIssue.none) {
+      await showAlarmPermissionDialog(
+        context,
+        issue,
+        alarmLabel: '일정 알람',
+        emoji: '🔔',
+      );
+      return;
+    }
+
+    await _showAlarmNoticeDialog(
+      title: enabled ? '🔔 $coachName 일정 알람이 설정되었어요' : '🔔 일정 알람을 껐어요',
+      message: enabled
+          ? '일정 시작 $advanceMinutes분 전에 알려드릴게요!'
+          : '이제 일정 알람이 울리지 않아요.',
+    );
   }
 
   void _showCoreReminderSettingsModal() {
@@ -1126,6 +995,7 @@ class _SettingsScreenState extends State<SettingsScreen>
     bool tempEnabled = _coreReminderEnabled;
     String tempCoachId = _coreReminderCoachId;
     int tempAdvance = _coreReminderAdvanceMinutes;
+    AlarmPermissionIssue modalIssue = _alarmPermissionIssue;
 
     showModalBottomSheet(
       context: context,
@@ -1195,6 +1065,25 @@ class _SettingsScreenState extends State<SettingsScreen>
                     ),
                   ),
                   const SizedBox(height: 24),
+
+                  if (tempEnabled)
+                    buildAlarmPermissionBanner(
+                      issue: modalIssue,
+                      alarmLabel: '일정 알람',
+                      onTap: () async {
+                        await showAlarmPermissionDialog(
+                          context,
+                          modalIssue,
+                          alarmLabel: '일정 알람',
+                          emoji: '🔔',
+                        );
+                        final next = await NotificationService()
+                            .checkAlarmPermission();
+                        if (!mounted) return;
+                        setState(() => _alarmPermissionIssue = next);
+                        setModalState(() => modalIssue = next);
+                      },
+                    ),
 
                   // 알람 시간 선택
                   Opacity(
@@ -1712,8 +1601,8 @@ class _SettingsScreenState extends State<SettingsScreen>
 
   String get _notificationSectionStatus {
     // 켜져 있어도 울리지 않는 상태라면 "켜짐"이라고 말하지 않는다.
-    if (_morningCallBlocked) return '모닝콜 안 울림';
-    if (_morningCallLimited) return '모닝콜 권한 확인';
+    if (_alarmBlocked) return '$_blockedAlarmLabel 안 울림';
+    if (_alarmLimited) return '$_blockedAlarmLabel 권한 확인';
     final enabledCount = [
       _morningCallEnabled,
       _coreReminderEnabled,

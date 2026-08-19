@@ -1232,7 +1232,9 @@ class _MainTabScreenState extends State<MainTabScreen>
 
       final advanceMinutes = prefs.getInt('nyang_core_reminder_advance') ?? 10;
       final now = DateTime.now();
-      final currentDate = '${now.year}-${now.month}-${now.day}';
+      // 알림 예약 쪽과 같은 자리수로 맞춰야 중복 방지 키가 서로 맞는다
+      final currentDate =
+          '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
       final currentFullDate = DateTime(
         now.year,
         now.month,
@@ -1275,8 +1277,11 @@ class _MainTabScreenState extends State<MainTabScreen>
             // Allow a 5-minute window so that manual testing or returning from background works
             if (diff >= 0 && diff <= 5) {
               // Include the exact target timestamp in the fireKey so a schedule change creates a new key
-              final fireKey =
-                  'reminder_${item['id']}_${targetDate.toIso8601String()}_$currentDate';
+              final fireKey = NotificationService.coreReminderFireKey(
+                alarmId: item['id'],
+                targetDate: targetDate,
+                dateKey: currentDate,
+              );
               if (!firedSet.contains(fireKey) &&
                   !_firedCoreReminders.contains(fireKey)) {
                 _firedCoreReminders.add(fireKey);
