@@ -9,6 +9,11 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- 진행 중인 일정을 다시 떠올리게 하는 냥냥이. 사용자가 설정에서 직접 켜야 하고,
+         켜지 않으면 아무것도 표시되지 않는다. -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <!-- 애플 캘린더 연동은 iOS 전용이라 device_calendar가 병합하는 캘린더 권한을 제거한다.
          (안드로이드 구글 캘린더 연동을 지원할 때 이 두 줄을 삭제해 권한을 복원) -->
     <uses-permission android:name="android.permission.READ_CALENDAR" tools:node="remove" />
@@ -94,6 +99,25 @@
             </intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/cat_character_widget_info" />
         </receiver>
+        <!-- 진행 중인 일정을 떠올리게 하는 냥냥이 -->
+        <service
+            android:name=".OngoingNudgeService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="사용자가 시작한 일정이 진행 중일 때, 다른 앱 위에 캐릭터를 잠깐 표시했다가 스스로 숨긴다" />
+        </service>
+        <receiver
+            android:name=".OngoingNudgeReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+            </intent-filter>
+        </receiver>
+
         <receiver android:name="es.antonborri.home_widget.HomeWidgetBackgroundReceiver" android:exported="true">
             <intent-filter>
                 <action android:name="es.antonborri.home_widget.action.BACKGROUND" />

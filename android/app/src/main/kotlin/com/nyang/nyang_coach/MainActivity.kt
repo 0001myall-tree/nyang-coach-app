@@ -27,6 +27,7 @@ import io.flutter.plugin.common.MethodChannel
 class MainActivity : FlutterFragmentActivity() {
     private val morningAlarmChannel = "nyang_coach/morning_alarm"
     private val widgetStatusChannel = "nyang_coach/widget_status"
+    private val ongoingNudgeChannel = "nyang_coach/ongoing_nudge"
     private var morningAlarmPlayer: MediaPlayer? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -100,6 +101,54 @@ class MainActivity : FlutterFragmentActivity() {
                     else -> result.notImplemented()
                 }
             }
+
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, ongoingNudgeChannel)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "canDrawOverlays" -> {
+                        result.success(Settings.canDrawOverlays(this))
+                    }
+                    "openOverlaySettings" -> {
+                        openOverlaySettings()
+                        result.success(null)
+                    }
+                    "start" -> {
+                        val taskId = call.argument<String>("taskId")
+                        val taskText = call.argument<String>("taskText").orEmpty()
+                        if (taskId.isNullOrBlank()) {
+                            result.error("INVALID_ARGS", "Missing taskId", null)
+                            return@setMethodCallHandler
+                        }
+                        // 같은 일정이 이미 걸려 있으면 예약을 처음부터 다시 걸지 않는다.
+                        val alreadyRunning = OngoingNudgeState.taskId(this) == taskId
+                        OngoingNudgeState.start(this, taskId, taskText)
+                        if (!alreadyRunning) {
+                            OngoingNudgeScheduler.cancel(this)
+                            OngoingNudgeScheduler.scheduleIn(
+                                this,
+                                OngoingNudgeScheduler.FIRST_DELAY_MILLIS,
+                                OngoingNudgeScheduler.STAGE_FIRST,
+                            )
+                        }
+                        result.success(null)
+                    }
+                    "stop" -> {
+                        OngoingNudgeState.clear(this)
+                        OngoingNudgeScheduler.cancel(this)
+                        stopService(Intent(this, OngoingNudgeService::class.java))
+                        result.success(null)
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+    }
+
+    private fun openOverlaySettings() {
+        val intent = Intent(
+            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+            Uri.parse("package:$packageName"),
+        )
+        startActivity(intent)
     }
 
     private fun hasInstalledCatHomeWidget(): Boolean {

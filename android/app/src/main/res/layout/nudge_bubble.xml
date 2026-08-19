@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 다른 앱 위에 잠깐 나타나는 냥냥이. 창 크기가 곧 터치를 가로채는 크기라
+     보이는 만큼만 차지하도록 캐릭터에 딱 맞춘다. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content">
+
+    <ImageView
+        android:id="@+id/nudge_bubble_image"
+        android:layout_width="64dp"
+        android:layout_height="64dp"
+        android:layout_gravity="center"
+        android:contentDescription="진행 중인 일정"
+        android:scaleType="fitCenter" />
+
+    <!-- 진행 중이라는 표시. 일시정지 같은 세부 상태는 밖에서 보여주지 않는다. -->
+    <TextView
+        android:id="@+id/nudge_bubble_badge"
+        android:layout_width="20dp"
+        android:layout_height="20dp"
+        android:layout_gravity="top|start"
+        android:background="@drawable/nudge_badge_bg"
+        android:gravity="center"
+        android:includeFontPadding="false"
+        android:text="▶"
+        android:textColor="#FFFFFF"
+        android:textSize="10sp" />
+</FrameLayout>

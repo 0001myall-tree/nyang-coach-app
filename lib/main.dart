@@ -19,6 +19,7 @@ import 'services/auth_service.dart';
 import 'services/coach_id_migration_service.dart';
 import 'services/task_resistance_service.dart';
 import 'services/notification_service.dart';
+import 'services/ongoing_task_nudge_service.dart';
 import 'services/tasks_sync_service.dart';
 import 'services/widget_sync_service.dart';
 import 'models/user_data.dart';
@@ -119,11 +120,14 @@ class _NyangCoachAppState extends State<NyangCoachApp>
     if (state == AppLifecycleState.resumed) {
       NotificationService().handleNativeMorningAlarm();
       NotificationService().recordAppActive();
+      // 앱을 보고 있는 동안에는 냥냥이가 다른 앱 위로 나가지 않는다.
+      OngoingTaskNudgeService.setAppForeground(true);
     }
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached) {
       TasksSyncService.syncToCloud();
       NotificationService().syncDailyPlannerNudge();
+      OngoingTaskNudgeService.setAppForeground(false);
     }
   }
 

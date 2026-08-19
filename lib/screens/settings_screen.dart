@@ -14,6 +14,7 @@ import '../services/tasks_sync_service.dart';
 import '../models/user_data.dart';
 import '../services/widget_sync_service.dart';
 import '../services/apple_calendar_sync_service.dart';
+import '../services/ongoing_task_nudge_service.dart';
 import '../theme/app_design_tokens.dart';
 import '../widgets/alarm_permission_notice.dart';
 
@@ -45,6 +46,8 @@ class _SettingsScreenState extends State<SettingsScreen>
   bool _coreReminderEnabled = false;
   String _coreReminderCoachId = 'push';
   int _coreReminderAdvanceMinutes = 10;
+  // 진행 중인 일정을 떠올리게 하는 냥냥이. 안드로이드에서만, 테스터가 직접 켠다.
+  bool _ongoingNudgeEnabled = false;
   String? _homeWidgetStatus;
   UserData? _userData;
   String? _expandedSettingsSection;
@@ -152,6 +155,8 @@ class _SettingsScreenState extends State<SettingsScreen>
       );
       _coreReminderAdvanceMinutes =
           prefs.getInt('nyang_core_reminder_advance') ?? 10;
+      _ongoingNudgeEnabled =
+          prefs.getBool(OngoingTaskNudgeService.enabledKey) ?? false;
       _chatBgStyle = prefs.getString('nyang_chat_bg_style') ?? 'simple';
       _homeWidgetStatus = _buildHomeWidgetStatus(
         nyang: prefs.getBool('widget_nyang_enabled') ?? false,
@@ -987,6 +992,49 @@ class _SettingsScreenState extends State<SettingsScreen>
     );
   }
 
+  /// 진행 중 냥냥이 켜고 끄기.
+  ///
+  /// "다른 앱 위에 표시"는 팝업으로 물을 수 없어서, 켜는 순간 설명을 먼저 읽히고
+  /// 시스템 설정으로 보낸다. 권한이 없으면 켜도 아무것도 나타나지 않기 때문이다.
+  Future<void> _toggleOngoingNudge() async {
+    final turningOn = !_ongoingNudgeEnabled;
+    await OngoingTaskNudgeService.setEnabled(turningOn);
+    if (!mounted) return;
+    setState(() => _ongoingNudgeEnabled = turningOn);
+
+    if (!turningOn) {
+      await _showAlarmNoticeDialog(
+        title: '🐾 진행 중 냥냥이를 껐어요',
+        message: '이제 다른 앱을 볼 때 냥냥이가 나타나지 않아요.',
+      );
+      return;
+    }
+
+    if (!await OngoingTaskNudgeService.canDrawOverlays()) {
+      if (!mounted) return;
+      await _showAlarmNoticeDialog(
+        title: '🐾 다른 앱 위에 표시를 켜주세요',
+        message:
+            '이 권한이 없으면 냥냥이가 다른 앱 위로 나올 수 없어요.\n\n'
+            '설정에서 냥냥코치를 찾아 "다른 앱 위에 표시"를 켜주세요.',
+        actionLabel: '설정 열기',
+        closeLabel: '나중에',
+        onAction: () async {
+          await OngoingTaskNudgeService.openOverlaySettings();
+        },
+      );
+      return;
+    }
+
+    await _showAlarmNoticeDialog(
+      title: '🐾 진행 중 냥냥이를 켰어요',
+      message:
+          '일정을 시작하고 30분이 지난 뒤, 폰으로 다른 걸 보고 있으면 '
+          '냥냥이가 화면 가장자리에 잠깐 나타나요.\n\n'
+          '소리도 진동도 없고, 그냥 두면 스스로 사라져요.',
+    );
+  }
+
   void _showCoreReminderSettingsModal() {
     if (_isFreeUser) {
       _showFreeSettingsLockedNotice();
@@ -1506,6 +1554,13 @@ class _SettingsScreenState extends State<SettingsScreen>
                               _showCoreReminderSettingsModal,
                             ),
                           ),
+                          if (OngoingTaskNudgeService.isSupported)
+                            _buildSettingsDetailRow(
+                              icon: Icons.pets_rounded,
+                              label: '진행 중 냥냥이 (실험)',
+                              status: _ongoingNudgeEnabled ? '켜짐' : '꺼짐',
+                              onTap: _paidSettingsTap(_toggleOngoingNudge),
+                            ),
                         ],
                       ),
                       const SizedBox(height: 10),

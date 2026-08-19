@@ -22,6 +22,7 @@ import '../services/analytics_service.dart';
 import '../services/api_usage_limit_service.dart';
 import '../services/widget_sync_service.dart';
 import '../services/daily_reset_service.dart';
+import '../services/ongoing_task_nudge_service.dart';
 import '../services/apple_calendar_sync_service.dart';
 import '../theme/app_design_tokens.dart';
 import '../widgets/core_reminder_settings_sheet.dart';
@@ -773,7 +774,7 @@ class MilestoneInfo {
 }
 
 class _TasksScreenState extends State<TasksScreen>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   static const int _maxMilestonesPerVision = 10;
 
   late TabController _tabCtrl;
@@ -878,12 +879,22 @@ class _TasksScreenState extends State<TasksScreen>
     );
     _tabCtrl.addListener(_handleTaskTabChanged);
     widget.controller?._attach(this);
+    WidgetsBinding.instance.addObserver(this);
     NotificationService().recordPlannerOpened();
     _loadAll().then((_) {
       _handleInitialPlannerTarget();
       // 앱을 껐다 켠 사이에도 진행 중이던 할 일이 있으면 시계를 다시 돌린다.
       _syncTaskTicker();
+      // 앱 밖에서 냥냥이에게 답한 게 있으면 여기서 일정에 반영된다.
+      _applyPendingNudgeAnswer();
     });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _applyPendingNudgeAnswer();
+    }
   }
 
   /// 켜둔 채 잠든 할 일을 자정에 멈춰 세운다.
@@ -963,6 +974,7 @@ class _TasksScreenState extends State<TasksScreen>
   @override
   void dispose() {
     widget.controller?._detach();
+    WidgetsBinding.instance.removeObserver(this);
     _taskTicker?.cancel();
     _visionHighlightTimer?.cancel();
     _swipeHintCtrl.dispose();
@@ -2208,8 +2220,63 @@ class _TasksScreenState extends State<TasksScreen>
     // 순간 예약을 다시 계산해야, 이미 움직인 사람에게 12시에 "슬슬 시작해볼까"가
     // 울리는 일이 없다.
     unawaited(NotificationService().syncDailyPlannerNudge());
+    unawaited(_syncOngoingNudge());
     widget.onProgressChanged?.call();
     TasksSyncService.scheduleSyncToCloud();
+  }
+
+  /// 진행 중인 일정 하나를 냥냥이에게 맡기거나 거둬들인다.
+  ///
+  /// 저장이 일어나는 자리에서만 부른다. 시작·일시정지·완료가 전부 여기를 지나기
+  /// 때문에, 상태가 바뀐 순간마다 정확히 한 번씩 맞춰진다.
+  Future<void> _syncOngoingNudge() async {
+    if (!OngoingTaskNudgeService.isSupported) return;
+    TaskItem? running;
+    for (final task in tasks) {
+      if (task.inProgress && !task.done) {
+        running = task;
+        break;
+      }
+    }
+    if (running == null) {
+      await OngoingTaskNudgeService.stop();
+      return;
+    }
+    await OngoingTaskNudgeService.start(
+      taskId: running.id.toString(),
+      taskText: running.text,
+    );
+  }
+
+  /// 앱 밖에서 냥냥이 카드로 고른 답을 일정에 반영한다.
+  ///
+  /// 앱이 꺼져 있는 동안 눌렀을 수도 있어서, 화면이 다시 살아날 때마다 확인한다.
+  Future<void> _applyPendingNudgeAnswer() async {
+    if (!OngoingTaskNudgeService.isSupported) return;
+    final answer = await OngoingTaskNudgeService.takeAnswer();
+    if (answer == null || !mounted) return;
+
+    final idx = tasks.indexWhere((t) => t.id.toString() == answer.taskId);
+    if (idx < 0) return;
+    final task = tasks[idx];
+    if (task.done) return;
+
+    if (answer.isDone) {
+      // 앱 안에서 체크한 것과 똑같이 처리한다. 습관 도장, 핵심 일정, 기록까지
+      // 손대야 할 곳이 많아서 완료 경로를 그대로 태운다.
+      await _toggleTask(task.id, forceComplete: true);
+      return;
+    }
+
+    // 잠깐 멈춤. 타이머형은 흘러간 만큼만 누적에 얹고 구간을 닫는다.
+    final now = DateTime.now();
+    setState(() {
+      task.elapsedSeconds = task.elapsedSecondsAt(now);
+      task.inProgress = false;
+      task.runStartedAt = null;
+    });
+    _syncTaskTicker();
+    await _persistTodayTasks();
   }
 
   /// 저장소의 날짜별 계획을 메모리로 다시 읽는다.
