@@ -116,4 +116,63 @@ void main() {
     final map = await archived(prefs);
     expect(map.keys, contains('2026-08-16'));
   });
+
+  // 자정 정리는 두 곳에서 따로 돈다. 화면이 표를 읽어둔 사이에 저장소에만 어제가
+  // 들어오면, 화면이 자기 표를 그대로 저장할 때 그 어제가 사라진다.
+  group('저장할 때 저장소에 있던 날짜를 지우지 않는다', () {
+    test('화면이 모르는 날짜는 남는다', () {
+      final merged = DailyResetService.mergePlannedTasksForSave(
+        stored: {
+          '2026-08-18': [
+            {'id': 1, 'text': '어제 집필'},
+          ],
+          '2026-08-25': [
+            {'id': 2, 'text': '다음주 계획'},
+          ],
+        },
+        encoded: {
+          '2026-08-25': [
+            {'id': 2, 'text': '다음주 계획'},
+          ],
+        },
+        knownKeys: {'2026-08-25'},
+      );
+
+      expect(merged.keys, contains('2026-08-18'));
+      expect(merged.keys, contains('2026-08-25'));
+    });
+
+    // 지운 것이 되살아나면 안 된다. 화면이 아는 날짜는 비어 있어도 화면이 이긴다.
+    test('화면이 비운 날짜는 되살아나지 않는다', () {
+      final merged = DailyResetService.mergePlannedTasksForSave(
+        stored: {
+          '2026-08-25': [
+            {'id': 2, 'text': '지운 계획'},
+          ],
+        },
+        encoded: const {},
+        knownKeys: {'2026-08-25'},
+      );
+
+      expect(merged.keys, isEmpty);
+    });
+
+    test('화면이 고친 날짜는 화면 쪽이 남는다', () {
+      final merged = DailyResetService.mergePlannedTasksForSave(
+        stored: {
+          '2026-08-25': [
+            {'id': 2, 'text': '옛 이름'},
+          ],
+        },
+        encoded: {
+          '2026-08-25': [
+            {'id': 2, 'text': '새 이름'},
+          ],
+        },
+        knownKeys: {'2026-08-25'},
+      );
+
+      expect((merged['2026-08-25'] as List).first['text'], '새 이름');
+    });
+  });
 }

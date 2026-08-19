@@ -176,6 +176,28 @@ class DailyResetService {
     await prefs.setString(plannedTasksByDateKey, jsonEncode(byDate));
   }
 
+  /// 날짜별 계획을 저장할 때, 저장소에 있던 것과 합친다.
+  ///
+  /// 자정 정리는 두 곳에서 돈다 — 여기(저장소만 보고)와 플래너 화면(메모리를 보고).
+  /// 둘이 같이 돌기 때문에, 화면이 표를 읽어둔 뒤에 이쪽이 어제 목록을 저장소에
+  /// 넣는 순간이 생긴다. 그때 화면이 자기 표를 그대로 저장하면 방금 보관된 어제가
+  /// 통째로 사라진다. 어제를 열었을 때 목록이 텅 비어 보이던 이유가 이것이다.
+  ///
+  /// 그래서 화면이 아예 모르는 날짜는 저장소 쪽을 남긴다. 화면이 아는 날짜는
+  /// 비어 있더라도 화면이 이긴다 — 지운 것이 되살아나면 안 되기 때문이다.
+  static Map<String, dynamic> mergePlannedTasksForSave({
+    required Map<String, dynamic> stored,
+    required Map<String, dynamic> encoded,
+    required Set<String> knownKeys,
+  }) {
+    final merged = Map<String, dynamic>.from(encoded);
+    stored.forEach((key, value) {
+      if (knownKeys.contains(key)) return;
+      merged[key] = value;
+    });
+    return merged;
+  }
+
   static Future<void> recordDayTransition({
     required SharedPreferences prefs,
     required String fromDate,

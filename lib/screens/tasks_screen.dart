@@ -2289,13 +2289,46 @@ class _TasksScreenState extends State<TasksScreen>
 
   Future<void> _savePlannedTodayTasks() async {
     final prefs = await SharedPreferences.getInstance();
+    // 이 화면이 표를 읽어둔 사이에 자정 정리가 저장소에만 어제 목록을 넣어둘 수
+    // 있다. 그대로 덮으면 방금 보관된 어제가 사라지므로, 저장 직전에 다시 본다.
+    await prefs.reload();
+
     final encoded = <String, dynamic>{};
     plannedTodayTasksByDate.forEach((key, value) {
       if (value.isNotEmpty) {
         encoded[key] = value.map((t) => t.toJson()).toList();
       }
     });
-    await prefs.setString('nyang_today_tasks_by_date', jsonEncode(encoded));
+
+    Map<String, dynamic> stored = {};
+    try {
+      final raw = prefs.getString(DailyResetService.plannedTasksByDateKey);
+      if (raw != null && raw.isNotEmpty) {
+        stored = Map<String, dynamic>.from(jsonDecode(raw) as Map);
+      }
+    } catch (_) {}
+
+    final merged = DailyResetService.mergePlannedTasksForSave(
+      stored: stored,
+      encoded: encoded,
+      knownKeys: plannedTodayTasksByDate.keys.toSet(),
+    );
+
+    // 저장소에만 있던 날짜는 화면도 알고 있어야 한다. 그래야 어제를 열었을 때
+    // 다시 읽지 않고도 목록이 보인다.
+    merged.forEach((key, value) {
+      if (plannedTodayTasksByDate.containsKey(key)) return;
+      try {
+        plannedTodayTasksByDate[key] = (value as List)
+            .map((e) => TaskItem.fromJson(e))
+            .toList();
+      } catch (_) {}
+    });
+
+    await prefs.setString(
+      DailyResetService.plannedTasksByDateKey,
+      jsonEncode(merged),
+    );
     TasksSyncService.scheduleSyncToCloud();
   }
 
