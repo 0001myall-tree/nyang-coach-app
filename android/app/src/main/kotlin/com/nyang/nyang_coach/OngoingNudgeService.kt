@@ -9,6 +9,7 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.graphics.BitmapFactory
 import android.graphics.PixelFormat
+import android.net.Uri
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
@@ -230,8 +231,11 @@ class OngoingNudgeService : Service() {
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                     if (moved) {
                         OngoingNudgeState.savePositionY(this@OngoingNudgeService, params.y)
-                    } else {
+                    } else if (OngoingNudgeState.isActive(this@OngoingNudgeService)) {
                         expandToCard()
+                    } else {
+                        // 이미 답을 마친 뒤다. 물을 것이 없으니 할 일 창으로 보낸다.
+                        openPlanner()
                     }
                     return true
                 }
@@ -247,8 +251,10 @@ class OngoingNudgeService : Service() {
         removeBubble()
 
         val view = LayoutInflater.from(this).inflate(R.layout.nudge_card, null)
-        view.findViewById<ImageView>(R.id.nudge_card_image)
-            .setImageBitmap(loadCatBitmap(dp(120)))
+        val cardImage = view.findViewById<ImageView>(R.id.nudge_card_image)
+        cardImage.setImageBitmap(loadCatBitmap(dp(120)))
+        // 여기서 답하지 않고 앱에서 보고 싶을 때. 냥냥이를 누르면 할 일 창으로 간다.
+        cardImage.setOnClickListener { openPlanner() }
 
         val taskText = OngoingNudgeState.taskText(this)
         view.findViewById<TextView>(R.id.nudge_card_title).text =
@@ -284,6 +290,23 @@ class OngoingNudgeService : Service() {
         )
         windowManager.addView(view, params)
         cardView = view
+    }
+
+    /**
+     * 앱의 할 일 창을 연다. 홈 화면 위젯이 쓰는 길을 그대로 탄다 —
+     * 어느 화면에 있든 플래너가 열린 상태로 들어간다.
+     */
+    private fun openPlanner() {
+        val intent = Intent(this, MainActivity::class.java).apply {
+            action = Intent.ACTION_VIEW
+            data = Uri.parse("nyangcoach://widget")
+            putExtra("route", "tasks")
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                Intent.FLAG_ACTIVITY_SINGLE_TOP
+        }
+        runCatching { startActivity(intent) }
+        finishRound(scheduleNext = OngoingNudgeState.isActive(this))
     }
 
     private fun answer(action: String) {
