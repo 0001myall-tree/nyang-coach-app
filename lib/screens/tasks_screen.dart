@@ -2030,7 +2030,15 @@ class _TasksScreenState extends State<TasksScreen>
 
       await prefs.setInt('nyang_streak', streak);
 
-      // 2. Clear tasks
+      // 2. Clear tasks — 어제 목록은 하루만 보관함에 남긴다.
+      // 전날 완료 표시를 깜빡했거나 자정을 넘겨 끝낸 일을 어제 화면에서 채울 수 있게.
+      await DailyResetService.archivePreviousDayTasks(
+        prefs: prefs,
+        fromDate: lastDate,
+        today: today,
+        tasksJson: tasks.map((t) => t.toJson()).toList(),
+      );
+      await _loadPlannedTodayTasks(prefs);
       setState(() {
         tasks.clear();
         coreTasks.clear();
@@ -2176,6 +2184,8 @@ class _TasksScreenState extends State<TasksScreen>
   Future<void> _saveTasks() async {
     if (!_isViewingActualToday) {
       await _savePlannedTodayTasks();
+      // 어제 화면에서 채운 완료 표시는 그날 기록에도 반영해야 기록 탭과 어긋나지 않는다.
+      if (_isViewingYesterday) await _saveRecordForYesterday();
       return;
     }
     await _persistTodayTasks();
@@ -2202,6 +2212,25 @@ class _TasksScreenState extends State<TasksScreen>
     TasksSyncService.scheduleSyncToCloud();
   }
 
+  /// 저장소의 날짜별 계획을 메모리로 다시 읽는다.
+  /// 자정 정리가 어제 목록을 보관함에 넣은 직후처럼, 저장소만 바뀐 경우에 쓴다.
+  Future<void> _loadPlannedTodayTasks(SharedPreferences prefs) async {
+    final raw = prefs.getString(DailyResetService.plannedTasksByDateKey);
+    if (raw == null || raw.isEmpty) {
+      plannedTodayTasksByDate = {};
+      return;
+    }
+    try {
+      final decoded = jsonDecode(raw) as Map<String, dynamic>;
+      plannedTodayTasksByDate = decoded.map(
+        (key, value) => MapEntry(
+          key,
+          (value as List).map((e) => TaskItem.fromJson(e)).toList(),
+        ),
+      );
+    } catch (_) {}
+  }
+
   Future<void> _savePlannedTodayTasks() async {
     final prefs = await SharedPreferences.getInstance();
     final encoded = <String, dynamic>{};
@@ -2215,14 +2244,14 @@ class _TasksScreenState extends State<TasksScreen>
   }
 
   /// 미리 세워둔 계획 중 날짜가 오늘이 된 것은 오늘 할 일로 승격하고,
-  /// 이미 지나가버린 날짜의 계획은 정리한다.
+  /// 이미 지나가버린 날짜의 계획은 정리한다. 어제는 하루 더 남긴다 —
+  /// 완료 표시를 채울 수 있는 마지막 날이다.
   Future<void> _promoteAndPrunePlannedTasks() async {
     final todayKey = _getTodayStr();
-    final today = _dateFromKey(todayKey);
 
     final promoted = plannedTodayTasksByDate.remove(todayKey);
     final staleKeys = plannedTodayTasksByDate.keys
-        .where((key) => _dateFromKey(key).isBefore(today))
+        .where((key) => _dateFromKey(key).isBefore(_yesterdayDate))
         .toList();
     for (final key in staleKeys) {
       plannedTodayTasksByDate.remove(key);
@@ -2318,6 +2347,110 @@ class _TasksScreenState extends State<TasksScreen>
     if (history.length > 30) history = history.sublist(history.length - 30);
 
     await prefs.setString('nyang_history', jsonEncode(history));
+  }
+
+  /// 어제 화면에서 바뀐 완료 표시를 그날 기록에 다시 쓴다.
+  ///
+  /// 기록 탭과 코치가 보는 "연속 달성"은 이 기록에서 바로 계산되므로,
+  /// 여기만 고치면 깜빡했던 하루가 제자리를 찾는다. 자정에 정리되어 목록에는
+  /// 없는 이월 항목은 기록에 있던 그대로 둔다.
+  Future<void> _saveRecordForYesterday() async {
+    final dateKey = _yesterdayKey;
+    final prefs = await SharedPreferences.getInstance();
+    List<Map<String, dynamic>> history = [];
+    final rawHistory = prefs.getString('nyang_history');
+    if (rawHistory != null) {
+      try {
+        history = List<Map<String, dynamic>>.from(jsonDecode(rawHistory));
+      } catch (_) {}
+    }
+
+    final idx = history.indexWhere((h) => h['date'] == dateKey);
+    final previous = idx >= 0 ? history[idx] : <String, dynamic>{};
+    final carried = ((previous['tasks'] as List?) ?? [])
+        .whereType<Map>()
+        .where((entry) => entry['deferred'] == true)
+        .toList();
+
+    final dayTasks = plannedTodayTasksByDate[dateKey] ?? <TaskItem>[];
+    final countableTasks = dayTasks.where(_countsTowardDailyCompletion).toList();
+    final doneTasks = countableTasks.where((t) => t.done).toList();
+    final dayMilestones = _todayMilestoneItems;
+    final doneMilestones = dayMilestones.where((m) => m.done).toList();
+
+    final record = {
+      'date': dateKey,
+      'totalCount': countableTasks.length + dayMilestones.length,
+      'doneCount': doneTasks.length + doneMilestones.length,
+      'success': doneTasks.isNotEmpty || doneMilestones.isNotEmpty,
+      'isVacation': previous['isVacation'] ?? false,
+      'updatedAt': DateTime.now().toIso8601String(),
+      'tasks': [
+        ...dayTasks.map(
+          (t) => {
+            'text': t.text,
+            'done': t.done,
+            'inProgress': t.inProgress,
+            if (t.inProgressAt != null) 'startedAt': t.inProgressAt,
+            if (t.completedAt != null) 'completedAt': t.completedAt,
+            'category': t.category,
+            'deferred': false,
+          },
+        ),
+        ...dayMilestones.map(
+          (m) => {
+            'text': m.text,
+            'done': m.done,
+            'category': 'milestone',
+            'deferred': false,
+          },
+        ),
+        ...carried,
+      ],
+    };
+
+    if (idx >= 0) {
+      history[idx] = record;
+    } else {
+      history.add(record);
+      history.sort((a, b) => a['date'].compareTo(b['date']));
+    }
+    await prefs.setString('nyang_history', jsonEncode(history));
+
+    await _syncStreakWithHistory(prefs, history);
+    widget.onProgressChanged?.call();
+    TasksSyncService.scheduleSyncToCloud();
+  }
+
+  /// 어제 기록이 바뀌면 저장된 연속 일수도 다시 본다.
+  ///
+  /// 어제가 빈 하루로 남으면 연속은 끊긴 것이고, 하나라도 해냈으면 기록을
+  /// 거슬러 올라가 다시 센다. 기록은 30일치만 남기 때문에 세어본 값이 저장된
+  /// 값보다 작게 나올 수 있는데, 그때는 저장된 값을 믿는다.
+  Future<void> _syncStreakWithHistory(
+    SharedPreferences prefs,
+    List<Map<String, dynamic>> history,
+  ) async {
+    final byDate = {for (final h in history) h['date'].toString(): h};
+    bool succeeded(String key) {
+      final record = byDate[key];
+      if (record == null) return false;
+      return record['success'] == true || record['isVacation'] == true;
+    }
+
+    final stored = prefs.getInt('nyang_streak') ?? 0;
+    if (!succeeded(_yesterdayKey)) {
+      if (stored != 0) await prefs.setInt('nyang_streak', 0);
+      return;
+    }
+
+    var counted = 0;
+    var cursor = _yesterdayDate;
+    while (succeeded(_dateKey(cursor))) {
+      counted++;
+      cursor = cursor.subtract(const Duration(days: 1));
+    }
+    if (counted > stored) await prefs.setInt('nyang_streak', counted);
   }
 
   Future<void> _saveCoreTasks() async {
@@ -2540,8 +2673,19 @@ class _TasksScreenState extends State<TasksScreen>
 
   bool get _isViewingActualToday => _activeTodayDateKey == _getTodayStr();
 
-  bool get _isViewingPastDate =>
-      _activeTodayDate.isBefore(_dateFromKey(_getTodayStr()));
+  DateTime get _yesterdayDate =>
+      _dateFromKey(_getTodayStr()).subtract(const Duration(days: 1));
+
+  String get _yesterdayKey => _dateKey(_yesterdayDate);
+
+  /// 어제까지는 열어둔다. 전날 완료 표시를 깜빡했거나 자정을 넘겨 끝낸 일이 있다.
+  bool get _isViewingYesterday => _activeTodayDateKey == _yesterdayKey;
+
+  /// 습관 도장은 지나간 날에도 찍을 수 있다. 단 어제까지, 미래에는 찍지 않는다.
+  bool get _canWriteHabitLogForActiveDate =>
+      _isViewingActualToday || _isViewingYesterday;
+
+  bool get _isViewingPastDate => _activeTodayDate.isBefore(_yesterdayDate);
 
   List<TaskItem> get _activeTodayTasks {
     if (_isViewingActualToday) return tasks;
@@ -3290,10 +3434,11 @@ class _TasksScreenState extends State<TasksScreen>
         t.actualSeconds = null;
         t.elapsedSeconds = 0;
         t.runStartedAt = null;
-        if (_isViewingActualToday &&
+        // 어제 화면에서 되돌린 것도 습관 도장에서 같이 지운다.
+        if (_canWriteHabitLogForActiveDate &&
             t.habitId != null &&
             habitLogs[t.habitId!] != null) {
-          habitLogs[t.habitId!]!.remove(_getTodayStr());
+          habitLogs[t.habitId!]!.remove(_activeTodayDateKey);
         }
         if (_isViewingActualToday && t.category == 'schedule') {
           final today = _getTodayStr();
@@ -3318,8 +3463,8 @@ class _TasksScreenState extends State<TasksScreen>
         }
       });
       _saveTasks();
+      if (_canWriteHabitLogForActiveDate) _saveHabitLogs();
       if (_isViewingActualToday) {
-        _saveHabitLogs();
         _saveCoreTasks();
         if (t.category == 'schedule') _saveSchedules();
         await TaskResistanceService.onTaskUncompleted(
@@ -3413,7 +3558,8 @@ class _TasksScreenState extends State<TasksScreen>
         t.inProgressAt = recordedStartedAt;
         t.completedAt = completedAtIso;
         final completedAt = DateTime.tryParse(t.completedAt!);
-        if (_isViewingActualToday && t.habitId != null) {
+        // 어제 화면에서 채운 것도 그날 도장으로 남긴다.
+        if (_canWriteHabitLogForActiveDate && t.habitId != null) {
           habitLogs[t.habitId!] ??= <String, dynamic>{};
           final logMap = <String, dynamic>{
             'done': true,
@@ -3440,7 +3586,7 @@ class _TasksScreenState extends State<TasksScreen>
               logMap['durationGoal'] = habitInfo.durationGoal ?? 0;
             }
           }
-          habitLogs[t.habitId!]![_getTodayStr()] = logMap;
+          habitLogs[t.habitId!]![_activeTodayDateKey] = logMap;
         }
         if (_isViewingActualToday && t.category == 'schedule') {
           final today = _getTodayStr();
@@ -3469,8 +3615,8 @@ class _TasksScreenState extends State<TasksScreen>
         }
       });
       _saveTasks();
+      if (_canWriteHabitLogForActiveDate) _saveHabitLogs();
       if (_isViewingActualToday) {
-        _saveHabitLogs();
         _saveCoreTasks();
         if (t.category == 'schedule') _saveSchedules();
       }
@@ -5316,10 +5462,13 @@ class _TasksScreenState extends State<TasksScreen>
   }
 
   Future<void> _pickDateFromTodayHeader(DateTime initialDate) async {
+    final firstDate = _yesterdayDate;
     final selected = await showDatePicker(
       context: context,
-      initialDate: initialDate,
-      firstDate: DateTime(2020, 1, 1),
+      // 다른 화면에서 더 지난 날짜를 열어둔 채 들어올 수 있다. 달력은 첫날부터 연다.
+      initialDate: initialDate.isBefore(firstDate) ? firstDate : initialDate,
+      // 어제까지만 연다. 그보다 앞은 기록 탭이 보여주는 지난 이야기다.
+      firstDate: firstDate,
       lastDate: DateTime(2050, 12, 31),
       locale: const Locale('ko', 'KR'),
     );
@@ -6021,7 +6170,9 @@ class _TasksScreenState extends State<TasksScreen>
             Text(
               _isViewingActualToday
                   ? '코치와 대화하면\n여기에 할 일이 추가돼요!'
-                  : '이 날짜에 계획된 할 일이 없어요.',
+                  : (_isViewingYesterday
+                        ? '어제 남은 할 일이 없어요.'
+                        : '이 날짜에 계획된 할 일이 없어요.'),
               textAlign: TextAlign.center,
               style: GoogleFonts.notoSansKr(
                 fontSize: 14,

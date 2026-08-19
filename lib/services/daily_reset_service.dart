@@ -132,6 +132,42 @@ class DailyResetService {
     return currentMessages;
   }
 
+  /// 날짜별 계획 보관함. 미래 계획과 함께, 자정에 넘어간 어제 목록도 여기 하루 머문다.
+  static const String plannedTasksByDateKey = 'nyang_today_tasks_by_date';
+
+  /// 자정 정리로 사라질 어제 목록을 보관함에 하루만 남긴다.
+  ///
+  /// 전날 완료 표시를 깜빡했거나 자정을 넘겨 끝낸 일을, '오늘' 탭에서 어제를
+  /// 열어 채울 수 있게 하려는 것이다. 이틀 전부터는 열 수 없으므로 같이 지운다.
+  static Future<void> archivePreviousDayTasks({
+    required SharedPreferences prefs,
+    required String fromDate,
+    required String today,
+    required List<dynamic> tasksJson,
+  }) async {
+    final todayDate = DateTime.tryParse(today);
+    if (todayDate == null) return;
+    final yesterday = DateFormat(
+      'yyyy-MM-dd',
+    ).format(todayDate.subtract(const Duration(days: 1)));
+
+    Map<String, dynamic> byDate = {};
+    try {
+      final raw = prefs.getString(plannedTasksByDateKey);
+      if (raw != null && raw.isNotEmpty) {
+        byDate = Map<String, dynamic>.from(jsonDecode(raw) as Map);
+      }
+    } catch (_) {}
+
+    // 하루를 건너뛰고 앱을 연 경우, 남길 수 있는 건 바로 어제뿐이다.
+    if (fromDate == yesterday && tasksJson.isNotEmpty) {
+      byDate[fromDate] = tasksJson;
+    }
+    byDate.removeWhere((key, _) => key.compareTo(yesterday) < 0);
+
+    await prefs.setString(plannedTasksByDateKey, jsonEncode(byDate));
+  }
+
   static Future<void> recordDayTransition({
     required SharedPreferences prefs,
     required String fromDate,
@@ -266,7 +302,13 @@ class DailyResetService {
         } catch (_) {}
       }
 
-      // 2. Clear tasks in preferences
+      // 2. Clear tasks in preferences (어제 목록은 보관함에 하루 남긴다)
+      await archivePreviousDayTasks(
+        prefs: prefs,
+        fromDate: lastDate,
+        today: today,
+        tasksJson: previousTasks,
+      );
       await prefs.setString('nyang_tasks', '[]');
       await prefs.setString('nyang_core_tasks', '[]');
       await prefs.setBool('nyang_core_reminder_enabled', false);
@@ -463,7 +505,14 @@ class DailyResetService {
           }
         }
         // 키는 yyyy-MM-dd 형식이라 문자열 비교가 날짜 순서와 일치한다.
-        plannedMap.removeWhere((key, _) => key.compareTo(today) < 0);
+        // 어제는 남긴다. '오늘' 탭에서 어제를 열어 완료 표시를 채울 수 있어야 한다.
+        final todayDate = DateTime.tryParse(today);
+        final keepFrom = todayDate == null
+            ? today
+            : DateFormat(
+                'yyyy-MM-dd',
+              ).format(todayDate.subtract(const Duration(days: 1)));
+        plannedMap.removeWhere((key, _) => key.compareTo(keepFrom) < 0);
         await prefs.setString(
           'nyang_today_tasks_by_date',
           jsonEncode(plannedMap),
