@@ -18,6 +18,8 @@ MasterGreetingContext ctx({
   String? resistedDoneLabel,
   bool offPlanResistance = false,
   String? startPatternLabel,
+  String? upcomingPlanName,
+  String? upcomingPlanTimeLabel,
 }) {
   return MasterGreetingContext(
     now: DateTime(2026, 7, 30, hour, 30),
@@ -33,6 +35,8 @@ MasterGreetingContext ctx({
     resistedDoneLabel: resistedDoneLabel,
     offPlanResistance: offPlanResistance,
     startPatternLabel: startPatternLabel,
+    upcomingPlanName: upcomingPlanName,
+    upcomingPlanTimeLabel: upcomingPlanTimeLabel,
   );
 }
 
@@ -64,6 +68,24 @@ final cases = <String, MasterGreetingContext>{
     doneLabel: "'운동'",
   ),
   '오후-완료0': ctx(hour: 14, planTotal: 4),
+  '오전-곧시작할일정': ctx(
+    hour: 10,
+    planTotal: 2,
+    upcomingPlanName: '집필',
+    upcomingPlanTimeLabel: '오전 11시',
+  ),
+  '오후-곧시작할일정': ctx(
+    hour: 14,
+    planTotal: 3,
+    upcomingPlanName: '집필',
+    upcomingPlanTimeLabel: '오후 3시 30분',
+  ),
+  '저녁-곧시작할일정': ctx(
+    hour: 19,
+    planTotal: 2,
+    upcomingPlanName: '운동',
+    upcomingPlanTimeLabel: '오후 8시',
+  ),
   '오후-계획없음': ctx(hour: 14),
   // 주 1회 오전 인사. 계획이 있든 없든 이 이야기가 오전 문구를 대신한다.
   '오전-시작패턴': ctx(hour: 8, startPatternLabel: '오전 8시~10시'),
@@ -76,6 +98,14 @@ final cases = <String, MasterGreetingContext>{
   '낮-어제아팠음': ctx(hour: 10, planTotal: 3, feltSick: true),
   '낮-아픔이늦밤보다우선': ctx(hour: 10, lateNight: true, feltSick: true),
   '저녁-계획없음': ctx(hour: 20),
+  '밤9시-남은게둘': ctx(
+    hour: 21,
+    planTotal: 4,
+    planDone: 1,
+    doneCount: 1,
+    doneLabel: "'설거지'",
+    pendingPlans: ['청소', '집필', '운동'],
+  ),
   '저녁-절반이하': ctx(
     hour: 20,
     planTotal: 4,
@@ -192,11 +222,13 @@ List<String> allTemplates(GreetingVoice v) => [
   ...v.startPatternMorning,
   ...v.afternoonBehind,
   ...v.afternoonNoPlan,
+  ...v.upcomingPlan,
   ...v.eveningLow,
   ...v.eveningMid,
   ...v.eveningHigh,
   ...v.earlyEveningNone,
   ...v.earlyEveningHigh,
+  ...v.eveningMinimumBar,
   ...v.eveningAll,
   ...v.eveningNoPlan,
   ...v.eveningOffPlanAsk,
@@ -380,6 +412,7 @@ void main() {
           voice.value.startPatternMorning,
           voice.value.afternoonBehind,
           voice.value.afternoonNoPlan,
+          voice.value.upcomingPlan,
           voice.value.dawn,
           voice.value.earlyMorning,
           voice.value.eveningLow,
@@ -387,6 +420,7 @@ void main() {
           voice.value.eveningHigh,
           voice.value.earlyEveningNone,
           voice.value.earlyEveningHigh,
+          voice.value.eveningMinimumBar,
           voice.value.eveningAll,
           voice.value.eveningNoPlan,
           voice.value.eveningOffPlanAsk,
@@ -534,6 +568,279 @@ void main() {
 
   // 18시에 하루가 딱 끊기면 "수고하셨습니다"가 이르다. 20시 전까지는 아직
   // 열려 있는 하루로 말하는지, 20시부터는 원래 마무리 문구로 돌아오는지 본다.
+  // 시각을 정해둔 일정이 곧 시작하는데 "가벼운 것부터 하나 잡아볼까요"가 나가면,
+  // 이미 정해둔 사람에게 딴 데를 가리키는 말이 된다.
+  group('곧 시작할 일정이 있으면 그것을 짚는다', () {
+    final upcomingCases = ['오전-곧시작할일정', '오후-곧시작할일정', '저녁-곧시작할일정'];
+    for (final voice in voices.entries) {
+      test('${voice.key} / 시각과 일 이름을 그대로 말한다', () {
+        for (final name in upcomingCases) {
+          final context = cases[name]!;
+          for (var seed = 0; seed < 30; seed++) {
+            final text = MasterGreetingBuilder(
+              voice: voice.value,
+              random: Random(seed),
+            ).build(context).text;
+            final where = '$name 씨앗 $seed: $text';
+            expect(text, contains(context.upcomingPlanTimeLabel!), reason: where);
+            expect(
+              text,
+              contains("'${context.upcomingPlanName!}'"),
+              reason: where,
+            );
+          }
+        }
+      });
+
+      // 아직 시각이 오지 않았으니 지금 쉬는 게 맞다. 코치는 그래도 된다고만 한다.
+      test('${voice.key} / 지금 시작하라고 재촉하지 않는다', () {
+        const pushy = ['시작해보', '잡아볼까', '골라드릴까', '골라줄까', '열어볼까', '늦지 않'];
+        for (final name in upcomingCases) {
+          for (var seed = 0; seed < 30; seed++) {
+            final text = MasterGreetingBuilder(
+              voice: voice.value,
+              random: Random(seed),
+            ).build(cases[name]!).text;
+            for (final word in pushy) {
+              expect(text, isNot(contains(word)), reason: '$name 씨앗 $seed: $text');
+            }
+          }
+        }
+      });
+    }
+
+    // 준비를 짚는 것까지가 이 자리의 목적이지만, 그 말로 문장을 끝내면 숙제가
+    // 된다. 마지막은 반드시 쉬어도 된다는 말이어야 한다.
+    for (final voice in voices.entries) {
+      test('${voice.key} / 문장이 쉬어도 된다는 말로 끝난다', () {
+        for (final template in voice.value.upcomingPlan) {
+          for (var seed = 0; seed < 20; seed++) {
+            final text = GreetingLinePicker(random: Random(seed)).fillUpcoming(
+              [template],
+              name: '집필',
+              timeLabel: '오후 3시',
+            );
+            final last = text
+                .split(RegExp(r'(?<=[.?!])\s+'))
+                .where((s) => s.trim().isNotEmpty)
+                .last;
+            expect(
+              ['쉬', '편히', '가볍게', '놀'].any(last.contains),
+              isTrue,
+              reason: '${voice.key} 씨앗 $seed: $last',
+            );
+          }
+        }
+      });
+    }
+
+    // 하나라도 해낸 사람에게는 원래 흐름대로 말한다. 이 문구는 아직 아무것도
+    // 못 한 사람을 위한 자리다.
+    test('완료가 하나라도 있으면 나오지 않는다', () {
+      final context = ctx(
+        hour: 14,
+        planTotal: 3,
+        planDone: 1,
+        doneCount: 1,
+        doneLabel: "'설거지'",
+        upcomingPlanName: '집필',
+        upcomingPlanTimeLabel: '오후 3시 30분',
+      );
+      for (final voice in voices.values) {
+        for (var seed = 0; seed < 30; seed++) {
+          final text = MasterGreetingBuilder(
+            voice: voice,
+            random: Random(seed),
+          ).build(context).text;
+          expect(text, isNot(contains('오후 3시 30분')), reason: '씨앗 $seed: $text');
+        }
+      }
+    });
+  });
+
+  // 냥냥이는 슬롯 인사를 쓰지 않는다. 이 한 자리만 앱이 만들어 내보낸다.
+  group('냥냥이가 곧 시작할 일정을 짚는 말', () {
+    final picker = GreetingLinePicker(random: Random(0));
+
+    test('시각과 일 이름을 그대로 말한다', () {
+      for (var seed = 0; seed < 30; seed++) {
+        final text = GreetingLinePicker(random: Random(seed)).fillUpcoming(
+          MasterGreetingCopy.catUpcomingPlan,
+          name: '집필',
+          timeLabel: '오후 3시 30분',
+        );
+        expect(text, contains('오후 3시 30분'), reason: '씨앗 $seed: $text');
+        expect(text, contains("'집필'"), reason: '씨앗 $seed: $text');
+        expect(text, isNot(contains('{')), reason: '씨앗 $seed: $text');
+        expect(text, isNot(contains('{{')), reason: '씨앗 $seed: $text');
+      }
+    });
+
+    test('재촉하거나 숙제를 주지 않는다', () {
+      // 준비를 짚는 말은 막지 않는다 — 그건 이 자리의 목적이다.
+      // 막는 것은 지금 시작하라고 미는 말이다.
+      const pushy = ['시작해보', '잡아볼까', '골라줄까', '열어볼까', '늦지 않'];
+      for (var seed = 0; seed < 30; seed++) {
+        final text = GreetingLinePicker(random: Random(seed)).fillUpcoming(
+          MasterGreetingCopy.catUpcomingPlan,
+          name: '집필',
+          timeLabel: '오후 3시 30분',
+        );
+        for (final word in pushy) {
+          expect(text, isNot(contains(word)), reason: '씨앗 $seed: $text');
+        }
+      }
+    });
+
+    test('냥냥이 말투로 끝난다', () {
+      for (final template in MasterGreetingCopy.catUpcomingPlan) {
+        expect(picker.anchor(template).length, greaterThanOrEqualTo(4));
+        for (var seed = 0; seed < 20; seed++) {
+          final text = GreetingLinePicker(random: Random(seed)).fillUpcoming(
+            [template],
+            name: '집필',
+            timeLabel: '오후 3시',
+          );
+          expect(text.contains('냥'), isTrue, reason: text);
+        }
+      }
+    });
+  });
+
+  // 밤 9시에 "남은 걸 다 하자"는 말은 쓸모가 없다. 대신 계획을 좁히게 돕는다.
+  group('밤 9시대에 남은 게 둘 이상이면 기준을 좁히자고 한다', () {
+    final context = cases['밤9시-남은게둘']!;
+
+    for (final voice in voices.entries) {
+      test('${voice.key} / 하나를 줄여서 다시 잡자고 말한다', () {
+        for (var seed = 0; seed < 30; seed++) {
+          final text = MasterGreetingBuilder(
+            voice: voice.value,
+            random: Random(seed),
+          ).build(context).text;
+          final where = '씨앗 $seed: $text';
+          // 핵심은 계획을 고쳐 잡는 것이다. 하나를 고르라는 말만으로는 부족하다.
+          expect(
+            ['줄여', '작게', '고쳐', '바꿔', '조각'].any(text.contains),
+            isTrue,
+            reason: where,
+          );
+          expect(['하나', '최소 성공'].any(text.contains), isTrue, reason: where);
+        }
+      });
+
+      // 남은 것을 다 해내라는 말이 섞이면 이 자리의 뜻이 뒤집힌다.
+      test('${voice.key} / 남은 걸 다 하라고 하지 않는다', () {
+        const pushy = ['다 끝내', '남김없이', '전부 마치', '마저 하'];
+        for (var seed = 0; seed < 30; seed++) {
+          final text = MasterGreetingBuilder(
+            voice: voice.value,
+            random: Random(seed),
+          ).build(context).text;
+          for (final word in pushy) {
+            expect(text, isNot(contains(word)), reason: '씨앗 $seed: $text');
+          }
+        }
+      });
+    }
+
+    // '성공 기준'이라고만 하면 기준을 낮춘 것이 되어, 계속 타협하다 영영 밀릴까
+    // 걱정하게 된다. '최소'는 바닥을 두는 말이라 그 걱정을 막는다.
+    // 줄인다는 게 어떤 모양인지는 전후를 나란히 보여줘야 잡힌다.
+    test('줄인 전후를 예로 보여준다', () {
+      for (final pool in [
+        ...voices.values.map((v) => v.eveningMinimumBar),
+        MasterGreetingCopy.catEveningMinimumBar,
+      ]) {
+        expect(
+          pool.any((line) => line.contains('1화 개요만 쓰기')),
+          isTrue,
+          reason: '줄인 뒤가 어떤 모양인지 보여주는 문구가 없다',
+        );
+      }
+    });
+
+    // 빈자리가 그대로 나가면 사용자에게 {{task}}가 보인다.
+    test('채우지 못한 자리가 남아 있지 않다', () {
+      for (final pool in [
+        ...voices.values.map((v) => v.eveningMinimumBar),
+        MasterGreetingCopy.catEveningMinimumBar,
+      ]) {
+        for (final template in pool) {
+          expect(template, isNot(contains('{{')), reason: template);
+        }
+      }
+    });
+
+    test('모든 문구가 최소 성공이라고 말한다', () {
+      for (final pool in [
+        ...voices.values.map((v) => v.eveningMinimumBar),
+        MasterGreetingCopy.catEveningMinimumBar,
+      ]) {
+        for (final template in pool) {
+          expect(template, contains('최소 성공'), reason: template);
+        }
+      }
+    });
+
+    test('냥냥이도 같은 말을 한다', () {
+      for (var seed = 0; seed < 30; seed++) {
+        final text = GreetingLinePicker(
+          random: Random(seed),
+        ).pickLine(MasterGreetingCopy.catEveningMinimumBar);
+        expect(text.contains('냥'), isTrue, reason: '씨앗 $seed: $text');
+        expect(text, isNot(contains('{')), reason: '씨앗 $seed: $text');
+      }
+    });
+
+    // 하나만 남았어도 나간다. 그 하나가 너무 커서 못 하고 있는 것일 수 있다.
+    test('하나만 남아도 나오고, 절반을 넘겼으면 나오지 않는다', () {
+      final onlyOne = ctx(
+        hour: 21,
+        planTotal: 2,
+        planDone: 1,
+        doneCount: 1,
+        pendingPlans: ['청소'],
+      );
+      final mostlyDone = ctx(
+        hour: 21,
+        planTotal: 4,
+        planDone: 3,
+        doneCount: 3,
+        pendingPlans: ['청소'],
+      );
+      final nothingLeft = ctx(hour: 21, planTotal: 2, planDone: 2, doneCount: 2);
+      expect(onlyOne.needsMinimumBar, isTrue);
+      expect(mostlyDone.needsMinimumBar, isFalse);
+      expect(nothingLeft.needsMinimumBar, isFalse);
+    });
+
+    // 계획을 고치는 건 사용자 몫이다. 코치가 "이렇게 하자"고 정해주면
+    // 줄이라는 말이 또 하나의 지시가 된다.
+    test('정해주지 않고 물어본다', () {
+      for (final pool in [
+        ...voices.values.map((v) => v.eveningMinimumBar),
+        MasterGreetingCopy.catEveningMinimumBar,
+      ]) {
+        for (final template in pool) {
+          expect(
+            ['어때', '어떨', '어떠', '어떻'].any(template.contains),
+            isTrue,
+            reason: template,
+          );
+        }
+      }
+    });
+
+    test('11시가 넘으면 아무 말도 하지 않는다', () {
+      final late = ctx(hour: 23, planTotal: 4, pendingPlans: ['청소', '집필']);
+      expect(late.needsMinimumBar, isFalse);
+      for (final voice in voices.values) {
+        expect(MasterGreetingBuilder(voice: voice).build(late).text, isEmpty);
+      }
+    });
+  });
+
   group('저녁 초입은 하루를 접지 않는다', () {
     /// 발화가 이 풀의 어느 틀에서 나왔는지. 펼친 문장은 매번 달라서 지문으로 본다.
     bool camefrom(GreetingVoice voice, List<String> pool, String text) {
@@ -860,8 +1167,8 @@ void main() {
 
   group('늦은 밤에는 아무 말도 하지 않는다', () {
     for (final voice in voices.entries) {
-      test('${voice.key} / 22시부터 자정까지는 조용하다', () {
-        for (var hour = 22; hour <= 23; hour++) {
+      test('${voice.key} / 23시부터 자정까지는 조용하다', () {
+        for (var hour = 23; hour <= 23; hour++) {
           for (var seed = 0; seed < 20; seed++) {
             final result = MasterGreetingBuilder(
               voice: voice.value,
@@ -882,11 +1189,11 @@ void main() {
         expect(result.text, isNotEmpty);
       });
 
-      test('${voice.key} / 21시까지는 저녁 인사가 나온다', () {
+      test('${voice.key} / 22시까지는 저녁 인사가 나온다', () {
         final result = MasterGreetingBuilder(
           voice: voice.value,
           random: Random(1),
-        ).build(ctx(hour: 21, planTotal: 5, planDone: 4, doneCount: 4));
+        ).build(ctx(hour: 22, planTotal: 5, planDone: 4, doneCount: 4));
         expect(result.text, isNotEmpty);
       });
 

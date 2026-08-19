@@ -4305,6 +4305,9 @@ ${lines.join('\n')}
       ...habits.where((task) => task['done'] != true),
     ].map(_taskText).whereType<String>().toList(growable: false);
 
+    // 시각까지 정해둔 일정이 곧 시작하는지. 습관은 시각이 없는 경우가 많아 함께 본다.
+    final upcoming = _findUpcomingPlan([...plans, ...habits], now);
+
     // 이름은 일정 우선, 습관은 후순위. 제목이 길면 이름을 빼고 격려만 한다.
     final ordered = [
       ..._sortByRecentCompletion(donePlans),
@@ -4461,7 +4464,46 @@ ${lines.join('\n')}
           : null,
       offPlanResistance: offPlanResistance,
       startPatternLabel: startPatternLabel,
+      upcomingPlanName: upcoming?.name,
+      upcomingPlanTimeLabel: upcoming?.timeLabel,
     );
+  }
+
+  /// 시각을 정해둔 일정 중 한 시간 안쪽으로 다가온 것 하나.
+  ///
+  /// 이미 시작 시각이 지난 것은 여기서 다루지 않는다. 그건 "시작했느냐"를 묻는
+  /// 자리(핵심 일정 질문)의 몫이고, 여기는 아직 오지 않은 시각을 짚는 자리다.
+  ({String name, String timeLabel})? _findUpcomingPlan(
+    List<Map<String, dynamic>> tasks,
+    DateTime now,
+  ) {
+    ({String name, String timeLabel, DateTime at})? nearest;
+    for (final task in tasks) {
+      if (task['done'] == true) continue;
+      final name = _taskText(task);
+      if (name == null) continue;
+      final parts = task['timeStart']?.toString().split(':') ?? const [];
+      if (parts.length != 2) continue;
+      final hour = int.tryParse(parts[0]);
+      final minute = int.tryParse(parts[1]);
+      if (hour == null || minute == null) continue;
+
+      final at = DateTime(now.year, now.month, now.day, hour, minute);
+      final minutesLeft = at.difference(now).inMinutes;
+      if (minutesLeft < 0 || minutesLeft > 60) continue;
+      if (nearest != null && !at.isBefore(nearest.at)) continue;
+      nearest = (name: name, timeLabel: _clockLabel(at), at: at);
+    }
+    if (nearest == null) return null;
+    return (name: nearest.name, timeLabel: nearest.timeLabel);
+  }
+
+  /// "오후 3시 30분". 정각이면 분은 뺀다.
+  String _clockLabel(DateTime at) {
+    final meridiem = at.hour < 12 ? '오전' : '오후';
+    final hour = at.hour % 12 == 0 ? 12 : at.hour % 12;
+    if (at.minute == 0) return '$meridiem $hour시';
+    return '$meridiem $hour시 ${at.minute}분';
   }
 
   /// 마스터 코치가 핵심 일정을 물어보는 시간대. 점심을 지나 오전이 어떻게
@@ -4665,6 +4707,97 @@ ${lines.join('\n')}
             : 'master_evening_card',
       ),
     );
+    return true;
+  }
+
+  /// 곧 시작할 일정을 짚는 발화만 냥냥이에게도 낸다.
+  ///
+  /// 냥냥이는 슬롯 인사를 쓰지 않는다. 하루를 여닫는 말은 대화가 만들고 앱은
+  /// 끼어들지 않는데, 시각까지 정해둔 일정이 곧 시작한다는 건 앱만 아는
+  /// 사실이라 대화가 대신할 수 없다.
+  ///
+  /// 마스터와 같은 조건이다 — 아직 아무것도 완료하지 않았고, 시각이 한 시간
+  /// 안쪽으로 남았을 때만. 같은 일정을 하루에 두 번 짚지 않는다.
+  static const _upcomingPlanGreetingKind = 'auto:upcoming_plan';
+
+  static const _minimumBarGreetingKind = 'auto:minimum_bar';
+
+  GreetingLinePicker get _catLinePicker => GreetingLinePicker(
+    recentLines: _messages.reversed
+        .where((m) => !m.isUser)
+        .take(12)
+        .map((m) => m.text)
+        .toList(growable: false),
+  );
+
+  Future<bool> _startCatAutoGreeting({
+    required SharedPreferences prefs,
+    required DateTime now,
+  }) async {
+    if (_coach.id != 'cat') return false;
+    if (now.hour >= MasterGreetingContext.quietFromHour) return false;
+
+    final tasks = _decodeMapList(prefs.getString('nyang_tasks'));
+    if (_startCatUpcomingPlanGreeting(tasks: tasks, now: now)) return true;
+    return _startCatMinimumBarGreeting(tasks: tasks, now: now);
+  }
+
+  bool _startCatUpcomingPlanGreeting({
+    required List<Map<String, dynamic>> tasks,
+    required DateTime now,
+  }) {
+    if (tasks.any((task) => task['done'] == true)) return false;
+
+    final upcoming = _findUpcomingPlan(tasks, now);
+    if (upcoming == null) return false;
+
+    final alreadySaid = _messages.any(
+      (m) =>
+          !m.isUser &&
+          m.kind == _upcomingPlanGreetingKind &&
+          _isSameDay(m.time, now) &&
+          m.text.contains("'${upcoming.name}'"),
+    );
+    if (alreadySaid) return false;
+
+    final line = _catLinePicker.fillUpcoming(
+      MasterGreetingCopy.catUpcomingPlan,
+      name: upcoming.name,
+      timeLabel: upcoming.timeLabel,
+    );
+    if (line.isEmpty || !mounted) return false;
+
+    _injectAiMessage(line, kind: _upcomingPlanGreetingKind);
+    unawaited(AnalyticsService.logFeatureUsage('cat_upcoming_plan_greeting'));
+    return true;
+  }
+
+  /// 밤 9시대에 남은 게 둘 이상이면 계획을 좁히도록 돕는다.
+  ///
+  /// 이 시간에 남은 것을 다 하라는 말은 쓸모가 없다. 미룰 것은 미루고 하나를
+  /// 골라 "여기까지면 오늘은 성공"이라는 기준을 스스로 정하게 한다.
+  bool _startCatMinimumBarGreeting({
+    required List<Map<String, dynamic>> tasks,
+    required DateTime now,
+  }) {
+    if (now.hour < MasterGreetingCopy.minimumBarFromHour) return false;
+    if (_spokeKindToday({_minimumBarGreetingKind}, now)) return false;
+
+    // 습관도 오늘 몫이라 함께 센다. 계획 유무 판정과 달리 여기는 개수만 본다.
+    final pending = tasks
+        .where((task) => task['category'] != 'core')
+        .where((task) => task['done'] != true)
+        .length;
+    final done = tasks.where((task) => task['done'] == true).length;
+    if (pending < MasterGreetingCopy.minimumBarPendingCount) return false;
+    // 이미 절반을 넘겼으면 좁힐 것이 별로 없다.
+    if (pending + done > 0 && done / (pending + done) > 0.5) return false;
+
+    final line = _catLinePicker.pickLine(MasterGreetingCopy.catEveningMinimumBar);
+    if (line.isEmpty || !mounted) return false;
+
+    _injectAiMessage(line, kind: _minimumBarGreetingKind);
+    unawaited(AnalyticsService.logFeatureUsage('cat_minimum_bar_greeting'));
     return true;
   }
 
@@ -5842,6 +5975,17 @@ ${lines.join('\n')}
           now: now,
           lastVisit: lastVisit,
         );
+        await prefs.setString(
+          'last_visit_${widget.coachId}',
+          now.toIso8601String(),
+        );
+        return;
+      }
+
+      // 냥냥이도 앱만 아는 사실 두 가지는 짚어준다. 슬롯 인사는 없지만
+      // 곧 시작할 일정과 밤에 남은 계획은 대화가 대신할 수 없다.
+      if (await _startCatAutoGreeting(prefs: prefs, now: now)) {
+        _greetedOnThisEntry = true;
         await prefs.setString(
           'last_visit_${widget.coachId}',
           now.toIso8601String(),

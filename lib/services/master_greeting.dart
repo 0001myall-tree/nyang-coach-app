@@ -74,6 +74,14 @@ class MasterGreetingContext {
   /// 정한다 — 주 1회 제한과 기록이 충분한지가 여기서는 보이지 않는다.
   final String? startPatternLabel;
 
+  /// 곧 시작하기로 해둔 일정의 이름과 시각("오후 3시 30분").
+  ///
+  /// 시작 시각이 적혀 있고 한 시간 안쪽으로 남았을 때만 채워진다. 이때
+  /// "가벼운 것부터 하나 열어보시죠"는 어긋난다 — 할 일도 시각도 이미 정해져
+  /// 있는 사람에게 다른 걸 고르라는 말이 되기 때문이다.
+  final String? upcomingPlanName;
+  final String? upcomingPlanTimeLabel;
+
   const MasterGreetingContext({
     required this.now,
     required this.daysSinceLastVisit,
@@ -94,9 +102,27 @@ class MasterGreetingContext {
     this.resistedNotStartedLabel,
     this.offPlanResistance = false,
     this.startPatternLabel,
+    this.upcomingPlanName,
+    this.upcomingPlanTimeLabel,
   });
 
   bool get hasPlan => planTotal > 0;
+
+  /// 밤 9시대인데 아직 남은 일정이 둘 이상인 상태.
+  ///
+  /// 이 시간에 다 하라는 말은 뜻이 없다. 계획을 좁히자고 말할 자리다.
+  /// 이미 절반을 넘겼으면 좁힐 것이 별로 없으니 원래 흐름대로 둔다.
+  bool get needsMinimumBar =>
+      now.hour >= MasterGreetingCopy.minimumBarFromHour &&
+      now.hour < quietFromHour &&
+      pendingPlans.length >= MasterGreetingCopy.minimumBarPendingCount &&
+      planRate <= 0.5;
+
+  /// 아직 아무것도 못 했는데, 곧 시작하기로 해둔 일정이 있는 상태.
+  bool get hasUpcomingPlan =>
+      doneCount == 0 &&
+      upcomingPlanName != null &&
+      upcomingPlanTimeLabel != null;
 
   /// 완료율. 일정과 습관을 함께 센다.
   double get planRate {
@@ -111,7 +137,7 @@ class MasterGreetingContext {
   /// 저녁 인사는 하루를 정리하는 말이라 이 시간엔 늦었고, 그렇다고 재우는 말을
   /// 하기도 어렵다 — 늦게 자는 사람에게는 참견이 된다. 자정을 넘겨 들어오면
   /// 그때는 새벽 문구가 받는다.
-  static const quietFromHour = 22;
+  static const quietFromHour = 23;
 
   bool get isQuietHour => now.hour >= quietFromHour;
 
@@ -160,6 +186,18 @@ class GreetingVoice {
   final List<String> startPatternMorning;
   final List<String> afternoonBehind; // 12~18시, 계획은 있는데 아직 완료 0
   final List<String> afternoonNoPlan;
+
+  /// 시각까지 정해둔 일정이 한 시간 안쪽으로 다가온 자리. `{{time}}`은
+  /// "오후 3시 30분", `{{task}}`는 일정 이름.
+  ///
+  /// 다른 낮 문구가 "뭐부터 잡아볼까요"라면 여기는 이미 정해진 것을 확인해주고
+  /// 물러나는 자리다. 시작을 재촉하지 않는다 — 아직 시각이 오지 않았으니
+  /// 지금 쉬는 게 맞고, 코치는 그래도 된다고만 말한다.
+  ///
+  /// 준비 이야기는 오히려 이 자리의 목적이다. 어디서 어떻게 할지가 그려져 있으면
+  /// 그 시각에 실제로 몸이 움직인다. 다만 그 말로 문장을 끝내면 숙제가 되므로,
+  /// 준비는 가운데 두고 문장은 반드시 쉬어도 된다는 말로 맺는다.
+  final List<String> upcomingPlan;
   final List<String> eveningLow; // 완료 50% 이하
   final List<String> eveningMid; // 51~80%
   final List<String> eveningHigh; // 81~99%
@@ -167,6 +205,31 @@ class GreetingVoice {
   // 이 두 자리에서만 하루가 아직 열려 있다는 쪽으로 말한다.
   final List<String> earlyEveningNone; // 저녁 초입, 완료 0
   final List<String> earlyEveningHigh; // 저녁 초입, 81~99%
+
+  /// 밤 9시대, 아직 남은 일정이 둘 이상일 때.
+  ///
+  /// 이 시간에 남은 것을 다 하라는 말은 아무 쓸모가 없다. 대신 계획을 고쳐
+  /// 잡게 돕는다.
+  ///
+  /// 남은 것 중 하나만 하라는 말이 아니다. 그 하나를 오늘 할 수 있는 크기로
+  /// 줄여 다시 적자는 말이다 — '1화 쓰기'를 '1화 개요만 쓰기'로. 할 일을 고르는
+  /// 게 아니라 할 일의 크기를 고치는 자리이고, 그래야 이상적으로 짜둔 하루가
+  /// 실패로 끝나지 않는다.
+  ///
+  /// 예시는 사용자의 일정 이름이 아니라 고정된 한 쌍으로 둔다. 줄인다는 게 어떤
+  /// 모양인지는 전후를 나란히 보여줘야 잡히는데, 남의 일정 이름만 불러서는
+  /// 줄인 뒤가 없어 감이 오지 않는다.
+  ///
+  /// "이렇게 하자"가 아니라 "이렇게 하면 어때?"로 묻는다. 계획을 고치는 건
+  /// 사용자 몫이라, 코치가 정해주면 그것대로 또 하나의 지시가 된다.
+  ///
+  /// 반드시 '최소'라고 말한다. 그냥 '성공 기준'이라고 하면 기준을 낮춘 것이
+  /// 되어, 이렇게 계속 타협하다 영영 밀리는 것 아닌가 하는 걱정을 부른다.
+  ///
+  /// 다만 한 발화에서 '최소 성공'을 두 번 말하지는 않는다. 안심시킬 자리에서는
+  /// 그 말을 되풀이하는 대신 성공이 무엇인지를 다시 말한다 — 다 해내는 것이
+  /// 아니라 중요한 일에 할 수 있을 만큼 집중하는 것이라고.
+  final List<String> eveningMinimumBar;
   final List<String> eveningAll; // 100%
   final List<String> eveningNoPlan;
   final List<String> comeback; // 2일 이상 만에 돌아왔을 때 앞에 붙일 한 문장
@@ -268,11 +331,13 @@ class GreetingVoice {
     required this.startPatternMorning,
     required this.afternoonBehind,
     required this.afternoonNoPlan,
+    required this.upcomingPlan,
     required this.eveningLow,
     required this.eveningMid,
     required this.eveningHigh,
     required this.earlyEveningNone,
     required this.earlyEveningHigh,
+    required this.eveningMinimumBar,
     required this.eveningAll,
     required this.eveningNoPlan,
     required this.comeback,
@@ -321,10 +386,38 @@ class MasterGreetingCopy {
   /// '아직 늦지 않았다'거나 '벌써 마무리돼 간다'는 말이 참이 되는 경계다.
   static const earlyEveningUntilHour = 20;
 
+  /// 이 시각부터는 남은 것을 다 하라는 말이 뜻을 잃는다. 대신 계획을 좁히게 돕는다.
+  /// 끝은 [MasterGreetingContext.quietFromHour]가 맡는다 — 그 뒤로는 아무 말도 하지 않는다.
+  static const minimumBarFromHour = 21;
+
+  /// 이만큼 남았을 때부터 나간다. 하나만 남았어도 그 하나가 너무 커서 못 하고
+  /// 있는 것일 수 있다 — 줄여 잡자는 말은 개수가 아니라 크기에 대한 것이다.
+  static const minimumBarPendingCount = 1;
+
   /// 냥할배의 옛 id('sec_male')가 저장된 값에는 아직 남아 있다. 그대로 비교하면
   /// 냥할배가 여비서 말투로 말하게 되므로 정규화한 id로 고른다.
   static GreetingVoice forCoach(String coachId) =>
       CoachIdService.isNyangHalbae(coachId) ? nyangHalbae : secretary;
+
+  /// 냥냥이가 곧 시작할 일정을 짚는 말.
+  ///
+  /// 냥냥이에게는 슬롯 인사가 없다. 하루를 여닫는 말은 대화가 만들고, 앱은
+  /// 끼어들지 않는다. 다만 시각까지 정해둔 일정이 곧 시작하는 것은 앱만 아는
+  /// 사실이라, 이 한 자리만 여기서 만들어 내보낸다.
+  ///
+  /// 마스터와 같은 규칙을 따른다 — 재촉하지 않고, 준비하라는 숙제도 주지 않는다.
+  /// 냥냥이가 밤 9시대에 계획을 좁히도록 돕는 말. 조건은 마스터와 같다.
+  static const catEveningMinimumBar = [
+    '오늘 계획이 {아직 남아 있네|아직 남았네}. 꼭 하고 싶은 거 하나를 지금 할 수 있는 크기로 줄여서 다시 잡아보는 건 어때냥? 거기까지가 오늘의 최소 성공인 거지냥.',
+    '남은 게 {아직 있네|남아 있네}. "1화 쓰기"를 "1화 개요만 쓰기"처럼, 하나를 오늘 할 만한 크기로 줄여보는 건 {어때냥|어떻겠냥}? 그게 오늘의 최소 성공인 거지냥.',
+    '오늘 몫이 {아직 남았다냥|남아 있다냥}. 통째로 하려 말고 하나를 작게 고쳐 오늘의 최소 성공으로 잡아보면 {어때냥|어떻겠냥}? {중요한 일에|꼭 하고 싶은 일에} 할 수 있을 만큼 집중하는 게 진짜 성공이라냥.',
+  ];
+
+  static const catUpcomingPlan = [
+    '{{time}}에 {{task}} 하기로 했다냥. {필요한 거 있으면|챙길 거 있으면} 잘 준비해두고 {쉬고 있으라냥|편히 있으라냥}.',
+    '이따 {{time}}에 {{task}} 하기로 했지냥? {서두를 거 없다냥|급할 거 없다냥}. 필요한 것만 챙겨두고 {쉬고 있으라냥|놀고 있으라냥}.',
+    '{{time}} 되면 {{task}} 시작이다냥. {어디서 할지|어떻게 할지} 정도만 {떠올려두고|생각해두고} {푹 쉬고 있으라냥|가볍게 있으라냥}.',
+  ];
 
   static const secretary = GreetingVoice(
     dawn: [
@@ -381,6 +474,12 @@ class MasterGreetingCopy {
       '{오후인데|오후가 됐는데} 아직 적어둔 일정이 없네요, {작은 것|가벼운 것} 하나만 {정해볼까요|잡아볼까요}?',
       '적어둔 일 없이 오후가 됐는데, {지금부터|이제부터} 할 수 있는 걸로 제가 {골라드릴까요|하나 잡아드릴까요}?',
     ],
+    // 조사가 이름 뒤에 붙으면 받침에 따라 문장이 깨진다. '하기로' 앞에 두어 피한다.
+    upcomingPlan: [
+      '{{time}}에 {{task}} 하기로 하셨네요. {필요하신 게 있으면|챙기실 게 있으면} 미리 준비해두시고 {편히 계세요|쉬고 계셔도 됩니다}.',
+      '이따 {{time}}에 {{task}} 하기로 되어 있네요. {서두르실 것 없습니다|급하실 건 없습니다}. 필요한 것만 챙겨두시고 {쉬고 계세요|편히 계세요}.',
+      '{{time}}에 {{task}} 시작하기로 하셨죠. {어디서 할지|어떻게 할지} 정도만 {그려두시고|떠올려두시고} {편히 쉬고 계세요|가볍게 계셔도 됩니다}.',
+    ],
     eveningLow: [
       '오늘 하루도 {수고하셨습니다|고생 많으셨습니다}. 남은 것 중에 {유독 손이 안 가는|자꾸 미뤄지는} 게 있으셨나요?',
       '{고생 많으셨어요|수고 많으셨어요}. 오늘 미뤄진 일 중에 {특히 귀찮았던|유난히 버거웠던} 게 있을까요?',
@@ -407,6 +506,12 @@ class MasterGreetingCopy {
     ],
     // 진척만 짚지 않고 코치 자신의 기분을 얹는다. 뒤에 격려가 한 문장 더
     // 붙으므로 여기서는 반드시 한 문장으로 끝낸다.
+    // 남은 것을 다 하라고 하지 않는다. 계획을 좁히도록 돕고, 기준은 사용자가 정한다.
+    eveningMinimumBar: [
+      '오늘 계획이 {아직 남아 있네요|아직 남았네요}. 꼭 하고 싶으신 것 하나를 지금 하실 수 있는 크기로 줄여서 다시 잡아보시는 건 어떨까요? 거기까지면 오늘은 최소 성공인 거고요.',
+      '남은 게 {아직 있네요|남아 있네요}. "1화 쓰기"를 "1화 개요만 쓰기"처럼, 하나를 오늘 하실 만한 크기로 줄여보시는 건 {어떨까요|어떠세요}? 그게 오늘의 최소 성공인 셈이고요.',
+      '오늘 몫이 {아직 남았습니다|남아 있습니다}. 통째로 하려 마시고 하나를 작게 고쳐 오늘의 최소 성공으로 잡아보시면 {어떨까요|어떠실까요}? {중요한 일에|꼭 하고 싶은 일에} 하실 수 있을 만큼 집중하시는 게 진짜 성공입니다.',
+    ],
     earlyEveningHigh: [
       '벌써 마무리가 {눈앞이라|보이니} 저도 {덩달아 기분이 좋습니다|기분이 좋아집니다}.',
       '오늘도 {벌써 마무리돼 가시네요|어느새 끝이 보이네요}, 지켜보는 저까지 {흐뭇합니다|즐거워집니다}.',
@@ -653,6 +758,11 @@ class MasterGreetingCopy {
       '{오후인데|오후가 됐는데} 아직 적어둔 일이 없구나냥, {작은 것|가벼운 것} 하나만 {정해볼까냥|잡아볼까냥}.',
       '적어둔 일 없이 오후가 왔는데, {지금부터|이제부터} 할 수 있는 걸로 내가 {골라줄까냥|하나 잡아줄까냥}.',
     ],
+    upcomingPlan: [
+      '{{time}}에 {{task}} 하기로 했구나냥. {필요한 게 있으면|챙길 게 있으면} 미리 준비해두고 {쉬고 있으라냥|편히 있으라냥}.',
+      '이따 {{time}}에 {{task}} 하기로 해뒀구나냥. {서두를 건 없다냥|급할 건 없다냥}. 필요한 것만 챙겨두고 {쉬고 있으라냥|편히 있으라냥}.',
+      '{{time}}에 {{task}} 시작하기로 했지냥. {어디서 할지|어떻게 할지} 정도만 {떠올려두고|생각해두고} {푹 쉬고 있으라냥|가볍게 있으라냥}.',
+    ],
     eveningLow: [
       '오늘도 {고생했다냥|수고했다냥}. 남은 것 중에 {유독 손이 안 가는|자꾸 미뤄지는} 게 있었냥?',
       '{수고했다냥|고생 많았다냥}. 오늘 미뤄진 일 중에 {특히 귀찮았던|유난히 버거웠던} 게 있냥?',
@@ -672,6 +782,11 @@ class MasterGreetingCopy {
       '{아직 안 늦었다냥|아직 늦은 시간 아니다냥|지금도 안 늦었다냥}. 하나만 해도 기분이 달라질 거다냥.',
       '{저녁은 이제 시작이니|이제 막 저녁이 됐으니|저녁은 아직 초입이니} 지금 하나만 해도 충분히 좋을 것 같다냥.',
       '오늘이 아직 {끝난 게 아니다냥|남아 있다냥|다 지나간 게 아니다냥}. {가벼운 거|작은 거} 하나만 해도 충분하다냥.',
+    ],
+    eveningMinimumBar: [
+      '오늘 계획이 {아직 남아 있구나냥|아직 남았구나냥}. 꼭 하고 싶은 것 하나를 지금 할 수 있는 크기로 줄여서 다시 잡아보는 건 어떠냥? 거기까지가 오늘의 최소 성공인 거지냥.',
+      '남은 게 {아직 있구나냥|남아 있구나냥}. "1화 쓰기"를 "1화 개요만 쓰기"처럼, 하나를 오늘 할 만한 크기로 줄여보는 건 {어떠냥|어떻겠냥}? 그게 오늘의 최소 성공인 거지냥.',
+      '오늘 몫이 {아직 남았다냥|남아 있다냥}. 통째로 하려 말고 하나를 작게 고쳐 오늘의 최소 성공으로 잡아보면 {어떠냥|어떻겠냥}? {중요한 일에|꼭 하고 싶은 일에} 할 수 있을 만큼 집중하는 게 진짜 성공이다냥.',
     ],
     earlyEveningHigh: [
       '벌써 마무리가 {눈앞이라|보이니} 나도 {덩달아 기분이 좋다냥|기분이 좋아진다냥}.',
@@ -860,19 +975,83 @@ class MasterGreetingCopy {
 ///
 /// 위젯 상태를 참조하지 않는다. 반복을 피하는 데 쓰는 최근 발화는 [recentLines]로,
 /// 무작위는 [random]으로 받는다 — 테스트에서 씨앗을 고정하면 같은 문장이 재현된다.
-class MasterGreetingBuilder {
-  final GreetingVoice voice;
-
+/// 문구 목록에서 하나를 골라 펼치는 부분만 떼어낸 것.
+///
+/// 냥냥이처럼 슬롯 인사를 쓰지 않는 코치도 한 자리(곧 시작할 일정)는 앱이 만들어
+/// 내보낸다. 그 한 문장을 위해 코치별 문구 한 벌을 통째로 만들 수는 없다.
+class GreetingLinePicker {
   /// 최근 코치 발화. 여기 이미 나온 문구는 후보에서 뺀다.
   final List<String> recentLines;
 
   final Random random;
 
+  GreetingLinePicker({this.recentLines = const [], Random? random})
+    : random = random ?? Random();
+
+  /// 곧 시작할 일정을 짚는 말. 시각은 앱이 붙인 것이라 묶지 않고,
+  /// 일 이름은 사용자가 적은 말이라 따옴표로 묶는다.
+  String fillUpcoming(
+    List<String> pool, {
+    required String name,
+    required String timeLabel,
+  }) => pickLine(
+    pool
+        .map(
+          (line) => line
+              .replaceAll('{{time}}', timeLabel)
+              .replaceAll('{{task}}', '\'$name\''),
+        )
+        .toList(growable: false),
+  );
+
+  /// 최근에 쓴 틀은 피해서 고르고, 고른 틀의 갈래를 펼친다.
+  String pickLine(List<String> pool) {
+    if (pool.isEmpty) return '';
+    final fresh = pool
+        .where(
+          (line) => !recentLines.any((text) => text.contains(anchor(line))),
+        )
+        .toList(growable: false);
+    final candidates = fresh.isNotEmpty ? fresh : pool;
+    return expand(candidates[random.nextInt(candidates.length)]);
+  }
+
+  /// 갈래 표기 `{가|나}`에서 하나씩 골라 문장 하나로 펼친다.
+  ///
+  /// 문장을 이어붙이지 않고 한 문장 안에서만 치환하므로 발화 길이가 늘지 않는다.
+  /// `{{task}}`는 세로줄이 없어서 갈래로 잡히지 않는다.
+  String expand(String template) {
+    final filled = template.replaceAllMapped(_group, (match) {
+      final options = match.group(1)!.split('|');
+      return options[random.nextInt(options.length)];
+    });
+    // 빈 갈래를 골랐을 때 생기는 이중 공백을 지운다.
+    return filled.replaceAll(RegExp(r' {2,}'), ' ').trim();
+  }
+
+  /// 반복 회피에 쓸 지문. 갈래 밖 고정 부분 중 가장 긴 조각이다.
+  ///
+  /// 펼친 문장은 매번 달라서 텍스트를 그대로 비교할 수 없다. 대신 어느 틀에서
+  /// 나왔는지 알아볼 수 있는 이 조각으로 본다. 지문이 짧으면 회피가 헐거워지므로
+  /// 틀을 늘릴 때는 고정 부분을 남겨야 한다(테스트가 길이를 지킨다).
+  String anchor(String template) {
+    final fixed = template.split(_group).map((part) => part.trim()).toList()
+      ..sort((a, b) => b.length.compareTo(a.length));
+    return fixed.first;
+  }
+
+  static final _group = RegExp(r'\{([^{}]*\|[^{}]*)\}');
+}
+
+/// 마스터 코치(냥할배·여비서)의 슬롯 인사를 만든다.
+class MasterGreetingBuilder extends GreetingLinePicker {
+  final GreetingVoice voice;
+
   MasterGreetingBuilder({
     required this.voice,
-    this.recentLines = const [],
-    Random? random,
-  }) : random = random ?? Random();
+    super.recentLines,
+    super.random,
+  });
 
   /// 한 발화는 최대 2문장(복귀 인사가 붙으면 그 앞에 한 문장 더).
   MasterGreetingResult build(MasterGreetingContext context) {
@@ -918,6 +1097,12 @@ class MasterGreetingBuilder {
             parts.join(' '),
             usedStartPattern: true,
           );
+        }
+        // 시각까지 정해둔 일정이 곧 시작한다면 그게 오늘의 이야기다. 다른 걸
+        // 고르라고 하면 이미 정해둔 사람에게 딴 데를 가리키는 말이 된다.
+        if (context.hasUpcomingPlan) {
+          parts.add(_fillUpcoming(context));
+          return MasterGreetingResult(parts.join(' '));
         }
         if (hour < 9) {
           // 9시 전에는 계획 유무를 따지지 않고 하루를 여는 인사만 한다.
@@ -979,6 +1164,18 @@ class MasterGreetingBuilder {
         }
         if (!context.hasPlan) {
           parts.add(pickLine(voice.eveningNoPlan));
+          return MasterGreetingResult(parts.join(' '));
+        }
+        // 저녁에도 시각을 정해둔 일정이 곧 시작할 수 있다. 그때는 하루를 접는
+        // 말보다 그 일정을 짚어주는 편이 맞다.
+        if (context.hasUpcomingPlan) {
+          parts.add(_fillUpcoming(context));
+          return MasterGreetingResult(parts.join(' '));
+        }
+        // 밤 9시대에 남은 게 둘 이상이면, 뭐가 미뤄졌는지 되묻는 대신
+        // 오늘의 기준을 스스로 좁히도록 돕는다.
+        if (context.needsMinimumBar) {
+          parts.add(pickLine(voice.eveningMinimumBar));
           return MasterGreetingResult(parts.join(' '));
         }
         final rate = context.planRate;
@@ -1069,6 +1266,18 @@ class MasterGreetingBuilder {
         .toList(growable: false),
   );
 
+  /// 곧 시작할 일정을 짚는 말. 시각은 앱이 붙인 것이라 묶지 않고,
+  /// 일 이름은 사용자가 적은 말이라 따옴표로 묶는다.
+  String _fillUpcoming(MasterGreetingContext context) => pickLine(
+    voice.upcomingPlan
+        .map(
+          (line) => line
+              .replaceAll('{{time}}', context.upcomingPlanTimeLabel ?? '')
+              .replaceAll('{{task}}', '\'${context.upcomingPlanName ?? ''}\''),
+        )
+        .toList(growable: false),
+  );
+
   /// 일 이름과 달리 시간대는 따옴표로 묶지 않는다. 사용자가 적은 말이 아니라
   /// 앱이 계산해 붙인 이름이라, 묶으면 인용처럼 보인다.
   String _fillWindow(List<String> pool, String windowLabel) => pickLine(
@@ -1076,44 +1285,6 @@ class MasterGreetingBuilder {
         .map((line) => line.replaceAll('{{window}}', windowLabel))
         .toList(growable: false),
   );
-
-  /// 최근에 쓴 틀은 피해서 고르고, 고른 틀의 갈래를 펼친다.
-  String pickLine(List<String> pool) {
-    if (pool.isEmpty) return '';
-    final fresh = pool
-        .where(
-          (line) => !recentLines.any((text) => text.contains(anchor(line))),
-        )
-        .toList(growable: false);
-    final candidates = fresh.isNotEmpty ? fresh : pool;
-    return expand(candidates[random.nextInt(candidates.length)]);
-  }
-
-  /// 갈래 표기 `{가|나}`에서 하나씩 골라 문장 하나로 펼친다.
-  ///
-  /// 문장을 이어붙이지 않고 한 문장 안에서만 치환하므로 발화 길이가 늘지 않는다.
-  /// `{{task}}`는 세로줄이 없어서 갈래로 잡히지 않는다.
-  String expand(String template) {
-    final filled = template.replaceAllMapped(_group, (match) {
-      final options = match.group(1)!.split('|');
-      return options[random.nextInt(options.length)];
-    });
-    // 빈 갈래를 골랐을 때 생기는 이중 공백을 지운다.
-    return filled.replaceAll(RegExp(r' {2,}'), ' ').trim();
-  }
-
-  /// 반복 회피에 쓸 지문. 갈래 밖 고정 부분 중 가장 긴 조각이다.
-  ///
-  /// 펼친 문장은 매번 달라서 텍스트를 그대로 비교할 수 없다. 대신 어느 틀에서
-  /// 나왔는지 알아볼 수 있는 이 조각으로 본다. 지문이 짧으면 회피가 헐거워지므로
-  /// 틀을 늘릴 때는 고정 부분을 남겨야 한다(테스트가 길이를 지킨다).
-  String anchor(String template) {
-    final fixed = template.split(_group).map((part) => part.trim()).toList()
-      ..sort((a, b) => b.length.compareTo(a.length));
-    return fixed.first;
-  }
-
-  static final _group = RegExp(r'\{([^{}]*\|[^{}]*)\}');
 
   /// 격려 문구. 완료한 일 이름이 있으면 문장 안에 녹이고, 없으면 이름 없는 형태를 쓴다.
   String pickEncouragement(List<(String, String)> pool, String? doneLabel) {
