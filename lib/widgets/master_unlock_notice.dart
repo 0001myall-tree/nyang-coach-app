@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/user_data.dart';
+import '../services/daily_reset_service.dart';
 import '../theme/app_design_tokens.dart';
 
 /// 마스터 코치가 열렸다는 걸 한 번만 알려준다.
@@ -23,23 +24,85 @@ import '../theme/app_design_tokens.dart';
 ///
 /// 결제가 실제로 일어나는 자리도 여기다. 채팅 화면의 구독 시트는 디버그
 /// 빌드에서만 열려서, 실기기에서는 그 경로로 결제가 되지 않는다.
-const String _masterUnlockNoticeKey = 'master_unlock_notice_shown';
+/// 어떤 구독을 두고 안내했는지 적어두는 자리.
+///
+/// 예전에는 "알렸다/안 알렸다" 한 칸이었고, 마스터가 아닌 것으로 읽히면 그 칸을
+/// 지웠다. 해지 뒤 다시 결제한 사람에게 한 번 더 알려주려던 것이었는데, 등급이
+/// 잠깐 다르게 읽히는 순간마다 표시가 함께 지워졌다. 그래서 같은 안내가 며칠씩
+/// 다시 떴다.
+///
+/// 이제 지우지 않는다. 대신 무엇을 두고 알렸는지를 적어두고, 그것과 다를 때만
+/// 다시 알린다. 잘못 읽힌 순간은 아무것도 건드리지 않고 지나간다.
+const String _masterUnlockNoticeKey = 'master_unlock_notice_plan';
 
-/// 플래그는 'nyang_'으로 시작하지 않는 키에 둔다. 그 접두어를 쓰면 클라우드
-/// 복원이 덮어써서 앱을 켤 때마다 같은 안내가 다시 뜬다.
+/// 예전의 "알렸다" 한 칸. 이미 안내를 받은 사람에게 한 번 더 띄우지 않으려고
+/// 읽기만 한다.
+const String _legacyMasterUnlockNoticeKey = 'master_unlock_notice_shown';
+
+/// 지금 무엇을 해야 하는지.
+enum MasterUnlockDecision {
+  /// 판단할 때가 아니거나 알릴 것이 없다. 적어둔 것도 건드리지 않는다.
+  skip,
+
+  /// 이미 이 구독을 두고 알렸다.
+  alreadyShown,
+
+  /// 지금 알린다.
+  show,
+}
+
+/// 이 구독을 알아보는 이름. 마스터가 아니면 null.
+///
+/// 만료일까지 넣는다. 해지하고 다시 결제하면 만료일이 달라지므로, 새 구독으로
+/// 보고 한 번 더 알려줄 수 있다.
+String? masterUnlockSignature({
+  required bool isPlanActive,
+  required String planType,
+  required DateTime? planExpiresAt,
+}) {
+  if (!isPlanActive || planType != 'master') return null;
+  return 'master|${planExpiresAt?.toIso8601String() ?? 'forever'}';
+}
+
+/// 판단만 떼어낸 것. 화면도 저장소도 없이 시험할 수 있다.
+///
+/// [restorePending]이 참이면 아무것도 하지 않는다. 로그인은 되어 있는데 이 기기가
+/// 아직 클라우드에서 데이터를 받아오기 전이면, 그때 읽은 등급은 진짜 등급이 아니다.
+MasterUnlockDecision decideMasterUnlockNotice({
+  required bool restorePending,
+  required String? signature,
+  required String? announced,
+}) {
+  if (restorePending) return MasterUnlockDecision.skip;
+  if (signature == null) return MasterUnlockDecision.skip;
+  if (announced == signature) return MasterUnlockDecision.alreadyShown;
+  return MasterUnlockDecision.show;
+}
+
+/// 적어두는 키는 'nyang_'으로 시작하지 않는다. 그 접두어를 쓰면 클라우드 복원이
+/// 덮어써서 앱을 켤 때마다 같은 안내가 다시 뜬다.
 Future<void> maybeShowMasterUnlockNotice(BuildContext context) async {
   final data = await UserDataService.load();
   final prefs = await SharedPreferences.getInstance();
 
-  // 마스터가 아닌 동안에는 표시를 지워둔다. 해지했다가 다시 결제했을 때도
-  // 열렸다는 안내를 한 번 더 받는다.
-  if (!data.isPlanActive || data.planType != 'master') {
-    await prefs.remove(_masterUnlockNoticeKey);
-    return;
-  }
+  final signature = masterUnlockSignature(
+    isPlanActive: data.isPlanActive,
+    planType: data.planType,
+    planExpiresAt: data.planExpiresAt,
+  );
+  // 옛 표시가 남아 있으면 그 사람은 이미 받은 것으로 본다.
+  final announced =
+      prefs.getString(_masterUnlockNoticeKey) ??
+      (prefs.getBool(_legacyMasterUnlockNoticeKey) == true ? signature : null);
 
-  if (prefs.getBool(_masterUnlockNoticeKey) == true) return;
-  await prefs.setBool(_masterUnlockNoticeKey, true);
+  final decision = decideMasterUnlockNotice(
+    restorePending: DailyResetService.isCloudRestorePending(prefs),
+    signature: signature,
+    announced: announced,
+  );
+  if (decision != MasterUnlockDecision.show) return;
+
+  await prefs.setString(_masterUnlockNoticeKey, signature!);
 
   if (!context.mounted) return;
   WidgetsBinding.instance.addPostFrameCallback((_) {
