@@ -112,6 +112,18 @@ class MainActivity : FlutterFragmentActivity() {
                         openOverlaySettings()
                         result.success(null)
                     }
+                    "diagnose" -> {
+                        // 조용히 실패하면 어디가 막힌 건지 알 길이 없다.
+                        result.success(
+                            mapOf(
+                                "enabled" to OngoingNudgeState.isEnabled(this),
+                                "overlay" to Settings.canDrawOverlays(this),
+                                "notifications" to canPostNotifications(),
+                                "exactAlarms" to canScheduleExactAlarms(),
+                                "batteryRestricted" to isBatterySleepRestricted(),
+                            ),
+                        )
+                    }
                     "isBatterySleepRestricted" -> {
                         result.success(isBatterySleepRestricted())
                     }
@@ -153,10 +165,14 @@ class MainActivity : FlutterFragmentActivity() {
                             OngoingNudgeState.start(this, "nudge_test", "테스트")
                         }
                         OngoingNudgeScheduler.cancel(this)
+                        OngoingNudgeState.openTestWindow(
+                            this,
+                            OngoingNudgeScheduler.TEST_WINDOW_MILLIS,
+                        )
                         OngoingNudgeScheduler.scheduleIn(
                             this,
                             OngoingNudgeScheduler.TEST_DELAY_MILLIS,
-                            OngoingNudgeScheduler.STAGE_CONFIRM,
+                            OngoingNudgeScheduler.STAGE_TEST,
                         )
                         result.success(null)
                     }

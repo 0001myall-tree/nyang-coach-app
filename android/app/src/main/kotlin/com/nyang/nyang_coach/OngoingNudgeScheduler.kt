@@ -23,6 +23,9 @@ object OngoingNudgeScheduler {
     /** 폰을 잠깐 켠 건지, 계속 보고 있는 건지 가르는 두 번째 확인. */
     const val STAGE_CONFIRM = "confirm"
 
+    /** 설정에서 "지금 한번 보기"로 부른 자리. 앱을 나갈 때까지 짧게 여러 번 본다. */
+    const val STAGE_TEST = "test"
+
     private const val REQUEST_CODE = 7401
 
     /** 시작하고 30분은 아무것도 하지 않는다. */
@@ -37,8 +40,14 @@ object OngoingNudgeScheduler {
     /** 한 번 나갔다 들어온 뒤 다음 등장까지. */
     const val NEXT_ROUND_DELAY_MILLIS = 60L * 60_000L
 
-    /** 설정에서 "지금 테스트"를 눌렀을 때. 앱을 나갈 시간만 준다. */
-    const val TEST_DELAY_MILLIS = 15_000L
+    /** "지금 한번 보기"를 누르고 처음 확인하기까지. */
+    const val TEST_DELAY_MILLIS = 8_000L
+
+    /** 아직 앱 안이면 이 간격으로 다시 본다. */
+    const val TEST_RETRY_MILLIS = 5_000L
+
+    /** 그래도 안 나가면 여기서 포기한다. */
+    const val TEST_WINDOW_MILLIS = 2L * 60_000L
 
     /** 아무도 누르지 않아도 스스로 사라지기까지. */
     const val VISIBLE_MILLIS = 15L * 60_000L

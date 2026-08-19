@@ -1009,14 +1009,36 @@ class _SettingsScreenState extends State<SettingsScreen>
       final action = await _askOngoingNudgeAction();
       if (action == null || !mounted) return;
       if (action == _OngoingNudgeAction.test) {
+        // 막고 있는 게 있으면 먼저 말해준다. 그냥 안 나오면 어디가 문제인지
+        // 알 길이 없어서, 기다린 사람만 헛수고한다.
+        final blocked = await _describeOngoingNudgeBlockers();
+        if (!mounted) return;
+        if (blocked != null) {
+          await _showAlarmNoticeDialog(
+            title: '🐾 지금은 나올 수 없어요',
+            message: blocked,
+            actionLabel: '설정 열기',
+            closeLabel: '나중에',
+            onAction: () async {
+              if (!await OngoingTaskNudgeService.isAvailable()) {
+                await OngoingTaskNudgeService.openSystemSettings();
+              } else {
+                await OngoingTaskNudgeService.openBatterySettings();
+              }
+            },
+          );
+          return;
+        }
+
         await OngoingTaskNudgeService.showTestNudge();
         if (!mounted) return;
         await _showAlarmNoticeDialog(
-          title: '🐾 15초 뒤에 나타나요',
+          title: '🐾 앱을 나가면 나타나요',
           message:
-              '지금 앱을 나가서 다른 화면을 보고 계세요.\n\n'
-              '화면이 켜져 있고 냥냥코치가 아닌 곳을 보고 있어야 나옵니다. '
-              '앱 안에 머물러 있으면 나오지 않아요.',
+              '지금 홈으로 나가거나 다른 앱을 열어보세요. 몇 초 안에 화면 '
+              '가장자리에 냥냥이가 나옵니다.\n\n'
+              '냥냥코치 안에 머물러 있으면 나오지 않아요. 2분 동안 기다리다가 '
+              '그래도 안 나가면 스스로 그만둡니다.',
         );
         return;
       }
@@ -1083,6 +1105,29 @@ class _SettingsScreenState extends State<SettingsScreen>
         },
       );
     }
+  }
+
+  /// 냥냥이를 막고 있는 것이 있으면 사람이 읽을 문장으로. 없으면 null.
+  Future<String?> _describeOngoingNudgeBlockers() async {
+    final state = await OngoingTaskNudgeService.diagnose();
+    if (state.isEmpty) return null;
+
+    if (state['overlay'] == false) {
+      return '"다른 앱 위에 표시" 권한이 꺼져 있어요.\n\n'
+          '이 권한이 없으면 냥냥이가 다른 앱 위로 나올 수 없습니다. '
+          '설정에서 냥냥코치를 찾아 켜주세요.';
+    }
+    if (state['notifications'] == false) {
+      return '냥냥코치 알림이 꺼져 있어요.\n\n'
+          '냥냥이가 나오는 동안 조용한 알림 한 줄이 함께 있어야 해서, '
+          '알림이 꺼져 있으면 나올 수 없습니다.';
+    }
+    if (state['batteryRestricted'] == true) {
+      return '휴대폰이 냥냥코치를 재워둘 수 있는 상태예요.\n\n'
+          '지금 확인은 될 수도 있지만, 평소에는 냥냥이가 늦게 나오거나 '
+          '아예 나오지 않습니다. 배터리 설정에서 "제한 없음"으로 바꿔주세요.';
+    }
+    return null;
   }
 
   /// 켜져 있는 동안 이 줄을 눌렀을 때 무엇을 할지.

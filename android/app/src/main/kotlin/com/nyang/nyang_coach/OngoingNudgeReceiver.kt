@@ -41,6 +41,24 @@ class OngoingNudgeReceiver : BroadcastReceiver() {
             return
         }
 
+        // "지금 한번 보기"는 사용자가 앱을 나가는 데 몇 초가 걸린다. 그 몇 초를
+        // 놓쳤다고 10분 뒤로 미루면 확인할 방법이 없어진다. 잠깐 동안 자주 본다.
+        if (stage == OngoingNudgeScheduler.STAGE_TEST) {
+            if (OngoingNudgeState.shouldAppearNow(context)) {
+                OngoingNudgeState.clearTestWindow(context)
+                OngoingNudgeService.show(context)
+                return
+            }
+            if (OngoingNudgeState.isTestWindowOpen(context)) {
+                OngoingNudgeScheduler.scheduleIn(
+                    context,
+                    OngoingNudgeScheduler.TEST_RETRY_MILLIS,
+                    OngoingNudgeScheduler.STAGE_TEST,
+                )
+            }
+            return
+        }
+
         if (!OngoingNudgeState.shouldAppearNow(context)) {
             // 폰을 안 보고 있다는 뜻이다. 아마 그 일을 하는 중이니 건드리지 않는다.
             OngoingNudgeScheduler.scheduleIn(

@@ -140,7 +140,20 @@ class OngoingTaskNudgeService {
     }
   }
 
-  /// 30분을 기다리지 않고 지금 확인해본다. 15초 뒤 등장을 예약한다.
+  /// 무엇이 냥냥이를 막고 있는지. 조용히 실패하면 어디가 문제인지 알 수 없다.
+  static Future<Map<String, bool>> diagnose() async {
+    if (!_isAndroid) return const {};
+    try {
+      final raw = await _channel.invokeMapMethod<String, bool>('diagnose');
+      return raw ?? const {};
+    } on PlatformException {
+      return const {};
+    } on MissingPluginException {
+      return const {};
+    }
+  }
+
+  /// 30분을 기다리지 않고 지금 확인해본다. 앱을 나가면 몇 초 안에 나타난다.
   static Future<void> showTestNudge() async {
     if (!_isAndroid) return;
     try {

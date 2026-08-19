@@ -30,6 +30,9 @@ object OngoingNudgeState {
     /** 그 표시를 남긴 프로세스. 앱이 죽었다 살아나면 번호가 달라진다. */
     private const val KEY_APP_FOREGROUND_PID = "ongoing_nudge_app_foreground_pid"
 
+    /** "지금 한번 보기"를 언제까지 기다려줄지. 네이티브만 쓴다. */
+    private const val KEY_TEST_UNTIL = "ongoing_nudge_test_until"
+
     /** 사용자가 옮겨둔 세로 위치. 네이티브만 쓴다. */
     private const val KEY_POSITION_Y = "ongoing_nudge_position_y"
 
@@ -112,6 +115,19 @@ object OngoingNudgeState {
 
     fun savePositionY(context: Context, y: Int) {
         prefs(context).edit().putInt(KEY_POSITION_Y, y).apply()
+    }
+
+    fun openTestWindow(context: Context, millis: Long) {
+        prefs(context).edit()
+            .putLong(KEY_TEST_UNTIL, System.currentTimeMillis() + millis)
+            .commit()
+    }
+
+    fun isTestWindowOpen(context: Context): Boolean =
+        prefs(context).getLong(KEY_TEST_UNTIL, 0L) > System.currentTimeMillis()
+
+    fun clearTestWindow(context: Context) {
+        prefs(context).edit().remove(KEY_TEST_UNTIL).commit()
     }
 
     fun canDrawOverlays(context: Context): Boolean = Settings.canDrawOverlays(context)
