@@ -46,7 +46,6 @@ class OngoingTaskNudgeService {
   /// 지금 이 폰에서 뭘 눌렀는지 — 다른 기기 값에 덮이면 안 된다.
   static const String enabledKey = 'ongoing_nudge_enabled';
   static const String _resultKey = 'ongoing_nudge_pending_result';
-  static const String _foregroundKey = 'ongoing_nudge_app_foreground';
 
   static bool get isSupported =>
       !kIsWeb &&
@@ -127,10 +126,30 @@ class OngoingTaskNudgeService {
 
   /// 냥냥코치를 보고 있는 동안에는 나가지 않는다. 앱 안에 이미 진행 중 카드가 있다.
   /// 안드로이드에서만 쓰는 신호다.
+  ///
+  /// 네이티브에 맡긴다. 표시와 함께 그 표시를 남긴 프로세스 번호를 적어둬야,
+  /// 앱이 갑자기 종료됐을 때 "앞에 있음"으로 굳어 냥냥이가 영영 못 나가는 일이 없다.
   static Future<void> setAppForeground(bool value) async {
     if (!_isAndroid) return;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_foregroundKey, value);
+    try {
+      await _channel.invokeMethod('setAppForeground', {'value': value});
+    } on PlatformException {
+      //
+    } on MissingPluginException {
+      //
+    }
+  }
+
+  /// 30분을 기다리지 않고 지금 확인해본다. 15초 뒤 등장을 예약한다.
+  static Future<void> showTestNudge() async {
+    if (!_isAndroid) return;
+    try {
+      await _channel.invokeMethod('showTestNudge');
+    } on PlatformException {
+      //
+    } on MissingPluginException {
+      //
+    }
   }
 
   /// 진행 중인 일정 하나를 지켜보게 한다. 같은 일정이면 시계를 다시 돌리지 않는다.

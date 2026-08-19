@@ -27,6 +27,9 @@ object OngoingNudgeState {
     /** 냥냥코치가 화면 앞에 있는지. 앱 안에서는 이미 진행 중 카드가 보이므로 나가지 않는다. */
     private const val KEY_APP_FOREGROUND = "flutter.ongoing_nudge_app_foreground"
 
+    /** 그 표시를 남긴 프로세스. 앱이 죽었다 살아나면 번호가 달라진다. */
+    private const val KEY_APP_FOREGROUND_PID = "ongoing_nudge_app_foreground_pid"
+
     /** 사용자가 옮겨둔 세로 위치. 네이티브만 쓴다. */
     private const val KEY_POSITION_Y = "ongoing_nudge_position_y"
 
@@ -76,8 +79,33 @@ object OngoingNudgeState {
     private fun escape(value: String): String =
         value.replace("\\", "\\\\").replace("\"", "\\\"")
 
-    fun isAppForeground(context: Context): Boolean =
-        prefs(context).getBoolean(KEY_APP_FOREGROUND, false)
+    /**
+     * 앱이 화면 앞에 있다고 표시한다. 표시를 남긴 프로세스 번호도 함께 적는다.
+     */
+    fun setAppForeground(context: Context, value: Boolean) {
+        prefs(context).edit()
+            .putBoolean(KEY_APP_FOREGROUND, value)
+            .putLong(KEY_APP_FOREGROUND_PID, android.os.Process.myPid().toLong())
+            .commit()
+    }
+
+    /**
+     * 냥냥코치가 지금 화면 앞에 있는지.
+     *
+     * 표시만 믿으면, 앱이 시스템에 갑자기 종료됐을 때 "앞에 있음"으로 굳어서
+     * 그 뒤로 냥냥이가 영영 나가지 못한다. 그래서 표시를 남긴 프로세스가 아직
+     * 그 프로세스인지 함께 본다 — 앱이 죽었다 다시 뜨면 번호가 달라지고,
+     * 그건 화면 앞에 있지 않다는 뜻이다.
+     *
+     * 프로세스 중요도로 판단하지 않는다. 알람을 받는 동안에는 우리 프로세스가
+     * 잠깐 앞에 있는 것으로 잡혀서, 늘 "앱을 보고 있다"가 되어버린다.
+     */
+    fun isAppForeground(context: Context): Boolean {
+        val prefs = prefs(context)
+        if (!prefs.getBoolean(KEY_APP_FOREGROUND, false)) return false
+        val markedPid = prefs.getLong(KEY_APP_FOREGROUND_PID, -1L)
+        return markedPid == android.os.Process.myPid().toLong()
+    }
 
     fun positionY(context: Context): Int =
         prefs(context).getInt(KEY_POSITION_Y, -1)

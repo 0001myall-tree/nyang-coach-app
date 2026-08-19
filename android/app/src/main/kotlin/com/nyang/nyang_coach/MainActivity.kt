@@ -139,6 +139,27 @@ class MainActivity : FlutterFragmentActivity() {
                         }
                         result.success(null)
                     }
+                    "setAppForeground" -> {
+                        OngoingNudgeState.setAppForeground(
+                            this,
+                            call.argument<Boolean>("value") ?: false,
+                        )
+                        result.success(null)
+                    }
+                    "showTestNudge" -> {
+                        // 30분을 기다리지 않고 지금 확인해보는 길.
+                        // 앱을 나가야 나오므로 잠깐 여유를 두고 예약한다.
+                        if (!OngoingNudgeState.isActive(this)) {
+                            OngoingNudgeState.start(this, "nudge_test", "테스트")
+                        }
+                        OngoingNudgeScheduler.cancel(this)
+                        OngoingNudgeScheduler.scheduleIn(
+                            this,
+                            OngoingNudgeScheduler.TEST_DELAY_MILLIS,
+                            OngoingNudgeScheduler.STAGE_CONFIRM,
+                        )
+                        result.success(null)
+                    }
                     "stop" -> {
                         OngoingNudgeState.clear(this)
                         OngoingNudgeScheduler.cancel(this)

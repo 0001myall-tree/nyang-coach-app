@@ -33,6 +33,9 @@ class SettingsScreen extends StatefulWidget {
   State<SettingsScreen> createState() => _SettingsScreenState();
 }
 
+/// 진행 중 냥냥이가 켜져 있을 때 이 줄을 누르면 고를 수 있는 것.
+enum _OngoingNudgeAction { test, turnOff }
+
 class _SettingsScreenState extends State<SettingsScreen>
     with WidgetsBindingObserver {
   static final Uri _termsUrl = Uri.parse('https://joflowapp.com/terms');
@@ -999,6 +1002,26 @@ class _SettingsScreenState extends State<SettingsScreen>
   /// 시스템 설정으로 보낸다. 없으면 켜도 아무것도 나타나지 않기 때문이다.
   Future<void> _toggleOngoingNudge() async {
     final isAndroid = Platform.isAndroid;
+
+    // 켜져 있는 동안에는 바로 끄지 않고 무엇을 할지 묻는다. 30분을 기다려야
+    // 확인되는 기능이라, 지금 한번 보는 길이 설정 안에 있어야 한다.
+    if (_ongoingNudgeEnabled && isAndroid) {
+      final action = await _askOngoingNudgeAction();
+      if (action == null || !mounted) return;
+      if (action == _OngoingNudgeAction.test) {
+        await OngoingTaskNudgeService.showTestNudge();
+        if (!mounted) return;
+        await _showAlarmNoticeDialog(
+          title: '🐾 15초 뒤에 나타나요',
+          message:
+              '지금 앱을 나가서 다른 화면을 보고 계세요.\n\n'
+              '화면이 켜져 있고 냥냥코치가 아닌 곳을 보고 있어야 나옵니다. '
+              '앱 안에 머물러 있으면 나오지 않아요.',
+        );
+        return;
+      }
+    }
+
     final turningOn = !_ongoingNudgeEnabled;
     await OngoingTaskNudgeService.setEnabled(turningOn);
     if (!mounted) return;
@@ -1060,6 +1083,67 @@ class _SettingsScreenState extends State<SettingsScreen>
         },
       );
     }
+  }
+
+  /// 켜져 있는 동안 이 줄을 눌렀을 때 무엇을 할지.
+  Future<_OngoingNudgeAction?> _askOngoingNudgeAction() {
+    return showDialog<_OngoingNudgeAction>(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: Text(
+            '🐾 진행 중 냥냥이',
+            style: GoogleFonts.notoSansKr(
+              fontSize: 17,
+              fontWeight: FontWeight.w900,
+              color: const Color(0xFF3D3A4E),
+            ),
+          ),
+          content: Text(
+            '지금 켜져 있어요. 일정을 시작하고 30분이 지난 뒤, 폰으로 다른 걸 '
+            '보고 있으면 나타납니다.',
+            style: GoogleFonts.notoSansKr(
+              fontSize: 13.5,
+              height: 1.5,
+              fontWeight: FontWeight.w500,
+              color: const Color(0xFF6B6676),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, _OngoingNudgeAction.turnOff),
+              child: Text(
+                '끄기',
+                style: GoogleFonts.notoSansKr(
+                  fontWeight: FontWeight.w900,
+                  color: const Color(0xFF9B96A8),
+                ),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, _OngoingNudgeAction.test),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF8B7CFF),
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: Text(
+                '지금 한번 보기',
+                style: GoogleFonts.notoSansKr(
+                  fontWeight: FontWeight.w900,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   void _showCoreReminderSettingsModal() {

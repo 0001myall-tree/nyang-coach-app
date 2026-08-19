@@ -42,10 +42,21 @@ class OngoingNudgeService : Service() {
 
         fun show(context: Context) {
             val intent = Intent(context, OngoingNudgeService::class.java)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(intent)
-            } else {
-                context.startService(intent)
+            // 백그라운드에서 서비스를 띄우는 건 기기·버전에 따라 막힐 수 있다.
+            // 막히면 이번 차례를 거르고 다음 기회에 다시 본다. 여기서 터지면
+            // 앱 전체가 조용히 죽는다.
+            runCatching {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    context.startForegroundService(intent)
+                } else {
+                    context.startService(intent)
+                }
+            }.onFailure {
+                OngoingNudgeScheduler.scheduleIn(
+                    context,
+                    OngoingNudgeScheduler.RETRY_DELAY_MILLIS,
+                    OngoingNudgeScheduler.STAGE_FIRST,
+                )
             }
         }
     }

@@ -37,6 +37,9 @@ object OngoingNudgeScheduler {
     /** 한 번 나갔다 들어온 뒤 다음 등장까지. */
     const val NEXT_ROUND_DELAY_MILLIS = 60L * 60_000L
 
+    /** 설정에서 "지금 테스트"를 눌렀을 때. 앱을 나갈 시간만 준다. */
+    const val TEST_DELAY_MILLIS = 15_000L
+
     /** 아무도 누르지 않아도 스스로 사라지기까지. */
     const val VISIBLE_MILLIS = 15L * 60_000L
 
