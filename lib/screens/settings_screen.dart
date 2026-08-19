@@ -33,7 +33,7 @@ class SettingsScreen extends StatefulWidget {
   State<SettingsScreen> createState() => _SettingsScreenState();
 }
 
-/// 진행 중 냥냥이가 켜져 있을 때 이 줄을 누르면 고를 수 있는 것.
+/// 딴짓 방지 코치가 켜져 있을 때 이 줄을 누르면 고를 수 있는 것.
 enum _OngoingNudgeAction { test, turnOff }
 
 class _SettingsScreenState extends State<SettingsScreen>
@@ -995,7 +995,7 @@ class _SettingsScreenState extends State<SettingsScreen>
     );
   }
 
-  /// 진행 중 냥냥이 켜고 끄기.
+  /// 딴짓 방지 코치 켜고 끄기.
   ///
   /// 안드로이드는 "다른 앱 위에 표시" 권한이, 아이폰은 라이브 액티비티 허용이
   /// 있어야 한다. 둘 다 팝업으로 물을 수 없어서, 켜는 순간 설명을 먼저 읽히고
@@ -1051,7 +1051,7 @@ class _SettingsScreenState extends State<SettingsScreen>
 
     if (!turningOn) {
       await _showAlarmNoticeDialog(
-        title: '🐾 진행 중 냥냥이를 껐어요',
+        title: '🐾 딴짓 방지 코치를 껐어요',
         message: isAndroid
             ? '이제 다른 앱을 볼 때 냥냥이가 나타나지 않아요.'
             : '이제 잠금화면에 진행 중인 일정이 표시되지 않아요.',
@@ -1078,7 +1078,7 @@ class _SettingsScreenState extends State<SettingsScreen>
     }
 
     await _showAlarmNoticeDialog(
-      title: '🐾 진행 중 냥냥이를 켰어요',
+      title: '🐾 딴짓 방지 코치를 켰어요',
       message: isAndroid
           ? '일정을 시작하고 30분이 지난 뒤, 폰으로 다른 걸 보고 있으면 '
                 '냥냥이가 화면 가장자리에 잠깐 나타나요.\n\n'
@@ -1140,7 +1140,7 @@ class _SettingsScreenState extends State<SettingsScreen>
             borderRadius: BorderRadius.circular(20),
           ),
           title: Text(
-            '🐾 진행 중 냥냥이',
+            '🐾 딴짓 방지 코치',
             style: GoogleFonts.notoSansKr(
               fontSize: 17,
               fontWeight: FontWeight.w900,
@@ -1710,15 +1710,18 @@ class _SettingsScreenState extends State<SettingsScreen>
                               _showCoreReminderSettingsModal,
                             ),
                           ),
-                          if (OngoingTaskNudgeService.isSupported)
-                            _buildSettingsDetailRow(
-                              icon: Icons.pets_rounded,
-                              label: '진행 중 냥냥이 (실험)',
-                              status: _ongoingNudgeEnabled ? '켜짐' : '꺼짐',
-                              onTap: _paidSettingsTap(_toggleOngoingNudge),
-                            ),
                         ],
                       ),
+                      if (OngoingTaskNudgeService.isSupported) ...[
+                        const SizedBox(height: 10),
+                        _buildSettingsNavigationTile(
+                          svgAsset: 'assets/icons/shield-cat.svg',
+                          label: '딴짓 방지 코치',
+                          subtitle: '앱 밖으로 새면 냥냥이가 살짝 챙겨줘요.',
+                          status: _ongoingNudgeEnabled ? '켜짐' : '꺼짐',
+                          onTap: _paidSettingsTap(_toggleOngoingNudge),
+                        ),
+                      ],
                       const SizedBox(height: 10),
 
                       _buildSettingsSectionTile(
@@ -1833,7 +1836,8 @@ class _SettingsScreenState extends State<SettingsScreen>
   }
 
   Widget _buildSettingsNavigationTile({
-    required IconData icon,
+    IconData? icon,
+    String? svgAsset,
     required String label,
     required VoidCallback onTap,
     String? subtitle,
@@ -1862,7 +1866,12 @@ class _SettingsScreenState extends State<SettingsScreen>
                     ),
                     child: Icon(icon, color: Colors.white, size: 18),
                   )
-                : Icon(icon, color: const Color(0xFF8B7CFF), size: 20),
+                : _buildSettingLeadingGlyph(
+                    icon: icon,
+                    svgAsset: svgAsset,
+                    color: const Color(0xFF8B7CFF),
+                    size: 20,
+                  ),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
