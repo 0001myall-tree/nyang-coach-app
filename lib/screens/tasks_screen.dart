@@ -2196,8 +2196,10 @@ class _TasksScreenState extends State<TasksScreen>
   Future<void> _saveTasks() async {
     if (!_isViewingActualToday) {
       await _savePlannedTodayTasks();
-      // 어제 화면에서 채운 완료 표시는 그날 기록에도 반영해야 기록 탭과 어긋나지 않는다.
-      if (_isViewingYesterday) await _saveRecordForYesterday();
+      // 지난 날에 채운 완료 표시는 그날 기록에도 반영해야 기록 탭과 어긋나지 않는다.
+      if (_isViewingArchivedPastDate) {
+        await _saveRecordForPastDate(_activeTodayDateKey);
+      }
       return;
     }
     await _persistTodayTasks();
@@ -2245,6 +2247,7 @@ class _TasksScreenState extends State<TasksScreen>
     await OngoingTaskNudgeService.start(
       taskId: running.id.toString(),
       taskText: running.text,
+      elapsedSeconds: running.elapsedSecondsAt(DateTime.now()),
     );
   }
 
@@ -2257,9 +2260,19 @@ class _TasksScreenState extends State<TasksScreen>
     if (answer == null || !mounted) return;
 
     final idx = tasks.indexWhere((t) => t.id.toString() == answer.taskId);
-    if (idx < 0) return;
+    if (idx < 0) {
+      // 오늘 목록에 없다. 밤에 누르고 다음 날 앱을 열면 자정 정리가 이미
+      // 지나가서, 그 일정은 지난 날 보관함에 있다. 거기서 채워준다.
+      await _applyNudgeAnswerToPastDay(answer);
+      return;
+    }
     final task = tasks[idx];
-    if (task.done) return;
+    if (task.done) {
+      // 냥냥이가 이미 적어둔 경우다. 개수는 어림으로 올려뒀으니 여기서 정확히
+      // 다시 센다. 저장 한 번이면 그날 기록이 제자리를 찾는다.
+      await _persistTodayTasks();
+      return;
+    }
 
     if (answer.isDone) {
       // 앱 안에서 체크한 것과 똑같이 처리한다. 습관 도장, 핵심 일정, 기록까지
@@ -2277,6 +2290,47 @@ class _TasksScreenState extends State<TasksScreen>
     });
     _syncTaskTicker();
     await _persistTodayTasks();
+  }
+
+  /// 자정을 넘겨 도착한 답을 그 일정이 있던 날에 채운다.
+  ///
+  /// 밤 11시에 "다 했어"를 누르고 이틀 뒤에 앱을 열면, 그 일정은 이미 오늘
+  /// 목록에 없다. 여기서 놓치면 완료 표시를 도우려던 기능이 오히려 하나를 잃는다.
+  ///
+  /// 그날 화면을 잠깐 통과시키면 완료 처리 경로가 그대로 돌아서, 습관 도장과
+  /// 그날 기록까지 알아서 맞춰진다. '잠깐 멈췄어'는 지나간 날에 뜻이 없어 넘긴다.
+  Future<void> _applyNudgeAnswerToPastDay(OngoingNudgeAnswer answer) async {
+    if (!answer.isDone) return;
+
+    String? foundKey;
+    TaskItem? task;
+    for (final entry in plannedTodayTasksByDate.entries) {
+      if (_dateFromKey(entry.key).isBefore(_archiveFloorDate)) continue;
+      for (final item in entry.value) {
+        if (item.id.toString() == answer.taskId) {
+          foundKey = entry.key;
+          task = item;
+          break;
+        }
+      }
+      if (task != null) break;
+    }
+    if (foundKey == null || task == null) return;
+
+    final restoreDate = _selectedTodayDate;
+    if (task.done) {
+      // 냥냥이가 이미 적어둔 경우. 그날 기록의 개수만 정확히 다시 센다.
+      setState(() => _selectedTodayDate = _dateFromKey(foundKey!));
+      await _saveRecordForPastDate(foundKey);
+      if (!mounted) return;
+      setState(() => _selectedTodayDate = restoreDate);
+      return;
+    }
+
+    setState(() => _selectedTodayDate = _dateFromKey(foundKey!));
+    await _toggleTask(task.id, forceComplete: true);
+    if (!mounted) return;
+    setState(() => _selectedTodayDate = restoreDate);
   }
 
   /// 저장소의 날짜별 계획을 메모리로 다시 읽는다.
@@ -2311,14 +2365,14 @@ class _TasksScreenState extends State<TasksScreen>
   }
 
   /// 미리 세워둔 계획 중 날짜가 오늘이 된 것은 오늘 할 일로 승격하고,
-  /// 이미 지나가버린 날짜의 계획은 정리한다. 어제는 하루 더 남긴다 —
-  /// 완료 표시를 채울 수 있는 마지막 날이다.
+  /// 너무 오래된 날짜의 계획은 정리한다. 지난 며칠은 남긴다 —
+  /// 뒤늦게 도착한 완료 표시를 채울 자리다.
   Future<void> _promoteAndPrunePlannedTasks() async {
     final todayKey = _getTodayStr();
 
     final promoted = plannedTodayTasksByDate.remove(todayKey);
     final staleKeys = plannedTodayTasksByDate.keys
-        .where((key) => _dateFromKey(key).isBefore(_yesterdayDate))
+        .where((key) => _dateFromKey(key).isBefore(_archiveFloorDate))
         .toList();
     for (final key in staleKeys) {
       plannedTodayTasksByDate.remove(key);
@@ -2416,13 +2470,12 @@ class _TasksScreenState extends State<TasksScreen>
     await prefs.setString('nyang_history', jsonEncode(history));
   }
 
-  /// 어제 화면에서 바뀐 완료 표시를 그날 기록에 다시 쓴다.
+  /// 지난 날 화면에서 바뀐 완료 표시를 그날 기록에 다시 쓴다.
   ///
   /// 기록 탭과 코치가 보는 "연속 달성"은 이 기록에서 바로 계산되므로,
   /// 여기만 고치면 깜빡했던 하루가 제자리를 찾는다. 자정에 정리되어 목록에는
   /// 없는 이월 항목은 기록에 있던 그대로 둔다.
-  Future<void> _saveRecordForYesterday() async {
-    final dateKey = _yesterdayKey;
+  Future<void> _saveRecordForPastDate(String dateKey) async {
     final prefs = await SharedPreferences.getInstance();
     List<Map<String, dynamic>> history = [];
     final rawHistory = prefs.getString('nyang_history');
@@ -2484,6 +2537,8 @@ class _TasksScreenState extends State<TasksScreen>
     }
     await prefs.setString('nyang_history', jsonEncode(history));
 
+    // 연속 달성은 어제까지 이어진 줄로 센다. 그보다 앞선 날을 고쳐도
+    // 저장된 숫자는 어제를 기준으로 다시 확인하면 된다.
     await _syncStreakWithHistory(prefs, history);
     widget.onProgressChanged?.call();
     TasksSyncService.scheduleSyncToCloud();
@@ -2748,9 +2803,22 @@ class _TasksScreenState extends State<TasksScreen>
   /// 어제까지는 열어둔다. 전날 완료 표시를 깜빡했거나 자정을 넘겨 끝낸 일이 있다.
   bool get _isViewingYesterday => _activeTodayDateKey == _yesterdayKey;
 
-  /// 습관 도장은 지나간 날에도 찍을 수 있다. 단 어제까지, 미래에는 찍지 않는다.
+  /// 목록을 아직 들고 있는 지난 날의 첫날.
+  ///
+  /// 달력으로 직접 열 수 있는 건 어제까지지만, 그보다 앞선 며칠도 자리는 남아 있다.
+  /// 뒤늦게 도착한 완료 표시를 채워 넣을 때 쓴다.
+  DateTime get _archiveFloorDate => _dateFromKey(
+    _getTodayStr(),
+  ).subtract(const Duration(days: DailyResetService.archivedPastDays));
+
+  bool get _isViewingArchivedPastDate =>
+      !_isViewingActualToday &&
+      _activeTodayDate.isBefore(_dateFromKey(_getTodayStr())) &&
+      !_activeTodayDate.isBefore(_archiveFloorDate);
+
+  /// 습관 도장은 지나간 날에도 찍을 수 있다. 목록이 남아 있는 날까지만, 미래에는 찍지 않는다.
   bool get _canWriteHabitLogForActiveDate =>
-      _isViewingActualToday || _isViewingYesterday;
+      _isViewingActualToday || _isViewingArchivedPastDate;
 
   bool get _isViewingPastDate => _activeTodayDate.isBefore(_yesterdayDate);
 

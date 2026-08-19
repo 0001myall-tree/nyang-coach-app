@@ -135,10 +135,16 @@ class DailyResetService {
   /// 날짜별 계획 보관함. 미래 계획과 함께, 자정에 넘어간 어제 목록도 여기 하루 머문다.
   static const String plannedTasksByDateKey = 'nyang_today_tasks_by_date';
 
-  /// 자정 정리로 사라질 어제 목록을 보관함에 하루만 남긴다.
+  /// 지난 날의 목록을 며칠까지 남겨둘지.
   ///
-  /// 전날 완료 표시를 깜빡했거나 자정을 넘겨 끝낸 일을, '오늘' 탭에서 어제를
-  /// 열어 채울 수 있게 하려는 것이다. 이틀 전부터는 열 수 없으므로 같이 지운다.
+  /// 하루만 남기면, 밤에 냥냥이에게 "다 했어"를 누르고 이틀 뒤에 들어온 사람은
+  /// 그 표시를 잃는다. 오랜만에 여는 사람을 위해 사흘까지 들고 있는다.
+  /// (오늘 탭에서 직접 열어볼 수 있는 건 어제까지다. 그 앞은 채워 넣을 자리로만 쓴다.)
+  static const int archivedPastDays = 3;
+
+  /// 자정 정리로 사라질 지난 목록을 보관함에 며칠 남긴다.
+  ///
+  /// 전날 완료 표시를 깜빡했거나 자정을 넘겨 끝낸 일을 나중에 채울 수 있게 하려는 것이다.
   static Future<void> archivePreviousDayTasks({
     required SharedPreferences prefs,
     required String fromDate,
@@ -147,9 +153,9 @@ class DailyResetService {
   }) async {
     final todayDate = DateTime.tryParse(today);
     if (todayDate == null) return;
-    final yesterday = DateFormat(
+    final floor = DateFormat(
       'yyyy-MM-dd',
-    ).format(todayDate.subtract(const Duration(days: 1)));
+    ).format(todayDate.subtract(const Duration(days: archivedPastDays)));
 
     Map<String, dynamic> byDate = {};
     try {
@@ -159,11 +165,13 @@ class DailyResetService {
       }
     } catch (_) {}
 
-    // 하루를 건너뛰고 앱을 연 경우, 남길 수 있는 건 바로 어제뿐이다.
-    if (fromDate == yesterday && tasksJson.isNotEmpty) {
+    // 며칠 만에 열었다면 fromDate가 보관 범위 밖일 수 있다. 그때는 남길 것이 없다.
+    if (tasksJson.isNotEmpty &&
+        fromDate.compareTo(floor) >= 0 &&
+        fromDate.compareTo(today) < 0) {
       byDate[fromDate] = tasksJson;
     }
-    byDate.removeWhere((key, _) => key.compareTo(yesterday) < 0);
+    byDate.removeWhere((key, _) => key.compareTo(floor) < 0);
 
     await prefs.setString(plannedTasksByDateKey, jsonEncode(byDate));
   }
@@ -505,13 +513,13 @@ class DailyResetService {
           }
         }
         // 키는 yyyy-MM-dd 형식이라 문자열 비교가 날짜 순서와 일치한다.
-        // 어제는 남긴다. '오늘' 탭에서 어제를 열어 완료 표시를 채울 수 있어야 한다.
+        // 지난 며칠은 남긴다. 뒤늦게 도착한 완료 표시를 채울 자리가 필요하다.
         final todayDate = DateTime.tryParse(today);
         final keepFrom = todayDate == null
             ? today
-            : DateFormat(
-                'yyyy-MM-dd',
-              ).format(todayDate.subtract(const Duration(days: 1)));
+            : DateFormat('yyyy-MM-dd').format(
+                todayDate.subtract(const Duration(days: archivedPastDays)),
+              );
         plannedMap.removeWhere((key, _) => key.compareTo(keepFrom) < 0);
         await prefs.setString(
           'nyang_today_tasks_by_date',

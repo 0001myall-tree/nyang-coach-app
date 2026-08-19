@@ -43,14 +43,18 @@ object OngoingNudgeScheduler {
     fun scheduleIn(context: Context, delayMillis: Long, stage: String) {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         val triggerAt = System.currentTimeMillis() + delayMillis
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            alarmManager.setAndAllowWhileIdle(
-                AlarmManager.RTC_WAKEUP,
-                triggerAt,
-                pendingIntent(context, stage),
-            )
+        val intent = pendingIntent(context, stage)
+
+        // 느슨한 예약은 절전 중인 기기에서 한참 뒤에야 울리거나 아예 묻힌다.
+        // 국내 안드로이드는 사실상 삼성이고 앱 절전이 기본으로 켜져 있어서,
+        // 30분 뒤에 나가야 할 냥냥이가 두 시간 뒤에 나가는 일이 생긴다.
+        // 앱이 이미 정확한 알람 권한을 갖고 있으니 그걸 쓴다.
+        val canBeExact = Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
+            alarmManager.canScheduleExactAlarms()
+        if (canBeExact) {
+            alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, intent)
         } else {
-            alarmManager.set(AlarmManager.RTC_WAKEUP, triggerAt, pendingIntent(context, stage))
+            alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, intent)
         }
     }
 

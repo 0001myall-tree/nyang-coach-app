@@ -18,25 +18,40 @@ class OngoingNudgeAnswer {
   bool get isPaused => action == 'paused';
 }
 
-/// 시작해둔 일정이 진행 중인데 사용자가 다른 앱으로 새어 나갔을 때,
-/// 화면 가장자리에 냥냥이를 잠깐 내보내는 기능.
+/// 시작해둔 일정을 앱 밖에서도 떠올릴 수 있게 하는 기능.
 ///
 /// 재촉이 아니라 "아 맞다, 나 이거 하던 중이었지"의 계기만 준다. 그래서
-/// 소리도 진동도 없고, 무시하면 스스로 사라진다. 판단은 전부 네이티브가 한다 —
-/// 앱이 꺼져 있는 동안에도 돌아가야 하기 때문이다.
+/// 소리도 진동도 없고, 눌러야만 무슨 일이 일어난다.
 ///
-/// 안드로이드 전용이다. iOS는 다른 앱 위에 무언가를 그리는 것이 아예 막혀 있다.
+/// 보여주는 방법은 두 나라가 다르다. 앱이 부르는 말(start/stop)은 같고,
+/// 그 뒤는 네이티브가 알아서 한다.
+///
+/// - 안드로이드: 30분 뒤 폰으로 딴 걸 보고 있으면 다른 앱 위에 냥냥이가
+///   잠깐 나타났다 사라진다. 판단도 네이티브가 한다 — 앱이 꺼져 있는
+///   동안에도 돌아가야 하기 때문이다.
+/// - 아이폰: 다른 앱 위에 그리는 것이 아예 막혀 있다. 대신 일정이 도는 동안
+///   잠금화면과 다이내믹 아일랜드에 조용히 머문다(라이브 액티비티). 딴짓
+///   중인지는 알 수 없어서 시작하자마자 뜬다.
 class OngoingTaskNudgeService {
   static const MethodChannel _channel = MethodChannel(
     'nyang_coach/ongoing_nudge',
   );
 
-  /// 테스터에게만 켜주는 스위치.
-  static const String enabledKey = 'nyang_ongoing_nudge_enabled';
-  static const String _resultKey = 'nyang_nudge_pending_result';
-  static const String _foregroundKey = 'nyang_app_in_foreground';
+  /// 이 기능이 쓰는 키는 'nyang_'으로 시작하지 않는다.
+  ///
+  /// 그 접두어가 붙은 값은 통째로 클라우드에 올라갔다 내려온다. 여기 담기는 건
+  /// 전부 이 기기에서만 뜻이 있는 것들이라 — 이 폰에 오버레이 권한이 있는지,
+  /// 지금 이 폰에서 뭘 눌렀는지 — 다른 기기 값에 덮이면 안 된다.
+  static const String enabledKey = 'ongoing_nudge_enabled';
+  static const String _resultKey = 'ongoing_nudge_pending_result';
+  static const String _foregroundKey = 'ongoing_nudge_app_foreground';
 
   static bool get isSupported =>
+      !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.android ||
+          defaultTargetPlatform == TargetPlatform.iOS);
+
+  static bool get _isAndroid =>
       !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
 
   static Future<bool> isEnabled() async {
@@ -51,11 +66,15 @@ class OngoingTaskNudgeService {
     if (!value) await stop();
   }
 
-  /// "다른 앱 위에 표시" 권한. 팝업으로 물을 수 없어서 시스템 설정으로 보내야 한다.
-  static Future<bool> canDrawOverlays() async {
+  /// 지금 이 기기에서 실제로 보여줄 수 있는 상태인지.
+  ///
+  /// 안드로이드는 "다른 앱 위에 표시" 권한, 아이폰은 라이브 액티비티 허용 여부다.
+  /// 둘 다 팝업으로 물을 수 없어서 시스템 설정으로 보내야 한다.
+  static Future<bool> isAvailable() async {
     if (!isSupported) return false;
     try {
-      return await _channel.invokeMethod<bool>('canDrawOverlays') ?? false;
+      final method = _isAndroid ? 'canDrawOverlays' : 'isAvailable';
+      return await _channel.invokeMethod<bool>(method) ?? false;
     } on PlatformException {
       return false;
     } on MissingPluginException {
@@ -63,10 +82,12 @@ class OngoingTaskNudgeService {
     }
   }
 
-  static Future<void> openOverlaySettings() async {
+  static Future<void> openSystemSettings() async {
     if (!isSupported) return;
     try {
-      await _channel.invokeMethod('openOverlaySettings');
+      await _channel.invokeMethod(
+        _isAndroid ? 'openOverlaySettings' : 'openSystemSettings',
+      );
     } on PlatformException {
       // 설정 화면이 없는 기기라면 할 수 있는 게 없다.
     } on MissingPluginException {
@@ -74,9 +95,38 @@ class OngoingTaskNudgeService {
     }
   }
 
+  /// 기기가 앱을 재워서 냥냥이가 제때 못 나갈 상태인지.
+  ///
+  /// 국내 안드로이드는 사실상 삼성이고 "사용하지 않는 앱 절전"이 기본으로
+  /// 켜져 있다. 그대로 두면 30분 뒤에 나가야 할 냥냥이가 한참 뒤에 나가거나
+  /// 아예 안 나간다. 기능이 고장 난 것처럼 보이는 가장 큰 원인이다.
+  static Future<bool> isBatterySleepRestricted() async {
+    if (!_isAndroid) return false;
+    try {
+      return await _channel.invokeMethod<bool>('isBatterySleepRestricted') ??
+          false;
+    } on PlatformException {
+      return false;
+    } on MissingPluginException {
+      return false;
+    }
+  }
+
+  static Future<void> openBatterySettings() async {
+    if (!_isAndroid) return;
+    try {
+      await _channel.invokeMethod('openBatterySettings');
+    } on PlatformException {
+      //
+    } on MissingPluginException {
+      //
+    }
+  }
+
   /// 냥냥코치를 보고 있는 동안에는 나가지 않는다. 앱 안에 이미 진행 중 카드가 있다.
+  /// 안드로이드에서만 쓰는 신호다.
   static Future<void> setAppForeground(bool value) async {
-    if (!isSupported) return;
+    if (!_isAndroid) return;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_foregroundKey, value);
   }
@@ -85,23 +135,84 @@ class OngoingTaskNudgeService {
   ///
   /// 어떤 코치를 쓰든 밖으로 나가는 얼굴은 냥냥이 하나다. 앱의 상징이라,
   /// 다른 앱 위에서는 이게 냥냥코치라는 걸 한눈에 알아야 한다.
+  /// [elapsedSeconds]는 이미 쌓인 실행 시간. 아이폰에서 흐르는 시계를 그만큼
+  /// 앞당겨 시작해야 이어서 흐르는 것처럼 보인다.
   static Future<void> start({
     required String taskId,
     required String taskText,
+    int elapsedSeconds = 0,
   }) async {
     if (!isSupported) return;
     if (!await isEnabled()) return;
-    if (!await canDrawOverlays()) return;
+    if (!await isAvailable()) return;
     try {
+      final startedAt = DateTime.now().subtract(
+        Duration(seconds: elapsedSeconds),
+      );
       await _channel.invokeMethod('start', {
         'taskId': taskId,
         'taskText': taskText,
+        'startedAtMillis': startedAt.millisecondsSinceEpoch,
       });
     } on PlatformException {
       // 실패해도 앱 동작에는 영향이 없다.
     } on MissingPluginException {
       //
     }
+  }
+
+  /// 저장된 할 일을 보고 지금 상태에 맞춰준다.
+  ///
+  /// 플래너 화면이 열려 있지 않아도 맞춰져야 한다. 앱을 강제 종료했다 켜면
+  /// 아이폰 잠금화면에 다 끝난 일정이 계속 떠 있을 수 있고, 안드로이드는
+  /// 재부팅 뒤 예약이 비어 있을 수 있다.
+  static Future<void> reconcile() async {
+    if (!isSupported) return;
+    if (!await isEnabled()) {
+      await stop();
+      return;
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.reload();
+    final raw = prefs.getString('nyang_tasks');
+    if (raw == null || raw.isEmpty) {
+      await stop();
+      return;
+    }
+
+    Map<String, dynamic>? running;
+    try {
+      for (final item in jsonDecode(raw) as List) {
+        if (item is! Map) continue;
+        if (item['done'] == true) continue;
+        if (item['inProgress'] != true) continue;
+        running = Map<String, dynamic>.from(item);
+        break;
+      }
+    } catch (_) {
+      return;
+    }
+
+    if (running == null) {
+      await stop();
+      return;
+    }
+
+    // 쌓인 시간 + 지금 돌고 있는 구간.
+    var elapsed = (running['elapsedSeconds'] as num?)?.toInt() ?? 0;
+    final runStartedAt = DateTime.tryParse(
+      running['runStartedAt']?.toString() ?? '',
+    );
+    if (runStartedAt != null) {
+      elapsed += DateTime.now().difference(runStartedAt).inSeconds;
+    }
+
+    await start(
+      taskId: running['id'].toString(),
+      taskText: running['text']?.toString() ?? '',
+      elapsedSeconds: elapsed < 0 ? 0 : elapsed,
+    );
   }
 
   static Future<void> stop() async {
@@ -119,8 +230,9 @@ class OngoingTaskNudgeService {
   ///
   /// 네이티브가 앱 밖에서 저장한 값이라, 메모리에 남아 있는 옛 값을 보지 않도록
   /// 반드시 다시 읽고 시작한다.
+  /// 안드로이드에만 있다. 아이폰 라이브 액티비티에는 버튼을 두지 않았다.
   static Future<OngoingNudgeAnswer?> takeAnswer() async {
-    if (!isSupported) return null;
+    if (!_isAndroid) return null;
     final prefs = await SharedPreferences.getInstance();
     await prefs.reload();
     final raw = prefs.getString(_resultKey);

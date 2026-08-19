@@ -112,6 +112,13 @@ class MainActivity : FlutterFragmentActivity() {
                         openOverlaySettings()
                         result.success(null)
                     }
+                    "isBatterySleepRestricted" -> {
+                        result.success(isBatterySleepRestricted())
+                    }
+                    "openBatterySettings" -> {
+                        openBatterySettings()
+                        result.success(null)
+                    }
                     "start" -> {
                         val taskId = call.argument<String>("taskId")
                         val taskText = call.argument<String>("taskText").orEmpty()
@@ -149,6 +156,38 @@ class MainActivity : FlutterFragmentActivity() {
             Uri.parse("package:$packageName"),
         )
         startActivity(intent)
+    }
+
+    /**
+     * 기기가 앱을 재워버릴 수 있는 상태인가.
+     *
+     * 삼성의 "사용하지 않는 앱 절전"처럼, 앱이 걸어둔 예약을 기기가 미루거나
+     * 묻어버리는 설정이다. 이 상태면 냥냥이가 제때 못 나가거나 아예 못 나간다.
+     */
+    private fun isBatterySleepRestricted(): Boolean {
+        val power = getSystemService(Context.POWER_SERVICE) as PowerManager
+        return !power.isIgnoringBatteryOptimizations(packageName)
+    }
+
+    /**
+     * 배터리 최적화 목록을 연다.
+     *
+     * 한 번에 끄는 시스템 팝업도 있지만 그건 별도 권한이 필요하고 심사에서
+     * 까다롭게 본다. 목록을 열어주고 사용자가 직접 고르게 한다.
+     */
+    private fun openBatterySettings() {
+        val intent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+        try {
+            startActivity(intent)
+        } catch (e: Exception) {
+            // 이 화면이 없는 기기라면 앱 정보 화면으로 보낸다.
+            startActivity(
+                Intent(
+                    Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                    Uri.parse("package:$packageName"),
+                ),
+            )
+        }
     }
 
     private fun hasInstalledCatHomeWidget(): Boolean {

@@ -1,5 +1,8 @@
 import SwiftUI
 import WidgetKit
+#if canImport(ActivityKit)
+import ActivityKit
+#endif
 
 private let appGroupId = "group.com.nyang.nyangCoach"
 
@@ -716,10 +719,103 @@ extension View {
     }
 }
 
+
+#if canImport(ActivityKit)
+
+// MARK: - 진행 중인 일정 (라이브 액티비티)
+
+/// 아이폰에서는 다른 앱 위에 그릴 수 없다. 그래서 안드로이드처럼 잠깐 나타났다
+/// 사라지는 대신, 일정이 도는 동안 잠금화면과 다이내믹 아일랜드에 조용히 머문다.
+/// 소리도 진동도 없고, 눌러야만 앱으로 들어온다.
+@available(iOSApplicationExtension 16.1, *)
+struct NyangTaskLiveActivity: Widget {
+    var body: some WidgetConfiguration {
+        ActivityConfiguration(for: NyangTaskActivityAttributes.self) { context in
+            // 잠금화면과 알림센터에 보이는 모습.
+            HStack(spacing: 12) {
+                NyangLiveActivityCat(size: 44)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(context.state.taskText.isEmpty ? "진행 중인 일정" : context.state.taskText)
+                        .font(.system(size: 15, weight: .bold))
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.85)
+                    Text("진행 중")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(.secondary)
+                }
+                Spacer()
+                Text(context.state.startedAt, style: .timer)
+                    .font(.system(size: 20, weight: .heavy, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundColor(Color(red: 0.545, green: 0.486, blue: 1.0))
+                    // 한 시간을 넘기면 "1:05:23"이 되어 자리가 모자란다. 줄여서라도 다 보여준다.
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+                    .fixedSize(horizontal: true, vertical: false)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+        } dynamicIsland: { context in
+            DynamicIsland {
+                DynamicIslandExpandedRegion(.leading) {
+                    NyangLiveActivityCat(size: 36)
+                }
+                DynamicIslandExpandedRegion(.trailing) {
+                    Text(context.state.startedAt, style: .timer)
+                        .font(.system(size: 18, weight: .heavy, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundColor(Color(red: 0.545, green: 0.486, blue: 1.0))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
+                        .frame(maxWidth: 88, alignment: .trailing)
+                }
+                DynamicIslandExpandedRegion(.bottom) {
+                    Text(context.state.taskText.isEmpty ? "진행 중인 일정" : context.state.taskText)
+                        .font(.system(size: 15, weight: .bold))
+                        .lineLimit(1)
+                }
+            } compactLeading: {
+                NyangLiveActivityCat(size: 20)
+            } compactTrailing: {
+                // 알약에서 가장 좁은 자리다. 시간이 길어지면 글자를 줄여서 맞춘다.
+                Text(context.state.startedAt, style: .timer)
+                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundColor(Color(red: 0.545, green: 0.486, blue: 1.0))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.5)
+                    .frame(maxWidth: 56)
+            } minimal: {
+                NyangLiveActivityCat(size: 18)
+            }
+        }
+    }
+}
+
+/// 어느 코치를 쓰든 밖으로 나가는 얼굴은 냥냥이 하나다. 앱의 상징이라서다.
+struct NyangLiveActivityCat: View {
+    let size: CGFloat
+
+    var body: some View {
+        Image("iphonecatwidget1")
+            .resizable()
+            .aspectRatio(contentMode: .fill)
+            .frame(width: size, height: size)
+            .clipShape(Circle())
+    }
+}
+
+#endif
+
 @main
 struct NyangWidgetBundle: WidgetBundle {
     var body: some Widget {
         NyangCharacterWidget()
         NyangCompactWidget()
+        #if canImport(ActivityKit)
+        if #available(iOSApplicationExtension 16.1, *) {
+            NyangTaskLiveActivity()
+        }
+        #endif
     }
 }

@@ -20,6 +20,7 @@ import android.view.View
 import android.view.ViewConfiguration
 import android.view.WindowManager
 import android.widget.ImageView
+import android.widget.Toast
 import android.widget.TextView
 
 /**
@@ -32,6 +33,12 @@ class OngoingNudgeService : Service() {
     companion object {
         private const val CHANNEL_ID = "nyang_ongoing_nudge"
         private const val NOTIFICATION_ID = 7402
+
+        /** 캐릭터 크기. 홈 화면 앱 아이콘만 하다. */
+        private const val BUBBLE_DP = 64
+
+        /** 가장자리 밖으로 내보내는 만큼. 이만큼은 일부러 안 보인다. */
+        private const val EDGE_PEEK_DP = 10
 
         fun show(context: Context) {
             val intent = Intent(context, OngoingNudgeService::class.java)
@@ -117,7 +124,7 @@ class OngoingNudgeService : Service() {
     private fun showBubble() {
         val view = LayoutInflater.from(this).inflate(R.layout.nudge_bubble, null)
         view.findViewById<ImageView>(R.id.nudge_bubble_image)
-            .setImageBitmap(loadCatBitmap(dp(64)))
+            .setImageBitmap(loadCatBitmap(dp(BUBBLE_DP)))
 
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
@@ -129,10 +136,14 @@ class OngoingNudgeService : Service() {
         ).apply {
             gravity = Gravity.TOP or Gravity.END
             // 가장자리에 살짝 걸치게 둔다. 차지하는 자리는 줄고 캐릭터는 그대로 보인다.
-            x = dp(-10)
-            y = OngoingNudgeState.positionY(this@OngoingNudgeService)
-                .takeIf { it >= 0 }
-                ?: defaultY()
+            x = EDGE_PEEK_DP.let { dp(-it) }
+            // 지난번에 옮겨둔 자리를 쓰되, 지금 화면 밖이면 무시한다.
+            // 가로로 눕히거나 기기를 바꾸면 그때 저장한 값이 화면 밖일 수 있다.
+            y = clampY(
+                OngoingNudgeState.positionY(this@OngoingNudgeService)
+                    .takeIf { it >= 0 }
+                    ?: defaultY()
+            )
         }
 
         view.setOnTouchListener(BubbleTouchListener(params))
@@ -145,6 +156,28 @@ class OngoingNudgeService : Service() {
     private fun defaultY(): Int {
         val metrics = resources.displayMetrics
         return (metrics.heightPixels * 0.62f).toInt()
+    }
+
+    /**
+     * 냥냥이가 화면 밖으로 달아나지 않게 잡아둔다.
+     *
+     * 끌어서 옮길 수 있게 해둔 이상, 위아래로 밀어내면 얼굴이 반쯤 잘리거나
+     * 아예 사라져서 다시 부를 방법이 없어진다. 위로는 상태바, 아래로는 제스처
+     * 영역만큼 여백을 남긴다.
+     */
+    private fun clampY(y: Int): Int {
+        val top = dp(28)
+        val bottom = resources.displayMetrics.heightPixels - dp(BUBBLE_DP) - dp(56)
+        if (bottom <= top) return top
+        return y.coerceIn(top, bottom)
+    }
+
+    /** 오른쪽 끝 기준. 음수는 화면 밖으로 걸친 만큼, 클수록 왼쪽으로 온다. */
+    private fun clampX(x: Int): Int {
+        val leftMost = resources.displayMetrics.widthPixels - dp(BUBBLE_DP)
+        val rightMost = dp(-EDGE_PEEK_DP)
+        if (leftMost <= rightMost) return rightMost
+        return x.coerceIn(rightMost, leftMost)
     }
 
     private inner class BubbleTouchListener(
@@ -176,8 +209,8 @@ class OngoingNudgeService : Service() {
                         moved = true
                     }
                     if (moved) {
-                        params.x = startX + dx
-                        params.y = startY + dy
+                        params.x = clampX(startX + dx)
+                        params.y = clampY(startY + dy)
                         windowManager.updateViewLayout(view, params)
                     }
                     return true
@@ -245,8 +278,17 @@ class OngoingNudgeService : Service() {
     private fun answer(action: String) {
         val taskId = OngoingNudgeState.taskId(this)
         if (taskId != null) {
+            // 지금 바로 적어 넣는다. 며칠 뒤에 앱을 열어도 이미 채워져 있어야 한다.
+            OngoingNudgeAnswerWriter.apply(this, taskId, done = action == "done")
+            // 쪽지도 남긴다. 앱이 열리면 정식 경로가 한 번 더 정확히 훑는다.
             OngoingNudgeState.writeResult(this, taskId, action)
         }
+        // 카드가 그냥 사라지면 눌린 건지 알 수 없다. 소리 없이 한 줄만 남긴다.
+        Toast.makeText(
+            this,
+            if (action == "done") "다 했다고 기록했어!" else "잠깐 멈춘 걸로 해둘게",
+            Toast.LENGTH_SHORT,
+        ).show()
         OngoingNudgeState.clear(this)
         OngoingNudgeScheduler.cancel(this)
         stopEverything()

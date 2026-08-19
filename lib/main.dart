@@ -104,6 +104,8 @@ class _NyangCoachAppState extends State<NyangCoachApp>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     NotificationService().recordAppActive();
+    OngoingTaskNudgeService.setAppForeground(true);
+    unawaited(OngoingTaskNudgeService.reconcile());
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(NotificationService().requestNotificationPermissions());
     });
@@ -122,6 +124,8 @@ class _NyangCoachAppState extends State<NyangCoachApp>
       NotificationService().recordAppActive();
       // 앱을 보고 있는 동안에는 냥냥이가 다른 앱 위로 나가지 않는다.
       OngoingTaskNudgeService.setAppForeground(true);
+      // 플래너를 열지 않아도, 끝난 일정이 잠금화면에 남아 있는 일은 없어야 한다.
+      OngoingTaskNudgeService.reconcile();
     }
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached) {

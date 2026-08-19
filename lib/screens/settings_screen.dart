@@ -994,9 +994,11 @@ class _SettingsScreenState extends State<SettingsScreen>
 
   /// 진행 중 냥냥이 켜고 끄기.
   ///
-  /// "다른 앱 위에 표시"는 팝업으로 물을 수 없어서, 켜는 순간 설명을 먼저 읽히고
-  /// 시스템 설정으로 보낸다. 권한이 없으면 켜도 아무것도 나타나지 않기 때문이다.
+  /// 안드로이드는 "다른 앱 위에 표시" 권한이, 아이폰은 라이브 액티비티 허용이
+  /// 있어야 한다. 둘 다 팝업으로 물을 수 없어서, 켜는 순간 설명을 먼저 읽히고
+  /// 시스템 설정으로 보낸다. 없으면 켜도 아무것도 나타나지 않기 때문이다.
   Future<void> _toggleOngoingNudge() async {
+    final isAndroid = Platform.isAndroid;
     final turningOn = !_ongoingNudgeEnabled;
     await OngoingTaskNudgeService.setEnabled(turningOn);
     if (!mounted) return;
@@ -1005,22 +1007,26 @@ class _SettingsScreenState extends State<SettingsScreen>
     if (!turningOn) {
       await _showAlarmNoticeDialog(
         title: '🐾 진행 중 냥냥이를 껐어요',
-        message: '이제 다른 앱을 볼 때 냥냥이가 나타나지 않아요.',
+        message: isAndroid
+            ? '이제 다른 앱을 볼 때 냥냥이가 나타나지 않아요.'
+            : '이제 잠금화면에 진행 중인 일정이 표시되지 않아요.',
       );
       return;
     }
 
-    if (!await OngoingTaskNudgeService.canDrawOverlays()) {
+    if (!await OngoingTaskNudgeService.isAvailable()) {
       if (!mounted) return;
       await _showAlarmNoticeDialog(
-        title: '🐾 다른 앱 위에 표시를 켜주세요',
-        message:
-            '이 권한이 없으면 냥냥이가 다른 앱 위로 나올 수 없어요.\n\n'
-            '설정에서 냥냥코치를 찾아 "다른 앱 위에 표시"를 켜주세요.',
+        title: isAndroid ? '🐾 다른 앱 위에 표시를 켜주세요' : '🐾 실시간 활동을 켜주세요',
+        message: isAndroid
+            ? '이 권한이 없으면 냥냥이가 다른 앱 위로 나올 수 없어요.\n\n'
+                  '설정에서 냥냥코치를 찾아 "다른 앱 위에 표시"를 켜주세요.'
+            : '이 설정이 꺼져 있으면 잠금화면에 아무것도 뜨지 않아요.\n\n'
+                  '설정에서 냥냥코치를 찾아 "실시간 활동"을 켜주세요.',
         actionLabel: '설정 열기',
         closeLabel: '나중에',
         onAction: () async {
-          await OngoingTaskNudgeService.openOverlaySettings();
+          await OngoingTaskNudgeService.openSystemSettings();
         },
       );
       return;
@@ -1028,11 +1034,32 @@ class _SettingsScreenState extends State<SettingsScreen>
 
     await _showAlarmNoticeDialog(
       title: '🐾 진행 중 냥냥이를 켰어요',
-      message:
-          '일정을 시작하고 30분이 지난 뒤, 폰으로 다른 걸 보고 있으면 '
-          '냥냥이가 화면 가장자리에 잠깐 나타나요.\n\n'
-          '소리도 진동도 없고, 그냥 두면 스스로 사라져요.',
+      message: isAndroid
+          ? '일정을 시작하고 30분이 지난 뒤, 폰으로 다른 걸 보고 있으면 '
+                '냥냥이가 화면 가장자리에 잠깐 나타나요.\n\n'
+                '소리도 진동도 없고, 그냥 두면 스스로 사라져요.'
+          : '일정을 시작하면 잠금화면과 다이내믹 아일랜드에 냥냥이와 흐른 시간이 '
+                '조용히 떠 있어요.\n\n'
+                '소리도 진동도 없고, 완료하거나 멈추면 사라져요.',
     );
+
+    // 절전이 걸려 있으면 냥냥이가 제때 못 나간다. 켠 직후 한 번만 짚어준다.
+    if (!mounted) return;
+    if (await OngoingTaskNudgeService.isBatterySleepRestricted()) {
+      if (!mounted) return;
+      await _showAlarmNoticeDialog(
+        title: '🔋 한 가지만 더 확인해주세요',
+        message:
+            '지금 설정으로는 휴대폰이 냥냥코치를 재워둘 수 있어요. '
+            '그러면 냥냥이가 늦게 나타나거나 아예 나타나지 않아요.\n\n'
+            '배터리 설정에서 냥냥코치를 찾아 "제한 없음"으로 바꿔주세요.',
+        actionLabel: '설정 열기',
+        closeLabel: '나중에',
+        onAction: () async {
+          await OngoingTaskNudgeService.openBatterySettings();
+        },
+      );
+    }
   }
 
   void _showCoreReminderSettingsModal() {

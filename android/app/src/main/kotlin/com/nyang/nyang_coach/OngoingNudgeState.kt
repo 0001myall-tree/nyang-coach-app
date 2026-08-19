@@ -11,26 +11,30 @@ import android.provider.Settings
  * "flutter." 접두어를 붙이고, 네이티브만 쓰는 값(마지막 위치)은 접두어 없이 둔다.
  * 접두어가 붙은 값은 Flutter 쪽 플러그인이 전부 훑기 때문에 타입이 어긋나면 안 된다
  * (정수는 반드시 Long).
+ *
+ * 이름은 'nyang_'으로 시작하지 않는다. 그 접두어가 붙은 값은 통째로 클라우드에
+ * 올라갔다 내려오는데, 여기 담기는 건 전부 이 기기에서만 뜻이 있는 것들이다.
  */
 object OngoingNudgeState {
     private const val PREFS = "FlutterSharedPreferences"
 
     /** 테스터에게만 켜주는 스위치. 꺼져 있으면 아무것도 하지 않는다. */
-    private const val KEY_ENABLED = "flutter.nyang_ongoing_nudge_enabled"
-    private const val KEY_TASK_ID = "flutter.nyang_nudge_task_id"
-    private const val KEY_TASK_TEXT = "flutter.nyang_nudge_task_text"
+    private const val KEY_ENABLED = "flutter.ongoing_nudge_enabled"
+    private const val KEY_TASK_ID = "flutter.ongoing_nudge_task_id"
+    private const val KEY_TASK_TEXT = "flutter.ongoing_nudge_task_text"
+    private const val KEY_RESULT = "flutter.ongoing_nudge_pending_result"
+
+    /** 냥냥코치가 화면 앞에 있는지. 앱 안에서는 이미 진행 중 카드가 보이므로 나가지 않는다. */
+    private const val KEY_APP_FOREGROUND = "flutter.ongoing_nudge_app_foreground"
+
+    /** 사용자가 옮겨둔 세로 위치. 네이티브만 쓴다. */
+    private const val KEY_POSITION_Y = "ongoing_nudge_position_y"
+
     /**
      * 어떤 코치를 쓰든 화면 밖으로 나가는 얼굴은 냥냥이 하나다.
      * 앱의 상징이고, 다른 앱 위에서는 이게 냥냥코치라는 걸 한눈에 알아야 한다.
      */
     const val IMAGE_ASSET = "flutter_assets/assets/images/cat_nobg.png"
-    private const val KEY_RESULT = "flutter.nyang_nudge_pending_result"
-
-    /** 냥냥코치가 화면 앞에 있는지. 앱 안에서는 이미 진행 중 카드가 보이므로 나가지 않는다. */
-    private const val KEY_APP_FOREGROUND = "flutter.nyang_app_in_foreground"
-
-    /** 사용자가 옮겨둔 세로 위치. 네이티브만 쓴다. */
-    private const val KEY_POSITION_Y = "nyang_nudge_position_y"
 
     private fun prefs(context: Context) =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)

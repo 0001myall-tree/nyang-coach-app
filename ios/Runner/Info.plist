@@ -4,6 +4,9 @@
 <dict>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
+	<!-- 진행 중인 일정을 잠금화면·다이내믹 아일랜드에 띄우기 위해 필요하다 -->
+	<key>NSSupportsLiveActivities</key>
+	<true/>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>

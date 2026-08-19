@@ -9,10 +9,18 @@
     android:clickable="true"
     android:focusable="false">
 
-    <LinearLayout
+    <!-- 가로로 눕히면 카드가 화면보다 길어질 수 있다. 잘리는 대신 스크롤되게 둔다. -->
+    <ScrollView
         android:layout_width="300dp"
         android:layout_height="wrap_content"
         android:layout_gravity="center"
+        android:clipToPadding="false"
+        android:fillViewport="false"
+        android:scrollbars="none">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
         android:background="@drawable/nudge_card_bg"
         android:clickable="true"
         android:orientation="vertical"
@@ -25,7 +33,9 @@
             android:id="@+id/nudge_card_title"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:ellipsize="end"
             android:lineSpacingExtra="4dp"
+            android:maxLines="4"
             android:textColor="#3D3A4E"
             android:textSize="16sp"
             android:textStyle="bold" />
@@ -74,4 +84,5 @@
             android:textColor="#6B6676"
             android:textSize="15sp" />
     </LinearLayout>
+    </ScrollView>
 </FrameLayout>
