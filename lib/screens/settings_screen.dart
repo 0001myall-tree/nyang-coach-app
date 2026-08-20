@@ -1042,7 +1042,8 @@ class _SettingsScreenState extends State<SettingsScreen>
           message:
               '지금 홈으로 나가거나 다른 앱을 열어보세요. 화면 위로 냥냥이 배너가 '
               '내려옵니다.\n\n'
-              '배너를 길게 누르면 "시작할게"와 "좀 더 있다가"가 나와요.',
+              '배너를 길게 누르거나 아래로 당기면 "시작할게"와 "좀 더 있다가"가 '
+              '나와요. 그냥 누르면 앱이 열려요.',
         );
         return;
       }

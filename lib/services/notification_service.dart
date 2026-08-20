@@ -259,7 +259,10 @@ class NotificationService {
           defaultPresentBanner: true,
           defaultPresentList: true,
           defaultPresentSound: true,
-          notificationCategories: [nyangBannerCategory],
+          notificationCategories: [
+            nyangBannerCategory,
+            nyangBannerRunningCategory,
+          ],
         );
     final InitializationSettings settings = InitializationSettings(
       android: androidSettings,
