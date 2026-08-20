@@ -2291,7 +2291,11 @@ class _TasksScreenState extends State<TasksScreen>
       // 아이폰은 처음부터 켜져 있다. 물어볼 것은 없지만, 시스템에서 실시간
       // 활동이 꺼져 있으면 켜져 있어도 아무것도 뜨지 않는다. 그 한 가지만
       // 짚어준다 — 켜졌다고 적힌 채 영영 안 뜨는 게 제일 나쁘다.
+      //
+      // 다이내믹 아일랜드가 없는 기종은 라이브 액티비티를 쓰지 않는다. 배너가
+      // 대신하므로 실시간 활동을 켜달라고 할 이유가 없다.
       if (_onAndroid) return;
+      if (!await OngoingTaskNudgeService.showsOverOtherApps()) return;
       if (await OngoingTaskNudgeService.isAvailable()) return;
       await Future.delayed(const Duration(milliseconds: 900));
       if (!mounted) return;
@@ -2326,7 +2330,10 @@ class _TasksScreenState extends State<TasksScreen>
     await OngoingTaskNudgeService.setEnabled(true);
     // 방금 시작한 일정을 바로 맡긴다. 다음 저장까지 기다리면 첫 일정만 빈다.
     await _syncOngoingNudge();
-    final available = await OngoingTaskNudgeService.isAvailable();
+    final needsLiveActivity =
+        _onAndroid || await OngoingTaskNudgeService.showsOverOtherApps();
+    final available =
+        !needsLiveActivity || await OngoingTaskNudgeService.isAvailable();
     if (!mounted) return;
 
     if (!available) {

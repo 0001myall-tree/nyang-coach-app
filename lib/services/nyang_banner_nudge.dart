@@ -71,12 +71,13 @@ class NyangBannerNudge {
 
   /// 이 기기가 배너로 찾아가야 하는 기기인지.
   ///
-  /// 다른 앱 위에 냥냥이를 직접 보여줄 수 있으면 배너는 군더더기다.
+  /// 아이폰이면 기종을 가리지 않는다. 다이내믹 아일랜드가 있어도 배너가 필요하다 —
+  /// 알약은 얼마나 지났는지를 보여줄 뿐 아무것도 묻지 않고, 펼쳐도 누를 것이 없어서
+  /// 답하려면 앱을 열어야 한다. 게다가 시작하기 전에는 알약 자체가 없다.
+  /// 라이브 액티비티는 표시고 배너는 부름이라, 하는 일이 겹치지 않는다.
   static Future<bool> isNeededHere() async {
     if (!_isIOS) return false;
-    if (!await OngoingTaskNudgeService.isEnabled()) return false;
-    if (!await OngoingTaskNudgeService.showsOverOtherApps()) return true;
-    return false;
+    return OngoingTaskNudgeService.isEnabled();
   }
 
   /// 저장된 할 일을 보고 다음 배너를 걸어둔다. 걸 것이 없으면 지운다.

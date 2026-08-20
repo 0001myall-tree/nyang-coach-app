@@ -1099,7 +1099,11 @@ class _SettingsScreenState extends State<SettingsScreen>
       return;
     }
 
-    if (!await OngoingTaskNudgeService.isAvailable()) {
+    // 라이브 액티비티가 필요한 것은 다이내믹 아일랜드가 있는 아이폰뿐이다.
+    // 없는 기종은 배너가 대신하므로, 실시간 활동을 켜달라고 할 이유가 없다.
+    final needsLiveActivity =
+        isAndroid || await OngoingTaskNudgeService.showsOverOtherApps();
+    if (needsLiveActivity && !await OngoingTaskNudgeService.isAvailable()) {
       if (!mounted) return;
       await _showAlarmNoticeDialog(
         title: isAndroid ? '🐾 다른 앱 위에 표시를 켜주세요' : '🐾 실시간 활동을 켜주세요',
@@ -1143,7 +1147,10 @@ class _SettingsScreenState extends State<SettingsScreen>
 
     // 배너로 찾아가는 아이폰은 인사와 안내가 한 장이다. 배너가 얼마나 머무를지는
     // 앱이 아니라 배너 스타일 설정이 정하므로, 그 길을 여기서 함께 낸다.
-    final needsBanner = await NyangBannerNudge.isNeededHere();
+    // 이미 "지속"으로 해둔 사람에게는 부탁할 것이 없다.
+    final needsBanner =
+        await NyangBannerNudge.isNeededHere() &&
+        !await OngoingTaskNudgeService.isBannerPersistent();
     if (!mounted) return;
 
     await _showAlarmNoticeDialog(
@@ -1155,11 +1162,11 @@ class _SettingsScreenState extends State<SettingsScreen>
                 '시작하는 걸 잊었을 때요.\n\n'
                 '소리도 진동도 없고, 그냥 두면 스스로 사라져요.'
           : await _iosNudgeDescription(),
-      actionLabel: needsBanner ? '설정 열기' : null,
+      actionLabel: needsBanner ? '배너 설정 열기' : null,
       closeLabel: needsBanner ? '나중에' : '확인',
       onAction: needsBanner
           ? () async {
-              await OngoingTaskNudgeService.openSystemSettings();
+              await OngoingTaskNudgeService.openNotificationSettings();
             }
           : null,
     );
@@ -1212,19 +1219,25 @@ class _SettingsScreenState extends State<SettingsScreen>
   /// 들어오지만, 없으면 잠금화면에서만 보인다 — 그건 딴짓을 막아주는 것이 아니라
   /// 진행 중이라는 표시다. 같은 문구로 안내하면 한쪽에게는 지키지 못할 약속이 된다.
   Future<String> _iosNudgeDescription() async {
+    // 배너는 어느 아이폰에나 간다. 다이내믹 아일랜드가 있는 기종은 거기에 더해
+    // 알약이 계속 보일 뿐이다.
+    final banner =
+        '시작할 시각이 되면, 그리고 시작하고 30분이 지나면 화면 위로 '
+        '"냥냥이 배너"가 내려와요. 거기서 바로 시작하거나 답할 수 있어요.'
+        // 이미 "지속"으로 해둔 사람에게는 이 줄이 군더더기다.
+        '${await OngoingTaskNudgeService.isBannerPersistent() ? '' : '\n\n'
+            '배너가 금방 사라지지 않게 하려면 배너 스타일을 "지속"으로 '
+            '바꿔주세요.'}';
+
     if (await OngoingTaskNudgeService.showsOverOtherApps()) {
-      return '일정을 시작하면 다른 앱을 보는 중에도 화면 맨 위에 냥냥이가 작게 '
-          '남아 있어요.\n\n'
-          '소리도 진동도 없고, 완료하거나 멈추면 사라져요.';
+      return '일정이 도는 동안에는 다른 앱을 봐도 화면 맨 위에 냥냥이가 작게 '
+          '남아 있어요.\n\n$banner';
     }
-    // 이 기종에서 이 기능이 하는 일은 배너 하나다. 잠금화면에도 뜨긴 하지만
-    // 그건 딴짓을 막아주지 않으니 여기서 말하지 않는다 — 켜는 사람이 기대할
-    // 것은 딴짓하는 중에 일어나는 일이어야 한다.
+    // 이 기종은 배너가 전부다. 잠금화면에도 뜨긴 하지만 그건 딴짓을 막아주지
+    // 않으니 여기서 말하지 않는다 — 켜는 사람이 기대할 것은 딴짓하는 중에
+    // 일어나는 일이어야 한다.
     return '이 아이폰은 다른 앱 위에 냥냥이를 띄울 수 없어서, 딴짓할 때 '
-        '"냥냥이 배너"로 찾아가요.\n\n'
-        '시작할 시각을 정해둔 일정은 그 시각이 되면 화면 위로 배너가 내려와요. '
-        '거기서 바로 시작할 수 있어요.\n\n'
-        '배너가 금방 사라지지 않게 하려면 배너 스타일을 "지속"으로 바꿔주세요.';
+        '배너로 찾아가요.\n\n$banner';
   }
 
   /// 켜져 있는 동안 이 줄을 눌렀을 때 무엇을 할지.

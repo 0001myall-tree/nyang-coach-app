@@ -17044,7 +17044,13 @@ ${Prompts.outputRulesTail}$coachOfferTaskRule$halmaeHint$resistanceTurnDirective
 
     unawaited(AnalyticsService.logFeatureUsage('ongoing_nudge_offer_yes'));
     await OngoingTaskNudgeService.setEnabled(true);
-    final available = await OngoingTaskNudgeService.isAvailable();
+    // 다이내믹 아일랜드가 없는 아이폰은 라이브 액티비티를 쓰지 않는다. 배너가
+    // 대신하므로 실시간 활동이 꺼져 있어도 켜달라고 할 이유가 없다.
+    final overOtherApps = await OngoingTaskNudgeService.showsOverOtherApps();
+    final needsLiveActivity =
+        defaultTargetPlatform == TargetPlatform.android || overOtherApps;
+    final available =
+        !needsLiveActivity || await OngoingTaskNudgeService.isAvailable();
     if (!mounted) return;
 
     if (!available) {
@@ -17053,11 +17059,7 @@ ${Prompts.outputRulesTail}$coachOfferTaskRule$halmaeHint$resistanceTurnDirective
       await OngoingTaskNudgeService.openSystemSettings();
       return;
     }
-    _injectAiMessage(
-      _ongoingNudgeAcceptText(
-        await OngoingTaskNudgeService.showsOverOtherApps(),
-      ),
-    );
+    _injectAiMessage(_ongoingNudgeAcceptText(overOtherApps));
   }
 
   String get _ongoingNudgeDeclineText {

@@ -133,6 +133,36 @@ class OngoingTaskNudgeService {
     }
   }
 
+  /// 배너가 누를 때까지 남아 있는 설정인지("지속").
+  ///
+  /// 앱이 정할 수 없는 값이라 부탁밖에 할 수 없지만, 어느 쪽인지는 읽을 수 있다.
+  /// 이미 바꿔둔 사람에게 또 부탁하지 않으려면 이것부터 봐야 한다.
+  static Future<bool> isBannerPersistent() async {
+    if (!isSupported || _isAndroid) return true;
+    try {
+      return await _channel.invokeMethod<bool>('isBannerPersistent') ?? true;
+    } on PlatformException {
+      return true;
+    } on MissingPluginException {
+      return true;
+    }
+  }
+
+  /// 이 앱의 알림 설정 화면을 바로 연다. 아이폰에만 있다.
+  static Future<void> openNotificationSettings() async {
+    if (!isSupported || _isAndroid) {
+      await openSystemSettings();
+      return;
+    }
+    try {
+      await _channel.invokeMethod('openNotificationSettings');
+    } on PlatformException {
+      await openSystemSettings();
+    } on MissingPluginException {
+      await openSystemSettings();
+    }
+  }
+
   static Future<void> openSystemSettings() async {
     if (!isSupported) return;
     try {
@@ -236,6 +266,14 @@ class OngoingTaskNudgeService {
     final enabled = await isEnabled();
     _log('start guard isEnabled=$enabled');
     if (!enabled) return;
+    // 다이내믹 아일랜드가 없으면 라이브 액티비티는 잠금화면에만 남는다. 딴짓을
+    // 막아주지도 못하면서 자리만 차지하고, 그 자리에서 제대로 그려지지도 않았다.
+    // 그 기종은 배너가 대신하므로 아예 띄우지 않는다.
+    if (!_isAndroid && !await showsOverOtherApps()) {
+      _log('start skipped: no dynamic island, banner covers this phone');
+      await stop();
+      return;
+    }
     final available = await isAvailable();
     _log('start guard isAvailable=$available');
     if (!available) return;

@@ -86,6 +86,17 @@ import ActivityKit
         result(self.liveActivitiesEnabled())
       case "hasDynamicIsland":
         result(self.hasDynamicIsland())
+      case "isBannerPersistent":
+        // 배너가 몇 초 뒤 사라질지, 누를 때까지 남을지. 사용자가 정하는 값이라
+        // 앱은 바꿀 수 없지만, 어느 쪽인지는 읽을 수 있다.
+        UNUserNotificationCenter.current().getNotificationSettings { settings in
+          DispatchQueue.main.async {
+            result(settings.alertStyle == .alert)
+          }
+        }
+      case "openNotificationSettings":
+        self.openNotificationSettings()
+        result(nil)
       case "openSystemSettings":
         self.openAppSettings()
         result(nil)
@@ -147,6 +158,20 @@ import ActivityKit
       .compactMap { ($0 as? UIWindowScene)?.windows.first?.safeAreaInsets.top }
       .max() ?? 0
     return top > 51
+  }
+
+  /// 이 앱의 알림 설정 화면을 바로 연다.
+  ///
+  /// 앱 설정 첫 화면으로 보내면 거기서 알림을 찾아 들어가고 배너 스타일까지
+  /// 내려가야 한다. 바꿔달라고 부탁하면서 길만 알려주고 마는 셈이다.
+  private func openNotificationSettings() {
+    if #available(iOS 16.0, *) {
+      if let url = URL(string: UIApplication.openNotificationSettingsURLString) {
+        UIApplication.shared.open(url)
+        return
+      }
+    }
+    openAppSettings()
   }
 
   private func openAppSettings() {
