@@ -159,7 +159,8 @@ class _SettingsScreenState extends State<SettingsScreen>
       _coreReminderAdvanceMinutes =
           prefs.getInt('nyang_core_reminder_advance') ?? 10;
       _ongoingNudgeEnabled =
-          prefs.getBool(OngoingTaskNudgeService.enabledKey) ?? false;
+          prefs.getBool(OngoingTaskNudgeService.enabledKey) ??
+          OngoingTaskNudgeService.defaultEnabled;
       _chatBgStyle = prefs.getString('nyang_chat_bg_style') ?? 'simple';
       _homeWidgetStatus = _buildHomeWidgetStatus(
         nyang: prefs.getBool('widget_nyang_enabled') ?? false,

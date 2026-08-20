@@ -47,6 +47,12 @@ class OngoingTaskNudgeService {
   static const String enabledKey = 'ongoing_nudge_enabled';
   static const String _resultKey = 'ongoing_nudge_pending_result';
 
+  /// 켤지 물어본 적이 있는지. 무엇으로 답했든 한 번 물으면 끝이다.
+  ///
+  /// 묻는 자리가 둘이라 — 일정을 처음 시작한 순간, 그리고 대화 중 —
+  /// 이 키를 양쪽이 같이 본다. 아니면 방금 거절한 사람에게 또 묻게 된다.
+  static const String offerShownKey = 'ongoing_nudge_offer_shown';
+
   static bool get isSupported =>
       !kIsWeb &&
       (defaultTargetPlatform == TargetPlatform.android ||
@@ -55,10 +61,21 @@ class OngoingTaskNudgeService {
   static bool get _isAndroid =>
       !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
 
+  /// 아직 한 번도 정하지 않았을 때 켜져 있다고 볼지.
+  ///
+  /// 아이폰은 켜져 있는 게 기본이다. 라이브 액티비티는 시스템에서 이미 켜져
+  /// 있고, 잠금화면에 조용히 한 줄 남는 것뿐이라 꺼져 있을 이유가 없다.
+  ///
+  /// 안드로이드는 반대다. "다른 앱 위에 표시"가 없으면 켜도 아무것도 나오지
+  /// 않는다. 기본을 켜짐으로 두면 설정에는 켜졌다고 적혀 있는데 냥냥이는
+  /// 영영 안 나오는, 고장 난 것과 구별할 수 없는 상태가 된다. 그래서 여기서는
+  /// 물어본 뒤에 켠다.
+  static bool get defaultEnabled => isSupported && !_isAndroid;
+
   static Future<bool> isEnabled() async {
     if (!isSupported) return false;
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getBool(enabledKey) ?? false;
+    return prefs.getBool(enabledKey) ?? defaultEnabled;
   }
 
   static Future<void> setEnabled(bool value) async {

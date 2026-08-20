@@ -16870,7 +16870,7 @@ ${Prompts.outputRulesTail}$coachOfferTaskRule$halmaeHint$resistanceTurnDirective
   /// 무슨 말인지 모른다 — 시작 버튼을 눌러본 적이 있어야 "딴 데로 샌다"는 말이
   /// 자기 이야기가 된다. 그래서 ▶를 한 번이라도 눌러본 사람에게만, 딱 한 번 권한다.
   static const _nudgeOfferKind = 'ongoing_nudge_offer';
-  static const _nudgeOfferShownKey = 'ongoing_nudge_offer_shown';
+  static const _nudgeOfferShownKey = OngoingTaskNudgeService.offerShownKey;
   static const _nudgeOfferYesLabel = '좋아, 챙겨줘';
   static const _nudgeOfferNoLabel = '괜찮아';
 

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 import 'package:intl/intl.dart';
+import 'package:flutter/foundation.dart' show defaultTargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/gestures.dart';
@@ -2257,6 +2258,216 @@ class _TasksScreenState extends State<TasksScreen>
     );
   }
 
+  /// 딴짓 방지 코치를 켤지 딱 한 번 물어본다.
+  ///
+  /// 설정 안의 스위치는 아무도 찾지 못한다. 대신 방금 ▶를 누른 자리에서 묻는다 —
+  /// 이 기능이 무엇을 해주는지 설명할 필요가 없는 유일한 순간이라, 여기서 물으면
+  /// 기능 소개가 아니라 지금 상황에 대한 제안이 된다.
+  ///
+  /// 답이 무엇이든 다시 묻지 않는다. 두 번 권하면 그때부터는 재촉이다. 물어본
+  /// 표시는 대화 쪽과 같은 키를 쓰므로, 한쪽에서 거절하면 다른 쪽도 조용해진다.
+  Future<void> _maybeOfferOngoingNudge() async {
+    if (!OngoingTaskNudgeService.isSupported) return;
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.getBool(OngoingTaskNudgeService.offerShownKey) == true) return;
+
+    if (await OngoingTaskNudgeService.isEnabled()) {
+      // 아이폰은 처음부터 켜져 있다. 물어볼 것은 없지만, 시스템에서 실시간
+      // 활동이 꺼져 있으면 켜져 있어도 아무것도 뜨지 않는다. 그 한 가지만
+      // 짚어준다 — 켜졌다고 적힌 채 영영 안 뜨는 게 제일 나쁘다.
+      if (_onAndroid) return;
+      if (await OngoingTaskNudgeService.isAvailable()) return;
+      await Future.delayed(const Duration(milliseconds: 900));
+      if (!mounted) return;
+      await prefs.setBool(OngoingTaskNudgeService.offerShownKey, true);
+      await _showOngoingNudgeNotice(
+        title: '🐾 실시간 활동을 켜주세요',
+        message:
+            '일정이 도는 동안 잠금화면에 냥냥이가 조용히 남아 있게 하려면 '
+            '실시간 활동이 필요해요.\n'
+            '설정에서 냥냥코치를 찾아 켜주세요.',
+        actionLabel: '설정 열기',
+      );
+      await OngoingTaskNudgeService.openSystemSettings();
+      return;
+    }
+
+    // 누르자마자 팝업이 튀어나오면 놀란다. 카드가 진행 중으로 바뀌는 것과
+    // 밀어보기 시늉이 끝난 뒤에 뜬다.
+    await Future.delayed(const Duration(milliseconds: 900));
+    if (!mounted) return;
+
+    await prefs.setBool(OngoingTaskNudgeService.offerShownKey, true);
+    unawaited(AnalyticsService.logFeatureUsage('ongoing_nudge_offer'));
+
+    final accepted = await _showOngoingNudgeOfferDialog();
+    if (accepted != true) {
+      unawaited(AnalyticsService.logFeatureUsage('ongoing_nudge_offer_no'));
+      return;
+    }
+
+    unawaited(AnalyticsService.logFeatureUsage('ongoing_nudge_offer_yes'));
+    await OngoingTaskNudgeService.setEnabled(true);
+    // 방금 시작한 일정을 바로 맡긴다. 다음 저장까지 기다리면 첫 일정만 빈다.
+    await _syncOngoingNudge();
+    final available = await OngoingTaskNudgeService.isAvailable();
+    if (!mounted) return;
+
+    if (!available) {
+      // 권한이 없으면 켜도 아무것도 나오지 않는다. 설정으로 데려다준다.
+      await _showOngoingNudgeNotice(
+        title: _onAndroid ? '🐾 한 가지만 켜주세요' : '🐾 실시간 활동을 켜주세요',
+        message: _onAndroid
+            ? '설정에서 냥냥코치를 찾아 "다른 앱 위에 표시"를 켜주세요.\n'
+                  '이게 없으면 냥냥이가 다른 앱 위로 나올 수 없어요.'
+            : '설정에서 냥냥코치를 찾아 "실시간 활동"을 켜주세요.\n'
+                  '이게 꺼져 있으면 잠금화면에 아무것도 뜨지 않아요.',
+        actionLabel: '설정 열기',
+      );
+      await OngoingTaskNudgeService.openSystemSettings();
+      return;
+    }
+
+    await _showOngoingNudgeNotice(
+      title: '🐾 이제 챙겨줄게요',
+      message: _onAndroid
+          ? '30분쯤 지나서 폰으로 다른 걸 보고 있으면 화면 가장자리에 잠깐 나타나요.\n'
+                '소리도 진동도 없으니 그냥 둬도 돼요.'
+          : '일정이 도는 동안 잠금화면에 조용히 남아 있어요.\n'
+                '완료하거나 멈추면 사라져요.',
+    );
+  }
+
+  bool get _onAndroid => defaultTargetPlatform == TargetPlatform.android;
+
+  /// 코치마다 자기 말로 묻는다. 앱 안에서 말을 거는 건 늘 이 사람이기 때문이다.
+  String get _ongoingNudgeOfferText {
+    switch (widget.coachId) {
+      case 'nyang_halbae':
+        return '자네, 시작해두고 딴 데로 새는 날이 있지냥.\n'
+            '앱 밖에 있을 때도 부담 안 되게 슬쩍 챙겨줄까냥?';
+      case 'sec_female':
+        return '시작해두고 다른 데로 새는 날이 있으시죠.\n'
+            '앱 밖에 계실 때도 부담 없이 살짝 챙겨드릴까요?';
+      case 'boyfriend':
+        return '시작해놓고 딴 데 새는 날 있잖아.\n'
+            '앱 밖에 있을 때도 부담 안 주게 살짝 챙겨줄까?';
+      case 'halmae':
+        return '시작해놓고 딴 데로 새는 날 있제?\n'
+            '앱 밖에 있을 때도 부담 없이 슬쩍 챙겨줄까잉?';
+      case 'bro':
+        return '시작해놓고 딴 데 새는 날 있지?\n'
+            '앱 밖에 있을 때도 부담 안 주게 살짝 챙겨줄까?';
+      default:
+        return '집사, 일 시작해두고 딴 데 새는 날 있지냥?\n'
+            '앱 밖에 있을 때도 부담 안 주게 살짝 챙겨줄까냥?';
+    }
+  }
+
+  Future<bool?> _showOngoingNudgeOfferDialog() {
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(
+          '🐾 딴짓 방지 코치',
+          style: GoogleFonts.notoSansKr(
+            fontSize: 17,
+            fontWeight: FontWeight.w900,
+            color: const Color(0xFF3D3A4E),
+          ),
+        ),
+        content: Text(
+          _ongoingNudgeOfferText,
+          style: GoogleFonts.notoSansKr(
+            fontSize: 13.5,
+            height: 1.55,
+            fontWeight: FontWeight.w500,
+            color: const Color(0xFF6B6676),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(
+              '괜찮아',
+              style: GoogleFonts.notoSansKr(
+                fontWeight: FontWeight.w900,
+                color: const Color(0xFF9B96A8),
+              ),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF8B7CFF),
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            child: Text(
+              '좋아, 챙겨줘',
+              style: GoogleFonts.notoSansKr(
+                fontWeight: FontWeight.w900,
+                color: Colors.white,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showOngoingNudgeNotice({
+    required String title,
+    required String message,
+    String actionLabel = '확인',
+  }) {
+    return showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(
+          title,
+          style: GoogleFonts.notoSansKr(
+            fontSize: 17,
+            fontWeight: FontWeight.w900,
+            color: const Color(0xFF3D3A4E),
+          ),
+        ),
+        content: Text(
+          message,
+          style: GoogleFonts.notoSansKr(
+            fontSize: 13.5,
+            height: 1.55,
+            fontWeight: FontWeight.w500,
+            color: const Color(0xFF6B6676),
+          ),
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF8B7CFF),
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            child: Text(
+              actionLabel,
+              style: GoogleFonts.notoSansKr(
+                fontWeight: FontWeight.w900,
+                color: Colors.white,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   /// 앱 밖에서 데이터가 바뀌었으면 다시 읽는다.
   ///
   /// 냥냥이 카드로 고른 답은 [TaskCompletionService]가 저장소에 바로 반영한다.
@@ -3578,6 +3789,7 @@ class _TasksScreenState extends State<TasksScreen>
       _syncTaskTicker();
       // 저장은 상태가 바뀌는 이 순간에만 한다. 화면의 초는 기기에서 센다.
       _saveTasks();
+      if (t.inProgress) unawaited(_maybeOfferOngoingNudge());
     } else if (!forceComplete && !t.inProgress) {
       // 1단계: 진행 중으로 전환 (한 번 더 누르면 완료)
       setState(() {
@@ -3587,6 +3799,7 @@ class _TasksScreenState extends State<TasksScreen>
         t.inProgressAt = DateTime.now().toIso8601String();
       });
       _saveTasks();
+      unawaited(_maybeOfferOngoingNudge());
     } else {
       HabitItem? habitInfo;
       double habitCompletionRatio = 1.0;
