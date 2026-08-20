@@ -755,6 +755,11 @@ struct NyangTaskLiveActivity: Widget {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
+            // 누르면 할 일 창이 열린다. 홈 화면 위젯과 같은 길이다.
+            //
+            // 이걸 달기 전에는 앱이 마지막에 보던 화면으로 그냥 열렸다. 진행 중인
+            // 일정을 눌렀는데 어제 보던 기록 화면이 뜨면, 누른 보람이 없다.
+            .widgetURL(URL(string: NyangTaskLiveActivity.plannerURL))
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
@@ -788,8 +793,13 @@ struct NyangTaskLiveActivity: Widget {
             } minimal: {
                 NyangLiveActivityCat(size: 18)
             }
+            // 알약을 눌렀을 때도 같은 곳으로. 펼친 카드와 갈 곳이 다르면 안 된다.
+            .widgetURL(URL(string: NyangTaskLiveActivity.plannerURL))
         }
     }
+
+    /// 눌렀을 때 열리는 곳. 홈 화면 위젯이 쓰는 주소를 그대로 쓴다.
+    static let plannerURL = "nyangcoach://widget/cat/tasks"
 }
 
 /// 어느 코치를 쓰든 밖으로 나가는 얼굴은 냥냥이 하나다. 앱의 상징이라서다.
