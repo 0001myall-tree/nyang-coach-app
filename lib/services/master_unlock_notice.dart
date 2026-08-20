@@ -1,10 +1,7 @@
-import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/user_data.dart';
-import '../services/daily_reset_service.dart';
-import '../theme/app_design_tokens.dart';
+import 'daily_reset_service.dart';
 
 /// 마스터 코치가 열렸다는 걸 한 번만 알려준다.
 ///
@@ -16,14 +13,17 @@ import '../theme/app_design_tokens.dart';
 /// 아직 안 알렸는가"만 보고, 그 확인을 여러 자리에서 부른다. 한 번만 뜨게
 /// 막아주는 플래그가 있으니 부르는 자리가 늘어도 두 번 뜨지 않는다.
 ///
-/// 뜨는 자리는 코치 선택 화면 하나다.
+/// 알리는 자리는 냥냥이와의 대화 하나다. 냥냥이가 자기 입으로 말한다.
 ///
-/// 한동안 메인 탭과 채팅 화면에서도 불렀다. 그러다 마스터 코치와 이야기하는
-/// 중에 "마스터 코치가 열렸어요"가 튀어나오고, 확인을 누르면 그 방에서
-/// 밀려나는 일이 생겼다. 안내가 하려던 일이 그대로 방해가 된 것이다.
+/// 예전에는 코치 선택 화면에서 팝업으로 띄웠다. 결제가 일어나는 자리라 골랐는데,
+/// 결제하고 한참 뒤 코치를 고르러 들른 사람에게는 아무 맥락 없이 튀어나왔다.
+/// 그전에는 메인 탭과 채팅 화면에서도 불러서, 마스터 코치와 이야기하는 중에
+/// "마스터 코치가 열렸어요"가 뜨고 확인을 누르면 그 방에서 밀려나기까지 했다.
 ///
-/// 결제가 실제로 일어나는 자리도 여기다. 채팅 화면의 구독 시트는 디버그
-/// 빌드에서만 열려서, 실기기에서는 그 경로로 결제가 되지 않는다.
+/// 팝업이 문제였다기보다 말하는 사람이 없던 게 문제였다. 이제 냥냥이가
+/// 대화 중에 말해준다. 마스터 코치 방에서는 말하지 않는다 — 이미 만난
+/// 사람에게 열렸다고 알릴 일은 없다.
+///
 /// 어떤 구독을 두고 안내했는지 적어두는 자리.
 ///
 /// 예전에는 "알렸다/안 알렸다" 한 칸이었고, 마스터가 아닌 것으로 읽히면 그 칸을
@@ -81,7 +81,11 @@ MasterUnlockDecision decideMasterUnlockNotice({
 
 /// 적어두는 키는 'nyang_'으로 시작하지 않는다. 그 접두어를 쓰면 클라우드 복원이
 /// 덮어써서 앱을 켤 때마다 같은 안내가 다시 뜬다.
-Future<void> maybeShowMasterUnlockNotice(BuildContext context) async {
+/// 지금 알릴 차례면 참을 돌려주고, 알렸다고 적어둔다.
+///
+/// 참이 돌아온 뒤 실제로 말하지 못하면 그 안내는 사라진다. 부르는 쪽에서 바로
+/// 말할 수 있을 때만 부른다.
+Future<bool> claimMasterUnlockNotice() async {
   final data = await UserDataService.load();
   final prefs = await SharedPreferences.getInstance();
 
@@ -100,67 +104,8 @@ Future<void> maybeShowMasterUnlockNotice(BuildContext context) async {
     signature: signature,
     announced: announced,
   );
-  if (decision != MasterUnlockDecision.show) return;
+  if (decision != MasterUnlockDecision.show) return false;
 
   await prefs.setString(_masterUnlockNoticeKey, signature!);
-
-  if (!context.mounted) return;
-  WidgetsBinding.instance.addPostFrameCallback((_) {
-    if (!context.mounted) return;
-    _showMasterUnlockDialog(context);
-  });
-}
-
-void _showMasterUnlockDialog(BuildContext context) {
-  showDialog<void>(
-    context: context,
-    // 그냥 닫고 지나치면 이 안내가 하는 일이 없다. 버튼을 누르게 한다.
-    barrierDismissible: false,
-    builder: (dialogContext) {
-      return AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppDesignTokens.radiusLarge),
-        ),
-        title: Text(
-          '마스터 코치가 열렸어요',
-          style: GoogleFonts.notoSansKr(
-            fontSize: 17,
-            fontWeight: FontWeight.w900,
-            color: AppDesignTokens.textPrimary,
-          ),
-        ),
-        content: Text(
-          '이제 냥할배와 비서 실장을 만날 수 있어요.\n'
-          '목표와 하루의 흐름을 함께 보면서, 지금 무엇부터 하면 좋을지 챙겨드립니다.',
-          style: GoogleFonts.notoSansKr(
-            fontSize: 13.5,
-            height: 1.5,
-            fontWeight: FontWeight.w500,
-            color: const Color(0xFF6B6676),
-          ),
-        ),
-        actions: [
-          // 이 화면이 이미 코치 선택 화면이고, 마스터 탭이 왼쪽에서 열려 있다.
-          // 보내줄 곳이 없으니 닫는 버튼 하나면 된다.
-          ElevatedButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppDesignTokens.brand,
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-            child: Text(
-              '좋아요',
-              style: GoogleFonts.notoSansKr(
-                fontWeight: FontWeight.w900,
-                color: Colors.white,
-              ),
-            ),
-          ),
-        ],
-      );
-    },
-  );
+  return true;
 }

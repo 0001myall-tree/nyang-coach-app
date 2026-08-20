@@ -16,6 +16,7 @@ import 'package:speech_to_text/speech_recognition_result.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:nyang_coach/screens/coach_selection_screen.dart';
 import 'package:nyang_coach/services/analytics_service.dart';
+import 'package:nyang_coach/services/master_unlock_notice.dart';
 import 'package:nyang_coach/services/api_usage_limit_service.dart';
 import 'package:nyang_coach/services/apple_calendar_sync_service.dart';
 import 'package:nyang_coach/services/tasks_sync_service.dart';
@@ -5861,6 +5862,15 @@ ${lines.join('\n')}
     // 푸시로 이미 말을 건넸으면 그게 오늘의 첫 마디다. 그 위에 새 인사를
     // 얹으면 코치가 방금 한 말을 못 들은 것처럼 군다.
     if (await _tryShowPreemptiveNudgeHandoff(prefs, now)) {
+      await prefs.setString(
+        'last_visit_${widget.coachId}',
+        now.toIso8601String(),
+      );
+      return;
+    }
+    // 마스터 코치가 열렸다는 소식이 먼저다. 평생 한 번뿐이고, 다른 인사는
+    // 내일도 할 수 있다.
+    if (await _tryAnnounceMasterUnlock()) {
       await prefs.setString(
         'last_visit_${widget.coachId}',
         now.toIso8601String(),
@@ -15876,6 +15886,9 @@ ${Prompts.outputRulesTail}$coachOfferTaskRule$halmaeHint$resistanceTurnDirective
     if (msg.kind == _nudgeOfferKind && msg.choices.isNotEmpty) {
       return _buildOngoingNudgeOfferCard(msg);
     }
+    if (msg.kind == _masterUnlockKind && msg.choices.isNotEmpty) {
+      return _buildMasterUnlockNoticeCard(msg);
+    }
     if (msg.kind == 'feature_location_picker') {
       return _buildFeatureLocationPickerCard(msg);
     }
@@ -16873,6 +16886,74 @@ ${Prompts.outputRulesTail}$coachOfferTaskRule$halmaeHint$resistanceTurnDirective
   static const _nudgeOfferShownKey = OngoingTaskNudgeService.offerShownKey;
   static const _nudgeOfferYesLabel = '좋아, 챙겨줘';
   static const _nudgeOfferNoLabel = '괜찮아';
+
+  static const _masterUnlockKind = 'master_unlock_notice';
+  static const _masterUnlockYesLabel = '만나러 갈래';
+  static const _masterUnlockNoLabel = '나중에';
+
+  /// 마스터 코치가 열렸다는 걸 냥냥이가 말해준다.
+  ///
+  /// 냥냥이 방에서만 말한다. 마스터 코치와 이야기하는 중에 "마스터 코치가
+  /// 열렸어요"가 뜨는 것이 예전 방식의 가장 큰 문제였다.
+  Future<bool> _tryAnnounceMasterUnlock() async {
+    if (widget.coachId != 'cat') return false;
+    if (!await claimMasterUnlockNotice()) return false;
+    if (!mounted) return false;
+
+    _injectAiMessage(
+      '집사, 소식이 있다냥!\n'
+      '마스터 코치가 열렸다냥. 냥할배랑 비서 실장이 목표랑 하루 흐름을 같이 보면서 '
+      '지금 뭐부터 하면 좋을지 챙겨준다냥.\n'
+      '나는 여기 그대로 있으니까 언제든 놀러 오라냥 🐾',
+      kind: _masterUnlockKind,
+      choices: const [_masterUnlockYesLabel, _masterUnlockNoLabel],
+    );
+    unawaited(AnalyticsService.logFeatureUsage('master_unlock_notice'));
+    return true;
+  }
+
+  Widget _buildMasterUnlockNoticeCard(ChatMessage msg) {
+    return _buildGroomingChoiceCard(msg, [
+      (
+        _masterUnlockYesLabel,
+        () => _handleMasterUnlockChoice(_masterUnlockYesLabel),
+      ),
+      (
+        _masterUnlockNoLabel,
+        () => _handleMasterUnlockChoice(_masterUnlockNoLabel),
+      ),
+    ]);
+  }
+
+  Future<void> _handleMasterUnlockChoice(String label) async {
+    if (_isLoading) return;
+    HapticFeedback.lightImpact();
+
+    setState(() {
+      _messages.add(
+        ChatMessage(text: label, isUser: true, time: DateTime.now()),
+      );
+      _dynamicChips = _coach.chips;
+      _suppressDefaultChips = false;
+    });
+    _scrollToBottom();
+    await _saveHistory();
+
+    if (label != _masterUnlockYesLabel) {
+      unawaited(AnalyticsService.logFeatureUsage('master_unlock_notice_no'));
+      _injectAiMessage('알겠다냥. 만나고 싶어지면 코치 바꾸기에서 고르면 된다냥.');
+      return;
+    }
+
+    unawaited(AnalyticsService.logFeatureUsage('master_unlock_notice_yes'));
+    if (!mounted) return;
+    // 데려다주기만 한다. 어떤 마스터 코치를 만날지는 거기서 고른다.
+    Navigator.of(context, rootNavigator: true).pushReplacement(
+      MaterialPageRoute(
+        builder: (_) => CoachSelectionScreen(returnCoachId: widget.coachId),
+      ),
+    );
+  }
 
   Future<bool> _tryOfferOngoingNudge(
     SharedPreferences prefs,

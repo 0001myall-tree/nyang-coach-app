@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:nyang_coach/widgets/master_unlock_notice.dart';
+import 'package:nyang_coach/services/master_unlock_notice.dart';
 
 /// "마스터 코치가 열렸어요"는 한 구독에 한 번만 나와야 한다.
 ///
