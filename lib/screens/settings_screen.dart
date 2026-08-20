@@ -1691,6 +1691,19 @@ class _SettingsScreenState extends State<SettingsScreen>
                       ),
                       const SizedBox(height: 10),
 
+                      // 알림보다 위에 둔다. 이 앱이 하겠다는 일이 딴짓을
+                      // 막아주는 것이라, 설정을 열었을 때 제일 먼저 보여야 한다.
+                      if (OngoingTaskNudgeService.isSupported) ...[
+                        _buildSettingsNavigationTile(
+                          svgAsset: 'assets/icons/shield-cat.svg',
+                          label: '딴짓 방지 코치',
+                          subtitle: '앱 밖으로 새면 냥냥이가 살짝 챙겨줘요.',
+                          status: _ongoingNudgeEnabled ? '켜짐' : '꺼짐',
+                          onTap: _paidSettingsTap(_toggleOngoingNudge),
+                        ),
+                        const SizedBox(height: 10),
+                      ],
+
                       _buildSettingsSectionTile(
                         id: 'notifications',
                         icon: Icons.notifications_none_rounded,
@@ -1713,16 +1726,6 @@ class _SettingsScreenState extends State<SettingsScreen>
                           ),
                         ],
                       ),
-                      if (OngoingTaskNudgeService.isSupported) ...[
-                        const SizedBox(height: 10),
-                        _buildSettingsNavigationTile(
-                          svgAsset: 'assets/icons/shield-cat.svg',
-                          label: '딴짓 방지 코치',
-                          subtitle: '앱 밖으로 새면 냥냥이가 살짝 챙겨줘요.',
-                          status: _ongoingNudgeEnabled ? '켜짐' : '꺼짐',
-                          onTap: _paidSettingsTap(_toggleOngoingNudge),
-                        ),
-                      ],
                       const SizedBox(height: 10),
 
                       _buildSettingsSectionTile(
