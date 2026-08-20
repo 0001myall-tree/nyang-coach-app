@@ -1095,9 +1095,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                 '시작할 시각을 정해둔 일정은 그 시각에도 나타나요. '
                 '시작하는 걸 잊었을 때요.\n\n'
                 '소리도 진동도 없고, 그냥 두면 스스로 사라져요.'
-          : '일정을 시작하면 잠금화면과 다이내믹 아일랜드에 냥냥이와 흐른 시간이 '
-                '조용히 떠 있어요.\n\n'
-                '소리도 진동도 없고, 완료하거나 멈추면 사라져요.',
+          : await _iosNudgeDescription(),
     );
 
     // 절전이 걸려 있으면 냥냥이가 제때 못 나간다. 켠 직후 한 번만 짚어준다.
@@ -1142,12 +1140,30 @@ class _SettingsScreenState extends State<SettingsScreen>
     return null;
   }
 
+  /// 아이폰에서 이 기능이 실제로 무엇을 해주는지.
+  ///
+  /// 기종에 따라 하는 일이 다르다. 다이내믹 아일랜드가 있으면 딴짓 중에도 눈에
+  /// 들어오지만, 없으면 잠금화면에서만 보인다 — 그건 딴짓을 막아주는 것이 아니라
+  /// 진행 중이라는 표시다. 같은 문구로 안내하면 한쪽에게는 지키지 못할 약속이 된다.
+  Future<String> _iosNudgeDescription() async {
+    if (await OngoingTaskNudgeService.showsOverOtherApps()) {
+      return '일정을 시작하면 다른 앱을 보는 중에도 화면 맨 위에 냥냥이가 작게 '
+          '남아 있어요. 잠금화면에도 함께 보여요.\n\n'
+          '소리도 진동도 없고, 완료하거나 멈추면 사라져요.';
+    }
+    return '일정을 시작하면 잠금화면에 냥냥이와 흐른 시간이 조용히 떠 있어요.\n\n'
+        '이 아이폰은 다른 앱 위에 냥냥이를 띄울 수 없어서, 딴짓하는 중에는 '
+        '보이지 않아요. 폰을 집어 들 때 눈에 들어옵니다.\n\n'
+        '소리도 진동도 없고, 완료하거나 멈추면 사라져요.';
+  }
+
   /// 켜져 있는 동안 이 줄을 눌렀을 때 무엇을 할지.
   Future<_OngoingNudgeAction?> _askOngoingNudgeAction() async {
     final isAndroid = Platform.isAndroid;
     // 아이폰은 "지금 한번 보기"가 없다. 대신 정말 뜰 수 있는 상태인지를 보고,
     // 막혀 있으면 그 자리에서 아이폰 설정으로 데려간다.
     final available = isAndroid || await OngoingTaskNudgeService.isAvailable();
+    final description = isAndroid ? '' : await _iosNudgeDescription();
     if (!mounted) return null;
 
     return showDialog<_OngoingNudgeAction>(
@@ -1170,8 +1186,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                 ? '지금 켜져 있어요. 일정을 시작하고 30분이 지난 뒤, 폰으로 다른 걸 '
                       '보고 있으면 나타납니다.'
                 : available
-                ? '지금 켜져 있어요. 일정을 시작하면 잠금화면에 냥냥이와 흐른 시간이 '
-                      '조용히 떠 있어요.'
+                ? '지금 켜져 있어요.\n\n$description'
                 : '앱에서는 켜져 있는데, 아이폰 설정의 "실시간 활동"이 꺼져 있어요.\n\n'
                       '그래서 일정을 시작해도 잠금화면에 아무것도 뜨지 않습니다.',
             style: GoogleFonts.notoSansKr(

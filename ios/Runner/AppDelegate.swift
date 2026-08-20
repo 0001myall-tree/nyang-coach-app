@@ -84,6 +84,8 @@ import ActivityKit
       switch call.method {
       case "isAvailable":
         result(self.liveActivitiesEnabled())
+      case "hasDynamicIsland":
+        result(self.hasDynamicIsland())
       case "openSystemSettings":
         self.openAppSettings()
         result(nil)
@@ -130,6 +132,21 @@ import ActivityKit
     }
     #endif
     return false
+  }
+
+  /// 이 아이폰에 다이내믹 아일랜드가 있는지.
+  ///
+  /// 이 기능이 딴짓을 막아주느냐가 여기서 갈린다. 있으면 다른 앱을 보는 중에도
+  /// 화면 맨 위에 남아 있고, 없으면 잠금화면에서만 보인다 — 딴짓 중에는 보이지
+  /// 않는다는 뜻이라, 같은 말로 안내하면 한쪽에게는 거짓말이 된다.
+  ///
+  /// 기종 이름 목록으로 가르지 않는다. 새 기종이 나올 때마다 목록이 낡는다.
+  /// 대신 위쪽 안전 영역을 본다 — 다이내믹 아일랜드는 59pt, 노치는 44~48pt다.
+  private func hasDynamicIsland() -> Bool {
+    let top = UIApplication.shared.connectedScenes
+      .compactMap { ($0 as? UIWindowScene)?.windows.first?.safeAreaInsets.top }
+      .max() ?? 0
+    return top > 51
   }
 
   private func openAppSettings() {

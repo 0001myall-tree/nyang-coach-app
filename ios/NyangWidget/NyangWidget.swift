@@ -737,11 +737,15 @@ struct NyangTaskLiveActivity: Widget {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(context.state.taskText.isEmpty ? "진행 중인 일정" : context.state.taskText)
                         .font(.system(size: 15, weight: .bold))
+                        // 글자색을 시스템에 맡기지 않는다. 잠금화면의 밝기와 이 카드의
+                        // 흰 바탕이 늘 같은 방향으로 움직이지 않아서, 맡겨두면 흰 바탕에
+                        // 흰 글씨가 되는 조합이 생긴다.
+                        .foregroundColor(Color(red: 0.239, green: 0.227, blue: 0.302))
                         .lineLimit(2)
                         .minimumScaleFactor(0.85)
                     Text("진행 중")
                         .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Color(red: 0.420, green: 0.400, blue: 0.463))
                 }
                 Spacer()
                 Text(context.state.startedAt, style: .timer)
@@ -755,6 +759,16 @@ struct NyangTaskLiveActivity: Widget {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
+            // iOS 17부터 위젯은 자기 배경을 직접 밝혀야 한다. 밝히지 않으면 시스템이
+            // 내용을 아예 그리지 않고 빈 상자만 남긴다 — 잠금화면에 검은 칸만 뜨던
+            // 이유가 이것이다. 홈 화면 위젯은 처음부터 이 선언을 하고 있었다.
+            .widgetWhiteBackground()
+            // 잠금화면 카드의 바탕도 흰색으로 맞춘다. 위 선언과 짝이 맞아야
+            // 모서리까지 흰 카드 하나로 보인다.
+            .activityBackgroundTint(Color.white)
+            .activitySystemActionForegroundColor(
+                Color(red: 0.545, green: 0.486, blue: 1.0)
+            )
             // 누르면 할 일 창이 열린다. 홈 화면 위젯과 같은 길이다.
             //
             // 이걸 달기 전에는 앱이 마지막에 보던 화면으로 그냥 열렸다. 진행 중인

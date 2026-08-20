@@ -114,6 +114,25 @@ class OngoingTaskNudgeService {
     }
   }
 
+  /// 이 아이폰이 다른 앱 위에 냥냥이를 보여줄 수 있는지.
+  ///
+  /// 다이내믹 아일랜드가 있으면 다른 앱을 보는 중에도 화면 맨 위에 남는다. 없으면
+  /// 잠금화면에서만 보이는데, 그건 딴짓을 막아주는 것이 아니라 진행 중이라는 표시일
+  /// 뿐이다. 같은 문구로 안내하면 한쪽에게는 지키지 못할 약속이 된다.
+  ///
+  /// 안드로이드는 오버레이로 어느 기종에서나 나가므로 늘 참이다.
+  static Future<bool> showsOverOtherApps() async {
+    if (!isSupported) return false;
+    if (_isAndroid) return true;
+    try {
+      return await _channel.invokeMethod<bool>('hasDynamicIsland') ?? false;
+    } on PlatformException {
+      return false;
+    } on MissingPluginException {
+      return false;
+    }
+  }
+
   static Future<void> openSystemSettings() async {
     if (!isSupported) return;
     try {

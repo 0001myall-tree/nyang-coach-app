@@ -2341,13 +2341,21 @@ class _TasksScreenState extends State<TasksScreen>
       return;
     }
 
+    // 아이폰은 기종에 따라 하는 일이 다르다. 다이내믹 아일랜드가 없으면 딴짓
+    // 중에는 보이지 않으니, 막아준다고 말하면 지키지 못할 약속이 된다.
+    final overOtherApps = await OngoingTaskNudgeService.showsOverOtherApps();
+    if (!mounted) return;
+
     await _showOngoingNudgeNotice(
       title: '🐾 이제 챙겨줄게요',
       message: _onAndroid
           ? '30분쯤 지나서 폰으로 다른 걸 보고 있으면 화면 가장자리에 잠깐 나타나요.\n'
                 '소리도 진동도 없으니 그냥 둬도 돼요.'
+          : overOtherApps
+          ? '일정이 도는 동안 다른 앱을 봐도 화면 맨 위에 냥냥이가 작게 남아 있어요.\n'
+                '완료하거나 멈추면 사라져요.'
           : '일정이 도는 동안 잠금화면에 조용히 남아 있어요.\n'
-                '완료하거나 멈추면 사라져요.',
+                '이 아이폰은 다른 앱 위에는 띄울 수 없어서, 폰을 집어 들 때 보여요.',
     );
   }
 

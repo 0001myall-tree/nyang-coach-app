@@ -17053,7 +17053,11 @@ ${Prompts.outputRulesTail}$coachOfferTaskRule$halmaeHint$resistanceTurnDirective
       await OngoingTaskNudgeService.openSystemSettings();
       return;
     }
-    _injectAiMessage(_ongoingNudgeAcceptText);
+    _injectAiMessage(
+      _ongoingNudgeAcceptText(
+        await OngoingTaskNudgeService.showsOverOtherApps(),
+      ),
+    );
   }
 
   String get _ongoingNudgeDeclineText {
@@ -17067,27 +17071,41 @@ ${Prompts.outputRulesTail}$coachOfferTaskRule$halmaeHint$resistanceTurnDirective
     }
   }
 
-  String get _ongoingNudgeAcceptText {
+  /// 아이폰은 기종에 따라 하는 일이 다르다. 다이내믹 아일랜드가 없으면 딴짓
+  /// 중에는 보이지 않으니, 막아준다고 말하면 지키지 못할 약속이 된다.
+  String _ongoingNudgeAcceptText(bool overOtherApps) {
     final onAndroid = defaultTargetPlatform == TargetPlatform.android;
     switch (_coach.id) {
       case 'nyang_halbae':
-        return onAndroid
-            ? '좋다냥. 일정 시작하고 30분쯤 지나서 폰으로 딴 걸 보고 있으면 화면 가장자리에 잠깐 나갈 거다냥.\n'
-                  '소리도 진동도 없으니 그냥 둬도 된다냥.'
+        if (onAndroid) {
+          return '좋다냥. 일정 시작하고 30분쯤 지나서 폰으로 딴 걸 보고 있으면 화면 가장자리에 잠깐 나갈 거다냥.\n'
+              '소리도 진동도 없으니 그냥 둬도 된다냥.';
+        }
+        return overOtherApps
+            ? '좋다냥. 일정을 시작하면 딴 앱을 봐도 화면 맨 위에 냥냥이가 작게 남아 있을 거다냥.\n'
+                  '완료하거나 멈추면 사라진다냥.'
             : '좋다냥. 일정을 시작하면 잠금화면에 조용히 남아 있을 거다냥.\n'
-                  '완료하거나 멈추면 사라진다냥.';
+                  '이 아이폰은 딴 앱 위에는 못 나가니, 폰을 집을 때 눈에 들어올 거다냥.';
       case 'sec_female':
-        return onAndroid
-            ? '좋습니다. 일정을 시작하고 30분쯤 지난 뒤, 휴대폰으로 다른 걸 보고 계시면 화면 가장자리에 잠깐 나갑니다.\n'
-                  '소리도 진동도 없으니 그냥 두셔도 됩니다.'
+        if (onAndroid) {
+          return '좋습니다. 일정을 시작하고 30분쯤 지난 뒤, 휴대폰으로 다른 걸 보고 계시면 화면 가장자리에 잠깐 나갑니다.\n'
+              '소리도 진동도 없으니 그냥 두셔도 됩니다.';
+        }
+        return overOtherApps
+            ? '좋습니다. 일정을 시작하면 다른 앱을 보시는 중에도 화면 맨 위에 작게 남아 있습니다.\n'
+                  '완료하거나 멈추시면 사라집니다.'
             : '좋습니다. 일정을 시작하면 잠금화면에 조용히 남아 있습니다.\n'
-                  '완료하거나 멈추시면 사라집니다.';
+                  '이 아이폰은 다른 앱 위에는 띄울 수 없어, 휴대폰을 드실 때 보입니다.';
       default:
-        return onAndroid
-            ? '좋았다냥! 일 시작하고 30분쯤 지나서 폰으로 딴 거 보고 있으면 화면 옆에 살짝 나타난다냥.\n'
-                  '소리도 진동도 없으니 무시해도 된다냥.'
+        if (onAndroid) {
+          return '좋았다냥! 일 시작하고 30분쯤 지나서 폰으로 딴 거 보고 있으면 화면 옆에 살짝 나타난다냥.\n'
+              '소리도 진동도 없으니 무시해도 된다냥.';
+        }
+        return overOtherApps
+            ? '좋았다냥! 일 시작하면 딴 앱 보고 있어도 화면 맨 위에 냥냥이가 조그맣게 붙어 있는다냥.\n'
+                  '다 하거나 멈추면 사라진다냥.'
             : '좋았다냥! 일 시작하면 잠금화면에 조용히 있을 거다냥.\n'
-                  '다 하거나 멈추면 사라진다냥.';
+                  '이 아이폰은 딴 앱 위로는 못 나가니까, 폰 집을 때 보인다냥.';
     }
   }
 
