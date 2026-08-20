@@ -1019,6 +1019,34 @@ class _SettingsScreenState extends State<SettingsScreen>
         return;
       }
 
+      if (action == _OngoingNudgeAction.test && !isAndroid) {
+        // 아이폰 배너는 정해둔 시각이 와야 확인된다. 기다렸다 안 오면 무엇이
+        // 막고 있는지 알 길이 없어서, 지금 보는 길을 여기 둔다.
+        if (!await NotificationService().areNotificationsEnabled()) {
+          if (!mounted) return;
+          await _showAlarmNoticeDialog(
+            title: '🔔 알림이 꺼져 있어요',
+            message: '냥냥이 배너는 알림으로 찾아가요. 알림이 꺼져 있으면 오지 않습니다.',
+            actionLabel: '설정 열기',
+            closeLabel: '나중에',
+            onAction: () async {
+              await OngoingTaskNudgeService.openSystemSettings();
+            },
+          );
+          return;
+        }
+        await NyangBannerNudge.showTest();
+        if (!mounted) return;
+        await _showAlarmNoticeDialog(
+          title: '🐾 8초 뒤에 나타나요',
+          message:
+              '지금 홈으로 나가거나 다른 앱을 열어보세요. 화면 위로 냥냥이 배너가 '
+              '내려옵니다.\n\n'
+              '배너를 길게 누르면 "시작할게"와 "좀 더 있다가"가 나와요.',
+        );
+        return;
+      }
+
       if (action == _OngoingNudgeAction.test) {
         // 막고 있는 게 있으면 먼저 말해준다. 그냥 안 나오면 어디가 문제인지
         // 알 길이 없어서, 기다린 사람만 헛수고한다.
@@ -1088,21 +1116,10 @@ class _SettingsScreenState extends State<SettingsScreen>
       return;
     }
 
-    await _showAlarmNoticeDialog(
-      title: '🐾 딴짓 방지 코치를 켰어요',
-      message: isAndroid
-          ? '일정을 시작하고 30분이 지난 뒤, 폰으로 다른 걸 보고 있으면 '
-                '냥냥이가 화면 가장자리에 잠깐 나타나요.\n\n'
-                '시작할 시각을 정해둔 일정은 그 시각에도 나타나요. '
-                '시작하는 걸 잊었을 때요.\n\n'
-                '소리도 진동도 없고, 그냥 두면 스스로 사라져요.'
-          : await _iosNudgeDescription(),
-    );
-
     // 알림이 꺼져 있으면 이 기능은 반쪽이 된다. 안드로이드는 냥냥이가 떠 있는
     // 동안 조용한 알림 한 줄이 함께 있어야 하고, 아이폰 배너는 알림 그 자체다.
     // 처음 물었을 때 거절했으면 시스템은 다시 묻지 않으므로 설정으로 데려간다.
-    if (!mounted) return;
+    // 켰다는 인사보다 먼저 한다 — 이게 막혀 있으면 인사가 지키지 못할 약속이 된다.
     if (!await NotificationService().areNotificationsEnabled()) {
       if (!mounted) return;
       await _showAlarmNoticeDialog(
@@ -1120,27 +1137,31 @@ class _SettingsScreenState extends State<SettingsScreen>
           await OngoingTaskNudgeService.openSystemSettings();
         },
       );
+      if (!mounted) return;
     }
 
-    // 배너로 찾아가는 아이폰이면, 그 배너가 금방 사라지지 않게 하는 길을
-    // 한 번만 알려준다. 얼마나 머무를지는 앱이 아니라 이 설정이 정한다.
+    // 배너로 찾아가는 아이폰은 인사와 안내가 한 장이다. 배너가 얼마나 머무를지는
+    // 앱이 아니라 배너 스타일 설정이 정하므로, 그 길을 여기서 함께 낸다.
+    final needsBanner = await NyangBannerNudge.isNeededHere();
     if (!mounted) return;
-    if (await NyangBannerNudge.isNeededHere()) {
-      if (!mounted) return;
-      await _showAlarmNoticeDialog(
-        title: '🐾 배너를 오래 남기려면',
-        message:
-            '이 아이폰은 다른 앱 위에 냥냥이를 띄울 수 없어서, 딴짓할 때 '
-            '"냥냥이 배너"로 찾아가요.\n\n'
-            '배너가 금방 사라지지 않게 하려면 배너 스타일을 "지속"으로 '
-            '바꿔주세요.',
-        actionLabel: '설정 열기',
-        closeLabel: '나중에',
-        onAction: () async {
-          await OngoingTaskNudgeService.openSystemSettings();
-        },
-      );
-    }
+
+    await _showAlarmNoticeDialog(
+      title: '🐾 딴짓 방지 코치를 켰어요',
+      message: isAndroid
+          ? '일정을 시작하고 30분이 지난 뒤, 폰으로 다른 걸 보고 있으면 '
+                '냥냥이가 화면 가장자리에 잠깐 나타나요.\n\n'
+                '시작할 시각을 정해둔 일정은 그 시각에도 나타나요. '
+                '시작하는 걸 잊었을 때요.\n\n'
+                '소리도 진동도 없고, 그냥 두면 스스로 사라져요.'
+          : await _iosNudgeDescription(),
+      actionLabel: needsBanner ? '설정 열기' : null,
+      closeLabel: needsBanner ? '나중에' : '확인',
+      onAction: needsBanner
+          ? () async {
+              await OngoingTaskNudgeService.openSystemSettings();
+            }
+          : null,
+    );
 
     // 절전이 걸려 있으면 냥냥이가 제때 못 나간다. 켠 직후 한 번만 짚어준다.
     if (!mounted) return;
@@ -1192,22 +1213,27 @@ class _SettingsScreenState extends State<SettingsScreen>
   Future<String> _iosNudgeDescription() async {
     if (await OngoingTaskNudgeService.showsOverOtherApps()) {
       return '일정을 시작하면 다른 앱을 보는 중에도 화면 맨 위에 냥냥이가 작게 '
-          '남아 있어요. 잠금화면에도 함께 보여요.\n\n'
+          '남아 있어요.\n\n'
           '소리도 진동도 없고, 완료하거나 멈추면 사라져요.';
     }
-    return '일정을 시작하면 잠금화면에 냥냥이와 흐른 시간이 조용히 떠 있어요.\n\n'
-        '이 아이폰은 다른 앱 위에 냥냥이를 띄울 수 없어서, 딴짓하는 중에는 '
-        '보이지 않아요. 폰을 집어 들 때 눈에 들어옵니다.\n\n'
-        '소리도 진동도 없고, 완료하거나 멈추면 사라져요.';
+    // 이 기종에서 이 기능이 하는 일은 배너 하나다. 잠금화면에도 뜨긴 하지만
+    // 그건 딴짓을 막아주지 않으니 여기서 말하지 않는다 — 켜는 사람이 기대할
+    // 것은 딴짓하는 중에 일어나는 일이어야 한다.
+    return '이 아이폰은 다른 앱 위에 냥냥이를 띄울 수 없어서, 딴짓할 때 '
+        '"냥냥이 배너"로 찾아가요.\n\n'
+        '시작할 시각을 정해둔 일정은 그 시각이 되면 화면 위로 배너가 내려와요. '
+        '거기서 바로 시작할 수 있어요.\n\n'
+        '배너가 금방 사라지지 않게 하려면 배너 스타일을 "지속"으로 바꿔주세요.';
   }
 
   /// 켜져 있는 동안 이 줄을 눌렀을 때 무엇을 할지.
   Future<_OngoingNudgeAction?> _askOngoingNudgeAction() async {
     final isAndroid = Platform.isAndroid;
-    // 아이폰은 "지금 한번 보기"가 없다. 대신 정말 뜰 수 있는 상태인지를 보고,
-    // 막혀 있으면 그 자리에서 아이폰 설정으로 데려간다.
     final available = isAndroid || await OngoingTaskNudgeService.isAvailable();
     final description = isAndroid ? '' : await _iosNudgeDescription();
+    // 배너로 찾아가는 아이폰은 여기서도 "지금 한번 보기"를 준다. 시각을 기다렸다
+    // 안 오면 무엇이 막고 있는지 알 길이 없기 때문이다.
+    final needsBanner = await NyangBannerNudge.isNeededHere();
     if (!mounted) return null;
 
     return showDialog<_OngoingNudgeAction>(
@@ -1229,10 +1255,12 @@ class _SettingsScreenState extends State<SettingsScreen>
             isAndroid
                 ? '지금 켜져 있어요. 일정을 시작하고 30분이 지난 뒤, 폰으로 다른 걸 '
                       '보고 있으면 나타납니다.'
+                : needsBanner
+                ? '지금 켜져 있어요.\n\n$description'
                 : available
                 ? '지금 켜져 있어요.\n\n$description'
                 : '앱에서는 켜져 있는데, 아이폰 설정의 "실시간 활동"이 꺼져 있어요.\n\n'
-                      '그래서 일정을 시작해도 잠금화면에 아무것도 뜨지 않습니다.',
+                      '그래서 일정을 시작해도 화면 위에 아무것도 뜨지 않습니다.',
             style: GoogleFonts.notoSansKr(
               fontSize: 13.5,
               height: 1.5,
@@ -1254,7 +1282,7 @@ class _SettingsScreenState extends State<SettingsScreen>
             ElevatedButton(
               onPressed: () => Navigator.pop(
                 ctx,
-                isAndroid
+                isAndroid || needsBanner
                     ? _OngoingNudgeAction.test
                     : _OngoingNudgeAction.openSettings,
               ),
@@ -1266,7 +1294,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                 ),
               ),
               child: Text(
-                isAndroid
+                isAndroid || needsBanner
                     ? '지금 한번 보기'
                     : available
                     ? '아이폰 설정 열기'

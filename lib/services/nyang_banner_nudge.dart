@@ -90,6 +90,22 @@ class NyangBannerNudge {
     );
   }
 
+  /// 시작 시각을 기다리지 않고 지금 한번 확인한다.
+  ///
+  /// 이 기능은 정해둔 시각이 와야 확인되는데, 그 시각을 기다렸다가 안 오면
+  /// 무엇이 막고 있는지 알 길이 없다. 설정 안에 지금 보는 길이 있어야 한다.
+  static Future<void> showTest() async {
+    if (!_isIOS) return;
+    final now = DateTime.now();
+    await _schedule(
+      taskId: 'nyang_banner_test',
+      taskText: '지금 한번 보기',
+      at: now.add(const Duration(seconds: 8)),
+      // 확인용이라 "좀 더 있다가"로 다시 부를 일은 없다.
+      deadline: now.add(const Duration(minutes: 1)),
+    );
+  }
+
   static Future<void> _schedule({
     required String taskId,
     required String taskText,
