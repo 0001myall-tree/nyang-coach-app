@@ -124,13 +124,26 @@ import ActivityKit
   }
 
   /// 같은 일정이면 내용만 갈아끼우고, 다른 일정이면 있던 것을 끝내고 새로 띄운다.
+  private func ongoingNudgeLog(_ message: String) {
+    NSLog("[OngoingNudge] %@", message)
+  }
+
   private func startOrUpdateActivity(
     taskId: String,
     taskText: String,
     startedAtMillis: Double?
   ) {
     #if canImport(ActivityKit)
-    guard #available(iOS 16.1, *), ActivityAuthorizationInfo().areActivitiesEnabled else { return }
+    guard #available(iOS 16.1, *) else {
+      ongoingNudgeLog("start skipped: iOS < 16.1")
+      return
+    }
+
+    let authorizationInfo = ActivityAuthorizationInfo()
+    guard authorizationInfo.areActivitiesEnabled else {
+      ongoingNudgeLog("start skipped: live activities disabled by system")
+      return
+    }
 
     let startedAt = startedAtMillis.map { Date(timeIntervalSince1970: $0 / 1000) } ?? Date()
     let state = NyangTaskActivityAttributes.ContentState(
@@ -139,24 +152,32 @@ import ActivityKit
     )
 
     let running = Activity<NyangTaskActivityAttributes>.activities
+    ongoingNudgeLog(
+      "start called taskId=\(taskId), taskTextLength=\(taskText.count), runningCount=\(running.count)"
+    )
     if let existing = running.first(where: { $0.attributes.taskId == taskId }) {
+      ongoingNudgeLog("updating existing activity id=\(existing.id)")
       Task { await existing.update(using: state) }
       return
     }
 
     for activity in running {
+      ongoingNudgeLog("ending existing activity id=\(activity.id), taskId=\(activity.attributes.taskId)")
       Task { await activity.end(dismissalPolicy: .immediate) }
     }
 
     do {
-      _ = try Activity.request(
+      let activity = try Activity.request(
         attributes: NyangTaskActivityAttributes(taskId: taskId),
         contentState: state,
         pushType: nil
       )
+      ongoingNudgeLog("request succeeded activityId=\(activity.id)")
     } catch {
-      // 개수 제한에 걸리거나 사용자가 막아둔 경우. 앱 동작에는 영향이 없다.
+      ongoingNudgeLog("request failed: \(error.localizedDescription) (\(String(describing: error)))")
     }
+    #else
+    ongoingNudgeLog("start skipped: ActivityKit cannot be imported")
     #endif
   }
 

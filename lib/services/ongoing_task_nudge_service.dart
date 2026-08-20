@@ -40,6 +40,10 @@ class OngoingTaskNudgeService {
     'nyang_coach/ongoing_nudge',
   );
 
+  static void _log(String message) {
+    debugPrint('[OngoingNudge] $message');
+  }
+
   /// 이 기능이 쓰는 키는 'nyang_'으로 시작하지 않는다.
   ///
   /// 그 접두어가 붙은 값은 통째로 클라우드에 올라갔다 내려온다. 여기 담기는 건
@@ -90,13 +94,22 @@ class OngoingTaskNudgeService {
   /// 안드로이드는 "다른 앱 위에 표시" 권한, 아이폰은 라이브 액티비티 허용 여부다.
   /// 둘 다 팝업으로 물을 수 없어서 시스템 설정으로 보내야 한다.
   static Future<bool> isAvailable() async {
-    if (!isSupported) return false;
+    if (!isSupported) {
+      _log('isAvailable=false: unsupported platform');
+      return false;
+    }
     try {
       final method = _isAndroid ? 'canDrawOverlays' : 'isAvailable';
-      return await _channel.invokeMethod<bool>(method) ?? false;
-    } on PlatformException {
+      final available = await _channel.invokeMethod<bool>(method) ?? false;
+      _log('isAvailable=$available via $method');
+      return available;
+    } on PlatformException catch (error) {
+      _log(
+        'isAvailable=false: PlatformException(${error.code}, ${error.message})',
+      );
       return false;
-    } on MissingPluginException {
+    } on MissingPluginException catch (error) {
+      _log('isAvailable=false: MissingPluginException($error)');
       return false;
     }
   }
@@ -194,9 +207,19 @@ class OngoingTaskNudgeService {
     required String taskText,
     int elapsedSeconds = 0,
   }) async {
-    if (!isSupported) return;
-    if (!await isEnabled()) return;
-    if (!await isAvailable()) return;
+    _log(
+      'start requested taskId=$taskId, taskTextLength=${taskText.length}, elapsedSeconds=$elapsedSeconds',
+    );
+    if (!isSupported) {
+      _log('start skipped: isSupported=false');
+      return;
+    }
+    final enabled = await isEnabled();
+    _log('start guard isEnabled=$enabled');
+    if (!enabled) return;
+    final available = await isAvailable();
+    _log('start guard isAvailable=$available');
+    if (!available) return;
     try {
       final startedAt = DateTime.now().subtract(
         Duration(seconds: elapsedSeconds),
@@ -206,10 +229,11 @@ class OngoingTaskNudgeService {
         'taskText': taskText,
         'startedAtMillis': startedAt.millisecondsSinceEpoch,
       });
-    } on PlatformException {
-      // 실패해도 앱 동작에는 영향이 없다.
-    } on MissingPluginException {
-      //
+      _log('start channel call completed');
+    } on PlatformException catch (error) {
+      _log('start failed: PlatformException(${error.code}, ${error.message})');
+    } on MissingPluginException catch (error) {
+      _log('start failed: MissingPluginException($error)');
     }
   }
 
