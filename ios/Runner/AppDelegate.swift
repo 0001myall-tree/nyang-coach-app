@@ -43,58 +43,72 @@ import ActivityKit
   ) -> Bool {
     UNUserNotificationCenter.current().delegate = self
     GeneratedPluginRegistrant.register(with: self)
+    // 이 앱은 UIScene을 쓴다. 그러면 창을 만드는 것은 SceneDelegate이고, 여기서는
+    // window가 아직 nil이다 — 아래 등록이 통째로 건너뛰어진다. 그래서 SceneDelegate가
+    // 창을 세운 뒤에 한 번 더 부른다. 여기 남겨두는 것은 씬을 쓰지 않는 경우를 위한
+    // 것이고, 두 번 불러도 채널 하나에 최신 핸들러가 붙을 뿐이라 문제가 없다.
     if let controller = window?.rootViewController as? FlutterViewController {
-      let channel = FlutterMethodChannel(
-        name: widgetStatusChannel,
-        binaryMessenger: controller.binaryMessenger
-      )
-      channel.setMethodCallHandler { call, result in
-        if call.method == "hasInstalledCatHomeWidget" {
-          self.hasInstalledCatHomeWidget(result: result)
-        } else {
-          result(FlutterMethodNotImplemented)
-        }
-      }
-
-      let nudgeChannel = FlutterMethodChannel(
-        name: ongoingNudgeChannel,
-        binaryMessenger: controller.binaryMessenger
-      )
-      nudgeChannel.setMethodCallHandler { call, result in
-        switch call.method {
-        case "isAvailable":
-          result(self.liveActivitiesEnabled())
-        case "openSystemSettings":
-          self.openAppSettings()
-          result(nil)
-        case "start":
-          let args = call.arguments as? [String: Any] ?? [:]
-          let taskId = args["taskId"] as? String ?? ""
-          let taskText = args["taskText"] as? String ?? ""
-          let startedAtMillis = args["startedAtMillis"] as? NSNumber
-          if taskId.isEmpty {
-            result(FlutterError(code: "INVALID_ARGS", message: "Missing taskId", details: nil))
-            return
-          }
-          self.startOrUpdateActivity(
-            taskId: taskId,
-            taskText: taskText,
-            startedAtMillis: startedAtMillis?.doubleValue
-          )
-          result(nil)
-        case "stop":
-          self.endAllActivities()
-          result(nil)
-        default:
-          result(FlutterMethodNotImplemented)
-        }
-      }
+      registerNativeChannels(with: controller)
     }
     if let url = launchOptions?[.url] as? URL {
       storeWidgetIntent(from: url)
     }
     reloadWidgetsIfAvailable()
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+  }
+
+  /// 네이티브에만 있는 기능을 Flutter 쪽에 열어준다.
+  ///
+  /// 등록되지 않으면 Flutter의 호출이 전부 MissingPluginException으로 떨어지는데,
+  /// 그쪽 코드는 그것을 조용히 삼키고 "할 수 없음"으로 처리한다. 그래서 라이브
+  /// 액티비티가 아이폰 설정에서 꺼진 것처럼 보이고, 설정을 열어달라는 요청은
+  /// 아무 일도 일어나지 않은 것처럼 보였다.
+  func registerNativeChannels(with controller: FlutterViewController) {
+    let channel = FlutterMethodChannel(
+      name: widgetStatusChannel,
+      binaryMessenger: controller.binaryMessenger
+    )
+    channel.setMethodCallHandler { call, result in
+      if call.method == "hasInstalledCatHomeWidget" {
+        self.hasInstalledCatHomeWidget(result: result)
+      } else {
+        result(FlutterMethodNotImplemented)
+      }
+    }
+
+    let nudgeChannel = FlutterMethodChannel(
+      name: ongoingNudgeChannel,
+      binaryMessenger: controller.binaryMessenger
+    )
+    nudgeChannel.setMethodCallHandler { call, result in
+      switch call.method {
+      case "isAvailable":
+        result(self.liveActivitiesEnabled())
+      case "openSystemSettings":
+        self.openAppSettings()
+        result(nil)
+      case "start":
+        let args = call.arguments as? [String: Any] ?? [:]
+        let taskId = args["taskId"] as? String ?? ""
+        let taskText = args["taskText"] as? String ?? ""
+        let startedAtMillis = args["startedAtMillis"] as? NSNumber
+        if taskId.isEmpty {
+          result(FlutterError(code: "INVALID_ARGS", message: "Missing taskId", details: nil))
+          return
+        }
+        self.startOrUpdateActivity(
+          taskId: taskId,
+          taskText: taskText,
+          startedAtMillis: startedAtMillis?.doubleValue
+        )
+        result(nil)
+      case "stop":
+        self.endAllActivities()
+        result(nil)
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
   }
 
   override func application(

@@ -38,6 +38,25 @@ class SceneDelegate: FlutterSceneDelegate {
       storeWidgetIntent(from: context.url)
     }
     super.scene(scene, willConnectTo: session, options: connectionOptions)
+    registerNativeChannels(in: scene)
+  }
+
+  /// 네이티브 채널은 창이 생긴 뒤에 붙여야 한다.
+  ///
+  /// AppDelegate에서 붙이고 있었는데, 씬을 쓰는 앱에서는 그 시점의 window가 nil이라
+  /// 등록이 통째로 건너뛰어졌다. Flutter 쪽 호출은 전부 조용히 실패했고 — 그쪽 코드가
+  /// MissingPluginException을 삼키고 "할 수 없음"으로 처리한다 — 그래서 라이브
+  /// 액티비티가 아이폰 설정에서 꺼진 것처럼 보이고, 설정을 열어달라는 요청은
+  /// 아무 일도 일어나지 않았다.
+  private func registerNativeChannels(in scene: UIScene) {
+    let fromScene = (scene as? UIWindowScene)?
+      .windows
+      .compactMap { $0.rootViewController as? FlutterViewController }
+      .first
+    guard let controller = fromScene ?? (window?.rootViewController as? FlutterViewController)
+    else { return }
+    (UIApplication.shared.delegate as? AppDelegate)?
+      .registerNativeChannels(with: controller)
   }
 
 
