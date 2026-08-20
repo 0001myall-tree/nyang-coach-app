@@ -34,7 +34,7 @@ class SettingsScreen extends StatefulWidget {
 }
 
 /// 딴짓 방지 코치가 켜져 있을 때 이 줄을 누르면 고를 수 있는 것.
-enum _OngoingNudgeAction { test, turnOff }
+enum _OngoingNudgeAction { test, turnOff, openSettings }
 
 class _SettingsScreenState extends State<SettingsScreen>
     with WidgetsBindingObserver {
@@ -1006,9 +1006,18 @@ class _SettingsScreenState extends State<SettingsScreen>
 
     // 켜져 있는 동안에는 바로 끄지 않고 무엇을 할지 묻는다. 30분을 기다려야
     // 확인되는 기능이라, 지금 한번 보는 길이 설정 안에 있어야 한다.
-    if (_ongoingNudgeEnabled && isAndroid) {
+    if (_ongoingNudgeEnabled) {
       final action = await _askOngoingNudgeAction();
       if (action == null || !mounted) return;
+
+      // 아이폰: 앱에서 켜도 아이폰 설정의 "실시간 활동"이 꺼져 있으면 아무것도
+      // 뜨지 않는다. 그런데 그 사실을 확인할 길도, 거기로 가는 길도 앱 안에
+      // 없었다. 켜져 있다고 적힌 화면만 보면서 왜 안 뜨는지 알 수 없었다.
+      if (action == _OngoingNudgeAction.openSettings) {
+        await OngoingTaskNudgeService.openSystemSettings();
+        return;
+      }
+
       if (action == _OngoingNudgeAction.test) {
         // 막고 있는 게 있으면 먼저 말해준다. 그냥 안 나오면 어디가 문제인지
         // 알 길이 없어서, 기다린 사람만 헛수고한다.
@@ -1134,7 +1143,13 @@ class _SettingsScreenState extends State<SettingsScreen>
   }
 
   /// 켜져 있는 동안 이 줄을 눌렀을 때 무엇을 할지.
-  Future<_OngoingNudgeAction?> _askOngoingNudgeAction() {
+  Future<_OngoingNudgeAction?> _askOngoingNudgeAction() async {
+    final isAndroid = Platform.isAndroid;
+    // 아이폰은 "지금 한번 보기"가 없다. 대신 정말 뜰 수 있는 상태인지를 보고,
+    // 막혀 있으면 그 자리에서 아이폰 설정으로 데려간다.
+    final available = isAndroid || await OngoingTaskNudgeService.isAvailable();
+    if (!mounted) return null;
+
     return showDialog<_OngoingNudgeAction>(
       context: context,
       builder: (ctx) {
@@ -1151,8 +1166,14 @@ class _SettingsScreenState extends State<SettingsScreen>
             ),
           ),
           content: Text(
-            '지금 켜져 있어요. 일정을 시작하고 30분이 지난 뒤, 폰으로 다른 걸 '
-            '보고 있으면 나타납니다.',
+            isAndroid
+                ? '지금 켜져 있어요. 일정을 시작하고 30분이 지난 뒤, 폰으로 다른 걸 '
+                      '보고 있으면 나타납니다.'
+                : available
+                ? '지금 켜져 있어요. 일정을 시작하면 잠금화면에 냥냥이와 흐른 시간이 '
+                      '조용히 떠 있어요.'
+                : '앱에서는 켜져 있는데, 아이폰 설정의 "실시간 활동"이 꺼져 있어요.\n\n'
+                      '그래서 일정을 시작해도 잠금화면에 아무것도 뜨지 않습니다.',
             style: GoogleFonts.notoSansKr(
               fontSize: 13.5,
               height: 1.5,
@@ -1172,7 +1193,12 @@ class _SettingsScreenState extends State<SettingsScreen>
               ),
             ),
             ElevatedButton(
-              onPressed: () => Navigator.pop(ctx, _OngoingNudgeAction.test),
+              onPressed: () => Navigator.pop(
+                ctx,
+                isAndroid
+                    ? _OngoingNudgeAction.test
+                    : _OngoingNudgeAction.openSettings,
+              ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF8B7CFF),
                 elevation: 0,
@@ -1181,7 +1207,11 @@ class _SettingsScreenState extends State<SettingsScreen>
                 ),
               ),
               child: Text(
-                '지금 한번 보기',
+                isAndroid
+                    ? '지금 한번 보기'
+                    : available
+                    ? '아이폰 설정 열기'
+                    : '실시간 활동 켜러 가기',
                 style: GoogleFonts.notoSansKr(
                   fontWeight: FontWeight.w900,
                   color: Colors.white,
