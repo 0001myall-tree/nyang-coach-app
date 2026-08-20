@@ -59,6 +59,30 @@ class OngoingNudgeReceiver : BroadcastReceiver() {
             return
         }
 
+        // 시작할 시각을 기다리는 중. 이쪽은 두 번에 나눠 확인하지 않는다.
+        //
+        // 진행 중인 일정은 "잠깐 폰을 켠 건지 빠져 있는 건지"를 갈라야 하지만,
+        // 시작할 시각에 폰을 들고 있다면 그것만으로 충분한 신호다. 4분을 더
+        // 기다리면 시작할 시각이 이미 지나간 뒤에 나타난다.
+        if (OngoingNudgeState.isStartReminder(context)) {
+            if (OngoingNudgeState.isStartWindowOver(context)) {
+                // 오늘은 지나갔다. 밤까지 들고 다니면 알림이 아니라 잔소리가 된다.
+                OngoingNudgeState.clear(context)
+                OngoingNudgeScheduler.cancel(context)
+                return
+            }
+            if (OngoingNudgeState.shouldAppearNow(context)) {
+                OngoingNudgeService.show(context)
+            } else {
+                OngoingNudgeScheduler.scheduleIn(
+                    context,
+                    OngoingNudgeScheduler.START_SNOOZE_MILLIS,
+                    OngoingNudgeScheduler.STAGE_FIRST,
+                )
+            }
+            return
+        }
+
         if (!OngoingNudgeState.shouldAppearNow(context)) {
             // 폰을 안 보고 있다는 뜻이다. 아마 그 일을 하는 중이니 건드리지 않는다.
             OngoingNudgeScheduler.scheduleIn(

@@ -2249,6 +2249,19 @@ class _TasksScreenState extends State<TasksScreen>
     }
     if (running == null) {
       await OngoingTaskNudgeService.stop();
+      // 도는 일정이 없으면 다음에 시작할 일정을 기다린다. 시작한 일을 잊는 것보다
+      // 시작 자체를 안 하는 쪽이 훨씬 흔하다.
+      final next = OngoingTaskNudgeService.nextUnstartedTask(
+        tasks.map((t) => t.toJson()).toList(),
+        DateTime.now(),
+      );
+      if (next != null) {
+        await OngoingTaskNudgeService.remindStart(
+          taskId: next['id'].toString(),
+          taskText: next['text']?.toString() ?? '',
+          startAt: next['_startAt'] as DateTime,
+        );
+      }
       return;
     }
     await OngoingTaskNudgeService.start(

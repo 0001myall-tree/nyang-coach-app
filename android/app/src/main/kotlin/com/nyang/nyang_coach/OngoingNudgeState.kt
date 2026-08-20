@@ -24,6 +24,23 @@ object OngoingNudgeState {
     private const val KEY_TASK_TEXT = "flutter.ongoing_nudge_task_text"
     private const val KEY_RESULT = "flutter.ongoing_nudge_pending_result"
 
+    /** 지금 맡고 있는 것이 어떤 일인지. [KIND_ONGOING] 또는 [KIND_START]. */
+    private const val KEY_KIND = "flutter.ongoing_nudge_kind"
+
+    /** 이미 시작한 일정을 지켜보는 중. */
+    const val KIND_ONGOING = "ongoing"
+
+    /**
+     * 아직 시작하지 않은 일정의 시각을 기다리는 중.
+     *
+     * 시작한 일을 잊는 것보다 시작 자체를 안 하는 쪽이 훨씬 흔하다. 시작할 시각을
+     * 정해두고 그 시각에 폰을 보고 있으면, 그 일정은 대개 그날 시작되지 않는다.
+     */
+    const val KIND_START = "start"
+
+    /** 시작을 권하는 것도 이 시각까지만. 네이티브만 쓴다. */
+    private const val KEY_START_UNTIL = "ongoing_nudge_start_until"
+
     /** 냥냥코치가 화면 앞에 있는지. 앱 안에서는 이미 진행 중 카드가 보이므로 나가지 않는다. */
     private const val KEY_APP_FOREGROUND = "flutter.ongoing_nudge_app_foreground"
 
@@ -56,10 +73,43 @@ object OngoingNudgeState {
 
     fun isActive(context: Context): Boolean = taskId(context) != null
 
-    fun start(context: Context, taskId: String, taskText: String) {
+    fun kind(context: Context): String =
+        prefs(context).getString(KEY_KIND, null).orEmpty().ifBlank { KIND_ONGOING }
+
+    fun isStartReminder(context: Context): Boolean = kind(context) == KIND_START
+
+    fun start(
+        context: Context,
+        taskId: String,
+        taskText: String,
+        kind: String = KIND_ONGOING,
+    ) {
         prefs(context).edit()
             .putString(KEY_TASK_ID, taskId)
             .putString(KEY_TASK_TEXT, taskText)
+            .putString(KEY_KIND, kind)
+            .commit()
+    }
+
+    /**
+     * 시작을 권하는 일을 언제까지 붙들고 있을지.
+     *
+     * 놓친 시각을 밤늦게까지 들고 다니면 그건 알림이 아니라 잔소리가 된다.
+     */
+    fun setStartUntil(context: Context, atMillis: Long) {
+        prefs(context).edit().putLong(KEY_START_UNTIL, atMillis).commit()
+    }
+
+    fun isStartWindowOver(context: Context): Boolean {
+        val until = prefs(context).getLong(KEY_START_UNTIL, 0L)
+        return until > 0L && System.currentTimeMillis() > until
+    }
+
+    /** 시작을 권하던 일정이 이제 도는 중이 됐다. 지켜보는 쪽으로 넘긴다. */
+    fun switchToOngoing(context: Context) {
+        prefs(context).edit()
+            .putString(KEY_KIND, KIND_ONGOING)
+            .remove(KEY_START_UNTIL)
             .commit()
     }
 
@@ -67,6 +117,8 @@ object OngoingNudgeState {
         prefs(context).edit()
             .remove(KEY_TASK_ID)
             .remove(KEY_TASK_TEXT)
+            .remove(KEY_KIND)
+            .remove(KEY_START_UNTIL)
             .commit()
     }
 

@@ -81,6 +81,41 @@ object OngoingNudgeAnswerWriter {
         }
     }
 
+    /**
+     * "시작할게"를 그 자리에서 시작으로 적는다.
+     *
+     * 앱에 들어가 ▶를 누르는 것과 같은 일을 한다. 쌓인 시간은 건드리지 않고
+     * 지금부터 도는 구간만 연다 — 멈췄다 다시 시작하는 경우에도 이어서 흐른다.
+     */
+    fun markStarted(context: Context, taskId: String) {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val tasksRaw = prefs.getString(KEY_TASKS, null) ?: return
+        val tasks = runCatching { JSONArray(tasksRaw) }.getOrNull() ?: return
+
+        var target: JSONObject? = null
+        for (i in 0 until tasks.length()) {
+            val item = tasks.optJSONObject(i) ?: continue
+            if (item.opt("id")?.toString() == taskId) {
+                target = item
+                break
+            }
+        }
+        val task = target ?: return
+        if (task.optBoolean("done", false)) return
+        if (task.optBoolean("inProgress", false)) return
+
+        val now = isoOf(Date())
+        task.put("inProgress", true)
+        task.put("runStartedAt", now)
+        // 이 일을 맨 처음 시작한 시각은 한 번만 적는다. 저녁에 "시작해두고 멈춘
+        // 것 같은데"를 물을 때 방금 누른 시각을 보게 되면 안 된다.
+        if (task.optString("inProgressAt", "").isBlank()) {
+            task.put("inProgressAt", now)
+        }
+        prefs.edit().putString(KEY_TASKS, tasks.toString()).commit()
+        markStoreChanged(prefs)
+    }
+
     /** 쌓인 시간 + 지금 돌고 있는 구간. */
     private fun elapsedSecondsOf(task: JSONObject, now: Date): Int {
         var elapsed = task.optInt("elapsedSeconds", 0)

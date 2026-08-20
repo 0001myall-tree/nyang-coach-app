@@ -52,9 +52,25 @@ object OngoingNudgeScheduler {
     /** 아무도 누르지 않아도 스스로 사라지기까지. */
     const val VISIBLE_MILLIS = 15L * 60_000L
 
+    /**
+     * "좀 더 있다가"를 골랐을 때 다시 물어보기까지.
+     *
+     * 15분은 방금 미룬 사람에게 너무 이르다. 미루겠다고 한 사람의 말을 안 들은
+     * 것처럼 되고, 두 번째가 그렇게 빨리 오면 그때부터는 재촉이다. 30분이면
+     * 시작할 시각을 놓친 게 분명해지는 정도이고, 창이 한 시간이라 실제로는
+     * 한 번만 더 묻고 끝난다.
+     */
+    const val START_SNOOZE_MILLIS = 30L * 60_000L
+
+    /** 시작 시각을 지나고 이만큼까지만 권한다. 그 뒤로는 잔소리가 된다. */
+    const val START_WINDOW_MILLIS = 60L * 60_000L
+
     fun scheduleIn(context: Context, delayMillis: Long, stage: String) {
+        scheduleAt(context, System.currentTimeMillis() + delayMillis, stage)
+    }
+
+    fun scheduleAt(context: Context, triggerAt: Long, stage: String) {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        val triggerAt = System.currentTimeMillis() + delayMillis
         val intent = pendingIntent(context, stage)
 
         // 느슨한 예약은 절전 중인 기기에서 한참 뒤에야 울리거나 아예 묻힌다.

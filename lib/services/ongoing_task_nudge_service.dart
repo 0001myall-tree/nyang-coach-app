@@ -12,12 +12,13 @@ class OngoingNudgeAnswer {
 
   final String taskId;
 
-  /// 'done' = 다 했어, 'paused' = 잠깐 멈췄어.
-  /// '계속하는 중'은 아무것도 바꾸지 않으므로 답이 남지 않는다.
+  /// 'done' = 다 했어, 'started' = (시작 전 일정에) 시작할게.
+  /// '계속하는 중', '다시 시작할게', '좀 더 있다가'는 일정을 바꾸지 않으므로
+  /// 답이 남지 않는다.
   final String action;
 
   bool get isDone => action == 'done';
-  bool get isPaused => action == 'paused';
+  bool get isStarted => action == 'started';
 }
 
 /// 시작해둔 일정을 앱 밖에서도 떠올릴 수 있게 하는 기능.
@@ -212,6 +213,69 @@ class OngoingTaskNudgeService {
     }
   }
 
+  /// 아직 시작하지 않은 일정의 시작 시각을 기다리게 한다.
+  ///
+  /// 안드로이드에만 있다. 아이폰은 다른 앱 위에 그릴 수 없어서, 시작하지 않은
+  /// 일정에는 보여줄 자리가 없다(라이브 액티비티는 도는 일정에만 붙는다).
+  static Future<void> remindStart({
+    required String taskId,
+    required String taskText,
+    required DateTime startAt,
+  }) async {
+    if (!_isAndroid) return;
+    if (!await isEnabled()) return;
+    if (!await isAvailable()) return;
+    try {
+      await _channel.invokeMethod('remindStart', {
+        'taskId': taskId,
+        'taskText': taskText,
+        'startAtMillis': startAt.millisecondsSinceEpoch,
+      });
+    } on PlatformException {
+      //
+    } on MissingPluginException {
+      //
+    }
+  }
+
+  /// 오늘 시작할 시각이 정해져 있는데 아직 손대지 않은 일정 중 가장 이른 것.
+  ///
+  /// 이미 시작했거나 끝낸 것, 시각이 없는 것, 시각이 지나버린 것은 뺀다.
+  /// 지나버린 것까지 챙기면 하루 종일 밀린 일정을 들고 다니게 된다.
+  static Map<String, dynamic>? nextUnstartedTask(
+    List<dynamic> tasks,
+    DateTime now,
+  ) {
+    Map<String, dynamic>? best;
+    DateTime? bestAt;
+    for (final item in tasks) {
+      if (item is! Map) continue;
+      if (item['done'] == true) continue;
+      if (item['inProgress'] == true) continue;
+      if (((item['elapsedSeconds'] as num?)?.toInt() ?? 0) > 0) continue;
+      final at = _startTimeOf(item['timeStart']?.toString(), now);
+      if (at == null || !at.isAfter(now)) continue;
+      if (bestAt == null || at.isBefore(bestAt)) {
+        best = Map<String, dynamic>.from(item);
+        bestAt = at;
+      }
+    }
+    if (best == null || bestAt == null) return null;
+    return {...best, '_startAt': bestAt};
+  }
+
+  /// "HH:mm"을 오늘의 시각으로. 형식이 아니면 null.
+  static DateTime? _startTimeOf(String? raw, DateTime now) {
+    if (raw == null) return null;
+    final parts = raw.split(':');
+    if (parts.length != 2) return null;
+    final hour = int.tryParse(parts[0]);
+    final minute = int.tryParse(parts[1]);
+    if (hour == null || minute == null) return null;
+    if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return null;
+    return DateTime(now.year, now.month, now.day, hour, minute);
+  }
+
   /// 저장된 할 일을 보고 지금 상태에 맞춰준다.
   ///
   /// 플래너 화면이 열려 있지 않아도 맞춰져야 한다. 앱을 강제 종료했다 켜면
@@ -232,21 +296,33 @@ class OngoingTaskNudgeService {
       return;
     }
 
-    Map<String, dynamic>? running;
+    final List tasks;
     try {
-      for (final item in jsonDecode(raw) as List) {
-        if (item is! Map) continue;
-        if (item['done'] == true) continue;
-        if (item['inProgress'] != true) continue;
-        running = Map<String, dynamic>.from(item);
-        break;
-      }
+      tasks = jsonDecode(raw) as List;
     } catch (_) {
       return;
     }
 
+    Map<String, dynamic>? running;
+    for (final item in tasks) {
+      if (item is! Map) continue;
+      if (item['done'] == true) continue;
+      if (item['inProgress'] != true) continue;
+      running = Map<String, dynamic>.from(item);
+      break;
+    }
+
     if (running == null) {
+      // 도는 일정이 없으면 다음에 시작할 일정을 기다린다.
       await stop();
+      final next = nextUnstartedTask(tasks, DateTime.now());
+      if (next != null) {
+        await remindStart(
+          taskId: next['id'].toString(),
+          taskText: next['text']?.toString() ?? '',
+          startAt: next['_startAt'] as DateTime,
+        );
+      }
       return;
     }
 
@@ -288,6 +364,9 @@ class OngoingTaskNudgeService {
     if (answer.isDone) {
       return TaskCompletionService.completeStoredTask(taskId: answer.taskId);
     }
+    // "시작할게"는 네이티브가 이미 저장소에 적었다. 여기서는 화면이 다시 읽도록
+    // 바뀌었다고만 알린다.
+    if (answer.isStarted) return true;
     return TaskCompletionService.pauseStoredTask(taskId: answer.taskId);
   }
 

@@ -139,13 +139,48 @@ class MainActivity : FlutterFragmentActivity() {
                             return@setMethodCallHandler
                         }
                         // 같은 일정이 이미 걸려 있으면 예약을 처음부터 다시 걸지 않는다.
-                        val alreadyRunning = OngoingNudgeState.taskId(this) == taskId
+                        // 시작을 기다리던 일정이 이제 도는 중이면 다시 걸어야 한다 —
+                        // 그때 잡아둔 예약은 시작할 시각을 보는 것이라 쓸모가 없다.
+                        val alreadyRunning = OngoingNudgeState.taskId(this) == taskId &&
+                            !OngoingNudgeState.isStartReminder(this)
                         OngoingNudgeState.start(this, taskId, taskText)
                         if (!alreadyRunning) {
                             OngoingNudgeScheduler.cancel(this)
                             OngoingNudgeScheduler.scheduleIn(
                                 this,
                                 OngoingNudgeScheduler.FIRST_DELAY_MILLIS,
+                                OngoingNudgeScheduler.STAGE_FIRST,
+                            )
+                        }
+                        result.success(null)
+                    }
+                    "remindStart" -> {
+                        val taskId = call.argument<String>("taskId")
+                        val taskText = call.argument<String>("taskText").orEmpty()
+                        val startAtMillis = call.argument<Long>("startAtMillis")
+                        if (taskId.isNullOrBlank() || startAtMillis == null) {
+                            result.error("INVALID_ARGS", "Missing taskId or startAtMillis", null)
+                            return@setMethodCallHandler
+                        }
+                        // 같은 일정을 이미 기다리고 있으면 예약을 다시 걸지 않는다.
+                        // 저장은 자주 일어나고, 그때마다 다시 걸면 시각이 조금씩 밀린다.
+                        val alreadyWaiting = OngoingNudgeState.taskId(this) == taskId &&
+                            OngoingNudgeState.isStartReminder(this)
+                        OngoingNudgeState.start(
+                            this,
+                            taskId,
+                            taskText,
+                            OngoingNudgeState.KIND_START,
+                        )
+                        OngoingNudgeState.setStartUntil(
+                            this,
+                            startAtMillis + OngoingNudgeScheduler.START_WINDOW_MILLIS,
+                        )
+                        if (!alreadyWaiting) {
+                            OngoingNudgeScheduler.cancel(this)
+                            OngoingNudgeScheduler.scheduleAt(
+                                this,
+                                startAtMillis,
                                 OngoingNudgeScheduler.STAGE_FIRST,
                             )
                         }

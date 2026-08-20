@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 냥냥이를 눌렀을 때만 펼쳐지는 카드. 이때는 사용자가 스스로 부른 것이라
-     화면 전체를 덮어도 되고, 바깥을 누르면 다시 작아진다. -->
+<!-- 시작할 시각이 됐는데 아직 시작하지 않은 일정을 물을 때 펼쳐지는 카드.
+     진행 중인 일정을 묻는 카드(nudge_card.xml)와 생김새는 같고 답이 다르다. -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:id="@+id/nudge_card_scrim"
+    android:id="@+id/nudge_start_scrim"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="#66000000"
@@ -30,7 +30,7 @@
         android:paddingBottom="16dp">
 
         <TextView
-            android:id="@+id/nudge_card_title"
+            android:id="@+id/nudge_start_title"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:ellipsize="end"
@@ -41,7 +41,7 @@
             android:textStyle="bold" />
 
         <ImageView
-            android:id="@+id/nudge_card_image"
+            android:id="@+id/nudge_start_image"
             android:layout_width="120dp"
             android:layout_height="120dp"
             android:layout_gravity="center_horizontal"
@@ -51,36 +51,24 @@
             android:scaleType="fitCenter" />
 
         <TextView
-            android:id="@+id/nudge_card_done"
+            android:id="@+id/nudge_start_go"
             android:layout_width="match_parent"
             android:layout_height="48dp"
             android:background="@drawable/nudge_button_primary"
             android:gravity="center"
-            android:text="다 했어"
+            android:text="시작할게"
             android:textColor="#FFFFFF"
             android:textSize="15sp"
             android:textStyle="bold" />
 
         <TextView
-            android:id="@+id/nudge_card_continue"
+            android:id="@+id/nudge_start_later"
             android:layout_width="match_parent"
             android:layout_height="48dp"
             android:layout_marginTop="8dp"
             android:background="@drawable/nudge_button_secondary"
             android:gravity="center"
-            android:text="계속하는 중"
-            android:textColor="#3D3A4E"
-            android:textSize="15sp"
-            android:textStyle="bold" />
-
-        <TextView
-            android:id="@+id/nudge_card_restart"
-            android:layout_width="match_parent"
-            android:layout_height="48dp"
-            android:layout_marginTop="8dp"
-            android:background="@drawable/nudge_button_secondary"
-            android:gravity="center"
-            android:text="다시 시작할게"
+            android:text="좀 더 있다가"
             android:textColor="#6B6676"
             android:textSize="15sp" />
     </LinearLayout>
