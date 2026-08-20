@@ -45,6 +45,34 @@ class TaskCompletionService {
   static Future<bool> pauseStoredTask({required String taskId}) =>
       _apply(taskId: taskId, done: false, at: DateTime.now());
 
+  /// 앱 밖에서 "시작할게"를 골랐을 때. ▶를 누른 것과 같은 일을 한다.
+  ///
+  /// 쌓인 시간은 건드리지 않고 지금부터 도는 구간만 연다. 멈췄다 다시 시작하는
+  /// 경우에도 이어서 흐른다. 이미 돌고 있거나 끝난 일이면 아무것도 하지 않는다.
+  static Future<bool> startStoredTask({required String taskId}) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.reload();
+
+    final tasks = _decodeList(prefs.getString(tasksKey));
+    final task = _findById(tasks, taskId);
+    if (task == null) return false;
+    if (task['done'] == true) return false;
+    if (task['inProgress'] == true) return false;
+
+    final now = DateTime.now();
+    final at = now.toIso8601String();
+    task['inProgress'] = true;
+    task['runStartedAt'] = at;
+    // 맨 처음 시작한 시각은 한 번만 적는다. 저녁에 "시작해두고 멈춘 것 같은데"를
+    // 물을 때 방금 누른 시각을 보게 되면 안 된다.
+    if ((task['inProgressAt']?.toString() ?? '').isEmpty) {
+      task['inProgressAt'] = at;
+    }
+    await prefs.setString(tasksKey, jsonEncode(tasks));
+    await _markChanged(prefs, now);
+    return true;
+  }
+
   static Future<bool> _apply({
     required String taskId,
     required bool done,

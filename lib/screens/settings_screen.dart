@@ -14,6 +14,7 @@ import '../services/tasks_sync_service.dart';
 import '../models/user_data.dart';
 import '../services/widget_sync_service.dart';
 import '../services/apple_calendar_sync_service.dart';
+import '../services/nyang_banner_nudge.dart';
 import '../services/ongoing_task_nudge_service.dart';
 import '../theme/app_design_tokens.dart';
 import '../widgets/alarm_permission_notice.dart';
@@ -1097,6 +1098,49 @@ class _SettingsScreenState extends State<SettingsScreen>
                 '소리도 진동도 없고, 그냥 두면 스스로 사라져요.'
           : await _iosNudgeDescription(),
     );
+
+    // 알림이 꺼져 있으면 이 기능은 반쪽이 된다. 안드로이드는 냥냥이가 떠 있는
+    // 동안 조용한 알림 한 줄이 함께 있어야 하고, 아이폰 배너는 알림 그 자체다.
+    // 처음 물었을 때 거절했으면 시스템은 다시 묻지 않으므로 설정으로 데려간다.
+    if (!mounted) return;
+    if (!await NotificationService().areNotificationsEnabled()) {
+      if (!mounted) return;
+      await _showAlarmNoticeDialog(
+        title: '🔔 알림을 켜주세요',
+        message: isAndroid
+            ? '냥냥코치 알림이 꺼져 있어요.\n\n'
+                  '냥냥이가 나와 있는 동안 조용한 알림 한 줄이 함께 있어야 해서, '
+                  '알림이 꺼져 있으면 나올 수 없어요.'
+            : '냥냥코치 알림이 꺼져 있어요.\n\n'
+                  '이 아이폰은 냥냥이가 배너로 찾아가는데, 알림이 꺼져 있으면 '
+                  '그 배너가 오지 않아요.',
+        actionLabel: '설정 열기',
+        closeLabel: '나중에',
+        onAction: () async {
+          await OngoingTaskNudgeService.openSystemSettings();
+        },
+      );
+    }
+
+    // 배너로 찾아가는 아이폰이면, 그 배너가 금방 사라지지 않게 하는 길을
+    // 한 번만 알려준다. 얼마나 머무를지는 앱이 아니라 이 설정이 정한다.
+    if (!mounted) return;
+    if (await NyangBannerNudge.isNeededHere()) {
+      if (!mounted) return;
+      await _showAlarmNoticeDialog(
+        title: '🐾 배너를 오래 남기려면',
+        message:
+            '이 아이폰은 다른 앱 위에 냥냥이를 띄울 수 없어서, 딴짓할 때 '
+            '"냥냥이 배너"로 찾아가요.\n\n'
+            '배너가 금방 사라지지 않게 하려면 배너 스타일을 "지속"으로 '
+            '바꿔주세요.',
+        actionLabel: '설정 열기',
+        closeLabel: '나중에',
+        onAction: () async {
+          await OngoingTaskNudgeService.openSystemSettings();
+        },
+      );
+    }
 
     // 절전이 걸려 있으면 냥냥이가 제때 못 나간다. 켠 직후 한 번만 짚어준다.
     if (!mounted) return;

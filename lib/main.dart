@@ -21,6 +21,7 @@ import 'services/task_resistance_service.dart';
 import 'services/notification_service.dart';
 import 'services/ongoing_task_nudge_service.dart';
 import 'services/tasks_sync_service.dart';
+import 'services/nyang_banner_nudge.dart';
 import 'services/widget_sync_service.dart';
 import 'models/user_data.dart';
 import 'theme/app_design_tokens.dart';
@@ -110,6 +111,7 @@ class _NyangCoachAppState extends State<NyangCoachApp>
         (_) => OngoingTaskNudgeService.reconcile(),
       ),
     );
+    unawaited(NyangBannerNudge.sync());
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(NotificationService().requestNotificationPermissions());
     });
@@ -132,6 +134,9 @@ class _NyangCoachAppState extends State<NyangCoachApp>
       OngoingTaskNudgeService.applyPendingAnswer().then(
         (_) => OngoingTaskNudgeService.reconcile(),
       );
+      // 배너에서 "시작할게"를 눌렀으면 저장소는 이미 바뀌어 있다. 다음 배너를
+      // 다시 잡아둬야 그 일정에 계속 걸려 있지 않는다.
+      unawaited(NyangBannerNudge.sync());
     }
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached) {

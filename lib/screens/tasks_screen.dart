@@ -23,6 +23,7 @@ import '../services/analytics_service.dart';
 import '../services/api_usage_limit_service.dart';
 import '../services/widget_sync_service.dart';
 import '../services/daily_reset_service.dart';
+import '../services/nyang_banner_nudge.dart';
 import '../services/ongoing_task_nudge_service.dart';
 import '../services/task_completion_service.dart';
 import '../services/apple_calendar_sync_service.dart';
@@ -2230,6 +2231,8 @@ class _TasksScreenState extends State<TasksScreen>
     // 울리는 일이 없다.
     unawaited(NotificationService().syncDailyPlannerNudge());
     unawaited(_syncOngoingNudge());
+    // 다이내믹 아일랜드가 없는 아이폰은 냥냥이 대신 배너가 찾아간다.
+    unawaited(NyangBannerNudge.sync());
     widget.onProgressChanged?.call();
     TasksSyncService.scheduleSyncToCloud();
   }
@@ -2335,6 +2338,21 @@ class _TasksScreenState extends State<TasksScreen>
                   '이게 없으면 냥냥이가 다른 앱 위로 나올 수 없어요.'
             : '설정에서 냥냥코치를 찾아 "실시간 활동"을 켜주세요.\n'
                   '이게 꺼져 있으면 잠금화면에 아무것도 뜨지 않아요.',
+        actionLabel: '설정 열기',
+      );
+      await OngoingTaskNudgeService.openSystemSettings();
+      return;
+    }
+
+    // 알림이 꺼져 있으면 냥냥이는 나올 수 없다(안드로이드는 조용한 한 줄이
+    // 함께 있어야 하고, 아이폰 배너는 알림 그 자체다). 켜졌다고 해놓고 아무것도
+    // 오지 않는 상태로 두지 않는다.
+    if (!await NotificationService().areNotificationsEnabled()) {
+      if (!mounted) return;
+      await _showOngoingNudgeNotice(
+        title: '🔔 알림도 켜주세요',
+        message: '냥냥코치 알림이 꺼져 있어서, 지금은 냥냥이가 나올 수 없어요.\n'
+            '설정에서 켜주시면 바로 챙겨드릴게요.',
         actionLabel: '설정 열기',
       );
       await OngoingTaskNudgeService.openSystemSettings();

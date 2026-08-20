@@ -15,6 +15,7 @@ import '../screens/main_tab_screen.dart';
 import 'analytics_service.dart';
 import 'coach_id_service.dart';
 import 'morning_call_alarm_session.dart';
+import 'nyang_banner_nudge.dart';
 import 'preemptive_nudge_service.dart';
 import 'tasks_sync_service.dart';
 import 'user_title_service.dart';
@@ -250,7 +251,7 @@ class NotificationService {
     }
     const AndroidInitializationSettings androidSettings =
         AndroidInitializationSettings('@mipmap/ic_launcher');
-    const DarwinInitializationSettings iosSettings =
+    final DarwinInitializationSettings iosSettings =
         DarwinInitializationSettings(
           requestAlertPermission: false,
           requestBadgePermission: false,
@@ -258,15 +259,21 @@ class NotificationService {
           defaultPresentBanner: true,
           defaultPresentList: true,
           defaultPresentSound: true,
+          notificationCategories: [nyangBannerCategory],
         );
-    const InitializationSettings settings = InitializationSettings(
+    final InitializationSettings settings = InitializationSettings(
       android: androidSettings,
       iOS: iosSettings,
     );
     await _plugin.initialize(
       settings: settings,
+      onDidReceiveBackgroundNotificationResponse: nyangBannerBackgroundHandler,
       onDidReceiveNotificationResponse: (NotificationResponse response) async {
         final payload = response.payload;
+        if (payload != null && payload.startsWith('$nyangBannerPayload:')) {
+          await handleNyangBannerResponse(response);
+          return;
+        }
         if (payload == null) return;
         if (payload.startsWith('core:')) {
           _openCoreReminder(payload);
@@ -415,6 +422,29 @@ class NotificationService {
         true;
 
     return androidAllowed && iosAllowed;
+  }
+
+  /// 이 기기에서 앱 알림이 켜져 있는지.
+  ///
+  /// 처음 물었을 때 거절하면 시스템은 다시 묻지 않는다. 그 뒤로는 설정에서
+  /// 직접 켜는 수밖에 없어서, 알림에 기대는 기능은 켤 때마다 이것을 확인해야
+  /// 한다. 확인하지 않으면 켜졌다고 적힌 채 아무것도 오지 않는다.
+  Future<bool> areNotificationsEnabled() async {
+    if (kIsWeb) return true;
+    if (defaultTargetPlatform == TargetPlatform.iOS) {
+      final granted = await _plugin
+          .resolvePlatformSpecificImplementation<
+            IOSFlutterLocalNotificationsPlugin
+          >()
+          ?.checkPermissions();
+      return granted?.isEnabled ?? true;
+    }
+    return await _plugin
+            .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin
+            >()
+            ?.areNotificationsEnabled() ??
+        true;
   }
 
   Future<bool> _invokeAndroidAlarmPermissionCheck(String method) async {
