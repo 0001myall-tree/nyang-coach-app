@@ -32,6 +32,8 @@ import 'package:nyang_coach/services/ongoing_task_nudge_service.dart';
 import 'package:nyang_coach/services/memory_service.dart';
 import 'package:nyang_coach/services/notification_service.dart';
 import 'package:nyang_coach/services/preemptive_nudge_service.dart';
+import 'package:nyang_coach/services/planner_action.dart';
+import 'package:nyang_coach/services/planner_edit_service.dart';
 import 'package:nyang_coach/services/registration_target.dart';
 import 'package:nyang_coach/services/repeat_keyword_service.dart';
 import 'package:nyang_coach/services/task_resistance_service.dart';
@@ -970,6 +972,9 @@ class _ParsedReply {
 
   /// 코치가 등록하자고 짚은 일정·습관. 바로 넣지 않고 확인 카드로 물어본다.
   final String? scheduleToConfirm;
+
+  /// 코치가 짚어준 플래너 조작. 확인 카드로 한 번 물어본 뒤에만 실행된다.
+  final PlannerAction? plannerAction;
   final String? habitToConfirm;
   final String? goalToConfirm;
 
@@ -983,6 +988,7 @@ class _ParsedReply {
     this.ultraLowResistanceFollowup,
     this.startCountdown = false,
     this.scheduleToConfirm,
+    this.plannerAction,
     this.habitToConfirm,
     this.goalToConfirm,
     List<_SuggestedTask>? suggestedTasks,
@@ -2044,6 +2050,213 @@ class _ChatScreenState extends State<ChatScreen>
   ///
   /// 이미 정규식이 잡아 등록한 턴이면 카드를 띄우지 않는다. 같은 항목을
   /// 두 번 물어보게 된다.
+  /// 코치가 짚어준 플래너 조작을 확인 카드로 띄운다.
+  ///
+  /// 태그를 받았다고 바로 고치지 않는다. 코치가 알아들은 것은 앞 대화와 목록을
+  /// 보고 맞춘 결과라 어긋날 수 있고, 앱 밖에서 조용히 바뀌면 알아채기 어렵다.
+  /// 되돌리기 쉬운 동작도 예외를 두지 않는다 — 규칙이 하나여야 헷갈리지 않는다.
+  static const String _plannerActionKind = 'planner_action';
+  static const String _plannerActionYes = '응';
+  static const String _plannerActionNo = '아니야';
+
+  Future<void> _offerPlannerAction(PlannerAction action) async {
+    if (!_userData.isPlanActive) return;
+    if (!action.isUsable) return;
+
+    // 모닝콜은 찾을 일정이 없다. 바로 카드로 간다.
+    if (action.kind == PlannerActionKind.morning) {
+      _showPlannerActionCard(action, _morningQuestion(action));
+      return;
+    }
+
+    final preview = await PlannerEditService.preview(action);
+    if (!mounted) return;
+    if (!preview.isOk) {
+      _injectAiMessage(_plannerActionMiss(action, preview));
+      return;
+    }
+    _showPlannerActionCard(action, _plannerQuestion(action, preview));
+  }
+
+  void _showPlannerActionCard(PlannerAction action, String question) {
+    setState(() {
+      _messages.add(
+        ChatMessage(
+          text: question,
+          isUser: false,
+          time: DateTime.now(),
+          kind: _plannerActionKind,
+          choices: const [_plannerActionYes, _plannerActionNo],
+          payload: jsonEncode(_plannerActionPayload(action)),
+        ),
+      );
+    });
+    _scrollToBottom();
+  }
+
+  Map<String, dynamic> _plannerActionPayload(PlannerAction action) => {
+    'kind': action.kind.name,
+    'target': action.target,
+    if (action.date != null) 'date': action.date!.toIso8601String(),
+    if (action.time != null) 'hour': action.time!.hour,
+    if (action.time != null) 'minute': action.time!.minute,
+    if (action.enabled != null) 'enabled': action.enabled,
+  };
+
+  PlannerAction? _plannerActionFromPayload(String? payload) {
+    if (payload == null || payload.isEmpty) return null;
+    final Map<String, dynamic> data;
+    try {
+      data = jsonDecode(payload) as Map<String, dynamic>;
+    } catch (_) {
+      return null;
+    }
+    final kind = PlannerActionKind.values
+        .where((k) => k.name == data['kind'])
+        .firstOrNull;
+    if (kind == null) return null;
+    final hour = (data['hour'] as num?)?.toInt();
+    final minute = (data['minute'] as num?)?.toInt();
+    return PlannerAction(
+      kind: kind,
+      target: data['target']?.toString() ?? '',
+      date: DateTime.tryParse(data['date']?.toString() ?? ''),
+      time: hour == null ? null : (hour: hour, minute: minute ?? 0),
+      enabled: data['enabled'] as bool?,
+    );
+  }
+
+  String _plannerQuestion(PlannerAction action, PlannerActionResult found) {
+    final name = found.label.isEmpty ? action.target : found.label;
+    return switch (action.kind) {
+      PlannerActionKind.move => "'$name' ${found.detail}으로 옮길까요?",
+      PlannerActionKind.done => "'$name' 완료로 표시할까요?",
+      PlannerActionKind.remind =>
+        action.enabled == true
+            ? "'$name' 알람을 켤까요?"
+            : "'$name' 알람을 끌까요?",
+      PlannerActionKind.morning => _morningQuestion(action),
+    };
+  }
+
+  String _morningQuestion(PlannerAction action) {
+    if (action.enabled == false) return '모닝콜을 끌까요?';
+    final time = action.time!;
+    return '모닝콜을 ${PlannerEditService.moveDetail(time: time)}로 맞출까요?';
+  }
+
+  /// 찾지 못했을 때 하는 말. 카드를 띄우지 않고 그냥 말해준다.
+  String _plannerActionMiss(PlannerAction action, PlannerActionResult found) {
+    final name = found.label.isEmpty ? action.target : found.label;
+    return switch (found.status) {
+      PlannerActionStatus.multiple => "'$name'이 여러 개 있어서 어느 건지 모르겠어요. "
+          '시간까지 알려주시면 찾아볼게요.',
+      PlannerActionStatus.noChange =>
+        action.kind == PlannerActionKind.done
+            ? "'$name'은 이미 완료로 되어 있어요."
+            : "'$name'은 이미 그렇게 되어 있어요.",
+      PlannerActionStatus.failed =>
+        action.kind == PlannerActionKind.remind
+            ? "'$name'은 시각이 없어서 알람을 걸 수 없어요. 시간을 먼저 정해주세요."
+            : "'$name'을 바꾸지 못했어요.",
+      _ => "'$name'을 못 찾겠어요. 이름이 조금 다를 수 있어요.",
+    };
+  }
+
+  Future<void> _handlePlannerActionChoice(
+    ChatMessage msg,
+    String label,
+  ) async {
+    if (_isLoading) return;
+    HapticFeedback.lightImpact();
+    await _consumeChoiceCard(msg);
+
+    final action = _plannerActionFromPayload(msg.payload);
+    if (action == null) return;
+    if (label == _plannerActionNo) {
+      _injectAiMessage('알겠어요, 그대로 둘게요.');
+      return;
+    }
+
+    unawaited(
+      AnalyticsService.logFeatureUsage('planner_action_${action.kind.name}'),
+    );
+
+    if (action.kind == PlannerActionKind.morning) {
+      await _applyMorningCall(action);
+      return;
+    }
+
+    final result = await PlannerEditService.apply(action);
+    if (!mounted) return;
+    if (!result.isOk) {
+      _injectAiMessage(_plannerActionMiss(action, result));
+      return;
+    }
+    // 알람은 시각을 보고 다시 계산된다. 옮겨놓고 예약을 그대로 두면 옛 시각에 운다.
+    unawaited(NotificationService().syncCoreReminders());
+    _injectAiMessage(_plannerActionDone(action, result));
+  }
+
+  /// 모닝콜은 플래너가 아니라 알림 설정에 있다. 저장하고 다시 예약한다.
+  ///
+  /// 권한이 막혀 있으면 켜도 울리지 않는다. 그건 설정 화면에서 안내하는 일이라
+  /// 여기서는 상태만 확인해 사실대로 말한다.
+  Future<void> _applyMorningCall(PlannerAction action) async {
+    final prefs = await SharedPreferences.getInstance();
+    final on = action.enabled != false;
+
+    if (!on) {
+      await prefs.setBool('nyang_morning_call_enabled', false);
+      await NotificationService().cancelAllMorningCalls();
+      TasksSyncService.scheduleSyncToCloud();
+      if (!mounted) return;
+      _injectAiMessage('모닝콜을 껐어요 ✓');
+      return;
+    }
+
+    final time = action.time!;
+    final timeStr =
+        '${time.hour.toString().padLeft(2, '0')}:'
+        '${time.minute.toString().padLeft(2, '0')}';
+    final coachId = prefs.getString('nyang_morning_call_coach') ?? widget.coachId;
+    await prefs.setBool('nyang_morning_call_enabled', true);
+    await prefs.setString('nyang_morning_call_time', timeStr);
+    await prefs.setString('nyang_morning_call_coach', coachId);
+    TasksSyncService.scheduleSyncToCloud();
+
+    await NotificationService().requestNotificationPermissions();
+    await NotificationService().scheduleDailyMorningCall(
+      hour: time.hour,
+      minute: time.minute,
+      coachId: coachId,
+    );
+    final issue = await NotificationService().checkAlarmPermission();
+    if (!mounted) return;
+
+    final label = PlannerEditService.moveDetail(time: time);
+    if (issue == AlarmPermissionIssue.none) {
+      _injectAiMessage('모닝콜을 $label로 맞췄어요 ✓');
+      return;
+    }
+    // 켜두기는 했으니 되돌리지 않는다. 다만 울리지 않는다는 것은 말해줘야 한다.
+    _injectAiMessage(
+      '모닝콜을 $label로 맞췄어요. 그런데 알림 권한이 막혀 있어서 지금은 울리지 않아요. '
+      '설정에서 알림을 켜주세요.',
+    );
+  }
+
+  String _plannerActionDone(PlannerAction action, PlannerActionResult result) {
+    final name = result.label.isEmpty ? action.target : result.label;
+    return switch (action.kind) {
+      PlannerActionKind.move => "'$name' ${result.detail}으로 옮겼어요 ✓",
+      PlannerActionKind.done => "'$name' 완료했어요 ✓",
+      PlannerActionKind.remind =>
+        action.enabled == true ? "'$name' 알람을 켰어요 ✓" : "'$name' 알람을 껐어요 ✓",
+      PlannerActionKind.morning => '모닝콜을 맞췄어요 ✓',
+    };
+  }
+
   void _offerRegistrationConfirm(_ParsedReply parsed) {
     if (!_userData.isPlanActive) return;
 
@@ -6344,6 +6557,12 @@ ${lines.join('\n')}
 
     // [SCHEDULE: ...] / [HABIT: ...] — 정규식이 놓친 말투를 코치가 대신 잡아준다.
     // 여기서 바로 등록하지 않고 이름만 챙긴다. 잘못 알아들었을 수 있어서다.
+    // 조작 태그는 본문에서 떼어낸다. 사용자에게 보이면 안 된다.
+    final plannerAction = PlannerAction.parse(raw);
+    if (plannerAction != null) {
+      text = PlannerAction.strip(text);
+    }
+
     final scheduleMatch = scheduleRegex.firstMatch(raw);
     if (scheduleMatch != null) {
       scheduleToConfirm = scheduleMatch.group(1)!.trim();
@@ -6394,6 +6613,7 @@ ${lines.join('\n')}
       scheduleToConfirm: scheduleToConfirm,
       habitToConfirm: habitToConfirm,
       goalToConfirm: goalToConfirm,
+      plannerAction: plannerAction?.isUsable == true ? plannerAction : null,
     );
   }
 
@@ -11665,7 +11885,13 @@ ${lines.join('\n')}
       _scrollToBottom();
       await _saveHistory();
       if (mounted) {
-        _offerRegistrationConfirm(parsed);
+        // 한 턴에 카드 하나. 조작과 등록이 같이 오면 조작이 먼저다 — 이미 있는
+        // 것을 고치는 쪽이 새로 만드는 쪽보다 방금 한 말에 가깝다.
+        if (parsed.plannerAction != null) {
+          await _offerPlannerAction(parsed.plannerAction!);
+        } else {
+          _offerRegistrationConfirm(parsed);
+        }
         await _saveHistory();
       }
       if (_coach.isMaster && parsed.startCountdown && mounted) {
@@ -13689,6 +13915,17 @@ $resistanceFlowRule'''
     var contextString = useVisionNewActionContext
         ? await _buildVisionNewActionContextString()
         : await _buildContextString(userText, scope: contextScope);
+    // 일정을 건드려달라는 말이 나온 턴에만 조작 규칙을 붙인다. 매 턴 실으면
+    // 잡담에도 태그가 붙고, 무엇보다 그 턴의 다른 지침을 밀어낸다.
+    //
+    // 목록이 실리지 않은 턴에는 붙이지 않는다. 이름을 목록에서 옮겨 적으라고
+    // 해놓고 목록을 안 주면, 코치는 없는 이름을 지어낸다.
+    final plannerActionSection =
+        contextScope.tasks &&
+            CoachContextScopeService.hasPlannerActionSignal(userText)
+        ? Prompts.plannerActionRules
+        : '';
+
     final timerOutputRule = _coach.isMaster
         ? Prompts.timerOutputMaster
         : Prompts.timerOutputFriends;
@@ -13763,6 +14000,7 @@ $bedtimeCarryOverSection
 $emptyPlanAskSection
 $capabilitySection
 $prepTimeSection
+$plannerActionSection
 
 ${Prompts.conversationContextRules}
 
@@ -15862,6 +16100,12 @@ ${Prompts.outputRulesTail}$coachOfferTaskRule$halmaeHint$resistanceTurnDirective
       return _buildChoiceBubbleCard(
         msg,
         (label) => _handleEveningPendingChoice(label, msg.choices),
+      );
+    }
+    if (msg.kind == _plannerActionKind && msg.choices.isNotEmpty) {
+      return _buildChoiceBubbleCard(
+        msg,
+        (label) => _handlePlannerActionChoice(msg, label),
       );
     }
     if (msg.kind == _registerConfirmKind && msg.choices.isNotEmpty) {

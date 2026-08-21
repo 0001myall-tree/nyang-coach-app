@@ -240,7 +240,26 @@ class CoachContextScopeService {
   }
 
   static bool hasTaskSignal(String text) =>
-      taskSignals.any(_normalize(text).contains);
+      taskSignals.any(_normalize(text).contains) || hasPlannerActionSignal(text);
+
+  /// 이미 있는 일정을 옮기거나 끝냈거나 알람을 걸어달라는 말.
+  ///
+  /// 코치가 그 일정을 짚어주려면 오늘 목록이 실려 있어야 한다. 이름을 대지 않고
+  /// "그거 8시로"라고만 말하는 일이 흔한데, 목록이 없으면 코치는 무엇을 가리키는지
+  /// 알 수 없어 이름을 지어낸다.
+  static bool hasPlannerActionSignal(String text) {
+    final normalized = _normalize(text);
+    return _plannerActionSignal.hasMatch(normalized);
+  }
+
+  static final RegExp _plannerActionSignal = RegExp(
+    // 옮기기 — 시각이나 날짜를 함께 말한다.
+    r'(?:옮겨|옮길|미뤄|미룰|미룰래|당겨|당길|바꿔|바꿀|변경|늦춰|앞당)'
+    // 끝냈다는 말. '했어'만으로는 잡담과 갈리지 않아 넣지 않는다.
+    r'|(?:완료|끝냈|끝났|다했|다끝)'
+    // 알람과 모닝콜.
+    r'|(?:알람|알려줘|알려줄래|깨워|모닝콜|리마인드)',
+  );
 
   static bool isAvoidanceMessage(String text) =>
       avoidanceSignals.any(_normalize(text).contains);
