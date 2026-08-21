@@ -33,6 +33,7 @@ import 'package:nyang_coach/services/memory_service.dart';
 import 'package:nyang_coach/services/notification_service.dart';
 import 'package:nyang_coach/services/preemptive_nudge_service.dart';
 import 'package:nyang_coach/services/planner_action.dart';
+import 'package:nyang_coach/widgets/alarm_permission_notice.dart';
 import 'package:nyang_coach/services/planner_edit_service.dart';
 import 'package:nyang_coach/services/registration_target.dart';
 import 'package:nyang_coach/services/repeat_keyword_service.dart';
@@ -2087,7 +2088,8 @@ class _ChatScreenState extends State<ChatScreen>
           preview.status == PlannerActionStatus.notFound) {
         return false;
       }
-      _injectAiMessage(_plannerActionMiss(action, preview));
+      final miss = _plannerActionMiss(action, preview);
+      if (miss != null) _injectAiMessage(miss);
       return true;
     }
     var question = _plannerQuestion(action, preview);
@@ -2181,41 +2183,149 @@ class _ChatScreenState extends State<ChatScreen>
     );
   }
 
+  /// 카드도 코치가 하는 말이다. 등록 카드가 코치마다 말투를 달리하는데
+  /// 이쪽만 존댓말로 물으면, 같은 대화 안에서 두 사람이 말하는 것처럼 보인다.
   String _plannerQuestion(PlannerAction action, PlannerActionResult found) {
     final name = found.label.isEmpty ? action.target : found.label;
     return switch (action.kind) {
-      PlannerActionKind.move => "'$name' ${found.detail}으로 옮길까요?",
-      PlannerActionKind.done => "'$name' 완료로 표시할까요?",
-      PlannerActionKind.remind =>
-        action.enabled == true
-            ? "'$name' 알람을 켤까요?"
-            : "'$name' 알람을 끌까요?",
+      PlannerActionKind.move => _ask(
+        "'$name' ${found.detail}${PlannerEditService.roJosa(found.detail)}",
+        plain: '옮길까',
+        helping: '옮겨줄까',
+        polite: '옮겨 드릴까요',
+      ),
+      PlannerActionKind.done => _ask(
+        "'$name'",
+        plain: '완료로 표시할까',
+        helping: '완료로 표시해줄까',
+        polite: '완료로 표시해 드릴까요',
+      ),
+      PlannerActionKind.remind => action.enabled == true
+          ? _ask(
+              "'$name'",
+              plain: '알람 켤까',
+              helping: '알람 켜줄까',
+              polite: '알람 켜 드릴까요',
+            )
+          : _ask(
+              "'$name'",
+              plain: '알람 끌까',
+              helping: '알람 꺼줄까',
+              polite: '알람 꺼 드릴까요',
+            ),
       PlannerActionKind.morning => _morningQuestion(action),
     };
   }
 
+  /// 코치마다 어미가 다르다.
+  ///
+  /// [plain]은 "옮길까"처럼 그냥 묻는 말, [helping]은 "옮겨줄까"처럼 해준다는 말,
+  /// [polite]는 비서 코치의 높임말이다. 한국어는 어간에 따라 어미가 달라져서
+  /// 한 조각을 돌려 쓸 수 없다 — "표시" 뒤에 "을까"를 붙이면 말이 안 된다.
+  String _ask(
+    String subject, {
+    required String plain,
+    required String helping,
+    required String polite,
+  }) => switch (_coach.id) {
+    'bro' || 'halmae' => '$subject $helping?',
+    'boyfriend' => '$subject $plain?',
+    'sec_female' => '$subject $polite?',
+    _ => '$subject $plain냥?',
+  };
+
   String _morningQuestion(PlannerAction action) {
-    if (action.enabled == false) return '모닝콜을 끌까요?';
+    if (action.enabled == false) {
+      return _ask(
+        '모닝콜',
+        plain: '끌까',
+        helping: '꺼줄까',
+        polite: '꺼 드릴까요',
+      );
+    }
     final time = action.time!;
-    return '모닝콜을 ${PlannerEditService.moveDetail(time: time)}로 맞출까요?';
+    // 매일이라는 것을 밝힌다. "내일 아침에 깨워줘"라고 부탁한 사람은 하루만
+    // 생각하고 있는데, 모닝콜은 그 뒤로도 계속 울린다.
+    final label = PlannerEditService.moveDetail(time: time);
+    return '${_ask('모닝콜 $label${PlannerEditService.roJosa(label)}', plain: '맞출까', helping: '맞춰줄까', polite: '맞춰 드릴까요')}\n'
+        '(매일 같은 시각에 울려요)';
   }
 
-  /// 찾지 못했을 때 하는 말. 카드를 띄우지 않고 그냥 말해준다.
-  String _plannerActionMiss(PlannerAction action, PlannerActionResult found) {
+  /// 코치가 하는 말이라 코치 말투를 쓴다.
+  ///
+  /// [cat]이 기본이고, 적지 않은 코치는 그 말을 쓴다.
+  String _voice({
+    required String cat,
+    String? bro,
+    String? halmae,
+    String? boyfriend,
+    String? nyangHalbae,
+    String? sec,
+  }) => switch (_coach.id) {
+    'bro' => bro ?? cat,
+    'halmae' => halmae ?? cat,
+    'boyfriend' => boyfriend ?? cat,
+    'nyang_halbae' => nyangHalbae ?? cat,
+    'sec_female' => sec ?? cat,
+    _ => cat,
+  };
+
+  /// 조작하지 못했을 때 하는 말. 카드를 띄우지 않고 그냥 말해준다.
+  ///
+  /// 이미 그렇게 되어 있는 완료만 아무 말도 하지 않는다. 코치는 그 앞에서 이미
+  /// 잘했다고 말한 참인데, 뒤에 "그건 이미 했다"를 붙이면 칭찬을 물리는 셈이다.
+  String? _plannerActionMiss(PlannerAction action, PlannerActionResult found) {
     final name = found.label.isEmpty ? action.target : found.label;
-    return switch (found.status) {
-      PlannerActionStatus.multiple => "'$name'이 여러 개 있어서 어느 건지 모르겠어요. "
-          '시간까지 알려주시면 찾아볼게요.',
-      PlannerActionStatus.noChange =>
-        action.kind == PlannerActionKind.done
-            ? "'$name'은 이미 완료로 되어 있어요."
-            : "'$name'은 이미 그렇게 되어 있어요.",
-      PlannerActionStatus.failed =>
-        action.kind == PlannerActionKind.remind
-            ? "'$name'은 시각이 없어서 알람을 걸 수 없어요. 시간을 먼저 정해주세요."
-            : "'$name'을 바꾸지 못했어요.",
-      _ => "'$name'을 못 찾겠어요. 이름이 조금 다를 수 있어요.",
-    };
+    switch (found.status) {
+      case PlannerActionStatus.multiple:
+        return _voice(
+          cat: "'$name'이 여러 개 있다냥. 몇 시 거냥?",
+          bro: "'$name'이 여러 개다. 몇 시 거냐?",
+          halmae: "'$name'이 여럿이구나. 몇 시 것이냐?",
+          boyfriend: "'$name'이 여러 개던데, 몇 시 거야?",
+          nyangHalbae: "'$name'이 여러 개다냥. 몇 시 것이냥?",
+          sec: "'$name'이 여러 개 있어요. 몇 시 건지 알려주시면 찾아볼게요.",
+        );
+      case PlannerActionStatus.noChange:
+        // 완료는 조용히 넘어간다.
+        if (action.kind == PlannerActionKind.done) return null;
+        return _voice(
+          cat: '그건 이미 그렇게 돼 있다냥',
+          bro: '그건 이미 그렇게 돼 있다.',
+          halmae: '그건 벌써 그리 돼 있다.',
+          boyfriend: '그거 이미 그렇게 돼 있어.',
+          nyangHalbae: '그건 이미 그리 돼 있다냥.',
+          sec: '이미 그렇게 되어 있어요.',
+        );
+      case PlannerActionStatus.failed:
+        if (action.kind == PlannerActionKind.remind) {
+          return _voice(
+            cat: "'$name'은 시각이 없어서 알람을 못 건다냥. 몇 시로 할까냥?",
+            bro: "'$name'은 시간이 없어서 알람을 못 건다. 몇 시로 할까?",
+            halmae: "'$name'은 시각이 없어 알람을 못 거는구나. 몇 시로 하마?",
+            boyfriend: "'$name'은 시간이 없어서 알람을 못 걸어. 몇 시로 할까?",
+            nyangHalbae: "'$name'은 시각이 없어 알람을 못 건다냥. 몇 시로 하겠냥?",
+            sec: "'$name'은 시각이 없어서 알람을 걸 수 없어요. 시간을 먼저 정해주세요.",
+          );
+        }
+        return _voice(
+          cat: '그건 못 바꿨다냥',
+          bro: '그건 못 바꿨다.',
+          halmae: '그건 못 바꿨구나.',
+          boyfriend: '그거 못 바꿨어.',
+          nyangHalbae: '그건 못 바꿨다냥.',
+          sec: '그건 바꾸지 못했어요.',
+        );
+      default:
+        return _voice(
+          cat: "'$name'은 목록에 없다냥",
+          bro: "'$name'은 목록에 없다.",
+          halmae: "'$name'은 목록에 없구나.",
+          boyfriend: "'$name'은 목록에 없어.",
+          nyangHalbae: "'$name'은 목록에 없다냥.",
+          sec: "'$name'을 목록에서 못 찾았어요.",
+        );
+    }
   }
 
   Future<void> _handlePlannerActionChoice(
@@ -2229,7 +2339,16 @@ class _ChatScreenState extends State<ChatScreen>
     final action = _plannerActionFromPayload(msg.payload);
     if (action == null) return;
     if (label == _plannerActionNo) {
-      _injectAiMessage('알겠어요, 그대로 둘게요.');
+      _injectAiMessage(
+        _voice(
+          cat: '알겠다냥. 그대로 둘게냥',
+          bro: '알겠다. 그대로 둔다.',
+          halmae: '알겠다. 그대로 두마.',
+          boyfriend: '오케이, 그대로 둘게.',
+          nyangHalbae: '알겠다냥. 그대로 두겠다냥.',
+          sec: '네, 그대로 둘게요.',
+        ),
+      );
       return;
     }
 
@@ -2242,18 +2361,28 @@ class _ChatScreenState extends State<ChatScreen>
       return;
     }
 
-    if (action.kind == PlannerActionKind.remind && action.enabled == true) {
-      await _ensureCoreRemindersEnabled();
-    }
+    final turningOnAlarm =
+        action.kind == PlannerActionKind.remind && action.enabled == true;
+    if (turningOnAlarm) await _ensureCoreRemindersEnabled();
+
     final result = await PlannerEditService.apply(action);
     if (!mounted) return;
     if (!result.isOk) {
-      _injectAiMessage(_plannerActionMiss(action, result));
+      final miss = _plannerActionMiss(action, result);
+      if (miss != null) _injectAiMessage(miss);
       return;
     }
     // 알람은 시각을 보고 다시 계산된다. 옮겨놓고 예약을 그대로 두면 옛 시각에 운다.
     unawaited(NotificationService().syncCoreReminders());
     _injectAiMessage(_plannerActionDone(action, result));
+
+    if (!turningOnAlarm) return;
+    // 켜졌다고 적혀 있어도 권한이 막혀 있으면 울리지 않는다. 그 자리에서
+    // 설정으로 갈 길을 낸다 — 채팅에 적어두면 스크롤에 밀려 사라진다.
+    await NotificationService().requestNotificationPermissions();
+    final issue = await NotificationService().checkAlarmPermission();
+    if (!mounted || issue == AlarmPermissionIssue.none) return;
+    await showAlarmPermissionDialog(context, issue, alarmLabel: '일정 알람');
   }
 
   /// 모닝콜은 플래너가 아니라 알림 설정에 있다. 저장하고 다시 예약한다.
@@ -2269,7 +2398,16 @@ class _ChatScreenState extends State<ChatScreen>
       await NotificationService().cancelAllMorningCalls();
       TasksSyncService.scheduleSyncToCloud();
       if (!mounted) return;
-      _injectAiMessage('모닝콜을 껐어요 ✓');
+      _injectAiMessage(
+        _voice(
+          cat: '모닝콜 껐다냥 ✓',
+          bro: '모닝콜 껐다 ✓',
+          halmae: '모닝콜 꺼뒀다 ✓',
+          boyfriend: '모닝콜 껐어 ✓',
+          nyangHalbae: '모닝콜 꺼뒀다냥 ✓',
+          sec: '모닝콜을 껐어요 ✓',
+        ),
+      );
       return;
     }
 
@@ -2293,25 +2431,82 @@ class _ChatScreenState extends State<ChatScreen>
     if (!mounted) return;
 
     final label = PlannerEditService.moveDetail(time: time);
+    final when = '$label${PlannerEditService.roJosa(label)}';
     if (issue == AlarmPermissionIssue.none) {
-      _injectAiMessage('모닝콜을 $label로 맞췄어요 ✓');
+      _injectAiMessage(
+        _voice(
+          cat: '모닝콜 $when 맞춰뒀다냥 ✓',
+          bro: '모닝콜 $when 맞췄다 ✓',
+          halmae: '모닝콜 $when 맞춰뒀다 ✓',
+          boyfriend: '모닝콜 $when 맞춰뒀어 ✓',
+          nyangHalbae: '모닝콜 $when 맞춰뒀다냥 ✓',
+          sec: '모닝콜을 $when 맞췄어요 ✓',
+        ),
+      );
       return;
     }
-    // 켜두기는 했으니 되돌리지 않는다. 다만 울리지 않는다는 것은 말해줘야 한다.
+
+    // 켜두기는 했으니 되돌리지 않는다. 다만 이대로면 울리지 않으므로, 말로만
+    // 알리지 않고 그 자리에서 설정으로 갈 길을 낸다. 채팅에 한 줄 적어두면
+    // 스크롤에 밀려 사라지고, 사용자는 맞춰졌다고 믿는다.
     _injectAiMessage(
-      '모닝콜을 $label로 맞췄어요. 그런데 알림 권한이 막혀 있어서 지금은 울리지 않아요. '
-      '설정에서 알림을 켜주세요.',
+      _voice(
+        cat: '모닝콜 $when 맞춰뒀다냥. 그런데 이대로면 안 울린다냥',
+        bro: '모닝콜 $when 맞췄다. 근데 이대로면 안 울린다.',
+        halmae: '모닝콜 $when 맞춰뒀다. 그런데 이대로면 울리지 않는다.',
+        boyfriend: '모닝콜 $when 맞춰뒀어. 근데 이대로면 안 울려.',
+        nyangHalbae: '모닝콜 $when 맞춰뒀다냥. 그런데 이대로면 안 울린다냥.',
+        sec: '모닝콜을 $when 맞췄어요. 그런데 이대로면 울리지 않아요.',
+      ),
     );
+    await showAlarmPermissionDialog(context, issue, alarmLabel: '모닝콜');
   }
 
   String _plannerActionDone(PlannerAction action, PlannerActionResult result) {
     final name = result.label.isEmpty ? action.target : result.label;
+    final where = '${result.detail}${PlannerEditService.roJosa(result.detail)}';
     return switch (action.kind) {
-      PlannerActionKind.move => "'$name' ${result.detail}으로 옮겼어요 ✓",
-      PlannerActionKind.done => "'$name' 완료했어요 ✓",
-      PlannerActionKind.remind =>
-        action.enabled == true ? "'$name' 알람을 켰어요 ✓" : "'$name' 알람을 껐어요 ✓",
-      PlannerActionKind.morning => '모닝콜을 맞췄어요 ✓',
+      PlannerActionKind.move => _voice(
+        cat: "'$name' $where 옮겼다냥 ✓",
+        bro: "'$name' $where 옮겼다 ✓",
+        halmae: "'$name' $where 옮겨뒀다 ✓",
+        boyfriend: "'$name' $where 옮겼어 ✓",
+        nyangHalbae: "'$name' $where 옮겨뒀다냥 ✓",
+        sec: "'$name' $where 옮겼어요 ✓",
+      ),
+      PlannerActionKind.done => _voice(
+        cat: "'$name' 완료로 적어뒀다냥 ✓",
+        bro: "'$name' 완료로 찍었다 ✓",
+        halmae: "'$name' 다 한 걸로 적어뒀다 ✓",
+        boyfriend: "'$name' 완료로 해뒀어 ✓",
+        nyangHalbae: "'$name' 완료로 적어뒀다냥 ✓",
+        sec: "'$name' 완료로 표시했어요 ✓",
+      ),
+      PlannerActionKind.remind => action.enabled == true
+          ? _voice(
+              cat: "'$name' 알람 켜뒀다냥 ✓",
+              bro: "'$name' 알람 켰다 ✓",
+              halmae: "'$name' 알람 켜뒀다 ✓",
+              boyfriend: "'$name' 알람 켜뒀어 ✓",
+              nyangHalbae: "'$name' 알람 켜뒀다냥 ✓",
+              sec: "'$name' 알람을 켰어요 ✓",
+            )
+          : _voice(
+              cat: "'$name' 알람 껐다냥 ✓",
+              bro: "'$name' 알람 껐다 ✓",
+              halmae: "'$name' 알람 꺼뒀다 ✓",
+              boyfriend: "'$name' 알람 껐어 ✓",
+              nyangHalbae: "'$name' 알람 꺼뒀다냥 ✓",
+              sec: "'$name' 알람을 껐어요 ✓",
+            ),
+      PlannerActionKind.morning => _voice(
+        cat: '모닝콜 맞춰뒀다냥 ✓',
+        bro: '모닝콜 맞췄다 ✓',
+        halmae: '모닝콜 맞춰뒀다 ✓',
+        boyfriend: '모닝콜 맞춰뒀어 ✓',
+        nyangHalbae: '모닝콜 맞춰뒀다냥 ✓',
+        sec: '모닝콜을 맞췄어요 ✓',
+      ),
     };
   }
 

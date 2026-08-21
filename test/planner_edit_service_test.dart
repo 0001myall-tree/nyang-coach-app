@@ -250,6 +250,19 @@ void main() {
     });
   });
 
+  group('로/으로', () {
+    test('받침 없으면 로', () {
+      expect(PlannerEditService.roJosa('오후 8시'), '로');
+      expect(PlannerEditService.roJosa('오늘'), '로');
+      expect(PlannerEditService.roJosa('내일(8월 22일)'), '로');
+    });
+
+    test('받침 있으면 으로', () {
+      expect(PlannerEditService.roJosa('오후 8시 30분'), '으로');
+      expect(PlannerEditService.roJosa('오전 9시 5분'), '으로');
+    });
+  });
+
   group('완료', () {
     test('이미 완료면 바꿀 것이 없다', () async {
       await _prefsWith(today: [_task('1', '운동', done: true)]);

@@ -386,6 +386,21 @@ class PlannerEditService {
     return parts.join(' ');
   }
 
+  /// 앞말에 맞는 '로/으로'를 고른다.
+  ///
+  /// "8시로"와 "30분으로"는 받침 유무로 갈린다. 하나로 통일하면 둘 중 하나는
+  /// 반드시 어색해진다. 괄호로 끝나는 말("내일(8월 22일)")은 괄호를 건너뛰고
+  /// 그 앞 글자를 본다.
+  static String roJosa(String word) {
+    final trimmed = word.replaceAll(RegExp(r'[)\]\s\u0027"]+\$'), '');
+    if (trimmed.isEmpty) return '로';
+    final code = trimmed.codeUnitAt(trimmed.length - 1);
+    if (code < 0xAC00 || code > 0xD7A3) return '로';
+    final finalConsonant = (code - 0xAC00) % 28;
+    // 받침이 없거나 'ㄹ'이면 '로'. 그 밖에는 '으로'.
+    return finalConsonant == 0 || finalConsonant == 8 ? '로' : '으로';
+  }
+
   static String relativeDateLabel(DateTime date) {
     final now = DateTime.now();
     final base = DateTime(now.year, now.month, now.day);

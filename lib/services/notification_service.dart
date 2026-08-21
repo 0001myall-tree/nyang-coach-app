@@ -810,6 +810,30 @@ class NotificationService {
     }
   }
 
+  /// 알람이 막혔던 적이 있으면, 풀린 뒤에 예약을 다시 건다.
+  ///
+  /// 권한이 없는 채로 켠 알람은 스위치만 켜져 있고 예약이 서 있지 않을 수 있다.
+  /// 사용자는 설정에서 알림을 켠 것으로 할 일을 다 했다고 여기므로, 돌아왔을 때
+  /// 앱이 알아서 다시 걸어야 한다. 다시 말하게 하면 그 자리에서 포기한다.
+  ///
+  /// 'nyang_'으로 시작하지 않는 키를 쓴다. 그 접두어는 클라우드 복원이 덮어쓰는데,
+  /// 이건 이 기기의 권한 상태라 기기마다 달라야 한다.
+  static const String _alarmBlockedKey = 'alarm_permission_blocked';
+
+  Future<void> reapplyAlarmsIfPermissionRecovered() async {
+    if (kIsWeb) return;
+    final prefs = await SharedPreferences.getInstance();
+    final issue = await checkAlarmPermission();
+    if (issue != AlarmPermissionIssue.none) {
+      await prefs.setBool(_alarmBlockedKey, true);
+      return;
+    }
+    if (prefs.getBool(_alarmBlockedKey) != true) return;
+    await prefs.remove(_alarmBlockedKey);
+    await rescheduleNextMorningCall();
+    await syncCoreReminders();
+  }
+
   Future<void> rescheduleNextMorningCall() async {
     if (kIsWeb) return;
     final prefs = await SharedPreferences.getInstance();

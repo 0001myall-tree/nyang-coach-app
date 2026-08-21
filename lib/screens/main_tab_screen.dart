@@ -690,6 +690,9 @@ class _MainTabScreenState extends State<MainTabScreen>
 
   Future<void> _handleAppResumed() async {
     await NotificationService().handleNativeMorningAlarm();
+    // 설정에서 알림을 켜고 돌아온 경우다. 막혀 있던 동안 걸리지 않은 예약을
+    // 여기서 다시 건다.
+    unawaited(NotificationService().reapplyAlarmsIfPermissionRecovered());
     await DailyResetService.checkAndExecuteReset();
     try {
       final appleCalendarChanged = await AppleCalendarSyncService.instance
