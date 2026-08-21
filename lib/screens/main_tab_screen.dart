@@ -1643,12 +1643,11 @@ class _MainTabScreenState extends State<MainTabScreen>
     ),
     const TasksPlaceholderScreen(),
     RecordsScreen(coachId: widget.coachId),
+    // 이 목록은 매 build마다 네 화면을 다 만들지만 화면에 나가는 건 첫 번째뿐이다.
+    // 설정 화면은 서랍이 그린다. 그래서 여기서는 부탁받은 시트를 건드리지
+    // 않는다 — 여기서 가져가버리면 정작 서랍에 뜨는 설정 화면이 빈손이 된다.
     SettingsScreen(
-      // 부탁받은 시트가 있으면 그 시트까지 열고 자리를 비운다. 남겨두면 설정
-      // 탭에 들를 때마다 같은 시트가 다시 열린다.
-      key: ValueKey('settings-$_pendingSettingsSection'),
       coachId: widget.coachId,
-      autoOpenSection: _takePendingSettingsSection(),
       onChatBgStyleChanged: (style) {
         if (style == _chatBgStyle) return;
         setState(() => _chatBgStyle = style);
@@ -2589,8 +2588,10 @@ class _MainTabScreenState extends State<MainTabScreen>
     } else if (_openDrawerIndex == 2) {
       drawerContent = RecordsScreen(coachId: widget.coachId);
     } else if (_openDrawerIndex == 3) {
+      // 서랍이 채팅에서 설정으로 넘어올 때 이 화면이 새로 만들어지므로,
+      // 부탁받은 시트는 그 첫 build에서 한 번만 넘어간다. 자리표를 따로 두면
+      // 값을 가져간 다음 build에서 화면이 통째로 다시 만들어진다.
       drawerContent = SettingsScreen(
-        key: ValueKey('settings-drawer-$_pendingSettingsSection'),
         coachId: widget.coachId,
         autoOpenSection: _takePendingSettingsSection(),
         onChatBgStyleChanged: (style) {
