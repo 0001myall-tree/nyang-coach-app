@@ -973,6 +973,9 @@ class _ParsedReply {
   /// 코치가 등록하자고 짚은 일정·습관. 바로 넣지 않고 확인 카드로 물어본다.
   final String? scheduleToConfirm;
 
+  /// 등록하면서 알람까지 켜달라고 했는지.
+  final bool scheduleReminder;
+
   /// 코치가 짚어준 플래너 조작. 확인 카드로 한 번 물어본 뒤에만 실행된다.
   final PlannerAction? plannerAction;
   final String? habitToConfirm;
@@ -988,6 +991,7 @@ class _ParsedReply {
     this.ultraLowResistanceFollowup,
     this.startCountdown = false,
     this.scheduleToConfirm,
+    this.scheduleReminder = false,
     this.plannerAction,
     this.habitToConfirm,
     this.goalToConfirm,
@@ -2059,23 +2063,49 @@ class _ChatScreenState extends State<ChatScreen>
   static const String _plannerActionYes = '응';
   static const String _plannerActionNo = '아니야';
 
-  Future<void> _offerPlannerAction(PlannerAction action) async {
-    if (!_userData.isPlanActive) return;
-    if (!action.isUsable) return;
+  /// 카드를 띄웠으면 true. 부를 대상이 없어 물러났으면 false.
+  Future<bool> _offerPlannerAction(
+    PlannerAction action, {
+    bool canRegisterInstead = false,
+  }) async {
+    if (!_userData.isPlanActive) return false;
+    if (!action.isUsable) return false;
 
     // 모닝콜은 찾을 일정이 없다. 바로 카드로 간다.
     if (action.kind == PlannerActionKind.morning) {
       _showPlannerActionCard(action, _morningQuestion(action));
-      return;
+      return true;
     }
 
     final preview = await PlannerEditService.preview(action);
-    if (!mounted) return;
+    if (!mounted) return false;
     if (!preview.isOk) {
+      // 아직 없는 일을 두고 "8시에 글 쓸 건데 알려줘"라고 하면 코치가 알람
+      // 태그를 붙일 때가 있다. 그 말의 뜻은 새로 넣어달라는 것이므로,
+      // 못 찾았다고 물러나지 말고 등록 카드에 자리를 넘긴다.
+      if (canRegisterInstead &&
+          preview.status == PlannerActionStatus.notFound) {
+        return false;
+      }
       _injectAiMessage(_plannerActionMiss(action, preview));
-      return;
+      return true;
     }
-    _showPlannerActionCard(action, _plannerQuestion(action, preview));
+    var question = _plannerQuestion(action, preview);
+    // 일정 알람 자체가 꺼져 있으면 이 일정만 켜도 울리지 않는다. 켜겠다고
+    // 말해놓고 안 울리는 것이 제일 나쁘므로, 같이 켠다는 것을 카드에 적는다.
+    if (action.kind == PlannerActionKind.remind &&
+        action.enabled == true &&
+        !await _coreRemindersEnabled()) {
+      if (!mounted) return false;
+      // 설정에 있다는 것을 밝힌다. 그래야 푸쉬 말고 코치 목소리로 받고 싶은
+      // 사람이 어디로 가야 하는지 알 수 있다.
+      question =
+          '$question\n'
+          '(설정에 일정 알람이 꺼져 있어서 기본 푸쉬로 함께 켤게요. '
+          '알람 방식은 설정에서 바꿀 수 있어요)';
+    }
+    _showPlannerActionCard(action, question);
+    return true;
   }
 
   void _showPlannerActionCard(PlannerAction action, String question) {
@@ -2092,6 +2122,31 @@ class _ChatScreenState extends State<ChatScreen>
       );
     });
     _scrollToBottom();
+  }
+
+  Future<bool> _coreRemindersEnabled() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool('nyang_core_reminder_enabled') ?? false;
+  }
+
+  /// 일정 알람을 켠다. 이미 켜져 있으면 아무것도 하지 않는다.
+  ///
+  /// 소리 종류와 몇 분 전인지는 건드리지 않는다. 처음 켜는 사람에게는 기본
+  /// 푸쉬가 붙는데, 코치 목소리로 받고 싶으면 설정에서 고르면 된다. 부탁받지
+  /// 않은 것까지 채팅에서 정해버리면 나중에 왜 이렇게 됐는지 알 수 없다.
+  /// 켰으면 true. 이미 켜져 있었으면 false.
+  Future<bool> _ensureCoreRemindersEnabled() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.getBool('nyang_core_reminder_enabled') == true) return false;
+    await prefs.setBool('nyang_core_reminder_enabled', true);
+    if (prefs.getString('nyang_core_reminder_coach') == null) {
+      await prefs.setString('nyang_core_reminder_coach', 'push');
+    }
+    if (prefs.getInt('nyang_core_reminder_advance') == null) {
+      await prefs.setInt('nyang_core_reminder_advance', 10);
+    }
+    TasksSyncService.scheduleSyncToCloud();
+    return true;
   }
 
   Map<String, dynamic> _plannerActionPayload(PlannerAction action) => {
@@ -2187,6 +2242,9 @@ class _ChatScreenState extends State<ChatScreen>
       return;
     }
 
+    if (action.kind == PlannerActionKind.remind && action.enabled == true) {
+      await _ensureCoreRemindersEnabled();
+    }
     final result = await PlannerEditService.apply(action);
     if (!mounted) return;
     if (!result.isOk) {
@@ -2295,7 +2353,11 @@ class _ChatScreenState extends State<ChatScreen>
           time: DateTime.now(),
           kind: _registerConfirmKind,
           choices: choices,
-          payload: '$type|$title',
+          // 알람까지 부탁했으면 그 사실을 카드에 실어 보낸다. 확인은 나중에
+          // 눌리므로, 그때 다시 알아낼 방법이 없다.
+          payload: type == 'schedule' && parsed.scheduleReminder
+              ? 'schedule+alarm|$title'
+              : '$type|$title',
         ),
       );
     });
@@ -2316,8 +2378,10 @@ class _ChatScreenState extends State<ChatScreen>
     final payload = msg.payload ?? '';
     final sep = payload.indexOf('|');
     if (sep <= 0) return;
-    final type = payload.substring(0, sep);
+    var type = payload.substring(0, sep);
     final title = payload.substring(sep + 1).trim();
+    final withAlarm = type == 'schedule+alarm';
+    if (withAlarm) type = 'schedule';
 
     if (label == _registerConfirmNo || title.isEmpty) {
       _injectAiMessage(_registerDeclinedReply());
@@ -2338,7 +2402,10 @@ class _ChatScreenState extends State<ChatScreen>
       return;
     }
     // 날짜·반복 해석은 기존 등록 흐름이 이미 하고 있으니 그대로 태운다.
-    await _showScheduleRegistrationDialog('$title 추가해줘');
+    await _showScheduleRegistrationDialog(
+      '$title 추가해줘',
+      reminderOverride: withAlarm ? true : null,
+    );
   }
 
   Future<void> _registerGoalByTitle(String type, String title) async {
@@ -6468,6 +6535,7 @@ ${lines.join('\n')}
     bool startCountdown = false;
     List<_SuggestedTask> suggestedTasks = [];
     String? scheduleToConfirm;
+    var scheduleReminder = false;
     String? habitToConfirm;
     String? goalToConfirm;
     String text = raw;
@@ -6565,7 +6633,17 @@ ${lines.join('\n')}
 
     final scheduleMatch = scheduleRegex.firstMatch(raw);
     if (scheduleMatch != null) {
-      scheduleToConfirm = scheduleMatch.group(1)!.trim();
+      // "[SCHEDULE: 글쓰기|알람]"처럼 알람까지 부탁한 경우가 있다. 이름과 갈라둔다.
+      final body = scheduleMatch.group(1)!.trim();
+      final bar = body.indexOf('|');
+      if (bar < 0) {
+        scheduleToConfirm = body;
+      } else {
+        scheduleToConfirm = body.substring(0, bar).trim();
+        scheduleReminder = RegExp(
+          r'알람|알려|리마인드|remind',
+        ).hasMatch(body.substring(bar + 1));
+      }
     }
     final habitMatch = habitRegex.firstMatch(raw);
     if (habitMatch != null) {
@@ -6611,6 +6689,7 @@ ${lines.join('\n')}
       startCountdown: startCountdown,
       suggestedTasks: suggestedTasks,
       scheduleToConfirm: scheduleToConfirm,
+      scheduleReminder: scheduleReminder,
       habitToConfirm: habitToConfirm,
       goalToConfirm: goalToConfirm,
       plannerAction: plannerAction?.isUsable == true ? plannerAction : null,
@@ -6854,6 +6933,15 @@ ${lines.join('\n')}
       if (_messages[i].isUser) return _messages[i].text;
     }
     return null;
+  }
+
+  /// "2026-08-21(금)". 조작 태그에 날짜를 적을 때 기준이 된다.
+  static String _todayLineForPrompt(DateTime now) {
+    const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
+    final ymd =
+        '${now.year}-${now.month.toString().padLeft(2, '0')}-'
+        '${now.day.toString().padLeft(2, '0')}';
+    return '$ymd(${dayNames[now.weekday % 7]})';
   }
 
   CoachContextScope _resolveContextScope(String userText) {
@@ -9099,7 +9187,14 @@ ${lines.join('\n')}
     );
   }
 
-  Future<void> _showScheduleRegistrationDialog(String speechText) async {
+  /// [reminderOverride]가 있으면 알람 스위치를 그 값으로 켜둔 채 띄운다.
+  ///
+  /// "8시에 글 쓸 건데 알려줘"처럼 알려달라고 한 사람에게, 알람이 꺼진 카드를
+  /// 내밀면 부탁한 것이 빠진 채로 등록된다.
+  Future<void> _showScheduleRegistrationDialog(
+    String speechText, {
+    bool? reminderOverride,
+  }) async {
     final parsed = _parseScheduleRegistration(speechText);
     final titleCtrl = TextEditingController(text: parsed.title);
     DateTime confirmedDate = parsed.date;
@@ -9110,7 +9205,8 @@ ${lines.join('\n')}
 
     final prefs = await SharedPreferences.getInstance();
     reminderEnabled =
-        (prefs.getBool('nyang_core_reminder_enabled') ?? false) &&
+        (reminderOverride ??
+            (prefs.getBool('nyang_core_reminder_enabled') ?? false)) &&
         confirmedTime != null;
 
     if (!mounted) return;
@@ -9492,6 +9588,13 @@ ${lines.join('\n')}
                               final messenger = ScaffoldMessenger.of(
                                 this.context,
                               );
+                              // 알람을 켠 채로 넣는데 일정 알람 자체가 꺼져
+                              // 있으면 울리지 않는다. 여기서 함께 켠다.
+                              var turnedOnCoreReminders = false;
+                              if (reminderEnabled && confirmedTime != null) {
+                                turnedOnCoreReminders =
+                                    await _ensureCoreRemindersEnabled();
+                              }
                               await _saveRegisteredSchedule(
                                 finalTitle,
                                 confirmedDate,
@@ -9504,8 +9607,15 @@ ${lines.join('\n')}
                               navigator.pop();
                               messenger.showSnackBar(
                                 SnackBar(
-                                  content: Text('"$finalTitle" 일정을 추가했어요 ✓'),
-                                  duration: const Duration(seconds: 2),
+                                  content: Text(
+                                    turnedOnCoreReminders
+                                        ? '"$finalTitle" 추가했어요 ✓ '
+                                              '설정에 일정 알람이 꺼져 있어서 기본 푸쉬로 함께 켰어요'
+                                        : '"$finalTitle" 일정을 추가했어요 ✓',
+                                  ),
+                                  duration: Duration(
+                                    seconds: turnedOnCoreReminders ? 4 : 2,
+                                  ),
                                 ),
                               );
                             },
@@ -11887,9 +11997,13 @@ ${lines.join('\n')}
       if (mounted) {
         // 한 턴에 카드 하나. 조작과 등록이 같이 오면 조작이 먼저다 — 이미 있는
         // 것을 고치는 쪽이 새로 만드는 쪽보다 방금 한 말에 가깝다.
-        if (parsed.plannerAction != null) {
-          await _offerPlannerAction(parsed.plannerAction!);
-        } else {
+        final handled =
+            parsed.plannerAction != null &&
+            await _offerPlannerAction(
+              parsed.plannerAction!,
+              canRegisterInstead: (parsed.scheduleToConfirm ?? '').isNotEmpty,
+            );
+        if (!handled && mounted) {
           _offerRegistrationConfirm(parsed);
         }
         await _saveHistory();
@@ -13923,7 +14037,7 @@ $resistanceFlowRule'''
     final plannerActionSection =
         contextScope.tasks &&
             CoachContextScopeService.hasPlannerActionSignal(userText)
-        ? Prompts.plannerActionRules
+        ? Prompts.plannerActionRules(_todayLineForPrompt(now))
         : '';
 
     final timerOutputRule = _coach.isMaster
