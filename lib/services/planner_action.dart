@@ -162,6 +162,8 @@ class PlannerAction {
   /// 적혀 오면 그 자리에서 조용히 실패했다.
   bool get isUsable => switch (kind) {
     PlannerActionKind.morning => true,
+    // 이름 없는 알람 이야기는 일정 알람 설정 자체를 가리킨다.
+    PlannerActionKind.remind => true,
     _ => target.isNotEmpty,
   };
 }

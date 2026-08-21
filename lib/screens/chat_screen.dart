@@ -2135,6 +2135,23 @@ class _ChatScreenState extends State<ChatScreen>
 
     if (!action.isUsable) return false;
 
+    // 이름 없이 알람 이야기만 했으면 일정 알람 설정 자체를 말하는 것이다.
+    // "일정 알람 켜줘"에는 가리킬 일정이 없다.
+    if (action.kind == PlannerActionKind.remind && action.target.isEmpty) {
+      widget.onOpenSettingsSection?.call('core_reminder');
+      _injectAiMessage(
+        _voice(
+          cat: '일정 알람 설정 열어뒀다냥. 거기서 켜고 끄면 된다냥',
+          bro: '일정 알람 설정 열어뒀다. 거기서 켜고 꺼라.',
+          halmae: '일정 알람 설정 열어뒀다. 거기서 켜고 끄면 된다.',
+          boyfriend: '일정 알람 설정 열어뒀어. 거기서 켜고 끄면 돼.',
+          nyangHalbae: '일정 알람 설정 열어뒀다냥. 거기서 켜고 끄면 된다냥.',
+          sec: '일정 알람 설정을 열어뒀어요. 거기서 켜고 끄시면 돼요.',
+        ),
+      );
+      return true;
+    }
+
     // 무엇을 가리키는지 먼저 찾는다. 없는 것을 두고 화면을 열어봐야 사용자는
     // 빈 목록 앞에서 무엇을 하라는 건지 알 수 없다.
     final found = await PlannerEditService.preview(action);
@@ -2619,6 +2636,7 @@ $role
 - 말로 일정·루틴·목표를 넣고, 고치고, 지울 수 있다. 타이머도 띄워준다.
 - 일정 시각을 옮기고, 다른 날로 미루고, 완료로 적고, 그 일정의 알람을 켜줄 수 있다.
 - 모닝콜을 맞추거나 끌 수 있다. 매일 정한 시각에 코치가 깨워준다.
+- 일정 알람을 켜고 끌 수 있다. 켜두면 정해둔 시각 전에 알려준다.
 - 사용자가 뭘 해왔는지 계속 보고 있어서, 오래 쓸수록 그 사람에게 맞게 말할 수 있다.
 - 기능을 나열하지 말고 두세 가지만 골라 말하세요. 설명서처럼 들리면 안 됩니다.
 - 장기 비전은 목표 탭에서 직접 만들어야 한다고만 덧붙이세요.''';

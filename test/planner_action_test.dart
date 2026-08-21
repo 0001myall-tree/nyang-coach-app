@@ -41,6 +41,16 @@ void main() {
     });
   });
 
+  group('이름 없는 알람', () {
+    test('일정 알람 자체를 가리킨다', () {
+      // "일정 알람 켜줘"에는 가리킬 일정이 없다. 설정 시트로 데려간다.
+      final a = PlannerAction.parse('[REMIND]')!;
+      expect(a.kind, PlannerActionKind.remind);
+      expect(a.target, isEmpty);
+      expect(a.isUsable, isTrue);
+    });
+  });
+
   group('쓸 수 없는 것', () {
     test('이름이 비었다', () {
       expect(PlannerAction.parse('[MOVE: ]')!.isUsable, isFalse);
