@@ -2889,6 +2889,8 @@ $closing''';
 - 사용자가 "넌 뭘 해줄 수 있어", "네가 하는 일이 뭐야"처럼 물으면 아래 내용만 코치 말투로 짧게 답하세요. 없는 기능을 지어내지 말고, 여기 적힌 것을 못 한다고도 하지 마세요.
 $role
 - 말로 일정·루틴·목표를 넣고, 고치고, 지울 수 있다. 타이머도 띄워준다.
+- 일정 시각을 옮기고, 다른 날로 미루고, 완료로 적고, 그 일정의 알람을 켜줄 수 있다.
+- 모닝콜을 맞추거나 끌 수 있다. 매일 정한 시각에 코치가 깨워준다.
 - 사용자가 뭘 해왔는지 계속 보고 있어서, 오래 쓸수록 그 사람에게 맞게 말할 수 있다.
 - 기능을 나열하지 말고 두세 가지만 골라 말하세요. 설명서처럼 들리면 안 됩니다.
 - 장기 비전은 목표 탭에서 직접 만들어야 한다고만 덧붙이세요.''';
@@ -2904,6 +2906,19 @@ $role
 
     // "이거 할 수 있을까 걱정돼"처럼 능력을 말하는 평범한 문장이 걸리지 않도록,
     // "무엇"을 묻는 형태이거나 코치를 직접 가리킬 때만 잡는다.
+    // 기능 이름을 대고 되냐고 묻는 말도 여기서 받는다.
+    //
+    // "모닝콜 해줄 수 있어?"에는 코치를 가리키는 말이 없어서 아래 규칙에
+    // 걸리지 않았다. 그래서 코치가 자기 기능을 모른 채로 답했고, 앱에 있는
+    // 기능을 못 한다고 말하는 일이 생겼다. 없는 기능을 있다고 하는 것만큼
+    // 나쁘다 — 있는 길을 스스로 닫아버린다.
+    if (RegExp(
+      r'(모닝콜|알람|타이머|일정|할일|루틴|습관|목표|미루|옮기)'
+      r'.{0,10}(할수있|해줄수있|되나|되니|돼|가능|지원)',
+    ).hasMatch(normalized)) {
+      return true;
+    }
+
     return RegExp(
       r'수있는(게|건|것|거)(뭐|무엇)'
       r'|하는(일|게|것)(이|은)?(뭐|무엇)'
@@ -14256,12 +14271,16 @@ $resistanceFlowRule'''
     // 일정을 건드려달라는 말이 나온 턴에만 조작 규칙을 붙인다. 매 턴 실으면
     // 잡담에도 태그가 붙고, 무엇보다 그 턴의 다른 지침을 밀어낸다.
     //
+    // 자리는 출력 규칙 바로 뒤다. 처음에는 위쪽 지침들 사이에 두었는데 태그가
+    // 한 번도 나오지 않았다. 태그를 붙이라는 말은 다른 태그 규칙들과 같은
+    // 자리에, 프롬프트 끝에 있어야 한다 — 가운데 두면 뒤따르는 지시에 묻힌다.
+    //
     // 목록이 실리지 않은 턴에는 붙이지 않는다. 이름을 목록에서 옮겨 적으라고
     // 해놓고 목록을 안 주면, 코치는 없는 이름을 지어낸다.
     final plannerActionSection =
         contextScope.tasks &&
             CoachContextScopeService.hasPlannerActionSignal(userText)
-        ? Prompts.plannerActionRules(_todayLineForPrompt(now))
+        ? '\n${Prompts.plannerActionRules(_todayLineForPrompt(now))}'
         : '';
 
     final timerOutputRule = _coach.isMaster
@@ -14338,7 +14357,6 @@ $bedtimeCarryOverSection
 $emptyPlanAskSection
 $capabilitySection
 $prepTimeSection
-$plannerActionSection
 
 ${Prompts.conversationContextRules}
 
@@ -14362,7 +14380,7 @@ $habitAutomationSection
 
 ${Prompts.outputRulesHead}
 $timerOutputRule
-${Prompts.outputRulesTail}$coachOfferTaskRule$halmaeHint$resistanceTurnDirective$contextRequestRule''';
+${Prompts.outputRulesTail}$plannerActionSection$coachOfferTaskRule$halmaeHint$resistanceTurnDirective$contextRequestRule''';
 
       // 마스터 코치는 하드코딩된 "대표님"을 사용자가 지정한 호칭으로 치환한다.
       // baseSystemPrompt 뒤에 이어붙인 모든 조각까지 함께 반영된다.
