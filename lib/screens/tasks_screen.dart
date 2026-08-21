@@ -827,10 +827,17 @@ class _TasksScreenState extends State<TasksScreen>
       'nyang_task_status_guide_never_show';
   static const _lightenPlanCardDismissedDateKey =
       'nyang_lighten_plan_card_dismissed_date';
+
+  /// 할 일이 세 개가 됐을 때 핵심을 골라보자고 얹어두는 카드.
+  static const _corePickCardDismissedDateKey =
+      'nyang_core_pick_card_dismissed_date';
   bool _taskCheckboxHintSeen = false;
   bool _taskStatusGuideNeverShow = false;
   bool _taskStatusGuideDismissed = false;
   String? _lightenPlanCardDismissedDate;
+  String? _corePickCardDismissedDate;
+  bool _corePickCardBounced = false;
+  late final AnimationController _corePickBounceCtrl;
   bool _taskCheckboxHintPulseStarted = false;
   late final AnimationController _taskCheckboxHintPulseCtrl;
 
@@ -868,6 +875,10 @@ class _TasksScreenState extends State<TasksScreen>
     _taskCheckboxHintPulseCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1500),
+    );
+    _corePickBounceCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1100),
     );
     _swipeHintCtrl = AnimationController(
       vsync: this,
@@ -1057,6 +1068,7 @@ class _TasksScreenState extends State<TasksScreen>
     _visionHighlightTimer?.cancel();
     _swipeHintCtrl.dispose();
     _taskCheckboxHintPulseCtrl.dispose();
+    _corePickBounceCtrl.dispose();
     _tabCtrl.removeListener(_handleTaskTabChanged);
     _tabCtrl.dispose();
     _todayInputCtrl.dispose();
@@ -1107,6 +1119,9 @@ class _TasksScreenState extends State<TasksScreen>
     final lightenPlanCardDismissedDate = prefs.getString(
       _lightenPlanCardDismissedDateKey,
     );
+    final corePickCardDismissedDate = prefs.getString(
+      _corePickCardDismissedDateKey,
+    );
     final hasActivePlan = await _hasActivePlan();
     if (!hasActivePlan) {
       await prefs.setBool('nyang_core_reminder_enabled', false);
@@ -1120,6 +1135,7 @@ class _TasksScreenState extends State<TasksScreen>
       _taskCheckboxHintSeen = taskCheckboxHintSeen;
       _taskStatusGuideNeverShow = taskStatusGuideNeverShow;
       _lightenPlanCardDismissedDate = lightenPlanCardDismissedDate;
+      _corePickCardDismissedDate = corePickCardDismissedDate;
       _todayReminderEnabled = false;
       if (rawTasks != null) {
         tasks = (jsonDecode(rawTasks) as List)
@@ -6049,6 +6065,8 @@ class _TasksScreenState extends State<TasksScreen>
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
       children: [
         if (showLightenPlanCard) _buildLightenPlanCard(),
+        if (!showLightenPlanCard && _shouldShowCorePickCard(remainingTasks))
+          _buildCorePickCard(),
         if (remainingTasks.isNotEmpty)
           _buildRemainingTaskGroup(remainingTasks)
         else
@@ -6067,7 +6085,132 @@ class _TasksScreenState extends State<TasksScreen>
         now.hour >= 15 &&
         remainingTasks.length >= 3 &&
         doneTasks.isEmpty &&
+        // 이미 핵심을 골라둔 사람에게 골라보자고 할 것은 없다.
+        coreTasks.isEmpty &&
         _lightenPlanCardDismissedDate != _getTodayStr();
+  }
+
+  /// 할 일이 세 개가 됐는데 아직 핵심을 안 골랐을 때.
+  ///
+  /// 오후 3시 카드와 자리는 같지만 하는 말이 다르다. 그쪽은 하루가 반이 지나도록
+  /// 하나도 못 한 사람에게 줄이자고 하는 것이고, 이쪽은 지금 막 목록이 길어진
+  /// 사람에게 순서를 정해두자고 하는 것이다.
+  ///
+  /// 등록하는 손을 막지 않는다. 세 개째에서 창이 뜨면 네 개를 넣으려던 사람은
+  /// 중간에 끊긴다. 카드는 목록 위에 얹혀 있기만 하고, 처음 생길 때 한 번
+  /// 튀어서 눈에 들어온다. 그 뒤로는 몇 개를 더 넣어도 다시 튀지 않는다.
+  bool _shouldShowCorePickCard(List<TaskItem> remainingTasks) {
+    return _isViewingActualToday &&
+        remainingTasks.length >= 3 &&
+        coreTasks.isEmpty &&
+        _corePickCardDismissedDate != _getTodayStr();
+  }
+
+  String get _corePickCardMessage => switch (_coach.id) {
+    'bro' => '할 일이 세 개 넘었다. 뭐부터 갈지 정해두자.',
+    'halmae' => '할 일이 세 개가 됐구나. 뭐부터 할지 정해두자.',
+    'boyfriend' => '할 일이 세 개 넘었네. 뭐부터 할지 정해둘까?',
+    'nyang_halbae' => '할 일이 세 개가 됐다냥. 뭐부터 할지 정해두자냥.',
+    'sec_female' => '할 일이 세 개가 됐어요. 무엇부터 하실지 정해둘까요?',
+    _ => '할 일이 세 개가 됐다냥. 뭐부터 할지 정해둘까냥?',
+  };
+
+  Future<void> _dismissCorePickCardForToday() async {
+    final today = _getTodayStr();
+    setState(() => _corePickCardDismissedDate = today);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_corePickCardDismissedDateKey, today);
+  }
+
+  Widget _buildCorePickCard() {
+    // 처음 생길 때 한 번만 튄다. 다음 build마다 다시 튀면 할 일을 넣을 때마다
+    // 카드가 들썩여서, 막지 않겠다고 해놓고 계속 끼어드는 셈이 된다.
+    if (!_corePickCardBounced) {
+      _corePickCardBounced = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _corePickBounceCtrl.forward(from: 0);
+      });
+    }
+
+    return AnimatedBuilder(
+      animation: _corePickBounceCtrl,
+      builder: (context, child) {
+        // 두 번 튀고 멈춘다.
+        final dy = TweenSequence<double>([
+          TweenSequenceItem(tween: ConstantTween<double>(0), weight: 10),
+          TweenSequenceItem(tween: Tween<double>(begin: 0, end: -10), weight: 12),
+          TweenSequenceItem(tween: Tween<double>(begin: -10, end: 0), weight: 16),
+          TweenSequenceItem(tween: Tween<double>(begin: 0, end: -6), weight: 10),
+          TweenSequenceItem(tween: Tween<double>(begin: -6, end: 0), weight: 14),
+          TweenSequenceItem(tween: ConstantTween<double>(0), weight: 38),
+        ]).evaluate(_corePickBounceCtrl);
+        return Transform.translate(offset: Offset(0, dy), child: child);
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.fromLTRB(16, 14, 10, 14),
+        decoration: BoxDecoration(
+          color: _coach.accentColor.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: _coach.accentColor.withValues(alpha: 0.28)),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _corePickCardMessage,
+                    style: GoogleFonts.notoSansKr(
+                      fontSize: 13,
+                      height: 1.45,
+                      fontWeight: FontWeight.w800,
+                      color: const Color(0xFF3D3A4E),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  GestureDetector(
+                    onTap: () async {
+                      await _dismissCorePickCardForToday();
+                      if (!mounted) return;
+                      _showCoreSelectionModal();
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 7,
+                      ),
+                      decoration: BoxDecoration(
+                        color: _coach.accentColor,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        '오늘의 핵심 고르기',
+                        style: GoogleFonts.notoSansKr(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w900,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            GestureDetector(
+              onTap: _dismissCorePickCardForToday,
+              behavior: HitTestBehavior.opaque,
+              child: const Padding(
+                padding: EdgeInsets.all(4),
+                child: Icon(Icons.close, size: 18, color: Color(0xFFA0A0B0)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   String get _lightenPlanCardMessage {
