@@ -13996,7 +13996,13 @@ $resistanceFlowRule'''
 
     // 운동 얘기가 오갈 때만 운동 지침을 붙인다. 청소와 같은 이유다 — 늘 실으면
     // 무슨 얘기를 하든 스트레칭부터 하자는 말이 따라 나온다.
-    final workoutSection = _isWorkoutContext(userText)
+    //
+    // 일정을 잡아달라는 턴에는 붙이지 않는다. "9시에 스트레칭 할 건데 알려줘"는
+    // 운동 상담이 아니라 시각을 잡아달라는 부탁인데, 이 지침은 처음부터 끝까지
+    // 무엇을 추천할지만 말한다. 그래서 이 코치만 일정 대신 동작 목록을 답했다.
+    final workoutSection =
+        _isWorkoutContext(userText) &&
+            !CoachContextScopeService.hasPlannerActionSignal(userText)
         ? _coach.workoutPlaybook ?? ''
         : '';
 
