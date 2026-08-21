@@ -192,7 +192,6 @@ class _MainTabScreenState extends State<MainTabScreen>
   static const Duration _catWidgetPromptCooldown = Duration(days: 7);
 
   late int _openDrawerIndex; // 0: 채팅, 1: 할일, 2: 기록, 3: 설정
-  Map<String, dynamic>? _vacationInfo;
   late TabController _tabCtrl;
   final ChatScreenController _chatController = ChatScreenController();
   final TasksScreenController _tasksController = TasksScreenController();
@@ -625,7 +624,6 @@ class _MainTabScreenState extends State<MainTabScreen>
       ),
     );
     _tabCtrl = TabController(length: _screens.length, vsync: this);
-    _loadVacation();
     _startMorningCallEngine();
     _startCoreReminderEngine();
     AnalyticsService.logAppOpen();
@@ -1610,24 +1608,9 @@ class _MainTabScreenState extends State<MainTabScreen>
     );
   }
 
-  Future<void> _loadVacation() async {
-    final prefs = await SharedPreferences.getInstance();
-    final rawVacation = prefs.getString('nyang_vacation');
-    if (mounted) {
-      setState(() {
-        if (rawVacation != null) {
-          _vacationInfo = jsonDecode(rawVacation);
-        } else {
-          _vacationInfo = null;
-        }
-      });
-    }
-  }
-
   List<Widget> get _screens => [
     ChatScreen(
       coachId: widget.coachId,
-      vacationInfo: _vacationInfo,
       controller: _chatController,
       onOpenDrawer: () => setState(() => _openDrawerIndex = 1),
       onOpenGoalVisionDrawer: _openTasksGoalVisionDrawer,
@@ -1638,9 +1621,6 @@ class _MainTabScreenState extends State<MainTabScreen>
       onEditCommand: _handleEditCommandFromChat,
       onSwitchCoach: _switchCoachFromChat,
       onOpenCatWidgetPrompt: _openCatWidgetPromptFromChat,
-      onVacationChanged: () {
-        _loadVacation();
-      },
       handoffFromCoachId: widget.handoffFromCoachId,
       chatBgStyle: _chatBgStyle,
     ),
@@ -1736,7 +1716,6 @@ class _MainTabScreenState extends State<MainTabScreen>
       _widgetIntentDrawerMode = false;
     });
     _chatController.refreshTaskProgress();
-    await _loadVacation();
     // 채팅 탭으로 복귀 시 미뤄둔 할일 리마인드 및 취침시간 이동 제안 확인
     Future.delayed(const Duration(milliseconds: 400), () {
       _chatController.checkDeferredReminder();
@@ -1746,7 +1725,6 @@ class _MainTabScreenState extends State<MainTabScreen>
 
   // 배경 이미지 경로
   String get _bgImagePath {
-    if (_vacationInfo != null) return 'assets/images/vacation_bg.jpg';
     if (_chatBgStyle == 'simple') {
       return 'assets/images/bg_${widget.coachId}_simple.png';
     }
@@ -1909,7 +1887,6 @@ class _MainTabScreenState extends State<MainTabScreen>
 
   // ── 마스터: 채팅창에만 배경 (기존 레이아웃 유지) ─────────
   Widget _buildMasterLayout() {
-    final isVacation = _vacationInfo != null;
     final scaffold = Scaffold(
       backgroundColor:
           Colors.transparent, // Let the background stack show through
@@ -1917,8 +1894,6 @@ class _MainTabScreenState extends State<MainTabScreen>
         preferredSize: const Size.fromHeight(90),
         child: Stack(
           children: [
-            if (isVacation)
-              Positioned.fill(child: Container(color: Colors.transparent)),
             // 오버레이 제거됨 (원본 이미지 선명도 유지)
             // 앱바 내용
             SafeArea(
@@ -1978,9 +1953,7 @@ class _MainTabScreenState extends State<MainTabScreen>
                                 padding: const EdgeInsets.only(right: 8.0),
                                 child: Icon(
                                   Icons.arrow_back_ios_new_rounded,
-                                  color: isVacation
-                                      ? Colors.white
-                                      : const Color(0xFF1A1A2E),
+                                  color: const Color(0xFF1A1A2E),
                                   size: 20,
                                 ),
                               ),
@@ -1993,9 +1966,7 @@ class _MainTabScreenState extends State<MainTabScreen>
                                 style: GoogleFonts.notoSansKr(
                                   fontSize: 16,
                                   fontWeight: FontWeight.w900,
-                                  color: isVacation
-                                      ? Colors.white
-                                      : const Color(0xFF1A1A2E),
+                                  color: const Color(0xFF1A1A2E),
                                 ),
                               ),
                             ),
@@ -2009,9 +1980,7 @@ class _MainTabScreenState extends State<MainTabScreen>
                                 ),
                                 child: Icon(
                                   Icons.keyboard_arrow_down_rounded,
-                                  color: isVacation
-                                      ? Colors.white
-                                      : const Color(0xFF1A1A2E),
+                                  color: const Color(0xFF1A1A2E),
                                   size: 24,
                                 ),
                               ),
@@ -2021,7 +1990,7 @@ class _MainTabScreenState extends State<MainTabScreen>
                       ],
                     ),
                     const Spacer(),
-                    _buildPlannerHelpAction(isVacation: isVacation),
+                    _buildPlannerHelpAction(),
                   ],
                 ),
               ),
@@ -2043,28 +2012,15 @@ class _MainTabScreenState extends State<MainTabScreen>
         activeIcons: _activeIcons,
         showNewBadges: _tabNewBadges,
         activeColor: AppDesignTokens.brand, // 마스터도 활성은 연보라
-        bgColor: isVacation ? Colors.black.withOpacity(0.35) : Colors.white,
-        inactiveColor: isVacation
-            ? Colors.white.withOpacity(0.6)
-            : AppDesignTokens.textDisabled,
-        isImmersive: isVacation,
-        border: isVacation
-            ? null
-            : const Border(top: BorderSide(color: AppDesignTokens.divider)),
+        bgColor: Colors.white,
+        inactiveColor: AppDesignTokens.textDisabled,
+        isImmersive: false,
+        border: const Border(top: BorderSide(color: AppDesignTokens.divider)),
       ),
     );
     return Stack(
       children: [
-        if (isVacation)
-          Positioned.fill(
-            child: Image.asset(
-              'assets/images/vacationmaste_bg.jpg',
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) =>
-                  Container(color: const Color(0xFFDFEEDF)),
-            ),
-          ),
-        if (!isVacation) ...[
+        ...[
           Positioned.fill(child: Container(color: Colors.white)),
           Positioned(
             top: 0,
@@ -2087,10 +2043,7 @@ class _MainTabScreenState extends State<MainTabScreen>
   }
 
   Widget _buildAppBarTitle({required bool isImmersive}) {
-    final isVacation = _vacationInfo != null;
-    final nameColor = isVacation
-        ? Colors.white
-        : (_chatBgStyle == 'simple'
+    final nameColor = (_chatBgStyle == 'simple'
               ? const Color(0xFF3A3652)
               : (isImmersive ? Colors.white : const Color(0xFF1A1A2E)));
 
@@ -2207,14 +2160,10 @@ class _MainTabScreenState extends State<MainTabScreen>
     await prefs.setBool(_plannerHelpSeenKey, true);
   }
 
-  Widget _buildPlannerHelpAction({bool isVacation = false}) {
-    final foreground = isVacation ? Colors.white : AppDesignTokens.brandMuted;
-    final border = isVacation
-        ? Colors.white.withOpacity(0.30)
-        : AppDesignTokens.brandCardBorder;
-    final shadowColor = isVacation
-        ? Colors.black.withOpacity(0.16)
-        : AppDesignTokens.brand.withOpacity(0.16);
+  Widget _buildPlannerHelpAction() {
+    const foreground = AppDesignTokens.brandMuted;
+    const border = AppDesignTokens.brandCardBorder;
+    final shadowColor = AppDesignTokens.brand.withOpacity(0.16);
 
     return Padding(
       padding: const EdgeInsets.only(right: 18),
@@ -2241,17 +2190,11 @@ class _MainTabScreenState extends State<MainTabScreen>
                     gradient: LinearGradient(
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
-                      colors: isVacation
-                          ? [
-                              Colors.white.withOpacity(0.30),
-                              AppDesignTokens.brand.withOpacity(0.32),
-                              AppDesignTokens.brand.withOpacity(0.46),
-                            ]
-                          : const [
-                              Color(0xFFFFFEFF),
-                              Color(0xFFF5F0FF),
-                              Color(0xFFE9DFFF),
-                            ],
+                      colors: const [
+                        Color(0xFFFFFEFF),
+                        Color(0xFFF5F0FF),
+                        Color(0xFFE9DFFF),
+                      ],
                       stops: const [0.0, 0.55, 1.0],
                     ),
                     border: Border.all(color: border, width: 1.1),
@@ -2262,9 +2205,7 @@ class _MainTabScreenState extends State<MainTabScreen>
                         offset: const Offset(0, 6),
                       ),
                       BoxShadow(
-                        color: Colors.white.withOpacity(
-                          isVacation ? 0.14 : 0.70,
-                        ),
+                        color: Colors.white.withOpacity(0.70),
                         blurRadius: 8,
                         offset: const Offset(-3, -3),
                       ),
@@ -2279,9 +2220,7 @@ class _MainTabScreenState extends State<MainTabScreen>
                           width: 12,
                           height: 6,
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(
-                              isVacation ? 0.20 : 0.74,
-                            ),
+                            color: Colors.white.withOpacity(0.74),
                             borderRadius: BorderRadius.circular(999),
                           ),
                         ),

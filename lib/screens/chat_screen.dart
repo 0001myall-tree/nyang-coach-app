@@ -1197,9 +1197,7 @@ class ChatScreen extends StatefulWidget {
   final Future<String> Function(Map<String, dynamic> command)? onEditCommand;
   final ValueChanged<String>? onSwitchCoach;
   final Future<void> Function()? onOpenCatWidgetPrompt;
-  final VoidCallback? onVacationChanged;
   final String? handoffFromCoachId;
-  final dynamic vacationInfo;
   final ChatScreenController? controller;
   final String chatBgStyle;
   const ChatScreen({
@@ -1214,9 +1212,7 @@ class ChatScreen extends StatefulWidget {
     this.onEditCommand,
     this.onSwitchCoach,
     this.onOpenCatWidgetPrompt,
-    this.onVacationChanged,
     this.handoffFromCoachId,
-    this.vacationInfo,
     this.controller,
     this.chatBgStyle = 'simple',
   });
@@ -3136,40 +3132,6 @@ ${lines.join('\n')}
     );
   }
 
-  String _vacationActivatedMessage() {
-    return switch (widget.coachId) {
-      'boyfriend' => '오늘은 휴식 모드로 하자. 오늘은 할 일 체크 안 할 테니까 아무 걱정하지 말고 푹 쉬어.',
-      'halmae' => '오늘은 휴식 모드로 하자, 우리 새끼. 오늘은 할 일 체크 안 할 테니 아무 걱정 말고 푹 쉬어라.',
-      'bro' => '오늘은 휴식 모드다. 할 일 체크 안 들어가니까 걱정 말고 제대로 쉬어.',
-      'nyang_halbae' => '오늘은 휴식 모드로 두자냥. 할 일 체크에서는 빠지니, 마음 내려놓고 쉬어도 된다냥.',
-      'sec_female' => '오늘은 휴식 모드로 할게요, 대표님. 오늘은 할 일 체크에서 제외되니까 아무 걱정 말고 푹 쉬세요.',
-      _ => '오늘은 휴식 모드로 하자냥. 오늘은 할 일 체크 안 할 테니까 아무 걱정하지 말고 푹 쉬어도 된다냥.',
-    };
-  }
-
-  String _lightDayMessage() {
-    return switch (widget.coachId) {
-      'boyfriend' => '알겠어. 오늘은 욕심내지 말고 할 수 있는 만큼만 같이 가자.',
-      'halmae' => '그래, 우리 새끼. 오늘은 욕심내지 말고 할 수 있는 만큼만 하자.',
-      'bro' => '오케이. 오늘은 욕심내지 말고 딱 할 수 있는 만큼만 가자.',
-      'nyang_halbae' => '좋다냥. 오늘은 범위를 줄이고, 할 수 있는 만큼만 가보자냥.',
-      'sec_female' => '알겠습니다, 대표님. 오늘은 범위를 줄이고 할 수 있는 만큼만 진행해요.',
-      _ => '알겠다냥. 오늘은 욕심내지 말고 할 수 있는 만큼만 같이 가자냥.',
-    };
-  }
-
-  String _vacationCancelledMessage() {
-    return switch (widget.coachId) {
-      'boyfriend' =>
-        '알겠어. 휴식 모드는 취소했어. 다시 해보고 싶은 마음이 들었으면 처음부터 다 하려고 하지 말고 천천히 돌아가자.',
-      'halmae' => '알았다, 우리 새끼. 휴식 모드는 취소했으니 처음부터 무리하지 말고 천천히 돌아가자.',
-      'bro' => '오케이, 휴식 모드 취소했다. 처음부터 풀파워로 가지 말고 천천히 복귀하자.',
-      'nyang_halbae' => '휴식 모드는 풀어두었다냥. 처음부터 다 짊어지지 말고 천천히 돌아오자냥.',
-      'sec_female' => '휴식 모드를 해제했어요, 대표님. 처음부터 다 하려고 하지 말고 천천히 돌아가요.',
-      _ => '알겠다냥. 휴식 모드는 취소했다냥. 다시 해보고 싶은 마음이 들었으면 처음부터 다 하려고 하지 말고 천천히 돌아가자냥.',
-    };
-  }
-
   bool _containsSelfHarmRiskSignal(String text) {
     final normalized = text.replaceAll(RegExp(r'\s+'), '').toLowerCase();
     return normalized.contains('자살') || normalized.contains('자해');
@@ -3188,140 +3150,6 @@ ${lines.join('\n')}
           text.contains('구체적인계획이나준비해둔수단') ||
           text.contains('지금119에전화');
     });
-  }
-
-  bool _isVacationActivationRequest(String text) {
-    final normalized = text.replaceAll(RegExp(r'\s+'), '').toLowerCase();
-    const requests = [
-      '오늘휴식하고싶',
-      '오늘휴식할래',
-      '오늘휴식으로해줘',
-      '휴식켜줘',
-      '휴식설정해줘',
-      '오늘쉬고싶',
-      '오늘쉴래',
-      '오늘은쉴래',
-      '오늘쉬게해줘',
-    ];
-    return requests.any(normalized.contains);
-  }
-
-  Future<bool> _tryActivateRequestedVacation(String userText) async {
-    if (!_isVacationActivationRequest(userText) ||
-        _containsSelfHarmRiskSignal(userText)) {
-      return false;
-    }
-    final prefs = await SharedPreferences.getInstance();
-    if (prefs.getString('nyang_vacation') != null) return false;
-    await _activateRestDay(userMessage: userText);
-    return true;
-  }
-
-  Future<void> _activateRestDay({String? userMessage}) async {
-    final prefs = await SharedPreferences.getInstance();
-    final todayStr = _getTodayStrWithReset(prefs);
-    await prefs.setString(
-      'nyang_vacation',
-      jsonEncode({
-        'type': 'today',
-        'date': todayStr,
-        'startedAt': DateTime.now().toIso8601String(),
-        'source': '${widget.coachId}_rest_offer',
-      }),
-    );
-    await _updateTodayRecord(prefs);
-    TasksSyncService.scheduleSyncToCloud();
-    final vacationActivatedMsg = await UserTitleService.applyForCoach(
-      _vacationActivatedMessage(),
-      widget.coachId,
-    );
-    if (!mounted) return;
-    setState(() {
-      _messages.add(
-        ChatMessage(
-          text: userMessage ?? '오늘은 쉬어가기',
-          isUser: true,
-          time: DateTime.now(),
-        ),
-      );
-      _messages.add(
-        ChatMessage(
-          text: vacationActivatedMsg,
-          isUser: false,
-          time: DateTime.now(),
-        ),
-      );
-      _dynamicChips = [];
-      _suppressDefaultChips = true;
-    });
-    await _saveHistory();
-    widget.onVacationChanged?.call();
-    _scrollToBottom();
-  }
-
-  Future<void> _chooseLightDay() async {
-    final lightDayMsg = await UserTitleService.applyForCoach(
-      _lightDayMessage(),
-      widget.coachId,
-    );
-    if (!mounted) return;
-    setState(() {
-      _messages.add(
-        ChatMessage(text: '오늘은 조금만 하기', isUser: true, time: DateTime.now()),
-      );
-      _messages.add(
-        ChatMessage(text: lightDayMsg, isUser: false, time: DateTime.now()),
-      );
-      _dynamicChips = [];
-      _suppressDefaultChips = true;
-    });
-    await _saveHistory();
-    _scrollToBottom();
-  }
-
-  bool _isVacationCancelRequest(String text) {
-    final normalized = text.replaceAll(RegExp(r'\s+'), '').toLowerCase();
-    return normalized.contains('휴식취소') ||
-        normalized.contains('휴식해제') ||
-        normalized.contains('쉬는거취소') ||
-        normalized == '다시할래' ||
-        normalized.contains('다시시작할래');
-  }
-
-  Future<bool> _tryCancelVacation(String userText) async {
-    if (!_isVacationCancelRequest(userText)) {
-      return false;
-    }
-    final prefs = await SharedPreferences.getInstance();
-    final rawVacation = prefs.getString('nyang_vacation');
-    if (rawVacation == null) return false;
-
-    await prefs.remove('nyang_vacation');
-    await _updateTodayRecord(prefs);
-    TasksSyncService.scheduleSyncToCloud();
-    final vacationCancelledMsg = await UserTitleService.applyForCoach(
-      _vacationCancelledMessage(),
-      widget.coachId,
-    );
-    if (!mounted) return true;
-    setState(() {
-      _messages.add(
-        ChatMessage(text: userText, isUser: true, time: DateTime.now()),
-      );
-      _messages.add(
-        ChatMessage(
-          text: vacationCancelledMsg,
-          isUser: false,
-          time: DateTime.now(),
-        ),
-      );
-      _dynamicChips = [];
-      _suppressDefaultChips = true;
-    });
-    await _saveHistory();
-    widget.onVacationChanged?.call();
-    _scrollToBottom();
-    return true;
   }
 
   String _dateKey(DateTime date) {
@@ -11859,9 +11687,6 @@ ${lines.join('\n')}
 
     if (_containsAnyRestSignal(trimmed)) {}
 
-    if (await _tryCancelVacation(trimmed)) return;
-    if (await _tryActivateRequestedVacation(trimmed)) return;
-
     // 오늘 미완료 태스크를 두고 한 저항 표현을 기록한다. 저녁에 "하기 싫다던 그 일을
     // 결국 하셨네요"라고 짚는 근거가 이것뿐이다.
     // 대화 흐름을 막지 않는 배경 기록이라 결과를 기다리지 않는다.
@@ -12806,34 +12631,6 @@ ${lines.join('\n')}
     // (프렌즈에게 주면 받은 적 없는 데이터를 활용하라는 죽은 지침이 되어 환각을 유발한다.)
     if (fullMasterProfileInjected) {
       sb.writeln(Prompts.coachingIntervention);
-    }
-
-    // 16. 휴식 모드 시 특별 코칭 지침
-    final isVacation =
-        widget.vacationInfo != null ||
-        prefs.getString('nyang_vacation') != null;
-    if (isVacation) {
-      sb.writeln('\n[특별 지침: 번아웃 방지 및 충전을 위한 휴식 모드 (최우선 지침)]');
-      sb.writeln(
-        '현재 사용자는 번아웃을 방지하고 충전하기 위한 휴식 모드 상태입니다. 다음 규칙을 철저히 준수하여 대응하십시오:',
-      );
-      sb.writeln(
-        '1. **마음의 부담 완화**: 사용자가 오늘 계획한 일이나 할 일을 하지 못하는 것에 대해 느끼는 죄책감이나 심리적 부담감을 대화를 통해 덜어주세요. "쉬어도 괜찮다", "충전도 하루의 중요한 일부이다"라는 점을 강조하며 따뜻하게 공감해 주고 마음의 부담을 낮춰주어야 합니다.',
-      );
-      sb.writeln(
-        '2. **압박 금지**: 오늘의 할 일이나 우선순위, 장기 목표 등을 달성하도록 독촉, 권유하거나 실행을 제안하지 마십시오. 일과 학업 등에 관한 압박이나 잔소리를 철저히 금합니다.',
-      );
-      sb.writeln(
-        '3. **기본 루틴 유지 유도**: 생산적이거나 부담스러운 일을 권하는 대신, 건강과 웰니스를 위한 아주 최소한의 기본 루틴(예: 제때 식사하기, 물 자주 마시기, 가벼운 스트레칭하기, 충분한 수면 취하기 등)을 잘 챙길 수 있도록 다정하게 격려하고 도우세요.',
-      );
-      sb.writeln(
-        '4. **어조**: 평소보다 더 부드럽고, 지지적이며, 편안한 어조로 말하십시오. 사용자가 이 휴식 시간을 죄책감 없이 온전히 누릴 수 있도록 대화로 안심시켜 주는 비서/친구 역할을 수행하세요.',
-      );
-      if (_coach.isMaster) {
-        sb.writeln(
-          '5. **프렌즈 코치 안내(최초 1회, 강요 금지)**: 대화 기록에서 이미 프렌즈 코치(냥냥이 등)를 언급한 적이 없다면, 이번 응답에서 딱 한 번만 "오늘은 편하게 계셔도 되고, 혹시 가벼운 대화 상대가 필요하시면 프렌즈 코치들도 있습니다" 정도로 지나가듯 안내하세요. 이미 언급했었다면 반복하지 말고, 사용자가 계속 대화하고 싶어하는 기색이면 언급하지 마세요.',
-        );
-      }
     }
 
     // 2. 장기 패턴 (마스터 전용 — 메모리 시스템이 저장하는 실제 키로 읽는다)
@@ -14929,18 +14726,9 @@ ${Prompts.outputRulesTail}$plannerActionSection$coachOfferTaskRule$halmaeHint$re
   @override
   Widget build(BuildContext context) {
     final keyboardOpen = MediaQuery.of(context).viewInsets.bottom > 0;
-    final showVacationSuggestBubble =
-        !_suppressDefaultChips &&
-        _dynamicChips.contains('오늘은 쉬어가기') &&
-        _dynamicChips.contains('오늘은 조금만 하기') &&
-        _dynamicChips.length == 2;
     final showQuickChips =
         !_suppressDefaultChips &&
-        !showVacationSuggestBubble &&
-        ((_dynamicChips.contains('오늘은 쉬어가기') &&
-                _dynamicChips.contains('오늘은 조금만 하기')) ||
-            _coach.isMaster ||
-            _baseQuickChips().isNotEmpty);
+        (_coach.isMaster || _baseQuickChips().isNotEmpty);
     if (keyboardOpen && _cheatKeyOpen) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) setState(() => _cheatKeyOpen = false);
@@ -14951,33 +14739,7 @@ ${Prompts.outputRulesTail}$plannerActionSection$coachOfferTaskRule$halmaeHint$re
       children: [
         Column(
           children: [
-            if (widget.vacationInfo == null) _buildSummaryCard(),
-            if (widget.vacationInfo != null)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
-                child: Row(
-                  children: [
-                    SvgPicture.asset(
-                      'assets/icons/fa-moon-solid.svg',
-                      width: 14,
-                      height: 14,
-                      colorFilter: ColorFilter.mode(
-                        Colors.white.withValues(alpha: 0.82),
-                        BlendMode.srcIn,
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      '오늘은 컨디션이 먼저입니다.',
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.85),
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+            _buildSummaryCard(),
             Expanded(
               child: Container(
                 color: _chatAreaBackgroundColor,
@@ -14991,8 +14753,6 @@ ${Prompts.outputRulesTail}$plannerActionSection$coachOfferTaskRule$halmaeHint$re
                           ? _buildEmptyState()
                           : _buildMessageList(),
                     ),
-                    if (showVacationSuggestBubble)
-                      _buildVacationSuggestBubble(),
                   ],
                 ),
               ),
@@ -16311,7 +16071,7 @@ ${Prompts.outputRulesTail}$plannerActionSection$coachOfferTaskRule$halmaeHint$re
 
   // ── 메시지 목록 ────────────────────────────────────────────
   Color get _chatAreaBackgroundColor {
-    if (!_coach.isMaster || widget.vacationInfo != null) {
+    if (!_coach.isMaster) {
       return Colors.transparent;
     }
     return _coach.id == 'nyang_halbae'
@@ -16382,9 +16142,8 @@ ${Prompts.outputRulesTail}$plannerActionSection$coachOfferTaskRule$halmaeHint$re
 
     // 마스터 코치별 대화 영역 배경
     if (_coach.isMaster) {
-      final isVacationBg = widget.vacationInfo != null;
       return ColoredBox(
-        color: isVacationBg ? Colors.transparent : _chatAreaBackgroundColor,
+        color: _chatAreaBackgroundColor,
         child: list,
       );
     }
@@ -17923,103 +17682,6 @@ ${Prompts.outputRulesTail}$plannerActionSection$coachOfferTaskRule$halmaeHint$re
   // ── 빠른 답장 칩 (동적) ──────────────────────────────────
 
   // 휴무 제안 말풍선 카드 (새로 추가)
-  Widget _buildVacationSuggestBubble() {
-    final accent = _coach.accentColor;
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: Container(
-        margin: const EdgeInsets.fromLTRB(16, 4, 60, 8),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.95),
-          borderRadius: const BorderRadius.only(
-            topLeft: Radius.circular(4),
-            topRight: Radius.circular(20),
-            bottomLeft: Radius.circular(20),
-            bottomRight: Radius.circular(20),
-          ),
-          border: Border.all(color: accent.withOpacity(0.15)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.06),
-              blurRadius: 12,
-              offset: const Offset(0, 3),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            GestureDetector(
-              onTap: _activateRestDay,
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 11),
-                decoration: BoxDecoration(
-                  color: accent.withOpacity(0.06),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: accent.withOpacity(0.18)),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    SvgPicture.asset(
-                      'assets/icons/fa-moon-solid.svg',
-                      width: 14,
-                      height: 14,
-                      colorFilter: ColorFilter.mode(accent, BlendMode.srcIn),
-                    ),
-                    const SizedBox(width: 7),
-                    Text(
-                      '오늘은 쉬어가기',
-                      style: GoogleFonts.notoSansKr(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: accent,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
-            GestureDetector(
-              onTap: _chooseLightDay,
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 11),
-                decoration: BoxDecoration(
-                  color: accent.withOpacity(0.06),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: accent.withOpacity(0.18)),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    SvgPicture.asset(
-                      'assets/icons/paw.svg',
-                      width: 14,
-                      height: 14,
-                      colorFilter: ColorFilter.mode(accent, BlendMode.srcIn),
-                    ),
-                    const SizedBox(width: 7),
-                    Text(
-                      '오늘은 조금만 하기',
-                      style: GoogleFonts.notoSansKr(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: accent,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   // 마스터 코치 채팅창 하단 고정 채팅칩.
   bool get _isMasterChipNightTime {
     final hour = DateTime.now().hour;
@@ -18519,8 +18181,6 @@ ${Prompts.outputRulesTail}$plannerActionSection$coachOfferTaskRule$halmaeHint$re
       '타이머 띄워줘' => 'assets/icons/fa-stopwatch-solid.svg',
       '수면 도우미' => 'assets/icons/fa-moon-solid.svg',
       '잠이 안 와' => 'assets/icons/fa-moon-solid.svg',
-      '오늘은 쉬어가기' => 'assets/icons/fa-moon-solid.svg',
-      '오늘은 조금만 하기' => 'assets/icons/paw.svg',
       '돌아가기' => 'assets/icons/fa-arrow-rotate-left-solid.svg',
       _ => null,
     };
@@ -18715,14 +18375,6 @@ ${Prompts.outputRulesTail}$plannerActionSection$coachOfferTaskRule$halmaeHint$re
             boxShadow: _quickChipShadow,
             fontSize: AppDesignTokens.textBody,
             onTap: () {
-              if (chip == '오늘은 쉬어가기') {
-                _activateRestDay();
-                return;
-              }
-              if (chip == '오늘은 조금만 하기') {
-                _chooseLightDay();
-                return;
-              }
               if (_coach.isMaster && chip == '마음 비우고 시작') {
                 _openCountdownFocusMode();
                 return;
@@ -18752,8 +18404,7 @@ ${Prompts.outputRulesTail}$plannerActionSection$coachOfferTaskRule$halmaeHint$re
   // 떠 있으면 화면이 복잡해 보여서, 흰 판을 칩 위까지 끌어올려 함께 담는다.
   Widget _buildInputArea({bool showChips = false}) {
     final isFriends = !_coach.isMaster;
-    final isMasterVacation = _coach.isMaster && widget.vacationInfo != null;
-    final isImmersiveInput = isFriends || isMasterVacation;
+    final isImmersiveInput = isFriends;
     final isNyang = widget.coachId == 'cat';
     // 심플 배경(흰 바탕)에서는 프렌즈도 흰 판을 깔아야 칩이 하단 UI에 박혀 보인다.
     // 감성 배경·휴식 배경은 배경 그림을 살려야 해서 투명을 유지한다.
@@ -18844,9 +18495,7 @@ ${Prompts.outputRulesTail}$plannerActionSection$coachOfferTaskRule$halmaeHint$re
                                               )
                                             : (isImmersiveInput
                                                   ? Colors.white.withOpacity(
-                                                      isMasterVacation
-                                                          ? 0.6
-                                                          : 0.3,
+                                                      0.3,
                                                     )
                                                   : masterLavenderBorder))),
                             width: _isListening ? 2.0 : 1.2,
@@ -18890,11 +18539,7 @@ ${Prompts.outputRulesTail}$plannerActionSection$coachOfferTaskRule$halmaeHint$re
                               ? Colors.white
                               : (isFriends
                                     ? Colors.white.withOpacity(0.25)
-                                    : (isMasterVacation
-                                          ? Colors.white.withOpacity(
-                                              AppDesignTokens.lightGlassOpacity,
-                                            )
-                                          : Colors.white)),
+                                    : Colors.white),
                           borderRadius: BorderRadius.circular(
                             AppDesignTokens.radiusPill,
                           ),
@@ -18905,12 +18550,7 @@ ${Prompts.outputRulesTail}$plannerActionSection$coachOfferTaskRule$halmaeHint$re
                                       ? _coach.accentColor.withOpacity(0.5)
                                       : (isFriends
                                             ? Colors.white.withOpacity(0.3)
-                                            : (isMasterVacation
-                                                  ? Colors.white.withOpacity(
-                                                      AppDesignTokens
-                                                          .lightGlassBorderOpacity,
-                                                    )
-                                                  : masterLavenderBorder))),
+                                            : masterLavenderBorder)),
                             width: 1.2,
                           ),
                         ),
@@ -19139,13 +18779,11 @@ ${Prompts.outputRulesTail}$plannerActionSection$coachOfferTaskRule$halmaeHint$re
       ),
     ];
 
-    final rawVacation = prefs.getString('nyang_vacation');
     final record = {
       'date': todayStr,
       'totalCount': countableTasks.length,
       'doneCount': doneTasks.length,
       'success': doneTasks.isNotEmpty,
-      'isVacation': rawVacation != null,
       'updatedAt': DateTime.now().toIso8601String(),
       'tasks': mergedTasks,
     };

@@ -165,13 +165,9 @@ class WidgetSyncService {
     // Convert to 0~100 integer for display
     int progressInt = (progressPercentage * 100).round();
 
-    // 휴식 모드 여부와 마지막 앱 접속 시각(밀리초)을 위젯에 전달한다.
+    // 마지막 앱 접속 시각(밀리초)을 위젯에 전달한다.
     // syncData는 앱이 실행 중일 때만 호출되므로 호출 시각을 접속 시각으로 쓴다.
-    final prefs = await SharedPreferences.getInstance();
-    await HomeWidget.saveWidgetData<bool>(
-      'vacation_mode',
-      prefs.getString('nyang_vacation') != null,
-    );
+    await HomeWidget.saveWidgetData<bool>('vacation_mode', false);
     await HomeWidget.saveWidgetData<int>(
       'last_opened_at',
       DateTime.now().millisecondsSinceEpoch,

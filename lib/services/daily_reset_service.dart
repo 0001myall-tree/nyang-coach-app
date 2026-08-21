@@ -302,36 +302,21 @@ class DailyResetService {
       final yStr = DateFormat('yyyy-MM-dd').format(yesterday);
 
       int streak = prefs.getInt('nyang_streak') ?? 0;
-      final rawVacation = prefs.getString('nyang_vacation');
-      final isLastVacation = rawVacation != null;
 
       if (lastDate == yStr) {
         if (prev.isNotEmpty && prev['success'] == true) {
           streak += 1;
-        } else if (isLastVacation) {
-          /* keep streak */
         } else {
           streak = 0;
         }
       } else {
-        if (prev.isNotEmpty && (prev['success'] == true || isLastVacation)) {
+        if (prev.isNotEmpty && prev['success'] == true) {
           streak = 1;
         } else {
           streak = 0;
         }
       }
       await prefs.setInt('nyang_streak', streak);
-
-      // '오늘만 쉬기'는 이전 활동일의 기록과 연속 출석을 보호한 뒤 자동 종료합니다.
-      if (rawVacation != null) {
-        try {
-          final vacation = jsonDecode(rawVacation) as Map<String, dynamic>;
-          if (vacation['type'] == 'today' &&
-              vacation['date']?.toString() != today) {
-            await prefs.remove('nyang_vacation');
-          }
-        } catch (_) {}
-      }
 
       // 2. Clear tasks in preferences (어제 목록은 보관함에 하루 남긴다)
       await archivePreviousDayTasks(
@@ -650,13 +635,11 @@ class DailyResetService {
       ),
     ];
 
-    final rawVacation = prefs.getString('nyang_vacation');
     final record = {
       'date': todayStr,
       'totalCount': countableTasks.length,
       'doneCount': doneTasks.length,
       'success': doneTasks.isNotEmpty,
-      'isVacation': rawVacation != null,
       'updatedAt': DateTime.now().toIso8601String(),
       'tasks': mergedTasks,
     };

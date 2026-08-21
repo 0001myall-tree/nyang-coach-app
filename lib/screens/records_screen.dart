@@ -36,7 +36,6 @@ class _RecordsScreenState extends State<RecordsScreen> {
   List<Map<String, dynamic>> _history = [];
   Map<String, Map<String, dynamic>> _habitLogs = {};
   List<HabitItem> _habits = [];
-  Map<String, dynamic>? _vacationInfo;
   String _userTitle = UserTitleService.defaultTitle;
   String? _weeklyFeedbackText;
   bool _isGeneratingWeeklyFeedback = false;
@@ -85,11 +84,6 @@ class _RecordsScreenState extends State<RecordsScreen> {
       );
     }
 
-    // 4. Vacation
-    final rawVacation = prefs.getString('nyang_vacation');
-    if (rawVacation != null) {
-      _vacationInfo = jsonDecode(rawVacation);
-    }
 
     _userTitle = await UserTitleService.getTitle();
     _lastDate = prefs.getString('nyang_last_date') ?? '';
@@ -149,9 +143,10 @@ class _RecordsScreenState extends State<RecordsScreen> {
       // history에서 찾기
       final existing = _history.where((r) => r['date'] == dateStr).toList();
       if (existing.isNotEmpty) {
-        final record = Map<String, dynamic>.from(existing.last);
-        record['isVacation'] = _isVacationDate(dateStr);
-        last7.add(record);
+        // 쉬는 날 표시는 그날 기록에 적혀 있던 것을 그대로 쓴다. 휴식 모드는
+        // 걷어냈지만 지난 기록의 값은 남아 있고, 그 숫자를 지금 다시 계산해
+        // 덮어쓰면 예전에 쉬었던 날이 실패로 바뀐다.
+        last7.add(Map<String, dynamic>.from(existing.last));
       } else {
         // 기록이 없으면 빈 데이터
         last7.add({
@@ -159,7 +154,7 @@ class _RecordsScreenState extends State<RecordsScreen> {
           'totalCount': 0,
           'doneCount': 0,
           'success': false,
-          'isVacation': _isVacationDate(dateStr),
+          'isVacation': false,
           'tasks': [],
         });
       }
@@ -1021,43 +1016,6 @@ ${feedbackType == 0
     } catch (_) {
       return '없음';
     }
-  }
-
-  bool _isVacationDate(String dateStr) {
-    if (_vacationInfo == null) return false;
-    final date = DateTime.tryParse(dateStr);
-    if (date == null) return false;
-
-    final normalized = DateTime(date.year, date.month, date.day);
-    final type = _vacationInfo!['type']?.toString();
-
-    if (type == 'today') {
-      final target = DateTime.tryParse(
-        _vacationInfo!['date']?.toString() ?? '',
-      );
-      if (target == null) return false;
-      return normalized == DateTime(target.year, target.month, target.day);
-    }
-
-    if (type == 'range') {
-      final start = DateTime.tryParse(
-        _vacationInfo!['start']?.toString() ?? '',
-      );
-      final end = DateTime.tryParse(_vacationInfo!['end']?.toString() ?? '');
-      if (start == null || end == null) return false;
-
-      final startDay = DateTime(start.year, start.month, start.day);
-      final endDay = DateTime(end.year, end.month, end.day);
-      return !normalized.isBefore(startDay) && !normalized.isAfter(endDay);
-    }
-
-    if (type == 'regular') {
-      final days = (_vacationInfo!['days'] as List?) ?? [];
-      final dayIndex = normalized.weekday % 7; // Sunday = 0
-      return days.any((day) => day == dayIndex);
-    }
-
-    return false;
   }
 
   String _getDayLabel(String dateStr) {
