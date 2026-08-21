@@ -12,6 +12,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 Future<void> pumpTimer(
   WidgetTester tester, {
   required String coachId,
+  bool isMasterPlan = false,
   int minutes = 15,
   Map<String, Object> extraPrefs = const {},
   Size size = const Size(360, 780),
@@ -33,6 +34,7 @@ Future<void> pumpTimer(
       home: Scaffold(
         body: FocusTimerWidget(
           coachId: coachId,
+          isMasterPlan: isMasterPlan,
           initialMinutes: minutes,
           onMessage: (_) {},
         ),
@@ -50,11 +52,11 @@ const savedPomodoro = {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  group('마스터 타이머', () {
+  group('마스터 플랜 타이머', () {
     testWidgets('제목 없이 시계만 있다', (tester) async {
       // 가운데 'MASTER TIMER'와 오른쪽 '전체 보기'가 좁은 기기에서 서로
       // 파고들었다. 카드 안에 시계가 큼직해서 제목 없이도 뭔지 안다.
-      await pumpTimer(tester, coachId: 'nyang_halbae');
+      await pumpTimer(tester, coachId: 'nyang_halbae', isMasterPlan: true);
       expect(find.text('MASTER TIMER'), findsNothing);
       expect(find.text('MIND TIMER'), findsNothing);
     });
@@ -64,6 +66,7 @@ void main() {
       await pumpTimer(
         tester,
         coachId: 'nyang_halbae',
+        isMasterPlan: true,
         minutes: 25,
         size: const Size(320, 700),
       );
@@ -77,6 +80,7 @@ void main() {
       await pumpTimer(
         tester,
         coachId: 'nyang_halbae',
+        isMasterPlan: true,
         size: const Size(320, 700),
       );
       final button = tester.getRect(find.text('전체 보기'));
@@ -87,7 +91,7 @@ void main() {
 
     testWidgets('시작 전에는 전체 화면 버튼이 집중 시작이다', (tester) async {
       // 눌러본 적 없는 타이머에 "다시 시작"이라고 하면 자기가 뭘 멈춘 줄 안다.
-      await pumpTimer(tester, coachId: 'nyang_halbae');
+      await pumpTimer(tester, coachId: 'nyang_halbae', isMasterPlan: true);
       await tester.tap(find.text('전체 보기'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
@@ -96,7 +100,7 @@ void main() {
     });
 
     testWidgets('15분·25분·직접 설정 셋만 나온다', (tester) async {
-      await pumpTimer(tester, coachId: 'nyang_halbae');
+      await pumpTimer(tester, coachId: 'nyang_halbae', isMasterPlan: true);
       expect(find.text('15분'), findsOneWidget);
       expect(find.text('25분'), findsOneWidget);
       expect(find.text('직접 설정'), findsOneWidget);
@@ -107,7 +111,7 @@ void main() {
     testWidgets('버튼 셋의 너비가 같다', (tester) async {
       // 글자 길이가 달라도 칸은 같아야 한다. 가운데 정렬로 두면 "직접 설정"만
       // 넓어서 줄이 한쪽으로 쏠려 보인다.
-      await pumpTimer(tester, coachId: 'nyang_halbae');
+      await pumpTimer(tester, coachId: 'nyang_halbae', isMasterPlan: true);
       double slotWidth(String label) => tester
           .getSize(
             find
@@ -123,6 +127,7 @@ void main() {
       await pumpTimer(
         tester,
         coachId: 'nyang_halbae',
+        isMasterPlan: true,
         size: const Size(300, 700),
       );
       expect(tester.takeException(), isNull);
@@ -130,7 +135,7 @@ void main() {
     });
 
     testWidgets('직접 설정을 누르면 세 항목이 나온다', (tester) async {
-      await pumpTimer(tester, coachId: 'nyang_halbae');
+      await pumpTimer(tester, coachId: 'nyang_halbae', isMasterPlan: true);
       await tester.tap(find.text('직접 설정'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
@@ -143,7 +148,7 @@ void main() {
     });
 
     testWidgets('기본값은 포모도로이고 총 시간을 보여준다', (tester) async {
-      await pumpTimer(tester, coachId: 'nyang_halbae');
+      await pumpTimer(tester, coachId: 'nyang_halbae', isMasterPlan: true);
       await tester.tap(find.text('직접 설정'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
@@ -154,7 +159,7 @@ void main() {
 
     testWidgets('처음 열 때는 되돌리는 길이 없다', (tester) async {
       // 아직 저장한 적이 없으면 끌 것도 없다.
-      await pumpTimer(tester, coachId: 'nyang_halbae');
+      await pumpTimer(tester, coachId: 'nyang_halbae', isMasterPlan: true);
       await tester.tap(find.text('직접 설정'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
@@ -162,7 +167,24 @@ void main() {
     });
   });
 
-  group('프렌즈 타이머', () {
+  // 타이머는 방에 딸린 물건이 아니라 그 사람이 산 것이다. 예전에는 코치 방으로
+  // 갈라서, 마스터 플랜을 쓰면서 냥이와 이야기하면 프렌즈 타이머가 나왔다.
+  group('플랜이 정한다', () {
+    testWidgets('마스터 플랜은 냥이 방에서도 마스터 타이머다', (tester) async {
+      await pumpTimer(tester, coachId: 'cat', isMasterPlan: true);
+      // 반복 설정은 마스터 타이머에만 있다.
+      expect(find.text('직접 설정'), findsOneWidget);
+      expect(find.text('집중 시간'), findsNothing);
+    });
+
+    testWidgets('프렌즈 플랜은 마스터 코치 방에서도 프렌즈 타이머다', (tester) async {
+      await pumpTimer(tester, coachId: 'nyang_halbae');
+      expect(find.text('집중 시간'), findsOneWidget);
+      expect(find.text('직접 설정'), findsNothing);
+    });
+  });
+
+  group('프렌즈 플랜 타이머', () {
     testWidgets('제목이 그대로고 직접 설정이 없다', (tester) async {
       await pumpTimer(tester, coachId: 'cat');
       // 프렌즈는 카드 자체가 다르다. 제목도 영문이 아니라 '집중 시간'이다.
@@ -184,8 +206,9 @@ void main() {
     Future<void> pumpAgain(
       WidgetTester tester,
       String coachId,
-      int minutes,
-    ) async {
+      int minutes, {
+      bool isMasterPlan = false,
+    }) async {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setInt('focus_timer_stage', minutes);
       await prefs.setInt('focus_timer_duration', minutes * 60);
@@ -194,6 +217,7 @@ void main() {
           home: Scaffold(
             body: FocusTimerWidget(
               coachId: coachId,
+              isMasterPlan: isMasterPlan,
               initialMinutes: minutes,
               onMessage: (_) {},
             ),
@@ -202,12 +226,19 @@ void main() {
       );
     }
 
-    for (final coachId in ['nyang_halbae', 'cat']) {
-      testWidgets('$coachId: 새 시간으로 다시 부르면 그 시간이 뜬다', (tester) async {
-        await pumpTimer(tester, coachId: coachId, minutes: 15);
+    for (final master in [true, false]) {
+      final label = master ? '마스터' : '프렌즈';
+      testWidgets('$label: 새 시간으로 다시 부르면 그 시간이 뜬다', (tester) async {
+        final coachId = master ? 'nyang_halbae' : 'cat';
+        await pumpTimer(
+          tester,
+          coachId: coachId,
+          isMasterPlan: master,
+          minutes: 15,
+        );
         expect(find.text('15:00'), findsOneWidget);
 
-        await pumpAgain(tester, coachId, 40);
+        await pumpAgain(tester, coachId, 40, isMasterPlan: master);
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 400));
 
@@ -227,6 +258,7 @@ void main() {
       await pumpTimer(
         tester,
         coachId: 'nyang_halbae',
+        isMasterPlan: true,
         minutes: 5,
         extraPrefs: {...savedPomodoro, ...oneOff},
       );
@@ -238,6 +270,7 @@ void main() {
       await pumpTimer(
         tester,
         coachId: 'nyang_halbae',
+        isMasterPlan: true,
         minutes: 20,
         extraPrefs: {...savedPomodoro, ...oneOff},
       );
@@ -262,6 +295,7 @@ void main() {
       await pumpTimer(
         tester,
         coachId: 'nyang_halbae',
+        isMasterPlan: true,
         minutes: 5,
         extraPrefs: savedPomodoro,
       );
@@ -275,6 +309,7 @@ void main() {
       await pumpTimer(
         tester,
         coachId: 'nyang_halbae',
+        isMasterPlan: true,
         minutes: 25,
         extraPrefs: savedPomodoro,
       );
@@ -289,6 +324,7 @@ void main() {
       await pumpTimer(
         tester,
         coachId: 'nyang_halbae',
+        isMasterPlan: true,
         minutes: 25,
         extraPrefs: savedPomodoro,
       );

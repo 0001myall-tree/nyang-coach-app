@@ -264,12 +264,21 @@ class FocusTimerWidget extends StatefulWidget {
   /// 화면을 따로 만들면 타이머 고칠 때마다 두 곳을 손봐야 한다.
   final bool isMindTimer;
 
+  /// 마스터 플랜을 쓰는 사람인지.
+  ///
+  /// 예전에는 어느 코치 방에서 켰는지로 갈랐다. 그래서 마스터 플랜을 쓰면서
+  /// 냥이 방에 있으면 프렌즈 타이머가, 프렌즈 플랜인데 마스터 코치 방을
+  /// 구경하면 마스터 타이머가 나왔다. 타이머는 방의 물건이 아니라 그 사람이
+  /// 산 것이므로, 어디서 켜든 자기 것이 나와야 한다.
+  final bool isMasterPlan;
+
   const FocusTimerWidget({
     super.key,
     required this.coachId,
     required this.initialMinutes,
     required this.onMessage,
     this.isMindTimer = false,
+    this.isMasterPlan = false,
   });
 
   @override
@@ -345,8 +354,7 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
   };
 
   bool get _isMale => widget.coachId == 'nyang_halbae';
-  bool get _isMasterTimer =>
-      widget.coachId == 'nyang_halbae' || widget.coachId == 'sec_female';
+  bool get _isMasterTimer => widget.isMasterPlan;
 
   /// 반복 설정은 마스터 코치 타이머에만 있다. 생각 정리용 타이머는 한 번
   /// 재고 끝나는 게 그 기능의 전부라 반복이 낄 자리가 없다.
@@ -360,11 +368,6 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
   static const _darkBg = Color(0xFF1A1A2E);
   static const _purpleMain = Color(0xFF7C3AED);
   static const _purpleLight = Color(0xFFA78BFA);
-
-  // ── 코치 이미지 경로 ──────────────────────────────────────
-  String get _coachTimerImg => _isMale
-      ? 'assets/images/coach_nyang_halbae_nobg.png'
-      : 'assets/images/sec_female_timer_done.png';
 
   @override
   void initState() {
@@ -1068,8 +1071,7 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
     final isDone = remain <= 0;
     // 마스터 코치 타이머는 "05:00"이 이미 시간을 보여주므로
     // 그 아래 "n분 집중" 문구를 숨겨 중복을 없앤다.
-    final isMaster =
-        widget.coachId == 'nyang_halbae' || widget.coachId == 'sec_female';
+    final isMaster = _isMasterTimer;
     const timerMain = Color(0xFF9B8AF0);
     const timerAccent = Color(0xFFA99AE8);
     const timerInk = Color(0xFF2F266C);
@@ -1452,36 +1454,6 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
                   // 별 반짝임
                   ..._buildSparkles(),
 
-                  // 코치 이미지 (상단 크롭 — 얼굴 반드시 표시)
-                  Positioned(
-                    bottom: -10,
-                    left: 0,
-                    right: 0,
-                    child: Center(
-                      child: SizedBox(
-                        width: 210,
-                        height: 225,
-                        child: ShaderMask(
-                          shaderCallback: (rect) => const LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            colors: [
-                              Colors.white,
-                              Colors.white,
-                              Colors.transparent,
-                            ],
-                            stops: [0.0, 0.70, 1.0],
-                          ).createShader(rect),
-                          blendMode: BlendMode.dstIn,
-                          child: Image.asset(
-                            _coachTimerImg,
-                            fit: BoxFit.cover,
-                            alignment: Alignment.topCenter,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
                 ],
               ),
             ),

@@ -16113,6 +16113,9 @@ ${Prompts.outputRulesTail}$plannerActionSection$coachOfferTaskRule$halmaeHint$re
               coachId: widget.coachId,
               initialMinutes: _timerActiveMinutes!,
               isMindTimer: _timerActiveIsMind,
+              // 타이머 종류는 방이 아니라 그 사람이 산 플랜이 정한다.
+              isMasterPlan:
+                  _userData.isPlanActive && _userData.planType == 'master',
               onMessage: (msg) {
                 setState(() {
                   _messages.add(
