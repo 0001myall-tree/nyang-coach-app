@@ -85,6 +85,9 @@ class _SettingsScreenState extends State<SettingsScreen>
     final section = widget.autoOpenSection;
     if (section == null) return;
     await _loadSettings();
+    // 권한 상태까지 읽고 연다. 시트 안의 경고 배너가 이 값을 보는데, 먼저
+    // 열면 막혀 있어도 멀쩡한 것처럼 보인다.
+    await _refreshAlarmPermission();
     if (!mounted) return;
     switch (section) {
       case 'morning_call':
