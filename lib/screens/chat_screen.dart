@@ -32,6 +32,7 @@ import 'package:nyang_coach/services/ongoing_task_nudge_service.dart';
 import 'package:nyang_coach/services/memory_service.dart';
 import 'package:nyang_coach/services/notification_service.dart';
 import 'package:nyang_coach/services/preemptive_nudge_service.dart';
+import 'package:nyang_coach/services/last_reply_log.dart';
 import 'package:nyang_coach/services/planner_action.dart';
 import 'package:nyang_coach/widgets/alarm_permission_notice.dart';
 import 'package:nyang_coach/services/planner_edit_service.dart';
@@ -1178,6 +1179,10 @@ class ChatScreen extends StatefulWidget {
   final VoidCallback? onOpenDrawer;
   final ValueChanged<List<String>>? onOpenGoalVisionDrawer;
   final ValueChanged<String>? onOpenFeatureLocation;
+
+  /// 설정 화면의 특정 시트를 열어달라고 부탁한다.
+  final ValueChanged<String>? onOpenSettingsSection;
+
   final Future<bool> Function(
     String name, {
     String freq,
@@ -1206,6 +1211,7 @@ class ChatScreen extends StatefulWidget {
     this.onOpenDrawer,
     this.onOpenGoalVisionDrawer,
     this.onOpenFeatureLocation,
+    this.onOpenSettingsSection,
     this.onRegisterHabit,
     this.onRegisterGoal,
     this.onDeleteCommand,
@@ -2051,88 +2057,7 @@ class _ChatScreenState extends State<ChatScreen>
   ///
   /// 이미 정규식이 잡아 등록한 턴이면 카드를 띄우지 않는다. 같은 항목을
   /// 두 번 물어보게 된다.
-  /// 코치가 짚어준 플래너 조작을 확인 카드로 띄운다.
-  ///
-  /// 태그를 받았다고 바로 고치지 않는다. 코치가 알아들은 것은 앞 대화와 목록을
-  /// 보고 맞춘 결과라 어긋날 수 있고, 앱 밖에서 조용히 바뀌면 알아채기 어렵다.
-  /// 되돌리기 쉬운 동작도 예외를 두지 않는다 — 규칙이 하나여야 헷갈리지 않는다.
-  static const String _plannerActionKind = 'planner_action';
-  static const String _plannerActionYes = '응';
-  static const String _plannerActionNo = '아니야';
-
   /// 카드를 띄웠으면 true. 부를 대상이 없어 물러났으면 false.
-  Future<bool> _offerPlannerAction(
-    PlannerAction action, {
-    bool canRegisterInstead = false,
-  }) async {
-    if (!_userData.isPlanActive) return false;
-    if (!action.isUsable) return false;
-
-    // 모닝콜은 찾을 일정이 없다. 바로 카드로 간다.
-    if (action.kind == PlannerActionKind.morning) {
-      _showPlannerActionCard(action, _morningQuestion(action));
-      return true;
-    }
-
-    final preview = await PlannerEditService.preview(action);
-    if (!mounted) return false;
-    if (!preview.isOk) {
-      // 아직 없는 일을 두고 "8시에 글 쓸 건데 알려줘"라고 하면 코치가 알람
-      // 태그를 붙일 때가 있다. 그 말의 뜻은 새로 넣어달라는 것이므로,
-      // 못 찾았다고 물러나지 말고 등록 카드에 자리를 넘긴다.
-      if (canRegisterInstead &&
-          preview.status == PlannerActionStatus.notFound) {
-        return false;
-      }
-      // 루틴은 카드로 고칠 것이 아니다. 요일·횟수까지 한자리에서 봐야 해서
-      // 루틴 탭으로 데려간다.
-      if (preview.status == PlannerActionStatus.routine) {
-        await _openRoutineTabFor(preview.label);
-        return true;
-      }
-      final miss = _plannerActionMiss(action, preview);
-      if (miss != null) _injectAiMessage(miss);
-      return true;
-    }
-    var question = _plannerQuestion(action, preview);
-    // 일정 알람 자체가 꺼져 있으면 이 일정만 켜도 울리지 않는다. 켜겠다고
-    // 말해놓고 안 울리는 것이 제일 나쁘므로, 같이 켠다는 것을 카드에 적는다.
-    if (action.kind == PlannerActionKind.remind &&
-        action.enabled == true &&
-        !await _coreRemindersEnabled()) {
-      if (!mounted) return false;
-      // 설정에 있다는 것을 밝힌다. 그래야 푸쉬 말고 코치 목소리로 받고 싶은
-      // 사람이 어디로 가야 하는지 알 수 있다.
-      question =
-          '$question\n'
-          '(설정에 일정 알람이 꺼져 있어서 기본 푸쉬로 함께 켤게요. '
-          '알람 방식은 설정에서 바꿀 수 있어요)';
-    }
-    _showPlannerActionCard(action, question);
-    return true;
-  }
-
-  void _showPlannerActionCard(PlannerAction action, String question) {
-    setState(() {
-      _messages.add(
-        ChatMessage(
-          text: question,
-          isUser: false,
-          time: DateTime.now(),
-          kind: _plannerActionKind,
-          choices: const [_plannerActionYes, _plannerActionNo],
-          payload: jsonEncode(_plannerActionPayload(action)),
-        ),
-      );
-    });
-    _scrollToBottom();
-  }
-
-  Future<bool> _coreRemindersEnabled() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getBool('nyang_core_reminder_enabled') ?? false;
-  }
-
   /// 일정 알람을 켠다. 이미 켜져 있으면 아무것도 하지 않는다.
   ///
   /// 소리 종류와 몇 분 전인지는 건드리지 않는다. 처음 켜는 사람에게는 기본
@@ -2153,106 +2078,13 @@ class _ChatScreenState extends State<ChatScreen>
     return true;
   }
 
-  Map<String, dynamic> _plannerActionPayload(PlannerAction action) => {
-    'kind': action.kind.name,
-    'target': action.target,
-    if (action.date != null) 'date': action.date!.toIso8601String(),
-    if (action.time != null) 'hour': action.time!.hour,
-    if (action.time != null) 'minute': action.time!.minute,
-    if (action.enabled != null) 'enabled': action.enabled,
-  };
-
-  PlannerAction? _plannerActionFromPayload(String? payload) {
-    if (payload == null || payload.isEmpty) return null;
-    final Map<String, dynamic> data;
-    try {
-      data = jsonDecode(payload) as Map<String, dynamic>;
-    } catch (_) {
-      return null;
-    }
-    final kind = PlannerActionKind.values
-        .where((k) => k.name == data['kind'])
-        .firstOrNull;
-    if (kind == null) return null;
-    final hour = (data['hour'] as num?)?.toInt();
-    final minute = (data['minute'] as num?)?.toInt();
-    return PlannerAction(
-      kind: kind,
-      target: data['target']?.toString() ?? '',
-      date: DateTime.tryParse(data['date']?.toString() ?? ''),
-      time: hour == null ? null : (hour: hour, minute: minute ?? 0),
-      enabled: data['enabled'] as bool?,
-    );
-  }
-
   /// 카드도 코치가 하는 말이다. 등록 카드가 코치마다 말투를 달리하는데
   /// 이쪽만 존댓말로 물으면, 같은 대화 안에서 두 사람이 말하는 것처럼 보인다.
-  String _plannerQuestion(PlannerAction action, PlannerActionResult found) {
-    final name = found.label.isEmpty ? action.target : found.label;
-    return switch (action.kind) {
-      PlannerActionKind.move => _ask(
-        "'$name' ${found.detail}${PlannerEditService.roJosa(found.detail)}",
-        plain: '옮길까',
-        helping: '옮겨줄까',
-        polite: '옮겨 드릴까요',
-      ),
-      PlannerActionKind.done => _ask(
-        "'$name'",
-        plain: '완료로 표시할까',
-        helping: '완료로 표시해줄까',
-        polite: '완료로 표시해 드릴까요',
-      ),
-      PlannerActionKind.remind => action.enabled == true
-          ? _ask(
-              "'$name'",
-              plain: '알람 켤까',
-              helping: '알람 켜줄까',
-              polite: '알람 켜 드릴까요',
-            )
-          : _ask(
-              "'$name'",
-              plain: '알람 끌까',
-              helping: '알람 꺼줄까',
-              polite: '알람 꺼 드릴까요',
-            ),
-      PlannerActionKind.morning => _morningQuestion(action),
-    };
-  }
-
   /// 코치마다 어미가 다르다.
   ///
   /// [plain]은 "옮길까"처럼 그냥 묻는 말, [helping]은 "옮겨줄까"처럼 해준다는 말,
   /// [polite]는 비서 코치의 높임말이다. 한국어는 어간에 따라 어미가 달라져서
   /// 한 조각을 돌려 쓸 수 없다 — "표시" 뒤에 "을까"를 붙이면 말이 안 된다.
-  String _ask(
-    String subject, {
-    required String plain,
-    required String helping,
-    required String polite,
-  }) => switch (_coach.id) {
-    'bro' || 'halmae' => '$subject $helping?',
-    'boyfriend' => '$subject $plain?',
-    'sec_female' => '$subject $polite?',
-    _ => '$subject $plain냥?',
-  };
-
-  String _morningQuestion(PlannerAction action) {
-    if (action.enabled == false) {
-      return _ask(
-        '모닝콜',
-        plain: '끌까',
-        helping: '꺼줄까',
-        polite: '꺼 드릴까요',
-      );
-    }
-    final time = action.time!;
-    // 매일이라는 것을 밝힌다. "내일 아침에 깨워줘"라고 부탁한 사람은 하루만
-    // 생각하고 있는데, 모닝콜은 그 뒤로도 계속 울린다.
-    final label = PlannerEditService.moveDetail(time: time);
-    return '${_ask('모닝콜 $label${PlannerEditService.roJosa(label)}', plain: '맞출까', helping: '맞춰줄까', polite: '맞춰 드릴까요')}\n'
-        '(매일 같은 시각에 울려요)';
-  }
-
   /// 루틴 탭을 열고, 이름이 하나로 좁혀지면 그 루틴의 수정 창까지 연다.
   ///
   /// 수정 명령이 쓰는 길을 그대로 탄다. 코치가 하는 말도 그쪽이 만들어준다.
@@ -2263,6 +2095,78 @@ class _ChatScreenState extends State<ChatScreen>
     });
     if (!mounted) return;
     _injectAiMessage(reply ?? '루틴 탭에서 바꿔주세요.');
+  }
+
+  /// 코치가 짚어준 조작을 그 일을 할 수 있는 자리로 데려간다.
+  ///
+  /// 값을 대신 바꿔주던 확인 카드는 걷어냈다. 시각을 "18:00" 대신 "6시"로 적어
+  /// 보내거나 이름이 목록과 조금 다르면 그 자리에서 어긋났는데, 어긋난 것을
+  /// 사용자는 알 수 없었다 — 코치는 바꿔주겠다고 말한 뒤였고 화면은 그대로였다.
+  ///
+  /// 데려가기만 하면 앱이 해석할 것이 없다. 화면에 지금 값이 그대로 있고,
+  /// 바꾸는 것은 사용자가 본 채로 한다. 코치가 하는 일은 어디로 갈지 고르는
+  /// 것까지다.
+  ///
+  /// 카드를 띄웠으면 true. 부를 대상이 없어 물러났으면 false.
+  Future<bool> _offerPlannerAction(
+    PlannerAction action, {
+    bool canRegisterInstead = false,
+  }) async {
+    if (!_userData.isPlanActive) return false;
+
+    // 모닝콜은 플래너가 아니라 설정에 있다. 찾을 일정도 없다.
+    // 끝냈다는 말은 그냥 대화로 받는다. 데려갈 곳이 없다.
+    if (action.kind == PlannerActionKind.done) return false;
+
+    if (action.kind == PlannerActionKind.morning) {
+      widget.onOpenSettingsSection?.call('morning_call');
+      _injectAiMessage(
+        _voice(
+          cat: '모닝콜 설정 열어뒀다냥. 시각은 거기서 맞추면 된다냥',
+          bro: '모닝콜 설정 열어뒀다. 시각은 거기서 맞춰라.',
+          halmae: '모닝콜 설정 열어뒀다. 시각은 거기서 맞추면 된다.',
+          boyfriend: '모닝콜 설정 열어뒀어. 시각은 거기서 맞추면 돼.',
+          nyangHalbae: '모닝콜 설정 열어뒀다냥. 시각은 거기서 맞추면 된다냥.',
+          sec: '모닝콜 설정을 열어뒀어요. 시각은 거기서 맞추시면 돼요.',
+        ),
+      );
+      return true;
+    }
+
+    if (!action.isUsable) return false;
+
+    // 무엇을 가리키는지 먼저 찾는다. 없는 것을 두고 화면을 열어봐야 사용자는
+    // 빈 목록 앞에서 무엇을 하라는 건지 알 수 없다.
+    final found = await PlannerEditService.preview(action);
+    if (!mounted) return false;
+
+    if (found.status == PlannerActionStatus.notFound) {
+      // 아직 없는 일을 두고 "8시에 글 쓸 건데 알려줘"라고 하면 코치가 알람
+      // 태그를 붙일 때가 있다. 그 말의 뜻은 새로 넣어달라는 것이다.
+      if (canRegisterInstead) return false;
+    }
+    if (found.status == PlannerActionStatus.multiple ||
+        found.status == PlannerActionStatus.notFound) {
+      final miss = _plannerActionMiss(action, found);
+      if (miss != null) _injectAiMessage(miss);
+      return true;
+    }
+
+    // 루틴은 요일·횟수까지 한자리에서 봐야 한다.
+    if (found.status == PlannerActionStatus.routine) {
+      await _openRoutineTabFor(found.label);
+      return true;
+    }
+
+    // 그 일정의 수정 창을 연다. 시각도 날짜도 알람 스위치도 그 한 화면에 있다.
+    final name = found.label.isEmpty ? action.target : found.label;
+    final reply = await widget.onEditCommand?.call({
+      'target': name,
+      'kind': 'task_or_schedule',
+    });
+    if (!mounted) return true;
+    if (reply != null) _injectAiMessage(reply);
+    return true;
   }
 
   /// 코치가 하는 말이라 코치 말투를 쓴다.
@@ -2290,15 +2194,19 @@ class _ChatScreenState extends State<ChatScreen>
   /// 잘했다고 말한 참인데, 뒤에 "그건 이미 했다"를 붙이면 칭찬을 물리는 셈이다.
   String? _plannerActionMiss(PlannerAction action, PlannerActionResult found) {
     final name = found.label.isEmpty ? action.target : found.label;
+    // 이름마다 붙는 조사가 다르다. '글쓰기이'가 아니라 '글쓰기가'.
+    final iGa = PlannerEditService.iGaJosa(name);
+    final eunNeun = PlannerEditService.iGaJosa(name) == '이' ? '은' : '는';
+    final eulReul = PlannerEditService.eulReulJosa(name);
     switch (found.status) {
       case PlannerActionStatus.multiple:
         return _voice(
-          cat: "'$name'이 여러 개 있다냥. 몇 시 거냥?",
-          bro: "'$name'이 여러 개다. 몇 시 거냐?",
-          halmae: "'$name'이 여럿이구나. 몇 시 것이냐?",
-          boyfriend: "'$name'이 여러 개던데, 몇 시 거야?",
-          nyangHalbae: "'$name'이 여러 개다냥. 몇 시 것이냥?",
-          sec: "'$name'이 여러 개 있어요. 몇 시 건지 알려주시면 찾아볼게요.",
+          cat: "'$name'$iGa 여러 개 있다냥. 몇 시 거냥?",
+          bro: "'$name'$iGa 여러 개다. 몇 시 거냐?",
+          halmae: "'$name'$iGa 여럿이구나. 몇 시 것이냐?",
+          boyfriend: "'$name'$iGa 여러 개던데, 몇 시 거야?",
+          nyangHalbae: "'$name'$iGa 여러 개다냥. 몇 시 것이냥?",
+          sec: "'$name'$iGa 여러 개 있어요. 몇 시 건지 알려주시면 찾아볼게요.",
         );
       case PlannerActionStatus.noChange:
         // 완료는 조용히 넘어간다.
@@ -2314,12 +2222,12 @@ class _ChatScreenState extends State<ChatScreen>
       case PlannerActionStatus.failed:
         if (action.kind == PlannerActionKind.remind) {
           return _voice(
-            cat: "'$name'은 시각이 없어서 알람을 못 건다냥. 몇 시로 할까냥?",
-            bro: "'$name'은 시간이 없어서 알람을 못 건다. 몇 시로 할까?",
-            halmae: "'$name'은 시각이 없어 알람을 못 거는구나. 몇 시로 하마?",
-            boyfriend: "'$name'은 시간이 없어서 알람을 못 걸어. 몇 시로 할까?",
-            nyangHalbae: "'$name'은 시각이 없어 알람을 못 건다냥. 몇 시로 하겠냥?",
-            sec: "'$name'은 시각이 없어서 알람을 걸 수 없어요. 시간을 먼저 정해주세요.",
+            cat: "'$name'$eunNeun 시각이 없어서 알람을 못 건다냥. 몇 시로 할까냥?",
+            bro: "'$name'$eunNeun 시간이 없어서 알람을 못 건다. 몇 시로 할까?",
+            halmae: "'$name'$eunNeun 시각이 없어 알람을 못 거는구나. 몇 시로 하마?",
+            boyfriend: "'$name'$eunNeun 시간이 없어서 알람을 못 걸어. 몇 시로 할까?",
+            nyangHalbae: "'$name'$eunNeun 시각이 없어 알람을 못 건다냥. 몇 시로 하겠냥?",
+            sec: "'$name'$eunNeun 시각이 없어서 알람을 걸 수 없어요. 시간을 먼저 정해주세요.",
           );
         }
         return _voice(
@@ -2332,198 +2240,20 @@ class _ChatScreenState extends State<ChatScreen>
         );
       default:
         return _voice(
-          cat: "'$name'은 목록에 없다냥",
-          bro: "'$name'은 목록에 없다.",
-          halmae: "'$name'은 목록에 없구나.",
-          boyfriend: "'$name'은 목록에 없어.",
-          nyangHalbae: "'$name'은 목록에 없다냥.",
-          sec: "'$name'을 목록에서 못 찾았어요.",
+          cat: "'$name'$eunNeun 목록에 없다냥",
+          bro: "'$name'$eunNeun 목록에 없다.",
+          halmae: "'$name'$eunNeun 목록에 없구나.",
+          boyfriend: "'$name'$eunNeun 목록에 없어.",
+          nyangHalbae: "'$name'$eunNeun 목록에 없다냥.",
+          sec: "'$name'$eulReul 목록에서 못 찾았어요.",
         );
     }
-  }
-
-  Future<void> _handlePlannerActionChoice(
-    ChatMessage msg,
-    String label,
-  ) async {
-    if (_isLoading) return;
-    HapticFeedback.lightImpact();
-    await _consumeChoiceCard(msg);
-
-    final action = _plannerActionFromPayload(msg.payload);
-    if (action == null) return;
-    if (label == _plannerActionNo) {
-      _injectAiMessage(
-        _voice(
-          cat: '알겠다냥. 그대로 둘게냥',
-          bro: '알겠다. 그대로 둔다.',
-          halmae: '알겠다. 그대로 두마.',
-          boyfriend: '오케이, 그대로 둘게.',
-          nyangHalbae: '알겠다냥. 그대로 두겠다냥.',
-          sec: '네, 그대로 둘게요.',
-        ),
-      );
-      return;
-    }
-
-    unawaited(
-      AnalyticsService.logFeatureUsage('planner_action_${action.kind.name}'),
-    );
-
-    if (action.kind == PlannerActionKind.morning) {
-      await _applyMorningCall(action);
-      return;
-    }
-
-    final turningOnAlarm =
-        action.kind == PlannerActionKind.remind && action.enabled == true;
-    if (turningOnAlarm) await _ensureCoreRemindersEnabled();
-
-    final result = await PlannerEditService.apply(action);
-    if (!mounted) return;
-    if (!result.isOk) {
-      final miss = _plannerActionMiss(action, result);
-      if (miss != null) _injectAiMessage(miss);
-      return;
-    }
-    // 알람은 시각을 보고 다시 계산된다. 옮겨놓고 예약을 그대로 두면 옛 시각에 운다.
-    unawaited(NotificationService().syncCoreReminders());
-    _injectAiMessage(_plannerActionDone(action, result));
-
-    if (!turningOnAlarm) return;
-    // 켜졌다고 적혀 있어도 권한이 막혀 있으면 울리지 않는다. 그 자리에서
-    // 설정으로 갈 길을 낸다 — 채팅에 적어두면 스크롤에 밀려 사라진다.
-    await NotificationService().requestNotificationPermissions();
-    final issue = await NotificationService().checkAlarmPermission();
-    if (!mounted || issue == AlarmPermissionIssue.none) return;
-    await showAlarmPermissionDialog(context, issue, alarmLabel: '일정 알람');
   }
 
   /// 모닝콜은 플래너가 아니라 알림 설정에 있다. 저장하고 다시 예약한다.
   ///
   /// 권한이 막혀 있으면 켜도 울리지 않는다. 그건 설정 화면에서 안내하는 일이라
   /// 여기서는 상태만 확인해 사실대로 말한다.
-  Future<void> _applyMorningCall(PlannerAction action) async {
-    final prefs = await SharedPreferences.getInstance();
-    final on = action.enabled != false;
-
-    if (!on) {
-      await prefs.setBool('nyang_morning_call_enabled', false);
-      await NotificationService().cancelAllMorningCalls();
-      TasksSyncService.scheduleSyncToCloud();
-      if (!mounted) return;
-      _injectAiMessage(
-        _voice(
-          cat: '모닝콜 껐다냥 ✓',
-          bro: '모닝콜 껐다 ✓',
-          halmae: '모닝콜 꺼뒀다 ✓',
-          boyfriend: '모닝콜 껐어 ✓',
-          nyangHalbae: '모닝콜 꺼뒀다냥 ✓',
-          sec: '모닝콜을 껐어요 ✓',
-        ),
-      );
-      return;
-    }
-
-    final time = action.time!;
-    final timeStr =
-        '${time.hour.toString().padLeft(2, '0')}:'
-        '${time.minute.toString().padLeft(2, '0')}';
-    final coachId = prefs.getString('nyang_morning_call_coach') ?? widget.coachId;
-    await prefs.setBool('nyang_morning_call_enabled', true);
-    await prefs.setString('nyang_morning_call_time', timeStr);
-    await prefs.setString('nyang_morning_call_coach', coachId);
-    TasksSyncService.scheduleSyncToCloud();
-
-    await NotificationService().requestNotificationPermissions();
-    await NotificationService().scheduleDailyMorningCall(
-      hour: time.hour,
-      minute: time.minute,
-      coachId: coachId,
-    );
-    final issue = await NotificationService().checkAlarmPermission();
-    if (!mounted) return;
-
-    final label = PlannerEditService.moveDetail(time: time);
-    final when = '$label${PlannerEditService.roJosa(label)}';
-    if (issue == AlarmPermissionIssue.none) {
-      _injectAiMessage(
-        _voice(
-          cat: '모닝콜 $when 맞춰뒀다냥 ✓',
-          bro: '모닝콜 $when 맞췄다 ✓',
-          halmae: '모닝콜 $when 맞춰뒀다 ✓',
-          boyfriend: '모닝콜 $when 맞춰뒀어 ✓',
-          nyangHalbae: '모닝콜 $when 맞춰뒀다냥 ✓',
-          sec: '모닝콜을 $when 맞췄어요 ✓',
-        ),
-      );
-      return;
-    }
-
-    // 켜두기는 했으니 되돌리지 않는다. 다만 이대로면 울리지 않으므로, 말로만
-    // 알리지 않고 그 자리에서 설정으로 갈 길을 낸다. 채팅에 한 줄 적어두면
-    // 스크롤에 밀려 사라지고, 사용자는 맞춰졌다고 믿는다.
-    _injectAiMessage(
-      _voice(
-        cat: '모닝콜 $when 맞춰뒀다냥. 그런데 이대로면 안 울린다냥',
-        bro: '모닝콜 $when 맞췄다. 근데 이대로면 안 울린다.',
-        halmae: '모닝콜 $when 맞춰뒀다. 그런데 이대로면 울리지 않는다.',
-        boyfriend: '모닝콜 $when 맞춰뒀어. 근데 이대로면 안 울려.',
-        nyangHalbae: '모닝콜 $when 맞춰뒀다냥. 그런데 이대로면 안 울린다냥.',
-        sec: '모닝콜을 $when 맞췄어요. 그런데 이대로면 울리지 않아요.',
-      ),
-    );
-    await showAlarmPermissionDialog(context, issue, alarmLabel: '모닝콜');
-  }
-
-  String _plannerActionDone(PlannerAction action, PlannerActionResult result) {
-    final name = result.label.isEmpty ? action.target : result.label;
-    final where = '${result.detail}${PlannerEditService.roJosa(result.detail)}';
-    return switch (action.kind) {
-      PlannerActionKind.move => _voice(
-        cat: "'$name' $where 옮겼다냥 ✓",
-        bro: "'$name' $where 옮겼다 ✓",
-        halmae: "'$name' $where 옮겨뒀다 ✓",
-        boyfriend: "'$name' $where 옮겼어 ✓",
-        nyangHalbae: "'$name' $where 옮겨뒀다냥 ✓",
-        sec: "'$name' $where 옮겼어요 ✓",
-      ),
-      PlannerActionKind.done => _voice(
-        cat: "'$name' 완료로 적어뒀다냥 ✓",
-        bro: "'$name' 완료로 찍었다 ✓",
-        halmae: "'$name' 다 한 걸로 적어뒀다 ✓",
-        boyfriend: "'$name' 완료로 해뒀어 ✓",
-        nyangHalbae: "'$name' 완료로 적어뒀다냥 ✓",
-        sec: "'$name' 완료로 표시했어요 ✓",
-      ),
-      PlannerActionKind.remind => action.enabled == true
-          ? _voice(
-              cat: "'$name' 알람 켜뒀다냥 ✓",
-              bro: "'$name' 알람 켰다 ✓",
-              halmae: "'$name' 알람 켜뒀다 ✓",
-              boyfriend: "'$name' 알람 켜뒀어 ✓",
-              nyangHalbae: "'$name' 알람 켜뒀다냥 ✓",
-              sec: "'$name' 알람을 켰어요 ✓",
-            )
-          : _voice(
-              cat: "'$name' 알람 껐다냥 ✓",
-              bro: "'$name' 알람 껐다 ✓",
-              halmae: "'$name' 알람 꺼뒀다 ✓",
-              boyfriend: "'$name' 알람 껐어 ✓",
-              nyangHalbae: "'$name' 알람 꺼뒀다냥 ✓",
-              sec: "'$name' 알람을 껐어요 ✓",
-            ),
-      PlannerActionKind.morning => _voice(
-        cat: '모닝콜 맞춰뒀다냥 ✓',
-        bro: '모닝콜 맞췄다 ✓',
-        halmae: '모닝콜 맞춰뒀다 ✓',
-        boyfriend: '모닝콜 맞춰뒀어 ✓',
-        nyangHalbae: '모닝콜 맞춰뒀다냥 ✓',
-        sec: '모닝콜을 맞췄어요 ✓',
-      ),
-    };
-  }
-
   void _offerRegistrationConfirm(_ParsedReply parsed) {
     if (!_userData.isPlanActive) return;
 
@@ -6748,7 +6478,7 @@ ${lines.join('\n')}
       scheduleReminder: scheduleReminder,
       habitToConfirm: habitToConfirm,
       goalToConfirm: goalToConfirm,
-      plannerAction: plannerAction?.isUsable == true ? plannerAction : null,
+      plannerAction: plannerAction,
     );
   }
 
@@ -12216,6 +11946,7 @@ ${lines.join('\n')}
         text.contains('기록') ||
         text.contains('리포트') ||
         text.contains('통계');
+    final asksTaskCheck = _asksTaskCheckGuide(text);
     final asksTodoReset = _asksTodoResetGuide(text);
     final asksRepeatScheduleGuide = _asksRepeatScheduleGuide(text);
 
@@ -12228,6 +11959,7 @@ ${lines.join('\n')}
         text.contains('열어줘') ||
         text.contains('가줘') ||
         (mentionsFeatureSurface && mentionsFeature) ||
+        asksTaskCheck ||
         asksTodoReset ||
         asksRepeatScheduleGuide;
     if (!asksLocation) return null;
@@ -12249,6 +11981,14 @@ ${lines.join('\n')}
 
     if (text.contains('목표')) {
       return _FeatureLocationReply(_featureLocationMessage('goals'), 'goals');
+    }
+
+    if (asksTaskCheck) {
+      return _FeatureLocationReply(
+        _featureLocationMessage('task_check'),
+        'today',
+        shouldNavigate: false,
+      );
     }
 
     if (asksTodoReset) {
@@ -12349,6 +12089,21 @@ ${lines.join('\n')}
     }
 
     return null;
+  }
+
+  /// 할 일을 완료로 만드는 법을 묻는 말.
+  ///
+  /// 끝냈다는 보고는 그냥 대화로 받는다. 코치가 대신 체크해주지도, 탭을 열어
+  /// 데려가지도 않는다 — 잊지 않고 말한 사람이 체크를 못 할 리 없고, 그 자리에
+  /// "여기 있다냥"을 얹으면 축하가 안내로 바뀐다.
+  ///
+  /// 다만 어떻게 하는지 물으면 그건 답해준다. 미는 동작은 눌러서는 안 되는
+  /// 것이라, 처음 쓰는 사람이 스스로 알아내기 어렵다.
+  bool _asksTaskCheckGuide(String normalized) {
+    if (!RegExp(r'완료|체크|다했|끝냈|끝난').hasMatch(normalized)) return false;
+    return RegExp(
+      r'어떻게|어디서|어디에|방법|하는법|하려면|표시|처리|누르',
+    ).hasMatch(normalized);
   }
 
   String _featureLocationMessage(String location) {
@@ -14314,6 +14069,10 @@ ${Prompts.outputRulesTail}$plannerActionSection$coachOfferTaskRule$halmaeHint$re
       var content = result.data['content'] as String? ?? '';
       if (content.isEmpty) throw Exception('Empty response from chatProxy');
 
+      // 태그를 떼기 전 원문을 적어둔다. 조작이 안 될 때 코치가 안 붙인 것인지
+      // 앱이 못 알아본 것인지는 이것 없이 알 수 없다.
+      unawaited(LastReplyLog.record(content));
+
       // 욕설이 섞였으면 답변 전체를 버린다. 일부만 지우면 앞뒤 문장이
       // "오, ○○이잖아!"처럼 남아서 오히려 무슨 말인지 다 드러난다.
       // 태그도 함께 버려서 할 일 등록이나 타이머가 딸려 나오지 않게 한다.
@@ -16218,12 +15977,6 @@ ${Prompts.outputRulesTail}$plannerActionSection$coachOfferTaskRule$halmaeHint$re
       return _buildChoiceBubbleCard(
         msg,
         (label) => _handleEveningPendingChoice(label, msg.choices),
-      );
-    }
-    if (msg.kind == _plannerActionKind && msg.choices.isNotEmpty) {
-      return _buildChoiceBubbleCard(
-        msg,
-        (label) => _handlePlannerActionChoice(msg, label),
       );
     }
     if (msg.kind == _registerConfirmKind && msg.choices.isNotEmpty) {

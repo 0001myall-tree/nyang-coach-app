@@ -748,6 +748,7 @@ class TasksScreenController {
         '삭제할 항목을 찾는 중 문제가 생겼어요. 잠시 후 다시 시도해 주세요.';
   }
 
+  /// 채팅에서 짚어준 할 일을 찾아 그 칸을 번쩍인다.
   Future<String> handleEditCommand(Map<String, dynamic> command) async {
     return await _state?._handleEditCommandFromChat(command) ??
         '수정할 항목을 찾는 중 문제가 생겼어요. 잠시 후 다시 시도해 주세요.';
@@ -1069,6 +1070,20 @@ class _TasksScreenState extends State<TasksScreen>
   DateTime _lastStoreLoadAt = DateTime.fromMillisecondsSinceEpoch(0);
 
   // ── 데이터 로드 ──────────────────────────────────────────
+  /// 첫 읽기가 끝났는지. 채팅에서 데려올 때 이걸 기다린다.
+  ///
+  /// 서랍이 열리자마자 부르는데, 그때는 목록이 아직 비어 있다. 그 상태에서
+  /// 찾으면 있는 할 일도 "없다"가 되고, 사용자는 방금 적은 것을 못 찾는다는
+  /// 말을 듣는다.
+  bool _initialLoadDone = false;
+
+  Future<void> _waitForInitialLoad() async {
+    for (var i = 0; i < 20 && !_initialLoadDone; i++) {
+      await Future.delayed(const Duration(milliseconds: 50));
+      if (!mounted) return;
+    }
+  }
+
   Future<void> _loadAll() async {
     final prefs = await SharedPreferences.getInstance();
     // 앱이 열려 있는 동안 밖에서(냥냥이 오버레이 등) 고친 값도 함께 읽는다.
@@ -1208,6 +1223,8 @@ class _TasksScreenState extends State<TasksScreen>
       if (mounted) setState(() {});
       await _saveCoreTasks();
     }
+
+    _initialLoadDone = true;
 
     if (widget.initialBottomSheet != null) {
       _openBottomSheet(widget.initialBottomSheet!);
@@ -1405,6 +1422,10 @@ class _TasksScreenState extends State<TasksScreen>
     return _deleteCommandReply('opened', target);
   }
 
+  /// 채팅에서 짚어준 할 일로 데려간다.
+  ///
+  /// 배너를 눌러 들어왔을 때 쓰는 길을 그대로 탄다 — 그 칸까지 스크롤하고
+  /// 테두리를 두 번 번쩍인다. 체크는 사용자가 누른다.
   Future<String> _handleEditCommandFromChat(
     Map<String, dynamic> command,
   ) async {

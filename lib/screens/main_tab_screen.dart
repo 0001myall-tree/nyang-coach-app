@@ -971,6 +971,17 @@ class _MainTabScreenState extends State<MainTabScreen>
     });
   }
 
+  /// 채팅에서 부탁받은 설정 시트를 열어둔 채 설정 탭으로 간다.
+  String? _pendingSettingsSection;
+
+  void _openSettingsSectionFromChat(String section) {
+    setState(() {
+      _pendingSettingsSection = section;
+      _openDrawerIndex = 3;
+      _widgetIntentDrawerMode = false;
+    });
+  }
+
   void _openFeatureLocationFromChat(String location) {
     final taskTabByLocation = {
       'today': 0,
@@ -1069,6 +1080,11 @@ class _MainTabScreenState extends State<MainTabScreen>
     return _tasksController.handleDeleteCommand(command);
   }
 
+  /// 할 일 탭을 열고 그 칸을 번쩍인다.
+  ///
+  /// 체크는 사용자가 한다. 채팅에서 대신 완료로 적어주는 길은 걷어냈다 —
+  /// 코치가 알아들은 것이 맞는지 확인하는 데 드는 품이, 탭에서 체크 한 번
+  /// 누르는 것보다 컸다.
   Future<String> _handleEditCommandFromChat(
     Map<String, dynamic> command,
   ) async {
@@ -1615,6 +1631,7 @@ class _MainTabScreenState extends State<MainTabScreen>
       onOpenDrawer: () => setState(() => _openDrawerIndex = 1),
       onOpenGoalVisionDrawer: _openTasksGoalVisionDrawer,
       onOpenFeatureLocation: _openFeatureLocationFromChat,
+      onOpenSettingsSection: _openSettingsSectionFromChat,
       onRegisterHabit: _registerHabitFromChat,
       onRegisterGoal: _registerGoalFromChat,
       onDeleteCommand: _handleDeleteCommandFromChat,
@@ -1627,13 +1644,23 @@ class _MainTabScreenState extends State<MainTabScreen>
     const TasksPlaceholderScreen(),
     RecordsScreen(coachId: widget.coachId),
     SettingsScreen(
+      // 부탁받은 시트가 있으면 그 시트까지 열고 자리를 비운다. 남겨두면 설정
+      // 탭에 들를 때마다 같은 시트가 다시 열린다.
+      key: ValueKey('settings-$_pendingSettingsSection'),
       coachId: widget.coachId,
+      autoOpenSection: _takePendingSettingsSection(),
       onChatBgStyleChanged: (style) {
         if (style == _chatBgStyle) return;
         setState(() => _chatBgStyle = style);
       },
     ),
   ];
+
+  String? _takePendingSettingsSection() {
+    final section = _pendingSettingsSection;
+    _pendingSettingsSection = null;
+    return section;
+  }
 
   static const _tabLabels = ['채팅', '할 일', '기록', '설정'];
 
@@ -2563,7 +2590,9 @@ class _MainTabScreenState extends State<MainTabScreen>
       drawerContent = RecordsScreen(coachId: widget.coachId);
     } else if (_openDrawerIndex == 3) {
       drawerContent = SettingsScreen(
+        key: ValueKey('settings-drawer-$_pendingSettingsSection'),
         coachId: widget.coachId,
+        autoOpenSection: _takePendingSettingsSection(),
         onChatBgStyleChanged: (style) {
           if (style == _chatBgStyle) return;
           setState(() => _chatBgStyle = style);

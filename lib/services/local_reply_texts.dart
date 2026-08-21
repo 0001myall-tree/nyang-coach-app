@@ -47,6 +47,7 @@ class LocalReplyTexts {
       'records' => '기록',
       'settings' => '설정',
       'todo_reset' => '오늘 할 일 초기화',
+      'task_check' => '할 일 체크',
       _ => '',
     };
 
@@ -54,6 +55,8 @@ class LocalReplyTexts {
 
     return switch (coachId) {
       'cat' => switch (location) {
+        'task_check' =>
+          '할 일 탭 > 오늘에서 그 항목을 오른쪽으로 끝까지 밀면 완료다냥.',
         'picker' => '어떤 화면 찾는 거냥? 냥이가 바로 데려다주겠다냥.',
         'settings' =>
           '설정 탭에 있다냥. 모닝콜, 캘린더 알람, 위젯, 채팅 배경, 비서 학습 설정까지 거기서 바꾸면 된다냥.',
@@ -69,6 +72,7 @@ class LocalReplyTexts {
         _ => base(' 화면으로 바로 데려다주겠다냥.'),
       },
       'boyfriend' => switch (location) {
+        'task_check' => '할 일 탭 > 오늘에서 그 항목을 오른쪽으로 끝까지 밀면 완료야.',
         'picker' => '어디 찾는지 말해줘. 내가 바로 데려다줄게.',
         'settings' => '설정 탭에 있어. 모닝콜, 캘린더 알람, 위젯, 채팅 배경, 비서 학습 설정까지 거기서 바꾸면 돼.',
         'todo_reset' => '오늘 할 일은 매일 자정에 자동으로 초기화돼. 초기화 시간은 따로 바꿀 수 없어.',
@@ -81,6 +85,7 @@ class LocalReplyTexts {
         _ => base(' 화면에 있어. 바로 열어줄게.'),
       },
       'halmae' => switch (location) {
+        'task_check' => '할 일 탭 > 오늘에서 그 항목을 오른쪽으로 끝까지 밀면 완료다.',
         'picker' => '뭘 찾는 게냐, 우리 새끼. 할미가 바로 데려다주마.',
         'settings' =>
           '설정 탭에 있다, 우리 새끼. 모닝콜이랑 알람, 위젯, 채팅 배경, 비서 학습 설정 다 거기서 바꾸면 된다.',
@@ -96,6 +101,7 @@ class LocalReplyTexts {
         _ => base(' 화면에 있다. 할미가 바로 열어주마.'),
       },
       'bro' => switch (location) {
+        'task_check' => '할 일 탭 > 오늘에서 그 항목 오른쪽으로 끝까지 밀어라. 그러면 완료다.',
         'picker' => '어디 찾냐. 말만 해라, 바로 보내준다.',
         'settings' => '설정 탭이다. 모닝콜, 캘린더 알람, 위젯, 채팅 배경, 비서 학습 설정 다 거기서 바꾸면 된다.',
         'todo_reset' => '오늘 할 일은 매일 자정에 자동 초기화된다. 초기화 시간은 따로 못 바꾼다.',
@@ -108,6 +114,7 @@ class LocalReplyTexts {
         _ => base(' 화면이다. 바로 열어준다.'),
       },
       'nyang_halbae' => switch (location) {
+        'task_check' => '할 일 탭 > 오늘에서 그 항목을 오른쪽으로 끝까지 밀면 완료다냥.',
         'picker' => '대표님, 찾으시는 화면을 선택해 주시면 바로 이동하겠습니다.',
         'settings' =>
           '대표님, 설정 탭에서 모닝콜, 캘린더 알람, 위젯, 채팅 배경, 비서 학습 설정을 변경하실 수 있습니다.',
@@ -123,6 +130,7 @@ class LocalReplyTexts {
         _ => '대표님, ${base(' 화면으로 바로 이동하겠습니다.')}',
       },
       'sec_female' => switch (location) {
+        'task_check' => '할 일 탭 > 오늘에서 해당 항목을 오른쪽으로 끝까지 밀면 완료돼요.',
         'picker' => '대표님, 어떤 화면을 찾으세요? 제가 바로 열어드릴게요.',
         'settings' => '대표님, 설정 탭에서 모닝콜, 캘린더 알람, 위젯, 채팅 배경, 비서 학습 설정을 바꿀 수 있어요.',
         'todo_reset' =>
@@ -137,6 +145,7 @@ class LocalReplyTexts {
         _ => '대표님, ${base(' 화면으로 바로 이동할게요.')}',
       },
       _ => switch (location) {
+        'task_check' => '할 일 탭 > 오늘에서 그 항목을 오른쪽으로 끝까지 밀면 완료다냥.',
         'picker' => '어떤 화면을 찾고 있어? 바로 열어줄게.',
         'settings' => '설정 탭에서 모닝콜, 캘린더 알람, 위젯, 채팅 배경, 비서 학습 설정을 바꿀 수 있어.',
         'todo_reset' => '오늘 할 일은 매일 자정에 자동으로 초기화돼. 초기화 시간은 따로 바꿀 수 없어.',

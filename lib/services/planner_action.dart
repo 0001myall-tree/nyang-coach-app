@@ -50,13 +50,22 @@ class PlannerAction {
   /// 켜는지 끄는지. [PlannerActionKind.remind]와 모닝콜에서 쓴다.
   final bool? enabled;
 
+  /// 이름 자리는 없어도 된다. 모닝콜은 가리킬 일정이 없어 [MORNING]만 온다.
   static final RegExp _tag = RegExp(
-    r'\[(MOVE|DONE|REMIND|MORNING):\s*([^\]]*)\]',
+    r'\[(MOVE|DONE|REMIND|MORNING)(?::\s*([^\]]*))?\]',
     caseSensitive: false,
   );
 
   static final RegExp _date = RegExp(r'(\d{4})-(\d{1,2})-(\d{1,2})');
   static final RegExp _time = RegExp(r'(\d{1,2}):(\d{2})');
+
+  /// "오후 6시", "6시 30분"처럼 우리말로 적어 보내는 경우.
+  ///
+  /// 형식은 HH:MM으로 적으라고 일러두지만 지키지 않을 때가 있다. 그때 조용히
+  /// 버리면 사용자에게는 코치가 바꿔주겠다고 해놓고 아무 일도 안 한 것으로 보인다.
+  static final RegExp _koreanTime = RegExp(
+    r'(오전|오후)?\s*(\d{1,2})\s*시(?:\s*(\d{1,2})\s*분)?',
+  );
 
   /// 답변에서 태그를 찾아낸다. 없으면 null.
   ///
@@ -73,8 +82,7 @@ class PlannerAction {
       _ => PlannerActionKind.morning,
     };
 
-    final parts = match
-        .group(2)!
+    final parts = (match.group(2) ?? '')
         .split('|')
         .map((part) => part.trim())
         .toList();
@@ -114,10 +122,29 @@ class PlannerAction {
 
   static ({int hour, int minute})? _readTime(String text) {
     final m = _time.firstMatch(text);
+    if (m != null) {
+      final hour = int.parse(m.group(1)!);
+      final minute = int.parse(m.group(2)!);
+      if (hour <= 23 && minute <= 59) return (hour: hour, minute: minute);
+    }
+    return _readKoreanTime(text);
+  }
+
+  /// 우리말로 적힌 시각. 오전/오후가 없으면 읽지 않는다.
+  ///
+  /// "6시"만으로는 아침인지 저녁인지 알 수 없다. 한쪽으로 찍으면 절반은 틀리고,
+  /// 틀린 채로 카드가 떠서 사용자가 눌러버리면 조용히 엉뚱한 시각이 된다.
+  /// 13시처럼 그 자체로 갈리는 것만 받는다.
+  static ({int hour, int minute})? _readKoreanTime(String text) {
+    final m = _koreanTime.firstMatch(text);
     if (m == null) return null;
-    final hour = int.parse(m.group(1)!);
-    final minute = int.parse(m.group(2)!);
+    final ampm = m.group(1);
+    var hour = int.parse(m.group(2)!);
+    final minute = int.parse(m.group(3) ?? '0');
     if (hour > 23 || minute > 59) return null;
+    if (ampm == '오후' && hour < 12) hour += 12;
+    if (ampm == '오전' && hour == 12) hour = 0;
+    if (ampm == null && hour < 13) return null;
     return (hour: hour, minute: minute);
   }
 
@@ -128,15 +155,14 @@ class PlannerAction {
     return null;
   }
 
-  /// 이 태그로 실제로 할 수 있는 일이 있는지.
+  /// 이 태그로 데려갈 곳을 정할 수 있는지.
   ///
-  /// 코치가 이름만 적고 값을 빠뜨리는 일이 있다. 그대로 카드를 띄우면
-  /// "집필을 (으)로 옮길까?" 같은 말이 나온다.
+  /// 이름만 있으면 된다. 시각과 날짜는 데려간 화면에 이미 있고, 사용자가 그
+  /// 화면에서 고른다. 앱이 시각을 읽어 대신 바꾸던 때는 "18:00" 대신 "6시"로
+  /// 적혀 오면 그 자리에서 조용히 실패했다.
   bool get isUsable => switch (kind) {
-    PlannerActionKind.move => target.isNotEmpty && (date != null || time != null),
-    PlannerActionKind.done => target.isNotEmpty,
-    PlannerActionKind.remind => target.isNotEmpty && enabled != null,
-    PlannerActionKind.morning => time != null || enabled == false,
+    PlannerActionKind.morning => true,
+    _ => target.isNotEmpty,
   };
 }
 

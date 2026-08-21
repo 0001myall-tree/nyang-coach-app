@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -8,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'coach_config.dart';
 import 'landing_screen.dart';
+import '../services/last_reply_log.dart';
 import '../services/notification_service.dart';
 import '../services/auth_service.dart';
 import '../services/tasks_sync_service.dart';
@@ -23,10 +25,18 @@ class SettingsScreen extends StatefulWidget {
   final String coachId;
   final bool autoOpenPremiumLearnSettings;
   final ValueChanged<String>? onChatBgStyleChanged;
+
+  /// 열자마자 펼칠 설정 시트. 채팅에서 데려올 때 쓴다.
+  ///
+  /// 설정 화면만 열어두면 사용자가 목록에서 다시 찾아야 한다. 부탁한 것이
+  /// 모닝콜이면 모닝콜 시트까지 열어주는 것이 데려간다는 말에 맞다.
+  final String? autoOpenSection;
+
   const SettingsScreen({
     super.key,
     required this.coachId,
     this.autoOpenPremiumLearnSettings = false,
+    this.autoOpenSection,
     this.onChatBgStyleChanged,
   });
 
@@ -67,6 +77,23 @@ class _SettingsScreenState extends State<SettingsScreen>
       _userData?.isPlanActive == true && _userData?.planType == 'master';
   bool get _isFreeUser => _userData?.isPlanActive != true;
 
+  /// 채팅에서 데려온 자리를 펼친다.
+  ///
+  /// 설정값을 다 읽은 뒤라야 시트에 지금 상태가 들어간다. 먼저 열면 꺼져 있는
+  /// 것처럼 보이고, 사용자가 그걸 보고 다시 켠다.
+  Future<void> _openRequestedSection() async {
+    final section = widget.autoOpenSection;
+    if (section == null) return;
+    await _loadSettings();
+    if (!mounted) return;
+    switch (section) {
+      case 'morning_call':
+        _showMorningCallSettingsModal();
+      case 'core_reminder':
+        _showCoreReminderSettingsModal();
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -79,6 +106,7 @@ class _SettingsScreenState extends State<SettingsScreen>
         _showPremiumLearnSettingsModal();
       });
     }
+    _openRequestedSection();
   }
 
   @override
@@ -1933,6 +1961,13 @@ class _SettingsScreenState extends State<SettingsScreen>
                         icon: Icons.policy_outlined,
                         label: '약관 및 개인정보',
                         onTap: _showLegalLinksSheet,
+                      ),
+                      const SizedBox(height: 10),
+
+                      _buildSettingsNavigationTile(
+                        icon: Icons.bug_report_outlined,
+                        label: '마지막 코치 답변 원문',
+                        onTap: _showLastReplyDialog,
                       ),
                       const SizedBox(height: 20),
 
@@ -4183,6 +4218,71 @@ class _SettingsScreenState extends State<SettingsScreen>
     if (opened || !mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('링크를 열 수 없어요. 잠시 후 다시 시도해주세요.')),
+    );
+  }
+
+  /// 코치가 마지막으로 보낸 답변을 태그가 붙은 그대로 보여준다.
+  ///
+  /// 화면에 나오는 말은 태그를 떼어낸 뒤다. 그래서 조작이 안 될 때 코치가
+  /// 태그를 안 붙인 것인지, 붙였는데 앱이 못 알아본 것인지 알 수 없었다.
+  /// 여기서 한 번 보면 갈린다.
+  Future<void> _showLastReplyDialog() async {
+    final text = await LastReplyLog.read();
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+        title: Text(
+          '마지막 코치 답변 원문',
+          style: GoogleFonts.notoSansKr(
+            fontSize: 16,
+            fontWeight: FontWeight.w900,
+            color: const Color(0xFF1E1E2D),
+          ),
+        ),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: SingleChildScrollView(
+            child: SelectableText(
+              text ?? '아직 받은 답변이 없어요.',
+              style: GoogleFonts.notoSansKr(
+                fontSize: 13,
+                height: 1.6,
+                color: const Color(0xFF3D3A4E),
+              ),
+            ),
+          ),
+        ),
+        actions: [
+          if (text != null)
+            TextButton(
+              onPressed: () async {
+                await Clipboard.setData(ClipboardData(text: text));
+                if (!ctx.mounted) return;
+                Navigator.pop(ctx);
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('복사했어요')),
+                );
+              },
+              child: Text(
+                '복사',
+                style: GoogleFonts.notoSansKr(fontWeight: FontWeight.w900),
+              ),
+            ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(
+              '닫기',
+              style: GoogleFonts.notoSansKr(fontWeight: FontWeight.w900),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
