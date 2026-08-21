@@ -2100,10 +2100,22 @@ class _ChatScreenState extends State<ChatScreen>
         sec: "$when '$name' 넣었어요 ✓",
       ),
     );
-    // 알람을 켜면서 일정 알람 자체가 함께 켜졌으면 그 사실을 알린다.
+    if (!alarmOn) return;
+
+    // 일정 알람 자체가 꺼져 있어서 함께 켠 경우다. 채팅에 한 줄 적어두면
+    // 스크롤에 밀려 사라지고, 사용자는 켜진 것을 눈으로 본 적이 없게 된다.
+    // 설정 시트를 열어 보여준다 — 거기서 푸쉬 대신 코치 목소리로 바꿀 수도 있다.
     if (turnedOn) {
-      _injectAiMessage('설정에 일정 알람이 꺼져 있어서 기본 푸쉬로 함께 켰어요. 알람 방식은 설정에서 바꿀 수 있어요.');
+      _injectAiMessage('설정에 일정 알람이 꺼져 있어서 기본 푸쉬로 함께 켰어요. 알람 방식은 여기서 바꿀 수 있어요.');
+      widget.onOpenSettingsSection?.call('core_reminder');
+      return;
     }
+
+    // 이미 켜져 있던 사람이라도 알림 권한이 막혀 있으면 울리지 않는다.
+    await NotificationService().requestNotificationPermissions();
+    final issue = await NotificationService().checkAlarmPermission();
+    if (!mounted || issue == AlarmPermissionIssue.none) return;
+    await showAlarmPermissionDialog(context, issue, alarmLabel: '일정 알람');
   }
 
   /// "오늘 오후 9시" 또는 "내일 오후 9시 (알람)". 카드에 붙는 앞말이다.
