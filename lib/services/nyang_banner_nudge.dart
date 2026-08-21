@@ -21,10 +21,9 @@ import 'task_completion_service.dart';
 /// 그래서 그런 기종에서는 알림으로 찾아간다. 알림 배너는 어느 아이폰에서나
 /// 다른 앱 위로 내려온다.
 ///
-/// 시작하라는 배너는 눌러서 앱을 열게만 한다. 버튼을 달 수도 있지만 꾹 눌러야
-/// 나오는 데다, 앱을 열면 할 일 목록에 ▶가 바로 보여서 아끼는 것이 한 번
-/// 누르는 정도다. 하는 중이냐는 배너에만 버튼을 둔다 — 그쪽은 앱에서 하려면
-/// 카드를 찾아 들어가야 해서 아끼는 것이 크다.
+/// 배너에는 버튼을 달지 않는다. 눌러서 앱을 열면 그 일정 칸이 번쩍여 어디를
+/// 볼지 알려주고, 거기서 손으로 한다. 버튼을 달았던 때는 꾹 눌러야 나오는 데다,
+/// 화면 없는 갈래에서 코드가 도는 길이라 잘못되면 앱이 통째로 꺼졌다.
 ///
 /// 세기는 안드로이드만 못하다. 배너가 몇 초 뒤 올라가기 때문인데, 얼마나
 /// 머무를지는 앱이 정할 수 없고 사용자의 배너 스타일 설정이 정한다. 그래서 켤 때
@@ -48,8 +47,13 @@ class NyangBannerNudge {
   /// 한 번에 하나만 걸어둔다. 다음 일정은 이 자리를 덮어쓴다.
   static const int notificationId = 1300;
 
-  /// 도는 일정을 확인하는 배너의 자리.
-  static const int runningNotificationId = 1302;
+  /// 도는 일정을 확인하는 배너의 자리들.
+  ///
+  /// 여러 개를 미리 걸어둔다. 안드로이드 냥냥이는 스스로 다음 차례를 잡지만,
+  /// 배너는 앱 안에서만 걸 수 있어서 한 번 뜨고 나면 앱을 다시 열기 전까지
+  /// 다음이 없었다. 일정을 켜둔 채 다른 앱에 있는 동안이 정확히 이 기능이
+  /// 필요한 시간인데, 그때가 통째로 비어 있었다.
+  static const List<int> runningNotificationIds = [1302, 1303, 1304, 1305];
 
   /// "지금 한번 보기"는 자기 자리를 쓴다.
   ///
@@ -84,7 +88,9 @@ class NyangBannerNudge {
   static Future<void> sync() async {
     if (!_isIOS) return;
     await _plugin.cancel(id: notificationId);
-    await _plugin.cancel(id: runningNotificationId);
+    for (final id in runningNotificationIds) {
+      await _plugin.cancel(id: id);
+    }
     if (!await isNeededHere()) return;
 
     final prefs = await SharedPreferences.getInstance();
@@ -147,15 +153,22 @@ class NyangBannerNudge {
     // 이미 지났으면 다음 차례로 넘긴다. 앱을 오랜만에 열었다고 해서 그 자리에서
     // 배너가 튀어나오면, 방금 앱을 연 사람에게 앱 밖에서 부르는 셈이 된다.
     if (!at.isAfter(now)) at = now.add(nextRound);
-    await _scheduleRunning(
-      taskId: taskId,
-      taskText: taskText,
-      at: at,
-      startedAt: runStartedAt,
-    );
+
+    // 앞으로 몇 차례를 한꺼번에 걸어둔다. 앱을 다시 열면 [sync]가 전부 지우고
+    // 다시 깔기 때문에, 일정이 끝나거나 바뀌면 남은 차례도 함께 없어진다.
+    for (var i = 0; i < runningNotificationIds.length; i++) {
+      await _scheduleRunning(
+        id: runningNotificationIds[i],
+        taskId: taskId,
+        taskText: taskText,
+        at: at.add(nextRound * i),
+        startedAt: runStartedAt,
+      );
+    }
   }
 
   static Future<void> _scheduleRunning({
+    required int id,
     required String taskId,
     required String taskText,
     required DateTime at,
@@ -174,9 +187,6 @@ class NyangBannerNudge {
         presentBanner: true,
         presentList: true,
         presentSound: false,
-        // 버튼은 달지 않는다. 시작 배너와 같은 이유다 — 꾹 눌러야 나오는 데다,
-        // 화면 없는 갈래에서 도는 코드라 잘못되면 그 자리에서 조용히 끝난다.
-        // 눌러서 앱으로 오면 그 일정 칸이 번쩍여 어디를 볼지 알려준다.
         // 여기도 방해금지를 뚫는다.
         //
         // 집중하는 사람을 깨울까 싶었지만, 집중하는 사람은 폰을 보고 있지 않다.
@@ -188,7 +198,7 @@ class NyangBannerNudge {
     );
 
     await _plugin.zonedSchedule(
-      id: runningNotificationId,
+      id: id,
       title: '🐾 ${taskText.isEmpty ? '진행 중인 일정' : taskText}',
       body: startedAt == null
           ? '지금도 하는 중이야?'

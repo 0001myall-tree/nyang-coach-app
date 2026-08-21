@@ -310,7 +310,7 @@ class OngoingNudgeService : Service() {
             answerDone()
         }
         view.findViewById<View>(R.id.nudge_card_continue).setOnClickListener {
-            finishRound(scheduleNext = true)
+            keepGoing()
         }
         view.findViewById<View>(R.id.nudge_card_restart).setOnClickListener {
             restart()
@@ -444,15 +444,30 @@ class OngoingNudgeService : Service() {
     }
 
     /**
+     * "계속하는 중"을 눌렀을 때.
+     *
+     * 일정은 건드리지 않는다. 하고 있다는 말을 그대로 믿는다.
+     *
+     * 다만 냥냥이는 남는다. 곧바로 사라지던 때는 이 버튼이 딴짓을 계속하기에
+     * 가장 편한 길이었다 — 하는 중이라고 한 마디만 하면 방해가 사라지니,
+     * 엄마에게 공부 중이라고 답하는 것과 같은 자리가 된다. 정말 하는 중이면
+     * 화면 가장자리의 냥냥이는 아무것도 막지 않고, 아니면 돌아갈 문이 된다.
+     */
+    private fun keepGoing() {
+        answered = true
+        scheduleNextRound(OngoingNudgeScheduler.NEXT_ROUND_DELAY_MILLIS)
+        Toast.makeText(this, "그래, 하던 거 이어서!", Toast.LENGTH_SHORT).show()
+        lingerAsDoorway()
+    }
+
+    /**
      * "다시 시작할게"를 눌렀을 때.
      *
      * 일정은 아무것도 건드리지 않는다. 돌아가겠다고 말한 사람에게 "멈춘 걸로
      * 해뒀어"라고 답하면, 돌아가기 전에 다시 시작부터 해야 하는 셈이 된다.
      * 그 한 칸이 그냥 안 하게 되는 이유가 된다. 시계는 그대로 흐른다.
      *
-     * 대신 냥냥이가 원래 있기로 한 만큼 자리를 지킨다. 곧바로 사라지던 때는
-     * 이 버튼이 딴짓을 계속하기에 가장 편한 길이었다 — 돌아가겠다고 말한 사람을
-     * 그 자리에서 혼자 두고 나가버리는 셈이다. 이제 물을 것은 없으니, 한 번 더
+     * 냥냥이가 남는 것은 [keepGoing]과 같다. 이제 물을 것은 없으니, 한 번 더
      * 누르면 할 일 창이 열린다.
      */
     private fun restart() {
