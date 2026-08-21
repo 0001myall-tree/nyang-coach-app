@@ -32,6 +32,7 @@ import 'package:nyang_coach/services/ongoing_task_nudge_service.dart';
 import 'package:nyang_coach/services/memory_service.dart';
 import 'package:nyang_coach/services/notification_service.dart';
 import 'package:nyang_coach/services/preemptive_nudge_service.dart';
+import 'package:nyang_coach/services/registration_target.dart';
 import 'package:nyang_coach/services/repeat_keyword_service.dart';
 import 'package:nyang_coach/services/task_resistance_service.dart';
 import 'package:nyang_coach/services/execution_resistance_service.dart';
@@ -7505,7 +7506,12 @@ ${lines.join('\n')}
 
   bool _isScheduleRegistrationCommand(String input) {
     final cleaned = _cleanScheduleRegistrationInput(input);
-    return _registrationSuffixRegex.hasMatch(cleaned);
+    if (!_registrationSuffixRegex.hasMatch(cleaned)) return false;
+    // 넣을 자리만 말하고 무엇을 넣을지는 앞 턴에 있는 문장은 정규식이 맡을 수
+    // 없다. 코치에게 넘긴다 — 코치는 앞 대화를 보고 있다.
+    return !RegistrationTarget.nameIsElsewhere(
+      cleaned.replaceFirst(_registrationSuffixRegex, ''),
+    );
   }
 
   String _cleanScheduleRegistrationInput(String input) {
@@ -7558,6 +7564,14 @@ ${lines.join('\n')}
   bool _isHabitRegistrationCommand(String input) {
     final cleaned = _cleanScheduleRegistrationInput(input);
     if (!_habitRegistrationSuffixRegex.hasMatch(cleaned)) return false;
+
+    // "루틴에 넣어줘"처럼 넣을 자리만 말한 문장은 여기서 넘긴다. '루틴'이라는
+    // 말은 어디에 넣을지를 가리킬 뿐 무엇을 넣을지는 말해주지 않는다.
+    if (RegistrationTarget.nameIsElsewhere(
+      cleaned.replaceFirst(_habitRegistrationSuffixRegex, ''),
+    )) {
+      return false;
+    }
     if (_routineWordRegex.hasMatch(cleaned)) return true;
 
     // 여기서부터는 '루틴'이라는 말 없이 반복만 말한 경우다. 일정이라고 못박은
