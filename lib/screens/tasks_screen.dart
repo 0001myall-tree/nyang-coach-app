@@ -929,6 +929,15 @@ class _TasksScreenState extends State<TasksScreen>
   }
 
   Future<void> _pulseBannerFocus(String taskId) async {
+    // 먼저 지목해두고 한 프레임 기다린다. 그 칸에 자리표가 달려야 어디 있는지
+    // 찾을 수 있는데, 자리표는 지목된 칸에만 붙기 때문이다.
+    setState(() {
+      _bannerFocusTaskId = taskId;
+      _bannerFocusOn = false;
+    });
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted) return;
+
     final key = _bannerFocusKeys[taskId];
     if (key?.currentContext != null) {
       await Scrollable.ensureVisible(
@@ -942,10 +951,7 @@ class _TasksScreenState extends State<TasksScreen>
 
     _bannerFocusTimer?.cancel();
     var tick = 0;
-    setState(() {
-      _bannerFocusTaskId = taskId;
-      _bannerFocusOn = true;
-    });
+    setState(() => _bannerFocusOn = true);
     // 켜고 끄기를 네 번. 두 번 번쩍이고 원래대로 돌아온다.
     _bannerFocusTimer = Timer.periodic(const Duration(milliseconds: 420), (
       timer,
@@ -961,6 +967,7 @@ class _TasksScreenState extends State<TasksScreen>
           _bannerFocusTaskId = null;
           _bannerFocusOn = false;
         });
+        _bannerFocusKeys.clear();
         return;
       }
       setState(() => _bannerFocusOn = !_bannerFocusOn);
@@ -2923,7 +2930,17 @@ class _TasksScreenState extends State<TasksScreen>
     TasksSyncService.scheduleSyncToCloud();
   }
 
+  /// 휴식 모드를 저장한다.
+  ///
+  /// 어떤 종류로 쉬는지까지 남긴다. 하루만 멈추는 것과 매주 무슨 요일마다 쉬는
+  /// 것은 쓰는 사람도 쓰는 이유도 달라서, 하나로 세면 어느 쪽이 쓰이는지 알 수 없다.
   Future<void> _saveVacation() async {
+    final type = vacationInfo?['type']?.toString();
+    unawaited(
+      AnalyticsService.logFeatureUsage(
+        type == null ? 'rest_mode_off' : 'rest_mode_$type',
+      ),
+    );
     final prefs = await SharedPreferences.getInstance();
     if (vacationInfo == null) {
       await prefs.remove('nyang_vacation');
@@ -8173,13 +8190,21 @@ class _TasksScreenState extends State<TasksScreen>
         : null;
 
     // 배너를 눌러 들어온 사람에게 어느 칸인지 알려주는 동안만 켜진다.
-    final isBannerFocused = _bannerFocusTaskId == t.id && _bannerFocusOn;
+    //
+    // id는 숫자일 때도 있고 'habit_' 같은 문자열일 때도 있다. 문자열로 맞춰
+    // 다룬다 — 배너가 남겨두는 값도, 자리표를 담는 곳도 문자열이다.
+    final taskKey = t.id.toString();
+    final isBannerFocused = _bannerFocusTaskId == taskKey && _bannerFocusOn;
 
     final card = Stack(
       clipBehavior: Clip.none,
       children: [
         Container(
-          key: _bannerFocusKeys.putIfAbsent(t.id, GlobalKey.new),
+          // 번쩍일 칸에만 자리표를 단다. 모든 칸에 상시로 달아두면 화면이
+          // 넘어가는 동안 같은 자리표가 두 곳에 있게 되어 그리기가 통째로 멈춘다.
+          key: _bannerFocusTaskId == taskKey
+              ? _bannerFocusKeys.putIfAbsent(taskKey, GlobalKey.new)
+              : null,
           margin: const EdgeInsets.only(bottom: 8),
           decoration: BoxDecoration(
             color: Colors.white,
