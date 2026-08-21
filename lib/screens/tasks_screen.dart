@@ -848,6 +848,15 @@ class _TasksScreenState extends State<TasksScreen>
   final _addVisionButtonKey = GlobalKey();
   final Map<String, GlobalKey> _visionCardKeys = {};
   Set<String> _highlightedVisionIds = {};
+
+  /// 배너를 눌러 들어왔을 때 번쩍일 할 일.
+  ///
+  /// 배너에는 버튼이 없다. 눌러서 앱에 오는 것이 전부라, 들어온 사람이 어느 칸을
+  /// 보라고 부른 것인지 알 수 있어야 한다.
+  final Map<String, GlobalKey> _bannerFocusKeys = {};
+  String? _bannerFocusTaskId;
+  bool _bannerFocusOn = false;
+  Timer? _bannerFocusTimer;
   bool _highlightAddVisionButton = false;
   bool _highlightPulseOn = false;
   Timer? _visionHighlightTimer;
@@ -889,6 +898,8 @@ class _TasksScreenState extends State<TasksScreen>
       _handleInitialPlannerTarget();
       // 앱을 껐다 켠 사이에도 진행 중이던 할 일이 있으면 시계를 다시 돌린다.
       _syncTaskTicker();
+      // 배너를 눌러 앱이 처음 켜진 경우다. 목록을 읽은 뒤라야 칸을 찾을 수 있다.
+      _consumeBannerFocus();
     });
   }
 
@@ -896,7 +907,64 @@ class _TasksScreenState extends State<TasksScreen>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       _reloadIfStoreChanged();
+      _consumeBannerFocus();
     }
+  }
+
+  /// 배너가 남겨둔 자리를 보고 그 칸을 번쩍인다.
+  ///
+  /// 한 번 쓰면 지운다. 남겨두면 다음에 앱을 열 때마다 엉뚱한 칸이 번쩍인다.
+  Future<void> _consumeBannerFocus() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.reload();
+    final taskId = prefs.getString(NyangBannerNudge.focusTaskKey);
+    if (taskId == null || taskId.isEmpty) return;
+    await prefs.remove(NyangBannerNudge.focusTaskKey);
+    if (!mounted) return;
+    // 화면이 자리를 잡은 뒤에 움직인다. 그리기가 끝나기 전에는 칸의 자리를
+    // 알 수 없어서 스크롤이 엉뚱한 데로 간다.
+    await Future.delayed(const Duration(milliseconds: 350));
+    if (!mounted) return;
+    await _pulseBannerFocus(taskId);
+  }
+
+  Future<void> _pulseBannerFocus(String taskId) async {
+    final key = _bannerFocusKeys[taskId];
+    if (key?.currentContext != null) {
+      await Scrollable.ensureVisible(
+        key!.currentContext!,
+        duration: const Duration(milliseconds: 420),
+        curve: Curves.easeOutCubic,
+        alignment: 0.35,
+      );
+    }
+    if (!mounted) return;
+
+    _bannerFocusTimer?.cancel();
+    var tick = 0;
+    setState(() {
+      _bannerFocusTaskId = taskId;
+      _bannerFocusOn = true;
+    });
+    // 켜고 끄기를 네 번. 두 번 번쩍이고 원래대로 돌아온다.
+    _bannerFocusTimer = Timer.periodic(const Duration(milliseconds: 420), (
+      timer,
+    ) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      tick += 1;
+      if (tick >= 4) {
+        timer.cancel();
+        setState(() {
+          _bannerFocusTaskId = null;
+          _bannerFocusOn = false;
+        });
+        return;
+      }
+      setState(() => _bannerFocusOn = !_bannerFocusOn);
+    });
   }
 
   /// 켜둔 채 잠든 할 일을 자정에 멈춰 세운다.
@@ -978,6 +1046,7 @@ class _TasksScreenState extends State<TasksScreen>
     widget.controller?._detach();
     WidgetsBinding.instance.removeObserver(this);
     _taskTicker?.cancel();
+    _bannerFocusTimer?.cancel();
     _visionHighlightTimer?.cancel();
     _swipeHintCtrl.dispose();
     _taskCheckboxHintPulseCtrl.dispose();
@@ -8078,15 +8147,21 @@ class _TasksScreenState extends State<TasksScreen>
         ? _formatElapsed(t.elapsedSecondsAt(DateTime.now()))
         : null;
 
+    // 배너를 눌러 들어온 사람에게 어느 칸인지 알려주는 동안만 켜진다.
+    final isBannerFocused = _bannerFocusTaskId == t.id && _bannerFocusOn;
+
     final card = Stack(
       clipBehavior: Clip.none,
       children: [
         Container(
+          key: _bannerFocusKeys.putIfAbsent(t.id, GlobalKey.new),
           margin: const EdgeInsets.only(bottom: 8),
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(14),
-            border: (t.done || t.inProgress)
+            border: isBannerFocused
+                ? Border.all(color: const Color(0xFFB9A7FF), width: 2)
+                : (t.done || t.inProgress)
                 ? Border.all(
                     color: t.inProgress
                         ? _coach.accentColor.withOpacity(0.5)

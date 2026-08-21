@@ -259,10 +259,7 @@ class NotificationService {
           defaultPresentBanner: true,
           defaultPresentList: true,
           defaultPresentSound: true,
-          notificationCategories: [
-            nyangBannerCategory,
-            nyangBannerRunningCategory,
-          ],
+          notificationCategories: const <DarwinNotificationCategory>[],
         );
     final InitializationSettings settings = InitializationSettings(
       android: androidSettings,

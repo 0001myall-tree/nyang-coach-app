@@ -19,25 +19,25 @@ import 'task_completion_service.dart';
 /// 딴짓을 막아주는 것이 아니라 진행 중이라는 표시일 뿐이다.
 ///
 /// 그래서 그런 기종에서는 알림으로 찾아간다. 알림 배너는 어느 아이폰에서나
-/// 다른 앱 위로 내려오고, 버튼을 달면 앱을 열지 않고 그 자리에서 시작할 수 있다.
+/// 다른 앱 위로 내려온다.
+///
+/// 시작하라는 배너는 눌러서 앱을 열게만 한다. 버튼을 달 수도 있지만 꾹 눌러야
+/// 나오는 데다, 앱을 열면 할 일 목록에 ▶가 바로 보여서 아끼는 것이 한 번
+/// 누르는 정도다. 하는 중이냐는 배너에만 버튼을 둔다 — 그쪽은 앱에서 하려면
+/// 카드를 찾아 들어가야 해서 아끼는 것이 크다.
 ///
 /// 세기는 안드로이드만 못하다. 배너가 몇 초 뒤 올라가기 때문인데, 얼마나
 /// 머무를지는 앱이 정할 수 없고 사용자의 배너 스타일 설정이 정한다. 그래서 켤 때
 /// "지속"으로 바꾸는 길을 한 번 알려준다. 배너가 올라가도 알림 자체는 잠금화면에
-/// 남으므로, 버튼은 지울 때까지 계속 누를 수 있다.
+/// 남으므로 나중에 눌러도 된다.
 class NyangBannerNudge {
   static const String payloadPrefix = 'nyangbanner';
 
-  /// 시작할 시각에 찾아가는 배너.
-  static const String categoryId = 'nyang_banner_start';
-  static const String actionStartNow = 'nyang_banner_start_now';
-  static const String actionLater = 'nyang_banner_later';
-
-  /// 이미 도는 일정을 확인하는 배너.
-  static const String runningCategoryId = 'nyang_banner_running';
-  static const String actionDone = 'nyang_banner_done';
-  static const String actionKeepGoing = 'nyang_banner_keep';
-  static const String actionRestart = 'nyang_banner_restart';
+  /// 배너를 눌러 앱에 들어왔을 때, 어느 일정을 보라고 할지 적어두는 자리.
+  ///
+  /// 'nyang_'으로 시작하지 않는 키를 쓴다. 그 접두어는 클라우드 복원이 덮어써서
+  /// 이 기기에서만 쓰이고 곧 지워질 값을 담기에 맞지 않는다.
+  static const String focusTaskKey = 'banner_focus_task_id';
 
   /// 시작하고 처음 확인하기까지. 안드로이드 냥냥이와 같은 간격이다.
   static const Duration firstCheck = Duration(minutes: 30);
@@ -56,9 +56,6 @@ class NyangBannerNudge {
   /// 같은 자리를 쓰면, 확인하려고 걸어둔 것을 앱으로 돌아오는 순간 [sync]가
   /// 지워버린다. 기다리던 사람만 헛수고한다.
   static const int testNotificationId = 1301;
-
-  /// "좀 더 있다가"를 골랐을 때 다시 부르기까지. 안드로이드와 같은 간격이다.
-  static const Duration snooze = Duration(minutes: 30);
 
   /// 시작 시각을 지나고 이만큼까지만 부른다. 그 뒤로는 잔소리가 된다.
   static const Duration window = Duration(hours: 1);
@@ -150,13 +147,19 @@ class NyangBannerNudge {
     // 이미 지났으면 다음 차례로 넘긴다. 앱을 오랜만에 열었다고 해서 그 자리에서
     // 배너가 튀어나오면, 방금 앱을 연 사람에게 앱 밖에서 부르는 셈이 된다.
     if (!at.isAfter(now)) at = now.add(nextRound);
-    await _scheduleRunning(taskId: taskId, taskText: taskText, at: at);
+    await _scheduleRunning(
+      taskId: taskId,
+      taskText: taskText,
+      at: at,
+      startedAt: runStartedAt,
+    );
   }
 
   static Future<void> _scheduleRunning({
     required String taskId,
     required String taskText,
     required DateTime at,
+    DateTime? startedAt,
   }) async {
     _ensureTimeZone();
     final payload = '$payloadPrefix:${jsonEncode({
@@ -167,11 +170,13 @@ class NyangBannerNudge {
 
     final details = NotificationDetails(
       iOS: DarwinNotificationDetails(
-        categoryIdentifier: runningCategoryId,
         presentAlert: true,
         presentBanner: true,
         presentList: true,
         presentSound: false,
+        // 버튼은 달지 않는다. 시작 배너와 같은 이유다 — 꾹 눌러야 나오는 데다,
+        // 화면 없는 갈래에서 도는 코드라 잘못되면 그 자리에서 조용히 끝난다.
+        // 눌러서 앱으로 오면 그 일정 칸이 번쩍여 어디를 볼지 알려준다.
         // 여기도 방해금지를 뚫는다.
         //
         // 집중하는 사람을 깨울까 싶었지만, 집중하는 사람은 폰을 보고 있지 않다.
@@ -185,12 +190,25 @@ class NyangBannerNudge {
     await _plugin.zonedSchedule(
       id: runningNotificationId,
       title: '🐾 ${taskText.isEmpty ? '진행 중인 일정' : taskText}',
-      body: '지금도 하는 중이야?',
+      body: startedAt == null
+          ? '지금도 하는 중이야?'
+          : '${_clock(startedAt)}에 시작했어. 지금도 하는 중이야?',
       scheduledDate: tz.TZDateTime.from(at, tz.local),
       notificationDetails: details,
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
       payload: payload,
     );
+  }
+
+  /// 배너에 적을 시각. "오후 2시", "오후 2시 30분".
+  ///
+  /// 배너를 그 자리에서 보지 못하고 나중에 잠금화면에서 발견하는 일이 흔하다.
+  /// 시각이 없으면 그 사람에게는 언제 이야기인지 알 길이 없다.
+  static String _clock(DateTime at) {
+    final ampm = at.hour < 12 ? '오전' : '오후';
+    final hour12 = at.hour % 12 == 0 ? 12 : at.hour % 12;
+    final minute = at.minute == 0 ? '' : ' ${at.minute}분';
+    return '$ampm $hour12시$minute';
   }
 
   /// 예약을 걸기 전에 시간대를 세워둔다.
@@ -260,7 +278,10 @@ class NyangBannerNudge {
 
     final details = NotificationDetails(
       iOS: DarwinNotificationDetails(
-        categoryIdentifier: categoryId,
+        // 버튼을 달지 않는다. 눌러서 앱을 열면 할 일 목록에 ▶가 바로 보이므로
+        // 버튼이 아끼는 것은 한 번 누르는 정도인데, 그 버튼은 화면 없는 갈래에서
+        // 코드를 돌리는 길이라 잘못되면 아무 일도 일어나지 않는 쪽으로 끝난다.
+        // 아끼는 것보다 잃을 것이 크다.
         presentAlert: true,
         presentBanner: true,
         presentList: true,
@@ -273,7 +294,7 @@ class NyangBannerNudge {
     await _plugin.zonedSchedule(
       id: id,
       title: '🐾 ${taskText.isEmpty ? '지금 시작하기로 한 일' : taskText}',
-      body: '시작하는 거 잊지 않았지?',
+      body: '${_clock(at)}, 시작할 시간이야',
       scheduledDate: tz.TZDateTime.from(at, tz.local),
       notificationDetails: details,
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
@@ -295,110 +316,26 @@ class NyangBannerNudge {
   }
 
   static Future<void> _handle(NotificationResponse response) async {
-    final raw = response.payload;
-    if (raw == null || !raw.startsWith('$payloadPrefix:')) return;
+    final payload = response.payload;
+    if (payload == null || !payload.startsWith('$payloadPrefix:')) return;
 
     final Map<String, dynamic> data;
     try {
-      data = jsonDecode(raw.substring(payloadPrefix.length + 1))
-          as Map<String, dynamic>;
+      data = jsonDecode(payload.substring(payloadPrefix.length + 1)) as Map<String, dynamic>;
     } catch (_) {
       return;
     }
+
     final taskId = data['taskId']?.toString() ?? '';
     if (taskId.isEmpty) return;
 
-    final taskText = data['taskText']?.toString() ?? '';
-
-    switch (response.actionId) {
-      case actionStartNow:
-        // 여기서 바로 시작으로 적는다. 앱에 들어가 ▶를 다시 누르게 하면,
-        // 시작하겠다고 말한 사람에게 한 칸을 더 시키는 셈이다.
-        await TaskCompletionService.startStoredTask(taskId: taskId);
-        // 이제 도는 중이다. 30분 뒤에 한 번 보는 자리로 넘긴다.
-        await _scheduleRunningCheck(
-          taskId: taskId,
-          taskText: taskText,
-          runStartedAt: DateTime.now(),
-        );
-        return;
-      case actionLater:
-        await _rescheduleLater(data);
-        return;
-      case actionDone:
-        await TaskCompletionService.completeStoredTask(taskId: taskId);
-        return;
-      case actionKeepGoing:
-      case actionRestart:
-        // 일정은 건드리지 않는다. "다시 시작할게"도 시계를 멈추지 않는다 —
-        // 돌아가겠다는 사람에게 다시 시작부터 시키면 그 한 칸이 문턱이 된다.
-        await _scheduleRunning(
-          taskId: taskId,
-          taskText: taskText,
-          at: DateTime.now().add(nextRound),
-        );
-        return;
-      default:
-        // 알림 자체를 누른 경우. 앱이 열리므로 여기서 할 일은 없다.
-        return;
-    }
+    // 앱이 열리면 할 일이 쭉 늘어서 있어서, 부른 쪽이 어느 것인지 알 수 없다.
+    // 어느 칸을 볼지 적어두면 할 일 화면이 그 칸을 번쩍여준다.
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(focusTaskKey, taskId);
   }
 
-  static Future<void> _rescheduleLater(Map<String, dynamic> data) async {
-    final deadlineMillis = (data['deadline'] as num?)?.toInt();
-    if (deadlineMillis == null) return;
-    final deadline = DateTime.fromMillisecondsSinceEpoch(deadlineMillis);
-    final next = DateTime.now().add(snooze);
-    // 창이 닫혔으면 조용히 물러난다. 두 번째가 마지막이다.
-    if (next.isAfter(deadline)) return;
-
-    await _schedule(
-      taskId: data['taskId']?.toString() ?? '',
-      taskText: data['taskText']?.toString() ?? '',
-      at: next,
-      deadline: deadline,
-    );
-  }
 }
-
-/// 아이폰 알림에 붙는 버튼 두 개.
-///
-/// 둘 다 앱을 열지 않는다. 딴짓하는 중에 앱까지 열리면, 챙겨주려던 것이
-/// 방해가 된다.
-final DarwinNotificationCategory nyangBannerCategory =
-    DarwinNotificationCategory(
-      NyangBannerNudge.categoryId,
-      actions: <DarwinNotificationAction>[
-        DarwinNotificationAction.plain(
-          NyangBannerNudge.actionStartNow,
-          '시작할게',
-        ),
-        DarwinNotificationAction.plain(NyangBannerNudge.actionLater, '좀 더 있다가'),
-      ],
-      options: <DarwinNotificationCategoryOption>{
-        DarwinNotificationCategoryOption.hiddenPreviewShowTitle,
-      },
-    );
-
-/// 도는 일정을 확인하는 배너에 붙는 버튼 셋. 안드로이드 카드와 같은 답이다.
-final DarwinNotificationCategory nyangBannerRunningCategory =
-    DarwinNotificationCategory(
-      NyangBannerNudge.runningCategoryId,
-      actions: <DarwinNotificationAction>[
-        DarwinNotificationAction.plain(NyangBannerNudge.actionDone, '다 했어'),
-        DarwinNotificationAction.plain(
-          NyangBannerNudge.actionKeepGoing,
-          '계속하는 중',
-        ),
-        DarwinNotificationAction.plain(
-          NyangBannerNudge.actionRestart,
-          '다시 시작할게',
-        ),
-      ],
-      options: <DarwinNotificationCategoryOption>{
-        DarwinNotificationCategoryOption.hiddenPreviewShowTitle,
-      },
-    );
 
 const String nyangBannerPayload = NyangBannerNudge.payloadPrefix;
 

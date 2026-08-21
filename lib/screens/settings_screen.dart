@@ -1223,7 +1223,7 @@ class _SettingsScreenState extends State<SettingsScreen>
     // 알약이 계속 보일 뿐이다.
     final banner =
         '시작할 시각이 되면, 그리고 시작하고 30분이 지나면 화면 위로 '
-        '"냥냥이 배너"가 내려와요. 거기서 바로 시작하거나 답할 수 있어요.'
+        '"냥냥이 배너"가 내려와요. 눌러서 바로 앱으로 올 수 있어요.'
         // 이미 "지속"으로 해둔 사람에게는 이 줄이 군더더기다.
         '${await OngoingTaskNudgeService.isBannerPersistent() ? '' : '\n\n'
             '배너가 금방 사라지지 않게 하려면 배너 스타일을 "지속"으로 '
