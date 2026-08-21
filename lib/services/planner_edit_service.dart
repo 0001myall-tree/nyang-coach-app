@@ -16,6 +16,7 @@ import 'task_completion_service.dart';
 class PlannerEditService {
   static const String _tasksKey = 'nyang_tasks';
   static const String _schedulesKey = 'nyang_schedules';
+  static const String _habitsKey = 'nyang_habits';
 
   /// 찾기만 하고 아무것도 바꾸지 않는다.
   ///
@@ -53,7 +54,22 @@ class PlannerEditService {
     }
 
     final hit = found.first;
-    final label = hit.item['text']?.toString() ?? action.target;
+    final label =
+        (hit.item['text'] ?? hit.item['name'])?.toString() ?? action.target;
+
+    // 루틴의 시각과 알람은 루틴 탭에서 고쳐야 한다. 오늘치만 손대면 앞으로도
+    // 바뀐 줄 알게 되고, 요일·횟수와 어긋난 채로 남는다.
+    //
+    // 오늘 목록에 안 내려온 루틴은 어떤 조작이든 여기서 할 것이 없다. 완료도
+    // 마찬가지다 — 오늘 하지 않기로 되어 있는 날의 루틴이다.
+    final routineOnly =
+        hit.store == _Store.habit ||
+        (hit.isRoutine &&
+            (action.kind == PlannerActionKind.move ||
+                action.kind == PlannerActionKind.remind));
+    if (routineOnly) {
+      return PlannerActionResult(PlannerActionStatus.routine, label: label);
+    }
 
     return switch (action.kind) {
       PlannerActionKind.move => _move(prefs, hit, action, label, dryRun),
@@ -75,13 +91,34 @@ class PlannerEditService {
         ? dateKey(action.date!)
         : null;
 
-    if (wantKey == null || wantKey == todayKey) {
-      for (final task in _list(prefs.getString(_tasksKey))) {
-        if (_titleMatches(task['text']?.toString() ?? '', action.target)) {
-          hits.add(_Hit(_Store.today, task, todayKey));
-        }
+    // 루틴을 먼저 찾아둔다. 이름이 걸리는지 알아야 오늘 목록의 그 항목이
+    // 루틴에서 온 것인지 알 수 있다.
+    final habitHits = <String, _Hit>{};
+    for (final habit in _list(prefs.getString(_habitsKey))) {
+      if (_titleMatches(habit['name']?.toString() ?? '', action.target)) {
+        habitHits[habit['id'].toString()] = _Hit(
+          _Store.habit,
+          habit,
+          todayKey,
+        );
       }
     }
+
+    if (wantKey == null || wantKey == todayKey) {
+      for (final task in _list(prefs.getString(_tasksKey))) {
+        if (!_titleMatches(task['text']?.toString() ?? '', action.target)) {
+          continue;
+        }
+        // 오늘 목록에 내려온 것이 있으면 그쪽을 쓴다. 완료는 오늘 하루의
+        // 일이라 루틴 정의가 아니라 오늘치에 적혀야 한다.
+        habitHits.remove(task['habitId']?.toString());
+        hits.add(_Hit(_Store.today, task, todayKey));
+      }
+    }
+
+    // 오늘 목록에 안 내려온 루틴만 남는다. 이건 오늘 할 것이 아니므로 여기서
+    // 고칠 것이 없고, 루틴 탭으로 보내는 표시로만 쓴다.
+    hits.addAll(habitHits.values);
 
     final planned = _map(prefs.getString(DailyResetService.plannedTasksByDateKey));
     planned.forEach((key, value) {
@@ -312,6 +349,9 @@ class PlannerEditService {
           _replaceIn(day, hit.item);
           all[hit.dateKey] = day;
           await prefs.setString(_schedulesKey, jsonEncode(all));
+        case _Store.habit:
+          // 여기까지 오지 않는다. 루틴 자체는 루틴 탭에서만 고친다.
+          break;
       }
     }
     // 플래너가 열려 있으면 메모리에 든 옛 목록을 들고 있다. 돌아올 때 다시
@@ -420,7 +460,7 @@ class PlannerEditService {
   }
 }
 
-enum _Store { today, planned, schedule }
+enum _Store { today, planned, schedule, habit }
 
 class _Hit {
   _Hit(this.store, this.item, this.dateKey);
@@ -431,4 +471,11 @@ class _Hit {
 
   /// 다른 날로 옮기면서 저장이 이미 끝났으면 그 자리를 적어둔다.
   _Store? movedTo;
+
+  /// 루틴에서 온 것인지. 오늘 목록에 복사되어 들어온 것도 포함한다.
+  bool get isRoutine =>
+      store == _Store.habit ||
+      item['isHabit'] == true ||
+      item['category'] == 'habit' ||
+      (item['habitId']?.toString().isNotEmpty ?? false);
 }

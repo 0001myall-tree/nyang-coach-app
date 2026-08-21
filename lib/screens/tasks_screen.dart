@@ -1413,6 +1413,25 @@ class _TasksScreenState extends State<TasksScreen>
     final kind = (command['kind'] ?? 'task_or_schedule').toString();
     final dateKey = command['date']?.toString();
     final targetDate = dateKey == null ? null : DateTime.tryParse(dateKey);
+
+    // 루틴은 이름을 못 알아내도 탭까지는 데려간다.
+    //
+    // "주5일 하던 거 월수금으로 바꿔줘"에는 루틴 이름이 없다. 앞 턴에 있어서
+    // 이 문장만으로는 무엇인지 알 수 없는데, 그렇다고 "이름을 말해달라"고 되묻는
+    // 것보다 반복 요일을 고칠 수 있는 자리로 데려다주는 편이 빠르다.
+    if (kind == 'habit') {
+      _openTab(3);
+      final found = habits
+          .where((h) => _titleMatches(h.name, target))
+          .toList();
+      if (found.length == 1) {
+        await Future.delayed(const Duration(milliseconds: 360));
+        if (!mounted) return _editCommandReply('habitOpened', target);
+        _showHabitModal(context, editHabit: found.first);
+      }
+      return _editCommandReply('habitOpened', found.length == 1 ? target : '');
+    }
+
     if (target.isEmpty) {
       return _editCommandReply('emptyTarget', target);
     }
@@ -1556,6 +1575,7 @@ class _TasksScreenState extends State<TasksScreen>
     switch (widget.coachId) {
       case 'boyfriend':
         return switch (key) {
+          'habitOpened' => '루틴 탭 열어뒀어. 반복 요일은 거기서 바꾸면 돼.',
           'emptyTarget' => '어떤 일정을 수정할지 이름까지 같이 말해줘.',
           'recurringNotFound' =>
             '$datePrefix$quoted 반복 일정은 못 찾았어. 캘린더에서 한번 확인해줘.',
@@ -1568,6 +1588,7 @@ class _TasksScreenState extends State<TasksScreen>
         };
       case 'bro':
         return switch (key) {
+          'habitOpened' => '루틴 탭 열어뒀다. 반복 요일은 거기서 바꿔라.',
           'emptyTarget' => '뭘 수정할지 이름까지 같이 말해라.',
           'recurringNotFound' => '$datePrefix$quoted 반복 일정은 안 보인다. 캘린더에서 확인해라.',
           'recurringMultiple' => '$quoted 비슷한 반복 일정이 여러 개다. 날짜나 이름 더 정확히 말해라.',
@@ -1578,6 +1599,7 @@ class _TasksScreenState extends State<TasksScreen>
         };
       case 'halmae':
         return switch (key) {
+          'habitOpened' => '루틴 탭 열어뒀다. 반복 요일은 거기서 고치면 된다.',
           'emptyTarget' => '뭘 고칠지 이름까지 말해줘야 한다, 우리 새끼.',
           'recurringNotFound' =>
             '$datePrefix$quoted 반복 일정은 못 찾았다. 캘린더에서 다시 봐라.',
@@ -1589,6 +1611,7 @@ class _TasksScreenState extends State<TasksScreen>
         };
       case 'nyang_halbae':
         return switch (key) {
+          'habitOpened' => '루틴 탭 열어뒀다냥. 반복 요일은 거기서 바꾸면 된다냥.',
           'emptyTarget' => '수정할 항목명을 함께 말씀해 주세요.',
           'recurringNotFound' =>
             '$datePrefix$quoted 반복 일정은 찾지 못했습니다. 캘린더에서 확인해 주세요.',
@@ -1602,6 +1625,7 @@ class _TasksScreenState extends State<TasksScreen>
         };
       case 'sec_female':
         return switch (key) {
+          'habitOpened' => '루틴 탭을 열어뒀어요. 반복 요일은 거기서 바꾸시면 돼요.',
           'emptyTarget' => '수정할 항목명을 함께 말씀해 주세요.',
           'recurringNotFound' =>
             '$datePrefix$quoted 반복 일정은 찾지 못했어요. 캘린더에서 확인해 주세요.',
@@ -1615,6 +1639,7 @@ class _TasksScreenState extends State<TasksScreen>
         };
       default:
         return switch (key) {
+          'habitOpened' => '루틴 탭 열어뒀다냥. 반복 요일은 거기서 바꾸면 된다냥.',
           'emptyTarget' => '어떤 일정을 수정할지 이름까지 같이 말해달라냥.',
           'recurringNotFound' =>
             '$datePrefix$quoted 반복 일정은 못 찾았다냥. 캘린더에서 확인해달라냥.',

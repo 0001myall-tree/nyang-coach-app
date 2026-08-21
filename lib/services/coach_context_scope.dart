@@ -247,18 +247,41 @@ class CoachContextScopeService {
   /// 코치가 그 일정을 짚어주려면 오늘 목록이 실려 있어야 한다. 이름을 대지 않고
   /// "그거 8시로"라고만 말하는 일이 흔한데, 목록이 없으면 코치는 무엇을 가리키는지
   /// 알 수 없어 이름을 지어낸다.
+  ///
+  /// 놓쳐도 막히지는 않는다. 목록이 없으면 코치가 [NEED: tasks]로 요청해서 한 번
+  /// 더 받아올 수 있다. 그래서 애매한 말은 넓게 잡기보다 좁게 두는 편이 낫다 —
+  /// 넓히면 매번 값을 치르고, 좁히면 정말 필요한 턴에만 왕복이 하나 는다.
   static bool hasPlannerActionSignal(String text) {
     final normalized = _normalize(text);
-    return _plannerActionSignal.hasMatch(normalized);
+    if (_plannerActionStrong.hasMatch(normalized)) return true;
+    // 혼자서는 일정 이야기인지 알 수 없는 말들. "날씨 알려줘"에 할 일 목록을
+    // 실을 이유가 없다. 시각이나 날짜가 함께 있을 때만 일정 이야기로 본다.
+    return _plannerActionWeak.hasMatch(normalized) &&
+        _whenSignal.hasMatch(normalized);
   }
 
-  static final RegExp _plannerActionSignal = RegExp(
-    // 옮기기 — 시각이나 날짜를 함께 말한다.
-    r'(?:옮겨|옮길|미뤄|미룰|미룰래|당겨|당길|바꿔|바꿀|변경|늦춰|앞당)'
-    // 끝냈다는 말. '했어'만으로는 잡담과 갈리지 않아 넣지 않는다.
+  /// 이 말만으로 일정을 건드리려는 뜻이 분명한 것.
+  static final RegExp _plannerActionStrong = RegExp(
+    r'(?:옮겨|옮길|미뤄|미룰|당겨|당길|늦춰|앞당)'
     r'|(?:완료|끝냈|끝났|다했|다끝)'
-    // 알람과 모닝콜.
-    r'|(?:알람|알려줘|알려줄래|깨워|모닝콜|리마인드)',
+    r'|(?:알람|모닝콜|리마인드|깨워)',
+  );
+
+  /// 시각이나 날짜가 함께 있어야 일정 이야기가 되는 말.
+  ///
+  /// "이제부터"가 여기 있는 이유는, 이미 있는 것의 시각을 옮기는 말이 "옮겨줘"로만
+  /// 오지 않기 때문이다. "운동 이제부터 7시에 할래"는 옮겨달라는 말인데, 목록을
+  /// 안 실으면 코치가 그 운동이 이미 있는 줄 모르고 새로 만들려 든다.
+  static final RegExp _plannerActionWeak = RegExp(
+    r'알려줘|알려줄래|알려주|바꿔|바꿀|바꾸|변경|이제부터|앞으로는?',
+  );
+
+  /// 언제인지를 가리키는 말.
+  static final RegExp _whenSignal = RegExp(
+    r'\d{1,2}시|\d{1,2}:\d{2}'
+    r'|오전|오후|새벽|아침|점심|저녁|밤에|밤까지'
+    r'|오늘|내일|모레|다음주|이번주|주말'
+    r'|시간|시각|날짜|일정|할일|스케줄',
   );
 
   static bool isAvoidanceMessage(String text) =>

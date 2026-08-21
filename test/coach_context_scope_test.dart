@@ -196,4 +196,55 @@ void main() {
       expect(scope.goal, GoalContextScope.full);
     });
   });
+
+  group('일정 조작 신호', () {
+    test('그 말만으로 일정 이야기가 되는 것', () {
+      for (final input in [
+        '집필 8시로 옮겨줘',
+        '그거 내일로 미룰래',
+        '운동 끝났어',
+        '청소 완료',
+        '집필 알람 켜줘',
+        '내일 아침에 깨워줘',
+        '모닝콜 꺼줘',
+      ]) {
+        expect(
+          CoachContextScopeService.hasPlannerActionSignal(input),
+          isTrue,
+          reason: input,
+        );
+      }
+    });
+
+    test('시각이나 날짜가 있어야 일정 이야기가 되는 것', () {
+      expect(
+        CoachContextScopeService.hasPlannerActionSignal('8시에 알려줘'),
+        isTrue,
+      );
+      expect(
+        CoachContextScopeService.hasPlannerActionSignal('집필 시간 바꿔줘'),
+        isTrue,
+      );
+      expect(
+        CoachContextScopeService.hasPlannerActionSignal('내일로 바꿔줘'),
+        isTrue,
+      );
+    });
+
+    test('일정과 상관없는 말에는 목록을 싣지 않는다', () {
+      for (final input in [
+        '날씨 알려줘',
+        '이거 뭔지 알려줘',
+        '말투 좀 바꿔줘',
+        '이름 바꾸고 싶어',
+        '오늘 좀 힘드네',
+      ]) {
+        expect(
+          CoachContextScopeService.hasPlannerActionSignal(input),
+          isFalse,
+          reason: input,
+        );
+      }
+    });
+  });
 }

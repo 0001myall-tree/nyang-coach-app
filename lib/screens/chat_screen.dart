@@ -2088,6 +2088,12 @@ class _ChatScreenState extends State<ChatScreen>
           preview.status == PlannerActionStatus.notFound) {
         return false;
       }
+      // 루틴은 카드로 고칠 것이 아니다. 요일·횟수까지 한자리에서 봐야 해서
+      // 루틴 탭으로 데려간다.
+      if (preview.status == PlannerActionStatus.routine) {
+        await _openRoutineTabFor(preview.label);
+        return true;
+      }
       final miss = _plannerActionMiss(action, preview);
       if (miss != null) _injectAiMessage(miss);
       return true;
@@ -2249,6 +2255,18 @@ class _ChatScreenState extends State<ChatScreen>
     final label = PlannerEditService.moveDetail(time: time);
     return '${_ask('모닝콜 $label${PlannerEditService.roJosa(label)}', plain: '맞출까', helping: '맞춰줄까', polite: '맞춰 드릴까요')}\n'
         '(매일 같은 시각에 울려요)';
+  }
+
+  /// 루틴 탭을 열고, 이름이 하나로 좁혀지면 그 루틴의 수정 창까지 연다.
+  ///
+  /// 수정 명령이 쓰는 길을 그대로 탄다. 코치가 하는 말도 그쪽이 만들어준다.
+  Future<void> _openRoutineTabFor(String name) async {
+    final reply = await widget.onEditCommand?.call({
+      'target': name,
+      'kind': 'habit',
+    });
+    if (!mounted) return;
+    _injectAiMessage(reply ?? '루틴 탭에서 바꿔주세요.');
   }
 
   /// 코치가 하는 말이라 코치 말투를 쓴다.
@@ -8420,7 +8438,10 @@ ${lines.join('\n')}
         normalized.contains('오늘할일') ||
         normalized.contains('오늘의할일') ||
         normalized.contains('태스크') ||
-        normalized.contains('반복일정');
+        normalized.contains('반복일정') ||
+        // 루틴은 반복 요일을 고치는 일이 잦은데 여기 없어서 아무 데도 닿지 않았다.
+        normalized.contains('습관') ||
+        normalized.contains('루틴');
     if (!hasEditableTarget) return false;
     return RegExp(
       r'(?:수정|변경|바꿔|바꾸|고쳐)\s*(?:해\s*)?(?:줘요?|주세요|달라)?$',
@@ -8473,10 +8494,18 @@ ${lines.join('\n')}
       cleaned = cleaned.replaceAll('오늘', '').trim();
     }
 
-    String kind = cleaned.contains('반복')
-        ? 'recurring_schedule'
-        : 'task_or_schedule';
+    // 루틴이라고 말했으면 루틴이다. '반복'이라는 말이 함께 있어도 마찬가지다 —
+    // "주5일 반복하던 습관"은 반복 일정이 아니라 루틴이다.
+    final String kind;
+    if (_routineWordRegex.hasMatch(cleaned)) {
+      kind = 'habit';
+    } else if (cleaned.contains('반복')) {
+      kind = 'recurring_schedule';
+    } else {
+      kind = 'task_or_schedule';
+    }
     cleaned = cleaned.replaceAll(RegExp(r'\s*반복\s*일정\s*'), ' ');
+    cleaned = cleaned.replaceAll(RegExp(r'\s*(?:습관|루틴)\s*(?:탭|텝)?\s*(?:을|를|에|은|는)?\s*'), ' ');
     cleaned = cleaned.replaceAll(RegExp(r'\s*(?:일정|할\s*일|태스크)\s*$'), '');
     cleaned = cleaned.replaceAll(
       RegExp(r'\s+(?:[월화수목금토일]\s*요일|[월화수목금토일])\s*(?:로|으로|에)?\s*$'),

@@ -28,10 +28,12 @@ Future<SharedPreferences> _prefsWith({
   List<Map<String, dynamic>>? today,
   Map<String, dynamic>? schedules,
   Map<String, dynamic>? planned,
+  List<Map<String, dynamic>>? habits,
 }) async {
   SharedPreferences.setMockInitialValues({
     if (today != null) 'nyang_tasks': jsonEncode(today),
     if (schedules != null) 'nyang_schedules': jsonEncode(schedules),
+    if (habits != null) 'nyang_habits': jsonEncode(habits),
     if (planned != null)
       DailyResetService.plannedTasksByDateKey: jsonEncode(planned),
   });
@@ -247,6 +249,92 @@ void main() {
       await prefs.reload();
       final stored = jsonDecode(prefs.getString('nyang_tasks')!) as List;
       expect(stored.first['isReminderEnabled'], isTrue);
+    });
+  });
+
+  group('루틴', () {
+    Map<String, dynamic> habit(String id, String name, {String? timeStart}) => {
+      'id': id,
+      'name': name,
+      'freq': 'daily',
+      if (timeStart != null) 'timeStart': timeStart,
+      'createdAt': DateTime.now().toIso8601String(),
+    };
+
+    Map<String, dynamic> injected(String id, String name, String habitId) => {
+      ..._task(id, name),
+      'category': 'habit',
+      'isHabit': true,
+      'habitId': habitId,
+    };
+
+    test('시각을 옮기려 하면 루틴 탭으로 보낸다', () async {
+      await _prefsWith(
+        habits: [habit('h1', '운동', timeStart: '08:00')],
+        today: [injected('1', '운동', 'h1')],
+      );
+      final r = await PlannerEditService.preview(
+        const PlannerAction(
+          kind: PlannerActionKind.move,
+          target: '운동',
+          time: (hour: 7, minute: 0),
+        ),
+      );
+      expect(r.status, PlannerActionStatus.routine);
+      expect(r.label, '운동');
+    });
+
+    test('알람도 루틴 탭으로 보낸다', () async {
+      await _prefsWith(
+        habits: [habit('h1', '운동', timeStart: '08:00')],
+        today: [injected('1', '운동', 'h1')],
+      );
+      final r = await PlannerEditService.preview(
+        const PlannerAction(
+          kind: PlannerActionKind.remind,
+          target: '운동',
+          enabled: true,
+        ),
+      );
+      expect(r.status, PlannerActionStatus.routine);
+    });
+
+    test('완료는 오늘치에 적는다', () async {
+      final prefs = await _prefsWith(
+        habits: [habit('h1', '운동', timeStart: '08:00')],
+        today: [injected('1', '운동', 'h1')],
+      );
+      final r = await PlannerEditService.preview(
+        const PlannerAction(kind: PlannerActionKind.done, target: '운동'),
+      );
+      // 루틴이라고 물러나지 않는다. 오늘 하루의 체크는 여기서 한다.
+      expect(r.isOk, isTrue);
+      await prefs.reload();
+      // 미리보기라 아직 아무것도 안 바뀐다.
+      final stored = jsonDecode(prefs.getString('nyang_tasks')!) as List;
+      expect(stored.first['done'], isFalse);
+    });
+
+    test('루틴과 오늘치를 둘로 세지 않는다', () async {
+      await _prefsWith(
+        habits: [habit('h1', '운동', timeStart: '08:00')],
+        today: [injected('1', '운동', 'h1')],
+      );
+      final r = await PlannerEditService.preview(
+        const PlannerAction(kind: PlannerActionKind.done, target: '운동'),
+      );
+      expect(r.status, isNot(PlannerActionStatus.multiple));
+    });
+
+    test('오늘 안 하는 루틴은 어떤 조작도 루틴 탭으로 보낸다', () async {
+      await _prefsWith(
+        habits: [habit('h1', '스트레칭', timeStart: '08:00')],
+        today: [],
+      );
+      final r = await PlannerEditService.preview(
+        const PlannerAction(kind: PlannerActionKind.done, target: '스트레칭'),
+      );
+      expect(r.status, PlannerActionStatus.routine);
     });
   });
 
