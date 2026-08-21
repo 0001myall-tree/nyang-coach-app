@@ -2019,7 +2019,15 @@ class _ChatScreenState extends State<ChatScreen>
   static const String _goalWeekLabel = '주간 목표';
   static const String _goalMonthLabel = '월 목표';
 
-  String _registerConfirmQuestion(String title, {required String type}) {
+  /// 확인 카드에 적을 말.
+  ///
+  /// 일정은 언제인지와 알람 여부까지 적는다. 누르면 그 자리에서 들어가므로,
+  /// 사용자가 값을 보는 곳은 여기가 전부다.
+  String _registerConfirmQuestion(
+    String title, {
+    required String type,
+    String detail = '',
+  }) {
     // 목표는 주간인지 월간인지를 사용자가 골라야 해서 묻는 말이 다르다.
     if (type == 'goal') {
       return switch (_coach.id) {
@@ -2032,14 +2040,94 @@ class _ChatScreenState extends State<ChatScreen>
       };
     }
     final what = type == 'habit' ? '루틴' : '일정';
+    final when = detail.isEmpty ? '' : '$detail ';
     return switch (_coach.id) {
-      'bro' => "'$title' $what으로 넣어줄까?",
-      'halmae' => "'$title' $what으로 넣어줄까?",
-      'boyfriend' => "'$title' $what으로 넣을까?",
-      'nyang_halbae' => "'$title' $what으로 등록할까냥?",
-      'sec_female' => "'$title' $what으로 등록해 드릴까요?",
-      _ => "'$title' $what으로 넣을까냥?",
+      'bro' => "$when'$title' $what으로 넣어줄까?",
+      'halmae' => "$when'$title' $what으로 넣어줄까?",
+      'boyfriend' => "$when'$title' $what으로 넣을까?",
+      'nyang_halbae' => "$when'$title' $what으로 등록할까냥?",
+      'sec_female' => "$when'$title' $what으로 등록해 드릴까요?",
+      _ => "$when'$title' $what으로 넣을까냥?",
     };
+  }
+
+  /// 확인 카드에서 "등록해줘"를 눌렀을 때.
+  ///
+  /// 시각이 있으면 그 자리에서 넣는다. 창을 한 번 더 띄우던 때는, 카드에서
+  /// 이미 예라고 답한 사람에게 같은 것을 또 확인시키는 셈이었다. 언제로
+  /// 들어가는지는 카드에 적혀 있었다.
+  ///
+  /// 시각이 없거나 반복이 걸린 말은 창을 연다. 그쪽은 고를 것이 남아 있다 —
+  /// 몇 시인지, 무슨 요일마다인지는 여기서 대신 찍을 수 없다.
+  Future<void> _registerScheduleFromCard(
+    String title, {
+    required bool withAlarm,
+  }) async {
+    final plan = _parseScheduleRegistration('$title 추가해줘');
+    if (plan.time == null || plan.repeatRule != null) {
+      await _showScheduleRegistrationDialog(
+        '$title 추가해줘',
+        reminderOverride: withAlarm ? true : null,
+      );
+      return;
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+    final alarmOn =
+        withAlarm || (prefs.getBool('nyang_core_reminder_enabled') ?? false);
+    // 알람을 켜서 넣는데 일정 알람 자체가 꺼져 있으면 울리지 않는다.
+    final turnedOn = alarmOn ? await _ensureCoreRemindersEnabled() : false;
+
+    await _saveRegisteredSchedule(
+      plan.title,
+      plan.date,
+      plan.time,
+      plan.endTime,
+      alarmOn,
+      null,
+    );
+    if (!mounted) return;
+
+    final when = _registrationWhenLabel(plan, withAlarm: alarmOn);
+    final name = plan.title;
+    _injectAiMessage(
+      _voice(
+        cat: "$when '$name' 넣어뒀다냥 ✓",
+        bro: "$when '$name' 넣었다 ✓",
+        halmae: "$when '$name' 넣어뒀다 ✓",
+        boyfriend: "$when '$name' 넣어뒀어 ✓",
+        nyangHalbae: "$when '$name' 넣어뒀다냥 ✓",
+        sec: "$when '$name' 넣었어요 ✓",
+      ),
+    );
+    // 알람을 켜면서 일정 알람 자체가 함께 켜졌으면 그 사실을 알린다.
+    if (turnedOn) {
+      _injectAiMessage('설정에 일정 알람이 꺼져 있어서 기본 푸쉬로 함께 켰어요. 알람 방식은 설정에서 바꿀 수 있어요.');
+    }
+  }
+
+  /// "오늘 오후 9시" 또는 "내일 오후 9시 (알람)". 카드에 붙는 앞말이다.
+  String _registrationWhenLabel(
+    _ParsedScheduleRegistration plan, {
+    required bool withAlarm,
+  }) {
+    final now = DateTime.now();
+    final base = DateTime(now.year, now.month, now.day);
+    final target = DateTime(plan.date.year, plan.date.month, plan.date.day);
+    final diff = target.difference(base).inDays;
+    final day = switch (diff) {
+      0 => '오늘',
+      1 => '내일',
+      2 => '모레',
+      _ => '${plan.date.month}월 ${plan.date.day}일',
+    };
+    final time = plan.time;
+    if (time == null) return day;
+    final ampm = time.hour < 12 ? '오전' : '오후';
+    final hour12 = time.hour % 12 == 0 ? 12 : time.hour % 12;
+    final minute = time.minute == 0 ? '' : ' ${time.minute}분';
+    final alarm = withAlarm ? ' (알람 켜서)' : '';
+    return '$day $ampm $hour12시$minute$alarm';
   }
 
   String _registerDeclinedReply() {
@@ -2275,6 +2363,7 @@ class _ChatScreenState extends State<ChatScreen>
   /// 여기서는 상태만 확인해 사실대로 말한다.
   void _offerRegistrationConfirm(_ParsedReply parsed) {
     if (!_userData.isPlanActive) return;
+    final withAlarm = parsed.scheduleReminder;
 
     // 한 턴에 하나만 물어본다. 카드가 겹치면 뭘 고르는 건지 알기 어렵다.
     final String type;
@@ -2303,10 +2392,19 @@ class _ChatScreenState extends State<ChatScreen>
         ? const [_goalWeekLabel, _goalMonthLabel, _registerConfirmNo]
         : const [_registerConfirmYes, _registerConfirmNo];
 
+    // 일정은 언제로 들어갈지 미리 읽어 카드에 적는다. 누르면 그 자리에서
+    // 들어가므로, 값을 보고 아니라고 할 수 있는 곳이 여기뿐이다.
+    final plan = type == 'schedule'
+        ? _parseScheduleRegistration('$title 추가해줘')
+        : null;
+    final detail = plan == null
+        ? ''
+        : _registrationWhenLabel(plan, withAlarm: plan.time != null && withAlarm);
+
     setState(() {
       _messages.add(
         ChatMessage(
-          text: _registerConfirmQuestion(title!, type: type),
+          text: _registerConfirmQuestion(title!, type: type, detail: detail),
           isUser: false,
           time: DateTime.now(),
           kind: _registerConfirmKind,
@@ -2359,11 +2457,7 @@ class _ChatScreenState extends State<ChatScreen>
       await _registerHabitByTitle(title);
       return;
     }
-    // 날짜·반복 해석은 기존 등록 흐름이 이미 하고 있으니 그대로 태운다.
-    await _showScheduleRegistrationDialog(
-      '$title 추가해줘',
-      reminderOverride: withAlarm ? true : null,
-    );
+    await _registerScheduleFromCard(title, withAlarm: withAlarm);
   }
 
   Future<void> _registerGoalByTitle(String type, String title) async {
@@ -2662,6 +2756,13 @@ $role
       r'(모닝콜|알람|타이머|일정|할일|루틴|습관|목표|미루|옮기)'
       r'.{0,10}(할수있|해줄수있|되나|되니|돼|가능|지원)',
     ).hasMatch(normalized)) {
+      return true;
+    }
+
+    // "알람 기능 없냐"처럼 없는지 묻는 말. 앱이나 기능을 함께 가리킬 때만
+    // 잡는다 — "오늘 일정이 없어"는 없다는 말이지 물음이 아니다.
+    if (RegExp(r'기능|냥냥코치|이앱|앱에|앱은|앱이').hasMatch(normalized) &&
+        RegExp(r'없|안되|안돼|못하|못해').hasMatch(normalized)) {
       return true;
     }
 
