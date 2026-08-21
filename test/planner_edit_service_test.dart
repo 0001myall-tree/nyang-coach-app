@@ -128,6 +128,49 @@ void main() {
     });
   });
 
+  group('같은 것을 두 번 세지 않는다', () {
+    test('오늘 목록에 내려온 일정과 그 원본', () async {
+      final today = DateTime.now();
+      await _prefsWith(
+        // 일정은 오늘 목록에 'schedule_<원본id>'로 복사되어 들어온다.
+        today: [
+          {..._task('schedule_s1', '글쓰기', timeStart: '10:00'),
+            'category': 'schedule'},
+        ],
+        schedules: {
+          _key(today): [
+            {'id': 's1', 'text': '글쓰기', 'timeStart': '10:00'},
+          ],
+        },
+      );
+      final r = await PlannerEditService.preview(
+        const PlannerAction(kind: PlannerActionKind.move, target: '글쓰기'),
+      );
+      // 하나뿐인 일정을 "여러 개 있다"고 하면 있지도 않은 선택을 시키게 된다.
+      expect(r.status, PlannerActionStatus.ok);
+      expect(r.label, '글쓰기');
+    });
+
+    test('진짜 둘이면 둘로 센다', () async {
+      final today = DateTime.now();
+      await _prefsWith(
+        today: [
+          {..._task('schedule_s1', '글쓰기'), 'category': 'schedule'},
+        ],
+        schedules: {
+          _key(today): [
+            {'id': 's1', 'text': '글쓰기'},
+            {'id': 's2', 'text': '글쓰기'},
+          ],
+        },
+      );
+      final r = await PlannerEditService.preview(
+        const PlannerAction(kind: PlannerActionKind.move, target: '글쓰기'),
+      );
+      expect(r.status, PlannerActionStatus.multiple);
+    });
+  });
+
   group('루틴은 따로 알려준다', () {
     test('오늘 목록에 내려온 루틴', () async {
       await _prefsWith(
@@ -167,6 +210,15 @@ void main() {
       );
       final r = await PlannerEditService.preview(_move);
       expect(r.status, isNot(PlannerActionStatus.multiple));
+    });
+  });
+
+  group('이미 끝낸 일', () {
+    test('수정 창을 열 것이 없다', () async {
+      await _prefsWith(today: [_task('1', '운동', done: true)]);
+      final r = await PlannerEditService.preview(_move);
+      expect(r.status, PlannerActionStatus.noChange);
+      expect(r.label, '운동');
     });
   });
 

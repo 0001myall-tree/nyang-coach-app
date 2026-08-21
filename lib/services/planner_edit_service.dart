@@ -46,6 +46,11 @@ class PlannerEditService {
     final label =
         (hit.item['text'] ?? hit.item['name'])?.toString() ?? action.target;
 
+    // 이미 끝낸 일은 고칠 것이 없다. 수정 창을 열어봐야 할 일이 없다.
+    if (hit.item['done'] == true) {
+      return PlannerActionResult(PlannerActionStatus.noChange, label: label);
+    }
+
     // 끝냈다는 말은 루틴이라도 오늘 하루의 체크다. 오늘 목록에 내려와 있으면
     // 그 칸으로 데려간다 — 루틴 탭에는 오늘 체크할 자리가 없다.
     final todaysCopy = hit.store != _Store.habit;
@@ -84,6 +89,10 @@ class PlannerEditService {
       }
     }
 
+    // 오늘 목록에 내려온 일정이 원본과 따로 세어지지 않게, 그 원본의 id를
+    // 적어둔다. 일정은 오늘 목록에 'schedule_<원본id>'로 복사되어 들어온다.
+    final injectedScheduleIds = <String>{};
+
     if (wantKey == null || wantKey == todayKey) {
       for (final task in _list(prefs.getString(_tasksKey))) {
         if (!_titleMatches(task['text']?.toString() ?? '', action.target)) {
@@ -92,6 +101,10 @@ class PlannerEditService {
         // 오늘 목록에 내려온 것이 있으면 그쪽을 쓴다. 완료는 오늘 하루의
         // 일이라 루틴 정의가 아니라 오늘치에 적혀야 한다.
         habitHits.remove(task['habitId']?.toString());
+        final id = task['id'].toString();
+        if (id.startsWith('schedule_')) {
+          injectedScheduleIds.add(id.substring('schedule_'.length));
+        }
         hits.add(_Hit(_Store.today, task, todayKey));
       }
     }
@@ -115,9 +128,13 @@ class PlannerEditService {
     schedules.forEach((key, value) {
       if (wantKey != null && key != wantKey) return;
       for (final item in _asList(value)) {
-        if (_titleMatches(item['text']?.toString() ?? '', action.target)) {
-          hits.add(_Hit(_Store.schedule, item, key));
+        if (!_titleMatches(item['text']?.toString() ?? '', action.target)) {
+          continue;
         }
+        // 오늘 목록에서 이미 센 것이면 건너뛴다. 둘 다 세면 하나뿐인 일정이
+        // "여러 개 있다"가 되고, 사용자는 있지도 않은 선택을 하라는 말을 듣는다.
+        if (injectedScheduleIds.contains(item['id'].toString())) continue;
+        hits.add(_Hit(_Store.schedule, item, key));
       }
     });
 

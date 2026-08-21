@@ -1477,17 +1477,26 @@ class _TasksScreenState extends State<TasksScreen>
       );
     }
 
+    // 알람 이야기로 데려온 경우다. 알람 스위치는 시간 칸 안에 있어서, 접힌
+    // 채로 열면 부탁한 것이 어디 있는지 찾아야 한다.
+    final expandTime = command['focus'] == 'reminder';
+
     final match = matches.first;
     if (match['type'] == 'task') {
       await _openTaskEditMatch(
         match['task'] as TaskItem,
         dateKey: match['dateKey'] as String?,
+        expandTimeOptions: expandTime,
       );
     } else {
-      await _openScheduleEditMatch(match);
+      await _openScheduleEditMatch(match, expandTimeOptions: expandTime);
     }
     return _editCommandReply(
-      kind == 'recurring_schedule' ? 'recurringOpened' : 'opened',
+      expandTime
+          ? 'reminderOpened'
+          : kind == 'recurring_schedule'
+          ? 'recurringOpened'
+          : 'opened',
       target,
     );
   }
@@ -1599,6 +1608,7 @@ class _TasksScreenState extends State<TasksScreen>
       case 'boyfriend':
         return switch (key) {
           'habitOpened' => '루틴 탭 열어뒀어. 반복 요일은 거기서 바꾸면 돼.',
+          'reminderOpened' => '$quoted 수정창 열어뒀어. 시간 옆 "알림 켜기"를 누르면 돼.',
           'emptyTarget' => '어떤 일정을 수정할지 이름까지 같이 말해줘.',
           'recurringNotFound' =>
             '$datePrefix$quoted 반복 일정은 못 찾았어. 캘린더에서 한번 확인해줘.',
@@ -1612,6 +1622,7 @@ class _TasksScreenState extends State<TasksScreen>
       case 'bro':
         return switch (key) {
           'habitOpened' => '루틴 탭 열어뒀다. 반복 요일은 거기서 바꿔라.',
+          'reminderOpened' => '$quoted 수정창 열어뒀다. 시간 옆 "알림 켜기" 눌러라.',
           'emptyTarget' => '뭘 수정할지 이름까지 같이 말해라.',
           'recurringNotFound' => '$datePrefix$quoted 반복 일정은 안 보인다. 캘린더에서 확인해라.',
           'recurringMultiple' => '$quoted 비슷한 반복 일정이 여러 개다. 날짜나 이름 더 정확히 말해라.',
@@ -1623,6 +1634,7 @@ class _TasksScreenState extends State<TasksScreen>
       case 'halmae':
         return switch (key) {
           'habitOpened' => '루틴 탭 열어뒀다. 반복 요일은 거기서 고치면 된다.',
+          'reminderOpened' => '$quoted 수정창 열어뒀다. 시간 옆 "알림 켜기"를 누르면 된다.',
           'emptyTarget' => '뭘 고칠지 이름까지 말해줘야 한다, 우리 새끼.',
           'recurringNotFound' =>
             '$datePrefix$quoted 반복 일정은 못 찾았다. 캘린더에서 다시 봐라.',
@@ -1635,6 +1647,7 @@ class _TasksScreenState extends State<TasksScreen>
       case 'nyang_halbae':
         return switch (key) {
           'habitOpened' => '루틴 탭 열어뒀다냥. 반복 요일은 거기서 바꾸면 된다냥.',
+          'reminderOpened' => '$quoted 수정창 열어뒀다냥. 시간 옆 "알림 켜기"를 누르면 된다냥.',
           'emptyTarget' => '수정할 항목명을 함께 말씀해 주세요.',
           'recurringNotFound' =>
             '$datePrefix$quoted 반복 일정은 찾지 못했습니다. 캘린더에서 확인해 주세요.',
@@ -1649,6 +1662,7 @@ class _TasksScreenState extends State<TasksScreen>
       case 'sec_female':
         return switch (key) {
           'habitOpened' => '루틴 탭을 열어뒀어요. 반복 요일은 거기서 바꾸시면 돼요.',
+          'reminderOpened' => '$quoted 수정창을 열어뒀어요. 시간 옆 "알림 켜기"를 눌러주세요.',
           'emptyTarget' => '수정할 항목명을 함께 말씀해 주세요.',
           'recurringNotFound' =>
             '$datePrefix$quoted 반복 일정은 찾지 못했어요. 캘린더에서 확인해 주세요.',
@@ -1663,6 +1677,7 @@ class _TasksScreenState extends State<TasksScreen>
       default:
         return switch (key) {
           'habitOpened' => '루틴 탭 열어뒀다냥. 반복 요일은 거기서 바꾸면 된다냥.',
+          'reminderOpened' => '$quoted 수정창 열어뒀다냥. 시간 옆 "알림 켜기"를 누르면 된다냥.',
           'emptyTarget' => '어떤 일정을 수정할지 이름까지 같이 말해달라냥.',
           'recurringNotFound' =>
             '$datePrefix$quoted 반복 일정은 못 찾았다냥. 캘린더에서 확인해달라냥.',
@@ -1762,7 +1777,11 @@ class _TasksScreenState extends State<TasksScreen>
     await _showTaskDeleteOptions(task);
   }
 
-  Future<void> _openTaskEditMatch(TaskItem task, {String? dateKey}) async {
+  Future<void> _openTaskEditMatch(
+    TaskItem task, {
+    String? dateKey,
+    bool expandTimeOptions = false,
+  }) async {
     final targetDate = dateKey == null ? null : DateTime.tryParse(dateKey);
     _openTab(0);
     if (targetDate != null) {
@@ -1772,7 +1791,7 @@ class _TasksScreenState extends State<TasksScreen>
     }
     await Future.delayed(const Duration(milliseconds: 360));
     if (!mounted) return;
-    _showEditItemModal(task, () {
+    _showEditItemModal(task, expandTimeOptions: expandTimeOptions, () {
       setState(() {
         final cIdx = coreTasks.indexWhere((ct) => ct.id == task.id);
         if (cIdx != -1) {
@@ -1828,7 +1847,10 @@ class _TasksScreenState extends State<TasksScreen>
     );
   }
 
-  Future<void> _openScheduleEditMatch(Map<String, dynamic> match) async {
+  Future<void> _openScheduleEditMatch(
+    Map<String, dynamic> match, {
+    bool expandTimeOptions = false,
+  }) async {
     final schedule = match['schedule'] as ScheduleItem;
     final dateKey = match['dateKey'] as String;
     final targetDate = DateTime.tryParse(dateKey) ?? DateTime.now();
@@ -1841,6 +1863,7 @@ class _TasksScreenState extends State<TasksScreen>
     if (!mounted) return;
     _showEditItemModal(
       schedule,
+      expandTimeOptions: expandTimeOptions,
       () {
         setState(() {});
         _saveSchedules();
@@ -6458,10 +6481,15 @@ class _TasksScreenState extends State<TasksScreen>
     await _saveCoreTasks();
   }
 
+  /// [expandTimeOptions]면 시간 칸을 펼친 채로 연다.
+  ///
+  /// 알람은 그 칸을 펼쳐야 보인다. 채팅에서 "알람 켜줘"라고 해서 데려왔는데
+  /// 접힌 채로 열리면, 부탁한 것이 어디 있는지 찾아야 한다.
   void _showEditItemModal(
     dynamic item,
     VoidCallback onSave, {
     VoidCallback? onDelete,
+    bool expandTimeOptions = false,
   }) {
     final wasInsightTask = item is TaskItem && _isInsightTask(item);
     final initialText = wasInsightTask
@@ -6487,7 +6515,7 @@ class _TasksScreenState extends State<TasksScreen>
               ? null
               : Map<String, dynamic>.from(item.recurrenceRule!))
         : null;
-    bool timeOptionsExpanded = false;
+    bool timeOptionsExpanded = expandTimeOptions;
     // 메모(선택): 기본 접힘. 값이 있어도 눌러야 펼쳐진다.
     final memoCtrl = TextEditingController(text: item.memo ?? '');
     bool memoExpanded = false;

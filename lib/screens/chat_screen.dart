@@ -2146,6 +2146,7 @@ class _ChatScreenState extends State<ChatScreen>
       if (canRegisterInstead) return false;
     }
     if (found.status == PlannerActionStatus.multiple ||
+        found.status == PlannerActionStatus.noChange ||
         found.status == PlannerActionStatus.notFound) {
       final miss = _plannerActionMiss(action, found);
       if (miss != null) _injectAiMessage(miss);
@@ -2163,6 +2164,8 @@ class _ChatScreenState extends State<ChatScreen>
     final reply = await widget.onEditCommand?.call({
       'target': name,
       'kind': 'task_or_schedule',
+      // 알람 이야기면 시간 칸을 펼친 채로 연다. 알람 스위치가 그 안에 있다.
+      if (action.kind == PlannerActionKind.remind) 'focus': 'reminder',
     });
     if (!mounted) return true;
     if (reply != null) _injectAiMessage(reply);
@@ -2209,15 +2212,14 @@ class _ChatScreenState extends State<ChatScreen>
           sec: "'$name'$iGa 여러 개 있어요. 몇 시 건지 알려주시면 찾아볼게요.",
         );
       case PlannerActionStatus.noChange:
-        // 완료는 조용히 넘어간다.
-        if (action.kind == PlannerActionKind.done) return null;
+        // 이미 끝낸 일이다. 수정 창을 열어봐야 할 일이 없다.
         return _voice(
-          cat: '그건 이미 그렇게 돼 있다냥',
-          bro: '그건 이미 그렇게 돼 있다.',
-          halmae: '그건 벌써 그리 돼 있다.',
-          boyfriend: '그거 이미 그렇게 돼 있어.',
-          nyangHalbae: '그건 이미 그리 돼 있다냥.',
-          sec: '이미 그렇게 되어 있어요.',
+          cat: "'$name'$eunNeun 이미 다 한 걸로 돼 있다냥",
+          bro: "'$name'$eunNeun 이미 다 한 걸로 돼 있다.",
+          halmae: "'$name'$eunNeun 벌써 다 한 걸로 돼 있다.",
+          boyfriend: "'$name'$eunNeun 이미 다 한 걸로 돼 있어.",
+          nyangHalbae: "'$name'$eunNeun 이미 다 한 걸로 돼 있다냥.",
+          sec: "'$name'$eunNeun 이미 완료로 되어 있어요.",
         );
       case PlannerActionStatus.failed:
         if (action.kind == PlannerActionKind.remind) {
