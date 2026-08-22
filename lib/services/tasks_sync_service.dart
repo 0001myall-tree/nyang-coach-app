@@ -33,6 +33,24 @@ class TasksSyncService {
     'nyang_coach_weekly_feedback_nyang_halbae',
   };
 
+  /// 접두어로만 알 수 있는 핵심 데이터. 코치마다 키가 갈라져서 위 목록에
+  /// 하나씩 적어둘 수가 없다.
+  ///
+  /// 채팅 기록이 보호를 못 받던 동안에는, 방금 한 대화가 4초 뒤 업로드를
+  /// 기다리는 사이에 도착한 클라우드 스냅샷에 옛 값으로 덮여 사라졌다.
+  /// 스냅샷은 바뀐 항목만 보는 게 아니라 전부 훑기 때문에, 다른 기기에서
+  /// 할 일 하나가 바뀌기만 해도 오래된 대화가 딸려 와 새 대화를 지웠다.
+  static const _criticalKeyPrefixes = {
+    'nyang_chat_history_',
+    'nyang_chat_archive_',
+  };
+
+  /// 오래된 클라우드 값이 덮어써서는 안 되는 키.
+  @visibleForTesting
+  static bool isCriticalKey(String key) =>
+      _criticalDataKeys.contains(key) ||
+      _criticalKeyPrefixes.any(key.startsWith);
+
   /// 기기 로컬 전용 키. 클라우드에 백업/복원하지 않는다.
   /// ('이 기기가 첫 복원을 마쳤는가'는 기기별 사실이라, 클라우드에서 true를
   /// 물려받으면 새 기기의 덮어쓰기 보호가 무력화된다.)
@@ -43,12 +61,22 @@ class TasksSyncService {
   /// 방금 저장한 값(예: 메모)이 오래된 클라우드 데이터로 사라지는 것을 방지한다.
   static final Set<String> _pendingUploadKeys = {};
 
+  /// 접두어로 걸리는 핵심 데이터도 업로드 대기 중인지.
+  /// [_pendingUploadKeys]와 생애주기가 같다.
+  static bool _criticalPrefixesPending = false;
+
+  /// 클라우드 값이 이 키의 로컬 값을 덮어써도 되는지.
+  static bool _isPendingUpload(String key) =>
+      _pendingUploadKeys.contains(key) ||
+      (_criticalPrefixesPending && _criticalKeyPrefixes.any(key.startsWith));
+
   static void scheduleSyncToCloud({
     Duration delay = const Duration(seconds: 4),
   }) {
     if (FirebaseAuth.instance.currentUser == null) return;
     // 업로드가 확정되기 전까지 핵심 데이터를 "로컬이 최신" 상태로 표시한다.
     _pendingUploadKeys.addAll(_criticalDataKeys);
+    _criticalPrefixesPending = true;
     _syncTimer?.cancel();
     _syncTimer = Timer(delay, () {
       syncToCloud();
@@ -93,7 +121,7 @@ class TasksSyncService {
           // 첫 동기화 완료 전 기존 클라우드 값을 빈 값으로 덮어쓰지 않도록 보호
           if (!hasSyncedFromCloud &&
               value is String &&
-              _criticalDataKeys.contains(key) &&
+              isCriticalKey(key) &&
               _isEmptyEncodedValue(value) &&
               cloudKeys.contains(key)) {
             final doc = snapshot.docs.firstWhere((d) => d.id == key);
@@ -142,6 +170,7 @@ class TasksSyncService {
       // (removeAll(keys)를 쓰면 로컬에 아직 없는 키가 pending에 영원히 남아
       // 클라우드 복원을 계속 막는 누수가 생긴다.)
       _pendingUploadKeys.clear();
+      _criticalPrefixesPending = false;
       debugPrint('✅ TasksSyncService: 로컬 데이터를 클라우드에 성공적으로 백업했습니다.');
     } catch (e) {
       debugPrint('❌ TasksSyncService syncToCloud 오류: $e');
@@ -210,7 +239,7 @@ class TasksSyncService {
         foundKeys.add(key);
 
         // 업로드 대기 중인(로컬이 더 최신인) 키는 클라우드 값으로 덮지 않는다.
-        if (_pendingUploadKeys.contains(key)) continue;
+        if (_isPendingUpload(key)) continue;
 
         if (_localOnlyKeys.contains(key)) continue;
 
@@ -278,7 +307,7 @@ class TasksSyncService {
 
               // 방금 로컬에서 수정돼 아직 업로드 대기 중인 키는 덮어쓰지 않는다.
               // (오래된 클라우드 스냅샷이 방금 저장한 메모 등을 지우는 것을 방지)
-              if (_pendingUploadKeys.contains(key)) continue;
+              if (_isPendingUpload(key)) continue;
               if (_localOnlyKeys.contains(key)) continue;
 
               if (data.containsKey('value')) {
