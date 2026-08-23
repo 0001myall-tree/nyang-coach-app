@@ -9,6 +9,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'coach_config.dart';
 import 'landing_screen.dart';
+import '../services/account_deletion_service.dart';
+import '../services/content_report_service.dart';
 import '../services/last_reply_log.dart';
 import '../services/notification_service.dart';
 import '../services/auth_service.dart';
@@ -49,6 +51,13 @@ enum _OngoingNudgeAction { test, turnOff, openSettings }
 
 class _SettingsScreenState extends State<SettingsScreen>
     with WidgetsBindingObserver {
+  /// 쿠폰 입력을 보여줄지.
+  ///
+  /// 지금은 닫아둔다. 쓸 수 있는 코드가 앱 안에 글자 그대로 박혀 있어서,
+  /// 공개된 앱에서는 'MASTER'라고 치기만 해도 플랜이 켜지는 셈이 된다.
+  /// 코드를 서버가 확인해주게 되면 그때 연다.
+  static const bool _couponEntryEnabled = false;
+
   static final Uri _termsUrl = Uri.parse('https://joflowapp.com/terms');
   static final Uri _privacyUrl = Uri.parse('https://joflowapp.com/privacy');
   static final Uri _refundUrl = Uri.parse('https://joflowapp.com/refund');
@@ -1968,13 +1977,15 @@ class _SettingsScreenState extends State<SettingsScreen>
                       const SizedBox(height: 10),
 
                       _buildSettingsNavigationTile(
-                        icon: Icons.bug_report_outlined,
-                        label: '마지막 코치 답변 원문',
+                        icon: Icons.flag_outlined,
+                        label: '코치 답변 신고',
+                        subtitle: '마지막으로 받은 답변을 그대로 보고 신고할 수 있어요.',
                         onTap: _showLastReplyDialog,
                       ),
                       const SizedBox(height: 20),
 
                       _buildLogoutButton(),
+                      _buildDeleteAccountButton(),
 
                       const SizedBox(height: 40),
                     ],
@@ -2822,86 +2833,91 @@ class _SettingsScreenState extends State<SettingsScreen>
                                   const SizedBox(height: 18),
                                   _buildPurchasedCoachSection(),
                                   const SizedBox(height: 18),
-                                  Text(
-                                    '쿠폰 입력',
-                                    style: GoogleFonts.notoSansKr(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w900,
-                                      color: const Color(0xFF1A1A2E),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 10),
-                                  TextField(
-                                    controller: couponController,
-                                    textCapitalization:
-                                        TextCapitalization.characters,
-                                    decoration: InputDecoration(
-                                      hintText: '쿠폰 또는 구독권 코드',
-                                      errorText: errorText,
-                                      hintStyle: GoogleFonts.notoSansKr(
-                                        color: const Color(0xFFB8B5C6),
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                      filled: true,
-                                      fillColor: const Color(0xFFF8F7FF),
-                                      border: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(16),
-                                        borderSide: const BorderSide(
-                                          color: Color(0xFFE8E3F8),
-                                        ),
-                                      ),
-                                      enabledBorder: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(16),
-                                        borderSide: const BorderSide(
-                                          color: Color(0xFFE8E3F8),
-                                        ),
-                                      ),
-                                      focusedBorder: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(16),
-                                        borderSide: const BorderSide(
-                                          color: Color(0xFFB6A4FF),
-                                          width: 1.5,
-                                        ),
+                                  // 쿠폰 코드가 앱 안에 글자로 박혀 있다. 공개된 앱에서
+                                  // 'MASTER'만 쳐도 플랜이 켜지는 셈이라, 코드를 서버가
+                                  // 확인해주기 전까지는 입구를 닫아둔다.
+                                  if (_couponEntryEnabled) ...[
+                                    Text(
+                                      '쿠폰 입력',
+                                      style: GoogleFonts.notoSansKr(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w900,
+                                        color: const Color(0xFF1A1A2E),
                                       ),
                                     ),
-                                    style: GoogleFonts.notoSansKr(
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.w800,
-                                      color: const Color(0xFF1A1A2E),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 12),
-                                  SizedBox(
-                                    width: double.infinity,
-                                    height: 54,
-                                    child: ElevatedButton(
-                                      onPressed: isApplying
-                                          ? null
-                                          : applyCoupon,
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: const Color(
-                                          0xFF1A1A2E,
+                                    const SizedBox(height: 10),
+                                    TextField(
+                                      controller: couponController,
+                                      textCapitalization:
+                                          TextCapitalization.characters,
+                                      decoration: InputDecoration(
+                                        hintText: '쿠폰 또는 구독권 코드',
+                                        errorText: errorText,
+                                        hintStyle: GoogleFonts.notoSansKr(
+                                          color: const Color(0xFFB8B5C6),
+                                          fontWeight: FontWeight.w600,
                                         ),
-                                        disabledBackgroundColor: const Color(
-                                          0xFFE5E7EB,
+                                        filled: true,
+                                        fillColor: const Color(0xFFF8F7FF),
+                                        border: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(16),
+                                          borderSide: const BorderSide(
+                                            color: Color(0xFFE8E3F8),
+                                          ),
                                         ),
-                                        elevation: 0,
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(
-                                            16,
+                                        enabledBorder: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(16),
+                                          borderSide: const BorderSide(
+                                            color: Color(0xFFE8E3F8),
+                                          ),
+                                        ),
+                                        focusedBorder: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(16),
+                                          borderSide: const BorderSide(
+                                            color: Color(0xFFB6A4FF),
+                                            width: 1.5,
                                           ),
                                         ),
                                       ),
-                                      child: Text(
-                                        isApplying ? '확인 중...' : '쿠폰 적용하기',
-                                        style: GoogleFonts.notoSansKr(
-                                          fontSize: 15,
-                                          fontWeight: FontWeight.w900,
-                                          color: Colors.white,
+                                      style: GoogleFonts.notoSansKr(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w800,
+                                        color: const Color(0xFF1A1A2E),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    SizedBox(
+                                      width: double.infinity,
+                                      height: 54,
+                                      child: ElevatedButton(
+                                        onPressed: isApplying
+                                            ? null
+                                            : applyCoupon,
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: const Color(
+                                            0xFF1A1A2E,
+                                          ),
+                                          disabledBackgroundColor: const Color(
+                                            0xFFE5E7EB,
+                                          ),
+                                          elevation: 0,
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(
+                                              16,
+                                            ),
+                                          ),
+                                        ),
+                                        child: Text(
+                                          isApplying ? '확인 중...' : '쿠폰 적용하기',
+                                          style: GoogleFonts.notoSansKr(
+                                            fontSize: 15,
+                                            fontWeight: FontWeight.w900,
+                                            color: Colors.white,
+                                          ),
                                         ),
                                       ),
                                     ),
-                                  ),
+                                  ],
                                   const SizedBox(height: 12),
                                   SizedBox(
                                     width: double.infinity,
@@ -4240,7 +4256,7 @@ class _SettingsScreenState extends State<SettingsScreen>
           borderRadius: BorderRadius.circular(20),
         ),
         title: Text(
-          '마지막 코치 답변 원문',
+          '마지막 코치 답변',
           style: GoogleFonts.notoSansKr(
             fontSize: 16,
             fontWeight: FontWeight.w900,
@@ -4277,6 +4293,20 @@ class _SettingsScreenState extends State<SettingsScreen>
                 style: GoogleFonts.notoSansKr(fontWeight: FontWeight.w900),
               ),
             ),
+          if (text != null)
+            TextButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                _showReportReasonDialog(text);
+              },
+              style: TextButton.styleFrom(
+                foregroundColor: const Color(0xFFD9455F),
+              ),
+              child: Text(
+                '신고',
+                style: GoogleFonts.notoSansKr(fontWeight: FontWeight.w900),
+              ),
+            ),
           TextButton(
             onPressed: () => Navigator.pop(ctx),
             child: Text(
@@ -4286,6 +4316,239 @@ class _SettingsScreenState extends State<SettingsScreen>
           ),
         ],
       ),
+    );
+  }
+
+  /// 신고 사유를 고르고 보낸다. 답변 원문은 고른 사유와 함께 그대로 실려간다.
+  Future<void> _showReportReasonDialog(String replyText) async {
+    final noteController = TextEditingController();
+    String? selectedReason;
+    var isSending = false;
+
+    final sent = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (dialogContext, setDialogState) {
+            return AlertDialog(
+              backgroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+              title: Text(
+                '이 답변을 신고할까요?',
+                style: GoogleFonts.notoSansKr(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w900,
+                  color: const Color(0xFF1E1E2D),
+                ),
+              ),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      for (final reason in ContentReportService.reasons)
+                        InkWell(
+                          onTap: isSending
+                              ? null
+                              : () =>
+                                    setDialogState(() => selectedReason = reason),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  selectedReason == reason
+                                      ? Icons.radio_button_checked
+                                      : Icons.radio_button_unchecked,
+                                  size: 20,
+                                  color: selectedReason == reason
+                                      ? const Color(0xFFD9455F)
+                                      : const Color(0xFFB9B5C4),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    reason,
+                                    style: GoogleFonts.notoSansKr(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: const Color(0xFF3D3A4E),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: noteController,
+                        enabled: !isSending,
+                        maxLines: 3,
+                        maxLength: 300,
+                        style: GoogleFonts.notoSansKr(fontSize: 13),
+                        decoration: InputDecoration(
+                          hintText: '더 알려주실 내용이 있으면 적어주세요 (선택)',
+                          hintStyle: GoogleFonts.notoSansKr(
+                            fontSize: 13,
+                            color: const Color(0xFF9A96A8),
+                          ),
+                          border: const OutlineInputBorder(),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: isSending
+                      ? null
+                      : () => Navigator.pop(dialogContext, false),
+                  child: Text(
+                    '취소',
+                    style: GoogleFonts.notoSansKr(fontWeight: FontWeight.w700),
+                  ),
+                ),
+                TextButton(
+                  onPressed: selectedReason == null || isSending
+                      ? null
+                      : () async {
+                          setDialogState(() => isSending = true);
+                          final ok = await ContentReportService.instance.submit(
+                            reason: selectedReason!,
+                            replyText: replyText,
+                            note: noteController.text.trim().isEmpty
+                                ? null
+                                : noteController.text.trim(),
+                            coachId: widget.coachId,
+                          );
+                          if (!dialogContext.mounted) return;
+                          Navigator.pop(dialogContext, ok);
+                        },
+                  style: TextButton.styleFrom(
+                    foregroundColor: const Color(0xFFD9455F),
+                  ),
+                  child: Text(
+                    isSending ? '보내는 중...' : '신고하기',
+                    style: GoogleFonts.notoSansKr(fontWeight: FontWeight.w900),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    noteController.dispose();
+    if (!mounted || sent == null) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          sent ? '신고를 접수했어요. 확인 후 반영할게요.' : '신고를 보내지 못했어요. 잠시 후 다시 시도해주세요.',
+          style: GoogleFonts.notoSansKr(fontWeight: FontWeight.w700),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDeleteAccountButton() {
+    return TextButton(
+      onPressed: _showDeleteAccountDialog,
+      style: TextButton.styleFrom(
+        foregroundColor: const Color(0xFFB9B5C4),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      ),
+      child: Text(
+        '계정 삭제',
+        style: GoogleFonts.notoSansKr(fontSize: 12, fontWeight: FontWeight.w700),
+      ),
+    );
+  }
+
+  Future<void> _showDeleteAccountDialog() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: Text(
+            '계정을 삭제할까요?',
+            style: GoogleFonts.notoSansKr(fontWeight: FontWeight.w900),
+          ),
+          content: Text(
+            '지금까지의 대화, 일정, 루틴, 기록이 모두 지워지고 되돌릴 수 없어요.\n'
+            '다시 로그인해도 복구되지 않습니다.',
+            style: GoogleFonts.notoSansKr(
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+              color: const Color(0xFF6B687A),
+              height: 1.45,
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: Text(
+                '취소',
+                style: GoogleFonts.notoSansKr(fontWeight: FontWeight.w700),
+              ),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: Text(
+                '삭제하기',
+                style: GoogleFonts.notoSansKr(
+                  fontWeight: FontWeight.w900,
+                  color: const Color(0xFFE15B64),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+
+    final result = await AccountDeletionService.instance.deleteAccount();
+    if (!mounted) return;
+    Navigator.of(context, rootNavigator: true).pop(); // 진행 표시 닫기
+
+    if (!result.isSuccess) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            result.message,
+            style: GoogleFonts.notoSansKr(fontWeight: FontWeight.w700),
+          ),
+        ),
+      );
+      return;
+    }
+
+    await AuthService().signOut();
+    if (!mounted) return;
+
+    Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const LandingScreen()),
+      (_) => false,
     );
   }
 
