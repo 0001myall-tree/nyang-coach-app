@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import '../models/user_data.dart';
+import '../services/free_access_service.dart';
 import '../services/memory_service.dart';
 import '../services/notification_service.dart';
 import '../services/tasks_sync_service.dart';
@@ -20,16 +21,12 @@ class AuthService {
   // 현재 유저 가져오기
   User? get currentUser => _auth.currentUser;
 
+  /// 로그인한 사람은 모두 들어온다. allowedEmails는 이제 문을 지키는 목록이
+  /// 아니라, 테스터에게 플랜을 미리 얹어주는 용도로만 남는다.
   Future<bool> ensureCurrentUserAllowed() async {
     final user = _auth.currentUser;
     if (user == null) return false;
-    final allowData = await _allowedEmailData(user.email);
-    if (!_isEnabledAllowedEmail(allowData)) {
-      if (_isAppleUser(user)) return true;
-      await _signOutAuthOnly();
-      return false;
-    }
-    await _applyAllowedEmailEntitlement(allowData);
+    await _applyAllowedEmailEntitlement(await _allowedEmailData(user.email));
     return true;
   }
 
@@ -137,19 +134,11 @@ class AuthService {
     final user = cred?.user;
     if (user == null) return;
     final allowData = await _allowedEmailData(user.email);
-    if (!_isEnabledAllowedEmail(allowData) && !_isAppleUser(user)) {
-      await _signOutAuthOnly();
-      throw const AuthAccessDeniedException();
-    }
     await UserDataService.syncFromCloud();
     await _applyAllowedEmailEntitlement(allowData);
     await MemoryService().syncFromCloud();
     await TasksSyncService.syncFromCloudWithRetry();
     await _syncNotificationsSafely();
-  }
-
-  bool _isAppleUser(User user) {
-    return user.providerData.any((info) => info.providerId == 'apple.com');
   }
 
   Future<bool> _isAllowedEmail(String? email) async {
@@ -284,6 +273,7 @@ class AuthService {
     await _signOutAuthOnly();
     UserDataService.clearCache();
     MemoryService().clearCache();
+    FreeAccessService.instance.clearCache();
     await TasksSyncService.clearCache();
   }
 }

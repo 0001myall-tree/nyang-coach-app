@@ -10,19 +10,27 @@ service cloud.firestore {
       return request.auth.token.email;
     }
 
-    function isAllowedEmail() {
+    // 이메일이 붙어 있는 로그인인지. 익명 로그인에는 이메일이 없어서,
+    // allowedEmails를 조회하기 전에 반드시 먼저 확인해야 한다.
+    function hasEmail() {
       return signedIn()
-        && request.auth.token.email_verified == true
-        && exists(/databases/$(database)/documents/allowedEmails/$(authEmail()))
-        && get(/databases/$(database)/documents/allowedEmails/$(authEmail())).data.enabled == true;
+        && request.auth.token.email != null
+        && request.auth.token.email != '';
+    }
+
+    // allowedEmails는 더 이상 출입을 막는 목록이 아니다. 테스터에게 플랜을
+    // 미리 얹어주는 자리로만 남아 있고, 문서가 없는 사람이 기본이다.
+    function hasEntitlementDoc() {
+      return hasEmail()
+        && exists(/databases/$(database)/documents/allowedEmails/$(authEmail()));
     }
 
     function allowedEmailData() {
       return get(/databases/$(database)/documents/allowedEmails/$(authEmail())).data;
     }
 
-    function isAllowedUser(userId) {
-      return isAllowedEmail() && request.auth.uid == userId;
+    function isOwner(userId) {
+      return signedIn() && request.auth.uid == userId;
     }
 
     function protectedUserDataKeys() {
@@ -52,6 +60,7 @@ service cloud.firestore {
 
     function hasEntitledPrivilegeUserData(data) {
       return hasUserData(data)
+        && hasEntitlementDoc()
         && allowedEmailData().keys().hasAny(['plan_type'])
         && data.userData.plan_type == allowedEmailData().plan_type
         && (!data.userData.keys().hasAny(['points']) || data.userData.points == 0)
@@ -80,38 +89,52 @@ service cloud.firestore {
         );
     }
 
+    // 무료 체험 날수처럼 앱을 다시 올리지 않고 바꿔야 하는 값. 읽기만 열고
+    // 고치는 건 콘솔에서 직접 한다.
+    match /config/{document} {
+      allow get: if signedIn();
+      allow list, create, update, delete: if false;
+    }
+
     match /allowedEmails/{email} {
-      allow get: if signedIn() && authEmail() == email;
+      allow get: if hasEmail() && authEmail() == email;
       allow list, create, update, delete: if false;
     }
 
     match /users/{userId} {
-      allow read: if isAllowedUser(userId);
-      allow create: if isAllowedUser(userId)
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId)
         && (
           hasDefaultPrivilegeUserData(request.resource.data)
           || hasEntitledPrivilegeUserData(request.resource.data)
         );
-      allow update: if isAllowedUser(userId)
+      allow update: if isOwner(userId)
         && (
           protectedUserDataUnchanged()
           || (!hasUserData(resource.data) && hasDefaultPrivilegeUserData(request.resource.data))
           || hasEntitledPrivilegeUserData(request.resource.data)
         );
-      allow delete: if false;
+      // 계정 삭제는 본인만. 지우고 나면 다시 만들 수 있어야 하므로 create와 짝이다.
+      allow delete: if isOwner(userId);
 
       match /{document=**} {
-        allow read, write: if isAllowedUser(userId);
+        allow read, write: if isOwner(userId);
       }
     }
 
     match /analytics/{document=**} {
-      allow create, update: if isAllowedEmail();
+      allow create, update: if signedIn();
       allow read, delete: if false;
     }
 
     match /error_logs/{document=**} {
-      allow create: if isAllowedEmail();
+      allow create: if signedIn();
+      allow read, update, delete: if false;
+    }
+
+    // 코치 답변 신고. 넣기만 하고 아무도 다시 못 읽는다.
+    match /content_reports/{document} {
+      allow create: if signedIn();
       allow read, update, delete: if false;
     }
 
