@@ -45,6 +45,7 @@ import 'package:nyang_coach/services/goal_push_service.dart';
 import 'package:nyang_coach/services/resistance_intervention_service.dart';
 import 'package:nyang_coach/services/start_pattern_service.dart';
 import 'package:nyang_coach/services/time_expression.dart';
+import 'package:nyang_coach/services/today_goal_task_intent.dart';
 import 'package:nyang_coach/prompts/coach_prompt.dart';
 import 'package:nyang_coach/services/prep_time_service.dart';
 import 'package:nyang_coach/services/widget_sync_service.dart';
@@ -2499,6 +2500,17 @@ class _ChatScreenState extends State<ChatScreen>
       'nyang_halbae' => "'$title' $where에 넣어두었다냥. 세부 내용은 목표 탭에서 살펴보자냥.",
       'sec_female' => "'$title' 항목을 $where에 넣어두었어요. 세부 내용은 목표 탭에서 확인해 주세요.",
       _ => "'$title' $where에 넣어뒀다냥. 목표 탭에서 확인해달라냥.",
+    };
+  }
+
+  String _todayGoalTaskRegistrationReply(String title) {
+    return switch (_coach.id) {
+      'bro' => "'$title', 오늘 할 일로 잡으면 되겠다. 추가할까?",
+      'halmae' => "'$title', 오늘 해볼 일로 잡아두면 좋겠구나. 추가하마?",
+      'boyfriend' => "'$title', 오늘 할 일로 잡아둘까?",
+      'nyang_halbae' => "'$title', 오늘 할 일로 두면 되겠다냥. 추가하겠냥?",
+      'sec_female' => "'$title' 항목을 오늘 할 일로 두면 되겠습니다. 추가할까요?",
+      _ => "'$title', 오늘 할 일로 잡으면 되겠다냥. 추가할까냥?",
     };
   }
 
@@ -11292,6 +11304,32 @@ ${lines.join('\n')}
 
     if (await _tryOpenScheduleOverview(trimmed)) return;
 
+    final todayGoalTask = TodayGoalTaskIntent.parse(trimmed);
+    if (_userData.isPlanActive && todayGoalTask != null) {
+      setState(() {
+        _messages.add(
+          ChatMessage(text: trimmed, isUser: true, time: DateTime.now()),
+        );
+        _messages.add(
+          ChatMessage(
+            text: _todayGoalTaskRegistrationReply(todayGoalTask.title),
+            isUser: false,
+            time: DateTime.now(),
+          ),
+        );
+        _suggestedTasks = [_SuggestedTask(text: todayGoalTask.title)];
+        _dynamicChips = [];
+        _suppressDefaultChips = false;
+      });
+      _scrollToBottom();
+      await _saveHistory();
+      await AnalyticsService.logConversationMessage(
+        coachId: widget.coachId,
+        usedApi: false,
+      );
+      return;
+    }
+
     final navigationReply = _featureLocationReply(trimmed);
     if (navigationReply != null) {
       final navMessage = await UserTitleService.applyForCoach(
@@ -12050,6 +12088,7 @@ ${lines.join('\n')}
     final text = rawText.trim().toLowerCase().replaceAll(' ', '');
     if (text.isEmpty) return null;
     if (_isDeletionCommand(rawText)) return null;
+    if (TodayGoalTaskIntent.isTodayTaskGoalExpression(rawText)) return null;
 
     final mentionsFeatureSurface =
         text.contains('탭') ||
