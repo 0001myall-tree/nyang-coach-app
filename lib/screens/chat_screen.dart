@@ -31,7 +31,9 @@ import 'package:nyang_coach/services/master_greeting.dart';
 import 'package:nyang_coach/services/ongoing_task_nudge_service.dart';
 import 'package:nyang_coach/services/memory_service.dart';
 import 'package:nyang_coach/services/notification_service.dart';
+import 'package:nyang_coach/services/free_access_service.dart';
 import 'package:nyang_coach/services/preemptive_nudge_service.dart';
+import 'package:nyang_coach/services/purchase_service.dart';
 import 'package:nyang_coach/services/last_reply_log.dart';
 import 'package:nyang_coach/services/planner_action.dart';
 import 'package:nyang_coach/widgets/alarm_permission_notice.dart';
@@ -1317,8 +1319,6 @@ class _ChatScreenState extends State<ChatScreen>
   Color get _accentButtonTextColor =>
       _coach.id == 'nyang_halbae' ? const Color(0xFF173A63) : Colors.white;
 
-  // 냥냥코치 비구독자 무료체험 단계 (0=시작 전, 1=인트로 완료, 2=업셀 완료)
-  int _catFreeTrialStep = 0;
   UserData _userData = UserData();
 
   int _completedTasks = 0;
@@ -1398,7 +1398,7 @@ class _ChatScreenState extends State<ChatScreen>
   // 무엇에 대한 답인지가 안 붙어 있어서, 물어본 쪽으로 넣는다.
   PrepMissing? _prepLastAsked;
 
-  bool get _canOpenSubscriptionGuide => kDebugMode;
+  bool get _canOpenSubscriptionGuide => PurchaseService.storeCheckoutEnabled;
 
   // Firebase Cloud Functions chatProxy (웹앱과 동일한 서버 사용)
   static final _chatProxy =
@@ -3481,7 +3481,6 @@ ${lines.join('\n')}
         _timerActiveInsertIndex = null;
         _suggestedTasks = [];
         _flirtVisible = false;
-        _catFreeTrialStep = 0;
         _awaitingResistanceCause = false;
         _pendingDiagnosisQuestion = null;
         _pendingEveningSplitTask = null;
@@ -3611,34 +3610,31 @@ ${lines.join('\n')}
               ),
             ),
             const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF6D28D9),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
+            if (_canOpenSubscriptionGuide) ...[
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF6D28D9),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    elevation: 0,
                   ),
-                  elevation: 0,
-                ),
-                onPressed: _canOpenSubscriptionGuide
-                    ? () {
-                        Navigator.pop(ctx);
-                        Future.delayed(
-                          Duration.zero,
-                          _showPlanGuideBottomSheet,
-                        );
-                      }
-                    : null,
-                child: const Text(
-                  '플랜 보기',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    Future.delayed(Duration.zero, _showPlanGuideBottomSheet);
+                  },
+                  child: const Text(
+                    '플랜 보기',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 10),
+              const SizedBox(height: 10),
+            ],
             SizedBox(
               width: double.infinity,
               child: TextButton(
@@ -6162,9 +6158,9 @@ ${lines.join('\n')}
 
     // 히스토리가 비어있거나 없는 경우에만 새롭게 인사 처리
     if (_messages.isEmpty) {
-      // 냥냥코치 비구독자: 로컬 무료체험 플로우 (API 호출 없음)
+      // 플랜 없이 처음 온 사람에게는 앱이 뭘 하는 곳인지부터 알린다.
+      // 인사와 시연은 코치를 부르지 않고 앱이 직접 한다.
       if (widget.coachId == 'cat' && !_userData.isPlanActive) {
-        _catFreeTrialStep = 0;
         await Future.delayed(const Duration(milliseconds: 600));
         if (!mounted) return;
         const intro =
@@ -6183,7 +6179,6 @@ ${lines.join('\n')}
         });
         await _saveHistory();
         _scrollToBottom();
-        setState(() => _catFreeTrialStep = 1);
         await prefs.setString(
           'last_visit_${widget.coachId}',
           now.toIso8601String(),
@@ -6286,10 +6281,11 @@ ${lines.join('\n')}
         return;
       }
 
-      // 냥냥코치 비구독자 & 히스토리가 이미 있을 경우
-      // 대화 기록이 있어도 아직 무료체험 미리보기를 안 봤으면 계속 보여준다.
-      if (widget.coachId == 'cat' && !_userData.isPlanActive) {
-        setState(() => _catFreeTrialStep = 2);
+      // 대화 기록이 있어도 시연을 아직 안 봤으면 그것부터 보여준다.
+      // 이미 본 사람은 여기서 멈추지 않고 아래 인사 흐름으로 그대로 간다.
+      if (widget.coachId == 'cat' &&
+          !_userData.isPlanActive &&
+          !(prefs.getBool(_kCatPreviewSeen) ?? false)) {
         await prefs.setString(
           'last_visit_${widget.coachId}',
           now.toIso8601String(),
@@ -6321,7 +6317,9 @@ ${lines.join('\n')}
     final prefs = await SharedPreferences.getInstance();
     final alreadySeen = prefs.getBool(_kCatPreviewSeen) ?? false;
     if (alreadySeen) {
-      if (mounted) _showCatUpsellBottomSheet();
+      // 살 수 없는 동안에는 권하지 않는다. 들어올 때마다 뜨는 팝업에 눌러도
+      // 아무 일이 없는 버튼만 있으면 앱이 고장난 것처럼 보인다.
+      if (mounted && _canOpenSubscriptionGuide) _showCatUpsellBottomSheet();
       return;
     }
 
@@ -6333,7 +6331,7 @@ ${lines.join('\n')}
     // 건너뛰기 선택 → "봤음"으로 표시하고 업셀
     if (!startPreview) {
       await prefs.setBool(_kCatPreviewSeen, true);
-      if (mounted) _showCatUpsellBottomSheet();
+      if (mounted && _canOpenSubscriptionGuide) _showCatUpsellBottomSheet();
       return;
     }
 
@@ -11304,8 +11302,14 @@ ${lines.join('\n')}
 
     if (await _tryOpenScheduleOverview(trimmed)) return;
 
+    // 말로 적어 넣는 길들. 플랜이 있으면 언제든 열려 있고, 없으면 무료로
+    // 열린 며칠 동안만 통한다. 이 길들은 코치를 부르지 않아서, 대화가 닫힌
+    // 뒤에도 여기까지는 닿는다.
+    final canInputTasks =
+        _userData.isPlanActive || await FreeAccessService.instance.canInput();
+
     final todayGoalTask = TodayGoalTaskIntent.parse(trimmed);
-    if (_userData.isPlanActive && todayGoalTask != null) {
+    if (canInputTasks && todayGoalTask != null) {
       setState(() {
         _messages.add(
           ChatMessage(text: trimmed, isUser: true, time: DateTime.now()),
@@ -11369,7 +11373,7 @@ ${lines.join('\n')}
       return;
     }
 
-    if (_userData.isPlanActive && _isDeletionCommand(trimmed)) {
+    if (canInputTasks && _isDeletionCommand(trimmed)) {
       final parsed = _parseDeletionCommand(trimmed);
       setState(() {
         _messages.add(
@@ -11408,7 +11412,7 @@ ${lines.join('\n')}
       return;
     }
 
-    if (_userData.isPlanActive && _isEditCommand(trimmed)) {
+    if (canInputTasks && _isEditCommand(trimmed)) {
       final parsed = _parseEditCommand(trimmed);
       setState(() {
         _messages.add(
@@ -11447,7 +11451,7 @@ ${lines.join('\n')}
       return;
     }
 
-    if (_userData.isPlanActive && _isHabitRegistrationCommand(trimmed)) {
+    if (canInputTasks && _isHabitRegistrationCommand(trimmed)) {
       final parsed = _parseHabitRegistration(trimmed);
       setState(() {
         _messages.add(
@@ -11509,7 +11513,7 @@ ${lines.join('\n')}
       return;
     }
 
-    if (_userData.isPlanActive && _isScheduleRegistrationCommand(trimmed)) {
+    if (canInputTasks && _isScheduleRegistrationCommand(trimmed)) {
       setState(() {
         _messages.add(
           ChatMessage(text: trimmed, isUser: true, time: DateTime.now()),
@@ -11543,48 +11547,9 @@ ${lines.join('\n')}
       return;
     }
 
-    // ── 냥냥코치 비구독자 무료체험 인터셉트 (API 호출 금지) ─
-
-    if (widget.coachId == 'cat' && !_userData.isPlanActive) {
-      if (_catFreeTrialStep == 1) {
-        // 첫 메시지 → 업셀 응답 (로컬)
-        setState(() {
-          _messages.add(
-            ChatMessage(text: trimmed, isUser: true, time: DateTime.now()),
-          );
-          _isLoading = true;
-        });
-        _scrollToBottom();
-        await Future.delayed(const Duration(milliseconds: 800));
-        if (!mounted) return;
-        const upsell = '냥냥코치와 더 이야기하고 싶다면\n플랜을 시작해보라냥 🐾';
-        setState(() {
-          _messages.add(
-            ChatMessage(text: upsell, isUser: false, time: DateTime.now()),
-          );
-          _catFreeTrialStep = 2;
-          _isLoading = false;
-        });
-        await _saveHistory();
-        _scrollToBottom();
-        await AnalyticsService.logConversationMessage(
-          coachId: widget.coachId,
-          usedApi: false,
-        );
-        await Future.delayed(const Duration(milliseconds: 300));
-        if (mounted) _showCatUpsellBottomSheet();
-        return;
-      } else if (_catFreeTrialStep >= 2) {
-        // 이미 업셀 완료 → 팝업만 다시 표시
-        _showCatUpsellBottomSheet();
-        await AnalyticsService.logConversationMessage(
-          coachId: widget.coachId,
-          usedApi: false,
-          coachReplied: false,
-        );
-        return;
-      }
-    }
+    // 플랜을 안 쓰는 사람도 냥냥코치와는 그냥 대화한다. 두 마디 만에 업셀로
+    // 끊던 자리였는데, 이제 하루 한도(ApiUsageLimitService.freePlanDailyTokenLimit)
+    // 안에서 다른 사용자와 똑같이 흘러간다. 한도를 다 쓰면 그때 안내가 나간다.
 
     if (_containsAnyRestSignal(trimmed)) {}
 
@@ -14543,20 +14508,18 @@ ${Prompts.outputRulesTail}$plannerActionSection$coachOfferTaskRule$halmaeHint$re
                 ),
               ),
               const SizedBox(height: 20),
-              if (showUpgrade) ...[
+              if (showUpgrade && _canOpenSubscriptionGuide) ...[
                 SizedBox(
                   width: double.infinity,
                   height: 52,
                   child: ElevatedButton(
-                    onPressed: _canOpenSubscriptionGuide
-                        ? () {
-                            Navigator.pop(sheetContext);
-                            Future.delayed(
-                              Duration.zero,
-                              _showPlanGuideBottomSheet,
-                            );
-                          }
-                        : null,
+                    onPressed: () {
+                      Navigator.pop(sheetContext);
+                      Future.delayed(
+                        Duration.zero,
+                        _showPlanGuideBottomSheet,
+                      );
+                    },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: _coach.accentColor,
                       foregroundColor: Colors.white,

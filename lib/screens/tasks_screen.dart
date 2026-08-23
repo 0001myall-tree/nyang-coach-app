@@ -23,6 +23,8 @@ import '../services/analytics_service.dart';
 import '../services/api_usage_limit_service.dart';
 import '../services/widget_sync_service.dart';
 import '../services/daily_reset_service.dart';
+import '../services/free_access_service.dart';
+import '../services/purchase_service.dart';
 import '../services/nyang_banner_nudge.dart';
 import '../services/distraction_coach_quota.dart';
 import '../services/ongoing_task_nudge_service.dart';
@@ -1328,7 +1330,7 @@ class _TasksScreenState extends State<TasksScreen>
     TimeOfDay? endTime,
     String? habitDuration,
   }) async {
-    if (!await _hasActivePlan()) return false;
+    if (!await _canInputTasks()) return false;
     final trimmedName = name.trim();
     if (trimmedName.isEmpty) return false;
 
@@ -1375,8 +1377,10 @@ class _TasksScreenState extends State<TasksScreen>
   Future<String> _handleDeleteCommandFromChat(
     Map<String, dynamic> command,
   ) async {
-    if (!await _hasActivePlan()) {
-      return '할 일, 일정, 루틴 관리는 Friends 또는 Master 플랜에서 이용할 수 있어요.';
+    if (!await _canInputTasks()) {
+      return PurchaseService.storeCheckoutEnabled
+          ? '할 일, 일정, 루틴 관리는 Friends 또는 Master 플랜에서 이용할 수 있어요.'
+          : '무료로 써볼 수 있는 기간이 끝났어요. 적어둔 것은 그대로 볼 수 있어요.';
     }
     final target = (command['target'] ?? '').toString().trim();
     final kind = (command['kind'] ?? 'task_or_schedule').toString();
@@ -1446,8 +1450,10 @@ class _TasksScreenState extends State<TasksScreen>
   Future<String> _handleEditCommandFromChat(
     Map<String, dynamic> command,
   ) async {
-    if (!await _hasActivePlan()) {
-      return '할 일, 일정 관리는 Friends 또는 Master 플랜에서 이용할 수 있어요.';
+    if (!await _canInputTasks()) {
+      return PurchaseService.storeCheckoutEnabled
+          ? '할 일, 일정 관리는 Friends 또는 Master 플랜에서 이용할 수 있어요.'
+          : '무료로 써볼 수 있는 기간이 끝났어요. 적어둔 것은 그대로 볼 수 있어요.';
     }
     final target = (command['target'] ?? '').toString().trim();
     final kind = (command['kind'] ?? 'task_or_schedule').toString();
@@ -3020,7 +3026,7 @@ class _TasksScreenState extends State<TasksScreen>
   /// 장기 비전은 마일스톤과 기한이 함께 있어야 뜻이 서기 때문에 여기로 받지
   /// 않는다. 비전은 목표 탭에서 직접 만든다.
   Future<bool> _addGoalFromChat(String type, String text) async {
-    if (!await _hasActivePlan()) return false;
+    if (!await _canInputTasks()) return false;
     final trimmed = text.trim();
     if (trimmed.isEmpty) return false;
     if (type != 'week' && type != 'month') return false;
@@ -3053,7 +3059,7 @@ class _TasksScreenState extends State<TasksScreen>
   }
 
   Future<void> _saveHabits() async {
-    if (!await _hasActivePlan()) return;
+    if (!await _canInputTasks()) return;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(
       'nyang_habits',
@@ -3125,8 +3131,15 @@ class _TasksScreenState extends State<TasksScreen>
     return userData.isPlanActive;
   }
 
-  Future<bool> _ensurePlanForTaskInput() async {
+  /// 적어 넣을 수 있는지. 플랜이 있으면 언제든 되고, 없으면 무료로 열린
+  /// 며칠 동안만 된다. 알림처럼 돈이 드는 기능은 여기에 딸려오지 않는다.
+  Future<bool> _canInputTasks() async {
     if (await _hasActivePlan()) return true;
+    return FreeAccessService.instance.canInput();
+  }
+
+  Future<bool> _ensurePlanForTaskInput() async {
+    if (await _canInputTasks()) return true;
     if (mounted) _showSubscriptionNotice(context);
     return false;
   }
@@ -14334,10 +14347,10 @@ class _TasksScreenState extends State<TasksScreen>
                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
                 child: GestureDetector(
                   onTap: () async {
-                    // 구독 체크
-                    final userData = await UserDataService.load();
+                    // 적어 넣을 수 있는 기간인지
+                    final canInput = await _canInputTasks();
                     if (!mounted || !ctx.mounted) return;
-                    if (!userData.isPlanActive) {
+                    if (!canInput) {
                       Navigator.pop(ctx); // 모달 닫기
                       _showSubscriptionNotice(context);
                       return;
@@ -14456,14 +14469,18 @@ class _TasksScreenState extends State<TasksScreen>
             borderRadius: BorderRadius.circular(20),
           ),
           title: Text(
-            '⚠️ 구독 플랜 필요',
+            PurchaseService.storeCheckoutEnabled ? '⚠️ 구독 플랜 필요' : '⚠️ 체험 기간 종료',
             style: GoogleFonts.notoSansKr(
               fontWeight: FontWeight.w900,
               color: const Color(0xFF1A1A2E),
             ),
           ),
           content: Text(
-            '할 일, 일정, 루틴 등록은 Friends 또는 Master 플랜 구독자만 이용할 수 있다냥!',
+            // 살 수 없는 동안에는 구독하라고 하지 않는다. 갈 수 없는 곳을
+            // 가리키면 앱이 고장난 것처럼 보인다.
+            PurchaseService.storeCheckoutEnabled
+                ? '할 일, 일정, 루틴 등록은 Friends 또는 Master 플랜 구독자만 이용할 수 있다냥!'
+                : '무료로 써볼 수 있는 기간이 끝났다냥.\n지금까지 적어둔 것은 그대로 볼 수 있어!',
             style: GoogleFonts.notoSansKr(
               fontSize: 14,
               fontWeight: FontWeight.w500,
