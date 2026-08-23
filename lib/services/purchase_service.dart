@@ -4,31 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
 
 import '../models/user_data.dart';
-
-enum PlanDuration { monthly, sixMonths }
-
-class PurchasePlan {
-  const PurchasePlan({
-    required this.planType,
-    required this.duration,
-    required this.productId,
-  });
-
-  final String planType;
-  final PlanDuration duration;
-  final String productId;
-
-  String get label {
-    final planLabel = planType == 'master' ? '마스터 플랜' : '프렌즈 플랜';
-    final durationLabel = duration == PlanDuration.monthly ? '월간' : '6개월';
-    return '$planLabel $durationLabel';
-  }
-
-  DateTime entitlementExpiresAt(DateTime purchasedAt) {
-    final days = duration == PlanDuration.monthly ? 31 : 183;
-    return purchasedAt.add(Duration(days: days));
-  }
-}
+import 'plan_catalog.dart';
 
 class PurchaseResult {
   const PurchaseResult._({
@@ -56,37 +32,21 @@ class PurchaseService {
 
   static final PurchaseService instance = PurchaseService._();
 
-  static const friendsMonthlyProductId = 'nyang_friends_monthly';
-  static const friendsSixMonthProductId = 'nyang_friends_6month';
-  static const masterMonthlyProductId = 'nyang_master_monthly';
-  static const masterSixMonthProductId = 'nyang_master_6month';
+  /// 구독 안내 시트로 들어가는 입구를 여는지.
+  ///
+  /// 지금은 닫아둔다. 결제가 성공해도 플랜을 켜주는 쪽(영수증을 확인하고
+  /// plan_type을 써주는 서버)이 아직 없어서, 열면 돈만 나가고 아무 일도
+  /// 일어나지 않는다. 그 서버가 붙는 날 이 값을 true로 바꾸고,
+  /// Play Console에서 구독 상품 4개를 활성으로 돌리면 된다.
+  static const bool storeCheckoutEnabled = false;
 
-  static const List<PurchasePlan> plans = [
-    PurchasePlan(
-      planType: 'friends',
-      duration: PlanDuration.monthly,
-      productId: friendsMonthlyProductId,
-    ),
-    PurchasePlan(
-      planType: 'friends',
-      duration: PlanDuration.sixMonths,
-      productId: friendsSixMonthProductId,
-    ),
-    PurchasePlan(
-      planType: 'master',
-      duration: PlanDuration.monthly,
-      productId: masterMonthlyProductId,
-    ),
-    PurchasePlan(
-      planType: 'master',
-      duration: PlanDuration.sixMonths,
-      productId: masterSixMonthProductId,
-    ),
-  ];
+  /// 코치 한 명만 따로 사는 길. 스토어에 대응하는 상품이 아직 없어서 닫아둔다.
+  /// (여는 순간 결제 없이 코치가 지급된다)
+  static const bool singleCoachPurchaseEnabled = false;
 
-  static final Set<String> productIds = plans
-      .map((plan) => plan.productId)
-      .toSet();
+  /// 무엇을 파는지는 [PlanCatalog]가 안다. 콘솔에서 바꿀 수 있어야 해서
+  /// 이 파일에 적어두지 않는다.
+  PlanCatalog get catalog => PlanCatalog.instance;
 
   final InAppPurchase _iap = InAppPurchase.instance;
   StreamSubscription<List<PurchaseDetails>>? _purchaseSubscription;
@@ -115,7 +75,8 @@ class PurchaseService {
     final available = await _iap.isAvailable();
     if (!available) return {};
 
-    final response = await _iap.queryProductDetails(productIds);
+    await catalog.load();
+    final response = await _iap.queryProductDetails(catalog.productIds);
     if (response.error != null) {
       debugPrint('Product query error: ${response.error}');
     }
@@ -128,13 +89,8 @@ class PurchaseService {
     return _products;
   }
 
-  PurchasePlan? planForSelection(String planType, bool isSixMonth) {
-    final duration = isSixMonth ? PlanDuration.sixMonths : PlanDuration.monthly;
-    for (final plan in plans) {
-      if (plan.planType == planType && plan.duration == duration) return plan;
-    }
-    return null;
-  }
+  PurchasePlan? planForSelection(String planType, bool isLongTerm) =>
+      catalog.planFor(planType, isLongTerm: isLongTerm);
 
   ProductDetails? productFor(PurchasePlan plan) => _products[plan.productId];
 
@@ -243,12 +199,8 @@ class PurchaseService {
     );
   }
 
-  PurchasePlan? _planForProductId(String productId) {
-    for (final plan in plans) {
-      if (plan.productId == productId) return plan;
-    }
-    return null;
-  }
+  PurchasePlan? _planForProductId(String productId) =>
+      catalog.planForProductId(productId);
 
   void _completePending(String productId, PurchaseResult result) {
     final completer = _pendingPurchases.remove(productId);

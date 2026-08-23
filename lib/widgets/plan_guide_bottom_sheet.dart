@@ -3,6 +3,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../theme/app_design_tokens.dart';
+import '../services/plan_catalog.dart';
 import '../services/purchase_service.dart';
 import 'app_bottom_sheet.dart';
 import 'app_button.dart';
@@ -42,10 +43,25 @@ class _PlanGuideBottomSheet extends StatefulWidget {
 }
 
 class _PlanGuideBottomSheetState extends State<_PlanGuideBottomSheet> {
-  bool _isSixMonth = false;
+  bool _isLongTerm = false;
   bool _isPurchasing = false;
   bool _isRestoring = false;
   String? _selectedPlanId;
+
+  PlanCatalog get _catalog => PlanCatalog.instance;
+
+  @override
+  void initState() {
+    super.initState();
+    // 팔 것이 바뀌었을 수 있다. 열릴 때 한 번 확인하고, 늦게 오면 그때 다시 그린다.
+    _catalog.load().then((_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  /// 화면에 쓸 상품. 서버 목록에 없으면 그 자리는 비워둔다.
+  PurchasePlan? _planFor(String planType) =>
+      _catalog.planFor(planType, isLongTerm: _isLongTerm);
 
   Future<void> _handleCheckout() async {
     final selectedPlanId = _selectedPlanId;
@@ -53,7 +69,7 @@ class _PlanGuideBottomSheetState extends State<_PlanGuideBottomSheet> {
 
     final plan = PurchaseService.instance.planForSelection(
       selectedPlanId,
-      _isSixMonth,
+      _isLongTerm,
     );
     if (plan == null) {
       _showSnackBar('선택한 플랜을 찾지 못했어요.');
@@ -114,9 +130,10 @@ class _PlanGuideBottomSheetState extends State<_PlanGuideBottomSheet> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             _PlanGuideHeader(
-              isSixMonth: _isSixMonth,
+              isLongTerm: _isLongTerm,
+              longTermLabel: _catalog.longTermLabel,
               onChanged: (value) {
-                setState(() => _isSixMonth = value);
+                setState(() => _isLongTerm = value);
               },
               onClose: () => Navigator.pop(context),
             ),
@@ -136,9 +153,9 @@ class _PlanGuideBottomSheetState extends State<_PlanGuideBottomSheet> {
                       isMaster: false,
                       title: '프렌즈 플랜',
                       subtitle: '가볍게 루틴 잡기',
-                      price: _isSixMonth ? '29,400원' : '5,900원 / 월',
-                      originalPrice: _isSixMonth ? '35,400원' : null,
-                      subPrice: _isSixMonth ? '월 4,900원' : null,
+                      price: _planFor('friends')?.price ?? '',
+                      originalPrice: _planFor('friends')?.originalPrice,
+                      subPrice: _planFor('friends')?.subPrice,
                       isSelected: _selectedPlanId == 'friends',
                       onTap: () {
                         setState(() => _selectedPlanId = 'friends');
@@ -160,9 +177,9 @@ class _PlanGuideBottomSheetState extends State<_PlanGuideBottomSheet> {
                       isMaster: true,
                       title: '마스터 플랜',
                       subtitle: '비서 코치와 목표 달성을 더 촘촘하게 관리',
-                      price: _isSixMonth ? '47,400원' : '8,900원 / 월',
-                      originalPrice: _isSixMonth ? '53,400원' : null,
-                      subPrice: _isSixMonth ? '월 7,900원' : null,
+                      price: _planFor('master')?.price ?? '',
+                      originalPrice: _planFor('master')?.originalPrice,
+                      subPrice: _planFor('master')?.subPrice,
                       isSelected: _selectedPlanId == 'master',
                       onTap: () {
                         setState(() => _selectedPlanId = 'master');
@@ -181,8 +198,11 @@ class _PlanGuideBottomSheetState extends State<_PlanGuideBottomSheet> {
                         ('assets/icons/route.svg', '장기 목표 조력'),
                       ],
                     ),
-                    const SizedBox(height: 14),
-                    const _IndividualCoachGuide(),
+                    // 코치 한 명만 사는 길이 닫혀 있으면 값도 알리지 않는다.
+                    if (PurchaseService.singleCoachPurchaseEnabled) ...[
+                      const SizedBox(height: 14),
+                      const _IndividualCoachGuide(),
+                    ],
                     const SizedBox(height: 12),
                     Center(
                       child: Text(
@@ -220,12 +240,14 @@ class _PlanGuideBottomSheetState extends State<_PlanGuideBottomSheet> {
 
 class _PlanGuideHeader extends StatelessWidget {
   const _PlanGuideHeader({
-    required this.isSixMonth,
+    required this.isLongTerm,
+    required this.longTermLabel,
     required this.onChanged,
     required this.onClose,
   });
 
-  final bool isSixMonth;
+  final bool isLongTerm;
+  final String longTermLabel;
   final ValueChanged<bool> onChanged;
   final VoidCallback onClose;
 
@@ -299,7 +321,8 @@ class _PlanGuideHeader extends StatelessWidget {
             right: 20,
             bottom: 54,
             child: _PlanPeriodTabs(
-              isSixMonth: isSixMonth,
+              isLongTerm: isLongTerm,
+              longTermLabel: longTermLabel,
               onChanged: onChanged,
             ),
           ),
@@ -310,9 +333,14 @@ class _PlanGuideHeader extends StatelessWidget {
 }
 
 class _PlanPeriodTabs extends StatelessWidget {
-  const _PlanPeriodTabs({required this.isSixMonth, required this.onChanged});
+  const _PlanPeriodTabs({
+    required this.isLongTerm,
+    required this.longTermLabel,
+    required this.onChanged,
+  });
 
-  final bool isSixMonth;
+  final bool isLongTerm;
+  final String longTermLabel;
   final ValueChanged<bool> onChanged;
 
   @override
@@ -330,15 +358,15 @@ class _PlanPeriodTabs extends StatelessWidget {
             child: _PlanPeriodTab(
               title: '월간 구독',
               subtitle: '매월 자동 결제',
-              isSelected: !isSixMonth,
+              isSelected: !isLongTerm,
               onTap: () => onChanged(false),
             ),
           ),
           Expanded(
             child: _PlanPeriodTab(
-              title: '6개월 구독',
+              title: '$longTermLabel 구독',
               subtitle: '한 번 결제로 더 큰 혜택',
-              isSelected: isSixMonth,
+              isSelected: isLongTerm,
               onTap: () => onChanged(true),
             ),
           ),
