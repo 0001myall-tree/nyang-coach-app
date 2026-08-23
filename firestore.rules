@@ -78,6 +78,17 @@ service cloud.firestore {
         );
     }
 
+    // 무료로 써볼 수 있는 기간이 언제 시작됐는지. 한 번 적히면 못 바꾼다.
+    // 본인이 오늘 날짜로 고쳐 쓸 수 있으면 무료 기간이 매일 새로 시작된다.
+    function freeAccessStartUnchanged() {
+      return !resource.data.keys().hasAny(['free_access_started_on'])
+        || (
+          request.resource.data.keys().hasAny(['free_access_started_on'])
+          && request.resource.data.free_access_started_on
+            == resource.data.free_access_started_on
+        );
+    }
+
     function protectedUserDataUnchanged() {
       return !request.resource.data.diff(resource.data).affectedKeys().hasAny(['userData'])
         || (
@@ -109,6 +120,7 @@ service cloud.firestore {
           || hasEntitledPrivilegeUserData(request.resource.data)
         );
       allow update: if isOwner(userId)
+        && freeAccessStartUnchanged()
         && (
           protectedUserDataUnchanged()
           || (!hasUserData(resource.data) && hasDefaultPrivilegeUserData(request.resource.data))
