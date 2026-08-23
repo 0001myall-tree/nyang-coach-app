@@ -54,6 +54,23 @@ object OngoingNudgeState {
     private const val KEY_POSITION_Y = "ongoing_nudge_position_y"
 
     /**
+     * 마스터 등급인지. Flutter가 적어두고 여기서 읽는다.
+     *
+     * 앱이 꺼진 사이에 판단해야 해서 사용자 정보를 읽을 수 없다. 결론만 받는다.
+     */
+    private const val KEY_UNLIMITED = "flutter.ongoing_nudge_unlimited"
+
+    /** 오늘치를 가져간 날짜(yyyy-MM-dd)와 그 일정. Flutter와 같이 본다. */
+    private const val KEY_SLOT_DATE = "flutter.ongoing_nudge_slot_date"
+    private const val KEY_SLOT_TASK_ID = "flutter.ongoing_nudge_slot_task_id"
+
+    /** 냥냥이가 실제로 나왔는지. 자리만 맡아둔 상태와 구분한다. */
+    private const val KEY_SLOT_CONFIRMED = "flutter.ongoing_nudge_slot_confirmed"
+
+    /** 맡아둔 자리의 예정 발동 시각. 여기서는 쓰지 않지만 함께 지운다. */
+    private const val KEY_SLOT_FIRES_AT = "flutter.ongoing_nudge_slot_fires_at"
+
+    /**
      * 어떤 코치를 쓰든 화면 밖으로 나가는 얼굴은 냥냥이 하나다.
      * 앱의 상징이고, 다른 앱 위에서는 이게 냥냥코치라는 걸 한눈에 알아야 한다.
      */
@@ -180,6 +197,57 @@ object OngoingNudgeState {
 
     fun clearTestWindow(context: Context) {
         prefs(context).edit().remove(KEY_TEST_UNTIL).commit()
+    }
+
+    /**
+     * 프렌즈 등급의 하루치를 지금 맡고 있는 일정이 가져간다.
+     *
+     * 부르는 자리가 곧 냥냥이가 나가는 자리다. 시작할 때가 아니라 여기서 세는
+     * 이유는, 시작만 해두고 딴짓하지 않은 일정에 하루치를 잃으면 받아본 적
+     * 없는 코칭에 몫을 잃는 셈이기 때문이다.
+     *
+     * 이미 이 일정이 임자면 그대로 true다. 하루 한 "번"이 아니라 한
+     * "일정"이라, 한 번 나온 일정은 그날 내내 30분마다 계속 나온다.
+     *
+     * 아직 나오지 않은 자리(아이폰 배너 갈래가 맡아두는 미확정 자리)는
+     * 빼앗는다. 나오지 못한 자리를 붙들고 있으면 몫이 다음 일정으로 넘어가야
+     * 한다는 규칙이 무너진다.
+     */
+    fun claimDailyQuota(context: Context): Boolean {
+        val prefs = prefs(context)
+        if (prefs.getBoolean(KEY_UNLIMITED, false)) return true
+        val taskId = taskId(context) ?: return false
+
+        val today = todayKey()
+        if (prefs.getString(KEY_SLOT_DATE, null) == today) {
+            val owner = prefs.getString(KEY_SLOT_TASK_ID, null)
+            if (!owner.isNullOrBlank() &&
+                owner != taskId &&
+                prefs.getBoolean(KEY_SLOT_CONFIRMED, false)
+            ) {
+                return false
+            }
+        }
+
+        prefs.edit()
+            .putString(KEY_SLOT_DATE, today)
+            .putString(KEY_SLOT_TASK_ID, taskId)
+            .putBoolean(KEY_SLOT_CONFIRMED, true)
+            .remove(KEY_SLOT_FIRES_AT)
+            .commit()
+        return true
+    }
+
+    /** Flutter가 쓰는 날짜 표기와 같아야 한다. */
+    private fun todayKey(): String {
+        val calendar = java.util.Calendar.getInstance()
+        return String.format(
+            java.util.Locale.US,
+            "%04d-%02d-%02d",
+            calendar.get(java.util.Calendar.YEAR),
+            calendar.get(java.util.Calendar.MONTH) + 1,
+            calendar.get(java.util.Calendar.DAY_OF_MONTH),
+        )
     }
 
     fun canDrawOverlays(context: Context): Boolean = Settings.canDrawOverlays(context)

@@ -102,6 +102,18 @@ class OngoingNudgeReceiver : BroadcastReceiver() {
             return
         }
 
+        // 여기가 딴짓 방지 코칭이 실제로 나가는 자리다. 프렌즈는 하루 한
+        // 일정까지라, 하루치도 여기서 센다.
+        //
+        // 시작을 권하는 알림은 위에서 이미 돌아갔다. 제한은 딴짓 방지 코칭에만
+        // 걸린다.
+        if (!OngoingNudgeState.claimDailyQuota(context)) {
+            // 오늘 이 일정에는 더 나가지 않는다. 계속 다시 물어봐야 답이
+            // 달라지지 않으므로 예약도 접는다. 앱을 열면 다시 잡힌다.
+            OngoingNudgeScheduler.cancel(context)
+            return
+        }
+
         OngoingNudgeService.show(context)
     }
 }

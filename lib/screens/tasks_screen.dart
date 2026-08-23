@@ -24,6 +24,7 @@ import '../services/api_usage_limit_service.dart';
 import '../services/widget_sync_service.dart';
 import '../services/daily_reset_service.dart';
 import '../services/nyang_banner_nudge.dart';
+import '../services/distraction_coach_quota.dart';
 import '../services/ongoing_task_nudge_service.dart';
 import '../services/task_completion_service.dart';
 import '../services/apple_calendar_sync_service.dart';
@@ -1460,9 +1461,7 @@ class _TasksScreenState extends State<TasksScreen>
     // 것보다 반복 요일을 고칠 수 있는 자리로 데려다주는 편이 빠르다.
     if (kind == 'habit') {
       _openTab(3);
-      final found = habits
-          .where((h) => _titleMatches(h.name, target))
-          .toList();
+      final found = habits.where((h) => _titleMatches(h.name, target)).toList();
       if (found.length == 1) {
         await Future.delayed(const Duration(milliseconds: 360));
         if (!mounted) return _editCommandReply('habitOpened', target);
@@ -2425,6 +2424,34 @@ class _TasksScreenState extends State<TasksScreen>
       taskText: running.text,
       elapsedSeconds: running.elapsedSecondsAt(DateTime.now()),
     );
+    await _tellQuotaSpentIfNeeded(running.id.toString());
+  }
+
+  /// 오늘치 딴짓 방지 코칭이 이미 다른 일정에 쓰였다고 알려준다.
+  ///
+  /// 아무 말 없이 안 나오면 고장과 구별되지 않는다. 그렇다고 ▶를 누를 때마다
+  /// 말하면 잔소리라, 하루 한 번만 말한다. 그 판단은 저장소가 들고 있으므로
+  /// 여기서는 물어보기만 한다.
+  Future<void> _tellQuotaSpentIfNeeded(String taskId) async {
+    if (!await DistractionCoachQuota.shouldTellQuotaSpent(taskId)) return;
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        duration: const Duration(seconds: 6),
+        backgroundColor: const Color(0xFF3D3A4E),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        content: Text(
+          DistractionCoachQuota.quotaSpentMessage,
+          style: GoogleFonts.notoSansKr(
+            fontSize: 13,
+            height: 1.5,
+            fontWeight: FontWeight.w600,
+            color: Colors.white,
+          ),
+        ),
+      ),
+    );
   }
 
   /// 딴짓 방지 코치를 켤지 딱 한 번 물어본다.
@@ -2511,7 +2538,8 @@ class _TasksScreenState extends State<TasksScreen>
       if (!mounted) return;
       await _showOngoingNudgeNotice(
         title: '🔔 알림도 켜주세요',
-        message: '냥냥코치 알림이 꺼져 있어서, 지금은 냥냥이가 나올 수 없어요.\n'
+        message:
+            '냥냥코치 알림이 꺼져 있어서, 지금은 냥냥이가 나올 수 없어요.\n'
             '설정에서 켜주시면 바로 챙겨드릴게요.',
         actionLabel: '설정 열기',
       );
@@ -2867,7 +2895,9 @@ class _TasksScreenState extends State<TasksScreen>
     final previous = idx >= 0 ? history[idx] : <String, dynamic>{};
 
     final dayTasks = plannedTodayTasksByDate[dateKey] ?? <TaskItem>[];
-    final countableTasks = dayTasks.where(_countsTowardDailyCompletion).toList();
+    final countableTasks = dayTasks
+        .where(_countsTowardDailyCompletion)
+        .toList();
     final doneTasks = countableTasks.where((t) => t.done).toList();
     final dayMilestones = _todayMilestoneItems;
     final doneMilestones = dayMilestones.where((m) => m.done).toList();
@@ -3453,7 +3483,6 @@ class _TasksScreenState extends State<TasksScreen>
       date: date,
     );
   }
-
 
   String _habitTaskBadgeLabel(TaskItem task) {
     if (task.habitId == null) return '루틴';
@@ -6139,10 +6168,22 @@ class _TasksScreenState extends State<TasksScreen>
         // 두 번 튀고 멈춘다.
         final dy = TweenSequence<double>([
           TweenSequenceItem(tween: ConstantTween<double>(0), weight: 10),
-          TweenSequenceItem(tween: Tween<double>(begin: 0, end: -10), weight: 12),
-          TweenSequenceItem(tween: Tween<double>(begin: -10, end: 0), weight: 16),
-          TweenSequenceItem(tween: Tween<double>(begin: 0, end: -6), weight: 10),
-          TweenSequenceItem(tween: Tween<double>(begin: -6, end: 0), weight: 14),
+          TweenSequenceItem(
+            tween: Tween<double>(begin: 0, end: -10),
+            weight: 12,
+          ),
+          TweenSequenceItem(
+            tween: Tween<double>(begin: -10, end: 0),
+            weight: 16,
+          ),
+          TweenSequenceItem(
+            tween: Tween<double>(begin: 0, end: -6),
+            weight: 10,
+          ),
+          TweenSequenceItem(
+            tween: Tween<double>(begin: -6, end: 0),
+            weight: 14,
+          ),
           TweenSequenceItem(tween: ConstantTween<double>(0), weight: 38),
         ]).evaluate(_corePickBounceCtrl);
         return Transform.translate(offset: Offset(0, dy), child: child);

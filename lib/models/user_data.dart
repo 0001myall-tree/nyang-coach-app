@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 
 import '../services/coach_id_service.dart';
+import '../services/distraction_coach_quota.dart';
 
 // ─────────────────────────────────────────────────────────────
 // UserData 모델
@@ -142,6 +143,7 @@ class UserDataService {
     _cache = data;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_key, jsonEncode(data.toJson()));
+    await _publishDistractionCoachTier(data);
 
     // Firestore Sync
     final user = FirebaseAuth.instance.currentUser;
@@ -174,12 +176,23 @@ class UserDataService {
           _cache = cloudData;
           final prefs = await SharedPreferences.getInstance();
           await prefs.setString(_key, jsonEncode(cloudData.toJson()));
+          await _publishDistractionCoachTier(cloudData);
         }
       } catch (e) {
         debugPrint('Firestore UserData load error: $e');
       }
     }
   }
+
+  /// 딴짓 방지 코칭이 일정마다 붙는 등급인지를 적어둔다.
+  ///
+  /// 안드로이드는 앱이 꺼진 사이에 냥냥이를 내보낼지 판단하는데, 그때는
+  /// 사용자 정보를 읽을 수 없다. 등급이 바뀔 수 있는 자리는 전부 [save]와
+  /// [syncFromCloud]를 지나므로 여기 한 곳에서 알려준다.
+  static Future<void> _publishDistractionCoachTier(UserData data) =>
+      DistractionCoachQuota.setUnlimited(
+        data.isPlanActive && data.planType == 'master',
+      );
 
   /// 캐시 무효화 (테스트 등)
   static void clearCache() => _cache = null;

@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'distraction_coach_quota.dart';
 import 'task_completion_service.dart';
 
 /// 냥냥이가 물어본 것에 사용자가 고른 답.
@@ -277,6 +278,17 @@ class OngoingTaskNudgeService {
     final available = await isAvailable();
     _log('start guard isAvailable=$available');
     if (!available) return;
+    // 다이내믹 아일랜드에 붙는 알약은 시작하자마자 나온다. 딴짓 중인지 알 수
+    // 없어서 30분을 기다릴 근거가 없고, 그래서 이 갈래에서는 발동 시점이 곧
+    // 시작 시점이다 — 프렌즈의 하루치는 그날 처음 시작한 일정이 가져간다.
+    //
+    // 안드로이드는 여기서 보지 않는다. 30분 뒤 딴짓 중인지 확인하고 나가는
+    // 판단이 네이티브에 있고, 그 판단이 곧 발동이라 하루치도 거기서 센다.
+    if (!_isAndroid && !await DistractionCoachQuota.claimNow(taskId)) {
+      _log('start skipped: friends plan daily quota already spent');
+      await stop();
+      return;
+    }
     try {
       final startedAt = DateTime.now().subtract(
         Duration(seconds: elapsedSeconds),

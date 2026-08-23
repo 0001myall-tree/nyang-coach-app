@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 
+import 'distraction_coach_quota.dart';
 import 'ongoing_task_nudge_service.dart';
 import 'task_completion_service.dart';
 
@@ -115,6 +116,9 @@ class NyangBannerNudge {
       DateTime.now(),
     );
     if (next != null) {
+      // 시작을 권하는 배너에는 하루치 제한이 없다. 여기서 하는 중이냐는 물음이
+      // 걸리지 않으므로, 나오지 못하게 된 자리는 풀어준다.
+      await DistractionCoachQuota.releaseUnconfirmedUnless();
       await _schedule(
         taskId: next['id'].toString(),
         taskText: next['text']?.toString() ?? '',
@@ -131,12 +135,13 @@ class NyangBannerNudge {
       await _scheduleRunningCheck(
         taskId: item['id'].toString(),
         taskText: item['text']?.toString() ?? '',
-        runStartedAt: DateTime.tryParse(
-          item['runStartedAt']?.toString() ?? '',
-        ),
+        runStartedAt: DateTime.tryParse(item['runStartedAt']?.toString() ?? ''),
       );
       return;
     }
+
+    // 도는 일정이 없다. 걸어둔 배너는 위에서 지워졌으니 맡아둔 자리도 푼다.
+    await DistractionCoachQuota.releaseUnconfirmedUnless();
   }
 
   /// 도는 일정에 "지금도 하는 중이야?"를 걸어둔다.
@@ -153,6 +158,16 @@ class NyangBannerNudge {
     // 이미 지났으면 다음 차례로 넘긴다. 앱을 오랜만에 열었다고 해서 그 자리에서
     // 배너가 튀어나오면, 방금 앱을 연 사람에게 앱 밖에서 부르는 셈이 된다.
     if (!at.isAfter(now)) at = now.add(nextRound);
+
+    // 프렌즈는 하루 한 일정까지다. 걸기 전에 오늘치가 이 일정 몫인지 본다.
+    // 배너는 미리 걸어두는 것이라 나오는 순간에 판단할 수가 없어서, 자리를
+    // 맡아두고 그 시각이 지난 뒤에 확정한다.
+    await DistractionCoachQuota.releaseUnconfirmedUnless(keepTaskId: taskId);
+    final mayFire = await DistractionCoachQuota.reserve(
+      taskId: taskId,
+      firesAt: at,
+    );
+    if (!mayFire) return;
 
     // 앞으로 몇 차례를 한꺼번에 걸어둔다. 앱을 다시 열면 [sync]가 전부 지우고
     // 다시 깔기 때문에, 일정이 끝나거나 바뀌면 남은 차례도 함께 없어진다.
@@ -175,11 +190,8 @@ class NyangBannerNudge {
     DateTime? startedAt,
   }) async {
     _ensureTimeZone();
-    final payload = '$payloadPrefix:${jsonEncode({
-      'kind': 'running',
-      'taskId': taskId,
-      'taskText': taskText,
-    })}';
+    final payload =
+        '$payloadPrefix:${jsonEncode({'kind': 'running', 'taskId': taskId, 'taskText': taskText})}';
 
     final details = NotificationDetails(
       iOS: DarwinNotificationDetails(
@@ -280,11 +292,8 @@ class NyangBannerNudge {
     if (at.isAfter(deadline)) return;
     _ensureTimeZone();
 
-    final payload = '$payloadPrefix:${jsonEncode({
-      'taskId': taskId,
-      'taskText': taskText,
-      'deadline': deadline.millisecondsSinceEpoch,
-    })}';
+    final payload =
+        '$payloadPrefix:${jsonEncode({'taskId': taskId, 'taskText': taskText, 'deadline': deadline.millisecondsSinceEpoch})}';
 
     final details = NotificationDetails(
       iOS: DarwinNotificationDetails(
@@ -331,7 +340,9 @@ class NyangBannerNudge {
 
     final Map<String, dynamic> data;
     try {
-      data = jsonDecode(payload.substring(payloadPrefix.length + 1)) as Map<String, dynamic>;
+      data =
+          jsonDecode(payload.substring(payloadPrefix.length + 1))
+              as Map<String, dynamic>;
     } catch (_) {
       return;
     }
@@ -344,7 +355,6 @@ class NyangBannerNudge {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(focusTaskKey, taskId);
   }
-
 }
 
 const String nyangBannerPayload = NyangBannerNudge.payloadPrefix;
