@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/user_data.dart';
+import 'free_access_service.dart';
 
 class ApiUsageLimitResult {
   final bool allowed;
@@ -68,6 +69,13 @@ class ApiUsageLimitService {
   static const int masterPlanDailyTokenLimit = 400000;
   static const int masterDailyOrganizeLimit = 7;
 
+  /// 플랜을 안 쓰는 사람도 냥냥코치와는 대화할 수 있다. 프렌즈의 4분의 1이니
+  /// 하루 12턴쯤. 써보기엔 넉넉하고 하루 종일 붙잡기엔 모자란 선이다.
+  static const int freePlanDailyTokenLimit = friendsPlanDailyTokenLimit ~/ 4;
+
+  /// 무료 대화는 매일 주는 게 아니라 계정당 하루뿐이다. 며칠째인지 세는 일은
+  /// [FreeAccessService]가 맡고, 여기서는 그날 하루의 토큰 상한만 본다.
+
   static final _firestore = FirebaseFirestore.instance;
   static final _auth = FirebaseAuth.instance;
 
@@ -92,6 +100,14 @@ class ApiUsageLimitService {
     }
 
     final today = DateTime.now();
+
+    if (!userData.isPlanActive && !await FreeAccessService.instance.canChat()) {
+      return const ApiUsageLimitResult(
+        allowed: false,
+        message: '무료로 코치와 대화할 수 있는 하루가 끝났어요.',
+      );
+    }
+
     final dailyUsed = await _dailyTokenUsage(user.uid, today);
     final nextDaily = dailyUsed + estimatedTokens;
 
@@ -198,7 +214,9 @@ class ApiUsageLimitService {
   }
 
   static _TokenLimits? _tokenLimitsFor(UserData userData) {
-    if (!userData.isPlanActive) return null;
+    if (!userData.isPlanActive) {
+      return const _TokenLimits(daily: freePlanDailyTokenLimit);
+    }
     if (userData.planType == 'friends') {
       return const _TokenLimits(daily: friendsPlanDailyTokenLimit);
     }
