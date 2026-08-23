@@ -59,6 +59,10 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen>
       ? const [CoachTab.master, CoachTab.friends]
       : const [CoachTab.friends, CoachTab.master];
 
+  /// 개발용 플랜 시뮬레이터를 여는 데 필요한 연속 탭 수. 실수로 열리지
+  /// 않을 만큼 깊게 둔다.
+  static const int _debugPlanSelectorTapCount = 10;
+
   int _logoTapCount = 0;
   Timer? _logoTapTimer;
 
@@ -444,7 +448,7 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen>
       _logoTapCount = 0;
     });
 
-    if (_logoTapCount >= 5) {
+    if (_logoTapCount >= _debugPlanSelectorTapCount) {
       _logoTapCount = 0;
       _logoTapTimer?.cancel();
       _showDebugPlanSelector();
