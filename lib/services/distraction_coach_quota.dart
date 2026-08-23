@@ -193,5 +193,5 @@ class DistractionCoachQuota {
 
   static const String quotaSpentMessage =
       '오늘의 딴짓 방지 코칭은 이미 다른 일정에 쓰였어요.\n'
-      '프렌즈는 하루 한 일정까지예요. 마스터로 올리면 일정마다 붙습니다.';
+      '프렌즈는 하루 한 일정까지예요. 마스터로 올리면 무제한으로 붙습니다.';
 }
