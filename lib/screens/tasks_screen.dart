@@ -2706,19 +2706,32 @@ class _TasksScreenState extends State<TasksScreen>
     // 아이폰은 기종에 따라 하는 일이 다르다. 다이내믹 아일랜드가 없으면 딴짓
     // 중에는 보이지 않으니, 막아준다고 말하면 지키지 못할 약속이 된다.
     final overOtherApps = await OngoingTaskNudgeService.showsOverOtherApps();
+    // 아이폰은 배너로 찾아가는데, 몇 초 뒤 사라지는지는 앱이 아니라 배너
+    // 스타일 설정이 정한다. 여기서 같이 안 물어보면, 딴짓 방지 스위치를
+    // 켠 사람 중 설정 화면을 따로 열어보지 않는 사람은 이 얘기를 영영 못 듣는다.
+    final needsPersistentBanner =
+        !_onAndroid && !await OngoingTaskNudgeService.isBannerPersistent();
     if (!mounted) return;
 
-    await _showOngoingNudgeNotice(
+    final tapped = await _showOngoingNudgeNotice(
       title: '🐾 이제 챙겨줄게요',
-      message: _onAndroid
-          ? '30분쯤 지나서 폰으로 다른 걸 보고 있으면 화면 가장자리에 잠깐 나타나요.\n'
-                '소리도 진동도 없으니 그냥 둬도 돼요.'
-          : overOtherApps
-          ? '일정이 도는 동안 다른 앱을 봐도 화면 맨 위에 냥냥이가 작게 남아 있어요.\n'
-                '완료하거나 멈추면 사라져요.'
-          : '일정이 도는 동안 잠금화면에 조용히 남아 있어요.\n'
-                '이 아이폰은 다른 앱 위에는 띄울 수 없어서, 폰을 집어 들 때 보여요.',
+      message:
+          (_onAndroid
+              ? '30분쯤 지나서 폰으로 다른 걸 보고 있으면 화면 가장자리에 잠깐 나타나요.\n'
+                    '소리도 진동도 없으니 그냥 둬도 돼요.'
+              : overOtherApps
+              ? '일정이 도는 동안 다른 앱을 봐도 화면 맨 위에 냥냥이가 작게 남아 있어요.\n'
+                    '완료하거나 멈추면 사라져요.'
+              : '일정이 도는 동안 잠금화면에 조용히 남아 있어요.\n'
+                    '이 아이폰은 다른 앱 위에는 띄울 수 없어서, 폰을 집어 들 때 보여요.') +
+          (needsPersistentBanner
+              ? '\n\n배너가 금방 사라지지 않게 하려면 배너 스타일을 "지속"으로 바꿔주세요.'
+              : ''),
+      actionLabel: needsPersistentBanner ? '배너 설정 열기' : '확인',
     );
+    if (needsPersistentBanner && tapped) {
+      await OngoingTaskNudgeService.openNotificationSettings();
+    }
   }
 
   bool get _onAndroid => defaultTargetPlatform == TargetPlatform.android;
