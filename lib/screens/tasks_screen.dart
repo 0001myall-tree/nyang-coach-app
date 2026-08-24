@@ -2438,6 +2438,10 @@ class _TasksScreenState extends State<TasksScreen>
     // 순간 예약을 다시 계산해야, 이미 움직인 사람에게 12시에 "슬슬 시작해볼까"가
     // 울리는 일이 없다.
     unawaited(NotificationService().syncDailyPlannerNudge());
+    // 일정 알람을 실제로 거는 자리다. "오늘 할 일 직접 추가"처럼 이 저장 함수
+    // 하나만 타고 끝나는 길에서는 이걸 부르지 않으면, 알림 벨을 켜서 등록해도
+    // 실제 예약은 한 번도 안 걸린 채로 남는다.
+    unawaited(NotificationService().syncCoreReminders());
     unawaited(_syncOngoingNudge());
     // 다이내믹 아일랜드가 없는 아이폰은 냥냥이 대신 배너가 찾아간다.
     unawaited(NyangBannerNudge.sync());
