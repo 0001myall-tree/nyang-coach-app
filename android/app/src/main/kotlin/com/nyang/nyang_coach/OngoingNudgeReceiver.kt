@@ -75,7 +75,7 @@ class OngoingNudgeReceiver : BroadcastReceiver() {
                 OngoingNudgeScheduler.cancel(context)
                 return
             }
-            if (OngoingNudgeState.shouldAppearNow(context)) {
+            if (OngoingNudgeState.shouldAppearNow(context, requireEnabled = false)) {
                 OngoingNudgeService.show(context)
             } else {
                 OngoingNudgeScheduler.scheduleIn(

@@ -111,7 +111,11 @@ class OngoingNudgeService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         startInForeground()
 
-        if (!OngoingNudgeState.shouldAppearNow(this)) {
+        // 시작 시간 알림은 딴짓 방지 스위치(isEnabled)와 별개로 뜬다. 여기서
+        // requireEnabled를 그대로 두면, 그 스위치를 켠 적 없는 사람에게는
+        // Receiver가 통과시켜도 창을 붙이기 직전에 다시 막혀 결국 안 나온다.
+        val requireEnabled = !OngoingNudgeState.isStartReminder(this)
+        if (!OngoingNudgeState.shouldAppearNow(this, requireEnabled = requireEnabled)) {
             // 깨어나서 창을 붙이기 직전에 상황이 바뀐 경우.
             finishRound(scheduleNext = OngoingNudgeState.isActive(this))
             return START_NOT_STICKY
