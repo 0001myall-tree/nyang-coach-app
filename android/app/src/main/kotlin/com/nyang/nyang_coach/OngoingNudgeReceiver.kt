@@ -20,7 +20,8 @@ class OngoingNudgeReceiver : BroadcastReceiver() {
             -> {
                 if (OngoingNudgeState.isActive(context) &&
                     (OngoingNudgeState.isEnabled(context) ||
-                        OngoingNudgeState.isStartReminder(context))
+                        OngoingNudgeState.isStartReminder(context) ||
+                        OngoingNudgeState.isNextTaskReminder(context))
                 ) {
                     OngoingNudgeScheduler.scheduleIn(
                         context,
@@ -37,7 +38,8 @@ class OngoingNudgeReceiver : BroadcastReceiver() {
     private fun handleCheck(context: Context, stage: String?) {
         // 그 사이에 완료했거나, 스위치를 껐거나, 권한이 사라졌으면 여기서 끝난다.
         val isStartReminder = OngoingNudgeState.isStartReminder(context)
-        if ((!isStartReminder && !OngoingNudgeState.isEnabled(context)) ||
+        val isNextTaskReminder = OngoingNudgeState.isNextTaskReminder(context)
+        if ((!isStartReminder && !isNextTaskReminder && !OngoingNudgeState.isEnabled(context)) ||
             !OngoingNudgeState.isActive(context) ||
             !OngoingNudgeState.canDrawOverlays(context)
         ) {
@@ -81,6 +83,37 @@ class OngoingNudgeReceiver : BroadcastReceiver() {
                 OngoingNudgeScheduler.scheduleIn(
                     context,
                     OngoingNudgeScheduler.START_SNOOZE_MILLIS,
+                    OngoingNudgeScheduler.STAGE_FIRST,
+                )
+            }
+            return
+        }
+
+        // 완료 3시간 뒤 "남은 일정도 시작할까냥?". 매번 조건부터 다시 본다 —
+        // 그 사이 다른 일을 시작했거나, 시간이 정해지지 않은 남은 일이 없어졌으면
+        // 사용자에게 아무 말 없이 접는다. 미룬 게 아니라 더 물을 이유가 없어진 거라
+        // 재촉으로 느껴지면 안 된다.
+        if (isNextTaskReminder) {
+            if (OngoingNudgeState.isNextTaskWindowOver()) {
+                OngoingNudgeState.clear(context)
+                OngoingNudgeScheduler.cancel(context)
+                return
+            }
+            val candidate = OngoingNudgeAnswerWriter.findNextTaskCandidate(context)
+            if (candidate == null || OngoingNudgeAnswerWriter.isAnyTaskInProgress(context)) {
+                OngoingNudgeState.clear(context)
+                OngoingNudgeScheduler.cancel(context)
+                return
+            }
+            // 처음 걸어둘 때와 지금 사이에 다른 일이 먼저 채워졌을 수 있다.
+            // 보여줄 거라면 지금 기준으로 가장 앞선 후보로 다시 적어 넣는다.
+            OngoingNudgeState.start(context, candidate.first, candidate.second, OngoingNudgeState.KIND_NEXT)
+            if (OngoingNudgeState.shouldAppearNow(context, requireEnabled = false)) {
+                OngoingNudgeService.show(context)
+            } else {
+                OngoingNudgeScheduler.scheduleIn(
+                    context,
+                    OngoingNudgeScheduler.RETRY_DELAY_MILLIS,
                     OngoingNudgeScheduler.STAGE_FIRST,
                 )
             }

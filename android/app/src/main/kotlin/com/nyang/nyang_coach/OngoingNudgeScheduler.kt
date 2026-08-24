@@ -65,6 +65,9 @@ object OngoingNudgeScheduler {
     /** 시작 시각을 지나고 이만큼까지만 권한다. 그 뒤로는 잔소리가 된다. */
     const val START_WINDOW_MILLIS = 60L * 60_000L
 
+    /** "다음 일" 카드를 "더 있다 할게"로 미루거나 그냥 넘겼을 때 다시 뜨기까지. */
+    const val NEXT_TASK_ROUND_MILLIS = 2L * 60L * 60_000L
+
     fun scheduleIn(context: Context, delayMillis: Long, stage: String) {
         scheduleAt(context, System.currentTimeMillis() + delayMillis, stage)
     }

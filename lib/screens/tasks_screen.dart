@@ -2438,7 +2438,7 @@ class _TasksScreenState extends State<TasksScreen>
       }
     }
     if (running == null) {
-      await OngoingTaskNudgeService.stop();
+      await OngoingTaskNudgeService.stopPreservingNextTask();
       // 도는 일정이 없으면 다음에 시작할 일정을 기다린다. 시작한 일을 잊는 것보다
       // 시작 자체를 안 하는 쪽이 훨씬 흔하다.
       final next = OngoingTaskNudgeService.nextUnstartedTask(
@@ -2460,6 +2460,39 @@ class _TasksScreenState extends State<TasksScreen>
       elapsedSeconds: running.elapsedSecondsAt(DateTime.now()),
     );
     await _tellQuotaSpentIfNeeded(running.id.toString());
+  }
+
+  /// 방금 하나를 끝냈고, 시간이 정해지지 않은 다음 일이 남아 있으면 3시간 뒤
+  /// 한 번 물어보게 걸어둔다. 마스터 플랜 전용.
+  ///
+  /// 여기서는 처음 한 번만 건다. 그 뒤 22시까지 이어지는 반복과, "이미 다른 걸
+  /// 시작했다"/"남은 일이 없어졌다" 같은 조건 재검사는 안드로이드는 네이티브가,
+  /// 아이폰은 [NyangBannerNudge.sync]가 저장이 일어날 때마다 스스로 잇는다.
+  Future<void> _maybeScheduleNextTaskNudge() async {
+    if (!OngoingTaskNudgeService.isSupported) return;
+    final userData = await UserDataService.load();
+    if (!userData.isPlanActive || userData.planType != 'master') return;
+
+    // 안드로이드 쪽 재검사는 'nyang_tasks'에 저장된 것만 직접 읽는다. 그
+    // 목록에 없는 것(마일스톤·일정)을 여기서 고르면, 처음 걸 때만 그 이름이
+    // 보이고 첫 재검사에서 곧장 조건 미달로 접혀 나오지 않는다.
+    final candidates = _activeTodayTasksWithSchedules.where(
+      (ts) =>
+          ts.hasTimer &&
+          ts.category != 'schedule' &&
+          !ts.done &&
+          !ts.inProgress &&
+          ts.elapsedSeconds == 0 &&
+          (ts.timeStart == null || ts.timeStart!.isEmpty),
+    );
+    if (candidates.isEmpty) return;
+    final candidate = candidates.first;
+
+    await OngoingTaskNudgeService.remindNextTask(
+      taskId: candidate.id.toString(),
+      taskText: candidate.text,
+      fireAt: DateTime.now().add(const Duration(hours: 3)),
+    );
   }
 
   /// 오늘치 딴짓 방지 코칭이 이미 다른 일정에 쓰였다고 알려준다.
@@ -4202,6 +4235,7 @@ class _TasksScreenState extends State<TasksScreen>
           completionOrder: doneCount,
           totalTasksThatDay: totalCount,
         );
+        unawaited(_maybeScheduleNextTaskNudge());
       }
 
       final remainingCount = totalCount - doneCount;

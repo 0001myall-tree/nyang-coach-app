@@ -330,6 +330,31 @@ class OngoingTaskNudgeService {
     }
   }
 
+  /// 방금 하나를 끝냈고, 시간이 정해지지 않은 다음 일이 남아 있을 때 다시 부른다.
+  ///
+  /// 안드로이드에만 있다. 아이폰은 [NyangBannerNudge]가 같은 역할을 알림 배너로
+  /// 대신한다. 조건은 이때 한 번만 보고 넘긴다 — 그 뒤로 22시까지 이어지는
+  /// 반복은 네이티브가 매번 조건을 다시 검사하며 스스로 잇는다.
+  static Future<void> remindNextTask({
+    required String taskId,
+    required String taskText,
+    required DateTime fireAt,
+  }) async {
+    if (!_isAndroid) return;
+    if (!await isAvailable()) return;
+    try {
+      await _channel.invokeMethod('remindNextTask', {
+        'taskId': taskId,
+        'taskText': taskText,
+        'fireAtMillis': fireAt.millisecondsSinceEpoch,
+      });
+    } on PlatformException {
+      //
+    } on MissingPluginException {
+      //
+    }
+  }
+
   /// 오늘 시작할 시각이 정해져 있는데 아직 손대지 않은 일정 중 가장 이른 것.
   ///
   /// 이미 시작했거나 끝낸 것, 시각이 없는 것, 시각이 지나버린 것은 뺀다.
@@ -377,14 +402,14 @@ class OngoingTaskNudgeService {
     if (!isSupported) return;
     final ongoingEnabled = await isEnabled();
     if (!ongoingEnabled) {
-      await stop();
+      await stopPreservingNextTask();
     }
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.reload();
     final raw = prefs.getString('nyang_tasks');
     if (raw == null || raw.isEmpty) {
-      await stop();
+      await stopPreservingNextTask();
       return;
     }
 
@@ -407,7 +432,7 @@ class OngoingTaskNudgeService {
     if (running == null) {
       // 도는 일정이 없으면 다음에 시작할 일정을 기다린다.
       // 시작 시간 알림은 딴짓 방지 스위치와 별개로, 시간 있는 일정의 기본 동작이다.
-      await stop();
+      await stopPreservingNextTask();
       final next = nextUnstartedTask(tasks, DateTime.now());
       if (next != null) {
         await remindStart(
@@ -443,6 +468,22 @@ class OngoingTaskNudgeService {
     if (!isSupported) return;
     try {
       await _channel.invokeMethod('stop');
+    } on PlatformException {
+      //
+    } on MissingPluginException {
+      //
+    }
+  }
+
+  /// 도는 일도, 시작 기다리는 일도 없을 때 부르는 [stop] 대신 이걸 쓴다.
+  ///
+  /// 안드로이드는 "다음 일" 카드를 이 서비스와 같은 자리에 걸어둔다. 할 일을
+  /// 하나 편집하는 것처럼 관계없는 저장에도 [stop]이 불리는 자리가 많아서,
+  /// 그 카드가 22시까지 기다리는 중이면 그것만 건드리지 않는다.
+  static Future<void> stopPreservingNextTask() async {
+    if (!_isAndroid) return stop();
+    try {
+      await _channel.invokeMethod('stopUnlessNextTask');
     } on PlatformException {
       //
     } on MissingPluginException {

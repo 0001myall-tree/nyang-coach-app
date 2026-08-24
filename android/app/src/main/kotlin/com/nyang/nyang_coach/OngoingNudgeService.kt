@@ -111,10 +111,12 @@ class OngoingNudgeService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         startInForeground()
 
-        // 시작 시간 알림은 딴짓 방지 스위치(isEnabled)와 별개로 뜬다. 여기서
-        // requireEnabled를 그대로 두면, 그 스위치를 켠 적 없는 사람에게는
-        // Receiver가 통과시켜도 창을 붙이기 직전에 다시 막혀 결국 안 나온다.
-        val requireEnabled = !OngoingNudgeState.isStartReminder(this)
+        // 시작 시간 알림과 다음 일 알림은 딴짓 방지 스위치(isEnabled)와 별개로
+        // 뜬다. 여기서 requireEnabled를 그대로 두면, 그 스위치를 켠 적 없는
+        // 사람에게는 Receiver가 통과시켜도 창을 붙이기 직전에 다시 막혀 결국
+        // 안 나온다.
+        val requireEnabled = !OngoingNudgeState.isStartReminder(this) &&
+            !OngoingNudgeState.isNextTaskReminder(this)
         if (!OngoingNudgeState.shouldAppearNow(this, requireEnabled = requireEnabled)) {
             // 깨어나서 창을 붙이기 직전에 상황이 바뀐 경우.
             finishRound(scheduleNext = OngoingNudgeState.isActive(this))
@@ -147,10 +149,13 @@ class OngoingNudgeService : Service() {
 
         val taskText = OngoingNudgeState.taskText(this)
         val waitingToStart = OngoingNudgeState.isStartReminder(this)
+        val waitingForNext = OngoingNudgeState.isNextTaskReminder(this)
         val title = when {
             taskText.isBlank() && waitingToStart -> "시작할 일정이 있어요"
+            taskText.isBlank() && waitingForNext -> "아직 안 한 일이 있어요"
             taskText.isBlank() -> "진행 중인 일정이 있어요"
             waitingToStart -> "시작할 시간: $taskText"
+            waitingForNext -> "다음 일: $taskText"
             else -> "진행 중: $taskText"
         }
         val notification = Notification.Builder(this, CHANNEL_ID)
@@ -289,7 +294,7 @@ class OngoingNudgeService : Service() {
     // ── 눌렀을 때 펼쳐지는 카드 ───────────────────────────────
 
     private fun expandToCard() {
-        if (OngoingNudgeState.isStartReminder(this)) {
+        if (OngoingNudgeState.isStartReminder(this) || OngoingNudgeState.isNextTaskReminder(this)) {
             expandToStartCard()
             return
         }
@@ -339,7 +344,9 @@ class OngoingNudgeService : Service() {
     }
 
     /**
-     * 시작할 시각이 됐는데 아직 시작하지 않은 일정을 묻는 카드.
+     * 시작할 시각이 됐는데 아직 시작하지 않은 일정, 또는 방금 하나를 끝내고
+     * 시간이 정해지지 않은 다음 일이 남았을 때 묻는 카드. 생김새는 같고 문구와
+     * 답이 다르다.
      *
      * 시작한 일을 잊는 것보다 시작 자체를 안 하는 쪽이 훨씬 흔하다. 정해둔 시각에
      * 폰을 보고 있으면 그 일정은 대개 그날 시작되지 않는다.
@@ -348,24 +355,30 @@ class OngoingNudgeService : Service() {
         handler.removeCallbacks(autoHide)
         removeBubble()
 
+        val isNext = OngoingNudgeState.isNextTaskReminder(this)
         val view = LayoutInflater.from(this).inflate(R.layout.nudge_start_card, null)
         val cardImage = view.findViewById<ImageView>(R.id.nudge_start_image)
         cardImage.setImageBitmap(loadCatBitmap(dp(120)))
         cardImage.setOnClickListener { openPlanner() }
 
         val taskText = OngoingNudgeState.taskText(this)
-        view.findViewById<TextView>(R.id.nudge_start_title).text =
-            if (taskText.isBlank()) {
-                "집사, 지금 시작하기로 한 일\n잊지 않았지?"
-            } else {
-                "집사, '$taskText'\n시작하는 거 잊지 않았지?"
-            }
-
-        view.findViewById<View>(R.id.nudge_start_go).setOnClickListener {
-            startNow()
+        view.findViewById<TextView>(R.id.nudge_start_title).text = when {
+            isNext && taskText.isBlank() -> "집사, 냥이랑 남은 일정도\n시작할까냥?"
+            isNext -> "집사, '$taskText'\n냥이랑 지금 시작할까냥?"
+            taskText.isBlank() -> "집사, 지금 시작하기로 한 일\n잊지 않았지?"
+            else -> "집사, '$taskText'\n시작하는 거 잊지 않았지?"
         }
-        view.findViewById<View>(R.id.nudge_start_later).setOnClickListener {
-            startLater()
+
+        val goButton = view.findViewById<TextView>(R.id.nudge_start_go)
+        val laterButton = view.findViewById<TextView>(R.id.nudge_start_later)
+        if (isNext) {
+            goButton.text = "지금 할게"
+            laterButton.text = "더 있다 할게"
+            goButton.setOnClickListener { nextTaskNow() }
+            laterButton.setOnClickListener { nextTaskLater() }
+        } else {
+            goButton.setOnClickListener { startNow() }
+            laterButton.setOnClickListener { startLater() }
         }
         // 카드 바깥을 누르면 다시 작아진다.
         view.findViewById<View>(R.id.nudge_start_scrim).setOnClickListener {
@@ -415,6 +428,34 @@ class OngoingNudgeService : Service() {
     private fun startLater() {
         answered = true
         scheduleNextRound(OngoingNudgeScheduler.START_SNOOZE_MILLIS)
+        Toast.makeText(this, "알겠어. 이따 다시 부를게!", Toast.LENGTH_SHORT).show()
+        lingerAsDoorway()
+    }
+
+    /**
+     * "지금 할게". 다음 일도 그 자리에서 바로 시작한 것으로 적는다.
+     *
+     * [startNow]와 같은 이유로 여기서 시작 표시까지 남긴다 — 앱에 들어가 ▶를
+     * 또 누르게 하면 그 한 칸이 안 하게 되는 이유가 된다. 물을 것이 끝났으니
+     * 더 반복하지 않는다.
+     */
+    private fun nextTaskNow() {
+        answered = true
+        val taskId = OngoingNudgeState.taskId(this)
+        if (taskId != null) {
+            OngoingNudgeAnswerWriter.markStarted(this, taskId)
+            OngoingNudgeState.writeResult(this, taskId, "started")
+        }
+        OngoingNudgeState.clear(this)
+        OngoingNudgeScheduler.cancel(this)
+        Toast.makeText(this, "좋아! 지금부터 시작이야", Toast.LENGTH_SHORT).show()
+        lingerAsDoorway()
+    }
+
+    /** "더 있다 할게". 22시가 되기 전까지 2시간마다 조건을 다시 보고 되묻는다. */
+    private fun nextTaskLater() {
+        answered = true
+        scheduleNextRound(OngoingNudgeScheduler.NEXT_TASK_ROUND_MILLIS)
         Toast.makeText(this, "알겠어. 이따 다시 부를게!", Toast.LENGTH_SHORT).show()
         lingerAsDoorway()
     }
@@ -517,10 +558,13 @@ class OngoingNudgeService : Service() {
             // 시작을 기다리는 쪽은 더 자주 본다. 시작할 시각은 지나가는 중이고,
             // 한 시간 뒤에 다시 오면 그때는 이미 오늘이 아니다.
             scheduleNextRound(
-                if (OngoingNudgeState.isStartReminder(this)) {
-                    OngoingNudgeScheduler.START_SNOOZE_MILLIS
-                } else {
-                    OngoingNudgeScheduler.NEXT_ROUND_DELAY_MILLIS
+                when {
+                    OngoingNudgeState.isStartReminder(this) ->
+                        OngoingNudgeScheduler.START_SNOOZE_MILLIS
+                    // 아무 것도 안 누르고 15분간 놔둔 것도 "더 있다 할게"와 같다.
+                    OngoingNudgeState.isNextTaskReminder(this) ->
+                        OngoingNudgeScheduler.NEXT_TASK_ROUND_MILLIS
+                    else -> OngoingNudgeScheduler.NEXT_ROUND_DELAY_MILLIS
                 },
             )
         }

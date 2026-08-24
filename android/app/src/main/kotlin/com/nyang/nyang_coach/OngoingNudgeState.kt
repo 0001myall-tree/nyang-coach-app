@@ -38,6 +38,15 @@ object OngoingNudgeState {
      */
     const val KIND_START = "start"
 
+    /**
+     * 방금 하나를 끝냈고, 시간이 정해지지 않은 다음 일이 남아 있어 다시 부르는 중.
+     *
+     * 마스터 플랜 전용. 완료 3시간 뒤 한 번, 그래도 미루면 22시까지 2시간마다
+     * 다시 본다. 매번 [OngoingNudgeAnswerWriter.findNextTaskCandidate]로 조건을
+     * 다시 검사해서, 그 사이 다른 일을 시작했거나 남은 일이 없어지면 조용히 접는다.
+     */
+    const val KIND_NEXT = "next"
+
     /** 시작을 권하는 것도 이 시각까지만. 네이티브만 쓴다. */
     private const val KEY_START_UNTIL = "ongoing_nudge_start_until"
 
@@ -94,6 +103,14 @@ object OngoingNudgeState {
         prefs(context).getString(KEY_KIND, null).orEmpty().ifBlank { KIND_ONGOING }
 
     fun isStartReminder(context: Context): Boolean = kind(context) == KIND_START
+
+    fun isNextTaskReminder(context: Context): Boolean = kind(context) == KIND_NEXT
+
+    /** 22시가 넘으면 다음 일 권하는 것도 멈춘다. 밤까지 이어지면 잔소리가 된다. */
+    fun isNextTaskWindowOver(): Boolean {
+        val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+        return hour >= 22
+    }
 
     fun start(
         context: Context,

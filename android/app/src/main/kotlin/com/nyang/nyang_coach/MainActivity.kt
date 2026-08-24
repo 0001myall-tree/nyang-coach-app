@@ -186,6 +186,41 @@ class MainActivity : FlutterFragmentActivity() {
                         }
                         result.success(null)
                     }
+                    "remindNextTask" -> {
+                        val taskId = call.argument<String>("taskId")
+                        val taskText = call.argument<String>("taskText").orEmpty()
+                        val fireAtMillis = call.argument<Long>("fireAtMillis")
+                        if (taskId.isNullOrBlank() || fireAtMillis == null) {
+                            result.error("INVALID_ARGS", "Missing taskId or fireAtMillis", null)
+                            return@setMethodCallHandler
+                        }
+                        // 이 자리를 이미 도는 일정이나 시작을 기다리는 일정이 쓰고
+                        // 있으면 넘겨받지 않는다. 하나를 끝냈다고 다른 일정의 알림이
+                        // 깨지면 안 된다.
+                        val slotTaken = OngoingNudgeState.isActive(this) &&
+                            !OngoingNudgeState.isNextTaskReminder(this)
+                        if (slotTaken) {
+                            result.success(null)
+                            return@setMethodCallHandler
+                        }
+                        val alreadyWaiting = OngoingNudgeState.taskId(this) == taskId &&
+                            OngoingNudgeState.isNextTaskReminder(this)
+                        OngoingNudgeState.start(
+                            this,
+                            taskId,
+                            taskText,
+                            OngoingNudgeState.KIND_NEXT,
+                        )
+                        if (!alreadyWaiting) {
+                            OngoingNudgeScheduler.cancel(this)
+                            OngoingNudgeScheduler.scheduleAt(
+                                this,
+                                fireAtMillis,
+                                OngoingNudgeScheduler.STAGE_FIRST,
+                            )
+                        }
+                        result.success(null)
+                    }
                     "setAppForeground" -> {
                         OngoingNudgeState.setAppForeground(
                             this,
@@ -215,6 +250,19 @@ class MainActivity : FlutterFragmentActivity() {
                         OngoingNudgeState.clear(this)
                         OngoingNudgeScheduler.cancel(this)
                         stopService(Intent(this, OngoingNudgeService::class.java))
+                        result.success(null)
+                    }
+                    "stopUnlessNextTask" -> {
+                        // 도는 일도, 시작 기다리는 일도 없을 때 부르는 자리다. 그런데
+                        // "다음 일" 카드가 22시까지 기다리는 중이라면, 지금 아무것도
+                        // 없다는 이유만으로 그것까지 지우면 안 된다. 다른 저장이 일어날
+                        // 때마다(할 일 편집 등) 이 자리가 불려서, 그러지 않으면 그 카드는
+                        // 예약된 시각까지 살아남지 못한다.
+                        if (!OngoingNudgeState.isNextTaskReminder(this)) {
+                            OngoingNudgeState.clear(this)
+                            OngoingNudgeScheduler.cancel(this)
+                            stopService(Intent(this, OngoingNudgeService::class.java))
+                        }
                         result.success(null)
                     }
                     else -> result.notImplemented()

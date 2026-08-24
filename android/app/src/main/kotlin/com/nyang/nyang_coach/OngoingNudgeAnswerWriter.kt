@@ -116,6 +116,44 @@ object OngoingNudgeAnswerWriter {
         markStoreChanged(prefs)
     }
 
+    /**
+     * 시간이 정해지지 않은, 아직 손대지 않은 다음 일.
+     *
+     * "냥이랑 남은 일정도 시작할까냥?" 카드가 매번 다시 검사하는 조건이다. 목록
+     * 순서상 가장 앞의 것 하나만 본다 — 여러 개를 한꺼번에 권하면 그중 뭘 먼저
+     * 해야 하는지 다시 고르게 만드는 셈이라, 고르는 일을 대신 해주지 못한다.
+     */
+    fun findNextTaskCandidate(context: Context): Pair<String, String>? {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val tasksRaw = prefs.getString(KEY_TASKS, null) ?: return null
+        val tasks = runCatching { JSONArray(tasksRaw) }.getOrNull() ?: return null
+
+        for (i in 0 until tasks.length()) {
+            val item = tasks.optJSONObject(i) ?: continue
+            if (item.optString("category", "") == "schedule") continue
+            if (item.optBoolean("done", false)) continue
+            if (item.optBoolean("inProgress", false)) continue
+            if (item.optInt("elapsedSeconds", 0) > 0) continue
+            val timeStart = item.optString("timeStart", "")
+            if (timeStart.isNotBlank()) continue
+            val id = item.opt("id")?.toString() ?: continue
+            return id to item.optString("text", "")
+        }
+        return null
+    }
+
+    /** 지금 도는 중인 일이 있는지. 있으면 다음 일 카드는 뜨지 않는다. */
+    fun isAnyTaskInProgress(context: Context): Boolean {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val tasksRaw = prefs.getString(KEY_TASKS, null) ?: return false
+        val tasks = runCatching { JSONArray(tasksRaw) }.getOrNull() ?: return false
+        for (i in 0 until tasks.length()) {
+            val item = tasks.optJSONObject(i) ?: continue
+            if (item.optBoolean("inProgress", false)) return true
+        }
+        return false
+    }
+
     /** 쌓인 시간 + 지금 돌고 있는 구간. */
     private fun elapsedSecondsOf(task: JSONObject, now: Date): Int {
         var elapsed = task.optInt("elapsedSeconds", 0)

@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 
+import '../models/user_data.dart';
 import 'distraction_coach_quota.dart';
 import 'ongoing_task_nudge_service.dart';
 
@@ -55,6 +56,23 @@ class NyangBannerNudge {
   /// 필요한 시간인데, 그때가 통째로 비어 있었다.
   static const List<int> runningNotificationIds = [1302, 1303, 1304, 1305];
 
+  /// 방금 하나를 끝냈고 시간이 정해지지 않은 다음 일이 남았을 때의 자리들.
+  ///
+  /// 마스터 플랜 전용. 안드로이드는 매번 깨어나 조건을 다시 보고 정하지만,
+  /// 아이폰은 그럴 수 없어서 완료 시각을 기준으로 22시까지 2시간 간격 자리를
+  /// 한꺼번에 걸어둔다. 대신 [sync]가 저장이 일어날 때마다 전부 지우고 지금
+  /// 상태로 다시 까는 것으로 "매번 조건을 다시 검사"를 흉내 낸다.
+  static const List<int> nextTaskNotificationIds = [
+    1306,
+    1307,
+    1308,
+    1309,
+    1310,
+    1311,
+  ];
+
+  static const Duration _nextTaskRound = Duration(hours: 2);
+
   /// "지금 한번 보기"는 자기 자리를 쓴다.
   ///
   /// 같은 자리를 쓰면, 확인하려고 걸어둔 것을 앱으로 돌아오는 순간 [sync]가
@@ -93,7 +111,16 @@ class NyangBannerNudge {
     for (final id in runningNotificationIds) {
       await _plugin.cancel(id: id);
     }
-    if (!await isNeededHere()) return;
+    for (final id in nextTaskNotificationIds) {
+      await _plugin.cancel(id: id);
+    }
+
+    final needed = await isNeededHere();
+    // "다음 일" 카드는 딴짓 방지 스위치나 일정 알림과 무관하게, 마스터 플랜이면
+    // 그 자체로 켜져 있는 기본 동작이다.
+    final userData = await UserDataService.load();
+    final masterEligible = userData.isPlanActive && userData.planType == 'master';
+    if (!needed && !masterEligible) return;
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.reload();
@@ -107,42 +134,149 @@ class NyangBannerNudge {
       return;
     }
 
+    final now = DateTime.now();
+
     // 시작할 시각이 먼저다.
     //
     // 도는 일정이 있어도 마찬가지다. 하는 중이냐는 물음은 미뤄도 그 일이 없어지지
     // 않지만, 시작하기로 한 시각은 지나가면 그날치가 사라진다. 그 시각이 정리된
     // 뒤에 — 시작했거나, 창이 닫혔거나 — 하는 중이냐는 물음이 자리를 잇는다.
-    final next = OngoingTaskNudgeService.nextUnstartedTask(
-      tasks,
-      DateTime.now(),
-    );
-    if (next != null) {
-      // 시작을 권하는 배너에는 하루치 제한이 없다. 여기서 하는 중이냐는 물음이
-      // 걸리지 않으므로, 나오지 못하게 된 자리는 풀어준다.
-      await DistractionCoachQuota.releaseUnconfirmedUnless();
-      await _schedule(
-        taskId: next['id'].toString(),
-        taskText: next['text']?.toString() ?? '',
-        at: next['_startAt'] as DateTime,
-        deadline: (next['_startAt'] as DateTime).add(window),
-      );
-      return;
+    if (needed) {
+      final next = OngoingTaskNudgeService.nextUnstartedTask(tasks, now);
+      if (next != null) {
+        // 시작을 권하는 배너에는 하루치 제한이 없다. 여기서 하는 중이냐는 물음이
+        // 걸리지 않으므로, 나오지 못하게 된 자리는 풀어준다.
+        await DistractionCoachQuota.releaseUnconfirmedUnless();
+        await _schedule(
+          taskId: next['id'].toString(),
+          taskText: next['text']?.toString() ?? '',
+          at: next['_startAt'] as DateTime,
+          deadline: (next['_startAt'] as DateTime).add(window),
+        );
+        return;
+      }
     }
 
+    Map<String, dynamic>? running;
     for (final item in tasks) {
       if (item is! Map) continue;
       if (item['done'] == true) continue;
       if (item['inProgress'] != true) continue;
-      await _scheduleRunningCheck(
-        taskId: item['id'].toString(),
-        taskText: item['text']?.toString() ?? '',
-        runStartedAt: DateTime.tryParse(item['runStartedAt']?.toString() ?? ''),
-      );
+      running = Map<String, dynamic>.from(item);
+      break;
+    }
+
+    if (running != null) {
+      // 딴짓 방지 스위치를 켠 사람에게만 "지금도 하는 중이야?"를 건다. 스위치가
+      // 꺼져 있어도 무언가 도는 중이면, 다음 일 카드는 얹지 않는다 — 이미 손을
+      // 대고 있는 사람에게 다른 걸 또 권하면 안 된다.
+      if (needed) {
+        await _scheduleRunningCheck(
+          taskId: running['id'].toString(),
+          taskText: running['text']?.toString() ?? '',
+          runStartedAt: DateTime.tryParse(
+            running['runStartedAt']?.toString() ?? '',
+          ),
+        );
+      }
       return;
     }
 
-    // 도는 일정이 없다. 걸어둔 배너는 위에서 지워졌으니 맡아둔 자리도 푼다.
+    if (masterEligible) {
+      await _syncNextTaskNudge(tasks, now);
+      return;
+    }
+
+    // 도는 일정도, 다음 일 후보도 없다. 걸어둔 배너는 위에서 지워졌으니
+    // 맡아둔 자리도 푼다.
     await DistractionCoachQuota.releaseUnconfirmedUnless();
+  }
+
+  /// 방금 하나를 끝냈고 시간이 정해지지 않은 다음 일이 남았을 때의 알림 사슬을
+  /// 다시 깐다.
+  ///
+  /// 안드로이드는 깨어날 때마다 조건을 다시 보지만, 아이폰의 예약 알림은 한 번
+  /// 걸면 조건이 바뀌어도 스스로 취소되지 않는다. 그래서 여기서 매번 통째로
+  /// 지우고 지금 상태로 새로 깐다 — 저장이 일어날 때마다(완료·시작·수정) [sync]가
+  /// 불리므로, 사실상 매번 조건을 다시 검사하는 것과 같다.
+  static Future<void> _syncNextTaskNudge(List tasks, DateTime now) async {
+    DateTime? anchor;
+    for (final item in tasks) {
+      if (item is! Map || item['done'] != true) continue;
+      final completedAt = DateTime.tryParse(
+        item['completedAt']?.toString() ?? '',
+      );
+      if (completedAt == null) continue;
+      if (anchor == null || completedAt.isAfter(anchor)) anchor = completedAt;
+    }
+    // 오늘 끝낸 일이 없으면 기준으로 삼을 시각이 없다.
+    if (anchor == null) return;
+
+    Map<String, dynamic>? candidate;
+    for (final item in tasks) {
+      if (item is! Map) continue;
+      if (item['category'] == 'schedule') continue;
+      if (item['done'] == true) continue;
+      if (item['inProgress'] == true) continue;
+      if (((item['elapsedSeconds'] as num?)?.toInt() ?? 0) > 0) continue;
+      final timeStart = item['timeStart']?.toString();
+      if (timeStart != null && timeStart.isNotEmpty) continue;
+      candidate = Map<String, dynamic>.from(item);
+      break;
+    }
+    if (candidate == null) return;
+
+    // 완료 시각을 기준으로 3, 5, 7시간… 자리를 잡는다. 지금이 이미 그 자리를
+    // 지났으면(오래 앱을 안 열었던 경우) 지금 이후의 다음 자리부터 잇는다 —
+    // 지난 자리에 알림을 걸면 곧바로 울리거나 실패한다.
+    var at = anchor.add(const Duration(hours: 3));
+    while (!at.isAfter(now)) {
+      at = at.add(_nextTaskRound);
+    }
+
+    final taskId = candidate['id'].toString();
+    final taskText = candidate['text']?.toString() ?? '';
+    for (var i = 0; i < nextTaskNotificationIds.length; i++) {
+      final fireAt = at.add(_nextTaskRound * i);
+      if (fireAt.hour >= 22) break;
+      await _scheduleNextTask(
+        id: nextTaskNotificationIds[i],
+        taskId: taskId,
+        taskText: taskText,
+        at: fireAt,
+      );
+    }
+  }
+
+  static Future<void> _scheduleNextTask({
+    required int id,
+    required String taskId,
+    required String taskText,
+    required DateTime at,
+  }) async {
+    _ensureTimeZone();
+    final payload =
+        '$payloadPrefix:${jsonEncode({'taskId': taskId, 'taskText': taskText})}';
+
+    final details = NotificationDetails(
+      iOS: DarwinNotificationDetails(
+        presentAlert: true,
+        presentBanner: true,
+        presentList: true,
+        presentSound: false,
+        interruptionLevel: InterruptionLevel.timeSensitive,
+      ),
+    );
+
+    await _plugin.zonedSchedule(
+      id: id,
+      title: '🐾 ${taskText.isEmpty ? '남은 일' : taskText}',
+      body: '냥이랑 남은 일정도 시작할까냥?',
+      scheduledDate: tz.TZDateTime.from(at, tz.local),
+      notificationDetails: details,
+      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      payload: payload,
+    );
   }
 
   /// 도는 일정에 "지금도 하는 중이야?"를 걸어둔다.
