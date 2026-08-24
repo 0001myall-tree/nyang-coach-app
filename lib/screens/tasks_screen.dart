@@ -2473,6 +2473,14 @@ class _TasksScreenState extends State<TasksScreen>
     final userData = await UserDataService.load();
     if (!userData.isPlanActive || userData.planType != 'master') return;
 
+    // 안 끝난 일 중에 시간이 정해진 게 하나라도 있으면 걸지 않는다. 곧 있을
+    // 약속을 앞두고 다른 것도 시작할지 물으면, 정작 지켜야 할 시각에 마음을
+    // 못 쓰게 만든다.
+    final hasTimedRemaining = _activeTodayTasksWithSchedules.any(
+      (ts) => !ts.done && ts.timeStart != null && ts.timeStart!.isNotEmpty,
+    );
+    if (hasTimedRemaining) return;
+
     // 안드로이드 쪽 재검사는 'nyang_tasks'에 저장된 것만 직접 읽는다. 그
     // 목록에 없는 것(마일스톤·일정)을 여기서 고르면, 처음 걸 때만 그 이름이
     // 보이고 첫 재검사에서 곧장 조건 미달로 접혀 나오지 않는다.

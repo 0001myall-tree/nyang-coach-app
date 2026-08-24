@@ -100,7 +100,10 @@ class OngoingNudgeReceiver : BroadcastReceiver() {
                 return
             }
             val candidate = OngoingNudgeAnswerWriter.findNextTaskCandidate(context)
-            if (candidate == null || OngoingNudgeAnswerWriter.isAnyTaskInProgress(context)) {
+            if (candidate == null ||
+                OngoingNudgeAnswerWriter.isAnyTaskInProgress(context) ||
+                OngoingNudgeAnswerWriter.hasAnyTimedRemainingTask(context)
+            ) {
                 OngoingNudgeState.clear(context)
                 OngoingNudgeScheduler.cancel(context)
                 return

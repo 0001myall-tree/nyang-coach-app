@@ -154,6 +154,24 @@ object OngoingNudgeAnswerWriter {
         return false
     }
 
+    /**
+     * 아직 안 끝난 일 중에 시간이 정해진 게 하나라도 있는지.
+     *
+     * 있으면 다음 일 카드는 뜨지 않는다. 곧 있을 약속을 앞두고 "다른 것도
+     * 시작할까냥?"을 얹으면 정작 지켜야 할 시각에 마음을 못 쓰게 만든다.
+     */
+    fun hasAnyTimedRemainingTask(context: Context): Boolean {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val tasksRaw = prefs.getString(KEY_TASKS, null) ?: return false
+        val tasks = runCatching { JSONArray(tasksRaw) }.getOrNull() ?: return false
+        for (i in 0 until tasks.length()) {
+            val item = tasks.optJSONObject(i) ?: continue
+            if (item.optBoolean("done", false)) continue
+            if (item.optString("timeStart", "").isNotBlank()) return true
+        }
+        return false
+    }
+
     /** 쌓인 시간 + 지금 돌고 있는 구간. */
     private fun elapsedSecondsOf(task: JSONObject, now: Date): Int {
         var elapsed = task.optInt("elapsedSeconds", 0)

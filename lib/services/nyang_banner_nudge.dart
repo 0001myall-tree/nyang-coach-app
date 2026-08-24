@@ -212,6 +212,16 @@ class NyangBannerNudge {
     // 오늘 끝낸 일이 없으면 기준으로 삼을 시각이 없다.
     if (anchor == null) return;
 
+    // 안 끝난 일 중에 시간이 정해진 게 하나라도 있으면 걸지 않는다. 곧 있을
+    // 약속을 앞두고 다른 것도 시작할지 물으면, 정작 지켜야 할 시각에 마음을
+    // 못 쓰게 만든다.
+    final hasTimedRemaining = tasks.any((item) {
+      if (item is! Map || item['done'] == true) return false;
+      final timeStart = item['timeStart']?.toString();
+      return timeStart != null && timeStart.isNotEmpty;
+    });
+    if (hasTimedRemaining) return;
+
     Map<String, dynamic>? candidate;
     for (final item in tasks) {
       if (item is! Map) continue;
