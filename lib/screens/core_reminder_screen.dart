@@ -20,6 +20,7 @@ class CoreReminderScreen extends StatefulWidget {
 }
 
 class _CoreReminderScreenState extends State<CoreReminderScreen> {
+  static const bool _releaseVoiceAlarmEnabled = false;
   late final AudioPlayer _audioPlayer;
 
   @override
@@ -30,6 +31,9 @@ class _CoreReminderScreenState extends State<CoreReminderScreen> {
   }
 
   Future<void> _playAudio() async {
+    // 일정 알람 음성은 출시 버전에서 비활성화한다. 화면은 재사용하되 소리만 막아
+    // 기존 코드와 payload 호환성은 남겨둔다.
+    if (!_releaseVoiceAlarmEnabled) return;
     if (widget.soundName != null) {
       final soundPath = 'voice/${widget.soundName}.mp3';
       try {

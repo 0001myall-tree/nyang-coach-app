@@ -46,6 +46,7 @@ class NotificationService {
   static const int _dailyPlannerNudgeMinute = 5;
   static const String _androidMorningChannelVersion = 'v10';
   static const String _androidCoreReminderChannelVersion = 'v4';
+  static const bool _releaseCoreReminderVoiceAlarmEnabled = false;
   static const String _androidPushChannelId = 'nyang_push_channel';
   static const String _staleScheduleCleanupKey =
       'nyang_stale_schedule_cleanup_v1';
@@ -385,20 +386,22 @@ class NotificationService {
         );
       }
 
-      for (final minutes in _coreReminderSoundMinutes) {
-        final soundName = '${coachId}_reminder_$minutes';
-        await android.createNotificationChannel(
-          AndroidNotificationChannel(
-            _coreReminderChannelId(soundName),
-            '냥냥코치 일정 알림',
-            description: '지정된 일정 시작 전 알림입니다.',
-            importance: Importance.max,
-            sound: RawResourceAndroidNotificationSound(soundName),
-            playSound: true,
-            enableVibration: true,
-            audioAttributesUsage: AudioAttributesUsage.alarm,
-          ),
-        );
+      if (_releaseCoreReminderVoiceAlarmEnabled) {
+        for (final minutes in _coreReminderSoundMinutes) {
+          final soundName = '${coachId}_reminder_$minutes';
+          await android.createNotificationChannel(
+            AndroidNotificationChannel(
+              _coreReminderChannelId(soundName),
+              '냥냥코치 일정 알림',
+              description: '지정된 일정 시작 전 알림입니다.',
+              importance: Importance.max,
+              sound: RawResourceAndroidNotificationSound(soundName),
+              playSound: true,
+              enableVibration: true,
+              audioAttributesUsage: AudioAttributesUsage.alarm,
+            ),
+          );
+        }
       }
     }
   }
@@ -1019,10 +1022,14 @@ class NotificationService {
       await prefs.setBool('nyang_core_reminder_enabled', false);
       await prefs.remove('nyang_core_reminder_resolved_coach');
       await _clearStoredCoreReminderFlags(prefs);
+      await NyangBannerNudge.sync();
       return;
     }
     final isEnabled = prefs.getBool('nyang_core_reminder_enabled') ?? false;
-    if (!isEnabled) return;
+    if (!isEnabled) {
+      await NyangBannerNudge.sync();
+      return;
+    }
 
     String targetCoachId =
         prefs.getString('nyang_core_reminder_coach') ?? 'push';
@@ -1039,7 +1046,11 @@ class NotificationService {
     // Save the resolved core reminder coach ID to SharedPreferences
     await prefs.setString('nyang_core_reminder_resolved_coach', targetCoachId);
 
-    final soundName = _coreReminderSoundName(targetCoachId, advanceMinutes);
+    // 출시 버전에서는 일정 알람을 캐릭터 음성 알람으로 울리지 않는다.
+    // 기존 coach/sound payload 구조는 남겨두되, 실제 예약은 일반 푸시 알림으로 고정한다.
+    final soundName = _releaseCoreReminderVoiceAlarmEnabled
+        ? _coreReminderSoundName(targetCoachId, advanceMinutes)
+        : null;
 
     final AndroidNotificationDetails androidDetails =
         AndroidNotificationDetails(
@@ -1052,8 +1063,8 @@ class NotificationService {
               ? RawResourceAndroidNotificationSound(soundName)
               : null,
           playSound: true,
-          fullScreenIntent: true,
-          audioAttributesUsage: AudioAttributesUsage.alarm,
+          fullScreenIntent: false,
+          audioAttributesUsage: AudioAttributesUsage.notification,
         );
     final DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
       sound: soundName != null ? '$soundName.caf' : null,
@@ -1194,8 +1205,8 @@ class NotificationService {
 
       await _plugin.zonedSchedule(
         id: notificationId,
-        title: '🔔 [$taskText] 일정을 시작할 시간이에요!',
-        body: '앱 밖에서도 잊지 않게 알려드려요!',
+        title: '🔔 [$taskText] 일정이 곧 시작돼요!',
+        body: '$advanceMinutes분 뒤 시작해요. 앱 밖에서도 잊지 않게 알려드려요!',
         scheduledDate: tzScheduled,
         notificationDetails: details,
         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
@@ -1203,6 +1214,7 @@ class NotificationService {
       );
       notificationId++;
     }
+    await NyangBannerNudge.sync();
   }
 
   Future<void> _clearStoredCoreReminderFlags(SharedPreferences prefs) async {

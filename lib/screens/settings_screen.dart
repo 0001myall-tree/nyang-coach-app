@@ -67,7 +67,6 @@ class _SettingsScreenState extends State<SettingsScreen>
   TimeOfDay _morningCallTime = const TimeOfDay(hour: 7, minute: 0);
   String _morningCallCoachId = 'cat';
   bool _coreReminderEnabled = false;
-  String _coreReminderCoachId = 'push';
   int _coreReminderAdvanceMinutes = 10;
   // 진행 중인 일정을 떠올리게 하는 냥냥이. 안드로이드에서만, 테스터가 직접 켠다.
   bool _ongoingNudgeEnabled = false;
@@ -191,12 +190,6 @@ class _SettingsScreenState extends State<SettingsScreen>
       );
       _coreReminderEnabled =
           prefs.getBool('nyang_core_reminder_enabled') ?? false;
-      final savedCoreReminderCoach =
-          prefs.getString('nyang_core_reminder_coach') ?? 'push';
-      _coreReminderCoachId = _notificationVoiceCoachId(
-        savedCoreReminderCoach,
-        fallback: 'push',
-      );
       _coreReminderAdvanceMinutes =
           prefs.getInt('nyang_core_reminder_advance') ?? 10;
       _ongoingNudgeEnabled =
@@ -975,7 +968,6 @@ class _SettingsScreenState extends State<SettingsScreen>
 
   Future<void> _saveCoreReminderSettings(
     bool enabled,
-    String coachId,
     int advanceMinutes,
   ) async {
     final userData = await UserDataService.load();
@@ -985,7 +977,6 @@ class _SettingsScreenState extends State<SettingsScreen>
       if (mounted) {
         setState(() {
           _coreReminderEnabled = false;
-          _coreReminderCoachId = 'push';
           _coreReminderAdvanceMinutes = 10;
         });
         _showFreeSettingsLockedNotice();
@@ -993,21 +984,16 @@ class _SettingsScreenState extends State<SettingsScreen>
       return;
     }
     await prefs.setBool('nyang_core_reminder_enabled', enabled);
-    await prefs.setString('nyang_core_reminder_coach', coachId);
+    await prefs.setString('nyang_core_reminder_coach', 'push');
     await prefs.setInt('nyang_core_reminder_advance', advanceMinutes);
     TasksSyncService.scheduleSyncToCloud();
 
     setState(() {
       _coreReminderEnabled = enabled;
-      _coreReminderCoachId = coachId;
       _coreReminderAdvanceMinutes = advanceMinutes;
     });
 
     NotificationService().syncCoreReminders();
-
-    final coachName = coachId == 'push'
-        ? '기본 푸쉬 알람'
-        : CoachConfigs.get(coachId).name;
 
     // 모닝콜과 똑같이, 켠 직후에 실제로 울릴 수 있는 상태인지 확인한다.
     // 시스템 권한 창은 두 번 거절당하면 다시 뜨지 않으므로 요청 결과와 별개로 다시 본다.
@@ -1030,10 +1016,10 @@ class _SettingsScreenState extends State<SettingsScreen>
     }
 
     await _showAlarmNoticeDialog(
-      title: enabled ? '🔔 $coachName 일정 알람이 설정되었어요' : '🔔 일정 알람을 껐어요',
+      title: enabled ? '🔔 일정 푸쉬 알람이 설정되었어요' : '🔔 일정 푸쉬 알람을 껐어요',
       message: enabled
           ? '일정 시작 $advanceMinutes분 전에 알려드릴게요!'
-          : '이제 일정 알람이 울리지 않아요.',
+          : '이제 일정 푸쉬 알람이 울리지 않아요.',
     );
   }
 
@@ -1371,7 +1357,6 @@ class _SettingsScreenState extends State<SettingsScreen>
       return;
     }
     bool tempEnabled = _coreReminderEnabled;
-    String tempCoachId = _coreReminderCoachId;
     int tempAdvance = _coreReminderAdvanceMinutes;
     AlarmPermissionIssue modalIssue = _alarmPermissionIssue;
 
@@ -1383,7 +1368,7 @@ class _SettingsScreenState extends State<SettingsScreen>
         return StatefulBuilder(
           builder: (context, setModalState) {
             return Container(
-              height: MediaQuery.of(context).size.height * 0.8,
+              height: MediaQuery.of(context).size.height * 0.48,
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
               decoration: const BoxDecoration(
                 color: Colors.white,
@@ -1415,7 +1400,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                           ),
                           const SizedBox(width: 8),
                           Text(
-                            '코치의 일정 알람',
+                            '일정 푸쉬 알람',
                             style: GoogleFonts.notoSansKr(
                               fontSize: 20,
                               fontWeight: FontWeight.w900,
@@ -1533,91 +1518,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                     ),
                   ),
 
-                  // 코치 선택 리스트
-                  Text(
-                    '알람 코치 선택',
-                    style: GoogleFonts.notoSansKr(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w800,
-                      color: const Color(0xFF1A1A2E),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-
-                  Expanded(
-                    child: Opacity(
-                      opacity: tempEnabled ? 1.0 : 0.5,
-                      child: ListView(
-                        children: [
-                          // 기본 푸시 알람
-                          _buildMorningCallCoachItem(
-                            id: 'push',
-                            name: '기본 푸쉬 알람',
-                            subtitle: '코치 없이 조용하게 시스템 알람만 받아요',
-                            isSelected: tempCoachId == 'push',
-                            onTap: () {
-                              if (tempEnabled)
-                                setModalState(() => tempCoachId = 'push');
-                            },
-                          ),
-                          _buildMorningCallCoachSectionHeader('FRIENDS 코치'),
-                          ...CoachConfigs.all.values
-                              .where(
-                                (coach) =>
-                                    coach.tier == 'friends' &&
-                                    coach.voiceCount > 0,
-                              )
-                              .map((coach) {
-                                return _buildMorningCallCoachItem(
-                                  id: coach.id,
-                                  name: coach.name,
-                                  subtitle: '',
-                                  isSelected: tempCoachId == coach.id,
-                                  imagePath: coach.imagePath,
-                                  onTap: () {
-                                    if (tempEnabled) {
-                                      setModalState(
-                                        () => tempCoachId = coach.id,
-                                      );
-                                    }
-                                  },
-                                );
-                              }),
-                          const Padding(
-                            padding: EdgeInsets.fromLTRB(4, 4, 4, 12),
-                            child: Divider(
-                              height: 1,
-                              thickness: 1,
-                              color: Color(0xFFEDEAF8),
-                            ),
-                          ),
-                          _buildMorningCallCoachSectionHeader('MASTER 코치'),
-                          ...CoachConfigs.all.values
-                              .where(
-                                (coach) =>
-                                    coach.tier == 'master' &&
-                                    coach.voiceCount > 0,
-                              )
-                              .map((coach) {
-                                return _buildMorningCallCoachItem(
-                                  id: coach.id,
-                                  name: coach.name,
-                                  subtitle: '',
-                                  isSelected: tempCoachId == coach.id,
-                                  imagePath: coach.imagePath,
-                                  onTap: () {
-                                    if (tempEnabled) {
-                                      setModalState(
-                                        () => tempCoachId = coach.id,
-                                      );
-                                    }
-                                  },
-                                );
-                              }),
-                        ],
-                      ),
-                    ),
-                  ),
+                  const Spacer(),
 
                   // 저장 버튼
                   SizedBox(
@@ -1626,11 +1527,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                     child: ElevatedButton(
                       onPressed: () {
                         Navigator.pop(context);
-                        _saveCoreReminderSettings(
-                          tempEnabled,
-                          tempCoachId,
-                          tempAdvance,
-                        );
+                        _saveCoreReminderSettings(tempEnabled, tempAdvance);
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF1A1A2E),
@@ -2508,7 +2405,7 @@ class _SettingsScreenState extends State<SettingsScreen>
 
   String get _coreReminderStatusLabel {
     if (!_coreReminderEnabled) return '';
-    return '${_coreReminderAdvanceMinutes}분 전 · ${_shortCoachName(_coreReminderCoachId)}';
+    return '${_coreReminderAdvanceMinutes}분 전';
   }
 
   String? get _morningCallStatus =>

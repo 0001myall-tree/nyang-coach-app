@@ -10,7 +10,6 @@ import 'package:timezone/timezone.dart' as tz;
 
 import 'distraction_coach_quota.dart';
 import 'ongoing_task_nudge_service.dart';
-import 'task_completion_service.dart';
 
 /// 다이내믹 아일랜드가 없는 아이폰을 위한 냥냥이 배너.
 ///
@@ -79,7 +78,9 @@ class NyangBannerNudge {
   /// 라이브 액티비티는 표시고 배너는 부름이라, 하는 일이 겹치지 않는다.
   static Future<bool> isNeededHere() async {
     if (!_isIOS) return false;
-    return OngoingTaskNudgeService.isEnabled();
+    final prefs = await SharedPreferences.getInstance();
+    return (prefs.getBool('nyang_core_reminder_enabled') ?? false) ||
+        await OngoingTaskNudgeService.isEnabled();
   }
 
   /// 저장된 할 일을 보고 다음 배너를 걸어둔다. 걸 것이 없으면 지운다.

@@ -493,7 +493,6 @@ class _MainTabScreenState extends State<MainTabScreen>
   final AudioPlayer _audioPlayer = AudioPlayer();
   String? _lastMorningCallDate;
   final Set<String> _firedCoreReminders = {};
-  StreamSubscription? _reminderAudioSub;
   late String _chatBgStyle;
   bool _chatBgStyleLoaded = false;
   bool _showRecordsNewBadge = false;
@@ -1496,18 +1495,21 @@ class _MainTabScreenState extends State<MainTabScreen>
       targetCoachId = 'push';
     }
 
-    if (targetCoachId == 'push') {
-      NotificationService().showImmediateNotification(
-        title: taskText.isNotEmpty ? '🔔 $taskText' : '🔔 오늘의 핵심 일정',
-        body: '핵심 일정을 시작할 시간이에요!',
-      );
+    NotificationService().showImmediateNotification(
+      title: taskText.isNotEmpty ? '🔔 $taskText' : '🔔 오늘의 핵심 일정',
+      body: '$advanceMinutes분 뒤 시작해요.',
+    );
+
+    // iPhone에서는 사전 알림은 일반 푸시만, 시작 시각에는 냥냥이 배너만 쓴다.
+    // 둘 다 iOS 알림 배너라 같은 역할로 겹치면 중복처럼 보인다.
+    if (targetCoachId == 'push' || Platform.isIOS) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
               taskText.isNotEmpty
-                  ? '🔔 [$taskText] 일정을 시작할 시간이에요!'
-                  : '🔔 핵심 일정을 시작할 시간이에요!',
+                  ? '🔔 [$taskText] 일정이 $advanceMinutes분 뒤 시작돼요!'
+                  : '🔔 핵심 일정이 $advanceMinutes분 뒤 시작돼요!',
             ),
             duration: const Duration(seconds: 5),
             backgroundColor: const Color(0xFF1A1A2E),
@@ -1518,18 +1520,6 @@ class _MainTabScreenState extends State<MainTabScreen>
     }
 
     final coach = CoachConfigs.get(targetCoachId);
-
-    _audioPlayer.setReleaseMode(ReleaseMode.stop);
-    await _audioPlayer.setVolume(1.0);
-    _reminderAudioSub?.cancel();
-
-    try {
-      await _audioPlayer.play(
-        AssetSource('voice/${targetCoachId}_reminder_$advanceMinutes.mp3'),
-      );
-    } catch (e) {
-      debugPrint('Audio play error: $e');
-    }
 
     if (mounted) {
       showGeneralDialog(
