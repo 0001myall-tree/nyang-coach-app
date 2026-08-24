@@ -67,6 +67,7 @@ class _SettingsScreenState extends State<SettingsScreen>
   bool _morningCallEnabled = true;
   TimeOfDay _morningCallTime = const TimeOfDay(hour: 7, minute: 0);
   String _morningCallCoachId = 'cat';
+
   /// 모닝콜이 울릴 요일. 월=1 ... 일=7. 저장된 값이 없으면 매일로 본다 —
   /// 요일 설정이 생기기 전부터 켜둔 사람의 모닝콜이 갑자기 조용해지면 안 된다.
   Set<int> _morningCallDays = {1, 2, 3, 4, 5, 6, 7};
@@ -731,6 +732,7 @@ class _SettingsScreenState extends State<SettingsScreen>
             void safeSetModalState(VoidCallback fn) {
               if (sheetOpen) setModalState(fn);
             }
+
             return Container(
               height: MediaQuery.of(context).size.height * 0.85,
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
@@ -957,8 +959,10 @@ class _SettingsScreenState extends State<SettingsScreen>
                                       );
                                     }
                                   },
-                                  onPreview: () =>
-                                      _toggleVoicePreview(coach.id, safeSetModalState),
+                                  onPreview: () => _toggleVoicePreview(
+                                    coach.id,
+                                    safeSetModalState,
+                                  ),
                                   isPreviewPlaying:
                                       _playingVoicePreviewCoachId == coach.id,
                                 );
@@ -992,8 +996,10 @@ class _SettingsScreenState extends State<SettingsScreen>
                                       );
                                     }
                                   },
-                                  onPreview: () =>
-                                      _toggleVoicePreview(coach.id, safeSetModalState),
+                                  onPreview: () => _toggleVoicePreview(
+                                    coach.id,
+                                    safeSetModalState,
+                                  ),
                                   isPreviewPlaying:
                                       _playingVoicePreviewCoachId == coach.id,
                                 );
@@ -1515,111 +1521,150 @@ class _SettingsScreenState extends State<SettingsScreen>
                       height: 1.35,
                     ),
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 16),
 
-                  if (tempEnabled)
-                    buildAlarmPermissionBanner(
-                      issue: modalIssue,
-                      alarmLabel: '일정 알람',
-                      onTap: () async {
-                        await showAlarmPermissionDialog(
-                          context,
-                          modalIssue,
-                          alarmLabel: '일정 알람',
-                          emoji: '🔔',
-                        );
-                        final next = await NotificationService()
-                            .checkCoreReminderPermission();
-                        if (!mounted) return;
-                        setState(() => _alarmPermissionIssue = next);
-                        setModalState(() => modalIssue = next);
-                      },
-                    ),
-
-                  // 알람 시간 선택
-                  Opacity(
-                    opacity: tempEnabled ? 1.0 : 0.5,
-                    child: Padding(
-                      padding: const EdgeInsets.only(bottom: 20),
-                      child: Row(
+                  Expanded(
+                    child: SingleChildScrollView(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Expanded(
-                            child: Text(
-                              '알람 시간 선택',
-                              style: GoogleFonts.notoSansKr(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w800,
-                                color: const Color(0xFF1A1A2E),
+                          // 소리가 나는지부터 먼저 말한다. "다른 앱 위에 표시" 같은 권한
+                          // 배너에 가려 맨 아래로 밀리면, 정작 가장 흔하게 걸리는
+                          // 원인(무음/방해금지)을 처음 켜는 사람이 못 보고 지나친다.
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 12,
+                            ),
+                            margin: const EdgeInsets.only(bottom: 16),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFDF4E4),
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                color: const Color(
+                                  0xFFCE8A2E,
+                                ).withValues(alpha: 0.3),
                               ),
                             ),
-                          ),
-                          Container(
-                            width: 168,
-                            height: 40,
-                            padding: const EdgeInsets.all(3),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFF3F0FF),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
                             child: Row(
-                              children: [10, 30].map((minutes) {
-                                final isActive = tempAdvance == minutes;
-                                return Expanded(
-                                  child: GestureDetector(
-                                    onTap: () {
-                                      if (tempEnabled) {
-                                        setModalState(
-                                          () => tempAdvance = minutes,
-                                        );
-                                      }
-                                    },
-                                    child: AnimatedContainer(
-                                      duration: const Duration(
-                                        milliseconds: 160,
-                                      ),
-                                      curve: Curves.easeOutCubic,
-                                      alignment: Alignment.center,
-                                      decoration: BoxDecoration(
-                                        color: isActive
-                                            ? const Color(0xFF8B7CFF)
-                                            : Colors.transparent,
-                                        borderRadius: BorderRadius.circular(9),
-                                      ),
-                                      child: Text(
-                                        '$minutes분 전',
-                                        style: GoogleFonts.notoSansKr(
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w800,
-                                          color: isActive
-                                              ? Colors.white
-                                              : const Color(0xFF6B7280),
-                                        ),
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Icon(
+                                  Icons.volume_up_outlined,
+                                  size: 18,
+                                  color: Color(0xFFCE8A2E),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    '휴대폰이 무음/진동 모드거나 방해금지(수면 모드) 중이면 소리 없이 조용히 와요. '
+                                    '소리로 받고 싶다면 방해금지 예외 설정을 확인해주세요.',
+                                    style: GoogleFonts.notoSansKr(
+                                      fontSize: 12.5,
+                                      fontWeight: FontWeight.w700,
+                                      height: 1.45,
+                                      color: const Color(0xFF8A6416),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+
+                          if (tempEnabled)
+                            buildAlarmPermissionBanner(
+                              issue: modalIssue,
+                              alarmLabel: '일정 알람',
+                              onTap: () async {
+                                await showAlarmPermissionDialog(
+                                  context,
+                                  modalIssue,
+                                  alarmLabel: '일정 알람',
+                                  emoji: '🔔',
+                                );
+                                final next = await NotificationService()
+                                    .checkCoreReminderPermission();
+                                if (!mounted) return;
+                                setState(() => _alarmPermissionIssue = next);
+                                setModalState(() => modalIssue = next);
+                              },
+                            ),
+
+                          // 알람 시간 선택
+                          Opacity(
+                            opacity: tempEnabled ? 1.0 : 0.5,
+                            child: Padding(
+                              padding: const EdgeInsets.only(bottom: 20),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      '알람 시간 선택',
+                                      style: GoogleFonts.notoSansKr(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w800,
+                                        color: const Color(0xFF1A1A2E),
                                       ),
                                     ),
                                   ),
-                                );
-                              }).toList(),
+                                  Container(
+                                    width: 168,
+                                    height: 40,
+                                    padding: const EdgeInsets.all(3),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFF3F0FF),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Row(
+                                      children: [10, 30].map((minutes) {
+                                        final isActive = tempAdvance == minutes;
+                                        return Expanded(
+                                          child: GestureDetector(
+                                            onTap: () {
+                                              if (tempEnabled) {
+                                                setModalState(
+                                                  () => tempAdvance = minutes,
+                                                );
+                                              }
+                                            },
+                                            child: AnimatedContainer(
+                                              duration: const Duration(
+                                                milliseconds: 160,
+                                              ),
+                                              curve: Curves.easeOutCubic,
+                                              alignment: Alignment.center,
+                                              decoration: BoxDecoration(
+                                                color: isActive
+                                                    ? const Color(0xFF8B7CFF)
+                                                    : Colors.transparent,
+                                                borderRadius:
+                                                    BorderRadius.circular(9),
+                                              ),
+                                              child: Text(
+                                                '$minutes분 전',
+                                                style: GoogleFonts.notoSansKr(
+                                                  fontSize: 13,
+                                                  fontWeight: FontWeight.w800,
+                                                  color: isActive
+                                                      ? Colors.white
+                                                      : const Color(0xFF6B7280),
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        );
+                                      }).toList(),
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                         ],
                       ),
                     ),
                   ),
-
-                  Opacity(
-                    opacity: tempEnabled ? 1.0 : 0.55,
-                    child: Text(
-                      '휴대폰 설정에 따라 무음/진동 모드나 방해금지(수면 모드) 상태에서는 소리 없이 조용히 올 수 있어요. 소리로 알려드리고 싶다면 앱 알림 권한과 방해금지 예외 설정을 확인해주세요.',
-                      style: GoogleFonts.notoSansKr(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w500,
-                        height: 1.45,
-                        color: const Color(0xFF8E8A9E),
-                      ),
-                    ),
-                  ),
-
-                  const Spacer(),
 
                   // 저장 버튼
                   SizedBox(
@@ -2589,10 +2634,7 @@ class _SettingsScreenState extends State<SettingsScreen>
     return CoachConfigs.get(coachId).name.replaceAll(' 코치', '');
   }
 
-  String _notificationVoiceCoachId(
-    String coachId, {
-    required String fallback,
-  }) {
+  String _notificationVoiceCoachId(String coachId, {required String fallback}) {
     if (coachId == 'push') return coachId;
     final coach = CoachConfigs.all[CoachConfigs.normalizeId(coachId)];
     if (coach == null || coach.voiceCount <= 0) return fallback;
