@@ -734,7 +734,7 @@ class _SettingsScreenState extends State<SettingsScreen>
             }
 
             return Container(
-              height: MediaQuery.of(context).size.height * 0.85,
+              height: MediaQuery.of(context).size.height * 0.94,
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
               decoration: const BoxDecoration(
                 color: Colors.white,
@@ -753,7 +753,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                       ),
                     ),
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 18),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -783,7 +783,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                       ),
                     ],
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 18),
 
                   if (tempEnabled)
                     buildAlarmPermissionBanner(
@@ -870,7 +870,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                       ),
                     ),
                   ),
-                  const SizedBox(height: 22),
+                  const SizedBox(height: 14),
 
                   // 요일 선택
                   Text(
@@ -920,7 +920,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                       ],
                     ),
                   ),
-                  const SizedBox(height: 22),
+                  const SizedBox(height: 14),
 
                   // 코치 선택 리스트
                   Text(
