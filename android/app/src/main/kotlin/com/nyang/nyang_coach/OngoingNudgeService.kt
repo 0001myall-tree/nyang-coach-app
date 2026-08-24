@@ -116,7 +116,7 @@ class OngoingNudgeService : Service() {
         // 사람에게는 Receiver가 통과시켜도 창을 붙이기 직전에 다시 막혀 결국
         // 안 나온다.
         val requireEnabled = !OngoingNudgeState.isStartReminder(this) &&
-            !OngoingNudgeState.isNextTaskReminder(this)
+            !OngoingNudgeState.isIdleNudge(this)
         if (!OngoingNudgeState.shouldAppearNow(this, requireEnabled = requireEnabled)) {
             // 깨어나서 창을 붙이기 직전에 상황이 바뀐 경우.
             finishRound(scheduleNext = OngoingNudgeState.isActive(this))
@@ -150,12 +150,15 @@ class OngoingNudgeService : Service() {
         val taskText = OngoingNudgeState.taskText(this)
         val waitingToStart = OngoingNudgeState.isStartReminder(this)
         val waitingForNext = OngoingNudgeState.isNextTaskReminder(this)
+        val waitingToResume = OngoingNudgeState.isResumeReminder(this)
         val title = when {
             taskText.isBlank() && waitingToStart -> "시작할 일정이 있어요"
             taskText.isBlank() && waitingForNext -> "아직 안 한 일이 있어요"
+            taskText.isBlank() && waitingToResume -> "멈춰 있는 일이 있어요"
             taskText.isBlank() -> "진행 중인 일정이 있어요"
             waitingToStart -> "시작할 시간: $taskText"
             waitingForNext -> "다음 일: $taskText"
+            waitingToResume -> "멈춘 일: $taskText"
             else -> "진행 중: $taskText"
         }
         val notification = Notification.Builder(this, CHANNEL_ID)
@@ -307,22 +310,33 @@ class OngoingNudgeService : Service() {
         // 여기서 답하지 않고 앱에서 보고 싶을 때. 냥냥이를 누르면 할 일 창으로 간다.
         cardImage.setOnClickListener { openPlanner() }
 
+        val isResume = OngoingNudgeState.isResumeReminder(this)
         val taskText = OngoingNudgeState.taskText(this)
-        view.findViewById<TextView>(R.id.nudge_card_title).text =
-            if (taskText.isBlank()) {
+        val titleView = view.findViewById<TextView>(R.id.nudge_card_title)
+        val doneButton = view.findViewById<TextView>(R.id.nudge_card_done)
+        val continueButton = view.findViewById<TextView>(R.id.nudge_card_continue)
+        val restartButton = view.findViewById<TextView>(R.id.nudge_card_restart)
+        if (isResume) {
+            titleView.text = if (taskText.isBlank()) {
+                "집사, 하다가 멈춘 일,\n다시 시작할까?"
+            } else {
+                "집사, '$taskText' 하다가 멈췄네.\n다시 시작할까?"
+            }
+            doneButton.text = "하고 있어"
+            continueButton.text = "그럴게"
+            restartButton.text = "나중에"
+            doneButton.setOnClickListener { resumeStillDoing() }
+            continueButton.setOnClickListener { resumeNow() }
+            restartButton.setOnClickListener { resumeLater() }
+        } else {
+            titleView.text = if (taskText.isBlank()) {
                 "아까 시작한 일,\n지금도 하는 중이야?"
             } else {
                 "아까 시작한 '$taskText',\n지금도 하는 중이야?"
             }
-
-        view.findViewById<View>(R.id.nudge_card_done).setOnClickListener {
-            answerDone()
-        }
-        view.findViewById<View>(R.id.nudge_card_continue).setOnClickListener {
-            keepGoing()
-        }
-        view.findViewById<View>(R.id.nudge_card_restart).setOnClickListener {
-            restart()
+            doneButton.setOnClickListener { answerDone() }
+            continueButton.setOnClickListener { keepGoing() }
+            restartButton.setOnClickListener { restart() }
         }
         // 카드 바깥을 누르면 다시 작아진다.
         view.findViewById<View>(R.id.nudge_card_scrim).setOnClickListener {
@@ -461,6 +475,42 @@ class OngoingNudgeService : Service() {
     }
 
     /**
+     * "그럴게". 멈춰 있던 일을 그 자리에서 다시 돈다.
+     *
+     * [nextTaskNow]와 달리 이미 손댄 일이라 처음 시작이 아니라 재시작이지만,
+     * [OngoingNudgeAnswerWriter.markStarted]는 둘을 가리지 않는다 — 쌓인 시간에
+     * 이어 붙이는 건 똑같다.
+     */
+    private fun resumeNow() {
+        answered = true
+        val taskId = OngoingNudgeState.taskId(this)
+        if (taskId != null) {
+            OngoingNudgeAnswerWriter.markStarted(this, taskId)
+            OngoingNudgeState.writeResult(this, taskId, "started")
+        }
+        OngoingNudgeState.clear(this)
+        OngoingNudgeScheduler.cancel(this)
+        Toast.makeText(this, "좋아! 다시 시작이야", Toast.LENGTH_SHORT).show()
+        lingerAsDoorway()
+    }
+
+    /** "하고 있어". 일정은 건드리지 않는다. 1시간 뒤에 한 번 더 본다. */
+    private fun resumeStillDoing() {
+        answered = true
+        scheduleNextRound(OngoingNudgeScheduler.NEXT_ROUND_DELAY_MILLIS)
+        Toast.makeText(this, "그렇구나! 계속 이어가", Toast.LENGTH_SHORT).show()
+        lingerAsDoorway()
+    }
+
+    /** "나중에". 22시가 되기 전까지 2시간마다 조건을 다시 보고 되묻는다. */
+    private fun resumeLater() {
+        answered = true
+        scheduleNextRound(OngoingNudgeScheduler.NEXT_TASK_ROUND_MILLIS)
+        Toast.makeText(this, "알겠어. 이따 다시 부를게!", Toast.LENGTH_SHORT).show()
+        lingerAsDoorway()
+    }
+
+    /**
      * 앱의 할 일 창을 연다. 홈 화면 위젯이 쓰는 길을 그대로 탄다 —
      * 어느 화면에 있든 플래너가 열린 상태로 들어간다.
      */
@@ -561,8 +611,8 @@ class OngoingNudgeService : Service() {
                 when {
                     OngoingNudgeState.isStartReminder(this) ->
                         OngoingNudgeScheduler.START_SNOOZE_MILLIS
-                    // 아무 것도 안 누르고 15분간 놔둔 것도 "더 있다 할게"와 같다.
-                    OngoingNudgeState.isNextTaskReminder(this) ->
+                    // 아무 것도 안 누르고 15분간 놔둔 것도 "더 있다 할게"/"나중에"와 같다.
+                    OngoingNudgeState.isIdleNudge(this) ->
                         OngoingNudgeScheduler.NEXT_TASK_ROUND_MILLIS
                     else -> OngoingNudgeScheduler.NEXT_ROUND_DELAY_MILLIS
                 },

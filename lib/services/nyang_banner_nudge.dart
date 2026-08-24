@@ -71,6 +71,17 @@ class NyangBannerNudge {
     1311,
   ];
 
+  /// 시작해뒀다 멈춘 지 3시간 넘은 일을 다시 부르는 자리들. [nextTaskNotificationIds]와
+  /// 같은 방식이고, 대상이 "시간이 정해지지 않은 새 일"이 아니라 "이미 손댄 그 일"이다.
+  static const List<int> resumeNotificationIds = [
+    1312,
+    1313,
+    1314,
+    1315,
+    1316,
+    1317,
+  ];
+
   static const Duration _nextTaskRound = Duration(hours: 2);
 
   /// "지금 한번 보기"는 자기 자리를 쓴다.
@@ -112,6 +123,9 @@ class NyangBannerNudge {
       await _plugin.cancel(id: id);
     }
     for (final id in nextTaskNotificationIds) {
+      await _plugin.cancel(id: id);
+    }
+    for (final id in resumeNotificationIds) {
       await _plugin.cancel(id: id);
     }
 
@@ -183,6 +197,9 @@ class NyangBannerNudge {
     }
 
     if (masterEligible) {
+      // 이미 손댄 일을 다시 붙잡을지가, 아직 안 건드린 일을 새로 시작할지보다
+      // 앞선다.
+      if (await _syncResumeNudge(tasks, now)) return;
       await _syncNextTaskNudge(tasks, now);
       return;
     }
@@ -190,6 +207,77 @@ class NyangBannerNudge {
     // 도는 일정도, 다음 일 후보도 없다. 걸어둔 배너는 위에서 지워졌으니
     // 맡아둔 자리도 푼다.
     await DistractionCoachQuota.releaseUnconfirmedUnless();
+  }
+
+  /// 시작해뒀다 멈춘 지 3시간 넘은 일을 다시 부르는 알림 사슬을 다시 깐다.
+  /// 걸었으면 true.
+  static Future<bool> _syncResumeNudge(List tasks, DateTime now) async {
+    Map<String, dynamic>? candidate;
+    DateTime? pausedAt;
+    for (final item in tasks) {
+      if (item is! Map) continue;
+      if (item['done'] == true) continue;
+      if (item['inProgress'] == true) continue;
+      if (((item['elapsedSeconds'] as num?)?.toInt() ?? 0) <= 0) continue;
+      final paused = DateTime.tryParse(item['pausedAt']?.toString() ?? '');
+      if (paused == null) continue;
+      candidate = Map<String, dynamic>.from(item);
+      pausedAt = paused;
+      break;
+    }
+    if (candidate == null || pausedAt == null) return false;
+
+    var at = pausedAt.add(const Duration(hours: 3));
+    while (!at.isAfter(now)) {
+      at = at.add(_nextTaskRound);
+    }
+
+    final taskId = candidate['id'].toString();
+    final taskText = candidate['text']?.toString() ?? '';
+    var scheduled = false;
+    for (var i = 0; i < resumeNotificationIds.length; i++) {
+      final fireAt = at.add(_nextTaskRound * i);
+      if (fireAt.hour >= 22) break;
+      await _scheduleResume(
+        id: resumeNotificationIds[i],
+        taskId: taskId,
+        taskText: taskText,
+        at: fireAt,
+      );
+      scheduled = true;
+    }
+    return scheduled;
+  }
+
+  static Future<void> _scheduleResume({
+    required int id,
+    required String taskId,
+    required String taskText,
+    required DateTime at,
+  }) async {
+    _ensureTimeZone();
+    final payload =
+        '$payloadPrefix:${jsonEncode({'taskId': taskId, 'taskText': taskText})}';
+
+    final details = NotificationDetails(
+      iOS: DarwinNotificationDetails(
+        presentAlert: true,
+        presentBanner: true,
+        presentList: true,
+        presentSound: false,
+        interruptionLevel: InterruptionLevel.timeSensitive,
+      ),
+    );
+
+    await _plugin.zonedSchedule(
+      id: id,
+      title: '🐾 ${taskText.isEmpty ? '멈춰 있는 일' : taskText}',
+      body: '하다가 멈췄네. 다시 시작할까냥?',
+      scheduledDate: tz.TZDateTime.from(at, tz.local),
+      notificationDetails: details,
+      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      payload: payload,
+    );
   }
 
   /// 방금 하나를 끝냈고 시간이 정해지지 않은 다음 일이 남았을 때의 알림 사슬을

@@ -47,6 +47,15 @@ object OngoingNudgeState {
      */
     const val KIND_NEXT = "next"
 
+    /**
+     * 시작해뒀다 멈춘 일이 그 상태로 오래 있어 다시 부르는 중.
+     *
+     * 마스터 플랜 전용. 멈춘 지 3시간 뒤 한 번, 그래도 미루면 22시까지 2시간마다
+     * 다시 본다. [KIND_NEXT]와 같은 조건 재검사 방식을 쓰지만, 대상이 "시간이
+     * 정해지지 않은 새 일"이 아니라 "이미 손댄 그 일"이라는 점이 다르다.
+     */
+    const val KIND_RESUME = "resume"
+
     /** 시작을 권하는 것도 이 시각까지만. 네이티브만 쓴다. */
     private const val KEY_START_UNTIL = "ongoing_nudge_start_until"
 
@@ -106,7 +115,20 @@ object OngoingNudgeState {
 
     fun isNextTaskReminder(context: Context): Boolean = kind(context) == KIND_NEXT
 
-    /** 22시가 넘으면 다음 일 권하는 것도 멈춘다. 밤까지 이어지면 잔소리가 된다. */
+    fun isResumeReminder(context: Context): Boolean = kind(context) == KIND_RESUME
+
+    /**
+     * 도는 일도, 시작을 기다리는 일도 아닌 "말 걸어보는" 쪽인지.
+     *
+     * [KIND_NEXT]와 [KIND_RESUME]는 서로의 자리를 자유롭게 넘겨받는다 — 둘 다
+     * 급한 일이 아니라, 나중에 걸린 쪽이 이기면 그만이다. 대신 진짜 도는
+     * 일([KIND_ONGOING])이나 시작을 기다리는 일([KIND_START])이 이 자리를 쓰고
+     * 있으면 절대 넘겨받지 않는다.
+     */
+    fun isIdleNudge(context: Context): Boolean =
+        isNextTaskReminder(context) || isResumeReminder(context)
+
+    /** 22시가 넘으면 다음 일·재개 권하는 것도 멈춘다. 밤까지 이어지면 잔소리가 된다. */
     fun isNextTaskWindowOver(): Boolean {
         val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
         return hour >= 22

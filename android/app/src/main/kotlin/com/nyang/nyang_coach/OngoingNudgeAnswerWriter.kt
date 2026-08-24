@@ -112,6 +112,9 @@ object OngoingNudgeAnswerWriter {
         if (task.optString("inProgressAt", "").isBlank()) {
             task.put("inProgressAt", now)
         }
+        // 멈춘 시각은 다시 도는 순간 뜻을 잃는다. 남겨두면 다음에 또 멈췄을 때
+        // "멈춘 지 3시간" 카드가 이번이 아니라 저번 것으로 착각할 수 있다.
+        task.remove("pausedAt")
         prefs.edit().putString(KEY_TASKS, tasks.toString()).commit()
         markStoreChanged(prefs)
     }
@@ -152,6 +155,29 @@ object OngoingNudgeAnswerWriter {
             if (item.optBoolean("inProgress", false)) return true
         }
         return false
+    }
+
+    /**
+     * 시작해뒀다 지금은 멈춰 있는 일.
+     *
+     * "'일정명' 하다가 멈췄네. 다시 시작할까?" 카드가 매번 다시 검사하는 조건이다.
+     * [findNextTaskCandidate]와 달리 시간이 정해졌는지는 안 본다 — 이미 손댄
+     * 일이라, 다른 시간대 약속이 있어도 잠깐 다시 붙잡을지는 물어볼 만하다.
+     */
+    fun findResumeCandidate(context: Context): Pair<String, String>? {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val tasksRaw = prefs.getString(KEY_TASKS, null) ?: return null
+        val tasks = runCatching { JSONArray(tasksRaw) }.getOrNull() ?: return null
+
+        for (i in 0 until tasks.length()) {
+            val item = tasks.optJSONObject(i) ?: continue
+            if (item.optBoolean("done", false)) continue
+            if (item.optBoolean("inProgress", false)) continue
+            if (item.optInt("elapsedSeconds", 0) <= 0) continue
+            val id = item.opt("id")?.toString() ?: continue
+            return id to item.optString("text", "")
+        }
+        return null
     }
 
     /**

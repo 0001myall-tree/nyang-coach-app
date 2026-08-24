@@ -355,6 +355,31 @@ class OngoingTaskNudgeService {
     }
   }
 
+  /// 시작해뒀다 멈춘 일을, 그 상태로 오래 있으면 다시 부른다.
+  ///
+  /// 안드로이드에만 있다. 아이폰은 [NyangBannerNudge]가 같은 역할을 대신한다.
+  /// [remindNextTask]와 같은 이유로 조건은 이때 한 번만 보고, 그 뒤는 네이티브가
+  /// 스스로 잇는다.
+  static Future<void> remindResume({
+    required String taskId,
+    required String taskText,
+    required DateTime fireAt,
+  }) async {
+    if (!_isAndroid) return;
+    if (!await isAvailable()) return;
+    try {
+      await _channel.invokeMethod('remindResume', {
+        'taskId': taskId,
+        'taskText': taskText,
+        'fireAtMillis': fireAt.millisecondsSinceEpoch,
+      });
+    } on PlatformException {
+      //
+    } on MissingPluginException {
+      //
+    }
+  }
+
   /// 오늘 시작할 시각이 정해져 있는데 아직 손대지 않은 일정 중 가장 이른 것.
   ///
   /// 이미 시작했거나 끝낸 것, 시각이 없는 것, 시각이 지나버린 것은 뺀다.

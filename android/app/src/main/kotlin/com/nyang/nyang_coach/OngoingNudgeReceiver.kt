@@ -21,7 +21,7 @@ class OngoingNudgeReceiver : BroadcastReceiver() {
                 if (OngoingNudgeState.isActive(context) &&
                     (OngoingNudgeState.isEnabled(context) ||
                         OngoingNudgeState.isStartReminder(context) ||
-                        OngoingNudgeState.isNextTaskReminder(context))
+                        OngoingNudgeState.isIdleNudge(context))
                 ) {
                     OngoingNudgeScheduler.scheduleIn(
                         context,
@@ -39,7 +39,9 @@ class OngoingNudgeReceiver : BroadcastReceiver() {
         // 그 사이에 완료했거나, 스위치를 껐거나, 권한이 사라졌으면 여기서 끝난다.
         val isStartReminder = OngoingNudgeState.isStartReminder(context)
         val isNextTaskReminder = OngoingNudgeState.isNextTaskReminder(context)
-        if ((!isStartReminder && !isNextTaskReminder && !OngoingNudgeState.isEnabled(context)) ||
+        val isResumeReminder = OngoingNudgeState.isResumeReminder(context)
+        if ((!isStartReminder && !isNextTaskReminder && !isResumeReminder &&
+                !OngoingNudgeState.isEnabled(context)) ||
             !OngoingNudgeState.isActive(context) ||
             !OngoingNudgeState.canDrawOverlays(context)
         ) {
@@ -111,6 +113,35 @@ class OngoingNudgeReceiver : BroadcastReceiver() {
             // 처음 걸어둘 때와 지금 사이에 다른 일이 먼저 채워졌을 수 있다.
             // 보여줄 거라면 지금 기준으로 가장 앞선 후보로 다시 적어 넣는다.
             OngoingNudgeState.start(context, candidate.first, candidate.second, OngoingNudgeState.KIND_NEXT)
+            if (OngoingNudgeState.shouldAppearNow(context, requireEnabled = false)) {
+                OngoingNudgeService.show(context)
+            } else {
+                OngoingNudgeScheduler.scheduleIn(
+                    context,
+                    OngoingNudgeScheduler.RETRY_DELAY_MILLIS,
+                    OngoingNudgeScheduler.STAGE_FIRST,
+                )
+            }
+            return
+        }
+
+        // 멈춘 지 3시간 뒤 "'일정명' 하다가 멈췄네. 다시 시작할까?". 조건은
+        // [isNextTaskReminder] 갈래와 같은 방식으로 매번 다시 본다 — 그 사이
+        // 다시 시작했거나(더는 멈춘 상태가 아니거나), 완료했거나, 다른 일을
+        // 손댔으면 조용히 접는다.
+        if (isResumeReminder) {
+            if (OngoingNudgeState.isNextTaskWindowOver()) {
+                OngoingNudgeState.clear(context)
+                OngoingNudgeScheduler.cancel(context)
+                return
+            }
+            val candidate = OngoingNudgeAnswerWriter.findResumeCandidate(context)
+            if (candidate == null || OngoingNudgeAnswerWriter.isAnyTaskInProgress(context)) {
+                OngoingNudgeState.clear(context)
+                OngoingNudgeScheduler.cancel(context)
+                return
+            }
+            OngoingNudgeState.start(context, candidate.first, candidate.second, OngoingNudgeState.KIND_RESUME)
             if (OngoingNudgeState.shouldAppearNow(context, requireEnabled = false)) {
                 OngoingNudgeService.show(context)
             } else {

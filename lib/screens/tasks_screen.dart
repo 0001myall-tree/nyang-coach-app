@@ -73,6 +73,13 @@ class TaskItem {
   /// 완료 시점에 굳힌 최종 실행 시간. 완료 뒤에는 이 값만 보여준다.
   int? actualSeconds;
 
+  /// 마지막으로 일시정지한 시각. 재시작하거나 완료하면 지운다.
+  ///
+  /// "멈춘 지 3시간 지난 일정" 냥냥이 카드가 이 값 하나로 판단한다. 시작 시각과
+  /// 달리 멈출 때마다 새로 적어야, 두 번째로 멈췄을 때 첫 번째 멈춘 시각을 보고
+  /// 이미 지난 일로 착각하지 않는다.
+  String? pausedAt;
+
   TaskItem({
     required this.id,
     required this.text,
@@ -95,6 +102,7 @@ class TaskItem {
     this.elapsedSeconds = 0,
     this.runStartedAt,
     this.actualSeconds,
+    this.pausedAt,
   });
 
   /// 이 할 일이 시작·일시정지·밀어서 완료 흐름을 타는지.
@@ -145,6 +153,7 @@ class TaskItem {
     if (elapsedSeconds > 0) 'elapsedSeconds': elapsedSeconds,
     if (runStartedAt != null) 'runStartedAt': runStartedAt,
     if (actualSeconds != null) 'actualSeconds': actualSeconds,
+    if (pausedAt != null) 'pausedAt': pausedAt,
   };
 
   factory TaskItem.fromJson(Map<String, dynamic> j) => TaskItem(
@@ -169,6 +178,7 @@ class TaskItem {
     elapsedSeconds: (j['elapsedSeconds'] as num?)?.toInt() ?? 0,
     runStartedAt: j['runStartedAt']?.toString(),
     actualSeconds: (j['actualSeconds'] as num?)?.toInt(),
+    pausedAt: j['pausedAt']?.toString(),
   );
 }
 
@@ -2462,6 +2472,25 @@ class _TasksScreenState extends State<TasksScreen>
     await _tellQuotaSpentIfNeeded(running.id.toString());
   }
 
+  /// 시작해뒀다 방금 멈춘 일이, 3시간이 지나도 여전히 멈춰 있고 다른 무엇도
+  /// 도는 게 없으면 한 번 물어보게 걸어둔다. 마스터 플랜 전용.
+  ///
+  /// 트리거만 여기서 건다. 22시까지 이어지는 반복과 조건 재검사(그 사이 다시
+  /// 시작했거나, 다른 일을 손댔거나)는 [_maybeScheduleNextTaskNudge]와 같은
+  /// 방식으로 안드로이드는 네이티브가, 아이폰은 [NyangBannerNudge.sync]가 잇는다.
+  Future<void> _maybeScheduleResumeNudge(TaskItem t) async {
+    if (!OngoingTaskNudgeService.isSupported) return;
+    if (!t.isPaused) return;
+    final userData = await UserDataService.load();
+    if (!userData.isPlanActive || userData.planType != 'master') return;
+
+    await OngoingTaskNudgeService.remindResume(
+      taskId: t.id.toString(),
+      taskText: t.text,
+      fireAt: DateTime.now().add(const Duration(hours: 3)),
+    );
+  }
+
   /// 방금 하나를 끝냈고, 시간이 정해지지 않은 다음 일이 남아 있으면 3시간 뒤
   /// 한 번 물어보게 걸어둔다. 마스터 플랜 전용.
   ///
@@ -4074,12 +4103,14 @@ class _TasksScreenState extends State<TasksScreen>
           t.elapsedSeconds = t.elapsedSecondsAt(now);
           t.inProgress = false;
           t.runStartedAt = null;
+          t.pausedAt = now.toIso8601String();
         } else {
           // 시작 또는 재시작. 누적은 건드리지 않아 이어서 흐른다.
           final firstStart = t.elapsedSeconds == 0;
           t.inProgress = true;
           t.runStartedAt = now.toIso8601String();
           t.inProgressAt ??= now.toIso8601String();
+          t.pausedAt = null;
           // 완료하려고 이 버튼을 누른 사람은 여기서 "왜 안 끝나지"를 만난다.
           // 그 자리에서 카드를 한 번 밀어 보여주면 답을 찾으러 다니지 않는다.
           if (firstStart) {
@@ -4092,7 +4123,11 @@ class _TasksScreenState extends State<TasksScreen>
       _syncTaskTicker();
       // 저장은 상태가 바뀌는 이 순간에만 한다. 화면의 초는 기기에서 센다.
       _saveTasks();
-      if (t.inProgress) unawaited(_maybeOfferOngoingNudge());
+      if (t.inProgress) {
+        unawaited(_maybeOfferOngoingNudge());
+      } else if (_isViewingActualToday) {
+        unawaited(_maybeScheduleResumeNudge(t));
+      }
     } else if (!forceComplete && !t.inProgress) {
       // 1단계: 진행 중으로 전환 (한 번 더 누르면 완료)
       setState(() {
@@ -4151,6 +4186,7 @@ class _TasksScreenState extends State<TasksScreen>
         t.runStartedAt = null;
         t.inProgress = false;
         t.inProgressAt = recordedStartedAt;
+        t.pausedAt = null;
         t.completedAt = completedAtIso;
         final completedAt = DateTime.tryParse(t.completedAt!);
         // 어제 화면에서 채운 것도 그날 도장으로 남긴다.
