@@ -1056,11 +1056,7 @@ class _LocalResponses {
       ],
     },
     'boyfriend': {
-      'greet': [
-        '오랜만이네~ 어디 갔다 왔어?^^',
-        '왔네! 기다리고 있었는데~',
-        '엄청 보고 싶었는데~^^',
-      ],
+      'greet': ['오랜만이네~ 어디 갔다 왔어?^^', '왔네! 기다리고 있었는데~', '엄청 보고 싶었는데~^^'],
     },
     'cat': {
       'greet': [
@@ -2074,8 +2070,13 @@ class _ChatScreenState extends State<ChatScreen>
     }
 
     final prefs = await SharedPreferences.getInstance();
+    final autoEnabledTimedReminder = plan.time != null
+        ? await _prepareTimedScheduleStartReminder()
+        : false;
     final alarmOn =
-        withAlarm || (prefs.getBool('nyang_core_reminder_enabled') ?? false);
+        withAlarm ||
+        autoEnabledTimedReminder ||
+        (prefs.getBool('nyang_core_reminder_enabled') ?? false);
     // 알람을 켜서 넣는데 일정 알람 자체가 꺼져 있으면 울리지 않는다.
     final turnedOn = alarmOn ? await _ensureCoreRemindersEnabled() : false;
 
@@ -2087,6 +2088,9 @@ class _ChatScreenState extends State<ChatScreen>
       alarmOn,
       null,
     );
+    if (alarmOn) {
+      await NotificationService().syncCoreReminders();
+    }
     if (!mounted) return;
 
     final when = _registrationWhenLabel(plan, withAlarm: alarmOn);
@@ -2114,8 +2118,12 @@ class _ChatScreenState extends State<ChatScreen>
 
     // 이미 켜져 있던 사람이라도 알림 권한이 막혀 있으면 울리지 않는다.
     await NotificationService().requestNotificationPermissions();
-    final issue = await NotificationService().checkAlarmPermission();
-    if (!mounted || issue == AlarmPermissionIssue.none) return;
+    final issue = await NotificationService().checkCoreReminderPermission();
+    if (!mounted) return;
+    if (issue == AlarmPermissionIssue.none) {
+      await NotificationService().syncCoreReminders();
+      return;
+    }
     await showAlarmPermissionDialog(context, issue, alarmLabel: '일정 알람');
   }
 
@@ -2177,6 +2185,50 @@ class _ChatScreenState extends State<ChatScreen>
     }
     TasksSyncService.scheduleSyncToCloud();
     return true;
+  }
+
+  Future<bool> _prepareTimedScheduleStartReminder() async {
+    if (!OngoingTaskNudgeService.isSupported) return false;
+
+    var enabledPushReminder = false;
+    if (_userData.isPlanActive) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('nyang_core_reminder_enabled', true);
+      await prefs.setString('nyang_core_reminder_coach', 'push');
+      if (prefs.getInt('nyang_core_reminder_advance') == null) {
+        await prefs.setInt('nyang_core_reminder_advance', 10);
+      }
+      TasksSyncService.scheduleSyncToCloud();
+      enabledPushReminder = true;
+    }
+
+    await NotificationService().requestNotificationPermissions();
+    final issue = await NotificationService().checkCoreReminderPermission();
+    if (!mounted) return enabledPushReminder;
+    if (issue != AlarmPermissionIssue.none) {
+      await showAlarmPermissionDialog(
+        context,
+        issue,
+        alarmLabel: '시간 냥냥이',
+        emoji: '🐾',
+      );
+      return enabledPushReminder;
+    }
+
+    await NotificationService().syncCoreReminders();
+
+    if (defaultTargetPlatform == TargetPlatform.android &&
+        !await OngoingTaskNudgeService.isAvailable()) {
+      _injectAiMessage(
+        '시간 냥냥이를 제시간에 보려면 "다른 앱 위에 표시" 권한이 필요해요. '
+        '설정 화면을 열어둘게요.',
+      );
+      await OngoingTaskNudgeService.openSystemSettings();
+      return enabledPushReminder;
+    }
+
+    await OngoingTaskNudgeService.reconcile();
+    return enabledPushReminder;
   }
 
   /// 카드도 코치가 하는 말이다. 등록 카드가 코치마다 말투를 달리하는데
@@ -2412,7 +2464,10 @@ class _ChatScreenState extends State<ChatScreen>
         : null;
     final detail = plan == null
         ? ''
-        : _registrationWhenLabel(plan, withAlarm: plan.time != null && withAlarm);
+        : _registrationWhenLabel(
+            plan,
+            withAlarm: plan.time != null && withAlarm,
+          );
 
     setState(() {
       _messages.add(
@@ -4809,9 +4864,7 @@ ${lines.join('\n')}
   Duration _elapsedOf(Map<String, dynamic> task, DateTime now) {
     final base = (task['elapsedSeconds'] as num?)?.toInt() ?? 0;
     if (task['inProgress'] != true) return Duration(seconds: base);
-    final startedAt = DateTime.tryParse(
-      task['runStartedAt']?.toString() ?? '',
-    );
+    final startedAt = DateTime.tryParse(task['runStartedAt']?.toString() ?? '');
     if (startedAt == null) return Duration(seconds: base);
     final running = now.difference(startedAt).inSeconds;
     return Duration(seconds: base + (running > 0 ? running : 0));
@@ -5006,7 +5059,9 @@ ${lines.join('\n')}
     // 이미 절반을 넘겼으면 좁힐 것이 별로 없다.
     if (pending + done > 0 && done / (pending + done) > 0.5) return false;
 
-    final line = _catLinePicker.pickLine(MasterGreetingCopy.catEveningMinimumBar);
+    final line = _catLinePicker.pickLine(
+      MasterGreetingCopy.catEveningMinimumBar,
+    );
     if (line.isEmpty || !mounted) return false;
 
     _injectAiMessage(line, kind: _minimumBarGreetingKind);
@@ -7772,9 +7827,7 @@ ${lines.join('\n')}
     if (afterTime) {
       // 떼고 나면 아무것도 안 남는 경우("9시부터 시작")는 그게 이름의 전부라는
       // 뜻이라 되돌린다.
-      final withoutStart = cleaned
-          .replaceFirst(RegExp(r'\s*시작$'), '')
-          .trim();
+      final withoutStart = cleaned.replaceFirst(RegExp(r'\s*시작$'), '').trim();
       if (withoutStart.isNotEmpty) cleaned = withoutStart;
     }
     // "산책 일정에", "할 일에 산책"처럼 어디에 넣을지 가리키는 말은 제목이 아니다.
@@ -8221,7 +8274,10 @@ ${lines.join('\n')}
       kind = 'task_or_schedule';
     }
     cleaned = cleaned.replaceAll(RegExp(r'\s*반복\s*일정\s*'), ' ');
-    cleaned = cleaned.replaceAll(RegExp(r'\s*(?:습관|루틴)\s*(?:탭|텝)?\s*(?:을|를|에|은|는)?\s*'), ' ');
+    cleaned = cleaned.replaceAll(
+      RegExp(r'\s*(?:습관|루틴)\s*(?:탭|텝)?\s*(?:을|를|에|은|는)?\s*'),
+      ' ',
+    );
     cleaned = cleaned.replaceAll(RegExp(r'\s*(?:일정|할\s*일|태스크)\s*$'), '');
     cleaned = cleaned.replaceAll(
       RegExp(r'\s+(?:[월화수목금토일]\s*요일|[월화수목금토일])\s*(?:로|으로|에)?\s*$'),
@@ -9528,10 +9584,16 @@ ${lines.join('\n')}
                               final messenger = ScaffoldMessenger.of(
                                 this.context,
                               );
+                              final autoEnabledTimedReminder =
+                                  confirmedTime != null
+                                  ? await _prepareTimedScheduleStartReminder()
+                                  : false;
                               // 알람을 켠 채로 넣는데 일정 알람 자체가 꺼져
                               // 있으면 울리지 않는다. 여기서 함께 켠다.
                               var turnedOnCoreReminders = false;
-                              if (reminderEnabled && confirmedTime != null) {
+                              if ((reminderEnabled ||
+                                      autoEnabledTimedReminder) &&
+                                  confirmedTime != null) {
                                 turnedOnCoreReminders =
                                     await _ensureCoreRemindersEnabled();
                               }
@@ -9540,9 +9602,15 @@ ${lines.join('\n')}
                                 confirmedDate,
                                 confirmedTime,
                                 confirmedEndTime,
-                                reminderEnabled && confirmedTime != null,
+                                (reminderEnabled || autoEnabledTimedReminder) &&
+                                    confirmedTime != null,
                                 confirmedRepeatRule,
                               );
+                              if ((reminderEnabled ||
+                                      autoEnabledTimedReminder) &&
+                                  confirmedTime != null) {
+                                await NotificationService().syncCoreReminders();
+                              }
                               if (!mounted) return;
                               navigator.pop();
                               messenger.showSnackBar(
@@ -12238,9 +12306,7 @@ ${lines.join('\n')}
   /// 것이라, 처음 쓰는 사람이 스스로 알아내기 어렵다.
   bool _asksTaskCheckGuide(String normalized) {
     if (!RegExp(r'완료|체크|다했|끝냈|끝난').hasMatch(normalized)) return false;
-    return RegExp(
-      r'어떻게|어디서|어디에|방법|하는법|하려면|표시|처리|누르',
-    ).hasMatch(normalized);
+    return RegExp(r'어떻게|어디서|어디에|방법|하는법|하려면|표시|처리|누르').hasMatch(normalized);
   }
 
   String _featureLocationMessage(String location) {
@@ -13821,8 +13887,7 @@ ${lines.join('\n')}
                   : '') +
               (_coach.isMaster ? Prompts.goalPushMaster : '')
         : isDriveTurn
-        ? Prompts.driveBoost +
-              (_coach.isMaster ? Prompts.driveBoostMaster : '')
+        ? Prompts.driveBoost + (_coach.isMaster ? Prompts.driveBoostMaster : '')
         : '';
 
     // 이번 턴에 쓸 개입을 앱이 하나만 고른다.
@@ -14515,10 +14580,7 @@ ${Prompts.outputRulesTail}$plannerActionSection$coachOfferTaskRule$halmaeHint$re
                   child: ElevatedButton(
                     onPressed: () {
                       Navigator.pop(sheetContext);
-                      Future.delayed(
-                        Duration.zero,
-                        _showPlanGuideBottomSheet,
-                      );
+                      Future.delayed(Duration.zero, _showPlanGuideBottomSheet);
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: _coach.accentColor,
@@ -16045,10 +16107,7 @@ ${Prompts.outputRulesTail}$plannerActionSection$coachOfferTaskRule$halmaeHint$re
 
     // 마스터 코치별 대화 영역 배경
     if (_coach.isMaster) {
-      return ColoredBox(
-        color: _chatAreaBackgroundColor,
-        child: list,
-      );
+      return ColoredBox(color: _chatAreaBackgroundColor, child: list);
     }
 
     // 프렌즈는 배경 투명 (main_tab_screen에서 전체 배경 처리)
@@ -17649,7 +17708,6 @@ ${Prompts.outputRulesTail}$plannerActionSection$coachOfferTaskRule$halmaeHint$re
       _reserveTaskChipName(taskName, usedTaskNames);
       return label;
     }
-
 
     String focusChip() {
       return _coach.id == 'sec_female' &&

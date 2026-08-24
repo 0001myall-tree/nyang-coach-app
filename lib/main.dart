@@ -138,6 +138,7 @@ class _NyangCoachAppState extends State<NyangCoachApp>
       OngoingTaskNudgeService.applyPendingAnswer().then(
         (_) => OngoingTaskNudgeService.reconcile(),
       );
+      unawaited(NotificationService().syncCoreReminders());
       // 배너에서 "시작할게"를 눌렀으면 저장소는 이미 바뀌어 있다. 다음 배너를
       // 다시 잡아둬야 그 일정에 계속 걸려 있지 않는다.
       unawaited(NyangBannerNudge.sync());

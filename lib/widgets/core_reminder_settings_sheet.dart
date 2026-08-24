@@ -23,7 +23,8 @@ Future<bool> showCoreReminderSettingsSheet(BuildContext context) async {
   var tempEnabled = true;
   var tempAdvance = prefs.getInt('nyang_core_reminder_advance') ?? 10;
   // 알람을 막고 있는 권한이 있으면 켜기 전에 보이게 한다.
-  var permissionIssue = await NotificationService().checkAlarmPermission();
+  var permissionIssue = await NotificationService()
+      .checkCoreReminderPermission();
 
   if (!context.mounted) return false;
   final saved = await showModalBottomSheet<bool>(
@@ -111,7 +112,7 @@ Future<bool> showCoreReminderSettingsSheet(BuildContext context) async {
                         emoji: '🔔',
                       );
                       final next = await NotificationService()
-                          .checkAlarmPermission();
+                          .checkCoreReminderPermission();
                       setModalState(() => permissionIssue = next);
                     },
                   ),
@@ -198,7 +199,7 @@ Future<bool> showCoreReminderSettingsSheet(BuildContext context) async {
                         tempAdvance,
                       );
                       TasksSyncService.scheduleSyncToCloud();
-                      NotificationService().syncCoreReminders();
+                      await NotificationService().syncCoreReminders();
                       if (sheetContext.mounted) {
                         Navigator.pop(sheetContext, tempEnabled);
                       }
@@ -233,7 +234,7 @@ Future<bool> showCoreReminderSettingsSheet(BuildContext context) async {
   // 켠 직후에 실제로 울릴 수 있는 상태인지 확인하고, 막혀 있으면 설정으로 갈 길을 안내한다.
   // 시트가 닫힌 뒤라 바깥 화면의 context로 띄운다.
   await NotificationService().requestNotificationPermissions();
-  final issue = await NotificationService().checkAlarmPermission();
+  final issue = await NotificationService().checkCoreReminderPermission();
   if (issue != AlarmPermissionIssue.none && context.mounted) {
     await showAlarmPermissionDialog(
       context,
@@ -241,6 +242,8 @@ Future<bool> showCoreReminderSettingsSheet(BuildContext context) async {
       alarmLabel: '일정 알람',
       emoji: '🔔',
     );
+  } else if (issue == AlarmPermissionIssue.none) {
+    await NotificationService().syncCoreReminders();
   }
 
   return true;

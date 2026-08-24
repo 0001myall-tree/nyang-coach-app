@@ -135,9 +135,19 @@ class _SettingsScreenState extends State<SettingsScreen>
   }
 
   Future<void> _refreshAlarmPermission() async {
-    final issue = await NotificationService().checkAlarmPermission();
+    final issue = await _currentAlarmPermissionIssue();
     if (!mounted || issue == _alarmPermissionIssue) return;
     setState(() => _alarmPermissionIssue = issue);
+  }
+
+  Future<AlarmPermissionIssue> _currentAlarmPermissionIssue() {
+    if (_morningCallEnabled) {
+      return NotificationService().checkAlarmPermission();
+    }
+    if (_coreReminderEnabled) {
+      return NotificationService().checkCoreReminderPermission();
+    }
+    return Future.value(AlarmPermissionIssue.none);
   }
 
   /// 알람이 켜져 있는데 알림 권한이 없으면 알람이 전혀 울리지 않는다.
@@ -993,14 +1003,14 @@ class _SettingsScreenState extends State<SettingsScreen>
       _coreReminderAdvanceMinutes = advanceMinutes;
     });
 
-    NotificationService().syncCoreReminders();
+    await NotificationService().syncCoreReminders();
 
     // 모닝콜과 똑같이, 켠 직후에 실제로 울릴 수 있는 상태인지 확인한다.
     // 시스템 권한 창은 두 번 거절당하면 다시 뜨지 않으므로 요청 결과와 별개로 다시 본다.
     var issue = AlarmPermissionIssue.none;
     if (enabled) {
       await NotificationService().requestNotificationPermissions();
-      issue = await NotificationService().checkAlarmPermission();
+      issue = await NotificationService().checkCoreReminderPermission();
     }
     if (!mounted) return;
     setState(() => _alarmPermissionIssue = issue);
@@ -1013,6 +1023,8 @@ class _SettingsScreenState extends State<SettingsScreen>
         emoji: '🔔',
       );
       return;
+    } else if (enabled) {
+      await NotificationService().syncCoreReminders();
     }
 
     await _showAlarmNoticeDialog(
@@ -1252,8 +1264,8 @@ class _SettingsScreenState extends State<SettingsScreen>
         '"냥냥이 배너"가 내려와요. 눌러서 바로 앱으로 올 수 있어요.'
         // 이미 "지속"으로 해둔 사람에게는 이 줄이 군더더기다.
         '${await OngoingTaskNudgeService.isBannerPersistent() ? '' : '\n\n'
-            '배너가 금방 사라지지 않게 하려면 배너 스타일을 "지속"으로 '
-            '바꿔주세요.'}';
+                  '배너가 금방 사라지지 않게 하려면 배너 스타일을 "지속"으로 '
+                  '바꿔주세요.'}';
 
     if (await OngoingTaskNudgeService.showsOverOtherApps()) {
       return '일정이 도는 동안에는 다른 앱을 봐도 화면 맨 위에 냥냥이가 작게 '
@@ -1441,7 +1453,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                           emoji: '🔔',
                         );
                         final next = await NotificationService()
-                            .checkAlarmPermission();
+                            .checkCoreReminderPermission();
                         if (!mounted) return;
                         setState(() => _alarmPermissionIssue = next);
                         setModalState(() => modalIssue = next);
@@ -2757,19 +2769,25 @@ class _SettingsScreenState extends State<SettingsScreen>
                                         filled: true,
                                         fillColor: const Color(0xFFF8F7FF),
                                         border: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(16),
+                                          borderRadius: BorderRadius.circular(
+                                            16,
+                                          ),
                                           borderSide: const BorderSide(
                                             color: Color(0xFFE8E3F8),
                                           ),
                                         ),
                                         enabledBorder: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(16),
+                                          borderRadius: BorderRadius.circular(
+                                            16,
+                                          ),
                                           borderSide: const BorderSide(
                                             color: Color(0xFFE8E3F8),
                                           ),
                                         ),
                                         focusedBorder: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(16),
+                                          borderRadius: BorderRadius.circular(
+                                            16,
+                                          ),
                                           borderSide: const BorderSide(
                                             color: Color(0xFFB6A4FF),
                                             width: 1.5,
@@ -4149,9 +4167,7 @@ class _SettingsScreenState extends State<SettingsScreen>
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text(
           '마지막 코치 답변',
           style: GoogleFonts.notoSansKr(
@@ -4181,9 +4197,9 @@ class _SettingsScreenState extends State<SettingsScreen>
                 if (!ctx.mounted) return;
                 Navigator.pop(ctx);
                 if (!mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('복사했어요')),
-                );
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(const SnackBar(content: Text('복사했어요')));
               },
               child: Text(
                 '복사',
@@ -4252,8 +4268,9 @@ class _SettingsScreenState extends State<SettingsScreen>
                         InkWell(
                           onTap: isSending
                               ? null
-                              : () =>
-                                    setDialogState(() => selectedReason = reason),
+                              : () => setDialogState(
+                                  () => selectedReason = reason,
+                                ),
                           child: Padding(
                             padding: const EdgeInsets.symmetric(vertical: 8),
                             child: Row(
@@ -4365,7 +4382,10 @@ class _SettingsScreenState extends State<SettingsScreen>
       ),
       child: Text(
         '계정 삭제',
-        style: GoogleFonts.notoSansKr(fontSize: 12, fontWeight: FontWeight.w700),
+        style: GoogleFonts.notoSansKr(
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+        ),
       ),
     );
   }

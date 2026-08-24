@@ -18,7 +18,10 @@ class OngoingNudgeReceiver : BroadcastReceiver() {
             Intent.ACTION_MY_PACKAGE_REPLACED,
             "android.intent.action.QUICKBOOT_POWERON",
             -> {
-                if (OngoingNudgeState.isEnabled(context) && OngoingNudgeState.isActive(context)) {
+                if (OngoingNudgeState.isActive(context) &&
+                    (OngoingNudgeState.isEnabled(context) ||
+                        OngoingNudgeState.isStartReminder(context))
+                ) {
                     OngoingNudgeScheduler.scheduleIn(
                         context,
                         OngoingNudgeScheduler.RETRY_DELAY_MILLIS,
@@ -33,7 +36,8 @@ class OngoingNudgeReceiver : BroadcastReceiver() {
 
     private fun handleCheck(context: Context, stage: String?) {
         // 그 사이에 완료했거나, 스위치를 껐거나, 권한이 사라졌으면 여기서 끝난다.
-        if (!OngoingNudgeState.isEnabled(context) ||
+        val isStartReminder = OngoingNudgeState.isStartReminder(context)
+        if ((!isStartReminder && !OngoingNudgeState.isEnabled(context)) ||
             !OngoingNudgeState.isActive(context) ||
             !OngoingNudgeState.canDrawOverlays(context)
         ) {
@@ -64,7 +68,7 @@ class OngoingNudgeReceiver : BroadcastReceiver() {
         // 진행 중인 일정은 "잠깐 폰을 켠 건지 빠져 있는 건지"를 갈라야 하지만,
         // 시작할 시각에 폰을 들고 있다면 그것만으로 충분한 신호다. 4분을 더
         // 기다리면 시작할 시각이 이미 지나간 뒤에 나타난다.
-        if (OngoingNudgeState.isStartReminder(context)) {
+        if (isStartReminder) {
             if (OngoingNudgeState.isStartWindowOver(context)) {
                 // 오늘은 지나갔다. 밤까지 들고 다니면 알림이 아니라 잔소리가 된다.
                 OngoingNudgeState.clear(context)

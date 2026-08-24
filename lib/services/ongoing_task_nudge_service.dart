@@ -316,7 +316,6 @@ class OngoingTaskNudgeService {
     required DateTime startAt,
   }) async {
     if (!_isAndroid) return;
-    if (!await isEnabled()) return;
     if (!await isAvailable()) return;
     try {
       await _channel.invokeMethod('remindStart', {
@@ -376,9 +375,9 @@ class OngoingTaskNudgeService {
   /// 재부팅 뒤 예약이 비어 있을 수 있다.
   static Future<void> reconcile() async {
     if (!isSupported) return;
-    if (!await isEnabled()) {
+    final ongoingEnabled = await isEnabled();
+    if (!ongoingEnabled) {
       await stop();
-      return;
     }
 
     final prefs = await SharedPreferences.getInstance();
@@ -407,6 +406,7 @@ class OngoingTaskNudgeService {
 
     if (running == null) {
       // 도는 일정이 없으면 다음에 시작할 일정을 기다린다.
+      // 시작 시간 알림은 딴짓 방지 스위치와 별개로, 시간 있는 일정의 기본 동작이다.
       await stop();
       final next = nextUnstartedTask(tasks, DateTime.now());
       if (next != null) {
@@ -416,6 +416,10 @@ class OngoingTaskNudgeService {
           startAt: next['_startAt'] as DateTime,
         );
       }
+      return;
+    }
+    if (!ongoingEnabled) {
+      await stop();
       return;
     }
 

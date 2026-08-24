@@ -32,6 +32,7 @@ import '../services/task_completion_service.dart';
 import '../services/apple_calendar_sync_service.dart';
 import '../services/routine_schedule.dart';
 import '../theme/app_design_tokens.dart';
+import '../widgets/alarm_permission_notice.dart';
 import '../widgets/core_reminder_settings_sheet.dart';
 
 // ─────────────────────────────────────────────────────────────
@@ -1275,6 +1276,56 @@ class _TasksScreenState extends State<TasksScreen>
     final savedEnabled = await showCoreReminderSettingsSheet(context);
     if (!savedEnabled) return false;
     return _checkCoreReminderEnabledGlobally();
+  }
+
+  Future<bool> _prepareTimedScheduleStartReminder() async {
+    if (!OngoingTaskNudgeService.isSupported) return false;
+
+    var enabledPushReminder = false;
+    if (await _hasActivePlan()) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('nyang_core_reminder_enabled', true);
+      await prefs.setString('nyang_core_reminder_coach', 'push');
+      if (prefs.getInt('nyang_core_reminder_advance') == null) {
+        await prefs.setInt('nyang_core_reminder_advance', 10);
+      }
+      TasksSyncService.scheduleSyncToCloud();
+      enabledPushReminder = true;
+      if (mounted && !_isCoreReminderEnabledGlobally) {
+        setState(() => _isCoreReminderEnabledGlobally = true);
+      }
+    }
+
+    await NotificationService().requestNotificationPermissions();
+    final issue = await NotificationService().checkCoreReminderPermission();
+    if (!mounted) return enabledPushReminder;
+    if (issue != AlarmPermissionIssue.none) {
+      await showAlarmPermissionDialog(
+        context,
+        issue,
+        alarmLabel: '시간 냥냥이',
+        emoji: '🐾',
+      );
+      return enabledPushReminder;
+    }
+
+    await NotificationService().syncCoreReminders();
+
+    if (_onAndroid && !await OngoingTaskNudgeService.isAvailable()) {
+      if (!mounted) return enabledPushReminder;
+      await _showOngoingNudgeNotice(
+        title: '🐾 시간 냥냥이를 켜주세요',
+        message:
+            '시간이 있는 일정은 시작 시간에 냥냥이가 화면에 살짝 나와 알려드려요.\n'
+            '설정에서 냥냥코치의 "다른 앱 위에 표시"를 켜주세요.',
+        actionLabel: '설정 열기',
+      );
+      await OngoingTaskNudgeService.openSystemSettings();
+      return enabledPushReminder;
+    }
+
+    await OngoingTaskNudgeService.reconcile();
+    return enabledPushReminder;
   }
 
   void _openBottomSheet(String type) {
@@ -10982,17 +11033,23 @@ class _TasksScreenState extends State<TasksScreen>
       return;
     }
 
-    final reminderGloballyEnabled = await _checkCoreReminderEnabledGlobally();
     final effectiveScheduleTimeType = _effectiveClockTimeType(
       _schTimeType,
       _schEndTime,
     );
-    final shouldEnableReminder =
-        reminderGloballyEnabled &&
+    final hasClockTime =
         (effectiveScheduleTimeType == 'single' ||
             effectiveScheduleTimeType == 'range') &&
-        _schStartTime != null &&
-        _schReminderEnabled;
+        _schStartTime != null;
+    final autoEnabledTimedReminder = hasClockTime
+        ? await _prepareTimedScheduleStartReminder()
+        : false;
+    final reminderGloballyEnabled =
+        autoEnabledTimedReminder || await _checkCoreReminderEnabledGlobally();
+    final shouldEnableReminder =
+        reminderGloballyEnabled &&
+        hasClockTime &&
+        (_schReminderEnabled || autoEnabledTimedReminder);
 
     final nowMs = DateTime.now().millisecondsSinceEpoch;
     final createdAt = DateTime.now().toIso8601String();
@@ -11668,10 +11725,17 @@ class _TasksScreenState extends State<TasksScreen>
                               elevation: 0,
                             ),
                             onPressed: () async {
-                              final reminderGloballyEnabled =
-                                  await _checkCoreReminderEnabledGlobally();
                               final finalTitle = titleCtrl.text.trim();
                               if (finalTitle.isEmpty) return;
+                              final navigator = Navigator.of(ctx);
+                              final messenger = ScaffoldMessenger.of(context);
+                              final autoEnabledTimedReminder =
+                                  confirmedTime != null
+                                  ? await _prepareTimedScheduleStartReminder()
+                                  : false;
+                              final reminderGloballyEnabled =
+                                  autoEnabledTimedReminder ||
+                                  await _checkCoreReminderEnabledGlobally();
 
                               final nowMs =
                                   DateTime.now().millisecondsSinceEpoch;
@@ -11698,7 +11762,8 @@ class _TasksScreenState extends State<TasksScreen>
                                     text: finalTitle,
                                     createdAt: createdAt,
                                     isReminderEnabled:
-                                        isReminderEnabled &&
+                                        (isReminderEnabled ||
+                                            autoEnabledTimedReminder) &&
                                         reminderGloballyEnabled &&
                                         confirmedTime != null,
                                     isRecurring: repeatRule != null,
@@ -11732,8 +11797,8 @@ class _TasksScreenState extends State<TasksScreen>
                               }
 
                               _saveSchedules();
-                              Navigator.pop(ctx);
-                              ScaffoldMessenger.of(context).showSnackBar(
+                              navigator.pop();
+                              messenger.showSnackBar(
                                 SnackBar(
                                   content: Text(
                                     '"${finalTitle}" 일정을 추가했다냥! 🐾',
@@ -14376,7 +14441,9 @@ class _TasksScreenState extends State<TasksScreen>
             borderRadius: BorderRadius.circular(20),
           ),
           title: Text(
-            PurchaseService.storeCheckoutEnabled ? '⚠️ 구독 플랜 필요' : '⚠️ 체험 기간 종료',
+            PurchaseService.storeCheckoutEnabled
+                ? '⚠️ 구독 플랜 필요'
+                : '⚠️ 체험 기간 종료',
             style: GoogleFonts.notoSansKr(
               fontWeight: FontWeight.w900,
               color: const Color(0xFF1A1A2E),

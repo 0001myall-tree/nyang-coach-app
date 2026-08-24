@@ -395,9 +395,14 @@ class OngoingNudgeService : Service() {
             OngoingNudgeAnswerWriter.markStarted(this, taskId)
             OngoingNudgeState.writeResult(this, taskId, "started")
         }
-        // 이제 도는 중이다. 지켜보는 쪽으로 넘기고 평소처럼 30분 뒤에 한 번 본다.
-        OngoingNudgeState.switchToOngoing(this)
-        scheduleNextRound(OngoingNudgeScheduler.FIRST_DELAY_MILLIS)
+        // 이제 도는 중이다. 딴짓 방지 기능을 켠 사람만 30분 뒤에 다시 챙긴다.
+        // 시작 시간 알림은 기본 동작이지만, 시작 후 계속 따라가는 기능은 별도 스위치다.
+        if (OngoingNudgeState.isEnabled(this)) {
+            OngoingNudgeState.switchToOngoing(this)
+            scheduleNextRound(OngoingNudgeScheduler.FIRST_DELAY_MILLIS)
+        } else {
+            OngoingNudgeState.clear(this)
+        }
         Toast.makeText(this, "좋아! 지금부터 시작이야", Toast.LENGTH_SHORT).show()
         lingerAsDoorway()
     }

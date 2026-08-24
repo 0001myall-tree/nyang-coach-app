@@ -45,13 +45,14 @@ class NotificationService {
   static const int _dailyPlannerNudgeHour = 12;
   static const int _dailyPlannerNudgeMinute = 5;
   static const String _androidMorningChannelVersion = 'v10';
-  static const String _androidCoreReminderChannelVersion = 'v4';
+  static const String _androidCoreReminderChannelVersion = 'v5';
   static const bool _releaseCoreReminderVoiceAlarmEnabled = false;
   static const String _androidPushChannelId = 'nyang_push_channel';
   static const String _staleScheduleCleanupKey =
       'nyang_stale_schedule_cleanup_v1';
   static const String _androidFocusTimerChannelId =
       'nyang_focus_timer_channel_v3';
+
   /// 낮에 보낸 선제 메시지를 채팅으로 이어붙이려고 남겨두는 자리.
   ///
   /// 'nyang_'으로 시작하지 않는 키를 쓴다. 그 접두어는 클라우드 복원이
@@ -86,6 +87,7 @@ class NotificationService {
     await prefs.setString(firedNudgeKey, raw);
     await prefs.remove(pendingNudgeKey);
   }
+
   String? _lastMorningPayload;
   DateTime? _lastMorningOpenedAt;
 
@@ -360,7 +362,7 @@ class NotificationService {
         importance: Importance.max,
         playSound: true,
         enableVibration: true,
-        audioAttributesUsage: AudioAttributesUsage.alarm,
+        audioAttributesUsage: AudioAttributesUsage.notification,
       ),
     );
 
@@ -490,10 +492,21 @@ class NotificationService {
     return AlarmPermissionIssue.none;
   }
 
+  Future<AlarmPermissionIssue> checkCoreReminderPermission() async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
+      return AlarmPermissionIssue.none;
+    }
+    if (!await _invokeAndroidAlarmPermissionCheck('canPostNotifications')) {
+      return AlarmPermissionIssue.notifications;
+    }
+    if (!await _invokeAndroidAlarmPermissionCheck('canScheduleExactAlarms')) {
+      return AlarmPermissionIssue.exactAlarm;
+    }
+    return AlarmPermissionIssue.none;
+  }
+
   /// [checkAlarmPermission]이 찾아낸 권한의 시스템 설정 화면을 연다.
-  Future<void> openAlarmPermissionSettings(
-    AlarmPermissionIssue issue,
-  ) async {
+  Future<void> openAlarmPermissionSettings(AlarmPermissionIssue issue) async {
     switch (issue) {
       case AlarmPermissionIssue.notifications:
         await _openAndroidAlarmPermissionSettings('openNotificationSettings');
@@ -1027,6 +1040,10 @@ class NotificationService {
     }
     final isEnabled = prefs.getBool('nyang_core_reminder_enabled') ?? false;
     if (!isEnabled) {
+      await NyangBannerNudge.sync();
+      return;
+    }
+    if (await checkCoreReminderPermission() != AlarmPermissionIssue.none) {
       await NyangBannerNudge.sync();
       return;
     }

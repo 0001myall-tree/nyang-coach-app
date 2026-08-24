@@ -259,8 +259,8 @@ object OngoingNudgeState {
     }
 
     /** 지금 냥냥이를 내보내도 되는 상황인가. */
-    fun shouldAppearNow(context: Context): Boolean =
-        isEnabled(context) &&
+    fun shouldAppearNow(context: Context, requireEnabled: Boolean = true): Boolean =
+        (!requireEnabled || isEnabled(context)) &&
             isActive(context) &&
             canDrawOverlays(context) &&
             isScreenOn(context) &&
