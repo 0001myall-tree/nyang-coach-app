@@ -1456,7 +1456,7 @@ class _SettingsScreenState extends State<SettingsScreen>
         return StatefulBuilder(
           builder: (context, setModalState) {
             return Container(
-              height: MediaQuery.of(context).size.height * 0.48,
+              height: MediaQuery.of(context).size.height * 0.56,
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
               decoration: const BoxDecoration(
                 color: Colors.white,
@@ -1602,6 +1602,19 @@ class _SettingsScreenState extends State<SettingsScreen>
                             ),
                           ),
                         ],
+                      ),
+                    ),
+                  ),
+
+                  Opacity(
+                    opacity: tempEnabled ? 1.0 : 0.55,
+                    child: Text(
+                      '휴대폰 설정에 따라 무음/진동 모드나 방해금지(수면 모드) 상태에서는 소리 없이 조용히 올 수 있어요. 소리로 알려드리고 싶다면 앱 알림 권한과 방해금지 예외 설정을 확인해주세요.',
+                      style: GoogleFonts.notoSansKr(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                        height: 1.45,
+                        color: const Color(0xFF8E8A9E),
                       ),
                     ),
                   ),
