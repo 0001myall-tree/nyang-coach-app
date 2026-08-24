@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../services/notification_service.dart';
 
@@ -81,6 +82,26 @@ Future<void> showAlarmNoticeDialog(
       );
     },
   );
+}
+
+/// 일정을 저장하다 곁다리로 걸리는 자리(일정 알람 자동 등록 등)에서 권한
+/// 안내를 다시 띄워도 되는지.
+///
+/// 설정 화면에서 사용자가 직접 스위치를 켰을 때는 늘 바로 알려줘야 하지만,
+/// 여기서는 한 번 보여줬으면 충분하다. 안 고친 사람이 시간 있는 일정을
+/// 저장할 때마다 같은 팝업을 또 보게 하면 그 자체가 잔소리가 된다. 그 뒤로도
+/// 안 고친 사람에게는 설정 화면의 배너([buildAlarmPermissionBanner])가 계속
+/// 남아 있으니, 새 일정을 저장할 때마다 또 튀어나올 필요가 없다.
+///
+/// [noticeKey]로 어느 안내인지 가른다 — 알림 권한을 고쳤는데 정확한 알람은
+/// 아직이면 그건 다른 문제라 다시 알려줄 만하고, "다른 앱 위에 표시"처럼
+/// 아예 다른 권한을 묻는 안내와도 서로 섞이면 안 된다.
+Future<bool> shouldAutoShowAlarmPermissionNotice(String noticeKey) async {
+  final prefs = await SharedPreferences.getInstance();
+  final key = 'auto_alarm_notice_shown_$noticeKey';
+  if (prefs.getBool(key) == true) return false;
+  await prefs.setBool(key, true);
+  return true;
 }
 
 /// 권한이 없을 때의 안내 팝업. 사용자가 직접 시스템 설정으로 갈 수 있게

@@ -2124,6 +2124,12 @@ class _ChatScreenState extends State<ChatScreen>
       await NotificationService().syncCoreReminders();
       return;
     }
+    // 채팅으로 일정을 등록하다 곁다리로 걸리는 자리라, 권한 종류마다
+    // 한 번만 보여준다.
+    if (!await shouldAutoShowAlarmPermissionNotice('chat_schedule_${issue.name}')) {
+      return;
+    }
+    if (!mounted) return;
     await showAlarmPermissionDialog(context, issue, alarmLabel: '일정 알람');
   }
 
@@ -2206,12 +2212,20 @@ class _ChatScreenState extends State<ChatScreen>
     final issue = await NotificationService().checkCoreReminderPermission();
     if (!mounted) return enabledPushReminder;
     if (issue != AlarmPermissionIssue.none) {
-      await showAlarmPermissionDialog(
-        context,
-        issue,
-        alarmLabel: '시간 냥냥이',
-        emoji: '🐾',
-      );
+      // 일정을 저장하다 곁다리로 걸리는 자리라, 권한 종류마다 한 번만
+      // 보여준다. tasks_screen.dart와 같은 키를 써서, 거기서 이미 봤으면
+      // 여기서 또 묻지 않는다.
+      if (await shouldAutoShowAlarmPermissionNotice(
+        'timed_schedule_${issue.name}',
+      )) {
+        if (!mounted) return enabledPushReminder;
+        await showAlarmPermissionDialog(
+          context,
+          issue,
+          alarmLabel: '시간 냥냥이',
+          emoji: '🐾',
+        );
+      }
       return enabledPushReminder;
     }
 
@@ -2219,11 +2233,13 @@ class _ChatScreenState extends State<ChatScreen>
 
     if (defaultTargetPlatform == TargetPlatform.android &&
         !await OngoingTaskNudgeService.isAvailable()) {
-      _injectAiMessage(
-        '시간 냥냥이를 제시간에 보려면 "다른 앱 위에 표시" 권한이 필요해요. '
-        '설정 화면을 열어둘게요.',
-      );
-      await OngoingTaskNudgeService.openSystemSettings();
+      if (await shouldAutoShowAlarmPermissionNotice('timed_schedule_overlay')) {
+        _injectAiMessage(
+          '시간 냥냥이를 제시간에 보려면 "다른 앱 위에 표시" 권한이 필요해요. '
+          '설정 화면을 열어둘게요.',
+        );
+        await OngoingTaskNudgeService.openSystemSettings();
+      }
       return enabledPushReminder;
     }
 

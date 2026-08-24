@@ -1310,12 +1310,18 @@ class _TasksScreenState extends State<TasksScreen>
     final issue = await NotificationService().checkCoreReminderPermission();
     if (!mounted) return enabledPushReminder;
     if (issue != AlarmPermissionIssue.none) {
-      await showAlarmPermissionDialog(
-        context,
-        issue,
-        alarmLabel: '시간 냥냥이',
-        emoji: '🐾',
-      );
+      // 일정을 저장하다 곁다리로 걸리는 자리라, 권한 종류마다 한 번만 보여준다.
+      if (await shouldAutoShowAlarmPermissionNotice(
+        'timed_schedule_${issue.name}',
+      )) {
+        if (!mounted) return enabledPushReminder;
+        await showAlarmPermissionDialog(
+          context,
+          issue,
+          alarmLabel: '시간 냥냥이',
+          emoji: '🐾',
+        );
+      }
       return enabledPushReminder;
     }
 
@@ -1323,14 +1329,19 @@ class _TasksScreenState extends State<TasksScreen>
 
     if (_onAndroid && !await OngoingTaskNudgeService.isAvailable()) {
       if (!mounted) return enabledPushReminder;
-      await _showOngoingNudgeNotice(
-        title: '🐾 시간 냥냥이를 켜주세요',
-        message:
-            '시간이 있는 일정은 시작 시간에 냥냥이가 화면에 살짝 나와 알려드려요.\n'
-            '설정에서 냥냥코치의 "다른 앱 위에 표시"를 켜주세요.',
-        actionLabel: '설정 열기',
-      );
-      await OngoingTaskNudgeService.openSystemSettings();
+      // 일정을 저장하다 곁다리로 걸리는 자리라, 한 번 보여줬으면 충분하다.
+      // 안 고친 사람이 시간 있는 일정을 저장할 때마다 또 뜨면 안 된다.
+      if (await shouldAutoShowAlarmPermissionNotice('timed_schedule_overlay')) {
+        if (!mounted) return enabledPushReminder;
+        final tapped = await _showOngoingNudgeNotice(
+          title: '🐾 시간 냥냥이를 켜주세요',
+          message:
+              '시간이 있는 일정은 시작 시간에 냥냥이가 화면에 살짝 나와 알려드려요.\n'
+              '설정에서 냥냥코치의 "다른 앱 위에 표시"를 켜주세요.',
+          actionLabel: '설정 열기',
+        );
+        if (tapped) await OngoingTaskNudgeService.openSystemSettings();
+      }
       return enabledPushReminder;
     }
 
@@ -2585,7 +2596,7 @@ class _TasksScreenState extends State<TasksScreen>
       await Future.delayed(const Duration(milliseconds: 900));
       if (!mounted) return;
       await prefs.setBool(OngoingTaskNudgeService.offerShownKey, true);
-      await _showOngoingNudgeNotice(
+      final tapped = await _showOngoingNudgeNotice(
         title: '🐾 실시간 활동을 켜주세요',
         message:
             '일정이 도는 동안 잠금화면에 냥냥이가 조용히 남아 있게 하려면 '
@@ -2593,7 +2604,7 @@ class _TasksScreenState extends State<TasksScreen>
             '설정에서 냥냥코치를 찾아 켜주세요.',
         actionLabel: '설정 열기',
       );
-      await OngoingTaskNudgeService.openSystemSettings();
+      if (tapped) await OngoingTaskNudgeService.openSystemSettings();
       return;
     }
 
@@ -2623,7 +2634,7 @@ class _TasksScreenState extends State<TasksScreen>
 
     if (!available) {
       // 권한이 없으면 켜도 아무것도 나오지 않는다. 설정으로 데려다준다.
-      await _showOngoingNudgeNotice(
+      final tapped = await _showOngoingNudgeNotice(
         title: _onAndroid ? '🐾 한 가지만 켜주세요' : '🐾 실시간 활동을 켜주세요',
         message: _onAndroid
             ? '설정에서 냥냥코치를 찾아 "다른 앱 위에 표시"를 켜주세요.\n'
@@ -2632,7 +2643,7 @@ class _TasksScreenState extends State<TasksScreen>
                   '이게 꺼져 있으면 잠금화면에 아무것도 뜨지 않아요.',
         actionLabel: '설정 열기',
       );
-      await OngoingTaskNudgeService.openSystemSettings();
+      if (tapped) await OngoingTaskNudgeService.openSystemSettings();
       return;
     }
 
@@ -2641,14 +2652,14 @@ class _TasksScreenState extends State<TasksScreen>
     // 오지 않는 상태로 두지 않는다.
     if (!await NotificationService().areNotificationsEnabled()) {
       if (!mounted) return;
-      await _showOngoingNudgeNotice(
+      final tapped = await _showOngoingNudgeNotice(
         title: '🔔 알림도 켜주세요',
         message:
             '냥냥코치 알림이 꺼져 있어서, 지금은 냥냥이가 나올 수 없어요.\n'
             '설정에서 켜주시면 바로 챙겨드릴게요.',
         actionLabel: '설정 열기',
       );
-      await OngoingTaskNudgeService.openSystemSettings();
+      if (tapped) await OngoingTaskNudgeService.openSystemSettings();
       return;
     }
 
@@ -2751,13 +2762,20 @@ class _TasksScreenState extends State<TasksScreen>
     );
   }
 
-  Future<void> _showOngoingNudgeNotice({
+  /// 버튼을 눌러야만 닫히고, 그때만 true를 돌려준다.
+  ///
+  /// 바깥을 눌러 닫는 것도 기본값으로는 닫힘으로 쳐서, 호출한 쪽이 "닫혔으니
+  /// 설정으로 보내자"라고 무조건 이어가면 거절하려고 바깥을 누른 사람까지
+  /// 시스템 설정으로 끌려간다. 그래서 여기서는 바깥 탭을 막고, 버튼을 눌렀을
+  /// 때만 true를 돌려준다 — 다음 동작은 호출한 쪽이 그 값을 보고 정한다.
+  Future<bool> _showOngoingNudgeNotice({
     required String title,
     required String message,
     String actionLabel = '확인',
-  }) {
-    return showDialog<void>(
+  }) async {
+    final tapped = await showDialog<bool>(
       context: context,
+      barrierDismissible: false,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text(
@@ -2779,7 +2797,7 @@ class _TasksScreenState extends State<TasksScreen>
         ),
         actions: [
           ElevatedButton(
-            onPressed: () => Navigator.pop(ctx),
+            onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF8B7CFF),
               elevation: 0,
@@ -2798,6 +2816,7 @@ class _TasksScreenState extends State<TasksScreen>
         ],
       ),
     );
+    return tapped ?? false;
   }
 
   /// 앱 밖에서 데이터가 바뀌었으면 다시 읽는다.
