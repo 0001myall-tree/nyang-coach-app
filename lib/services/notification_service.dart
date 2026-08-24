@@ -474,6 +474,15 @@ class NotificationService {
     return _invokeAndroidAlarmPermissionCheck('canUseFullScreenIntent');
   }
 
+  /// 정확한 알람 권한 하나만 따로 본다.
+  ///
+  /// [checkAlarmPermission]/[checkCoreReminderPermission]은 알림 권한이 먼저
+  /// 걸리면 그쪽만 돌려주고 정확한 알람 상태는 숨긴다. 두 권한을 한 화면에서
+  /// 같이 안내하려면 서로 가리지 않고 따로 물어야 한다.
+  Future<bool> canScheduleExactAlarms() async {
+    return _invokeAndroidAlarmPermissionCheck('canScheduleExactAlarms');
+  }
+
   /// 알람(모닝콜·일정 알람)을 막고 있는 권한을 하나 찾아 돌려준다. 설정 화면은 열지 않는다.
   /// 여러 개가 없을 수 있으므로 가장 치명적인 것(알림 권한)부터 확인한다.
   Future<AlarmPermissionIssue> checkAlarmPermission() async {

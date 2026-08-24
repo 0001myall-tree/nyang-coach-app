@@ -2626,25 +2626,65 @@ class _TasksScreenState extends State<TasksScreen>
     await OngoingTaskNudgeService.setEnabled(true);
     // 방금 시작한 일정을 바로 맡긴다. 다음 저장까지 기다리면 첫 일정만 빈다.
     await _syncOngoingNudge();
-    final needsLiveActivity =
-        _onAndroid || await OngoingTaskNudgeService.showsOverOtherApps();
-    final available =
-        !needsLiveActivity || await OngoingTaskNudgeService.isAvailable();
-    if (!mounted) return;
 
-    if (!available) {
-      // 권한이 없으면 켜도 아무것도 나오지 않는다. 설정으로 데려다준다.
-      final tapped = await _showOngoingNudgeNotice(
-        title: _onAndroid ? '🐾 한 가지만 켜주세요' : '🐾 실시간 활동을 켜주세요',
-        message: _onAndroid
-            ? '설정에서 냥냥코치를 찾아 "다른 앱 위에 표시"를 켜주세요.\n'
-                  '이게 없으면 냥냥이가 다른 앱 위로 나올 수 없어요.'
-            : '설정에서 냥냥코치를 찾아 "실시간 활동"을 켜주세요.\n'
-                  '이게 꺼져 있으면 잠금화면에 아무것도 뜨지 않아요.',
-        actionLabel: '설정 열기',
-      );
-      if (tapped) await OngoingTaskNudgeService.openSystemSettings();
-      return;
+    if (_onAndroid) {
+      // 여기가 가장 먼저, 가장 확실히 뜨는 자리다. 나올지(오버레이)와
+      // 제시간에 나올지(정확한 알람)는 서로 다른 권한이라, 오버레이만 받고
+      // 정확한 알람 쪽을 놓치면 나중에 아무 말 없이 늦게 뜨는 채로 남는다.
+      // 두 개 다 여기서 한 번에 물어본다.
+      final needsOverlay = !await OngoingTaskNudgeService.isAvailable();
+      final needsExactAlarm =
+          !await NotificationService().canScheduleExactAlarms();
+      if (!mounted) return;
+      if (needsOverlay || needsExactAlarm) {
+        final title = needsOverlay && needsExactAlarm
+            ? '🐾 두 가지만 켜주세요'
+            : '🐾 한 가지만 켜주세요';
+        final message = switch ((needsOverlay, needsExactAlarm)) {
+          (true, true) =>
+            '설정에서 냥냥코치를 찾아 "다른 앱 위에 표시"와 "알람 및 리마인더"를 '
+                '함께 켜주세요.\n'
+                '하나는 냥냥이가 나오게, 하나는 정해진 시간에 정확히 나오게 해줘요.',
+          (true, false) =>
+            '설정에서 냥냥코치를 찾아 "다른 앱 위에 표시"를 켜주세요.\n'
+                '이게 없으면 냥냥이가 다른 앱 위로 나올 수 없어요.',
+          (false, true) =>
+            '설정에서 "알람 및 리마인더"를 허용해주세요.\n'
+                '이게 없으면 냥냥이가 정해진 시간보다 늦게 나올 수 있어요.',
+          (false, false) => '',
+        };
+        final tapped = await _showOngoingNudgeNotice(
+          title: title,
+          message: message,
+          actionLabel: '설정 열기',
+        );
+        if (tapped) {
+          if (needsOverlay) await OngoingTaskNudgeService.openSystemSettings();
+          if (needsExactAlarm) {
+            await NotificationService().openAlarmPermissionSettings(
+              AlarmPermissionIssue.exactAlarm,
+            );
+          }
+        }
+        return;
+      }
+    } else {
+      final needsLiveActivity = await OngoingTaskNudgeService.showsOverOtherApps();
+      final available =
+          !needsLiveActivity || await OngoingTaskNudgeService.isAvailable();
+      if (!mounted) return;
+      if (!available) {
+        // 권한이 없으면 켜도 아무것도 나오지 않는다. 설정으로 데려다준다.
+        final tapped = await _showOngoingNudgeNotice(
+          title: '🐾 실시간 활동을 켜주세요',
+          message:
+              '설정에서 냥냥코치를 찾아 "실시간 활동"을 켜주세요.\n'
+              '이게 꺼져 있으면 잠금화면에 아무것도 뜨지 않아요.',
+          actionLabel: '설정 열기',
+        );
+        if (tapped) await OngoingTaskNudgeService.openSystemSettings();
+        return;
+      }
     }
 
     // 알림이 꺼져 있으면 냥냥이는 나올 수 없다(안드로이드는 조용한 한 줄이
