@@ -481,7 +481,17 @@ class OngoingNudgeService : Service() {
      * [OngoingNudgeAnswerWriter.markStarted]는 둘을 가리지 않는다 — 쌓인 시간에
      * 이어 붙이는 건 똑같다.
      */
-    private fun resumeNow() {
+    private fun resumeNow() = markResumed("좋아! 다시 시작이야")
+
+    /**
+     * "하고 있어". 버튼만 안 눌렀을 뿐 실제로는 하는 중이었다는 뜻이라, 여기서도
+     * 똑같이 시작으로 적는다. 데이터를 안 건드리면 앱은 계속 멈춘 걸로 알고
+     * 있다가 조금 뒤 또 "다시 시작할까"를 묻는데, 이미 하는 중이라고 답한
+     * 사람에게 같은 질문을 반복하는 셈이 된다.
+     */
+    private fun resumeStillDoing() = markResumed("그렇구나! 이어서 기록할게")
+
+    private fun markResumed(toast: String) {
         answered = true
         val taskId = OngoingNudgeState.taskId(this)
         if (taskId != null) {
@@ -490,15 +500,7 @@ class OngoingNudgeService : Service() {
         }
         OngoingNudgeState.clear(this)
         OngoingNudgeScheduler.cancel(this)
-        Toast.makeText(this, "좋아! 다시 시작이야", Toast.LENGTH_SHORT).show()
-        lingerAsDoorway()
-    }
-
-    /** "하고 있어". 일정은 건드리지 않는다. 1시간 뒤에 한 번 더 본다. */
-    private fun resumeStillDoing() {
-        answered = true
-        scheduleNextRound(OngoingNudgeScheduler.NEXT_ROUND_DELAY_MILLIS)
-        Toast.makeText(this, "그렇구나! 계속 이어가", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, toast, Toast.LENGTH_SHORT).show()
         lingerAsDoorway()
     }
 
