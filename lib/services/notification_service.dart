@@ -720,29 +720,30 @@ class NotificationService {
     });
   }
 
+  /// 요일별 알림 사슬이 쓰는 자리. 매일(7일 전부)이면 이걸 안 쓰고 0,1,2를
+  /// 그대로 쓴다 — 대부분의 사용자가 매일을 고를 텐데, 그 흔한 경우까지
+  /// 매번 요일별 사슬로 깔면 iOS에 걸어야 하는 예약 개수만 늘어난다.
+  static const List<int> _morningCallWeekdayIds = [
+    20, 21, 22, 30, 31, 32, 40, 41, 42, 50, 51, 52,
+    60, 61, 62, 70, 71, 72, 80, 81, 82,
+  ];
+
   Future<void> scheduleDailyMorningCall({
     required int hour,
     required int minute,
     required String coachId,
+    required Set<int> days,
   }) async {
     if (kIsWeb) return;
     for (int i = 0; i < _morningCallRepeatCount; i++) {
       await _plugin.cancel(id: i);
     }
+    for (final id in _morningCallWeekdayIds) {
+      await _plugin.cancel(id: id);
+    }
+    final isDaily = days.isEmpty || days.length == 7;
     String targetCoachId = CoachIdService.normalize(coachId);
-
-    if (targetCoachId == 'random') {
-      final availableCoaches = CoachConfigs.all.values
-          .where((coach) => coach.voiceCount > 0)
-          .map((coach) => coach.id)
-          .toList();
-      if (availableCoaches.isNotEmpty) {
-        targetCoachId =
-            availableCoaches[Random().nextInt(availableCoaches.length)];
-      } else {
-        targetCoachId = 'cat';
-      }
-    } else if (!CoachConfigs.all.containsKey(targetCoachId)) {
+    if (!CoachConfigs.all.containsKey(targetCoachId)) {
       targetCoachId = 'cat';
     }
     // Save the resolved coach ID to SharedPreferences so the in-app engine can align with it
@@ -797,6 +798,14 @@ class NotificationService {
         // 날짜 필드를 +1 하면 서머타임이 있어도 벽시계 시각이 그대로 유지된다.
         scheduled = DateTime(now.year, now.month, now.day + 1, hour, minute);
       }
+      if (!isDaily) {
+        // 요일이 안 맞으면 맞는 날이 나올 때까지 하루씩 민다. 재부팅·재발화
+        // 뒤에는 네이티브(MorningAlarmScheduler.rescheduleFromPrefs)가 같은
+        // 요일 목록을 저장소에서 읽어 똑같이 계산한다.
+        for (var i = 0; i < 7 && !days.contains(scheduled.weekday); i++) {
+          scheduled = scheduled.add(const Duration(days: 1));
+        }
+      }
       await _androidAlarmChannel.invokeMethod('scheduleMorningAlarm', {
         'triggerMillis': scheduled.millisecondsSinceEpoch,
         'payload': 'morning:$targetCoachId:${soundName ?? ''}',
@@ -820,18 +829,45 @@ class NotificationService {
     // iOS cannot start the in-app audio loop from a killed/background state
     // without user interaction, so the system notification itself is the alarm.
     // Schedule a short burst so a locked phone behaves closer to a clock alarm.
-    for (int i = 0; i < _morningCallRepeatCount; i++) {
-      final targetTime = scheduled.add(Duration(minutes: i));
-      await _plugin.zonedSchedule(
-        id: i,
-        title: '⏰ 모닝콜 시간입니다!',
-        body: '코치가 깨우러 왔어요. 얼른 일어나세요!',
-        scheduledDate: targetTime,
-        notificationDetails: details,
-        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-        matchDateTimeComponents: DateTimeComponents.time,
-        payload: 'morning:$targetCoachId:${soundName ?? ''}',
-      );
+    if (isDaily) {
+      for (int i = 0; i < _morningCallRepeatCount; i++) {
+        final targetTime = scheduled.add(Duration(minutes: i));
+        await _plugin.zonedSchedule(
+          id: i,
+          title: '⏰ 모닝콜 시간입니다!',
+          body: '코치가 깨우러 왔어요. 얼른 일어나세요!',
+          scheduledDate: targetTime,
+          notificationDetails: details,
+          androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+          matchDateTimeComponents: DateTimeComponents.time,
+          payload: 'morning:$targetCoachId:${soundName ?? ''}',
+        );
+      }
+      return;
+    }
+
+    // 특정 요일만 골랐으면 요일 하나마다 따로 예약을 건다. iOS의
+    // dayOfWeekAndTime은 요일 하나만 반복시킬 수 있어서, 여러 요일을
+    // 하나의 예약으로 묶을 수 없다.
+    for (final weekday in days) {
+      // scheduled의 요일이 이 weekday가 되는 가장 이른 날짜를 찾는다.
+      var forWeekday = scheduled;
+      for (var i = 0; i < 7 && forWeekday.weekday != weekday; i++) {
+        forWeekday = forWeekday.add(const Duration(days: 1));
+      }
+      for (int i = 0; i < _morningCallRepeatCount; i++) {
+        final targetTime = forWeekday.add(Duration(minutes: i));
+        await _plugin.zonedSchedule(
+          id: _morningCallWeekdayIds[(weekday - 1) * 3 + i],
+          title: '⏰ 모닝콜 시간입니다!',
+          body: '코치가 깨우러 왔어요. 얼른 일어나세요!',
+          scheduledDate: targetTime,
+          notificationDetails: details,
+          androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+          matchDateTimeComponents: DateTimeComponents.dayOfWeekAndTime,
+          payload: 'morning:$targetCoachId:${soundName ?? ''}',
+        );
+      }
     }
   }
 
@@ -877,8 +913,22 @@ class NotificationService {
         hour: hour,
         minute: minute,
         coachId: coachId,
+        days: _parseMorningCallDays(prefs.getString('nyang_morning_call_days')),
       );
     }
+  }
+
+  /// "1,3,5" 같은 저장값을 요일 집합으로. 비어 있거나 못 읽으면 매일로 본다.
+  /// 요일 설정이 생기기 전부터 켜둔 사람의 모닝콜이 갑자기 조용해지면 안 된다.
+  Set<int> _parseMorningCallDays(String? raw) {
+    if (raw == null || raw.isEmpty) return {1, 2, 3, 4, 5, 6, 7};
+    final days = raw
+        .split(',')
+        .map((s) => int.tryParse(s.trim()))
+        .whereType<int>()
+        .where((d) => d >= 1 && d <= 7)
+        .toSet();
+    return days.isEmpty ? {1, 2, 3, 4, 5, 6, 7} : days;
   }
 
   Future<void> syncDailyMorningCall() async {
@@ -911,6 +961,7 @@ class NotificationService {
       hour: hour,
       minute: minute,
       coachId: prefs.getString('nyang_morning_call_coach') ?? 'cat',
+      days: _parseMorningCallDays(prefs.getString('nyang_morning_call_days')),
     );
   }
 
@@ -918,6 +969,9 @@ class NotificationService {
     if (kIsWeb) return;
     for (int i = 0; i < _morningCallRepeatCount; i++) {
       await _plugin.cancel(id: i);
+    }
+    for (final id in _morningCallWeekdayIds) {
+      await _plugin.cancel(id: id);
     }
     if (defaultTargetPlatform == TargetPlatform.android) {
       await _androidAlarmChannel.invokeMethod('cancelMorningAlarm');

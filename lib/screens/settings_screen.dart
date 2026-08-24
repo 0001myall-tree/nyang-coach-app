@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/cupertino.dart';
@@ -66,6 +67,11 @@ class _SettingsScreenState extends State<SettingsScreen>
   bool _morningCallEnabled = true;
   TimeOfDay _morningCallTime = const TimeOfDay(hour: 7, minute: 0);
   String _morningCallCoachId = 'cat';
+  /// 모닝콜이 울릴 요일. 월=1 ... 일=7. 저장된 값이 없으면 매일로 본다 —
+  /// 요일 설정이 생기기 전부터 켜둔 사람의 모닝콜이 갑자기 조용해지면 안 된다.
+  Set<int> _morningCallDays = {1, 2, 3, 4, 5, 6, 7};
+  final AudioPlayer _voicePreviewPlayer = AudioPlayer();
+  String? _playingVoicePreviewCoachId;
   bool _coreReminderEnabled = false;
   int _coreReminderAdvanceMinutes = 10;
   // 진행 중인 일정을 떠올리게 하는 냥냥이. 안드로이드에서만, 테스터가 직접 켠다.
@@ -123,6 +129,7 @@ class _SettingsScreenState extends State<SettingsScreen>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _voicePreviewPlayer.dispose();
     super.dispose();
   }
 
@@ -193,10 +200,14 @@ class _SettingsScreenState extends State<SettingsScreen>
       }
       final savedMorningCallCoach =
           prefs.getString('nyang_morning_call_coach') ?? 'cat';
+      // 'random'을 저장해둔 예전 사용자도 여기로 오면 폴백으로 정리된다 —
+      // CoachConfigs에 없는 id라 fallback('cat')으로 떨어진다.
       _morningCallCoachId = _notificationVoiceCoachId(
         savedMorningCallCoach,
         fallback: 'cat',
-        allowRandom: true,
+      );
+      _morningCallDays = _parseMorningCallDays(
+        prefs.getString('nyang_morning_call_days'),
       );
       _coreReminderEnabled =
           prefs.getBool('nyang_core_reminder_enabled') ?? false;
@@ -645,25 +656,31 @@ class _SettingsScreenState extends State<SettingsScreen>
     bool enabled,
     TimeOfDay time,
     String coachId,
+    Set<int> days,
   ) async {
     final prefs = await SharedPreferences.getInstance();
     final timeStr =
         '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
+    // 하나도 안 고른 채로 저장할 길은 UI에서 막아뒀지만, 혹시 비어 오면
+    // 매일로 되돌린다 — 빈 요일로 저장되면 모닝콜이 영영 안 울린다.
+    final savedDays = days.isEmpty ? {1, 2, 3, 4, 5, 6, 7} : days;
     await prefs.setBool('nyang_morning_call_enabled', enabled);
     await prefs.setString('nyang_morning_call_time', timeStr);
     await prefs.setString('nyang_morning_call_coach', coachId);
+    await prefs.setString(
+      'nyang_morning_call_days',
+      _encodeMorningCallDays(savedDays),
+    );
     TasksSyncService.scheduleSyncToCloud();
 
     setState(() {
       _morningCallEnabled = enabled;
       _morningCallTime = time;
       _morningCallCoachId = coachId;
+      _morningCallDays = savedDays;
     });
 
-    String coachName = '랜덤 코치';
-    if (coachId != 'random') {
-      coachName = CoachConfigs.get(coachId).name;
-    }
+    final coachName = CoachConfigs.get(coachId).name;
 
     var issue = AlarmPermissionIssue.none;
     if (enabled) {
@@ -674,6 +691,7 @@ class _SettingsScreenState extends State<SettingsScreen>
         hour: time.hour,
         minute: time.minute,
         coachId: coachId,
+        days: savedDays,
       );
       issue = await NotificationService().checkAlarmPermission();
     } else {
@@ -696,8 +714,12 @@ class _SettingsScreenState extends State<SettingsScreen>
     bool tempEnabled = _morningCallEnabled;
     TimeOfDay tempTime = _morningCallTime;
     String tempCoachId = _morningCallCoachId;
+    Set<int> tempDays = {..._morningCallDays};
     bool isPickingTime = false;
     AlarmPermissionIssue modalIssue = _alarmPermissionIssue;
+    // 목소리 미리듣기가 끝나는 순간을 비동기로 기다리는데, 그 사이 시트가
+    // 닫히면 이 시트의 setState는 이미 죽은 위젯을 건드리는 셈이 된다.
+    var sheetOpen = true;
 
     showModalBottomSheet(
       context: context,
@@ -706,6 +728,9 @@ class _SettingsScreenState extends State<SettingsScreen>
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setModalState) {
+            void safeSetModalState(VoidCallback fn) {
+              if (sheetOpen) setModalState(fn);
+            }
             return Container(
               height: MediaQuery.of(context).size.height * 0.85,
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
@@ -845,6 +870,56 @@ class _SettingsScreenState extends State<SettingsScreen>
                   ),
                   const SizedBox(height: 22),
 
+                  // 요일 선택
+                  Text(
+                    '모닝콜 요일',
+                    style: GoogleFonts.notoSansKr(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                      color: const Color(0xFF1A1A2E),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Opacity(
+                    opacity: tempEnabled ? 1.0 : 0.5,
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        _buildMorningCallDayChip(
+                          label: '매일',
+                          isSelected: tempDays.length == 7,
+                          onTap: () {
+                            if (!tempEnabled) return;
+                            setModalState(
+                              () => tempDays = {1, 2, 3, 4, 5, 6, 7},
+                            );
+                          },
+                        ),
+                        for (var day = 1; day <= 7; day++)
+                          _buildMorningCallDayChip(
+                            label: _weekdayShortLabels[day - 1],
+                            isSelected: tempDays.contains(day),
+                            onTap: () {
+                              if (!tempEnabled) return;
+                              setModalState(() {
+                                // 마지막 하나는 끄지 못하게 막는다. 요일이
+                                // 하나도 안 남으면 모닝콜이 영영 안 울린다.
+                                if (tempDays.contains(day)) {
+                                  if (tempDays.length > 1) {
+                                    tempDays = {...tempDays}..remove(day);
+                                  }
+                                } else {
+                                  tempDays = {...tempDays, day};
+                                }
+                              });
+                            },
+                          ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 22),
+
                   // 코치 선택 리스트
                   Text(
                     '모닝콜 코치 선택',
@@ -861,17 +936,6 @@ class _SettingsScreenState extends State<SettingsScreen>
                       opacity: tempEnabled ? 1.0 : 0.5,
                       child: ListView(
                         children: [
-                          // 랜덤 코치
-                          _buildMorningCallCoachItem(
-                            id: 'random',
-                            name: '랜덤 코치 모닝콜',
-                            subtitle: '모든 코치 중 한 명이 랜덤으로 깨워줘요',
-                            isSelected: tempCoachId == 'random',
-                            onTap: () {
-                              if (tempEnabled)
-                                setModalState(() => tempCoachId = 'random');
-                            },
-                          ),
                           _buildMorningCallCoachSectionHeader('FRIENDS 코치'),
                           ...CoachConfigs.all.values
                               .where(
@@ -893,6 +957,10 @@ class _SettingsScreenState extends State<SettingsScreen>
                                       );
                                     }
                                   },
+                                  onPreview: () =>
+                                      _toggleVoicePreview(coach.id, safeSetModalState),
+                                  isPreviewPlaying:
+                                      _playingVoicePreviewCoachId == coach.id,
                                 );
                               }),
                           const Padding(
@@ -924,6 +992,10 @@ class _SettingsScreenState extends State<SettingsScreen>
                                       );
                                     }
                                   },
+                                  onPreview: () =>
+                                      _toggleVoicePreview(coach.id, safeSetModalState),
+                                  isPreviewPlaying:
+                                      _playingVoicePreviewCoachId == coach.id,
                                 );
                               }),
                         ],
@@ -947,6 +1019,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                                   tempEnabled,
                                   tempTime,
                                   tempCoachId,
+                                  tempDays,
                                 );
                               },
                               style: ElevatedButton.styleFrom(
@@ -973,7 +1046,10 @@ class _SettingsScreenState extends State<SettingsScreen>
           },
         );
       },
-    );
+    ).whenComplete(() {
+      sheetOpen = false;
+      _voicePreviewPlayer.stop();
+    });
   }
 
   Future<void> _saveCoreReminderSettings(
@@ -1567,6 +1643,68 @@ class _SettingsScreenState extends State<SettingsScreen>
     );
   }
 
+  Widget _buildMorningCallDayChip({
+    required String label,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        width: 44,
+        height: 40,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFF8B7CFF) : Colors.white,
+          border: Border.all(
+            color: isSelected
+                ? const Color(0xFF8B7CFF)
+                : const Color(0xFFE5E7EB),
+            width: 1.5,
+          ),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Text(
+          label,
+          style: GoogleFonts.notoSansKr(
+            fontSize: 13,
+            fontWeight: FontWeight.w800,
+            color: isSelected ? Colors.white : const Color(0xFF4B5563),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 코치 목소리를 한 번 들려준다. 실제 모닝콜과 같은 첫 번째 목소리 파일을 쓴다
+  /// — 매번 다른 걸 들려주면 "방금 들은 게 아니네" 소리를 듣는다.
+  Future<void> _toggleVoicePreview(
+    String coachId,
+    StateSetter setModalState,
+  ) async {
+    if (_playingVoicePreviewCoachId == coachId) {
+      await _voicePreviewPlayer.stop();
+      setModalState(() => _playingVoicePreviewCoachId = null);
+      return;
+    }
+    await _voicePreviewPlayer.stop();
+    setModalState(() => _playingVoicePreviewCoachId = coachId);
+    try {
+      await _voicePreviewPlayer.play(AssetSource('voice/${coachId}_1.mp3'));
+      _voicePreviewPlayer.onPlayerComplete.first.then((_) {
+        if (!mounted) return;
+        setModalState(() {
+          if (_playingVoicePreviewCoachId == coachId) {
+            _playingVoicePreviewCoachId = null;
+          }
+        });
+      });
+    } catch (_) {
+      setModalState(() => _playingVoicePreviewCoachId = null);
+    }
+  }
+
   Widget _buildMorningCallCoachSectionHeader(String label) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(4, 12, 4, 8),
@@ -1589,6 +1727,8 @@ class _SettingsScreenState extends State<SettingsScreen>
     required VoidCallback onTap,
     bool isLocked = false,
     String? imagePath,
+    VoidCallback? onPreview,
+    bool isPreviewPlaying = false,
   }) {
     return GestureDetector(
       onTap: isLocked ? null : onTap,
@@ -1612,27 +1752,7 @@ class _SettingsScreenState extends State<SettingsScreen>
           opacity: isLocked ? 0.5 : 1.0,
           child: Row(
             children: [
-              if (id == 'random')
-                Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFFA78BFA), Color(0xFF7C3AED)],
-                    ),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  alignment: Alignment.center,
-                  child: const Text(
-                    '?',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                )
-              else if (id == 'push')
+              if (id == 'push')
                 Container(
                   width: 48,
                   height: 48,
@@ -1691,6 +1811,31 @@ class _SettingsScreenState extends State<SettingsScreen>
                   ],
                 ),
               ),
+              if (!isLocked && onPreview != null)
+                GestureDetector(
+                  // 눌러도 코치가 바뀌지 않게, 카드 전체의 탭과는 따로 받는다.
+                  onTap: onPreview,
+                  child: Container(
+                    width: 36,
+                    height: 36,
+                    margin: const EdgeInsets.only(right: 8),
+                    decoration: BoxDecoration(
+                      color: isPreviewPlaying
+                          ? const Color(0xFF8B7CFF)
+                          : const Color(0xFFF3F0FF),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      isPreviewPlaying
+                          ? Icons.stop_rounded
+                          : Icons.play_arrow_rounded,
+                      color: isPreviewPlaying
+                          ? Colors.white
+                          : const Color(0xFF8B7CFF),
+                      size: 20,
+                    ),
+                  ),
+                ),
               if (isLocked)
                 const Icon(Icons.lock, color: Color(0xFF9CA3AF), size: 24)
               else
@@ -2434,14 +2579,39 @@ class _SettingsScreenState extends State<SettingsScreen>
   String _notificationVoiceCoachId(
     String coachId, {
     required String fallback,
-    bool allowRandom = false,
   }) {
-    if (allowRandom && coachId == 'random') return coachId;
     if (coachId == 'push') return coachId;
     final coach = CoachConfigs.all[CoachConfigs.normalizeId(coachId)];
     if (coach == null || coach.voiceCount <= 0) return fallback;
     return coachId;
   }
+
+  /// "1,3,5" 같은 저장값을 요일 집합으로. 비어 있거나 못 읽으면 매일로 본다.
+  Set<int> _parseMorningCallDays(String? raw) {
+    if (raw == null || raw.isEmpty) return {1, 2, 3, 4, 5, 6, 7};
+    final days = raw
+        .split(',')
+        .map((s) => int.tryParse(s.trim()))
+        .whereType<int>()
+        .where((d) => d >= 1 && d <= 7)
+        .toSet();
+    return days.isEmpty ? {1, 2, 3, 4, 5, 6, 7} : days;
+  }
+
+  String _encodeMorningCallDays(Set<int> days) {
+    final sorted = days.toList()..sort();
+    return sorted.join(',');
+  }
+
+  static const List<String> _weekdayShortLabels = [
+    '월',
+    '화',
+    '수',
+    '목',
+    '금',
+    '토',
+    '일',
+  ];
 
   String _formatAmPmHour(TimeOfDay time) {
     final period = time.hour < 12 ? 'AM' : 'PM';
