@@ -4474,6 +4474,15 @@ class _SettingsScreenState extends State<SettingsScreen>
   }
 
   Future<void> _showDeleteAccountDialog() async {
+    // 구독은 계정에 붙어 있다. 계정이 사라지면 남은 기간도 같이 사라진다는 걸
+    // 지우기 전에 알려준다. 화면에 들고 있던 값이 오래됐을 수 있어 다시 읽는다.
+    final data = await UserDataService.load();
+    if (!mounted) return;
+    final hasPlan = data.isPlanActive;
+    // 화면 위쪽 배지가 쓰는 _planStatusLabel은 예전에 읽어둔 값을 본다.
+    // 여기서는 방금 읽은 쪽으로 이름을 짓는다.
+    final planLabel = data.planType == 'master' ? '마스터 플랜' : '프렌즈 플랜';
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) {
@@ -4486,15 +4495,51 @@ class _SettingsScreenState extends State<SettingsScreen>
             '계정을 삭제할까요?',
             style: GoogleFonts.notoSansKr(fontWeight: FontWeight.w900),
           ),
-          content: Text(
-            '지금까지의 대화, 일정, 루틴, 기록이 모두 지워지고 되돌릴 수 없어요.\n'
-            '다시 로그인해도 복구되지 않습니다.',
-            style: GoogleFonts.notoSansKr(
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-              color: const Color(0xFF6B687A),
-              height: 1.45,
-            ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '지금까지의 대화, 일정, 루틴, 기록이 모두 지워지고 되돌릴 수 없어요.\n'
+                '다시 로그인해도 복구되지 않습니다.',
+                style: GoogleFonts.notoSansKr(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: const Color(0xFF6B687A),
+                  height: 1.45,
+                ),
+              ),
+              // 이용 중인 플랜이 없으면 구독 이야기를 꺼내지 않는다. 삭제를
+              // 망설이는 자리에서 상관없는 경고를 하나 더 얹을 이유가 없다.
+              if (hasPlan) ...[
+                const SizedBox(height: 14),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFDF1F2),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFF6DADD)),
+                  ),
+                  // 남은 기간이 사라진다는 것과, 자동 결제는 스토어에서 따로
+                  // 끊어야 한다는 것은 다른 이야기다. 계정을 지워도 스토어의
+                  // 정기 결제는 그대로 돌아 돈이 계속 빠져나간다.
+                  child: Text(
+                    '이용 중인 $planLabel도 계정과 함께 사라져요.\n'
+                    '남은 기간은 환불되지 않고, 정기 결제는 계정을 지워도 자동으로 멈추지 않습니다. '
+                    '${Platform.isIOS ? 'App Store' : 'Play 스토어'}의 구독 설정에서 따로 해지해주세요.',
+                    style: GoogleFonts.notoSansKr(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: const Color(0xFFB4545D),
+                      height: 1.45,
+                    ),
+                  ),
+                ),
+              ],
+            ],
           ),
           actions: [
             TextButton(
