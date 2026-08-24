@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:ui';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -12,6 +11,7 @@ import '../models/user_data.dart';
 import '../theme/app_design_tokens.dart';
 import '../widgets/app_button.dart';
 import '../widgets/app_card.dart';
+import '../services/purchase_service.dart';
 import '../widgets/plan_guide_bottom_sheet.dart';
 
 class CoachSelectionScreen extends StatefulWidget {
@@ -59,10 +59,17 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen>
       ? const [CoachTab.master, CoachTab.friends]
       : const [CoachTab.friends, CoachTab.master];
 
+  /// 개발용 플랜 시뮬레이터를 여는 데 필요한 연속 탭 수. 실수로 열리지
+  /// 않을 만큼 깊게 둔다.
+  static const int _debugPlanSelectorTapCount = 10;
+
   int _logoTapCount = 0;
   Timer? _logoTapTimer;
 
-  bool get _canOpenSubscriptionGuide => kDebugMode;
+  bool get _canOpenSubscriptionGuide => PurchaseService.storeCheckoutEnabled;
+
+  /// 코치 한 명만 사는 길은 아직 스토어 상품이 없다. 열면 결제 없이 지급된다.
+  bool get _canBuySingleCoach => PurchaseService.singleCoachPurchaseEnabled;
 
   void _goBack() {
     final destination = widget.returnCoachId == null
@@ -441,7 +448,7 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen>
       _logoTapCount = 0;
     });
 
-    if (_logoTapCount >= 5) {
+    if (_logoTapCount >= _debugPlanSelectorTapCount) {
       _logoTapCount = 0;
       _logoTapTimer?.cancel();
       _showDebugPlanSelector();
@@ -651,7 +658,7 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen>
     BuildContext context,
     Map<String, dynamic> coach,
   ) async {
-    if (!_canOpenSubscriptionGuide) return;
+    if (!_canBuySingleCoach) return;
     // TODO: 실제 결제 연동 시 여기에 IAP 로직 추가
     // 결제 성공 가정 후 owned_coaches에 추가
     await UserDataService.addOwnedCoach(coach['id']);
@@ -1065,33 +1072,46 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen>
 
                                                 const Spacer(),
 
-                                                if (isLocked)
+                                                if (isLocked &&
+                                                    _canOpenSubscriptionGuide)
                                                   AppButton(
                                                     label: !planActive
                                                         ? '구독 안내 보기'
-                                                        : (isFriendsCoach
+                                                        : (isFriendsCoach &&
+                                                                  _canBuySingleCoach
                                                               ? '1년 이용 / 2,900원'
-                                                              : '플랜 업그레이드'),
-                                                    onPressed:
-                                                        _canOpenSubscriptionGuide
-                                                        ? () {
-                                                            if (!planActive ||
-                                                                !isFriendsCoach) {
-                                                              Navigator.pop(
-                                                                context,
-                                                              );
-                                                              _showPlanGuidePlaceholder();
-                                                            } else {
-                                                              _purchaseCoach(
-                                                                context,
-                                                                coach,
-                                                              );
-                                                            }
-                                                          }
-                                                        : null,
+                                                              : '플랜 보기'),
+                                                    onPressed: () {
+                                                      if (planActive &&
+                                                          isFriendsCoach &&
+                                                          _canBuySingleCoach) {
+                                                        _purchaseCoach(
+                                                          context,
+                                                          coach,
+                                                        );
+                                                      } else {
+                                                        Navigator.pop(context);
+                                                        _showPlanGuidePlaceholder();
+                                                      }
+                                                    },
                                                     backgroundColor:
                                                         AppDesignTokens
                                                             .brandAccent,
+                                                  )
+                                                // 살 수 없는 동안에는 잠긴 이유만
+                                                // 알리고 버튼은 내보내지 않는다.
+                                                else if (isLocked)
+                                                  Text(
+                                                    '지금은 만날 수 없는 코치예요.',
+                                                    textAlign: TextAlign.center,
+                                                    style:
+                                                        GoogleFonts.notoSansKr(
+                                                          fontSize: 13,
+                                                          fontWeight:
+                                                              FontWeight.w700,
+                                                          color: AppDesignTokens
+                                                              .textSecondary,
+                                                        ),
                                                   )
                                                 else
                                                   AppButton(
@@ -1267,27 +1287,28 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen>
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         const SizedBox.shrink(),
-                        TextButton(
-                          onPressed: _canOpenSubscriptionGuide
-                              ? _showPlanGuidePlaceholder
-                              : null,
-                          style: TextButton.styleFrom(
-                            foregroundColor: AppDesignTokens.brandAccent,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 6,
+                        if (_canOpenSubscriptionGuide)
+                          TextButton(
+                            onPressed: _showPlanGuidePlaceholder,
+                            style: TextButton.styleFrom(
+                              foregroundColor: AppDesignTokens.brandAccent,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 6,
+                              ),
+                              minimumSize: Size.zero,
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                             ),
-                            minimumSize: Size.zero,
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          ),
-                          child: Text(
-                            '구독 안내 >',
-                            style: GoogleFonts.notoSansKr(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w800,
+                            child: Text(
+                              '구독 안내 >',
+                              style: GoogleFonts.notoSansKr(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w800,
+                              ),
                             ),
-                          ),
-                        ),
+                          )
+                        else
+                          const SizedBox.shrink(),
                       ],
                     ),
                     const SizedBox(height: 32),

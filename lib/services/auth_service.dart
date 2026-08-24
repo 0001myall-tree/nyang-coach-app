@@ -3,6 +3,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import '../models/user_data.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../services/distraction_coach_quota.dart';
+import '../services/free_access_service.dart';
 import '../services/memory_service.dart';
 import '../services/notification_service.dart';
 import '../services/tasks_sync_service.dart';
@@ -20,16 +23,12 @@ class AuthService {
   // 현재 유저 가져오기
   User? get currentUser => _auth.currentUser;
 
+  /// 로그인한 사람은 모두 들어온다. allowedEmails는 이제 문을 지키는 목록이
+  /// 아니라, 테스터에게 플랜을 미리 얹어주는 용도로만 남는다.
   Future<bool> ensureCurrentUserAllowed() async {
     final user = _auth.currentUser;
     if (user == null) return false;
-    final allowData = await _allowedEmailData(user.email);
-    if (!_isEnabledAllowedEmail(allowData)) {
-      if (_isAppleUser(user)) return true;
-      await _signOutAuthOnly();
-      return false;
-    }
-    await _applyAllowedEmailEntitlement(allowData);
+    await _applyAllowedEmailEntitlement(await _allowedEmailData(user.email));
     return true;
   }
 
@@ -136,11 +135,8 @@ class AuthService {
   Future<void> _syncAfterSignIn(UserCredential? cred) async {
     final user = cred?.user;
     if (user == null) return;
+    await _clearDataOfPreviousAccount(user);
     final allowData = await _allowedEmailData(user.email);
-    if (!_isEnabledAllowedEmail(allowData) && !_isAppleUser(user)) {
-      await _signOutAuthOnly();
-      throw const AuthAccessDeniedException();
-    }
     await UserDataService.syncFromCloud();
     await _applyAllowedEmailEntitlement(allowData);
     await MemoryService().syncFromCloud();
@@ -148,8 +144,39 @@ class AuthService {
     await _syncNotificationsSafely();
   }
 
-  bool _isAppleUser(User user) {
-    return user.providerData.any((info) => info.providerId == 'apple.com');
+  /// 이 기기에 마지막으로 로그인했던 사람. 'nyang_'으로 시작하지 않는 키를
+  /// 쓴다 — 그 접두어는 클라우드 복원이 덮어쓰는데, 이건 이 기기에서 방금
+  /// 일어난 일이라 기기마다 달라야 한다.
+  static const _lastUidKey = 'last_signed_in_uid';
+
+  /// 다른 사람이 로그인하면 앞사람이 남긴 것을 지운다.
+  ///
+  /// 앱 데이터는 기기에 있고 계정과 묶여 있지 않다. 그래서 로그아웃하고
+  /// 다른 계정으로 들어와도 앞사람의 플랜과 코치, 일정과 대화가 그대로
+  /// 남아 있었다. 클라우드에서 받아오는 것도 도움이 안 됐다 — 새 계정은
+  /// 클라우드에 아무것도 없어서, 덮어쓸 값이 없으니 앞사람 것이 살아남았다.
+  ///
+  /// 처음 로그인하는 기기에서는 지우지 않는다. 지울 앞사람이 없고, 이미
+  /// 쓰고 있던 분이 이 버전으로 올라오는 길이기도 하다.
+  Future<void> _clearDataOfPreviousAccount(User user) async {
+    final prefs = await SharedPreferences.getInstance();
+    final lastUid = prefs.getString(_lastUidKey);
+
+    if (lastUid != null && lastUid != user.uid) {
+      final keys = prefs
+          .getKeys()
+          .where((key) => key.startsWith('nyang_'))
+          .toList();
+      for (final key in keys) {
+        await prefs.remove(key);
+      }
+      await prefs.remove(DistractionCoachQuota.unlimitedKey);
+      UserDataService.clearCache();
+      MemoryService().clearCache();
+      FreeAccessService.instance.clearCache();
+    }
+
+    await prefs.setString(_lastUidKey, user.uid);
   }
 
   Future<bool> _isAllowedEmail(String? email) async {
@@ -284,6 +311,7 @@ class AuthService {
     await _signOutAuthOnly();
     UserDataService.clearCache();
     MemoryService().clearCache();
+    FreeAccessService.instance.clearCache();
     await TasksSyncService.clearCache();
   }
 }

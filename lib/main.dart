@@ -19,6 +19,7 @@ import 'services/auth_service.dart';
 import 'services/coach_id_migration_service.dart';
 import 'services/task_resistance_service.dart';
 import 'services/notification_service.dart';
+import 'services/purchase_service.dart';
 import 'services/ongoing_task_nudge_service.dart';
 import 'services/tasks_sync_service.dart';
 import 'services/nyang_banner_nudge.dart';
@@ -35,6 +36,9 @@ void main() async {
   await CoachIdMigrationService.migrateLegacyNyangHalbaeIds();
   await TaskResistanceService.purgeRemovedPreemptiveKeys();
   await NotificationService().init();
+  // 결제 결과는 앱이 꺼져 있는 동안에도 도착한다. 켜자마자 듣고 있어야
+  // 그때 들어온 구매를 확인 처리할 수 있고, 안 하면 사흘 뒤 자동 환불된다.
+  await PurchaseService.instance.start();
 
   runApp(const ProviderScope(child: NyangCoachApp()));
   unawaited(_runStartupBackgroundJobs());

@@ -204,6 +204,9 @@ class _MainTabScreenState extends State<MainTabScreen>
   bool _redirectingForCoachAccess = false;
   bool _catWidgetPromptShowing = false;
 
+  /// 개발용 플랜 시뮬레이터를 여는 데 필요한 연속 탭 수.
+  static const int _debugPlanSelectorTapCount = 10;
+
   int _logoTapCount = 0;
   Timer? _logoTapTimer;
 
@@ -287,7 +290,7 @@ class _MainTabScreenState extends State<MainTabScreen>
       _logoTapCount = 0;
     });
 
-    if (_logoTapCount >= 5) {
+    if (_logoTapCount >= _debugPlanSelectorTapCount) {
       print('DEBUG: 5 taps reached! Showing modal.');
       _logoTapCount = 0;
       _logoTapTimer?.cancel();
