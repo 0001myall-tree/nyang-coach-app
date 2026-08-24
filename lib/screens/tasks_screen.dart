@@ -379,28 +379,6 @@ class VisionDeadline {
   }
 }
 
-class _TaskHintTrianglePainter extends CustomPainter {
-  final Color color;
-
-  const _TaskHintTrianglePainter({required this.color});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()..color = color;
-    final path = Path()
-      ..moveTo(0, 0)
-      ..lineTo(size.width / 2, size.height)
-      ..lineTo(size.width, 0)
-      ..close();
-    canvas.drawPath(path, paint);
-  }
-
-  @override
-  bool shouldRepaint(covariant _TaskHintTrianglePainter oldDelegate) {
-    return oldDelegate.color != color;
-  }
-}
-
 class MemoSection {
   String title;
   String content;
@@ -6399,7 +6377,9 @@ class _TasksScreenState extends State<TasksScreen>
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (showCheckboxHint) _buildTaskCheckboxHint(),
+        // 여기 있던 "한 번 더 누르면 완료돼요" 말풍선은 걷어냈다. 완료는 이제
+        // 카드를 미는 쪽이라 설명이 틀렸고, ▶를 처음 누르면 카드가 한 번 밀려
+        // 보이는 안내가 따로 나온다. 처음 쓰는 사람에게 설명이 둘 뜨던 자리다.
         _buildTaskTimerToggle(remainingTasks),
         ...remainingTasks.asMap().entries.map(
           (entry) => _buildTaskItem(
@@ -6461,79 +6441,6 @@ class _TasksScreenState extends State<TasksScreen>
                 ),
               ),
             ),
-    );
-  }
-
-  Widget _buildTaskCheckboxHint() {
-    return Padding(
-      padding: const EdgeInsets.only(left: 10, right: 10, bottom: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const SizedBox(width: 4),
-          Column(
-            children: [
-              Container(
-                width: 54,
-                height: 28,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF8F5FF),
-                  border: Border.all(
-                    color: const Color(0xFFB7A5FF),
-                    width: 1.2,
-                  ),
-                  borderRadius: BorderRadius.circular(9),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(
-                      Icons.play_arrow_rounded,
-                      size: 16,
-                      color: Color(0xFF7B61FF),
-                    ),
-                    Text(
-                      '시작',
-                      style: GoogleFonts.notoSansKr(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w800,
-                        color: const Color(0xFF7B61FF),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              CustomPaint(
-                size: const Size(10, 6),
-                painter: _TaskHintTrianglePainter(
-                  color: const Color(0xFFF6F2FF),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(width: 10),
-          Flexible(
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF6F2FF),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFFE4DAFF)),
-              ),
-              child: Text(
-                '▶ 를 누르면 불이 들어와요. 다 했을 때 한 번 더 누르면 완료돼요.',
-                style: GoogleFonts.notoSansKr(
-                  fontSize: 12.5,
-                  height: 1.35,
-                  fontWeight: FontWeight.w700,
-                  color: const Color(0xFF6D5BD0),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
     );
   }
 
