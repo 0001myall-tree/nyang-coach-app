@@ -2126,7 +2126,9 @@ class _ChatScreenState extends State<ChatScreen>
     }
     // 채팅으로 일정을 등록하다 곁다리로 걸리는 자리라, 권한 종류마다
     // 한 번만 보여준다.
-    if (!await shouldAutoShowAlarmPermissionNotice('chat_schedule_${issue.name}')) {
+    if (!await shouldAutoShowAlarmPermissionNotice(
+      'chat_schedule_${issue.name}',
+    )) {
       return;
     }
     if (!mounted) return;
@@ -3236,6 +3238,33 @@ ${lines.join('\n')}
       }
     }
     if (didUpdate) TasksSyncService.scheduleSyncToCloud();
+  }
+
+  bool _hasRepeatedLatePlannerEntries(
+    List<String> entries,
+    DateTime now, {
+    int minDays = 5,
+  }) {
+    final today = DateTime(now.year, now.month, now.day);
+    final recentDays = {
+      for (var offset = 0; offset < 7; offset++)
+        _dateKey(today.subtract(Duration(days: offset))),
+    };
+    return entries.where(recentDays.contains).toSet().length >= minDays;
+  }
+
+  bool _hasLateNightTraceForGreeting(SharedPreferences prefs, DateTime now) {
+    final yesterday = now.subtract(const Duration(days: 1));
+    final seen = [
+      ..._messages,
+      ..._decodeRecentArchive(prefs.getString(_chatArchiveKey)),
+    ].where((m) => _isSameDay(m.time, now) || _isSameDay(m.time, yesterday));
+    if (seen.any((m) => m.time.hour >= 2 && m.time.hour < 5)) {
+      return true;
+    }
+
+    final entries = prefs.getStringList('nyang_late_planner_entry_dates') ?? [];
+    return entries.contains(_dateKey(yesterday));
   }
 
   Future<String> _getEffectiveTodayStr() async {
@@ -4588,6 +4617,16 @@ ${lines.join('\n')}
       ...plans.where((task) => task['done'] != true),
       ...habits.where((task) => task['done'] != true),
     ].map(_taskText).whereType<String>().toList(growable: false);
+    bool hasStartTrace(Map<String, dynamic> task) {
+      final inProgressAt = task['inProgressAt']?.toString().trim() ?? '';
+      final runStartedAt = task['runStartedAt']?.toString().trim() ?? '';
+      return task['done'] == true ||
+          task['inProgress'] == true ||
+          inProgressAt.isNotEmpty ||
+          runStartedAt.isNotEmpty;
+    }
+
+    final startedCount = [...plans, ...habits].where(hasStartTrace).length;
 
     // 시각까지 정해둔 일정이 곧 시작하는지. 습관은 시각이 없는 경우가 많아 함께 본다.
     final upcoming = _findUpcomingPlan([...plans, ...habits], now);
@@ -4617,12 +4656,16 @@ ${lines.join('\n')}
 
     // 어젯밤 흔적은 아카이브까지 봐야 한다 — 하루 지나면 기록이 넘어간다.
     // 5시부터는 늦게 잔 쪽이 아니라 일찍 일어난 쪽으로 본다(새벽 인사와 같은 경계).
+    final lateNight = _hasLateNightTraceForGreeting(prefs, now);
     final yesterday = now.subtract(const Duration(days: 1));
     final seen = [
       ..._messages,
       ..._decodeRecentArchive(prefs.getString(_chatArchiveKey)),
     ].where((m) => _isSameDay(m.time, now) || _isSameDay(m.time, yesterday));
-    final lateNight = seen.any((m) => m.time.hour >= 2 && m.time.hour < 5);
+    final repeatedLateNights = _hasRepeatedLatePlannerEntries(
+      prefs.getStringList('nyang_late_planner_entry_dates') ?? const [],
+      now,
+    );
     const sickWords = [
       '아프',
       '아팠',
@@ -4722,9 +4765,11 @@ ${lines.join('\n')}
       habitTotal: habits.length,
       habitDone: doneHabits.length,
       doneCount: doneCount,
+      startedCount: startedCount,
       doneLabel: doneLabel,
       pendingPlans: pendingPlans,
       lateNight: lateNight,
+      repeatedLateNights: repeatedLateNights,
       feltSick: feltSick,
       resistedDone: resistedName != null,
       resistedDoneLabel:
@@ -5004,6 +5049,8 @@ ${lines.join('\n')}
 
   static const _minimumBarGreetingKind = 'auto:minimum_bar';
 
+  static const _catLateNightMinimumGreetingKind = 'auto:cat_late_night_minimum';
+
   GreetingLinePicker get _catLinePicker => GreetingLinePicker(
     recentLines: _messages.reversed
         .where((m) => !m.isUser)
@@ -5020,8 +5067,32 @@ ${lines.join('\n')}
     if (now.hour >= MasterGreetingContext.quietFromHour) return false;
 
     final tasks = _decodeMapList(prefs.getString('nyang_tasks'));
+    if (_startCatLateNightMinimumGreeting(prefs: prefs, now: now)) {
+      return true;
+    }
     if (_startCatUpcomingPlanGreeting(tasks: tasks, now: now)) return true;
     return _startCatMinimumBarGreeting(tasks: tasks, now: now);
+  }
+
+  bool _startCatLateNightMinimumGreeting({
+    required SharedPreferences prefs,
+    required DateTime now,
+  }) {
+    if (now.hour < 7) return false;
+    if (_spokeKindToday({_catLateNightMinimumGreetingKind}, now)) return false;
+    if (!_hasLateNightTraceForGreeting(prefs, now)) return false;
+
+    final pool = now.hour >= 18
+        ? MasterGreetingCopy.catAfterLateNightEveningMinimum
+        : MasterGreetingCopy.catAfterLateNightMinimumSuccess;
+    final line = _catLinePicker.pickLine(pool);
+    if (line.isEmpty || !mounted) return false;
+
+    _injectAiMessage(line, kind: _catLateNightMinimumGreetingKind);
+    unawaited(
+      AnalyticsService.logFeatureUsage('cat_late_night_minimum_greeting'),
+    );
+    return true;
   }
 
   bool _startCatUpcomingPlanGreeting({

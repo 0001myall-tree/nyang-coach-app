@@ -34,6 +34,9 @@ class MasterGreetingContext {
   /// 같다 — 자동 주입된 습관이 분모를 오염시킨다.
   final int doneCount;
 
+  /// 오늘 일정/습관 중 시작 또는 완료 흔적이 있는 개수.
+  final int startedCount;
+
   /// 격려에 녹일 완료 항목 이름. 제목이 길거나 완료가 없으면 null.
   final String? doneLabel;
 
@@ -42,6 +45,9 @@ class MasterGreetingContext {
 
   /// 어젯밤 늦게까지(새벽 2~6시) 앱을 쓴 흔적이 있는지.
   final bool lateNight;
+
+  /// 최근에 늦은 밤 앱/플래너 진입이 여러 날 반복됐는지.
+  final bool repeatedLateNights;
 
   /// 어제나 오늘 아프다고 말한 적이 있는지.
   final bool feltSick;
@@ -90,9 +96,11 @@ class MasterGreetingContext {
     this.habitTotal = 0,
     this.habitDone = 0,
     required this.doneCount,
+    this.startedCount = 0,
     required this.doneLabel,
     required this.pendingPlans,
     required this.lateNight,
+    this.repeatedLateNights = false,
     required this.feltSick,
     this.resistedDone = false,
     this.resistedDoneLabel,
@@ -117,6 +125,16 @@ class MasterGreetingContext {
       now.hour < quietFromHour &&
       pendingPlans.length >= MasterGreetingCopy.minimumBarPendingCount &&
       planRate <= 0.5;
+
+  /// 저녁 8시 이후인데 오늘 아직 시작한 흔적이 하나도 없는 상태.
+  bool get needsEveningMinimumSuccessReset =>
+      now.hour >= MasterGreetingCopy.eveningNoStartFromHour &&
+      now.hour < quietFromHour &&
+      hasPlan &&
+      planDone == 0 &&
+      habitDone == 0 &&
+      doneCount == 0 &&
+      startedCount == 0;
 
   /// 아직 아무것도 못 했는데, 곧 시작하기로 해둔 일정이 있는 상태.
   bool get hasUpcomingPlan =>
@@ -205,6 +223,7 @@ class GreetingVoice {
   // 이 두 자리에서만 하루가 아직 열려 있다는 쪽으로 말한다.
   final List<String> earlyEveningNone; // 저녁 초입, 완료 0
   final List<String> earlyEveningHigh; // 저녁 초입, 81~99%
+  final List<String> eveningNoStartMinimum; // 20시 이후, 시작 기록 0
 
   /// 밤 9시대, 아직 남은 일정이 둘 이상일 때.
   ///
@@ -237,6 +256,7 @@ class GreetingVoice {
   /// 복귀한 날 뒤에 붙일 문장. 뭘 했고 뭐가 남았는지 짚는 대신 도움을 청하라고만 한다.
   final List<String> comebackSupport;
   final List<String> afterLateNight; // 늦게 잔 다음 날 낮
+  final List<String> afterRepeatedLateNights; // 늦은 밤 패턴이 5일 이상 반복된 다음 날 낮
   final List<String> afterSick; // 아프다고 한 다음 날 낮
 
   /// 격려 문구. (완료 항목 이름을 넣는 형태, 이름 없이 쓰는 형태) 순서다.
@@ -337,12 +357,14 @@ class GreetingVoice {
     required this.eveningHigh,
     required this.earlyEveningNone,
     required this.earlyEveningHigh,
+    required this.eveningNoStartMinimum,
     required this.eveningMinimumBar,
     required this.eveningAll,
     required this.eveningNoPlan,
     required this.comeback,
     required this.comebackSupport,
     required this.afterLateNight,
+    required this.afterRepeatedLateNights,
     required this.afterSick,
     required this.encStarted,
     required this.encStrong,
@@ -386,6 +408,9 @@ class MasterGreetingCopy {
   /// '아직 늦지 않았다'거나 '벌써 마무리돼 간다'는 말이 참이 되는 경계다.
   static const earlyEveningUntilHour = 20;
 
+  /// 이 시각부터는 시작 기록이 없는 날에 오늘의 성공 기준을 다시 잡게 돕는다.
+  static const eveningNoStartFromHour = 20;
+
   /// 이 시각부터는 남은 것을 다 하라는 말이 뜻을 잃는다. 대신 계획을 좁히게 돕는다.
   /// 끝은 [MasterGreetingContext.quietFromHour]가 맡는다 — 그 뒤로는 아무 말도 하지 않는다.
   static const minimumBarFromHour = 21;
@@ -411,6 +436,16 @@ class MasterGreetingCopy {
     '오늘 계획이 {아직 남아 있네|아직 남았네}. 꼭 하고 싶은 거 하나를 지금 할 수 있는 크기로 줄여서 다시 잡아보는 건 어때냥? 거기까지가 오늘의 최소 성공인 거지냥.',
     '남은 게 {아직 있네|남아 있네}. "1화 쓰기"를 "1화 개요만 쓰기"처럼, 하나를 오늘 할 만한 크기로 줄여보는 건 {어때냥|어떻겠냥}? 그게 오늘의 최소 성공인 거지냥.',
     '오늘 몫이 {아직 남았다냥|남아 있다냥}. 통째로 하려 말고 하나를 작게 고쳐 오늘의 최소 성공으로 잡아보면 {어때냥|어떻겠냥}? {중요한 일에|꼭 하고 싶은 일에} 할 수 있을 만큼 집중하는 게 진짜 성공이라냥.',
+  ];
+
+  static const catAfterLateNightMinimumSuccess = [
+    '어제 늦게 잤네냥. 오늘은 무리하지 않는 게 좋을 것 같다냥. 냥이랑 최소 성공 기준 잡아볼까냥?',
+    '어제 좀 늦게 잤다냥. 오늘은 에너지와 체력에 맞게 최소 성공 기준만 잡아보자냥.',
+  ];
+
+  static const catAfterLateNightEveningMinimum = [
+    '왔구냥. 오늘 남은 체력으로 어디까지 해볼까냥? 딱 하나만 해도 좋고, 하나를 더 쪼개도 좋다냥.',
+    '왔구냥. 오늘은 남은 체력에 맞춰 보자냥. 하나만 해도 좋고, 하나를 더 작게 쪼개도 좋다냥.',
   ];
 
   static const catUpcomingPlan = [
@@ -517,6 +552,10 @@ class MasterGreetingCopy {
       '오늘도 {벌써 마무리돼 가시네요|어느새 끝이 보이네요}, 지켜보는 저까지 {흐뭇합니다|즐거워집니다}.',
       '이 시간에 {여기까지 오시다니|벌써 이만큼이라니}, 저도 {마음이 놓입니다|덩달아 뿌듯합니다}.',
     ],
+    eveningNoStartMinimum: [
+      '아직 시작 표시가 없네요. 괜찮습니다. 지금은 에너지와 체력에 맞게 오늘의 최소 성공 기준만 다시 잡아보시죠.',
+      '오늘은 아직 시작 흔적이 없네요. 지금은 에너지와 체력에 맞게 오늘의 최소 성공 기준만 다시 잡아도 충분합니다.',
+    ],
     eveningAll: [
       '오늘 계획을 {전부|남김없이} 마치셨습니다.',
       '오늘은 계획을 {남김없이 끝내셨네요|하나도 남기지 않으셨네요}.',
@@ -538,8 +577,12 @@ class MasterGreetingCopy {
       '필요한 게 있으면 편하게 말씀해 주세요.',
     ],
     afterLateNight: [
-      '어제 늦게 주무신 것 같은데 컨디션은 괜찮으신지 모르겠네요. 오늘 할 일 해나가시다가 힘든 점 있으면 말씀해 주세요.',
-      '어젯밤 늦게까지 깨어 계셨죠. 무리되는 일이 있으면 언제든 알려주세요.',
+      '어제 조금 늦게 주무신 것 같은데 오늘 체력은 괜찮으신가요? 피곤하시면 오늘은 최소 성공 기준으로 가볍게 계획하셔도 좋습니다.',
+      '어젯밤 늦게까지 깨어 계셨죠. 컨디션이 무거우시면 오늘 계획은 최소 성공 기준으로 낮춰 잡으셔도 됩니다.',
+    ],
+    afterRepeatedLateNights: [
+      '요즘 늦게 주무시는 날이 이어진 것 같습니다. 오늘 컨디션은 어떠신가요? 피곤한 날엔 일을 더 늘리기보다 체력을 위한 가벼운 활동을 일정에 넣어보셔도 좋겠습니다.',
+      '최근 늦은 밤까지 깨어 계신 날이 여러 번 보였습니다. 오늘 몸은 괜찮으신가요? 오늘은 계획을 더 늘리기보다 산책이나 스트레칭처럼 체력을 위한 가벼운 일정을 하나 넣어보셔도 좋습니다.',
     ],
     afterSick: [
       '어제 컨디션이 안 좋으셨는데 좀 회복되셨는지 모르겠어요. 오늘 할 일 해나가시다가 심리적으로 힘든 점 있으면 알려주세요.',
@@ -793,6 +836,10 @@ class MasterGreetingCopy {
       '오늘도 {벌써 마무리돼 가는구나냥|어느새 끝이 보이는구나냥}, 지켜보는 나까지 {흐뭇하다냥|즐거워진다냥}.',
       '이 시간에 {여기까지 왔다니|벌써 이만큼이라니}, 나도 {마음이 놓인다냥|덩달아 뿌듯하다냥}.',
     ],
+    eveningNoStartMinimum: [
+      '아직 시작 표시가 없구나냥. 괜찮다냥. 지금은 에너지와 체력에 맞게 오늘의 최소 성공 기준만 다시 잡아보자냥.',
+      '오늘은 아직 시작 흔적이 없다냥. 지금은 에너지와 체력에 맞게 오늘의 최소 성공 기준만 다시 잡아도 충분하다냥.',
+    ],
     eveningAll: [
       '오늘 계획을 {전부|남김없이} 마쳤구나냥.',
       '오늘은 계획을 {남김없이 끝냈다냥|하나도 안 남겼다냥}.',
@@ -810,8 +857,12 @@ class MasterGreetingCopy {
       '필요한 게 있으면 편하게 말하라냥.',
     ],
     afterLateNight: [
-      '어제 늦게 잔 것 같은데 컨디션은 괜찮은지 모르겠구나냥. 오늘 하다가 힘든 일 있으면 말하라냥.',
-      '어젯밤 늦게까지 깨어 있었지냥. 무리되는 게 있으면 언제든 말하라냥.',
+      '어제 조금 늦게 잤다냥. 오늘 체력은 괜찮냥? 피곤하면 오늘은 최소 성공 기준으로 가볍게 계획해도 좋다냥.',
+      '어젯밤 늦게까지 깨어 있었지냥. 컨디션이 무거우면 오늘 계획은 최소 성공 기준으로 낮춰 잡아도 된다냥.',
+    ],
+    afterRepeatedLateNights: [
+      '요즘 늦게 자는 날이 이어진 것 같다냥, 오늘 컨디션 어때냥? 피곤한 날에는 계획을 시작하기 어려워하는 편 같다냥. 일을 더 늘리기보다 체력을 위한 가벼운 활동을 일정에 넣어볼까냥?',
+      '최근 늦은 밤까지 깨어 있던 날이 여러 번 보였다냥. 오늘 몸은 괜찮냥? 오늘은 할 일을 더 보태기보다 산책이나 스트레칭처럼 체력을 위한 가벼운 일정을 하나 넣어봐도 좋다냥.',
     ],
     afterSick: [
       '어제 몸이 안 좋았는데 좀 회복됐는지 모르겠구나냥. 오늘 하다가 마음이 힘든 일 있으면 알려주라냥.',
@@ -1047,11 +1098,7 @@ class GreetingLinePicker {
 class MasterGreetingBuilder extends GreetingLinePicker {
   final GreetingVoice voice;
 
-  MasterGreetingBuilder({
-    required this.voice,
-    super.recentLines,
-    super.random,
-  });
+  MasterGreetingBuilder({required this.voice, super.recentLines, super.random});
 
   /// 한 발화는 최대 2문장(복귀 인사가 붙으면 그 앞에 한 문장 더).
   MasterGreetingResult build(MasterGreetingContext context) {
@@ -1082,9 +1129,17 @@ class MasterGreetingBuilder extends GreetingLinePicker {
 
       case GreetingSlot.day:
         // 어제 아팠거나 늦게 잔 날은 계획 이야기보다 컨디션을 먼저 챙긴다.
-        if (context.feltSick || context.lateNight) {
+        if (context.feltSick ||
+            context.repeatedLateNights ||
+            context.lateNight) {
           parts.add(
-            pickLine(context.feltSick ? voice.afterSick : voice.afterLateNight),
+            pickLine(
+              context.feltSick
+                  ? voice.afterSick
+                  : context.repeatedLateNights
+                  ? voice.afterRepeatedLateNights
+                  : voice.afterLateNight,
+            ),
           );
           return MasterGreetingResult(parts.join(' '));
         }
@@ -1093,10 +1148,7 @@ class MasterGreetingBuilder extends GreetingLinePicker {
         final startPattern = context.startPatternLabel;
         if (startPattern != null && hour < 12) {
           parts.add(_fillWindow(voice.startPatternMorning, startPattern));
-          return MasterGreetingResult(
-            parts.join(' '),
-            usedStartPattern: true,
-          );
+          return MasterGreetingResult(parts.join(' '), usedStartPattern: true);
         }
         // 시각까지 정해둔 일정이 곧 시작한다면 그게 오늘의 이야기다. 다른 걸
         // 고르라고 하면 이미 정해둔 사람에게 딴 데를 가리키는 말이 된다.
@@ -1170,6 +1222,10 @@ class MasterGreetingBuilder extends GreetingLinePicker {
         // 말보다 그 일정을 짚어주는 편이 맞다.
         if (context.hasUpcomingPlan) {
           parts.add(_fillUpcoming(context));
+          return MasterGreetingResult(parts.join(' '));
+        }
+        if (context.needsEveningMinimumSuccessReset) {
+          parts.add(pickLine(voice.eveningNoStartMinimum));
           return MasterGreetingResult(parts.join(' '));
         }
         // 밤 9시대에 남은 게 둘 이상이면, 뭐가 미뤄졌는지 되묻는 대신

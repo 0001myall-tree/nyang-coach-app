@@ -9,10 +9,12 @@ MasterGreetingContext ctx({
   int planTotal = 0,
   int planDone = 0,
   int doneCount = 0,
+  int startedCount = 0,
   String? doneLabel,
   List<String> pendingPlans = const [],
   int? daysSinceLastVisit,
   bool lateNight = false,
+  bool repeatedLateNights = false,
   bool feltSick = false,
   bool resistedDone = false,
   String? resistedDoneLabel,
@@ -27,9 +29,11 @@ MasterGreetingContext ctx({
     planTotal: planTotal,
     planDone: planDone,
     doneCount: doneCount,
+    startedCount: startedCount,
     doneLabel: doneLabel,
     pendingPlans: pendingPlans,
     lateNight: lateNight,
+    repeatedLateNights: repeatedLateNights,
     feltSick: feltSick,
     resistedDone: resistedDone,
     resistedDoneLabel: resistedDoneLabel,
@@ -89,12 +93,14 @@ final cases = <String, MasterGreetingContext>{
   '오후-계획없음': ctx(hour: 14),
   // 주 1회 오전 인사. 계획이 있든 없든 이 이야기가 오전 문구를 대신한다.
   '오전-시작패턴': ctx(hour: 8, startPatternLabel: '오전 8시~10시'),
-  '오전-시작패턴-계획있음': ctx(
+  '오전-시작패턴-계획있음': ctx(hour: 10, planTotal: 3, startPatternLabel: '오전 8시~10시'),
+  '낮-어제늦게잠': ctx(hour: 10, planTotal: 3, lateNight: true),
+  '낮-늦은패턴반복': ctx(
     hour: 10,
     planTotal: 3,
-    startPatternLabel: '오전 8시~10시',
+    lateNight: true,
+    repeatedLateNights: true,
   ),
-  '낮-어제늦게잠': ctx(hour: 10, planTotal: 3, lateNight: true),
   '낮-어제아팠음': ctx(hour: 10, planTotal: 3, feltSick: true),
   '낮-아픔이늦밤보다우선': ctx(hour: 10, lateNight: true, feltSick: true),
   '저녁-계획없음': ctx(hour: 20),
@@ -112,6 +118,7 @@ final cases = <String, MasterGreetingContext>{
     planDone: 1,
     pendingPlans: ['설거지', '빨래', '운동'],
   ),
+  '저녁-시작0': ctx(hour: 20, planTotal: 4, pendingPlans: ['설거지', '빨래', '운동']),
   // 저녁 초입(18~20시)은 하루가 아직 열려 있는 것으로 본다.
   '저녁초입-완료0': ctx(hour: 18, planTotal: 4, pendingPlans: ['설거지', '빨래', '운동']),
   '저녁초입-거의다': ctx(
@@ -228,6 +235,7 @@ List<String> allTemplates(GreetingVoice v) => [
   ...v.eveningHigh,
   ...v.earlyEveningNone,
   ...v.earlyEveningHigh,
+  ...v.eveningNoStartMinimum,
   ...v.eveningMinimumBar,
   ...v.eveningAll,
   ...v.eveningNoPlan,
@@ -249,6 +257,7 @@ List<String> allTemplates(GreetingVoice v) => [
   ...v.comeback,
   ...v.comebackSupport,
   ...v.afterLateNight,
+  ...v.afterRepeatedLateNights,
   ...v.afterSick,
   for (final pool in [
     v.encStarted,
@@ -372,6 +381,58 @@ void main() {
 
   // 상황 문장과 질문 문장을 각각 두면 둘이 같은 말을 하게 된다. 실제로
   // "막히는 점 있으면 말씀해 주세요. 필요하신 게 있으면 말씀해 주세요."가 나갔다.
+  group('늦게 잔 다음 날 첫 낮 인사', () {
+    for (final voice in voices.entries) {
+      test('${voice.key} / 체력을 묻고 최소 성공 기준을 허용한다', () {
+        final context = ctx(hour: 10, planTotal: 3, lateNight: true);
+        for (var seed = 0; seed < 50; seed++) {
+          final text = MasterGreetingBuilder(
+            voice: voice.value,
+            random: Random(seed),
+          ).build(context).text;
+          final where = '씨앗 $seed: $text';
+
+          expect(text, contains('최소 성공 기준'), reason: where);
+          expect(
+            text.contains('체력') || text.contains('컨디션'),
+            isTrue,
+            reason: where,
+          );
+        }
+      });
+    }
+  });
+
+  group('늦은 패턴이 반복된 다음 날 첫 낮 인사', () {
+    for (final voice in voices.entries) {
+      test('${voice.key} / 일을 늘리기보다 체력 활동을 제안한다', () {
+        final context = ctx(
+          hour: 10,
+          planTotal: 3,
+          lateNight: true,
+          repeatedLateNights: true,
+        );
+        for (var seed = 0; seed < 50; seed++) {
+          final text = MasterGreetingBuilder(
+            voice: voice.value,
+            random: Random(seed),
+          ).build(context).text;
+          final where = '씨앗 $seed: $text';
+
+          expect(text, contains('체력'), reason: where);
+          expect(text, contains('일정'), reason: where);
+          expect(
+            text.contains('일을 더 늘리기보다') ||
+                text.contains('계획을 더 늘리기보다') ||
+                text.contains('할 일을 더 보태기보다'),
+            isTrue,
+            reason: where,
+          );
+        }
+      });
+    }
+  });
+
   group('9시 뒤 낮 발화는 한 문장이다', () {
     final dayCases = [
       '오전-계획있음',
@@ -420,11 +481,13 @@ void main() {
           voice.value.eveningHigh,
           voice.value.earlyEveningNone,
           voice.value.earlyEveningHigh,
+          voice.value.eveningNoStartMinimum,
           voice.value.eveningMinimumBar,
           voice.value.eveningAll,
           voice.value.eveningNoPlan,
           voice.value.eveningOffPlanAsk,
           voice.value.offPlanDoneReply,
+          voice.value.afterRepeatedLateNights,
         ]) {
           for (final template in pool) {
             expect(
@@ -582,7 +645,11 @@ void main() {
               random: Random(seed),
             ).build(context).text;
             final where = '$name 씨앗 $seed: $text';
-            expect(text, contains(context.upcomingPlanTimeLabel!), reason: where);
+            expect(
+              text,
+              contains(context.upcomingPlanTimeLabel!),
+              reason: where,
+            );
             expect(
               text,
               contains("'${context.upcomingPlanName!}'"),
@@ -602,7 +669,11 @@ void main() {
               random: Random(seed),
             ).build(cases[name]!).text;
             for (final word in pushy) {
-              expect(text, isNot(contains(word)), reason: '$name 씨앗 $seed: $text');
+              expect(
+                text,
+                isNot(contains(word)),
+                reason: '$name 씨앗 $seed: $text',
+              );
             }
           }
         }
@@ -615,11 +686,9 @@ void main() {
       test('${voice.key} / 문장이 쉬어도 된다는 말로 끝난다', () {
         for (final template in voice.value.upcomingPlan) {
           for (var seed = 0; seed < 20; seed++) {
-            final text = GreetingLinePicker(random: Random(seed)).fillUpcoming(
-              [template],
-              name: '집필',
-              timeLabel: '오후 3시',
-            );
+            final text = GreetingLinePicker(
+              random: Random(seed),
+            ).fillUpcoming([template], name: '집필', timeLabel: '오후 3시');
             final last = text
                 .split(RegExp(r'(?<=[.?!])\s+'))
                 .where((s) => s.trim().isNotEmpty)
@@ -696,13 +765,44 @@ void main() {
       for (final template in MasterGreetingCopy.catUpcomingPlan) {
         expect(picker.anchor(template).length, greaterThanOrEqualTo(4));
         for (var seed = 0; seed < 20; seed++) {
-          final text = GreetingLinePicker(random: Random(seed)).fillUpcoming(
-            [template],
-            name: '집필',
-            timeLabel: '오후 3시',
-          );
+          final text = GreetingLinePicker(
+            random: Random(seed),
+          ).fillUpcoming([template], name: '집필', timeLabel: '오후 3시');
           expect(text.contains('냥'), isTrue, reason: text);
         }
+      }
+    });
+  });
+
+  group('냥냥이가 늦게 잔 다음 날 최소 성공 기준을 잡는 말', () {
+    test('무리하지 말고 기준을 낮추자고 짧게 말한다', () {
+      for (final template
+          in MasterGreetingCopy.catAfterLateNightMinimumSuccess) {
+        final text = GreetingLinePicker(random: Random(1)).pickLine([template]);
+        expect(text, contains('냥'), reason: text);
+        expect(text, contains('최소 성공 기준'), reason: text);
+        expect(
+          text.contains('무리하지') || text.contains('에너지와 체력에 맞게'),
+          isTrue,
+          reason: text,
+        );
+        expect(sentenceCount(text), lessThanOrEqualTo(3), reason: text);
+      }
+    });
+
+    test('저녁에는 남은 체력 기준으로 하나만 보자고 말한다', () {
+      for (final template
+          in MasterGreetingCopy.catAfterLateNightEveningMinimum) {
+        final text = GreetingLinePicker(random: Random(1)).pickLine([template]);
+        expect(text, contains('냥'), reason: text);
+        expect(text, contains('체력'), reason: text);
+        expect(text, contains('하나'), reason: text);
+        expect(
+          text.contains('쪼개') || text.contains('작게'),
+          isTrue,
+          reason: text,
+        );
+        expect(sentenceCount(text), lessThanOrEqualTo(3), reason: text);
       }
     });
   });
@@ -809,7 +909,12 @@ void main() {
         doneCount: 3,
         pendingPlans: ['청소'],
       );
-      final nothingLeft = ctx(hour: 21, planTotal: 2, planDone: 2, doneCount: 2);
+      final nothingLeft = ctx(
+        hour: 21,
+        planTotal: 2,
+        planDone: 2,
+        doneCount: 2,
+      );
       expect(onlyOne.needsMinimumBar, isTrue);
       expect(mostlyDone.needsMinimumBar, isFalse);
       expect(nothingLeft.needsMinimumBar, isFalse);
@@ -900,6 +1005,64 @@ void main() {
             camefrom(voice.value, voice.value.eveningHigh, late),
             isTrue,
             reason: '씨앗 $seed: $late',
+          );
+        }
+      });
+    }
+  });
+
+  group('20시 이후 시작 기록이 없으면 성공 기준을 다시 잡는다', () {
+    /// 발화가 이 풀의 어느 틀에서 나왔는지. 펼친 문장은 매번 달라서 지문으로 본다.
+    bool camefrom(GreetingVoice voice, List<String> pool, String text) {
+      final builder = MasterGreetingBuilder(voice: voice);
+      return pool.any((t) => text.contains(builder.anchor(t)));
+    }
+
+    for (final voice in voices.entries) {
+      test('${voice.key} / 에너지와 체력에 맞게 최소 성공 기준을 잡자고 한다', () {
+        final context = ctx(
+          hour: 20,
+          planTotal: 3,
+          pendingPlans: ['설거지', '빨래', '운동'],
+        );
+        for (var seed = 0; seed < 50; seed++) {
+          final result = MasterGreetingBuilder(
+            voice: voice.value,
+            random: Random(seed),
+          ).build(context);
+          final where = '씨앗 $seed: ${result.text}';
+
+          expect(
+            camefrom(
+              voice.value,
+              voice.value.eveningNoStartMinimum,
+              result.text,
+            ),
+            isTrue,
+            reason: where,
+          );
+          expect(result.text, contains('에너지와 체력에 맞게'), reason: where);
+          expect(result.text, contains('오늘의 최소 성공 기준'), reason: where);
+          expect(result.choices, isEmpty, reason: where);
+        }
+      });
+
+      test('${voice.key} / 시작 흔적이 있으면 이 문구로 가지 않는다', () {
+        final context = ctx(
+          hour: 20,
+          planTotal: 3,
+          startedCount: 1,
+          pendingPlans: ['설거지', '빨래', '운동'],
+        );
+        for (var seed = 0; seed < 20; seed++) {
+          final text = MasterGreetingBuilder(
+            voice: voice.value,
+            random: Random(seed),
+          ).build(context).text;
+          expect(
+            camefrom(voice.value, voice.value.eveningNoStartMinimum, text),
+            isFalse,
+            reason: '씨앗 $seed: $text',
           );
         }
       });
