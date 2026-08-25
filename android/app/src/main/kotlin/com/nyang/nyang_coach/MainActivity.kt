@@ -134,24 +134,26 @@ class MainActivity : FlutterFragmentActivity() {
                     "start" -> {
                         val taskId = call.argument<String>("taskId")
                         val taskText = call.argument<String>("taskText").orEmpty()
+                        val startedAtMillis = call.argument<Long>("startedAtMillis")
                         if (taskId.isNullOrBlank()) {
                             result.error("INVALID_ARGS", "Missing taskId", null)
                             return@setMethodCallHandler
                         }
-                        // 같은 일정이 이미 걸려 있으면 예약을 처음부터 다시 걸지 않는다.
+                        // 같은 일정이 다시 들어와도 예약은 원래 시작 시각 기준으로 다시 맞춘다.
+                        // 권한/배터리 설정을 다녀오면 상태만 살아 있고 알람은 사라진 것처럼 보일
+                        // 수 있어서, "이미 걸림"만 믿으면 첫 냥냥이가 영영 안 나갈 수 있다.
+                        // 기준 시각을 쓰면 저장이 자주 일어나도 30분 타이밍이 뒤로 밀리지 않는다.
                         // 시작을 기다리던 일정이 이제 도는 중이면 다시 걸어야 한다 —
                         // 그때 잡아둔 예약은 시작할 시각을 보는 것이라 쓸모가 없다.
-                        val alreadyRunning = OngoingNudgeState.taskId(this) == taskId &&
-                            !OngoingNudgeState.isStartReminder(this)
                         OngoingNudgeState.start(this, taskId, taskText)
-                        if (!alreadyRunning) {
-                            OngoingNudgeScheduler.cancel(this)
-                            OngoingNudgeScheduler.scheduleIn(
-                                this,
-                                OngoingNudgeScheduler.FIRST_DELAY_MILLIS,
-                                OngoingNudgeScheduler.STAGE_FIRST,
-                            )
-                        }
+                        OngoingNudgeScheduler.cancel(this)
+                        val firstCheckAt = (startedAtMillis ?: System.currentTimeMillis()) +
+                            OngoingNudgeScheduler.FIRST_DELAY_MILLIS
+                        OngoingNudgeScheduler.scheduleAt(
+                            this,
+                            maxOf(firstCheckAt, System.currentTimeMillis()),
+                            OngoingNudgeScheduler.STAGE_FIRST,
+                        )
                         result.success(null)
                     }
                     "remindStart" -> {

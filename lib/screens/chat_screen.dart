@@ -36,6 +36,7 @@ import 'package:nyang_coach/services/preemptive_nudge_service.dart';
 import 'package:nyang_coach/services/purchase_service.dart';
 import 'package:nyang_coach/services/last_reply_log.dart';
 import 'package:nyang_coach/services/planner_action.dart';
+import 'package:nyang_coach/services/planner_routine_prompt_service.dart';
 import 'package:nyang_coach/widgets/alarm_permission_notice.dart';
 import 'package:nyang_coach/services/planner_edit_service.dart';
 import 'package:nyang_coach/services/registration_target.dart';
@@ -5013,7 +5014,8 @@ ${lines.join('\n')}
     if (_alreadySpokeInSlot(context.slot, now)) return false;
 
     final greeting = _greetingBuilder.build(context);
-    final text = greeting.text.trim();
+    var text = greeting.text.trim();
+    text = (await _buildMinimumSuccessSplitGreeting(context)) ?? text;
     if (text.isEmpty) return false;
     if (!mounted) return false;
 
@@ -5037,6 +5039,155 @@ ${lines.join('\n')}
     return true;
   }
 
+  String? _numericMinimumSuccessCandidate(List<String> pendingPlans) {
+    final numeric = RegExp(r'\d');
+    final candidates = pendingPlans
+        .map((plan) => plan.trim())
+        .where((plan) => plan.isNotEmpty && plan.length <= 40)
+        .where((plan) => numeric.hasMatch(plan))
+        .toList(growable: false);
+    if (candidates.isEmpty) return null;
+    candidates.sort((a, b) => a.length.compareTo(b.length));
+    return candidates.first;
+  }
+
+  Future<String?> _buildMinimumSuccessSplitGreeting(
+    MasterGreetingContext context,
+  ) async {
+    if (!context.needsEveningMinimumSuccessReset) return null;
+    final original = _numericMinimumSuccessCandidate(context.pendingPlans);
+    if (original == null) return null;
+
+    final reduced = await _suggestReducedMinimumSuccessTask(original);
+    if (reduced == null) return null;
+
+    final safeOriginal = original.replaceAll("'", '');
+    final safeReduced = reduced.replaceAll("'", '');
+    final particle = _objectParticle(safeOriginal);
+    if (CoachIdService.isNyangHalbae(_coach.id)) {
+      return '아직 오늘 시작 표시가 없구나냥. 괜찮다냥. 지금은 원래 계획을 다 붙잡기보다 \'$safeOriginal\'$particle \'$safeReduced\'로 줄여보자냥. 그 정도면 오늘의 최소 성공으로 충분하다냥.';
+    }
+    return '아직 오늘 시작 표시가 없네요. 괜찮습니다. 지금은 원래 계획을 다 붙잡기보다 \'$safeOriginal\'$particle \'$safeReduced\'로 줄여보시죠. 그 정도면 오늘의 최소 성공으로 충분합니다.';
+  }
+
+  String _objectParticle(String text) {
+    final trimmed = text.trim();
+    if (trimmed.isEmpty) return '를';
+    final code = trimmed.runes.last;
+    if (code < 0xAC00 || code > 0xD7A3) return '를';
+    return (code - 0xAC00) % 28 == 0 ? '를' : '을';
+  }
+
+  Future<String?> _suggestReducedMinimumSuccessTask(String taskName) async {
+    const model = 'gpt-4.1-mini';
+    final messages = [
+      {
+        'role': 'system',
+        'content': '''
+You rewrite one Korean task title into a smaller "minimum success" version.
+Rules:
+- Only reduce numeric quantity/time/progress already present in the title.
+- Aim for about 1/3 or 1/4 of the original amount.
+- Keep the same unit and action.
+- Never add a new task, new unit, schedule, explanation, or encouragement.
+- If the title cannot be safely reduced, return {"reduced":null}.
+- Return only compact JSON like {"reduced":"문제 8개만 풀기"}.
+''',
+      },
+      {'role': 'user', 'content': taskName},
+    ];
+
+    try {
+      final estimatedPromptTokens = AnalyticsService.estimateChatTokens(
+        messages,
+        '',
+      );
+      await ApiUsageLimitService.ensureChatAllowed(
+        estimatedTokens: estimatedPromptTokens,
+      );
+      final result = await _chatProxy.call({
+        'messages': messages,
+        'model': model,
+        'temperature': 0.2,
+      });
+
+      final content = result.data['content'] as String? ?? '';
+      final reduced = _parseReducedMinimumSuccessTask(content);
+      if (reduced == null || !_looksLikeReducedTask(taskName, reduced)) {
+        return null;
+      }
+
+      final estimatedTokens = AnalyticsService.estimateChatTokens(
+        messages,
+        content,
+      );
+      final usageData = result.data is Map ? result.data as Map : const {};
+      final actualTokens = AnalyticsService.readIntValue(usageData, [
+        'totalTokens',
+        'total_tokens',
+        'tokens',
+        'usage.totalTokens',
+        'usage.total_tokens',
+      ]);
+      final actualCostWon = AnalyticsService.readIntValue(usageData, [
+        'costWon',
+        'cost_won',
+        'estimatedCostWon',
+        'estimated_cost_won',
+        'usage.costWon',
+      ]);
+      unawaited(
+        AnalyticsService.logApiUsage(
+          coachId: widget.coachId,
+          estimatedTokens: estimatedTokens,
+          actualTokens: actualTokens,
+          actualCostWon: actualCostWon,
+          model: model,
+          usageSource: 'minimum_success_split',
+          countAsUserUsage: false,
+        ),
+      );
+      unawaited(
+        AnalyticsService.logFeatureUsage('master_minimum_success_split_api'),
+      );
+      return reduced;
+    } catch (error) {
+      debugPrint('Minimum success split failed: $error');
+      return null;
+    }
+  }
+
+  String? _parseReducedMinimumSuccessTask(String content) {
+    final trimmed = content.trim();
+    if (trimmed.isEmpty) return null;
+    try {
+      final decoded = jsonDecode(trimmed);
+      if (decoded is! Map) return null;
+      final value = decoded['reduced'];
+      if (value == null) return null;
+      final reduced = value.toString().trim();
+      if (reduced.isEmpty || reduced.length > 40) return null;
+      return reduced.replaceAll(RegExp(r'[\r\n]'), ' ');
+    } catch (_) {
+      return null;
+    }
+  }
+
+  bool _looksLikeReducedTask(String original, String reduced) {
+    if (original == reduced) return false;
+    final originalNumbers = RegExp(r'\d+').allMatches(original).toList();
+    final reducedNumbers = RegExp(r'\d+').allMatches(reduced).toList();
+    if (originalNumbers.isEmpty || reducedNumbers.isEmpty) return false;
+
+    final originalMax = originalNumbers
+        .map((m) => int.tryParse(m.group(0) ?? '') ?? 0)
+        .fold<int>(0, max);
+    final reducedMax = reducedNumbers
+        .map((m) => int.tryParse(m.group(0) ?? '') ?? 0)
+        .fold<int>(0, max);
+    return reducedMax > 0 && originalMax > reducedMax;
+  }
+
   /// 곧 시작할 일정을 짚는 발화만 냥냥이에게도 낸다.
   ///
   /// 냥냥이는 슬롯 인사를 쓰지 않는다. 하루를 여닫는 말은 대화가 만들고 앱은
@@ -5050,6 +5201,9 @@ ${lines.join('\n')}
   static const _minimumBarGreetingKind = 'auto:minimum_bar';
 
   static const _catLateNightMinimumGreetingKind = 'auto:cat_late_night_minimum';
+  static const _catPlannerRoutineGreetingKind = 'auto:cat_planner_routine';
+  static const _catPlannerRoutineLastOfferedKey =
+      'cat_planner_routine_last_offered_at';
 
   GreetingLinePicker get _catLinePicker => GreetingLinePicker(
     recentLines: _messages.reversed
@@ -5070,8 +5224,47 @@ ${lines.join('\n')}
     if (_startCatLateNightMinimumGreeting(prefs: prefs, now: now)) {
       return true;
     }
+    if (await _startCatPlannerRoutineGreeting(
+      prefs: prefs,
+      tasks: tasks,
+      now: now,
+    )) {
+      return true;
+    }
     if (_startCatUpcomingPlanGreeting(tasks: tasks, now: now)) return true;
     return _startCatMinimumBarGreeting(tasks: tasks, now: now);
+  }
+
+  Future<bool> _startCatPlannerRoutineGreeting({
+    required SharedPreferences prefs,
+    required List<Map<String, dynamic>> tasks,
+    required DateTime now,
+  }) async {
+    if (_spokeKindToday({_catPlannerRoutineGreetingKind}, now)) return false;
+
+    final lastOfferedAt = DateTime.tryParse(
+      prefs.getString(_catPlannerRoutineLastOfferedKey) ?? '',
+    );
+    final shouldOffer = PlannerRoutinePromptService.shouldOffer(
+      history: _decodeMapList(prefs.getString('nyang_history')),
+      todayTasks: tasks,
+      habits: _decodeMapList(prefs.getString('nyang_habits')),
+      now: now,
+      lastOfferedAt: lastOfferedAt,
+    );
+    if (!shouldOffer || !mounted) return false;
+
+    const line =
+        '요즘 계획 없이 지나가는 날이 제법 있네.\n'
+        '혹시 잊어버리고 있는 거면, 매일 같은 시간에 플래너 보는 루틴부터 잡아보는 건 어떠냥?\n'
+        '정해두면 냥이가 시작 시간도 부담 없이 알려줄 수 있다냥.';
+    _injectAiMessage(line, kind: _catPlannerRoutineGreetingKind);
+    await prefs.setString(
+      _catPlannerRoutineLastOfferedKey,
+      now.toIso8601String(),
+    );
+    unawaited(AnalyticsService.logFeatureUsage('cat_planner_routine_greeting'));
+    return true;
   }
 
   bool _startCatLateNightMinimumGreeting({
