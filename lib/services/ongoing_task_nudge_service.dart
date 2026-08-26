@@ -330,6 +330,18 @@ class OngoingTaskNudgeService {
     }
   }
 
+  /// 시작 시각을 기다리던 자리를 접는다. 더 기다릴 시간 있는 일정이 없을 때 쓴다.
+  static Future<void> clearStart() async {
+    if (!_isAndroid) return;
+    try {
+      await _channel.invokeMethod('clearStart');
+    } on PlatformException {
+      //
+    } on MissingPluginException {
+      //
+    }
+  }
+
   /// 방금 하나를 끝냈고, 시간이 정해지지 않은 다음 일이 남아 있을 때 다시 부른다.
   ///
   /// 안드로이드에만 있다. 아이폰은 [NyangBannerNudge]가 같은 역할을 알림 배너로
@@ -426,15 +438,13 @@ class OngoingTaskNudgeService {
   static Future<void> reconcile() async {
     if (!isSupported) return;
     final ongoingEnabled = await isEnabled();
-    if (!ongoingEnabled) {
-      await stopPreservingNextTask();
-    }
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.reload();
     final raw = prefs.getString('nyang_tasks');
     if (raw == null || raw.isEmpty) {
       await stopPreservingNextTask();
+      await clearStart();
       return;
     }
 
@@ -455,38 +465,37 @@ class OngoingTaskNudgeService {
     }
 
     if (running == null) {
-      // 도는 일정이 없으면 다음에 시작할 일정을 기다린다.
-      // 시작 시간 알림은 딴짓 방지 스위치와 별개로, 시간 있는 일정의 기본 동작이다.
       await stopPreservingNextTask();
-      final next = nextUnstartedTask(tasks, DateTime.now());
-      if (next != null) {
-        await remindStart(
-          taskId: next['id'].toString(),
-          taskText: next['text']?.toString() ?? '',
-          startAt: next['_startAt'] as DateTime,
-        );
-      }
-      return;
-    }
-    if (!ongoingEnabled) {
+    } else if (!ongoingEnabled) {
       await stop();
-      return;
+    } else {
+      // 쌓인 시간 + 지금 돌고 있는 구간.
+      var elapsed = (running['elapsedSeconds'] as num?)?.toInt() ?? 0;
+      final runStartedAt = DateTime.tryParse(
+        running['runStartedAt']?.toString() ?? '',
+      );
+      if (runStartedAt != null) {
+        elapsed += DateTime.now().difference(runStartedAt).inSeconds;
+      }
+      await start(
+        taskId: running['id'].toString(),
+        taskText: running['text']?.toString() ?? '',
+        elapsedSeconds: elapsed < 0 ? 0 : elapsed,
+      );
     }
 
-    // 쌓인 시간 + 지금 돌고 있는 구간.
-    var elapsed = (running['elapsedSeconds'] as num?)?.toInt() ?? 0;
-    final runStartedAt = DateTime.tryParse(
-      running['runStartedAt']?.toString() ?? '',
-    );
-    if (runStartedAt != null) {
-      elapsed += DateTime.now().difference(runStartedAt).inSeconds;
+    // 시작 시각 알림은 딴짓 방지 스위치는 물론, 도는 일정이 있는지와도 무관한
+    // 별도 자리다. 진행 중인 일정이 있어도 매번 다시 본다.
+    final next = nextUnstartedTask(tasks, DateTime.now());
+    if (next != null) {
+      await remindStart(
+        taskId: next['id'].toString(),
+        taskText: next['text']?.toString() ?? '',
+        startAt: next['_startAt'] as DateTime,
+      );
+    } else {
+      await clearStart();
     }
-
-    await start(
-      taskId: running['id'].toString(),
-      taskText: running['text']?.toString() ?? '',
-      elapsedSeconds: elapsed < 0 ? 0 : elapsed,
-    );
   }
 
   static Future<void> stop() async {

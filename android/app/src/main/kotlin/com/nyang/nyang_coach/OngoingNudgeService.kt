@@ -42,6 +42,17 @@ class OngoingNudgeService : Service() {
         /** 가장자리 밖으로 내보내는 만큼. 이만큼은 일부러 안 보인다. */
         private const val EDGE_PEEK_DP = 10
 
+        private const val EXTRA_TRACK = "track"
+
+        /** 진행 중인 일정 / 말 걸어보는 자리. [OngoingNudgeState]의 기본 슬롯. */
+        private const val TRACK_PRIMARY = "primary"
+
+        /** 시작 시각을 기다리는 자리. 독립된 슬롯이라 서로 지우지 않는다. */
+        private const val TRACK_START = "start"
+
+        /** 틈새 코칭 자리. 일정을 붙들지 않고 한 마디만 건넨다. */
+        private const val TRACK_GAP = "gap"
+
         /**
          * "다시 시작할게"를 누른 뒤 냥냥이가 적어도 이만큼은 남아 있는다.
          *
@@ -50,8 +61,18 @@ class OngoingNudgeService : Service() {
          */
         private const val LINGER_MILLIS = 2L * 60_000L
 
-        fun show(context: Context) {
-            val intent = Intent(context, OngoingNudgeService::class.java)
+        fun show(context: Context) = start(context, TRACK_PRIMARY)
+
+        /** 시작 시각 자리 전용. 진행 중인 일정과 서로 지우지 않는다. */
+        fun showStart(context: Context) = start(context, TRACK_START)
+
+        /** 틈새 코칭 자리 전용. 막히면 다시 걸지 않고 오늘은 지나간다. */
+        fun showGap(context: Context) = start(context, TRACK_GAP)
+
+        private fun start(context: Context, track: String) {
+            val intent = Intent(context, OngoingNudgeService::class.java).apply {
+                putExtra(EXTRA_TRACK, track)
+            }
             // 백그라운드에서 서비스를 띄우는 건 기기·버전에 따라 막힐 수 있다.
             // 막히면 이번 차례를 거르고 다음 기회에 다시 본다. 여기서 터지면
             // 앱 전체가 조용히 죽는다.
@@ -62,11 +83,24 @@ class OngoingNudgeService : Service() {
                     context.startService(intent)
                 }
             }.onFailure {
-                OngoingNudgeScheduler.scheduleIn(
-                    context,
-                    OngoingNudgeScheduler.RETRY_DELAY_MILLIS,
-                    OngoingNudgeScheduler.STAGE_FIRST,
-                )
+                // 틈새 코칭은 다시 걸지 않는다. 재촉하지 않기로 한 자리라,
+                // 못 나간 차례는 그냥 오늘 몫이 없었던 것이 된다.
+                if (track == TRACK_GAP) {
+                    return@onFailure
+                }
+                if (track == TRACK_START) {
+                    OngoingNudgeScheduler.scheduleStartIn(
+                        context,
+                        OngoingNudgeScheduler.RETRY_DELAY_MILLIS,
+                        OngoingNudgeScheduler.STAGE_FIRST,
+                    )
+                } else {
+                    OngoingNudgeScheduler.scheduleIn(
+                        context,
+                        OngoingNudgeScheduler.RETRY_DELAY_MILLIS,
+                        OngoingNudgeScheduler.STAGE_FIRST,
+                    )
+                }
             }
         }
     }
@@ -101,6 +135,36 @@ class OngoingNudgeService : Service() {
     /** 다음 차례를 이미 잡아뒀는지. 답할 때 잡고, 사라질 때 또 잡지 않는다. */
     private var nextScheduled = false
 
+    /**
+     * 지금 이 화면이 어느 자리를 보여주는 중인지. [TRACK_PRIMARY] 또는 [TRACK_START].
+     *
+     * 두 자리가 독립된 알람으로 따로 예약되기 때문에, 하나가 화면에 떠 있는
+     * 동안 다른 쪽 알람이 울릴 수 있다. 그때 어느 쪽 데이터를 읽고 어느 쪽
+     * 알람을 다시 걸지 구분하는 기준이 이 값이다.
+     */
+    private var track = TRACK_PRIMARY
+
+    private fun isStartTrack(): Boolean = track == TRACK_START
+
+    private fun isGapTrack(): Boolean = track == TRACK_GAP
+
+    private fun currentTaskText(): String = when {
+        isGapTrack() -> ""
+        isStartTrack() -> OngoingNudgeState.startTaskText(this)
+        else -> OngoingNudgeState.taskText(this)
+    }
+
+    /**
+     * 이 자리가 아직 무언가를 맡고 있는지. 다음 차례를 잡을지 여기서 갈린다.
+     *
+     * 틈새 코칭은 늘 아니다. 붙들고 있는 일정도 없고, 다음 차례도 없다.
+     */
+    private fun isActiveForCurrentTrack(): Boolean = when {
+        isGapTrack() -> false
+        isStartTrack() -> OngoingNudgeState.isStartActive(this)
+        else -> OngoingNudgeState.isActive(this)
+    }
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onCreate() {
@@ -109,25 +173,93 @@ class OngoingNudgeService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        val requestedTrack = intent?.getStringExtra(EXTRA_TRACK) ?: TRACK_PRIMARY
+        val currentlyShowing = bubbleView != null || cardView != null
+
+        if (currentlyShowing && requestedTrack == TRACK_GAP) {
+            // "다음 일"·"멈춘 일" 카드가 떠 있으면 자리를 넘겨받는다. 저쪽은
+            // 두 시간 뒤에 다시 물어도 그만이지만, 틈새 코칭은 정해둔 그 시각을
+            // 놓치면 그날치가 사라진다.
+            val showingIdleNudge = track == TRACK_PRIMARY &&
+                OngoingNudgeState.isIdleNudge(this)
+            if (!showingIdleNudge) return START_NOT_STICKY
+
+            OngoingNudgeScheduler.scheduleIn(
+                this,
+                OngoingNudgeScheduler.NEXT_TASK_ROUND_MILLIS,
+                OngoingNudgeScheduler.STAGE_FIRST,
+            )
+            handler.removeCallbacks(autoHide)
+            removeBubble()
+            cardView?.let { runCatching { windowManager.removeView(it) } }
+            cardView = null
+            answered = false
+            nextScheduled = false
+            track = TRACK_GAP
+        }
+
+        if (currentlyShowing && requestedTrack != track) {
+            if (requestedTrack == TRACK_START) {
+                // 시작 알림이 우선이다. 보여주던 트랙은 다시 보게 접어두고
+                // 넘어간다 — 틈새 코칭만 예외로, 밀려난 자리를 다시 잡지 않는다.
+                if (track == TRACK_PRIMARY) {
+                    OngoingNudgeScheduler.scheduleIn(
+                        this,
+                        OngoingNudgeScheduler.RETRY_DELAY_MILLIS,
+                        OngoingNudgeScheduler.STAGE_FIRST,
+                    )
+                }
+                handler.removeCallbacks(autoHide)
+                removeBubble()
+                cardView?.let { runCatching { windowManager.removeView(it) } }
+                cardView = null
+                answered = false
+                nextScheduled = false
+                track = requestedTrack
+            } else {
+                // 시작 카드가 이미 떠 있는데 진행 중 확인이 늦게 왔다. 이번 차례는
+                // 접고 나중에 다시 본다 — 지금 뜬 걸 밀어내지 않는다.
+                OngoingNudgeScheduler.scheduleIn(
+                    this,
+                    OngoingNudgeScheduler.RETRY_DELAY_MILLIS,
+                    OngoingNudgeScheduler.STAGE_FIRST,
+                )
+                return START_NOT_STICKY
+            }
+        } else if (!currentlyShowing) {
+            track = requestedTrack
+        }
+
         startInForeground()
 
         // 시작 시간 알림과 다음 일 알림은 딴짓 방지 스위치(isEnabled)와 별개로
         // 뜬다. 여기서 requireEnabled를 그대로 두면, 그 스위치를 켠 적 없는
         // 사람에게는 Receiver가 통과시켜도 창을 붙이기 직전에 다시 막혀 결국
         // 안 나온다.
-        val requireEnabled = !OngoingNudgeState.isStartReminder(this) &&
-            !OngoingNudgeState.isIdleNudge(this)
-        if (!OngoingNudgeState.shouldAppearNow(this, requireEnabled = requireEnabled)) {
+        val requireEnabled = !isStartTrack() && !OngoingNudgeState.isIdleNudge(this)
+        val shouldAppear = when {
+            isGapTrack() -> OngoingNudgeState.shouldAppearNowForGap(this)
+            isStartTrack() -> OngoingNudgeState.shouldAppearNowForStart(this)
+            else -> OngoingNudgeState.shouldAppearNow(this, requireEnabled = requireEnabled)
+        }
+        if (!shouldAppear) {
             // 깨어나서 창을 붙이기 직전에 상황이 바뀐 경우.
-            finishRound(scheduleNext = OngoingNudgeState.isActive(this))
+            finishRound(scheduleNext = isActiveForCurrentTrack())
             return START_NOT_STICKY
         }
 
         if (bubbleView == null && cardView == null) {
-            visibleUntil = SystemClock.elapsedRealtime() +
+            val visibleMillis = if (isGapTrack()) {
+                OngoingNudgeScheduler.GAP_VISIBLE_MILLIS
+            } else {
                 OngoingNudgeScheduler.VISIBLE_MILLIS
+            }
+            visibleUntil = SystemClock.elapsedRealtime() + visibleMillis
             showBubble()
-            handler.postDelayed(autoHide, OngoingNudgeScheduler.VISIBLE_MILLIS)
+            handler.postDelayed(autoHide, visibleMillis)
+            // 실제로 화면에 붙은 자리다. 걸러져 지나간 경우와 구분해서 적어야,
+            // 나가지도 않은 틈새 코칭 때문에 다음 코칭이 막히지 않는다.
+            if (isGapTrack()) OngoingNudgeState.markGapShown(this)
         }
         return START_NOT_STICKY
     }
@@ -147,11 +279,14 @@ class OngoingNudgeService : Service() {
             manager.createNotificationChannel(channel)
         }
 
-        val taskText = OngoingNudgeState.taskText(this)
-        val waitingToStart = OngoingNudgeState.isStartReminder(this)
-        val waitingForNext = OngoingNudgeState.isNextTaskReminder(this)
-        val waitingToResume = OngoingNudgeState.isResumeReminder(this)
+        val taskText = currentTaskText()
+        val waitingToStart = isStartTrack()
+        val waitingForNext = !isStartTrack() && !isGapTrack() &&
+            OngoingNudgeState.isNextTaskReminder(this)
+        val waitingToResume = !isStartTrack() && !isGapTrack() &&
+            OngoingNudgeState.isResumeReminder(this)
         val title = when {
+            isGapTrack() -> "지금 잠깐 여유 있나냥?"
             taskText.isBlank() && waitingToStart -> "시작할 일정이 있어요"
             taskText.isBlank() && waitingForNext -> "아직 안 한 일이 있어요"
             taskText.isBlank() && waitingToResume -> "멈춰 있는 일이 있어요"
@@ -279,9 +414,7 @@ class OngoingNudgeService : Service() {
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                     if (moved) {
                         OngoingNudgeState.savePositionY(this@OngoingNudgeService, params.y)
-                    } else if (
-                        !answered && OngoingNudgeState.isActive(this@OngoingNudgeService)
-                    ) {
+                    } else if (!answered && (isGapTrack() || isActiveForCurrentTrack())) {
                         expandToCard()
                     } else {
                         // 이미 답을 마친 뒤다. 물을 것이 없으니 할 일 창으로 보낸다.
@@ -297,7 +430,11 @@ class OngoingNudgeService : Service() {
     // ── 눌렀을 때 펼쳐지는 카드 ───────────────────────────────
 
     private fun expandToCard() {
-        if (OngoingNudgeState.isStartReminder(this) || OngoingNudgeState.isNextTaskReminder(this)) {
+        if (isGapTrack()) {
+            expandToGapCard()
+            return
+        }
+        if (isStartTrack() || OngoingNudgeState.isNextTaskReminder(this)) {
             expandToStartCard()
             return
         }
@@ -369,13 +506,13 @@ class OngoingNudgeService : Service() {
         handler.removeCallbacks(autoHide)
         removeBubble()
 
-        val isNext = OngoingNudgeState.isNextTaskReminder(this)
+        val isNext = !isStartTrack() && OngoingNudgeState.isNextTaskReminder(this)
         val view = LayoutInflater.from(this).inflate(R.layout.nudge_start_card, null)
         val cardImage = view.findViewById<ImageView>(R.id.nudge_start_image)
         cardImage.setImageBitmap(loadCatBitmap(dp(120)))
         cardImage.setOnClickListener { openPlanner() }
 
-        val taskText = OngoingNudgeState.taskText(this)
+        val taskText = currentTaskText()
         view.findViewById<TextView>(R.id.nudge_start_title).text = when {
             isNext && taskText.isBlank() -> "집사, 냥이랑 남은 일정도\n시작할까냥?"
             isNext -> "집사, '$taskText'\n냥이랑 지금 시작할까냥?"
@@ -414,6 +551,40 @@ class OngoingNudgeService : Service() {
     }
 
     /**
+     * 틈새 코칭 카드. 버튼이 없다.
+     *
+     * 무엇을 할지 정해주지 않는 자리라 실행도 거절도 물을 것이 없다. 하고 싶은
+     * 사람은 냥냥이를 눌러 할 일 목록으로 가고, 아니면 바깥을 누르거나 그냥
+     * 두면 사라진다. 어느 쪽이든 다시 부르지 않는다.
+     */
+    private fun expandToGapCard() {
+        handler.removeCallbacks(autoHide)
+        removeBubble()
+
+        val view = LayoutInflater.from(this).inflate(R.layout.nudge_gap_card, null)
+        val cardImage = view.findViewById<ImageView>(R.id.nudge_gap_image)
+        cardImage.setImageBitmap(loadCatBitmap(dp(120)))
+        cardImage.setOnClickListener { openPlanner() }
+
+        view.findViewById<View>(R.id.nudge_gap_scrim).setOnClickListener {
+            cardView?.let { runCatching { windowManager.removeView(it) } }
+            cardView = null
+            showBubble()
+            handler.postDelayed(autoHide, remainingVisibleMillis())
+        }
+
+        val params = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.MATCH_PARENT,
+            overlayType(),
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+            PixelFormat.TRANSLUCENT,
+        )
+        windowManager.addView(view, params)
+        cardView = view
+    }
+
+    /**
      * "시작할게". 여기서 바로 시작한 것으로 적는다.
      *
      * 앱에 들어가 ▶를 다시 누르게 하면, 시작하겠다고 말한 사람에게 한 칸을 더
@@ -421,18 +592,27 @@ class OngoingNudgeService : Service() {
      */
     private fun startNow() {
         answered = true
-        val taskId = OngoingNudgeState.taskId(this)
+        val taskId = OngoingNudgeState.startTaskId(this)
+        val taskText = OngoingNudgeState.startTaskText(this)
         if (taskId != null) {
             OngoingNudgeAnswerWriter.markStarted(this, taskId)
             OngoingNudgeState.writeResult(this, taskId, "started")
         }
+        OngoingNudgeState.clearStart(this)
+        OngoingNudgeScheduler.cancelStart(this)
         // 이제 도는 중이다. 딴짓 방지 기능을 켠 사람만 30분 뒤에 다시 챙긴다.
         // 시작 시간 알림은 기본 동작이지만, 시작 후 계속 따라가는 기능은 별도 스위치다.
-        if (OngoingNudgeState.isEnabled(this)) {
-            OngoingNudgeState.switchToOngoing(this)
-            scheduleNextRound(OngoingNudgeScheduler.FIRST_DELAY_MILLIS)
-        } else {
-            OngoingNudgeState.clear(this)
+        // 진행 중 자리는 시작 시각 자리와 독립이라, 이미 다른 일정이 돌고 있어도
+        // 그건 그것대로 건드리지 않는다.
+        if (taskId != null && OngoingNudgeState.isEnabled(this) &&
+            !OngoingNudgeAnswerWriter.isAnyTaskInProgress(this)
+        ) {
+            OngoingNudgeState.start(this, taskId, taskText, OngoingNudgeState.KIND_ONGOING)
+            OngoingNudgeScheduler.scheduleIn(
+                this,
+                OngoingNudgeScheduler.FIRST_DELAY_MILLIS,
+                OngoingNudgeScheduler.STAGE_FIRST,
+            )
         }
         Toast.makeText(this, "좋아! 지금부터 시작이야", Toast.LENGTH_SHORT).show()
         lingerAsDoorway()
@@ -441,7 +621,7 @@ class OngoingNudgeService : Service() {
     /** "좀 더 있다가". 30분 뒤에 한 번 더 묻고, 그 뒤로는 묻지 않는다. */
     private fun startLater() {
         answered = true
-        scheduleNextRound(OngoingNudgeScheduler.START_SNOOZE_MILLIS)
+        scheduleNextStartRound(OngoingNudgeScheduler.START_SNOOZE_MILLIS)
         Toast.makeText(this, "알겠어. 이따 다시 부를게!", Toast.LENGTH_SHORT).show()
         lingerAsDoorway()
     }
@@ -526,7 +706,7 @@ class OngoingNudgeService : Service() {
                 Intent.FLAG_ACTIVITY_SINGLE_TOP
         }
         runCatching { startActivity(intent) }
-        finishRound(scheduleNext = OngoingNudgeState.isActive(this))
+        finishRound(scheduleNext = isActiveForCurrentTrack())
     }
 
     /** "다 했어". 여기서 바로 완료로 적고 이번 일정은 끝난다. */
@@ -589,6 +769,16 @@ class OngoingNudgeService : Service() {
         nextScheduled = true
     }
 
+    /** [scheduleNextRound]의 시작 시각 자리 버전. 독립된 알람이라 따로 건다. */
+    private fun scheduleNextStartRound(delayMillis: Long) {
+        OngoingNudgeScheduler.scheduleStartIn(
+            this,
+            delayMillis,
+            OngoingNudgeScheduler.STAGE_FIRST,
+        )
+        nextScheduled = true
+    }
+
     /** 답을 하고도 냥냥이가 자리를 지킨다. */
     private fun lingerAsDoorway() {
         cardView?.let { runCatching { windowManager.removeView(it) } }
@@ -606,19 +796,21 @@ class OngoingNudgeService : Service() {
         (visibleUntil - SystemClock.elapsedRealtime()).coerceAtLeast(0L)
 
     private fun finishRound(scheduleNext: Boolean) {
-        if (scheduleNext && !nextScheduled && OngoingNudgeState.isActive(this)) {
-            // 시작을 기다리는 쪽은 더 자주 본다. 시작할 시각은 지나가는 중이고,
-            // 한 시간 뒤에 다시 오면 그때는 이미 오늘이 아니다.
-            scheduleNextRound(
-                when {
-                    OngoingNudgeState.isStartReminder(this) ->
-                        OngoingNudgeScheduler.START_SNOOZE_MILLIS
+        if (scheduleNext && !nextScheduled && isActiveForCurrentTrack()) {
+            if (isStartTrack()) {
+                // 시작을 기다리는 쪽은 더 자주 본다. 시작할 시각은 지나가는 중이고,
+                // 한 시간 뒤에 다시 오면 그때는 이미 오늘이 아니다.
+                scheduleNextStartRound(OngoingNudgeScheduler.START_SNOOZE_MILLIS)
+            } else {
+                scheduleNextRound(
                     // 아무 것도 안 누르고 15분간 놔둔 것도 "더 있다 할게"/"나중에"와 같다.
-                    OngoingNudgeState.isIdleNudge(this) ->
+                    if (OngoingNudgeState.isIdleNudge(this)) {
                         OngoingNudgeScheduler.NEXT_TASK_ROUND_MILLIS
-                    else -> OngoingNudgeScheduler.NEXT_ROUND_DELAY_MILLIS
-                },
-            )
+                    } else {
+                        OngoingNudgeScheduler.NEXT_ROUND_DELAY_MILLIS
+                    },
+                )
+            }
         }
         stopEverything()
     }

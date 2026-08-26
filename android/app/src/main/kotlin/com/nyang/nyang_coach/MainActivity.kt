@@ -166,21 +166,17 @@ class MainActivity : FlutterFragmentActivity() {
                         }
                         // 같은 일정을 이미 기다리고 있으면 예약을 다시 걸지 않는다.
                         // 저장은 자주 일어나고, 그때마다 다시 걸면 시각이 조금씩 밀린다.
-                        val alreadyWaiting = OngoingNudgeState.taskId(this) == taskId &&
-                            OngoingNudgeState.isStartReminder(this)
-                        OngoingNudgeState.start(
-                            this,
-                            taskId,
-                            taskText,
-                            OngoingNudgeState.KIND_START,
-                        )
+                        // 이 자리는 진행 중인 일정과 완전히 독립이라, 도는 일정이
+                        // 있어도 그대로 걸린다.
+                        val alreadyWaiting = OngoingNudgeState.startTaskId(this) == taskId
+                        OngoingNudgeState.setStartTask(this, taskId, taskText)
                         OngoingNudgeState.setStartUntil(
                             this,
                             startAtMillis + OngoingNudgeScheduler.START_WINDOW_MILLIS,
                         )
                         if (!alreadyWaiting) {
-                            OngoingNudgeScheduler.cancel(this)
-                            OngoingNudgeScheduler.scheduleAt(
+                            OngoingNudgeScheduler.cancelStart(this)
+                            OngoingNudgeScheduler.scheduleStartAt(
                                 this,
                                 startAtMillis,
                                 OngoingNudgeScheduler.STAGE_FIRST,
@@ -256,6 +252,16 @@ class MainActivity : FlutterFragmentActivity() {
                         }
                         result.success(null)
                     }
+                    "syncGapCoaching" -> {
+                        // 시각 자체는 Flutter가 이미 저장해뒀다. 여기서는 그 값을
+                        // 읽어 알람만 다시 건다.
+                        GapCoachingPlanner.reschedule(this)
+                        result.success(null)
+                    }
+                    "clearGapCoaching" -> {
+                        GapCoachingPlanner.cancelAll(this)
+                        result.success(null)
+                    }
                     "setAppForeground" -> {
                         OngoingNudgeState.setAppForeground(
                             this,
@@ -285,6 +291,11 @@ class MainActivity : FlutterFragmentActivity() {
                         OngoingNudgeState.clear(this)
                         OngoingNudgeScheduler.cancel(this)
                         stopService(Intent(this, OngoingNudgeService::class.java))
+                        result.success(null)
+                    }
+                    "clearStart" -> {
+                        OngoingNudgeState.clearStart(this)
+                        OngoingNudgeScheduler.cancelStart(this)
                         result.success(null)
                     }
                     "stopUnlessNextTask" -> {

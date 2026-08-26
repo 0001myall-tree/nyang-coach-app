@@ -19,6 +19,7 @@ import '../services/tasks_sync_service.dart';
 import '../models/user_data.dart';
 import '../services/widget_sync_service.dart';
 import '../services/apple_calendar_sync_service.dart';
+import '../services/gap_coaching_service.dart';
 import '../services/nyang_banner_nudge.dart';
 import '../services/ongoing_task_nudge_service.dart';
 import '../theme/app_design_tokens.dart';
@@ -77,6 +78,9 @@ class _SettingsScreenState extends State<SettingsScreen>
   int _coreReminderAdvanceMinutes = 10;
   // 진행 중인 일정을 떠올리게 하는 냥냥이. 안드로이드에서만, 테스터가 직접 켠다.
   bool _ongoingNudgeEnabled = false;
+  // 여유 있어 보이는 시각에 한 마디만 건네는 자리. 마스터 전용.
+  bool _gapCoachingEnabled = false;
+  List<TimeOfDay> _gapCoachingTimes = const [];
   String? _homeWidgetStatus;
   UserData? _userData;
   String? _expandedSettingsSection;
@@ -91,6 +95,14 @@ class _SettingsScreenState extends State<SettingsScreen>
   bool get _hasMasterPlan =>
       _userData?.isPlanActive == true && _userData?.planType == 'master';
   bool get _isFreeUser => _userData?.isPlanActive != true;
+
+  /// 틈새 코칭 줄에 붙는 상태. 마스터가 아니면 켜둔 값이 있어도 나가지 않으므로
+  /// 켜졌다고 적지 않는다.
+  String get _gapCoachingStatus {
+    if (!_hasMasterPlan) return 'MASTER 전용';
+    if (!_gapCoachingEnabled || _gapCoachingTimes.isEmpty) return '꺼짐';
+    return _gapCoachingTimes.map(GapCoachingService.label).join(' · ');
+  }
 
   /// 채팅에서 데려온 자리를 펼친다.
   ///
@@ -217,6 +229,11 @@ class _SettingsScreenState extends State<SettingsScreen>
       _ongoingNudgeEnabled =
           prefs.getBool(OngoingTaskNudgeService.enabledKey) ??
           OngoingTaskNudgeService.defaultEnabled;
+      _gapCoachingEnabled =
+          prefs.getBool(GapCoachingService.enabledKey) ?? false;
+      _gapCoachingTimes = GapCoachingService.parseTimes(
+        prefs.getString(GapCoachingService.timesKey),
+      );
       _chatBgStyle = prefs.getString('nyang_chat_bg_style') ?? 'simple';
       _homeWidgetStatus = _buildHomeWidgetStatus(
         nyang: prefs.getBool('widget_nyang_enabled') ?? false,
@@ -1701,6 +1718,321 @@ class _SettingsScreenState extends State<SettingsScreen>
     );
   }
 
+  /// 틈새 코칭 설정 시트.
+  ///
+  /// 켜고 끄기와 시각 하나(또는 둘)가 전부다. 무엇을 할지는 고르게 하지 않는다 —
+  /// 그걸 정해주는 순간 쉬는 시간이 새 일정이 된다.
+  void _showGapCoachingModal() {
+    bool tempEnabled = _gapCoachingEnabled;
+    final tempTimes = <TimeOfDay>[
+      if (_gapCoachingTimes.isEmpty)
+        GapCoachingService.defaultTime
+      else
+        ..._gapCoachingTimes,
+    ];
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Container(
+              height: MediaQuery.of(context).size.height * 0.66,
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE5E7EB),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          SvgPicture.asset(
+                            'assets/icons/seedling.svg',
+                            width: 21,
+                            height: 21,
+                            colorFilter: const ColorFilter.mode(
+                              Color(0xFF8B7CFF),
+                              BlendMode.srcIn,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            '틈새 코칭',
+                            style: GoogleFonts.notoSansKr(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w900,
+                              color: const Color(0xFF1A1A2E),
+                            ),
+                          ),
+                        ],
+                      ),
+                      CupertinoSwitch(
+                        value: tempEnabled,
+                        activeColor: const Color(0xFF8B7CFF),
+                        onChanged: (val) =>
+                            setModalState(() => tempEnabled = val),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    '정해둔 시각에 여유가 있어 보이면 냥냥이가 한 마디만 건네요.',
+                    style: GoogleFonts.notoSansKr(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: const Color(0xFFA78BFA),
+                      height: 1.35,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  Expanded(
+                    child: SingleChildScrollView(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 14,
+                            ),
+                            margin: const EdgeInsets.only(bottom: 20),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF3F0FF),
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            child: Text(
+                              '지금 잠깐 여유 있나냥?\n'
+                              '이따 할 일이 가벼워지도록 10분만 미리 씨앗을 뿌려볼까냥? 🌱',
+                              style: GoogleFonts.notoSansKr(
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w700,
+                                height: 1.5,
+                                color: const Color(0xFF5B4FB0),
+                              ),
+                            ),
+                          ),
+
+                          Opacity(
+                            opacity: tempEnabled ? 1.0 : 0.5,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                for (var i = 0; i < tempTimes.length; i++)
+                                  _buildGapTimeRow(
+                                    label: i == 0 ? '① 첫 번째' : '② 두 번째',
+                                    time: tempTimes[i],
+                                    onTap: () async {
+                                      if (!tempEnabled) return;
+                                      final picked =
+                                          await _showFocusedTimePicker(
+                                            context: context,
+                                            initialTime: tempTimes[i],
+                                          );
+                                      if (picked == null) return;
+                                      setModalState(() => tempTimes[i] = picked);
+                                    },
+                                    onRemove: i == 0
+                                        ? null
+                                        : () => setModalState(
+                                            () => tempTimes.removeAt(i),
+                                          ),
+                                  ),
+                                if (tempTimes.length <
+                                    GapCoachingService.maxTimes)
+                                  GestureDetector(
+                                    onTap: () {
+                                      if (!tempEnabled) return;
+                                      setModalState(
+                                        () => tempTimes.add(
+                                          const TimeOfDay(
+                                            hour: 10,
+                                            minute: 30,
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                    child: Container(
+                                      width: double.infinity,
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 14,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(14),
+                                        border: Border.all(
+                                          color: const Color(0xFFE8E3F8),
+                                        ),
+                                      ),
+                                      child: Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                          const Icon(
+                                            Icons.add_rounded,
+                                            size: 18,
+                                            color: Color(0xFF8B7CFF),
+                                          ),
+                                          const SizedBox(width: 6),
+                                          Text(
+                                            '시간 추가',
+                                            style: GoogleFonts.notoSansKr(
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w800,
+                                              color: const Color(0xFF8B7CFF),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+
+                          const SizedBox(height: 20),
+                          Text(
+                            '일정을 하는 중이거나, 방금 하나를 끝냈거나, 시간이 정해진 일정이 '
+                            '앞뒤 두 시간 안에 있으면 그날 그 시각은 조용히 지나가요. '
+                            '놓쳐도 다시 부르지 않아요.',
+                            style: GoogleFonts.notoSansKr(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w600,
+                              height: 1.5,
+                              color: const Color(0xFF9A96A8),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  SizedBox(
+                    width: double.infinity,
+                    height: 56,
+                    child: ElevatedButton(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        _saveGapCoachingSettings(tempEnabled, tempTimes);
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF1A1A2E),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        elevation: 0,
+                      ),
+                      child: Text(
+                        '저장하기',
+                        style: GoogleFonts.notoSansKr(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildGapTimeRow({
+    required String label,
+    required TimeOfDay time,
+    required VoidCallback onTap,
+    VoidCallback? onRemove,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: const Color(0xFFE8E3F8)),
+          ),
+          child: Row(
+            children: [
+              Text(
+                label,
+                style: GoogleFonts.notoSansKr(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                  color: const Color(0xFF3D3A4E),
+                ),
+              ),
+              const Spacer(),
+              Text(
+                GapCoachingService.label(time),
+                style: GoogleFonts.notoSansKr(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w900,
+                  color: const Color(0xFF8B7CFF),
+                ),
+              ),
+              if (onRemove != null) ...[
+                const SizedBox(width: 10),
+                GestureDetector(
+                  onTap: onRemove,
+                  child: const Icon(
+                    Icons.close_rounded,
+                    size: 18,
+                    color: Color(0xFF9A96A8),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _saveGapCoachingSettings(
+    bool enabled,
+    List<TimeOfDay> times,
+  ) async {
+    final sorted = [...times]
+      ..sort((a, b) => (a.hour * 60 + a.minute).compareTo(b.hour * 60 + b.minute));
+    await GapCoachingService.save(enabled: enabled, times: sorted);
+    if (!mounted) return;
+    setState(() {
+      _gapCoachingEnabled = enabled && sorted.isNotEmpty;
+      _gapCoachingTimes = sorted;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(enabled ? '틈새 코칭을 켰어요.' : '틈새 코칭을 껐어요.'),
+      ),
+    );
+  }
+
   Widget _buildMorningCallDayChip({
     required String label,
     required bool isSelected,
@@ -1985,6 +2317,30 @@ class _SettingsScreenState extends State<SettingsScreen>
                           subtitle: '앱 밖으로 새면 냥냥이가 살짝 챙겨줘요.',
                           status: _ongoingNudgeEnabled ? '켜짐' : '꺼짐',
                           onTap: _paidSettingsTap(_toggleOngoingNudge),
+                        ),
+                        const SizedBox(height: 10),
+                      ],
+
+                      // 딴짓 방지 코치 바로 아래. 하는 일이 반대라서 나란히
+                      // 두는 편이 무엇을 고르는 자리인지 알아보기 쉽다 — 저쪽은
+                      // 하던 일에서 새어 나갔을 때, 이쪽은 아무것도 안 할 때다.
+                      if (GapCoachingService.isSupported) ...[
+                        _buildSettingsNavigationTile(
+                          svgAsset: 'assets/icons/seedling.svg',
+                          label: '틈새 코칭',
+                          subtitle: '여유 있는 시간에 냥냥이가 살짝 말 걸어요.',
+                          status: _gapCoachingStatus,
+                          onTap: () {
+                            if (_hasMasterPlan) {
+                              _showGapCoachingModal();
+                              return;
+                            }
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('틈새 코칭은 마스터 플랜 구독자 전용입니다.'),
+                              ),
+                            );
+                          },
                         ),
                         const SizedBox(height: 10),
                       ],

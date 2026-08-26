@@ -15,7 +15,20 @@ import android.os.Build
  */
 object OngoingNudgeScheduler {
     const val ACTION_CHECK = "com.coscene.nyangcoach.ONGOING_NUDGE_CHECK"
+
+    /**
+     * 시작 시각을 기다리는 자리 전용 알람. 진행 중인 일정과 완전히 독립된
+     * 요청 코드를 쓴다 — 같은 코드를 쓰면 나중에 건 쪽이 먼저 것을 지워버린다.
+     */
+    const val ACTION_CHECK_START = "com.coscene.nyangcoach.ONGOING_NUDGE_CHECK_START"
+
+    /**
+     * 틈새 코칭 전용 알람. 슬롯마다 요청 코드가 다르다 — 같은 코드를 쓰면
+     * 두 번째 시각을 걸 때 첫 번째가 지워진다.
+     */
+    const val ACTION_CHECK_GAP = "com.coscene.nyangcoach.ONGOING_NUDGE_CHECK_GAP"
     const val EXTRA_STAGE = "stage"
+    const val EXTRA_SLOT = "slot"
 
     /** 시작 후 처음 확인하는 자리. */
     const val STAGE_FIRST = "first"
@@ -27,6 +40,11 @@ object OngoingNudgeScheduler {
     const val STAGE_TEST = "test"
 
     private const val REQUEST_CODE = 7401
+    private const val REQUEST_CODE_START = 7406
+    private const val REQUEST_CODE_GAP = 7407
+
+    /** 틈새 코칭 시각은 하루 둘까지. */
+    const val GAP_SLOT_COUNT = 2
 
     /** 시작하고 30분은 아무것도 하지 않는다. */
     const val FIRST_DELAY_MILLIS = 30L * 60_000L
@@ -68,13 +86,53 @@ object OngoingNudgeScheduler {
     /** "다음 일" 카드를 "더 있다 할게"로 미루거나 그냥 넘겼을 때 다시 뜨기까지. */
     const val NEXT_TASK_ROUND_MILLIS = 2L * 60L * 60_000L
 
+    /**
+     * 틈새 코칭 냥냥이가 스스로 사라지기까지.
+     *
+     * 다른 자리보다 짧다. "지금 잠깐 여유 있나"라고 묻는 말이라, 15분 뒤에
+     * 눌러서는 묻는 뜻이 이미 흐려져 있다.
+     */
+    const val GAP_VISIBLE_MILLIS = 5L * 60_000L
+
     fun scheduleIn(context: Context, delayMillis: Long, stage: String) {
         scheduleAt(context, System.currentTimeMillis() + delayMillis, stage)
     }
 
     fun scheduleAt(context: Context, triggerAt: Long, stage: String) {
+        schedule(context, triggerAt, pendingIntent(context, stage))
+    }
+
+    fun cancel(context: Context) {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        val intent = pendingIntent(context, stage)
+        alarmManager.cancel(pendingIntent(context, STAGE_FIRST))
+    }
+
+    /** 시작 시각 자리 전용. 진행 중인 일정의 예약과 서로 지우지 않는다. */
+    fun scheduleStartIn(context: Context, delayMillis: Long, stage: String) {
+        scheduleStartAt(context, System.currentTimeMillis() + delayMillis, stage)
+    }
+
+    fun scheduleStartAt(context: Context, triggerAt: Long, stage: String) {
+        schedule(context, triggerAt, startPendingIntent(context, stage))
+    }
+
+    fun cancelStart(context: Context) {
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        alarmManager.cancel(startPendingIntent(context, STAGE_FIRST))
+    }
+
+    /** 틈새 코칭 자리 전용. 슬롯마다 따로 걸고 따로 지운다. */
+    fun scheduleGapAt(context: Context, triggerAt: Long, slot: Int) {
+        schedule(context, triggerAt, gapPendingIntent(context, slot))
+    }
+
+    fun cancelGap(context: Context, slot: Int) {
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        alarmManager.cancel(gapPendingIntent(context, slot))
+    }
+
+    private fun schedule(context: Context, triggerAt: Long, intent: PendingIntent) {
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
 
         // 느슨한 예약은 절전 중인 기기에서 한참 뒤에야 울리거나 아예 묻힌다.
         // 국내 안드로이드는 사실상 삼성이고 앱 절전이 기본으로 켜져 있어서,
@@ -89,11 +147,6 @@ object OngoingNudgeScheduler {
         }
     }
 
-    fun cancel(context: Context) {
-        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        alarmManager.cancel(pendingIntent(context, STAGE_FIRST))
-    }
-
     private fun pendingIntent(context: Context, stage: String): PendingIntent {
         val intent = Intent(context, OngoingNudgeReceiver::class.java).apply {
             action = ACTION_CHECK
@@ -102,6 +155,32 @@ object OngoingNudgeScheduler {
         return PendingIntent.getBroadcast(
             context,
             REQUEST_CODE,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+    }
+
+    private fun gapPendingIntent(context: Context, slot: Int): PendingIntent {
+        val intent = Intent(context, OngoingNudgeReceiver::class.java).apply {
+            action = ACTION_CHECK_GAP
+            putExtra(EXTRA_SLOT, slot)
+        }
+        return PendingIntent.getBroadcast(
+            context,
+            REQUEST_CODE_GAP + slot,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+    }
+
+    private fun startPendingIntent(context: Context, stage: String): PendingIntent {
+        val intent = Intent(context, OngoingNudgeReceiver::class.java).apply {
+            action = ACTION_CHECK_START
+            putExtra(EXTRA_STAGE, stage)
+        }
+        return PendingIntent.getBroadcast(
+            context,
+            REQUEST_CODE_START,
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )

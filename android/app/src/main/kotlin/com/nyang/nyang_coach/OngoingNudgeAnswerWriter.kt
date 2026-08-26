@@ -198,6 +198,75 @@ object OngoingNudgeAnswerWriter {
         return false
     }
 
+    /**
+     * 마지막으로 무언가를 끝낸 지 몇 분 지났는지. 끝낸 게 없으면 null.
+     *
+     * 틈새 코칭이 본다. 방금 하나를 끝낸 사람의 여유는 이미 벌어둔 여유라,
+     * 거기에 대고 또 무언가를 권하지 않는다.
+     */
+    fun minutesSinceLastCompletion(context: Context): Long? {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val tasksRaw = prefs.getString(KEY_TASKS, null) ?: return null
+        val tasks = runCatching { JSONArray(tasksRaw) }.getOrNull() ?: return null
+
+        var latest = 0L
+        for (i in 0 until tasks.length()) {
+            val item = tasks.optJSONObject(i) ?: continue
+            if (!item.optBoolean("done", false)) continue
+            val at = parseIso(item.optString("completedAt", "")) ?: continue
+            if (at > latest) latest = at
+        }
+        if (latest == 0L) return null
+        return (System.currentTimeMillis() - latest) / 60_000L
+    }
+
+    /**
+     * 시간이 정해진 일정이 지금 앞뒤로 가까이 있는지.
+     *
+     * [beforeMinutes]는 지나간 쪽, [afterMinutes]는 다가오는 쪽이다. 지켜야 할
+     * 시각을 앞두고 "여유 있냐"고 물으면, 정작 그 시각에 마음을 못 쓰게 만든다.
+     *
+     * 앞뒤로 넉넉하게 두 시간씩 본다. 좁게 잡았다가 약속을 앞둔 사람에게 한 번
+     * 잘못 나가는 쪽이, 여유 있는 날 한 번 걸러지는 쪽보다 훨씬 나쁘다.
+     */
+    fun hasTimedTaskNear(
+        context: Context,
+        beforeMinutes: Long = 120L,
+        afterMinutes: Long = 120L,
+    ): Boolean {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val tasksRaw = prefs.getString(KEY_TASKS, null) ?: return false
+        val tasks = runCatching { JSONArray(tasksRaw) }.getOrNull() ?: return false
+
+        val now = java.util.Calendar.getInstance()
+        val nowMinutes = now.get(java.util.Calendar.HOUR_OF_DAY) * 60 +
+            now.get(java.util.Calendar.MINUTE)
+        for (i in 0 until tasks.length()) {
+            val item = tasks.optJSONObject(i) ?: continue
+            if (item.optBoolean("done", false)) continue
+            val pieces = item.optString("timeStart", "").split(":")
+            if (pieces.size != 2) continue
+            val hour = pieces[0].toIntOrNull() ?: continue
+            val minute = pieces[1].toIntOrNull() ?: continue
+            val diff = nowMinutes - (hour * 60 + minute)
+            if (diff in 0..beforeMinutes.toInt()) return true
+            if (diff < 0 && -diff <= afterMinutes.toInt()) return true
+        }
+        return false
+    }
+
+    /**
+     * Dart가 적은 시각 문자열을 읽는다.
+     *
+     * Dart 쪽은 마이크로초까지 적을 때가 있는데, 밀리초까지만 아는 형식으로
+     * 그대로 읽으면 몇 분씩 밀린 시각이 나온다. 아는 자리까지만 자른다.
+     */
+    private fun parseIso(raw: String): Long? {
+        if (raw.isBlank()) return null
+        val trimmed = if (raw.length > 23) raw.substring(0, 23) else raw
+        return runCatching { isoFormat().parse(trimmed)?.time }.getOrNull()
+    }
+
     /** 쌓인 시간 + 지금 돌고 있는 구간. */
     private fun elapsedSecondsOf(task: JSONObject, now: Date): Int {
         var elapsed = task.optInt("elapsedSeconds", 0)

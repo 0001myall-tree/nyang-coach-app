@@ -22,6 +22,7 @@ import 'services/notification_service.dart';
 import 'services/purchase_service.dart';
 import 'services/ongoing_task_nudge_service.dart';
 import 'services/tasks_sync_service.dart';
+import 'services/gap_coaching_service.dart';
 import 'services/nyang_banner_nudge.dart';
 import 'services/widget_sync_service.dart';
 import 'models/user_data.dart';
@@ -116,6 +117,9 @@ class _NyangCoachAppState extends State<NyangCoachApp>
       ),
     );
     unawaited(NyangBannerNudge.sync());
+    // 등급이 내려갔거나 폰을 새로 켰을 수 있다. 틈새 코칭 예약도 지금 상태로
+    // 다시 맞춘다.
+    unawaited(GapCoachingService.sync());
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(NotificationService().requestNotificationPermissions());
     });
@@ -142,6 +146,7 @@ class _NyangCoachAppState extends State<NyangCoachApp>
       // 배너에서 "시작할게"를 눌렀으면 저장소는 이미 바뀌어 있다. 다음 배너를
       // 다시 잡아둬야 그 일정에 계속 걸려 있지 않는다.
       unawaited(NyangBannerNudge.sync());
+      unawaited(GapCoachingService.sync());
     }
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached) {

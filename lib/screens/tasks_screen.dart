@@ -2464,27 +2464,31 @@ class _TasksScreenState extends State<TasksScreen>
     }
     if (running == null) {
       await OngoingTaskNudgeService.stopPreservingNextTask();
-      // 도는 일정이 없으면 다음에 시작할 일정을 기다린다. 시작한 일을 잊는 것보다
-      // 시작 자체를 안 하는 쪽이 훨씬 흔하다.
-      final next = OngoingTaskNudgeService.nextUnstartedTask(
-        tasks.map((t) => t.toJson()).toList(),
-        DateTime.now(),
+    } else {
+      await OngoingTaskNudgeService.start(
+        taskId: running.id.toString(),
+        taskText: running.text,
+        elapsedSeconds: running.elapsedSecondsAt(DateTime.now()),
       );
-      if (next != null) {
-        await OngoingTaskNudgeService.remindStart(
-          taskId: next['id'].toString(),
-          taskText: next['text']?.toString() ?? '',
-          startAt: next['_startAt'] as DateTime,
-        );
-      }
-      return;
+      await _tellQuotaSpentIfNeeded(running.id.toString());
     }
-    await OngoingTaskNudgeService.start(
-      taskId: running.id.toString(),
-      taskText: running.text,
-      elapsedSeconds: running.elapsedSecondsAt(DateTime.now()),
+
+    // 시작 시각 알림은 도는 일정이 있는지와 무관한 별도 자리다. 시작한 일을
+    // 잊는 것보다 시작 자체를 안 하는 쪽이 훨씬 흔해서, 진행 중인 일정이 있어도
+    // 매번 다시 본다.
+    final next = OngoingTaskNudgeService.nextUnstartedTask(
+      tasks.map((t) => t.toJson()).toList(),
+      DateTime.now(),
     );
-    await _tellQuotaSpentIfNeeded(running.id.toString());
+    if (next != null) {
+      await OngoingTaskNudgeService.remindStart(
+        taskId: next['id'].toString(),
+        taskText: next['text']?.toString() ?? '',
+        startAt: next['_startAt'] as DateTime,
+      );
+    } else {
+      await OngoingTaskNudgeService.clearStart();
+    }
   }
 
   /// 시작해뒀다 방금 멈춘 일이, 3시간이 지나도 여전히 멈춰 있고 다른 무엇도
