@@ -5202,7 +5202,15 @@ Rules:
 
   static const _catLateNightMinimumGreetingKind = 'auto:cat_late_night_minimum';
   static const _catPlannerRoutineGreetingKind = 'auto:cat_planner_routine';
+  /// 플래너 루틴을 권한 적이 있는지. 한 번 말하면 그걸로 끝이라 시각만 적어둔다.
+  ///
+  /// 'nyang_'으로 시작해서 계정을 따라간다. 폰을 바꿨다고 같은 말을 다시
+  /// 꺼내면, 그때 안 만들기로 한 답을 못 들은 척하는 셈이 된다.
   static const _catPlannerRoutineLastOfferedKey =
+      'nyang_cat_planner_routine_offered_at';
+
+  /// 계정을 따라가기 전에 쓰던 자리. 이미 들은 사람에게 또 말하지 않으려고 같이 본다.
+  static const _catPlannerRoutineLegacyOfferedKey =
       'cat_planner_routine_last_offered_at';
 
   GreetingLinePicker get _catLinePicker => GreetingLinePicker(
@@ -5242,13 +5250,16 @@ Rules:
   }) async {
     if (_spokeKindToday({_catPlannerRoutineGreetingKind}, now)) return false;
 
-    final lastOfferedAt = DateTime.tryParse(
-      prefs.getString(_catPlannerRoutineLastOfferedKey) ?? '',
-    );
+    final lastOfferedAt =
+        DateTime.tryParse(
+          prefs.getString(_catPlannerRoutineLastOfferedKey) ?? '',
+        ) ??
+        DateTime.tryParse(
+          prefs.getString(_catPlannerRoutineLegacyOfferedKey) ?? '',
+        );
     final shouldOffer = PlannerRoutinePromptService.shouldOffer(
       history: _decodeMapList(prefs.getString('nyang_history')),
       todayTasks: tasks,
-      habits: _decodeMapList(prefs.getString('nyang_habits')),
       now: now,
       lastOfferedAt: lastOfferedAt,
     );

@@ -1,21 +1,21 @@
 class PlannerRoutinePromptService {
-  static const cooldown = Duration(days: 30);
   static const windowDays = 7;
   static const noPlanThreshold = 4;
 
+  /// 플래너 보는 루틴을 권해볼 때인지.
+  ///
+  /// 한 번 말하면 그걸로 끝이다. 안 만들기로 한 것도 답이라, 몇 달 뒤에 같은
+  /// 말을 다시 꺼내면 그 답을 못 들은 척하는 셈이 된다.
+  ///
+  /// 이미 그런 루틴이 있는지는 보지 않는다. 이름만 보고 알아내려니 놓치거나
+  /// 엉뚱한 걸 삼켰는데, 평생 한 번 나가는 말이라 그렇게까지 가릴 일이 아니다.
   static bool shouldOffer({
     required List<dynamic> history,
     required List<dynamic> todayTasks,
-    required List<dynamic> habits,
     required DateTime now,
     DateTime? lastOfferedAt,
   }) {
-    if (lastOfferedAt != null && now.difference(lastOfferedAt) < cooldown) {
-      return false;
-    }
-    if (hasPlannerRoutine(habits) || hasPlannerRoutine(todayTasks)) {
-      return false;
-    }
+    if (lastOfferedAt != null) return false;
 
     final recordsByDate = <String, Map>{};
     for (final item in history.whereType<Map>()) {
@@ -44,35 +44,6 @@ class PlannerRoutinePromptService {
     }
 
     return evaluatedDays >= noPlanThreshold && noPlanDays >= noPlanThreshold;
-  }
-
-  static bool hasPlannerRoutine(List<dynamic> items) {
-    return items.whereType<Map>().any((item) {
-      final category = item['category']?.toString() ?? '';
-      final looksLikeHabit =
-          category == 'habit' ||
-          item['habitId'] != null ||
-          item['freq'] != null;
-      if (!looksLikeHabit && !item.containsKey('name')) return false;
-      final text = '${item['name'] ?? ''} ${item['text'] ?? ''}'.replaceAll(
-        RegExp(r'\s+'),
-        '',
-      );
-      if (text.isEmpty) return false;
-      final hasPlannerNoun =
-          text.contains('플래너') ||
-          text.contains('계획') ||
-          text.contains('오늘할일') ||
-          text.contains('할일');
-      final hasRoutineAction =
-          text.contains('보기') ||
-          text.contains('확인') ||
-          text.contains('열기') ||
-          text.contains('체크') ||
-          text.contains('점검') ||
-          text.contains('정리');
-      return hasPlannerNoun && hasRoutineAction;
-    });
   }
 
   static int _directPlanCount(List<dynamic> tasks) {

@@ -27,14 +27,13 @@ void main() {
       PlannerRoutinePromptService.shouldOffer(
         history: history,
         todayTasks: [],
-        habits: const [],
         now: now,
       ),
       isTrue,
     );
   });
 
-  test('30일 쿨다운 안이면 제안하지 않는다', () {
+  test('한 번 말했으면 다시 말하지 않는다', () {
     final history = [
       record('2026-08-24', []),
       record('2026-08-23', []),
@@ -45,29 +44,8 @@ void main() {
       PlannerRoutinePromptService.shouldOffer(
         history: history,
         todayTasks: [],
-        habits: const [],
         now: now,
-        lastOfferedAt: now.subtract(const Duration(days: 10)),
-      ),
-      isFalse,
-    );
-  });
-
-  test('이미 플래너 보기 루틴이 있으면 제안하지 않는다', () {
-    final history = [
-      record('2026-08-24', []),
-      record('2026-08-23', []),
-      record('2026-08-22', []),
-    ];
-
-    expect(
-      PlannerRoutinePromptService.shouldOffer(
-        history: history,
-        todayTasks: [],
-        habits: [
-          {'name': '아침 플래너 확인', 'freq': 'daily', 'timeStart': '09:00'},
-        ],
-        now: now,
+        lastOfferedAt: now.subtract(const Duration(days: 400)),
       ),
       isFalse,
     );
@@ -84,7 +62,6 @@ void main() {
       PlannerRoutinePromptService.shouldOffer(
         history: history,
         todayTasks: [task('명상', category: 'habit')],
-        habits: const [],
         now: now,
       ),
       isTrue,
