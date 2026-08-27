@@ -2358,12 +2358,11 @@ class _MainTabScreenState extends State<MainTabScreen>
                               '"내일 오후 3시 회의 추가해줘"\n'
                               '"저녁 7시에 운동 등록해줘"\n'
                               '처럼 \'추가해줘\' 또는 \'등록해줘\'를 붙여 말하면 바로 캘린더 일정을 등록할 수 있어요.\n'
-                              '\'추가해줄래?\', \'넣어줘\'처럼 말해도 알아들어요.',
+                              '등록 여부는 할 일 탭 > 오늘 탭에서 꼭 확인하세요.',
                           highlightTerms: const [
                             '추가해줘',
                             '등록해줘',
-                            '추가해줄래?',
-                            '넣어줘',
+                            '할 일 탭 > 오늘 탭',
                           ],
                         ),
                         const SizedBox(height: 18),
@@ -2421,7 +2420,7 @@ class _MainTabScreenState extends State<MainTabScreen>
                               '할 일을 시작할 때 ▶ 를 누르면 걸린 시간이 흐르기 시작해요. 잠깐 쉬고 싶으면 Ⅱ 를 누르면 멈추고, 다시 누르면 이어집니다.\n'
                               '다 했으면 카드를 오른쪽으로 미세요.\n\n'
                               '시작해두고 도중에 멈춰도 괜찮아요. 시작했다는 게 중요하니까요.\n'
-                              '코치들이 손이 안 간 중요한 일이 있으면 이야기해줄 거예요. 특히 마스터 플랜에서 루틴 트래킹을 하시면 해당 루틴이 완료로 이어진 적이 많았던 시작 시간대를 기록 탭에서 확인하실 수 있어요.\n\n'
+                              '코치들이 손이 안 간 중요한 일이 있으면 이야기해줄 거예요.\n\n'
                               '중간중간 할 일을 해낼 때마다 냥냥코치의 칭찬도 받아보세요. 작은 완료를 그때그때 확인하면 남은 일을 더 가볍게 이어갈 수 있습니다.\n\n'
                               '실행하는 하루를 냥냥코치와 함께하세요.',
                           highlightTerms: const [
@@ -2430,11 +2429,22 @@ class _MainTabScreenState extends State<MainTabScreen>
                             '이야기해줄 거예요',
                             '다시 누르면 이어집니다',
                             '작은 완료',
-                            // 이 문단에서 '습관'은 두 번 나오고 둘 다 칠해진다.
-                            // 기록 탭에서 볼 수 있는 게 습관에 한정된다는 걸
-                            // 눈으로 먼저 알아채게 하는 자리다.
-                            '루틴',
                           ],
+                        ),
+                        const SizedBox(height: 20),
+                        // 아이콘 없이 한 줄. 사용법이 아니라 덧붙이는 말이라
+                        // 앞의 칸들과 같은 모양으로 세우면 항목처럼 읽힌다.
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            'P.S. 설정에 생각보다 많은 기능이 숨겨져 있으니 살펴보세요.',
+                            style: GoogleFonts.notoSansKr(
+                              fontSize: 13,
+                              height: 1.5,
+                              fontWeight: FontWeight.w700,
+                              color: AppDesignTokens.brand,
+                            ),
+                          ),
                         ),
                       ],
                     ),
