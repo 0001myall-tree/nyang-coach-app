@@ -63,6 +63,18 @@ object GapCoachingCopy {
         "강의", "수업", "이력서", "정리해서", "회의록",
     )
 
+    /**
+     * 머리가 아니라 몸이 움직여야 하는 일.
+     *
+     * 이런 일은 생각이 막는 게 아니라 나가는 것이 막는다. 미리 해두라고 하면
+     * 그냥 지금 하라는 말이 되니, 문턱인 준비 쪽만 한 칸 앞당긴다.
+     */
+    private val BODY_WORDS = listOf(
+        "운동", "헬스", "러닝", "조깅", "요가", "필라테스", "산책", "수영",
+        "등산", "스트레칭", "청소", "설거지", "빨래", "장보기", "마트",
+        "외출", "이사", "정리정돈",
+    )
+
     fun cardFor(context: Context): Card {
         val name = pickTaskName(context)
         if (name == null) {
@@ -78,37 +90,60 @@ object GapCoachingCopy {
     }
 
     private fun bodyFor(name: String): String {
+        val shown = shorten(name)
         return when {
             CONCEPT_WORDS.any { name.contains(it) } ->
-                "이따 할 '$name' 10분간 콘셉트만 생각해둬도 훨씬 가벼워질 거라냥."
+                "이따 할 '$shown' 10분간 콘셉트만 생각해둬도 훨씬 가벼워질 거라냥."
             OUTLINE_WORDS.any { name.contains(it) } ->
-                "이따 할 '$name' 10분간 개요만 대충 잡아둬도 훨씬 가벼워질 거라냥."
+                "이따 할 '$shown' 10분간 개요만 대충 잡아둬도 훨씬 가벼워질 거라냥."
             FIRST_LINE_WORDS.any { name.contains(it) } ->
-                "이따 할 '$name' 10분간 첫문장만 준비해둬도 훨씬 가벼워질 거라냥."
+                "이따 할 '$shown' 10분간 첫문장만 준비해둬도 훨씬 가벼워질 거라냥."
+            BODY_WORDS.any { name.contains(it) } ->
+                "이따 할 '$shown' 10분간 뭐부터 준비할지만 정해둬도 훨씬 움직이기 좋을 거라냥."
             else ->
-                "이따 할 '$name' 10분만 미리 해두면 훨씬 가벼워질 거라냥."
+                "이따 할 '$shown' 10분만 미리 해두면 훨씬 가벼워질 거라냥."
         }
     }
+
+    /** 머리로 하는 일인지. 10분을 앞당겨 얻는 것이 가장 큰 쪽이다. */
+    private fun isMindWork(name: String): Boolean =
+        CONCEPT_WORDS.any { name.contains(it) } ||
+            OUTLINE_WORDS.any { name.contains(it) } ||
+            FIRST_LINE_WORDS.any { name.contains(it) }
 
     /**
      * 이름을 불러줄 일 하나.
      *
-     * 아직 시작하지 않은 일만 본다 — 손을 댄 일에 "미리 해두라"고 할 수는 없다.
-     * 시각이 정해진 일이 있으면 그중 가장 이른 것이 먼저다. 이따 있을 일이라는
-     * 게 분명하기 때문이다. 없으면 시각 없는 일 중 첫 번째를 쓴다.
+     * 머리로 하는 일이 하나라도 있으면 그것부터 부른다. 10분을 앞당겨 가장
+     * 크게 달라지는 쪽이라서다 — 콘셉트든 개요든 첫 줄이든, 미리 굴려둔 것이
+     * 있으면 그 뒤가 통째로 수월해진다. 몸으로 하는 일은 그 10분이 준비 한
+     * 칸을 앞당기는 정도다.
      *
-     * 약속(schedule)은 빼둔다. 시각에 가서 하는 것이라 10분을 앞당길 자리가 없다.
+     * 같은 갈래 안에서는 시각이 정해진 일이 먼저고(이따 있을 일이라는 게
+     * 분명하다), 없으면 목록에서 먼저 나오는 것을 쓴다.
      */
     private fun pickTaskName(context: Context): String? {
+        val names = candidates(context)
+        if (names.isEmpty()) return null
+        return names.firstOrNull { isMindWork(it) } ?: names.first()
+    }
+
+    /**
+     * 이름을 부를 수 있는 일들. 부르고 싶은 순서대로.
+     *
+     * 아직 시작하지 않은 일만 본다 — 손을 댄 일에 "미리 해두라"고 할 수는 없다.
+     * 약속(schedule)도 빼둔다. 시각에 가서 하는 것이라 10분을 앞당길 자리가 없다.
+     */
+    private fun candidates(context: Context): List<String> {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        val tasksRaw = prefs.getString(KEY_TASKS, null) ?: return null
-        val tasks = runCatching { JSONArray(tasksRaw) }.getOrNull() ?: return null
+        val tasksRaw = prefs.getString(KEY_TASKS, null) ?: return emptyList()
+        val tasks = runCatching { JSONArray(tasksRaw) }.getOrNull() ?: return emptyList()
 
         val now = Calendar.getInstance()
         val nowMinutes = now.get(Calendar.HOUR_OF_DAY) * 60 + now.get(Calendar.MINUTE)
 
-        var untimed: String? = null
-        var soonest: Pair<Int, String>? = null
+        val timed = mutableListOf<Pair<Int, String>>()
+        val untimed = mutableListOf<String>()
 
         for (i in 0 until tasks.length()) {
             val item = tasks.optJSONObject(i) ?: continue
@@ -129,15 +164,16 @@ object GapCoachingCopy {
             }
 
             if (minutes == null) {
-                if (untimed == null) untimed = text
+                untimed += text
                 continue
             }
             // 이미 지난 시각은 "이따"가 아니다.
             if (minutes <= nowMinutes) continue
-            if (soonest == null || minutes < soonest!!.first) soonest = minutes to text
+            timed += minutes to text
         }
 
-        return shorten(soonest?.second ?: untimed ?: return null)
+        timed.sortBy { it.first }
+        return timed.map { it.second } + untimed
     }
 
     /** 아직 안 끝낸 일이 하나라도 있는지. 약속도 센다. */

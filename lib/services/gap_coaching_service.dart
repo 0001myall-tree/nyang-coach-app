@@ -123,6 +123,16 @@ class GapCoachingService {
     '강의', '수업', '이력서', '정리해서', '회의록',
   ];
 
+  /// 머리가 아니라 몸이 움직여야 하는 일.
+  ///
+  /// 이런 일은 생각이 막는 게 아니라 나가는 것이 막는다. 미리 해두라고 하면
+  /// 그냥 지금 하라는 말이 되니, 문턱인 준비 쪽만 한 칸 앞당긴다.
+  static const List<String> _bodyWords = [
+    '운동', '헬스', '러닝', '조깅', '요가', '필라테스', '산책', '수영',
+    '등산', '스트레칭', '청소', '설거지', '빨래', '장보기', '마트',
+    '외출', '이사', '정리정돈',
+  ];
+
   /// 그 시각에 건넬 한 줄. 안드로이드의 GapCoachingCopy와 같은 규칙이다.
   ///
   /// "이따 할 일"이라고만 하면 아무 일도 떠오르지 않는다. 이름을 불러줘야 무엇을
@@ -136,17 +146,31 @@ class GapCoachingService {
       // 아예 비어 있을 때만 정하자고 권한다.
       return hasAnyRemaining(tasks) ? fallbackBody : emptyBody;
     }
+    final shown = _shorten(name);
     if (_conceptWords.any(name.contains)) {
-      return "이따 할 '$name' 10분간 콘셉트만 생각해둬도 훨씬 가벼워질 거라냥.";
+      return "이따 할 '$shown' 10분간 콘셉트만 생각해둬도 훨씬 가벼워질 거라냥.";
     }
     if (_outlineWords.any(name.contains)) {
-      return "이따 할 '$name' 10분간 개요만 대충 잡아둬도 훨씬 가벼워질 거라냥.";
+      return "이따 할 '$shown' 10분간 개요만 대충 잡아둬도 훨씬 가벼워질 거라냥.";
     }
     if (_firstLineWords.any(name.contains)) {
-      return "이따 할 '$name' 10분간 첫문장만 준비해둬도 훨씬 가벼워질 거라냥.";
+      return "이따 할 '$shown' 10분간 첫문장만 준비해둬도 훨씬 가벼워질 거라냥.";
     }
-    return "이따 할 '$name' 10분만 미리 해두면 훨씬 가벼워질 거라냥.";
+    if (_bodyWords.any(name.contains)) {
+      return "이따 할 '$shown' 10분간 뭐부터 준비할지만 정해둬도 훨씬 움직이기 좋을 거라냥.";
+    }
+    return "이따 할 '$shown' 10분만 미리 해두면 훨씬 가벼워질 거라냥.";
   }
+
+  /// 머리로 하는 일인지. 10분을 앞당겨 얻는 것이 가장 큰 쪽이다.
+  static bool _isMindWork(String name) =>
+      _conceptWords.any(name.contains) ||
+      _outlineWords.any(name.contains) ||
+      _firstLineWords.any(name.contains);
+
+  static String _shorten(String text) => text.length <= _nameLimit
+      ? text
+      : '${text.substring(0, _nameLimit)}…';
 
   /// 아직 안 끝낸 일이 하나라도 있는지. 약속도 센다.
   static bool hasAnyRemaining(List tasks) =>
@@ -163,14 +187,26 @@ class GapCoachingService {
 
   /// 이름을 불러줄 일 하나.
   ///
-  /// 아직 시작하지 않은 일만 본다 — 손을 댄 일에 "미리 해두라"고 할 수는 없다.
-  /// [at] 뒤에 오는 시각이 정해진 일이 먼저고, 없으면 시각 없는 일 중 첫 번째다.
-  /// 약속(schedule)은 시각에 가서 하는 것이라 10분을 앞당길 자리가 없어 뺀다.
+  /// 머리로 하는 일이 하나라도 있으면 그것부터 부른다. 10분을 앞당겨 가장 크게
+  /// 달라지는 쪽이라서다 — 콘셉트든 개요든 첫 줄이든, 미리 굴려둔 것이 있으면
+  /// 그 뒤가 통째로 수월해진다. 몸으로 하는 일은 그 10분이 준비 한 칸을
+  /// 앞당기는 정도다.
+  ///
+  /// 같은 갈래 안에서는 [at] 뒤에 오는 시각이 정해진 일이 먼저다.
   static String? _pickTaskName(List tasks, DateTime at) {
+    final names = _candidates(tasks, at);
+    if (names.isEmpty) return null;
+    return names.firstWhere(_isMindWork, orElse: () => names.first);
+  }
+
+  /// 이름을 부를 수 있는 일들. 부르고 싶은 순서대로.
+  ///
+  /// 아직 시작하지 않은 일만 본다 — 손을 댄 일에 "미리 해두라"고 할 수는 없다.
+  /// 약속(schedule)은 시각에 가서 하는 것이라 10분을 앞당길 자리가 없어 뺀다.
+  static List<String> _candidates(List tasks, DateTime at) {
     final atMinutes = at.hour * 60 + at.minute;
-    String? untimed;
-    int? soonestMinutes;
-    String? soonest;
+    final untimed = <String>[];
+    final timed = <MapEntry<int, String>>[];
 
     for (final item in tasks) {
       if (item is! Map) continue;
@@ -185,23 +221,17 @@ class GapCoachingService {
       final hour = parts.length == 2 ? int.tryParse(parts[0]) : null;
       final minute = parts.length == 2 ? int.tryParse(parts[1]) : null;
       if (hour == null || minute == null) {
-        untimed ??= text;
+        untimed.add(text);
         continue;
       }
       final minutes = hour * 60 + minute;
       // 이미 지난 시각은 "이따"가 아니다.
       if (minutes <= atMinutes) continue;
-      if (soonestMinutes == null || minutes < soonestMinutes) {
-        soonestMinutes = minutes;
-        soonest = text;
-      }
+      timed.add(MapEntry(minutes, text));
     }
 
-    final picked = soonest ?? untimed;
-    if (picked == null) return null;
-    return picked.length <= _nameLimit
-        ? picked
-        : '${picked.substring(0, _nameLimit)}…';
+    timed.sort((a, b) => a.key.compareTo(b.key));
+    return [...timed.map((e) => e.value), ...untimed];
   }
 
   static Future<void> save({
