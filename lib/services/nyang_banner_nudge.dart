@@ -90,10 +90,8 @@ class NyangBannerNudge {
   /// 다시 깔린다.
   static const List<int> gapNotificationIds = [1318, 1319, 1320, 1321];
 
-  /// 배너에 적는 고정 문구. 어떤 일을 하라고는 말하지 않는다.
-  static const String gapTitle = '🐾 지금 잠깐 여유 있나냥?';
-  static const String gapBody =
-      '이따 할 일이 가벼워지도록 10분만 미리 씨앗을 뿌려볼까냥? 🌱';
+  /// 배너 제목. 본문은 그때 남은 일을 보고 [GapCoachingService.bodyFor]가 고른다.
+  static const String gapTitle = '🐾 지금 잠깐 여유 있냥?';
 
   /// 하나를 끝낸 직후의 여유는 건드리지 않는다.
   static const Duration _gapAfterDone = Duration(minutes: 30);
@@ -322,8 +320,14 @@ class NyangBannerNudge {
   /// 안드로이드는 그 시각에 깨어나 조건을 다시 보고 정하지만, 아이폰의 예약
   /// 알림은 걸어두면 조건이 바뀌어도 스스로 취소되지 않는다. 그래서 여기서
   /// 미리 보고 거른다 — [sync]가 저장이 일어날 때마다 통째로 다시 깔기 때문에
-  /// 사실상 매번 다시 검사하는 것과 같다. 다만 하루 종일 앱을 안 열면 내일
-  /// 자리는 어제 본 상태 그대로 나간다.
+  /// 사실상 매번 다시 검사하는 것과 같다.
+  ///
+  /// 내일 자리도 같은 잣대로 거른다. 그때 읽는 할 일 목록은 오늘 것이라 내일을
+  /// 정확히 아는 것은 아니지만, 틀리는 방향이 한쪽으로만 기운다 — 오늘 지켜야
+  /// 할 시각이 있으면 내일 자리도 함께 접힌다. 앱을 하루 안에 한 번이라도 열면
+  /// 그 자리는 그날의 진짜 목록으로 다시 깔리고, 끝까지 안 열면 조용히 지나간다.
+  /// 여유 있는 날 한 번 걸러지는 쪽이, 약속을 앞둔 사람에게 한 번 잘못 나가는
+  /// 쪽보다 낫다.
   static Future<void> _scheduleGapSlots(
     List tasks,
     DateTime now,
@@ -331,12 +335,23 @@ class NyangBannerNudge {
     List<DateTime> blocking,
   ) async {
     final today = DateTime(now.year, now.month, now.day);
+    // 오늘 할 일을 다 끝냈으면 오늘 남은 자리는 접는다. 내일 자리는 그대로 둔다 —
+    // 저녁에 다 끝내고 앱을 닫는 사람이 대부분이라, 이걸 내일까지 끌고 가면
+    // 부지런한 사람일수록 다음 날 아침이 조용해진다.
+    final dayFinished = GapCoachingService.isDayFinished(tasks);
+
     for (var i = 0; i < slots.length && i < gapNotificationIds.length; i++) {
       final at = slots[i];
-      // 오늘 자리만 지금 상태로 거른다. 내일은 알 길이 없다.
       final isToday = DateTime(at.year, at.month, at.day) == today;
-      if (isToday && _gapBlocked(tasks, at, blocking)) continue;
-      await _scheduleGap(id: gapNotificationIds[i], at: at);
+      if (isToday && dayFinished) continue;
+      if (_gapBlocked(tasks, at, blocking)) continue;
+      await _scheduleGap(
+        id: gapNotificationIds[i],
+        at: at,
+        // 지금 남아 있는 일을 보고 문장을 고른다. 내일 자리는 오늘 목록으로
+        // 고르게 되지만, 앱을 한 번이라도 열면 그날 것으로 다시 깔린다.
+        body: GapCoachingService.bodyFor(tasks, at),
+      );
     }
   }
 
@@ -384,6 +399,7 @@ class NyangBannerNudge {
   static Future<void> _scheduleGap({
     required int id,
     required DateTime at,
+    required String body,
   }) async {
     _ensureTimeZone();
 
@@ -402,7 +418,7 @@ class NyangBannerNudge {
     await _plugin.zonedSchedule(
       id: id,
       title: gapTitle,
-      body: gapBody,
+      body: body,
       scheduledDate: tz.TZDateTime.from(at, tz.local),
       notificationDetails: details,
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,

@@ -92,6 +92,10 @@ class OngoingNudgeReceiver : BroadcastReceiver() {
         // 이쪽에 자리를 내주므로 여기서 걸리지 않는다.
         if (OngoingNudgeState.isGapSlotTaken(context)) return
         if (OngoingNudgeAnswerWriter.isAnyTaskInProgress(context)) return
+        // 오늘 할 일을 다 끝냈다. 다 한 사람에게 여유 있냐고 묻는 것은 칭찬이
+        // 아니라 잔소리다. 아무것도 적어두지 않은 사람은 여기서 걸리지 않는다 —
+        // 그쪽에는 하나 정해두자고 권할 말이 있다.
+        if (GapCoachingCopy.isDayFinished(context)) return
         // 방금 하나를 끝냈다.
         val sinceDone = OngoingNudgeAnswerWriter.minutesSinceLastCompletion(context)
         if (sinceDone != null && sinceDone in 0L..29L) return

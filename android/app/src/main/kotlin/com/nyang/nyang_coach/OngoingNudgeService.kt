@@ -286,7 +286,7 @@ class OngoingNudgeService : Service() {
         val waitingToResume = !isStartTrack() && !isGapTrack() &&
             OngoingNudgeState.isResumeReminder(this)
         val title = when {
-            isGapTrack() -> "지금 잠깐 여유 있나냥?"
+            isGapTrack() -> "지금 잠깐 여유 있냥?"
             taskText.isBlank() && waitingToStart -> "시작할 일정이 있어요"
             taskText.isBlank() && waitingForNext -> "아직 안 한 일이 있어요"
             taskText.isBlank() && waitingToResume -> "멈춰 있는 일이 있어요"
@@ -551,20 +551,29 @@ class OngoingNudgeService : Service() {
     }
 
     /**
-     * 틈새 코칭 카드. 버튼이 없다.
+     * 틈새 코칭 카드. 버튼은 데려가는 것 하나뿐이다.
      *
-     * 무엇을 할지 정해주지 않는 자리라 실행도 거절도 물을 것이 없다. 하고 싶은
-     * 사람은 냥냥이를 눌러 할 일 목록으로 가고, 아니면 바깥을 누르거나 그냥
-     * 두면 사라진다. 어느 쪽이든 다시 부르지 않는다.
+     * 무엇을 할지 정해주지 않는 자리라 거절 버튼이 없다 — 바깥을 누르거나 그냥
+     * 두면 사라지고, 어느 쪽이든 다시 부르지 않는다.
+     *
+     * 대신 하고 싶어진 사람은 한 번에 할 일 창까지 가야 한다. 여유 있냐고 물어놓고
+     * "이따 할 일"이 어디 있는지는 알아서 찾게 하면, 그 몇 칸이 그냥 안 하게 되는
+     * 이유가 된다.
      */
     private fun expandToGapCard() {
         handler.removeCallbacks(autoHide)
         removeBubble()
 
+        // 이 카드에는 냥냥이 그림이 없다. 말을 건 냥냥이는 바로 앞 버블에서 이미
+        // 봤고, 여기서 눈에 남아야 하는 것은 할 일 창으로 가는 버튼 하나다.
         val view = LayoutInflater.from(this).inflate(R.layout.nudge_gap_card, null)
-        val cardImage = view.findViewById<ImageView>(R.id.nudge_gap_image)
-        cardImage.setImageBitmap(loadCatBitmap(dp(120)))
-        cardImage.setOnClickListener { openPlanner() }
+        // 문구도 버튼도 지금 목록을 보고 정해진다. 적어둔 것이 없으면 "미리
+        // 해두라"가 아니라 "하나 정해두자"가 되고, 버튼도 그쪽을 가리킨다.
+        val copy = GapCoachingCopy.cardFor(this)
+        view.findViewById<TextView>(R.id.nudge_gap_body).text = copy.body
+        val goButton = view.findViewById<TextView>(R.id.nudge_gap_go)
+        goButton.text = copy.buttonLabel
+        goButton.setOnClickListener { openPlanner() }
 
         view.findViewById<View>(R.id.nudge_gap_scrim).setOnClickListener {
             cardView?.let { runCatching { windowManager.removeView(it) } }

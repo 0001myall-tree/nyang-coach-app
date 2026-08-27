@@ -51,6 +51,27 @@ class SettingsScreen extends StatefulWidget {
 /// 딴짓 방지 코치가 켜져 있을 때 이 줄을 누르면 고를 수 있는 것.
 enum _OngoingNudgeAction { test, turnOff, openSettings }
 
+/// 틈새 코칭을 막고 있는 것 하나.
+///
+/// 여러 개가 함께 빠져 있어도 한 번에 하나만 말한다. 한 화면에 권한 셋을 늘어놓으면
+/// 어디부터 손대야 하는지 알 수 없어서, 가장 앞을 막은 것부터 고치고 다시 본다.
+class _GapBlocker {
+  const _GapBlocker({
+    required this.headline,
+    required this.detail,
+    required this.open,
+  });
+
+  /// 시트 안 경고 줄에 적히는 한 문장.
+  final String headline;
+
+  /// 눌렀을 때 나오는 설명.
+  final String detail;
+
+  /// 고치러 갈 시스템 설정 화면.
+  final Future<void> Function() open;
+}
+
 class _SettingsScreenState extends State<SettingsScreen>
     with WidgetsBindingObserver {
   /// 쿠폰 입력을 보여줄지.
@@ -1722,7 +1743,16 @@ class _SettingsScreenState extends State<SettingsScreen>
   ///
   /// 켜고 끄기와 시각 하나(또는 둘)가 전부다. 무엇을 할지는 고르게 하지 않는다 —
   /// 그걸 정해주는 순간 쉬는 시간이 새 일정이 된다.
-  void _showGapCoachingModal() {
+  ///
+  /// 냥냥이가 무슨 말을 하는지는 여기서 미리 보여주지 않는다. 그 말은 여유 있는
+  /// 순간에 처음 만나야 한다 — 설정에서 이미 읽어버리면 정작 그때는 읽은 문장이
+  /// 한 번 더 오는 것이 된다.
+  Future<void> _showGapCoachingModal() async {
+    // 시트를 열기 전에 막고 있는 것부터 본다. 정해둔 시각에 깨어나 다른 앱 위로
+    // 나가야 하는 기능이라, 권한이 빠져 있으면 켜져 있다고 적힌 화면만 남는다.
+    var blocker = await _findGapBlocker();
+    if (!mounted) return;
+
     bool tempEnabled = _gapCoachingEnabled;
     final tempTimes = <TimeOfDay>[
       if (_gapCoachingTimes.isEmpty)
@@ -1794,7 +1824,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    '정해둔 시각에 여유가 있어 보이면 냥냥이가 한 마디만 건네요.',
+                    '흘러가는 여유 시간에, 이따 할 일을 10분만 미리 해둘 수 있게 도와줘요.',
                     style: GoogleFonts.notoSansKr(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
@@ -1809,28 +1839,22 @@ class _SettingsScreenState extends State<SettingsScreen>
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 14,
+                          if (tempEnabled && blocker != null)
+                            _buildGapBlockerBanner(
+                              blocker!,
+                              onTap: () async {
+                                await _showAlarmNoticeDialog(
+                                  title: '🐾 지금은 나올 수 없어요',
+                                  message: blocker!.detail,
+                                  actionLabel: '설정 열기',
+                                  closeLabel: '나중에',
+                                  onAction: blocker!.open,
+                                );
+                                final next = await _findGapBlocker();
+                                if (!mounted) return;
+                                setModalState(() => blocker = next);
+                              },
                             ),
-                            margin: const EdgeInsets.only(bottom: 20),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFF3F0FF),
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                            child: Text(
-                              '지금 잠깐 여유 있나냥?\n'
-                              '이따 할 일이 가벼워지도록 10분만 미리 씨앗을 뿌려볼까냥? 🌱',
-                              style: GoogleFonts.notoSansKr(
-                                fontSize: 13.5,
-                                fontWeight: FontWeight.w700,
-                                height: 1.5,
-                                color: const Color(0xFF5B4FB0),
-                              ),
-                            ),
-                          ),
 
                           Opacity(
                             opacity: tempEnabled ? 1.0 : 0.5,
@@ -1849,6 +1873,26 @@ class _SettingsScreenState extends State<SettingsScreen>
                                             initialTime: tempTimes[i],
                                           );
                                       if (picked == null) return;
+                                      // 두 자리가 같은 시각이면 하나는 나가지도
+                                      // 못하고 사라진다. 저장한 뒤에 조용히
+                                      // 없어지는 것보다 여기서 막는 편이 낫다.
+                                      final taken = tempTimes.asMap().entries.any(
+                                        (e) =>
+                                            e.key != i &&
+                                            e.value.hour == picked.hour &&
+                                            e.value.minute == picked.minute,
+                                      );
+                                      if (taken) {
+                                        if (!mounted) return;
+                                        // 스낵바는 이 시트 뒤로 나와서 보이지 않는다.
+                                        await _showAlarmNoticeDialog(
+                                          title: '🌱 이미 정해둔 시각이에요',
+                                          message:
+                                              '두 자리를 같은 시각으로 두면 하나는 '
+                                              '나가지 못해요. 다른 시각으로 골라주세요.',
+                                        );
+                                        return;
+                                      }
                                       setModalState(() => tempTimes[i] = picked);
                                     },
                                     onRemove: i == 0
@@ -1862,12 +1906,25 @@ class _SettingsScreenState extends State<SettingsScreen>
                                   GestureDetector(
                                     onTap: () {
                                       if (!tempEnabled) return;
+                                      // 첫 번째와 같은 시각으로 더해지면 그 자리는
+                                      // 만들자마자 못 쓰는 자리가 된다.
+                                      const morning = TimeOfDay(
+                                        hour: 10,
+                                        minute: 30,
+                                      );
+                                      final clash = tempTimes.any(
+                                        (t) =>
+                                            t.hour == morning.hour &&
+                                            t.minute == morning.minute,
+                                      );
                                       setModalState(
                                         () => tempTimes.add(
-                                          const TimeOfDay(
-                                            hour: 10,
-                                            minute: 30,
-                                          ),
+                                          clash
+                                              ? const TimeOfDay(
+                                                  hour: 15,
+                                                  minute: 30,
+                                                )
+                                              : morning,
                                         ),
                                       );
                                     },
@@ -2014,22 +2071,207 @@ class _SettingsScreenState extends State<SettingsScreen>
     );
   }
 
+  /// 시트 안에 붙는 경고 줄. 눌러야 자세한 이야기가 나온다.
+  Widget _buildGapBlockerBanner(
+    _GapBlocker blocker, {
+    required VoidCallback onTap,
+  }) {
+    const accent = Color(0xFFD64545);
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: double.infinity,
+        margin: const EdgeInsets.only(bottom: 20),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFDECEC),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: accent.withValues(alpha: 0.35)),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(Icons.warning_amber_rounded, size: 18, color: accent),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    blocker.headline,
+                    style: GoogleFonts.notoSansKr(
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w900,
+                      color: accent,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    '눌러서 확인해주세요.',
+                    style: GoogleFonts.notoSansKr(
+                      fontSize: 12,
+                      height: 1.4,
+                      fontWeight: FontWeight.w600,
+                      color: const Color(0xFF6B6676),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right, size: 18, color: accent),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 지금 이 폰에서 틈새 코칭을 막고 있는 것. 없으면 null.
+  ///
+  /// 딴짓 방지 코치와 같은 층을 쓰지만 막히는 자리가 하나 더 있다. 저쪽은 일정을
+  /// 시작하는 순간부터 앱이 깨어 있지만, 이쪽은 정해둔 시각에 스스로 깨어나야 해서
+  /// "알람 및 리마인더" 권한이 없으면 시각이 밀리거나 그냥 지나간다.
+  Future<_GapBlocker?> _findGapBlocker() async {
+    if (!GapCoachingService.isSupported) return null;
+
+    if (Platform.isAndroid) {
+      final state = await OngoingTaskNudgeService.diagnose();
+      if (state.isEmpty) return null;
+
+      if (state['overlay'] == false) {
+        return _GapBlocker(
+          headline: '"다른 앱 위에 표시"가 꺼져 있어요',
+          detail:
+              '이 권한이 없으면 냥냥이가 다른 앱 위로 나올 수 없어요.\n\n'
+              '설정에서 냥냥코치를 찾아 "다른 앱 위에 표시"를 켜주세요.',
+          open: OngoingTaskNudgeService.openSystemSettings,
+        );
+      }
+      if (state['exactAlarms'] == false) {
+        return _GapBlocker(
+          headline: '정해둔 시각에 깨어날 수 없어요',
+          detail:
+              '"알람 및 리마인더" 권한이 꺼져 있어요.\n\n'
+              '틈새 코칭은 정해둔 시각에 냥냥코치가 스스로 깨어나야 하는데, '
+              '이 권한이 없으면 그 시각이 한참 밀리거나 그냥 지나갑니다.',
+          open: () => NotificationService().openAlarmPermissionSettings(
+            AlarmPermissionIssue.exactAlarm,
+          ),
+        );
+      }
+      if (state['notifications'] == false) {
+        return _GapBlocker(
+          headline: '냥냥코치 알림이 꺼져 있어요',
+          detail:
+              '냥냥이가 나와 있는 동안 조용한 알림 한 줄이 함께 있어야 해서, '
+              '알림이 꺼져 있으면 나올 수 없어요.',
+          open: OngoingTaskNudgeService.openSystemSettings,
+        );
+      }
+      if (state['batteryRestricted'] == true) {
+        return _GapBlocker(
+          headline: '휴대폰이 냥냥코치를 재워둘 수 있어요',
+          detail:
+              '지금 설정으로는 휴대폰이 냥냥코치를 재워둘 수 있어요. '
+              '그러면 정해둔 시각에 냥냥이가 늦게 나오거나 아예 나오지 않아요.\n\n'
+              '배터리 설정에서 냥냥코치를 찾아 "제한 없음"으로 바꿔주세요.',
+          open: OngoingTaskNudgeService.openBatterySettings,
+        );
+      }
+      return null;
+    }
+
+    // 아이폰은 알림 배너로 간다. 알림이 꺼져 있으면 이 기능은 통째로 없는 것과 같다.
+    if (!await NotificationService().areNotificationsEnabled()) {
+      return _GapBlocker(
+        headline: '냥냥코치 알림이 꺼져 있어요',
+        detail:
+            '이 기능은 알림 배너로 찾아가요. 알림이 꺼져 있으면 정해둔 시각이 와도 '
+            '아무것도 오지 않습니다.',
+        open: OngoingTaskNudgeService.openSystemSettings,
+      );
+    }
+    return null;
+  }
+
+  /// "이건 마스터 플랜 자리예요."
+  ///
+  /// 스낵바로 알리던 자리다. 이 화면은 아래를 서랍이 덮고 있어서 스낵바가 그
+  /// 뒤로 나왔다 사라진다 — 왜 안 되는지 말해준 적이 없는 것과 같았다.
+  Future<void> _showGapMasterOnlyNotice() {
+    return _showAlarmNoticeDialog(
+      title: '🌱 틈새 코칭',
+      message: '마스터 플랜에서만 쓸 수 있어요.',
+    );
+  }
+
   Future<void> _saveGapCoachingSettings(
     bool enabled,
     List<TimeOfDay> times,
   ) async {
-    final sorted = [...times]
-      ..sort((a, b) => (a.hour * 60 + a.minute).compareTo(b.hour * 60 + b.minute));
+    final sorted = <TimeOfDay>[];
+    for (final time in [...times]..sort(
+      (a, b) => (a.hour * 60 + a.minute).compareTo(b.hour * 60 + b.minute),
+    )) {
+      // 저장하는 쪽도 같은 시각은 하나로 접는다. 화면에 남은 값과 실제로 걸린
+      // 예약이 어긋나면, 설정에는 둘인데 하나만 오는 것으로 보인다.
+      if (sorted.any((t) => t.hour == time.hour && t.minute == time.minute)) {
+        continue;
+      }
+      sorted.add(time);
+    }
+
+    // 등급은 저장하는 자리에서 다시 본다. 화면을 열어둔 사이에 바뀌었을 수도
+    // 있고, 무엇보다 켰다고 적어놓고 아무것도 나가지 않는 상태가 제일 나쁘다.
+    if (enabled) {
+      final data = await UserDataService.load();
+      final master = data.isPlanActive && data.planType == 'master';
+      if (!mounted) return;
+      if (!master) {
+        // 고른 시각은 적어둔다. 켜지지만 않을 뿐이라, 마스터로 올린 날 다시
+        // 입력하게 하면 지금 한 일이 통째로 없던 일이 된다.
+        await GapCoachingService.save(enabled: false, times: sorted);
+        if (!mounted) return;
+        setState(() {
+          _userData = data;
+          _gapCoachingEnabled = false;
+          _gapCoachingTimes = sorted;
+        });
+        await _showGapMasterOnlyNotice();
+        return;
+      }
+    }
+
     await GapCoachingService.save(enabled: enabled, times: sorted);
     if (!mounted) return;
     setState(() {
       _gapCoachingEnabled = enabled && sorted.isNotEmpty;
       _gapCoachingTimes = sorted;
     });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(enabled ? '틈새 코칭을 켰어요.' : '틈새 코칭을 껐어요.'),
-      ),
+
+    // 스낵바로 알리던 자리다. 이 화면은 서랍이 아래를 덮고 있어서, 켜졌다는 말이
+    // 그 뒤로 나왔다 사라졌다 — 켠 사람이 켜진 것을 본 적이 없었다.
+    await _showAlarmNoticeDialog(
+      title: enabled ? '🌱 틈새 코칭을 켰어요' : '🌱 틈새 코칭을 껐어요',
+      message: enabled
+          ? '${sorted.map(GapCoachingService.label).join(' · ')}에 여유가 있어 '
+                '보이면 냥냥이가 한 마디만 건넬게요.\n\n'
+                '무언가 하는 중이거나 지켜야 할 시각이 가까우면 그날 그 시각은 '
+                '조용히 지나가요.'
+          : '이제 냥냥이가 여유 시간에 말을 걸지 않아요.',
+    );
+    if (!mounted) return;
+
+    // 켰다는 인사만 하고 끝내면, 막혀 있는 사람은 정해둔 시각을 기다렸다가
+    // 아무 일도 일어나지 않는 것만 보게 된다. 켠 자리에서 바로 짚어준다.
+    if (!enabled) return;
+    final blocker = await _findGapBlocker();
+    if (!mounted || blocker == null) return;
+    await _showAlarmNoticeDialog(
+      title: '🐾 지금은 나올 수 없어요',
+      message: blocker.detail,
+      actionLabel: '설정 열기',
+      closeLabel: '나중에',
+      onAction: blocker.open,
     );
   }
 
@@ -2335,11 +2577,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                               _showGapCoachingModal();
                               return;
                             }
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('틈새 코칭은 마스터 플랜 구독자 전용입니다.'),
-                              ),
-                            );
+                            _showGapMasterOnlyNotice();
                           },
                         ),
                         const SizedBox(height: 10),
