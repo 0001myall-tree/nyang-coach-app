@@ -651,6 +651,35 @@ class _RecordsScreenState extends State<RecordsScreen> {
       }
     }
 
+    // 시작한 일이 끝까지 간 비율.
+    //
+    // 완료율과 재는 것이 다르다. 완료율은 계획한 것 중 몇 개를 끝냈는지라
+    // 계획을 크게 세운 사람은 낮게 나오는데, 이 값은 손을 댄 것 중 몇 개가
+    // 끝났는지다. 이게 높으면 그 사람의 문턱은 지속이 아니라 시작이고,
+    // 다음 주에 필요한 것도 "덜 계획하기"가 아니라 "시작하는 자리 만들기"다.
+    var startedTaskCount = 0;
+    var startedThenDoneCount = 0;
+    for (final text in allTaskTexts) {
+      var touched = false;
+      var finished = false;
+      for (final record in activeRecords) {
+        for (final task in (record['tasks'] as List?) ?? []) {
+          final map = task as Map?;
+          if (map == null || map['text'] != text) continue;
+          if (map['done'] == true) finished = true;
+          if (map['done'] == true || _taskWasStarted(map)) touched = true;
+        }
+      }
+      if (!touched) continue;
+      startedTaskCount++;
+      if (finished) startedThenDoneCount++;
+    }
+    // 두세 개로는 사람의 패턴이라고 말할 수 없다. 그 아래는 숫자를 주지 않는다.
+    final startToFinishText = startedTaskCount >= 4
+        ? '손댄 일 $startedTaskCount개 중 $startedThenDoneCount개 완료 '
+              '(${(startedThenDoneCount * 100 / startedTaskCount).round()}%)'
+        : '표본이 적어 판단 보류';
+
     final heldOverRanked = heldOverDayCounts.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
     final heldOverText = heldOverRanked
@@ -892,6 +921,7 @@ ${completionSummaryBuffer.toString().trim()}
 - 꾸준히 해낸 일 (3일 이상 연속 완료): ${consistentTasks.join(', ').isEmpty ? '없음' : consistentTasks.join(', ')}
 - 꾸준히 손댄 일 (완료까지는 아니어도 3일 이상 연속으로 시작): ${consistentStartTasks.join(', ').isEmpty ? '없음' : consistentStartTasks.join(', ')}
 - 이번 주 주력한 일 (하루에 끝나지 않아 여러 날 붙잡은 일, 괄호는 손댄 날 수): ${heldOverText.isEmpty ? '없음' : heldOverText}
+${feedbackType == 0 ? '- 시작한 일이 완료로 이어진 비율: $startToFinishText\n' : ''}
 - 미루다 다시 완료한 일 (3일 이상 미루다 최근 다시 완료): ${resumedTasks.join(', ').isEmpty ? '없음' : resumedTasks.join(', ')}
 - 미루다 다시 시작한 일 (3일 이상 손대지 못하다 최근 다시 시작, 완료는 아직): ${resumedStartTasks.join(', ').isEmpty ? '없음' : resumedStartTasks.join(', ')}
 
@@ -932,6 +962,7 @@ ${feedbackType == 0
    - 목표/비전과 연결되는 중요한 활동 1~2개를 콕 집어 구체적으로 칭찬하세요. (추상적 칭찬 금지) 후보는 [이번 주 주력한 일]과 완료한 일 양쪽에서 고르세요.
    - 여러 날 붙잡은 일은 끝내지 못했어도 그 주의 주력으로 인정하고, 끝낸 일은 끝낸 것으로 칭찬하세요. (예: "이번 주는 보고서에 나흘을 쓰셨네요." / "수요일에 보고서를 끝내셨네요.")
    - 미루다 다시 완료한 일이나 다시 시작한 일이 있다면 특별히 언급해 주세요. 완료까지 가지 못했어도 다시 손을 댄 것 자체를 인정해 주세요.
+   - '시작한 일이 완료로 이어진 비율'이 7할을 넘으면, 완료율이 낮은 주라도 그 사람은 일단 손을 대면 끝내는 사람입니다. 그 점을 이번 주의 강점으로 짚고, 다음 주 제안은 계획을 줄이는 쪽보다 시작하는 자리를 만드는 쪽으로 하세요. (예: 첫 10분만 정해두기, 시작 시각을 미리 잡아두기)
    - 다시 시작은 했는데 완료 기록이 적다면, 의지나 성실함의 문제로 읽지 말고 하루에 실행 가능한 크기로 계획을 나누자고 제안해 주세요.
    - 반복적으로 밀린 중요한 일이 있다면 부드럽게 지적하고 다음 주 우선순위로 권유하세요. 단, 시작 기록이 있는 일은 밀린 일로 지적하지 마세요. 손을 댄 일은 진행 중인 일입니다.
    - 단, [주간 완료율 요약]에서 "저조한 날이 많은 주인가: 예"인 경우에만 밀린 항목을 나열하거나 지적하지 말고 이 구조로 쓰세요: 수고 인정 → 원인 해석([지난 주 대화 기록 요약]이 있으면 그 근거로, 없으면 계획이 컨디션보다 컸을 가능성으로) → 다음 주에는 확실히 해낼 수 있는 만큼만 계획하자는 제안.
@@ -950,7 +981,7 @@ ${feedbackType == 0
    - 실행이나 성장보다 이번 주의 컨디션 흐름에 초점을 맞춥니다.
    - 완료율, 휴무일 패턴, 할 일 밀도 등을 바탕으로 체력/휴식/회복 측면을 분석하세요.
    - 무리한 주였는지, 잘 쉰 주였는지, 회복이 더 필요한지를 부드럽게 짚어주세요.
-   - 꾸준히 해낸 일이나 꾸준히 손댄 일이 있다면 컨디션 속에서도 놓치지 않았다는 점을 자연스럽게 언급해 주세요. 완료까지 가지 못했더라도 매일 시작한 것은 그대로 인정해 주세요. (예: "그 와중에도 매일 손은 대고 계셨네요.")
+   - 꾸준히 해낸 일이나 꾸준히 손댄 일이 있다면 컨디션 속에서도 놓치지 않았다는 점을 자연스럽게 언급해 주세요. 완료까지 가지 못했더라도 시작한 것은 그대로 인정해 주세요.
    - 다음 주 컨디션 관리를 위한 한 가지 제안으로 마무리하세요.'''}
 4. 분량: 3~4문장으로 간결하게. JSON이나 마크다운 없이 순수 텍스트로만 답변해 주세요.
 5. 가독성: 문장 앞에 접속어가 올 때는 그 접속어 앞에서 한 줄을 비우고, 들여쓰기 없이 문단을 시작해 주세요. 예: "또한,", "특히,", "다만,", "하지만,", "그리고,", "앞으로,".''';
