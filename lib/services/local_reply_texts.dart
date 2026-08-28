@@ -22,15 +22,6 @@ class LocalReplyTexts {
     };
   }
 
-  static String todayTaskTimeNotFoundReply(String coachId) {
-    return switch (coachId) {
-      'cat' || 'nyang_halbae' => '오늘 할 일에서 그 일정은 바로 못 찾겠다냥.\n냥이가 할 일 탭 열어줄게.',
-      'bro' => '오늘 할 일에서 그 일정은 바로 못 찾겠다.\n할 일 탭 열어준다.',
-      'sec_female' => '오늘 할 일에서 해당 일정을 바로 찾지 못했어요.\n할 일 탭을 열어드릴게요.',
-      _ => '오늘 할 일에서 그 일정은 바로 못 찾겠어.\n할 일 탭 열어줄게.',
-    };
-  }
-
   static String featureLocationMessage({
     required String coachId,
     required String location,

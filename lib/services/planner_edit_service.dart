@@ -55,7 +55,11 @@ class PlannerEditService {
     // 그 칸으로 데려간다 — 루틴 탭에는 오늘 체크할 자리가 없다.
     final todaysCopy = hit.store != _Store.habit;
     if (action.kind == PlannerActionKind.done && todaysCopy) {
-      return PlannerActionResult(PlannerActionStatus.ok, label: label);
+      return PlannerActionResult(
+        PlannerActionStatus.ok,
+        label: label,
+        id: hit.item['id']?.toString() ?? '',
+      );
     }
 
     // 시각과 요일은 루틴 탭에서 고친다. 오늘 목록에 안 내려온 루틴은 오늘 할

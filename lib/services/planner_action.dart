@@ -71,6 +71,9 @@ class PlannerAction {
   ///
   /// 한 턴에 하나만 받는다. 여러 개가 오면 첫 번째만 쓴다 — 카드가 겹치면
   /// 무엇을 고르는 건지 알기 어렵고, 앞의 조작이 뒤의 대상을 바꿔놓기도 한다.
+  ///
+  /// 완료만 예외다. 서로 건드리지 않아서 한 장에 모아 물을 수 있고, 이름은
+  /// [doneTargets]가 따로 모아준다.
   static PlannerAction? parse(String reply) {
     final match = _tag.firstMatch(reply);
     if (match == null) return null;
@@ -102,6 +105,23 @@ class PlannerAction {
       time: _readTime(valueText),
       enabled: _readSwitch(valueText),
     );
+  }
+
+  /// 끝냈다고 짚은 이름 전부. 없으면 빈 목록.
+  ///
+  /// 완료만 여러 개를 받는다. 옮기기·알람은 하나씩 확인해야 하지만 — 앞의
+  /// 조작이 뒤의 대상을 바꿔놓기도 한다 — 완료는 서로 건드리지 않아서 한 장에
+  /// 모아 물어볼 수 있다. "다 했어"라고 한 사람에게 카드를 세 번 띄우거나
+  /// 하나만 체크해주는 것은 둘 다 답이 아니다.
+  static List<String> doneTargets(String reply) {
+    final names = <String>[];
+    for (final match in _tag.allMatches(reply)) {
+      if (match.group(1)!.toUpperCase() != 'DONE') continue;
+      final name = (match.group(2) ?? '').split('|').first.trim();
+      if (name.isEmpty || names.contains(name)) continue;
+      names.add(name);
+    }
+    return names;
   }
 
   /// 태그를 떼어낸 답변. 태그는 사용자에게 보이면 안 된다.
@@ -194,12 +214,23 @@ enum PlannerActionStatus {
 }
 
 class PlannerActionResult {
-  const PlannerActionResult(this.status, {this.label = '', this.detail = ''});
+  const PlannerActionResult(
+    this.status, {
+    this.label = '',
+    this.detail = '',
+    this.id = '',
+  });
 
   final PlannerActionStatus status;
 
   /// 실제로 찾은 일정의 이름. 코치가 짚어준 이름과 다를 수 있다.
   final String label;
+
+  /// 찾은 항목의 id. 완료로 표시할 때 이걸로 다시 찾는다.
+  ///
+  /// 이름으로 두 번 찾지 않는다. 확인 카드를 띄우고 사용자가 누르기까지 사이에
+  /// 목록이 바뀔 수 있고, 같은 이름이 하나 더 생기면 엉뚱한 것이 체크된다.
+  final String id;
 
   /// 사람에게 보여줄 값. "오후 8시", "내일(8월 22일)" 같은 것.
   final String detail;

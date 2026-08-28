@@ -1,16 +1,11 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nyang_coach/services/coach_context_scope.dart';
 
-CoachContextScope master(
-  String current, {
-  String? previous,
-  bool timer = false,
-}) {
+CoachContextScope master(String current, {String? previous}) {
   return CoachContextScopeService.resolve(
     isMaster: true,
     currentText: current,
     previousUserText: previous,
-    timerAuthorization: timer,
   );
 }
 
@@ -51,10 +46,18 @@ void main() {
       expect(scope.tasks, isTrue);
     });
 
-    test('잡담에는 아무것도 싣지 않는다', () {
+    test('잡담에는 목표를 싣지 않는다. 오늘 할 일은 늘 실린다', () {
       final scope = master('아 배고파');
       expect(scope.goal, GoalContextScope.none);
-      expect(scope.tasks, isFalse);
+      expect(scope.tasks, isTrue);
+    });
+
+    test('신호가 없는 완료 보고에도 오늘 할 일이 실린다', () {
+      // "일 다했다구 체크해주삼"에는 '완료했'도 '끝냈'도 없다. 단어로 고르던
+      // 때는 이런 말이 빈손으로 나가서, 코치가 다 체크해둔 사람에게
+      // "세 개라면 잘한 거다"라고 답했다.
+      expect(master('아니 일 다했다구 체크해주삼').tasks, isTrue);
+      expect(master('계획 세 개 세운 거 한번 카운팅 해 봐').tasks, isTrue);
     });
 
     test('할 일 얘기에는 목표 없이 할 일만 싣는다', () {
@@ -63,9 +66,8 @@ void main() {
       expect(scope.tasks, isTrue);
     });
 
-    test('타이머 동의 응답에는 할 일을 싣는다', () {
-      final scope = master('응', timer: true);
-      expect(scope.tasks, isTrue);
+    test('짧은 대답에도 할 일을 싣는다', () {
+      expect(master('응').tasks, isTrue);
     });
   });
 
@@ -234,7 +236,7 @@ void main() {
       );
     });
 
-    test('일정과 상관없는 말에는 목록을 싣지 않는다', () {
+    test('일정과 상관없는 말은 조작 신호로 보지 않는다', () {
       for (final input in [
         '날씨 알려줘',
         '이거 뭔지 알려줘',

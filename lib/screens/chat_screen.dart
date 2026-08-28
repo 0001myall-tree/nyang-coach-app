@@ -19,6 +19,7 @@ import 'package:nyang_coach/services/analytics_service.dart';
 import 'package:nyang_coach/services/master_unlock_notice.dart';
 import 'package:nyang_coach/services/api_usage_limit_service.dart';
 import 'package:nyang_coach/services/apple_calendar_sync_service.dart';
+import 'package:nyang_coach/services/task_completion_service.dart';
 import 'package:nyang_coach/services/tasks_sync_service.dart';
 import 'package:nyang_coach/services/user_title_service.dart';
 import 'package:nyang_coach/services/daily_reset_service.dart';
@@ -984,6 +985,9 @@ class _ParsedReply {
 
   /// 코치가 짚어준 플래너 조작. 확인 카드로 한 번 물어본 뒤에만 실행된다.
   final PlannerAction? plannerAction;
+
+  /// 끝냈다고 짚은 이름 전부. 완료만 한 장에 모아 물어본다.
+  final List<String> doneTargets;
   final String? habitToConfirm;
   final String? goalToConfirm;
 
@@ -999,6 +1003,7 @@ class _ParsedReply {
     this.scheduleToConfirm,
     this.scheduleReminder = false,
     this.plannerAction,
+    this.doneTargets = const [],
     this.habitToConfirm,
     this.goalToConfirm,
     List<_SuggestedTask>? suggestedTasks,
@@ -1269,6 +1274,12 @@ class ChatScreenController {
 
 class _ChatScreenState extends State<ChatScreen>
     with TickerProviderStateMixin, WidgetsBindingObserver {
+  /// 프롬프트에 실을 오늘 할 일 개수의 상한.
+  ///
+  /// 보통 하루치는 대여섯 줄이라 걸릴 일이 없다. 스무 개를 넘겨 적어두는
+  /// 사람에게만 잘리고, 그때도 아직 안 끝난 것부터 남는다.
+  static const int _taskContextLimit = 20;
+
   final _ctrl = TextEditingController();
   final _scrollCtrl = ScrollController();
   final List<ChatMessage> _messages = [];
@@ -1295,6 +1306,9 @@ class _ChatScreenState extends State<ChatScreen>
   late AnimationController _flirtAnim;
 
   // 할 일 서랍
+  /// 끝냈다는 말에 띄우는 확인 카드. 누르면 이 항목들이 완료로 찍힌다.
+  List<({String id, String label})>? _doneConfirm;
+
   // 타이머 확인 버튼
   int? _timerConfirmMinutes;
   String? _timerConfirmTaskName;
@@ -2283,12 +2297,20 @@ class _ChatScreenState extends State<ChatScreen>
   Future<bool> _offerPlannerAction(
     PlannerAction action, {
     bool canRegisterInstead = false,
+    List<String> doneTargets = const [],
   }) async {
     if (!_userData.isPlanActive) return false;
 
+    // 끝냈다는 말은 그 자리에서 체크할 수 있게 카드를 띄운다.
+    //
+    // 값을 대신 바꾸지 않는다는 원칙은 그대로다 — 누르는 것은 사용자고, 앱은
+    // 코치가 짚은 것이 맞는지 묻기만 한다. 다만 다 해놓고 말한 사람에게
+    // "할 일 탭에서 미세요"를 돌려주면, 이미 한 일을 한 번 더 시키는 셈이다.
+    if (action.kind == PlannerActionKind.done) {
+      return _offerDoneCheck(action, doneTargets);
+    }
+
     // 모닝콜은 플래너가 아니라 설정에 있다. 찾을 일정도 없다.
-    // 끝냈다는 말은 그냥 대화로 받는다. 데려갈 곳이 없다.
-    if (action.kind == PlannerActionKind.done) return false;
 
     if (action.kind == PlannerActionKind.morning) {
       widget.onOpenSettingsSection?.call('morning_call');
@@ -2359,6 +2381,93 @@ class _ChatScreenState extends State<ChatScreen>
     if (!mounted) return true;
     if (reply != null) _injectAiMessage(reply);
     return true;
+  }
+
+  /// 끝냈다는 말에 확인 카드를 띄운다. 띄웠으면 true.
+  ///
+  /// "다 했어"처럼 여러 개를 한 번에 말하면 코치가 태그를 여러 개 붙인다.
+  /// 카드는 한 장이고 그 안에 이름이 나란히 선다 — 세 번 물으면 그 자체가
+  /// 일이 된다.
+  ///
+  /// 하나도 못 찾았을 때만 말로 답한다. 그중 하나가 이미 완료라면 그건 말할
+  /// 것이 아니다 — 나머지를 체크해주면 될 일이라, 거기에 "그건 이미 했다"를
+  /// 얹으면 칭찬이 지적으로 바뀐다.
+  Future<bool> _offerDoneCheck(
+    PlannerAction action,
+    List<String> doneTargets,
+  ) async {
+    final names = doneTargets.isEmpty ? [action.target] : doneTargets;
+
+    final hits = <({String id, String label})>[];
+    PlannerActionResult? firstMiss;
+    for (final name in names) {
+      final found = await PlannerEditService.preview(
+        PlannerAction(
+          kind: PlannerActionKind.done,
+          target: name,
+          date: action.date,
+        ),
+      );
+      if (found.status == PlannerActionStatus.ok && found.id.isNotEmpty) {
+        if (hits.any((hit) => hit.id == found.id)) continue;
+        hits.add((id: found.id, label: found.label));
+      } else {
+        firstMiss ??= found;
+      }
+    }
+    if (!mounted) return false;
+
+    if (hits.isEmpty) {
+      // 이미 완료면 "이미 다 한 걸로 돼 있다", 없으면 "목록에 없다"고 말해준다.
+      // 루틴 탭으로 데려가지는 않는다 — 오늘 목록에 안 내려온 루틴은 오늘
+      // 체크할 칸 자체가 없다.
+      final miss = _plannerActionMiss(
+        action,
+        firstMiss ?? const PlannerActionResult(PlannerActionStatus.notFound),
+      );
+      if (miss != null) _injectAiMessage(miss);
+      return true;
+    }
+
+    setState(() => _doneConfirm = hits);
+    return true;
+  }
+
+  /// 확인 카드에서 "완료로 표시"를 눌렀을 때.
+  Future<void> _confirmDoneCheck() async {
+    final targets = _doneConfirm;
+    if (targets == null || targets.isEmpty) return;
+    setState(() => _doneConfirm = null);
+
+    final checked = <String>[];
+    for (final target in targets) {
+      final ok = await TaskCompletionService.completeStoredTask(
+        taskId: target.id,
+      );
+      if (ok) checked.add(target.label);
+    }
+    if (!mounted) return;
+    if (checked.isEmpty) {
+      // 카드를 띄운 뒤에 사라졌거나 이미 체크된 경우다. 조용히 넘긴다 —
+      // 사용자가 직접 체크했을 수도 있고, 그렇다면 알릴 일이 아니다.
+      return;
+    }
+
+    _injectAiMessage(
+      checked.length == 1
+          ? "'${checked.first}' 완료로 표시했어요 ✓"
+          : "${checked.map((name) => "'$name'").join(', ')} 완료로 표시했어요 ✓",
+    );
+    _loadTaskProgress();
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await _updateTodayRecord(prefs);
+      await _refreshAttendanceStreak(prefs);
+      TasksSyncService.scheduleSyncToCloud();
+    } catch (e) {
+      debugPrint('완료 체크 후 기록 갱신 실패: $e');
+    }
   }
 
   /// 코치가 하는 말이라 코치 말투를 쓴다.
@@ -6968,6 +7077,7 @@ Rules:
       habitToConfirm: habitToConfirm,
       goalToConfirm: goalToConfirm,
       plannerAction: plannerAction,
+      doneTargets: PlannerAction.doneTargets(raw),
     );
   }
 
@@ -7224,7 +7334,6 @@ Rules:
       isMaster: _coach.isMaster,
       currentText: userText,
       previousUserText: _previousUserText(),
-      timerAuthorization: _isMasterTimerAuthorizationResponse(userText),
     );
   }
 
@@ -7310,9 +7419,12 @@ Rules:
         normalized.contains('뭐하지') ||
         normalized.contains('계획') ||
         normalized.contains('짜줘');
+    // 물음표가 붙었다고 길이를 안 보면, "남은 일이 너무 많은데 다 할 수 있을까?"
+    // 처럼 마음을 묻는 말에 진행 현황표가 돌아간다.
     return asksStatus &&
         !asksAnalysis &&
-        (isQuestion || normalized.length <= 12);
+        (normalized.length <= 12 ||
+            (isQuestion && _isShortDirectRequest(normalized)));
   }
 
   bool _isTodayTaskOverviewRequest(String input) {
@@ -7336,7 +7448,10 @@ Rules:
           '할일확인해줘',
           '할일확인',
         ].contains(compact) ||
-        (compact.contains('오늘') &&
+        // 문장 전체가 그 부탁일 때만. 긴 이야기 안에 '할 일'이 스쳐 지나가는
+        // 것까지 붙잡으면, 하려던 말은 못 하고 탭만 열린다.
+        (_isShortDirectRequest(compact, maxChars: 20) &&
+            compact.contains('오늘') &&
             compact.contains('할일') &&
             RegExp(r'(확인|알려|보여|열어|뭐)').hasMatch(compact));
   }
@@ -7351,14 +7466,27 @@ Rules:
     };
   }
 
+  /// 앱이 코치를 부르지 않고 직접 답해도 되는 길이인지.
+  ///
+  /// 이 층은 사용자가 쓴 문장을 코치에게 보내기 전에 가로챈다. 그래서 짧고
+  /// 분명한 부탁에만 걸려야 한다 — 긴 이야기 속에 '시간'이나 '할 일' 같은 말이
+  /// 스쳐 지나가는 것은 부탁이 아니라 문장의 일부다. 그런 문장을 여기서 붙잡으면
+  /// 정작 사용자가 물은 것("내가 잘할 수 있을까?")은 코치에게 닿지 못한다.
+  bool _isShortDirectRequest(String compact, {int maxChars = 25}) =>
+      compact.length <= maxChars;
+
   bool _looksLikeTodayTaskTimeQuestion(String input) {
     final normalized = input.replaceAll(RegExp(r'\s+'), '').toLowerCase();
     if (!normalized.contains('오늘')) return false;
+    if (!_isShortDirectRequest(normalized)) return false;
     if (_asksTodoResetGuide(normalized) ||
         _asksRepeatScheduleGuide(normalized)) {
       return false;
     }
-    return RegExp(r'(몇시|언제|시간|몇시에|몇시부터|몇시쯤)').hasMatch(normalized);
+    // '시간'만으로는 묻는 말이 아니다. "시간이 되면", "시간 없어", "시간 낭비"가
+    // 전부 여기 걸렸다. 묻는 꼴을 갖췄을 때만 받는다.
+    return RegExp(r'(몇시|언제)').hasMatch(normalized) ||
+        RegExp(r'시간(알려|언제|몇|뭐|이야|이지|이니|이에요|예요)').hasMatch(normalized);
   }
 
   List<String> _quotedTaskTerms(String input) {
@@ -7445,10 +7573,6 @@ Rules:
     );
   }
 
-  String _todayTaskTimeNotFoundReply() {
-    return LocalReplyTexts.todayTaskTimeNotFoundReply(widget.coachId);
-  }
-
   bool _hasTaskTimeQueryCue(
     List<String> quotedTerms,
     List<String> queryTokens,
@@ -7473,10 +7597,8 @@ Rules:
               category == 'schedule';
         })
         .toList(growable: false);
-    if (todayTasks.isEmpty) {
-      await _sendTodayTaskTimeNotFoundReply(input);
-      return true;
-    }
+    // 오늘 목록이 비어 있으면 여기서 답할 것이 없다. 코치에게 넘긴다.
+    if (todayTasks.isEmpty) return false;
 
     final scored =
         todayTasks
@@ -7494,10 +7616,11 @@ Rules:
             .where((item) => item.score > 0)
             .toList()
           ..sort((a, b) => b.score.compareTo(a.score));
-    if (scored.isEmpty) {
-      await _sendTodayTaskTimeNotFoundReply(input);
-      return true;
-    }
+    // 물어본 일을 목록에서 못 찾았다. 예전에는 여기서 "못 찾겠다, 할 일 탭
+    // 열어줄게"로 대화를 닫았는데, 그러면 시각을 물은 게 아니었던 사람은 자기
+    // 질문에 대한 답을 영영 못 받는다. 코치는 오늘 할 일을 이미 알고 있으니
+    // 넘기는 편이 낫다.
+    if (scored.isEmpty) return false;
 
     final reply = await UserTitleService.applyForCoach(
       _todayTaskTimeReply(scored.first.task),
@@ -7521,32 +7644,6 @@ Rules:
       usedApi: false,
     );
     return true;
-  }
-
-  Future<void> _sendTodayTaskTimeNotFoundReply(String input) async {
-    final reply = await UserTitleService.applyForCoach(
-      _todayTaskTimeNotFoundReply(),
-      widget.coachId,
-    );
-    setState(() {
-      _messages.add(
-        ChatMessage(text: input, isUser: true, time: DateTime.now()),
-      );
-      _messages.add(
-        ChatMessage(text: reply, isUser: false, time: DateTime.now()),
-      );
-      _suggestedTasks = [];
-      _dynamicChips = [];
-      _suppressDefaultChips = false;
-    });
-    _scrollToBottom();
-    await _saveHistory();
-    await AnalyticsService.logConversationMessage(
-      coachId: widget.coachId,
-      usedApi: false,
-    );
-    await Future.delayed(const Duration(milliseconds: 260));
-    widget.onOpenFeatureLocation?.call('today');
   }
 
   Future<bool> _tryOpenTodayTaskOverview(String input) async {
@@ -7974,6 +8071,9 @@ Rules:
 
   bool _isYesterdayIncompleteQuery(String input) {
     final compact = input.replaceAll(RegExp(r'\s+'), '');
+    // 목록을 달라는 짧은 물음만 받는다. "어제 못한 게 마음에 남았어"에도 세 조건이
+    // 다 들어 있어서, 길이를 안 보면 마음을 털어놓은 사람에게 미완료 목록이 간다.
+    if (!_isShortDirectRequest(compact)) return false;
     return compact.contains('어제') &&
         (compact.contains('미완료') ||
             compact.contains('못한') ||
@@ -9194,6 +9294,9 @@ Rules:
         _asksRepeatScheduleGuide(normalized)) {
       return null;
     }
+    // 날짜를 묻는 짧은 말에만 답한다. '언제'·'날짜'는 긴 문장 속에서도 흔해서,
+    // 길이를 안 보면 "언제쯤 될까 싶어"에도 오늘 날짜를 읊게 된다.
+    if (!_isShortDirectRequest(normalized)) return null;
     final asksDate = RegExp(r'(몇일|며칠|몇월몇일|날짜|언제)').hasMatch(normalized);
     if (!asksDate) return null;
 
@@ -12291,6 +12394,7 @@ Rules:
             await _offerPlannerAction(
               parsed.plannerAction!,
               canRegisterInstead: (parsed.scheduleToConfirm ?? '').isNotEmpty,
+              doneTargets: parsed.doneTargets,
             );
         if (!handled && mounted) {
           _offerRegistrationConfirm(parsed);
@@ -12411,6 +12515,10 @@ Rules:
   _FeatureLocationReply? _featureLocationReply(String rawText) {
     final text = rawText.trim().toLowerCase().replaceAll(' ', '');
     if (text.isEmpty) return null;
+    // 어디 있냐고 묻는 짧은 말만 받는다. 길이를 안 보면 "할 일이 너무 많아서
+    // 어디서부터 손대야 할지 모르겠어"처럼 사연을 털어놓는 문장에도 '어디'와
+    // '할일'이 함께 들어 있어서, 대답 대신 탭이 열린다.
+    if (!_isShortDirectRequest(text, maxChars: 30)) return null;
     if (_isDeletionCommand(rawText)) return null;
     if (TodayGoalTaskIntent.isTodayTaskGoalExpression(rawText)) return null;
 
@@ -12587,17 +12695,18 @@ Rules:
     return null;
   }
 
-  /// 할 일을 완료로 만드는 법을 묻는 말.
+  /// 할 일을 완료로 만드는 법을 **묻는** 말.
   ///
-  /// 끝냈다는 보고는 그냥 대화로 받는다. 코치가 대신 체크해주지도, 탭을 열어
-  /// 데려가지도 않는다 — 잊지 않고 말한 사람이 체크를 못 할 리 없고, 그 자리에
-  /// "여기 있다냥"을 얹으면 축하가 안내로 바뀐다.
+  /// 해달라는 말은 여기 오면 안 된다. 이제 코치가 [DONE] 태그로 확인 카드를
+  /// 띄워주기 때문에, "완료 처리해줘"가 여기 걸리면 눌러서 끝날 일이 "할 일 탭에서
+  /// 미세요"라는 안내로 바뀐다. 그래서 방법을 묻는 말투만 남기고 '표시·처리·누르'는
+  /// 뺐다 — 그 세 개는 부탁하는 문장에 더 자주 들어간다.
   ///
-  /// 다만 어떻게 하는지 물으면 그건 답해준다. 미는 동작은 눌러서는 안 되는
+  /// 미는 동작은 눌러서는 안 되는
   /// 것이라, 처음 쓰는 사람이 스스로 알아내기 어렵다.
   bool _asksTaskCheckGuide(String normalized) {
     if (!RegExp(r'완료|체크|다했|끝냈|끝난').hasMatch(normalized)) return false;
-    return RegExp(r'어떻게|어디서|어디에|방법|하는법|하려면|표시|처리|누르').hasMatch(normalized);
+    return RegExp(r'어떻게|어디서|어디에|방법|하는법|하려면').hasMatch(normalized);
   }
 
   String _featureLocationMessage(String location) {
@@ -12613,6 +12722,10 @@ Rules:
       '',
     );
     if (compact.isEmpty) return false;
+    // 캘린더를 열어달라는 짧은 부탁만 받는다. "내일 일정이 빡세서 오늘 마음
+    // 정리 좀 하고 싶어"에도 '일정'과 '정리'가 함께 있어서, 길이를 안 보면
+    // 그런 말에 캘린더가 열린다.
+    if (!_isShortDirectRequest(compact, maxChars: 20)) return false;
     if (_isDeletionCommand(input) ||
         _isEditCommand(input) ||
         _isScheduleRegistrationCommand(input) ||
@@ -12994,7 +13107,18 @@ Rules:
                 ? '\n[새 활동일용 할 일 - 리셋 후 아직 시작 전]'
                 : '\n[오늘 할 일 현황]',
           );
-          for (final t in allTasks) {
+
+          // 이 목록은 이제 매 턴 실린다. 할 일을 서른 개씩 적어두는 사람에게는
+          // 그것만으로 프롬프트가 기울어서, 실을 개수를 정해둔다. 잘릴 때는
+          // 아직 안 끝난 것부터 남긴다 — 지금 이야기할 거리는 그쪽이다.
+          final listed = allTasks.length <= _taskContextLimit
+              ? allTasks
+              : [
+                  ...allTasks.where((t) => t is Map && t['done'] != true),
+                  ...allTasks.where((t) => t is Map && t['done'] == true),
+                ].take(_taskContextLimit).toList();
+
+          for (final t in listed) {
             final done = t['done'] == true;
             final inProgress = !done && t['inProgress'] == true;
             final timeStr = _taskTimeLabelForPrompt(t);
@@ -13062,6 +13186,17 @@ Rules:
             );
             sb.writeln('*감정 토로 중에는 이 예정 목록을 근거로 압박하거나 일정 조정을 제안하지 말 것.');
           } else {
+            // 개수를 여기서 세어준다. 사용자가 "몇 개 했는지 세어봐"라고 하면
+            // 코치가 목록을 눈으로 세는데, 그러다 "세 개라면"처럼 사용자 말을
+            // 되받는 답이 나온다. 센 값을 주면 그럴 일이 없다.
+            final doneCount = allTasks
+                .where((t) => t is Map && t['done'] == true)
+                .length;
+            sb.writeln(
+              '*오늘 할 일 ${allTasks.length}개 중 $doneCount개 완료, '
+              '${allTasks.length - doneCount}개 남음.'
+              '${listed.length < allTasks.length ? ' (목록에는 미완료 우선 ${listed.length}개만 실림)' : ''}',
+            );
             sb.writeln('*[V] 표시된 항목은 완료됨. 완료 항목은 절대 다시 실행 유도하지 말 것.');
             sb.writeln(
               '*[~] 표시된 항목은 사용자가 이미 시작했지만 아직 완료 전인 상태. "아직 안 했네요"처럼 아예 안 한 것으로 말하지 말고, 이미 시작한 것을 인정하며 마무리를 자연스럽게 격려할 것.',
@@ -14320,11 +14455,15 @@ $resistanceFlowRule'''
     // 한 번도 나오지 않았다. 태그를 붙이라는 말은 다른 태그 규칙들과 같은
     // 자리에, 프롬프트 끝에 있어야 한다 — 가운데 두면 뒤따르는 지시에 묻힌다.
     //
-    // 목록이 실리지 않은 턴에는 붙이지 않는다. 이름을 목록에서 옮겨 적으라고
-    // 해놓고 목록을 안 주면, 코치는 없는 이름을 지어낸다.
-    final plannerActionSection =
-        contextScope.tasks &&
-            CoachContextScopeService.hasPlannerActionSignal(userText)
+    // 늘 붙인다.
+    //
+    // 예전에는 "옮겨줘", "끝냈어" 같은 말이 보일 때만 붙였는데, 그러면 그 목록에
+    // 없는 말로 부탁한 사람에게는 태그 자체가 존재하지 않는 기능이 된다.
+    // "설거지 체크 좀 해줘"에는 '완료'도 '끝냈'도 없다. 붙이는 조건을 목록으로
+    // 관리하는 한 그 목록은 계속 뚫린다.
+    //
+    // 목록이 실려 있어야 이름을 옮겨 적을 수 있는데, 오늘 할 일은 이제 늘 실린다.
+    final plannerActionSection = contextScope.tasks
         ? '\n${Prompts.plannerActionRules(_todayLineForPrompt(now))}'
         : '';
 
@@ -15027,6 +15166,7 @@ ${Prompts.outputRulesTail}$plannerActionSection$coachOfferTaskRule$halmaeHint$re
         if (_coach.isMaster && _timerConfirmMinutes != null)
           _buildTimerConfirmCard(),
         if (_suggestedTasks.isNotEmpty) _buildTaskSuggestCard(),
+        if (_doneConfirm != null) _buildDoneConfirmCard(),
         if (_flirtVisible) _buildFlirtToast(),
       ],
     );
@@ -15090,6 +15230,124 @@ ${Prompts.outputRulesTail}$plannerActionSection$coachOfferTaskRule$halmaeHint$re
     } catch (e) {
       debugPrint('할 일 추가 후 기록 갱신 실패: $e');
     }
+  }
+
+  /// 완료 확인 카드.
+  ///
+  /// 할 일 추가 카드와 같은 자리, 같은 모양이다. 다른 것은 묻는 말과 버튼뿐이다 —
+  /// 채팅에서 뜨는 카드는 전부 "코치가 알아들은 것이 맞는지" 묻는 자리라,
+  /// 생김새가 같아야 무엇을 누르는 건지 헷갈리지 않는다.
+  Widget _buildDoneConfirmCard() {
+    final targets = _doneConfirm;
+    if (targets == null || targets.isEmpty) return const SizedBox.shrink();
+    final accent = _coach.accentColor;
+
+    return Positioned(
+      bottom: 80,
+      left: 16,
+      right: 16,
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFE8E4F0)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.08),
+              blurRadius: 16,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.check_circle_outline, size: 12, color: accent),
+                const SizedBox(width: 4),
+                Text(
+                  targets.length == 1
+                      ? '완료로 표시할까요?'
+                      : '${targets.length}개를 완료로 표시할까요?',
+                  style: GoogleFonts.notoSansKr(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    color: accent,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            for (final target in targets)
+              Padding(
+                padding: EdgeInsets.only(
+                  bottom: target == targets.last ? 0 : 2,
+                ),
+                child: Text(
+                  target.label,
+                  style: GoogleFonts.notoSansKr(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFF1A1A2E),
+                  ),
+                ),
+              ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () => setState(() => _doneConfirm = null),
+                    child: Container(
+                      height: 38,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF3F2F7),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        '아니야',
+                        style: GoogleFonts.notoSansKr(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w800,
+                          color: const Color(0xFF8A8698),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: GestureDetector(
+                    onTap: _confirmDoneCheck,
+                    child: Container(
+                      height: 38,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: accent,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        '완료로 표시',
+                        style: GoogleFonts.notoSansKr(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _buildTaskSuggestCard() {

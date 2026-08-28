@@ -4,10 +4,13 @@
 /// 실어 보낼 때다. 토큰값보다 큰 문제는 지시가 묻히는 것이다. 잡담 한 마디에
 /// 7일 기록과 비전까지 딸려 나가면, 그날 꼭 지켜야 할 한 줄이 그 사이에 파묻힌다.
 ///
-/// 판단은 세 단계다.
+/// 판단하는 것은 목표·비전·기록뿐이고, 세 단계다.
 /// - full: 이번 말이 직접 목표·방향을 물었다. 7일 기록, 실행률, 비전 메모까지 전부.
 /// - light: 직전 말이 목표 얘기였거나 귀찮다고 했다. 목표 제목만.
 /// - none: 그 외. 아무것도 싣지 않는다.
+///
+/// 오늘 할 일은 판단하지 않고 늘 싣는다. 몇 줄짜리라 값이 작고, 없으면 코치가
+/// 사용자의 하루를 통째로 못 보기 때문이다.
 ///
 /// 예전에는 이번 말과 직전 말을 한 줄로 이어 붙여 한 번에 검사했다. 그래서
 /// "오늘 뭐부터 하지?" 다음 턴에 "아 배고파"라고만 해도 전부 다시 실렸다.
@@ -187,21 +190,6 @@ class CoachContextScopeService {
     '감이안',
   ];
 
-  /// 오늘 할 일 목록이 있어야 답할 수 있는 말.
-  static const List<String> taskSignals = [
-    '할일',
-    '일정',
-    '스케줄',
-    '습관',
-    '루틴',
-    '타이머',
-    '미완료',
-    '완료했',
-    '끝냈',
-    '해야돼',
-    '해야해',
-  ];
-
   /// 하기 싫다는 표현. 목표를 얇게 실어서 의미를 짚어줄 수 있게 한다.
   static const List<String> avoidanceSignals = [
     '귀찮',
@@ -238,9 +226,6 @@ class CoachContextScopeService {
     if (goalSignals.any(normalized.contains)) return true;
     return _goalPatterns.any((pattern) => pattern.hasMatch(normalized));
   }
-
-  static bool hasTaskSignal(String text) =>
-      taskSignals.any(_normalize(text).contains) || hasPlannerActionSignal(text);
 
   /// 이미 있는 일정을 옮기거나 끝냈거나 알람을 걸어달라는 말.
   ///
@@ -297,7 +282,6 @@ class CoachContextScopeService {
     required bool isMaster,
     required String currentText,
     String? previousUserText,
-    bool timerAuthorization = false,
   }) {
     // 프렌즈 코치는 목표를 다루지 않는다. 오늘 하루만 본다.
     if (!isMaster) {
@@ -327,10 +311,19 @@ class CoachContextScopeService {
 
     return CoachContextScope(
       goal: goal,
-      tasks:
-          goal != GoalContextScope.none ||
-          timerAuthorization ||
-          hasTaskSignal(currentText),
+      // 오늘 할 일은 늘 싣는다.
+      //
+      // 예전에는 사용자가 쓴 말에서 신호를 찾아 실을지 정했는데, 사람이 쓰는
+      // 말을 목록으로 따라잡을 수가 없었다. "일 다했다구 체크해주삼"에는
+      // '완료했'도 '끝냈'도 없어서 목록이 안 실렸고, 코치는 다 체크해둔 사람에게
+      // "세 개라면 잘한 거다"라고 답했다. 단어를 더 넣어봐야 다음 표현에서 또
+      // 뚫린다.
+      //
+      // 처음에 범위를 나눈 이유는 잡담 한마디에 7일 기록과 비전까지 딸려 나가면
+      // 그날 지켜야 할 지시가 묻히기 때문인데, 그건 큰 덩어리 이야기다. 오늘
+      // 목록은 몇 줄이라 그만한 값을 치르지 않는다. 프렌즈 코치는 처음부터
+      // 이렇게 늘 싣고 있었다.
+      tasks: true,
       avoidanceLink:
           goal == GoalContextScope.light &&
           (currentAvoidance || previousAvoidance),
