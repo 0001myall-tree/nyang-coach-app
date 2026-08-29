@@ -25,7 +25,10 @@ import 'tasks_screen.dart';
 import 'records_screen.dart';
 import 'settings_screen.dart';
 import '../theme/app_design_tokens.dart';
+import '../services/coach_say_service.dart';
+import '../services/plan_feedback_service.dart';
 import '../widgets/app_bottom_sheet.dart';
+import '../widgets/coach_say_bubble.dart';
 import '../widgets/app_button.dart';
 
 // 각 탭 화면 플레이스홀더
@@ -201,6 +204,9 @@ class _MainTabScreenState extends State<MainTabScreen>
   // 공유하는 플래그. 위젯을 연타하거나 화면이 겹쳐 쌓인 상태에서도
   // 이미 열려 있으면 새로 덮어 띄우지 않는다.
   static bool _isPlannerOverlayOpen = false;
+
+  /// 지금 떠 있는 코치 말풍선. 겹치는 자리에 직접 얹기 때문에 손으로 거둔다.
+  OverlayEntry? _coachSayEntry;
   bool _redirectingForCoachAccess = false;
   bool _catWidgetPromptShowing = false;
 
@@ -626,6 +632,15 @@ class _MainTabScreenState extends State<MainTabScreen>
       ),
     );
     _tabCtrl = TabController(length: _screens.length, vsync: this);
+    // 코치가 채팅 밖에서 건네는 말. 어느 화면이 열려 있든 그 위에 뜬다.
+    unawaited(CoachSayService.load());
+    CoachSayService.pending.addListener(_onCoachSay);
+    CoachSayService.unread.addListener(_onCoachSayUnreadChanged);
+    if (_openDrawerIndex == 0) {
+      unawaited(CoachSayService.markRead(widget.coachId));
+    }
+    // 한 주가 통째로 안 풀린 사람에게만, 아침에 한 번. 대개는 아무 일도 없다.
+    unawaited(PlanFeedbackService.maybeMorningPreMortem(coachId: widget.coachId));
     _startMorningCallEngine();
     _startCoreReminderEngine();
     AnalyticsService.logAppOpen();
@@ -672,12 +687,90 @@ class _MainTabScreenState extends State<MainTabScreen>
     _authSubscription?.cancel();
     TasksSyncService.stopRealTimeSync();
     WidgetsBinding.instance.removeObserver(this);
+    CoachSayService.pending.removeListener(_onCoachSay);
+    CoachSayService.unread.removeListener(_onCoachSayUnreadChanged);
+    _removeCoachSayBubble();
     _tabCtrl.dispose();
     _morningCallTimer?.cancel();
     _coreReminderTimer?.cancel();
     MorningCallAlarmSession().stop();
     _audioPlayer.dispose();
     super.dispose();
+  }
+
+  // ── 코치 말풍선 ────────────────────────────────
+  //
+  // 겹치는 자리(root overlay)에 그린다. 그래야 할 일 창처럼 위에 얹힌 화면이
+  // 열려 있어도 그 위에 뜬다. 화면 안에 그리면 그 화면이 가려질 때 같이 가려진다.
+
+  void _onCoachSay() {
+    final say = CoachSayService.pending.value;
+    if (say == null) {
+      _removeCoachSayBubble();
+      return;
+    }
+    // 지금 보고 있는 코치의 말만 띄운다. 다른 코치 것은 NEW로만 남는다.
+    if (say.coachId != widget.coachId) return;
+    // 채팅을 보고 있으면 말이 이미 눈앞에 있다. 같은 말을 두 번 보여줄 이유가 없다.
+    if (_openDrawerIndex == 0 && !_isPlannerOverlayOpen) {
+      unawaited(CoachSayService.markRead(widget.coachId));
+      return;
+    }
+    _showCoachSayBubble(say);
+  }
+
+  void _onCoachSayUnreadChanged() {
+    if (mounted) setState(() {});
+  }
+
+  void _showCoachSayBubble(CoachSay say) {
+    _removeCoachSayBubble();
+    final overlay = Navigator.of(context, rootNavigator: true).overlay;
+    if (overlay == null) return;
+
+    // 알림이 아니라 눈앞에서 일어나는 일이라, 진동이 아니라 툭 하는 정도로.
+    HapticFeedback.lightImpact();
+
+    final entry = OverlayEntry(
+      builder: (_) => CoachSayBubble(
+        text: say.text,
+        accent: _activeColor,
+        avatarAsset: 'assets/images/${say.coachId}.png',
+        onAccept: () {
+          _removeCoachSayBubble();
+          CoachSayService.dismissBubble();
+          _openChatFromCoachSay();
+        },
+        onDecline: () {
+          _removeCoachSayBubble();
+          CoachSayService.dismissBubble();
+          // 알아서 하겠다고 했다. 한동안 먼저 말을 걸지 않는다.
+          unawaited(PlanFeedbackService.onAdviceDeclined());
+        },
+      ),
+    );
+    _coachSayEntry = entry;
+    overlay.insert(entry);
+  }
+
+  void _removeCoachSayBubble() {
+    _coachSayEntry?.remove();
+    _coachSayEntry = null;
+  }
+
+  /// 말풍선을 눌렀다. 열려 있던 창을 닫고 채팅으로 데려간다.
+  void _openChatFromCoachSay() {
+    final navigator = Navigator.of(context, rootNavigator: true);
+    if (_isPlannerOverlayOpen && navigator.canPop()) {
+      navigator.pop();
+    }
+    if (_openDrawerIndex != 0) {
+      setState(() {
+        _openDrawerIndex = 0;
+        _widgetIntentDrawerMode = false;
+      });
+    }
+    unawaited(CoachSayService.markRead(widget.coachId));
   }
 
   @override
@@ -1684,7 +1777,8 @@ class _MainTabScreenState extends State<MainTabScreen>
   ];
 
   List<bool> get _tabNewBadges => [
-    false,
+    // 코치가 채팅 밖에서 남긴 말을 아직 안 봤다.
+    CoachSayService.unread.value.contains(widget.coachId),
     false,
     _hasMasterPlanForRecordsBadge && _showRecordsNewBadge,
     false,
@@ -1698,6 +1792,8 @@ class _MainTabScreenState extends State<MainTabScreen>
   void _onTabTapped(int index) {
     _loadBgStyle();
     if (index == 0) {
+      // 채팅을 열었으니 코치가 남긴 말은 이제 눈앞에 있다.
+      unawaited(CoachSayService.markRead(widget.coachId));
       if (_openDrawerIndex != 0) {
         HapticFeedback.lightImpact();
         setState(() {
@@ -1730,6 +1826,7 @@ class _MainTabScreenState extends State<MainTabScreen>
   }
 
   Future<void> _closeDrawerAndCheck() async {
+    unawaited(CoachSayService.markRead(widget.coachId));
     setState(() {
       _openDrawerIndex = 0;
       _widgetIntentDrawerMode = false;

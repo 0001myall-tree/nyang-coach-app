@@ -482,8 +482,13 @@ class _RecordsScreenState extends State<RecordsScreen> {
         'temperature': 0.5,
       });
       final feedbackText = (response.data['content'] as String? ?? '')
-          .replaceAll(RegExp(r'\*\*(.*?)\*\*'), r'$1')
-          .replaceAll(RegExp(r'\*(.*?)\*'), r'$1')
+          // replaceAll은 그룹 참조를 문자 그대로 넣는다. 이대로 두면 강조
+          // 표시를 쓴 자리에 "$1"이 찍혀 나간다.
+          .replaceAllMapped(
+            RegExp(r'\*\*(.*?)\*\*'),
+            (match) => match.group(1)!,
+          )
+          .replaceAllMapped(RegExp(r'\*(.*?)\*'), (match) => match.group(1)!)
           .replaceAll(RegExp(r'^#{1,6}\s+', multiLine: true), '')
           .trim();
 

@@ -19,6 +19,8 @@ import 'package:nyang_coach/services/analytics_service.dart';
 import 'package:nyang_coach/services/master_unlock_notice.dart';
 import 'package:nyang_coach/services/api_usage_limit_service.dart';
 import 'package:nyang_coach/services/apple_calendar_sync_service.dart';
+import 'package:nyang_coach/services/coach_say_service.dart';
+import 'package:nyang_coach/services/execution_pattern_service.dart';
 import 'package:nyang_coach/services/task_completion_service.dart';
 import 'package:nyang_coach/services/tasks_sync_service.dart';
 import 'package:nyang_coach/services/user_title_service.dart';
@@ -1306,8 +1308,11 @@ class _ChatScreenState extends State<ChatScreen>
   late AnimationController _flirtAnim;
 
   // 할 일 서랍
-  /// 끝냈다는 말에 띄우는 확인 카드. 누르면 이 항목들이 완료로 찍힌다.
+  /// 체크해달라는 부탁에 띄우는 확인 카드. 누르면 이 항목들이 완료로 찍힌다.
   List<({String id, String label})>? _doneConfirm;
+
+  /// 카드에 이름을 몇 개까지 보여줄지. 나머지는 "외 N개"로 접는다.
+  static const int _doneConfirmNameLimit = 5;
 
   // 타이머 확인 버튼
   int? _timerConfirmMinutes;
@@ -1429,6 +1434,14 @@ class _ChatScreenState extends State<ChatScreen>
       duration: const Duration(milliseconds: 350),
     );
     widget.controller?._attach(this);
+    // 코치가 채팅 밖에서 건네는 말을 이 화면이 받아 적는다.
+    //
+    // 이 화면은 저장할 때 자기가 들고 있는 목록을 통째로 덮어쓴다. 살아 있는
+    // 동안 저장소에 직접 써넣으면 다음 저장에서 그 줄이 조용히 사라진다.
+    CoachSayService.registerSink(
+      widget.coachId,
+      (text) => _injectAiMessage(text, kind: 'auto:say'),
+    );
     _initAndLoad();
   }
 
@@ -1920,6 +1933,15 @@ class _ChatScreenState extends State<ChatScreen>
       '노력이날아갈까',
       '노력이무너질까',
       '노력이헛',
+      // 자기 의심. "오늘 이거 하기로 했는데 내가 과연 할 수 있을까?"가 여기
+      // 안 걸려서, 위로가 필요한 자리에 플래너 조작 규칙이 실려 나갔다.
+      '할수있을까',
+      '해낼수있을까',
+      '해낼수있을지',
+      '할수있을지',
+      '자신없',
+      '내가과연',
+      '잘해낼수',
     ];
     return signals.any(normalized.contains);
   }
@@ -2301,11 +2323,12 @@ class _ChatScreenState extends State<ChatScreen>
   }) async {
     if (!_userData.isPlanActive) return false;
 
-    // 끝냈다는 말은 그 자리에서 체크할 수 있게 카드를 띄운다.
+    // 체크해달라는 부탁에는 그 자리에서 카드를 띄운다.
     //
     // 값을 대신 바꾸지 않는다는 원칙은 그대로다 — 누르는 것은 사용자고, 앱은
-    // 코치가 짚은 것이 맞는지 묻기만 한다. 다만 다 해놓고 말한 사람에게
-    // "할 일 탭에서 미세요"를 돌려주면, 이미 한 일을 한 번 더 시키는 셈이다.
+    // 코치가 짚은 것이 맞는지 묻기만 한다. 부탁받았을 때만 손대는 것도 같다.
+    // 끝냈다는 이야기 자체는 그냥 대화로 받는다. 미는 그 한 번이 하루를 닫는
+    // 자리이기도 하고, "일 다 끝났어"가 퇴근했다는 뜻일 수도 있어서다.
     if (action.kind == PlannerActionKind.done) {
       return _offerDoneCheck(action, doneTargets);
     }
@@ -2383,9 +2406,9 @@ class _ChatScreenState extends State<ChatScreen>
     return true;
   }
 
-  /// 끝냈다는 말에 확인 카드를 띄운다. 띄웠으면 true.
+  /// 체크해달라는 부탁에 확인 카드를 띄운다. 띄웠으면 true.
   ///
-  /// "다 했어"처럼 여러 개를 한 번에 말하면 코치가 태그를 여러 개 붙인다.
+  /// "다 체크해줘"처럼 여러 개를 한 번에 부탁하면 코치가 태그를 여러 개 붙인다.
   /// 카드는 한 장이고 그 안에 이름이 나란히 선다 — 세 번 물으면 그 자체가
   /// 일이 된다.
   ///
@@ -3705,6 +3728,7 @@ ${lines.join('\n')}
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     widget.controller?._detach();
+    CoachSayService.unregisterSink(widget.coachId);
     _ctrl.dispose();
     _scrollCtrl.dispose();
     _flirtAnim.dispose();
@@ -7046,6 +7070,9 @@ Rules:
     }
     // 문장 사이에 있던 태그를 떼면 공백이 두 칸 남는다. 줄바꿈은 건드리지 않는다.
     text = text.replaceAll(RegExp(r'[ \t]{2,}'), ' ');
+
+    // 태그가 있던 자리에 문장부호만 남는 일이 있다.
+    text = ChatBubbleFormat.tidyAfterTags(text);
 
     // 긴 문장 뒤에는 줄을 바꾼다. 태그를 다 떼어낸 뒤라야 문장 끝을 제대로
     // 찾는다 — [CHIPS: …]가 붙어 있으면 그게 마지막 문장에 매달려 있다.
@@ -12855,6 +12882,7 @@ Rules:
   Future<String> _buildContextString(
     String userText, {
     CoachContextScope? scope,
+    bool resistanceTurn = false,
   }) async {
     final tier = _coach.tier; // 'friends' | 'master'
     final prefs = await SharedPreferences.getInstance();
@@ -13598,6 +13626,25 @@ Rules:
       sb.writeln(
         '- 타이머가 도움이 될 수 있어도 말로만 짧게 열어두세요. 예: "시작 사인이 필요하면 타이머도 켜줄 수 있으니까, 필요하면 말해달라냥." 이 경우에는 [TIMER_CONFIRM]을 붙이지 않습니다.',
       );
+    }
+
+    // 16. 이 사람이 어떻게 실행하는 사람인지. 앱이 최근 이레 기록에서 센 값이다.
+    //
+    // 실행 저항 개입과 다루는 단위가 다르다. 저쪽은 지금 이 일 하나를 어떻게
+    // 시작할지고, 이쪽은 요즘 이 사람의 방식 — 계획량, 걸리는 시간을 어떻게
+    // 어림하는지, 언제 첫 발을 떼는지다.
+    //
+    // 그래서 저항 턴에는 싣지 않는다. 지금 못 움직이겠다는 사람에게 한 주
+    // 경향은 나중 이야기고, 두 층이 한 답에 섞이면 "5분만 해보자" 옆에
+    // "요즘 계획을 많이 세우시네요"가 나란히 선다.
+    //
+    // 마스터에만 준다. 프렌즈는 오늘 하루만 보는 자리라, 일주일치 경향을
+    // 쥐여주면 압박 없는 자리라는 전제가 깨진다.
+    //
+    // 코치에게 "패턴을 찾아 활용하라"고 시키지 않는 이유는 하나다. 그러면
+    // 볼 것이 없는 턴에도 패턴을 지어낸다. 셀 수 있는 것은 앱이 센다.
+    if (_coach.isMaster && !resistanceTurn) {
+      sb.write(await ExecutionPatternService.promptBlock());
     }
 
     return sb.toString();
@@ -14447,7 +14494,11 @@ $resistanceFlowRule'''
     var contextScope = _resolveContextScope(userText);
     var contextString = useVisionNewActionContext
         ? await _buildVisionNewActionContextString()
-        : await _buildContextString(userText, scope: contextScope);
+        : await _buildContextString(
+            userText,
+            scope: contextScope,
+            resistanceTurn: shouldIncludeResistanceInterventionSection,
+          );
     // 일정을 건드려달라는 말이 나온 턴에만 조작 규칙을 붙인다. 매 턴 실으면
     // 잡담에도 태그가 붙고, 무엇보다 그 턴의 다른 지침을 밀어낸다.
     //
@@ -14463,7 +14514,17 @@ $resistanceFlowRule'''
     // 관리하는 한 그 목록은 계속 뚫린다.
     //
     // 목록이 실려 있어야 이름을 옮겨 적을 수 있는데, 오늘 할 일은 이제 늘 실린다.
-    final plannerActionSection = contextScope.tasks
+    //
+    // 다만 마음을 털어놓는 턴에는 빼둔다. "오늘 이거 하기로 했는데 내가 할 수
+    // 있을까?"는 일정을 건드려달라는 말이 아니라 불안을 말하는 것인데, 규칙이
+    // 실려 있으면 코치가 거기에 태그를 붙이고 앱이 "그건 목록에 없다냥"으로
+    // 받는다. 위로가 필요한 자리에서 제일 나쁜 답이다.
+    //
+    // 감정 상황을 막는 줄이 출력 규칙에도 있지만 그쪽은 [TASK]와
+    // [TIMER_CONFIRM]만 가린다. 규칙을 통째로 빼면 그 태그들도 함께 막힌다.
+    final emotionalTurn =
+        isSelfHarmRiskTurn || isResultAnxietyTurn || isThoughtOverloadTurn;
+    final plannerActionSection = contextScope.tasks && !emotionalTurn
         ? '\n${Prompts.plannerActionRules(_todayLineForPrompt(now))}'
         : '';
 
@@ -14776,6 +14837,7 @@ ${Prompts.outputRulesTail}$plannerActionSection$coachOfferTaskRule$halmaeHint$re
         contextString = await _buildContextString(
           userText,
           scope: contextScope,
+          resistanceTurn: shouldIncludeResistanceInterventionSection,
         );
         content = await request(assemble(contextString, ''));
       }
@@ -15162,11 +15224,18 @@ ${Prompts.outputRulesTail}$plannerActionSection$coachOfferTaskRule$halmaeHint$re
           Positioned(top: 76, left: 28, child: _buildCheatKeyMenu()),
         ],
         if (_coach.isMaster && _memoSearchOpen) _buildMemoSearchPanel(),
-        // 타이머 확인 버튼
+        // 확인 카드는 한 번에 한 장만.
+        //
+        // 셋이 같은 자리에 그려져서, 한 답변에 태그가 둘 오면 그대로 포개진다.
+        // 순서는 안 떴을 때 잃는 것이 큰 쪽부터다 — 타이머는 사용자가 직접
+        // 부탁한 것이라 안 뜨면 부탁이 증발하고, 완료 체크는 안 떠도 할 일
+        // 탭에서 밀면 되고, 할 일 제안은 코치가 먼저 꺼낸 것이라 제일 가볍다.
         if (_coach.isMaster && _timerConfirmMinutes != null)
-          _buildTimerConfirmCard(),
-        if (_suggestedTasks.isNotEmpty) _buildTaskSuggestCard(),
-        if (_doneConfirm != null) _buildDoneConfirmCard(),
+          _buildTimerConfirmCard()
+        else if (_doneConfirm != null)
+          _buildDoneConfirmCard()
+        else if (_suggestedTasks.isNotEmpty)
+          _buildTaskSuggestCard(),
         if (_flirtVisible) _buildFlirtToast(),
       ],
     );
@@ -15282,11 +15351,12 @@ ${Prompts.outputRulesTail}$plannerActionSection$coachOfferTaskRule$halmaeHint$re
               ],
             ),
             const SizedBox(height: 4),
-            for (final target in targets)
+            // 이름은 다섯 개까지만. "오늘 거 다 체크해줘"에 열 줄이 올라오면
+            // 카드가 화면 절반을 덮는다. 어차피 다 체크할 것이라 전부 읽을
+            // 이유가 없고, 몇 개인지만 보이면 된다.
+            for (final target in targets.take(_doneConfirmNameLimit))
               Padding(
-                padding: EdgeInsets.only(
-                  bottom: target == targets.last ? 0 : 2,
-                ),
+                padding: const EdgeInsets.only(bottom: 2),
                 child: Text(
                   target.label,
                   style: GoogleFonts.notoSansKr(
@@ -15294,6 +15364,15 @@ ${Prompts.outputRulesTail}$plannerActionSection$coachOfferTaskRule$halmaeHint$re
                     fontWeight: FontWeight.w700,
                     color: const Color(0xFF1A1A2E),
                   ),
+                ),
+              ),
+            if (targets.length > _doneConfirmNameLimit)
+              Text(
+                '외 ${targets.length - _doneConfirmNameLimit}개',
+                style: GoogleFonts.notoSansKr(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w700,
+                  color: const Color(0xFF8A8698),
                 ),
               ),
             const SizedBox(height: 10),

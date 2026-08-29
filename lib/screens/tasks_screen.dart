@@ -18,6 +18,7 @@ import '../services/memory_service.dart';
 import '../services/task_resistance_service.dart';
 import '../models/user_data.dart';
 import '../services/notification_service.dart';
+import '../services/plan_feedback_service.dart';
 import '../services/tasks_sync_service.dart';
 import '../services/analytics_service.dart';
 import '../services/api_usage_limit_service.dart';
@@ -4050,6 +4051,17 @@ class _TasksScreenState extends State<TasksScreen>
     });
     _saveTasks();
     _todayInputCtrl.clear();
+
+    // 방금 적은 계획을 두고 코치가 한 마디 건넬 자리인지 본다. 대개는 아무
+    // 일도 일어나지 않는다 — 이틀에 한 번까지고, 짚을 것이 있는지는 코치가
+    // 다시 판단한다.
+    unawaited(
+      PlanFeedbackService.onTaskSaved(
+        coachId: widget.coachId,
+        taskText: finalTitle,
+        hasTime: timeStartStr != null,
+      ),
+    );
   }
 
   // ── toggleTask (웹앱 그대로) ──────────────────────────────

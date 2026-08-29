@@ -4,6 +4,8 @@ import 'package:nyang_coach/services/chat_bubble_format.dart';
 String wrap(String text) => ChatBubbleFormat.wrap(text);
 
 void main() {
+  _tidyAfterTagsTests();
+
   group('긴 문장 뒤에는 줄을 바꾼다', () {
     test('앞 문장이 길면 다음 문장이 새 줄로 간다', () {
       expect(
@@ -80,6 +82,38 @@ void main() {
       // runes로 안 세면 이모지 하나가 둘로 잡혀 짧은 문장이 길다고 판정된다.
       const short = '수고했어요 🌸.'; // 이모지 포함 9자
       expect(wrap('$short 오늘은 여기까지.'), '$short 오늘은 여기까지.');
+    });
+  });
+}
+
+void _tidyAfterTagsTests() {
+  group('태그를 뗀 자리', () {
+    test('문장 끝에 남은 쉼표를 치운다', () {
+      // 실제로 나갔던 답변이다. "[TASK: …]," 에서 태그만 떼면 쉼표가 남는다.
+      expect(
+        ChatBubbleFormat.tidyAfterTags('두 번째는 좀 더 쉬워진다냥. ,'),
+        '두 번째는 좀 더 쉬워진다냥.',
+      );
+    });
+
+    test('부호 앞에 벌어진 공백을 붙인다', () {
+      expect(ChatBubbleFormat.tidyAfterTags('알겠다냥 .'), '알겠다냥.');
+    });
+
+    test('줄 끝에 남은 부호를 치운다', () {
+      expect(ChatBubbleFormat.tidyAfterTags('오늘도 잘했다냥ㅋㅋ ,'), '오늘도 잘했다냥ㅋㅋ');
+    });
+
+    test('멀쩡한 문장은 건드리지 않는다', () {
+      const line = '설거지, 빨래 둘 다 했구나. 오늘 잘했다냥!';
+      expect(ChatBubbleFormat.tidyAfterTags(line), line);
+    });
+
+    test('여러 줄에서도 각 줄 끝을 본다', () {
+      expect(
+        ChatBubbleFormat.tidyAfterTags('첫 줄이다냥 ,\n둘째 줄이다냥.'),
+        '첫 줄이다냥\n둘째 줄이다냥.',
+      );
     });
   });
 }

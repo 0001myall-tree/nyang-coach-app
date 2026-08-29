@@ -22,6 +22,29 @@ class ChatBubbleFormat {
   /// "오후 3시"의 마침표에 걸리지 않는다.
   static final RegExp _sentenceBreak = RegExp(r'(?<=[.!?…~])[ \t]+');
 
+  /// 태그를 떼어낸 자리에 남은 문장부호를 치운다.
+  ///
+  /// "쉬워진다냥. [TASK: 책 한 페이지 읽기]," 같은 답변에서 태그를 떼면
+  /// "쉬워진다냥. ,"가 남는다. 화면에는 코치가 말을 하다 만 것으로 보인다.
+  static String tidyAfterTags(String text) {
+    // replaceAll은 $1 같은 그룹 참조를 문자 그대로 넣는다. 여기서는
+    // replaceAllMapped를 써야 앞 글자를 되살릴 수 있다.
+    return text
+        // 문장 끝에 홀로 남은 부호. "…다냥. ," → "…다냥."
+        .replaceAllMapped(
+          RegExp(r'([.!?…])\s*[,·/]+'),
+          (match) => match.group(1)!,
+        )
+        // 부호 앞의 공백. "…다냥 ." → "…다냥."
+        .replaceAllMapped(
+          RegExp(r'[ \t]+([,.!?…])'),
+          (match) => match.group(1)!,
+        )
+        // 줄 끝에 남은 부호. "…다냥ㅋㅋ ," → "…다냥ㅋㅋ"
+        .replaceAll(RegExp(r'[,·/]+[ \t]*$', multiLine: true), '')
+        .trim();
+  }
+
   static String wrap(String text) {
     // 코치가 이미 줄을 나눠 보냈으면 그 뜻을 존중한다. 거기에 또 넣으면
     // 문단 사이가 벌어져 답변이 띄엄띄엄해 보인다.
