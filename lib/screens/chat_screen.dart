@@ -14662,7 +14662,7 @@ $habitAutomationSection
 
 ${Prompts.outputRulesHead}
 $timerOutputRule
-${Prompts.outputRulesTail}$plannerActionSection$coachOfferTaskRule$halmaeHint$resistanceTurnDirective$contextRequestRule$masterStyleRule''';
+${Prompts.outputRulesTail}$plannerActionSection$coachOfferTaskRule${Prompts.corePickHint}$halmaeHint$resistanceTurnDirective$contextRequestRule$masterStyleRule''';
 
       // 마스터 코치는 하드코딩된 "대표님"을 사용자가 지정한 호칭으로 치환한다.
       // baseSystemPrompt 뒤에 이어붙인 모든 조각까지 함께 반영된다.
