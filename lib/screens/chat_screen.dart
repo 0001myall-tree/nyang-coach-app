@@ -5053,6 +5053,22 @@ ${lines.join('\n')}
       return true;
     }
 
+    // 하는 날과 안 하는 날이 갈리는 사람에게는 무엇이 달랐는지 묻는다.
+    //
+    // 짐작하지 않는다. 요일이나 시간대로 맞혀보려면 몇 주가 필요하고 그마저도
+    // 우연과 구분이 안 되는데, 본인은 이미 알고 있다.
+    if (_isAllOrNothing(prefs) &&
+        await LifeContextService.mayAskCondition()) {
+      if (!mounted) return false;
+      _injectAiMessage(
+        _greetingBuilder.buildConditionAsk(),
+        kind: _masterConditionAskKind,
+        choices: _conditionAskLabels,
+      );
+      unawaited(AnalyticsService.logFeatureUsage('master_condition_ask'));
+      return true;
+    }
+
     // 오늘 것을 묻는 것은 정오부터다. 오전에는 아직 하지 않았다는 말이
     // 재촉으로만 들린다.
     if (now.hour < _masterCoreAskFromHour) return false;
@@ -5655,6 +5671,41 @@ Rules:
     sb.writeln('*다른 이야기로 넘어갔다면 해당 이야기의 맥락에 맞춰 새로 반응해주세요.');
   }
 
+  /// 하는 날엔 다 하고, 안 하는 날엔 아예 손도 안 대는 사람인지.
+  ///
+  /// 완료율만 보면 절반쯤 하는 사람으로 읽히는데, 날짜별로 보면 100%인 날과
+  /// 0%인 날로 갈리는 경우가 있다. 그 사람에게 "계획을 줄여보자"고 하면
+  /// 완전히 빗나간다 — 하는 날에는 세 개도 다 해내기 때문이다. 걸린 것은
+  /// 양이 아니라 시작 여부다.
+  ///
+  /// 양쪽 날이 두 번씩은 있어야 본다. 하루씩으로는 그날 사정과 구분이 안 된다.
+  bool _isAllOrNothing(SharedPreferences prefs) {
+    final from = DateTime.now().subtract(const Duration(days: 21));
+    final today = _dateKeyOf(DateTime.now());
+    var fullDays = 0;
+    var zeroDays = 0;
+    for (final record in _decodeMapList(prefs.getString('nyang_history'))) {
+      final date = DateTime.tryParse(record['date']?.toString() ?? '');
+      if (date == null || date.isBefore(from)) continue;
+      if (_dateKeyOf(date) == today || record['isVacation'] == true) continue;
+      final tasks = (record['tasks'] as List?) ?? const [];
+      if (tasks.isEmpty) continue;
+      var done = 0;
+      var total = 0;
+      for (final task in tasks) {
+        if (task is! Map) continue;
+        total++;
+        if (task['done'] == true) done++;
+      }
+      if (total == 0) continue;
+      if (done == total) fullDays++;
+      if (done == 0) zeroDays++;
+    }
+    return fullDays >= 2 && zeroDays >= 2;
+  }
+
+  String _dateKeyOf(DateTime at) => '${at.year}-${at.month}-${at.day}';
+
   /// 오늘 목록에 있는데 지난 며칠 기록에도 못 끝낸 채로 남아 있던 일.
   ///
   /// 이월된 일은 코치가 계획을 적는 자리에서 챙길 수가 없다. 사용자가 오늘
@@ -5814,6 +5865,15 @@ Rules:
     _masterCoreStartedLabel,
     _masterCoreBurdenLabel,
     _masterCoreBusyLabel,
+  ];
+
+  /// 실행되는 날에 무엇이 달랐는지 묻는 발화.
+  static const _masterConditionAskKind = 'auto:master_condition';
+
+  static const _conditionOtherLabel = '다른 이유가 있어';
+  static final List<String> _conditionAskLabels = [
+    ...LifeContextService.conditionAnswers.keys,
+    _conditionOtherLabel,
   ];
 
   /// 시작해두고 완료가 안 된 일을 저녁에 물어보는 발화.
@@ -16972,6 +17032,9 @@ ${Prompts.outputRulesTail}$plannerActionSection$coachOfferTaskRule$halmaeHint$re
     if (msg.kind == _masterStalledGreetingKind && msg.choices.isNotEmpty) {
       return _buildChoiceBubbleCard(msg, _handleMasterStalledAskChoice);
     }
+    if (msg.kind == _masterConditionAskKind && msg.choices.isNotEmpty) {
+      return _buildChoiceBubbleCard(msg, _handleConditionAskChoice);
+    }
     if (msg.kind == 'grooming_care_choice') {
       return _buildGroomingCareChoiceCard(msg);
     }
@@ -17813,6 +17876,31 @@ ${Prompts.outputRulesTail}$plannerActionSection$coachOfferTaskRule$halmaeHint$re
           ? '며칠째 넘기고 있는 일이 부담돼서 아직 시작을 못 하고 있어'
           : '오늘 핵심으로 잡은 일이 부담돼서 아직 시작을 못 하고 있어',
     );
+  }
+
+  /// 실행되는 날에 무엇이 달랐는지 물은 뒤 누른 버튼을 처리한다.
+  ///
+  /// 고른 답은 그대로 저장해 앞으로 계획 이야기를 할 때 코치가 참고한다.
+  /// 다른 이유가 있다고 하면 대화로 받는다 — 목록에 없는 답이 그 사람에게는
+  /// 제일 중요한 답일 수 있다.
+  Future<void> _handleConditionAskChoice(String label) async {
+    if (_isLoading) return;
+    HapticFeedback.lightImpact();
+
+    if (label == _conditionOtherLabel) {
+      await LifeContextService.saveConditionAnswer(null);
+      await AnalyticsService.logFeatureUsage('master_condition_other');
+      await _send(
+        label,
+        apiInputOverride: '내가 계획을 해내는 날과 아예 손도 못 대는 날이 갈리는데, 그 차이가 뭔지 같이 찾아보고 싶어',
+      );
+      return;
+    }
+
+    _injectUserChoice(label);
+    await LifeContextService.saveConditionAnswer(label);
+    await AnalyticsService.logFeatureUsage('master_condition_answered');
+    _injectAiMessage(_greetingBuilder.buildConditionReply());
   }
 
   /// 시작해두고 멈춘 것 같은 일을 물은 뒤 누른 버튼을 처리한다.

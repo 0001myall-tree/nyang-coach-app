@@ -214,6 +214,56 @@ class LifeContextService {
     return out;
   }
 
+  /// 실행되는 날에 무엇이 달랐는지. 사용자가 골라준 답을 그대로 들고 있다.
+  ///
+  /// 기록만 보면 어느 날 되고 어느 날 안 되는지는 보이는데 왜 그런지는 보이지
+  /// 않는다. 요일이나 시간대로 짐작할 수도 있지만, 몇 주치가 쌓여야 하고
+  /// 그마저도 우연과 구분이 안 된다. 본인은 알고 있으니 고르게 하면 된다.
+  static const String _conditionKey = 'life_execution_condition';
+  static const String _conditionAtKey = 'life_execution_condition_at';
+
+  /// 한 번 물으면 이만큼은 다시 묻지 않는다.
+  ///
+  /// 두 주다. 답이 한 번 나오면 그걸로 오래 갈 것 같지만, 되는 조건은 사는
+  /// 모양이 바뀌면 같이 바뀐다. 그렇다고 자주 물으면 같은 질문을 반복하는
+  /// 코치가 된다.
+  static const Duration conditionAskInterval = Duration(days: 14);
+
+  /// 고를 수 있는 답과, 코치에게 넘길 한 줄.
+  static const Map<String, String> conditionAnswers = {
+    '일하러 가는 날이었어': '일하러 나가는 날에 오히려 잘 굴러가는 편. 하루에 틀이 있는 날이 실행되는 날임.',
+    '장소가 달랐어': '집이 아닌 곳(카페 같은)에서 실행됨. 장소가 바뀌면 시작이 쉬워지는 사람.',
+    '일찍 시작했어': '그날 첫 발을 일찍 뗀 날에 끝까지 감. 시작 시각이 그날을 가름.',
+    '계획을 미리 세워뒀어': '전날이나 아침에 미리 정해둔 날에 실행됨. 그 자리에서 정하는 날은 잘 안 됨.',
+    '수면 시간이 달랐어': '잘 잔 날에 실행됨. 그날의 실행 여부가 전날 밤에 갈리는 사람.',
+  };
+
+  /// 골라둔 답이 있으면 코치에게 넘길 한 줄. 없으면 빈 문자열.
+  static Future<String> executionConditionLine() async {
+    final prefs = await SharedPreferences.getInstance();
+    final answer = prefs.getString(_conditionKey);
+    final line = conditionAnswers[answer];
+    if (line == null) return '';
+    return '- 실행되는 날의 조건(사용자가 직접 고른 것): $line';
+  }
+
+  /// 아직 물어본 적이 없거나, 물어본 지 한참 지났는지.
+  static Future<bool> mayAskCondition() async {
+    final prefs = await SharedPreferences.getInstance();
+    final at = DateTime.tryParse(prefs.getString(_conditionAtKey) ?? '');
+    if (at == null) return true;
+    return DateTime.now().difference(at) >= conditionAskInterval;
+  }
+
+  /// 골랐다. 답을 모르겠다고 해도 물어본 것은 물어본 것이라 시각을 남긴다.
+  static Future<void> saveConditionAnswer(String? answer) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_conditionAtKey, DateTime.now().toIso8601String());
+    if (answer != null && conditionAnswers.containsKey(answer)) {
+      await prefs.setString(_conditionKey, answer);
+    }
+  }
+
   /// 이 말에서 읽히는 생활들. 없으면 빈 집합.
   static Set<String> kindsIn(String text) {
     final found = <String>{};

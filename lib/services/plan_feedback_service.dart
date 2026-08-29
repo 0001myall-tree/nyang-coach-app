@@ -804,14 +804,15 @@ class PlanFeedbackService {
     return '지금 $label $hour시.$left';
   }
 
-  /// 최근 며칠의 완료율과 하루 평균 완료 개수. 오늘은 빼고 센다.
+  /// 최근 며칠의 완료율과, 해낸 날 기준 하루 완료 개수. 오늘은 빼고 센다.
   ///
   /// 오늘 것은 아직 끝나지 않았다. 진행 중인 일을 실패로 세면 하루가 저물기
   /// 전에는 누구나 완료율이 낮은 사람이 된다.
   ///
-  /// 평균을 낼 때는 계획을 적은 날만 분모에 넣는다. 안 적은 날까지 나누면
-  /// 며칠에 한 번 적고 그날은 다 해내는 사람이 "하루 0.6개 하는 사람"이
-  /// 되어, 다섯 개만 잡아도 많다는 말을 듣는다.
+  /// 평균은 하나라도 해낸 날만 나눈다. 아무것도 못 한 날은 이 사람이 하루에
+  /// 얼마나 할 수 있는지와 상관이 없다 — 그건 양의 문제가 아니라 시작하지
+  /// 못한 날의 문제다. 그 날들까지 나누면, 하는 날에는 세 개씩 해내는 사람이
+  /// "하루 한 개 하는 사람"이 되어 두어 개만 잡아도 많다는 말을 듣는다.
   static _RecentRates _recentRates(
     SharedPreferences prefs, {
     required int days,
@@ -819,18 +820,20 @@ class PlanFeedbackService {
     final today = _todayKey();
     var total = 0;
     var done = 0;
-    var plannedDays = 0;
+    var activeDays = 0;
     for (final record in _history(prefs, days: days)) {
       final date = DateTime.tryParse(record['date']?.toString() ?? '');
       if (date == null || _dayKey(date) == today) continue;
       final tasks = (record['tasks'] as List?) ?? const [];
       if (tasks.isEmpty) continue;
-      plannedDays++;
+      var dayDone = 0;
       for (final task in tasks) {
         if (task is! Map) continue;
         total++;
-        if (task['done'] == true) done++;
+        if (task['done'] == true) dayDone++;
       }
+      done += dayDone;
+      if (dayDone > 0) activeDays++;
     }
     if (total == 0) {
       return const _RecentRates(hasData: false, rate: 0, doneAverage: 0);
@@ -838,7 +841,7 @@ class PlanFeedbackService {
     return _RecentRates(
       hasData: true,
       rate: done / total,
-      doneAverage: done / plannedDays,
+      doneAverage: activeDays == 0 ? 0 : done / activeDays,
     );
   }
 
@@ -899,6 +902,7 @@ class PlanFeedbackService {
     final rate = (recent.rate * 100).round();
     final slackAdvice = await _nextSlackAdvice();
     final life = await LifeContextService.promptLine();
+    final condition = await LifeContextService.executionConditionLine();
     final splitPhrase = await _nextSplitPhrase();
 
     final situation = switch (kind) {
@@ -906,7 +910,7 @@ class PlanFeedbackService {
         '''[이번에 할 이야기 - 잘 되고 있는 사람]
 최근 이레 완료율 $rate% (오늘 제외). 적어둔 것을 대체로 해내는 사람임.
 방금 적은 일: '$taskText'${hasTime ? '' : ' (시각을 정해두지 않음)'}
-오늘 계획 $todayCount개, 계획을 적은 날 기준 하루 평균 완료 ${recent.doneAverage.toStringAsFixed(1)}개.
+오늘 계획 $todayCount개. 하나라도 해낸 날 기준으로 하루 ${recent.doneAverage.toStringAsFixed(1)}개를 끝내는 사람임.
 해내고 있다는 것을 먼저 인정하는 데서 시작할 것.
 그다음 무엇이 도움이 될지 하나만 고를 것.
 - 가서 하고 오면 끝나는 볼일('미용실 가기', '병원 가기', '장 보기')이면 손댈 것 없음. SKIP.
@@ -952,7 +956,9 @@ $slackAdvice
 ${_clockNote(DateTime.now())}
 $todaySummary
 $life
+$condition
 *이건 무엇을 말할지 고르는 데만 쓸 것. 문장에 옮기지 말 것. 다만 낮에 일이나 수업이 있는 사람이면 남은 시간을 그만큼 덜 잡을 것.
+*실행되는 날의 조건이 적혀 있으면 그쪽으로 거들 것. 본인이 직접 고른 답이라 짐작이 아니고, 계획을 다듬는 어떤 말보다 이 사람에게 잘 듣는다.
 
 [이 계획의 지난 자취]
 $historyNote

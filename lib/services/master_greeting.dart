@@ -288,6 +288,16 @@ class GreetingVoice {
   /// 수 있다. 그래서 묻되, 왜 묻는지(표시가 비어 있다는 것)를 밝힌다.
   final List<String> coreAsk;
 
+  /// 하는 날과 안 하는 날이 갈리는 사람에게, 무엇이 달랐는지 묻는 말.
+  ///
+  /// 못 한 날을 나무라지 않는다. 하는 날에는 잡은 것을 다 해내는 사람이라
+  /// 양이나 구체성이 걸린 것이 아니다. 걸린 것은 시작 여부이고, 그건 앱이
+  /// 기록으로는 못 보는 자리다.
+  final List<String> conditionAsk;
+
+  /// 답을 골랐을 때. 알아들었다는 것만 짧게 알린다.
+  final List<String> conditionReply;
+
   /// 권한 대로 해내고 온 날 아침에 건네는 말. `{{task}}`가 그 일,
   /// `{{advice}}`는 그때 무엇을 권했는지.
   ///
@@ -400,6 +410,8 @@ class GreetingVoice {
     required this.eveningOffPlanAsk,
     required this.offPlanDoneReply,
     required this.coreAsk,
+    required this.conditionAsk,
+    required this.conditionReply,
     required this.adviceWorked,
     required this.carriedAsk,
     required this.repeatingAsk,
@@ -694,6 +706,16 @@ class MasterGreetingCopy {
           '표시가 그대로라 {여쭤보는 겁니다|확인차 여쭙습니다}. 이미 하고 계신데 누르는 걸 잊으셨을 수도 있으니까요.',
       '{{task}}는 {진행하고 계신가요|시작하셨나요}?\n'
           '{아직 시작 표시가 없어서요|시작 표시가 비어 있어서요}. 아직이셔도 괜찮습니다.',
+    ],
+    conditionAsk: [
+      '요즘 기록을 보니 {하시는 날에는 잡아두신 걸 다 끝내시고|손대신 날에는 전부 마치시고}, 아예 손을 못 대신 날도 있더군요.\n'
+          '{그 두 날은 무엇이 달랐을까요|되는 날에는 무엇이 달랐을까요}?',
+      '{되는 날과 안 되는 날이 꽤 갈리시네요|하시는 날엔 다 하시는데 아예 못 하시는 날도 있네요}. 양이 문제는 아닌 것 같습니다.\n'
+          '{되는 날에는 무엇이 달랐는지 짚어주시겠어요|무엇이 달랐을까요}?',
+    ],
+    conditionReply: [
+      '{그러셨군요|알겠습니다}. 그럼 앞으로 그 조건을 같이 챙겨보겠습니다.',
+      '{좋은 단서네요|기억해두겠습니다}. 다음부터 그쪽으로 함께 맞춰보시죠.',
     ],
     adviceWorked: [
       '{{advice}} 했던 {{task}}, 어제 {끝내셨더군요|해내셨더군요}.\n'
@@ -990,6 +1012,16 @@ class MasterGreetingCopy {
           '표시가 그대로라 {물어본다냥|확인차 묻는다냥}. 이미 하고 있는데 누르는 걸 잊었을 수도 있으니까냥.',
       '{{task}}는 {하고 있냥|시작했냥}?\n'
           '{아직 시작 표시가 없어서다냥|시작 표시가 비어 있어서다냥}. 아직이어도 괜찮다냥.',
+    ],
+    conditionAsk: [
+      '요즘 기록을 보니 {하는 날엔 잡아둔 걸 다 끝내고|손댄 날엔 전부 해내고}, 아예 손도 안 댄 날도 있더라냥.\n'
+          '{그 두 날은 뭐가 달랐냥|되는 날엔 뭐가 달랐냥}?',
+      '{되는 날이랑 안 되는 날이 꽤 갈린다냥|하는 날엔 다 하는데 아예 못 하는 날도 있다냥}. 양이 문제는 아닌 것 같다냥.\n'
+          '{되는 날엔 뭐가 달랐는지 짚어줄래냥|뭐가 달랐냥}?',
+    ],
+    conditionReply: [
+      '{그랬구나냥|알겠다냥}. 그럼 앞으로 그 조건을 같이 챙겨보자냥.',
+      '{좋은 단서다냥|기억해두겠다냥}. 다음부터 그쪽으로 같이 맞춰보자냥.',
     ],
     adviceWorked: [
       '{{advice}} 했던 {{task}}, 어제 {끝났더라냥|끝냈더라냥}.\n'
@@ -1341,6 +1373,12 @@ class MasterGreetingBuilder extends GreetingLinePicker {
   /// 거치지 않는다 — 발화 조건(몇 시인지, 얼마나 밀렸는지)은 화면이 판단하고,
   /// 여기서는 이름만 받아 문장으로 옮긴다.
   String buildCoreAsk(String taskName) => _fill(voice.coreAsk, taskName);
+
+  /// 되는 날에 무엇이 달랐는지 묻는 말.
+  String buildConditionAsk() => pickLine(voice.conditionAsk);
+
+  /// 답을 골랐을 때의 대꾸.
+  String buildConditionReply() => pickLine(voice.conditionReply);
 
   /// 권한 대로 해내고 온 날의 인사.
   String buildAdviceWorked(String taskName, String advice) => pickLine(
