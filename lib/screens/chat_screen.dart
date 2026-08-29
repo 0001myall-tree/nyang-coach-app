@@ -7255,6 +7255,32 @@ Rules:
         .toLowerCase();
   }
 
+  /// 할 일 이름으로 쓸 수 없는 제안을 걸러낸다.
+  ///
+  /// 프롬프트에도 "감정 토로 상황에는 [TASK] 금지"가 있지만 지시는 지켜지지
+  /// 않을 때가 있다. "내가 잘할 수 있을까?"에 카드가 떠서, 위로가 필요한 사람이
+  /// 자기 문장을 할 일로 등록할지 묻는 화면을 받았다. 판정은 앱이 이미 하고
+  /// 있으니 여기서 막는다.
+  List<_SuggestedTask> _keepableSuggestedTasks(
+    List<_SuggestedTask> tasks,
+    String userText,
+  ) {
+    if (tasks.isEmpty) return tasks;
+    if (_isSelfHarmRiskTurn(userText) ||
+        _containsResultAnxietySignal(userText) ||
+        _containsThoughtOverloadSignal(userText)) {
+      return const [];
+    }
+    // 이름이 아니라 사용자 문장을 그대로 옮겨 적은 경우. 등록해봐야 목록에
+    // 문장 하나가 남는다.
+    return tasks
+        .where((task) => task.text.trim().length <= _suggestedTaskNameLimit)
+        .toList(growable: false);
+  }
+
+  /// 할 일 이름으로 받아줄 길이. 넘으면 문장을 옮겨 적은 것으로 본다.
+  static const int _suggestedTaskNameLimit = 30;
+
   Future<List<_SuggestedTask>> _filterDuplicateSuggestedTasks(
     List<_SuggestedTask> suggestions,
   ) async {
@@ -12352,8 +12378,9 @@ Rules:
       if (!mounted || widget.coachId != currentId) return;
       final parsed = _parseReply(raw);
       await _confirmResistanceDiagnosisIfAsked(parsed.text);
-      final suggestedTasks = await _filterDuplicateSuggestedTasks(
-        parsed.suggestedTasks,
+      final suggestedTasks = _keepableSuggestedTasks(
+        await _filterDuplicateSuggestedTasks(parsed.suggestedTasks),
+        trimmed,
       );
       final masterTimerEligible = await _isMasterTimerSuggestionEligible(
         parsed.timerConfirmTaskName,
@@ -14536,6 +14563,11 @@ $resistanceFlowRule'''
     final coachOfferTaskRule = _coach.isMaster
         ? Prompts.taskTagFromCoachOffer
         : '';
+    // 말투 규칙은 맨 끝에 붙인다.
+    //
+    // 앞쪽에 두었더니 존댓말이 새어 나왔다. 프롬프트의 대부분이 존댓말 지시체로
+    // 쓰여 있고 — 오늘 더한 실행 패턴 블록도 그렇다 — 모델은 뒤에 온 지시를 더
+    // 세게 따른다. 반말 코치의 말투는 마지막에 한 번 더 못 박아야 남는다.
     final masterStyleRule = _coach.id == 'nyang_halbae'
         ? Prompts.nyangHalbaeStyle
         : '';
@@ -14600,7 +14632,6 @@ $resistanceFlowRule'''
       final assembledSystemPrompt =
           '''$baseSystemPrompt
 ${context.isNotEmpty ? '\n$context' : ''}
-$masterStyleRule
 $lifeRoutineSection
 $cleaningSection
 $workoutSection
@@ -14631,7 +14662,7 @@ $habitAutomationSection
 
 ${Prompts.outputRulesHead}
 $timerOutputRule
-${Prompts.outputRulesTail}$plannerActionSection$coachOfferTaskRule$halmaeHint$resistanceTurnDirective$contextRequestRule''';
+${Prompts.outputRulesTail}$plannerActionSection$coachOfferTaskRule$halmaeHint$resistanceTurnDirective$contextRequestRule$masterStyleRule''';
 
       // 마스터 코치는 하드코딩된 "대표님"을 사용자가 지정한 호칭으로 치환한다.
       // baseSystemPrompt 뒤에 이어붙인 모든 조각까지 함께 반영된다.
@@ -18069,10 +18100,26 @@ ${Prompts.outputRulesTail}$plannerActionSection$coachOfferTaskRule$halmaeHint$re
   }
 
   String get _ongoingNudgePermissionText {
+    // 코치마다 말투가 다르다. 이 줄만 갈라두지 않아서, 비서 실장이 "설정
+    // 화면을 열었다냥"이라고 말하고 있었다.
     if (defaultTargetPlatform != TargetPlatform.android) {
-      return '설정 화면을 열었다냥. "실시간 활동"만 켜주면 준비 끝이다냥.';
+      return _voice(
+        cat: '설정 화면을 열었다냥. "실시간 활동"만 켜주면 준비 끝이다냥.',
+        bro: '설정 화면 열었다. "실시간 활동"만 켜면 준비 끝이다.',
+        halmae: '설정 화면을 열었다. "실시간 활동"만 켜면 준비 끝이구나.',
+        boyfriend: '설정 화면 열어뒀어. "실시간 활동"만 켜면 준비 끝이야.',
+        nyangHalbae: '설정 화면을 열었다냥. "실시간 활동"만 켜면 준비 끝이다냥.',
+        sec: '설정 화면을 열어뒀어요. "실시간 활동"만 켜주시면 준비 끝입니다.',
+      );
     }
-    return '설정 화면을 열었다냥. "다른 앱 위에 표시"만 켜주면 준비 끝이다냥.';
+    return _voice(
+      cat: '설정 화면을 열었다냥. "다른 앱 위에 표시"만 켜주면 준비 끝이다냥.',
+      bro: '설정 화면 열었다. "다른 앱 위에 표시"만 켜면 준비 끝이다.',
+      halmae: '설정 화면을 열었다. "다른 앱 위에 표시"만 켜면 준비 끝이구나.',
+      boyfriend: '설정 화면 열어뒀어. "다른 앱 위에 표시"만 켜면 준비 끝이야.',
+      nyangHalbae: '설정 화면을 열었다냥. "다른 앱 위에 표시"만 켜면 준비 끝이다냥.',
+      sec: '설정 화면을 열어뒀어요. "다른 앱 위에 표시"만 켜주시면 준비 끝입니다.',
+    );
   }
 
   Widget _buildCatWidgetPromptChoiceCard(ChatMessage msg) {
