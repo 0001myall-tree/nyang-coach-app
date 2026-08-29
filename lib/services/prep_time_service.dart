@@ -26,12 +26,6 @@ class PrepPlan {
   /// 씻고 챙기는 데 걸리는 분.
   final int? prepMinutes;
 
-  /// 오늘따라 안 풀릴 때를 위한 여유. 사용자에게 감추지 않는다.
-  ///
-  /// 늦는 쪽 손해가 일찍 준비하는 쪽 손해보다 훨씬 크다. 게다가 사람은
-  /// 지난 시간을 떠올릴 때도 잘 풀린 날 쪽으로 줄여 말한다.
-  final int bufferMinutes;
-
   /// 시각에 오전/오후가 붙어 있었는지. 답할 때 같은 표현을 쓰려고 들고 있다.
   final bool meridiemKnown;
 
@@ -43,7 +37,6 @@ class PrepPlan {
     this.departure,
     this.travelMinutes,
     this.prepMinutes,
-    this.bufferMinutes = 15,
     this.meridiemKnown = false,
     this.goal = PrepGoal.prepStart,
   });
@@ -53,7 +46,6 @@ class PrepPlan {
     int? departure,
     int? travelMinutes,
     int? prepMinutes,
-    int? bufferMinutes,
     bool? meridiemKnown,
     PrepGoal? goal,
   }) {
@@ -62,7 +54,6 @@ class PrepPlan {
       departure: departure ?? this.departure,
       travelMinutes: travelMinutes ?? this.travelMinutes,
       prepMinutes: prepMinutes ?? this.prepMinutes,
-      bufferMinutes: bufferMinutes ?? this.bufferMinutes,
       meridiemKnown: meridiemKnown ?? this.meridiemKnown,
       goal: goal ?? this.goal,
     );
@@ -78,18 +69,33 @@ class PrepPlan {
     return null;
   }
 
+  /// 오늘따라 안 풀릴 때를 위한 여유. 준비 시간의 20%로 잡고, 감추지 않는다.
+  ///
+  /// 늦는 쪽 손해가 일찍 준비하는 쪽 손해보다 훨씬 크다. 게다가 사람은 지난
+  /// 시간을 떠올릴 때 잘 풀린 날 쪽으로 줄여 말하는데, 그 어긋남은 준비가
+  /// 길수록 커진다. 15분 고정이던 때는 20분 준비에도 90분 준비에도 같은 여유가
+  /// 붙었다. 짧은 준비에도 최소 10분은 남긴다 — 신발 신고 나가는 데도 시간이 든다.
+  int get effectiveBuffer {
+    final prep = prepMinutes;
+    if (prep == null) return _minBuffer;
+    final fifth = (prep * 0.2).ceil();
+    return fifth < _minBuffer ? _minBuffer : fifth;
+  }
+
+  static const int _minBuffer = 10;
+
   /// 출발 시각에서 준비 시간과 여유를 빼면 준비를 시작할 시각이 나온다.
   int? get prepStart {
     final start = resolvedDeparture;
     if (start == null || prepMinutes == null) return null;
-    return _wrap(start - prepMinutes! - bufferMinutes);
+    return _wrap(start - prepMinutes! - effectiveBuffer);
   }
 
   /// 준비 시작이 전날로 넘어가는지. 새벽 비행기 같은 경우다.
   bool get crossesMidnight {
     final start = resolvedDeparture;
     if (start == null || prepMinutes == null) return false;
-    return start - prepMinutes! - bufferMinutes < 0;
+    return start - prepMinutes! - effectiveBuffer < 0;
   }
 
   /// 사용자가 알고 싶어한 값이 나왔는지.

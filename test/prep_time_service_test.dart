@@ -7,33 +7,29 @@ int hm(int hour, int minute) => hour * 60 + minute;
 void main() {
   group('역산', () {
     test('출발 시각과 준비 시간에서 준비 시작이 나온다', () {
-      // 사용자가 실제로 겪은 그 대화. 10:10 출발에 준비 30분이면 9:40이다.
+      // 사용자가 실제로 겪은 그 대화. 10:10 출발에 준비 30분, 여유 10분이면 9:30이다.
       final plan = PrepPlan(
         departure: 610, // 10:10
         prepMinutes: 30,
-        bufferMinutes: 0,
       );
-      expect(plan.prepStart, hm(9, 40));
+      expect(plan.prepStart, hm(9, 30));
     });
 
-    test('여유 시간을 더해 앞당긴다', () {
-      final plan = PrepPlan(departure: 610, prepMinutes: 40);
-      expect(plan.bufferMinutes, 15);
-      expect(plan.prepStart, hm(9, 15));
+    test('여유는 준비 시간의 20%로 늘어난다', () {
+      // 짧은 준비는 최소 10분, 긴 준비는 그 20%.
+      expect(PrepPlan(departure: 610, prepMinutes: 40).effectiveBuffer, 10);
+      expect(PrepPlan(departure: 610, prepMinutes: 90).effectiveBuffer, 18);
+      expect(PrepPlan(departure: 610, prepMinutes: 40).prepStart, hm(9, 20));
     });
 
     test('한 시간을 빼도 자기가 앞서 말한 시각이 아니라 출발 시각에서 뺀다', () {
-      final plan = PrepPlan(departure: 610, prepMinutes: 60, bufferMinutes: 0);
-      expect(plan.prepStart, hm(9, 10));
+      final plan = PrepPlan(departure: 610, prepMinutes: 60);
+      expect(plan.prepStart, hm(8, 58)); // 60분 + 여유 12분
     });
 
     test('1시간 20분처럼 시간을 걸쳐 빼도 맞는다', () {
-      final plan = PrepPlan(
-        departure: hm(8, 30),
-        prepMinutes: 80,
-        bufferMinutes: 0,
-      );
-      expect(plan.prepStart, hm(7, 10));
+      final plan = PrepPlan(departure: hm(8, 30), prepMinutes: 80);
+      expect(plan.prepStart, hm(6, 54)); // 80분 + 여유 16분
     });
 
     test('약속 시각과 이동 시간에서 출발 시각이 나온다', () {
@@ -64,24 +60,16 @@ void main() {
         prepMinutes: 40,
       );
       expect(plan.resolvedDeparture, hm(9, 30));
-      expect(plan.prepStart, hm(8, 35));
+      expect(plan.prepStart, hm(8, 40));
     });
 
     test('자정을 넘어가면 전날 시각으로 돌려주고 표시해준다', () {
-      final plan = PrepPlan(
-        departure: hm(6, 0),
-        prepMinutes: 90,
-        bufferMinutes: 0,
-      );
-      expect(plan.prepStart, hm(4, 30));
+      final plan = PrepPlan(departure: hm(6, 0), prepMinutes: 90);
+      expect(plan.prepStart, hm(4, 12)); // 90분 + 여유 18분
       expect(plan.crossesMidnight, isFalse);
 
-      final dawn = PrepPlan(
-        departure: hm(0, 30),
-        prepMinutes: 60,
-        bufferMinutes: 0,
-      );
-      expect(dawn.prepStart, hm(23, 30));
+      final dawn = PrepPlan(departure: hm(0, 30), prepMinutes: 60);
+      expect(dawn.prepStart, hm(23, 18)); // 60분 + 여유 12분
       expect(dawn.crossesMidnight, isTrue);
     });
   });
@@ -218,10 +206,10 @@ void main() {
       talk.say('가는 데 10분');
       talk.say('준비 30분');
       // 예전엔 여기서 "0시 15분"이 나왔다.
-      expect(talk.plan!.prepStart, hm(12, 5));
+      expect(talk.plan!.prepStart, hm(12, 10));
       expect(
         formatClock(talk.plan!.prepStart!, withMeridiem: true),
-        '오후 12시 5분',
+        '오후 12시 10분',
       );
     });
   });
@@ -236,8 +224,8 @@ void main() {
 
       talk.say('머리 감는데 30분 정도 걸려.');
       expect(talk.plan!.prepMinutes, 30);
-      // 코치가 "8시"라고 했던 자리. 10:10 - 30분 - 여유 15분 = 9:25.
-      expect(talk.plan!.prepStart, hm(9, 25));
+      // 코치가 "8시"라고 했던 자리. 10:10 - 30분 - 여유 10분 = 9:30.
+      expect(talk.plan!.prepStart, hm(9, 30));
       expect(talk.lastAsked, isNull, reason: '다 알았으니 더 묻지 않는다');
     });
 
@@ -253,7 +241,7 @@ void main() {
       expect(talk.lastAsked, PrepMissing.prep);
 
       talk.say('씻고 나가는 데 보통 40분');
-      expect(talk.plan!.prepStart, hm(12, 35));
+      expect(talk.plan!.prepStart, hm(12, 40));
     });
 
     test('한 마디에 다 말하면 아무것도 묻지 않는다', () {
@@ -261,7 +249,7 @@ void main() {
       talk.say('오후 3시 약속인데 가는 데 20분 걸려');
       expect(talk.plan!.resolvedDeparture, hm(14, 40));
       talk.say('준비는 1시간');
-      expect(talk.plan!.prepStart, hm(13, 25));
+      expect(talk.plan!.prepStart, hm(13, 28)); // 여유는 1시간의 20%인 12분
       expect(talk.lastAsked, isNull);
     });
 
@@ -296,7 +284,7 @@ void main() {
 
       talk.say('신촌까지 40분 걸려');
       expect(talk.plan!.resolvedDeparture, hm(12, 20));
-      expect(talk.plan!.prepStart, hm(11, 15));
+      expect(talk.plan!.prepStart, hm(11, 20));
     });
 
     test('한 문장에 도착 시각과 출발을 묻는 말이 같이 있어도 헷갈리지 않는다', () {
@@ -336,7 +324,7 @@ void main() {
       talk.say('거기까지 30분');
       expect(talk.plan!.resolvedDeparture, hm(17, 30));
       talk.say('준비는 40분쯤');
-      expect(talk.plan!.prepStart, hm(16, 35));
+      expect(talk.plan!.prepStart, hm(16, 40));
     });
 
     test('할 일 이름이 나가는 일이면 출발 시각으로 읽는다', () {
@@ -378,7 +366,7 @@ void main() {
 
       talk.say('집 근처라 10분이면 가');
       expect(talk.plan!.resolvedDeparture, hm(4, 50));
-      expect(talk.plan!.prepStart, hm(4, 5));
+      expect(talk.plan!.prepStart, hm(4, 10));
     });
 
     test('준비 시간을 안 들으면 어떤 시각도 내놓지 않는다', () {
@@ -393,7 +381,7 @@ void main() {
       expect(talk.lastAsked, PrepMissing.prep);
 
       talk.say('한 30분?');
-      expect(talk.plan!.prepStart, hm(9, 25));
+      expect(talk.plan!.prepStart, hm(9, 30));
     });
 
     test('이동 시간도 기본값이 없다', () {
@@ -414,7 +402,7 @@ void main() {
       expect(talk.lastAsked, PrepMissing.travel);
 
       talk.say('집 앞이라 5분이면 가');
-      expect(talk.plan!.prepStart, hm(16, 0));
+      expect(talk.plan!.prepStart, hm(16, 5));
     });
 
     test('나가는 시각만 물으면 준비는 묻지 않는다', () {

@@ -207,3 +207,108 @@ class _BubbleButton extends StatelessWidget {
     );
   }
 }
+
+/// 코치가 말을 지어내는 동안 그 자리에 먼저 뜨는 것.
+///
+/// 핵심을 지정하고 몇 초 뒤에 말풍선이 떠서, 그때는 이미 다른 것을 보고 있는
+/// 일이 잦았다. 뜰 자리를 미리 잡아두면 무언가 오는 중인 줄 알고 기다릴 수
+/// 있다. 말풍선과 같은 자리, 같은 모양이라 답이 도착하면 그대로 바뀐다.
+///
+/// 누를 것은 없다. 기다리는 일에 손댈 것을 주면 그 자체가 일이 된다.
+class CoachThinkingBubble extends StatefulWidget {
+  const CoachThinkingBubble({
+    super.key,
+    required this.accent,
+    required this.avatarAsset,
+  });
+
+  final Color accent;
+  final String avatarAsset;
+
+  @override
+  State<CoachThinkingBubble> createState() => _CoachThinkingBubbleState();
+}
+
+class _CoachThinkingBubbleState extends State<CoachThinkingBubble>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _anim = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1100),
+  )..repeat();
+
+  @override
+  void dispose() {
+    _anim.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottom = MediaQuery.of(context).padding.bottom;
+    return Positioned(
+      left: 12,
+      right: 12,
+      bottom: bottom + 84,
+      child: Material(
+        color: Colors.transparent,
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+          decoration: BoxDecoration(
+            color: AppDesignTokens.surface,
+            borderRadius: BorderRadius.circular(AppDesignTokens.radiusMedium),
+            border: Border.all(color: AppDesignTokens.brandBorder),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.14),
+                blurRadius: 20,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              ClipOval(
+                child: Image.asset(
+                  widget.avatarAsset,
+                  width: 34,
+                  height: 34,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, _, _) => Container(
+                    width: 34,
+                    height: 34,
+                    color: widget.accent.withValues(alpha: 0.15),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              // 점 세 개가 차례로 밝아진다. 글자로 "생각 중"이라고 적으면
+              // 그것도 읽어야 할 말이 된다.
+              AnimatedBuilder(
+                animation: _anim,
+                builder: (_, _) => Row(
+                  children: List.generate(3, (i) {
+                    final t = (_anim.value * 3 - i).clamp(0.0, 1.0);
+                    final glow = (1 - (t * 2 - 1).abs()).clamp(0.0, 1.0);
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 5),
+                      child: Container(
+                        width: 7,
+                        height: 7,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: widget.accent.withValues(
+                            alpha: 0.25 + glow * 0.6,
+                          ),
+                        ),
+                      ),
+                    );
+                  }),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}

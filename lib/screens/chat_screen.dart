@@ -15,6 +15,7 @@ import 'package:speech_to_text/speech_to_text.dart';
 import 'package:speech_to_text/speech_recognition_result.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:nyang_coach/screens/coach_selection_screen.dart';
+import 'package:nyang_coach/services/plan_feedback_service.dart';
 import 'package:nyang_coach/services/analytics_service.dart';
 import 'package:nyang_coach/services/master_unlock_notice.dart';
 import 'package:nyang_coach/services/api_usage_limit_service.dart';
@@ -43,7 +44,6 @@ import 'package:nyang_coach/services/planner_routine_prompt_service.dart';
 import 'package:nyang_coach/widgets/alarm_permission_notice.dart';
 import 'package:nyang_coach/services/planner_edit_service.dart';
 import 'package:nyang_coach/services/registration_target.dart';
-import 'package:nyang_coach/services/repeat_keyword_service.dart';
 import 'package:nyang_coach/services/task_resistance_service.dart';
 import 'package:nyang_coach/services/execution_resistance_service.dart';
 import 'package:nyang_coach/services/focus_fatigue_service.dart';
@@ -2861,7 +2861,7 @@ class _ChatScreenState extends State<ChatScreen>
     final prepStart = plan.prepStart;
     if (prepStart != null) {
       lines.add(
-        '- 준비 시작(여유 ${plan.bufferMinutes}분 포함): '
+        '- 준비 시작(여유 ${plan.effectiveBuffer}분 포함): '
         '${formatClock(prepStart, withMeridiem: withMeridiem)}',
       );
     }
@@ -2887,7 +2887,7 @@ class _ChatScreenState extends State<ChatScreen>
     // 다르니 물어봐야 할 값이지 어림잡을 값이 아니다.
     final closing = plan.isAnswered
         ? '''
-- 여유 ${plan.bufferMinutes}분을 계산에 넣었다고 짧게 밝히세요. 감추지 마세요.
+- 여유 ${plan.effectiveBuffer}분을 계산에 넣었다고 짧게 밝히세요. 감추지 마세요.
 - 알람이나 일정으로 넣어줄지 한 번만 물어보세요.
 - 사용자가 물은 것까지만 답하세요. 나가는 시각만 물었으면 준비 시각까지 밀어붙이지 마세요.'''
         : Prompts.prepTimeNotReadyClosing;
@@ -4995,7 +4995,7 @@ ${lines.join('\n')}
     final core = _coreTaskDueForAsk(prefs, now);
     // 핵심을 지정해두지 않은 사람에게는 요즘 자주 하던 일을 대신 묻는다.
     // 질문의 모양이 같아서 뒤따르는 버튼과 처리도 그대로 쓴다.
-    final repeating = core == null ? _repeatingTaskDueToday(prefs) : null;
+    final repeating = core == null ? _otherTaskDueToday(prefs) : null;
     if (core == null && repeating == null) return false;
     if (!mounted) return false;
 
@@ -5094,7 +5094,7 @@ ${lines.join('\n')}
       if (habit != current) return habit;
     }
 
-    final repeating = _repeatingTaskDueToday(prefs);
+    final repeating = _otherTaskDueToday(prefs);
     if (repeating != null && repeating != current) return repeating;
     return null;
   }
@@ -5559,19 +5559,48 @@ Rules:
     return names;
   }
 
-  /// 핵심으로도 습관으로도 지정하지 않았지만 요즘 자주 하던 일.
+  /// 조금 전 코치가 먼저 꺼낸 계획 이야기를 프롬프트에 싣는다.
   ///
-  /// 코치가 챙기는 세 번째 순위다. 사용자가 아무것도 지정해두지 않아도, 최근
-  /// 기록에서 반복되던 말이 오늘 다시 올라왔으면 그것부터 본다.
-  ///
-  /// 핵심과 습관은 여기서 뺀다. 앞의 두 순위가 이미 챙기는 것들이라 같은 일을
-  /// 두 번 짚게 된다.
-  String? _repeatingTaskDueToday(SharedPreferences prefs) {
-    final candidates = RepeatKeywordService.analyze(
-      _decodeMapList(prefs.getString('nyang_history')),
-    );
-    if (candidates.isEmpty) return null;
+  /// 세 시간이 지났으면 싣지 않는다. 그때쯤이면 사용자도 코치도 다른 이야기를
+  /// 하고 있어서, 굳이 끌어오면 지난 이야기로 되돌리는 말이 된다.
+  void _writeRecentPlanNudge(StringBuffer sb, SharedPreferences prefs) {
+    final raw = prefs.getString(PlanFeedbackService.lastNudgeKey);
+    if (raw == null || raw.isEmpty) return;
+    Map<String, dynamic> nudge;
+    try {
+      nudge = Map<String, dynamic>.from(jsonDecode(raw) as Map);
+    } catch (_) {
+      return;
+    }
+    final at = DateTime.tryParse(nudge['at']?.toString() ?? '');
+    if (at == null) return;
+    if (DateTime.now().difference(at) > PlanFeedbackService.lastNudgeLife) {
+      return;
+    }
+    final task = nudge['task']?.toString() ?? '';
+    final topic = nudge['topic']?.toString() ?? '';
+    if (task.isEmpty || topic.isEmpty) return;
 
+    sb.writeln('\n[조금 전 당신이 먼저 꺼낸 이야기]');
+    sb.writeln('사용자가 \'$task\'를 적었을 때, 당신이 $topic를 먼저 건넸습니다.');
+    sb.writeln(
+      '*사용자의 이번 말이 그 이야기에 대한 답이나 항변일 수 있습니다. 그렇다면 사정을 먼저 듣고, 사용자가 이미 그렇게 하고 있거나 그럴 만한 이유가 있으면 물러나세요.',
+    );
+    sb.writeln('*다른 이야기로 넘어갔다면 해당 이야기의 맥락에 맞춰 새로 반응해주세요.');
+  }
+
+  /// 핵심도 습관도 아닌, 오늘 적어둔 나머지 일 하나.
+  ///
+  /// 코치가 챙기는 세 번째 순위다. 아무것도 지정해두지 않은 사람에게도 오늘
+  /// 적어둔 것은 있고, 그중 하나는 챙길 수 있다.
+  ///
+  /// 한동안은 최근 기록에서 자주 올라오던 말과 맞춰본 것만 골랐다. 근거를
+  /// 대려던 것이었는데, 그 근거가 맞는 날이 드물어 대개 아무 말도 못 하고
+  /// 지나갔다. 지금 눈앞의 목록에서 고르는 편이 실제로 챙기는 일이 된다.
+  ///
+  /// 핵심과 습관은 여기서 뺀다. 앞의 두 순위가 이미 챙기는 것들이다.
+  /// 시작 표시가 있는 것도 뺀다 — 하고 있는 사람에게 안 했다고 하는 셈이 된다.
+  String? _otherTaskDueToday(SharedPreferences prefs) {
     final coreTexts = _decodeMapList(prefs.getString('nyang_core_tasks'))
         .map((task) => task['text']?.toString().trim() ?? '')
         .where((text) => text.isNotEmpty)
@@ -5582,29 +5611,25 @@ Rules:
       if (_isHabitTask(task) || task['habitId'] != null) continue;
       final text = task['text']?.toString().trim() ?? '';
       if (text.isEmpty || coreTexts.contains(text)) continue;
-      if (RepeatKeywordService.matchingKeyword(text, candidates) == null) {
-        continue;
-      }
       final name = _shortTaskName(task);
       if (name != null) return name;
     }
     return null;
   }
 
-  /// 요즘 계속 올라오는 일을 짚어주는 오후 인사.
+  /// 핵심도 습관도 없을 때, 오늘 목록에 남아 있는 일 하나를 짚어주는 오후 인사.
   ///
   /// 왜 하필 이 일인지 밝힌다. 근거 없이 하나를 집으면 아무거나 고른 것으로
   /// 읽혀서, 지켜보고 있었다는 느낌이 살지 않는다.
   ///
-  /// "자주 하던 일"이라고는 하지 않는다. 세는 건 목록에 올라온 횟수라, 계속
-  /// 적어두기만 하고 못 한 일도 여기 걸린다. 그 사람에게 자주 했다고 말하면
-  /// 바로 틀린 말이 된다. 했든 못 했든 사실인 쪽으로 말한다.
+  /// 여기서 댈 수 있는 근거는 하나뿐이다 — 오늘 적어뒀고 아직 그대로라는 것.
+  /// 그 이상을 말하면 지어내는 것이 된다.
   String _buildCatRepeatingTaskText(String task) {
     final texts = [
-      '집사, \'$task\'는 요즘 신경 쓰는 거잖냥.\n'
-          '오늘 몫은 아직 안 건드렸다냥. 지금 짧게 손대볼까냥?',
-      '\'$task\', 요즘 신경 쓰는 거 아니냥?\n'
-          '오늘 것도 비어 있다냥. 5분만 해볼까냥?',
+      '집사, 오늘 적어둔 것 중에 \'$task\'가 아직 그대로다냥.\n'
+          '지금 짧게 손대볼까냥?',
+      '\'$task\'는 아직 손대기 전이냥?\n'
+          '오늘 목록에 그대로 남아 있길래 물어본다냥. 5분만 해볼까냥?',
     ];
     return texts[Random().nextInt(texts.length)];
   }
@@ -5967,40 +5992,17 @@ Rules:
 
   /// 시작해두고 멈춘 것으로 보이는 일. 없으면 null.
   ///
-  /// 사용자가 챙기겠다고 표시한 것(습관, 핵심 일정)만 본다. 아무 할 일이나
-  /// 붙잡고 물으면 하루에 걸릴 게 너무 많아진다.
+  /// 시작 표시를 켠 것이면 무엇이든 본다. 켰다는 것 자체가 챙기겠다는 표시라,
+  /// 핵심인지 습관인지를 여기서 또 가릴 이유가 없다. 낮에 짚는 자리도 같은
+  /// 기준으로 바뀌었다 — 저녁만 좁게 두면 낮에 먼저 꺼낸 일을 저녁에는 모른
+  /// 척하게 된다.
   Map<String, dynamic>? _stalledTask(SharedPreferences prefs, DateTime now) {
-    final coreIds = <String>{};
-    final coreTexts = <String>{};
-    for (final core in _decodeMapList(prefs.getString('nyang_core_tasks'))) {
-      final id = core['id']?.toString();
-      if (id != null && id.isNotEmpty) coreIds.add(id);
-      final text = _taskText(core);
-      if (text != null) coreTexts.add(text);
-    }
-
-    // 낮에 반복 일감으로 짚어준 일도 여기서 받는다. 안 받으면 낮에 먼저 꺼낸
-    // 일을 저녁에는 모른 척하게 된다 — 시작했다는 이유로 낮에 빠지고, 핵심도
-    // 습관도 아니라는 이유로 저녁에 또 빠진다.
-    final repeats = RepeatKeywordService.analyze(
-      _decodeMapList(prefs.getString('nyang_history')),
-    );
-
     for (final task in _decodeMapList(prefs.getString('nyang_tasks'))) {
       if (task['done'] == true) continue;
       if (!_isStartedTask(task)) continue;
 
-      final isHabit = _isHabitTask(task) || task['habitId'] != null;
-      final id = task['id']?.toString();
-      final text = _taskText(task);
-      final isCore =
-          (id != null && coreIds.contains(id)) ||
-          (text != null && coreTexts.contains(text));
-      final isRepeating =
-          text != null &&
-          RepeatKeywordService.matchingKeyword(text, repeats) != null;
-      if (!isHabit && !isCore && !isRepeating) continue;
       // 되물어야 끝낼 수 있는 습관은 대신 처리하지 못하니 묻지도 않는다.
+      final isHabit = _isHabitTask(task) || task['habitId'] != null;
       if (isHabit && !_isSimpleCheckHabit(prefs, task)) continue;
 
       final startedAt = DateTime.tryParse(
@@ -6418,7 +6420,7 @@ Rules:
         ? _pendingDailyHabits(prefs)
         : const <String>[];
     // 핵심도 습관도 없는 사람을 위한 세 번째 순위. 지정해둔 게 없다고 해서
-    // 챙길 것이 없는 건 아니다.
+    // 챙길 것이 없는 건 아니다. 오늘 적어둔 것 중 아직 그대로인 하나를 본다.
     //
     // 핵심 질문과 같은 예산을 쓴다. 사용자에게는 둘 다 "아직 안 한 일"을 짚는
     // 말이라, 따로 세면 마스터가 낮에 묻고 냥냥이가 오후에 또 묻게 된다.
@@ -6427,7 +6429,7 @@ Rules:
             !coreInProgress &&
             pendingHabits.isEmpty &&
             await _canAskCoreToday(now)
-        ? _repeatingTaskDueToday(prefs)
+        ? _otherTaskDueToday(prefs)
         : null;
     final text = notStartedCore != null
         ? _buildCatAfternoonCoreAskText(notStartedCore)
@@ -13312,6 +13314,13 @@ Rules:
         } catch (_) {}
       }
     }
+
+    // 6-1. 방금 코치가 먼저 건넨 계획 이야기.
+    //
+    // 그 말은 채팅에도 한 줄로 남지만, 남는 것은 문장뿐이다. 사용자가 "그거
+    // 오늘 다 해야 해"라고 답할 때 코치가 무엇에 대한 답인지 알아야 대화가
+    // 이어진다. 무슨 일을 두고 꺼낸 말이었는지 여기서 알려준다.
+    _writeRecentPlanNudge(sb, prefs);
 
     // 7. 이번 주/달 목표 (pro + master)
     if (_coach.isMaster && (needsGoalContext || needsLightGoalContext)) {

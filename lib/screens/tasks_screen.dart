@@ -1230,7 +1230,7 @@ class _TasksScreenState extends State<TasksScreen>
     final coreMilestonesChanged = _syncTodayMilestonesIntoCoreTasks();
     if (coreMilestonesChanged) {
       if (mounted) setState(() {});
-      await _saveCoreTasks(userPicked: false);
+      await _saveCoreTasks();
     }
 
     _initialLoadDone = true;
@@ -2279,7 +2279,7 @@ class _TasksScreenState extends State<TasksScreen>
       await prefs.remove('nyang_deferred_tasks_today');
       await NotificationService().cancelCoreReminders();
       await _saveTasks();
-      await _saveCoreTasks(userPicked: false);
+      await _saveCoreTasks();
 
       // 3. Generate daily summary before clearing chat history
       try {
@@ -3186,18 +3186,14 @@ class _TasksScreenState extends State<TasksScreen>
     if (counted > stored) await prefs.setInt('nyang_streak', counted);
   }
 
-  /// [userPicked]가 참이면 사용자가 방금 고른 것으로 본다.
+  /// 핵심을 지정하는 자리에서는 코치가 말을 걸지 않는다.
   ///
-  /// 앱이 스스로 채워 넣는 자리(마일스톤 동기화, 하루 리셋)에서는 거짓으로
-  /// 부른다. 고르지도 않은 것을 두고 코치가 말을 걸면 안 된다.
-  Future<void> _saveCoreTasks({bool userPicked = true}) async {
+  /// 한동안은 여기서만 말했다. 사용자가 스스로 중요하다고 고른 자리라
+  /// 계획을 다듬는 이야기가 쓸모 있을 것 같았는데, 정작 그 화면을 못 보고
+  /// 지나가는 날이 많았다. 지금은 할 일을 적는 자리에서 말한다. 두 곳에서
+  /// 다 말하면 하나를 두고 두 번 듣게 된다.
+  Future<void> _saveCoreTasks() async {
     final prefs = await SharedPreferences.getInstance();
-    // 저장하기 전의 목록. 이번에 새로 들어온 것이 무엇인지 알아야 한다.
-    final before = <String>{
-      for (final task in _decodeCoreTaskIds(prefs.getString('nyang_core_tasks')))
-        task,
-    };
-
     _syncTodayMilestonesIntoCoreTasks();
     await prefs.setString(
       'nyang_core_tasks',
@@ -3205,44 +3201,8 @@ class _TasksScreenState extends State<TasksScreen>
     );
     NotificationService().syncCoreReminders();
     TasksSyncService.scheduleSyncToCloud();
-
-    if (!userPicked) return;
-    // 오늘의 핵심으로 새로 지정된 것. 사용자가 직접 "이게 오늘 중요한
-    // 일"이라고 고른 자리라, 코치가 한 마디 건넬 만한 순간이다. 저장할 때마다
-    // 말을 걸던 때는 '미용실 가기'에까지 조언이 붙었다.
-    final added = coreTasks
-        .where((task) => !before.contains(task.id.toString()))
-        .toList();
-    if (added.isEmpty) return;
-
-    // 한 번에 여러 개를 골랐으면 그중 하나만 이야기한다. 시각이 비어 있는 쪽을
-    // 먼저 본다 — 언제 할지가 정해지지 않은 일이 코치가 도울 것이 많다.
-    added.sort((a, b) {
-      final aHasTime = (a.timeStart ?? '').isNotEmpty ? 1 : 0;
-      final bHasTime = (b.timeStart ?? '').isNotEmpty ? 1 : 0;
-      return aHasTime.compareTo(bHasTime);
-    });
-    final task = added.first;
-    unawaited(
-      PlanFeedbackService.onCoreTaskSet(
-        coachId: widget.coachId,
-        taskText: task.text,
-        hasTime: (task.timeStart ?? '').isNotEmpty,
-      ),
-    );
   }
 
-  List<String> _decodeCoreTaskIds(String? raw) {
-    if (raw == null || raw.isEmpty) return const [];
-    try {
-      return (jsonDecode(raw) as List)
-          .whereType<Map>()
-          .map((task) => task['id'].toString())
-          .toList(growable: false);
-    } catch (_) {
-      return const [];
-    }
-  }
 
   /// 휴식 모드를 저장한다.
   ///

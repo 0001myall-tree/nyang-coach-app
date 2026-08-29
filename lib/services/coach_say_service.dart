@@ -20,6 +20,13 @@ class CoachSayService {
     null,
   );
 
+  /// 지금 말을 지어내고 있는 코치. 없으면 null.
+  ///
+  /// 코치에게 물어보고 오는 데 몇 초가 걸린다. 그 사이 사용자는 다른 것을
+  /// 하러 가고, 말풍선은 아무도 안 보는 자리에서 뜬다. 무언가 오고 있다는
+  /// 것을 먼저 알리면 기다릴지 말지를 사용자가 정할 수 있다.
+  static final ValueNotifier<String?> thinking = ValueNotifier<String?>(null);
+
   /// 아직 확인하지 않은 코치들.
   ///
   /// 채팅 기록이 코치마다 나뉘어 있으니 표시도 코치별이다. 냥이가 남긴 말은
@@ -80,8 +87,15 @@ class CoachSayService {
     }
 
     await _setUnread(coachId, true);
+    thinking.value = null;
     pending.value = CoachSay(coachId: coachId, text: trimmed);
   }
+
+  /// 코치에게 물어보러 갔다. 말풍선 자리에 기다림을 먼저 띄운다.
+  static void startThinking(String coachId) => thinking.value = coachId;
+
+  /// 답이 없거나 짚을 것이 없다고 했다. 조용히 거둔다.
+  static void stopThinking() => thinking.value = null;
 
   /// 말풍선을 거뒀다. 채팅에는 그대로 남아 있다.
   static void dismissBubble() {
@@ -89,10 +103,14 @@ class CoachSayService {
   }
 
   /// 그 코치의 채팅을 열었다. NEW를 지운다.
-  static Future<void> markRead(String coachId) async {
-    if (!unread.value.contains(coachId)) return;
+  ///
+  /// 안 읽은 말이 있었으면 true. 부르는 쪽이 그때만 손끝에 알릴 수 있게
+  /// 돌려준다 — 말풍선을 놓친 사람에게는 이게 유일한 신호다.
+  static Future<bool> markRead(String coachId) async {
+    if (!unread.value.contains(coachId)) return false;
     await _setUnread(coachId, false);
     if (pending.value?.coachId == coachId) pending.value = null;
+    return true;
   }
 
   static Future<void> _setUnread(String coachId, bool value) async {
