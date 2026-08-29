@@ -6386,12 +6386,19 @@ class _TasksScreenState extends State<TasksScreen>
   /// 두 개째에 뜬다. 셋을 기다리면 오늘 두 가지만 적는 사람에게는 이 말이
   /// 영영 가지 않는데, 그 사람에게도 둘 중 무엇이 먼저인지는 정할 만하다.
   ///
+  /// 세는 것은 오늘 새로 잡은 일뿐이다. 매일 도는 루틴은 이미 정해진 것이라
+  /// 고를 대상이 아니고, 그것까지 세면 아무것도 안 적은 날에도 카드가 떠서
+  /// 매일 같은 권유를 받게 된다.
+  ///
   /// 등록하는 손을 막지 않는다. 창이 뜨면 하나 더 넣으려던 사람은 중간에
   /// 끊긴다. 카드는 목록 위에 얹혀 있기만 하고, 처음 생길 때 한 번 튀어서
   /// 눈에 들어온다. 그 뒤로는 몇 개를 더 넣어도 다시 튀지 않는다.
   bool _shouldShowCorePickCard(List<TaskItem> remainingTasks) {
+    final picked = remainingTasks
+        .where((task) => !task.isHabit && task.category != 'habit')
+        .length;
     return _isViewingActualToday &&
-        remainingTasks.length >= 2 &&
+        picked >= 2 &&
         coreTasks.isEmpty &&
         _corePickCardDismissedDate != _getTodayStr();
   }
