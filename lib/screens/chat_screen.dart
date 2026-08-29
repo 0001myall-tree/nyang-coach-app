@@ -14654,11 +14654,17 @@ Rules:
       final refusedLastOffer =
           _lastOfferedInterventionId != null &&
           ResistanceInterventionService.isRefusal(userText);
+      // 무엇이 막는지 본인이 골라둔 것이 있으면 그에 맞는 개입부터 꺼낸다.
+      // 기운이 없다고 한 이번 턴의 말이 그보다 앞선다 — 지금 상태가 평소보다
+      // 우선이다.
+      final preferredId = shouldOfferLowEnergyStarter
+          ? 'wake_body'
+          : await ExecutionBlockerService.preferredInterventionId();
       final next = ResistanceInterventionService.nextIntervention(
         _offeredInterventionIds,
         isMaster: _coach.isMaster,
         startAfterId: prefs.getString(_interventionRotationKey),
-        preferredId: shouldOfferLowEnergyStarter ? 'wake_body' : null,
+        preferredId: preferredId,
       );
       if (next == null) {
         interventionSection = ResistanceInterventionService.exhaustedRule;

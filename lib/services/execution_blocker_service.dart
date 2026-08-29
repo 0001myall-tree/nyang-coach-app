@@ -32,9 +32,44 @@ class ExecutionBlockerService {
     '첫 동작이 안 잡혀': '그 일의 첫 동작이 그려지지 않아 못 움직임. 무엇을 하는 것인지가 흐림.',
     '결과가 신경 쓰여': '잘 안 나올까 봐 시작을 못 함. 손대는 순간 결과를 마주해야 해서 미룸.',
     '기운이 없어': '몸이 안 따라줘서 못 움직임. 의지의 문제가 아님.',
-    '하던 일에서 못 넘어와': '앞의 일에서 빠져나오는 데 걸림. 넘어가는 자리가 문제.',
+    '계속 딴짓을 하게 돼': '다른 것에 붙들려 그 일로 넘어오지 못함. 일 자체가 아니라 넘어오는 자리가 문제.',
     '자리에 앉기가 싫어': '그 일을 하는 자리나 준비 과정이 걸림. 일 자체보다 그 앞이 싫음.',
   };
+
+  /// 막는 것마다 먼저 꺼낼 개입.
+  ///
+  /// 개입을 순번대로만 돌리면, 뭐부터 할지 모르겠다는 사람에게 "5분만 해보자"가
+  /// 나오고 기운 없는 사람에게 "둘 중 골라"가 나온다. 둘 다 틀린 짝이다.
+  ///
+  /// 지목일 뿐 고정이 아니다. 이번 대화에서 이미 꺼냈으면 순번으로 넘어가고,
+  /// 사용자가 싫다고 하면 그다음 것으로 간다.
+  static const Map<String, String> _preferred = {
+    // 고를 것이 많아 못 정하는 사람에게는 코치가 정해주지 말고 둘로 좁혀준다.
+    '뭐부터 할지 모르겠어': 'let_user_choose',
+    // 첫 동작이 안 그려지면 그 일의 제일 작은 한 칸을 짚어준다.
+    '첫 동작이 안 잡혀': 'narrow_scope',
+    // 잘 나올까 봐 못 시작하는 것이라, 잘 안 해도 된다는 쪽으로 기준을 내린다.
+    '결과가 신경 쓰여': 'allow_rough',
+    // 몸이 안 따라주는 사람에게는 그 일의 조각도 무겁다. 그 아래 층부터.
+    '기운이 없어': 'wake_body',
+    // 넘어오는 자리가 문제니 시작에 신호를 만든다.
+    '계속 딴짓을 하게 돼': 'start_signal',
+    // 일이 아니라 그 앞이 싫은 것이라, 앉는 순간을 다르게 만든다.
+    '자리에 앉기가 싫어': 'music_start',
+  };
+
+  /// 그 답에 짝지은 개입. 없으면 null. 테스트가 이 자리로 들어온다.
+  static String? interventionFor(String label) => _preferred[label];
+
+  /// 이번 턴에 먼저 꺼낼 개입. 답이 없거나 오래됐으면 null.
+  static Future<String?> preferredInterventionId() async {
+    final prefs = await SharedPreferences.getInstance();
+    final at = DateTime.tryParse(prefs.getString(_atKey) ?? '');
+    if (at == null || DateTime.now().difference(at) > answerLife) return null;
+    // 직접 적은 답에는 짝지을 개입이 없다. 그건 코치가 읽고 판단한다.
+    if ((prefs.getString(_freeKey) ?? '').isNotEmpty) return null;
+    return _preferred[prefs.getString(_key)];
+  }
 
   /// 목록에 없다고 할 때. 이건 답이 아니라 적겠다는 표시다.
   static const String otherLabel = '다른 게 걸려';
