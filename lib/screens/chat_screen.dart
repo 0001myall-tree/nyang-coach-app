@@ -5030,9 +5030,12 @@ ${lines.join('\n')}
         now.hour >= _masterCoreAskUntilHour) {
       return false;
     }
-    // 자기 방 기록만 보면 여비서에서 물어본 걸 냥할배가 또 묻는다. 코치 전체를
-    // 보고, 어제 물었으면 오늘은 쉰다.
-    if (!await _canAskCoreToday(now)) return false;
+    // 예산을 셋으로 가른다. 말마다 부담이 달라서다.
+    //
+    // 시키는 말(안 한 일을 짚는 것)은 잦으면 재촉이 되어 격일로 둔다. 알아주는
+    // 말과 준비를 돕는 말은 일을 시키지 않으니 매일 나가도 된다. 하나로 묶어
+    // 두었더니 어제 이월을 물었다는 이유로 오늘 해낸 것을 알아주지 못했다.
+    final canNudge = await _canAskCoreToday(now);
 
     // 권한 대로 해낸 것이 있으면 그 이야기부터. 며칠 전 이야기를 이어받는
     // 말이고, 무엇보다 좋은 소식이다.
@@ -5045,14 +5048,14 @@ ${lines.join('\n')}
       if (!mounted) return false;
       _injectAiMessage(
         _greetingBuilder.buildAdviceWorked(worked.task, worked.advice),
-        kind: _masterCoreGreetingKind,
+        kind: _masterAdviceWorkedKind,
       );
       unawaited(AnalyticsService.logFeatureUsage('master_advice_worked'));
       return true;
     }
 
     // 그다음은 이월된 일. 며칠째 걸려 있는 것이 오늘 처음 적은 것보다 급하다.
-    final carried = _carriedOverTask(prefs);
+    final carried = canNudge ? _carriedOverTask(prefs) : null;
     if (carried != null) {
       if (!mounted) return false;
       _pendingRepeatingAskTask = carried.name;
@@ -5085,7 +5088,8 @@ ${lines.join('\n')}
     //
     // 짐작하지 않는다. 요일이나 시간대로 맞혀보려면 몇 주가 필요하고 그마저도
     // 우연과 구분이 안 되는데, 본인은 이미 알고 있다.
-    if (_isAllOrNothing(prefs) &&
+    if (canNudge &&
+        _isAllOrNothing(prefs) &&
         await LifeContextService.mayAskCondition()) {
       if (!mounted) return false;
       final trend = await ExecutionPatternService.activeDayTrend();
@@ -5104,7 +5108,7 @@ ${lines.join('\n')}
 
     // 오늘 것을 묻는 것은 정오부터다. 오전에는 아직 하지 않았다는 말이
     // 재촉으로만 들린다.
-    if (now.hour < _masterCoreAskFromHour) return false;
+    if (now.hour < _masterCoreAskFromHour || !canNudge) return false;
 
     final core = _coreTaskDueForAsk(prefs, now);
     // 핵심을 지정해두지 않은 사람에게는 오늘 적어둔 나머지 하나를 묻는다.
@@ -5881,6 +5885,13 @@ Rules:
   /// 마스터 코치가 핵심 일정을 물어보는 발화. 낮 슬롯 인사와 kind를 나눠서
   /// 따로 센다 — 아침에 인사를 받았어도 오후에 이 질문은 나갈 수 있어야 한다.
   static const _masterCoreGreetingKind = 'auto:master_core';
+
+  /// 권한 대로 해낸 것을 알아주는 말.
+  ///
+  /// 안 한 일을 짚는 말들과 kind를 나눈다. 같이 세면 어제 이월을 물었다는
+  /// 이유로 오늘 해낸 것을 못 알아주게 된다. 이건 시키는 말이 아니라서
+  /// 매일 나가도 된다.
+  static const _masterAdviceWorkedKind = 'auto:master_advice_worked';
 
   /// 핵심 일정을 시작했는지 물었을 때 누르는 버튼. 세 갈래로 나눈 이유는
   /// 못 한 이유가 부담인지 상황인지에 따라 이어갈 말이 완전히 다르기 때문이다.
