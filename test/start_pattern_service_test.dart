@@ -8,12 +8,10 @@ Map<String, dynamic> day({
   required List<int> startHours,
   required int done,
   int? total,
-  bool vacation = false,
 }) {
   final count = total ?? startHours.length;
   return {
     'date': date,
-    'isVacation': vacation,
     'tasks': [
       for (var i = 0; i < count; i++)
         {
@@ -125,14 +123,6 @@ void main() {
   });
 
   group('셈에서 빼는 날', () {
-    test('휴식 모드인 날은 평가하지 않는다', () {
-      final result = StartPatternService.analyze([
-        ...days(count: 3, startHour: 9, done: 5, total: 5),
-        day(date: '2026-08-21', startHours: [14], done: 0, vacation: true),
-      ]);
-      expect(result.dayCount, 3);
-    });
-
     test('아무것도 시작하지 않은 날은 셈에 넣지 않는다', () {
       final result = StartPatternService.analyze([
         ...days(count: 3, startHour: 9, done: 5, total: 5),

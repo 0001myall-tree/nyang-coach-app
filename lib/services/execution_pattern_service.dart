@@ -52,11 +52,17 @@ class ExecutionPatternService {
     var planned = 0;
     var done = 0;
     var touched = 0;
+    var fullDays = 0;
+    var zeroDays = 0;
     final startHours = <int>[];
 
     for (final record in records) {
+      var dayPlanned = 0;
+      var dayDone = 0;
       for (final task in (record['tasks'] as List?) ?? const []) {
         if (task is! Map) continue;
+        dayPlanned++;
+        if (task['done'] == true) dayDone++;
         planned++;
         final isDone = task['done'] == true;
         final startedAt = DateTime.tryParse(
@@ -66,6 +72,9 @@ class ExecutionPatternService {
         if (isDone || startedAt != null) touched++;
         if (startedAt != null) startHours.add(startedAt.hour);
       }
+      if (dayPlanned == 0) continue;
+      if (dayDone == dayPlanned) fullDays++;
+      if (dayDone == 0) zeroDays++;
     }
     if (planned == 0) return '';
 
@@ -96,7 +105,17 @@ class ExecutionPatternService {
     // 관찰만 주면 코치는 그날 대화에 맞는 수를 고른다. 여기서 한 수를 정해두면
     // 계획 이야기가 나올 때마다 같은 말이 나가고, 이미 갖고 있는 개입 열댓 가지가
     // 쓰이지 않는다.
-    if (planPerDay >= 3 && planPerDay >= donePerDay * 2 && rate <= 0.5) {
+    // 날마다 전부 아니면 전무인 사람.
+    //
+    // 완료율만 보면 절반쯤 하는 사람으로 읽히는데, 날짜별로 보면 다 해낸 날과
+    // 손도 안 댄 날로 갈린다. 이 사람에게 계획을 줄이라고 하면 빗나간다 —
+    // 하는 날에는 세 개도 다 끝내기 때문이다. 그래서 이 표시가 붙으면 양을
+    // 두고 하는 판단은 접어둔다.
+    final swings = fullDays >= 2 && zeroDays >= 2;
+    if (swings) {
+      flags.add('편차형 — 하는 날엔 잡은 것을 다 해내고, 아예 손도 안 대는 날이 따로 있음. 양이 걸린 것이 아님');
+    }
+    if (!swings && planPerDay >= 3 && planPerDay >= donePerDay * 2 && rate <= 0.5) {
       flags.add('계획 과다형 — 계획한 양이 해내는 양의 갑절');
     }
     // 완료율만 보면 안 하는 사람처럼 보이지만, 제일 어려운 시작은 매번 해내고 있다.

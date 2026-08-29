@@ -3135,7 +3135,6 @@ class _TasksScreenState extends State<TasksScreen>
       'doneCount': doneTasks.length + doneMilestones.length + keptDone,
       'success':
           doneTasks.isNotEmpty || doneMilestones.isNotEmpty || keptDone > 0,
-      'isVacation': previous['isVacation'] ?? false,
       'updatedAt': DateTime.now().toIso8601String(),
       'tasks': [...listEntries, ...kept],
     };
@@ -3168,7 +3167,7 @@ class _TasksScreenState extends State<TasksScreen>
     bool succeeded(String key) {
       final record = byDate[key];
       if (record == null) return false;
-      return record['success'] == true || record['isVacation'] == true;
+      return record['success'] == true;
     }
 
     final stored = prefs.getInt('nyang_streak') ?? 0;
@@ -3204,10 +3203,6 @@ class _TasksScreenState extends State<TasksScreen>
   }
 
 
-  /// 휴식 모드를 저장한다.
-  ///
-  /// 어떤 종류로 쉬는지까지 남긴다. 하루만 멈추는 것과 매주 무슨 요일마다 쉬는
-  /// 것은 쓰는 사람도 쓰는 이유도 달라서, 하나로 세면 어느 쪽이 쓰이는지 알 수 없다.
   /// 채팅에서 말로 등록하는 주간·월간 목표.
   ///
   /// 장기 비전은 마일스톤과 기한이 함께 있어야 뜻이 서기 때문에 여기로 받지

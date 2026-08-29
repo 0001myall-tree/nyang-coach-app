@@ -76,6 +76,46 @@ void main() {
       expect(block, contains('계획 과다형'));
     });
 
+    test('다 하는 날과 아예 안 하는 날로 갈리면 편차형', () {
+      final block = ExecutionPatternService.blockFrom(
+        history([
+          day(1, planned: 3, done: 3),
+          day(2, planned: 2, done: 0),
+          day(3, planned: 2, done: 2),
+          day(4, planned: 3, done: 0),
+        ]),
+      );
+      expect(block, contains('편차형'));
+    });
+
+    test('편차형이면 계획 과다형은 붙지 않는다', () {
+      // 하는 날에는 세 개도 다 끝내는 사람에게 계획을 줄이라고 하면 빗나간다.
+      final block = ExecutionPatternService.blockFrom(
+        history([
+          day(1, planned: 4, done: 4),
+          day(2, planned: 4, done: 0),
+          day(3, planned: 4, done: 4),
+          day(4, planned: 4, done: 0),
+          day(5, planned: 4, done: 0),
+        ]),
+      );
+      expect(block, contains('편차형'));
+      expect(block, isNot(contains('계획 과다형')));
+    });
+
+    test('한쪽 날이 하루뿐이면 편차형으로 보지 않는다', () {
+      // 하루씩으로는 그날 사정과 구분이 안 된다.
+      final block = ExecutionPatternService.blockFrom(
+        history([
+          day(1, planned: 2, done: 2),
+          day(2, planned: 2, done: 0),
+          day(3, planned: 2, done: 1),
+          day(4, planned: 2, done: 1),
+        ]),
+      );
+      expect(block, isNot(contains('편차형')));
+    });
+
     test('시작은 하는데 못 끝내면 시작 꾸준형', () {
       // 다섯 개 중 둘 완료, 셋은 손댔지만 미완료 → 손댄 비율 100%.
       final block = ExecutionPatternService.blockFrom(

@@ -329,7 +329,6 @@ class TaskCompletionService {
       'totalCount': countable.length + milestones,
       'doneCount': doneCount + keptDone,
       'success': doneCount + keptDone > 0,
-      'isVacation': previous['isVacation'] ?? false,
       'updatedAt': at.toIso8601String(),
       'tasks': [...listEntries, ...kept],
     };

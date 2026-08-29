@@ -34,7 +34,6 @@ void main() {
     'totalCount': total,
     'doneCount': done,
     'success': done > 0,
-    'isVacation': false,
     'tasks': <Map<String, dynamic>>[],
   };
 

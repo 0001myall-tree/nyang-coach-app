@@ -1740,15 +1740,13 @@ class _ChatScreenState extends State<ChatScreen>
       final dateStr = _dateKey(date);
       return history.lastWhere(
         (record) => record['date'] == dateStr,
-        orElse: () => {'date': dateStr, 'doneCount': 0, 'isVacation': false},
+        orElse: () => {'date': dateStr, 'doneCount': 0},
       );
     });
 
     // 기록 탭의 "연속 출석"과 동일하게 최근 7일 기준으로 계산합니다.
-    // 휴식 모드일은 연속 기록을 끊지 않고 건너뜁니다.
     var streak = 0;
     for (var i = records.length - 1; i >= 0; i--) {
-      if (records[i]['isVacation'] == true) continue;
       if ((records[i]['doneCount'] ?? 0) <= 0) {
         // 오늘은 아직 끝나지 않은 하루라 연속을 끊지 않는다. 아침에 열 때마다
         // 0을 보여주면 하루가 시작도 하기 전에 기운이 빠진다.
@@ -3293,7 +3291,7 @@ ${lines.join('\n')}
     var doneCount = 0;
     for (var offset = 1; offset <= days; offset++) {
       final record = byDate[_dateKey(today.subtract(Duration(days: offset)))];
-      if (record == null || record['isVacation'] == true) continue;
+      if (record == null) continue;
       final total = (record['totalCount'] as num?)?.toInt() ?? 0;
       if (total <= 0) continue;
       evaluatedDays++;
@@ -5697,7 +5695,7 @@ Rules:
     for (final record in _decodeMapList(prefs.getString('nyang_history'))) {
       final date = DateTime.tryParse(record['date']?.toString() ?? '');
       if (date == null || date.isBefore(from)) continue;
-      if (_dateKeyOf(date) == today || record['isVacation'] == true) continue;
+      if (_dateKeyOf(date) == today) continue;
       final tasks = (record['tasks'] as List?) ?? const [];
       if (tasks.isEmpty) continue;
       var done = 0;
@@ -5737,7 +5735,6 @@ Rules:
     for (final record in _decodeMapList(prefs.getString('nyang_history'))) {
       final date = DateTime.tryParse(record['date']?.toString() ?? '');
       if (date == null || date.isBefore(from)) continue;
-      if (record['isVacation'] == true) continue;
       final seen = <String>{};
       for (final task in (record['tasks'] as List?) ?? const []) {
         if (task is! Map || task['done'] == true) continue;
@@ -8351,10 +8348,6 @@ Rules:
       if (record.isEmpty) {
         return '$title, 어제($yesterdayStr) 기록을 찾지 못했습니다.';
       }
-      if (record['isVacation'] == true) {
-        return '$title, 어제($yesterdayStr)는 휴식 모드로 기록되어 있어서 미완료 평가에서 제외되어 있습니다.';
-      }
-
       final tasks = (record['tasks'] as List?) ?? [];
       final incomplete = tasks
           .where((task) => (task as Map?)?['done'] != true)
@@ -18553,7 +18546,6 @@ ${Prompts.outputRulesTail}$plannerActionSection$coachOfferTaskRule$halmaeHint$re
 
   // ── 빠른 답장 칩 (동적) ──────────────────────────────────
 
-  // 휴무 제안 말풍선 카드 (새로 추가)
   // 마스터 코치 채팅창 하단 고정 채팅칩.
   bool get _isMasterChipNightTime {
     final hour = DateTime.now().hour;

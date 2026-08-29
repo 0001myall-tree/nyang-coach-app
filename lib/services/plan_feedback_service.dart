@@ -740,7 +740,6 @@ class PlanFeedbackService {
       if (item is! Map) continue;
       final date = DateTime.tryParse(item['date']?.toString() ?? '');
       if (date == null || date.isBefore(from)) continue;
-      if (item['isVacation'] == true) continue;
       out.add(Map<String, dynamic>.from(item));
     }
     return out;

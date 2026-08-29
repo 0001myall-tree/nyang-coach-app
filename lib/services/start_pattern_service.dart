@@ -177,7 +177,6 @@ class StartPatternService {
   /// 하루 기록에서 첫 시작 시각과 완료율을 뽑는다. 둘 중 하나라도 없으면 null.
   static _DayStart? _readDay(Map<String, dynamic> record) {
     // 휴식 모드인 날은 완료율로 사람을 평가하면 안 되는 날이다.
-    if (record['isVacation'] == true) return null;
 
     final tasks = (record['tasks'] as List?) ?? const [];
     final counted = tasks

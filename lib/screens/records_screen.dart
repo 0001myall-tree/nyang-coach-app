@@ -143,9 +143,6 @@ class _RecordsScreenState extends State<RecordsScreen> {
       // history에서 찾기
       final existing = _history.where((r) => r['date'] == dateStr).toList();
       if (existing.isNotEmpty) {
-        // 쉬는 날 표시는 그날 기록에 적혀 있던 것을 그대로 쓴다. 휴식 모드는
-        // 걷어냈지만 지난 기록의 값은 남아 있고, 그 숫자를 지금 다시 계산해
-        // 덮어쓰면 예전에 쉬었던 날이 실패로 바뀐다.
         last7.add(Map<String, dynamic>.from(existing.last));
       } else {
         // 기록이 없으면 빈 데이터
@@ -154,7 +151,6 @@ class _RecordsScreenState extends State<RecordsScreen> {
           'totalCount': 0,
           'doneCount': 0,
           'success': false,
-          'isVacation': false,
           'tasks': [],
         });
       }
@@ -574,7 +570,6 @@ class _RecordsScreenState extends State<RecordsScreen> {
 
     final allTaskTexts = <String>{};
     for (final record in records) {
-      if (record['isVacation'] == true) continue;
       final tasks = (record['tasks'] as List?) ?? [];
       for (final task in tasks) {
         final text = (task as Map?)?['text']?.toString().trim();
@@ -588,7 +583,6 @@ class _RecordsScreenState extends State<RecordsScreen> {
     final consistentStartTasks = <String>[];
     final heldOverDayCounts = <String, int>{};
     final activeRecords = records
-        .where((record) => record['isVacation'] != true)
         .toList();
 
     /// 3일 이상 비어 있다가 다시 걸린 적이 있는지.
@@ -702,13 +696,6 @@ class _RecordsScreenState extends State<RecordsScreen> {
     var totalTaskCount = 0;
 
     for (final record in records) {
-      if (record['isVacation'] == true) {
-        recordBuffer.writeln(
-          '- ${record['date']}: 휴무일(회복일)로 설정됨. 완료/미완료 평가에서 제외.',
-        );
-        continue;
-      }
-
       final dateStr = record['date']?.toString() ?? '';
       final doneCount = _recordDoneCount(record);
       final taskCount = _recordTotalCount(record);
@@ -954,7 +941,6 @@ $chatSummarySection
 [작성 지침]
 1. 어투: ${isMale ? '냥할배로서 부드럽고 느긋한 반말 기반 말투. 존댓말과 냥 말투를 섞지 말고, "$title" 호칭도 남발하지 마세요.' : '여비서로서 지적이고 부드러운 "$title" 호칭의 격식체 (~했어요, ~어떨까요).'}
 2. 공통 원칙:
-   - 휴무일(회복일)은 미완료나 실패로 해석하지 말고, 필요한 회복을 일정에 포함한 것으로 자연스럽게 존중해 주세요.
    - "시작했지만 끝내지 못한 일"과 "손대지 못한 일"을 한데 묶어 미완료로 말하지 마세요. 시작한 일은 아무것도 하지 않은 일이 아닙니다.
    - [현재 설정된 루틴 트래킹 빈도]를 반드시 참고하세요. 특정 요일에만 하기로 한 루틴이라면 그 빈도에 맞게 평가해 주세요.
    - [주간 완료율 요약]의 수치를 우선 기준으로 삼으세요. 100% 완료한 날이 대부분이고 저조한 날이 하루뿐이면 "계획대로 진행되지 않은 날이 많았다", "저조한 날이 많았다", "대부분 미완료였다" 같은 복수/다수 표현을 절대 쓰지 마세요.
@@ -984,7 +970,7 @@ ${feedbackType == 0
    - 마지막으로 미래를 응원하는 한마디로 마무리하세요.'''
         : '''   [컨디션 회고형]
    - 실행이나 성장보다 이번 주의 컨디션 흐름에 초점을 맞춥니다.
-   - 완료율, 휴무일 패턴, 할 일 밀도 등을 바탕으로 체력/휴식/회복 측면을 분석하세요.
+   - 완료율과 할 일 밀도 등을 바탕으로 체력/휴식/회복 측면을 분석하세요.
    - 무리한 주였는지, 잘 쉰 주였는지, 회복이 더 필요한지를 부드럽게 짚어주세요.
    - 꾸준히 해낸 일이나 꾸준히 손댄 일이 있다면 컨디션 속에서도 놓치지 않았다는 점을 자연스럽게 언급해 주세요. 완료까지 가지 못했더라도 시작한 것은 그대로 인정해 주세요.
    - 다음 주 컨디션 관리를 위한 한 가지 제안으로 마무리하세요.'''}
@@ -1070,17 +1056,13 @@ ${feedbackType == 0
     final records = _getLast7Records();
     int successDays = 0;
     int streak = 0;
-    final vacationDays = records.where((r) => r['isVacation'] == true).length;
-    final trackableDays = records.length - vacationDays;
+    final trackableDays = records.length;
     for (final r in records) {
-      if (r['isVacation'] == true) continue;
       if (_recordDoneCount(r) > 0) {
         successDays++;
       }
     }
-    // 휴무일은 연속 기록을 끊지 않고 건너뜁니다.
     for (int i = records.length - 1; i >= 0; i--) {
-      if (records[i]['isVacation'] == true) continue;
       if (_recordDoneCount(records[i]) > 0) {
         streak++;
       } else {
@@ -1150,12 +1132,7 @@ ${feedbackType == 0
                 child: Column(
                   children: [
                     // 4칸 통계 요약 (패턴 써머리) -> 2칸으로 축소됨
-                    _buildSummaryGrid(
-                      successDays,
-                      flowPct,
-                      streak,
-                      vacationDays,
-                    ),
+                    _buildSummaryGrid(successDays, flowPct, streak),
                     const SizedBox(height: 4),
 
                     // 코치의 한마디
@@ -1179,12 +1156,7 @@ ${feedbackType == 0
     );
   }
 
-  Widget _buildSummaryGrid(
-    int successDays,
-    int flowPct,
-    int streak,
-    int restDays,
-  ) {
+  Widget _buildSummaryGrid(int successDays, int flowPct, int streak) {
     return GridView.count(
       crossAxisCount: 2,
       crossAxisSpacing: 12,
@@ -1204,10 +1176,12 @@ ${feedbackType == 0
           true,
         ),
         _summaryCard(
-          '쉬는 날',
-          '$restDays일',
-          '-',
-          Icons.bedtime_outlined,
+          // 하루라도 끝낸 날의 비율. 완료율이 아니라 "손댄 날"을 센다 —
+          // 하나만 해낸 날도 아무것도 안 한 날과는 다르다.
+          '해낸 날',
+          '$successDays일',
+          '$flowPct%',
+          Icons.check_circle_outline,
           const Color(0xFF6EBF8B),
           false,
         ),
@@ -1274,14 +1248,9 @@ ${feedbackType == 0
   }
 
   String _getPatternFeedback(List<Map<String, dynamic>> records) {
-    final activeRecords = records
-        .where((r) => r['isVacation'] != true)
-        .toList();
-    final vacationCount = records.length - activeRecords.length;
+    final activeRecords = records;
     if (activeRecords.isEmpty) {
-      return vacationCount > 0
-          ? '이번 주는 쉬어가는 흐름이야. 잘 쉬는 것도 루틴을 오래 가져가는 방법이야.'
-          : '아직 기록이 부족해. 오늘 하나만 완료하면 패턴이 시작돼.';
+      return '아직 기록이 부족해. 오늘 하나만 완료하면 패턴이 시작돼.';
     }
 
     int total = 0;
@@ -1306,9 +1275,7 @@ ${feedbackType == 0
     }
 
     if (total == 0) {
-      return vacationCount > 0
-          ? '휴무일은 잘 쉬어가고 있어. 다시 시작하는 날엔 오늘 하나만 잡아도 충분해.'
-          : '아직 기록이 부족해. 오늘 하나만 완료하면 패턴이 시작돼.';
+      return '아직 기록이 부족해. 오늘 하나만 완료하면 패턴이 시작돼.';
     }
 
     final bestDay = _getDayLabel(best['date'] ?? '');
@@ -1325,10 +1292,7 @@ ${feedbackType == 0
   /// 마스터 한마디를 API로 못 받았을 때 대신 내보내는 문장.
   /// 마스터일 때만 불리고 화면도 마스터일 때만 그리므로 여비서 존댓말 하나면 된다.
   String _getMasterPatternFeedback(List<Map<String, dynamic>> records) {
-    final activeRecords = records
-        .where((r) => r['isVacation'] != true)
-        .toList();
-    final vacationCount = records.length - activeRecords.length;
+    final activeRecords = records;
     int total = 0;
     int successDays = 0;
     int totalTaskCount = 0;
@@ -1341,9 +1305,7 @@ ${feedbackType == 0
     }
 
     if (total == 0) {
-      final feedback = vacationCount > 0
-          ? '이번 주에는 회복을 선택하신 날이 있어요. 잘 쉬는 것도 일정 관리의 일부예요, 대표님.'
-          : '아직 이번 주 기록이 없어요. 오늘 하나만 시작해보는 건 어떨까요, 대표님?';
+      const feedback = '아직 이번 주 기록이 없어요. 오늘 하나만 시작해보는 건 어떨까요, 대표님?';
       return feedback.replaceAll(UserTitleService.defaultTitle, _userTitle);
     }
 
@@ -1460,7 +1422,6 @@ ${feedbackType == 0
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             crossAxisAlignment: CrossAxisAlignment.end,
             children: records.map((r) {
-              final isVacation = r['isVacation'] == true;
               final doneCount = _recordDoneCount(r);
               final touchedCount = _recordTouchedCount(r);
               final totalCount = _recordTotalCount(r);
@@ -1477,13 +1438,11 @@ ${feedbackType == 0
               return Column(
                 children: [
                   Text(
-                    isVacation ? '쉼' : (pct > 0 ? '$pct%' : '-'),
+                    pct > 0 ? '$pct%' : '-',
                     style: GoogleFonts.notoSansKr(
                       fontSize: 10,
                       fontWeight: FontWeight.w700,
-                      color: isVacation
-                          ? const Color(0xFF6EBF8B)
-                          : const Color(0xFFA0A0B0),
+                      color: const Color(0xFFA0A0B0),
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -1491,9 +1450,7 @@ ${feedbackType == 0
                     width: 24,
                     height: 100,
                     decoration: BoxDecoration(
-                      color: isVacation
-                          ? const Color(0xFFEAF7EF)
-                          : const Color(0xFFF3F4F6),
+                      color: const Color(0xFFF3F4F6),
                       borderRadius: BorderRadius.circular(6),
                     ),
                     alignment: Alignment.bottomCenter,
@@ -1502,7 +1459,7 @@ ${feedbackType == 0
                     child: Stack(
                       alignment: Alignment.bottomCenter,
                       children: [
-                        if (!isVacation && touchedPct > pct)
+                        if (touchedPct > pct)
                           Container(
                             width: 24,
                             height: 100.0 * (touchedPct / 100.0),
@@ -1515,11 +1472,9 @@ ${feedbackType == 0
                           ),
                         Container(
                           width: 24,
-                          height: isVacation ? 100 : 100.0 * (pct / 100.0),
+                          height: 100.0 * (pct / 100.0),
                           decoration: BoxDecoration(
-                            color: isVacation
-                                ? const Color(0xFF6EBF8B)
-                                : _recordCoach.accentColor,
+                            color: _recordCoach.accentColor,
                             borderRadius: BorderRadius.circular(6),
                           ),
                         ),
@@ -1532,9 +1487,7 @@ ${feedbackType == 0
                     style: GoogleFonts.notoSansKr(
                       fontSize: 12,
                       fontWeight: isToday ? FontWeight.w800 : FontWeight.w600,
-                      color: isVacation
-                          ? const Color(0xFF6EBF8B)
-                          : isToday
+                      color: isToday
                           ? _recordCoach.accentColor
                           : const Color(0xFF6B7280),
                     ),
@@ -1544,9 +1497,7 @@ ${feedbackType == 0
             }).toList(),
           ),
           if (records.any(
-            (r) =>
-                r['isVacation'] != true &&
-                _recordTouchedCount(r) > _recordDoneCount(r),
+            (r) => _recordTouchedCount(r) > _recordDoneCount(r),
           )) ...[
             const SizedBox(height: 10),
             _buildChartLegend(),
