@@ -15,6 +15,7 @@ import 'package:speech_to_text/speech_to_text.dart';
 import 'package:speech_to_text/speech_recognition_result.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:nyang_coach/screens/coach_selection_screen.dart';
+import 'package:nyang_coach/services/day_capacity_service.dart';
 import 'package:nyang_coach/services/execution_blocker_service.dart';
 import 'package:nyang_coach/services/life_context_service.dart';
 import 'package:nyang_coach/services/plan_feedback_service.dart';
@@ -5065,6 +5066,21 @@ ${lines.join('\n')}
       return true;
     }
 
+    // 오늘 쓸 수 있는 시간을 묻는다. 계획을 짜기 전에 알아야 뜻이 있어서
+    // 정오 전에만 묻는다 — 오후에 물으면 이미 짜놓은 계획 위에 얹는 말이 된다.
+    if (now.hour < _masterCoreAskFromHour &&
+        DayCapacityService.worthAsking(prefs.getString('nyang_history')) &&
+        !await DayCapacityService.answeredToday()) {
+      if (!mounted) return false;
+      _injectAiMessage(
+        _greetingBuilder.buildCapacityAsk(),
+        kind: _capacityAskKind,
+        choices: DayCapacityService.labels,
+      );
+      unawaited(AnalyticsService.logFeatureUsage('master_capacity_ask'));
+      return true;
+    }
+
     // 하는 날과 안 하는 날이 갈리는 사람에게는 무엇이 달랐는지 묻는다.
     //
     // 짐작하지 않는다. 요일이나 시간대로 맞혀보려면 몇 주가 필요하고 그마저도
@@ -5888,6 +5904,9 @@ Rules:
 
   /// 무엇이 시작을 막는지 묻는 카드.
   static const _blockerAskKind = 'blocker_ask';
+
+  /// 오늘 쓸 수 있는 시간을 묻는 카드.
+  static const _capacityAskKind = 'auto:day_capacity';
 
   static const _conditionOtherLabel = '다른 이유가 있어';
   static final List<String> _conditionAskLabels = [
@@ -17109,6 +17128,9 @@ ${Prompts.outputRulesTail}$plannerActionSection$coachOfferTaskRule$halmaeHint$re
     if (msg.kind == _blockerAskKind && msg.choices.isNotEmpty) {
       return _buildChoiceBubbleCard(msg, _handleBlockerAskChoice);
     }
+    if (msg.kind == _capacityAskKind && msg.choices.isNotEmpty) {
+      return _buildChoiceBubbleCard(msg, _handleCapacityAskChoice);
+    }
     if (msg.kind == 'grooming_care_choice') {
       return _buildGroomingCareChoiceCard(msg);
     }
@@ -17950,6 +17972,19 @@ ${Prompts.outputRulesTail}$plannerActionSection$coachOfferTaskRule$halmaeHint$re
           ? '며칠째 넘기고 있는 일이 부담돼서 아직 시작을 못 하고 있어'
           : '오늘 핵심으로 잡은 일이 부담돼서 아직 시작을 못 하고 있어',
     );
+  }
+
+  /// 오늘 쓸 수 있는 시간을 물은 뒤 누른 버튼을 처리한다.
+  ///
+  /// 여기서 계획을 줄이라고 하지 않는다. 아직 오늘 계획이 뭔지도 모르는
+  /// 자리다. 답을 받아두면 계획을 적을 때 코치가 그걸 알고 말한다.
+  Future<void> _handleCapacityAskChoice(String label) async {
+    if (_isLoading) return;
+    HapticFeedback.lightImpact();
+    _injectUserChoice(label);
+    await DayCapacityService.save(label);
+    await AnalyticsService.logFeatureUsage('master_capacity_answered');
+    _injectAiMessage(_greetingBuilder.buildCapacityReply(label));
   }
 
   /// 무엇이 시작을 막는지 물은 뒤 누른 버튼을 처리한다.

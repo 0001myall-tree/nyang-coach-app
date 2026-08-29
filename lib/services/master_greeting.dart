@@ -298,6 +298,17 @@ class GreetingVoice {
   /// 답을 골랐을 때. 알아들었다는 것만 짧게 알린다.
   final List<String> conditionReply;
 
+  /// 오늘 쓸 수 있는 시간을 묻는 말.
+  ///
+  /// 계획을 짜기 전에 묻는다. 개수로만 재던 때는 두 시간뿐인 날의 다섯 개와
+  /// 온종일 비는 날의 다섯 개가 같은 것이 되었다.
+  final List<String> capacityAsk;
+
+  /// 답을 골랐을 때. 여기서 계획을 줄이라고 하지 않는다 — 아직 오늘 계획이
+  /// 무엇인지도 모르는 자리다.
+  final List<String> capacityReplyTight;
+  final List<String> capacityReplyRoomy;
+
   /// 막혀 있다고 한 뒤, 무엇이 걸리는지 묻는 말.
   ///
   /// 코치가 답을 이미 한 뒤에 붙는 카드라 짧아야 한다. 위로를 또 하지 않는다.
@@ -434,6 +445,9 @@ class GreetingVoice {
     required this.coreAsk,
     required this.conditionAsk,
     required this.conditionReply,
+    required this.capacityAsk,
+    required this.capacityReplyTight,
+    required this.capacityReplyRoomy,
     required this.blockerAsk,
     required this.blockerFreeAsk,
     required this.blockerReply,
@@ -739,6 +753,19 @@ class MasterGreetingCopy {
           '{그 두 날은 무엇이 달랐을까요|되는 날에는 무엇이 달랐을까요}?',
       '{되는 날과 안 되는 날이 꽤 갈리시네요|하시는 날엔 다 하시는데 아예 못 하시는 날도 있네요}. 양이 문제는 아닌 것 같습니다.\n'
           '{되는 날에는 무엇이 달랐는지 짚어주시겠어요|무엇이 달랐을까요}?',
+    ],
+    capacityAsk: [
+      '오늘 {쓰실 수 있는 시간이 얼마나 되시나요|시간이 얼마나 나시나요}?\n'
+          '{그거에 맞춰 오늘 계획을 같이 보겠습니다|알아두면 계획을 짜실 때 도움이 됩니다}.',
+      '{오늘 하루는 어떠신가요|오늘은 시간이 어떠신가요}? 쓸 수 있는 짬이 얼마나 될까요?',
+    ],
+    capacityReplyTight: [
+      '{알겠습니다|그러시군요}. 오늘은 욕심내지 말고 꼭 할 것 위주로 잡으시죠.',
+      '{알아두겠습니다|그러시군요}. 짧은 날에는 하나를 확실히 끝내는 편이 낫습니다.',
+    ],
+    capacityReplyRoomy: [
+      '{알겠습니다|그러시군요}. 시간이 있으니 미뤄두셨던 것도 하나 넣어보시죠.',
+      '{알아두겠습니다|좋습니다}. 오늘 계획은 그에 맞춰 같이 보겠습니다.',
     ],
     blockerAsk: [
       '하나만 여쭤봐도 될까요. 지금 {제일 걸리는 게 무엇인가요|무엇이 제일 걸리시나요}?',
@@ -1067,6 +1094,19 @@ class MasterGreetingCopy {
           '{그 두 날은 뭐가 달랐냥|되는 날엔 뭐가 달랐냥}?',
       '{되는 날이랑 안 되는 날이 꽤 갈린다냥|하는 날엔 다 하는데 아예 못 하는 날도 있다냥}. 양이 문제는 아닌 것 같다냥.\n'
           '{되는 날엔 뭐가 달랐는지 짚어줄래냥|뭐가 달랐냥}?',
+    ],
+    capacityAsk: [
+      '오늘 {쓸 수 있는 시간이 얼마나 되냥|시간이 얼마나 나냥}?\n'
+          '{그거에 맞춰 오늘 계획을 같이 보자냥|알아두면 계획 짤 때 도움이 된다냥}.',
+      '{오늘 하루는 어떻냥|오늘은 시간이 어떻냥}? 쓸 수 있는 짬이 얼마나 되냥?',
+    ],
+    capacityReplyTight: [
+      '{알겠다냥|그렇구나냥}. 오늘은 욕심내지 말고 꼭 할 것 위주로 잡자냥.',
+      '{알아두겠다냥|그렇구나냥}. 짧은 날엔 하나를 확실히 끝내는 게 낫다냥.',
+    ],
+    capacityReplyRoomy: [
+      '{알겠다냥|그렇구나냥}. 시간 있으니 미뤄뒀던 것도 하나 넣어보자냥.',
+      '{알아두겠다냥|좋다냥}. 오늘 계획은 그에 맞춰 같이 보자냥.',
     ],
     blockerAsk: [
       '하나만 물어봐도 되냥. 지금 {제일 걸리는 게 뭐냥|뭐가 제일 걸리냥}?',
@@ -1464,6 +1504,16 @@ class MasterGreetingBuilder extends GreetingLinePicker {
 
   /// 답을 골랐을 때의 대꾸.
   String buildConditionReply() => pickLine(voice.conditionReply);
+
+  /// 오늘 쓸 수 있는 시간을 묻는 말.
+  String buildCapacityAsk() => pickLine(voice.capacityAsk);
+
+  /// 답을 골랐을 때의 대꾸. 짧은 날과 여유 있는 날에 할 말이 다르다.
+  String buildCapacityReply(String answer) => pickLine(
+    answer == '온종일 비어 있어' || answer == '반나절쯤 돼'
+        ? voice.capacityReplyRoomy
+        : voice.capacityReplyTight,
+  );
 
   /// 무엇이 시작을 막는지 묻는 말.
   String buildBlockerAsk() => pickLine(voice.blockerAsk);

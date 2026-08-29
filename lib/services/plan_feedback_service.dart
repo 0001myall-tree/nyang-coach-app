@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/user_data.dart';
 import '../screens/coach_config.dart';
 import 'coach_say_service.dart';
+import 'day_capacity_service.dart';
 import 'life_context_service.dart';
 
 /// 계획을 적는 자리에서 코치가 한 마디 건네는 자리.
@@ -901,6 +902,7 @@ class PlanFeedbackService {
     final rate = (recent.rate * 100).round();
     final slackAdvice = await _nextSlackAdvice();
     final life = await LifeContextService.promptLine();
+    final capacity = await DayCapacityService.promptLine();
     final condition = await LifeContextService.executionConditionLine();
     final splitPhrase = await _nextSplitPhrase();
 
@@ -910,6 +912,7 @@ class PlanFeedbackService {
 최근 이레 완료율 $rate% (오늘 제외). 적어둔 것을 대체로 해내는 사람임.
 방금 적은 일: '$taskText'${hasTime ? '' : ' (시각을 정해두지 않음)'}
 오늘 계획 $todayCount개. 하나라도 해낸 날 기준으로 하루 ${recent.doneAverage.toStringAsFixed(1)}개를 끝내는 사람임.
+$capacity
 해내고 있다는 것을 먼저 인정하는 데서 시작할 것.
 그다음 무엇이 도움이 될지 하나만 고를 것.
 - 가서 하고 오면 끝나는 볼일('미용실 가기', '병원 가기', '장 보기')이면 손댈 것 없음. SKIP.
@@ -941,6 +944,7 @@ class PlanFeedbackService {
         '''[이번에 할 이야기 - 오늘 계획한 양]
 오늘 계획 $todayCount개. 계획을 적은 날 기준 하루 평균 완료는 ${recent.doneAverage.toStringAsFixed(1)}개임.
 숫자를 들이대며 "당신은 평균 몇 개"라고 하지 말 것. 그건 성적표를 읽어주는 말이 됨. 대신 계획 수가 많으면 완료율이 떨어지더라는 이야기를 먼저 꺼내고, 그다음에 이 사람의 숫자를 근거로 제안할 것.
+*위 [이 계획의 지난 자취]에 주로 저녁에 손을 댄다고 적혀 있고 지금이 오전이면, 개수가 아니라 그것부터 물을 것. 오전에 잡아두고 저녁에 몰아서 하는 사람에게는 하루가 아니라 저녁 몇 시간이 전부라, 같은 개수라도 훨씬 벅참. "설마 오늘도 밤에 다 하려는 건 아니지? 밤에 다 하기엔 벅차지 않을까?" 하는 식으로 짚고, 할 수 있을 만큼 줄여보거나 지금 할 수 있는 것을 하나 앞으로 당겨보자고 권할 것.
 $slackAdvice
 줄이라고 지시하지 말고, 어떻게 생각하는지 물으며 끝낼 것.''',
     };
@@ -953,10 +957,12 @@ $slackAdvice
 
 [지금 상태]
 ${_clockNote(DateTime.now())}
+$capacity
 $todaySummary
 $life
 $condition
 *이건 무엇을 말할지 고르는 데만 쓸 것. 문장에 옮기지 말 것. 다만 낮에 일이나 수업이 있는 사람이면 남은 시간을 그만큼 덜 잡을 것.
+*오늘 쓸 수 있는 시간이 적혀 있으면 그것이 개수보다 앞선다. 두 시간뿐인 날의 세 개와 온종일 비는 날의 세 개는 다른 이야기임. 사용자가 오늘 아침에 직접 말해준 것이라 짐작이 아님.
 *실행되는 날의 조건이 적혀 있으면 그쪽으로 거들 것. 본인이 직접 고른 답이라 짐작이 아니고, 계획을 다듬는 어떤 말보다 이 사람에게 잘 듣는다. 다만 유일한 조건인 것처럼 다루지는 말 것 — 여러 조건을 다 갖추라고 하면 그게 못 하는 이유가 된다.
 
 [이 계획의 지난 자취]
