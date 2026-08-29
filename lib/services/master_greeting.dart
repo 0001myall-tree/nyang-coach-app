@@ -298,6 +298,18 @@ class GreetingVoice {
   /// 답을 골랐을 때. 알아들었다는 것만 짧게 알린다.
   final List<String> conditionReply;
 
+  /// 막혀 있다고 한 뒤, 무엇이 걸리는지 묻는 말.
+  ///
+  /// 코치가 답을 이미 한 뒤에 붙는 카드라 짧아야 한다. 위로를 또 하지 않는다.
+  final List<String> blockerAsk;
+
+  /// 목록에 없다고 했을 때, 그 자리에서 적어달라고 청하는 말.
+  final List<String> blockerFreeAsk;
+
+  /// 무엇이 막는지 골랐을 때. 고쳐주겠다고 나서지 않는다 — 지금은 알아둔
+  /// 것으로 충분하고, 무엇을 할지는 다음 대화에서 그 답을 보고 정한다.
+  final List<String> blockerReply;
+
   /// 같은 질문을, 지난 이레보다 해낸 날이 늘어난 사람에게 건널 때.
   /// `{{from}}`이 지난 이레, `{{to}}`가 이번 이레의 날수.
   ///
@@ -422,6 +434,9 @@ class GreetingVoice {
     required this.coreAsk,
     required this.conditionAsk,
     required this.conditionReply,
+    required this.blockerAsk,
+    required this.blockerFreeAsk,
+    required this.blockerReply,
     required this.conditionAskImproved,
     required this.conditionFreeAsk,
     required this.adviceWorked,
@@ -724,6 +739,17 @@ class MasterGreetingCopy {
           '{그 두 날은 무엇이 달랐을까요|되는 날에는 무엇이 달랐을까요}?',
       '{되는 날과 안 되는 날이 꽤 갈리시네요|하시는 날엔 다 하시는데 아예 못 하시는 날도 있네요}. 양이 문제는 아닌 것 같습니다.\n'
           '{되는 날에는 무엇이 달랐는지 짚어주시겠어요|무엇이 달랐을까요}?',
+    ],
+    blockerAsk: [
+      '하나만 여쭤봐도 될까요. 지금 {제일 걸리는 게 무엇인가요|무엇이 제일 걸리시나요}?',
+      '{무엇이 걸리는지만 알면 다음부터 훨씬 수월합니다|어디서 걸리는지만 알아두고 싶어서요}. 어느 쪽에 가까울까요?',
+    ],
+    blockerFreeAsk: [
+      '{어떤 게 걸리는지 한 줄로 적어주시겠어요|무엇이 걸리는지 편하게 적어주세요}? {짧아도 괜찮습니다|길게 안 쓰셔도 됩니다}.',
+    ],
+    blockerReply: [
+      '{알겠습니다|그러셨군요}. 다음에 같은 자리에서 막히시면 그쪽부터 같이 보겠습니다.',
+      '{기억해두겠습니다|알아두겠습니다}. 그 자리를 아는 것만으로도 다음이 달라집니다.',
     ],
     conditionAskImproved: [
       '지난 이레에는 {{from}}일, 이번 이레는 {{to}}일 해내셨습니다. 손대시는 날이 늘고 있어요.\n'
@@ -1041,6 +1067,17 @@ class MasterGreetingCopy {
           '{그 두 날은 뭐가 달랐냥|되는 날엔 뭐가 달랐냥}?',
       '{되는 날이랑 안 되는 날이 꽤 갈린다냥|하는 날엔 다 하는데 아예 못 하는 날도 있다냥}. 양이 문제는 아닌 것 같다냥.\n'
           '{되는 날엔 뭐가 달랐는지 짚어줄래냥|뭐가 달랐냥}?',
+    ],
+    blockerAsk: [
+      '하나만 물어봐도 되냥. 지금 {제일 걸리는 게 뭐냥|뭐가 제일 걸리냥}?',
+      '{뭐가 걸리는지만 알면 다음부턴 훨씬 수월하다냥|어디서 걸리는지만 알아두고 싶다냥}. 어느 쪽에 가깝냥?',
+    ],
+    blockerFreeAsk: [
+      '{뭐가 걸리는지 한 줄로 적어줄래냥|뭐가 걸리는지 편하게 적어보라냥}? {짧아도 괜찮다냥|길게 안 써도 된다냥}.',
+    ],
+    blockerReply: [
+      '{알겠다냥|그랬구나냥}. 다음에 같은 자리에서 막히면 그쪽부터 같이 보자냥.',
+      '{기억해두겠다냥|알아두겠다냥}. 그 자리를 아는 것만으로도 다음이 달라진다냥.',
     ],
     conditionAskImproved: [
       '지난 이레엔 {{from}}일, 이번 이레는 {{to}}일 해냈다냥. 손대는 날이 늘고 있다냥.\n'
@@ -1427,6 +1464,15 @@ class MasterGreetingBuilder extends GreetingLinePicker {
 
   /// 답을 골랐을 때의 대꾸.
   String buildConditionReply() => pickLine(voice.conditionReply);
+
+  /// 무엇이 시작을 막는지 묻는 말.
+  String buildBlockerAsk() => pickLine(voice.blockerAsk);
+
+  /// 목록에 없다고 했을 때, 적어달라고 청하는 말.
+  String buildBlockerFreeAsk() => pickLine(voice.blockerFreeAsk);
+
+  /// 무엇이 막는지 골랐을 때의 대꾸.
+  String buildBlockerReply() => pickLine(voice.blockerReply);
 
   /// 목록에 없는 답이라고 했을 때, 적어달라고 청하는 말.
   String buildConditionFreeAsk() => pickLine(voice.conditionFreeAsk);

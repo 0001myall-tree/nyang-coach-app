@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:nyang_coach/services/execution_blocker_service.dart';
+import 'package:nyang_coach/services/life_context_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:nyang_coach/services/user_title_service.dart';
 import 'package:nyang_coach/services/analytics_service.dart';
@@ -34,6 +36,12 @@ class _RecordsScreenState extends State<RecordsScreen> {
 
   bool _isLoading = true;
   List<Map<String, dynamic>> _history = [];
+
+  /// 되는 날의 조건. 사용자가 코치에게 골라준 답이다.
+  List<String> _executionConditions = const [];
+
+  /// 시작을 막는 것. 막혀 있던 그 순간에 골라준 답이다.
+  List<String> _executionBlockers = const [];
   Map<String, Map<String, dynamic>> _habitLogs = {};
   List<HabitItem> _habits = [];
   String _userTitle = UserTitleService.defaultTitle;
@@ -64,6 +72,9 @@ class _RecordsScreenState extends State<RecordsScreen> {
       final List decoded = jsonDecode(rawHistory);
       _history = decoded.cast<Map<String, dynamic>>();
     }
+
+    _executionConditions = await LifeContextService.conditionAnswersPicked();
+    _executionBlockers = await ExecutionBlockerService.pickedLabels();
 
     // 2. Habits
     final rawHabits = prefs.getString('nyang_habits');
@@ -1506,6 +1517,10 @@ ${feedbackType == 0
           _buildWeeklyCompanionSummary(),
           const SizedBox(height: 10),
           _buildStartPatternSummary(),
+          const SizedBox(height: 10),
+          _buildExecutionConditionSummary(),
+          if (_executionBlockers.isNotEmpty) const SizedBox(height: 10),
+          _buildExecutionBlockerSummary(),
         ],
       ),
     );
@@ -1546,6 +1561,105 @@ ${feedbackType == 0
   ///
   /// 위 차트가 "어느 날 잘했나"라면 이건 "몇 시에 시작한 날 잘했나"다.
   /// 프렌즈와 마스터 모두에게 보여준다.
+  /// 되는 날에 무엇이 달랐는지, 본인이 골라둔 답.
+  ///
+  /// 코치가 쥐고만 있으면 사용자는 자기가 뭐라고 답했는지 잊는다. 여기 적어두면
+  /// 기록을 볼 때마다 다시 보게 되고, 그 자체가 오늘 무엇을 하면 되는지를
+  /// 알려주는 한 줄이 된다.
+  Widget _buildExecutionConditionSummary() {
+    final answers = _executionConditions;
+    if (answers.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8F6FF),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE8E3F8)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildWeeklyCompanionHeader(
+            iconPath: 'assets/icons/fa-hourglass-start-solid.svg',
+            label: '잘 되는 날의 조건',
+          ),
+          const SizedBox(height: 8),
+          for (final answer in answers)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 2),
+              child: Text(
+                answer,
+                style: GoogleFonts.notoSansKr(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
+                  color: _recordCoach.accentColor,
+                ),
+              ),
+            ),
+          const SizedBox(height: 4),
+          Text(
+            '코치에게 직접 알려주신 조건이에요. 오늘도 이 조건이 되는지 살펴보세요.',
+            style: GoogleFonts.notoSansKr(
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+              color: const Color(0xFF8A8A9E),
+              height: 1.5,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 시작을 막는 것. 막혀 있던 그 순간에 본인이 고른 답이다.
+  Widget _buildExecutionBlockerSummary() {
+    if (_executionBlockers.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8F6FF),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE8E3F8)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildWeeklyCompanionHeader(
+            iconPath: 'assets/icons/fa-hourglass-start-solid.svg',
+            label: '시작을 막는 것',
+          ),
+          const SizedBox(height: 8),
+          for (final answer in _executionBlockers)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 2),
+              child: Text(
+                answer,
+                style: GoogleFonts.notoSansKr(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
+                  color: _recordCoach.accentColor,
+                ),
+              ),
+            ),
+          const SizedBox(height: 4),
+          Text(
+            '막혔을 때 직접 골라주신 자리예요. 다음에 같은 데서 걸리면 여기부터 보면 돼요.',
+            style: GoogleFonts.notoSansKr(
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+              color: const Color(0xFF8A8A9E),
+              height: 1.5,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildStartPatternSummary() {
     // 30일치까지 본다. 며칠 안 쌓였을 때 단정하지 않는 건 서비스가 판단한다.
     final recent = _history.length > 30

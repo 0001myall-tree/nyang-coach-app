@@ -265,9 +265,17 @@ class LifeContextService {
     if (free != null && free.isNotEmpty) {
       return '- 실행되는 날의 조건(사용자가 직접 한 말): "$free"';
     }
-    final line = conditionAnswers[prefs.getString(_conditionKey)];
-    if (line == null) return '';
-    return '- 실행되는 날의 조건(사용자가 직접 고른 것): $line';
+    final picked = prefs.getStringList(_conditionKey) ?? const [];
+    final lines = [
+      for (final answer in picked)
+        if (conditionAnswers[answer] != null) conditionAnswers[answer]!,
+    ];
+    if (lines.isEmpty) return '';
+    if (lines.length == 1) {
+      return '- 실행되는 날의 조건(사용자가 직접 고른 것): ${lines.first}';
+    }
+    return '- 실행되는 날의 조건(사용자가 직접 고른 것, 둘 다 해당):\n'
+        '  · ${lines.join('\n  · ')}';
   }
 
   /// 직접 적은 답을 받아 둔다.
@@ -283,6 +291,20 @@ class LifeContextService {
     await prefs.setString(_conditionAtKey, DateTime.now().toIso8601String());
   }
 
+  /// 골라둔 답을 사람이 읽을 말 그대로. 기록 화면이 이걸 보여준다.
+  static Future<List<String>> conditionAnswersPicked() async {
+    final prefs = await SharedPreferences.getInstance();
+    final at = DateTime.tryParse(prefs.getString(_conditionAtKey) ?? '');
+    if (at == null || DateTime.now().difference(at) > conditionLife) {
+      return const [];
+    }
+    final free = prefs.getString(_conditionFreeKey);
+    if (free != null && free.isNotEmpty) return [free];
+    return (prefs.getStringList(_conditionKey) ?? const [])
+        .where(conditionAnswers.containsKey)
+        .toList(growable: false);
+  }
+
   /// 아직 물어본 적이 없거나, 물어본 지 한참 지났는지.
   static Future<bool> mayAskCondition() async {
     final prefs = await SharedPreferences.getInstance();
@@ -292,14 +314,21 @@ class LifeContextService {
   }
 
   /// 골랐다. 답을 모르겠다고 해도 물어본 것은 물어본 것이라 시각을 남긴다.
-  static Future<void> saveConditionAnswer(String? answer) async {
+  static Future<void> saveConditionAnswer(String? answer) =>
+      saveConditionAnswers(answer == null ? const [] : [answer]);
+
+  /// 여러 개를 골랐을 때. 조건은 대개 하나가 아니다.
+  static Future<void> saveConditionAnswers(List<String> answers) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_conditionAtKey, DateTime.now().toIso8601String());
-    if (answer != null && conditionAnswers.containsKey(answer)) {
-      await prefs.setString(_conditionKey, answer);
-      // 새로 고른 답이 앞서 적어둔 말을 대신한다.
-      await prefs.remove(_conditionFreeKey);
-    }
+    final kept = answers
+        .where(conditionAnswers.containsKey)
+        .take(2)
+        .toList(growable: false);
+    if (kept.isEmpty) return;
+    await prefs.setStringList(_conditionKey, kept);
+    // 새로 고른 답이 앞서 적어둔 말을 대신한다.
+    await prefs.remove(_conditionFreeKey);
   }
 
   /// 이 말에서 읽히는 생활들. 없으면 빈 집합.

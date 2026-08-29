@@ -15,6 +15,7 @@ import 'package:speech_to_text/speech_to_text.dart';
 import 'package:speech_to_text/speech_recognition_result.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:nyang_coach/screens/coach_selection_screen.dart';
+import 'package:nyang_coach/services/execution_blocker_service.dart';
 import 'package:nyang_coach/services/life_context_service.dart';
 import 'package:nyang_coach/services/plan_feedback_service.dart';
 import 'package:nyang_coach/services/analytics_service.dart';
@@ -1388,6 +1389,9 @@ class _ChatScreenState extends State<ChatScreen>
   /// 다음에 사용자가 하는 말이 그 답이다. 버튼으로 고른 답은 저장되는데
   /// 직접 쓴 답만 흘려보내면, 제일 정확한 답이 제일 먼저 사라진다.
   bool _awaitingConditionAnswer = false;
+
+  /// 무엇이 막는지 직접 적어달라고 한 참인지.
+  bool _awaitingBlockerAnswer = false;
   static const _eveningSplitTtl = Duration(minutes: 3);
 
   // 실행 저항 원인 확인: 확인 질문을 던진 직후, 사용자의 원인 답변을 기다리는 상태
@@ -5881,6 +5885,9 @@ Rules:
 
   /// 실행되는 날에 무엇이 달랐는지 묻는 발화.
   static const _masterConditionAskKind = 'auto:master_condition';
+
+  /// 무엇이 시작을 막는지 묻는 카드.
+  static const _blockerAskKind = 'blocker_ask';
 
   static const _conditionOtherLabel = '다른 이유가 있어';
   static final List<String> _conditionAskLabels = [
@@ -11874,6 +11881,10 @@ Rules:
       _awaitingConditionAnswer = false;
       unawaited(LifeContextService.saveFreeCondition(trimmed));
     }
+    if (_awaitingBlockerAnswer) {
+      _awaitingBlockerAnswer = false;
+      unawaited(ExecutionBlockerService.saveFreeAnswer(trimmed));
+    }
 
     final isFutureTodayFlow =
         trimmed == '미래를 위한 오늘' ||
@@ -12580,6 +12591,14 @@ Rules:
         await _saveVisionRecommendation(parsed);
       }
       if (!mounted || widget.coachId != currentId) return;
+      // 막혀 있다고 말한 턴이었으면, 코치의 답 뒤에 무엇이 걸리는지 한 번
+      // 물어본다. 2주에 한 번까지다 — 막힐 때마다 물으면 그것부터가 막는
+      // 일이 된다.
+      final askBlocker =
+          _coach.isMaster &&
+          ExecutionResistanceService.isResistanceExpression(trimmed) &&
+          await ExecutionBlockerService.mayAsk();
+      if (!mounted || widget.coachId != currentId) return;
       setState(() {
         _messages.add(
           ChatMessage(
@@ -12598,6 +12617,17 @@ Rules:
                 : const [],
           ),
         );
+        if (askBlocker) {
+          _messages.add(
+            ChatMessage(
+              text: _greetingBuilder.buildBlockerAsk(),
+              isUser: false,
+              time: DateTime.now(),
+              kind: _blockerAskKind,
+              choices: ExecutionBlockerService.labels,
+            ),
+          );
+        }
         _suppressDefaultChips = parsed.suppressDefaultChips;
         _dynamicChips = parsed.chips.isNotEmpty
             ? parsed.chips
@@ -13874,10 +13904,17 @@ Rules:
       // 본인만 아는 것이라, 없으면 코치는 일반론으로 답할 수밖에 없다.
       final life = await LifeContextService.promptLine();
       final condition = await LifeContextService.executionConditionLine();
-      if (condition.isNotEmpty) {
+      final blocker = await ExecutionBlockerService.promptLine();
+      if (condition.isNotEmpty || blocker.isNotEmpty) {
         sb.writeln('\n[이 사람의 생활]');
         sb.writeln(life);
-        sb.writeln(condition);
+        if (condition.isNotEmpty) sb.writeln(condition);
+        if (blocker.isNotEmpty) {
+          sb.writeln(blocker);
+          sb.writeln(
+            '*시작을 막는 것은 막혀 있던 그 순간에 사용자가 직접 고른 답입니다. 같은 자리에서 또 막혔을 때 그쪽부터 보세요. 다만 매번 이것 때문이라고 단정하지는 마세요.',
+          );
+        }
         sb.writeln(
           '*실행이 잘 되는 날의 조건은 사용자가 직접 고른 답입니다. 짐작이 아니라 본인이 한 말이니 이것부터 붙잡으세요. 다만 이게 유일한 조건은 아닙니다 — 대화에서 다른 조건이 보이면 그쪽을 따라가세요. 여러 조건을 한꺼번에 갖추라고는 하지 마세요. 다 맞는 날은 거의 없어서 오히려 못 하는 이유가 늘어납니다.',
         );
@@ -17061,7 +17098,10 @@ ${Prompts.outputRulesTail}$plannerActionSection$coachOfferTaskRule$halmaeHint$re
       return _buildChoiceBubbleCard(msg, _handleMasterStalledAskChoice);
     }
     if (msg.kind == _masterConditionAskKind && msg.choices.isNotEmpty) {
-      return _buildChoiceBubbleCard(msg, _handleConditionAskChoice);
+      return _buildConditionChoiceCard(msg);
+    }
+    if (msg.kind == _blockerAskKind && msg.choices.isNotEmpty) {
+      return _buildChoiceBubbleCard(msg, _handleBlockerAskChoice);
     }
     if (msg.kind == 'grooming_care_choice') {
       return _buildGroomingCareChoiceCard(msg);
@@ -17906,16 +17946,166 @@ ${Prompts.outputRulesTail}$plannerActionSection$coachOfferTaskRule$halmaeHint$re
     );
   }
 
-  /// 실행되는 날에 무엇이 달랐는지 물은 뒤 누른 버튼을 처리한다.
+  /// 무엇이 시작을 막는지 물은 뒤 누른 버튼을 처리한다.
+  ///
+  /// 하나만 고른다. 지금 막고 있는 것은 대개 하나이고, 여럿을 고르게 하면
+  /// 막혀 있는 사람에게 분류를 시키는 일이 된다.
+  Future<void> _handleBlockerAskChoice(String label) async {
+    if (_isLoading) return;
+    HapticFeedback.lightImpact();
+
+    if (label == ExecutionBlockerService.otherLabel) {
+      // 누른 말을 그대로 보내지 않는다. 답이 아니라 적겠다는 표시다.
+      await ExecutionBlockerService.markAsked();
+      _awaitingBlockerAnswer = true;
+      _injectAiMessage(_greetingBuilder.buildBlockerFreeAsk());
+      if (mounted) _inputFocus.requestFocus();
+      await AnalyticsService.logFeatureUsage('blocker_other');
+      return;
+    }
+
+    _injectUserChoice(label);
+    await ExecutionBlockerService.saveAnswer(label);
+    await AnalyticsService.logFeatureUsage('blocker_answered');
+    _injectAiMessage(_greetingBuilder.buildBlockerReply());
+  }
+
+  /// 되는 날의 조건을 고르는 카드. 이것만 여러 개를 고른다.
+  ///
+  /// 조건은 대개 하나가 아니다 — 카페에 갔고 일찍 시작한 날이 되는 날일 수
+  /// 있다. 하나만 고르게 하면 나머지는 없는 셈이 되는데, 그러면 다음에 그
+  /// 조건이 갖춰진 날을 코치가 못 알아본다.
+  ///
+  /// 둘까지만 받는다. 셋을 넘어가면 조건이 아니라 문턱이 된다 — 다 갖춰진
+  /// 날은 거의 없어서 오히려 못 하는 이유가 늘어난다.
+  Widget _buildConditionChoiceCard(ChatMessage msg) {
+    final accent = _coach.accentColor;
+    final picked = _pickedConditions;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12, left: 44, right: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (final label in msg.choices)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: GestureDetector(
+                onTap: _isLoading
+                    ? null
+                    : () => _toggleConditionChoice(label),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 12,
+                  ),
+                  decoration: BoxDecoration(
+                    color: picked.contains(label)
+                        ? accent.withValues(alpha: 0.14)
+                        : const Color(0xFFF8F5FF),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: picked.contains(label)
+                          ? accent
+                          : const Color(0xFFE5DEFF),
+                      width: picked.contains(label) ? 1.6 : 1,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        picked.contains(label)
+                            ? Icons.check_circle_rounded
+                            : Icons.circle_outlined,
+                        size: 18,
+                        color: picked.contains(label)
+                            ? accent
+                            : const Color(0xFFC9C2E0),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          label,
+                          style: GoogleFonts.notoSansKr(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w800,
+                            color: accent,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          if (picked.isNotEmpty)
+            GestureDetector(
+              onTap: _isLoading ? null : _submitConditionChoices,
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: accent,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  '이걸로 할게',
+                  style: GoogleFonts.notoSansKr(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w900,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// 고르는 중인 조건들. 카드를 그리는 쪽과 처리하는 쪽이 같이 본다.
+  final Set<String> _pickedConditions = <String>{};
+
+  void _toggleConditionChoice(String label) {
+    HapticFeedback.selectionClick();
+    setState(() {
+      if (_pickedConditions.contains(label)) {
+        _pickedConditions.remove(label);
+        return;
+      }
+      // "다른 이유가 있어"는 고르는 답이 아니라 적겠다는 표시다. 다른 것과
+      // 섞이면 무엇을 저장할지가 흐려진다.
+      if (label == _conditionOtherLabel) {
+        _pickedConditions
+          ..clear()
+          ..add(label);
+        return;
+      }
+      _pickedConditions.remove(_conditionOtherLabel);
+      if (_pickedConditions.length >= 2) return;
+      _pickedConditions.add(label);
+    });
+  }
+
+  Future<void> _submitConditionChoices() async {
+    if (_isLoading || _pickedConditions.isEmpty) return;
+    final picked = _pickedConditions.toList();
+    setState(_pickedConditions.clear);
+    await _handleConditionAskChoice(picked);
+  }
+
+  /// 실행되는 날에 무엇이 달랐는지 물은 뒤 고른 답을 처리한다.
   ///
   /// 고른 답은 그대로 저장해 앞으로 계획 이야기를 할 때 코치가 참고한다.
   /// 다른 이유가 있다고 하면 대화로 받는다 — 목록에 없는 답이 그 사람에게는
   /// 제일 중요한 답일 수 있다.
-  Future<void> _handleConditionAskChoice(String label) async {
-    if (_isLoading) return;
+  Future<void> _handleConditionAskChoice(List<String> labels) async {
+    if (_isLoading || labels.isEmpty) return;
     HapticFeedback.lightImpact();
 
-    if (label == _conditionOtherLabel) {
+    if (labels.first == _conditionOtherLabel) {
       // 누른 말을 그대로 보내지 않는다. "다른 이유가 있어"는 답이 아니라
       // 답을 적겠다는 표시다. 물어보고 입력창으로 옮겨준다.
       await LifeContextService.saveConditionAnswer(null);
@@ -17926,8 +18116,8 @@ ${Prompts.outputRulesTail}$plannerActionSection$coachOfferTaskRule$halmaeHint$re
       return;
     }
 
-    _injectUserChoice(label);
-    await LifeContextService.saveConditionAnswer(label);
+    _injectUserChoice(labels.join(', '));
+    await LifeContextService.saveConditionAnswers(labels);
     await AnalyticsService.logFeatureUsage('master_condition_answered');
     _injectAiMessage(_greetingBuilder.buildConditionReply());
   }
