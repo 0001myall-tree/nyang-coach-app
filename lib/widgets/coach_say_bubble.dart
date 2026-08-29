@@ -49,9 +49,18 @@ class _CoachSayBubbleState extends State<CoachSayBubble>
     super.dispose();
   }
 
+  /// 말풍선이 차지할 수 있는 최대 높이. 화면의 이만큼.
+  ///
+  /// 길이를 고정하지 않는다. 한 줄짜리 말에 큰 상자가 뜨면 어색하고, 긴 말이
+  /// 잘리면 정작 뒷문장이 안 보인다. 대신 상한을 둔다 — 코치가 길게 쓴 날
+  /// 말풍선이 화면을 덮으면 그 아래 할 일이 아예 안 보인다.
+  static const double _maxHeightRatio = 0.4;
+
   @override
   Widget build(BuildContext context) {
-    final bottom = MediaQuery.of(context).padding.bottom;
+    final media = MediaQuery.of(context);
+    final bottom = media.padding.bottom;
+    final maxHeight = media.size.height * _maxHeightRatio;
 
     return Positioned(
       // 탭바 위에 앉힌다. 할 일 목록을 덜 가리는 자리다.
@@ -68,6 +77,7 @@ class _CoachSayBubbleState extends State<CoachSayBubble>
           child: Material(
             color: Colors.transparent,
             child: Container(
+              constraints: BoxConstraints(maxHeight: maxHeight),
               padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
               decoration: BoxDecoration(
                 color: AppDesignTokens.surface,
@@ -89,38 +99,40 @@ class _CoachSayBubbleState extends State<CoachSayBubble>
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      ClipOval(
-                        child: Image.asset(
-                          widget.avatarAsset,
-                          width: 34,
-                          height: 34,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, _, _) => Container(
+                  Flexible(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        ClipOval(
+                          child: Image.asset(
+                            widget.avatarAsset,
                             width: 34,
                             height: 34,
-                            color: widget.accent.withValues(alpha: 0.15),
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, _, _) => Container(
+                              width: 34,
+                              height: 34,
+                              color: widget.accent.withValues(alpha: 0.15),
+                            ),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          widget.text,
-                          // 긴 말은 잘라둔다. 전문은 채팅에 그대로 남아 있다.
-                          maxLines: 4,
-                          overflow: TextOverflow.ellipsis,
-                          style: GoogleFonts.notoSansKr(
-                            fontSize: 13.5,
-                            height: 1.5,
-                            fontWeight: FontWeight.w600,
-                            color: AppDesignTokens.textPrimary,
+                        const SizedBox(width: 10),
+                        Expanded(
+                          // 상한에 닿으면 잘리는 대신 그 안에서 스크롤된다.
+                          child: SingleChildScrollView(
+                            child: Text(
+                              widget.text,
+                              style: GoogleFonts.notoSansKr(
+                                fontSize: 13.5,
+                                height: 1.5,
+                                fontWeight: FontWeight.w600,
+                                color: AppDesignTokens.textPrimary,
+                              ),
+                            ),
                           ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                   const SizedBox(height: 10),
                   // 답을 두 개로 갈라둔다.

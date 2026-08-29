@@ -31,6 +31,13 @@ class PlanFeedbackService {
   /// 말을 거는 간격. 매일이면 계획을 적을 때마다 검사받는 기분이 된다.
   static const Duration interval = Duration(days: 2);
 
+  /// 해내고 있는 사람에게 말을 거는 간격.
+  ///
+  /// 아예 침묵하는 것보다 낫다. 완료율이 높아도 계획을 뭉뚱그려 적는 버릇은
+  /// 남아 있을 수 있고, 그건 언젠가 일이 커졌을 때 걸린다. 다만 잘 굴러가는
+  /// 사람에게 이틀마다는 참견이라 하루를 더 띄운다.
+  static const Duration steadyInterval = Duration(days: 3);
+
   /// 이미 짚은 이름을 몇 개까지 기억할지. 여기 있는 이름에는 말을 걸지 않는다.
   static const int handledMemory = 7;
 
@@ -40,10 +47,10 @@ class PlanFeedbackService {
   /// 되어야 누르는 쪽이 가볍다.
   static const Duration restLength = Duration(days: 7);
 
-  /// 이 아래면 도울 여지가 있다고 본다.
+  /// 이 아래면 도울 여지가 있다고 본다. 실행 패턴이 "안정형"으로 보는 선과 같다.
   ///
-  /// 실행 패턴이 "안정형 — 잘 돌아가고 있다"로 보는 선과 같은 값이다. 둘이
-  /// 어긋나면 그 사이에 낀 사람이 생긴다 — 안정형도 아닌데 도움도 안 받는.
+  /// 넘는 사람에게도 입을 닫지는 않는다. 간격이 사흘로 늘고, 근거가 있는
+  /// 이야기(시각을 정해두면 수월해진다) 하나만 남는다.
   static const double lowRate = 0.7;
 
   /// 최근에 해내던 양보다 이만큼 넘게 잡았을 때만 총량 이야기를 꺼낸다.
@@ -90,7 +97,13 @@ class PlanFeedbackService {
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.reload();
-    if (!_maySpeakNow(prefs)) return;
+
+    final recent = _recentRates(prefs, days: 2);
+    // 해내고 있으면 뜸하게. 완료율이 간격을 정한다.
+    final gap = recent.hasData && recent.rate > lowRate
+        ? steadyInterval
+        : interval;
+    if (!_maySpeakNow(prefs, gap)) return;
     // 한 번 짚은 항목은 다시 짚지 않는다. 고쳤든 안 고쳤든, 같은 말을 두 번
     // 하는 순간 조언이 잔소리가 된다.
     if ((prefs.getStringList(_handledKey) ?? const []).contains(taskText)) {
@@ -98,7 +111,6 @@ class PlanFeedbackService {
     }
 
     final today = _todayTasks(prefs);
-    final recent = _recentRates(prefs, days: 2);
     final kind = _pickKind(
       prefs: prefs,
       taskText: taskText,
@@ -112,6 +124,7 @@ class PlanFeedbackService {
       coachId: coachId,
       kind: kind,
       taskText: taskText,
+      hasTime: hasTime,
       todayCount: today.length,
       recent: recent,
     );
@@ -180,7 +193,7 @@ class PlanFeedbackService {
         '''${coach.systemPrompt}
 
 [지금 상황]
-아침에 사용자가 앱을 열었습니다. 당신은 채팅 밖 말풍선으로 한 마디를 건넵니다. 두세 문장을 넘기지 마세요.
+아침에 사용자가 앱을 열었습니다. 당신은 채팅 밖 말풍선으로 한 마디를 건넵니다. 화면 위에 뜨는 작은 말풍선이라, 두 문장 90자 안에서 끝내세요. 넘으면 뒷말이 잘립니다.
 
 [이번에 할 이야기 - 사전 부검]
 어떤 일을 시작하기 전에 "이 계획이 완전히 망했다고 가정하고" 그 원인을 미리 적어보는 방법이 있습니다. 미리 꺼내놓은 위험은 시작 전에 치울 수 있어서, 실패 확률이 눈에 띄게 줄어듭니다.
@@ -228,13 +241,13 @@ class PlanFeedbackService {
     return userData.isPlanActive && userData.planType == 'master';
   }
 
-  static bool _maySpeakNow(SharedPreferences prefs) {
+  static bool _maySpeakNow(SharedPreferences prefs, Duration gap) {
     final restUntil = DateTime.tryParse(prefs.getString(_restUntilKey) ?? '');
     if (restUntil != null && DateTime.now().isBefore(restUntil)) return false;
 
     final lastAt = DateTime.tryParse(prefs.getString(_lastSaidAtKey) ?? '');
     if (lastAt == null) return true;
-    return DateTime.now().difference(lastAt) >= interval;
+    return DateTime.now().difference(lastAt) >= gap;
   }
 
   static Future<void> _remember(
@@ -277,12 +290,13 @@ class PlanFeedbackService {
       return hasTime ? null : _PlanFeedbackKind.when;
     }
 
-    // 해내고 있으면 아무 말도 하지 않는다.
+    // 해내고 있는 사람은 따로 본다.
     //
-    // 계획이 많은 것도, 시각을 안 적는 것도 그 자체로는 문제가 아니다. 하루에
-    // 열 개를 잡아도 다 해내는 사람에게 그건 그 사람의 방식이다. 조언이 필요한
-    // 자리는 계획이 실제로 안 끝나고 있는 때뿐이다.
-    if (recent.rate > lowRate) return null;
+    // 계획이 많은 것도, 안 끝나는 것도 이 사람에게는 일어나지 않는 일이라
+    // 총량과 크기 이야기는 근거가 없다. 그렇다고 시각 이야기만 사흘마다
+    // 되풀이하면, 이미 시각 없이도 해내는 사람에게 없는 문제를 고치라는 말이
+    // 된다. 무엇이 도움이 될지는 그 계획을 보고 코치가 고른다.
+    if (recent.rate > lowRate) return _PlanFeedbackKind.steady;
 
     // 여기서부터는 무엇이 걸리고 있는지를 고른다. 셋 다 완료율이 낮은 사람에게
     // 하는 이야기라, 순서는 그날 무엇이 눈에 띄는지로 정한다.
@@ -384,6 +398,7 @@ class PlanFeedbackService {
     required String coachId,
     required _PlanFeedbackKind kind,
     required String taskText,
+    required bool hasTime,
     required int todayCount,
     required _RecentRates recent,
   }) async {
@@ -391,6 +406,15 @@ class PlanFeedbackService {
     final rate = (recent.rate * 100).round();
 
     final situation = switch (kind) {
+      _PlanFeedbackKind.steady =>
+        '''[이번에 할 이야기 - 잘 되고 있는 사람]
+최근 이틀 완료율은 $rate%다. 적어둔 것을 대체로 해내는 사람이라, 계획이 많다거나 안 끝난다는 이야기는 이 사람에게 해당하지 않는다.
+방금 적은 계획: '$taskText'${hasTime ? '' : ' (시각을 정해두지 않음)'}
+해내고 있다는 것을 먼저 인정하는 데서 시작하세요.
+그다음 이 계획에 무엇이 도움이 될지 하나만 고르세요.
+- 하루에 끝날 크기가 아니면: 한 과제로 두지 말고 진도가 보이도록 나눠보자고. 나눠두면 하나씩 지워지는 것이 눈에 보여서 성취감이 더 자주 옵니다.
+- 크기는 괜찮은데 언제 할지가 비어 있으면: 시각과 장소까지 정해두자고. 정해둔 사람이 그러지 않은 사람보다 목표 달성률이 두세 배 높았습니다.
+둘 다 이미 되어 있으면 SKIP.''',
       _PlanFeedbackKind.when =>
         '''[이번에 할 이야기 - 실행 의도]
 심리 연구에 따르면 '언제, 어디서, 어떻게 할 것인지'까지 정해둔 사람은 그러지 않은 사람보다 목표 달성률이 두세 배 높았다. "글을 쓴다"보다 "오전 9시에 책상에 앉아 바로 첫 문장을 쓴다"가 실제로 일어난다.
@@ -416,7 +440,7 @@ class PlanFeedbackService {
         '''${coach.systemPrompt}
 
 [지금 상황]
-사용자가 방금 오늘 할 일 하나를 적어 저장했습니다. 당신은 그 옆에서 짧게 한 마디를 건넵니다. 대화 중이 아니라 화면에 뜨는 말풍선이라 두세 문장을 넘기지 마세요.
+사용자가 방금 오늘 할 일 하나를 적어 저장했습니다. 당신은 그 옆에서 짧게 한 마디를 건넵니다. 대화창이 아니라 화면 위에 뜨는 작은 말풍선이라, 두 문장 90자 안에서 끝내세요. 넘으면 뒷말이 잘려서 사용자에게 닿지 않습니다.
 
 $situation
 
@@ -443,6 +467,9 @@ $situation
 }
 
 enum _PlanFeedbackKind {
+  /// 잘 되고 있는 사람. 무슨 이야기를 할지는 코치가 고른다.
+  steady,
+
   /// 언제 어디서 할지를 정해보자.
   when,
 
