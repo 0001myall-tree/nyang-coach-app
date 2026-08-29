@@ -40,8 +40,11 @@ class PlanFeedbackService {
   /// 되어야 누르는 쪽이 가볍다.
   static const Duration restLength = Duration(days: 7);
 
-  /// 안 되고 있다고 볼 완료율.
-  static const double lowRate = 0.5;
+  /// 이 아래면 도울 여지가 있다고 본다.
+  ///
+  /// 실행 패턴이 "안정형 — 잘 돌아가고 있다"로 보는 선과 같은 값이다. 둘이
+  /// 어긋나면 그 사이에 낀 사람이 생긴다 — 안정형도 아닌데 도움도 안 받는.
+  static const double lowRate = 0.7;
 
   /// 최근에 해내던 양보다 이만큼 넘게 잡았을 때만 총량 이야기를 꺼낸다.
   ///
@@ -265,12 +268,21 @@ class PlanFeedbackService {
     // 그 사람에게는 그걸로 충분하다는 뜻이다.
     if (_provenTask(prefs, taskText)) return null;
 
+    // 기록이 아직 없다. 오늘 처음 쓰는 사람이다.
+    //
+    // 완료율로 재는 두 갈래는 근거가 없어 쓸 수 없다. 다만 시각이 비었다는
+    // 것은 지금 보이므로 실행 의도만 연다 — 첫날이 첫인상이라, 계획을 함께
+    // 다듬는 장면을 한 번은 보여줄 만하다.
+    if (!recent.hasData) {
+      return hasTime ? null : _PlanFeedbackKind.when;
+    }
+
     // 해내고 있으면 아무 말도 하지 않는다.
     //
     // 계획이 많은 것도, 시각을 안 적는 것도 그 자체로는 문제가 아니다. 하루에
     // 열 개를 잡아도 다 해내는 사람에게 그건 그 사람의 방식이다. 조언이 필요한
     // 자리는 계획이 실제로 안 끝나고 있는 때뿐이다.
-    if (!recent.hasData || recent.rate > lowRate) return null;
+    if (recent.rate > lowRate) return null;
 
     // 여기서부터는 무엇이 걸리고 있는지를 고른다. 셋 다 완료율이 낮은 사람에게
     // 하는 이야기라, 순서는 그날 무엇이 눈에 띄는지로 정한다.

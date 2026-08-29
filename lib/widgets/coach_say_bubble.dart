@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../theme/app_design_tokens.dart';
+
 /// 어느 화면 위에든 뜨는 코치 말풍선.
 ///
 /// 할 일 창을 열어둔 사람에게 채팅으로만 말을 걸면 그 말은 도착하지 않는다.
@@ -68,11 +70,13 @@ class _CoachSayBubbleState extends State<CoachSayBubble>
             child: Container(
               padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
               decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(18),
-                border: Border.all(
-                  color: widget.accent.withValues(alpha: 0.35),
+                color: AppDesignTokens.surface,
+                borderRadius: BorderRadius.circular(
+                  AppDesignTokens.radiusMedium,
                 ),
+                border: Border.all(color: AppDesignTokens.brandBorder),
+                // 그림자만 확인 카드보다 진하다. 이건 다른 화면 위에 떠 있는
+                // 것이라, 같은 값으로 두면 할 일 목록에 파묻힌다.
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withValues(alpha: 0.14),
@@ -112,7 +116,7 @@ class _CoachSayBubbleState extends State<CoachSayBubble>
                             fontSize: 13.5,
                             height: 1.5,
                             fontWeight: FontWeight.w600,
-                            color: const Color(0xFF3D3A4E),
+                            color: AppDesignTokens.textPrimary,
                           ),
                         ),
                       ),
@@ -130,8 +134,8 @@ class _CoachSayBubbleState extends State<CoachSayBubble>
                         child: _BubbleButton(
                           label: '알아서 할게',
                           onTap: widget.onDecline,
-                          background: const Color(0xFFF3F2F7),
-                          foreground: const Color(0xFF8A8698),
+                          background: AppDesignTokens.surfaceSubtle,
+                          foreground: AppDesignTokens.textSecondary,
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -177,7 +181,7 @@ class _BubbleButton extends StatelessWidget {
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: background,
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(AppDesignTokens.radiusSmall),
         ),
         child: Text(
           label,
