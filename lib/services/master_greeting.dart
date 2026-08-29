@@ -288,6 +288,14 @@ class GreetingVoice {
   /// 수 있다. 그래서 묻되, 왜 묻는지(표시가 비어 있다는 것)를 밝힌다.
   final List<String> coreAsk;
 
+  /// 권한 대로 해내고 온 날 아침에 건네는 말. `{{task}}`가 그 일,
+  /// `{{advice}}`는 그때 무엇을 권했는지.
+  ///
+  /// 오늘 무엇을 하라는 말은 붙이지 않는다. 챙겨주는 자리지 시키는 자리가
+  /// 아니다. 그리고 내 말 덕이라고 하지 않는다 — 다른 코치가 건넨 말일 수도
+  /// 있고, 무엇보다 해낸 것은 사용자다.
+  final List<String> adviceWorked;
+
   /// 며칠째 못 끝내고 넘어온 일을 묻는 말. `{{task}}`가 그 일, `{{days}}`는
   /// 며칠째인지.
   ///
@@ -392,6 +400,7 @@ class GreetingVoice {
     required this.eveningOffPlanAsk,
     required this.offPlanDoneReply,
     required this.coreAsk,
+    required this.adviceWorked,
     required this.carriedAsk,
     required this.repeatingAsk,
     required this.coreAskStartedReply,
@@ -686,6 +695,12 @@ class MasterGreetingCopy {
       '{{task}}는 {진행하고 계신가요|시작하셨나요}?\n'
           '{아직 시작 표시가 없어서요|시작 표시가 비어 있어서요}. 아직이셔도 괜찮습니다.',
     ],
+    adviceWorked: [
+      '{{advice}} 했던 {{task}}, {끝내셨더군요|해내셨더군요}.\n'
+          '{제 말이 통한 걸까요|코칭이 먹힌 걸까요}. {기분이 좋네요|괜히 뿌듯합니다}. 오늘도 그 흐름으로 가시죠.',
+      '{{task}} {완료된 걸 봤습니다|끝난 걸 봤습니다}. {{advice}} 했던 그것 말입니다.\n'
+          '{코칭이 먹힌 걸까요|덕분인지는 모르겠지만}, {기분이 좋습니다|보기 좋네요}.',
+    ],
     carriedAsk: [
       '{{task}}, {{days}}일째 이월된 항목입니다.\n'
           '{무엇이 걸리는지 같이 풀어보시죠|어디가 막히는지 같이 보시죠}. 무엇 때문이었을까요?',
@@ -975,6 +990,12 @@ class MasterGreetingCopy {
           '표시가 그대로라 {물어본다냥|확인차 묻는다냥}. 이미 하고 있는데 누르는 걸 잊었을 수도 있으니까냥.',
       '{{task}}는 {하고 있냥|시작했냥}?\n'
           '{아직 시작 표시가 없어서다냥|시작 표시가 비어 있어서다냥}. 아직이어도 괜찮다냥.',
+    ],
+    adviceWorked: [
+      '{{advice}} 했던 {{task}}, {끝냈더라냥|해냈더라냥}.\n'
+          '{코칭이 먹힌 건가냥|내 말이 통한 건가냥}? {기분 좋다냥|괜히 뿌듯하다냥}. 오늘도 파이팅이다냥.',
+      '{{task}} {끝난 거 봤다냥|완료된 거 봤다냥}. {{advice}} 했던 그거 말이다냥.\n'
+          '{코칭이 먹힌 건가냥|덕분인지는 모르겠다만}, {기분 좋다냥|보기 좋다냥}.',
     ],
     carriedAsk: [
       '{{task}}, {{days}}일째 이월된 항목이다냥.\n'
@@ -1320,6 +1341,17 @@ class MasterGreetingBuilder extends GreetingLinePicker {
   /// 거치지 않는다 — 발화 조건(몇 시인지, 얼마나 밀렸는지)은 화면이 판단하고,
   /// 여기서는 이름만 받아 문장으로 옮긴다.
   String buildCoreAsk(String taskName) => _fill(voice.coreAsk, taskName);
+
+  /// 권한 대로 해내고 온 날의 인사.
+  String buildAdviceWorked(String taskName, String advice) => pickLine(
+    voice.adviceWorked
+        .map(
+          (line) => line
+              .replaceAll('{{task}}', '\'$taskName\'')
+              .replaceAll('{{advice}}', advice),
+        )
+        .toList(growable: false),
+  );
 
   /// 며칠째 넘어온 일을 묻는 말.
   String buildCarriedAsk(String taskName, int days) => pickLine(

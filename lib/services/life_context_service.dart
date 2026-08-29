@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'daily_reset_service.dart';
+
 /// 이 사람의 하루가 무엇으로 차 있는지. 대화에서 주워 담는다.
 ///
 /// 같은 "저녁 8시"라도 6시에 퇴근한 사람에게는 하루의 시작이고, 오후 알바를
@@ -20,6 +22,7 @@ class LifeContextService {
   /// 그 접두어는 클라우드 복원이 통째로 덮어쓴다.
   static const String _key = 'life_context_hits';
   static const String _deniedKey = 'life_context_denied';
+  static const String _seededKey = 'life_context_seeded';
 
   /// 이만큼 쌓여야 말을 꺼낸다.
   static const int minHits = 2;
@@ -98,6 +101,63 @@ class LifeContextService {
     }
     if (_denials.any(text.contains)) out.addAll(kindsIn(text));
     return out;
+  }
+
+  /// 이미 쌓인 채팅 기록을 한 번 훑어 씨를 뿌린다.
+  ///
+  /// 오늘부터 세기 시작하면 이미 여러 번 "퇴근하고"라고 말해온 사람도 처음
+  /// 만난 사람이 된다. 그 말은 이미 채팅에 남아 있으니 한 번만 읽으면 된다.
+  ///
+  /// 한 번만 한다. 매번 훑으면 같은 말이 계속 다시 세어져서, 한 번 한 말이
+  /// 열 번 한 말이 된다.
+  static Future<void> seedFromChatHistory() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.getBool(_seededKey) == true) return;
+    await prefs.setBool(_seededKey, true);
+
+    final hits = _hits(prefs);
+    final denied = <String>{};
+    for (final coachId in DailyResetService.coachIds) {
+      final raw = prefs.getString('nyang_chat_history_$coachId');
+      if (raw == null || raw.isEmpty) continue;
+      List<dynamic> items;
+      try {
+        items = jsonDecode(raw) as List<dynamic>;
+      } catch (_) {
+        continue;
+      }
+      for (final item in items.whereType<Map>()) {
+        // 사용자가 한 말만 본다. 코치가 "퇴근하고 하자"고 한 것을 세면
+        // 자기가 한 말을 근거로 삼는 셈이 된다.
+        if (item['isUser'] != true) continue;
+        final text = item['text']?.toString() ?? '';
+        if (text.isEmpty) continue;
+        // 말한 때를 그대로 쓴다. 오래된 이야기는 어차피 걸러진다.
+        final at = DateTime.tryParse(item['time']?.toString() ?? '');
+        if (at == null) continue;
+
+        final negated = negatedKindsIn(text);
+        if (negated.isNotEmpty) {
+          denied.addAll(negated);
+          continue;
+        }
+        for (final kind in kindsIn(text)) {
+          hits.add(LifeHit(kind: kind, at: at));
+        }
+      }
+    }
+    if (denied.isNotEmpty) {
+      final now = DateTime.now();
+      await prefs.setString(
+        _deniedKey,
+        jsonEncode({for (final kind in denied) kind: now.toIso8601String()}),
+      );
+    }
+    // 아니라고 한 것은 세지 않는다. 지난 기록에는 그만두기 전의 말도 섞여 있다.
+    await _save(prefs, [
+      for (final hit in hits)
+        if (!denied.contains(hit.kind)) hit,
+    ]);
   }
 
   /// 사용자가 한 말에서 생활의 자취를 줍는다. 대개는 아무 일도 없다.

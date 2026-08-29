@@ -5021,9 +5021,22 @@ ${lines.join('\n')}
     // 보고, 어제 물었으면 오늘은 쉰다.
     if (!await _canAskCoreToday(now)) return false;
 
-    // 오전은 이월된 일의 자리다. 오늘 것을 묻기에는 이르다 — 아직 하지
-    // 않았다는 말이 재촉으로만 들린다.
     if (now.hour < _masterCoreAskFromHour) {
+      // 권한 대로 해낸 것이 있으면 그 이야기부터. 며칠 전 이야기를 이어받는
+      // 말이라 아침의 첫 마디로 어울리고, 무엇보다 좋은 소식이다.
+      final worked = await PlanFeedbackService.adviceThatWorked();
+      if (worked != null) {
+        if (!mounted) return false;
+        _injectAiMessage(
+          _greetingBuilder.buildAdviceWorked(worked.task, worked.advice),
+          kind: _masterCoreGreetingKind,
+        );
+        unawaited(AnalyticsService.logFeatureUsage('master_advice_worked'));
+        return true;
+      }
+
+      // 그다음은 이월된 일의 자리다. 오늘 것을 묻기에는 이르다 — 아직 하지
+      // 않았다는 말이 재촉으로만 들린다.
       final carried = _carriedOverTask(prefs);
       if (carried == null) return false;
       if (!mounted) return false;

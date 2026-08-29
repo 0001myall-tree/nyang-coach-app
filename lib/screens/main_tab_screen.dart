@@ -15,6 +15,7 @@ import '../services/analytics_service.dart';
 import '../services/apple_calendar_sync_service.dart';
 import '../services/morning_call_alarm_session.dart';
 import '../services/daily_reset_service.dart';
+import '../services/life_context_service.dart';
 import '../services/widget_sync_service.dart';
 import '../services/tasks_sync_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -635,6 +636,9 @@ class _MainTabScreenState extends State<MainTabScreen>
     _tabCtrl = TabController(length: _screens.length, vsync: this);
     // 코치가 채팅 밖에서 건네는 말. 어느 화면이 열려 있든 그 위에 뜬다.
     unawaited(CoachSayService.load());
+    // 이미 쌓인 채팅에서 생활의 자취를 한 번 주워둔다. 두 번째부터는 아무
+    // 일도 하지 않는다.
+    unawaited(LifeContextService.seedFromChatHistory());
     CoachSayService.pending.addListener(_onCoachSay);
     CoachSayService.thinking.addListener(_onCoachThinking);
     CoachSayService.unread.addListener(_onCoachSayUnreadChanged);
@@ -642,13 +646,13 @@ class _MainTabScreenState extends State<MainTabScreen>
       unawaited(CoachSayService.markRead(widget.coachId));
     }
     // 한 주가 통째로 안 풀린 사람에게만, 아침에 한 번. 대개는 아무 일도 없다.
-    // 한 주에 한 번, 그 주가 어떻게 흘렀는지. 부검이 나간 아침에는 쉰다.
+    // 아침 말풍선 둘. 하나가 나가면 나머지는 그날 쉰다.
     unawaited(
       PlanFeedbackService.maybeMorningPreMortem(
         coachId: widget.coachId,
-      ).then((_) => PlanFeedbackService.maybeWeeklyPattern(
-        coachId: widget.coachId,
-      )),
+      ).then(
+        (_) => PlanFeedbackService.maybeWeeklyPattern(coachId: widget.coachId),
+      ),
     );
     _startMorningCallEngine();
     _startCoreReminderEngine();
