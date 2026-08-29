@@ -646,14 +646,6 @@ class _MainTabScreenState extends State<MainTabScreen>
       unawaited(CoachSayService.markRead(widget.coachId));
     }
     // 한 주가 통째로 안 풀린 사람에게만, 아침에 한 번. 대개는 아무 일도 없다.
-    // 아침 말풍선 둘. 하나가 나가면 나머지는 그날 쉰다.
-    unawaited(
-      PlanFeedbackService.maybeMorningPreMortem(
-        coachId: widget.coachId,
-      ).then(
-        (_) => PlanFeedbackService.maybeWeeklyPattern(coachId: widget.coachId),
-      ),
-    );
     _startMorningCallEngine();
     _startCoreReminderEngine();
     AnalyticsService.logAppOpen();

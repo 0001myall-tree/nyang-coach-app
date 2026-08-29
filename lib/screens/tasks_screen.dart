@@ -4059,8 +4059,8 @@ class _TasksScreenState extends State<TasksScreen>
     _saveTasks();
     _todayInputCtrl.clear();
 
-    // 핵심을 고르지 않는 사람도 있다. 그때는 그날 잡은 양이 평소 해내던 것보다
-    // 훨씬 많을 때만 한 마디 건넨다.
+    // 계획을 적는 이 순간이 코치가 말을 거는 유일한 자리다. 대개는 아무 일도
+    // 일어나지 않는다 — 이틀에 한 번, 그것도 짚을 것이 있을 때만.
     unawaited(
       PlanFeedbackService.onTaskSaved(
         coachId: widget.coachId,

@@ -5000,11 +5000,11 @@ ${lines.join('\n')}
   static const _masterCoreAskFromHour = 12;
   static const _masterCoreAskUntilHour = 18;
 
-  /// 이월된 일만 오전에 묻는다.
+  /// 이월된 일과 먹힌 조언은 이 시각부터 본다.
   ///
-  /// 어제 넘긴 것은 오늘 계획을 짜기 전에 이미 있던 일이다. 하루를 다 그린
-  /// 뒤에 꺼내면 이미 짜놓은 계획 위에 하나를 더 얹는 말이 되고, 오전에
-  /// 꺼내면 그 계획 안에 자리를 잡을 수 있다.
+  /// 오늘 것을 묻는 것보다 이르게 연다. 어제 넘긴 것은 오늘 계획을 짜기 전에
+  /// 이미 있던 일이라, 하루를 다 그린 뒤에 꺼내면 짜놓은 계획 위에 하나를 더
+  /// 얹는 말이 된다.
   static const _masterCarriedAskFromHour = 7;
 
   /// 핵심 일정을 물어봤으면 true. 슬롯 인사와 예산이 따로라 아침에 인사를
@@ -5021,24 +5021,26 @@ ${lines.join('\n')}
     // 보고, 어제 물었으면 오늘은 쉰다.
     if (!await _canAskCoreToday(now)) return false;
 
-    if (now.hour < _masterCoreAskFromHour) {
-      // 권한 대로 해낸 것이 있으면 그 이야기부터. 며칠 전 이야기를 이어받는
-      // 말이라 아침의 첫 마디로 어울리고, 무엇보다 좋은 소식이다.
-      final worked = await PlanFeedbackService.adviceThatWorked();
-      if (worked != null) {
-        if (!mounted) return false;
-        _injectAiMessage(
-          _greetingBuilder.buildAdviceWorked(worked.task, worked.advice),
-          kind: _masterCoreGreetingKind,
-        );
-        unawaited(AnalyticsService.logFeatureUsage('master_advice_worked'));
-        return true;
-      }
+    // 권한 대로 해낸 것이 있으면 그 이야기부터. 며칠 전 이야기를 이어받는
+    // 말이고, 무엇보다 좋은 소식이다.
+    //
+    // 시간을 가리지 않는다. 오전에만 두었더니 점심에 앱을 여는 사람은 이
+    // 이야기도 아래 이월 이야기도 영영 못 들었다. 이건 몇 시냐가 아니라
+    // 오늘 아직 안 했느냐의 문제다.
+    final worked = await PlanFeedbackService.adviceThatWorked();
+    if (worked != null) {
+      if (!mounted) return false;
+      _injectAiMessage(
+        _greetingBuilder.buildAdviceWorked(worked.task, worked.advice),
+        kind: _masterCoreGreetingKind,
+      );
+      unawaited(AnalyticsService.logFeatureUsage('master_advice_worked'));
+      return true;
+    }
 
-      // 그다음은 이월된 일의 자리다. 오늘 것을 묻기에는 이르다 — 아직 하지
-      // 않았다는 말이 재촉으로만 들린다.
-      final carried = _carriedOverTask(prefs);
-      if (carried == null) return false;
+    // 그다음은 이월된 일. 며칠째 걸려 있는 것이 오늘 처음 적은 것보다 급하다.
+    final carried = _carriedOverTask(prefs);
+    if (carried != null) {
       if (!mounted) return false;
       _pendingRepeatingAskTask = carried.name;
       _pendingCarriedOverTask = carried.name;
@@ -5050,6 +5052,10 @@ ${lines.join('\n')}
       unawaited(AnalyticsService.logFeatureUsage('master_carried_ask'));
       return true;
     }
+
+    // 오늘 것을 묻는 것은 정오부터다. 오전에는 아직 하지 않았다는 말이
+    // 재촉으로만 들린다.
+    if (now.hour < _masterCoreAskFromHour) return false;
 
     final core = _coreTaskDueForAsk(prefs, now);
     // 핵심을 지정해두지 않은 사람에게는 오늘 적어둔 나머지 하나를 묻는다.
@@ -5659,6 +5665,11 @@ Rules:
   /// 사용자에게는 며칠째 못 끝낸 같은 일이다.
   ///
   /// 여러 개면 가장 여러 날 걸려 있던 것을 고른다.
+  ///
+  /// 두 날 넘게 걸려 있어야 꺼낸다. 하루 못 한 것은 그날 사정일 수 있고,
+  /// 그걸 다음 날 아침에 짚으면 챙기는 게 아니라 재촉이 된다.
+  static const int _carriedMinDays = 2;
+
   ({String name, int days})? _carriedOverTask(SharedPreferences prefs) {
     final from = DateTime.now().subtract(const Duration(days: 7));
     final missedDays = <String, int>{};
@@ -5680,7 +5691,7 @@ Rules:
     for (final task in _decodeMapList(prefs.getString('nyang_tasks'))) {
       if (!_isPendingNotInProgressTask(task)) continue;
       final days = missedDays[task['text']?.toString().trim() ?? ''] ?? 0;
-      if (days == 0) continue;
+      if (days < _carriedMinDays) continue;
       final name = _shortTaskName(task);
       if (name == null) continue;
       if (best == null || days > best.days) best = (name: name, days: days);

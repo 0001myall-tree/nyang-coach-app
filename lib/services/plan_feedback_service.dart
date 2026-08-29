@@ -7,7 +7,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/user_data.dart';
 import '../screens/coach_config.dart';
 import 'coach_say_service.dart';
-import 'execution_pattern_service.dart';
 import 'life_context_service.dart';
 
 /// 계획을 적는 자리에서 코치가 한 마디 건네는 자리.
@@ -56,8 +55,6 @@ class PlanFeedbackService {
   /// 이야기고, 사용자는 무슨 말인지 떠올리지도 못한다.
   static const Duration adviceLogLife = Duration(days: 5);
 
-  /// 아침에 한 마디만. 어느 이야기가 나가든 그날 아침은 그것으로 끝난다.
-  static const String _morningSaidKey = 'plan_feedback_morning_at';
 
   /// 적어둔 것이 이만큼 지나면 지운다. 그때쯤이면 다른 이야기를 하고 있다.
   static const Duration lastNudgeLife = Duration(hours: 3);
@@ -335,32 +332,43 @@ class PlanFeedbackService {
     }
   }
 
-  /// 권한 뒤에 실제로 끝난 일. 없으면 null.
+  /// 권한 뒤에 어제 끝낸 일. 없으면 null.
+  ///
+  /// 어제 것만 본다. 사흘 전에 끝낸 일을 오늘 아침에 꺼내면 뜬금없고,
+  /// 조언과 이어진 일로도 들리지 않는다.
   static ({String task, String advice})? _adviceThatWorked(
     SharedPreferences prefs,
   ) {
-    final now = DateTime.now();
-    final records = _history(prefs, days: adviceLogLife.inDays + 1);
-    for (final advice in _adviceLog(prefs).reversed) {
-      // 권한 그날 저녁에 확인하면 아직 해보지도 않은 것을 묻는 셈이 된다.
-      if (now.difference(advice.at) < adviceRipeAfter) continue;
-      if (now.difference(advice.at) > adviceLogLife) continue;
-
-      for (final record in records) {
-        final date = DateTime.tryParse(record['date']?.toString() ?? '');
-        if (date == null || date.isBefore(advice.at)) continue;
-        for (final task in (record['tasks'] as List?) ?? const []) {
-          if (task is! Map || task['done'] != true) continue;
-          if (task['text']?.toString().trim() != advice.task) continue;
-          final kind = _PlanFeedbackKind.values
-              .where((value) => value.name == advice.kind)
-              .firstOrNull;
-          return (
-            task: advice.task,
-            advice: kind?.shortAdvice ?? '계획을 좀 다듬어보자고',
-          );
-        }
+    final yesterday = _dayKey(DateTime.now().subtract(const Duration(days: 1)));
+    final done = <String>{};
+    for (final record in _history(prefs, days: 3)) {
+      final date = DateTime.tryParse(record['date']?.toString() ?? '');
+      if (date == null || _dayKey(date) != yesterday) continue;
+      for (final task in (record['tasks'] as List?) ?? const []) {
+        if (task is! Map || task['done'] != true) continue;
+        final text = task['text']?.toString().trim() ?? '';
+        if (text.isNotEmpty) done.add(text);
       }
+    }
+    if (done.isEmpty) return null;
+
+    final ripeBefore = DateTime.now().subtract(adviceRipeAfter);
+    for (final advice in _adviceLog(prefs).reversed) {
+      // 그러겠다고 한 것만 본다. 흘려들은 조언까지 세면, 저 혼자 해낸 일을
+      // 두고 코치가 아는 체하는 꼴이 된다.
+      if (!advice.accepted) continue;
+      // 권하자마자 끝낸 것은 세지 않는다. 아침에 꺼낼 이야기는 하루가 지난
+      // 일이고, 그래야 권한 것과 해낸 것 사이에 하루가 놓인다.
+      if (!advice.at.isBefore(ripeBefore)) continue;
+      if (!done.contains(advice.task)) continue;
+
+      final kind = _PlanFeedbackKind.values
+          .where((value) => value.name == advice.kind)
+          .firstOrNull;
+      return (
+        task: advice.task,
+        advice: kind?.shortAdvice ?? '계획을 다듬어보자고',
+      );
     }
     return null;
   }
@@ -381,185 +389,6 @@ class PlanFeedbackService {
             },
       ]),
     );
-  }
-
-  // ── 주간 실행 패턴 코칭 ────────────────────────
-  //
-  // 하루치 이야기만 하면 매번 같은 자리를 맴돈다. 한 주에 한 번은 그 주가
-  // 어떻게 흘렀는지를 두고 말한다 — 언제 첫 발을 뗐는지, 잡은 양과 해낸 양이
-  // 얼마나 벌어졌는지.
-  //
-  // 아침에 꺼낸다. 하루가 아직 안 정해진 시간이라야 오늘 무엇을 바꿔볼지
-  // 이야기가 되고, 저녁에 꺼내면 지나간 일에 대한 평가가 된다.
-
-  static const String _patternAtKey = 'plan_feedback_pattern_at';
-
-  static const Duration patternInterval = Duration(days: 7);
-  static const int patternFromHour = 5;
-  static const int patternUntilHour = 12;
-
-  /// 아침에 앱을 열었을 때 한 번 본다. 셀 것이 모자라면 아무 일도 없다.
-  static Future<void> maybeWeeklyPattern({required String coachId}) async {
-    try {
-      await _maybeWeeklyPattern(coachId);
-    } catch (e) {
-      debugPrint('weekly pattern failed: $e');
-    }
-  }
-
-  static Future<void> _maybeWeeklyPattern(String coachId) async {
-    if (coachId != 'nyang_halbae' && coachId != 'sec_female') return;
-
-    final hour = DateTime.now().hour;
-    if (hour < patternFromHour || hour >= patternUntilHour) return;
-
-    if (!await _hasMasterPlan()) return;
-
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.reload();
-
-    if (_morningTaken(prefs)) return;
-
-    final lastAt = DateTime.tryParse(prefs.getString(_patternAtKey) ?? '');
-    if (lastAt != null &&
-        DateTime.now().difference(lastAt) < patternInterval) {
-      return;
-    }
-
-    // 앱이 센 것이 없으면 할 말도 없다. 없는 패턴을 지어내게 두지 않는다.
-    final pattern = await ExecutionPatternService.promptBlock();
-    if (pattern.isEmpty) return;
-
-    final coach = CoachConfigs.get(coachId);
-    final life = await LifeContextService.promptLine();
-    final prompt =
-        '''${coach.systemPrompt}
-
-[지금 상황]
-아침에 사용자가 앱을 열었음. 채팅 밖 말풍선으로 한 마디를 건네는 자리임. 화면 위에 뜨는 작은 말풍선이라, 세 문장 130자 안에서 끝낼 것.
-
-[이번에 할 이야기 - 한 주의 실행 패턴]
-아래는 앱이 최근 이레 기록에서 센 값임. 한 주에 한 번 하는 이야기라, 오늘 하루가 아니라 그 주가 어떻게 흘렀는지를 두고 말할 것.
-$pattern
-
-[이 사람의 생활]
-$life
-*생활 형태를 알면 그것에 비추어 말할 것. 예를 들어 낮에 일이 있는 사람이 밤에만 첫 발을 뗀다면, 밤에 처음부터 다 하려 하지 말고 낮에 십 분만 내어 얼개만 잡아두자고 권할 수 있음.
-*모르면 단정하지 말 것. "낮에 따로 일이 있는지는 모르겠지만" 하고 열어두고 말할 것.
-
-[출력]
-- 그 말만 쓸 것. 태그나 따옴표, 머리말 없이 코치의 말투 그대로.
-- 위 지시문의 말투를 따라 쓰지 말 것. 지시문은 설명일 뿐이고, 실제로 쓸 말투는 위에 주어진 코치의 말투임.
-- 숫자를 늘어놓지 말 것. 센 값은 무엇을 말할지 고르는 데 쓰고, 문장에는 눈에 띄는 하나만 짚을 것.
-- 지난 한 주를 평가하지 말 것. 오늘 무엇을 조금 바꿔볼지로 끝낼 것.
-- 한 가지만 말할 것.''';
-
-    final response = await _chatProxy.call({
-      'messages': [
-        {'role': 'user', 'content': prompt},
-      ],
-      'temperature': 0.7,
-    });
-    final content = (response.data is Map
-            ? (response.data as Map)['content'] as String? ?? ''
-            : '')
-        .trim();
-    if (content.isEmpty) return;
-
-    await prefs.setString(_patternAtKey, DateTime.now().toIso8601String());
-    await _takeMorning(prefs);
-    await CoachSayService.say(coachId: coachId, text: content);
-  }
-
-  // ── 사전 부검 ────────────────────────────────
-  //
-  // "이 계획이 완전히 망했다고 치고, 왜 망했을지 미리 적어보기". 위험을 미리
-  // 꺼내놓으면 그중 몇 개는 시작 전에 치울 수 있다.
-  //
-  // 계획을 막 세운 사람 옆에서 꺼내면 안 되는 말이다. 방금 적어놓은 것을 두고
-  // 망한다고 가정하자는 말은 응원이 아니라 초를 치는 것이 된다. 그래서 이건
-  // 저장하는 자리가 아니라 아침에, 그것도 한 주가 계속 안 풀린 사람에게만
-  // 꺼낸다.
-
-  static const String _preMortemAtKey = 'plan_feedback_premortem_at';
-
-  /// 이 아래로 내려간 주에만. 한 주 내내 안 됐다는 뜻이다.
-  static const double preMortemRate = 0.3;
-
-  static const Duration preMortemInterval = Duration(days: 7);
-  static const int preMortemFromHour = 5;
-  static const int preMortemUntilHour = 11;
-
-  /// 아침에 앱을 열었을 때 한 번 본다. 대개는 아무 일도 없다.
-  static Future<void> maybeMorningPreMortem({required String coachId}) async {
-    try {
-      await _maybeMorningPreMortem(coachId);
-    } catch (e) {
-      debugPrint('pre-mortem failed: $e');
-    }
-  }
-
-  static Future<void> _maybeMorningPreMortem(String coachId) async {
-    // 마스터 코치만. 위험을 미리 적어보자는 말은 오늘 하루를 함께 보는
-    // 프렌즈 코치의 자리가 아니다.
-    if (coachId != 'nyang_halbae' && coachId != 'sec_female') return;
-
-    final hour = DateTime.now().hour;
-    if (hour < preMortemFromHour || hour >= preMortemUntilHour) return;
-
-    if (!await _hasMasterPlan()) return;
-
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.reload();
-
-    if (_morningTaken(prefs)) return;
-
-    final lastAt = DateTime.tryParse(prefs.getString(_preMortemAtKey) ?? '');
-    if (lastAt != null &&
-        DateTime.now().difference(lastAt) < preMortemInterval) {
-      return;
-    }
-
-    // 지난 이레를 본다. 하루 이틀 무너진 것과 한 주가 통째로 안 풀린 것은
-    // 다른 이야기다.
-    final week = _recentRates(prefs, days: 7);
-    if (!week.hasData || week.rate > preMortemRate) return;
-
-    final coach = CoachConfigs.get(coachId);
-    final rate = (week.rate * 100).round();
-    final stuck = _stuckNames(prefs);
-    final prompt =
-        '''${coach.systemPrompt}
-
-[지금 상황]
-아침에 사용자가 앱을 열었음. 채팅 밖 말풍선으로 한 마디를 건네는 자리임. 화면 위에 뜨는 작은 말풍선이라, 두 문장 90자 안에서 끝낼 것. 넘으면 뒷말이 잘림.
-
-[이번에 할 이야기 - 사전 부검]
-어떤 일을 시작하기 전에 "이 계획이 완전히 망했다고 가정하고" 그 원인을 미리 적어보는 방법이 있음. 미리 꺼내놓은 위험은 시작 전에 치울 수 있어서, 실패 확률이 눈에 띄게 줄어듦.
-지난 이레 완료율 $rate%.
-$stuck
-지난 주가 잘 안 풀린 것을 탓하지 말고, 오늘 계획을 세우기 전에 "무엇 때문에 오늘이 무너질 것 같은지" 두어 개만 먼저 꺼내보자고 할 것. 이 방법의 이름이나 원리는 한 문장으로만 곁들일 것.
-*끝나지 않은 일이 위에 적혀 있으면 그중 하나를 이름으로 짚을 것. 무엇을 두고 하는 이야기인지가 분명해야 사용자도 떠올릴 것이 생김. 여러 개를 늘어놓지는 말 것.
-
-[출력]
-- 그 말만 쓸 것. 태그나 따옴표, 머리말 없이 코치의 말투 그대로.
-- 위 지시문의 말투를 따라 쓰지 말 것. 지시문은 설명일 뿐이고, 실제로 쓸 말투는 위에 주어진 코치의 말투임.''';
-
-    final response = await _chatProxy.call({
-      'messages': [
-        {'role': 'user', 'content': prompt},
-      ],
-      'temperature': 0.7,
-    });
-    final content = (response.data is Map
-            ? (response.data as Map)['content'] as String? ?? ''
-            : '')
-        .trim();
-    if (content.isEmpty) return;
-
-    await prefs.setString(_preMortemAtKey, DateTime.now().toIso8601String());
-    await _takeMorning(prefs);
-    await CoachSayService.say(coachId: coachId, text: content);
   }
 
   /// "알아서 할게"를 눌렀다.
@@ -599,6 +428,17 @@ $stuck
   static Future<void> onAdviceAccepted() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_declineKey);
+
+    // 방금 한 조언에 그러겠다고 표시해둔다. 나중에 그 일이 끝났는지 볼 때
+    // 여기 표시된 것만 본다 — 듣고 흘린 조언까지 세면 저 혼자 해낸 일을
+    // 두고 코치가 자기 덕이라고 하는 셈이 된다.
+    final log = _adviceLog(prefs);
+    if (log.isEmpty) return;
+    final last = log.removeLast();
+    log.add(
+      _Advice(task: last.task, kind: last.kind, at: last.at, accepted: true),
+    );
+    await _saveAdviceLog(prefs, log);
   }
 
   /// 마스터 플랜 전용이다. 틈새 코칭과 같은 자리다.
@@ -665,14 +505,22 @@ $stuck
       _Advice(task: taskText, kind: kind.name, at: now),
     ];
     if (kept.length > 5) kept.removeRange(0, kept.length - 5);
+    await _saveAdviceLog(prefs, kept);
+  }
+
+  static Future<void> _saveAdviceLog(
+    SharedPreferences prefs,
+    List<_Advice> log,
+  ) async {
     await prefs.setString(
       _adviceLogKey,
       jsonEncode([
-        for (final item in kept)
+        for (final item in log)
           {
             'task': item.task,
             'kind': item.kind,
             'at': item.at.toIso8601String(),
+            'accepted': item.accepted,
           },
       ]),
     );
@@ -688,7 +536,12 @@ $stuck
         final at = DateTime.tryParse(item['at']?.toString() ?? '');
         if (task.isEmpty || at == null) continue;
         out.add(
-          _Advice(task: task, kind: item['kind']?.toString() ?? '', at: at),
+          _Advice(
+            task: task,
+            kind: item['kind']?.toString() ?? '',
+            at: at,
+            accepted: item['accepted'] == true,
+          ),
         );
       }
       return out;
@@ -696,18 +549,6 @@ $stuck
       return [];
     }
   }
-
-  /// 오늘 아침에 이미 한 마디 했는지.
-  ///
-  /// 아침에 나갈 수 있는 이야기가 셋이다. 따로 세면 어떤 날은 아침부터
-  /// 세 마디를 듣는다.
-  static bool _morningTaken(SharedPreferences prefs) {
-    final at = DateTime.tryParse(prefs.getString(_morningSaidKey) ?? '');
-    return at != null && _isToday(at);
-  }
-
-  static Future<void> _takeMorning(SharedPreferences prefs) =>
-      prefs.setString(_morningSaidKey, DateTime.now().toIso8601String());
 
   /// 오늘 코치를 몇 번 불렀는지. 날짜가 바뀌면 0부터다.
   static int _asksToday(SharedPreferences prefs) {
@@ -723,8 +564,6 @@ $stuck
       '${_todayKey()}|${_asksToday(prefs) + 1}',
     );
   }
-
-  static bool _isToday(DateTime at) => _dayKey(at) == _todayKey();
 
   static String _todayKey() => _dayKey(DateTime.now());
 
@@ -839,35 +678,6 @@ $stuck
       return '주로 오전에 손을 대는 편.';
     }
     return '';
-  }
-
-  /// 지난 이레에 여러 번 올라왔는데 끝나지 않은 일들.
-  ///
-  /// "한 주가 안 풀렸다"는 말만으로는 무엇을 두고 하는 이야기인지 알 수 없다.
-  /// 이름을 짚어주면 사전 부검이 막연한 반성이 아니라 그 일에 대한 이야기가
-  /// 된다.
-  static String _stuckNames(SharedPreferences prefs) {
-    final planned = <String, int>{};
-    final done = <String, int>{};
-    for (final record in _history(prefs, days: 7)) {
-      for (final task in (record['tasks'] as List?) ?? const []) {
-        if (task is! Map) continue;
-        final text = task['text']?.toString().trim() ?? '';
-        if (text.isEmpty) continue;
-        planned[text] = (planned[text] ?? 0) + 1;
-        if (task['done'] == true) done[text] = (done[text] ?? 0) + 1;
-      }
-    }
-    final stuck = <String>[];
-    for (final entry in planned.entries) {
-      if (entry.value < 2) continue;
-      final finished = done[entry.key] ?? 0;
-      if (finished >= entry.value / 2) continue;
-      stuck.add("'${entry.key}' (${entry.value}번 중 $finished번 완료)");
-      if (stuck.length >= 3) break;
-    }
-    if (stuck.isEmpty) return '';
-    return '여러 번 올라왔는데 끝나지 않은 일: ${stuck.join(', ')}';
   }
 
   /// 그 이름이 최근에 어떻게 굴러갔는지. 코치가 아는 체할 거리다.
@@ -1088,6 +898,7 @@ $stuck
     final coach = CoachConfigs.get(coachId);
     final rate = (recent.rate * 100).round();
     final slackAdvice = await _nextSlackAdvice();
+    final life = await LifeContextService.promptLine();
     final splitPhrase = await _nextSplitPhrase();
 
     final situation = switch (kind) {
@@ -1140,7 +951,8 @@ $slackAdvice
 [지금 상태]
 ${_clockNote(DateTime.now())}
 $todaySummary
-*이건 무엇을 말할지 고르는 데만 쓸 것. 문장에 옮기지 말 것.
+$life
+*이건 무엇을 말할지 고르는 데만 쓸 것. 문장에 옮기지 말 것. 다만 낮에 일이나 수업이 있는 사람이면 남은 시간을 그만큼 덜 잡을 것.
 
 [이 계획의 지난 자취]
 $historyNote
@@ -1180,16 +992,16 @@ enum _PlanFeedbackKind {
   firstDay('처음 적은 계획을 반기고, 몇 시에 할지 물어본 이야기', '몇 시에 할지 정해보자고'),
 
   /// 잘 되고 있는 사람. 무슨 이야기를 할지는 코치가 고른다.
-  steady('그 계획을 오늘 할 만한 크기로 다듬는 이야기', '오늘 할 몫을 나눠보자고'),
+  steady('그 계획을 오늘 할 만한 크기로 다듬는 이야기', '할 몫을 나눠보자고'),
 
   /// 언제 어디서 할지를 정해보자.
   when(
     '그 계획을 오늘 할 만한 크기로 다듬거나, 몇 시에 할지 정하는 이야기',
-    '오늘 어디까지 할지 정해보자고',
+    '어디까지 할지 정해보자고',
   ),
 
   /// 여유는 넣었나.
-  slack('오늘 잡은 일이 평소 해내던 양보다 많아 보인다는 이야기', '오늘 잡은 양을 줄여보자고');
+  slack('오늘 잡은 일이 평소 해내던 양보다 많아 보인다는 이야기', '잡은 양을 줄여보자고');
 
   const _PlanFeedbackKind(this.topic, this.shortAdvice);
 
@@ -1197,17 +1009,28 @@ enum _PlanFeedbackKind {
   final String topic;
 
   /// 인사 문구에 끼워 넣을 짧은 표현. "~했던"으로 이어진다.
+  ///
+  /// "오늘"을 넣지 않는다. 권할 때는 그날이 오늘이었지만 이 말은 다음 날
+  /// 아침에 나가서, 그대로 두면 어제 끝낸 일을 오늘 일처럼 말하게 된다.
   final String shortAdvice;
 }
 
 /// 짚은 계획 하나와 짚은 때.
 /// 언제 무엇을 두고 무슨 조언을 했는지.
 class _Advice {
-  const _Advice({required this.task, required this.kind, required this.at});
+  const _Advice({
+    required this.task,
+    required this.kind,
+    required this.at,
+    this.accepted = false,
+  });
 
   final String task;
   final String kind;
   final DateTime at;
+
+  /// "그렇게 해볼게"를 눌렀는지. 결과를 보는 것은 이것뿐이다.
+  final bool accepted;
 }
 
 class _Handled {
