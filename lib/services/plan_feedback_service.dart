@@ -67,29 +67,58 @@ class PlanFeedbackService {
     region: 'asia-northeast3',
   ).httpsCallable('chatProxy');
 
-  /// 오늘 할 일에 새 항목이 저장됐다.
+  /// 오늘의 핵심으로 하나를 새로 지정했다.
+  ///
+  /// 적을 때마다 말을 걸던 때는 '미용실 가기'에까지 조언이 붙었다. 사용자가
+  /// 스스로 중요하다고 고른 일은 대개 한 번에 안 끝나는 일이라, 계획을 다듬는
+  /// 이야기가 실제로 쓸모 있는 자리다.
   ///
   /// 실패해도 조용히 지나간다. 계획을 적는 일이 이것 때문에 막히면 안 된다.
-  static Future<void> onTaskSaved({
+  static Future<void> onCoreTaskSet({
     required String coachId,
     required String taskText,
     required bool hasTime,
   }) async {
     try {
-      await _onTaskSaved(
+      await _speak(
         coachId: coachId,
         taskText: taskText.trim(),
         hasTime: hasTime,
+        onlyTooMany: false,
       );
     } catch (e) {
       debugPrint('plan feedback failed: $e');
     }
   }
 
-  static Future<void> _onTaskSaved({
+  /// 그냥 할 일 하나를 저장했다.
+  ///
+  /// 핵심을 고르지 않는 사람에게도 도울 자리가 하나는 있어야 한다. 다만 여기서는
+  /// 그날 잡은 양이 평소 해내던 것보다 훨씬 많을 때만 말한다 — 그건 항목 하나를
+  /// 두고 하는 판단이 아니라 하루 전체를 보는 이야기라, '미용실 가기'에 조언이
+  /// 붙던 종류의 참견이 되지 않는다.
+  static Future<void> onTaskSaved({
     required String coachId,
     required String taskText,
     required bool hasTime,
+  }) async {
+    try {
+      await _speak(
+        coachId: coachId,
+        taskText: taskText.trim(),
+        hasTime: hasTime,
+        onlyTooMany: true,
+      );
+    } catch (e) {
+      debugPrint('plan feedback failed: $e');
+    }
+  }
+
+  static Future<void> _speak({
+    required String coachId,
+    required String taskText,
+    required bool hasTime,
+    required bool onlyTooMany,
   }) async {
     if (taskText.isEmpty) return;
 
@@ -117,6 +146,7 @@ class PlanFeedbackService {
       hasTime: hasTime,
       todayCount: today.length,
       recent: recent,
+      onlyTooMany: onlyTooMany,
     );
     if (kind == null) return;
 
@@ -276,7 +306,16 @@ class PlanFeedbackService {
     required bool hasTime,
     required int todayCount,
     required _RecentRates recent,
+    bool onlyTooMany = false,
   }) {
+    // 핵심을 고르지 않은 사람에게는 양 이야기 하나만.
+    if (onlyTooMany) {
+      if (!recent.hasData || recent.rate > lowRate) return null;
+      return todayCount >= recent.doneAverage + tooManyMargin
+          ? _PlanFeedbackKind.slack
+          : null;
+    }
+
     // 그 이름으로 이미 해내고 있는 일은 건드리지 않는다. 뭉뚱그려 적어도
     // 그 사람에게는 그걸로 충분하다는 뜻이다.
     if (_provenTask(prefs, taskText)) return null;
@@ -290,13 +329,13 @@ class PlanFeedbackService {
       return hasTime ? null : _PlanFeedbackKind.when;
     }
 
-    // 해내고 있는 사람은 따로 본다.
+    // 해내고 있으면 아무 말도 하지 않는다.
     //
-    // 계획이 많은 것도, 안 끝나는 것도 이 사람에게는 일어나지 않는 일이라
-    // 총량과 크기 이야기는 근거가 없다. 그렇다고 시각 이야기만 사흘마다
-    // 되풀이하면, 이미 시각 없이도 해내는 사람에게 없는 문제를 고치라는 말이
-    // 된다. 무엇이 도움이 될지는 그 계획을 보고 코치가 고른다.
-    if (recent.rate > lowRate) return _PlanFeedbackKind.steady;
+    // 잘하는 사람에게 건넬 말이 없는 것은 아니다(_PlanFeedbackKind.steady에
+    // 그 문구가 남아 있다). 다만 코치가 어떤 말투로 그 이야기를 꺼내는지
+    // 아직 확인되지 않았고, 다 해내고 있는 사람에게 조언이 붙으면 그게 곧장
+    // 참견으로 읽힌다. 캐릭터가 서고 나면 그때 열어도 늦지 않다.
+    if (recent.rate > lowRate) return null;
 
     // 여기서부터는 무엇이 걸리고 있는지를 고른다. 셋 다 완료율이 낮은 사람에게
     // 하는 이야기라, 순서는 그날 무엇이 눈에 띄는지로 정한다.
@@ -408,30 +447,32 @@ class PlanFeedbackService {
     final situation = switch (kind) {
       _PlanFeedbackKind.steady =>
         '''[이번에 할 이야기 - 잘 되고 있는 사람]
-최근 이틀 완료율은 $rate%다. 적어둔 것을 대체로 해내는 사람이라, 계획이 많다거나 안 끝난다는 이야기는 이 사람에게 해당하지 않는다.
-방금 적은 계획: '$taskText'${hasTime ? '' : ' (시각을 정해두지 않음)'}
+최근 이틀 완료율은 $rate%다. 적어둔 것을 대체로 해내는 사람이다.
+방금 핵심으로 지정한 일: '$taskText'${hasTime ? '' : ' (시각을 정해두지 않음)'}
+오늘 계획은 $todayCount개, 최근 이틀 하루 평균 완료는 ${recent.doneAverage.toStringAsFixed(1)}개.
 해내고 있다는 것을 먼저 인정하는 데서 시작하세요.
-그다음 이 계획에 무엇이 도움이 될지 하나만 고르세요.
+그다음 무엇이 도움이 될지 하나만 고르세요.
 - 하루에 끝날 크기가 아니면: 한 과제로 두지 말고 진도가 보이도록 나눠보자고. 나눠두면 하나씩 지워지는 것이 눈에 보여서 성취감이 더 자주 옵니다.
 - 크기는 괜찮은데 언제 할지가 비어 있으면: 시각과 장소까지 정해두자고. 정해둔 사람이 그러지 않은 사람보다 목표 달성률이 두세 배 높았습니다.
-둘 다 이미 되어 있으면 SKIP.''',
+- 오늘 잡은 양이 평소 해내던 것보다 눈에 띄게 많으면: 그 차이를 짚고, 오늘 그만큼의 시간과 체력이 실제로 있는지 함께 셈해보자고. 잘 해내던 사람일수록 자기 속도를 높게 잡습니다.
+셋 다 해당하지 않으면 SKIP.''',
       _PlanFeedbackKind.when =>
         '''[이번에 할 이야기 - 실행 의도]
 심리 연구에 따르면 '언제, 어디서, 어떻게 할 것인지'까지 정해둔 사람은 그러지 않은 사람보다 목표 달성률이 두세 배 높았다. "글을 쓴다"보다 "오전 9시에 책상에 앉아 바로 첫 문장을 쓴다"가 실제로 일어난다.
-방금 적은 계획: '$taskText' (시각을 정해두지 않음)
+방금 핵심으로 지정한 일: '$taskText' (시각을 정해두지 않음)
 이 계획이 언제 어디서 할지 정해두면 달라질 만한 것이면, 그 연구 이야기를 한 문장으로 곁들이고 시각과 장소를 정해보자고 권하세요.
 다만 이 계획이 하루에 끝날 크기가 아니면 — 며칠에서 몇 주에 걸칠 일이면 — 그건 계획이 아니라 목표입니다. 목표에는 눈금이 없어서 오늘 무엇을 했는지 알 수가 없습니다. 이때는 시각보다 먼저 오늘 할 한 조각을 정해보자고 권하세요. 9시에 앉아도 무엇을 하는지 모르면 시각은 쓸모가 없습니다.''',
       _PlanFeedbackKind.slack =>
         '''[이번에 할 이야기 - 계획 오류]
 사람은 자기 능력을 과신해서 과거에 실제로 걸린 시간을 무시한다. 그래서 계획에는 20~30%의 여유를 미리 넣어야 실패율이 낮아진다.
-방금 적은 계획: '$taskText'
+방금 핵심으로 지정한 일: '$taskText'
 오늘 계획은 $todayCount개인데, 최근 이틀 하루 평균 완료는 ${recent.doneAverage.toStringAsFixed(1)}개였다.
 그 차이를 한 문장으로 짚고, 여유 시간과 체력까지 셈에 넣었는지 물어보세요. 계획을 줄이라고 지시하지 말고 물어보는 자리입니다.''',
       _PlanFeedbackKind.shrink =>
         '''[이번에 할 이야기 - 목표 구체화]
 거창한 최종 목표보다 당장 오늘 할 구체적인 과제에 집중할 때 실행력이 훨씬 높아진다.
 사람들이 세우는 계획은 목표만 거창하고 정작 계획은 없는 경우가 많다. 목표를 할 일의 조각으로 나눠두면 그 조각들이 진도를 재는 눈금이 되고, 성취 동기를 높인다.
-방금 적은 계획: '$taskText'
+방금 핵심으로 지정한 일: '$taskText'
 최근 이틀 완료율은 $rate%다.
 이 계획이 오늘 손대기에 너무 뭉뚱그려져 있으면, 목표를 눈금이 될 만한 조각으로 나눠 그중 오늘 할 것만 추리자고 권하세요.''',
     };
@@ -440,7 +481,7 @@ class PlanFeedbackService {
         '''${coach.systemPrompt}
 
 [지금 상황]
-사용자가 방금 오늘 할 일 하나를 적어 저장했습니다. 당신은 그 옆에서 짧게 한 마디를 건넵니다. 대화창이 아니라 화면 위에 뜨는 작은 말풍선이라, 두 문장 90자 안에서 끝내세요. 넘으면 뒷말이 잘려서 사용자에게 닿지 않습니다.
+사용자가 방금 할 일 하나를 오늘의 핵심으로 지정했습니다. 스스로 오늘 중요하다고 고른 일입니다. 당신은 그 옆에서 짧게 한 마디를 건넵니다. 대화창이 아니라 화면 위에 뜨는 작은 말풍선이라, 두 문장 90자 안에서 끝내세요. 넘으면 뒷말이 잘려서 사용자에게 닿지 않습니다.
 
 $situation
 

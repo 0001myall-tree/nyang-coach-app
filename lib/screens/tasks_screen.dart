@@ -1230,7 +1230,7 @@ class _TasksScreenState extends State<TasksScreen>
     final coreMilestonesChanged = _syncTodayMilestonesIntoCoreTasks();
     if (coreMilestonesChanged) {
       if (mounted) setState(() {});
-      await _saveCoreTasks();
+      await _saveCoreTasks(userPicked: false);
     }
 
     _initialLoadDone = true;
@@ -2279,7 +2279,7 @@ class _TasksScreenState extends State<TasksScreen>
       await prefs.remove('nyang_deferred_tasks_today');
       await NotificationService().cancelCoreReminders();
       await _saveTasks();
-      await _saveCoreTasks();
+      await _saveCoreTasks(userPicked: false);
 
       // 3. Generate daily summary before clearing chat history
       try {
@@ -3186,15 +3186,62 @@ class _TasksScreenState extends State<TasksScreen>
     if (counted > stored) await prefs.setInt('nyang_streak', counted);
   }
 
-  Future<void> _saveCoreTasks() async {
-    _syncTodayMilestonesIntoCoreTasks();
+  /// [userPicked]가 참이면 사용자가 방금 고른 것으로 본다.
+  ///
+  /// 앱이 스스로 채워 넣는 자리(마일스톤 동기화, 하루 리셋)에서는 거짓으로
+  /// 부른다. 고르지도 않은 것을 두고 코치가 말을 걸면 안 된다.
+  Future<void> _saveCoreTasks({bool userPicked = true}) async {
     final prefs = await SharedPreferences.getInstance();
+    // 저장하기 전의 목록. 이번에 새로 들어온 것이 무엇인지 알아야 한다.
+    final before = <String>{
+      for (final task in _decodeCoreTaskIds(prefs.getString('nyang_core_tasks')))
+        task,
+    };
+
+    _syncTodayMilestonesIntoCoreTasks();
     await prefs.setString(
       'nyang_core_tasks',
       jsonEncode(coreTasks.map((t) => t.toJson()).toList()),
     );
     NotificationService().syncCoreReminders();
     TasksSyncService.scheduleSyncToCloud();
+
+    if (!userPicked) return;
+    // 오늘의 핵심으로 새로 지정된 것. 사용자가 직접 "이게 오늘 중요한
+    // 일"이라고 고른 자리라, 코치가 한 마디 건넬 만한 순간이다. 저장할 때마다
+    // 말을 걸던 때는 '미용실 가기'에까지 조언이 붙었다.
+    final added = coreTasks
+        .where((task) => !before.contains(task.id.toString()))
+        .toList();
+    if (added.isEmpty) return;
+
+    // 한 번에 여러 개를 골랐으면 그중 하나만 이야기한다. 시각이 비어 있는 쪽을
+    // 먼저 본다 — 언제 할지가 정해지지 않은 일이 코치가 도울 것이 많다.
+    added.sort((a, b) {
+      final aHasTime = (a.timeStart ?? '').isNotEmpty ? 1 : 0;
+      final bHasTime = (b.timeStart ?? '').isNotEmpty ? 1 : 0;
+      return aHasTime.compareTo(bHasTime);
+    });
+    final task = added.first;
+    unawaited(
+      PlanFeedbackService.onCoreTaskSet(
+        coachId: widget.coachId,
+        taskText: task.text,
+        hasTime: (task.timeStart ?? '').isNotEmpty,
+      ),
+    );
+  }
+
+  List<String> _decodeCoreTaskIds(String? raw) {
+    if (raw == null || raw.isEmpty) return const [];
+    try {
+      return (jsonDecode(raw) as List)
+          .whereType<Map>()
+          .map((task) => task['id'].toString())
+          .toList(growable: false);
+    } catch (_) {
+      return const [];
+    }
   }
 
   /// 휴식 모드를 저장한다.
@@ -4052,9 +4099,8 @@ class _TasksScreenState extends State<TasksScreen>
     _saveTasks();
     _todayInputCtrl.clear();
 
-    // 방금 적은 계획을 두고 코치가 한 마디 건넬 자리인지 본다. 대개는 아무
-    // 일도 일어나지 않는다 — 이틀에 한 번까지고, 짚을 것이 있는지는 코치가
-    // 다시 판단한다.
+    // 핵심을 고르지 않는 사람도 있다. 그때는 그날 잡은 양이 평소 해내던 것보다
+    // 훨씬 많을 때만 한 마디 건넨다.
     unawaited(
       PlanFeedbackService.onTaskSaved(
         coachId: widget.coachId,
