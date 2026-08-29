@@ -6377,18 +6377,21 @@ class _TasksScreenState extends State<TasksScreen>
         _lightenPlanCardDismissedDate != _getTodayStr();
   }
 
-  /// 할 일이 세 개가 됐는데 아직 핵심을 안 골랐을 때.
+  /// 할 일이 두 개가 됐는데 아직 핵심을 안 골랐을 때.
   ///
   /// 오후 3시 카드와 자리는 같지만 하는 말이 다르다. 그쪽은 하루가 반이 지나도록
   /// 하나도 못 한 사람에게 줄이자고 하는 것이고, 이쪽은 지금 막 목록이 길어진
   /// 사람에게 그중 중요한 것을 골라두자고 하는 것이다.
   ///
-  /// 등록하는 손을 막지 않는다. 세 개째에서 창이 뜨면 네 개를 넣으려던 사람은
-  /// 중간에 끊긴다. 카드는 목록 위에 얹혀 있기만 하고, 처음 생길 때 한 번
-  /// 튀어서 눈에 들어온다. 그 뒤로는 몇 개를 더 넣어도 다시 튀지 않는다.
+  /// 두 개째에 뜬다. 셋을 기다리면 오늘 두 가지만 적는 사람에게는 이 말이
+  /// 영영 가지 않는데, 그 사람에게도 둘 중 무엇이 먼저인지는 정할 만하다.
+  ///
+  /// 등록하는 손을 막지 않는다. 창이 뜨면 하나 더 넣으려던 사람은 중간에
+  /// 끊긴다. 카드는 목록 위에 얹혀 있기만 하고, 처음 생길 때 한 번 튀어서
+  /// 눈에 들어온다. 그 뒤로는 몇 개를 더 넣어도 다시 튀지 않는다.
   bool _shouldShowCorePickCard(List<TaskItem> remainingTasks) {
     return _isViewingActualToday &&
-        remainingTasks.length >= 3 &&
+        remainingTasks.length >= 2 &&
         coreTasks.isEmpty &&
         _corePickCardDismissedDate != _getTodayStr();
   }
