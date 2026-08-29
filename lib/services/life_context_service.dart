@@ -222,6 +222,16 @@ class LifeContextService {
   static const String _conditionKey = 'life_execution_condition';
   static const String _conditionAtKey = 'life_execution_condition_at';
 
+  /// 골라둔 답을 이만큼만 들고 있는다.
+  ///
+  /// 되는 조건은 사는 모양이 바뀌면 같이 바뀐다. 특히 "일부러 쉬었다"는
+  /// 그때 그 며칠의 이야기지 그 사람의 성향이 아니다. 그걸 몇 달 들고 있으면
+  /// 정말 못 한 날까지 쉰 날로 읽게 된다.
+  ///
+  /// 다시 묻는 주기보다 조금 길게 둔다. 답이 사라지자마자 물어야 그 사이에
+  /// 아무것도 모르는 구간이 생기지 않는다.
+  static const Duration conditionLife = Duration(days: 21);
+
   /// 한 번 물으면 이만큼은 다시 묻지 않는다.
   ///
   /// 두 주다. 답이 한 번 나오면 그걸로 오래 갈 것 같지만, 되는 조건은 사는
@@ -236,15 +246,41 @@ class LifeContextService {
     '일찍 시작했어': '그날 첫 발을 일찍 뗀 날에 끝까지 감. 시작 시각이 그날을 가름.',
     '계획을 미리 세워뒀어': '전날이나 아침에 미리 정해둔 날에 실행됨. 그 자리에서 정하는 날은 잘 안 됨.',
     '수면 시간이 달랐어': '잘 잔 날에 실행됨. 그날의 실행 여부가 전날 밤에 갈리는 사람.',
+    '일부러 쉬었어':
+        '최근에 아무것도 안 한 날들은 일부러 쉰 것이라고 함. 그 며칠을 못 한 날로 보지 말 것. '
+        '쉬는 날을 따로 두는 것도 그 사람의 방식이고, 거기에 계획을 밀어 넣으면 쉬는 자리를 뺏는 것이 됨.',
   };
 
-  /// 골라둔 답이 있으면 코치에게 넘길 한 줄. 없으면 빈 문자열.
+  /// 사용자가 직접 적은 답을 담는 칸. 목록에 없는 답이 그 사람에게는 제일
+  /// 정확한 답일 수 있어서, 고른 답과 같은 자리에 둔다.
+  static const String _conditionFreeKey = 'life_execution_condition_free';
+
+  /// 답이 있으면 코치에게 넘길 한 줄. 없으면 빈 문자열.
   static Future<String> executionConditionLine() async {
     final prefs = await SharedPreferences.getInstance();
-    final answer = prefs.getString(_conditionKey);
-    final line = conditionAnswers[answer];
+    final at = DateTime.tryParse(prefs.getString(_conditionAtKey) ?? '');
+    if (at == null || DateTime.now().difference(at) > conditionLife) return '';
+
+    final free = prefs.getString(_conditionFreeKey);
+    if (free != null && free.isNotEmpty) {
+      return '- 실행되는 날의 조건(사용자가 직접 한 말): "$free"';
+    }
+    final line = conditionAnswers[prefs.getString(_conditionKey)];
     if (line == null) return '';
     return '- 실행되는 날의 조건(사용자가 직접 고른 것): $line';
+  }
+
+  /// 직접 적은 답을 받아 둔다.
+  ///
+  /// 너무 길면 담지 않는다. 그건 조건을 말한 것이 아니라 다른 이야기로
+  /// 넘어간 것이고, 그런 말을 조건이라고 들고 다니면 코치가 엉뚱한 것을
+  /// 근거로 삼는다.
+  static Future<void> saveFreeCondition(String text) async {
+    final trimmed = text.trim();
+    if (trimmed.isEmpty || trimmed.length > 120) return;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_conditionFreeKey, trimmed);
+    await prefs.setString(_conditionAtKey, DateTime.now().toIso8601String());
   }
 
   /// 아직 물어본 적이 없거나, 물어본 지 한참 지났는지.
@@ -261,6 +297,8 @@ class LifeContextService {
     await prefs.setString(_conditionAtKey, DateTime.now().toIso8601String());
     if (answer != null && conditionAnswers.containsKey(answer)) {
       await prefs.setString(_conditionKey, answer);
+      // 새로 고른 답이 앞서 적어둔 말을 대신한다.
+      await prefs.remove(_conditionFreeKey);
     }
   }
 

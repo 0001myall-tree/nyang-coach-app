@@ -1379,6 +1379,15 @@ class _ChatScreenState extends State<ChatScreen>
 
   /// 이월된 일을 물었을 때만 채운다. 답을 받는 쪽이 그때만 다르게 반응한다.
   String? _pendingCarriedOverTask;
+
+  /// 입력창. "다른 이유가 있어"를 눌렀을 때 바로 쓸 수 있게 초점을 옮긴다.
+  final FocusNode _inputFocus = FocusNode();
+
+  /// 되는 날의 조건을 직접 적어달라고 한 참인지.
+  ///
+  /// 다음에 사용자가 하는 말이 그 답이다. 버튼으로 고른 답은 저장되는데
+  /// 직접 쓴 답만 흘려보내면, 제일 정확한 답이 제일 먼저 사라진다.
+  bool _awaitingConditionAnswer = false;
   static const _eveningSplitTtl = Duration(minutes: 3);
 
   // 실행 저항 원인 확인: 확인 질문을 던진 직후, 사용자의 원인 답변을 기다리는 상태
@@ -3734,6 +3743,7 @@ ${lines.join('\n')}
     WidgetsBinding.instance.removeObserver(this);
     widget.controller?._detach();
     CoachSayService.unregisterSink(widget.coachId);
+    _inputFocus.dispose();
     _ctrl.dispose();
     _scrollCtrl.dispose();
     _flirtAnim.dispose();
@@ -11862,6 +11872,10 @@ Rules:
     // 사용자가 한 말에서만 줍는다. 코치가 "퇴근하고 하자"고 한 것을 세면
     // 자기가 한 말을 근거로 삼는 셈이 된다.
     unawaited(LifeContextService.noteFromUserText(trimmed));
+    if (_awaitingConditionAnswer) {
+      _awaitingConditionAnswer = false;
+      unawaited(LifeContextService.saveFreeCondition(trimmed));
+    }
 
     final isFutureTodayFlow =
         trimmed == '미래를 위한 오늘' ||
@@ -17888,12 +17902,13 @@ ${Prompts.outputRulesTail}$plannerActionSection$coachOfferTaskRule$halmaeHint$re
     HapticFeedback.lightImpact();
 
     if (label == _conditionOtherLabel) {
+      // 누른 말을 그대로 보내지 않는다. "다른 이유가 있어"는 답이 아니라
+      // 답을 적겠다는 표시다. 물어보고 입력창으로 옮겨준다.
       await LifeContextService.saveConditionAnswer(null);
       await AnalyticsService.logFeatureUsage('master_condition_other');
-      await _send(
-        label,
-        apiInputOverride: '내가 계획을 해내는 날과 아예 손도 못 대는 날이 갈리는데, 그 차이가 뭔지 같이 찾아보고 싶어',
-      );
+      _awaitingConditionAnswer = true;
+      _injectAiMessage(_greetingBuilder.buildConditionFreeAsk());
+      if (mounted) _inputFocus.requestFocus();
       return;
     }
 
@@ -19412,6 +19427,7 @@ ${Prompts.outputRulesTail}$plannerActionSection$coachOfferTaskRule$halmaeHint$re
                         ),
                         child: TextField(
                           controller: _ctrl,
+                          focusNode: _inputFocus,
                           maxLines: null,
                           textInputAction: TextInputAction.send,
                           onSubmitted: _send,

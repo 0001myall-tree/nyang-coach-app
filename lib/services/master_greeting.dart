@@ -298,6 +298,9 @@ class GreetingVoice {
   /// 답을 골랐을 때. 알아들었다는 것만 짧게 알린다.
   final List<String> conditionReply;
 
+  /// 목록에 없는 답이라고 했을 때. 그 자리에서 적어달라고 청한다.
+  final List<String> conditionFreeAsk;
+
   /// 권한 대로 해내고 온 날 아침에 건네는 말. `{{task}}`가 그 일,
   /// `{{advice}}`는 그때 무엇을 권했는지.
   ///
@@ -412,6 +415,7 @@ class GreetingVoice {
     required this.coreAsk,
     required this.conditionAsk,
     required this.conditionReply,
+    required this.conditionFreeAsk,
     required this.adviceWorked,
     required this.carriedAsk,
     required this.repeatingAsk,
@@ -716,6 +720,11 @@ class MasterGreetingCopy {
     conditionReply: [
       '{그러셨군요|알겠습니다}. 그럼 앞으로 그 조건을 같이 챙겨보겠습니다.',
       '{좋은 단서네요|기억해두겠습니다}. 다음부터 그쪽으로 함께 맞춰보시죠.',
+    ],
+    conditionFreeAsk: [
+      '{어떤 점이 달랐는지 한 줄로 적어주시겠어요|무엇이 달랐는지 편하게 적어주세요}?\n'
+          '{길게 안 쓰셔도 됩니다|짧아도 괜찮습니다}.',
+      '{그럼 직접 들려주시죠|그 이야기가 궁금하네요}. 되는 날에는 무엇이 달랐나요?',
     ],
     adviceWorked: [
       '{{advice}} 했던 {{task}}, 어제 {끝내셨더군요|해내셨더군요}.\n'
@@ -1022,6 +1031,11 @@ class MasterGreetingCopy {
     conditionReply: [
       '{그랬구나냥|알겠다냥}. 그럼 앞으로 그 조건을 같이 챙겨보자냥.',
       '{좋은 단서다냥|기억해두겠다냥}. 다음부터 그쪽으로 같이 맞춰보자냥.',
+    ],
+    conditionFreeAsk: [
+      '{뭐가 달랐는지 한 줄로 적어줄래냥|뭐가 달랐는지 편하게 적어보라냥}?\n'
+          '{길게 안 써도 된다냥|짧아도 괜찮다냥}.',
+      '{그럼 직접 들려달라냥|그 이야기가 궁금하다냥}. 되는 날엔 뭐가 달랐냥?',
     ],
     adviceWorked: [
       '{{advice}} 했던 {{task}}, 어제 {끝났더라냥|끝냈더라냥}.\n'
@@ -1379,6 +1393,9 @@ class MasterGreetingBuilder extends GreetingLinePicker {
 
   /// 답을 골랐을 때의 대꾸.
   String buildConditionReply() => pickLine(voice.conditionReply);
+
+  /// 목록에 없는 답이라고 했을 때, 적어달라고 청하는 말.
+  String buildConditionFreeAsk() => pickLine(voice.conditionFreeAsk);
 
   /// 권한 대로 해내고 온 날의 인사.
   String buildAdviceWorked(String taskName, String advice) => pickLine(
