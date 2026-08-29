@@ -11,6 +11,10 @@ import '../theme/app_design_tokens.dart';
 /// 스스로 사라지지 않는다. 계획을 쓰는 데 집중한 사람은 몇 초짜리 말풍선을
 /// 그대로 놓친다. 닫는 것은 손으로 하고, 닫아도 같은 말이 채팅에 남아 있다.
 class CoachSayBubble extends StatefulWidget {
+  /// 버튼에 적힌 말. 누른 것을 기록에 남기는 쪽도 이 말을 쓴다.
+  static const String acceptLabel = '그렇게 해볼게';
+  static const String declineLabel = '알아서 할게';
+
   const CoachSayBubble({
     super.key,
     required this.text,
@@ -144,7 +148,7 @@ class _CoachSayBubbleState extends State<CoachSayBubble>
                     children: [
                       Expanded(
                         child: _BubbleButton(
-                          label: '알아서 할게',
+                          label: CoachSayBubble.declineLabel,
                           onTap: widget.onDecline,
                           background: AppDesignTokens.surfaceSubtle,
                           foreground: AppDesignTokens.textSecondary,
@@ -153,7 +157,7 @@ class _CoachSayBubbleState extends State<CoachSayBubble>
                       const SizedBox(width: 8),
                       Expanded(
                         child: _BubbleButton(
-                          label: '그렇게 해볼게',
+                          label: CoachSayBubble.acceptLabel,
                           onTap: widget.onAccept,
                           background: widget.accent,
                           foreground: Colors.white,

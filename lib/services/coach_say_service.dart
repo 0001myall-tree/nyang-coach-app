@@ -45,12 +45,38 @@ class CoachSayService {
   /// 살아 있는데 저장소에 직접 써넣으면, 다음 저장에서 그 줄이 조용히 사라진다.
   static final Map<String, void Function(String text)> _sinks = {};
 
-  static void registerSink(String coachId, void Function(String text) sink) {
+  /// 사용자가 말풍선 버튼으로 답한 것을 받아 적는 통로.
+  static final Map<String, void Function(String text)> _choiceSinks = {};
+
+  static void registerSink(
+    String coachId,
+    void Function(String text) sink, {
+    void Function(String text)? onUserChoice,
+  }) {
     _sinks[coachId] = sink;
+    if (onUserChoice != null) _choiceSinks[coachId] = onUserChoice;
   }
 
   static void unregisterSink(String coachId) {
     _sinks.remove(coachId);
+    _choiceSinks.remove(coachId);
+  }
+
+  /// 말풍선에서 무엇을 눌렀는지 기록에 한 줄 남긴다.
+  ///
+  /// 보내는 것이 아니라 적는 것이다. 이게 없으면 코치가 먼저 건넨 말만 남고
+  /// 사용자가 뭐라고 답했는지는 사라져서, 나중에 기록을 되짚어도 무슨 일이
+  /// 있었는지 알 수가 없다.
+  static Future<void> noteUserChoice({
+    required String coachId,
+    required String text,
+  }) async {
+    final sink = _choiceSinks[coachId];
+    if (sink != null) {
+      sink(text);
+      return;
+    }
+    await _appendToHistory(coachId, text, 'choice', isUser: true);
   }
 
   /// 앱이 시작할 때 한 번. 저장해둔 안 읽음 표시를 되살린다.
@@ -133,8 +159,9 @@ class CoachSayService {
   static Future<void> _appendToHistory(
     String coachId,
     String text,
-    String kind,
-  ) async {
+    String kind, {
+    bool isUser = false,
+  }) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.reload();
     final key = 'nyang_chat_history_$coachId';
@@ -147,7 +174,7 @@ class CoachSayService {
     }
     history.add({
       'text': text,
-      'isUser': false,
+      'isUser': isUser,
       'time': DateTime.now().toIso8601String(),
       'kind': kind,
     });

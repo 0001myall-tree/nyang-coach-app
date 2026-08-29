@@ -15,6 +15,7 @@ import 'package:speech_to_text/speech_to_text.dart';
 import 'package:speech_to_text/speech_recognition_result.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:nyang_coach/screens/coach_selection_screen.dart';
+import 'package:nyang_coach/services/life_context_service.dart';
 import 'package:nyang_coach/services/plan_feedback_service.dart';
 import 'package:nyang_coach/services/analytics_service.dart';
 import 'package:nyang_coach/services/master_unlock_notice.dart';
@@ -1375,6 +1376,9 @@ class _ChatScreenState extends State<ChatScreen>
   ///
   /// 핵심을 물었을 때는 비워둔다. 그때는 핵심 목록에서 찾으면 되기 때문이다.
   String? _pendingRepeatingAskTask;
+
+  /// 이월된 일을 물었을 때만 채운다. 답을 받는 쪽이 그때만 다르게 반응한다.
+  String? _pendingCarriedOverTask;
   static const _eveningSplitTtl = Duration(minutes: 3);
 
   // 실행 저항 원인 확인: 확인 질문을 던진 직후, 사용자의 원인 답변을 기다리는 상태
@@ -1441,6 +1445,7 @@ class _ChatScreenState extends State<ChatScreen>
     CoachSayService.registerSink(
       widget.coachId,
       (text) => _injectAiMessage(text, kind: 'auto:say'),
+      onUserChoice: _injectUserChoice,
     );
     _initAndLoad();
   }
@@ -3748,6 +3753,22 @@ ${lines.join('\n')}
   }
 
   /// 외부에서 AI 메시지를 채팅창에 직접 주입합니다 (핵심 설정 완료 반응 등).
+  /// 사용자가 버튼으로 답한 것을 기록에 한 줄 남긴다.
+  ///
+  /// 보내지 않는다. 새로 말을 건 것이 아니라 이미 일어난 일을 적는 것이라,
+  /// 코치를 부르지도 않고 답을 기다리지도 않는다. 이게 없으면 기록에는
+  /// 질문 다음에 답이 없는데 코치가 대꾸를 하고 있는 모양이 남는다.
+  void _injectUserChoice(String text) {
+    if (!mounted) return;
+    setState(() {
+      _messages.add(
+        ChatMessage(text: text, isUser: true, time: DateTime.now()),
+      );
+    });
+    _saveHistory();
+    Future.delayed(const Duration(milliseconds: 100), _scrollToBottom);
+  }
+
   void _injectAiMessage(
     String text, {
     String? kind,
@@ -4979,31 +5000,57 @@ ${lines.join('\n')}
   static const _masterCoreAskFromHour = 12;
   static const _masterCoreAskUntilHour = 18;
 
+  /// 이월된 일만 오전에 묻는다.
+  ///
+  /// 어제 넘긴 것은 오늘 계획을 짜기 전에 이미 있던 일이다. 하루를 다 그린
+  /// 뒤에 꺼내면 이미 짜놓은 계획 위에 하나를 더 얹는 말이 되고, 오전에
+  /// 꺼내면 그 계획 안에 자리를 잡을 수 있다.
+  static const _masterCarriedAskFromHour = 7;
+
   /// 핵심 일정을 물어봤으면 true. 슬롯 인사와 예산이 따로라 아침에 인사를
   /// 받았어도 이 질문은 나갈 수 있다. 다만 한 번 진입에 하나만 말한다.
   Future<bool> _startMasterCoreAsk(
     SharedPreferences prefs,
     DateTime now,
   ) async {
-    if (now.hour < _masterCoreAskFromHour ||
+    if (now.hour < _masterCarriedAskFromHour ||
         now.hour >= _masterCoreAskUntilHour) {
       return false;
     }
     // 자기 방 기록만 보면 여비서에서 물어본 걸 냥할배가 또 묻는다. 코치 전체를
     // 보고, 어제 물었으면 오늘은 쉰다.
     if (!await _canAskCoreToday(now)) return false;
+
+    // 오전은 이월된 일의 자리다. 오늘 것을 묻기에는 이르다 — 아직 하지
+    // 않았다는 말이 재촉으로만 들린다.
+    if (now.hour < _masterCoreAskFromHour) {
+      final carried = _carriedOverTask(prefs);
+      if (carried == null) return false;
+      if (!mounted) return false;
+      _pendingRepeatingAskTask = carried.name;
+      _pendingCarriedOverTask = carried.name;
+      _injectAiMessage(
+        _greetingBuilder.buildCarriedAsk(carried.name, carried.days),
+        kind: _masterCoreGreetingKind,
+        choices: _masterCoreAskLabels,
+      );
+      unawaited(AnalyticsService.logFeatureUsage('master_carried_ask'));
+      return true;
+    }
+
     final core = _coreTaskDueForAsk(prefs, now);
-    // 핵심을 지정해두지 않은 사람에게는 요즘 자주 하던 일을 대신 묻는다.
+    // 핵심을 지정해두지 않은 사람에게는 오늘 적어둔 나머지 하나를 묻는다.
     // 질문의 모양이 같아서 뒤따르는 버튼과 처리도 그대로 쓴다.
-    final repeating = core == null ? _otherTaskDueToday(prefs) : null;
-    if (core == null && repeating == null) return false;
+    final other = core == null ? _otherTaskDueToday(prefs) : null;
+    if (core == null && other == null) return false;
     if (!mounted) return false;
 
-    _pendingRepeatingAskTask = repeating;
+    _pendingRepeatingAskTask = other;
+    _pendingCarriedOverTask = null;
     _injectAiMessage(
       core != null
           ? _greetingBuilder.buildCoreAsk(core)
-          : _greetingBuilder.buildRepeatingAsk(repeating!),
+          : _greetingBuilder.buildRepeatingAsk(other!),
       kind: _masterCoreGreetingKind,
       choices: _masterCoreAskLabels,
     );
@@ -5587,6 +5634,45 @@ Rules:
       '*사용자의 이번 말이 그 이야기에 대한 답이나 항변일 수 있습니다. 그렇다면 사정을 먼저 듣고, 사용자가 이미 그렇게 하고 있거나 그럴 만한 이유가 있으면 물러나세요.',
     );
     sb.writeln('*다른 이야기로 넘어갔다면 해당 이야기의 맥락에 맞춰 새로 반응해주세요.');
+  }
+
+  /// 오늘 목록에 있는데 지난 며칠 기록에도 못 끝낸 채로 남아 있던 일.
+  ///
+  /// 이월된 일은 코치가 계획을 적는 자리에서 챙길 수가 없다. 사용자가 오늘
+  /// 적은 것이 아니라 어제에서 넘어온 것이라, 적는 순간 자체가 없다. 그래서
+  /// 인사에서 챙긴다.
+  ///
+  /// 날짜를 옮긴 것과 그냥 매일 다시 적는 것을 가리지 않는다. 어느 쪽이든
+  /// 사용자에게는 며칠째 못 끝낸 같은 일이다.
+  ///
+  /// 여러 개면 가장 여러 날 걸려 있던 것을 고른다.
+  ({String name, int days})? _carriedOverTask(SharedPreferences prefs) {
+    final from = DateTime.now().subtract(const Duration(days: 7));
+    final missedDays = <String, int>{};
+    for (final record in _decodeMapList(prefs.getString('nyang_history'))) {
+      final date = DateTime.tryParse(record['date']?.toString() ?? '');
+      if (date == null || date.isBefore(from)) continue;
+      if (record['isVacation'] == true) continue;
+      final seen = <String>{};
+      for (final task in (record['tasks'] as List?) ?? const []) {
+        if (task is! Map || task['done'] == true) continue;
+        final text = task['text']?.toString().trim() ?? '';
+        if (text.isEmpty || !seen.add(text)) continue;
+        missedDays[text] = (missedDays[text] ?? 0) + 1;
+      }
+    }
+    if (missedDays.isEmpty) return null;
+
+    ({String name, int days})? best;
+    for (final task in _decodeMapList(prefs.getString('nyang_tasks'))) {
+      if (!_isPendingNotInProgressTask(task)) continue;
+      final days = missedDays[task['text']?.toString().trim() ?? ''] ?? 0;
+      if (days == 0) continue;
+      final name = _shortTaskName(task);
+      if (name == null) continue;
+      if (best == null || days > best.days) best = (name: name, days: days);
+    }
+    return best;
   }
 
   /// 핵심도 습관도 아닌, 오늘 적어둔 나머지 일 하나.
@@ -6419,8 +6505,8 @@ Rules:
     final pendingHabits = notStartedCore == null && !coreInProgress
         ? _pendingDailyHabits(prefs)
         : const <String>[];
-    // 핵심도 습관도 없는 사람을 위한 세 번째 순위. 지정해둔 게 없다고 해서
-    // 챙길 것이 없는 건 아니다. 오늘 적어둔 것 중 아직 그대로인 하나를 본다.
+    // 핵심도 습관도 없는 사람을 위한 세 번째 순위. 오늘 적어둔 것 중 아직
+    // 그대로인 하나를 본다.
     //
     // 핵심 질문과 같은 예산을 쓴다. 사용자에게는 둘 다 "아직 안 한 일"을 짚는
     // 말이라, 따로 세면 마스터가 낮에 묻고 냥냥이가 오후에 또 묻게 된다.
@@ -11689,6 +11775,9 @@ Rules:
     if (trimmed.isEmpty || _isLoading) return;
     if (!await _ensureMasterCoachAccess()) return;
     _conversationStarted = true;
+    // 사용자가 한 말에서만 줍는다. 코치가 "퇴근하고 하자"고 한 것을 세면
+    // 자기가 한 말을 근거로 삼는 셈이 된다.
+    unawaited(LifeContextService.noteFromUserText(trimmed));
 
     final isFutureTodayFlow =
         trimmed == '미래를 위한 오늘' ||
@@ -17656,6 +17745,7 @@ ${Prompts.outputRulesTail}$plannerActionSection$coachOfferTaskRule$halmaeHint$re
     HapticFeedback.lightImpact();
 
     if (label == _masterCoreStartedLabel) {
+      _injectUserChoice(label);
       // 표시를 안 누른 게 귀찮아서였을 텐데 또 누르라고 하면 똑같다.
       final prefs = await SharedPreferences.getInstance();
       final started = await _markCoreTaskStarted(
@@ -17674,17 +17764,31 @@ ${Prompts.outputRulesTail}$plannerActionSection$coachOfferTaskRule$halmaeHint$re
     }
 
     if (label == _masterCoreBusyLabel) {
+      _injectUserChoice(label);
       // 못 한 게 아니라 못 할 상황이었던 것이다. 다음 행동을 밀지 않는다.
+      //
+      // 다만 며칠째 넘어온 일은 다르게 받는다. 하루 못 한 것과 사흘 밀린
+      // 것에 같은 말을 하면, 밀린 쪽은 계속 밀리는 자리에 그대로 남는다.
       _injectAiMessage(
-        _greetingBuilder.pickLine(_greetingVoice.coreAskBusyReply),
+        _greetingBuilder.pickLine(
+          _pendingCarriedOverTask != null
+              ? _greetingVoice.carriedBusyReply
+              : _greetingVoice.coreAskBusyReply,
+        ),
       );
       await AnalyticsService.logFeatureUsage('master_core_ask_busy');
       return;
     }
 
-    // 부담이라고 답한 경우만 실행 저항 흐름을 태운다.
+    // 부담이라고 답한 경우만 실행 저항 흐름을 태운다. 거기서 시작 행동을
+    // 정하거나 조각으로 나누는 이야기가 나온다.
     await AnalyticsService.logFeatureUsage('master_core_ask_burden');
-    await _send(label, apiInputOverride: '오늘 핵심으로 잡은 일이 부담돼서 아직 시작을 못 하고 있어');
+    await _send(
+      label,
+      apiInputOverride: _pendingCarriedOverTask != null
+          ? '며칠째 넘기고 있는 일이 부담돼서 아직 시작을 못 하고 있어'
+          : '오늘 핵심으로 잡은 일이 부담돼서 아직 시작을 못 하고 있어',
+    );
   }
 
   /// 시작해두고 멈춘 것 같은 일을 물은 뒤 누른 버튼을 처리한다.
@@ -17696,6 +17800,7 @@ ${Prompts.outputRulesTail}$plannerActionSection$coachOfferTaskRule$halmaeHint$re
     HapticFeedback.lightImpact();
 
     if (label == _masterStalledDoneLabel) {
+      _injectUserChoice(label);
       final prefs = await SharedPreferences.getInstance();
       final task = _stalledTask(prefs, DateTime.now());
       final done = task == null ? null : await _markTaskDone(prefs, task);

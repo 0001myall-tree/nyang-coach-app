@@ -7,6 +7,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/user_data.dart';
 import '../screens/coach_config.dart';
 import 'coach_say_service.dart';
+import 'execution_pattern_service.dart';
+import 'life_context_service.dart';
 
 /// 계획을 적는 자리에서 코치가 한 마디 건네는 자리.
 ///
@@ -26,6 +28,13 @@ class PlanFeedbackService {
   /// 이 값들은 이 기기에서만 뜻이 있어 'nyang_' 접두어를 쓰지 않는다.
   static const String _lastSaidAtKey = 'plan_feedback_last_at';
 
+  /// 총량 이야기는 따로 센다.
+  ///
+  /// 계획 코칭은 그날 첫 계획을 적는 순간에 나가는데, 그때는 목록에 그것
+  /// 하나뿐이라 양이 많은지를 볼 수가 없다. 같은 예산을 쓰면 여덟 개 잡은
+  /// 날을 영영 못 본다. 종류가 다른 말이라 하루에 한 번씩 따로 둔다.
+  static const String _lastVolumeAtKey = 'plan_feedback_volume_at';
+
   /// 방금 무엇을 두고 먼저 말을 걸었는지. 채팅 화면이 다음 턴에 읽어간다.
   ///
   /// 이 말은 채팅에도 한 줄로 남는다. 그런데 남는 것은 문장뿐이라, 사용자가
@@ -42,15 +51,15 @@ class PlanFeedbackService {
   static const String _handledKey = 'plan_feedback_handled_at';
   static const String _oldHandledKey = 'plan_feedback_handled';
 
-  /// 말을 거는 간격. 하루에 한 마디까지다.
+  /// 말을 거는 간격. 이틀에 한 마디까지다.
   ///
-  /// 사흘에 한 번이던 것을 하루로 당겼다. 계획을 여러 개 적어도 그중 하나에만
-  /// 말하니, 하루 한 마디는 검사받는 기분이 들 만큼은 아니다.
+  /// 하루에 한 번으로 뒀다가 이틀로 되돌렸다. 갈래가 몇 개뿐이라 매일이면
+  /// 며칠 만에 같은 말을 다시 듣게 된다.
   ///
-  /// 완료율이 높은 사람에게만 주 한 번으로 벌려두었던 것도 없앴다. 잦아서
-  /// 참견이 되는 것을 막는 일은 이제 연속 거절이 맡는다 — 짐작으로 뜸하게
-  /// 두는 것보다, 싫다고 말한 사람에게 물러나는 편이 정확하다.
-  static const Duration interval = Duration(days: 1);
+  /// 완료율이 높은 사람에게만 주 한 번으로 벌려두었던 것은 없앴다. 잦아서
+  /// 참견이 되는 것을 막는 일은 연속 거절이 맡는다 — 짐작으로 뜸하게 두는
+  /// 것보다, 싫다고 말한 사람에게 물러나는 편이 정확하다.
+  static const Duration interval = Duration(days: 2);
 
   /// 한 번 짚은 이름을 이만큼 잊지 않는다. 그동안은 그 계획에 말을 걸지 않는다.
   ///
@@ -135,6 +144,9 @@ class PlanFeedbackService {
     required bool hasTime,
   }) async {
     try {
+      // 오늘 잡은 양 이야기가 먼저다. 그날 전체를 보는 말이라 항목 하나를
+      // 다듬는 이야기보다 앞선다. 한 번 저장에 두 마디를 하지는 않는다.
+      if (await _speakVolume(coachId)) return;
       await _speak(
         coachId: coachId,
         taskText: taskText.trim(),
@@ -143,6 +155,64 @@ class PlanFeedbackService {
     } catch (e) {
       debugPrint('plan feedback failed: $e');
     }
+  }
+
+  /// 오늘 잡은 양이 평소 해내던 것보다 많으면 한 마디. 말했으면 true.
+  static Future<bool> _speakVolume(String coachId) async {
+    if (!await _hasMasterPlan()) return false;
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.reload();
+
+    final recent = _recentRates(prefs, days: 8);
+    if (!recent.hasData) return false;
+
+    final today = _todayTasks(prefs);
+    if (today.length < recent.doneAverage + tooManyMargin) return false;
+
+    if (!debugAlwaysSpeak) {
+      if (!_maySpeakNow(prefs, interval, atKey: _lastVolumeAtKey)) return false;
+      if (_asksToday(prefs) >= askBudgetPerDay) return false;
+    }
+
+    await _countAsk(prefs);
+    CoachSayService.startThinking(coachId);
+    String? line;
+    try {
+      line = await _askCoach(
+        coachId: coachId,
+        kind: _PlanFeedbackKind.slack,
+        taskText: '',
+        hasTime: false,
+        todayCount: today.length,
+        recent: recent,
+        todaySummary: _todaySummary(today, ''),
+        historyNote: '',
+        whenNote: _whenNote(prefs, recent),
+      );
+    } catch (_) {
+      CoachSayService.stopThinking();
+      rethrow;
+    }
+    if (line == null || line.isEmpty) {
+      CoachSayService.stopThinking();
+      return false;
+    }
+
+    await prefs.setString(
+      _lastVolumeAtKey,
+      DateTime.now().toIso8601String(),
+    );
+    await prefs.setString(
+      lastNudgeKey,
+      jsonEncode({
+        'task': '오늘 잡은 일 전체',
+        'topic': _PlanFeedbackKind.slack.topic,
+        'at': DateTime.now().toIso8601String(),
+      }),
+    );
+    await CoachSayService.say(coachId: coachId, text: line);
+    return true;
   }
 
   static Future<void> _speak({
@@ -157,7 +227,7 @@ class PlanFeedbackService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.reload();
 
-    final recent = _recentRates(prefs, days: 2);
+    final recent = _recentRates(prefs, days: 8);
     if (!debugAlwaysSpeak) {
       if (!_maySpeakNow(prefs, interval)) return;
       // 한 번 짚은 항목은 한동안 다시 짚지 않는다. 고쳤든 안 고쳤든, 같은
@@ -190,6 +260,9 @@ class PlanFeedbackService {
         hasTime: hasTime,
         todayCount: today.length,
         recent: recent,
+        todaySummary: _todaySummary(today, taskText),
+        historyNote: _taskHistoryNote(prefs, taskText),
+        whenNote: _whenNote(prefs, recent),
       );
     } catch (_) {
       CoachSayService.stopThinking();
@@ -211,6 +284,97 @@ class PlanFeedbackService {
       }),
     );
     await CoachSayService.say(coachId: coachId, text: line);
+  }
+
+  // ── 주간 실행 패턴 코칭 ────────────────────────
+  //
+  // 하루치 이야기만 하면 매번 같은 자리를 맴돈다. 한 주에 한 번은 그 주가
+  // 어떻게 흘렀는지를 두고 말한다 — 언제 첫 발을 뗐는지, 잡은 양과 해낸 양이
+  // 얼마나 벌어졌는지.
+  //
+  // 아침에 꺼낸다. 하루가 아직 안 정해진 시간이라야 오늘 무엇을 바꿔볼지
+  // 이야기가 되고, 저녁에 꺼내면 지나간 일에 대한 평가가 된다.
+
+  static const String _patternAtKey = 'plan_feedback_pattern_at';
+
+  static const Duration patternInterval = Duration(days: 7);
+  static const int patternFromHour = 5;
+  static const int patternUntilHour = 12;
+
+  /// 아침에 앱을 열었을 때 한 번 본다. 셀 것이 모자라면 아무 일도 없다.
+  static Future<void> maybeWeeklyPattern({required String coachId}) async {
+    try {
+      await _maybeWeeklyPattern(coachId);
+    } catch (e) {
+      debugPrint('weekly pattern failed: $e');
+    }
+  }
+
+  static Future<void> _maybeWeeklyPattern(String coachId) async {
+    if (coachId != 'nyang_halbae' && coachId != 'sec_female') return;
+
+    final hour = DateTime.now().hour;
+    if (hour < patternFromHour || hour >= patternUntilHour) return;
+
+    if (!await _hasMasterPlan()) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.reload();
+
+    final lastAt = DateTime.tryParse(prefs.getString(_patternAtKey) ?? '');
+    if (lastAt != null &&
+        DateTime.now().difference(lastAt) < patternInterval) {
+      return;
+    }
+    // 사전 부검과 같은 아침을 쓰지 않는다. 둘 다 지난 한 주를 두고 하는
+    // 이야기라, 나란히 나가면 아침부터 회고를 두 번 듣는 셈이 된다.
+    final preMortemAt = DateTime.tryParse(
+      prefs.getString(_preMortemAtKey) ?? '',
+    );
+    if (preMortemAt != null && _isToday(preMortemAt)) return;
+
+    // 앱이 센 것이 없으면 할 말도 없다. 없는 패턴을 지어내게 두지 않는다.
+    final pattern = await ExecutionPatternService.promptBlock();
+    if (pattern.isEmpty) return;
+
+    final coach = CoachConfigs.get(coachId);
+    final life = await LifeContextService.promptLine();
+    final prompt =
+        '''${coach.systemPrompt}
+
+[지금 상황]
+아침에 사용자가 앱을 열었음. 채팅 밖 말풍선으로 한 마디를 건네는 자리임. 화면 위에 뜨는 작은 말풍선이라, 세 문장 130자 안에서 끝낼 것.
+
+[이번에 할 이야기 - 한 주의 실행 패턴]
+아래는 앱이 최근 이레 기록에서 센 값임. 한 주에 한 번 하는 이야기라, 오늘 하루가 아니라 그 주가 어떻게 흘렀는지를 두고 말할 것.
+$pattern
+
+[이 사람의 생활]
+$life
+*생활 형태를 알면 그것에 비추어 말할 것. 예를 들어 낮에 일이 있는 사람이 밤에만 첫 발을 뗀다면, 밤에 처음부터 다 하려 하지 말고 낮에 십 분만 내어 얼개만 잡아두자고 권할 수 있음.
+*모르면 단정하지 말 것. "낮에 따로 일이 있는지는 모르겠지만" 하고 열어두고 말할 것.
+
+[출력]
+- 그 말만 쓸 것. 태그나 따옴표, 머리말 없이 코치의 말투 그대로.
+- 위 지시문의 말투를 따라 쓰지 말 것. 지시문은 설명일 뿐이고, 실제로 쓸 말투는 위에 주어진 코치의 말투임.
+- 숫자를 늘어놓지 말 것. 센 값은 무엇을 말할지 고르는 데 쓰고, 문장에는 눈에 띄는 하나만 짚을 것.
+- 지난 한 주를 평가하지 말 것. 오늘 무엇을 조금 바꿔볼지로 끝낼 것.
+- 한 가지만 말할 것.''';
+
+    final response = await _chatProxy.call({
+      'messages': [
+        {'role': 'user', 'content': prompt},
+      ],
+      'temperature': 0.7,
+    });
+    final content = (response.data is Map
+            ? (response.data as Map)['content'] as String? ?? ''
+            : '')
+        .trim();
+    if (content.isEmpty) return;
+
+    await prefs.setString(_patternAtKey, DateTime.now().toIso8601String());
+    await CoachSayService.say(coachId: coachId, text: content);
   }
 
   // ── 사전 부검 ────────────────────────────────
@@ -267,6 +431,7 @@ class PlanFeedbackService {
 
     final coach = CoachConfigs.get(coachId);
     final rate = (week.rate * 100).round();
+    final stuck = _stuckNames(prefs);
     final prompt =
         '''${coach.systemPrompt}
 
@@ -276,7 +441,9 @@ class PlanFeedbackService {
 [이번에 할 이야기 - 사전 부검]
 어떤 일을 시작하기 전에 "이 계획이 완전히 망했다고 가정하고" 그 원인을 미리 적어보는 방법이 있음. 미리 꺼내놓은 위험은 시작 전에 치울 수 있어서, 실패 확률이 눈에 띄게 줄어듦.
 지난 이레 완료율 $rate%.
+$stuck
 지난 주가 잘 안 풀린 것을 탓하지 말고, 오늘 계획을 세우기 전에 "무엇 때문에 오늘이 무너질 것 같은지" 두어 개만 먼저 꺼내보자고 할 것. 이 방법의 이름이나 원리는 한 문장으로만 곁들일 것.
+*끝나지 않은 일이 위에 적혀 있으면 그중 하나를 이름으로 짚을 것. 무엇을 두고 하는 이야기인지가 분명해야 사용자도 떠올릴 것이 생김. 여러 개를 늘어놓지는 말 것.
 
 [출력]
 - 그 말만 쓸 것. 태그나 따옴표, 머리말 없이 코치의 말투 그대로.
@@ -346,11 +513,15 @@ class PlanFeedbackService {
     return userData.isPlanActive && userData.planType == 'master';
   }
 
-  static bool _maySpeakNow(SharedPreferences prefs, Duration gap) {
+  static bool _maySpeakNow(
+    SharedPreferences prefs,
+    Duration gap, {
+    String atKey = _lastSaidAtKey,
+  }) {
     final restUntil = DateTime.tryParse(prefs.getString(_restUntilKey) ?? '');
     if (restUntil != null && DateTime.now().isBefore(restUntil)) return false;
 
-    final lastAt = DateTime.tryParse(prefs.getString(_lastSaidAtKey) ?? '');
+    final lastAt = DateTime.tryParse(prefs.getString(atKey) ?? '');
     if (lastAt == null) return true;
     return DateTime.now().difference(lastAt) >= gap;
   }
@@ -398,6 +569,8 @@ class PlanFeedbackService {
       '${_todayKey()}|${_asksToday(prefs) + 1}',
     );
   }
+
+  static bool _isToday(DateTime at) => _dayKey(at) == _todayKey();
 
   static String _todayKey() => _dayKey(DateTime.now());
 
@@ -451,37 +624,121 @@ class PlanFeedbackService {
 
       // 기록이 아직 없다. 오늘 처음 쓰는 사람이다.
       //
-      // 완료율로 재는 두 갈래는 근거가 없어 쓸 수 없다. 다만 시각이 비었다는
-      // 것은 지금 보이므로 실행 의도만 연다 — 첫날이 첫인상이라, 계획을 함께
-      // 다듬는 장면을 한 번은 보여줄 만하다.
+      // 완료율로 재는 갈래는 근거가 없어 쓸 수 없고, 첫마디부터 계획을
+      // 뜯어보는 것도 아니다. 처음 만난 자리라 알아주는 말이 먼저다.
       if (!recent.hasData) {
-        return hasTime ? null : _PlanFeedbackKind.when;
+        return hasTime ? null : _PlanFeedbackKind.firstDay;
       }
     }
-
-    // 오늘 잡은 양이 최근에 해내는 양보다 눈에 띄게 많다. 그날의 걸림돌은 총량이다.
-    //
-    // 이것만 시각을 가리지 않는다. 항목 하나를 두고 하는 말이 아니라 하루
-    // 전체를 보는 이야기라, 그 항목이 잘 적혀 있는지와 상관이 없다.
-    final tooMany =
-        recent.rate <= lowRate &&
-        todayCount >= recent.doneAverage + tooManyMargin;
 
     // 시각을 적어둔 일은 건드리지 않는다.
     //
     // 언제 할지를 정해둔 것 자체가 이미 계획을 구체화한 것이다. 거기다 대고
     // 더 다듬자고 하면 그건 도움이 아니라 검사다. 코치에게 맡기지 않고
     // 여기서 가른다 — 판단이 아니라 사실이라 흔들릴 이유가 없다.
-    if (hasTime) return tooMany ? _PlanFeedbackKind.slack : null;
+    //
+    // 오늘 잡은 양 이야기는 여기 없다. 그건 항목 하나가 아니라 하루 전체를
+    // 보는 말이라 [_speakVolume]이 따로 맡는다.
+    if (hasTime) return null;
 
-    // 해내고 있는 사람에게는 뜸하게. 간격은 _speak에서 일주일로 벌어진다.
+    // 해내고 있으면 인정부터 하고 시작한다.
     if (recent.rate > lowRate) return _PlanFeedbackKind.steady;
-
-    if (tooMany) return _PlanFeedbackKind.slack;
 
     // 언제 할지가 비어 있다. 큰 계획이면 오늘 할 몫부터 정하자는 쪽으로
     // 코치가 갈아탄다.
     return _PlanFeedbackKind.when;
+  }
+
+  /// 주로 언제 손을 대는 사람인지. 표본이 모자라면 빈 문자열.
+  ///
+  /// 밤에 시작해서 밤에 끝내는 사람이 있다. 그 사람에게 "오늘 안에 될까"라고
+  /// 묻는 것과 "오늘도 밤에 시작하려나"라고 묻는 것은 다르다. 뒤엣말은 그
+  /// 사람을 보고 하는 말이다.
+  static String _whenNote(SharedPreferences prefs, _RecentRates recent) {
+    final hours = <int>[];
+    for (final record in _history(prefs, days: 14)) {
+      for (final task in (record['tasks'] as List?) ?? const []) {
+        if (task is! Map) continue;
+        final at = DateTime.tryParse(
+          task['startedAt']?.toString() ??
+              task['completedAt']?.toString() ??
+              '',
+        );
+        if (at != null) hours.add(at.hour);
+      }
+    }
+    // 두엇으로 "밤형"이라고 적으면 없는 버릇을 지어내는 것이 된다.
+    if (hours.length < 4) return '';
+    final night = hours.where((hour) => hour >= 19 || hour < 4).length;
+    final morning = hours.where((hour) => hour >= 5 && hour < 12).length;
+    final struggling = recent.hasData && recent.rate <= lowRate;
+    if (night / hours.length >= 0.6) {
+      // 같은 저녁형이라도 해내고 있는 사람과 아닌 사람에게 할 말이 다르다.
+      // 그 리듬으로 끝내고 있는 사람에게 당기라고 하면 남의 리듬을 권하는
+      // 것이 되고, 밤마다 못 끝내는 사람에게는 시간이 모자란 것이 원인이다.
+      return struggling
+          ? '주로 저녁이나 밤에 손을 대는데 끝나는 비율은 낮음.\n'
+                '*시작을 30분에서 한 시간쯤 당겨 미리 정해두자고 권할 수 있음. 밤에는 남은 시간이 적어서 한 번 밀리면 그날이 끝나버림.'
+          : '주로 저녁이나 밤에 손을 대는 편. 그 리듬으로 해내고 있으니 당기라고 하지 말 것.';
+    }
+    if (morning / hours.length >= 0.6) {
+      return '주로 오전에 손을 대는 편.';
+    }
+    return '';
+  }
+
+  /// 지난 이레에 여러 번 올라왔는데 끝나지 않은 일들.
+  ///
+  /// "한 주가 안 풀렸다"는 말만으로는 무엇을 두고 하는 이야기인지 알 수 없다.
+  /// 이름을 짚어주면 사전 부검이 막연한 반성이 아니라 그 일에 대한 이야기가
+  /// 된다.
+  static String _stuckNames(SharedPreferences prefs) {
+    final planned = <String, int>{};
+    final done = <String, int>{};
+    for (final record in _history(prefs, days: 7)) {
+      for (final task in (record['tasks'] as List?) ?? const []) {
+        if (task is! Map) continue;
+        final text = task['text']?.toString().trim() ?? '';
+        if (text.isEmpty) continue;
+        planned[text] = (planned[text] ?? 0) + 1;
+        if (task['done'] == true) done[text] = (done[text] ?? 0) + 1;
+      }
+    }
+    final stuck = <String>[];
+    for (final entry in planned.entries) {
+      if (entry.value < 2) continue;
+      final finished = done[entry.key] ?? 0;
+      if (finished >= entry.value / 2) continue;
+      stuck.add("'${entry.key}' (${entry.value}번 중 $finished번 완료)");
+      if (stuck.length >= 3) break;
+    }
+    if (stuck.isEmpty) return '';
+    return '여러 번 올라왔는데 끝나지 않은 일: ${stuck.join(', ')}';
+  }
+
+  /// 그 이름이 최근에 어떻게 굴러갔는지. 코치가 아는 체할 거리다.
+  ///
+  /// 이력을 세는 일은 원래도 하고 있었다. 다만 "건드릴까 말까"를 정하는 데만
+  /// 쓰고 버렸다. 같은 숫자를 코치에게 넘기면 "요즘 자주 올라오는데 잘 안
+  /// 되네" 같은 말이 되고, 그 한 마디가 있고 없고에 따라 조언이 남 얘기처럼
+  /// 들리는지가 갈린다.
+  static String _taskHistoryNote(SharedPreferences prefs, String taskText) {
+    if (taskText.isEmpty) return '';
+    final records = _history(prefs, days: 14);
+    var appeared = 0;
+    var done = 0;
+    for (final record in records) {
+      for (final task in (record['tasks'] as List?) ?? const []) {
+        if (task is! Map) continue;
+        if (task['text']?.toString().trim() != taskText) continue;
+        appeared++;
+        if (task['done'] == true) done++;
+      }
+    }
+    if (appeared == 0) {
+      return '이 이름은 최근 2주 기록에 없음. 처음 적는 계획이거나 오랜만인 것.';
+    }
+    return '이 이름은 최근 2주에 $appeared번 올라왔고 그중 $done번 끝냈음.';
   }
 
   /// 그 이름을 최근에 꾸준히 해냈는지.
@@ -538,28 +795,86 @@ class PlanFeedbackService {
     }
   }
 
-  /// 최근 며칠의 완료율과 하루 평균 완료 개수.
+  /// 오늘 목록에 무엇이 더 있는지. 코치가 지금 상황에 대고 말하도록 넘긴다.
+  ///
+  /// 계획 이름 한 줄만 보고 하는 말은 어느 날에 해도 맞는 말이라, 두어 번만
+  /// 들어도 판박이가 된다. 오늘 다른 일이 몇 개 있고 무엇이 끝났는지를 알면
+  /// 같은 조언도 오늘의 말이 된다.
+  static String _todaySummary(
+    List<Map<String, dynamic>> tasks,
+    String taskText,
+  ) {
+    final others = <String>[];
+    var done = 0;
+    for (final task in tasks) {
+      if (task['done'] == true) done++;
+      final text = task['text']?.toString().trim() ?? '';
+      if (text.isEmpty || text == taskText) continue;
+      if (others.length < 8) {
+        others.add('${task['done'] == true ? 'V' : ' '} $text');
+      }
+    }
+    if (others.isEmpty) return '오늘 목록에는 이것 하나뿐임.';
+    return '오늘 목록의 나머지(V는 끝낸 것): ${others.join(', ')}. '
+        '${tasks.length}개 중 $done개 끝냄.';
+  }
+
+  /// 지금이 하루의 어디쯤인지. 밤에 적은 계획에 "오늘 어디까지"를 물으면
+  /// 그건 오늘 얘기가 아니게 된다.
+  static String _clockNote(DateTime now) {
+    final hour = now.hour;
+    final label = hour < 6
+        ? '새벽'
+        : hour < 12
+        ? '오전'
+        : hour < 18
+        ? '오후'
+        : hour < 22
+        ? '저녁'
+        : '밤';
+    final left = hour >= 21
+        ? ' 오늘 안에 손댈 시간은 거의 남지 않았음. 오늘 하라는 말은 하지 말 것.'
+        : hour >= 18
+        ? ' 오늘 남은 시간이 많지 않음.'
+        : '';
+    return '지금 $label $hour시.$left';
+  }
+
+  /// 최근 며칠의 완료율과 하루 평균 완료 개수. 오늘은 빼고 센다.
+  ///
+  /// 오늘 것은 아직 끝나지 않았다. 진행 중인 일을 실패로 세면 하루가 저물기
+  /// 전에는 누구나 완료율이 낮은 사람이 된다.
+  ///
+  /// 평균을 낼 때는 계획을 적은 날만 분모에 넣는다. 안 적은 날까지 나누면
+  /// 며칠에 한 번 적고 그날은 다 해내는 사람이 "하루 0.6개 하는 사람"이
+  /// 되어, 다섯 개만 잡아도 많다는 말을 듣는다.
   static _RecentRates _recentRates(
     SharedPreferences prefs, {
     required int days,
   }) {
-    final records = _history(prefs, days: days);
+    final today = _todayKey();
     var total = 0;
     var done = 0;
-    for (final record in records) {
-      for (final task in (record['tasks'] as List?) ?? const []) {
+    var plannedDays = 0;
+    for (final record in _history(prefs, days: days)) {
+      final date = DateTime.tryParse(record['date']?.toString() ?? '');
+      if (date == null || _dayKey(date) == today) continue;
+      final tasks = (record['tasks'] as List?) ?? const [];
+      if (tasks.isEmpty) continue;
+      plannedDays++;
+      for (final task in tasks) {
         if (task is! Map) continue;
         total++;
         if (task['done'] == true) done++;
       }
     }
-    if (records.isEmpty || total == 0) {
+    if (total == 0) {
       return const _RecentRates(hasData: false, rate: 0, doneAverage: 0);
     }
     return _RecentRates(
       hasData: true,
       rate: done / total,
-      doneAverage: done / records.length,
+      doneAverage: done / plannedDays,
     );
   }
 
@@ -611,6 +926,9 @@ class PlanFeedbackService {
     required bool hasTime,
     required int todayCount,
     required _RecentRates recent,
+    required String todaySummary,
+    required String historyNote,
+    required String whenNote,
   }) async {
     final coach = CoachConfigs.get(coachId);
     final rate = (recent.rate * 100).round();
@@ -620,9 +938,9 @@ class PlanFeedbackService {
     final situation = switch (kind) {
       _PlanFeedbackKind.steady =>
         '''[이번에 할 이야기 - 잘 되고 있는 사람]
-최근 이틀 완료율 $rate%. 적어둔 것을 대체로 해내는 사람임.
+최근 이레 완료율 $rate% (오늘 제외). 적어둔 것을 대체로 해내는 사람임.
 방금 적은 일: '$taskText'${hasTime ? '' : ' (시각을 정해두지 않음)'}
-오늘 계획 $todayCount개, 최근 이틀 하루 평균 완료 ${recent.doneAverage.toStringAsFixed(1)}개.
+오늘 계획 $todayCount개, 계획을 적은 날 기준 하루 평균 완료 ${recent.doneAverage.toStringAsFixed(1)}개.
 해내고 있다는 것을 먼저 인정하는 데서 시작할 것.
 그다음 무엇이 도움이 될지 하나만 고를 것.
 - 가서 하고 오면 끝나는 볼일('미용실 가기', '병원 가기', '장 보기')이면 손댈 것 없음. SKIP.
@@ -630,13 +948,21 @@ class PlanFeedbackService {
 - 할 일은 정해졌는데 한 번에 하기 벅찬 일('기획서 쓰기', '홍보 방향 점검', '줄넘기 1000번'): 오늘 할 몫을 두세 개로 나눠보자고 할 것. 나눠두면 그 조각들이 진도를 재는 눈금이 됨. 눈금이 있으면 하나 끝낼 때마다 해냈다는 신호가 와서, 끝까지 붙어 있기가 쉬워짐. 나누는 것도 사용자가 함.
   나눠보자는 말은 이렇게 꺼낼 것: $splitPhrase
 - 크기는 괜찮은데 언제 할지가 비어 있음: 몇 시에 할지 정해두자고 할 것. 정해둔 사람이 그러지 않은 사람보다 목표 달성률이 두세 배 높았음. 장소는 어디서 하느냐에 따라 그 일이 실제로 달라질 때만 같이 물을 것. 어디서 하든 똑같은 일이면 묻지 말 것.
-- 오늘 잡은 양이 평소 해내던 것보다 눈에 띄게 많음: 그 차이를 짚고, 오늘 그만큼의 시간과 체력이 실제로 있는지 함께 셈해보자고 할 것. 잘 해내던 사람일수록 자기 속도를 높게 잡음.
 어느 것도 해당하지 않으면 SKIP.''',
+      _PlanFeedbackKind.firstDay =>
+        '''[이번에 할 이야기 - 처음 적은 계획]
+이 사람이 이 앱에 계획을 적은 것이 오늘이 처음임. 아직 기록이 없어 어떻게 실행하는 사람인지 알 수 없음.
+방금 적은 일: '$taskText' (시각을 정해두지 않음)
+고칠 거리를 찾지 말 것. 처음 만난 자리에서 계획부터 뜯어보면 검사받는 기분이 됨.
+1) 무엇을 하려는 사람인지 그 계획에서 읽히는 것을 한 마디로 알아줄 것. 계획 이름을 그대로 불러주되, 그 사람이 왜 그것을 적었을지 짐작해서 단정하지는 말 것.
+2) 그다음 몇 시에 할지 물어볼 것. 시각이나 상황이 정해져 있으면 실제로 일어날 확률이 훨씬 높아진다는 것을 짧게 곁들여도 좋음.
+크기가 큰지 작은지, 얼마나 할지가 비었는지는 오늘 말하지 말 것. 그건 며칠 지켜본 뒤에 할 이야기임.''',
       _PlanFeedbackKind.when =>
         '''[이번에 할 이야기 - 실행 의도]
 심리 연구에 따르면 '언제, 어디서, 어떻게 할 것인지'까지 정해둔 사람은 그러지 않은 사람보다 목표 달성률이 두세 배 높았음. "글을 쓴다"보다 "오전 9시에 책상에 앉아 바로 첫 문장을 쓴다"가 실제로 일어남.
 방금 적은 일: '$taskText' (시각을 정해두지 않음)
-이 계획이 어느 쪽인지 먼저 보고, 그중 하나만 말할 것.
+먼저 그 계획에서 읽히는 것을 한 마디로 알아줄 것. 무엇을 하려는 사람인지 짚어주는 정도면 됨. 잘하고 있다는 말은 하지 말 것 — 사실이 아니면 빈말로 들리고, 그 뒤에 붙는 말까지 같이 가벼워짐.
+그다음 이 계획이 어느 쪽인지 보고, 그중 하나만 말할 것.
 - 무엇을 어디서 할지가 이미 분명하고 한 번에 끝나는 일('미용실 가기', '병원 가기', '장 보기')이면 손댈 것 없음. SKIP.
 - 무엇을 얼마나 할지가 비어 있는 일('글쓰기', '공부하기', '홍보 점검'): 오늘 그 일에서 무엇을 어디까지 할지부터 정해보자고 하되 무리가 되지 않는 최소선으로 잡자고 할 것. 넉넉히 잡아둔 양은 미루는 이유가 됨. 시각 이야기는 꺼내지 말 것 — 무엇을 할지 모르는 채로 시각부터 잡는 것은 순서가 뒤바뀐 데다, 한 번에 두 가지를 물으면 어느 쪽에도 답하기 어려움.
 - 할 일은 정해졌는데 한 번에 하기 벅찬 일('기획서 쓰기', '줄넘기 1000번'): 오늘 할 몫을 두세 개로 나눠보자고 할 것. 나눠두면 그 조각들이 진도를 재는 눈금이 됨. 눈금이 있으면 하나 끝낼 때마다 해냈다는 신호가 와서, 끝까지 붙어 있기가 쉬워짐. 어떻게 나눌지는 사용자가 정함.
@@ -645,7 +971,7 @@ class PlanFeedbackService {
       _PlanFeedbackKind.slack =>
         '''[이번에 할 이야기 - 오늘 계획한 양]
 사람은 자기 속도를 높게 잡음. 그래서 어제까지 실제로 해낸 양이 오늘 잡을 양의 기준이 됨.
-오늘 계획 $todayCount개, 최근 이틀 하루 평균 완료 ${recent.doneAverage.toStringAsFixed(1)}개.
+오늘 계획 $todayCount개, 계획을 적은 날 기준 하루 평균 완료 ${recent.doneAverage.toStringAsFixed(1)}개.
 그 차이를 한 문장으로 짚고, 아래 이야기 하나만 권할 것.
 $slackAdvice
 줄이라고 지시하지 말고 물어보는 자리임.''',
@@ -655,7 +981,18 @@ $slackAdvice
         '''${coach.systemPrompt}
 
 [지금 상황]
-사용자가 방금 오늘 할 일 하나를 적음. 그 옆에서 짧게 한 마디를 건네는 자리임. 대화창이 아니라 화면 위에 뜨는 작은 말풍선이라, 세 문장 130자 안에서 끝낼 것.
+사용자가 방금 오늘 할 일 하나를 적음. 그 옆에서 짧게 한 마디를 건네는 자리임. 대화창이 아니라 화면 위에 뜨는 작은 말풍선이라, 두 문장 100자 안에서 끝낼 것.
+
+[지금 상태]
+${_clockNote(DateTime.now())}
+$todaySummary
+*이건 무엇을 말할지 고르는 데만 쓸 것. 문장에 옮기지 말 것.
+
+[이 계획의 지난 자취]
+$historyNote
+$whenNote
+*여기 적힌 것이 있으면 알아주는 자리에 쓸 것. 요즘 자주 올라오는 일인지, 처음 적는 일인지를 아는 체하면 남 얘기처럼 들리지 않음. 숫자를 그대로 읊지는 말 것.
+*주로 손을 대는 시간대가 적혀 있으면 그것도 쓸 수 있음. "오늘도 밤에 시작하려나?"처럼 묻는 자리에 어울림. 다만 늦다고 나무라는 말로는 쓰지 말 것 — 그 시간에 해내고 있는 사람이면 그게 그 사람의 리듬임.
 
 $situation
 
@@ -664,6 +1001,7 @@ $situation
 - 위 지시문의 말투를 따라 쓰지 말 것. 지시문은 설명일 뿐이고, 실제로 쓸 말투는 위에 주어진 코치의 말투임.
 - 무엇이 비었는지 짚기만 하지 말고 무엇을 하면 되는지까지 말한 뒤, 물어보는 말로 끝낼 것.
 - 왜 그렇게 하면 나은지를 반드시 한 조각 곁들일 것. 근거가 있어야 사용자가 따를 가능성이 높아짐. 다만 심플한 한 마디로 언급할 것.
+- 한 가지만 말할 것. 짚을 것도 하나, 권할 것도 하나. 여러 개를 담으면 무엇을 하라는 말인지 흐려짐.
 - 이 계획에 그 이야기가 맞지 않으면(이미 충분히 구체적이거나, 짚을 것이 없으면) SKIP 한 단어만 출력할 것.''';
 
     final response = await _chatProxy.call({
@@ -684,6 +1022,9 @@ $situation
 }
 
 enum _PlanFeedbackKind {
+  /// 오늘 처음 적어보는 사람. 고칠 거리보다 알아주는 말이 먼저다.
+  firstDay('처음 적은 계획을 반기고, 몇 시에 할지 물어본 이야기'),
+
   /// 잘 되고 있는 사람. 무슨 이야기를 할지는 코치가 고른다.
   steady('그 계획을 오늘 할 만한 크기로 다듬는 이야기'),
 

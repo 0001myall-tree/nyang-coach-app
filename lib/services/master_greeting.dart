@@ -288,6 +288,15 @@ class GreetingVoice {
   /// 수 있다. 그래서 묻되, 왜 묻는지(표시가 비어 있다는 것)를 밝힌다.
   final List<String> coreAsk;
 
+  /// 며칠째 못 끝내고 넘어온 일을 묻는 말. `{{task}}`가 그 일, `{{days}}`는
+  /// 며칠째인지.
+  ///
+  /// 나무라지 않는다는 말은 하지 않는다. 그 말을 꺼내는 순간 나무랄 일이라는
+  /// 뜻이 되어서, 안 하려던 지적을 대신 해버린다. 그냥 사실을 적고 무엇이
+  /// 걸렸는지를 묻는다 — 며칠 걸려 있는 일에 필요한 것은 조언이 아니라
+  /// 어디가 막혔는지다.
+  final List<String> carriedAsk;
+
   /// 핵심도 습관도 아닌, 오늘 적어둔 나머지 일 하나를 묻는 말.
   ///
   /// 왜 하필 이 일인지 밝힌다 — 오늘 목록에 남아 있다는 것. 그게 여기서 댈
@@ -303,6 +312,12 @@ class GreetingVoice {
 
   /// 상황 때문에 못 했다고 답했을 때. 다음 행동을 밀지 않는다.
   final List<String> coreAskBusyReply;
+
+  /// 며칠째 넘어온 일을 두고 "시간이 없었다"고 답했을 때.
+  ///
+  /// 여기서는 물러나지 않는다. 하루 못 한 것과 며칠째 밀린 것은 다르다.
+  /// 시간이 없어서였다면 막힌 곳이 분명하니, 오늘은 그 자리를 먼저 잡는다.
+  final List<String> carriedBusyReply;
 
   /// 시작해두고 한참 지나도록 완료가 안 된 일을 저녁에 물어보는 말.
   /// `{{task}}`는 일정 이름.
@@ -377,10 +392,12 @@ class GreetingVoice {
     required this.eveningOffPlanAsk,
     required this.offPlanDoneReply,
     required this.coreAsk,
+    required this.carriedAsk,
     required this.repeatingAsk,
     required this.coreAskStartedReply,
     required this.coreAskAlreadyReply,
     required this.coreAskBusyReply,
+    required this.carriedBusyReply,
     required this.stalledAsk,
     required this.inProgressAck,
     required this.inProgressAckOnly,
@@ -669,6 +686,12 @@ class MasterGreetingCopy {
       '{{task}}는 {진행하고 계신가요|시작하셨나요}?\n'
           '{아직 시작 표시가 없어서요|시작 표시가 비어 있어서요}. 아직이셔도 괜찮습니다.',
     ],
+    carriedAsk: [
+      '{{task}}, {{days}}일째 이월된 항목입니다.\n'
+          '{무엇이 걸리는지 같이 풀어보시죠|어디가 막히는지 같이 보시죠}. 무엇 때문이었을까요?',
+      '{{days}}일째 이월되고 있는 항목이 하나 있습니다. {{task}} 말입니다.\n'
+          '{여기만 뚫으면 오늘은 넘어갈 것 같은데요|한 번 걸리면 그다음은 더 미뤄지지요}. 무엇 때문이었을까요?',
+    ],
     repeatingAsk: [
       '오늘 적어두신 것 중에 {{task}}가 {아직 그대로입니다|시작 표시가 비어 있습니다}.\n'
           '{지금 짧게 손대보실까요|잠깐이라도 시작해보시겠어요}?',
@@ -692,6 +715,12 @@ class MasterGreetingCopy {
     // 물러나되 문은 닫지 않는다. '내일 챙겨드리겠다'처럼 지킬 수 없는 약속
     // 대신, 지금 코치가 실제로 해줄 수 있는 것(부담 낮추기, 작은 조각 고르기)을
     // 남겨둔다. 비서가 상황만 인정하고 사라지면 도와줄 사람이 없어진다.
+    carriedBusyReply: [
+      '{시간이 안 났던 거군요|그러셨군요}. 며칠째 그러셨다면 오늘도 그냥 두면 또 넘어갈 겁니다.\n'
+          '{몇 시에 하실지 지금 정해두시는 건 어떨까요|오늘은 시각부터 잡아두시죠}? 자리를 먼저 잡아두면 그 시간이 남습니다.',
+      '{알겠습니다|그러셨겠지요}. 다만 시간이 문제였다면 오늘 그 시간을 먼저 떼어두는 게 순서일 겁니다.\n'
+          '몇 시로 잡아둘까요?',
+    ],
     coreAskBusyReply: [
       // 부담 얘기를 꺼내되 오늘 일로 몰지 않는다. 상황이었다고 답한 사람에게
       // 부담이 아니었냐고 되물으면 못 알아들은 대답이 된다.
@@ -947,6 +976,12 @@ class MasterGreetingCopy {
       '{{task}}는 {하고 있냥|시작했냥}?\n'
           '{아직 시작 표시가 없어서다냥|시작 표시가 비어 있어서다냥}. 아직이어도 괜찮다냥.',
     ],
+    carriedAsk: [
+      '{{task}}, {{days}}일째 이월된 항목이다냥.\n'
+          '{뭐가 걸리는지 같이 해결해보자냥|어디가 막히는지 같이 보자냥}. 뭐 때문이었냥?',
+      '{{days}}일째 이월되고 있는 게 하나 있다냥. {{task}} 말이다냥.\n'
+          '{여기만 뚫으면 오늘은 넘어갈 것 같은데냥|한 번 걸리면 그다음은 더 미뤄진다냥}. 뭐 때문이었냥?',
+    ],
     repeatingAsk: [
       '오늘 적어둔 것 중에 {{task}}가 {아직 그대로다냥|시작 표시가 비어 있다냥}.\n'
           '{지금 짧게 손대볼까냥|잠깐이라도 시작해볼까냥}?',
@@ -966,6 +1001,12 @@ class MasterGreetingCopy {
           '표시까지 {잘 되어 있으니|이미 챙겨뒀으니} 그대로 가면 된다냥.',
       '{벌써 손대고 있었구나냥|하고 있었구나냥}! 표시도 {이미 되어 있고냥|벌써 켜뒀구나냥}.\n'
           '이런 날은 내가 {할 일이 없어서 좋다냥|거들 게 없어 흐뭇하다냥}.',
+    ],
+    carriedBusyReply: [
+      '{시간이 안 났던 거구나냥|그랬구나냥}. 근데 며칠째 그랬으면 오늘도 그냥 두면 또 넘어간다냥.\n'
+          '{몇 시에 할지 지금 정해둘까냥|오늘은 시각부터 잡아두자냥}? 자리를 먼저 잡아두면 그 시간이 남는다냥.',
+      '{알겠다냥|그랬겠지냥}. 다만 시간이 문제였으면 오늘 그 시간을 먼저 떼어두는 게 순서다냥.\n'
+          '몇 시로 잡아둘까냥?',
     ],
     coreAskBusyReply: [
       '{알겠다냥|그랬구나냥}. 일정 밀리는 날은 {누구한테나 있으니까냥|누구한테나 있다냥}.\n'
@@ -1279,6 +1320,17 @@ class MasterGreetingBuilder extends GreetingLinePicker {
   /// 거치지 않는다 — 발화 조건(몇 시인지, 얼마나 밀렸는지)은 화면이 판단하고,
   /// 여기서는 이름만 받아 문장으로 옮긴다.
   String buildCoreAsk(String taskName) => _fill(voice.coreAsk, taskName);
+
+  /// 며칠째 넘어온 일을 묻는 말.
+  String buildCarriedAsk(String taskName, int days) => pickLine(
+    voice.carriedAsk
+        .map(
+          (line) => line
+              .replaceAll('{{task}}', '\'$taskName\'')
+              .replaceAll('{{days}}', '$days'),
+        )
+        .toList(growable: false),
+  );
 
   /// 지정해둔 것은 없지만 오늘 목록에 남아 있는 일을 묻는 말.
   String buildRepeatingAsk(String taskName) =>

@@ -642,7 +642,14 @@ class _MainTabScreenState extends State<MainTabScreen>
       unawaited(CoachSayService.markRead(widget.coachId));
     }
     // 한 주가 통째로 안 풀린 사람에게만, 아침에 한 번. 대개는 아무 일도 없다.
-    unawaited(PlanFeedbackService.maybeMorningPreMortem(coachId: widget.coachId));
+    // 한 주에 한 번, 그 주가 어떻게 흘렀는지. 부검이 나간 아침에는 쉰다.
+    unawaited(
+      PlanFeedbackService.maybeMorningPreMortem(
+        coachId: widget.coachId,
+      ).then((_) => PlanFeedbackService.maybeWeeklyPattern(
+        coachId: widget.coachId,
+      )),
+    );
     _startMorningCallEngine();
     _startCoreReminderEngine();
     AnalyticsService.logAppOpen();
@@ -789,11 +796,23 @@ class _MainTabScreenState extends State<MainTabScreen>
         onAccept: () {
           _removeCoachSayBubble();
           CoachSayService.dismissBubble();
+          unawaited(
+            CoachSayService.noteUserChoice(
+              coachId: say.coachId,
+              text: CoachSayBubble.acceptLabel,
+            ),
+          );
           unawaited(PlanFeedbackService.onAdviceAccepted());
         },
         onDecline: () {
           _removeCoachSayBubble();
           CoachSayService.dismissBubble();
+          unawaited(
+            CoachSayService.noteUserChoice(
+              coachId: say.coachId,
+              text: CoachSayBubble.declineLabel,
+            ),
+          );
           // 알아서 하겠다고 했다. 이틀 내리 그러면 한동안 물러난다.
           unawaited(PlanFeedbackService.onAdviceDeclined());
         },
