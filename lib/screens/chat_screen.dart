@@ -13861,6 +13861,22 @@ Rules:
     // 볼 것이 없는 턴에도 패턴을 지어낸다. 셀 수 있는 것은 앱이 센다.
     if (_coach.isMaster && !resistanceTurn) {
       sb.write(await ExecutionPatternService.promptBlock());
+
+      // 앱이 센 것 옆에 사용자가 말해준 것을 나란히 둔다.
+      //
+      // 이 둘은 계획을 적는 자리에서만 쓰이고 있었는데, 정작 "어떻게 하면
+      // 더 해낼까"를 묻는 자리는 여기다. 앱이 세는 것으로는 알 수 없고
+      // 본인만 아는 것이라, 없으면 코치는 일반론으로 답할 수밖에 없다.
+      final life = await LifeContextService.promptLine();
+      final condition = await LifeContextService.executionConditionLine();
+      if (condition.isNotEmpty) {
+        sb.writeln('\n[이 사람의 생활]');
+        sb.writeln(life);
+        sb.writeln(condition);
+        sb.writeln(
+          '*실행이 잘 되는 날의 조건은 사용자가 직접 고른 답입니다. 짐작이 아니라 본인이 한 말이니 이것부터 붙잡으세요. 다만 이게 유일한 조건은 아닙니다 — 대화에서 다른 조건이 보이면 그쪽을 따라가세요. 여러 조건을 한꺼번에 갖추라고는 하지 마세요. 다 맞는 날은 거의 없어서 오히려 못 하는 이유가 늘어납니다.',
+        );
+      }
     }
 
     return sb.toString();
