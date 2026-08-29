@@ -298,6 +298,13 @@ class GreetingVoice {
   /// 답을 골랐을 때. 알아들었다는 것만 짧게 알린다.
   final List<String> conditionReply;
 
+  /// 같은 질문을, 지난 이레보다 해낸 날이 늘어난 사람에게 건널 때.
+  /// `{{from}}`이 지난 이레, `{{to}}`가 이번 이레의 날수.
+  ///
+  /// 늘었다는 말을 먼저 한다. 이 사람에게는 완료율이 눈금이 못 되어서,
+  /// 나아지고 있다는 것을 볼 수 있는 자리가 여기뿐이다.
+  final List<String> conditionAskImproved;
+
   /// 목록에 없는 답이라고 했을 때. 그 자리에서 적어달라고 청한다.
   final List<String> conditionFreeAsk;
 
@@ -415,6 +422,7 @@ class GreetingVoice {
     required this.coreAsk,
     required this.conditionAsk,
     required this.conditionReply,
+    required this.conditionAskImproved,
     required this.conditionFreeAsk,
     required this.adviceWorked,
     required this.carriedAsk,
@@ -716,6 +724,12 @@ class MasterGreetingCopy {
           '{그 두 날은 무엇이 달랐을까요|되는 날에는 무엇이 달랐을까요}?',
       '{되는 날과 안 되는 날이 꽤 갈리시네요|하시는 날엔 다 하시는데 아예 못 하시는 날도 있네요}. 양이 문제는 아닌 것 같습니다.\n'
           '{되는 날에는 무엇이 달랐는지 짚어주시겠어요|무엇이 달랐을까요}?',
+    ],
+    conditionAskImproved: [
+      '지난 이레에는 {{from}}일, 이번 이레는 {{to}}일 해내셨습니다. 손대시는 날이 늘고 있어요.\n'
+          '{되는 날에는 무엇이 달랐을까요|그 날들은 무엇이 달랐을까요}? 알면 더 늘릴 수 있을 텐데요.',
+      '{{from}}일에서 {{to}}일로, 해내신 날이 하나 더 늘었습니다.\n'
+          '{그 날들에는 무엇이 달랐는지 짚어주시겠어요|무엇이 달랐을까요}?',
     ],
     conditionReply: [
       '{그러셨군요|알겠습니다}. 그럼 앞으로 그 조건을 같이 챙겨보겠습니다.',
@@ -1027,6 +1041,12 @@ class MasterGreetingCopy {
           '{그 두 날은 뭐가 달랐냥|되는 날엔 뭐가 달랐냥}?',
       '{되는 날이랑 안 되는 날이 꽤 갈린다냥|하는 날엔 다 하는데 아예 못 하는 날도 있다냥}. 양이 문제는 아닌 것 같다냥.\n'
           '{되는 날엔 뭐가 달랐는지 짚어줄래냥|뭐가 달랐냥}?',
+    ],
+    conditionAskImproved: [
+      '지난 이레엔 {{from}}일, 이번 이레는 {{to}}일 해냈다냥. 손대는 날이 늘고 있다냥.\n'
+          '{되는 날엔 뭐가 달랐냥|그 날들은 뭐가 달랐냥}? 알면 더 늘릴 수 있다냥.',
+      '{{from}}일에서 {{to}}일로, 해낸 날이 하나 더 늘었다냥.\n'
+          '{그 날들엔 뭐가 달랐는지 짚어줄래냥|뭐가 달랐냥}?',
     ],
     conditionReply: [
       '{그랬구나냥|알겠다냥}. 그럼 앞으로 그 조건을 같이 챙겨보자냥.',
@@ -1389,7 +1409,21 @@ class MasterGreetingBuilder extends GreetingLinePicker {
   String buildCoreAsk(String taskName) => _fill(voice.coreAsk, taskName);
 
   /// 되는 날에 무엇이 달랐는지 묻는 말.
-  String buildConditionAsk() => pickLine(voice.conditionAsk);
+  ///
+  /// 지난 이레보다 해낸 날이 늘었으면 그 이야기부터 꺼낸다.
+  String buildConditionAsk({int? from, int? to}) {
+    if (from == null || to == null || to <= from) {
+      return pickLine(voice.conditionAsk);
+    }
+    return pickLine(
+      voice.conditionAskImproved
+          .map(
+            (line) =>
+                line.replaceAll('{{from}}', '$from').replaceAll('{{to}}', '$to'),
+          )
+          .toList(growable: false),
+    );
+  }
 
   /// 답을 골랐을 때의 대꾸.
   String buildConditionReply() => pickLine(voice.conditionReply);

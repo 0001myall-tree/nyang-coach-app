@@ -32,6 +32,19 @@ class ExecutionPatternService {
     return blockFrom(prefs.getString('nyang_history'));
   }
 
+  /// 이번 이레와 지난 이레에 하루라도 해낸 날이 며칠인지.
+  ///
+  /// 편차형에게 진도를 재는 눈금이다. 완료율로는 안 보인다 — 하는 날에는
+  /// 어차피 100%라, 손대는 날이 하루 늘어도 숫자가 그대로다.
+  static Future<({int thisWeek, int lastWeek})> activeDayTrend() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString('nyang_history');
+    return (
+      thisWeek: _activeDays(_records(raw)),
+      lastWeek: _activeDays(_records(raw, weeksBack: 1)),
+    );
+  }
+
   /// 기록 원문에서 바로 만든다. 테스트가 이 자리로 들어온다.
   static String blockFrom(String? historyRaw) {
     final records = _records(historyRaw);
@@ -54,6 +67,7 @@ class ExecutionPatternService {
     var touched = 0;
     var fullDays = 0;
     var zeroDays = 0;
+    var activeDays = 0;
     final startHours = <int>[];
 
     for (final record in records) {
@@ -74,7 +88,11 @@ class ExecutionPatternService {
       }
       if (dayPlanned == 0) continue;
       if (dayDone == dayPlanned) fullDays++;
-      if (dayDone == 0) zeroDays++;
+      if (dayDone == 0) {
+        zeroDays++;
+      } else {
+        activeDays++;
+      }
     }
     if (planned == 0) return '';
 
@@ -114,6 +132,18 @@ class ExecutionPatternService {
     final swings = fullDays >= 2 && zeroDays >= 2;
     if (swings) {
       flags.add('편차형 — 하는 날엔 잡은 것을 다 해내고, 아예 손도 안 대는 날이 따로 있음. 양이 걸린 것이 아님');
+      // 나아지고 있으면 그것부터 말한다.
+      //
+      // 이 사람에게 완료율은 눈금이 못 된다. 하는 날에는 어차피 100%라,
+      // 손대는 날이 하루 늘어도 숫자는 그대로다. 늘어난 것을 볼 수 있는
+      // 자리는 여기뿐이고, 늘었다는 말은 어떤 조언보다 잘 듣는다.
+      final lastWeek = _activeDays(_records(historyRaw, weeksBack: 1));
+      if (lastWeek > 0 && activeDays > lastWeek) {
+        flags.add(
+          '다만 지난 이레보다 해낸 날이 늘었음(${lastWeek}일 → $activeDays일). '
+          '고칠 거리를 꺼내기 전에 이것부터 알아줄 것',
+        );
+      }
     }
     if (!swings && planPerDay >= 3 && planPerDay >= donePerDay * 2 && rate <= 0.5) {
       flags.add('계획 과다형 — 계획한 양이 해내는 양의 갑절');
@@ -158,7 +188,7 @@ class ExecutionPatternService {
     return '';
   }
 
-  static List<Map<String, dynamic>> _records(String? raw) {
+  static List<Map<String, dynamic>> _records(String? raw, {int weeksBack = 0}) {
     if (raw == null || raw.isEmpty) return const [];
     List<dynamic> list;
     try {
@@ -166,14 +196,36 @@ class ExecutionPatternService {
     } catch (_) {
       return const [];
     }
-    final from = DateTime.now().subtract(const Duration(days: windowDays));
+    final from = DateTime.now().subtract(
+      Duration(days: windowDays * (1 + weeksBack)),
+    );
+    final until = DateTime.now().subtract(
+      Duration(days: windowDays * weeksBack),
+    );
     final out = <Map<String, dynamic>>[];
     for (final item in list) {
       if (item is! Map) continue;
       final date = DateTime.tryParse(item['date']?.toString() ?? '');
       if (date == null || date.isBefore(from)) continue;
+      if (weeksBack > 0 && !date.isBefore(until)) continue;
       out.add(Map<String, dynamic>.from(item));
     }
     return out;
+  }
+
+  /// 하루라도 해낸 날이 며칠인지. 편차형에게는 이게 진도를 재는 눈금이다.
+  ///
+  /// 완료율로는 나아지는 것이 안 보인다. 하는 날에는 어차피 100%라, 손대는
+  /// 날이 하루 늘어도 완료율은 그대로다. 세어야 할 것은 며칠에 손댔느냐다.
+  static int _activeDays(List<Map<String, dynamic>> records) {
+    var count = 0;
+    for (final record in records) {
+      for (final task in (record['tasks'] as List?) ?? const []) {
+        if (task is! Map || task['done'] != true) continue;
+        count++;
+        break;
+      }
+    }
+    return count;
   }
 }

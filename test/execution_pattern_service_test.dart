@@ -116,6 +116,41 @@ void main() {
       expect(block, isNot(contains('편차형')));
     });
 
+    test('편차형이라도 지난주보다 해낸 날이 늘었으면 그것부터 알아준다', () {
+      final block = ExecutionPatternService.blockFrom(
+        history([
+          // 이번 이레: 사흘 해냄
+          day(1, planned: 2, done: 2),
+          day(2, planned: 2, done: 0),
+          day(3, planned: 2, done: 2),
+          day(4, planned: 2, done: 0),
+          day(5, planned: 2, done: 2),
+          // 지난 이레: 하루만 해냄
+          day(9, planned: 2, done: 2),
+          day(10, planned: 2, done: 0),
+          day(11, planned: 2, done: 0),
+        ]),
+      );
+      expect(block, contains('편차형'));
+      expect(block, contains('1일 → 3일'));
+    });
+
+    test('지난주보다 줄었으면 늘었다고 하지 않는다', () {
+      final block = ExecutionPatternService.blockFrom(
+        history([
+          day(1, planned: 2, done: 2),
+          day(2, planned: 2, done: 0),
+          day(3, planned: 2, done: 2),
+          day(4, planned: 2, done: 0),
+          day(9, planned: 2, done: 2),
+          day(10, planned: 2, done: 2),
+          day(11, planned: 2, done: 2),
+        ]),
+      );
+      expect(block, contains('편차형'));
+      expect(block, isNot(contains('늘었음')));
+    });
+
     test('시작은 하는데 못 끝내면 시작 꾸준형', () {
       // 다섯 개 중 둘 완료, 셋은 손댔지만 미완료 → 손댄 비율 100%.
       final block = ExecutionPatternService.blockFrom(

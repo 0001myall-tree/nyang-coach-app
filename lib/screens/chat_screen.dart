@@ -5068,8 +5068,13 @@ ${lines.join('\n')}
     if (_isAllOrNothing(prefs) &&
         await LifeContextService.mayAskCondition()) {
       if (!mounted) return false;
+      final trend = await ExecutionPatternService.activeDayTrend();
+      if (!mounted) return false;
       _injectAiMessage(
-        _greetingBuilder.buildConditionAsk(),
+        _greetingBuilder.buildConditionAsk(
+          from: trend.lastWeek,
+          to: trend.thisWeek,
+        ),
         kind: _masterConditionAskKind,
         choices: _conditionAskLabels,
       );
