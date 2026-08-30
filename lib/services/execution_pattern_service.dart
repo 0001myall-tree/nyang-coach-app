@@ -154,7 +154,19 @@ class ExecutionPatternService {
     }
     final timeLine = _startTimeLine(startHours, flags);
 
-    if (flags.isEmpty) return '';
+    // 이름 붙는 유형에 하나도 안 걸려도 숫자는 이미 다 세어져 있다. 여기서
+    // 그냥 버리면 애매하게 걸치는 사람(완료율 55%처럼 어느 문턱에도 안 닿는
+    // 경우)은 정보 자체가 사라진다. 계획/시작/완료 세 축의 숫자는 그대로
+    // 넘기고, 어디가 낮은지는 코치가 보고 판단하게 둔다.
+    if (flags.isEmpty) {
+      return '''
+
+[실행 패턴 - 앱이 최근 이레 기록에서 센 값]
+계획이 실제로 끝나게 돕는 자리. 계획을 얼마나 잡을지, 한 가지에 걸리는 시간을 어떻게 어림할지, 언제 첫 발을 뗄지, 무엇을 루틴으로 굳힐지 — 그날 대화에 맞는 것을 골라 쓸 것.
+하루 평균 계획 ${planPerDay.toStringAsFixed(1)}개 / 완료 ${donePerDay.toStringAsFixed(1)}개 (완료율 ${(rate * 100).round()}%), 손댄 비율 ${(touchedRate * 100).round()}%$timeLine
+→ 뚜렷하게 이름 붙는 패턴은 없음. 계획(이레 중 $days일 기록) / 시작(손댄 비율 ${(touchedRate * 100).round()}%) / 완료(완료율 ${(rate * 100).round()}%) 세 축 중 가장 낮은 지점이 병목. 지적하듯 짚지 말고, 그 지점이 나아지면 전체가 어떻게 달라질지 격려하면서 그 병목에 맞는 구체적인 방법을 하나 제안할 것.
+- 위 숫자는 앱이 기록에서 센 값. 여기 없는 것은 세지 않았음.''';
+    }
 
     return '''
 

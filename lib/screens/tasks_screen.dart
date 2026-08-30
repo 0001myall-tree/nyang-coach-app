@@ -18,7 +18,6 @@ import '../services/memory_service.dart';
 import '../services/task_resistance_service.dart';
 import '../models/user_data.dart';
 import '../services/notification_service.dart';
-import '../services/plan_feedback_service.dart';
 import '../services/tasks_sync_service.dart';
 import '../services/analytics_service.dart';
 import '../services/api_usage_limit_service.dart';
@@ -4054,15 +4053,9 @@ class _TasksScreenState extends State<TasksScreen>
     _saveTasks();
     _todayInputCtrl.clear();
 
-    // 계획을 적는 이 순간이 코치가 말을 거는 유일한 자리다. 대개는 아무 일도
-    // 일어나지 않는다 — 이틀에 한 번, 그것도 짚을 것이 있을 때만.
-    unawaited(
-      PlanFeedbackService.onTaskSaved(
-        coachId: widget.coachId,
-        taskText: finalTitle,
-        hasTime: timeStartStr != null,
-      ),
-    );
+    // 저장할 때마다 코치가 참견하던 자리는 없앴다. 계획을 구체화하면 좋다는
+    // 이야기는 이제 주 1회, 인사 자리에서 한 번만 건넨다
+    // (chat_screen.dart의 _startWeeklyConcretizeTip).
   }
 
   // ── toggleTask (웹앱 그대로) ──────────────────────────────

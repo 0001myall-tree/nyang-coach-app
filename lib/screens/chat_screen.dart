@@ -4465,6 +4465,188 @@ ${lines.join('\n')}
     return pattern.window!.label;
   }
 
+  // ── 계획 구체화 이야기 (주 1회) ──────────────────────
+  // 예전에는 계획을 저장할 때마다 코치가 참견했다(PlanFeedbackService.onTaskSaved,
+  // 삭제됨). 잘 해내는 사람에게도 매번 말을 걸게 돼서, 지금은 계획 하나하나를
+  // 짚지 않고 인사 자리에서 주 1회, 일반적인 이야기만 건넨다. 냥냥이와 마스터가
+  // 쿨다운을 공유한다 — 방을 옮겨 다녀도 같은 주에 두 번 듣지 않는다.
+  static const _weeklyConcretizeGreetingKind = 'auto:weekly_concretize';
+
+  static const String _weeklyConcretizeTimePlaceText =
+      "안 하던 걸 하려면 처음엔 좀 귀찮을 수도 있는데, 시간이랑 장소를 미리 정해두면 "
+      "실제로 할 확률이 확 올라간대. 심리학에서는 이걸 '실행 의도'라고 부르는데, "
+      "언제 어디서 할지만 딱 정해도 실천율이 꽤 달라진다더라고. 이미 생각해뒀으면 "
+      "그대로 가면 돼!";
+
+  static const String _weeklyConcretizeScopeText =
+      "미리 정해두는 거 좀 귀찮을 수도 있는데, 오늘 뭘 어디까지 할지 정해두면 막상 "
+      "시작할 때는 훨씬 편해져. 목표가 구체적일수록 실제로 해낼 확률이 높다는 연구도 "
+      "있고. 이미 정해뒀으면 그대로 가도 좋아!";
+
+  /// 마스터의 이 슬롯이 몇 번째로 발화했는지 세는 로컬 카운터.
+  ///
+  /// 홀/짝으로 이번 차례가 구체화 멘트 차례인지 실행 병목 진단 차례인지를
+  /// 정한다. 기기 재설치 등으로 사라져도 로테이션이 처음부터 다시 도는
+  /// 것뿐이라 손해가 적다 — 그래서 클라우드 동기화되는 nyang_ 접두 prefs가
+  /// 아니라 기기 로컬 카운터로 둔다.
+  static const String _weeklyConcretizeMasterFireCountKey =
+      'weekly_concretize_master_fire_count';
+
+  /// 이 kind로 가장 최근에 말한 메시지. 코치를 가리지 않고 본다(냥냥이 + 마스터
+  /// 공통 쿨다운이라서다). 없으면 null.
+  ///
+  /// 판정 근거는 prefs 날짜가 아니라 채팅 기록이다([_spokeKindToday] 참고).
+  /// 자정에 오늘 기록이 보관함으로 넘어가므로 두 곳을 함께 보고, 보관함이 7일치를
+  /// 들고 있어 일주일을 보기엔 딱 맞는다.
+  ({DateTime at, String text})? _lastAutoMessage(
+    SharedPreferences prefs,
+    String kind,
+  ) {
+    ({DateTime at, String text})? latest;
+    for (final coachId in DailyResetService.coachIds) {
+      for (final key in [
+        'nyang_chat_history_$coachId',
+        '${DailyResetService.chatArchivePrefix}$coachId',
+      ]) {
+        final raw = prefs.getString(key);
+        if (raw == null || raw.isEmpty) continue;
+        for (final item in _decodeMapList(raw)) {
+          if (item['isUser'] == true) continue;
+          if (item['kind'] != kind) continue;
+          final time = DateTime.tryParse(item['time']?.toString() ?? '');
+          if (time == null) continue;
+          if (latest == null || time.isAfter(latest.at)) {
+            latest = (at: time, text: item['text']?.toString() ?? '');
+          }
+        }
+      }
+    }
+    return latest;
+  }
+
+  /// 계획 구체화 이야기를 인사 자리에서 건넨다. 건넸으면 true.
+  ///
+  /// 마스터는 이 슬롯의 두 번에 한 번(짝수 번째)을 구체화 멘트 대신 실행
+  /// 병목 진단으로 대신한다([_buildExecutionBottleneckLine]). 병목을 셀
+  /// 데이터가 없으면(기록이 모자람) 조용히 원래 순서로 돌아간다 — 오늘
+  /// 적어둔 계획 중 봐도 뭘 해야 할지 모를 만큼 막막해 보이는 게 하나라도
+  /// 있으면 그걸 콕 집고([PlanFeedbackService.pinpointConfusingTask]),
+  /// 확실한 게 없으면(코치가 SKIP을 내면) 냥냥이와 똑같이 로테이션 문구로
+  /// 대신한다.
+  ///
+  /// 로테이션 문구 두 개는 번갈아 나간다 — 마지막으로 이 kind로 무엇을
+  /// 말했는지를 채팅 기록에서 읽어 반대쪽을 고른다. 콕 집은 말이나 병목
+  /// 진단이 나갔던 다음 차례는 로테이션의 첫 문구(시간/장소)로 되돌아간다.
+  Future<bool> _startWeeklyConcretizeTip(
+    SharedPreferences prefs,
+    DateTime now,
+  ) async {
+    if (now.hour >= MasterGreetingContext.quietFromHour) return false;
+
+    final last = _lastAutoMessage(prefs, _weeklyConcretizeGreetingKind);
+    if (last != null && now.difference(last.at) < const Duration(days: 7)) {
+      return false;
+    }
+
+    String? pinpointTask;
+    String? line;
+    var isBottleneck = false;
+    if (_coach.isMaster) {
+      // 카운터는 이번 차례를 실제로 이 슬롯이 맡은 순간(쿨다운 통과) 늘린다.
+      // 병목 데이터가 없어 결국 로테이션/콕집기로 대신하더라도, 다음 차례
+      // 계산이 어긋나지 않도록 그대로 늘려둔다.
+      final fireCount =
+          (prefs.getInt(_weeklyConcretizeMasterFireCountKey) ?? 0) + 1;
+      await prefs.setInt(_weeklyConcretizeMasterFireCountKey, fireCount);
+
+      if (fireCount.isEven) {
+        line = await _buildExecutionBottleneckLine(prefs);
+        isBottleneck = line != null;
+      }
+
+      if (line == null) {
+        final pinpoint = await PlanFeedbackService.pinpointConfusingTask(
+          coachId: widget.coachId,
+          todayTasks: _decodeMapList(prefs.getString('nyang_tasks')),
+        );
+        if (pinpoint != null) {
+          pinpointTask = pinpoint.task;
+          line = pinpoint.line;
+        }
+      }
+    }
+    line ??= last?.text == _weeklyConcretizeTimePlaceText
+        ? _weeklyConcretizeScopeText
+        : _weeklyConcretizeTimePlaceText;
+    if (line.isEmpty || !mounted) return false;
+
+    _injectAiMessage(line, kind: _weeklyConcretizeGreetingKind);
+    unawaited(
+      AnalyticsService.logFeatureUsage(
+        isBottleneck
+            ? 'weekly_concretize_bottleneck'
+            : pinpointTask != null
+            ? 'weekly_concretize_pinpoint'
+            : 'weekly_concretize_rotation',
+      ),
+    );
+    return true;
+  }
+
+  /// 실행 병목 진단을 인사 문구 하나로 만든다. 셀 데이터가 없거나(빈 문자열)
+  /// 호출이 실패하면 null — 그러면 부르는 쪽이 원래 순서(콕집기/로테이션)로
+  /// 대신한다.
+  ///
+  /// [PlanFeedbackService._askPinpoint]와 같은 패턴이다: 코치의 systemPrompt를
+  /// 그대로 얹어 코치 말투를 지키고, [ExecutionPatternService]가 센 값(패턴
+  /// 이름 또는 계획/시작/완료 세 축 숫자)만 관찰로 건네 코치가 지어내지
+  /// 않게 한다.
+  Future<String?> _buildExecutionBottleneckLine(
+    SharedPreferences prefs,
+  ) async {
+    try {
+      final block = ExecutionPatternService.blockFrom(
+        prefs.getString('nyang_history'),
+      );
+      if (block.isEmpty) return null;
+
+      final prompt =
+          '''${_coach.systemPrompt}
+
+[할 일]
+아래는 앱이 최근 실행 기록에서 센 값이다. 이 관찰을 바탕으로, 인사 자리에서
+사용자에게 실행 병목을 짚어주는 짧은 말을 만들어줘.
+$block
+
+[말투 원칙 - 반드시 지킬 것]
+- 지적하듯 짚지 말 것. 병목 지점(계획/시작/완료 중 가장 낮은 곳, 또는 관찰에
+이미 담긴 패턴)이 나아지면 전체가 어떻게 달라질지 먼저 격려하는 투로 말하고,
+그 병목에 맞는 구체적인 방법을 하나만 제안할 것.
+- 패턴 이름이나 숫자를 그대로 읽지 말고, 자연스러운 문장으로 풀어 쓸 것.
+- 두 문장 안팎, 120자 안에서 끝낼 것. 태그나 따옴표, 머리말 없이 코치의
+말투 그대로 쓸 것.
+
+[출력 형식]
+완성된 멘트 하나만 출력할 것. 다른 말은 덧붙이지 말 것.''';
+
+      final response = await _chatProxy.call({
+        'messages': [
+          {'role': 'user', 'content': prompt},
+        ],
+        'temperature': 0.7,
+      });
+
+      final content = (response.data is Map
+              ? (response.data as Map)['content'] as String? ?? ''
+              : '')
+          .trim();
+      return content.isEmpty ? null : content;
+    } catch (e) {
+      debugPrint('execution bottleneck greeting failed: $e');
+      return null;
+    }
+  }
+
   List<Map<String, dynamic>> _decodeMapList(String? raw) {
     if (raw == null || raw.isEmpty) return [];
     try {
@@ -6899,6 +7081,8 @@ Rules:
         // 할 말이 없던 자리에서만 권한다. 한 번 들어올 때 두 마디 하지 않는다.
         _greetedOnThisEntry =
             _greetedOnThisEntry || await _tryOfferOngoingNudge(prefs, now);
+        _greetedOnThisEntry =
+            _greetedOnThisEntry || await _startWeeklyConcretizeTip(prefs, now);
         await prefs.setString(
           'last_visit_${widget.coachId}',
           now.toIso8601String(),
@@ -6918,6 +7102,15 @@ Rules:
       }
 
       if (await _tryOfferOngoingNudge(prefs, now)) {
+        _greetedOnThisEntry = true;
+        await prefs.setString(
+          'last_visit_${widget.coachId}',
+          now.toIso8601String(),
+        );
+        return;
+      }
+
+      if (await _startWeeklyConcretizeTip(prefs, now)) {
         _greetedOnThisEntry = true;
         await prefs.setString(
           'last_visit_${widget.coachId}',
@@ -6974,6 +7167,8 @@ Rules:
           now: now,
           lastVisit: lastVisit,
         );
+        _greetedOnThisEntry =
+            _greetedOnThisEntry || await _startWeeklyConcretizeTip(prefs, now);
         await prefs.setString(
           'last_visit_${widget.coachId}',
           now.toIso8601String(),

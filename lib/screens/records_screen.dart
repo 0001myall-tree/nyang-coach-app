@@ -4,6 +4,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:nyang_coach/services/execution_blocker_service.dart';
+import 'package:nyang_coach/services/execution_pattern_service.dart';
 import 'package:nyang_coach/services/life_context_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:nyang_coach/services/user_title_service.dart';
@@ -378,7 +379,10 @@ class _RecordsScreenState extends State<RecordsScreen> {
     return (record['doneCount'] as num?)?.toInt() ?? 0;
   }
 
-  int _selectFeedbackType(SharedPreferences prefs, String weekMonday) {
+  Future<int> _selectFeedbackType(
+    SharedPreferences prefs,
+    String weekMonday,
+  ) async {
     final thisMonday = DateTime.parse(weekMonday);
     final lastWeekMonday = thisMonday.subtract(const Duration(days: 7));
     final twoWeeksAgoMonday = thisMonday.subtract(const Duration(days: 14));
@@ -406,7 +410,15 @@ class _RecordsScreenState extends State<RecordsScreen> {
       }
     } catch (_) {}
 
-    final available = [0, 1, 2].where((t) => !usedTypes.contains(t)).toList()
+    // 실행 유형형(3)은 그 주에 셀 것이 있을 때만 후보에 넣는다. 데이터가
+    // 없는데(ExecutionPatternService가 빈 문자열) 이 유형이 뽑히면 코치가
+    // 근거 없이 지어내게 된다.
+    final hasExecutionPattern = ExecutionPatternService.blockFrom(
+      prefs.getString('nyang_history'),
+    ).isNotEmpty;
+
+    final candidates = hasExecutionPattern ? [0, 1, 2, 3] : [0, 1, 2];
+    final available = candidates.where((t) => !usedTypes.contains(t)).toList()
       ..shuffle();
     return available.first;
   }
@@ -448,7 +460,7 @@ class _RecordsScreenState extends State<RecordsScreen> {
       }
     } catch (_) {}
 
-    final feedbackType = _selectFeedbackType(prefs, weekMonday);
+    final feedbackType = await _selectFeedbackType(prefs, weekMonday);
     await _triggerWeeklyFeedback(weekMonday, cacheKey, feedbackType);
   }
 
@@ -578,6 +590,11 @@ class _RecordsScreenState extends State<RecordsScreen> {
     final hasVisibleVisions = visibleVisions != '없음';
     final weekGoalText = _formatGoalText(prefs.getString('nyang_week_goals'));
     final monthGoalText = _formatGoalText(prefs.getString('nyang_month_goals'));
+    // 실행 유형형(3)에서만 쓴다. 앱이 기록에서 센 패턴 이름 또는 계획/시작/완료
+    // 세 축 숫자 — 코치가 근거 없이 유형을 지어내지 않게 한다.
+    final executionPatternBlock = ExecutionPatternService.blockFrom(
+      prefs.getString('nyang_history'),
+    );
 
     final allTaskTexts = <String>{};
     for (final record in records) {
@@ -927,6 +944,7 @@ ${completionSummaryBuffer.toString().trim()}
 ${feedbackType == 0 ? '- 시작한 일이 완료로 이어진 비율: $startToFinishText\n' : ''}
 - 미루다 다시 완료한 일 (3일 이상 미루다 최근 다시 완료): ${resumedTasks.join(', ').isEmpty ? '없음' : resumedTasks.join(', ')}
 - 미루다 다시 시작한 일 (3일 이상 손대지 못하다 최근 다시 시작, 완료는 아직): ${resumedStartTasks.join(', ').isEmpty ? '없음' : resumedStartTasks.join(', ')}
+${feedbackType == 3 ? '$executionPatternBlock\n' : ''}
 
 [사용자의 현재 목표 및 장기 비전]
 - 주간 목표: $weekGoalText
@@ -947,6 +965,8 @@ $chatSummarySection
         ? '실행 회고형'
         : feedbackType == 1
         ? '장기 비전형'
+        : feedbackType == 3
+        ? '실행 유형형'
         : '컨디션 회고형'}]
 
 [작성 지침]
@@ -979,6 +999,13 @@ ${feedbackType == 0
    - 마감일이 지난 미완료 마일스톤이 있다면 부드럽게 확인을 권유하세요.
    $visionEmptyGuidance
    - 마지막으로 미래를 응원하는 한마디로 마무리하세요.'''
+        : feedbackType == 3
+        ? '''   [실행 유형형]
+   - 이번 주 "무엇을 했는지"가 아니라 "이 사람이 어떤 식으로 계획을 실행하는 사람인지"에 초점을 맞춥니다. [분석 참고 데이터]의 [실행 패턴 - 앱이 최근 이레 기록에서 센 값]을 반드시 참고하세요. 거기 없는 숫자나 패턴은 지어내지 마세요.
+   - "당신은 이런 식으로 계획을 실행하는 사람이에요"라는 투로 먼저 유형을 짚어주세요. 패턴 이름이 있으면 그 이름을, 없으면 계획/시작/완료 세 축의 숫자를 근거로 풀어서 설명하세요.
+   - 계획/시작/완료 세 축 중 강점인 축은 구체적으로 인정하세요. (예: 손댄 비율이 높다면 "일단 붙잡으면 놓지 않는 편"이라고 짚기)
+   - 병목인 축(가장 낮은 지점)은 지적하듯 짚지 마세요. 그 지점이 나아지면 전체가 어떻게 달라질지부터 격려하는 투로 말하고, 그 병목에 맞는 구체적인 방법을 하나만 제안하세요. (예: 계획이 병목이면 계획을 얼마나 잡을지, 시작이 병목이면 언제 첫 발을 뗄지, 완료가 병목이면 한 번에 걸리는 시간을 어떻게 어림할지)
+   - 이 유형은 유형 자체를 알아가는 자리이니, 이번 주 개별 할 일 목록을 나열하며 회고하지 마세요.'''
         : '''   [컨디션 회고형]
    - 실행이나 성장보다 이번 주의 컨디션 흐름에 초점을 맞춥니다.
    - 완료율과 할 일 밀도 등을 바탕으로 체력/휴식/회복 측면을 분석하세요.
