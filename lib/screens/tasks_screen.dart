@@ -28,6 +28,7 @@ import '../services/purchase_service.dart';
 import '../services/nyang_banner_nudge.dart';
 import '../services/distraction_coach_quota.dart';
 import '../services/ongoing_task_nudge_service.dart';
+import '../services/overplan_nudge_service.dart';
 import '../services/task_completion_service.dart';
 import '../services/apple_calendar_sync_service.dart';
 import '../services/routine_schedule.dart';
@@ -4056,6 +4057,88 @@ class _TasksScreenState extends State<TasksScreen>
     // 저장할 때마다 코치가 참견하던 자리는 없앴다. 계획을 구체화하면 좋다는
     // 이야기는 이제 주 1회, 인사 자리에서 한 번만 건넨다
     // (chat_screen.dart의 _startWeeklyConcretizeTip).
+    //
+    // 다만 오늘 계획 자체가 최근 실제로 해낸 최대치보다 훨씬 많아지면
+    // 예외다 - 그건 참견이 아니라 그 순간에만 뜻이 있는 경고라 저장할
+    // 때마다 다시 봐야 한다. 하루 한 번만 나가도록 서비스 안에서 막는다.
+    unawaited(_checkOverplan());
+  }
+
+  Future<void> _checkOverplan() async {
+    if (!_coach.isMaster) return;
+    final prefs = await SharedPreferences.getInstance();
+    final recentMax = await OverplanNudgeService.shouldFire(
+      todayTasks: _activeTodayTasks.map((t) => t.toJson()).toList(),
+      historyRaw: prefs.getString('nyang_history'),
+    );
+    if (recentMax == null || !mounted) return;
+
+    final turns = <Map<String, dynamic>>[];
+
+    final primary = OverplanNudgeService.primaryMessage(_coach.id, recentMax);
+    turns.add({'isUser': false, 'text': primary});
+    final firstChoice = await _showOverplanChoiceDialog(primary);
+    turns.add({'isUser': true, 'text': firstChoice});
+
+    if (firstChoice == _overplanGoAhead && mounted) {
+      final followup = OverplanNudgeService.followupMessage(_coach.id);
+      turns.add({'isUser': false, 'text': followup});
+      final secondChoice = await _showOverplanChoiceDialog(followup);
+      turns.add({'isUser': true, 'text': secondChoice});
+    }
+
+    await OverplanNudgeService.recordChatTurns(turns);
+  }
+
+  static const String _overplanGoAhead = '그렇게 할게';
+  static const String _overplanLeaveIt = '알아서 할게';
+
+  /// [_overplanGoAhead] 또는 [_overplanLeaveIt] 중 사용자가 고른 것.
+  Future<String> _showOverplanChoiceDialog(String message) async {
+    final result = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: Text(
+          _coach.name,
+          style: GoogleFonts.notoSansKr(
+            fontWeight: FontWeight.bold,
+            fontSize: 16,
+            color: const Color(0xFF3D3A4E),
+          ),
+        ),
+        content: Text(
+          message,
+          style: GoogleFonts.notoSansKr(
+            fontSize: 14,
+            color: const Color(0xFF6B7280),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, _overplanLeaveIt),
+            child: Text(
+              _overplanLeaveIt,
+              style: GoogleFonts.notoSansKr(
+                color: const Color(0xFF9593A5),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, _overplanGoAhead),
+            child: Text(
+              _overplanGoAhead,
+              style: GoogleFonts.notoSansKr(
+                color: const Color(0xFF6C5CE7),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    return result ?? _overplanLeaveIt;
   }
 
   // ── toggleTask (웹앱 그대로) ──────────────────────────────

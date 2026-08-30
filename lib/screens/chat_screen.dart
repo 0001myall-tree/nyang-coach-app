@@ -19,6 +19,7 @@ import 'package:nyang_coach/services/day_capacity_service.dart';
 import 'package:nyang_coach/services/execution_blocker_service.dart';
 import 'package:nyang_coach/services/life_context_service.dart';
 import 'package:nyang_coach/services/plan_feedback_service.dart';
+import 'package:nyang_coach/services/overplan_nudge_service.dart';
 import 'package:nyang_coach/services/analytics_service.dart';
 import 'package:nyang_coach/services/master_unlock_notice.dart';
 import 'package:nyang_coach/services/api_usage_limit_service.dart';
@@ -1647,7 +1648,25 @@ class _ChatScreenState extends State<ChatScreen>
     await _loadHistoryAndGreet();
     await _restoreActiveFocusTimer();
     await _checkBedtimeMoveOffer();
+    await _checkOverplanPending();
     _initSpeech();
+  }
+
+  /// 등록창(할 일 탭)에서 오늘 계획이 최근 최대 완료량보다 훨씬 많아
+  /// 다이얼로그로 주고받은 문답이 있으면, 채팅에도 그대로 이어 붙인다 -
+  /// 마치 그 자리에서 대화한 것처럼.
+  Future<void> _checkOverplanPending() async {
+    final turns = await OverplanNudgeService.takePendingChatTurns();
+    if (turns == null || turns.isEmpty) return;
+    for (final turn in turns) {
+      final text = turn['text']?.toString() ?? '';
+      if (text.isEmpty) continue;
+      if (turn['isUser'] == true) {
+        _injectUserChoice(text);
+      } else {
+        _injectAiMessage(text, kind: 'overplan_nudge');
+      }
+    }
   }
 
   Future<void> _recordCatChatEntry(
@@ -3751,6 +3770,7 @@ ${lines.join('\n')}
       _loadTaskProgress();
       _checkDeferredReminder();
       _checkBedtimeMoveOffer();
+      _checkOverplanPending();
     }
   }
 
@@ -4608,9 +4628,14 @@ ${lines.join('\n')}
 $block
 
 [말투 원칙 - 반드시 지킬 것]
-- 지적하듯 짚지 말 것. 병목 지점(계획/시작/완료 중 가장 낮은 곳, 또는 관찰에
-이미 담긴 패턴)이 나아지면 전체가 어떻게 달라질지 먼저 격려하는 투로 말하고,
-그 병목에 맞는 구체적인 방법을 하나만 제안할 것.
+- 유형 이름 자체를 문제처럼 다루지 말 것 - 예를 들어 편차형이나 무난형,
+자유형은 고칠 결함이 아니라 이 사람이 원래 그렇게 해내는 방식이다.
+- 격려는 부드럽게 하되, 개선 방향은 흐릿하게 뭉개지 말 것. 병목 지점(계획/
+시작/완료 중 가장 낮은 곳, 또는 관찰에 이미 담긴 패턴)에 맞춰, 왜 그
+방법이 효과가 있는지 심리학적 근거(예: 실행 의도, 작은 시작이 관성을
+만드는 것, 완료 경험이 다음 시도를 쉽게 만드는 것 등)를 바탕으로 무엇을
+어떻게 하라는 것인지 한 문장 안에서 선명하게 짚을 것 - "잘하고 있으니
+계속하세요" 같은 말로 끝내지 말 것.
 - 패턴 이름이나 숫자를 그대로 읽지 말고, 자연스러운 문장으로 풀어 쓸 것.
 - 두 문장 안팎, 120자 안에서 끝낼 것. 태그나 따옴표, 머리말 없이 코치의
 말투 그대로 쓸 것.

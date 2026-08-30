@@ -27,7 +27,7 @@ class RecordsScreen extends StatefulWidget {
   /// 기록탭의 캐시와 탭에 붙는 안 읽음 표시가 이 하나를 함께 본다. 따로 두었을
   /// 때는 한마디를 새로 뽑게 해놓고 표시 쪽 번호를 안 올려서, 새 한마디가
   /// 나왔는데 사용자는 모르는 일이 생겼다.
-  static const int weeklyFeedbackVersion = 5;
+  static const int weeklyFeedbackVersion = 6;
 
   @override
   State<RecordsScreen> createState() => _RecordsScreenState();
@@ -47,6 +47,11 @@ class _RecordsScreenState extends State<RecordsScreen> {
   List<HabitItem> _habits = [];
   String _userTitle = UserTitleService.defaultTitle;
   String? _weeklyFeedbackText;
+
+  /// "실행 유형" 배지. 코치의 한마디와 같은 주기(주 1회)로만 바뀐다 - 매번
+  /// 최근 이레를 다시 계산하면 한마디는 지난주 기준인데 배지만 오늘 기준으로
+  /// 따로 움직여서 둘이 어긋난다.
+  String? _weeklyExecutionTypeLabel;
   bool _isGeneratingWeeklyFeedback = false;
   bool _hasMasterPlan = false;
   String _lastDate = '';
@@ -454,6 +459,7 @@ class _RecordsScreenState extends State<RecordsScreen> {
           if (!mounted) return;
           setState(() {
             _weeklyFeedbackText = cached['text'] as String;
+            _weeklyExecutionTypeLabel = cached['executionTypeLabel'] as String?;
           });
           return;
         }
@@ -543,6 +549,9 @@ class _RecordsScreenState extends State<RecordsScreen> {
       );
 
       final prefs = await SharedPreferences.getInstance();
+      final executionTypeLabel = ExecutionPatternService.typeLabel(
+        prefs.getString('nyang_history'),
+      );
       await prefs.setString(
         cacheKey,
         jsonEncode({
@@ -550,6 +559,7 @@ class _RecordsScreenState extends State<RecordsScreen> {
           'text': feedbackText,
           'type': feedbackType,
           'version': RecordsScreen.weeklyFeedbackVersion,
+          'executionTypeLabel': executionTypeLabel,
         }),
       );
       await prefs.setString(
@@ -564,6 +574,7 @@ class _RecordsScreenState extends State<RecordsScreen> {
       if (!mounted) return;
       setState(() {
         _weeklyFeedbackText = feedbackText;
+        _weeklyExecutionTypeLabel = executionTypeLabel;
       });
     } catch (e) {
       debugPrint('주간 코치 피드백 생성 실패: $e');
@@ -1365,6 +1376,9 @@ ${feedbackType == 0
   }
 
   Widget _buildCoachCommentCard(List<Map<String, dynamic>> records) {
+    // 마스터가 아니면 코치의 한마디 자체가 주 1회 캐시가 아니라 매번 즉석
+    // 계산이라, 이 배지도 같이 낼 만한 짝이 없다. 마스터만 보여준다.
+    final executionTypeLabel = _isMaster ? _weeklyExecutionTypeLabel : null;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -1412,6 +1426,17 @@ ${feedbackType == 0
                     height: 1.5,
                   ),
                 ),
+                if (executionTypeLabel != null) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    '실행 유형 : $executionTypeLabel',
+                    style: GoogleFonts.notoSansKr(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: _recordCoach.accentColor,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),

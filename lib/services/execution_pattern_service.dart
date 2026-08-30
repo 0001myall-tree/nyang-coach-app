@@ -45,11 +45,27 @@ class ExecutionPatternService {
     );
   }
 
+  /// 유형 이름만 짧게. 기록 화면에 배지처럼 붙일 때 쓴다. 셀 것이 모자라면
+  /// null.
+  ///
+  /// [blockFrom]이 만드는 "→ 이름 — 설명" 줄에서 이름만 뽑는다. 판단
+  /// 기준을 두 곳에 따로 두면 어긋나기 쉬워서, 새로 계산하지 않고 그
+  /// 문장에서 그대로 가져온다.
+  static String? typeLabel(String? historyRaw) {
+    final block = blockFrom(historyRaw);
+    if (block.isEmpty) return null;
+    final match = RegExp(r'→ ([^—.]+)').firstMatch(block);
+    final name = match?.group(1)?.trim();
+    return (name == null || name.isEmpty) ? null : name;
+  }
+
   /// 기록 원문에서 바로 만든다. 테스트가 이 자리로 들어온다.
   static String blockFrom(String? historyRaw) {
     final records = _records(historyRaw);
 
-    // 뜸한 사용자는 완료율로 평가할 것이 아니다. 그것만 말해준다.
+    // 계획을 잘 안 적는(플래너에 뜸하게 오는) 사람은 완료율로 평가할 것이
+    // 아니다. 그것만 말해준다. 다른 유형이 전부 "-형"이라 이 사람에게도
+    // 이름을 붙인다 - 정해진 틀 없이 오는 사람이라 자유형.
     if (records.length <= 2) {
       if (records.isEmpty) return '';
       return '''
@@ -57,7 +73,7 @@ class ExecutionPatternService {
 [실행 패턴 - 앱이 최근 이레 기록에서 센 값]
 계획이 실제로 끝나게 돕는 자리. 계획을 얼마나 잡을지, 한 가지에 걸리는 시간을 어떻게 어림할지, 언제 첫 발을 뗄지, 무엇을 루틴으로 굳힐지 — 그날 대화에 맞는 것을 골라 쓸 것.
 최근 이레 중 계획을 적은 날이 ${records.length}일뿐.
-→ 뜸한 사용자. 이 숫자로 재는 완료율은 뜻이 없음. 돌아오는 자리는 30분 안에 끝나는 루틴 하나면 충분.
+→ 자유형 — 플래너에 뜸하게 옴. 이 숫자로 재는 완료율은 뜻이 없음. 돌아오는 자리는 30분 안에 끝나는 루틴 하나면 충분.
 - 위 숫자는 앱이 기록에서 센 값. 여기 없는 것은 세지 않았음.''';
     }
     if (records.length < minRecordedDays) return '';
@@ -158,13 +174,18 @@ class ExecutionPatternService {
     // 그냥 버리면 애매하게 걸치는 사람(완료율 55%처럼 어느 문턱에도 안 닿는
     // 경우)은 정보 자체가 사라진다. 계획/시작/완료 세 축의 숫자는 그대로
     // 넘기고, 어디가 낮은지는 코치가 보고 판단하게 둔다.
+    //
+    // "패턴 없음"이라고 하면 코치가 짚을 말이 마땅치 않아 병목 지적으로
+    // 흐르기 쉽다. 세 축이 다 어중간한 것도 그 자체로 하나의 유형(무난형)
+    // 이라 이름을 붙여, 지적거리가 아니라 "고르게 가는 중"으로 먼저 읽히게
+    // 한다.
     if (flags.isEmpty) {
       return '''
 
 [실행 패턴 - 앱이 최근 이레 기록에서 센 값]
 계획이 실제로 끝나게 돕는 자리. 계획을 얼마나 잡을지, 한 가지에 걸리는 시간을 어떻게 어림할지, 언제 첫 발을 뗄지, 무엇을 루틴으로 굳힐지 — 그날 대화에 맞는 것을 골라 쓸 것.
 하루 평균 계획 ${planPerDay.toStringAsFixed(1)}개 / 완료 ${donePerDay.toStringAsFixed(1)}개 (완료율 ${(rate * 100).round()}%), 손댄 비율 ${(touchedRate * 100).round()}%$timeLine
-→ 뚜렷하게 이름 붙는 패턴은 없음. 계획(이레 중 $days일 기록) / 시작(손댄 비율 ${(touchedRate * 100).round()}%) / 완료(완료율 ${(rate * 100).round()}%) 세 축 중 가장 낮은 지점이 병목. 지적하듯 짚지 말고, 그 지점이 나아지면 전체가 어떻게 달라질지 격려하면서 그 병목에 맞는 구체적인 방법을 하나 제안할 것.
+→ 무난형 — 계획(이레 중 $days일 기록) / 시작(손댄 비율 ${(touchedRate * 100).round()}%) / 완료(완료율 ${(rate * 100).round()}%) 세 축 중 특별히 처지는 곳 없이 고르게 되고 있음. 이걸 먼저 알아줄 것. 굳이 하나를 더 다지고 싶다면 세 축 중 가장 낮은 지점에 아주 가벼운 제안 하나만 곁들이되, 지적처럼 들리지 않게 할 것.
 - 위 숫자는 앱이 기록에서 센 값. 여기 없는 것은 세지 않았음.''';
     }
 
