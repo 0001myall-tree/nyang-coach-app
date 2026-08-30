@@ -59,6 +59,36 @@ class ExecutionPatternService {
     return (name == null || name.isEmpty) ? null : name;
   }
 
+  /// [typeLabel]에 붙이는 고정 코칭 한마디. API를 안 쓰는 코치(프렌즈 등급)를
+  /// 위한 것이라, 유형마다 미리 써둔 문장 중 하나를 그대로 돌려준다.
+  ///
+  /// "이대로도 괜찮아"로 끝내지 않는다 - 강점을 먼저 인정하되, 다음에 뭘
+  /// 해보면 좋을지까지 한 문장에 담는다. 셀 것이 모자라면 null.
+  static String? staticComment(String? historyRaw) {
+    switch (typeLabel(historyRaw)) {
+      case '안정형':
+        return '지금 방식이 잘 맞고 있어. 여기서 하나 더 다지고 싶다면, 하나 끝낸 김에 내일 할 것 하나를 미리 적어두는 습관을 얹어봐.';
+      case '편차형':
+        return '의욕이 켜지면 계획부터 완료까지 한번에 몰아치고, 꺼지면 아예 손을 놓는 편이야. 그 자체가 나쁜 게 아니라 에너지가 몰아서 도는 리듬인 거고, 관건은 손 놓는 날에도 그 에너지가 완전히 0으로 안 떨어지게 제일 만만한 일 하나만 살짝 걸쳐두는 거야.';
+      case '계획 편차형':
+        return '계획을 세우는 날 자체가 들쭉날쭉해. 근데 일단 적어두면 웬만하면 다 해내잖아. 완벽하게 다 못 지킬까 봐 아예 안 적는 날이 있는 거니까, 하루에 딱 하나만 적는 걸로 부담을 줄여봐.';
+      case '시작 편차형':
+        return '계획은 꾸준히 쓰는데, 그중 며칠은 계획해두고도 손을 아예 안 대. 계획 세운 것만으로 이미 만족해버려서 정작 실행할 힘이 빠지는 걸 수도 있어. 할 수 있는 가짓수만 세우고, 그 계획을 실행하기 좋게 구체적으로 뭘 할지까지 세워봐. 귀찮더라도 실행률이 올라갈 거야.';
+      case '계획 과다형':
+        return '계획한 양이 해내는 양의 갑절이야. 의지가 아니라 양이 많은 거야. 다음엔 하루치를 절반으로 줄여서 다 끝내는 경험부터 만들어봐.';
+      case '시작 꾸준형':
+        return '완료율은 낮아도 손은 매번 대고 있어. 시작은 이미 되니까, 이번엔 한 번에 걸리는 시간을 짧게 잡아서 끝까지 가보는 것부터 해봐.';
+      case '무난형':
+        return '계획·시작·완료 중 특별히 처지는 곳 없이 고르게 가고 있어. 셋 다 골고루 된다는 건 지금도 나쁘지 않다는 거지만, 좀 더 발전하고 싶다면 더 과감히 시작하도록 자신감을 조금만 더 붙이면 나머지도 따라올 거야.';
+      case '자유형':
+        return '플래너에 뜸하게 오고 있어. 잘하고 못하고를 따질 단계는 아니고, 계획 세우는 거, 시작하는 거 너무 무서워하지 마.';
+      case '벼락치기형':
+        return '밤 10시 넘어서 여러 개를 한꺼번에 몰아서 시작하는 날이 잦아. 막판에도 결국 다 손을 대는 힘은 있다는 뜻이니까, 진짜 마감 하나만 보지 말고 중간중간 가상의 마감을 여러 개 나눠서 잡아봐. 그럼 막판까지 안 미루게 될 거야.';
+      default:
+        return null;
+    }
+  }
+
   /// 기록 원문에서 바로 만든다. 테스트가 이 자리로 들어온다.
   static String blockFrom(String? historyRaw) {
     final records = _records(historyRaw);
@@ -83,12 +113,22 @@ class ExecutionPatternService {
     var touched = 0;
     var fullDays = 0;
     var zeroDays = 0;
+    var noPlanDays = 0;
     var activeDays = 0;
+    var crammedDays = 0;
     final startHours = <int>[];
+
+    // 벼락치기: 밤 10시 이후에 시작한 서로 다른 일이 하루에 이 개수 이상.
+    // 완료됐는지는 안 본다 - 그 시각까지 미뤄뒀다가 한꺼번에 손을 댔다는
+    // 것 자체가 신호라, 다 끝냈어도 벼락치기는 벼락치기다.
+    const lateNightHour = 22;
+    const crammedTaskThreshold = 3;
 
     for (final record in records) {
       var dayPlanned = 0;
       var dayDone = 0;
+      var dayTouched = 0;
+      var lateNightStarts = 0;
       for (final task in (record['tasks'] as List?) ?? const []) {
         if (task is! Map) continue;
         dayPlanned++;
@@ -99,12 +139,24 @@ class ExecutionPatternService {
           task['startedAt']?.toString() ?? '',
         );
         if (isDone) done++;
-        if (isDone || startedAt != null) touched++;
-        if (startedAt != null) startHours.add(startedAt.hour);
+        if (isDone || startedAt != null) {
+          touched++;
+          dayTouched++;
+        }
+        if (startedAt != null) {
+          startHours.add(startedAt.hour);
+          if (startedAt.hour >= lateNightHour) lateNightStarts++;
+        }
       }
-      if (dayPlanned == 0) continue;
+      if (lateNightStarts >= crammedTaskThreshold) crammedDays++;
+      if (dayPlanned == 0) {
+        noPlanDays++;
+        continue;
+      }
       if (dayDone == dayPlanned) fullDays++;
-      if (dayDone == 0) {
+      // 손을 대긴 했는데 다 못 끝낸 날은 "편차형"의 아예 손 안 댄 날과 다르다.
+      // 그건 시작 꾸준형이 이미 맡는 자리라, 여기서는 진짜 미착수만 센다.
+      if (dayTouched == 0) {
         zeroDays++;
       } else {
         activeDays++;
@@ -124,7 +176,12 @@ class ExecutionPatternService {
     //
     // 다른 패턴과 함께 붙이면 고쳐줄 것이 없는 사람에게 고칠 거리가 하나 붙는다.
     // 완료율 75%인 사람에게 낮 조각을 권할 이유가 없다.
-    if (rate >= 0.7) {
+    //
+    // 단, 계획 안 세운 날은 이 비율 계산에 아예 안 들어간다(분모 자체가
+    // planned라서). 계획을 어쩌다 세우고 세운 날만 다 해내는 사람도 그래서
+    // 완료율이 100%로 나오는데, 이 사람은 안정형이 아니라 계획 편차형이다 -
+    // 계획 자체를 자주 건너뛰면 안정형으로 덮지 않는다.
+    if (rate >= 0.7 && noPlanDays < 2) {
       return '''
 
 [실행 패턴 - 앱이 최근 이레 기록에서 센 값]
@@ -139,27 +196,60 @@ class ExecutionPatternService {
     // 관찰만 주면 코치는 그날 대화에 맞는 수를 고른다. 여기서 한 수를 정해두면
     // 계획 이야기가 나올 때마다 같은 말이 나가고, 이미 갖고 있는 개입 열댓 가지가
     // 쓰이지 않는다.
-    // 날마다 전부 아니면 전무인 사람.
-    //
+    // 날마다 전부 아니면 전무인 사람. 이 사람에게 완료율은 눈금이 못 된다 —
+    // 하는 날에는 어차피 100%라, 손대는 날이 하루 늘어도 숫자는 그대로다.
+    final lastWeek = _activeDays(_records(historyRaw, weeksBack: 1));
+    final improvedNote = (lastWeek > 0 && activeDays > lastWeek)
+        ? '다만 지난 이레보다 해낸 날이 늘었음(${lastWeek}일 → $activeDays일). '
+              '고칠 거리를 꺼내기 전에 이것부터 알아줄 것'
+        : null;
+
     // 완료율만 보면 절반쯤 하는 사람으로 읽히는데, 날짜별로 보면 다 해낸 날과
-    // 손도 안 댄 날로 갈린다. 이 사람에게 계획을 줄이라고 하면 빗나간다 —
-    // 하는 날에는 세 개도 다 끝내기 때문이다. 그래서 이 표시가 붙으면 양을
-    // 두고 하는 판단은 접어둔다.
+    // 아예 손도 안 댄 날로 갈린다. 이 사람에게 계획을 줄이라고 하면 빗나간다 —
+    // 하는 날에는 세 개도 다 끝내기 때문이다.
+    //
+    // 손을 대긴 했는데 다 못 끝낸 날은 이 갈래가 아니다 - 그건 시작은
+    // 꾸준하다는 뜻이라 아래 '시작 꾸준형'이 이미 맡고 있고, 시작을 잘하는
+    // 사람을 굳이 편차형(불안정하다는 인상)으로 묶어 깎아내릴 이유가 없다.
     final swings = fullDays >= 2 && zeroDays >= 2;
-    if (swings) {
-      flags.add('편차형 — 하는 날엔 잡은 것을 다 해내고, 아예 손도 안 대는 날이 따로 있음. 양이 걸린 것이 아님');
-      // 나아지고 있으면 그것부터 말한다.
-      //
-      // 이 사람에게 완료율은 눈금이 못 된다. 하는 날에는 어차피 100%라,
-      // 손대는 날이 하루 늘어도 숫자는 그대로다. 늘어난 것을 볼 수 있는
-      // 자리는 여기뿐이고, 늘었다는 말은 어떤 조언보다 잘 듣는다.
-      final lastWeek = _activeDays(_records(historyRaw, weeksBack: 1));
-      if (lastWeek > 0 && activeDays > lastWeek) {
+
+    // 계획 자체가 들쭉날쭉하지만, 일단 세운 날엔 거의 다 해낸다. 병목은
+    // "계획을 쓰느냐"이지 실행력이 아니다 - 자기불일치 이론: 촘촘하고
+    // 이상적인 계획을 다 못 지킬까 봐, 컨디션 안 좋은 날은 계획 쓰는 것
+    // 자체를 회피하는 방어기제일 수 있다.
+    final planGated = noPlanDays >= 2 && fullDays >= 2 && zeroDays < 2;
+
+    if (planGated) {
+      flags.add(
+        '계획 편차형 — 계획을 세우는 날 자체가 들쭉날쭉함(이레 중 계획 없는 '
+        '날 $noPlanDays일). 대신 일단 계획을 세운 날엔 거의 다 완료함. 병목은 '
+        '실행력이 아니라 계획을 쓰느냐 마느냐 그 자체 - 계획을 다 못 지킬까 '
+        '봐 아예 계획 쓰기를 피하는 것일 수 있음(자기불일치 이론)',
+      );
+      if (improvedNote != null) flags.add(improvedNote);
+    } else if (swings) {
+      if (noPlanDays < 2) {
+        // 계획은 꾸준히 쓰는데, 그중 일부 날은 아예 손을 안 댄다. 계획을
+        // 세운 순간 뇌가 이미 해낸 것처럼 느껴서(보상 예측 오류) 정작 실행
+        // 동력이 그 자리에서 빠지는 경우일 수 있다.
         flags.add(
-          '다만 지난 이레보다 해낸 날이 늘었음(${lastWeek}일 → $activeDays일). '
-          '고칠 거리를 꺼내기 전에 이것부터 알아줄 것',
+          '시작 편차형 — 계획은 꾸준히 쓰지만, 그중 일부 날은 계획해두고도 '
+          '아예 손을 안 댐(아예 미착수). 세운 날엔 거의 다 완료하는 걸 보면 '
+          '실행력 문제가 아니라, 계획을 세운 것만으로 이미 만족해버려서 '
+          '정작 시작할 동력이 빠지는 경우일 수 있음(계획-실행 혼동, 보상 '
+          '예측 오류)',
+        );
+      } else {
+        // 계획도 들쭉날쭉, 완료도 들쭉날쭉 - 어느 한 지점을 병목으로 못
+        // 좁힌다. 의욕 시스템이 켜지면 계획부터 완료까지 몰아치고, 꺼지면
+        // 통째로 쉬는 리듬(BAS/BIS)에 가깝다.
+        flags.add(
+          '편차형 — 계획을 세우는 날도, 세운 날의 완료도 둘 다 들쭉날쭉함. '
+          '하는 날엔 잡은 것을 다 해내고, 아예 손도 안 대는 날이 따로 있음. '
+          '의욕이 몰릴 때 확 하고 소진되면 완전히 쉬는 리듬일 수 있음(BAS/BIS)',
         );
       }
+      if (improvedNote != null) flags.add(improvedNote);
     }
     if (!swings && planPerDay >= 3 && planPerDay >= donePerDay * 2 && rate <= 0.5) {
       flags.add('계획 과다형 — 계획한 양이 해내는 양의 갑절');
@@ -167,6 +257,16 @@ class ExecutionPatternService {
     // 완료율만 보면 안 하는 사람처럼 보이지만, 제일 어려운 시작은 매번 해내고 있다.
     if (touchedRate >= 0.7 && rate < 0.5) {
       flags.add('시작 꾸준형 — 완료율은 낮아도 손은 매번 대고 있음');
+    }
+    // 늦은 밤에 규칙적으로 하는 저녁형과는 다르다 - 저녁형은 시간대가
+    // 퍼져 있고, 이건 자정 전 막판에 여러 개가 한꺼번에 몰린다. 하루만
+    // 그러면 바쁜 날일 뿐이라, 반복돼야(이레 중 이틀 이상) 유형으로 본다.
+    if (crammedDays >= 2) {
+      flags.add(
+        '벼락치기형 — 밤 10시 이후에 서로 다른 일 $crammedTaskThreshold개 이상을 '
+        '한꺼번에 시작하는 날이 이레 중 $crammedDays일. 다 끝냈는지와 무관하게 '
+        '시작 자체가 막판에 몰림',
+      );
     }
     final timeLine = _startTimeLine(startHours, flags);
 

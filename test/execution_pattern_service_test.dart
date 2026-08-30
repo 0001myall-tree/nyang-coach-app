@@ -49,11 +49,11 @@ void main() {
       final block = ExecutionPatternService.blockFrom(
         history([day(1, planned: 3, done: 0), day(3, planned: 2, done: 0)]),
       );
-      expect(block, contains('뜸한 사용자'));
+      expect(block, contains('자유형'));
       expect(block, isNot(contains('하루 평균 계획')));
     });
 
-    test('짚을 패턴이 없으면 숫자만 늘어놓지 않는다', () {
+    test('짚을 패턴이 없으면 무난형으로 이름 붙인다', () {
       // 완료율 60%에 시작 시각도 흩어져 있다. 과다도, 안정형도, 시간대도 아니다.
       final block = ExecutionPatternService.blockFrom(
         history([
@@ -64,7 +64,7 @@ void main() {
           day(5, planned: 5, done: 3, startHour: 15),
         ]),
       );
-      expect(block, isEmpty);
+      expect(block, contains('무난형'));
     });
   });
 
@@ -164,6 +164,47 @@ void main() {
       expect(block, contains('시작 꾸준형'));
     });
 
+    test('손댔지만 다 못 끝낸 날은 편차형의 미착수로 안 셈', () {
+      // 완료는 날마다 갈리지만(전부/0), 0인 날도 실은 손을 댔다. 시작을 잘
+      // 하는 사람을 편차형(불안정하다는 인상)으로 묶으면 안 된다.
+      final block = ExecutionPatternService.blockFrom(
+        history([
+          day(1, planned: 3, done: 3),
+          day(2, planned: 3, done: 0, startedNotDone: 3),
+          day(3, planned: 3, done: 3),
+          day(4, planned: 3, done: 0, startedNotDone: 3),
+        ]),
+      );
+      expect(block, isNot(contains('편차형')));
+    });
+
+    test('계획을 어쩌다 세우고 세운 날엔 완료하면 계획 편차형', () {
+      final block = ExecutionPatternService.blockFrom(
+        history([
+          day(1, planned: 3, done: 3),
+          day(2, planned: 0, done: 0),
+          day(3, planned: 0, done: 0),
+          day(4, planned: 3, done: 3),
+          day(5, planned: 0, done: 0),
+          day(6, planned: 2, done: 2),
+        ]),
+      );
+      expect(block, contains('계획 편차형'));
+    });
+
+    test('계획은 꾸준한데 일부 날은 아예 미착수면 시작 편차형', () {
+      final block = ExecutionPatternService.blockFrom(
+        history([
+          day(1, planned: 3, done: 3),
+          day(2, planned: 3, done: 0),
+          day(3, planned: 3, done: 3),
+          day(4, planned: 3, done: 0),
+          day(5, planned: 3, done: 3),
+        ]),
+      );
+      expect(block, contains('시작 편차형'));
+    });
+
     test('잘 돌아가는 사람에게는 건드리지 말라고 적는다', () {
       final block = ExecutionPatternService.blockFrom(
         history(List.generate(5, (i) => day(i + 1, planned: 4, done: 4))),
@@ -224,10 +265,10 @@ void main() {
     expect(block, isNot(contains('늦게 시작하는 편')));
   });
 
-  test('이레 중 이틀만 적었으면 뜸한 사용자', () {
+  test('이레 중 이틀만 적었으면 자유형', () {
     final block = ExecutionPatternService.blockFrom(
       history([day(1, planned: 3, done: 1), day(4, planned: 2, done: 0)]),
     );
-    expect(block, contains('뜸한 사용자'));
+    expect(block, contains('자유형'));
   });
 }

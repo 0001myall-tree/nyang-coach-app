@@ -27,7 +27,7 @@ class RecordsScreen extends StatefulWidget {
   /// 기록탭의 캐시와 탭에 붙는 안 읽음 표시가 이 하나를 함께 본다. 따로 두었을
   /// 때는 한마디를 새로 뽑게 해놓고 표시 쪽 번호를 안 올려서, 새 한마디가
   /// 나왔는데 사용자는 모르는 일이 생겼다.
-  static const int weeklyFeedbackVersion = 6;
+  static const int weeklyFeedbackVersion = 7;
 
   @override
   State<RecordsScreen> createState() => _RecordsScreenState();
@@ -422,7 +422,16 @@ class _RecordsScreenState extends State<RecordsScreen> {
       prefs.getString('nyang_history'),
     ).isNotEmpty;
 
-    final candidates = hasExecutionPattern ? [0, 1, 2, 3] : [0, 1, 2];
+    // 장기 비전형(1)도 같은 이유로 뺀다. 비전을 안 적어둔 사람에게 뽑히면
+    // 회고할 내용이 없어서 "적어두시면 좋아요" 안내로만 채워지고 만다.
+    final hasVisibleVisions =
+        _formatVisionText(prefs.getString('nyang_visions')) != '없음';
+
+    final candidates = [
+      0,
+      if (hasVisibleVisions) 1,
+      if (hasExecutionPattern) 3,
+    ];
     final available = candidates.where((t) => !usedTypes.contains(t)).toList()
       ..shuffle();
     return available.first;
@@ -976,9 +985,7 @@ $chatSummarySection
         ? '실행 회고형'
         : feedbackType == 1
         ? '장기 비전형'
-        : feedbackType == 3
-        ? '실행 유형형'
-        : '컨디션 회고형'}]
+        : '실행 유형형'}]
 
 [작성 지침]
 1. 어투: ${isMale ? '냥할배로서 부드럽고 느긋한 반말 기반 말투. 존댓말과 냥 말투를 섞지 말고, "$title" 호칭도 남발하지 마세요.' : '여비서로서 지적이고 부드러운 "$title" 호칭의 격식체 (~했어요, ~어떨까요).'}
@@ -1010,19 +1017,12 @@ ${feedbackType == 0
    - 마감일이 지난 미완료 마일스톤이 있다면 부드럽게 확인을 권유하세요.
    $visionEmptyGuidance
    - 마지막으로 미래를 응원하는 한마디로 마무리하세요.'''
-        : feedbackType == 3
-        ? '''   [실행 유형형]
+        : '''   [실행 유형형]
    - 이번 주 "무엇을 했는지"가 아니라 "이 사람이 어떤 식으로 계획을 실행하는 사람인지"에 초점을 맞춥니다. [분석 참고 데이터]의 [실행 패턴 - 앱이 최근 이레 기록에서 센 값]을 반드시 참고하세요. 거기 없는 숫자나 패턴은 지어내지 마세요.
    - "당신은 이런 식으로 계획을 실행하는 사람이에요"라는 투로 먼저 유형을 짚어주세요. 패턴 이름이 있으면 그 이름을, 없으면 계획/시작/완료 세 축의 숫자를 근거로 풀어서 설명하세요.
    - 계획/시작/완료 세 축 중 강점인 축은 구체적으로 인정하세요. (예: 손댄 비율이 높다면 "일단 붙잡으면 놓지 않는 편"이라고 짚기)
    - 병목인 축(가장 낮은 지점)은 지적하듯 짚지 마세요. 그 지점이 나아지면 전체가 어떻게 달라질지부터 격려하는 투로 말하고, 그 병목에 맞는 구체적인 방법을 하나만 제안하세요. (예: 계획이 병목이면 계획을 얼마나 잡을지, 시작이 병목이면 언제 첫 발을 뗄지, 완료가 병목이면 한 번에 걸리는 시간을 어떻게 어림할지)
-   - 이 유형은 유형 자체를 알아가는 자리이니, 이번 주 개별 할 일 목록을 나열하며 회고하지 마세요.'''
-        : '''   [컨디션 회고형]
-   - 실행이나 성장보다 이번 주의 컨디션 흐름에 초점을 맞춥니다.
-   - 완료율과 할 일 밀도 등을 바탕으로 체력/휴식/회복 측면을 분석하세요.
-   - 무리한 주였는지, 잘 쉰 주였는지, 회복이 더 필요한지를 부드럽게 짚어주세요.
-   - 꾸준히 해낸 일이나 꾸준히 손댄 일이 있다면 컨디션 속에서도 놓치지 않았다는 점을 자연스럽게 언급해 주세요. 완료까지 가지 못했더라도 시작한 것은 그대로 인정해 주세요.
-   - 다음 주 컨디션 관리를 위한 한 가지 제안으로 마무리하세요.'''}
+   - 이 유형은 유형 자체를 알아가는 자리이니, 이번 주 개별 할 일 목록을 나열하며 회고하지 마세요.'''}
 4. 분량: 3~4문장으로 간결하게. JSON이나 마크다운 없이 순수 텍스트로만 답변해 주세요.
 5. 가독성: 문장 앞에 접속어가 올 때는 그 접속어 앞에서 한 줄을 비우고, 들여쓰기 없이 문단을 시작해 주세요. 예: "또한,", "특히,", "다만,", "하지만,", "그리고,", "앞으로,".''';
   }
@@ -1376,9 +1376,12 @@ ${feedbackType == 0
   }
 
   Widget _buildCoachCommentCard(List<Map<String, dynamic>> records) {
-    // 마스터가 아니면 코치의 한마디 자체가 주 1회 캐시가 아니라 매번 즉석
-    // 계산이라, 이 배지도 같이 낼 만한 짝이 없다. 마스터만 보여준다.
-    final executionTypeLabel = _isMaster ? _weeklyExecutionTypeLabel : null;
+    // 마스터는 코치의 한마디가 주 1회 캐시라 배지도 그 주기에 맞춰 같이
+    // 캐시해둔 값을 쓴다. 프렌즈는 애초에 한마디 자체가 매번 즉석 계산(API를
+    // 안 씀)이라, 배지도 매번 그 자리에서 계산해 짝을 맞춘다.
+    final executionTypeLabel = _isMaster
+        ? _weeklyExecutionTypeLabel
+        : ExecutionPatternService.typeLabel(jsonEncode(_history));
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -1418,7 +1421,10 @@ ${feedbackType == 0
                           _weeklyFeedbackText ??
                               '이번 주 활동과 목표를 분석하여 $_userTitle께 드릴 한마디를 작성하고 있습니다. 약 5초 정도만 잠시 기다려주십시오...',
                         )
-                      : _getPatternFeedback(records),
+                      : (ExecutionPatternService.staticComment(
+                              jsonEncode(_history),
+                            ) ??
+                            _getPatternFeedback(records)),
                   style: GoogleFonts.notoSansKr(
                     fontSize: 14,
                     fontWeight: FontWeight.w500,
