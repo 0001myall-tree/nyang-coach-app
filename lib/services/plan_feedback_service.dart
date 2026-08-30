@@ -238,11 +238,13 @@ SKIP
     }
     if (done.isEmpty) return null;
 
+    // 예전엔 "그렇게 해볼게" 버튼을 눌러야만(accepted) 여기 잡혔다. 그
+    // 버튼이 뜨던 말풍선 팝업(CoachSayService.say)은 이제 어디서도 부르지
+    // 않아 완전히 죽은 경로가 됐다 — pinpoint는 주 1회 인사 자리에 조용히
+    // 채팅 메시지로만 들어간다. 그래서 수락 여부를 더 이상 보지 않고,
+    // 짚어준 계획이 다음날 끝났으면 그것만으로 축하한다.
     final ripeBefore = DateTime.now().subtract(adviceRipeAfter);
     for (final advice in _adviceLog(prefs).reversed) {
-      // 그러겠다고 한 것만 본다. 흘려들은 조언까지 세면, 저 혼자 해낸 일을
-      // 두고 코치가 아는 체하는 꼴이 된다.
-      if (!advice.accepted) continue;
       // 권하자마자 끝낸 것은 세지 않는다. 아침에 꺼낼 이야기는 하루가 지난
       // 일이고, 그래야 권한 것과 해낸 것 사이에 하루가 놓인다.
       if (!advice.at.isBefore(ripeBefore)) continue;
@@ -266,37 +268,9 @@ SKIP
               'task': item.task,
               'advice': item.advice,
               'at': item.at.toIso8601String(),
-              'accepted': item.accepted,
             },
       ]),
     );
-  }
-
-  /// "알아서 할게"를 눌렀다. 지금은 아무 상태도 남기지 않는다.
-  ///
-  /// 저장할 때마다 말을 걸던 때는 이틀 연속 사양이면 며칠 쉬는 규칙이
-  /// 있었다. 지금은 주 1회로 이미 뜸해서 그 규칙이 필요 없다.
-  static Future<void> onAdviceDeclined() async {}
-
-  /// "그렇게 해볼게"를 눌렀다.
-  ///
-  /// 방금 한 조언에 그러겠다고 표시해둔다. 나중에 그 일이 끝났는지 볼 때
-  /// 여기 표시된 것만 본다 — 듣고 흘린 조언까지 세면 저 혼자 해낸 일을
-  /// 두고 코치가 자기 덕이라고 하는 셈이 된다.
-  static Future<void> onAdviceAccepted() async {
-    final prefs = await SharedPreferences.getInstance();
-    final log = _adviceLog(prefs);
-    if (log.isEmpty) return;
-    final last = log.removeLast();
-    log.add(
-      _Advice(
-        task: last.task,
-        advice: last.advice,
-        at: last.at,
-        accepted: true,
-      ),
-    );
-    await _saveAdviceLog(prefs, log);
   }
 
   /// 마스터 플랜 전용이다. 틈새 코칭과 같은 자리다.
@@ -336,7 +310,6 @@ SKIP
             'task': item.task,
             'advice': item.advice,
             'at': item.at.toIso8601String(),
-            'accepted': item.accepted,
           },
       ]),
     );
@@ -356,7 +329,6 @@ SKIP
             task: task,
             advice: item['advice']?.toString() ?? '계획을 다듬어보자고',
             at: at,
-            accepted: item['accepted'] == true,
           ),
         );
       }
@@ -398,7 +370,6 @@ class _Advice {
     required this.task,
     required this.advice,
     required this.at,
-    this.accepted = false,
   });
 
   final String task;
@@ -407,7 +378,4 @@ class _Advice {
   final String advice;
 
   final DateTime at;
-
-  /// "그렇게 해볼게"를 눌렀는지. 결과를 보는 것은 이것뿐이다.
-  final bool accepted;
 }

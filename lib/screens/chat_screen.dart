@@ -23,7 +23,6 @@ import 'package:nyang_coach/services/analytics_service.dart';
 import 'package:nyang_coach/services/master_unlock_notice.dart';
 import 'package:nyang_coach/services/api_usage_limit_service.dart';
 import 'package:nyang_coach/services/apple_calendar_sync_service.dart';
-import 'package:nyang_coach/services/coach_say_service.dart';
 import 'package:nyang_coach/services/execution_pattern_service.dart';
 import 'package:nyang_coach/services/task_completion_service.dart';
 import 'package:nyang_coach/services/tasks_sync_service.dart';
@@ -1452,15 +1451,6 @@ class _ChatScreenState extends State<ChatScreen>
       duration: const Duration(milliseconds: 350),
     );
     widget.controller?._attach(this);
-    // 코치가 채팅 밖에서 건네는 말을 이 화면이 받아 적는다.
-    //
-    // 이 화면은 저장할 때 자기가 들고 있는 목록을 통째로 덮어쓴다. 살아 있는
-    // 동안 저장소에 직접 써넣으면 다음 저장에서 그 줄이 조용히 사라진다.
-    CoachSayService.registerSink(
-      widget.coachId,
-      (text) => _injectAiMessage(text, kind: 'auto:say'),
-      onUserChoice: _injectUserChoice,
-    );
     _initAndLoad();
   }
 
@@ -3745,7 +3735,6 @@ ${lines.join('\n')}
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     widget.controller?._detach();
-    CoachSayService.unregisterSink(widget.coachId);
     _inputFocus.dispose();
     _ctrl.dispose();
     _scrollCtrl.dispose();

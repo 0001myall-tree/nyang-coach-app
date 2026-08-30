@@ -11,7 +11,6 @@ import '../models/user_data.dart';
 import '../theme/app_design_tokens.dart';
 import '../widgets/app_button.dart';
 import '../widgets/app_card.dart';
-import '../services/coach_say_service.dart';
 import '../services/purchase_service.dart';
 import '../widgets/plan_guide_bottom_sheet.dart';
 
@@ -460,8 +459,6 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    // 코치 카드에 붙는 NEW. 다른 코치가 남긴 말도 여기서 보인다.
-    CoachSayService.unread.addListener(_onCoachSayUnreadChanged);
     UserDataService.load().then((d) {
       if (mounted) setState(() => _userData = d);
     });
@@ -472,13 +469,8 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen>
     });
   }
 
-  void _onCoachSayUnreadChanged() {
-    if (mounted) setState(() {});
-  }
-
   @override
   void dispose() {
-    CoachSayService.unread.removeListener(_onCoachSayUnreadChanged);
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -1517,37 +1509,6 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen>
                                                   ),
                                                 ),
                                               ],
-                                            ),
-                                          ),
-                                        ),
-                                      // 그 코치가 채팅 밖에서 남긴 말을 아직
-                                      // 못 봤다. 코치를 바꿔 쓰는 사람은 다른
-                                      // 코치 화면에 있는 동안 그 말을 잃어버린다.
-                                      if (!isLocked &&
-                                          CoachSayService.unread.value.contains(
-                                            coach['id'],
-                                          ))
-                                        Positioned(
-                                          top: 10,
-                                          left: 10,
-                                          child: Container(
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 6,
-                                              vertical: 3,
-                                            ),
-                                            decoration: BoxDecoration(
-                                              color: const Color(0xFFFF5A5A),
-                                              borderRadius:
-                                                  BorderRadius.circular(8),
-                                            ),
-                                            child: Text(
-                                              'NEW',
-                                              style: GoogleFonts.notoSansKr(
-                                                fontSize: 10,
-                                                fontWeight: FontWeight.w900,
-                                                color: Colors.white,
-                                                letterSpacing: 0.4,
-                                              ),
                                             ),
                                           ),
                                         ),
