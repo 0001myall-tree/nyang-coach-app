@@ -7725,10 +7725,17 @@ Rules:
         .where((text) => text.isNotEmpty)
         .toSet();
 
+    // 이번 답변 안에서 같은 이름의 태그가 두 번 나오는 경우도 걸러낸다.
+    // 안 그러면 카드는 하나만 보이는데 목록엔 똑같은 게 두 개 실려서,
+    // "추가하기"를 눌러도 하나가 남아 카드가 안 사라지는 것처럼 보인다.
+    final seenInBatch = <String>{};
     return suggestions.where((suggestion) {
       final suggestedText = _normalizeTaskSuggestionText(suggestion.text);
-      return suggestedText.isNotEmpty &&
-          !existingTaskTexts.contains(suggestedText);
+      if (suggestedText.isEmpty ||
+          existingTaskTexts.contains(suggestedText)) {
+        return false;
+      }
+      return seenInBatch.add(suggestedText);
     }).toList();
   }
 
