@@ -265,6 +265,58 @@ void main() {
     expect(block, isNot(contains('늦게 시작하는 편')));
   });
 
+  group('유형 이름 뽑기', () {
+    test('시간대는 유형 이름으로 뽑히지 않는다', () {
+      // 늘 아침에 시작하지만 다른 유형에는 하나도 안 걸리는 사람. 한때
+      // "실행 유형 : 아침형"이 배지에 떴다 — 아침에 시작하느냐는 실행 방식을
+      // 가르는 축이 아니라 곁들이는 정보다.
+      final raw = history(
+        List.generate(
+          5,
+          (i) => day(i + 1, planned: 5, done: 3, startHour: 8),
+        ),
+      );
+      expect(ExecutionPatternService.blockFrom(raw), contains('아침형'));
+      expect(ExecutionPatternService.typeLabel(raw), '무난형');
+    });
+
+    test('이레에 사흘 이하로 적고 성적도 어중간하면 무난형이 아니라 자유형', () {
+      // 무난형은 "세 축 중 처지는 곳이 없다"는 말인데, 계획을 절반도 안 적은
+      // 사람에게 고르게 가고 있다고 하면 틀린 말이 된다.
+      final raw = history([
+        day(0, planned: 4, done: 1),
+        day(1, planned: 0, done: 0),
+        day(2, planned: 0, done: 0),
+        day(3, planned: 4, done: 1),
+        day(4, planned: 0, done: 0),
+        day(5, planned: 0, done: 0),
+        day(6, planned: 4, done: 0),
+      ]);
+      expect(ExecutionPatternService.typeLabel(raw), '자유형');
+    });
+
+    test('이레에 나흘 적는 사람은 뜸하다고 하지 않는다', () {
+      // 문턱을 낮게 잡으면 그 주 사정으로 며칠 거른 사람까지 자유형이 된다.
+      final raw = history([
+        day(0, planned: 4, done: 2),
+        day(1, planned: 0, done: 0),
+        day(2, planned: 4, done: 2),
+        day(3, planned: 0, done: 0),
+        day(4, planned: 4, done: 2),
+        day(5, planned: 0, done: 0),
+        day(6, planned: 4, done: 2),
+      ]);
+      expect(ExecutionPatternService.typeLabel(raw), isNot('자유형'));
+    });
+
+    test('계획을 매일 쓰면 완료가 어중간해도 무난형', () {
+      final raw = history(
+        List.generate(5, (i) => day(i + 1, planned: 5, done: 3)),
+      );
+      expect(ExecutionPatternService.typeLabel(raw), '무난형');
+    });
+  });
+
   test('이레 중 이틀만 적었으면 자유형', () {
     final block = ExecutionPatternService.blockFrom(
       history([day(1, planned: 3, done: 1), day(4, planned: 2, done: 0)]),

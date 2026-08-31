@@ -1532,4 +1532,59 @@ void main() {
       same(MasterGreetingCopy.nyangHalbae),
     );
   });
+
+  group('실행 유형 처방', () {
+    final voices = {
+      '비서': MasterGreetingCopy.secretary,
+      '냥할배': MasterGreetingCopy.nyangHalbae,
+    };
+
+    test('두 코치 모두 모든 유형에 계획 있는 날/없는 날 문구를 갖고 있다', () {
+      // 유형은 앱이 세어 붙이는 이름이라, 한쪽 코치에만 문구가 빠져 있으면
+      // 그 코치는 그날 아무 말도 못 하고 조용히 넘어간다.
+      final types = MasterGreetingCopy.secretary.typeAdvice.keys.toSet();
+      expect(types, isNotEmpty);
+      for (final entry in voices.entries) {
+        expect(entry.value.typeAdvice.keys.toSet(), types, reason: entry.key);
+        expect(
+          entry.value.typeAdviceNoPlan.keys.toSet(),
+          types,
+          reason: entry.key,
+        );
+      }
+    });
+
+    test('계획 개수를 앞에 짚고, 없는 날은 없다고 말한다', () {
+      for (final entry in voices.entries) {
+        final builder = MasterGreetingBuilder(voice: entry.value);
+        for (final type in entry.value.typeAdvice.keys) {
+          final withPlan = builder.buildTypeAdvice(type, planCount: 5)!;
+          expect(withPlan, contains('5가지'), reason: '${entry.key}/$type');
+          expect(withPlan, isNot(contains('{{count}}')));
+
+          final noPlan = builder.buildTypeAdvice(type, planCount: 0)!;
+          expect(noPlan, isNot(contains('5가지')));
+          // 적어둔 게 없다고 해놓고 "적어두신 것만으로"가 이어지면 어긋난다.
+          expect(
+            noPlan,
+            isNot(contains('적어두신 것만으로')),
+            reason: '${entry.key}/$type',
+          );
+          expect(
+            noPlan,
+            isNot(contains('적어둔 것만으로')),
+            reason: '${entry.key}/$type',
+          );
+        }
+      }
+    });
+
+    test('문구를 안 채운 유형이면 조용히 넘어간다', () {
+      final builder = MasterGreetingBuilder(
+        voice: MasterGreetingCopy.secretary,
+      );
+      expect(builder.buildTypeAdvice('없는유형', planCount: 3), isNull);
+      expect(builder.buildTypeAdvice('없는유형', planCount: 0), isNull);
+    });
+  });
 }

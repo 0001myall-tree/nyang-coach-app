@@ -5466,6 +5466,10 @@ $block
     // 다른 방에서 방금 인사를 받았으면 슬롯 인사는 쉰다.
     if (await _otherCoachGreetedRecently(now)) return false;
 
+    // 핵심을 묻지 않는 날에는 이 자리를 가끔 유형 처방이 가져간다. 슬롯 인사가
+    // 그날의 상태를 짚는 말이라면, 이쪽은 그 사람이 어떻게 실행하는지를 짚는다.
+    if (await _startMasterTypeAdvice(prefs, now)) return true;
+
     final context = await _buildMasterGreetingContext(
       prefs: prefs,
       now: now,
@@ -6042,6 +6046,75 @@ Rules:
   /// 한 번 물으면 정작 핵심 시각이 지난 뒤에도, 다음 날에도 핵심을 못 묻는다.
   bool _hasPendingCoreTask(SharedPreferences prefs) {
     return _findCoreTask(prefs, _isPendingNotInProgressTask) != null;
+  }
+
+  static const _masterTypeAdviceKind = 'auto:master_type_advice';
+
+  /// 유형 처방을 마지막으로 건넨 날.
+  ///
+  /// 'nyang_'으로 시작하지 않는다. 그 접두어는 클라우드 복원이 덮어써서, 기기
+  /// 하나에서 세는 값을 담기에 맞지 않는다.
+  static const String _masterTypeAdviceDateKey = 'master_type_advice_on';
+
+  /// 처방을 얼마 만에 다시 건넬지.
+  ///
+  /// 핵심 질문이 격일이고 이 자리는 그 사이 날에 서니, 나흘이면 그 사이 날
+  /// 두 번에 한 번꼴이다. 유형별 문구가 셋이라 열이틀에 한 바퀴 돈다.
+  static const Duration _masterTypeAdviceGap = Duration(days: 4);
+
+  /// 처방을 건넬 시간대.
+  ///
+  /// 저녁에는 문구가 어긋난다 — "밤이 오기 전에 끊어갈 지점을 정해두시죠"를
+  /// 밤에 하면 뜻이 없다. 아침은 열어둔다. 계획을 아직 안 적은 날이면 지금
+  /// 하나 적자는 말이 되고, 그건 아침일수록 잘 듣는다.
+  static const int _masterTypeAdviceFromHour = 9;
+  static const int _masterTypeAdviceUntilHour = 18;
+
+  /// 실행 유형에 맞는 처방을 건넸으면 true.
+  ///
+  /// 핵심 질문이 안 나가는 날의 슬롯 인사 자리를 나흘에 한 번 가져간다.
+  /// 핵심 질문 자리에서 대신 내보내지 않는 것은, 그쪽이 버튼으로 시작 표시를
+  /// 대신 켜주는 자리여서다 — 조언 때문에 실제로 일하는 자리가 반으로 줄면
+  /// 손해다.
+  Future<bool> _startMasterTypeAdvice(
+    SharedPreferences prefs,
+    DateTime now,
+  ) async {
+    if (now.hour < _masterTypeAdviceFromHour ||
+        now.hour >= _masterTypeAdviceUntilHour) {
+      return false;
+    }
+    // 오늘 이미 물어본 날이면 쉰다. 사용자에게는 둘 다 코치가 먼저 거는 말이라,
+    // 같은 날 겹치면 하루에 두 번 잔소리한 것이 된다.
+    if (await _coreAskedOnDay(now)) return false;
+
+    final last = DateTime.tryParse(
+      prefs.getString(_masterTypeAdviceDateKey) ?? '',
+    );
+    if (last != null && now.difference(last) < _masterTypeAdviceGap) {
+      return false;
+    }
+
+    final line = _buildExecutionTypeAdvice(prefs);
+    if (line == null || !mounted) return false;
+
+    await prefs.setString(_masterTypeAdviceDateKey, now.toIso8601String());
+    // 버튼은 달지 않는다. 눌러서 답할 물음이 아니라 건네는 말이다.
+    _injectAiMessage(line, kind: _masterTypeAdviceKind);
+    unawaited(AnalyticsService.logFeatureUsage('master_type_advice'));
+    return true;
+  }
+
+  /// 실행 유형에 맞는 처방 한 마디. 유형을 셀 기록이 모자라면 null.
+  String? _buildExecutionTypeAdvice(SharedPreferences prefs) {
+    final type = ExecutionPatternService.typeLabel(
+      prefs.getString('nyang_history'),
+    );
+    if (type == null) return null;
+    // 루틴도 함께 센다. 사용자에게는 오늘 화면에 늘어선 것이 곧 오늘의 몫이고,
+    // 그중 어느 것이 매일 돌아오는 루틴인지로 개수를 가르지 않는다.
+    final planCount = _decodeMapList(prefs.getString('nyang_tasks')).length;
+    return _greetingBuilder.buildTypeAdvice(type, planCount: planCount);
   }
 
   /// 핵심도 습관도 없을 때, 오늘 목록에 남아 있는 일 하나를 짚어주는 오후 인사.
