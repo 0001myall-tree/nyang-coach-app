@@ -7849,9 +7849,15 @@ Rules:
     }
     // 이름이 아니라 사용자 문장을 그대로 옮겨 적은 경우. 등록해봐야 목록에
     // 문장 하나가 남는다.
+    //
+    // 길이를 고정하지 않는다. 이 목록은 그대로 [_suggestedTasks]가 되고, 카드에서
+    // "추가하기"나 "괜찮아"를 누르면 거기서 항목을 빼낸다. 고정 리스트로 두면
+    // 그 자리에서 오류가 나서, 할 일은 저장됐는데 카드는 안 걷히고 확인 말풍선도
+    // 안 뜬다. 사용자에게는 "눌러도 아무 일이 없다"로 보이고, 그래서 다시 누르면
+    // 저장만 또 된다.
     return tasks
         .where((task) => task.text.trim().length <= _suggestedTaskNameLimit)
-        .toList(growable: false);
+        .toList();
   }
 
   /// 할 일 이름으로 받아줄 길이. 넘으면 문장을 옮겨 적은 것으로 본다.
@@ -14773,11 +14779,14 @@ Rules:
   ///
   /// [masterModelPolicy]와 [needsDeepReasoning]은 부르는 쪽 배선을 그대로 두려고
   /// 남겨둔 자리다. 다시 모델을 나눌 일이 생기면 여기서 갈라 쓰면 된다.
+  ///
+  /// 답을 쓰기 전에 한 번 생각하고 쓰는 모델이다. 서버가 추론 세기를 낮게
+  /// 걸어두어서, 가벼운 말에는 거의 안 쓰고 무거운 상담일수록 더 쓴다.
   Future<String> _pickChatModel({
     required _MasterModelPolicy masterModelPolicy,
     required bool needsDeepReasoning,
   }) async {
-    return 'gpt-4.1-mini';
+    return 'gpt-5-mini';
   }
 
   Future<String> _callOpenAI(
@@ -15939,8 +15948,30 @@ ${Prompts.outputRulesTail}$plannerActionSection$coachOfferTaskRule$halmaeHint$re
   // 열어주되 프렌즈는 사용자가 직접 말한 일에만 붙인다. 코치가 권한 것까지
   // 태그를 달면 잡담 중에도 카드가 뜬다 — 일정·습관·목표 카드가 부탁받았을
   // 때만 뜨는 것과 달리, 이건 코치가 먼저 꺼낼 수 있는 유일한 카드다.
+
+  /// 지금 할 일 하나를 넣는 중인지.
+  ///
+  /// 카드를 걷는 것은 저장이 끝난 뒤라, 그 사이에 한 번 더 누르면 같은 항목을
+  /// 다시 읽어 두 번 넣는다. 저장은 눈에 안 보이니 사용자는 "안 눌렸나" 싶어
+  /// 한 번 더 누르고, 그래서 목록에 같은 일이 쌓인다.
+  bool _confirmingSuggestTask = false;
+
   Future<void> _confirmSuggestTask(int idx) async {
+    if (_confirmingSuggestTask) return;
     if (idx >= _suggestedTasks.length) return;
+    _confirmingSuggestTask = true;
+    try {
+      await _confirmSuggestTaskInner(idx);
+    } catch (e, st) {
+      // 여기서 터지면 카드가 뜬 채로 남고 눌러도 아무 일이 없는 것처럼 보인다.
+      // 조용히 지나가면 원인을 영영 못 찾으니 자국은 남긴다.
+      debugPrint('할 일 추가 실패: $e\n$st');
+    } finally {
+      _confirmingSuggestTask = false;
+    }
+  }
+
+  Future<void> _confirmSuggestTaskInner(int idx) async {
     final task = _suggestedTasks[idx];
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString('nyang_tasks') ?? '[]';
@@ -18464,6 +18495,20 @@ ${Prompts.outputRulesTail}$plannerActionSection$coachOfferTaskRule$halmaeHint$re
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // 코치가 무엇을 물었는지부터 보여준다. 이게 빠져 있어서 보기만
+          // 덩그러니 떴고, 무엇에 답하는 건지 알 수 없는 화면이 됐다.
+          if (msg.text.trim().isNotEmpty) ...[
+            Text(
+              msg.text,
+              style: GoogleFonts.notoSansKr(
+                fontSize: AppDesignTokens.textBody,
+                fontWeight: FontWeight.w500,
+                height: 1.6,
+                color: AppDesignTokens.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 10),
+          ],
           for (final label in msg.choices)
             Padding(
               padding: const EdgeInsets.only(bottom: 6),
