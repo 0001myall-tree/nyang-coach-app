@@ -1,6 +1,7 @@
 import 'dart:math';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:nyang_coach/services/life_context_service.dart';
 import 'package:nyang_coach/services/master_greeting.dart';
 
 /// 조건을 손으로 지어 넣어 컨텍스트를 만든다. 화면도 prefs도 필요 없다.
@@ -1577,6 +1578,41 @@ void main() {
           );
         }
       }
+    });
+
+    test('두 코치 모두 되는 날 조건 보기 전부에 문구를 갖고 있다', () {
+      // 조건은 사용자가 고른 답이라 앱이 이름을 정한다. 한쪽 코치에 문구가
+      // 빠져 있으면 그 사람은 그 자리에서 조건 처방을 영영 못 받는다.
+      final answers = LifeContextService.conditionAnswers.keys.toSet();
+      expect(answers, isNotEmpty);
+      for (final entry in voices.entries) {
+        expect(
+          entry.value.conditionAdvice.keys.toSet(),
+          answers,
+          reason: entry.key,
+        );
+      }
+    });
+
+    test('조건 처방도 계획 개수를 앞에 짚는다', () {
+      for (final entry in voices.entries) {
+        final builder = MasterGreetingBuilder(voice: entry.value);
+        for (final answer in entry.value.conditionAdvice.keys) {
+          final withPlan = builder.buildConditionAdvice(answer, planCount: 5)!;
+          expect(withPlan, contains('5가지'), reason: '${entry.key}/$answer');
+          expect(
+            builder.buildConditionAdvice(answer, planCount: 0)!,
+            isNot(contains('5가지')),
+          );
+        }
+      }
+    });
+
+    test('안 골라둔 조건이면 조용히 넘어간다', () {
+      final builder = MasterGreetingBuilder(
+        voice: MasterGreetingCopy.secretary,
+      );
+      expect(builder.buildConditionAdvice('없는답', planCount: 3), isNull);
     });
 
     test('문구를 안 채운 유형이면 조용히 넘어간다', () {

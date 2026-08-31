@@ -6060,6 +6060,9 @@ Rules:
   /// 하나에서 세는 값을 담기에 맞지 않는다.
   static const String _masterTypeAdviceDateKey = 'master_type_advice_on';
 
+  /// 이 자리가 몇 번째로 돌았는지. 유형 처방과 조건 처방을 번갈아 내는 데 쓴다.
+  static const String _masterTypeAdviceTurnKey = 'master_type_advice_turn';
+
   /// 처방을 얼마 만에 다시 건넬지.
   ///
   /// 핵심 질문이 격일이고 이 자리는 그 사이 날에 서니, 나흘이면 그 사이 날
@@ -6099,10 +6102,15 @@ Rules:
       return false;
     }
 
-    final line = _buildExecutionTypeAdvice(prefs);
+    final line = await _buildExecutionTypeAdvice(prefs);
     if (line == null || !mounted) return false;
 
     await prefs.setString(_masterTypeAdviceDateKey, now.toIso8601String());
+    // 다음 차례는 반대쪽이 맡는다.
+    await prefs.setInt(
+      _masterTypeAdviceTurnKey,
+      (prefs.getInt(_masterTypeAdviceTurnKey) ?? 0) + 1,
+    );
     // 버튼은 달지 않는다. 눌러서 답할 물음이 아니라 건네는 말이다.
     _injectAiMessage(line, kind: _masterTypeAdviceKind);
     unawaited(AnalyticsService.logFeatureUsage('master_type_advice'));
@@ -6110,14 +6118,32 @@ Rules:
   }
 
   /// 실행 유형에 맞는 처방 한 마디. 유형을 셀 기록이 모자라면 null.
-  String? _buildExecutionTypeAdvice(SharedPreferences prefs) {
+  Future<String?> _buildExecutionTypeAdvice(SharedPreferences prefs) async {
+    // 루틴도 함께 센다. 사용자에게는 오늘 화면에 늘어선 것이 곧 오늘의 몫이고,
+    // 그중 어느 것이 매일 돌아오는 루틴인지로 개수를 가르지 않는다.
+    final planCount = _decodeMapList(prefs.getString('nyang_tasks')).length;
+
+    // 되는 날의 조건을 골라준 사람에게는 두 번에 한 번 그 답으로 건넨다.
+    //
+    // 앱이 센 것과 본인이 한 말을 갈아 쓰는 것이라, 한쪽만 계속 쓰는 것보다
+    // 낫다. 조건을 안 골라뒀거나 그 답에 쓸 문구가 없으면 아래 유형 처방으로
+    // 되돌아간다.
+    final turn = prefs.getInt(_masterTypeAdviceTurnKey) ?? 0;
+    if (turn.isOdd) {
+      final picked = await LifeContextService.conditionAnswersPicked();
+      if (picked.isNotEmpty) {
+        final line = _greetingBuilder.buildConditionAdvice(
+          picked.first,
+          planCount: planCount,
+        );
+        if (line != null) return line;
+      }
+    }
+
     final type = ExecutionPatternService.typeLabel(
       prefs.getString('nyang_history'),
     );
     if (type == null) return null;
-    // 루틴도 함께 센다. 사용자에게는 오늘 화면에 늘어선 것이 곧 오늘의 몫이고,
-    // 그중 어느 것이 매일 돌아오는 루틴인지로 개수를 가르지 않는다.
-    final planCount = _decodeMapList(prefs.getString('nyang_tasks')).length;
     return _greetingBuilder.buildTypeAdvice(type, planCount: planCount);
   }
 
@@ -14784,13 +14810,17 @@ Rules:
   /// [masterModelPolicy]와 [needsDeepReasoning]은 부르는 쪽 배선을 그대로 두려고
   /// 남겨둔 자리다. 다시 모델을 나눌 일이 생기면 여기서 갈라 쓰면 된다.
   ///
-  /// 답을 쓰기 전에 한 번 생각하고 쓰는 모델이다. 서버가 추론 세기를 낮게
-  /// 걸어두어서, 가벼운 말에는 거의 안 쓰고 무거운 상담일수록 더 쓴다.
+  /// 등급으로 나눈다. 한 코치 안에서는 갈리지 않으므로, 같은 코치의 답이
+  /// 어떤 날은 멀쩡하고 어떤 날은 어색해지는 일은 없다.
+  ///
+  /// 마스터는 답을 쓰기 전에 한 번 생각하고 쓰는 모델이다. 서버가 추론 세기를
+  /// 낮게 걸어두어서 가벼운 말에는 거의 안 쓰고 무거운 상담일수록 더 쓴다.
+  /// 대신 말이 길어지는 편이라, 짧게 받아치는 것이 캐릭터인 프렌즈는 그대로 둔다.
   Future<String> _pickChatModel({
     required _MasterModelPolicy masterModelPolicy,
     required bool needsDeepReasoning,
   }) async {
-    return 'gpt-5-mini';
+    return _coach.isMaster ? 'gpt-5-mini' : 'gpt-4.1-mini';
   }
 
   Future<String> _callOpenAI(

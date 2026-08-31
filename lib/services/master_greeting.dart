@@ -440,6 +440,13 @@ class GreetingVoice {
   /// 쓰인 말이 많아 그대로 쓰면 앞머리와 어긋난다. 그래서 한 벌을 따로 둔다.
   final Map<String, List<String>> typeAdviceNoPlan;
 
+  /// 되는 날의 조건을 본인이 골라준 사람에게 건네는 처방. 열쇠는 그때 고른 답.
+  ///
+  /// 유형 처방과 번갈아 나간다. 유형 쪽이 앱이 기록에서 센 것이라면 이쪽은
+  /// 본인이 직접 한 말이라, 같은 자리에서 갈아 쓰면 재고 있으면서 한 말도
+  /// 기억하는 것으로 읽힌다.
+  final Map<String, List<String>> conditionAdvice;
+
   const GreetingVoice({
     required this.dawn,
     required this.earlyMorning,
@@ -506,6 +513,7 @@ class GreetingVoice {
     required this.typeAdviceIntroNoPlan,
     required this.typeAdvice,
     required this.typeAdviceNoPlan,
+    required this.conditionAdvice,
   });
 }
 
@@ -1009,6 +1017,34 @@ class MasterGreetingCopy {
         '지금 하나만 적어두시면 어떨까요? 언제까지 할지도 같이 적어두시면 더 좋고요.',
       ],
     },
+    conditionAdvice: {
+      '일찍 시작했어': [
+        '저번에 일찍 손대신 날이 잘 풀렸다고 하셨죠. 오늘도 첫 발만 조금 당겨보시면 어떨까요?',
+        '먼저 시작한 날이 끝까지 가셨다고 했으니, 오늘 하나는 지금 열어두시는 것부터 해보시죠.',
+      ],
+      '계획을 미리 세워뒀어': [
+        '미리 정해두신 날이 잘 되셨다고 하셨죠. 오늘 몫은 지금 정해두고, 실행은 이따 하셔도 됩니다.',
+        '그 자리에서 정하면 잘 안 된다고 하셨으니, 오늘 할 것만 먼저 적어두고 시작은 나중에 하시죠.',
+      ],
+      '장소가 달랐어': [
+        '자리를 옮기신 날이 잘 되셨다고 하셨죠. 오늘도 한 가지는 다른 자리에서 해보시면 어떨까요?',
+        '집이 아닌 곳에서 시작이 쉬우셨다고 했으니, 오늘 제일 무거운 하나만 그쪽으로 가져가보시죠.',
+      ],
+      '수면 시간이 달랐어': [
+        '잘 주무신 날이 잘 풀렸다고 하셨죠. 오늘 계획은 어젯밤 잠에 맞춰 잡으셔도 됩니다.',
+        '그날 실행이 전날 밤에 갈린다고 하셨으니, 오늘이 짧게 주무신 날이면 기준을 낮춰 잡으시죠.',
+      ],
+      '출근한 날과 아닌 날의 차이였어': [
+        '그날의 틀이 실행을 가른다고 하셨죠. 오늘이 어느 쪽인지부터 보고 그에 맞게 잡아보시죠.',
+        '출근 여부로 갈린다고 하셨으니, 오늘이 안 되는 쪽이면 처음부터 적게 잡으셔도 됩니다.',
+      ],
+      '일부러 쉬었어': [
+        '쉬는 날을 따로 두시는 게 방식이라고 하셨죠. 그 리듬은 그대로 두셔도 됩니다. '
+            '다만 쉬려던 게 아닌 날이 섞여 있다면, 그날만 제일 만만한 것 하나로 잡아보시죠.',
+        '아무것도 안 한 날들은 쉬기로 하신 거라고 했으니 그건 그대로 두겠습니다. '
+            '혹시 쉴 생각이 아니었던 날이 있었다면, 그런 날만 하나로 줄여 잡아보셔도 좋고요.',
+      ],
+    },
   );
 
   static const nyangHalbae = GreetingVoice(
@@ -1422,6 +1458,34 @@ class MasterGreetingCopy {
         '지금 하나만 적어두면 어떠냐. 언제까지 할지도 같이 적어두면 더 좋고냥.',
       ],
     },
+    conditionAdvice: {
+      '일찍 시작했어': [
+        '저번에 일찍 손댄 날이 잘 풀렸다고 했지. 오늘도 첫 발만 조금 당겨보면 어떠냥?',
+        '먼저 시작한 날이 끝까지 갔다고 했으니, 오늘 하나는 지금 열어두는 것부터 해보자.',
+      ],
+      '계획을 미리 세워뒀어': [
+        '미리 정해둔 날이 잘 됐다고 했지. 오늘 몫은 지금 정해두고, 하는 건 이따 해도 된다냥.',
+        '그 자리에서 정하면 잘 안 된다고 했으니, 오늘 할 것만 먼저 적어두고 시작은 나중에 하자.',
+      ],
+      '장소가 달랐어': [
+        '자리를 옮긴 날이 잘 됐다고 했지. 오늘도 하나는 다른 자리에서 해보면 어떠냥?',
+        '집이 아닌 데서 시작이 쉬웠다고 했으니, 오늘 제일 무거운 하나만 그쪽으로 가져가보자.',
+      ],
+      '수면 시간이 달랐어': [
+        '잘 잔 날이 잘 풀렸다고 했지. 오늘 계획은 어젯밤 잠에 맞춰 잡아도 된다냥.',
+        '그날 실행이 전날 밤에 갈린다고 했으니, 오늘이 짧게 잔 날이면 기준을 낮춰 잡자.',
+      ],
+      '출근한 날과 아닌 날의 차이였어': [
+        '그날의 틀이 실행을 가른다고 했지. 오늘이 어느 쪽인지부터 보고 거기 맞춰 잡아보자냥.',
+        '출근 여부로 갈린다고 했으니, 오늘이 안 되는 쪽이면 처음부터 적게 잡아도 된다.',
+      ],
+      '일부러 쉬었어': [
+        '쉬는 날을 따로 두는 게 네 방식이라고 했지. 그 리듬은 그대로 둬도 된다냥. '
+            '다만 쉬려던 게 아닌 날이 섞여 있으면, 그날만 제일 만만한 것 하나로 잡아보자.',
+        '아무것도 안 한 날들은 쉬기로 한 거라고 했으니 그건 그대로 두겠다. '
+            '혹시 쉴 생각이 아니었던 날이 있었으면, 그런 날만 하나로 줄여 잡아도 좋고냥.',
+      ],
+    },
   );
 }
 
@@ -1688,10 +1752,22 @@ class MasterGreetingBuilder extends GreetingLinePicker {
   /// 이름이 올 일은 없지만, 새 유형을 만들고 문구를 안 채웠을 때 엉뚱한 말이
   /// 나가느니 조용히 넘어가는 편이 낫다.
   String? buildTypeAdvice(String type, {required int planCount}) {
-    final hasPlan = planCount > 0;
-    final pool = (hasPlan ? voice.typeAdvice : voice.typeAdviceNoPlan)[type];
+    final pool = (planCount > 0 ? voice.typeAdvice : voice.typeAdviceNoPlan)[type];
+    return _adviceWithIntro(pool, planCount);
+  }
+
+  /// 되는 날의 조건을 본인이 골라준 사람에게 그 답에 맞춰 건네는 처방.
+  ///
+  /// 유형 처방과 같은 자리에 서고, 앞머리도 같다. 다른 것은 근거뿐이다 —
+  /// 저쪽이 앱이 센 것이라면 이쪽은 본인이 한 말이다. 안 골라둔 답이면 null이라,
+  /// 부르는 쪽이 유형 처방으로 되돌아간다.
+  String? buildConditionAdvice(String answer, {required int planCount}) {
+    return _adviceWithIntro(voice.conditionAdvice[answer], planCount);
+  }
+
+  String? _adviceWithIntro(List<String>? pool, int planCount) {
     if (pool == null || pool.isEmpty) return null;
-    final intro = hasPlan
+    final intro = planCount > 0
         ? expand(voice.typeAdviceIntro).replaceAll('{{count}}', '$planCount')
         : expand(voice.typeAdviceIntroNoPlan);
     return '$intro ${pickLine(pool)}';
