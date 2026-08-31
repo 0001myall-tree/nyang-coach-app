@@ -130,7 +130,6 @@ class ExecutionPatternService {
     var touched = 0;
     var fullDays = 0;
     var zeroDays = 0;
-    var noPlanDays = 0;
     var activeDays = 0;
     var crammedDays = 0;
     final startHours = <int>[];
@@ -167,7 +166,6 @@ class ExecutionPatternService {
       }
       if (lateNightStarts >= crammedTaskThreshold) crammedDays++;
       if (dayPlanned == 0) {
-        noPlanDays++;
         continue;
       }
       if (dayDone == dayPlanned) fullDays++;
@@ -180,6 +178,35 @@ class ExecutionPatternService {
       }
     }
     if (planned == 0) return '';
+
+    // 계획을 안 적은 날은 기록에 남은 것만 세면 안 된다.
+    //
+    // 기록은 앱을 연 날에만 생긴다. 며칠을 아예 안 열면 그 날짜는 목록에
+    // 없고, 있는 기록만 훑으면 그 며칠이 세어지지 않는다. 실제로 이레에
+    // 사흘을 안 열고 하루만 계획을 걸렀는데 "안 적은 날 1일"로 나왔다.
+    //
+    // 그래서 최근 이레의 날짜를 처음부터 훑고, 기록이 없거나 있어도 계획이
+    // 빈 날을 함께 센다.
+    final plannedDates = <String>{
+      for (final record in records)
+        if (((record['tasks'] as List?) ?? const []).isNotEmpty)
+          _dayKey(DateTime.parse(record['date'].toString())),
+    };
+    // 오늘은 빼고 센다. 아직 안 끝난 날이라, 아침에 열어본 사람은 그날
+    // 계획을 적기 전이다. 그걸 거른 날로 세면 열자마자 한 번 깎고 시작한다.
+    //
+    // 첫 기록보다 이전 날도 뺀다. 그건 이 사람이 거른 날이 아니라 아직 앱을
+    // 안 쓰던 날이다. 엊그제 깐 사람이 지난주를 통째로 거른 것이 된다.
+    final today = DateTime.now();
+    final firstDay = records
+        .map((r) => DateTime.parse(r['date'].toString()))
+        .reduce((a, b) => a.isBefore(b) ? a : b);
+    var noPlanDays = 0;
+    for (var back = 1; back <= windowDays; back++) {
+      final day = today.subtract(Duration(days: back));
+      if (DateTime(day.year, day.month, day.day).isBefore(firstDay)) continue;
+      if (!plannedDates.contains(_dayKey(day))) noPlanDays++;
+    }
 
     final days = records.length;
     final rate = done / planned;
@@ -366,6 +393,10 @@ class ExecutionPatternService {
     }
     return '';
   }
+
+  static String _dayKey(DateTime d) =>
+      '${d.year}-${d.month.toString().padLeft(2, '0')}-'
+      '${d.day.toString().padLeft(2, '0')}';
 
   static List<Map<String, dynamic>> _records(String? raw, {int weeksBack = 0}) {
     if (raw == null || raw.isEmpty) return const [];
