@@ -1598,10 +1598,12 @@ void main() {
       for (final entry in voices.entries) {
         final builder = MasterGreetingBuilder(voice: entry.value);
         for (final answer in entry.value.conditionAdvice.keys) {
-          final withPlan = builder.buildConditionAdvice(answer, planCount: 5)!;
+          final withPlan = builder.buildConditionAdvice([
+            answer,
+          ], planCount: 5)!;
           expect(withPlan, contains('5가지'), reason: '${entry.key}/$answer');
           expect(
-            builder.buildConditionAdvice(answer, planCount: 0)!,
+            builder.buildConditionAdvice([answer], planCount: 0)!,
             isNot(contains('5가지')),
           );
         }
@@ -1612,7 +1614,55 @@ void main() {
       final builder = MasterGreetingBuilder(
         voice: MasterGreetingCopy.secretary,
       );
-      expect(builder.buildConditionAdvice('없는답', planCount: 3), isNull);
+      expect(builder.buildConditionAdvice(['없는답'], planCount: 3), isNull);
+      expect(builder.buildConditionAdvice([], planCount: 3), isNull);
+    });
+
+    test('쉬었다는 답에 조건이 붙으면 그 조건을 챙기라고 말한다', () {
+      // 따로 읽으면 "쉬는 리듬은 그대로 두시라"로 끝난다. 그건 맞는 말이지만
+      // 손댈 자리를 안 짚은 말이라, 나흘에 한 번 오는 자리를 그걸로 쓴다.
+      for (final entry in voices.entries) {
+        final builder = MasterGreetingBuilder(voice: entry.value);
+        for (final other in entry.value.conditionRestPlusAdvice.keys) {
+          final line = builder.buildConditionAdvice([
+            '일부러 쉬었어',
+            other,
+          ], planCount: 3)!;
+          expect(
+            line,
+            isNot(equals(builder.buildConditionAdvice(['일부러 쉬었어'], planCount: 3))),
+            reason: '${entry.key}/$other',
+          );
+        }
+      }
+    });
+
+    test('고른 순서가 달라도 조합을 알아본다', () {
+      final builder = MasterGreetingBuilder(
+        voice: MasterGreetingCopy.secretary,
+      );
+      final pool =
+          MasterGreetingCopy.secretary.conditionRestPlusAdvice['수면 시간이 달랐어']!;
+      for (final picked in [
+        ['일부러 쉬었어', '수면 시간이 달랐어'],
+        ['수면 시간이 달랐어', '일부러 쉬었어'],
+      ]) {
+        final line = builder.buildConditionAdvice(picked, planCount: 0)!;
+        expect(pool.any(line.endsWith), isTrue, reason: line);
+      }
+    });
+
+    test('쉬었다는 답 하나만이면 쉬는 리듬을 그대로 두라고 한다', () {
+      final builder = MasterGreetingBuilder(
+        voice: MasterGreetingCopy.secretary,
+      );
+      final line = builder.buildConditionAdvice(['일부러 쉬었어'], planCount: 0)!;
+      expect(
+        MasterGreetingCopy.secretary.conditionAdvice['일부러 쉬었어']!
+            .any(line.endsWith),
+        isTrue,
+        reason: line,
+      );
     });
 
     test('문구를 안 채운 유형이면 조용히 넘어간다', () {

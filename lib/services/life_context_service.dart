@@ -57,7 +57,19 @@ class LifeContextService {
   static const Map<String, List<String>> _signals = {
     'job': ['퇴근', '출근', '야근', '회사', '사무실', '연차', '월차', '재택근무', '반차', '주말 근무'],
     'parttime': ['알바', '아르바이트', '시급', '오픈조', '마감조', '주휴'],
-    'student': ['수업', '강의', '과제', '시험 기간', '시험기간', '등교', '종강', '개강', '학교 가', '중간고사', '기말'],
+    'student': [
+      '수업',
+      '강의',
+      '과제',
+      '시험 기간',
+      '시험기간',
+      '등교',
+      '종강',
+      '개강',
+      '학교 가',
+      '중간고사',
+      '기말',
+    ],
     'freelance': ['외주', '클라이언트', '납품', '프리랜서', '작업물 넘기'],
     'business': ['가게', '손님', '영업 시간', '영업시간', '매출', '장사'],
   };
@@ -223,7 +235,8 @@ class LifeContextService {
   static const String _conditionAtKey = 'life_execution_condition_at';
 
   /// 마지막으로 물어본 시각. 답을 안 고르고 넘겨도 남는다.
-  static const String _conditionAskedAtKey = 'life_execution_condition_asked_at';
+  static const String _conditionAskedAtKey =
+      'life_execution_condition_asked_at';
 
   /// 골라둔 답을 이만큼만 들고 있는다.
   ///
@@ -242,14 +255,25 @@ class LifeContextService {
   /// 코치가 된다.
   static const Duration conditionAskInterval = Duration(days: 14);
 
+  /// 조건은 이만큼까지만 받는다. 카드도 이 수만큼만 고르게 한다.
+  ///
+  /// 다 고를 수 있게 두면 답이 아니라 목록이 된다. 되는 날을 가르는 것이
+  /// 넷이라면 가르는 것이 없다는 말과 같아서, 코치는 그중 무엇을 두고 말할지
+  /// 알 수 없다. 둘이면 하나를 짚으면서 다른 하나와 겹쳐 읽을 수 있다.
+  static const int conditionPickLimit = 2;
+
   /// 고를 수 있는 답과, 코치에게 넘길 한 줄.
+  ///
+  /// "계획을 미리 세워뒀어"가 여기 있었다. 뺐다 — 미리 정해두라는 조언은
+  /// 주간 구체화 팁과 계획 저장 자리에서 이미 하고 있어서, 여기 한 자리를 더
+  /// 주면 같은 말을 여러 군데서 하게 된다. 반대로 "일부러 쉬었어"는 여기
+  /// 말고는 받아둘 데가 없고, 못 받으면 앱이 그 며칠을 계속 못 한 날로 센다.
   static const Map<String, String> conditionAnswers = {
     '출근한 날과 아닌 날의 차이였어':
         '출근 여부가 그날을 가름. 어느 쪽이 되는 날인지는 사람마다 다르니 대화에서 확인할 것 — '
         '하루에 틀이 있어야 굴러가는 사람도 있고, 출근하면 시간이 없어 못 하는 사람도 있다.',
     '장소가 달랐어': '집이 아닌 곳(카페 같은)에서 실행됨. 장소가 바뀌면 시작이 쉬워지는 사람.',
     '일찍 시작했어': '그날 첫 발을 일찍 뗀 날에 끝까지 감. 시작 시각이 그날을 가름.',
-    '계획을 미리 세워뒀어': '전날이나 아침에 미리 정해둔 날에 실행됨. 그 자리에서 정하는 날은 잘 안 됨.',
     '수면 시간이 달랐어': '잘 잔 날에 실행됨. 그날의 실행 여부가 전날 밤에 갈리는 사람.',
     '일부러 쉬었어':
         '최근에 아무것도 안 한 날들은 일부러 쉰 것이라고 함. 그 며칠을 못 한 날로 보지 말 것. '
@@ -279,9 +303,33 @@ class LifeContextService {
     if (lines.length == 1) {
       return '- 실행되는 날의 조건(사용자가 직접 고른 것): ${lines.first}';
     }
+    final read = combinedReading(picked);
     return '- 실행되는 날의 조건(사용자가 직접 고른 것, 둘 다 해당):\n'
-        '  · ${lines.join('\n  · ')}';
+        '  · ${lines.join('\n  · ')}'
+        '${read.isEmpty ? '' : '\n  → $read'}';
   }
+
+  /// 고른 답 여러 개를 한 상황으로 읽어준 줄. 읽을 것이 없으면 빈 문자열.
+  ///
+  /// 답을 나란히 늘어놓기만 하면 코치가 그중 하나를 집어 말한다. 그런데
+  /// "일부러 쉬었어"를 다른 답과 같이 고른 사람에게는 둘을 붙여 읽어야
+  /// 나오는 것이 있다 — 쉰 날들은 대개 저쪽 조건이 무너진 날이다. 거기까지
+  /// 읽어주지 않으면 코치는 쉬는 리듬을 존중한다는 말로 끝내고, 정작 그
+  /// 사람이 손댈 수 있는 자리는 짚지 못한다.
+  static String combinedReading(List<String> picked) {
+    if (!picked.contains(_restAnswer)) return '';
+    final other = picked.firstWhere(
+      (answer) => answer != _restAnswer && conditionAnswers.containsKey(answer),
+      orElse: () => '',
+    );
+    if (other.isEmpty) return '';
+    return '이 둘을 같이 볼 것. 쉰 날들은 대개 위 조건이 무너진 날이다. '
+        '쉬는 리듬 자체를 고치라고 하지 말고, 그 조건을 챙기면 쉬어야 하는 날이 '
+        '줄어든다는 쪽으로 말할 것.';
+  }
+
+  /// 되는 조건이 아니라 안 된 날을 두고 하는 답이라 따로 이름을 둔다.
+  static const String _restAnswer = '일부러 쉬었어';
 
   /// 직접 적은 답을 받아 둔다.
   ///
@@ -349,7 +397,7 @@ class LifeContextService {
     await prefs.setString(_conditionAtKey, DateTime.now().toIso8601String());
     final kept = answers
         .where(conditionAnswers.containsKey)
-        .take(2)
+        .take(conditionPickLimit)
         .toList(growable: false);
     if (kept.isEmpty) return;
     await prefs.setStringList(_conditionKey, kept);

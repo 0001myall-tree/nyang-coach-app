@@ -4616,9 +4616,7 @@ ${lines.join('\n')}
   /// 그대로 얹어 코치 말투를 지키고, [ExecutionPatternService]가 센 값(패턴
   /// 이름 또는 계획/시작/완료 세 축 숫자)만 관찰로 건네 코치가 지어내지
   /// 않게 한다.
-  Future<String?> _buildExecutionBottleneckLine(
-    SharedPreferences prefs,
-  ) async {
+  Future<String?> _buildExecutionBottleneckLine(SharedPreferences prefs) async {
     try {
       final block = ExecutionPatternService.blockFrom(
         prefs.getString('nyang_history'),
@@ -4657,10 +4655,11 @@ $block
         'temperature': 0.7,
       });
 
-      final content = (response.data is Map
-              ? (response.data as Map)['content'] as String? ?? ''
-              : '')
-          .trim();
+      final content =
+          (response.data is Map
+                  ? (response.data as Map)['content'] as String? ?? ''
+                  : '')
+              .trim();
       return content.isEmpty ? null : content;
     } catch (e) {
       debugPrint('execution bottleneck greeting failed: $e');
@@ -5678,6 +5677,7 @@ Rules:
 
   static const _catLateNightMinimumGreetingKind = 'auto:cat_late_night_minimum';
   static const _catPlannerRoutineGreetingKind = 'auto:cat_planner_routine';
+
   /// 플래너 루틴을 권한 적이 있는지. 한 번 말하면 그걸로 끝이라 시각만 적어둔다.
   ///
   /// 'nyang_'으로 시작해서 계정을 따라간다. 폰을 바꿨다고 같은 말을 다시
@@ -6139,8 +6139,10 @@ Rules:
     if (turn.isOdd) {
       final picked = await LifeContextService.conditionAnswersPicked();
       if (picked.isNotEmpty) {
+        // 첫 답만 넘기지 않는다. 여러 개를 고른 사람에게는 그 답들을 함께
+        // 읽어야 나오는 말이 따로 있다.
         final line = _greetingBuilder.buildConditionAdvice(
-          picked.first,
+          picked,
           planCount: planCount,
         );
         if (line != null) return line;
@@ -7924,7 +7926,8 @@ Rules:
     const minSubstringLen = 3;
     bool overlapsExisting(String text) {
       return existingTaskTexts.any((existing) {
-        if (existing.length < minSubstringLen || text.length < minSubstringLen) {
+        if (existing.length < minSubstringLen ||
+            text.length < minSubstringLen) {
           return existing == text;
         }
         return text.contains(existing) || existing.contains(text);
@@ -18243,7 +18246,6 @@ ${Prompts.outputRulesTail}$plannerActionSection$coachOfferTaskRule$halmaeHint$re
   Widget _buildStartDifficultyChoiceCard(ChatMessage msg) {
     final time = DateFormat('a h:mm', 'ko').format(msg.time);
 
-
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Row(
@@ -18341,7 +18343,6 @@ ${Prompts.outputRulesTail}$plannerActionSection$coachOfferTaskRule$halmaeHint$re
     void Function(String label) onChoice,
   ) {
     final time = DateFormat('a h:mm', 'ko').format(msg.time);
-
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
@@ -18550,54 +18551,77 @@ ${Prompts.outputRulesTail}$plannerActionSection$coachOfferTaskRule$halmaeHint$re
             ),
             const SizedBox(height: 10),
           ],
+          // 몇 개까지 고를 수 있는지 미리 밝힌다. 이 말이 없으면 세 번째를
+          // 눌렀을 때 아무 일도 일어나지 않아, 눌리지 않는 화면으로 읽힌다.
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(
+              picked.length >= _conditionPickLimit
+                  ? '$_conditionPickLimit개까지 고를 수 있어요. 바꾸려면 고른 걸 눌러서 빼주세요.'
+                  : '해당하는 걸로 최대 $_conditionPickLimit개까지 고를 수 있어요.',
+              style: GoogleFonts.notoSansKr(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: AppDesignTokens.textSecondary,
+              ),
+            ),
+          ),
           for (final label in msg.choices)
             Padding(
               padding: const EdgeInsets.only(bottom: 6),
               child: GestureDetector(
-                onTap: _isLoading
-                    ? null
-                    : () => _toggleConditionChoice(label),
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 12,
-                  ),
-                  decoration: BoxDecoration(
-                    color: picked.contains(label)
-                        ? accent.withValues(alpha: 0.14)
-                        : const Color(0xFFF8F5FF),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: picked.contains(label)
-                          ? accent
-                          : const Color(0xFFE5DEFF),
-                      width: picked.contains(label) ? 1.6 : 1,
+                onTap: _isLoading ? null : () => _toggleConditionChoice(label),
+                child: Opacity(
+                  // 더 못 고르는 것들은 흐리게 둔다. 눌러도 안 되는 것과
+                  // 눌러서 뺄 수 있는 것이 같아 보이면 안 된다.
+                  opacity:
+                      picked.contains(label) ||
+                          picked.length < _conditionPickLimit ||
+                          label == _conditionOtherLabel
+                      ? 1
+                      : 0.4,
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 12,
                     ),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        picked.contains(label)
-                            ? Icons.check_circle_rounded
-                            : Icons.circle_outlined,
-                        size: 18,
+                    decoration: BoxDecoration(
+                      color: picked.contains(label)
+                          ? accent.withValues(alpha: 0.14)
+                          : const Color(0xFFF8F5FF),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
                         color: picked.contains(label)
                             ? accent
-                            : const Color(0xFFC9C2E0),
+                            : const Color(0xFFE5DEFF),
+                        width: picked.contains(label) ? 1.6 : 1,
                       ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          label,
-                          style: GoogleFonts.notoSansKr(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w800,
-                            color: accent,
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          picked.contains(label)
+                              ? Icons.check_circle_rounded
+                              : Icons.circle_outlined,
+                          size: 18,
+                          color: picked.contains(label)
+                              ? accent
+                              : const Color(0xFFC9C2E0),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            label,
+                            style: GoogleFonts.notoSansKr(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w800,
+                              color: accent,
+                            ),
                           ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -18631,6 +18655,9 @@ ${Prompts.outputRulesTail}$plannerActionSection$coachOfferTaskRule$halmaeHint$re
   /// 고르는 중인 조건들. 카드를 그리는 쪽과 처리하는 쪽이 같이 본다.
   final Set<String> _pickedConditions = <String>{};
 
+  /// 조건은 이만큼까지만 고르게 한다. 저장하는 쪽과 같은 수를 본다.
+  static const int _conditionPickLimit = LifeContextService.conditionPickLimit;
+
   void _toggleConditionChoice(String label) {
     HapticFeedback.selectionClick();
     setState(() {
@@ -18647,7 +18674,7 @@ ${Prompts.outputRulesTail}$plannerActionSection$coachOfferTaskRule$halmaeHint$re
         return;
       }
       _pickedConditions.remove(_conditionOtherLabel);
-      if (_pickedConditions.length >= 2) return;
+      if (_pickedConditions.length >= _conditionPickLimit) return;
       _pickedConditions.add(label);
     });
   }
@@ -19166,7 +19193,6 @@ ${Prompts.outputRulesTail}$plannerActionSection$coachOfferTaskRule$halmaeHint$re
     List<(String, VoidCallback)> options,
   ) {
     final time = DateFormat('a h:mm', 'ko').format(msg.time);
-
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
