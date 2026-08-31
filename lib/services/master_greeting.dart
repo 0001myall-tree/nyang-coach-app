@@ -91,6 +91,7 @@ class MasterGreetingContext {
   const MasterGreetingContext({
     required this.now,
     required this.daysSinceLastVisit,
+    this.executionType,
     required this.planTotal,
     required this.planDone,
     this.habitTotal = 0,
@@ -147,6 +148,10 @@ class MasterGreetingContext {
     final total = planTotal + habitTotal;
     return total == 0 ? 0 : (planDone + habitDone) / total;
   }
+
+  /// 앱이 기록에서 센 실행 유형. 며칠 만에 돌아온 날 잘한 대목을 짚는 데
+  /// 쓴다. 셀 것이 모자라 유형이 없으면 null.
+  final String? executionType;
 
   bool get isComeback => daysSinceLastVisit != null && daysSinceLastVisit! >= 2;
 
@@ -255,6 +260,16 @@ class GreetingVoice {
 
   /// 복귀한 날 뒤에 붙일 문장. 뭘 했고 뭐가 남았는지 짚는 대신 도움을 청하라고만 한다.
   final List<String> comebackSupport;
+
+  /// 돌아온 날, 그 사람의 실행 유형에서 짚을 강점. 열쇠는 유형 이름.
+  ///
+  /// 며칠 비우고 여는 날은 "며칠 날렸다"는 마음으로 열기 쉽다. 반갑다고만
+  /// 하고 끝내면 그 마음이 그대로 남는다. 지난 기록에서 잘한 대목을 짚어주면
+  /// 거기서 뒤집힌다 — 지어낸 칭찬이 아니라 앱이 실제로 센 것이라 힘이 있다.
+  ///
+  /// 밀린 것을 따라잡자고 하지 않는다. 돌아온 사람이 제일 먼저 하는 일이
+  /// 그것이고, 그러다 또 나가떨어진다.
+  final Map<String, List<String>> comebackStrength;
   final List<String> afterLateNight; // 늦게 잔 다음 날 낮
   final List<String> afterRepeatedLateNights; // 늦은 밤 패턴이 5일 이상 반복된 다음 날 낮
   final List<String> afterSick; // 아프다고 한 다음 날 낮
@@ -469,6 +484,7 @@ class GreetingVoice {
     required this.eveningNoPlan,
     required this.comeback,
     required this.comebackSupport,
+    required this.comebackStrength,
     required this.afterLateNight,
     required this.afterRepeatedLateNights,
     required this.afterSick,
@@ -696,6 +712,17 @@ class MasterGreetingCopy {
     // 복귀 문구는 뒤에 슬롯 문구가 붙으니 반드시 한 문장이어야 한다.
     // 두 문장짜리를 두면 발화가 네 문장으로 늘어난다.
     comeback: ['다시 뵈어 반갑습니다.', '오랜만이네요, 돌아와 주셔서 좋습니다.', '잠시 쉬었다 오셨군요.'],
+    comebackStrength: {
+      '계획 편차형': ['지난 기록을 보니 적어두신 날은 거의 다 해내셨더군요. 오늘은 밀린 걸 따라잡지 마시고 하나만 다시 적어보실까요?'],
+      '시작 편차형': ['지난 기록을 보니 손을 대신 날은 끝까지 가셨더군요. 오늘은 밀린 걸 따라잡지 마시고 하나만 다시 열어보실까요?'],
+      '편차형': ['지난 기록을 보니 하신 날에는 잡아두신 걸 다 끝내셨더군요. 오늘은 밀린 걸 따라잡지 마시고 제일 만만한 하나만 해보실까요?'],
+      '시작 꾸준형': ['지난 기록을 보니 손은 늘 대고 계셨더군요. 오늘은 밀린 걸 따라잡지 마시고 하나만 다시 시작해보실까요?'],
+      '계획 과다형': ['오늘은 밀린 걸 따라잡지 마시고 딱 하나만 잡아보실까요? 적게 잡으신 날이 오히려 끝까지 가더라고요.'],
+      '벼락치기형': ['막판에도 결국 손을 대시는 분이니 오늘도 될 겁니다. 밀린 건 두시고 하나만 다시 시작해보실까요?'],
+      '무난형': ['지난 기록을 보니 고르게 잘 가고 계셨더군요. 오늘은 밀린 걸 따라잡지 마시고 하나만 다시 잡아보실까요?'],
+      '안정형': ['지난 기록을 보니 흐름이 좋으셨더군요. 오늘은 밀린 걸 따라잡지 마시고 가볍게 하나만 잡아보실까요?'],
+      '자유형': ['돌아오신 것만으로 충분합니다. 밀린 건 두시고 오늘 하나만 정해보실까요?'],
+    },
     comebackSupport: [
       '실행하시다가 어려운 게 있으면 말씀해 주세요.',
       '하시다가 막히는 게 있으면 언제든 말씀해 주세요.',
@@ -1147,6 +1174,17 @@ class MasterGreetingCopy {
       '별다른 일 {없었냥|없이 지나갔냥}?',
     ],
     comeback: ['오랜만이구나냥.', '다시 와줬구나냥.', '쉬었다 다시 걷는 것도 좋다냥.'],
+    comebackStrength: {
+      '계획 편차형': ['지난 기록을 보니 적어둔 날은 거의 다 해냈더구나. 오늘은 밀린 거 따라잡지 말고 하나만 다시 적어볼까냥?'],
+      '시작 편차형': ['지난 기록을 보니 손을 댄 날은 끝까지 갔더구나. 오늘은 밀린 거 따라잡지 말고 하나만 다시 열어볼까냥?'],
+      '편차형': ['지난 기록을 보니 한 날에는 잡아둔 걸 다 끝냈더구나. 오늘은 밀린 거 따라잡지 말고 제일 만만한 하나만 해볼까냥?'],
+      '시작 꾸준형': ['지난 기록을 보니 손은 늘 대고 있었더구나. 오늘은 밀린 거 따라잡지 말고 하나만 다시 시작해볼까냥?'],
+      '계획 과다형': ['오늘은 밀린 거 따라잡지 말고 딱 하나만 잡아볼까냥? 적게 잡은 날이 오히려 끝까지 가더라.'],
+      '벼락치기형': ['막판에도 결국 손을 대는 사람이니 오늘도 될 거다냥. 밀린 건 두고 하나만 다시 시작해볼까?'],
+      '무난형': ['지난 기록을 보니 고르게 잘 가고 있었더구나. 오늘은 밀린 거 따라잡지 말고 하나만 다시 잡아볼까냥?'],
+      '안정형': ['지난 기록을 보니 흐름이 좋았더구나. 오늘은 밀린 거 따라잡지 말고 가볍게 하나만 잡아볼까냥?'],
+      '자유형': ['돌아온 것만으로 충분하다냥. 밀린 건 두고 오늘 하나만 정해볼까?'],
+    },
     comebackSupport: [
       '하다가 어려운 게 있으면 말하라냥.',
       '하다가 막히는 게 있으면 언제든 말하라냥.',
@@ -1583,7 +1621,16 @@ class MasterGreetingBuilder extends GreetingLinePicker {
       // 오래 비웠다 돌아온 날은 뭘 했고 뭐가 남았는지 짚지 않는다. 뭉뚱그려
       // 도움을 청하라고만 하고 끝낸다. 새벽 문구는 원래 계획을 안 짚으니 그대로 둔다.
       if (context.slot != GreetingSlot.dawn) {
-        parts.add(pickLine(voice.comebackSupport));
+        // 유형을 아는 사람에게는 잘한 대목을 짚어준다. 모르면 예전처럼
+        // 도움을 청하라고만 하고 끝낸다.
+        final strength = context.executionType == null
+            ? null
+            : voice.comebackStrength[context.executionType];
+        parts.add(
+          strength == null || strength.isEmpty
+              ? pickLine(voice.comebackSupport)
+              : pickLine(strength),
+        );
         return MasterGreetingResult(parts.join(' '));
       }
     }

@@ -5131,6 +5131,10 @@ $block
     return MasterGreetingContext(
       now: now,
       daysSinceLastVisit: daysSinceLastVisit,
+      // 며칠 만에 돌아온 날, 잘한 대목을 짚어주는 데 쓴다.
+      executionType: ExecutionPatternService.typeLabel(
+        prefs.getString('nyang_history'),
+      ),
       planTotal: plans.length,
       planDone: donePlans.length,
       habitTotal: habits.length,
