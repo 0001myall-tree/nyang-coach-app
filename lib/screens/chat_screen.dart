@@ -5316,7 +5316,13 @@ $block
     final core = _coreTaskDueForAsk(prefs, now);
     // 핵심을 지정해두지 않은 사람에게는 오늘 적어둔 나머지 하나를 묻는다.
     // 질문의 모양이 같아서 뒤따르는 버튼과 처리도 그대로 쓴다.
-    final other = core == null ? _otherTaskDueToday(prefs) : null;
+    //
+    // 핵심이 있는데 아직 물을 때가 아닐 뿐인 경우는 여기 오지 않는다. 그때
+    // 잡무를 물으면 핵심 몫의 예산까지 태워, 정작 그 시각이 지난 뒤에도
+    // 핵심을 못 묻게 된다.
+    final other = (core == null && !_hasPendingCoreTask(prefs))
+        ? _otherTaskDueToday(prefs, now)
+        : null;
     if (core == null && other == null) return false;
     if (!mounted) return false;
 
@@ -5416,7 +5422,7 @@ $block
       if (habit != current) return habit;
     }
 
-    final repeating = _otherTaskDueToday(prefs);
+    final repeating = _otherTaskDueToday(prefs, DateTime.now());
     if (repeating != null && repeating != current) return repeating;
     return null;
   }
@@ -6000,7 +6006,7 @@ Rules:
   ///
   /// 핵심과 습관은 여기서 뺀다. 앞의 두 순위가 이미 챙기는 것들이다.
   /// 시작 표시가 있는 것도 뺀다 — 하고 있는 사람에게 안 했다고 하는 셈이 된다.
-  String? _otherTaskDueToday(SharedPreferences prefs) {
+  String? _otherTaskDueToday(SharedPreferences prefs, DateTime now) {
     final coreTexts = _decodeMapList(prefs.getString('nyang_core_tasks'))
         .map((task) => task['text']?.toString().trim() ?? '')
         .where((text) => text.isNotEmpty)
@@ -6011,10 +6017,31 @@ Rules:
       if (_isHabitTask(task) || task['habitId'] != null) continue;
       final text = task['text']?.toString().trim() ?? '';
       if (text.isEmpty || coreTexts.contains(text)) continue;
+      // 할 시각을 정해둔 일은 그 시각 전에 짚지 않는다. 저녁 8시에 하기로
+      // 한 일을 오후 1시에 "아직 그대로네요"라고 하면 재촉이기 이전에 틀린
+      // 말이다. 핵심 일정에는 이미 같은 기준이 걸려 있다.
+      //
+      // 시각을 안 적은 일은 그대로 둔다. 이쪽 문구는 "이미 하셨으면 표시만
+      // 눌러주세요" 정도라, 잡무를 바로 짚어도 재촉으로 읽히지 않는다.
+      final startAt = _todayTimeOf(task['timeStart']?.toString(), now);
+      if (startAt != null && !now.isAfter(startAt)) continue;
       final name = _shortTaskName(task);
       if (name != null) return name;
     }
     return null;
+  }
+
+  /// 오늘 핵심으로 잡아둔 일 중 아직 시작 표시가 없는 것이 있는지.
+  ///
+  /// [_coreTaskDueForAsk]와 조건이 같되 "슬슬 늦었는지"만 빼고 본다. 그 둘을
+  /// 가르려고 있는 함수다 — 핵심이 아예 없는 것과, 핵심은 있는데 아직 물을
+  /// 때가 아닌 것은 다르다.
+  ///
+  /// 뒤쪽을 앞쪽처럼 다루면 아껴둔 핵심 대신 잡무가 나간다. 그런데 둘은 기록에
+  /// 같은 종류로 찍혀 예산을 함께 쓰고, 그 예산은 격일이다. 그래서 낮에 잡무를
+  /// 한 번 물으면 정작 핵심 시각이 지난 뒤에도, 다음 날에도 핵심을 못 묻는다.
+  bool _hasPendingCoreTask(SharedPreferences prefs) {
+    return _findCoreTask(prefs, _isPendingNotInProgressTask) != null;
   }
 
   /// 핵심도 습관도 없을 때, 오늘 목록에 남아 있는 일 하나를 짚어주는 오후 인사.
@@ -6846,12 +6873,17 @@ Rules:
     //
     // 핵심 질문과 같은 예산을 쓴다. 사용자에게는 둘 다 "아직 안 한 일"을 짚는
     // 말이라, 따로 세면 마스터가 낮에 묻고 냥냥이가 오후에 또 묻게 된다.
+    //
+    // 핵심이 있는데 아직 물을 때가 아닐 뿐이면 여기도 비켜간다. 이 질문은
+    // 핵심과 같은 예산을 쓰는데 그 예산이 격일이라, 지금 잡무를 물어버리면
+    // 핵심 시각이 지난 뒤에도 핵심을 못 묻는다.
     final repeatingTask =
         notStartedCore == null &&
             !coreInProgress &&
+            !_hasPendingCoreTask(prefs) &&
             pendingHabits.isEmpty &&
             await _canAskCoreToday(now)
-        ? _otherTaskDueToday(prefs)
+        ? _otherTaskDueToday(prefs, now)
         : null;
     final text = notStartedCore != null
         ? _buildCatAfternoonCoreAskText(notStartedCore)
