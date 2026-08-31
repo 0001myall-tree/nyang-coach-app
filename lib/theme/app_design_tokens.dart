@@ -70,6 +70,30 @@ abstract final class AppDesignTokens {
   static int chatAccentSlot(int index) =>
       index.abs() % chatAccentInks.length;
 
+  // ── 마스터 채팅 바탕 ────────────────────────────────────
+  //
+  // 코치마다 한 색으로 칠하던 자리다. 위쪽은 그 색을 그대로 두고 아래로만
+  // 풀어내, 쓰던 인상은 유지하면서 판판한 느낌만 걷어낸다.
+  //
+  // 말풍선이 흰색으로 얹히는 바탕이라 색은 아주 옅게 둔다. 여기가 진해지면
+  // 정작 읽어야 할 말풍선이 묻힌다.
+
+  /// 비서 실장. 민트에서 시작해 거의 흰색을 지나 아주 옅은 라벤더로 내려간다.
+  /// 깨끗하고 정돈된 인상을 지키는 쪽이다.
+  static const Gradient secretaryChatBackground = LinearGradient(
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+    colors: [Color(0xFFEDF7F4), Color(0xFFF9FBFB), Color(0xFFF7F5FD)],
+  );
+
+  /// 냥할배. 옅은 라벤더에서 시작해 분홍 기운을 지나 따뜻한 크림으로 내려간다.
+  /// 같은 앱이되 비서보다 포근한 쪽이다.
+  static const Gradient nyangHalbaeChatBackground = LinearGradient(
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+    colors: [Color(0xFFF7F3FF), Color(0xFFFBF5FA), Color(0xFFFDF6F0)],
+  );
+
   // Backward-compatible brand aliases
   static const Color brandDark = brandPressed;
 

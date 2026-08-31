@@ -15886,7 +15886,7 @@ ${Prompts.outputRulesTail}$plannerActionSection$coachOfferTaskRule$halmaeHint$re
             _buildSummaryCard(),
             Expanded(
               child: Container(
-                color: _chatAreaBackgroundColor,
+                decoration: _chatAreaBackgroundDecoration,
                 width: double.infinity,
                 // 퀵 액션 칩은 대화 영역 위에 떠 있지 않고 하단 입력 영역 안으로
                 // 들어가 있다. 여기는 순수하게 말풍선만 그린다.
@@ -17362,13 +17362,19 @@ ${Prompts.outputRulesTail}$plannerActionSection$coachOfferTaskRule$halmaeHint$re
   }
 
   // ── 메시지 목록 ────────────────────────────────────────────
-  Color get _chatAreaBackgroundColor {
+  /// 대화 영역의 바탕.
+  ///
+  /// 프렌즈는 배경 그림이 뒤에 깔려 있어 비워둔다. 마스터는 코치마다 다른
+  /// 그라데이션을 깐다 — 위쪽은 여태 쓰던 그 색이고, 아래로만 풀어냈다.
+  BoxDecoration get _chatAreaBackgroundDecoration {
     if (!_coach.isMaster) {
-      return Colors.transparent;
+      return const BoxDecoration(color: Colors.transparent);
     }
-    return _coach.id == 'nyang_halbae'
-        ? AppDesignTokens.brandSoftAlt
-        : const Color(0xFFEDF7F4);
+    return BoxDecoration(
+      gradient: _coach.id == 'nyang_halbae'
+          ? AppDesignTokens.nyangHalbaeChatBackground
+          : AppDesignTokens.secretaryChatBackground,
+    );
   }
 
   Widget _buildMessageList() {
@@ -17435,13 +17441,9 @@ ${Prompts.outputRulesTail}$plannerActionSection$coachOfferTaskRule$halmaeHint$re
       itemBuilder: (ctx, i) => items[i],
     );
 
-    // 마스터 코치별 대화 영역 배경
-    if (_coach.isMaster) {
-      return ColoredBox(color: _chatAreaBackgroundColor, child: list);
-    }
-
-    // 프렌즈는 배경 투명 (main_tab_screen에서 전체 배경 처리)
-    return ColoredBox(color: Colors.transparent, child: list);
+    // 바탕은 이 목록을 감싼 쪽이 이미 깔았다. 여기서 또 칠하면 같은 자리에
+    // 같은 그림을 두 번 그리는 셈이라, 스크롤하는 내내 값을 두 번 치른다.
+    return list;
   }
 
   // 채팅창 상단의 연한 "지난 대화 보기" 링크.
