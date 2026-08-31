@@ -126,6 +126,8 @@ $listed
 [판단 순서 - 반드시 이 순서를 지킬 것]
 1. 목록을 하나씩 보며 "이 계획 이름만 보고 이 사람이 지금 당장 무엇을, 어디서,
 어떻게 시작해야 할지 알 수 있는가?"를 스스로에게 물을 것.
+1-1. 확실한 사례가 여럿 보여도 후보는 반드시 하나만 고를 것. 절대 두 개 이상
+쓰지 말 것.
 2. 알 수 없어서 막막해 보이는 계획이 있다면, 왜 그런지 이유를 한 줄로 먼저 쓸
 것. (예: "'기획서 쓰기'는 무엇부터 손대야 할지, 어디까지 하면 되는지가 전혀 안
 드러남")
@@ -169,10 +171,11 @@ SKIP
       'temperature': 0.7,
     });
 
-    final content = (response.data is Map
-            ? (response.data as Map)['content'] as String? ?? ''
-            : '')
-        .trim();
+    final content =
+        (response.data is Map
+                ? (response.data as Map)['content'] as String? ?? ''
+                : '')
+            .trim();
     return content.isEmpty ? null : content;
   }
 
@@ -184,16 +187,39 @@ SKIP
     if (trimmed.isEmpty) return null;
     if (trimmed.toUpperCase().startsWith('SKIP')) return null;
 
-    final taskMatch = RegExp(r'계획\s*[:：]\s*(.+)').firstMatch(trimmed);
-    final lineMatch = RegExp(r'말\s*[:：]\s*([\s\S]+)').firstMatch(trimmed);
+    final taskMatch = RegExp(
+      r'^계획\s*[:：]\s*(.+)$',
+      multiLine: true,
+    ).firstMatch(trimmed);
+    final lineMatch = RegExp(
+      r'^말\s*[:：]\s*([\s\S]+)$',
+      multiLine: true,
+    ).firstMatch(trimmed);
     if (taskMatch == null || lineMatch == null) return null;
 
     final task = taskMatch.group(1)!.trim();
-    final line = lineMatch.group(1)!.trim();
+    final line = _firstPinpointLineBlock(lineMatch.group(1)!);
     if (task.isEmpty || line.isEmpty) return null;
     // 목록에 없는 이름을 지어냈으면 믿지 않는다.
     if (!validNames.contains(task)) return null;
     return (task: task, line: line);
+  }
+
+  @visibleForTesting
+  static ({String task, String line})? parsePinpointResponseForTest(
+    String content,
+    List<String> validNames,
+  ) {
+    return _parsePinpointResponse(content, validNames);
+  }
+
+  static String _firstPinpointLineBlock(String raw) {
+    final nextLabel = RegExp(
+      r'^\s*(?:이유|계획|말)\s*[:：]',
+      multiLine: true,
+    ).firstMatch(raw);
+    final block = nextLabel == null ? raw : raw.substring(0, nextLabel.start);
+    return block.trim();
   }
 
   // ── 조언이 먹혔는지 ──────────────────────────
@@ -375,11 +401,7 @@ SKIP
 
 /// 짚은 계획 하나와 짚은 때, 그때 건넨 짧은 조언.
 class _Advice {
-  const _Advice({
-    required this.task,
-    required this.advice,
-    required this.at,
-  });
+  const _Advice({required this.task, required this.advice, required this.at});
 
   final String task;
 
