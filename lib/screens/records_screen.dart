@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:nyang_coach/theme/app_design_tokens.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_functions/cloud_functions.dart';
@@ -54,6 +55,9 @@ class _RecordsScreenState extends State<RecordsScreen> {
   String? _weeklyExecutionTypeLabel;
   bool _isGeneratingWeeklyFeedback = false;
   bool _hasMasterPlan = false;
+
+  /// 어느 플랜이든 구독 중인지. 아직이면 이 화면 아래에 미리보기를 붙인다.
+  bool _hasAnyPlan = false;
   String _lastDate = '';
   List<_WeeklyCoachRank> _weeklyFavoriteCoachRanks = const [];
   int _weeklyCompletedResistanceCount = 0;
@@ -71,6 +75,7 @@ class _RecordsScreenState extends State<RecordsScreen> {
     final prefs = await SharedPreferences.getInstance();
     final userData = await UserDataService.load();
     _hasMasterPlan = userData.isPlanActive && userData.planType == 'master';
+    _hasAnyPlan = userData.isPlanActive;
 
     // 1. History (nyang_history)
     final rawHistory = prefs.getString('nyang_history');
@@ -1188,6 +1193,14 @@ ${feedbackType == 0
                     _buildCoachCommentCard(records),
                     const SizedBox(height: 20),
 
+                    // 아직 구독 전이면 두 플랜이 이 자리에서 무엇을 주는지
+                    // 보여준다. 말로 설명하는 것보다 같은 자리에 나란히 두는
+                    // 편이 차이가 빨리 보인다.
+                    if (!_hasAnyPlan) ...[
+                      _buildPlanPreviewCard(),
+                      const SizedBox(height: 20),
+                    ],
+
                     // 이번 주 기록 (차트)
                     _buildWeeklyChartCard(records),
                     const SizedBox(height: 20),
@@ -1373,6 +1386,105 @@ ${feedbackType == 0
     return parts
         .join(' ')
         .replaceAll(UserTitleService.defaultTitle, _userTitle);
+  }
+
+  /// 구독 전에 두 플랜이 이 자리에서 무엇을 주는지 나란히 보여준다.
+  ///
+  /// 아직 안 쓴 기능을 말로 설명하면 무엇이 다른지 안 와닿는다. 같은 자리에
+  /// 같은 유형으로 두 문장을 붙여두면, 프렌즈는 정해진 문구고 마스터는 그 주
+  /// 기록을 읽고 쓴 글이라는 차이가 읽는 것만으로 보인다.
+  ///
+  /// 남의 기록임이 분명해야 한다. 자기 것으로 읽히면 없는 일을 했다고 믿게
+  /// 되므로, 머리에 예시라고 적고 본문에도 요일과 일 이름을 남겨둔다.
+  Widget _buildPlanPreviewCard() {
+    Widget sample(String plan, String body, Color accent) {
+      return Container(
+        width: double.infinity,
+        margin: const EdgeInsets.only(top: 10),
+        padding: const EdgeInsets.all(13),
+        decoration: BoxDecoration(
+          color: accent.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: accent.withValues(alpha: 0.24)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              plan,
+              style: GoogleFonts.notoSansKr(
+                fontSize: 12,
+                fontWeight: FontWeight.w900,
+                color: accent,
+              ),
+            ),
+            const SizedBox(height: 3),
+            Text(
+              '실행 유형 : 시작 꾸준형',
+              style: GoogleFonts.notoSansKr(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: accent.withValues(alpha: 0.85),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              body,
+              style: GoogleFonts.notoSansKr(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                height: 1.55,
+                color: const Color(0xFF3D3A4E),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE8E3F8)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '구독하면 이 자리에서 이렇게 받아요 (예시)',
+            style: GoogleFonts.notoSansKr(
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+              color: AppDesignTokens.brandVivid,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '아래는 다른 분의 기록으로 만든 예시예요.',
+            style: GoogleFonts.notoSansKr(
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+              color: AppDesignTokens.textMuted,
+            ),
+          ),
+          sample(
+            '프렌즈 플랜',
+            '완료율은 낮아도 손은 매번 대고 있어. 시작은 이미 되니까, 이번엔 한 번에 '
+                '걸리는 시간을 짧게 잡아서 끝까지 가보는 것부터 해봐.',
+            const Color(0xFF33A883),
+          ),
+          sample(
+            '마스터 플랜',
+            "이번 주는 손을 대는 데까지 늘 가셨습니다. 화요일과 목요일에 '기획서 쓰기'를 "
+                '붙잡으셨고, 완료 표시까지는 못 가셨지만 두 번 다 시작하신 건 분명합니다. '
+                '다음 주는 시작보다 끝을 먼저 정해보시면 어떨까요?',
+            AppDesignTokens.brandVivid,
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildCoachCommentCard(List<Map<String, dynamic>> records) {
