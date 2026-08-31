@@ -1260,6 +1260,12 @@ class ChatScreenController {
     _state?._injectAiMessage(text);
   }
 
+  /// 사용자가 버튼으로 답한 것을 채팅 기록에 한 줄로 남깁니다. 코치를
+  /// 부르지 않고 이미 일어난 일만 적어둔다.
+  void injectUserChoice(String text) {
+    _state?._injectUserChoice(text);
+  }
+
   /// 할 일 완료 후 미뤄둔 작업 리마인드 확인
   void checkDeferredReminder() {
     // 탭 복귀는 새 진입이다. 인사와 겹치지 않으므로 억제를 푼다.
@@ -7274,7 +7280,41 @@ Rules:
 
   // ── 한국어 시간 표현 추출 ─────────────────────────────────
   // null 반환 = 시간이 감지됐지만 오늘 안에 해당 시간이 없음 → 제안 건너뜀
-  ({String cleanText, String? time})? _extractTimeFromTask(String rawText) {
+  /// "11:30"처럼 숫자:숫자로 적힌 시각을 뒤따르는 정규식이 알아듣는
+  /// 한국어 시각 표현("11시 30분")으로 미리 바꿔둔다.
+  ///
+  /// [kSingleTimeRegex]/[kTimeRangeRegex]는 "9시", "오후 3시"처럼 한국어
+  /// 말투만 알아듣는다. 코치가 가끔 숫자 표기로 시각을 적으면(모델을 바꾼
+  /// 뒤로 더 잦아졌다) 시각이 안 떨어져 나가고 "11:30 사업지원서 쓰기"처럼
+  /// 시각이 할 일 이름에 그대로 눌러붙는다.
+  String _digitalTimeToKorean(String text) {
+    return text.replaceAllMapped(RegExp(r'\b([01]?\d|2[0-3]):([0-5]\d)\b'), (
+      m,
+    ) {
+      final hour = int.parse(m.group(1)!);
+      final minute = int.parse(m.group(2)!);
+      String prefix;
+      int displayHour;
+      if (hour == 0) {
+        prefix = '오전 ';
+        displayHour = 12;
+      } else if (hour < 12) {
+        prefix = '';
+        displayHour = hour;
+      } else if (hour == 12) {
+        prefix = '';
+        displayHour = 12;
+      } else {
+        prefix = '오후 ';
+        displayHour = hour - 12;
+      }
+      final base = '$prefix$displayHour시';
+      return minute == 0 ? base : '$base $minute분';
+    });
+  }
+
+  ({String cleanText, String? time})? _extractTimeFromTask(String rawInput) {
+    final rawText = _digitalTimeToKorean(rawInput);
     // "9시부터 10시까지"처럼 범위로 말했어도 할 일에는 끝 시각을 담을 자리가
     // 없다. 시작만 쓰되 매치는 범위 전체로 잡아야 제목에 '10시까지'가 안 남는다.
     final match =
@@ -7728,11 +7768,25 @@ Rules:
     // 이번 답변 안에서 같은 이름의 태그가 두 번 나오는 경우도 걸러낸다.
     // 안 그러면 카드는 하나만 보이는데 목록엔 똑같은 게 두 개 실려서,
     // "추가하기"를 눌러도 하나가 남아 카드가 안 사라지는 것처럼 보인다.
+    //
+    // 완전히 같은 문자열인지만 보면 "사업계획서 쓰기"가 이미 있는데 코치가
+    // "오늘 사업계획서 쓰기"라고 살짝 다르게 적은 것까지는 못 잡는다. 그래서
+    // 한쪽이 다른 쪽을 통째로 포함하는지도 함께 본다. 너무 짧은 이름끼리는
+    // 우연히 겹칠 수 있어 그 경우는 제외한다.
+    const minSubstringLen = 3;
+    bool overlapsExisting(String text) {
+      return existingTaskTexts.any((existing) {
+        if (existing.length < minSubstringLen || text.length < minSubstringLen) {
+          return existing == text;
+        }
+        return text.contains(existing) || existing.contains(text);
+      });
+    }
+
     final seenInBatch = <String>{};
     return suggestions.where((suggestion) {
       final suggestedText = _normalizeTaskSuggestionText(suggestion.text);
-      if (suggestedText.isEmpty ||
-          existingTaskTexts.contains(suggestedText)) {
+      if (suggestedText.isEmpty || overlapsExisting(suggestedText)) {
         return false;
       }
       return seenInBatch.add(suggestedText);

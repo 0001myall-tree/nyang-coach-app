@@ -665,6 +665,10 @@ class TasksScreen extends StatefulWidget {
   final String coachId;
   final void Function(String message)? onCoreTaskSet;
   final VoidCallback? onProgressChanged;
+  /// 오버플랜 다이얼로그에서 오간 문답. 있으면 채팅으로 바로 재생하고,
+  /// 없으면(예: 컨트롤러 없이 이 화면만 단독으로 띄운 자리) 다음에 채팅을
+  /// 열 때 재생하도록 [OverplanNudgeService]에 남겨둔다.
+  final void Function(List<Map<String, dynamic>> turns)? onOverplanTurns;
   final TasksScreenController? controller;
   final String? initialBottomSheet;
   final int initialTabIndex;
@@ -675,6 +679,7 @@ class TasksScreen extends StatefulWidget {
     required this.coachId,
     this.onCoreTaskSet,
     this.onProgressChanged,
+    this.onOverplanTurns,
     this.controller,
     this.initialBottomSheet,
     this.initialTabIndex = 0,
@@ -4065,12 +4070,13 @@ class _TasksScreenState extends State<TasksScreen>
   }
 
   Future<void> _checkOverplan() async {
-    if (!_coach.isMaster) return;
+    debugPrint('[overplan] _checkOverplan called');
     final prefs = await SharedPreferences.getInstance();
     final recentMax = await OverplanNudgeService.shouldFire(
       todayTasks: _activeTodayTasks.map((t) => t.toJson()).toList(),
       historyRaw: prefs.getString('nyang_history'),
     );
+    debugPrint('[overplan] shouldFire returned $recentMax, mounted=$mounted');
     if (recentMax == null || !mounted) return;
 
     final turns = <Map<String, dynamic>>[];
@@ -4087,7 +4093,14 @@ class _TasksScreenState extends State<TasksScreen>
       turns.add({'isUser': true, 'text': secondChoice});
     }
 
-    await OverplanNudgeService.recordChatTurns(turns);
+    if (widget.onOverplanTurns != null) {
+      // 즉시 채팅으로 넘길 길이 있으면 바로 재생한다. 저장만 해두면 채팅
+      // 화면이 다음에 새로 열릴 때(앱 재시작, 백그라운드 복귀)까지 미뤄져서,
+      // 방금 답한 문답이 한참 뒤 다른 대화 다음에 뒤늦게 나타나 보인다.
+      widget.onOverplanTurns!(turns);
+    } else {
+      await OverplanNudgeService.recordChatTurns(turns);
+    }
   }
 
   static const String _overplanGoAhead = '그렇게 할게';

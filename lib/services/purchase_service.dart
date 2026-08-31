@@ -186,17 +186,30 @@ class PurchaseService {
   Future<void> _grantPlan(PurchasePlan plan, PurchaseDetails purchase) async {
     // TODO: Move entitlement writes behind a Cloud Function after adding
     // App Store Server API / Google Play Developer API receipt validation.
-    await UserDataService.setPlan(
-      plan.planType,
-      expiresAt: plan.entitlementExpiresAt(
-        purchase.transactionDate == null
-            ? DateTime.now()
-            : DateTime.fromMillisecondsSinceEpoch(
-                int.tryParse(purchase.transactionDate!) ??
-                    DateTime.now().millisecondsSinceEpoch,
-              ),
-      ),
+    final candidateExpiry = plan.entitlementExpiresAt(
+      purchase.transactionDate == null
+          ? DateTime.now()
+          : DateTime.fromMillisecondsSinceEpoch(
+              int.tryParse(purchase.transactionDate!) ??
+                  DateTime.now().millisecondsSinceEpoch,
+            ),
     );
+
+    // 구매 스트림은 같은 구독을 앱을 열 때마다 다시 흘려보낼 수 있고, 그때
+    // transactionDate가 비어 있으면 위에서 "지금부터 며칠"로 다시 잰다.
+    // 그대로 덮어쓰면 만료일이 열 때마다 오늘 기준으로 밀리면서, 마스터
+    // 개통 안내([[master_unlock_notice]])가 매번 "새 구독"으로 보여 또 뜬다.
+    // 이미 가진 만료일이 이번에 다시 잰 값보다 같거나 늦으면(또는 영구면)
+    // 그대로 둔다 - 진짜로 더 늘어난 경우(연장 결제)만 갱신한다.
+    final current = await UserDataService.load();
+    final keepsCurrent =
+        current.isPlanActive &&
+        current.planType == plan.planType &&
+        (current.planExpiresAt == null ||
+            !current.planExpiresAt!.isBefore(candidateExpiry));
+    if (keepsCurrent) return;
+
+    await UserDataService.setPlan(plan.planType, expiresAt: candidateExpiry);
   }
 
   PurchasePlan? _planForProductId(String productId) =>
