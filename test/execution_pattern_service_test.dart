@@ -309,6 +309,20 @@ void main() {
       expect(ExecutionPatternService.typeLabel(raw), isNot('자유형'));
     });
 
+    test('완료율이 바닥이면 무난형이라고 하지 않는다', () {
+      // 어느 유형에도 안 걸린 사람은 전부 무난형으로 떨어지는데, 그 판정은
+      // 완료율을 안 본다. 실제 기록에서 완료율 18%인 사람이 "특별히 처지는
+      // 곳 없이 고르게 되고 있음"을 들었다.
+      final raw = history([
+        day(1, planned: 3, done: 0),
+        day(2, planned: 3, done: 0),
+        day(3, planned: 3, done: 3),
+        day(4, planned: 5, done: 0, startedNotDone: 2),
+        day(5, planned: 3, done: 0),
+      ]);
+      expect(ExecutionPatternService.typeLabel(raw), isNot('무난형'));
+    });
+
     test('계획을 매일 쓰면 완료가 어중간해도 무난형', () {
       final raw = history(
         List.generate(5, (i) => day(i + 1, planned: 5, done: 3)),
