@@ -5296,11 +5296,15 @@ $block
         await LifeContextService.mayAskCondition()) {
       if (!mounted) return false;
       final trend = await ExecutionPatternService.activeDayTrend();
+      // 저번에 받아둔 답. 두 주 만에 다시 묻는 자리라, 그때 뭐라고 했는지를
+      // 먼저 짚어야 같은 질문을 두 번 받는 것으로 안 읽힌다.
+      final lastAnswers = await LifeContextService.conditionAnswersPicked();
       if (!mounted) return false;
       _injectAiMessage(
         _greetingBuilder.buildConditionAsk(
           from: trend.lastWeek,
           to: trend.thisWeek,
+          lastAnswer: lastAnswers.isEmpty ? null : lastAnswers.first,
         ),
         kind: _masterConditionAskKind,
         choices: _conditionAskLabels,

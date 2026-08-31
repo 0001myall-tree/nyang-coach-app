@@ -295,6 +295,12 @@ class GreetingVoice {
   /// 기록으로는 못 보는 자리다.
   final List<String> conditionAsk;
 
+  /// 저번에 답을 받아둔 사람에게 다시 물을 때. `{{answer}}`는 그때 고른 것.
+  ///
+  /// 같은 말을 두 주 만에 그대로 다시 물으면, 답한 사람 입장에서는 지난번
+  /// 대답이 어디로 갔나 싶다. 기억하고 있다는 것부터 보이고 나서 묻는다.
+  final List<String> conditionReAsk;
+
   /// 답을 골랐을 때. 알아들었다는 것만 짧게 알린다.
   final List<String> conditionReply;
 
@@ -470,6 +476,7 @@ class GreetingVoice {
     required this.offPlanDoneReply,
     required this.coreAsk,
     required this.conditionAsk,
+    required this.conditionReAsk,
     required this.conditionReply,
     required this.capacityAsk,
     required this.capacityReplyTight,
@@ -783,6 +790,12 @@ class MasterGreetingCopy {
           '{그 두 날은 뭐가 달랐을까요|되는 날엔 뭐가 달랐을까요}?',
       '{되는 날과 안 되는 날이 꽤 갈리시네요|하시는 날엔 다 하시는데 아예 못 하시는 날도 있네요}.\n'
           '{되는 날엔 뭐가 달랐을까요|무엇이 달랐을까요}?',
+    ],
+    conditionReAsk: [
+      '저번엔 {{answer}}라고 하셨죠.\n'
+          '{요즘도 그런가요|지금도 그런지 궁금합니다}?',
+      '{{answer}} — 저번에 이렇게 짚어주셨습니다.\n'
+          '{그 뒤로 달라진 게 있을까요|요즘은 어떠신가요}?',
     ],
     capacityAsk: [
       '오늘 {쓰실 수 있는 시간이 얼마나 되시나요|시간이 얼마나 나시나요}?\n'
@@ -1198,6 +1211,12 @@ class MasterGreetingCopy {
           '{그 두 날은 뭐가 달랐냥|되는 날엔 뭐가 달랐냥}?',
       '{되는 날이랑 안 되는 날이 꽤 갈린다냥|하는 날엔 다 하는데 아예 못 하는 날도 있다냥}.\n'
           '{되는 날엔 뭐가 달랐냥|뭐가 달랐냥}?',
+    ],
+    conditionReAsk: [
+      '저번엔 {{answer}}라고 했지.\n'
+          '{요즘도 그렇냥|지금도 그런지 궁금하다냥}?',
+      '{{answer}} — 저번에 이렇게 짚어줬다냥.\n'
+          '{그 뒤로 달라진 게 있냥|요즘은 어떻냥}?',
     ],
     capacityAsk: [
       '오늘 {쓸 수 있는 시간이 얼마나 되냥|시간이 얼마나 나냥}?\n'
@@ -1681,7 +1700,17 @@ class MasterGreetingBuilder extends GreetingLinePicker {
   /// 되는 날에 무엇이 달랐는지 묻는 말.
   ///
   /// 지난 이레보다 해낸 날이 늘었으면 그 이야기부터 꺼낸다.
-  String buildConditionAsk({int? from, int? to}) {
+  String buildConditionAsk({int? from, int? to, String? lastAnswer}) {
+    // 저번에 답을 받아둔 사람에게는 그 답부터 꺼낸다. 늘었다는 소식보다
+    // 앞에 두는 것은, 같은 물음을 두 번째로 받는 쪽에서 제일 먼저 걸리는
+    // 것이 "저번에 말했는데"이기 때문이다.
+    if (lastAnswer != null && lastAnswer.trim().isNotEmpty) {
+      return pickLine(
+        voice.conditionReAsk
+            .map((line) => line.replaceAll('{{answer}}', "'$lastAnswer'"))
+            .toList(growable: false),
+      );
+    }
     if (from == null || to == null || to <= from) {
       return pickLine(voice.conditionAsk);
     }
