@@ -16640,13 +16640,29 @@ ${Prompts.outputRulesTail}$plannerActionSection$coachOfferTaskRule$halmaeHint$re
           height: 44,
           padding: const EdgeInsets.symmetric(horizontal: 14),
           decoration: BoxDecoration(
-            color: const Color(0xFFF4F0FF),
+            gradient: AppDesignTokens.brandVividGradient,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: const Color(0xFFDED6FF), width: 1.2),
+            boxShadow: [
+              BoxShadow(
+                color: AppDesignTokens.brandVivid.withValues(alpha: 0.32),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
+              SvgPicture.asset(
+                'assets/icons/bolt.svg',
+                width: 13,
+                height: 13,
+                colorFilter: const ColorFilter.mode(
+                  Colors.white,
+                  BlendMode.srcIn,
+                ),
+              ),
+              const SizedBox(width: 6),
               Flexible(
                 child: Text(
                   '빠른 실행',
@@ -16655,7 +16671,7 @@ ${Prompts.outputRulesTail}$plannerActionSection$coachOfferTaskRule$halmaeHint$re
                   style: GoogleFonts.notoSansKr(
                     fontSize: 13,
                     fontWeight: FontWeight.w900,
-                    color: const Color(0xFF8B7CCC),
+                    color: Colors.white,
                   ),
                 ),
               ),
@@ -17128,15 +17144,11 @@ ${Prompts.outputRulesTail}$plannerActionSection$coachOfferTaskRule$halmaeHint$re
                     child: FractionallySizedBox(
                       widthFactor: progress,
                       alignment: Alignment.centerLeft,
-                      child: Container(
-                        decoration: const BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [
-                              AppDesignTokens.brandAccent,
-                              AppDesignTokens.brandMuted,
-                            ],
-                          ),
+                      child: const DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: AppDesignTokens.progressGradient,
                         ),
+                        child: SizedBox.expand(),
                       ),
                     ),
                   ),
@@ -18076,33 +18088,87 @@ ${Prompts.outputRulesTail}$plannerActionSection$coachOfferTaskRule$halmaeHint$re
     );
   }
 
+  /// 말풍선 안에 세로로 쌓이는 선택지 버튼.
+  ///
+  /// 같은 모양이 세 카드에 복사돼 있던 것을 한자리로 모았다. 버튼 생김새가
+  /// 카드마다 갈리면 사용자에게는 다른 종류의 버튼처럼 보인다.
+  ///
+  /// [slot]은 버튼이 놓인 자리다. 마스터 방에서는 자리마다 색을 돌려 쓴다 —
+  /// 라벨이 아니라 자리로 고르는 것은, 저녁 카드처럼 일정 이름이 그대로 버튼이
+  /// 되는 자리가 있어 이름으로는 짝을 맞출 수 없어서다.
+  Widget _buildChoiceButton(String label, int slot, VoidCallback onTap) {
+    // 마스터만 색을 돌린다. 프렌즈 방은 배경 그림이 이미 화면을 채우고 있어서
+    // 버튼까지 색을 나누면 어수선해진다.
+    final varyTone = _coach.isMaster;
+    final tone = AppDesignTokens.chatAccentSlot(slot);
+    final ink = varyTone
+        ? AppDesignTokens.chatAccentInks[tone]
+        : _coach.accentColor;
+    final surface = varyTone
+        ? AppDesignTokens.chatAccentSurfaces[tone]
+        : const Color(0xFFF8F5FF);
+    final border = varyTone
+        ? AppDesignTokens.chatAccentBorders[tone]
+        : const Color(0xFFE5DEFF);
+    final icon = varyTone ? _choiceIcon(label, ink) : null;
+    return GestureDetector(
+      onTap: _isLoading ? null : onTap,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: surface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: border),
+        ),
+        child: Row(
+          children: [
+            if (icon != null) ...[icon, const SizedBox(width: 8)],
+            Expanded(
+              child: Text(
+                label,
+                // 아이콘이 붙은 줄만 왼쪽에서 시작한다. 가운데로 두면 아이콘과
+                // 글씨 사이가 버튼마다 달라져 줄이 안 맞는다.
+                textAlign: icon == null ? TextAlign.center : TextAlign.left,
+                style: GoogleFonts.notoSansKr(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                  color: ink,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 선택지 버튼 앞에 붙는 아이콘. 이름이 정해져 있는 보기에만 붙는다.
+  ///
+  /// 일정 이름이 그대로 보기가 되는 자리도 있어서, 모르는 말에는 아무것도
+  /// 붙이지 않고 색만 나가게 둔다.
+  Widget? _choiceIcon(String label, Color color) {
+    final asset = switch (label) {
+      _masterCoreStartedLabel => 'assets/icons/fa-circle-play-solid.svg',
+      _masterCoreBurdenLabel => 'assets/icons/heart-pulse.svg',
+      _masterCoreBusyLabel => 'assets/icons/calendar-days.svg',
+      _masterStalledDoneLabel => 'assets/icons/circle-check.svg',
+      _masterStalledBurdenLabel => 'assets/icons/heart-pulse.svg',
+      _masterStalledBusyLabel => 'assets/icons/calendar-days.svg',
+      _ => null,
+    };
+    if (asset == null) return null;
+    return SvgPicture.asset(
+      asset,
+      width: 14,
+      height: 14,
+      colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
+    );
+  }
+
   Widget _buildStartDifficultyChoiceCard(ChatMessage msg) {
     final time = DateFormat('a h:mm', 'ko').format(msg.time);
-    final accent = _coach.accentColor;
 
-    Widget choiceButton(String label, VoidCallback onTap) {
-      return GestureDetector(
-        onTap: _isLoading ? null : onTap,
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          decoration: BoxDecoration(
-            color: const Color(0xFFF8F5FF),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: const Color(0xFFE5DEFF)),
-          ),
-          child: Text(
-            label,
-            textAlign: TextAlign.center,
-            style: GoogleFonts.notoSansKr(
-              fontSize: 13,
-              fontWeight: FontWeight.w800,
-              color: accent,
-            ),
-          ),
-        ),
-      );
-    }
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
@@ -18161,8 +18227,9 @@ ${Prompts.outputRulesTail}$plannerActionSection$coachOfferTaskRule$halmaeHint$re
                     ),
                   ),
                   const SizedBox(height: 12),
-                  choiceButton(
+                  _buildChoiceButton(
                     '첫 조각 골라줘',
+                    0,
                     () => _send(
                       '첫 조각 골라줘',
                       apiInputOverride: '지금 뭐하지?',
@@ -18170,7 +18237,7 @@ ${Prompts.outputRulesTail}$plannerActionSection$coachOfferTaskRule$halmaeHint$re
                     ),
                   ),
                   const SizedBox(height: 8),
-                  choiceButton('생각 비우고 시작할래', _startMorningCountdown),
+                  _buildChoiceButton('생각 비우고 시작할래', 1, _startMorningCountdown),
                 ],
               ),
             ),
@@ -18200,31 +18267,7 @@ ${Prompts.outputRulesTail}$plannerActionSection$coachOfferTaskRule$halmaeHint$re
     void Function(String label) onChoice,
   ) {
     final time = DateFormat('a h:mm', 'ko').format(msg.time);
-    final accent = _coach.accentColor;
 
-    Widget choiceButton(String label, VoidCallback onTap) {
-      return GestureDetector(
-        onTap: _isLoading ? null : onTap,
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          decoration: BoxDecoration(
-            color: const Color(0xFFF8F5FF),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: const Color(0xFFE5DEFF)),
-          ),
-          child: Text(
-            label,
-            textAlign: TextAlign.center,
-            style: GoogleFonts.notoSansKr(
-              fontSize: 13,
-              fontWeight: FontWeight.w800,
-              color: accent,
-            ),
-          ),
-        ),
-      );
-    }
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
@@ -18282,9 +18325,13 @@ ${Prompts.outputRulesTail}$plannerActionSection$coachOfferTaskRule$halmaeHint$re
                       color: AppDesignTokens.textPrimary,
                     ),
                   ),
-                  for (final label in msg.choices) ...[
+                  for (var i = 0; i < msg.choices.length; i++) ...[
                     const SizedBox(height: 8),
-                    choiceButton(label, () => onChoice(label)),
+                    _buildChoiceButton(
+                      msg.choices[i],
+                      i,
+                      () => onChoice(msg.choices[i]),
+                    ),
                   ],
                 ],
               ),
@@ -19031,31 +19078,7 @@ ${Prompts.outputRulesTail}$plannerActionSection$coachOfferTaskRule$halmaeHint$re
     List<(String, VoidCallback)> options,
   ) {
     final time = DateFormat('a h:mm', 'ko').format(msg.time);
-    final accent = _coach.accentColor;
 
-    Widget choiceButton(String label, VoidCallback onTap) {
-      return GestureDetector(
-        onTap: _isLoading ? null : onTap,
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          decoration: BoxDecoration(
-            color: const Color(0xFFF8F5FF),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: const Color(0xFFE5DEFF)),
-          ),
-          child: Text(
-            label,
-            textAlign: TextAlign.center,
-            style: GoogleFonts.notoSansKr(
-              fontSize: 13,
-              fontWeight: FontWeight.w800,
-              color: accent,
-            ),
-          ),
-        ),
-      );
-    }
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
@@ -19118,7 +19141,7 @@ ${Prompts.outputRulesTail}$plannerActionSection$coachOfferTaskRule$halmaeHint$re
                   ],
                   for (var i = 0; i < options.length; i++) ...[
                     if (i > 0) const SizedBox(height: 8),
-                    choiceButton(options[i].$1, options[i].$2),
+                    _buildChoiceButton(options[i].$1, i, options[i].$2),
                   ],
                 ],
               ),
@@ -19742,15 +19765,24 @@ ${Prompts.outputRulesTail}$plannerActionSection$coachOfferTaskRule$halmaeHint$re
     return const BoxDecoration(color: Colors.transparent);
   }
 
-  Widget _buildMasterQuickChip(String chip) {
-    final chipInk = _quickChipForegroundColor;
+  /// [slot]은 칩이 놓인 자리. 이름이 아니라 자리로 색을 고르는 것은, 칩 이름에
+  /// 그날 일정이 그대로 들어오기도 해서 이름으로는 짝을 맞출 수가 없어서다.
+  Widget _buildMasterQuickChip(String chip, int slot) {
+    final tone = AppDesignTokens.chatAccentSlot(slot);
+    final chipInk = AppDesignTokens.chatAccentInks[tone];
     return AppChip(
       label: chip,
       icon: _chipIcon(chip, color: chipInk),
-      backgroundColor: _quickChipBackgroundColor,
+      backgroundColor: AppDesignTokens.chatAccentSurfaces[tone],
       foregroundColor: chipInk,
-      borderColor: _quickChipBorderColor,
-      boxShadow: _quickChipShadow,
+      borderColor: AppDesignTokens.chatAccentBorders[tone],
+      boxShadow: [
+        BoxShadow(
+          color: chipInk.withValues(alpha: 0.14),
+          blurRadius: 14,
+          offset: const Offset(0, 4),
+        ),
+      ],
       fontSize: AppDesignTokens.textBody,
       onTap: () {
         final override = _quickChipSendOverrides[chip];
@@ -19805,8 +19837,9 @@ ${Prompts.outputRulesTail}$plannerActionSection$coachOfferTaskRule$halmaeHint$re
 
   Widget _buildMasterChipRow() {
     final List<Widget> items = [];
-    for (final chip in _masterQuickChips) {
-      items.add(_buildMasterQuickChip(chip));
+    final chips = _masterQuickChips;
+    for (var i = 0; i < chips.length; i++) {
+      items.add(_buildMasterQuickChip(chips[i], i));
       items.add(const SizedBox(width: 7));
     }
     return SingleChildScrollView(
@@ -20104,30 +20137,20 @@ ${Prompts.outputRulesTail}$plannerActionSection$coachOfferTaskRule$halmaeHint$re
                         decoration: BoxDecoration(
                           gradient: isFriends
                               ? null
-                              : const LinearGradient(
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                  colors: [
-                                    AppDesignTokens.brand,
-                                    AppDesignTokens.brandMuted,
-                                  ],
-                                ),
+                              : AppDesignTokens.brandVividGradient,
                           color: isFriends ? _coach.accentColor : null,
                           borderRadius: BorderRadius.circular(
                             AppDesignTokens.radiusPill,
                           ),
-                          border: isFriends
-                              ? null
-                              : Border.all(
-                                  color: const Color(0xFFE6DCFF),
-                                  width: 1.2,
-                                ),
+                          // 마스터는 테두리를 두르지 않는다. 채워진 보라 위에
+                          // 연한 테두리를 얹으면 가장자리가 흐려 보인다.
+                          border: null,
                           boxShadow: [
                             BoxShadow(
                               color: isFriends
                                   ? _coach.accentColor.withOpacity(0.35)
-                                  : AppDesignTokens.brand.withValues(
-                                      alpha: 0.28,
+                                  : AppDesignTokens.brandVivid.withValues(
+                                      alpha: 0.34,
                                     ),
                               blurRadius: isFriends ? 10 : 15,
                               offset: const Offset(0, 4),
