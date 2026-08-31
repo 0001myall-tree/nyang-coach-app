@@ -222,6 +222,9 @@ class LifeContextService {
   static const String _conditionKey = 'life_execution_condition';
   static const String _conditionAtKey = 'life_execution_condition_at';
 
+  /// 마지막으로 물어본 시각. 답을 안 고르고 넘겨도 남는다.
+  static const String _conditionAskedAtKey = 'life_execution_condition_asked_at';
+
   /// 골라둔 답을 이만큼만 들고 있는다.
   ///
   /// 되는 조건은 사는 모양이 바뀌면 같이 바뀐다. 특히 "일부러 쉬었다"는
@@ -308,11 +311,32 @@ class LifeContextService {
   }
 
   /// 아직 물어본 적이 없거나, 물어본 지 한참 지났는지.
+  ///
+  /// 답한 시각만 보면 안 된다. 답을 안 고르고 넘긴 사람에게는 물어본 적이
+  /// 없는 것이 되어, 다음에 인사할 자리가 생기는 대로 같은 질문이 다시 뜬다.
+  /// 실제로 2분 사이에 두 번 뜬 기록이 있다. 안 고른 것도 대답이라, 물어본
+  /// 시각을 따로 남기고 그쪽도 함께 본다.
   static Future<bool> mayAskCondition() async {
     final prefs = await SharedPreferences.getInstance();
-    final at = DateTime.tryParse(prefs.getString(_conditionAtKey) ?? '');
-    if (at == null) return true;
-    return DateTime.now().difference(at) >= conditionAskInterval;
+    final now = DateTime.now();
+    for (final key in [_conditionAtKey, _conditionAskedAtKey]) {
+      final at = DateTime.tryParse(prefs.getString(key) ?? '');
+      if (at != null && now.difference(at) < conditionAskInterval) return false;
+    }
+    return true;
+  }
+
+  /// 물어봤다는 것만 남긴다. 답을 고르면 [saveConditionAnswers]가 따로 남긴다.
+  ///
+  /// 답을 담는 자리([_conditionAtKey])에 같이 쓰지 않는다. 그 시각은 답이
+  /// 얼마나 묵었는지를 재는 데도 쓰여서, 묻기만 한 것으로 갱신하면 없는 답이
+  /// 방금 받은 답처럼 된다.
+  static Future<void> markConditionAsked() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      _conditionAskedAtKey,
+      DateTime.now().toIso8601String(),
+    );
   }
 
   /// 골랐다. 답을 모르겠다고 해도 물어본 것은 물어본 것이라 시각을 남긴다.

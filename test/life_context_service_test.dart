@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nyang_coach/services/life_context_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// 같은 말을 [times]번 들은 것으로 친다.
 List<LifeHit> hits(Map<String, int> counts) => [
@@ -74,6 +75,34 @@ void main() {
 
     test('아니라는 말만 있고 무엇인지 없으면 아무 일도 없다', () {
       expect(LifeContextService.negatedKindsIn('오늘은 안 해'), isEmpty);
+    });
+  });
+
+  group('되는 날의 조건 묻기', () {
+    setUp(() => SharedPreferences.setMockInitialValues({}));
+
+    test('물어본 적이 없으면 묻는다', () async {
+      expect(await LifeContextService.mayAskCondition(), isTrue);
+    });
+
+    test('답을 안 고르고 넘겨도 두 주는 다시 묻지 않는다', () async {
+      // 2분 사이에 같은 질문이 두 번 뜬 적이 있다. 답한 시각만 보고 있어서,
+      // 그냥 넘긴 사람에게는 물어본 적이 없는 것으로 남았다.
+      await LifeContextService.markConditionAsked();
+      expect(await LifeContextService.mayAskCondition(), isFalse);
+    });
+
+    test('답을 고른 뒤에도 다시 묻지 않는다', () async {
+      await LifeContextService.saveConditionAnswers(['일찍 시작했어']);
+      expect(await LifeContextService.mayAskCondition(), isFalse);
+    });
+
+    test('묻기만 한 것은 답으로 세지 않는다', () async {
+      // 물어본 시각을 답 자리에 같이 쓰면, 고른 적 없는 답이 방금 받은
+      // 답처럼 되살아난다.
+      await LifeContextService.markConditionAsked();
+      expect(await LifeContextService.conditionAnswersPicked(), isEmpty);
+      expect(await LifeContextService.executionConditionLine(), isEmpty);
     });
   });
 }

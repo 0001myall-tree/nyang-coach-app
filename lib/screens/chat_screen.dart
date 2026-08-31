@@ -5303,6 +5303,9 @@ $block
       // 저번에 받아둔 답. 두 주 만에 다시 묻는 자리라, 그때 뭐라고 했는지를
       // 먼저 짚어야 같은 질문을 두 번 받는 것으로 안 읽힌다.
       final lastAnswers = await LifeContextService.conditionAnswersPicked();
+      // 물어본 것부터 남긴다. 답을 안 고르고 넘기면 여기 말고는 남는 데가
+      // 없어서, 다음 인사 자리에 같은 질문이 또 뜬다.
+      await LifeContextService.markConditionAsked();
       if (!mounted) return false;
       _injectAiMessage(
         _greetingBuilder.buildConditionAsk(
