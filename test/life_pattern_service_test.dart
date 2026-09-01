@@ -297,13 +297,14 @@ void main() {
       expect(await LifePatternService.promptBlock('bro'), contains('본인이 고른 답'));
     });
 
-    test('그 방식대로 잡으라고 못박는다', () async {
-      // 실어주기만 하면 코치는 이 답을 읽고도 자기가 아는 일반적인 방법을
-      // 권한다. 그 사람이 아니라고 말해둔 방식으로.
+    test('어디에 쓰는 답인지 밝힌다', () async {
+      // 실어주기만 하고 아무 말도 없으면 코치가 자기가 아는 일반적인 방법을
+      // 권한다. 다만 어긋나게 권하지 말라는 금지까지 두지는 않는다 — 몰아서
+      // 하고 싶다고 한 사람도 가끔은 조금씩 하고 싶은 날이 있다.
       await LifePatternService.saveAnswer('halmae', 'style', ['몰아서 하고 싶어']);
       final block = await LifePatternService.promptBlock('halmae');
       expect(block, contains('언제 어떻게 넣을지도 이 답 안에서'));
-      expect(block, contains('어긋나게 권하지 마세요'));
+      expect(block, isNot(contains('마세요')));
     });
 
     test('맡지 않는 코치에는 실리지 않는다', () async {
