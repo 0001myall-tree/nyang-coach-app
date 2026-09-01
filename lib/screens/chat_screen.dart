@@ -1149,47 +1149,6 @@ class _LocalResponses {
   ];
 }
 
-/// 햇살 코치 가꾸기 문장 한 줄.
-///
-/// 뜻이 담긴 [body]는 그대로 두고, 앞에 붙는 도입구와 뒤에 붙는 효과 문장의
-/// 어미만 매번 새로 조합한다. 같은 내용이라도 입에서 나오는 모양이 달라져서
-/// 복붙 티가 덜 난다.
-///
-/// [effect]는 효과 문장에서 어미를 뗀 어간이다(예: '기분이 조금 나아지').
-/// null이면 효과 문장 없이 [body]만 쓴다 — 효과를 굳이 덧붙일 자리가 아닌
-/// 문장들(새벽처럼 재우는 쪽으로 안내하는 문장)이 여기 해당한다.
-class _GroomingLine {
-  const _GroomingLine(this.body, {this.effect});
-
-  final String body;
-  final String? effect;
-}
-
-/// 어떤 문장을 몇 번 거절했는지와, 마지막으로 거절한 시각.
-/// 한 번은 그날 컨디션일 수 있어서 횟수를 같이 센다.
-class _GroomingDislike {
-  _GroomingDislike({required this.count, required this.lastAt});
-
-  int count;
-  DateTime lastAt;
-
-  Map<String, dynamic> toJson() => {
-    'count': count,
-    'at': lastAt.millisecondsSinceEpoch,
-  };
-
-  static _GroomingDislike? fromJson(dynamic raw) {
-    if (raw is! Map) return null;
-    final count = raw['count'];
-    final at = raw['at'];
-    if (count is! int || at is! int) return null;
-    return _GroomingDislike(
-      count: count,
-      lastAt: DateTime.fromMillisecondsSinceEpoch(at),
-    );
-  }
-}
-
 // ─────────────────────────────────────────────────────────────
 // 채팅 화면
 // ─────────────────────────────────────────────────────────────
@@ -1345,7 +1304,6 @@ class _ChatScreenState extends State<ChatScreen>
   bool _timerActiveIsMind = false;
   int? _timerActiveInsertIndex;
   String? _usageLimitBanner;
-  bool _awaitingBroWorkoutPreference = false;
   String _broQuickWorkoutChipLabel = '';
   bool _isCheckingVisionRecommendationAllowance = false;
   bool _isCheckingNextActionAllowance = false;
@@ -3172,6 +3130,49 @@ $role
       '체지방',
       '근육',
       '몸매',
+    ];
+    return signals.any(normalized.contains);
+  }
+
+  bool _isGroomingContext(String userText) {
+    if (_containsGroomingSignal(userText)) return true;
+    final recent = _messages.reversed
+        .take(4)
+        .map((message) => message.text)
+        .join(' ');
+    return _containsGroomingSignal(recent);
+  }
+
+  // '머리'와 '옷'은 단어 하나로 두지 않는다. "머리 아파", "옷 사야 하는데"까지
+  // 걸려서 엉뚱한 턴에 관리 지침이 실린다. 걸리는 자리를 좁혀서 적는다.
+  //
+  // 몸매·다이어트 쪽은 운동 신호에 있다. 여기에도 넣으면 한 턴에 지침 두 개가
+  // 실려서 운동하자는 말과 관리하자는 말이 같이 나온다.
+  bool _containsGroomingSignal(String text) {
+    final normalized = text.replaceAll(RegExp(r'\s+'), '').toLowerCase();
+    const signals = [
+      '가꾸',
+      '꾸미',
+      '단장',
+      '예뻐',
+      '피부',
+      '화장',
+      '메이크업',
+      '스킨케어',
+      '세안',
+      '미용',
+      '네일',
+      '손톱',
+      '눈썹',
+      '향수',
+      '헤어',
+      '두피',
+      '머리감',
+      '머리손질',
+      '머리스타일',
+      '앞머리',
+      '옷차림',
+      '스타일링',
     ];
     return signals.any(normalized.contains);
   }
@@ -11133,288 +11134,6 @@ Rules:
     titleCtrl.dispose();
   }
 
-  bool _containsAny(String text, List<String> keywords) {
-    return keywords.any((keyword) => text.contains(keyword));
-  }
-
-  String _workoutNormalized(String input) {
-    return input.replaceAll(RegExp(r'\s+'), '').toLowerCase();
-  }
-
-  bool _isBroWorkoutRecommendationRequest(String normalized) {
-    return _containsAny(normalized, [
-      '추천',
-      '추천해줘',
-      '뭐해야',
-      '뭘해야',
-      '뭐부터',
-      '어디서부터',
-      '알려줘',
-      '골라줘',
-      '루틴',
-      '영상',
-      '링크',
-      '따라할',
-      '시작할까',
-      '하면돼',
-      '하면되',
-      '해볼까',
-    ]);
-  }
-
-  String? _broTargetedWorkoutAreas(String normalized) {
-    final areas = <String>[];
-    if (_containsAny(normalized, ['복부', '복근', '뱃살', '배살', '코어'])) {
-      areas.add('복부/코어');
-    }
-    if (_containsAny(normalized, ['하체', '다리', '엉덩이', '허벅지', '종아리'])) {
-      areas.add('하체');
-    }
-    if (_containsAny(normalized, ['상체', '팔', '이두', '삼두'])) {
-      areas.add('상체/팔');
-    }
-    if (_containsAny(normalized, ['어깨', '승모'])) {
-      areas.add('어깨');
-    }
-    if (_containsAny(normalized, ['등', '등운동', '광배'])) {
-      areas.add('등');
-    }
-    if (_containsAny(normalized, ['가슴', '흉근', '푸쉬업', '팔굽혀'])) {
-      areas.add('가슴');
-    }
-    if (_containsAny(normalized, ['전신', '온몸', '몸전체', '전체'])) {
-      areas.add('전신');
-    }
-    if (_containsAny(normalized, ['다이어트', '살빼', '체지방', '유산소'])) {
-      areas.add('다이어트/유산소');
-    }
-    if (_containsAny(normalized, ['스트레칭', '유연성', '풀어', '뻐근'])) {
-      areas.add('스트레칭');
-    }
-    if (areas.isEmpty) return null;
-    return areas.join(', ');
-  }
-
-  String? _buildBroTargetedWorkoutApiInput(String input) {
-    final normalized = _workoutNormalized(input);
-    final hasWorkoutIntent = _containsAny(normalized, [
-      '운동',
-      '루틴',
-      '추천',
-      '짜줘',
-      '해줘',
-      '뭐하지',
-      '뭐해야',
-      '뭘해야',
-      '할거',
-      '할것',
-      '스트레칭',
-      '다이어트',
-    ]);
-    if (!hasWorkoutIntent) return null;
-
-    final areas = _broTargetedWorkoutAreas(normalized);
-    if (areas == null) return null;
-
-    return '사용자가 부위별 또는 목적별 운동 추천을 요청했다. '
-        '사용자 원문: "$input". '
-        '중심 부위/목적: $areas. '
-        '사용자의 장소, 난이도, 시간, 소음 제약이 원문에 있으면 반드시 반영해줘. '
-        '조건이 부족하면 초보자도 바로 할 수 있는 짧은 루틴으로 추천하고, '
-        '세트/횟수/쉬는 시간을 간단히 포함해줘. '
-        '통증을 유발할 수 있는 동작은 피하고 대체 동작을 짧게 제시해줘. '
-        '말투는 갓생 형 코치답게 짧고 힘 있게 해줘.';
-  }
-
-  Future<String?> _tryBuildBroWorkoutReply(String input) async {
-    if (_coach.id != 'bro') return null;
-    final normalized = _workoutNormalized(input);
-    final prefs = await SharedPreferences.getInstance();
-    final pendingContext = prefs.getString('bro_pending_workout_context');
-
-    if (_containsAny(normalized, ['브릿지가뭐야', '브릿지뭐야', '브릿지어떻게'])) {
-      return '브릿지는 누워서 무릎 세우고 엉덩이 들어올리는 운동.\n발은 바닥에 붙이고, 엉덩이를 들어 올렸다가 천천히 내려오면 된다. 엉덩이랑 하체 깨우는 데 좋다.';
-    }
-
-    if (_containsAny(normalized, ['브릿지영상', '브릿지링크', '브릿지추천'])) {
-      return '브릿지는 8회만 가자.\n누워서 무릎 세우고, 엉덩이를 천천히 들어 올렸다가 내려와. 허리로 버티지 말고 엉덩이에 힘 주는 느낌으로.';
-    }
-
-    if (pendingContext == 'reluctant_reason') {
-      await prefs.remove('bro_pending_workout_context');
-      if (_containsAny(normalized, ['몸', '피곤', '힘들', '아파', '컨디션', '지침'])) {
-        return '오케이. 몸이 힘든 거면 오늘은 운동으로 이기려 하지 마라.\n그냥 몸 깨우는 정도만 가자.\n지금 제일 부담 없는 게 뭐냐. 5분 걷기, 스트레칭, 아니면 아예 쉬면서 내일 다시 잡기.';
-      }
-      if (_containsAny(normalized, ['귀찮', '의욕', '누워', '침대', '미루'])) {
-        return '오케이. 귀찮은 거면 의지 싸움으로 끌고 가지 마라.\n딱 하나만 정하자.\n집이야, 헬스장이야, 밖이야? 장소 말하면 형이 제일 덜 귀찮은 첫 행동만 잘라줄게.';
-      }
-      if (_containsAny(normalized, ['무섭', '오래쉬', '오랜만', '몇달', '몇년', '모르겠'])) {
-        return '그럼 바로 빡센 거 추천하면 안 되겠다.\n오늘은 1단계만 가자. 목이랑 어깨 풀고, 제자리 걷기 1분. 몸이 괜찮으면 그때 쉬운 본운동 하나 붙이면 된다.';
-      }
-      return '오케이. 그럼 오늘은 이유부터 잡자.\n몸이 힘든 쪽이야, 귀찮은 쪽이야, 아니면 뭘 해야 할지 몰라서 막힌 거야?';
-    }
-
-    final isWorkoutRelated = _containsAny(normalized, [
-      '운동',
-      '홈트',
-      '헬스',
-      '헬스장',
-      '웨이트',
-      '스트레칭',
-      '몸풀',
-      '폼롤러',
-      '밴드',
-      '러닝',
-      '조깅',
-      '타바타',
-      '복근',
-      '뱃살',
-      '다이어트',
-      '하체',
-      '상체',
-      '전신',
-      '층간소음',
-      '풀고왔다',
-      '풀었어',
-      '워밍업',
-      '오래쉬',
-      '오랜만',
-      '몇년만',
-      '몇달만',
-      '몇년',
-      '몇달',
-      '쉬었다',
-      '쉬었',
-      '운동안한',
-      '초보',
-      '입문',
-      '브릿지',
-      '힙힌지',
-      '계단',
-      'workout',
-      'exercise',
-    ]);
-    if (!isWorkoutRelated) return null;
-
-    final warmedUp = _containsAny(normalized, [
-      '풀고왔다',
-      '풀었어',
-      '스트레칭했',
-      '워밍업끝',
-      '몸풀었',
-      '운동중',
-    ]);
-    final gym = _containsAny(normalized, ['헬스장', '웨이트', '기구', '헬린이', '루틴']);
-    final reluctant = _containsAny(normalized, [
-      '하기싫',
-      '하기싫어',
-      '귀찮',
-      '못하겠',
-      '싫다',
-      '싫어',
-      '미루고싶',
-      '안하고싶',
-    ]);
-    final longBreak = _containsAny(normalized, [
-      '오래쉬',
-      '오랜만',
-      '몇년만',
-      '몇달만',
-      '운동안한',
-      '안한지오래',
-      '초보',
-      '입문',
-      '처음',
-    ]);
-    final lowerBody = _containsAny(normalized, [
-      '하체',
-      '다리',
-      '엉덩이',
-      '고관절',
-      '무릎',
-      '스쿼트',
-      '런지',
-    ]);
-    final genericWorkout = _containsAny(normalized, [
-      '운동',
-      '홈트',
-      '헬스',
-      '헬스장',
-      '웨이트',
-      '다이어트',
-      '몸만들',
-    ]);
-    final explicitWorkoutRequest = _isBroWorkoutRecommendationRequest(
-      normalized,
-    );
-
-    if (!warmedUp &&
-        !reluctant &&
-        !longBreak &&
-        genericWorkout &&
-        !explicitWorkoutRequest &&
-        Random().nextDouble() < 0.25) {
-      return _pickLine([
-        '아 근데 너 운동 요새 많이 하냐?\n오래 쉬었으면 바로 추천부터 안 하고, 먼저 상태부터 보고 가자.',
-        '잠깐. 너 혹시 운동 오래 쉬었어?\n몸이 무거운 건지, 뭘 해야 할지 모르는 건지부터 보자.',
-      ]);
-    }
-
-    if (reluctant && !warmedUp) {
-      await prefs.setString('bro_pending_workout_context', 'reluctant_reason');
-      return _pickLine([
-        '야 하기 싫은 거 정상이다.\n오늘은 왜 하기 싫은데?\n몸이 힘든 거냐, 귀찮은 거냐?',
-        '오케이. 바로 운동 추천 안 한다.\n먼저 이유부터 보자. 몸이 무거운 거야, 아니면 그냥 시작이 귀찮은 거야?',
-      ]);
-    }
-
-    if (longBreak && !warmedUp && !explicitWorkoutRequest) {
-      return _pickLine([
-        '몇 달 쉬었으면 무서울 수 있다. 정상이다.\n바로 운동 던지기 전에 하나만 보자.\n뭐가 제일 걸려? 체력, 부상 걱정, 아니면 뭘 해야 할지 모르는 거?',
-        '오케이. 오래 쉬었으면 바로 빡세게 가는 건 별로다.\n지금은 네 상태부터 보는 게 먼저야.\n운동 추천이 필요한 거야, 아니면 그냥 다시 시작할 용기가 필요한 거야?',
-      ]);
-    }
-
-    if (longBreak && !warmedUp && explicitWorkoutRequest) {
-      if (lowerBody && Random().nextBool()) {
-        return '오케이. 오래 쉬었으면 바로 스쿼트부터 박지 마라.\n누워서 브릿지 8회만 해보자. 무릎 세우고, 엉덩이 들어올렸다가 천천히 내려오면 된다.\n하체 깨우기엔 이게 진입 장벽 낮다.';
-      }
-      final starter = Random().nextInt(4);
-      if (starter == 0) {
-        return '오케이.\n그럼 갑자기 빡세게 하는 것보다 몸부터 깨우는 게 좋겠다.\n벽 앞에 서서 힙힌지 8회만 해봐. 허리 꺾지 말고 엉덩이를 뒤로 빼는 느낌.\n오래 쉬었을 땐 이런 식으로 문턱 낮추는 게 낫다.';
-      }
-      if (starter == 1) {
-        return '오케이. 오래 쉬었으면 오늘은 단계 낮춰서 가자.\n1단계 목 돌리기 5번, 어깨 돌리기 10번, 제자리 걷기 1분.\n2단계 몸 괜찮으면 브릿지 8회만 붙여. 갑자기 빡세게 가지 마라.';
-      }
-      if (starter == 2) {
-        return '오케이. 오래 쉬었으면 오늘은 운동복 입고 10분 산책만 해도 성공이다.\n몸이 깨어나야 다음 것도 된다.\n형도 전문가 아니다. 그냥 운동 좋아해서 이것저것 해본 사람인데, 다시 시작할 땐 이렇게 문턱 낮추는 게 제일 세다.';
-      }
-      return '오케이. 오래 쉬었으면 오늘 바로 고강도 가지 마라.\n집이면 제자리 걷기 5분, 밖이면 산책 10분, 건물 안이면 계단 한두 층만 가자.\n운동을 가르치려는 게 아니라, 오늘 다시 시작하게 만드는 게 먼저다.';
-    }
-
-    if (gym && warmedUp) {
-      return _pickLine([
-        '좋아. 몸 풀었으면 본운동 간다.\n레그프레스 2세트, 랫풀다운 2세트, 러닝머신 걷기 10분. 세트 사이엔 60초만 쉬어. 복잡하게 가지 말고 이 정도만 제대로 해.',
-        '좋다. 이제 루틴 잡고 가자.\n스쿼트나 레그프레스 2세트, 체스트프레스 2세트, 마지막에 가볍게 걷기 10분. 몸 괜찮으면 다음번에 세트 하나 늘리면 된다.',
-      ]);
-    }
-
-    if (warmedUp) {
-      if (_containsAny(normalized, ['층간소음', '조용', '점프없이', '노점프'])) {
-        return '집이면 층간소음 신경 써야지. 점프는 빼자.\n스쿼트 10회, 뒤로 다리 뻗기 10회, 플랭크 20초. 1라운드 하고 괜찮으면 2라운드. 단계 올리는 건 그다음이다.';
-      }
-      if (_containsAny(normalized, ['복근', '뱃살', '배살', '복부'])) {
-        return '복근이면 허리부터 지켜라. 배에 힘 제대로 주고 간다.\n데드버그 10회, 플랭크 20초, 크런치 10회. 1라운드 먼저 하고, 허리 괜찮으면 2라운드까지.';
-      }
-      return _pickLine([
-        '좋아. 이제 몸 깨웠지? 그럼 본운동은 작게 간다.\n스쿼트 10회, 푸쉬업은 무릎 대고 8회, 제자리 걷기 1분. 1라운드 먼저 끝내.',
-        '좋다. 이제 본운동 들어가자.\n런지 8회씩, 플랭크 20초, 제자리 빠른 걷기 1분. 할 만하면 한 라운드만 더. 무리하면 바로 컷.',
-      ]);
-    }
-
-    return null;
-  }
-
   int? _directTimerRequestMinutes(String text) {
     final normalized = text.toLowerCase().replaceAll(RegExp(r'\s+'), '');
     final hasTimerWord =
@@ -11818,767 +11537,6 @@ Rules:
     );
   }
 
-  Future<void> _handleGroomingCareChip() async {
-    if (_isLoading) return;
-    await _loadGroomingMemory();
-    if (!mounted) return;
-    // 오늘 이미 하나 꺼내줬는데 또 눌렀다면, 그건 그게 별로였다는 뜻이다.
-    // 못 본 척하고 집·밖부터 다시 물으면 방금 한 말을 잊은 사람처럼 보인다.
-    final shownToday = _lastGroomingDate == _todayGroomingKey;
-    // 날이 바뀐 뒤 다시 열면 지난 추천을 한 번 되묻는다. 뭘 추천했는지 인용하진
-    // 않는다 — 문장을 잘라 붙이면 어색해지고, 되묻는다는 사실만으로 충분하다.
-    final askBack =
-        _lastGroomingBody != null &&
-        !shownToday &&
-        _askBackDoneDate != _todayGroomingKey;
-    if (shownToday) {
-      if (_groomingRetryDate != _todayGroomingKey) {
-        _groomingRetryDate = _todayGroomingKey;
-        _groomingRetryCount = 0;
-      }
-      _groomingRetryCount += 1;
-    }
-    // 장소를 아는 날엔 묻지 않고 바로 뽑는다. setState 밖에서 미리 만들어 둔다 —
-    // 뽑기가 최근 기록까지 건드려서, 빌드 중에 부르면 흐름을 따라가기 어려워진다.
-    final retryPlace = shownToday ? _lastGroomingPlace : null;
-    final retryReply = retryPlace == null
-        ? null
-        : (retryPlace == 'home'
-              ? _pickHomeGroomingRoutine()
-              : _pickOutdoorGroomingRoutine());
-
-    setState(() {
-      _messages.add(
-        ChatMessage(text: '나 좀 가꾸고 싶어', isUser: true, time: DateTime.now()),
-      );
-      // 되물을 게 있으면 여기서 멈춘다. 물어놓고 다음 질문을 같이 띄우면
-      // 대답할 자리가 없어서, 되묻는 게 아니라 혼잣말처럼 읽힌다.
-      if (askBack) {
-        _messages.add(
-          ChatMessage(
-            text: '저번에 얘기한 거 해봤어? 못 했어도 괜찮아.',
-            isUser: false,
-            time: DateTime.now(),
-          ),
-        );
-        _messages.add(
-          ChatMessage(
-            text: '',
-            isUser: false,
-            time: DateTime.now(),
-            kind: 'grooming_askback',
-          ),
-        );
-      } else if (retryReply != null) {
-        _messages.add(
-          ChatMessage(
-            text: _groomingRetryPrompt(_groomingRetryCount, retryPlace),
-            isUser: false,
-            time: DateTime.now(),
-          ),
-        );
-        _messages.add(
-          ChatMessage(text: retryReply, isUser: false, time: DateTime.now()),
-        );
-        _messages.add(
-          ChatMessage(
-            text: '',
-            isUser: false,
-            time: DateTime.now(),
-            kind: retryPlace == 'home'
-                ? 'grooming_followup_from_home'
-                : 'grooming_followup_from_outdoor',
-          ),
-        );
-      } else if (shownToday) {
-        _appendGroomingPlaceQuestion(
-          text: _groomingRetryPrompt(_groomingRetryCount, null),
-        );
-      } else {
-        _appendGroomingPlaceQuestion();
-      }
-      _suggestedTasks = [];
-      _dynamicChips = _coach.chips;
-      _suppressDefaultChips = false;
-    });
-    _scrollToBottom();
-    await _saveHistory();
-    await AnalyticsService.logConversationMessage(
-      coachId: widget.coachId,
-      usedApi: false,
-    );
-    // 가꾸기 퍼널의 분모. 이 값 대비 accept/resist 비율이 "문장이 실제로 먹혔나"의
-    // 유일한 신호라서, 문장을 더 손보기 전에 이것부터 쌓아둔다.
-    await AnalyticsService.logFeatureUsage('grooming_care');
-    if (shownToday) {
-      await _saveGroomingMemory();
-      // 하루에 두 번 이상 여는 비율. 이게 높으면 한 번에 주는 문장이 안 맞는다는
-      // 뜻이고, 풀을 늘릴지 정할 때 grooming_resist_repeat과 같이 봐야 한다.
-      await AnalyticsService.logFeatureUsage('grooming_care_retry');
-    }
-  }
-
-  /// 집·밖을 묻는 말과 선택지를 붙인다. setState 안에서만 부른다.
-  void _appendGroomingPlaceQuestion({String text = '좋아. 지금 집이야, 밖이야?'}) {
-    _messages.add(ChatMessage(text: text, isUser: false, time: DateTime.now()));
-    _messages.add(
-      ChatMessage(
-        text: '',
-        isUser: false,
-        time: DateTime.now(),
-        kind: 'grooming_care_choice',
-      ),
-    );
-  }
-
-  /// 되묻기에 답하면 그제서야 집·밖을 묻는다. 답에 따라 이어지는 말만 달라진다.
-  Future<void> _answerGroomingAskBack(bool done) async {
-    if (_isLoading) return;
-    HapticFeedback.lightImpact();
-    // 되묻기에 답이 돌아왔으니 오늘은 다시 묻지 않는다. 추천 날짜와 따로 두는 건,
-    // 여기서 그걸 오늘로 밀면 아직 아무것도 안 꺼내줬는데 "아까 그건 별로였어?"가 뜬다.
-    _askBackDoneDate = _todayGroomingKey;
-
-    setState(() {
-      _messages.add(
-        ChatMessage(
-          text: done ? '응, 해봤어' : '아니, 못 했어',
-          isUser: true,
-          time: DateTime.now(),
-        ),
-      );
-      _appendGroomingPlaceQuestion(
-        text: done
-            ? '잘했어. 그럼 오늘 것도 골라보자. 지금 집이야, 밖이야?'
-            : '그럴 수도 있지. 오늘 걸로 다시 해보자. 지금 집이야, 밖이야?',
-      );
-      _suggestedTasks = [];
-      _dynamicChips = _coach.chips;
-      _suppressDefaultChips = false;
-    });
-    _scrollToBottom();
-    await _saveHistory();
-    await _saveGroomingMemory();
-    await AnalyticsService.logConversationMessage(
-      coachId: widget.coachId,
-      usedApi: false,
-    );
-    // 되묻기에 실제로 답하는 비율, 그리고 해본 비율. 문장이 밖에서 먹혔는지의 유일한 단서다.
-    await AnalyticsService.logFeatureUsage(
-      done ? 'grooming_askback_done' : 'grooming_askback_missed',
-    );
-  }
-
-  Future<void> _sendGroomingCareRoutine({
-    required String userText,
-    required String reply,
-    required String feature,
-    String? place,
-  }) async {
-    if (_isLoading) return;
-    HapticFeedback.lightImpact();
-    if (place != null) _lastGroomingPlace = place;
-
-    setState(() {
-      _messages.add(
-        ChatMessage(text: userText, isUser: true, time: DateTime.now()),
-      );
-      _messages.add(
-        ChatMessage(text: reply, isUser: false, time: DateTime.now()),
-      );
-      _messages.add(
-        ChatMessage(
-          text: '',
-          isUser: false,
-          time: DateTime.now(),
-          kind: 'grooming_care_followup',
-        ),
-      );
-      _suggestedTasks = [];
-      _dynamicChips = _coach.chips;
-      _suppressDefaultChips = false;
-    });
-    _scrollToBottom();
-    await _saveHistory();
-    await AnalyticsService.logConversationMessage(
-      coachId: widget.coachId,
-      usedApi: false,
-    );
-    // 집·밖 중 어느 쪽에서 열리는지. 한쪽이 거의 안 눌리면 그 목록부터 손보면 된다.
-    await AnalyticsService.logFeatureUsage(feature);
-    await _saveGroomingMemory();
-  }
-
-  Future<void> _sendHomeGroomingRoutine() {
-    return _sendGroomingCareRoutine(
-      userText: '집이야',
-      reply: _pickHomeGroomingRoutine(),
-      feature: 'grooming_home',
-      place: 'home',
-    );
-  }
-
-  Future<void> _sendOutdoorGroomingRoutine() {
-    return _sendGroomingCareRoutine(
-      userText: '밖이야',
-      reply: _pickOutdoorGroomingRoutine(),
-      feature: 'grooming_outdoor',
-      place: 'outdoor',
-    );
-  }
-
-  Future<void> _acceptGroomingCareRoutine() async {
-    // _send가 로딩 중이면 아무 일도 안 하고 빠져나간다. 그 경우까지 세면
-    // 분자만 부풀어서 비율이 실제보다 좋게 보인다.
-    if (_isLoading) return;
-    // 문장을 받아들인 비율. grooming_care 대비로 봐야 의미가 있다.
-    await AnalyticsService.logFeatureUsage('grooming_accept');
-    await _send(
-      '알았어. 해볼게',
-      apiInputOverride: '방금 추천받은 가꾸기 루틴을 해보겠다고 한다. 부담을 키우지 말고 짧게 응원해줘.',
-    );
-  }
-
-  Future<void> _resistGroomingCareRoutine() async {
-    if (_isLoading) return;
-    // 이 비율이 곧 "뭐야 하고 지나가는" 비율이다. 문장 손볼 우선순위의 근거.
-    await AnalyticsService.logFeatureUsage('grooming_resist');
-    // 거절한 문장은 횟수만 세어둔다. 뽑기에는 영향을 주지 않는다.
-    final rejected = _lastGroomingBody;
-    if (rejected != null) {
-      final record = _groomingDislikes[rejected];
-      if (record == null) {
-        _groomingDislikes[rejected] = _GroomingDislike(
-          count: 1,
-          lastAt: DateTime.now(),
-        );
-      } else {
-        record.count += 1;
-        record.lastAt = DateTime.now();
-        // 전에도 거절했던 문장을 또 거절한 경우. grooming_resist 대비로 보면
-        // "반복 때문에 지치는가"를 알 수 있다. 문장을 더 쓸지 정하는 근거다.
-        await AnalyticsService.logFeatureUsage('grooming_resist_repeat');
-      }
-      await _saveGroomingMemory();
-    }
-    await _send(
-      '하기 귀찮아',
-      apiInputOverride:
-          '방금 추천받은 가꾸기 루틴이 귀찮다고 느낀다. 더 작게 줄이거나 부담을 낮춰서 바로 시작할 수 있게 도와줘.',
-    );
-  }
-
-  /// 방금 본 문장이 또 나오면 "복붙" 티가 제일 크게 난다. 최근에 나온 건 후보에서 뺀다.
-  /// 앱을 다시 켜면 비워지는데, 한 세션 안의 연속 반복만 막아도 체감이 크게 달라져서
-  /// 저장까지는 하지 않는다(뽑기 함수들이 전부 동기라 async로 바꾸면 호출부까지 번진다).
-  /// 집과 밖이 이 기록을 함께 쓴다 — 두 목록에 겹치는 문장이 있어서,
-  /// 버튼을 바꿔 눌렀을 때 같은 문장이 다시 나오는 것도 같이 막힌다.
-  /// 도입구와 어미가 매번 달라지므로, 완성된 문장이 아니라 본문(body)을 기준으로 기억한다.
-  final List<String> _recentGroomingLines = [];
-  static const int _groomingRecentMemory = 3;
-
-  /// 귀찮다고 한 문장의 거절 횟수와 마지막 거절 시각.
-  ///
-  /// 뽑기에는 쓰지 않는다. 한때 거절한 문장을 후보에서 뺐는데, 시간대별로 나뉜
-  /// 풀이 원래 3~12개라 뺄수록 눈에 띄게 얕아졌다. 게다가 안 나온 문장을
-  /// 알아차리는 사람은 없어서, 기억한다는 느낌은 주지 못하고 풀만 깎였다.
-  /// 그 몫은 되묻기가 한다 — 그건 기억이 화면에 뜬다.
-  ///
-  /// 대신 어떤 문장이 반복해서 거절당하는지 세어두고 지표로 내보낸다.
-  /// 숨길 문장이 아니라 고쳐 쓸 문장을 찾는 게 이 기록의 쓸모다.
-  /// 풀 크기만큼만 쌓이므로(현재 38개) 따로 만료시키지 않는다.
-  final Map<String, _GroomingDislike> _groomingDislikes = {};
-
-  /// 마지막으로 추천한 문장과 그 날짜. 날이 바뀐 뒤 다시 열면 되물어보고,
-  /// 같은 날 또 열면 아까 것이 별로였냐고 짚는다.
-  String? _lastGroomingBody;
-  String? _lastGroomingDate;
-
-  /// 되묻기에 답한 날. 답을 받고도 루틴을 안 고른 채 다시 열었을 때
-  /// 같은 질문을 또 하지 않으려고, 추천 날짜와 따로 센다.
-  String? _askBackDoneDate;
-
-  /// 같은 날 다시 누른 횟수와 그 날짜. 세 번, 네 번 누르는데 매번 똑같이
-  /// "아까 그건 별로였어?"로 받으면, 짚어주려던 게 오히려 녹음 같아진다.
-  int _groomingRetryCount = 0;
-  String? _groomingRetryDate;
-
-  /// 오늘 고른 장소('home'/'outdoor'). 같은 날 또 열면 이걸 다시 묻지 않는다.
-  /// 하루 사이에 나갈 수도 있어서 단정만 하고 끝내지 않고, 아래 카드에
-  /// 자리를 바꾸는 버튼을 같이 둔다.
-  String? _lastGroomingPlace;
-
-  /// 다시 누른 횟수에 맞춰 받는 말. 처음엔 안 맞았다고 단정하지 않는다 —
-  /// 해놓고 하나 더 받으러 온 걸 수도 있어서, 묻고 그냥 다음으로 넘어간다.
-  /// 횟수가 쌓이면 캐묻지 않고 물러난다. 계속 안 맞는 날에 이유까지 물으면
-  /// 고르는 게 일이 된다.
-  String _groomingRetryPrompt(int count, String? place) {
-    const tail = '지금 집이야, 밖이야?';
-    if (place == null) {
-      if (count <= 1) return '아까 내가 하라고 한 건 했어? 음.. 그럼 또 뭐가 있을까. $tail';
-      if (count == 2) return '오늘 계속 안 맞네. 다시 골라볼게. $tail';
-      return '오늘은 뭘 꺼내도 잘 안 맞는 날인가 봐. 그런 날도 있어. $tail';
-    }
-    // 장소를 아는 날엔 되묻지 않는다. 방금 들은 걸 또 묻는 게 제일 티가 난다.
-    final label = place == 'home' ? '집' : '밖';
-    if (count <= 1) {
-      return '아까 내가 하라고 한 건 했어? 음.. 그럼 또 뭐가 있을까. 아까 $label이라고 했지?';
-    }
-    if (count == 2) return '오늘 계속 안 맞네. 아직 $label이지? 하나 더 볼게.';
-    return '오늘은 뭘 꺼내도 잘 안 맞는 날인가 봐. 그런 날도 있어.';
-  }
-
-  bool _groomingMemoryLoaded = false;
-
-  String get _groomingMemoryPrefix => 'nyang_grooming_${widget.coachId}';
-  String get _todayGroomingKey =>
-      DateTime.now().toIso8601String().substring(0, 10);
-
-  /// 앱을 다시 켜도 남아야 하는 것만 prefs에서 읽는다. 전부 사실이라 틀릴 일이 없다.
-  Future<void> _loadGroomingMemory() async {
-    if (_groomingMemoryLoaded) return;
-    final prefs = await SharedPreferences.getInstance();
-    _recentGroomingLines
-      ..clear()
-      ..addAll(prefs.getStringList('${_groomingMemoryPrefix}_recent') ?? []);
-    _loadGroomingDislikes(prefs);
-    _lastGroomingBody = prefs.getString('${_groomingMemoryPrefix}_last_body');
-    _lastGroomingDate = prefs.getString('${_groomingMemoryPrefix}_last_date');
-    _askBackDoneDate = prefs.getString('${_groomingMemoryPrefix}_askback_date');
-    _groomingRetryDate = prefs.getString('${_groomingMemoryPrefix}_retry_date');
-    _groomingRetryCount =
-        prefs.getInt('${_groomingMemoryPrefix}_retry_count') ?? 0;
-    _lastGroomingPlace = prefs.getString('${_groomingMemoryPrefix}_last_place');
-    _groomingMemoryLoaded = true;
-  }
-
-  /// 거절 기록을 읽는다. 예전 버전은 문장 목록만 저장했으니 한 번 거절한 것으로
-  /// 치고 넘긴다 — 그 목록 때문에 후보에서 빠져 있던 문장이 전부 돌아온다.
-  void _loadGroomingDislikes(SharedPreferences prefs) {
-    _groomingDislikes.clear();
-    final raw = prefs.getString('${_groomingMemoryPrefix}_disliked_v2');
-    if (raw != null) {
-      try {
-        final decoded = jsonDecode(raw);
-        if (decoded is Map) {
-          decoded.forEach((body, value) {
-            final record = _GroomingDislike.fromJson(value);
-            if (body is String && record != null) {
-              _groomingDislikes[body] = record;
-            }
-          });
-        }
-      } catch (_) {
-        // 형식이 깨졌으면 기록을 버린다. 거절 기억을 잃는 것보다 앱이 막히는 게 나쁘다.
-      }
-    } else {
-      final legacy = prefs.getStringList('${_groomingMemoryPrefix}_disliked');
-      final now = DateTime.now();
-      for (final body in legacy ?? const <String>[]) {
-        _groomingDislikes[body] = _GroomingDislike(count: 1, lastAt: now);
-      }
-    }
-  }
-
-  Future<void> _saveGroomingMemory() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setStringList(
-      '${_groomingMemoryPrefix}_recent',
-      _recentGroomingLines,
-    );
-    await prefs.setString(
-      '${_groomingMemoryPrefix}_disliked_v2',
-      jsonEncode(
-        _groomingDislikes.map(
-          (body, record) => MapEntry(body, record.toJson()),
-        ),
-      ),
-    );
-    final body = _lastGroomingBody;
-    final date = _lastGroomingDate;
-    // 오늘 날짜를 여기서 찍지 않는다. 이 함수는 되묻기에 답만 해도 불리는데,
-    // 그때 추천 날짜까지 오늘로 밀리면 안 꺼내준 걸 꺼내준 걸로 세게 된다.
-    // 날짜는 실제로 문장을 뽑는 자리에서만 갱신한다.
-    if (body != null) {
-      await prefs.setString('${_groomingMemoryPrefix}_last_body', body);
-    }
-    if (date != null) {
-      await prefs.setString('${_groomingMemoryPrefix}_last_date', date);
-    }
-    final askBackDate = _askBackDoneDate;
-    if (askBackDate != null) {
-      await prefs.setString(
-        '${_groomingMemoryPrefix}_askback_date',
-        askBackDate,
-      );
-    }
-    final place = _lastGroomingPlace;
-    if (place != null) {
-      await prefs.setString('${_groomingMemoryPrefix}_last_place', place);
-    }
-    final retryDate = _groomingRetryDate;
-    if (retryDate != null) {
-      await prefs.setString('${_groomingMemoryPrefix}_retry_date', retryDate);
-      await prefs.setInt(
-        '${_groomingMemoryPrefix}_retry_count',
-        _groomingRetryCount,
-      );
-    }
-  }
-
-  final Random _groomingRandom = Random();
-
-  /// 오늘 정한 어미 후보 셋. 셋 다 추측('~일 거야', '~걸')이거나 경험담('~더라')이라
-  /// 효과를 단정하지 않는다. '~해 보여'처럼 남의 시선을 끌어오는 어미는 후보에 없다.
-  static const List<String> _groomingEndings = ['거야', '더라', '걸'];
-
-  /// 직전에 쓴 도입구·어미. 같은 게 연달아 나오면 조합이 돌아가는 게 아니라
-  /// 고장 난 것처럼 읽혀서, 바로 앞에 쓴 것만 후보에서 뺀다.
-  String? _lastGroomingOpener;
-  String? _lastGroomingEnding;
-
-  /// 집 도입구. 빈 문자열이 섞여 있어서 도입구 없이 바로 시작하기도 한다.
-  static const List<String> _homeGroomingOpeners = [
-    '',
-    '딱 5분이면 돼. ',
-    '오래 안 걸리는 걸로 하나 골라봤어. ',
-    '지금 바로 할 수 있는 거야. ',
-    '마음부터 좀 풀어보자. ',
-    '무겁게 생각하지 말고, ',
-  ];
-
-  /// 밖 도입구. 지금 서 있는 자리에서 된다는 걸 앞에서 짚어준다.
-  static const List<String> _outdoorGroomingOpeners = [
-    '',
-    '밖이면 이게 편해. ',
-    '지금 서 있는 자리에서 되는 거야. ',
-    '조용히 할 수 있는 거야. ',
-  ];
-
-  /// 새벽엔 재우는 쪽으로 안내하니까 도입구도 조용한 것만 쓴다. 집·밖 공용.
-  static const List<String> _lateNightGroomingOpeners = [
-    '',
-    '지금은 이 정도면 충분해. ',
-    '오늘은 여기까지만. ',
-  ];
-
-  _GroomingLine _pickFreshGroomingLine(List<_GroomingLine> pool) {
-    final fresh = pool
-        .where((line) => !_recentGroomingLines.contains(line.body))
-        .toList();
-    // 후보가 다 소진되면 어쩔 수 없이 전체에서 다시 고른다.
-    final candidates = fresh.isEmpty ? pool : fresh;
-    final picked = candidates[_groomingRandom.nextInt(candidates.length)];
-    _lastGroomingBody = picked.body;
-    // 실제로 문장을 꺼내주는 건 여기뿐이다. 추천 날짜는 이 자리에서만 갱신한다.
-    _lastGroomingDate = _todayGroomingKey;
-    _recentGroomingLines.add(picked.body);
-    while (_recentGroomingLines.length > _groomingRecentMemory) {
-      _recentGroomingLines.removeAt(0);
-    }
-    return picked;
-  }
-
-  /// 직전에 쓴 조각만 빼고 하나 고른다.
-  String _pickGroomingSlot(List<String> pool, String? last) {
-    final fresh = pool.where((s) => s != last).toList();
-    final candidates = fresh.isEmpty ? pool : fresh;
-    return candidates[_groomingRandom.nextInt(candidates.length)];
-  }
-
-  /// 어간에 관형형 'ㄹ'을 붙인다('나아지' → '나아질', '들' → '들', '좋' → '좋을').
-  /// 여기 쓰는 어간은 전부 규칙 활용이라 받침만 보고 판단해도 어색해지지 않는다.
-  String _groomingModifierForm(String stem) {
-    const hangulStart = 0xAC00;
-    const hangulEnd = 0xD7A3;
-    final last = stem.codeUnitAt(stem.length - 1);
-    if (last < hangulStart || last > hangulEnd) return '$stem을';
-    final finalConsonant = (last - hangulStart) % 28;
-    // 받침이 없으면 그 자리에 'ㄹ'(종성 8번)을 넣는다.
-    if (finalConsonant == 0) {
-      return stem.substring(0, stem.length - 1) + String.fromCharCode(last + 8);
-    }
-    if (finalConsonant == 8) return stem; // 이미 'ㄹ' 받침이면 그대로 쓴다.
-    return '$stem을';
-  }
-
-  /// 도입구 + 본문 + (효과 문장 + 어미)로 한 줄을 완성한다.
-  /// 본문은 손대지 않으니 뜻은 그대로 두고 말투만 달라진다.
-  String _renderGroomingLine(_GroomingLine line, List<String> openers) {
-    final opener = _pickGroomingSlot(openers, _lastGroomingOpener);
-    // 후보가 하나뿐인 자리(폴백 답변)는 기억해봐야 다음 뽑기 폭만 좁힌다.
-    if (openers.length > 1) _lastGroomingOpener = opener;
-    final effect = line.effect;
-    if (effect == null) return '$opener${line.body}';
-    final ending = _pickGroomingSlot(_groomingEndings, _lastGroomingEnding);
-    _lastGroomingEnding = ending;
-    final closing = ending == '더라'
-        ? '$effect더라'
-        : '${_groomingModifierForm(effect)} $ending';
-    return '$opener${line.body} $closing.';
-  }
-
-  /// 집(낮)과 밖에 함께 들어가는 문장. 거울은 어디에나 있어서 양쪽 다 된다.
-  /// 한 군데에 두면 어느 쪽으로 뽑히든 최근 기록을 공유해서 연달아 나오는 걸 막을 수 있다.
-  static const _GroomingLine _mirrorSpotGroomingLine = _GroomingLine(
-    '거울 앞에 잠깐 서봐. 머리, 얼굴, 옷 중에 제일 신경 쓰이는 곳 하나만 가볍게 만져주자.',
-    effect: '별 거 아니어도 기분이 좀 나아지',
-  );
-
-  /// 공용 문장 중 새벽에도 꺼낼 수 있는 것들. 몸을 깨우는 동작이 없고
-  /// 부담을 내려놓는 쪽이라, 재우는 방향으로 안내하는 새벽 톤과 어긋나지 않는다.
-  /// 새벽 목록이 제일 얇아서(전용 5개) 여기서 받아 가는 몫이 크다.
-  static const List<_GroomingLine> _calmGroomingLines = [
-    _GroomingLine(
-      '오늘은 예뻐져야 한다는 숙제는 잠깐 미뤄두자. 손을 씻고 향이 나는 걸 하나 발라봐.',
-      effect: '몸이 편해지면 마음도 조금 따라오',
-    ),
-    _GroomingLine(
-      '목이랑 어깨만 천천히 풀어보자.',
-      effect: '스트레칭을 꾸준히 하면 몸선도 자세도 조금씩 좋아져서 몸이 괜히 더 가볍고 편해지',
-    ),
-  ];
-
-  /// 집에서 시간대를 안 타는 문장. 아침·낮·저녁 목록에 공통으로 얹는다.
-  /// 새벽(0~6시)엔 몸을 깨우는 동작이라 빼둔다 — 그 시간대는 재우는 쪽으로 안내한다.
-  static const List<_GroomingLine> _anytimeHomeGroomingRoutines = [
-    _GroomingLine(
-      '기지개를 쭉 편 다음 겨드랑이를 꾹꾹 눌러줘. 그리고 마지막으로 겨드랑이에서 팔 안쪽으로 쓸어주면 림프 순환이 잘 된대.',
-      effect: '몸이 시원해져서 기분도 조금 괜찮아지',
-    ),
-    _GroomingLine(
-      '따뜻한 물 한 모금 마시고 얼굴만 가볍게 씻어보자. 지금은 완벽한 관리보다 다시 산뜻해지는 느낌 하나면 충분해.',
-    ),
-    _GroomingLine(
-      '좋아하는 향수나 바디미스트가 있으면 한 번만 뿌려봐.',
-      effect: '향 하나로 기분이 꽤 빨리 돌아오',
-    ),
-    ..._calmGroomingLines,
-    _GroomingLine(
-      '화장품 바르기 전에 손부터 씻고, 화장품 용기 표면도 한 번 닦아줘.',
-      effect: '별 거 아닌 거 같아도 이런 게 쌓이면 피부가 덜 예민해지',
-    ),
-    _manualScalpMassageLine,
-  ];
-
-  String _pickHomeGroomingRoutine() {
-    final hour = DateTime.now().hour;
-    final lines = switch (hour) {
-      >= 6 && < 12 => const [
-        _GroomingLine(
-          '물 한 잔 먼저 마셔보자. 혹시 챙겨 먹는 영양제가 있으면 지금 같이 먹어도 좋아.',
-          effect: '몸 안쪽 컨디션이 잡히면 피부도 훨씬 덜 푸석해지',
-        ),
-        _GroomingLine(
-          '선크림은 발랐어? 밖에 안 나가도 실내로 햇빛이 들어오면 피부에 안 좋아.',
-          effect: '오늘은 선크림 하나만 챙겨도 관리한 느낌이 나',
-        ),
-        _GroomingLine(
-          '아침에 얼굴이 좀 부은 느낌이면 찬물로 손을 씻고, 턱이랑 귀 밑을 가볍게 쓸어줘. 세게 하지 말고 1분만 해도',
-          effect: '얼굴이 조금 깨는 느낌이 들',
-        ),
-        _GroomingLine(
-          '머리 앞쪽만 정리해보자.',
-          effect: '아침엔 전체 스타일보다 앞머리랑 정수리 볼륨만 살아도 하루가 훨씬 산뜻하게 시작되',
-        ),
-        _GroomingLine(
-          '어깨를 내리고 목을 길게 세워봐.',
-          effect: '아침 자세가 잡히면 숨도 깊어지고 몸이 한결 가벼워지',
-        ),
-        _GroomingLine('과일 챙겨먹는 거 어때?', effect: '비타민을 꾸준히 챙기면 피부 컨디션도 조금씩 달라지'),
-      ],
-      >= 12 && < 18 => const [
-        _GroomingLine(
-          '턱에 힘 빼고 입꼬리를 살짝 올려봐. 크게 바꾸지 않아도 충분히 괜찮아.',
-          effect: '머리 앞쪽만 정리하고 자세만 바로 세워도 얼굴에 들어간 힘이 스르르 풀리',
-        ),
-        _GroomingLine(
-          '미스트나 선크림이 있으면 피부부터 가볍게 챙겨보자. 그다음 입술이 건조하면 립밤만 발라줘.',
-          effect: '얼굴에 수분감 하나만 더해도 피곤한 게 조금 가시는 느낌이 들',
-        ),
-        _GroomingLine(
-          '지금 앉아 있어, 서 있어? 배에 힘을 아주 살짝만 줘봐. 모델들도 촬영 전에 자주 쓰는 작은 습관이래.',
-          effect: '허리를 세우고 아랫배를 안쪽으로 가볍게 당기면 몸이 훨씬 곧게 잡히는 느낌이 들',
-        ),
-        _mirrorSpotGroomingLine,
-      ],
-      >= 18 && < 24 => const [
-        _GroomingLine(
-          '손톱은 정리했어? 아직이면 오늘은 손톱만 깔끔하게 깎아보자.',
-          effect: '작은 부분인데도 손끝이 정돈되면 기분이 꽤 달라지',
-        ),
-        _GroomingLine(
-          '혹시 집 안에 방치된 미용기기 있어? 고데기, 괄사, 마사지기, 드라이기 같은 거. 없으면 안 쓰는 마스크팩도 괜찮아. 오늘은 새로 뭘 사지 말고, 이미 있는 걸 한 번 써먹어보자.',
-          effect: '안 쓰던 걸 꺼내 쓰는 것만으로도 뭔가 챙긴 기분이 나',
-        ),
-        _GroomingLine(
-          '두피 마사지 어때? 간단한 괄사 도구가 있으면 정수리 쪽으로 천천히 쓸어올려봐. 꾸준히 해주면 노화 예방이나 머리 빠짐 관리에도 도움 된대.',
-          effect: '두피가 덜 굳어서 머리가 한결 가벼워지',
-        ),
-        _GroomingLine(
-          '몸 전체를 관리하려고 하지 말고, 오늘은 신경 쓰이던 잔털 한 군데만 정리해봐.',
-          effect: '작은 정돈인데도 깔끔해진 느낌이 꽤 오래 가',
-        ),
-        _GroomingLine(
-          '자기 전 세안하고 화장품 바를 때, 여러 개를 한꺼번에 올리지 말고 하나씩 찹찹 흡수시켜줘.',
-          effect: '헤어라인, 귀 뒤, 목 아래쪽까지 같이 발라주면 피부가 훨씬 잘 챙겨진 느낌이 들',
-        ),
-        _GroomingLine(
-          '향이 나는 오일이나 로션을 목에 바르고 어깨랑 쇄골 쪽을 마사지해줘봐.',
-          effect: '노폐물이 빠져서 피부톤도 조금 맑아지',
-        ),
-        _GroomingLine(
-          '편한 옷으로 갈아입고 조명을 조금 따뜻하게 바꿔봐.',
-          effect: '분위기가 바뀌면 나를 대하는 마음도 덜 거칠어지',
-        ),
-      ],
-      _ => const [
-        _GroomingLine(
-          '너무 늦은 시간이니까 자극적인 관리는 빼자. 얼굴만 가볍게 씻고 보습 하나 얹어줘. 오늘은 피부를 깨우기보다 편하게 재우는 쪽이 좋아.',
-        ),
-        _GroomingLine(
-          '립밤이나 핸드크림처럼 조용한 관리 하나만 하자. 새벽엔 크게 꾸미려 하기보다 몸이 쉬어도 된다는 신호를 주는 게 더 좋아.',
-        ),
-        _GroomingLine(
-          '두피를 세게 문지르진 말고 손끝으로 살짝만 눌러줘. 머리가 조금 가벼워지면 바로 내려놓고 쉬자. 오래 하면 자극될 수 있어.',
-        ),
-        _GroomingLine(
-          '잠옷이나 편한 옷으로 갈아입고 목 주변만 느슨하게 풀어줘. 몸이 편해지는 상태를 만드는 것도 충분한 관리야.',
-        ),
-        _GroomingLine(
-          '뭘 관리하려고 하지 말고 잘 자는 게 1순위일 것 같아. 눈 감고 천천히 숨을 쉬어봐. 온 몸에 긴장 빼고. 할 수 있겠어?',
-        ),
-      ],
-    };
-    final isLateNight = hour < 6;
-    // 새벽엔 공용 문장 중 조용한 것만 받는다. 나머지는 몸을 깨우는 쪽이라 뺀다.
-    final pool = isLateNight
-        ? [...lines, ..._calmGroomingLines]
-        : [...lines, ..._anytimeHomeGroomingRoutines];
-    return _renderGroomingLine(
-      _pickFreshGroomingLine(pool),
-      isLateNight ? _lateNightGroomingOpeners : _homeGroomingOpeners,
-    );
-  }
-
-  /// 마지막 말풍선이 집·밖 선택지 카드인가. 그 자리에서 온 답만 장소로 읽는다.
-  bool get _awaitingGroomingPlace =>
-      _messages.isNotEmpty && _messages.last.kind == 'grooming_care_choice';
-
-  /// 밖으로 치는 말. 회사·학교·카페는 남 앞이라 밖 문장이 그대로 맞는다.
-  static const List<String> _outdoorPlaceWords = [
-    '밖',
-    '회사',
-    '사무실',
-    '학교',
-    '카페',
-    '지하철',
-    '버스',
-    '외출',
-    '이동중',
-    '길',
-  ];
-
-  static const List<String> _homePlaceWords = ['집', '방', '자취', '침대'];
-
-  /// 버튼 대신 타이핑한 답을 집·밖으로 읽는다. 어느 쪽도 아니면 null을 주고
-  /// 평소 대화로 넘긴다 — 애매한 걸 억지로 한쪽에 밀어 넣지 않는다.
-  String? _groomingPlaceFromText(String text) {
-    final normalized = text.replaceAll(RegExp(r'\s+'), '');
-    // 밖을 먼저 본다. '집에 가는 길이야'처럼 둘 다 걸리는 말은 아직 밖이다.
-    if (_outdoorPlaceWords.any(normalized.contains)) return 'outdoor';
-    if (_homePlaceWords.any(normalized.contains)) return 'home';
-    return null;
-  }
-
-  String? _groomingToolFallbackReply(String text) {
-    final normalized = text.replaceAll(RegExp(r'\s+'), '');
-    final mentionsScalpCare =
-        normalized.contains('괄사') ||
-        normalized.contains('두피마사지') ||
-        normalized.contains('두피') ||
-        normalized.contains('마사지도구');
-    final saysUnavailable =
-        normalized.contains('없') ||
-        normalized.contains('안가지') ||
-        normalized.contains('안갖') ||
-        normalized.contains('못찾');
-    if (!mentionsScalpCare || !saysUnavailable) return null;
-    return _manualScalpMassageRoutine();
-  }
-
-  static const _GroomingLine _manualScalpMassageLine = _GroomingLine(
-    '손끝으로 두피를 천천히 눌러봐. 뻐근하다 싶은 부위를 둥글게 문질러주면 돼. 맞다, 너무 길게 하면 자극이 될 수 있으니까 3분 정도만 하자.',
-    effect: '두피가 풀리면 머리도 가볍고 얼굴 컨디션도 조금 살아나는 느낌이 들',
-  );
-
-  /// "괄사 없어" 같은 답을 바로 되받는 자리라 도입구도 '그럼' 하나로 고정한다.
-  /// 기분 전환 목록에 같은 문장이 들어갈 땐 거기 도입구가 대신 붙는다.
-  String _manualScalpMassageRoutine() =>
-      _renderGroomingLine(_manualScalpMassageLine, const ['그럼 ']);
-
-  /// 밖에서는 시간대를 나누지 않는다. 남 앞에서 티 안 나게 할 수 있는 게
-  /// 어차피 비슷해서, 아침에 뽑히든 저녁에 뽑히든 어색해지지 않을 문장만 모았다.
-  /// 시간에 걸리는 문장(선크림)은 조건절을 앞에 달아서 밤에도 걸리지 않게 했다.
-  static const List<_GroomingLine> _outdoorGroomingRoutines = [
-    _GroomingLine(
-      '햇빛 아래 오래 있었으면 선크림 한 번만 덧발라줘. 없으면 그늘로 두어 걸음만 옮겨도 돼.',
-      effect: '이거 하나만 챙겨도 나중에 피부가 덜 지치',
-    ),
-    _GroomingLine(
-      '턱에 힘 빼고 입꼬리를 살짝 올려봐. 크게 바꾸지 않아도 충분히 괜찮아.',
-      effect: '자세만 바로 세워도 얼굴에 들어간 힘이 스르르 풀리',
-    ),
-    _GroomingLine(
-      '가방에 미스트나 립밤 있어? 있으면 건조한 데 하나만 발라줘.',
-      effect: '수분감 하나만 더해도 피곤한 게 조금 가시는 느낌이 들',
-    ),
-    _GroomingLine(
-      '지금 앉아 있어, 서 있어? 배에 힘을 아주 살짝만 줘봐. 모델들도 촬영 전에 자주 쓰는 작은 습관이래.',
-      effect: '허리를 세우고 아랫배를 안쪽으로 가볍게 당기면 몸이 훨씬 곧게 잡히는 느낌이 들',
-    ),
-    _mirrorSpotGroomingLine,
-    _GroomingLine(
-      '어깨를 뒤로 살짝 열고 시선만 조금 위로 둬봐. 걸음도 같이 느긋해지게.',
-      effect: '움츠린 자세만 풀어도 숨이 깊어지고 몸이 한결 가벼워지',
-    ),
-    _GroomingLine(
-      '물 마신 지 오래됐으면 지금 몇 모금만 마시자. 편의점이든 정수기든 지나가는 길에 있는 걸로.',
-      effect: '몸 안쪽이 채워지면 얼굴 푸석한 것도 조금 가라앉',
-    ),
-    _GroomingLine(
-      '화장실 갈 일 있으면 손 씻고 찬물로 손목 안쪽을 잠깐만 대봐. 오래 말고 몇 초면 돼.',
-      effect: '열이 내려가면서 얼굴에 몰린 기운도 좀 정리되',
-    ),
-    _GroomingLine(
-      '손거울이나 폰 화면으로 앞머리만 슬쩍 정리해봐. 전체를 손볼 필요는 없어.',
-      effect: '앞머리랑 정수리 볼륨만 살아도 인상이 꽤 산뜻해지',
-    ),
-    _GroomingLine(
-      '옷 매무새 한 번만 고쳐보자. 소매랑 옷깃만 정리해도 충분해.',
-      effect: '몇 초 안 걸리는데 몸에 붙어 있던 어수선한 느낌이 가시',
-    ),
-  ];
-
-  /// 새벽에 밖이면 관리보다 무사히 들어가는 게 먼저다. 짧게만 짚어준다.
-  static const List<_GroomingLine> _lateNightOutdoorGroomingRoutines = [
-    _GroomingLine('이 시간에 밖이면 관리보다 무사히 들어가는 게 먼저야. 가는 길에 물 몇 모금이랑 립밤 정도만 챙기자.'),
-    _GroomingLine('새벽 공기에 얼굴이 금방 마르니까 립밤이나 핸드크림만 하나 발라줘. 나머지는 들어가서 하자.'),
-    _GroomingLine('어깨 움츠리고 걷지 말고 목만 살짝 세워봐. 집에 도착하면 씻는 것도 미루지 말고 바로 하자.'),
-  ];
-
-  String _pickOutdoorGroomingRoutine() {
-    final isLateNight = DateTime.now().hour < 6;
-    return _renderGroomingLine(
-      _pickFreshGroomingLine(
-        isLateNight
-            ? _lateNightOutdoorGroomingRoutines
-            : _outdoorGroomingRoutines,
-      ),
-      isLateNight ? _lateNightGroomingOpeners : _outdoorGroomingOpeners,
-    );
-  }
-
   static const String _nyangPerfectionismLineDateKey =
       'nyang_halbae_perfectionism_line_date';
   static const String _nyangPerfectionismLineIndexKey =
@@ -12730,59 +11688,6 @@ Rules:
     _speechBaseText = '';
     _lastSpeechSegment = '';
     HapticFeedback.lightImpact();
-
-    if (widget.coachId == 'boyfriend' &&
-        trimmed == '나 좀 가꾸고 싶어' &&
-        apiInputOverride == null) {
-      await _handleGroomingCareChip();
-      return;
-    }
-
-    // 선택지 카드가 떠 있을 때만 타이핑한 답을 장소로 읽는다. 아무 때나 '집'을
-    // 집어내면, 밖에서 지쳐 "집에 가고 싶어"라고 한 사람한테 집 루틴을 던지게 된다.
-    if (apiInputOverride == null && _awaitingGroomingPlace) {
-      final typedPlace = _groomingPlaceFromText(trimmed);
-      if (typedPlace != null) {
-        final isHome = typedPlace == 'home';
-        await _sendGroomingCareRoutine(
-          userText: trimmed,
-          reply: isHome
-              ? _pickHomeGroomingRoutine()
-              : _pickOutdoorGroomingRoutine(),
-          feature: isHome ? 'grooming_home' : 'grooming_outdoor',
-          place: typedPlace,
-        );
-        // 버튼 대신 쳐서 들어온 비율. 높으면 선택지가 안 보이거나 좁다는 뜻이다.
-        await AnalyticsService.logFeatureUsage('grooming_place_typed');
-        return;
-      }
-    }
-
-    final groomingToolFallback = _groomingToolFallbackReply(trimmed);
-    if (widget.coachId == 'boyfriend' && groomingToolFallback != null) {
-      setState(() {
-        _messages.add(
-          ChatMessage(text: trimmed, isUser: true, time: DateTime.now()),
-        );
-        _messages.add(
-          ChatMessage(
-            text: groomingToolFallback,
-            isUser: false,
-            time: DateTime.now(),
-          ),
-        );
-        _suggestedTasks = [];
-        _dynamicChips = _coach.chips;
-        _suppressDefaultChips = false;
-      });
-      _scrollToBottom();
-      await _saveHistory();
-      await AnalyticsService.logConversationMessage(
-        coachId: widget.coachId,
-        usedApi: false,
-      );
-      return;
-    }
 
     if (trimmed == '미래를 위한 오늘' && apiInputOverride == null) {
       setState(() {
@@ -13087,77 +11992,6 @@ Rules:
     if (widget.coachId == 'cat' && trimmed == '남은 것 중 뭐하지?') {
       apiInput = '지금 뭐하지?';
     }
-    var skipBroWorkoutLocalReply = false;
-
-    if (widget.coachId == 'bro') {
-      if (trimmed == '지금 할 운동') {
-        setState(() {
-          _messages.add(
-            ChatMessage(text: trimmed, isUser: true, time: DateTime.now()),
-          );
-          _messages.add(
-            ChatMessage(
-              text: '좋아. 장소랑 강도만 말해.\n예: 집에서 쉽게, 사무실 의자에서 조용히, 밖에서 빡세게.',
-              isUser: false,
-              time: DateTime.now(),
-            ),
-          );
-          _dynamicChips = ['집에서 쉽게', '사무실 의자', '밖에서 빡세게'];
-          _awaitingBroWorkoutPreference = true;
-        });
-        _scrollToBottom();
-        await _saveHistory();
-        await AnalyticsService.logConversationMessage(
-          coachId: widget.coachId,
-          usedApi: false,
-        );
-        return;
-      }
-
-      if (_awaitingBroWorkoutPreference) {
-        apiInput =
-            '사용자가 지금 바로 할 운동을 추천받고 싶어 한다. '
-            '사용자가 말한 장소/환경/강도: "$trimmed". '
-            '이 조건에 맞춰 바로 시작할 수 있는 짧은 운동 루틴을 추천해줘. '
-            '장소가 좁거나 조용해야 할 수 있으니 층간소음과 안전을 고려하고, '
-            '말투는 갓생 형 코치답게 짧고 힘 있게 해줘.';
-        skipBroWorkoutLocalReply = true;
-        _awaitingBroWorkoutPreference = false;
-      }
-
-      final targetedWorkoutApiInput = _buildBroTargetedWorkoutApiInput(trimmed);
-      if (targetedWorkoutApiInput != null) {
-        apiInput = targetedWorkoutApiInput;
-        skipBroWorkoutLocalReply = true;
-      }
-    }
-
-    final broWorkoutReply = skipBroWorkoutLocalReply
-        ? null
-        : await _tryBuildBroWorkoutReply(trimmed);
-    if (broWorkoutReply != null) {
-      setState(() {
-        _messages.add(
-          ChatMessage(text: trimmed, isUser: true, time: DateTime.now()),
-        );
-        _messages.add(
-          ChatMessage(
-            text: broWorkoutReply,
-            isUser: false,
-            time: DateTime.now(),
-          ),
-        );
-        _dynamicChips = _coach.chips;
-      });
-      _scrollToBottom();
-      await _saveHistory();
-      await AnalyticsService.logConversationMessage(
-        coachId: widget.coachId,
-        usedApi: false,
-      );
-      return;
-    }
-
     final yesterdayIncompleteReply = await _tryBuildYesterdayIncompleteReply(
       trimmed,
     );
@@ -15729,11 +14563,13 @@ $resistanceFlowRule'''
         ? _coach.workoutPlaybook ?? ''
         : '';
 
-    // 시간대별 생활 루틴은 지금 구간 하나만 붙인다.
-    final lifeRoutineSection = CoachConfigs.lifeRoutineSection(
-      _coach,
-      DateTime.now(),
-    );
+    // 가꾸기 얘기가 오갈 때만 붙인다. 운동과 같은 이유이고, 일정을 잡아달라는
+    // 턴에 빼두는 것도 같다 — "8시에 머리 감을 거야"는 상담이 아니라 부탁이다.
+    final groomingSection =
+        _isGroomingContext(userText) &&
+            !CoachContextScopeService.hasPlannerActionSignal(userText)
+        ? _coach.groomingPlaybook ?? ''
+        : '';
 
     // 취침 무렵에만 쓰는 규칙이라 그 시간대에만 붙인다. 늘 붙이면 하루에 한 번
     // 쓸까 말까 한 지시가 매 요청마다 실려 나가고, 정작 중요한 지시가 묻힌다.
@@ -15769,9 +14605,9 @@ ${LifePatternService.roleLine(_coach.id)}
 ${Prompts.executionSupportRule}
 ${Prompts.goalBackcastRule}
 ${context.isNotEmpty ? '\n$context' : ''}
-$lifeRoutineSection
 $cleaningSection
 $workoutSection
+$groomingSection
 $bedtimeCarryOverSection
 $emptyPlanAskSection
 $capabilitySection
@@ -18048,21 +16884,6 @@ ${Prompts.outputRulesTail}$plannerActionSection$coachOfferTaskRule$halmaeHint$re
     if (msg.kind == _lifeReviewKind && msg.choices.isNotEmpty) {
       return _buildChoiceBubbleCard(msg, _handleLifeReviewChoice);
     }
-    if (msg.kind == 'grooming_care_choice') {
-      return _buildGroomingCareChoiceCard(msg);
-    }
-    if (msg.kind == 'grooming_askback') {
-      return _buildGroomingAskBackCard(msg);
-    }
-    if (msg.kind == 'grooming_followup_from_home') {
-      return _buildGroomingMovedFollowupCard(msg, wasHome: true);
-    }
-    if (msg.kind == 'grooming_followup_from_outdoor') {
-      return _buildGroomingMovedFollowupCard(msg, wasHome: false);
-    }
-    if (msg.kind == 'grooming_care_followup') {
-      return _buildGroomingCareFollowupCard(msg);
-    }
     if (msg.kind == 'ultra_low_resistance_check') {
       return _buildUltraLowResistanceCheckCard(msg);
     }
@@ -19374,47 +18195,9 @@ ${Prompts.outputRulesTail}$plannerActionSection$coachOfferTaskRule$halmaeHint$re
     );
   }
 
-  Widget _buildGroomingCareChoiceCard(ChatMessage msg) {
-    return _buildGroomingChoiceCard(msg, [
-      ('집이야', _sendHomeGroomingRoutine),
-      ('밖이야', _sendOutdoorGroomingRoutine),
-    ]);
-  }
-
-  Widget _buildGroomingAskBackCard(ChatMessage msg) {
-    return _buildGroomingChoiceCard(msg, [
-      ('응, 해봤어', () => _answerGroomingAskBack(true)),
-      ('아니, 못 했어', () => _answerGroomingAskBack(false)),
-    ]);
-  }
-
-  /// 장소를 기억해서 바로 추천한 뒤에 붙는 카드. 그 사이 자리를 옮겼을 수도
-  /// 있어서, 수락·거절에 더해 반대쪽으로 다시 받는 버튼을 하나 더 둔다.
-  /// 어느 자리에서 뽑은 카드인지는 메시지 종류에 박아 둔다. 지금 장소를 보고
-  /// 그리면, 나중에 자리를 옮겼을 때 위로 지나간 옛날 카드까지 버튼이 뒤집힌다.
-  Widget _buildGroomingMovedFollowupCard(
-    ChatMessage msg, {
-    required bool wasHome,
-  }) {
-    return _buildGroomingChoiceCard(msg, [
-      ('알았어. 해볼게', _acceptGroomingCareRoutine),
-      ('하기 귀찮아', _resistGroomingCareRoutine),
-      wasHome
-          ? ('나 지금 밖이야', _sendOutdoorGroomingRoutine)
-          : ('나 지금 집이야', _sendHomeGroomingRoutine),
-    ]);
-  }
-
-  Widget _buildGroomingCareFollowupCard(ChatMessage msg) {
-    return _buildGroomingChoiceCard(msg, [
-      ('알았어. 해볼게', _acceptGroomingCareRoutine),
-      ('하기 귀찮아', _resistGroomingCareRoutine),
-    ]);
-  }
-
   Widget _buildUltraLowResistanceCheckCard(ChatMessage msg) {
     final followup = msg.choices.isNotEmpty ? msg.choices.first : '';
-    return _buildGroomingChoiceCard(msg, [
+    return _buildOptionButtonsCard(msg, [
       ('응 했어', () => _answerUltraLowResistanceCheck(followup, didIt: true)),
       (
         '지금은 안 할래',
@@ -19492,7 +18275,7 @@ ${Prompts.outputRulesTail}$plannerActionSection$coachOfferTaskRule$halmaeHint$re
   }
 
   Widget _buildMasterUnlockNoticeCard(ChatMessage msg) {
-    return _buildGroomingChoiceCard(msg, [
+    return _buildOptionButtonsCard(msg, [
       (
         _masterUnlockYesLabel,
         () => _handleMasterUnlockChoice(_masterUnlockYesLabel),
@@ -19589,7 +18372,7 @@ ${Prompts.outputRulesTail}$plannerActionSection$coachOfferTaskRule$halmaeHint$re
   }
 
   Widget _buildOngoingNudgeOfferCard(ChatMessage msg) {
-    return _buildGroomingChoiceCard(msg, [
+    return _buildOptionButtonsCard(msg, [
       (
         _nudgeOfferYesLabel,
         () => _handleOngoingNudgeOfferChoice(_nudgeOfferYesLabel),
@@ -19714,7 +18497,7 @@ ${Prompts.outputRulesTail}$plannerActionSection$coachOfferTaskRule$halmaeHint$re
   }
 
   Widget _buildCatWidgetPromptChoiceCard(ChatMessage msg) {
-    return _buildGroomingChoiceCard(msg, [
+    return _buildOptionButtonsCard(msg, [
       ('지금 위젯 설치하기', () => _handleCatWidgetPromptChoice('지금 위젯 설치하기')),
       ('지금은 안 할래', () => _handleCatWidgetPromptChoice('지금은 안 할래')),
     ]);
@@ -19742,9 +18525,9 @@ ${Prompts.outputRulesTail}$plannerActionSection$coachOfferTaskRule$halmaeHint$re
     _injectAiMessage('알겠다냥. 필요하면 설정에서 언제든 위젯을 설치할 수 있다냥.');
   }
 
-  /// 가꾸기 플로우의 선택지 말풍선. 되묻기·집밖·수락거절이 생김새가 같아서
+  /// 버튼 몇 개를 얹은 선택지 말풍선. 쓰는 자리마다 생김새가 같아서
   /// 한 군데서 만든다 — 버튼 문구와 눌렀을 때 할 일만 다르다.
-  Widget _buildGroomingChoiceCard(
+  Widget _buildOptionButtonsCard(
     ChatMessage msg,
     List<(String, VoidCallback)> options,
   ) {
