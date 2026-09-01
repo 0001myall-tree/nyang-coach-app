@@ -1874,7 +1874,9 @@ ${ExecutionTypeLabels.listForPrompt}
         children: [
           _buildWeeklyCompanionHeader(
             iconPath: 'assets/icons/fa-hourglass-start-solid.svg',
-            label: '시작을 막는 것',
+            // "시작을 막는 것"이라고만 하면 늘 그런 사람처럼 읽힌다. 이건
+            // 막혀 있던 그 하루에 고른 답이다.
+            label: '그날 시작을 막던 것',
           ),
           const SizedBox(height: 8),
           for (final answer in _executionBlockers)

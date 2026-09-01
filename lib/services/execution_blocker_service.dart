@@ -22,7 +22,17 @@ class ExecutionBlockerService {
   static const Duration askInterval = Duration(days: 14);
 
   /// 답을 이만큼만 들고 있는다. 막히는 자리는 하는 일에 따라 바뀐다.
-  static const Duration answerLife = Duration(days: 21);
+  ///
+  /// 묻는 주기와 같은 길이로 맞춘다. 답이 다음에 물어볼 때까지만 사는 셈이라,
+  /// 한 번 고른 답이 그 사람의 성질처럼 굳지 않는다.
+  ///
+  /// 답의 수명을 더 길게 뒀던 때가 있다. 만료되기 전에 다시 물을 기회를 주려던
+  /// 것인데, 다시 물으려면 그날 마침 막혔다는 말도 해야 해서 실제로는 며칠씩
+  /// 늘어졌다. 그 며칠 동안 옛 답이 계속 코치에게 갔다.
+  ///
+  /// 이제는 새 답이 오기 전에 잠시 비는 구간이 생긴다. 그 편이 낫다 — 없으면
+  /// 코치가 대화를 보고 판단하고, 있으면 그건 최근에 고른 답이다.
+  static const Duration answerLife = askInterval;
 
   /// 고를 수 있는 답과, 코치에게 넘길 한 줄.
   ///
