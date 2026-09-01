@@ -234,11 +234,12 @@ void main() {
       }
     });
 
-    test('분량을 안 정했으면 억지로 끌지 않는다', () {
+    test('분량을 안 정했으면 더 갈지 멈출지 그때 정한다', () {
+      // 무조건 끄는 것도 무조건 미는 것도 앱이 미리 정할 수 있는 것이 아니다.
       for (final coachId in LifePatternService.domains.keys) {
         expect(
           LifePatternService.roleLine(coachId),
-          contains('한 것을 인정해준다'),
+          contains('그때 정한다'),
           reason: coachId,
         );
       }
