@@ -28,6 +28,15 @@ class PlannerEditService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.reload();
 
+    // 어제보다 앞선 날은 받지 않는다. 목록은 며칠 들고 있지만, 채팅으로
+    // 채워 넣는 것은 어제까지다.
+    if (action.kind == PlannerActionKind.done && _isBeforeYesterday(action.date)) {
+      return PlannerActionResult(
+        PlannerActionStatus.tooOld,
+        label: action.target,
+      );
+    }
+
     final found = _find(prefs, action);
     if (found.isEmpty) {
       return PlannerActionResult(
@@ -51,10 +60,10 @@ class PlannerEditService {
       return PlannerActionResult(PlannerActionStatus.noChange, label: label);
     }
 
-    // 끝냈다는 말은 루틴이라도 오늘 하루의 체크다. 오늘 목록에 내려와 있으면
-    // 그 칸으로 데려간다 — 루틴 탭에는 오늘 체크할 자리가 없다.
-    final todaysCopy = hit.store != _Store.habit;
-    if (action.kind == PlannerActionKind.done && todaysCopy) {
+    // 끝냈다는 말은 루틴이라도 그날 하루의 체크다. 그날 목록에 내려와 있으면
+    // 그 칸을 체크한다 — 루틴 탭에는 하루치를 체크할 자리가 없다.
+    final dayCopy = hit.store != _Store.habit;
+    if (action.kind == PlannerActionKind.done && dayCopy) {
       return PlannerActionResult(
         PlannerActionStatus.ok,
         label: label,
@@ -70,15 +79,30 @@ class PlannerEditService {
     return PlannerActionResult(PlannerActionStatus.ok, label: label);
   }
 
+  /// 어제보다 앞선 날인지. 날짜가 없으면 오늘이라 아니다.
+  static bool _isBeforeYesterday(DateTime? date) {
+    if (date == null) return false;
+    final now = DateTime.now();
+    final yesterday = DateTime(now.year, now.month, now.day - 1);
+    return DateTime(date.year, date.month, date.day).isBefore(yesterday);
+  }
+
   // ── 찾기 ──────────────────────────────────────
 
   static List<_Hit> _find(SharedPreferences prefs, PlannerAction action) {
     final hits = <_Hit>[];
     final todayKey = dateKey(DateTime.now());
+    final isDone = action.kind == PlannerActionKind.done;
     // 완료는 지난 날의 일도 받는다. "어제 했던 청소 완료했어"처럼.
-    final wantKey = action.kind == PlannerActionKind.done && action.date != null
+    final wantKey = isDone && action.date != null
         ? dateKey(action.date!)
         : null;
+    // 날짜를 짚지 않은 완료는 오늘 이야기다.
+    //
+    // 예전에는 이때도 지난 날과 앞날을 전부 훑었다. 그래서 매일 도는 루틴은
+    // 날마다 사본이 하나씩 있어 늘 "여러 개 있다"가 됐고, 사용자는 몇 시
+    // 것이냐는 물음 앞에서 답할 말이 없었다 — 루틴에는 고를 시각이 없다.
+    final todayOnly = isDone && wantKey == null;
 
     // 루틴을 먼저 찾아둔다. 이름이 걸리는지 알아야 오늘 목록의 그 항목이
     // 루틴에서 온 것인지 알 수 있다.
@@ -113,23 +137,28 @@ class PlannerEditService {
       }
     }
 
-    // 오늘 목록에 안 내려온 루틴만 남는다. 이건 오늘 할 것이 아니므로 여기서
-    // 고칠 것이 없고, 루틴 탭으로 보내는 표시로만 쓴다.
-    hits.addAll(habitHits.values);
-
     final planned = _map(prefs.getString(DailyResetService.plannedTasksByDateKey));
     planned.forEach((key, value) {
       if (key == todayKey) return;
+      if (todayOnly) return;
       if (wantKey != null && key != wantKey) return;
       for (final task in _asList(value)) {
         if (_titleMatches(task['text']?.toString() ?? '', action.target)) {
+          // 그날 목록에 내려온 루틴은 정의와 따로 세지 않는다. 어제 것을
+          // 체크해달라는 말에 "여러 개 있다"가 나오던 자리다.
+          habitHits.remove(task['habitId']?.toString());
           hits.add(_Hit(_Store.planned, task, key));
         }
       }
     });
 
+    // 어느 날 목록에도 안 내려온 루틴만 남는다. 이건 그날 할 것이 아니므로
+    // 여기서 고칠 것이 없고, 루틴 탭으로 보내는 표시로만 쓴다.
+    hits.addAll(habitHits.values);
+
     final schedules = _map(prefs.getString(_schedulesKey));
     schedules.forEach((key, value) {
+      if (todayOnly && key != todayKey) return;
       if (wantKey != null && key != wantKey) return;
       for (final item in _asList(value)) {
         if (!_titleMatches(item['text']?.toString() ?? '', action.target)) {

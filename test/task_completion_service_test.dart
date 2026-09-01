@@ -305,6 +305,49 @@ void main() {
     });
   });
 
+  // 확인 카드까지 띄워놓고 사용자가 누르면 아무 일도 일어나지 않던 자리다.
+  // 오늘 목록에 사본이 안 내려온 일정은 여기가 유일한 저장소다.
+  group('오늘 목록에 없는 일정', () {
+    test('날짜별 일정에서 찾아 완료로 바꾼다', () async {
+      SharedPreferences.setMockInitialValues({
+        TaskCompletionService.tasksKey: jsonEncode([task('9', '오늘 할 일')]),
+        TaskCompletionService.schedulesKey: jsonEncode({
+          '2026-08-18': [
+            {'id': 's1', 'text': '병원', 'done': false},
+          ],
+        }),
+      });
+      final prefs = await SharedPreferences.getInstance();
+
+      final applied = await TaskCompletionService.completeStoredTask(
+        taskId: 's1',
+        at: DateTime(2026, 8, 19, 9),
+      );
+      expect(applied, isTrue);
+
+      final byDate = readMap(prefs, TaskCompletionService.schedulesKey);
+      expect((byDate['2026-08-18'] as List).first['done'], isTrue);
+    });
+
+    test('이미 완료면 아무것도 하지 않는다', () async {
+      SharedPreferences.setMockInitialValues({
+        TaskCompletionService.tasksKey: jsonEncode([task('9', '오늘 할 일')]),
+        TaskCompletionService.schedulesKey: jsonEncode({
+          '2026-08-18': [
+            {'id': 's1', 'text': '병원', 'done': true},
+          ],
+        }),
+      });
+      await SharedPreferences.getInstance();
+
+      final applied = await TaskCompletionService.completeStoredTask(
+        taskId: 's1',
+        at: DateTime(2026, 8, 19, 9),
+      );
+      expect(applied, isFalse);
+    });
+  });
+
   // 하루치가 통째로 0이 된 적이 있다. 보관본이 모자란 채로 그날 기록을 덮었기
   // 때문이다. 지난 날 기록은 줄어들 수 없어야 한다.
   group('지난 날 기록은 줄어들지 않는다', () {

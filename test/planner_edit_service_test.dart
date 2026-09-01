@@ -213,6 +213,70 @@ void main() {
     });
   });
 
+  group('지난 날의 완료', () {
+    test('날짜를 안 짚은 완료는 오늘만 본다', () async {
+      // 매일 도는 루틴은 날마다 사본이 하나씩 남는다. 지난 날까지 훑으면
+      // 늘 "여러 개 있다"가 되고, 루틴에는 골라줄 시각도 없다.
+      final now = DateTime.now();
+      await _prefsWith(
+        habits: [_habit('h1', '운동')],
+        today: [_injected('1', '운동', 'h1')],
+        planned: {
+          _key(now.subtract(const Duration(days: 1))): [
+            _injected('2', '운동', 'h1'),
+          ],
+          _key(now.subtract(const Duration(days: 2))): [
+            _injected('3', '운동', 'h1'),
+          ],
+        },
+      );
+      final r = await PlannerEditService.preview(
+        const PlannerAction(kind: PlannerActionKind.done, target: '운동'),
+      );
+      expect(r.status, PlannerActionStatus.ok);
+      expect(r.id, '1');
+    });
+
+    test('어제 날짜를 짚으면 루틴도 그날 것을 체크한다', () async {
+      final yesterday = DateTime.now().subtract(const Duration(days: 1));
+      await _prefsWith(
+        habits: [_habit('h1', '운동')],
+        today: [],
+        planned: {
+          _key(yesterday): [_injected('2', '운동', 'h1')],
+        },
+      );
+      final r = await PlannerEditService.preview(
+        PlannerAction(
+          kind: PlannerActionKind.done,
+          target: '운동',
+          date: yesterday,
+        ),
+      );
+      expect(r.status, PlannerActionStatus.ok);
+      expect(r.id, '2');
+    });
+
+    test('그저께는 받지 않는다', () async {
+      final twoDaysAgo = DateTime.now().subtract(const Duration(days: 2));
+      await _prefsWith(
+        today: [],
+        planned: {
+          _key(twoDaysAgo): [_task('9', '청소')],
+        },
+      );
+      final r = await PlannerEditService.preview(
+        PlannerAction(
+          kind: PlannerActionKind.done,
+          target: '청소',
+          date: twoDaysAgo,
+        ),
+      );
+      // 목록은 며칠 남아 있지만, 채팅으로 채워 넣는 것은 어제까지다.
+      expect(r.status, PlannerActionStatus.tooOld);
+    });
+  });
+
   group('이미 끝낸 일', () {
     test('수정 창을 열 것이 없다', () async {
       await _prefsWith(today: [_task('1', '운동', done: true)]);

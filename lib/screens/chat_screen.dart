@@ -2413,7 +2413,20 @@ class _ChatScreenState extends State<ChatScreen>
     }
     if (found.status == PlannerActionStatus.multiple ||
         found.status == PlannerActionStatus.noChange ||
+        found.status == PlannerActionStatus.tooOld ||
         found.status == PlannerActionStatus.notFound) {
+      final miss = _plannerActionMiss(action, found);
+      if (miss != null) _injectAiMessage(miss);
+      return true;
+    }
+
+    // 루틴을 미뤄달라는 말에는 루틴 탭을 열지 않는다.
+    //
+    // 루틴에는 "오늘만 미루기"가 없다. 그런데 화면을 열어주면 사용자는 거기서
+    // 미루는 방법을 찾다가 못 찾는다 — 없다는 말을 화면이 대신 해주지는 못한다.
+    // 시각·요일을 아주 바꾸는 것은 되므로, 그건 말로 알려준다.
+    if (found.status == PlannerActionStatus.routine &&
+        action.kind == PlannerActionKind.move) {
       final miss = _plannerActionMiss(action, found);
       if (miss != null) _injectAiMessage(miss);
       return true;
@@ -2573,6 +2586,38 @@ class _ChatScreenState extends State<ChatScreen>
           boyfriend: "'$name'$eunNeun 이미 다 한 걸로 돼 있어.",
           nyangHalbae: "'$name'$eunNeun 이미 다 한 걸로 돼 있다냥.",
           sec: "'$name'$eunNeun 이미 완료로 되어 있어요.",
+        );
+      case PlannerActionStatus.tooOld:
+        // 어제보다 앞선 날. 목록은 남아 있지만 채팅으로는 안 받는다.
+        return _voice(
+          cat: '체크는 어제 것까지만 해줄 수 있다냥. 그 앞은 오늘 탭에서 그 날짜를 열어서 눌러야 한다냥',
+          bro: '체크는 어제 것까지만 된다. 그 앞은 오늘 탭에서 그 날짜 열어서 눌러라.',
+          halmae: '체크는 어제 것까지만 되는구나. 그 앞은 오늘 탭에서 그날을 열어 눌러야 한다.',
+          boyfriend: '체크는 어제 것까지만 돼. 그 앞은 오늘 탭에서 그 날짜 열어서 누르면 돼.',
+          nyangHalbae: '체크는 어제 것까지만 된다냥. 그 앞은 오늘 탭에서 그날을 열어 눌러야 한다냥.',
+          sec: '완료 처리는 어제 것까지만 가능해요. 그 앞의 날짜는 오늘 탭에서 해당 날짜를 열어 직접 체크해주세요.',
+        );
+      case PlannerActionStatus.routine:
+        // 체크해달라는 말이 여기까지 왔다면 그날 목록에 안 내려온 루틴이다.
+        // 체크할 칸 자체가 없으니 미루기 이야기를 꺼낼 자리가 아니다.
+        if (action.kind != PlannerActionKind.move) {
+          return _voice(
+            cat: "'$name'$eunNeun 그날 목록에 없어서 체크할 자리가 없다냥",
+            bro: "'$name'$eunNeun 그날 목록에 없어서 체크할 자리가 없다.",
+            halmae: "'$name'$eunNeun 그날 목록에 없어 체크할 자리가 없구나.",
+            boyfriend: "'$name'$eunNeun 그날 목록에 없어서 체크할 자리가 없어.",
+            nyangHalbae: "'$name'$eunNeun 그날 목록에 없어 체크할 자리가 없다냥.",
+            sec: "'$name'$eunNeun 그날 목록에 없어서 체크할 자리가 없어요.",
+          );
+        }
+        // 루틴을 미뤄달라는 말. 루틴에는 "오늘만 미루기"가 없다.
+        return _voice(
+          cat: "'$name'$eunNeun 루틴이라 하루만 미루는 건 안 된다냥. 시각이나 요일을 아예 바꾸는 거면 루틴에서 고칠 수 있다냥",
+          bro: "'$name'$eunNeun 루틴이라 하루만 미루는 건 안 된다. 시각이나 요일을 아예 바꾸는 거면 루틴에서 고쳐라.",
+          halmae: "'$name'$eunNeun 루틴이라 하루만 미루지는 못한다. 시각이나 요일을 아주 바꾸는 거라면 루틴에서 고치면 된다.",
+          boyfriend: "'$name'$eunNeun 루틴이라 하루만 미루는 건 안 돼. 시각이나 요일을 아예 바꾸는 거면 루틴에서 고칠 수 있어.",
+          nyangHalbae: "'$name'$eunNeun 루틴이라 하루만 미루는 건 안 된다냥. 시각이나 요일을 아주 바꾸는 거면 루틴에서 고치면 된다냥.",
+          sec: "'$name'$eunNeun 루틴이라 하루만 미뤄두는 건 안 돼요. 시각이나 요일 자체를 바꾸시려면 루틴에서 수정하시면 됩니다.",
         );
       case PlannerActionStatus.failed:
         if (action.kind == PlannerActionKind.remind) {
@@ -9174,20 +9219,6 @@ Rules:
     );
   }
 
-  /// 습관 이름 없이 "습관 설정해줘"라고만 했을 때.
-  ///
-  /// 양식에 없는 걸 되묻지 않도록 실제 칸(이름, 매일·요일·주 몇 일)만 짚는다.
-  String _habitFormGuideReply() {
-    return switch (_coach.id) {
-      'bro' => '루틴 탭 열어준다. 이름이랑 매일 할지 무슨 요일에 할지만 정하면 된다.',
-      'halmae' => '루틴 탭 열어주마. 이름이랑, 매일 할지 무슨 요일에 할지만 정하면 된다.',
-      'boyfriend' => '루틴 탭 열어줄게. 이름이랑 매일 할지 무슨 요일에 할지만 정하면 돼.',
-      'nyang_halbae' => '루틴 탭을 열어두겠다냥. 이름과 매일 할지 무슨 요일에 할지만 정하면 된다냥.',
-      'sec_female' => '루틴 탭을 열어 드릴게요. 이름과 매일 할지, 무슨 요일에 할지만 정하시면 돼요.',
-      _ => '냥이가 루틴 탭 열어줄게냥. 이름이랑 매일 할지 무슨 요일에 할지만 정하면 된다냥.',
-    };
-  }
-
   String _habitRegistrationReply(String habitName) {
     return switch (widget.coachId) {
       'boyfriend' => '$habitName, 루틴 탭에 추가해뒀어. 세부 설정은 한번 확인해줘.',
@@ -9390,28 +9421,6 @@ Rules:
       'nyang_halbae' => '무엇을 수정할지 이름까지 같이 말해주라냥.',
       'sec_female' => '수정할 항목명을 함께 말씀해 주세요.',
       _ => '어떤 일정을 수정할지 이름까지 같이 말해달라냥.',
-    };
-  }
-
-  bool _needsWeeklyRepeatWeekday(String input) {
-    var cleaned = _cleanScheduleRegistrationInput(input);
-    cleaned = cleaned.replaceFirst(_registrationSuffixRegex, '').trim();
-    if (!RegExp(r'매\s*주(?:마다)?').hasMatch(cleaned)) return false;
-    if (RegExp(r'(평일|주말)').hasMatch(cleaned)) return false;
-    if (RegExp(r'[월화수목금토일]\s*요일|[월화수목금토일]\s*(?:마다|에)').hasMatch(cleaned)) {
-      return false;
-    }
-    return true;
-  }
-
-  String _weeklyRepeatWeekdayQuestion() {
-    return switch (widget.coachId) {
-      'boyfriend' => '매주 반복으로 등록하려면 무슨 요일로 할지 말해줘.',
-      'bro' => '매주 반복이면 요일이 필요하다. 무슨 요일로 할지 말해라.',
-      'halmae' => '매주 반복이면 요일을 정해야 한다. 무슨 요일로 해줄까?',
-      'nyang_halbae' => '매주 반복하려면 요일이 필요하다냥. 무슨 요일로 둘까냥?',
-      'sec_female' => '매주 반복 일정으로 등록하려면 요일이 필요해요. 무슨 요일로 해드릴까요?',
-      _ => '매주 반복 일정이면 요일이 필요하다냥. 무슨 요일로 해줄까냥?',
     };
   }
 
@@ -12473,6 +12482,22 @@ Rules:
     final canInputTasks =
         _userData.isPlanActive || await FreeAccessService.instance.canInput();
 
+    // 등록할 이름은 여기서 뽑지 않는다. 코치가 짚는다.
+    //
+    // 예전에는 정규식이 문장에서 꼬리를 떼고 남은 글자를 그대로 이름으로 썼다.
+    // 이 문장 하나만 보기 때문에 "스트레칭 어때? → 할일에 추가해줘"에서는
+    // '할일에'가 이름이 됐다. 예외를 몇 개 골라 막아뒀지만 사람이 쓰는 말을
+    // 목록으로 따라잡을 수는 없었다.
+    //
+    // 코치는 앞 대화를 보고 있어서 무엇을 말하는지 알고, 태그로 이름을
+    // 짚어준다. 호출이 한 번 더 늘지만 이름이 잘못 저장되면 사용자가 지우고
+    // 다시 넣어야 한다.
+    //
+    // 무료로 쓰는 사람도 같은 길로 간다. 대화 날수가 끝나면 채팅으로 적어
+    // 넣는 것도 함께 닫힌다 — 코치를 못 부르는데 등록만 되게 하려면 그 사람만
+    // 예전의 기계적인 이름 뽑기를 겪게 되고, 써보라고 열어둔 기간에 제일 나쁜
+    // 판을 보여주는 셈이 된다.
+
     final todayGoalTask = TodayGoalTaskIntent.parse(trimmed);
     if (canInputTasks && todayGoalTask != null) {
       setState(() {
@@ -12613,102 +12638,6 @@ Rules:
       });
       _scrollToBottom();
       await _saveHistory();
-      return;
-    }
-
-    if (canInputTasks && _isHabitRegistrationCommand(trimmed)) {
-      final parsed = _parseHabitRegistration(trimmed);
-      setState(() {
-        _messages.add(
-          ChatMessage(text: trimmed, isUser: true, time: DateTime.now()),
-        );
-        _dynamicChips = [];
-      });
-      _scrollToBottom();
-      await _saveHistory();
-      await AnalyticsService.logConversationMessage(
-        coachId: widget.coachId,
-        usedApi: false,
-        coachReplied: false,
-      );
-      // "습관 설정해줘"처럼 이름이 없으면 말로 캐묻지 말고 습관 탭을 열어준다.
-      // 양식에 어떤 칸이 있는지는 화면이 직접 보여주는 게 제일 빠르다.
-      if (parsed.title.isEmpty) {
-        setState(() {
-          _messages.add(
-            ChatMessage(
-              text: _habitFormGuideReply(),
-              isUser: false,
-              time: DateTime.now(),
-            ),
-          );
-        });
-        _scrollToBottom();
-        await _saveHistory();
-        widget.onOpenFeatureLocation?.call('habit');
-        return;
-      }
-      final registered =
-          await widget.onRegisterHabit?.call(
-            parsed.title,
-            freq: parsed.freq,
-            days: parsed.days,
-            weeklyTargetCount: parsed.weeklyTargetCount,
-            countGoal: parsed.countGoal,
-            unit: parsed.unit,
-            time: parsed.time,
-            endTime: parsed.endTime,
-            habitDuration: parsed.habitDuration,
-          ) ??
-          false;
-      if (!mounted) return;
-      setState(() {
-        _messages.add(
-          ChatMessage(
-            text: registered
-                ? _habitRegistrationReply(parsed.title)
-                : '루틴 탭을 여는 중 문제가 생겼어요. 잠시 후 다시 시도해 주세요.',
-            isUser: false,
-            time: DateTime.now(),
-          ),
-        );
-      });
-      _scrollToBottom();
-      await _saveHistory();
-      return;
-    }
-
-    if (canInputTasks && _isScheduleRegistrationCommand(trimmed)) {
-      setState(() {
-        _messages.add(
-          ChatMessage(text: trimmed, isUser: true, time: DateTime.now()),
-        );
-        _dynamicChips = [];
-      });
-      _scrollToBottom();
-      await _saveHistory();
-      await AnalyticsService.logConversationMessage(
-        coachId: widget.coachId,
-        usedApi: false,
-        coachReplied: false,
-      );
-      if (_needsWeeklyRepeatWeekday(trimmed)) {
-        setState(() {
-          _messages.add(
-            ChatMessage(
-              text: _weeklyRepeatWeekdayQuestion(),
-              isUser: false,
-              time: DateTime.now(),
-            ),
-          );
-        });
-        _scrollToBottom();
-        await _saveHistory();
-        return;
-      }
-      await Future.delayed(const Duration(milliseconds: 120));
-      if (!mounted) return;
-      await _showScheduleRegistrationDialog(trimmed);
       return;
     }
 
@@ -13529,6 +13458,66 @@ Rules:
     return '$startLabel ~ ${_formatTime12(endTime)}';
   }
 
+  /// 어제 목록에서 아직 완료되지 않은 일들. 이름만 적는다.
+  ///
+  /// 코치가 여기서 할 일은 사용자가 말한 것이 어느 항목인지 짚는 것뿐이라,
+  /// 시각도 소요시간도 미루기 횟수도 쓸 데가 없다. 오늘 목록처럼 다 붙이면
+  /// 값만 늘고, 무엇보다 어제 못한 것을 세는 재료가 되어버린다.
+  ///
+  /// 어제 하루만 본다. 목록 자체는 며칠 보관되지만 채팅으로 채워 넣는 것은
+  /// 어제까지다.
+  static const int _yesterdayContextLimit = 8;
+
+  String _yesterdayLeftoverSection(SharedPreferences prefs, DateTime now) {
+    final yesterday = DateTime(now.year, now.month, now.day - 1);
+    final key = PlannerEditService.dateKey(yesterday);
+
+    final raw = prefs.getString(DailyResetService.plannedTasksByDateKey);
+    List<dynamic> dayTasks = const [];
+    if (raw != null && raw.isNotEmpty) {
+      try {
+        final byDate = jsonDecode(raw) as Map<String, dynamic>;
+        final value = byDate[key];
+        if (value is List) dayTasks = value;
+      } catch (_) {}
+    }
+
+    final leftover = dayTasks
+        .whereType<Map>()
+        .where((task) => task['done'] != true)
+        .map((task) => task['text']?.toString().trim() ?? '')
+        .where((text) => text.isNotEmpty)
+        .toList();
+
+    final header = '\n[어제(${yesterday.month}월 ${yesterday.day}일) 남은 일]\n';
+    if (leftover.isEmpty) {
+      return '$header'
+          '- 어제 목록에 남아 있는 일이 없습니다. (전부 완료했거나 어제는 적어둔 것이 없습니다)\n'
+          '*완료 처리는 어제 것까지만 됩니다. 그 앞의 날은 오늘 탭에서 그 날짜를 열어 직접 눌러야 한다고 알려주세요.\n';
+    }
+
+    final listed = leftover.take(_yesterdayContextLimit);
+    final buffer = StringBuffer(header);
+    for (final text in listed) {
+      buffer.writeln('- $text');
+    }
+    if (leftover.length > _yesterdayContextLimit) {
+      buffer.writeln(
+        '*어제 남은 일이 ${leftover.length}개라 $_yesterdayContextLimit개만 실었습니다. 나머지까지 체크하려면 오늘 탭에서 어제를 여는 편이 빠르다고 알려주세요.',
+      );
+    }
+    // 목록이 눈앞에 있으면 묻지도 않은 어제 이야기를 꺼내기 쉽다. 어제 못한
+    // 것을 짚는 건 사용자가 꺼낸 이야기일 때만 할 일이다.
+    buffer.writeln(
+      '*이 목록은 사용자가 어제 이야기를 꺼냈을 때 어느 항목인지 짚으라고 주는 것입니다. 먼저 꺼내 "어제 이거 안 하셨네요"처럼 말하지 마세요.',
+    );
+    buffer.writeln('*여기 있는 일을 끝냈다고 하면 [DONE: 이름|$key] 형태로 날짜를 붙이세요.');
+    buffer.writeln(
+      '*완료 처리는 어제 것까지만 됩니다. 그 앞의 날은 오늘 탭에서 그 날짜를 열어 직접 눌러야 한다고 알려주세요.',
+    );
+    return buffer.toString();
+  }
+
   // ── 웹앱 buildMemoryContext() 이식 (전 코치 등급) ───────
   /// 내일부터 [days]일치 일정을 한 줄씩. 잡힌 게 없는 날은 건너뛴다.
   ///
@@ -13945,6 +13934,11 @@ Rules:
           }
         }
       } catch (_) {}
+    }
+
+    // 5-2. 어제 남은 일 — 코치가 [NEED: past]로 부른 턴에만.
+    if (resolvedScope.pastDay) {
+      sb.write(_yesterdayLeftoverSection(prefs, now));
     }
 
     // 6. 오늘의 핵심
@@ -15562,6 +15556,9 @@ ${Prompts.outputRulesTail}$plannerActionSection$coachOfferTaskRule$halmaeHint$re
         ? Prompts.contextRequestRule(
             goalsMissing: _coach.isMaster && !contextScope.needsFullGoal,
             tasksMissing: !contextScope.tasks,
+            // 어제 목록은 앱이 미리 싣지 않는다. 늘 빠져 있으므로 늘 부를 수
+            // 있어야 한다.
+            pastDayMissing: !contextScope.pastDay,
           )
         : '';
 
@@ -15576,6 +15573,7 @@ ${Prompts.outputRulesTail}$plannerActionSection$coachOfferTaskRule$halmaeHint$re
         contextScope = contextScope.escalated(
           goals: requested.goals,
           tasks: requested.tasks,
+          pastDay: requested.pastDay,
         );
         contextString = await _buildContextString(
           userText,

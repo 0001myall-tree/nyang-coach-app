@@ -23,6 +23,7 @@ class TaskCompletionService {
   static const String coreTasksKey = 'nyang_core_tasks';
   static const String habitLogsKey = 'nyang_habit_logs';
   static const String habitsKey = 'nyang_habits';
+  static const String schedulesKey = 'nyang_schedules';
   static const String historyKey = 'nyang_history';
 
   /// 저장소가 마지막으로 바뀐 시각.
@@ -91,6 +92,47 @@ class TaskCompletionService {
     if (!done) return false;
     if (await _applyToPastDays(prefs, taskId: taskId, at: at, today: today)) {
       await _markChanged(prefs, at);
+      return true;
+    }
+    if (await _applyToSchedules(prefs, taskId: taskId, at: at)) {
+      await _markChanged(prefs, at);
+      return true;
+    }
+    return false;
+  }
+
+  /// 날짜별 일정에서 찾아 완료로 바꾼다.
+  ///
+  /// 일정은 오늘 목록에 사본으로 내려오는 것이 보통이라 대개 위에서 끝난다.
+  /// 내려오지 않은 일정은 여기가 유일한 자리다. 예전에는 이 길이 없어서,
+  /// 확인 카드까지 띄워놓고 사용자가 누르면 아무 일도 일어나지 않았다.
+  static Future<bool> _applyToSchedules(
+    SharedPreferences prefs, {
+    required String taskId,
+    required DateTime at,
+  }) async {
+    final raw = prefs.getString(schedulesKey);
+    if (raw == null || raw.isEmpty) return false;
+
+    Map<String, dynamic> byDate;
+    try {
+      byDate = Map<String, dynamic>.from(jsonDecode(raw) as Map);
+    } catch (_) {
+      return false;
+    }
+
+    for (final entry in byDate.entries) {
+      final items = _asList(entry.value);
+      final item = _findById(items, taskId);
+      if (item == null) continue;
+      if (item['done'] == true) return false;
+
+      _markTask(item, done: true, at: at);
+      byDate[entry.key] = items;
+      await prefs.setString(schedulesKey, jsonEncode(byDate));
+      // 그날 기록은 다시 쓰지 않는다. 기록이 세는 것은 할 일 목록이고, 일정은
+      // 그 목록에 사본으로 내려왔을 때만 거기 들어간다. 여기서 기록을 목록으로
+      // 덮으면 일정 하나 때문에 그날 완료 개수가 통째로 어긋난다.
       return true;
     }
     return false;

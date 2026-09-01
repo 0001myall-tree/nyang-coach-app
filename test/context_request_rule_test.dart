@@ -2,8 +2,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:nyang_coach/prompts/coach_prompt.dart';
 import 'package:nyang_coach/services/coach_context_scope.dart';
 
-String rule({bool goals = false, bool tasks = false}) =>
-    Prompts.contextRequestRule(goalsMissing: goals, tasksMissing: tasks);
+String rule({bool goals = false, bool tasks = false, bool past = false}) =>
+    Prompts.contextRequestRule(
+      goalsMissing: goals,
+      tasksMissing: tasks,
+      pastDayMissing: past,
+    );
 
 void main() {
   group('요청 규칙을 붙이는 조건', () {
@@ -23,6 +27,13 @@ void main() {
       final text = rule(goals: true, tasks: true);
       expect(text, contains('[NEED: goals]'));
       expect(text, contains('[NEED: tasks]'));
+    });
+
+    test('어제 목록은 따로 부를 수 있다', () {
+      // 어제 목록은 앱이 미리 싣지 않으니 늘 빠져 있고, 늘 부를 수 있어야 한다.
+      final text = rule(past: true);
+      expect(text, contains('[NEED: past]'));
+      expect(text, isNot(contains('[NEED: tasks]')));
     });
   });
 
@@ -57,6 +68,7 @@ void main() {
       // 문구와 파서가 따로 놀면 코치가 요청해도 앱이 못 알아듣는다.
       expect(CoachContextRequest.parse('[NEED: goals]').goals, isTrue);
       expect(CoachContextRequest.parse('[NEED: tasks]').tasks, isTrue);
+      expect(CoachContextRequest.parse('[NEED: past]').pastDay, isTrue);
     });
   });
 }
