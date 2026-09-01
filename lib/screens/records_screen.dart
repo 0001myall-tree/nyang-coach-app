@@ -5,7 +5,9 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:nyang_coach/services/execution_blocker_service.dart';
+import 'package:nyang_coach/services/execution_funnel.dart';
 import 'package:nyang_coach/services/execution_pattern_service.dart';
+import 'package:nyang_coach/services/execution_type_labels.dart';
 import 'package:nyang_coach/services/life_context_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:nyang_coach/services/user_title_service.dart';
@@ -28,7 +30,11 @@ class RecordsScreen extends StatefulWidget {
   /// 기록탭의 캐시와 탭에 붙는 안 읽음 표시가 이 하나를 함께 본다. 따로 두었을
   /// 때는 한마디를 새로 뽑게 해놓고 표시 쪽 번호를 안 올려서, 새 한마디가
   /// 나왔는데 사용자는 모르는 일이 생겼다.
-  static const int weeklyFeedbackVersion = 7;
+  /// 이 값을 올리면 캐시해둔 한마디를 버리고 다시 만든다.
+  ///
+  /// 8로 올린 이유: 유형 이름을 앱이 문턱으로 붙이다가 코치가 고르는 것으로
+  /// 바꿨다. 캐시에 남은 옛 이름은 문턱이 붙인 것이라 이번 주 숫자와 안 맞는다.
+  static const int weeklyFeedbackVersion = 8;
 
   @override
   State<RecordsScreen> createState() => _RecordsScreenState();
@@ -533,6 +539,12 @@ class _RecordsScreenState extends State<RecordsScreen> {
 
       if (feedbackText.isEmpty) return;
 
+      // 코치가 마지막 줄에 적은 이름을 읽고 그 줄은 떼어낸다. 화면에 그대로
+      // 나가는 말이라 남아 있으면 사용자에게 "유형: 안정형"이 보인다.
+      final pickedLabel = ExecutionTypeLabels.readFrom(feedbackText);
+      final bodyText = ExecutionTypeLabels.strip(feedbackText);
+      if (bodyText.isEmpty) return;
+
       // API 사용 기록 (주간 리포트 생성에 따른 토큰/비용 집계)
       final estimatedTokens = AnalyticsService.estimateChatTokens([
         {'content': prompt},
@@ -563,14 +575,12 @@ class _RecordsScreenState extends State<RecordsScreen> {
       );
 
       final prefs = await SharedPreferences.getInstance();
-      final executionTypeLabel = ExecutionPatternService.typeLabel(
-        prefs.getString('nyang_history'),
-      );
+      final executionTypeLabel = pickedLabel;
       await prefs.setString(
         cacheKey,
         jsonEncode({
           'weekMonday': weekMonday,
-          'text': feedbackText,
+          'text': bodyText,
           'type': feedbackType,
           'version': RecordsScreen.weeklyFeedbackVersion,
           'executionTypeLabel': executionTypeLabel,
@@ -587,7 +597,7 @@ class _RecordsScreenState extends State<RecordsScreen> {
 
       if (!mounted) return;
       setState(() {
-        _weeklyFeedbackText = feedbackText;
+        _weeklyFeedbackText = bodyText;
         _weeklyExecutionTypeLabel = executionTypeLabel;
       });
     } catch (e) {
@@ -615,11 +625,19 @@ class _RecordsScreenState extends State<RecordsScreen> {
     final hasVisibleVisions = visibleVisions != '없음';
     final weekGoalText = _formatGoalText(prefs.getString('nyang_week_goals'));
     final monthGoalText = _formatGoalText(prefs.getString('nyang_month_goals'));
-    // 실행 유형형(3)에서만 쓴다. 앱이 기록에서 센 패턴 이름 또는 계획/시작/완료
-    // 세 축 숫자 — 코치가 근거 없이 유형을 지어내지 않게 한다.
-    final executionPatternBlock = ExecutionPatternService.blockFrom(
+    // 실행 유형형(3)에서만 쓴다. 계획/시작/완료 세 축의 숫자와 제일 많이 새는
+    // 곳 — 코치가 근거 없이 유형을 지어내지 않게 한다.
+    //
+    // 유형 이름은 앱이 붙이지 않는다. 문턱으로 이름을 정하면 앞뒤가 정반대인
+    // 두 사람이 같은 이름으로 묶이고, 이름에 처방이 달려 있어 처방까지 같이
+    // 틀린다. 이름은 코치가 이 숫자를 보고 고른다.
+    final executionPatternBlock = ExecutionFunnel.from(
       prefs.getString('nyang_history'),
-    );
+    ).promptBlock();
+
+    // 지난주에 뭐라고 불렀는지. 같은 사람이 한 주 만에 다른 사람이 되지는
+    // 않는데, 배지 이름이 주마다 바뀌면 사용자는 앱이 자기를 모른다고 느낀다.
+    final lastLabel = _weeklyExecutionTypeLabel;
 
     final allTaskTexts = <String>{};
     for (final record in records) {
@@ -1024,10 +1042,16 @@ ${feedbackType == 0
    - 마지막으로 미래를 응원하는 한마디로 마무리하세요.'''
         : '''   [실행 유형형]
    - 이번 주 "무엇을 했는지"가 아니라 "이 사람이 어떤 식으로 계획을 실행하는 사람인지"에 초점을 맞춥니다. [분석 참고 데이터]의 [실행 패턴 - 앱이 최근 이레 기록에서 센 값]을 반드시 참고하세요. 거기 없는 숫자나 패턴은 지어내지 마세요.
-   - "당신은 이런 식으로 계획을 실행하는 사람이에요"라는 투로 먼저 유형을 짚어주세요. 패턴 이름이 있으면 그 이름을, 없으면 계획/시작/완료 세 축의 숫자를 근거로 풀어서 설명하세요.
-   - 계획/시작/완료 세 축 중 강점인 축은 구체적으로 인정하세요. (예: 손댄 비율이 높다면 "일단 붙잡으면 놓지 않는 편"이라고 짚기)
-   - 병목인 축(가장 낮은 지점)은 지적하듯 짚지 마세요. 그 지점이 나아지면 전체가 어떻게 달라질지부터 격려하는 투로 말하고, 그 병목에 맞는 구체적인 방법을 하나만 제안하세요. (예: 계획이 병목이면 계획을 얼마나 잡을지, 시작이 병목이면 언제 첫 발을 뗄지, 완료가 병목이면 한 번에 걸리는 시간을 어떻게 어림할지)
-   - 이 유형은 유형 자체를 알아가는 자리이니, 이번 주 개별 할 일 목록을 나열하며 회고하지 마세요.'''}
+   - "당신은 이런 식으로 계획을 실행하는 사람이에요"라는 투로 먼저 유형을 짚어주세요. 세 축의 숫자를 근거로 풀어서 설명하되, 숫자를 그대로 읽지 말고 사람 말로 옮기세요.
+   - 축은 서로 견주어 보세요. 같은 완료율이라도 앞뒤가 다르면 다른 사람입니다. 적어둔 것의 4분의 1에만 손대고 그 전부를 끝낸 사람에게 할 말은 "한 번에 잡는 양을 줄이자"이고, 대부분에 손대고 그중 일부만 끝낸 사람에게 할 말은 "한 번에 끝나는 크기로 자르자"입니다. 정반대입니다.
+   - 잘 지나가고 있는 축은 구체적으로 인정하세요. (예: 손댄 것을 거의 다 끝낸다면 "일단 붙잡으면 놓지 않는 편"이라고 짚기)
+   - "제일 많이 새는 곳"은 지적하듯 짚지 마세요. 그 지점이 나아지면 전체가 어떻게 달라질지부터 격려하는 투로 말하고, 거기에 맞는 구체적인 방법을 하나만 제안하세요.
+   - 이 유형은 유형 자체를 알아가는 자리이니, 이번 주 개별 할 일 목록을 나열하며 회고하지 마세요.
+   - 마지막 줄에 이 사람의 실행 유형 이름을 `유형: 이름` 형식으로 한 줄 적으세요. 이 줄은 화면에 보이지 않고 앱이 배지에 씁니다.
+     - 반드시 다음 중에서만 고르세요. 각 이름이 가리키는 모양이 정해져 있으니, 그 뜻과 다른 사람에게 그 이름을 붙이지 마세요.
+${ExecutionTypeLabels.listForPrompt}
+     - 어디에도 맞지 않으면 `유형: 없음`이라고 적으세요. 새 이름을 지어내면 앱이 알아보지 못합니다.
+     - 지난주에는 `${lastLabel ?? '없음'}`이라고 불렀습니다. 숫자가 뚜렷하게 달라졌을 때만 바꾸세요. 같은 사람이 한 주 만에 다른 사람이 되지는 않습니다.'''}
 4. 분량: 3~4문장으로 간결하게. JSON이나 마크다운 없이 순수 텍스트로만 답변해 주세요.
 5. 가독성: 문장 앞에 접속어가 올 때는 그 접속어 앞에서 한 줄을 비우고, 들여쓰기 없이 문단을 시작해 주세요. 예: "또한,", "특히,", "다만,", "하지만,", "그리고,", "앞으로,".''';
   }

@@ -222,6 +222,81 @@ void main() {
     });
   });
 
+  group('곁들이는 정보', () {
+    Map<String, dynamic> startedAt(int hour) => {
+      'text': '할 일',
+      'done': true,
+      'category': 'today',
+      'startedAt': DateTime(2026, 8, 30, hour).toIso8601String(),
+    };
+
+    test('주로 손대는 시간대를 짚는다', () {
+      final funnel = ExecutionFunnel.from(
+        history([startedAt(9), startedAt(9)]),
+        now: now,
+      );
+      expect(funnel.busiestStartHour, 8);
+      expect(funnel.promptBlock(), contains('오전 8시~오전 10시'));
+    });
+
+    test('골고루 퍼져 있으면 시간대라고 하지 않는다', () {
+      final funnel = ExecutionFunnel.from(
+        historyByDay({
+          1: [startedAt(7), startedAt(13)],
+          2: [startedAt(9), startedAt(15)],
+          3: [startedAt(11), startedAt(19)],
+          4: [startedAt(21), startedAt(17)],
+        }),
+        now: now,
+      );
+      expect(funnel.busiestStartHour, isNull);
+    });
+
+    test('표본이 모자라면 말하지 않는다', () {
+      final funnel = ExecutionFunnel.from(
+        historyByDay({
+          1: [startedAt(9)],
+          2: [startedAt(9)],
+          3: [startedAt(9)],
+        }),
+        now: now,
+      );
+      expect(funnel.busiestStartHour, isNull);
+    });
+
+    test('밤에 몰아서 시작한 날을 센다', () {
+      final funnel = ExecutionFunnel.from(
+        history([startedAt(23), startedAt(23), startedAt(23)]),
+        now: now,
+      );
+      expect(funnel.lateNightDays, 7);
+      expect(funnel.promptBlock(), contains('막판에 몰림'));
+    });
+
+    test('하루만 몰렸으면 바쁜 날일 뿐이다', () {
+      final funnel = ExecutionFunnel.from(
+        historyByDay({
+          1: [startedAt(23), startedAt(23), startedAt(23)],
+          2: [startedAt(10)],
+          3: [startedAt(10)],
+          4: [startedAt(10)],
+        }),
+        now: now,
+      );
+      expect(funnel.lateNightDays, 1);
+      expect(funnel.promptBlock(), isNot(contains('막판에 몰림')));
+    });
+
+    test('시간대는 새는 곳을 고르는 데 끼어들지 않는다', () {
+      // 밤에 몰아 시작해도 세 단계가 잘 지나가면 새는 곳은 없다.
+      final funnel = ExecutionFunnel.from(
+        history([startedAt(23), startedAt(23), startedAt(23)]),
+        now: now,
+      );
+      expect(funnel.leak, FunnelLeak.none);
+    });
+  });
+
   group('코치에게 넘기는 묶음', () {
     test('유형 이름을 붙이지 않는다', () {
       final block = ExecutionFunnel.from(

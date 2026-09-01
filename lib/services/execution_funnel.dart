@@ -54,6 +54,8 @@ class ExecutionFunnel {
     required this.startedMarked,
     required this.maxPlanInDay,
     required this.minPlanInDay,
+    this.lateNightDays = 0,
+    this.startHours = const [],
   });
 
   /// 셀 수 있었던 날. 오늘과 첫 기록 이전은 뺀다.
@@ -85,6 +87,37 @@ class ExecutionFunnel {
 
   final int maxPlanInDay;
   final int minPlanInDay;
+
+  /// 밤 10시 이후에 서로 다른 일 셋 이상을 한꺼번에 시작한 날.
+  ///
+  /// 어느 단계가 새는지와는 다른 축이다. 다 끝냈어도 막판에 몰린 것은 몰린
+  /// 것이라, 단계 비교에 섞지 않고 곁들이는 정보로만 둔다.
+  final int lateNightDays;
+
+  /// 무언가를 시작한 시각들. 주로 언제 손대는 사람인지 여기서 나온다.
+  final List<int> startHours;
+
+  /// 하루 몇 개 이상이 밤에 몰려야 벼락치기로 보는지.
+  static const int crammedTaskThreshold = 3;
+
+  /// 이 시각 이후를 밤으로 본다.
+  static const int lateNightHour = 22;
+
+  /// 시간대 이야기를 하려면 시작 기록이 이만큼은 있어야 한다.
+  static const int minStartHourSamples = 5;
+
+  /// 주로 시작하는 두 시간짜리 구간. 표본이 모자라면 null.
+  int? get busiestStartHour {
+    if (startHours.length < minStartHourSamples) return null;
+    final counts = <int, int>{};
+    for (final hour in startHours) {
+      final slot = hour - hour % 2;
+      counts[slot] = (counts[slot] ?? 0) + 1;
+    }
+    final top = counts.entries.reduce((a, b) => a.value >= b.value ? a : b);
+    // 골고루 퍼져 있으면 시간대라고 부를 것이 없다.
+    return top.value * 2 >= startHours.length ? top.key : null;
+  }
 
   /// 이만큼은 있어야 무슨 말이든 한다.
   static const int minEvaluatedDays = 3;
@@ -194,12 +227,39 @@ class ExecutionFunnel {
         '이 사람은 시작 버튼을 안 쓰고 체크만 하는 것일 수 있으니, 끝까지 못 간다고 단정하지 마세요.',
       );
     }
+    // 시간대는 단계 비교에 섞지 않는다. 아침에 시작하느냐는 어디가 새는지와
+    // 다른 축이고, 한 줄에 섞으면 새는 곳을 고르는 자리를 그것이 차지한다.
+    final aside = <String>[];
+    final busiest = busiestStartHour;
+    if (busiest != null) {
+      aside.add('주로 ${_clock(busiest)}~${_clock(busiest + 2)} 사이에 손댐');
+    }
+    if (lateNightDays >= 2) {
+      aside.add(
+        '밤 $lateNightHour시 이후에 여러 개를 한꺼번에 시작한 날이 $lateNightDays일 '
+        '(다 끝냈는지와 무관하게 시작이 막판에 몰림)',
+      );
+    }
+    if (aside.isNotEmpty) buffer.writeln('곁들여  ${aside.join(' / ')}');
+
     buffer.writeln('→ 제일 많이 새는 곳: ${leakNames[leak]}');
     buffer.writeln('- 위 숫자는 앱이 기록에서 센 값. 여기 없는 것은 세지 않았음.');
     return buffer.toString();
   }
 
   static String _pct(double value) => '${(value * 100).round()}%';
+
+  /// "오전 8시"처럼. 화면 표기와 같은 모양으로 적는다.
+  static String _clock(int hour) {
+    final wrapped = hour % 24;
+    final prefix = wrapped < 6
+        ? '새벽'
+        : wrapped < 12
+        ? '오전'
+        : '오후';
+    final h = wrapped % 12 == 0 ? 12 : wrapped % 12;
+    return '$prefix $h시';
+  }
 
   // ── 세기 ──────────────────────────────────────
 
@@ -231,6 +291,8 @@ class ExecutionFunnel {
     var startedMarked = 0;
     var maxPlanInDay = 0;
     var minPlanInDay = 0;
+    var lateNightDays = 0;
+    final startHours = <int>[];
 
     for (var back = 1; back <= windowDays; back++) {
       final day = DateTime(at.year, at.month, at.day - back);
@@ -246,6 +308,7 @@ class ExecutionFunnel {
       var dayTouched = 0;
       var dayDone = 0;
       var dayDirect = 0;
+      var dayLateStarts = 0;
 
       for (final task in tasks) {
         // 이월 표시는 그날 세운 계획이 아니라 넘어온 것이다.
@@ -254,11 +317,18 @@ class ExecutionFunnel {
         if (_isDirectPlan(task)) dayDirect++;
 
         final isDone = task['done'] == true;
-        final started = (task['startedAt']?.toString() ?? '').isNotEmpty;
-        if (started) startedMarked++;
+        final startedAt = DateTime.tryParse(
+          task['startedAt']?.toString() ?? '',
+        );
+        if (startedAt != null) {
+          startedMarked++;
+          startHours.add(startedAt.hour);
+          if (startedAt.hour >= lateNightHour) dayLateStarts++;
+        }
         if (isDone) dayDone++;
-        if (isDone || started) dayTouched++;
+        if (isDone || startedAt != null) dayTouched++;
       }
+      if (dayLateStarts >= crammedTaskThreshold) lateNightDays++;
 
       if (dayPlanned == 0) {
         daysWithPlan--;
@@ -291,6 +361,8 @@ class ExecutionFunnel {
       startedMarked: startedMarked,
       maxPlanInDay: maxPlanInDay,
       minPlanInDay: minPlanInDay,
+      lateNightDays: lateNightDays,
+      startHours: startHours,
     );
   }
 
