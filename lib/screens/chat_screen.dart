@@ -48,6 +48,7 @@ import 'package:nyang_coach/widgets/alarm_permission_notice.dart';
 import 'package:nyang_coach/services/planner_edit_service.dart';
 import 'package:nyang_coach/services/registration_target.dart';
 import 'package:nyang_coach/services/execution_funnel.dart';
+import 'package:nyang_coach/services/execution_type_labels.dart';
 import 'package:nyang_coach/services/life_pattern_service.dart';
 import 'package:nyang_coach/services/life_routine_analysis.dart';
 import 'package:nyang_coach/services/life_routine_offer.dart';
@@ -5184,8 +5185,8 @@ $block
       now: now,
       daysSinceLastVisit: daysSinceLastVisit,
       // 며칠 만에 돌아온 날, 잘한 대목을 짚어주는 데 쓴다.
-      executionType: ExecutionPatternService.typeLabel(
-        prefs.getString('nyang_history'),
+      executionType: ExecutionTypeLabels.fromFunnel(
+        ExecutionFunnel.from(prefs.getString('nyang_history')),
       ),
       planTotal: plans.length,
       planDone: donePlans.length,
@@ -6452,8 +6453,10 @@ Rules:
       }
     }
 
-    final type = ExecutionPatternService.typeLabel(
-      prefs.getString('nyang_history'),
+    // 이름은 깔때기가 짚은 자리에서 나온다. 문턱으로 붙이던 이름은 앞뒤가
+    // 정반대인 두 사람을 같은 칸에 넣었고, 이름에 달린 처방까지 같이 틀렸다.
+    final type = ExecutionTypeLabels.fromFunnel(
+      ExecutionFunnel.from(prefs.getString('nyang_history')),
     );
     if (type == null) return null;
     return _greetingBuilder.buildTypeAdvice(type, planCount: planCount);

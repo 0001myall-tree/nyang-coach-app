@@ -1,6 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nyang_coach/services/execution_type_labels.dart';
 
+/// 이름마다 문구가 하나씩 붙어 있어야 한다. 프렌즈 등급은 그 문구가 유일한
+/// 한마디라, 빠진 이름이 있으면 그 사람은 아무 말도 못 듣는다.
+
 /// 이름은 코치가 고르지만 뜻은 앱이 고정한다. 뜻을 안 주면 같은 이름이
 /// 주마다 다른 것을 가리키게 되고, 사용자는 지난주 배지와 이번 주 배지가
 /// 같은 말인지도 알 수 없다.
@@ -30,6 +33,31 @@ void main() {
         );
         expect(entry.value, isNot(contains('해보')), reason: entry.key);
       }
+    });
+  });
+
+  group('이름마다 문구가 있다', () {
+    test('빠진 이름이 없다', () {
+      for (final label in ExecutionTypeLabels.all) {
+        expect(
+          ExecutionTypeLabels.commentFor(label),
+          isNotNull,
+          reason: label,
+        );
+      }
+    });
+
+    test('강점을 먼저 말한다', () {
+      // 못한 것부터 세는 문구가 있으면 그 이름을 받은 사람은 매주 지적을
+      // 먼저 듣는다.
+      for (final entry in ExecutionTypeLabels.comments.entries) {
+        expect(entry.value.trim(), isNotEmpty, reason: entry.key);
+      }
+    });
+
+    test('이름이 없으면 문구도 없다', () {
+      expect(ExecutionTypeLabels.commentFor(null), isNull);
+      expect(ExecutionTypeLabels.commentFor('몰아치기형'), isNull);
     });
   });
 

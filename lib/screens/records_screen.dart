@@ -6,8 +6,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:nyang_coach/services/execution_blocker_service.dart';
 import 'package:nyang_coach/services/execution_funnel.dart';
-import 'package:nyang_coach/services/execution_pattern_service.dart';
 import 'package:nyang_coach/services/execution_type_labels.dart';
+import 'package:nyang_coach/services/execution_type_vote.dart';
 import 'package:nyang_coach/services/life_context_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:nyang_coach/services/user_title_service.dart';
@@ -129,8 +129,60 @@ class _RecordsScreenState extends State<RecordsScreen> {
     setState(() => _isLoading = false);
     if (_isMaster) {
       _loadOrGenerateWeeklyFeedback();
+    } else {
+      _loadOrPickExecutionType(prefs);
     }
   }
+
+  /// 프렌즈 등급의 실행 유형 배지.
+  ///
+  /// 이 등급은 주간 한마디를 통째로 만들지 않는다. 대신 이름 하나만 코치에게
+  /// 묻고, 문구는 그 이름에 미리 적어둔 것을 쓴다. 문턱으로 이름을 붙이던
+  /// 때는 앞뒤가 정반대인 두 사람이 같은 이름으로 묶여서, 그 이름에 달린
+  /// 고정 문구까지 같이 틀렸다.
+  ///
+  /// 주 1회다. 그 주 안에서는 캐시한 이름을 그대로 쓴다.
+  Future<void> _loadOrPickExecutionType(SharedPreferences prefs) async {
+    final weekMonday = _getWeekMondayStr();
+    final funnel = ExecutionFunnel.from(prefs.getString('nyang_history'));
+
+    String? lastLabel;
+    try {
+      final cachedRaw = prefs.getString(_executionTypeCacheKey);
+      if (cachedRaw != null) {
+        final cached = jsonDecode(cachedRaw) as Map<String, dynamic>;
+        lastLabel = cached['label'] as String?;
+        if (cached['weekMonday'] == weekMonday) {
+          if (!mounted) return;
+          setState(() => _weeklyExecutionTypeLabel = lastLabel);
+          return;
+        }
+      }
+    } catch (_) {}
+
+    // 물어보기 전에 앱이 짚은 자리를 먼저 띄운다. 답이 오면 그걸로 바뀌고,
+    // 못 물어봤으면 이게 그대로 남는다 — 배지가 통째로 비는 것보다 낫다.
+    final fallback = ExecutionTypeLabels.fromFunnel(funnel);
+    if (!mounted) return;
+    setState(() => _weeklyExecutionTypeLabel = fallback);
+
+    final picked = await ExecutionTypeVote.pick(
+      funnel: funnel,
+      lastLabel: lastLabel,
+    );
+    if (!mounted) return;
+    final label = picked ?? fallback;
+    if (label == null) return;
+
+    setState(() => _weeklyExecutionTypeLabel = label);
+    await prefs.setString(
+      _executionTypeCacheKey,
+      jsonEncode({'weekMonday': weekMonday, 'label': label}),
+    );
+  }
+
+  /// 이 기기에서만 뜻이 있는 값이라 'nyang_' 접두어를 쓰지 않는다.
+  static const String _executionTypeCacheKey = 'execution_type_week';
 
   bool get _isMaster => _hasMasterPlan;
   CoachConfig get _coach => CoachConfigs.get(widget.coachId);
@@ -426,12 +478,11 @@ class _RecordsScreenState extends State<RecordsScreen> {
       }
     } catch (_) {}
 
-    // 실행 유형형(3)은 그 주에 셀 것이 있을 때만 후보에 넣는다. 데이터가
-    // 없는데(ExecutionPatternService가 빈 문자열) 이 유형이 뽑히면 코치가
-    // 근거 없이 지어내게 된다.
-    final hasExecutionPattern = ExecutionPatternService.blockFrom(
+    // 실행 유형형(3)은 그 주에 셀 것이 있을 때만 후보에 넣는다. 셀 것이
+    // 없는데 이 유형이 뽑히면 코치가 근거 없이 지어내게 된다.
+    final hasExecutionPattern = ExecutionFunnel.from(
       prefs.getString('nyang_history'),
-    ).isNotEmpty;
+    ).hasEnough;
 
     // 장기 비전형(1)도 같은 이유로 뺀다. 비전을 안 적어둔 사람에게 뽑히면
     // 회고할 내용이 없어서 "적어두시면 좋아요" 안내로만 채워지고 만다.
@@ -1046,6 +1097,7 @@ ${feedbackType == 0
    - 축은 서로 견주어 보세요. 같은 완료율이라도 앞뒤가 다르면 다른 사람입니다. 적어둔 것의 4분의 1에만 손대고 그 전부를 끝낸 사람에게 할 말은 "한 번에 잡는 양을 줄이자"이고, 대부분에 손대고 그중 일부만 끝낸 사람에게 할 말은 "한 번에 끝나는 크기로 자르자"입니다. 정반대입니다.
    - 잘 지나가고 있는 축은 구체적으로 인정하세요. (예: 손댄 것을 거의 다 끝낸다면 "일단 붙잡으면 놓지 않는 편"이라고 짚기)
    - "제일 많이 새는 곳"은 지적하듯 짚지 마세요. 그 지점이 나아지면 전체가 어떻게 달라질지부터 격려하는 투로 말하고, 거기에 맞는 구체적인 방법을 하나만 제안하세요.
+   - 그 방법은 이번 주 숫자를 보고 심리학에 기반해 정하세요. 왜 그 방법이 이 사람에게 효과가 있는지가 문장 안에서 드러나야 합니다. (예: 언제 어디서 할지 미리 정해두는 실행 의도, 작은 시작이 관성을 만드는 것, 완료 경험 하나가 다음 시도를 쉽게 만드는 것, 계획을 세운 것만으로 이미 해낸 듯 느껴져 동력이 빠지는 것) 이론 이름을 나열하지 말고, 근거가 말 속에 자연스럽게 녹게 쓰세요.
    - 이 유형은 유형 자체를 알아가는 자리이니, 이번 주 개별 할 일 목록을 나열하며 회고하지 마세요.
    - 마지막 줄에 이 사람의 실행 유형 이름을 `유형: 이름` 형식으로 한 줄 적으세요. 이 줄은 화면에 보이지 않고 앱이 배지에 씁니다.
      - 반드시 다음 중에서만 고르세요. 각 이름이 가리키는 모양이 정해져 있으니, 그 뜻과 다른 사람에게 그 이름을 붙이지 마세요.
@@ -1515,9 +1567,7 @@ ${ExecutionTypeLabels.listForPrompt}
     // 마스터는 코치의 한마디가 주 1회 캐시라 배지도 그 주기에 맞춰 같이
     // 캐시해둔 값을 쓴다. 프렌즈는 애초에 한마디 자체가 매번 즉석 계산(API를
     // 안 씀)이라, 배지도 매번 그 자리에서 계산해 짝을 맞춘다.
-    final executionTypeLabel = _isMaster
-        ? _weeklyExecutionTypeLabel
-        : ExecutionPatternService.typeLabel(jsonEncode(_history));
+    final executionTypeLabel = _weeklyExecutionTypeLabel;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -1557,8 +1607,8 @@ ${ExecutionTypeLabels.listForPrompt}
                           _weeklyFeedbackText ??
                               '이번 주 활동과 목표를 분석하여 $_userTitle께 드릴 한마디를 작성하고 있습니다. 약 5초 정도만 잠시 기다려주십시오...',
                         )
-                      : (ExecutionPatternService.staticComment(
-                              jsonEncode(_history),
+                      : (ExecutionTypeLabels.commentFor(
+                              _weeklyExecutionTypeLabel,
                             ) ??
                             _getPatternFeedback(records)),
                   style: GoogleFonts.notoSansKr(

@@ -10,6 +10,8 @@
 /// 이름에 처방을 달지 않는다. 무엇을 할지는 그 주의 숫자를 보고 코치가 정한다.
 library;
 
+import 'execution_funnel.dart';
+
 class ExecutionTypeLabels {
   const ExecutionTypeLabels._();
 
@@ -32,7 +34,7 @@ class ExecutionTypeLabels {
     '시작 꾸준형': '손은 매번 대는데 손댄 것이 끝까지 가는 비율이 낮음',
     '편차형': '다 해낸 날과 아예 손도 안 댄 날로 갈림. 계획도 완료도 들쭉날쭉',
     '벼락치기형': '시작이 밤 늦게 몰림. 다 끝냈는지와 무관하게 손대는 시각이 막판',
-    '자유형': '플래너에 뜸하게 오거나 아직 셀 것이 적어 유형을 말하기 이름',
+    '자유형': '플래너에 뜸하게 오거나 아직 셀 것이 적어 유형을 말하기 이른 상태',
   };
 
   static List<String> get all => meanings.keys.toList(growable: false);
@@ -41,6 +43,57 @@ class ExecutionTypeLabels {
   static String get listForPrompt => meanings.entries
       .map((entry) => '     · ${entry.key} — ${entry.value}')
       .join('\n');
+
+  /// 판정을 못 받았을 때 앱이 대신 고르는 이름.
+  ///
+  /// 프렌즈 등급도 이름은 코치가 고른다. 다만 한도가 찼거나 통신이 끊기면
+  /// 배지가 통째로 비는데, 그럴 바에는 깔때기가 짚은 자리를 그대로 이름으로
+  /// 쓰는 편이 낫다. 문턱으로 붙이던 옛 이름과 달리 적어도 새는 자리는 맞다.
+  static String? fromFunnel(ExecutionFunnel funnel) {
+    if (!funnel.hasEnough) return null;
+    // 밤에 몰아 시작하는 것은 어느 단계가 새는지와 다른 축이라, 세 축이 다
+    // 잘 지나갈 때만 이름 자리를 준다.
+    final leak = funnel.leak;
+    if (leak == FunnelLeak.none && funnel.lateNightDays >= 2) return '벼락치기형';
+    return switch (leak) {
+      FunnelLeak.none => '안정형',
+      FunnelLeak.planning => '계획 편차형',
+      FunnelLeak.amount => '계획 과다형',
+      FunnelLeak.starting => '시작 편차형',
+      FunnelLeak.finishing => '시작 꾸준형',
+      FunnelLeak.notStarted => '자유형',
+    };
+  }
+
+  /// 이름마다 붙는 고정 한마디.
+  ///
+  /// 코치를 부를 수 없는 등급에서 쓴다. 그 등급도 이름은 코치가 고르므로
+  /// 짚는 자리는 맞고, 그 자리에 맞는 말이 나간다. 문구까지 매주 API로
+  /// 만들 만한 자리는 아니다.
+  ///
+  /// 강점을 먼저 말하고 그다음에 하나만 권한다. "이대로도 괜찮아"로 끝내지도,
+  /// 못한 것부터 세지도 않는다.
+  static const Map<String, String> comments = {
+    '안정형':
+        '계획하고 시작하고 끝내는 게 다 이어지고 있어. 지금 방식이 맞으니 여기서 하나 더 다지고 싶으면, 끝낸 김에 내일 할 것 하나를 미리 적어두는 걸 얹어봐.',
+    '계획 편차형':
+        '적어둔 날엔 곧잘 해내는데 적는 날 자체가 드물어. 다 지키지 못할까 봐 아예 안 적게 되는 거라면, 하루에 딱 하나만 적는 걸로 문턱을 낮춰봐.',
+    '계획 과다형':
+        '매일 손은 대고 있어. 다만 하루에 적어두는 양이 실제로 해내는 양보다 많아서 남는 게 쌓여. 다음엔 하루치를 절반으로 줄여서 다 끝내는 경험부터 만들어봐.',
+    '시작 편차형':
+        '계획은 꾸준히 쓰는데 그중 손도 못 대는 날이 있어. 계획을 세운 것만으로 이미 한 것처럼 느껴져서 정작 시작할 힘이 빠지는 걸 수도 있어. 언제 어디서 할지까지 같이 정해두면 첫 발이 가벼워져.',
+    '시작 꾸준형':
+        '제일 어려운 시작은 매번 해내고 있어. 손댄 게 끝까지 안 가는 거니까, 이번엔 한 번에 걸리는 시간을 짧게 잡아서 끝내는 경험부터 만들어봐.',
+    '편차형':
+        '의욕이 켜지면 계획부터 완료까지 몰아치고 꺼지면 손을 놓는 편이야. 나쁜 게 아니라 에너지가 몰아서 도는 리듬인 거고, 관건은 손 놓는 날에도 제일 만만한 것 하나만 살짝 걸쳐두는 거야.',
+    '벼락치기형':
+        '결국 다 손을 대긴 하는데 시작이 밤 늦게 몰려 있어. 막판 하나만 보지 말고 중간에 나만의 마감을 두어 개 끼워두면 미루는 자리가 줄어들 거야.',
+    '자유형':
+        '아직 잘하고 못하고를 따질 단계는 아니야. 계획 세우는 것도 시작하는 것도 너무 무겁게 보지 마.',
+  };
+
+  static String? commentFor(String? label) =>
+      label == null ? null : comments[label];
 
   /// 코치 답변 끝에 붙은 `유형: 이름` 줄을 읽는다.
   ///
