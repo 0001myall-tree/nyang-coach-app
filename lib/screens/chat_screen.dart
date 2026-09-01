@@ -47,6 +47,7 @@ import 'package:nyang_coach/services/planner_routine_prompt_service.dart';
 import 'package:nyang_coach/widgets/alarm_permission_notice.dart';
 import 'package:nyang_coach/services/planner_edit_service.dart';
 import 'package:nyang_coach/services/registration_target.dart';
+import 'package:nyang_coach/services/same_work_check.dart';
 import 'package:nyang_coach/services/task_name_similarity.dart';
 import 'package:nyang_coach/services/task_resistance_service.dart';
 import 'package:nyang_coach/services/execution_resistance_service.dart';
@@ -7966,18 +7967,19 @@ Rules:
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString('nyang_tasks') ?? '[]';
     final List<dynamic> tasks = jsonDecode(raw);
-    // 띄어쓰기를 지우지 않고 들고 있는다. 끝말만 다른 이름을 견주려면 낱말이
-    // 어디서 갈리는지를 알아야 한다.
     final existingTaskTexts = tasks
         .map((t) => (t['text'] ?? '').toString().trim())
         .where((text) => text.isNotEmpty)
-        .toSet();
+        .toList();
 
-    // 이번 답변 안에서 같은 이름의 태그가 두 번 나오는 경우도 걸러낸다.
+    // 먼저 글자로 확실한 것만 걸러낸다. 이름이 같거나 한쪽이 다른 쪽을 통째로
+    // 품은 경우다. 이건 물어볼 것 없이 안다.
+    //
+    // 이번 답변 안에서 같은 이름의 태그가 두 번 나오는 경우도 여기서 걸러낸다.
     // 안 그러면 카드는 하나만 보이는데 목록엔 똑같은 게 두 개 실려서,
     // "추가하기"를 눌러도 하나가 남아 카드가 안 사라지는 것처럼 보인다.
     final seenInBatch = <String>{};
-    return suggestions.where((suggestion) {
+    final survivors = suggestions.where((suggestion) {
       final suggestedText = _normalizeTaskSuggestionText(suggestion.text);
       if (suggestedText.isEmpty) return false;
       if (existingTaskTexts.any(
@@ -7987,6 +7989,26 @@ Rules:
       }
       return seenInBatch.add(suggestedText);
     }).toList();
+
+    if (survivors.isEmpty || existingTaskTexts.isEmpty) return survivors;
+
+    // 남은 것은 글자로 가를 수 없다. 뜻을 보고 가른다.
+    //
+    // '책 읽기'와 '독서'는 글자가 하나도 안 겹치고, '지원서 비교견적서 내기'와
+    // '지원서 비교견적서 제출'은 서로를 품지 않는다. 반대로 '보고서 초안 쓰기'와
+    // '보고서 초안 검토'는 앞이 통째로 같은데 다른 일이다.
+    final duplicates = await SameWorkCheck.alreadyOnList(
+      existing: existingTaskTexts,
+      candidates: survivors
+          .map((suggestion) => suggestion.text.trim())
+          .toList(growable: false),
+    );
+    if (duplicates.isEmpty) return survivors;
+
+    return [
+      for (var i = 0; i < survivors.length; i++)
+        if (!duplicates.contains(i)) survivors[i],
+    ];
   }
 
   Future<bool> _isMasterTimerSuggestionEligible(

@@ -3,8 +3,9 @@ import 'package:nyang_coach/services/task_name_similarity.dart';
 
 bool same(String a, String b) => TaskNameSimilarity.isSameWork(a, b);
 
+/// 글자만 보고 아는 것까지가 여기 몫이다. 그 너머는 뜻을 보는 쪽이 맡는다.
 void main() {
-  group('같은 일로 본다', () {
+  group('글자만 보고 아는 것', () {
     test('글자가 같으면', () {
       expect(same('청소', '청소'), isTrue);
     });
@@ -18,31 +19,29 @@ void main() {
       expect(same('사업계획서 쓰기', '오늘 사업계획서 쓰기'), isTrue);
     });
 
-    test('끝말만 다르면', () {
-      // 목록에 있는 일을 코치가 조금 다르게 적어 새 할 일로 다시 제안하던 자리다.
-      expect(same('지원서 비교견적서 내기', '지원서 비교견적서 제출'), isTrue);
-      expect(same('보고서 초안 쓰기', '보고서 초안 작성'), isTrue);
-    });
-
     test('견주는 순서를 타지 않는다', () {
-      expect(
-        same('지원서 비교견적서 제출', '지원서 비교견적서 내기'),
-        same('지원서 비교견적서 내기', '지원서 비교견적서 제출'),
-      );
+      expect(same('오늘 사업계획서 쓰기', '사업계획서 쓰기'), isTrue);
     });
   });
 
-  group('다른 일로 본다', () {
-    test('앞말이 겹쳐도 낱말이 하나뿐이면', () {
-      // '청소'와 '청소기 수리'가 같은 일이 되면 안 된다.
-      expect(same('청소', '청소기 수리'), isFalse);
+  group('글자로는 모르는 것', () {
+    // 여기서 false는 "다른 일"이 아니라 "글자로는 모르겠다"는 뜻이다.
+    // 이 짝들은 뜻을 보는 판정으로 넘어간다.
+    test('끝말만 다른 이름', () {
+      expect(same('지원서 비교견적서 내기', '지원서 비교견적서 제출'), isFalse);
     });
 
-    test('뗀 앞부분이 너무 짧으면', () {
-      // 한두 글자는 우연히 겹친다.
-      expect(same('책 읽기', '책 사기'), isFalse);
+    test('글자가 하나도 안 겹치는 같은 일', () {
+      expect(same('책 읽기', '독서'), isFalse);
     });
 
+    test('앞말이 같은 다른 일', () {
+      // 예전에는 이걸 같은 일로 쳐서, 다른 일을 제안하지 못하게 됐다.
+      expect(same('보고서 초안 쓰기', '보고서 초안 검토'), isFalse);
+    });
+  });
+
+  group('겹쳐 보여도 다른 일', () {
     test('아무 관계 없는 이름', () {
       expect(same('운동하기', '장보기'), isFalse);
     });
@@ -51,11 +50,9 @@ void main() {
       expect(same('', '청소'), isFalse);
       expect(same('   ', '청소'), isFalse);
     });
-  });
 
-  group('짧은 이름은 포함 관계를 보지 않는다', () {
-    test('두 글자끼리는 같을 때만', () {
-      // '독서'가 '독서실 예약' 안에 있다고 같은 일은 아니다.
+    test('너무 짧은 이름끼리는 포함 관계를 보지 않는다', () {
+      // 두 글자가 우연히 다른 이름 안에 들어 있는 일이 잦다.
       expect(same('독서', '독'), isFalse);
     });
   });
