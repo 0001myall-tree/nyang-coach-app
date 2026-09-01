@@ -15600,13 +15600,12 @@ Rules:
         // 노하우(욕실 순서, 분류 기준)가 아니라 조각 쪽을 싣는다. 여기서 고르는
         // 건 지금 할 하나라, 절차를 주면 읊을 내용이 될 뿐이다.
         //
-        // 무슨 얘기인지에 따라 목록이 갈린다. 개입의 예시에는 청소·설거지·
-        // 글쓰기·공부만 있어서, 운동 얘기일 때는 코치가 참고할 것이 없었다.
-        final isCleaning = _isCleaningContext(userText);
-        final playbook = isCleaning
+        // 운동 조각 목록은 걷어냈다. 동작 이름과 효능을 적어두면 코치가 그
+        // 안에서만 고르는데, 지금 모델은 그 사람 상황에 맞는 동작을 직접 고를
+        // 수 있다. 청소는 조각이 남아 있다 — 그쪽은 집 구조에 따라 갈려서
+        // 앱이 무엇을 짚어줄지 고르는 층이 따로 있다.
+        final playbook = _isCleaningContext(userText)
             ? await _pickCleaningFragment(prefs, userText)
-            : _isWorkoutContext(userText)
-            ? _coach.workoutSmallStepPlaybook
             : null;
         if (playbook != null &&
             playbook.isNotEmpty &&
