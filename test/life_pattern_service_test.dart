@@ -292,18 +292,12 @@ void main() {
       expect(block, contains('이미 걷고 있음'));
     });
 
-    test('본인이 고른 답이라는 것을 밝힌다', () async {
+    test('본인이 고른 답이라는 것이 제목에 있다', () async {
+      // 어떻게 쓰라는 말은 따로 두지 않는다. 답을 실어주는 것 자체가 쓰라는
+      // 뜻이고, 어긋나지 말라는 금지는 판단할 여지만 없앤다.
       await LifePatternService.saveAnswer('bro', 'posture', ['앉아 있는 시간이 많아']);
-      expect(await LifePatternService.promptBlock('bro'), contains('본인이 고른 답'));
-    });
-
-    test('어디에 쓰는 답인지 밝힌다', () async {
-      // 실어주기만 하고 아무 말도 없으면 코치가 자기가 아는 일반적인 방법을
-      // 권한다. 다만 어긋나게 권하지 말라는 금지까지 두지는 않는다 — 몰아서
-      // 하고 싶다고 한 사람도 가끔은 조금씩 하고 싶은 날이 있다.
-      await LifePatternService.saveAnswer('halmae', 'style', ['몰아서 하고 싶어']);
-      final block = await LifePatternService.promptBlock('halmae');
-      expect(block, contains('언제 어떻게 넣을지도 이 답 안에서'));
+      final block = await LifePatternService.promptBlock('bro');
+      expect(block, contains('본인이 직접 고른 답'));
       expect(block, isNot(contains('마세요')));
     });
 

@@ -539,7 +539,6 @@ class LifePatternService {
       if (notes.isEmpty) continue;
       buffer.writeln('- ${notes.join(' / ')}');
     }
-    buffer.writeln('*짐작이 아니라 본인이 고른 답입니다. 무엇을 권할지도, 언제 어떻게 넣을지도 이 답 안에서 정하세요.');
     return buffer.toString();
   }
 }
