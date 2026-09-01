@@ -6012,41 +6012,51 @@ Rules:
 
   String _dateKeyOf(DateTime at) => '${at.year}-${at.month}-${at.day}';
 
-  /// 오늘 목록에 있는데 지난 며칠 기록에도 못 끝낸 채로 남아 있던 일.
+  /// 오늘 목록에 있는데 지난 며칠 동안 다음 날로 넘겨온 일.
   ///
   /// 이월된 일은 코치가 계획을 적는 자리에서 챙길 수가 없다. 사용자가 오늘
   /// 적은 것이 아니라 어제에서 넘어온 것이라, 적는 순간 자체가 없다. 그래서
   /// 인사에서 챙긴다.
   ///
-  /// 날짜를 옮긴 것과 그냥 매일 다시 적는 것을 가리지 않는다. 어느 쪽이든
-  /// 사용자에게는 며칠째 못 끝낸 같은 일이다.
+  /// 사용자가 실제로 넘긴 날만 센다. 기록에 이월 표시가 따로 남으므로 그것만
+  /// 본다.
   ///
-  /// 여러 개면 가장 여러 날 걸려 있던 것을 고른다.
+  /// 예전에는 이름이 같은 항목이 완료 안 된 채로 올라온 날을 셌다. 그러면
+  /// 루틴이 거의 항상 뽑힌다. 일반 할 일은 적어둔 며칠만 목록에 있는데 매일
+  /// 루틴은 이레 내내 있어서, 셀 기회부터 몇 배 많다. 주 n회 루틴은 더한데,
+  /// 그 주에 횟수를 채울 때까지 매일 떠 있어서 몰아서 하는 사람에게는 닷새쯤
+  /// "완료 안 됨"으로 남는다 — 안 한 게 아니라 아직 주가 안 끝난 것인데
+  /// "닷새째 못 끝낸 일"이 되어버린다.
   ///
-  /// 두 날 넘게 걸려 있어야 꺼낸다. 하루 못 한 것은 그날 사정일 수 있고,
-  /// 그걸 다음 날 아침에 짚으면 챙기는 게 아니라 재촉이 된다.
+  /// 문구도 원래 "N일째 이월된 항목"이라고 말하고 있었다. 세는 쪽이 그 말과
+  /// 달랐던 것이다.
+  ///
+  /// 여러 개면 가장 여러 날 넘겨온 것을 고른다.
+  ///
+  /// 두 날 넘게 넘겨야 꺼낸다. 하루 미룬 것은 그날 사정일 수 있고, 그걸 다음
+  /// 날 아침에 짚으면 챙기는 게 아니라 재촉이 된다.
   static const int _carriedMinDays = 2;
 
   ({String name, int days})? _carriedOverTask(SharedPreferences prefs) {
     final from = DateTime.now().subtract(const Duration(days: 7));
-    final missedDays = <String, int>{};
+    final deferredDays = <String, int>{};
     for (final record in _decodeMapList(prefs.getString('nyang_history'))) {
       final date = DateTime.tryParse(record['date']?.toString() ?? '');
       if (date == null || date.isBefore(from)) continue;
       final seen = <String>{};
       for (final task in (record['tasks'] as List?) ?? const []) {
-        if (task is! Map || task['done'] == true) continue;
+        if (task is! Map || task['deferred'] != true) continue;
         final text = task['text']?.toString().trim() ?? '';
         if (text.isEmpty || !seen.add(text)) continue;
-        missedDays[text] = (missedDays[text] ?? 0) + 1;
+        deferredDays[text] = (deferredDays[text] ?? 0) + 1;
       }
     }
-    if (missedDays.isEmpty) return null;
+    if (deferredDays.isEmpty) return null;
 
     ({String name, int days})? best;
     for (final task in _decodeMapList(prefs.getString('nyang_tasks'))) {
       if (!_isPendingNotInProgressTask(task)) continue;
-      final days = missedDays[task['text']?.toString().trim() ?? ''] ?? 0;
+      final days = deferredDays[task['text']?.toString().trim() ?? ''] ?? 0;
       if (days < _carriedMinDays) continue;
       final name = _shortTaskName(task);
       if (name == null) continue;
