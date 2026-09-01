@@ -2,18 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../services/coach_id_service.dart';
 
-/// 청소 조각 한 줄과, 그 줄이 어디를 가리키는지 알아보는 단어들.
-///
-/// 사용자가 "설거지"라고 말하면 그 줄을 쓰고, 어디라고 말하지 않았으면 앱이
-/// 순번대로 다음 줄을 준다. 순번은 저장되어 앱을 껐다 켜도 이어진다 —
-/// 그러지 않으면 새 대화가 늘 같은 줄로 시작한다.
-class CleaningFragment {
-  const CleaningFragment({required this.signals, required this.line});
-
-  final List<String> signals;
-  final String line;
-}
-
 class CoachConfig {
   final String id;
   final String _name;
@@ -39,25 +27,6 @@ class CoachConfig {
   /// 청소가 특기인 코치는 이 대목이 길어서, 늘 실으면 밥·잠 얘기를 할 때도
   /// 청소 팁이 프롬프트의 절반을 차지한다.
 
-  /// 코치가 아는 청소 조각들.
-  ///
-  /// 규칙은 한 줄도 없이 이름만 있다. 무엇을 고를지는 여기서 가져오고, 어떻게
-  /// 할지는 공통 실행 저항 개입이 정한다.
-  ///
-  /// 원래는 노하우와 한 덩어리였고 규칙도 섞여 있었다. "전체를 한 번에 하지
-  /// 마라"는 [범위 좁히기]와, "오늘은 15분만"은 [시간 낮추기]와 같은 말이었다.
-  /// 개입은 한 턴에 하나만 고르게 되어 있는데, 그 줄들이 어느 개입이 뽑히든
-  /// 딸려 들어가서 원칙이 샜다.
-  ///
-  /// 붙는 자리는 한 군데뿐이다. 개입이 행동을 고르는 턴. 거기서는 개입이 준
-  /// 예시 하나("물건 하나 치우기")를 이겨야 해서 이 이름들이 필요하다.
-  ///
-  /// 그냥 청소 얘기를 하는 턴에는 붙이지 않는다. 이길 예시가 없는 자리에
-  /// 이름만 놓으면, 코치가 아는 것을 말하지 못하고 그 안에서만 고르게 된다.
-  ///
-  /// 여덟 줄을 통째로 주지 않고 앱이 한 줄만 골라 넘긴다. 다 주고 고르라고
-  /// 하면 모델이 매번 비슷한 걸 집는다 — 개입 로테이션에서 이미 겪은 일이다.
-  final List<CleaningFragment>? cleaningFragments;
 
   /// 코치가 아는 운동 조각의 이름들. [cleaningFragments]와 같은 자리에
   /// 같은 이유로 붙는다 — 개입이 행동을 고르는 턴에만.
@@ -104,7 +73,6 @@ class CoachConfig {
     this.flirtCore = const [],
     required this.systemPrompt,
     this.bedtimeCarryOverRule,
-    this.cleaningFragments,
     this.workoutPlaybook,
     this.lifeRoutineByTimeOfDay,
     this.voiceCount = 0,
@@ -494,40 +462,6 @@ class CoachConfigs {
         'night':
             '씻기, 폰 내려놓기, 기지개처럼 수면 루틴을 우선하고 잠자리에 들게 한다. 이 시간에는 생산성 과제나 청소 추천을 하지 않는다.',
       },
-      cleaningFragments: [
-        CleaningFragment(
-          signals: ['이불', '침대', '침구', '베개'],
-          line: '이불: 반으로 접기, 베개 제자리 놓기',
-        ),
-        CleaningFragment(
-          signals: ['책상', '데스크'],
-          line: '책상: 쓰레기 버리기, 물건 제자리 놓기',
-        ),
-        CleaningFragment(
-          signals: ['화장대', '화장품'],
-          line: '화장대: 안 쓰는 화장품이나 쓰레기 하나 버리기',
-        ),
-        CleaningFragment(
-          signals: ['냉장고', '냉장실', '유통기한'],
-          line: '냉장고: 문 쪽 칸 하나 비우기',
-        ),
-        CleaningFragment(
-          signals: ['욕실', '화장실', '변기', '세면대', '샤워'],
-          line: '욕실: 바닥·세면대·거울 중 하나 닦기, 머리카락 줍기, 세제만 뿌려두기',
-        ),
-        CleaningFragment(
-          signals: ['거실', '부엌', '주방', '식탁', '싱크대', '바닥'],
-          line: '거실·부엌: 바닥에 떨어져 있는 것 치우기, 식탁 위 비우기, 싱크대 컵 치우기',
-        ),
-        CleaningFragment(
-          signals: ['설거지', '그릇', '컵'],
-          line: '설거지: 컵 하나 씻기, 물에 담가두기',
-        ),
-        CleaningFragment(
-          signals: ['빨래', '세탁', '건조'],
-          line: '빨래: 세탁기 돌리기, 다 된 것 꺼내 널기',
-        ),
-      ],
     ),
     'bro': CoachConfig(
       id: 'bro',
