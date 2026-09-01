@@ -207,6 +207,44 @@ void main() {
     });
   });
 
+  group('역할 한 줄', () {
+    test('맡은 영역이 있는 코치에만 붙는다', () {
+      for (final coachId in LifePatternService.domains.keys) {
+        expect(LifePatternService.roleLine(coachId), isNotEmpty, reason: coachId);
+      }
+      expect(LifePatternService.roleLine('cat'), isEmpty);
+      expect(LifePatternService.roleLine('sec_female'), isEmpty);
+    });
+
+    test('코치마다 맡는 것이 다르다', () {
+      final lines = LifePatternService.domains.keys
+          .map(LifePatternService.roleLine)
+          .toSet();
+      expect(lines.length, LifePatternService.domains.length);
+    });
+
+    test('기회가 안 보이면 만들어내지 말라고 못박는다', () {
+      // 대상을 찾아야 하는 동사는 이 앱에서 여러 번 지어내기로 이어졌다.
+      for (final coachId in LifePatternService.domains.keys) {
+        expect(
+          LifePatternService.roleLine(coachId),
+          contains('만들어내지 않는다'),
+          reason: coachId,
+        );
+      }
+    });
+
+    test('이미 하는 일에 붙이는 쪽을 먼저 보게 한다', () {
+      for (final coachId in LifePatternService.domains.keys) {
+        expect(
+          LifePatternService.roleLine(coachId),
+          contains('이미 하는 일에 붙일 수 있는지'),
+          reason: coachId,
+        );
+      }
+    });
+  });
+
   group('담당으로 가려둔 루틴', () {
     test('아직 안 갈랐으면 빈 집합', () async {
       expect(await LifePatternService.domainHabitIds('halmae'), isEmpty);

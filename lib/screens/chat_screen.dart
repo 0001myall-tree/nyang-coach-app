@@ -15794,6 +15794,7 @@ $resistanceFlowRule'''
       // 쪽에 붙어야 읽힌다.
       final assembledSystemPrompt =
           '''$baseSystemPrompt
+${LifePatternService.roleLine(_coach.id)}
 ${Prompts.executionSupportRule}
 ${context.isNotEmpty ? '\n$context' : ''}
 $lifeRoutineSection
