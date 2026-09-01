@@ -48,6 +48,9 @@ import 'package:nyang_coach/widgets/alarm_permission_notice.dart';
 import 'package:nyang_coach/services/planner_edit_service.dart';
 import 'package:nyang_coach/services/registration_target.dart';
 import 'package:nyang_coach/services/life_pattern_service.dart';
+import 'package:nyang_coach/services/life_routine_analysis.dart';
+import 'package:nyang_coach/services/life_routine_offer.dart';
+import 'package:nyang_coach/services/routine_domain_check.dart';
 import 'package:nyang_coach/services/same_work_check.dart';
 import 'package:nyang_coach/services/task_name_similarity.dart';
 import 'package:nyang_coach/services/task_resistance_service.dart';
@@ -5532,7 +5535,77 @@ $block
       return true;
     }
 
-    return false;
+    return _offerLifeRoutine(coachId);
+  }
+
+  /// 판정이 났으면 코치 목소리로 한마디 건넨다. 건넸으면 true.
+  ///
+  /// 같은 제안을 두 번 잇달아 하지 않는다. 지난번과 판정도 대상도 같다면
+  /// 사용자가 이미 듣고 안 한 것이고, 같은 말을 한 달 뒤에 또 하면 그건
+  /// 코칭이 아니라 반복이다.
+  Future<bool> _offerLifeRoutine(String coachId) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.reload();
+
+    final habits = _decodeMapList(prefs.getString('nyang_habits'));
+    final domainIds = await _domainHabitIds(coachId, habits);
+    if (!mounted) return false;
+
+    final plan = LifeRoutineAnalysis.analyze(
+      historyRaw: prefs.getString('nyang_history'),
+      habitsRaw: prefs.getString('nyang_habits'),
+      habitLogsRaw: prefs.getString('nyang_habit_logs'),
+      schedulesRaw: prefs.getString('nyang_schedules'),
+      answers: await LifePatternService.answers(coachId),
+      domainHabitIds: domainIds,
+    );
+    if (!mounted || !plan.speaks) return false;
+
+    final mark = '${plan.verdict.name}:${plan.target?.habitId ?? ''}';
+    final saved = await LifePatternService.profile(coachId);
+    if (saved['lastOffer'] == mark) return false;
+    if (!mounted) return false;
+
+    final line = await LifeRoutineOffer.compose(
+      coachId: coachId,
+      plan: plan,
+      surveyBlock: await LifePatternService.promptBlock(coachId),
+      domainRoutineNames: habits
+          .where((habit) => domainIds.contains(habit['id']?.toString()))
+          .map((habit) => habit['name']?.toString() ?? '')
+          .where((name) => name.isNotEmpty)
+          .toList(growable: false),
+    );
+    if (!mounted || line == null) return false;
+
+    await LifePatternService.update(coachId, {
+      'lastOffer': mark,
+      'lastOfferedAt': DateTime.now().toIso8601String(),
+    });
+    if (!mounted) return false;
+
+    _injectAiMessage(line);
+    unawaited(
+      AnalyticsService.logFeatureUsage('life_routine_${plan.verdict.name}'),
+    );
+    return true;
+  }
+
+  /// 이 코치 담당인 루틴들. 가른 지 오래됐으면 다시 가른다.
+  ///
+  /// 30일에 한 번만 묻는다. 루틴 이름은 자주 바뀌는 것이 아니고, 이 판정에
+  /// 매번 값을 치를 이유가 없다.
+  Future<Set<String>> _domainHabitIds(
+    String coachId,
+    List<Map<String, dynamic>> habits,
+  ) async {
+    final saved = await LifePatternService.profile(coachId);
+    final analyzedAt = DateTime.tryParse(saved['analyzedAt']?.toString() ?? '');
+    final fresh =
+        analyzedAt != null &&
+        DateTime.now().difference(analyzedAt) < LifePatternService.reviewInterval;
+    if (fresh) return LifePatternService.domainHabitIds(coachId);
+    return RoutineDomainCheck.refresh(coachId: coachId, habits: habits);
   }
 
   /// 문항 하나를 카드로 띄운다.
