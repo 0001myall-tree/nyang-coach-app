@@ -47,6 +47,7 @@ import 'package:nyang_coach/services/planner_routine_prompt_service.dart';
 import 'package:nyang_coach/widgets/alarm_permission_notice.dart';
 import 'package:nyang_coach/services/planner_edit_service.dart';
 import 'package:nyang_coach/services/registration_target.dart';
+import 'package:nyang_coach/services/execution_funnel.dart';
 import 'package:nyang_coach/services/life_pattern_service.dart';
 import 'package:nyang_coach/services/life_routine_analysis.dart';
 import 'package:nyang_coach/services/life_routine_offer.dart';
@@ -4667,14 +4668,13 @@ ${lines.join('\n')}
   /// 대신한다.
   ///
   /// [PlanFeedbackService._askPinpoint]와 같은 패턴이다: 코치의 systemPrompt를
-  /// 그대로 얹어 코치 말투를 지키고, [ExecutionPatternService]가 센 값(패턴
-  /// 이름 또는 계획/시작/완료 세 축 숫자)만 관찰로 건네 코치가 지어내지
-  /// 않게 한다.
+  /// 그대로 얹어 코치 말투를 지키고, 앱이 센 값(계획/시작/완료 세 축의 숫자와
+  /// 제일 많이 새는 곳)만 관찰로 건네 코치가 지어내지 않게 한다.
   Future<String?> _buildExecutionBottleneckLine(SharedPreferences prefs) async {
     try {
-      final block = ExecutionPatternService.blockFrom(
+      final block = ExecutionFunnel.from(
         prefs.getString('nyang_history'),
-      );
+      ).promptBlock();
       if (block.isEmpty) return null;
 
       final prompt =
@@ -4686,16 +4686,15 @@ ${lines.join('\n')}
 $block
 
 [말투 원칙 - 반드시 지킬 것]
-- 유형 이름 자체를 문제처럼 다루지 말 것 - 예를 들어 편차형(계획 편차형,
-시작 편차형 포함)이나 무난형, 자유형, 벼락치기형은 고칠 결함이 아니라
-이 사람이 원래 그렇게 해내는 방식이다.
-- 격려는 부드럽게 하되, 개선 방향은 흐릿하게 뭉개지 말 것. 병목 지점(계획/
-시작/완료 중 가장 낮은 곳, 또는 관찰에 이미 담긴 패턴)에 맞춰, 왜 그
+- 새는 곳을 결함처럼 다루지 말 것 - 지금 그 자리에서 걸릴 뿐이지 이 사람이
+잘못하고 있다는 뜻이 아니다. 잘 지나가고 있는 축이 있으면 그것부터 알아줄 것.
+- 격려는 부드럽게 하되, 개선 방향은 흐릿하게 뭉개지 말 것. 관찰에 적힌
+"제일 많이 새는 곳"에 맞춰, 왜 그
 방법이 효과가 있는지 심리학적 근거(예: 실행 의도, 작은 시작이 관성을
 만드는 것, 완료 경험이 다음 시도를 쉽게 만드는 것 등)를 바탕으로 무엇을
 어떻게 하라는 것인지 한 문장 안에서 선명하게 짚을 것 - "잘하고 있으니
 계속하세요" 같은 말로 끝내지 말 것.
-- 패턴 이름이나 숫자를 그대로 읽지 말고, 자연스러운 문장으로 풀어 쓸 것.
+- 숫자를 그대로 읽지 말고, 자연스러운 문장으로 풀어 쓸 것.
 - 두 문장 안팎, 120자 안에서 끝낼 것. 태그나 따옴표, 머리말 없이 코치의
 말투 그대로 쓸 것.
 
@@ -14663,8 +14662,16 @@ Rules:
     //
     // 코치에게 "패턴을 찾아 활용하라"고 시키지 않는 이유는 하나다. 그러면
     // 볼 것이 없는 턴에도 패턴을 지어낸다. 셀 수 있는 것은 앱이 센다.
+    //
+    // 유형 이름 대신 축별 숫자를 넘긴다. 이름은 정보를 잃는 압축이라, 앞뒤가
+    // 정반대인 두 사람이 같은 이름으로 묶이면 처방까지 같이 틀린다.
     if (!resistanceTurn) {
-      sb.write(await ExecutionPatternService.promptBlock());
+      sb.write(
+        ExecutionFunnel.from(prefs.getString('nyang_history')).promptBlock(
+          purpose:
+              '계획이 실제로 끝나게 돕는 자리. 계획을 얼마나 잡을지, 한 가지에 걸리는 시간을 어떻게 어림할지, 언제 첫 발을 뗄지, 무엇을 루틴으로 굳힐지 — 그날 대화에 맞는 것을 골라 쓸 것.',
+        ),
+      );
     }
 
     // 생활 정보는 마스터만 받는다. 실행 패턴은 앱이 센 값이라 지어낼 여지가
