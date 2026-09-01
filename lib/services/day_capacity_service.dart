@@ -100,10 +100,14 @@ class DayCapacityService {
   }
 
   /// 코치에게 넘길 한 줄. 안 물었거나 안 골랐으면 빈 문자열.
+  ///
+  /// 한동안 부르는 곳이 없었다. 아침에 물어서 답까지 받아놓고 코치에게는 안
+  /// 보냈으니, 두세 시간뿐이라고 답한 사람에게 여섯 개짜리 하루를 짜주는 일이
+  /// 생겼다. 물어놓고 안 듣는 것은 안 묻느니만 못하다.
   static Future<String> promptLine() async {
     final answer = await today();
     if (answer == null) return '';
-    return '오늘 쓸 수 있는 시간: ${answers[answer]}';
+    return answers[answer] ?? '';
   }
 
   static String _todayKey() {
