@@ -52,9 +52,23 @@ class AnalyticsService {
   /// gpt-4.1-mini 혼합 단가. 4o-mini의 두 배 반쯤 든다.
   ///
   /// 위와 같은 비율로 낮췄다. 다만 이 값은 아직 실측으로 맞춰본 적이 없는
-  /// 어림값이다. 프렌즈 코치까지 이 모델을 쓰기 시작했으니, 다음 청구서가
-  /// 나오면 대시보드 금액과 비교해서 여기부터 맞출 것.
+  /// 어림값이다. 다음 청구서가 나오면 대시보드 금액과 비교해서 맞출 것.
   static const double _gpt41MiniBlendedUsdPerMillionTokens = 0.59;
+
+  /// gpt-5-mini 혼합 단가.
+  ///
+  /// 목록가는 입력이 4.1-mini보다 싸고(100만당 $0.25 대 $0.40) 출력이 비싸다
+  /// ($2.00 대 $1.60). 이 앱은 긴 지시문과 대화 이력이 매번 실려 입력이 훨씬
+  /// 많으므로, 그것만 보면 4.1-mini보다 싸야 한다.
+  ///
+  /// 그런데 이 모델은 답을 쓰기 전에 생각하고, 그 생각한 분량도 출력으로
+  /// 청구된다. 서버가 추론 세기를 낮게 걸어두어 많지는 않지만 공짜도 아니다.
+  /// 그래서 위 값과 비슷한 자리에 둔다.
+  ///
+  /// **실측으로 맞춰본 적 없는 어림값이다.** 이제 모든 코치가 이 모델을 쓰므로
+  /// 청구액의 거의 전부가 이 값에서 나온다. 다음 청구서가 나오면 여기부터
+  /// 대시보드 금액과 맞출 것.
+  static const double _gpt5MiniBlendedUsdPerMillionTokens = 0.62;
 
   static String _dateKey(DateTime date) {
     return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
@@ -81,12 +95,20 @@ class AnalyticsService {
         .doc(dateKey);
   }
 
-  /// [model]을 모르면 싼 모델로 친다. 부르는 쪽 대부분이 4o-mini다.
+  /// [model]을 모르면 싼 모델로 친다.
+  ///
+  /// 모르는 이름이 제일 싼 값으로 떨어지는 것은 조심할 자리다. gpt-5-mini가
+  /// 여기 없던 동안 마스터 턴이 4o-mini 값으로 기록됐고, 그래서 남은 숫자가
+  /// 실제보다 싸게 나와 있었다. 모델을 바꾸면 이 함수부터 볼 것.
   static int _estimateCostWonFromTokens(int tokenCount, {String? model}) {
     if (tokenCount <= 0) return 0;
-    final rate = (model != null && model.startsWith('gpt-4.1'))
-        ? _gpt41MiniBlendedUsdPerMillionTokens
-        : _gpt4oMiniBlendedUsdPerMillionTokens;
+    final rate = switch (model) {
+      final name? when name.startsWith('gpt-5') =>
+        _gpt5MiniBlendedUsdPerMillionTokens,
+      final name? when name.startsWith('gpt-4.1') =>
+        _gpt41MiniBlendedUsdPerMillionTokens,
+      _ => _gpt4oMiniBlendedUsdPerMillionTokens,
+    };
     final usdCost = tokenCount / 1000000 * rate;
     return (usdCost * _krwPerUsd).round();
   }
