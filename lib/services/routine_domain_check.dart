@@ -7,8 +7,8 @@
 /// 대신 30일에 한 번, 그 코치의 루틴 이름을 통째로 넘겨 한 번만 가른다. 그
 /// 주기면 값은 없는 것과 같고, 이름이 어떻게 쓰였든 뜻으로 갈린다.
 ///
-/// 못 물어봤으면 빈 집합이다. 아무것도 담당이 아닌 것으로 보고 조용히 넘어간다
-/// — 잘못 분류해서 남의 영역에 참견하는 것보다 낫다.
+/// 못 물어봤으면 아무것도 적어두지 않는다. "담당이 없다"와 "아직 모른다"를
+/// 섞으면, 통신이 한 번 끊긴 것 때문에 한 달 내내 담당 루틴이 없는 사람이 된다.
 library;
 
 import 'package:cloud_functions/cloud_functions.dart';
@@ -44,7 +44,11 @@ class RoutineDomainCheck {
   };
 
   /// [names] 중 [domain]에 속하는 것들의 번호(0부터).
-  static Future<Set<int>> pick({
+  ///
+  /// 못 물어봤으면 null. 빈 집합과 갈라야 한다 — 빈 집합은 "담당인 게 없다"는
+  /// 답이고 null은 "아직 모른다"라서, 둘을 섞으면 통신이 한 번 끊긴 것 때문에
+  /// 한 달 내내 담당 루틴이 없는 사람이 된다.
+  static Future<Set<int>?> pick({
     required LifeDomain domain,
     required List<String> names,
   }) async {
@@ -65,7 +69,7 @@ class RoutineDomainCheck {
   /// 보기에 채워 확인만 받으면 되지만, '운동 30분'처럼 종목이 안 적힌 이름이
   /// 훨씬 흔하다. 그때는 문항을 그대로 묻는 편이 낫다 — 애매한 이름을 보기로
   /// 내밀면 사용자가 무엇을 고르는 건지 알 수 없다.
-  static Future<Set<int>> namedSports(List<String> names) async {
+  static Future<Set<int>?> namedSports(List<String> names) async {
     if (names.isEmpty) return const {};
     final asked = names.take(maxNames).toList(growable: false);
 
@@ -93,8 +97,8 @@ class RoutineDomainCheck {
 
   /// 그 코치 담당인 루틴을 다시 가르고 프로필에 적는다.
   ///
-  /// 못 가른 경우와 담당이 하나도 없는 경우를 구분하지 않는다. 어느 쪽이든
-  /// 이번 주기에는 손댈 루틴이 없다는 뜻이고, 30일 뒤에 다시 물어보게 된다.
+  /// 못 물어봤으면 적어두지 않고 지난번에 가른 것을 그대로 돌려준다. 다음
+  /// 기회에 다시 묻게 된다.
   static Future<Set<String>> refresh({
     required String coachId,
     required List<Map<String, dynamic>> habits,
@@ -119,6 +123,9 @@ class RoutineDomainCheck {
           .map((habit) => habit['name'].toString())
           .toList(growable: false),
     );
+    // 못 물어봤으면 적어두지 않는다. 적어두면 가른 시각이 찍혀서 한 달 동안
+    // 다시 묻지 않게 되고, 그동안 이 코치는 담당 루틴이 하나도 없는 채로 돈다.
+    if (picked == null) return LifePatternService.domainHabitIds(coachId);
     final ids = <String>{
       for (var i = 0; i < usable.length; i++)
         if (picked.contains(i)) usable[i]['id'].toString(),
@@ -150,7 +157,8 @@ class RoutineDomainCheck {
     return buffer.toString();
   }
 
-  static Future<Set<int>> _ask(
+  /// 못 물어봤으면 null. 답을 못 읽었으면 빈 집합이다.
+  static Future<Set<int>?> _ask(
     List<Map<String, String>> messages, {
     required int count,
     required String tag,
@@ -199,8 +207,9 @@ class RoutineDomainCheck {
       );
       return picked;
     } catch (_) {
-      // 한도가 찼거나 통신이 끊긴 경우다. 아무것도 담당이 아닌 것으로 둔다.
-      return const {};
+      // 한도가 찼거나 통신이 끊긴 경우다. 담당이 없는 것이 아니라 모르는
+      // 것이라, 부르는 쪽이 다음에 다시 묻게 둔다.
+      return null;
     }
   }
 }

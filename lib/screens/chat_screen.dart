@@ -5506,10 +5506,13 @@ $block
   Future<bool> _startLifePatternSlot(DateTime now) async {
     final coachId = _coach.id;
     if (!LifePatternService.handles(coachId)) return false;
+    // 제안도 이 자리의 발화다. 세지 않으면 하루에 여러 번 들어온 사람에게
+    // 들어올 때마다 뜬다.
     if (_spokeKindToday({
       _lifeAskKind,
       _lifeAskMultiKind,
       _lifeReviewKind,
+      _lifeOfferKind,
     }, now)) {
       return false;
     }
@@ -5544,6 +5547,15 @@ $block
   /// 사용자가 이미 듣고 안 한 것이고, 같은 말을 한 달 뒤에 또 하면 그건
   /// 코칭이 아니라 반복이다.
   Future<bool> _offerLifeRoutine(String coachId) async {
+    final saved = await LifePatternService.profile(coachId);
+    final offeredAt = DateTime.tryParse(
+      saved['lastOfferedAt']?.toString() ?? '',
+    );
+    if (offeredAt != null &&
+        DateTime.now().difference(offeredAt) < _lifeOfferInterval) {
+      return false;
+    }
+
     final prefs = await SharedPreferences.getInstance();
     await prefs.reload();
 
@@ -5562,7 +5574,6 @@ $block
     if (!mounted || !plan.speaks) return false;
 
     final mark = '${plan.verdict.name}:${plan.target?.habitId ?? ''}';
-    final saved = await LifePatternService.profile(coachId);
     if (saved['lastOffer'] == mark) return false;
     if (!mounted) return false;
 
@@ -5584,10 +5595,20 @@ $block
     });
     if (!mounted) return false;
 
-    _injectAiMessage(line);
+    _injectAiMessage(line, kind: _lifeOfferKind);
     unawaited(
       AnalyticsService.logFeatureUsage('life_routine_${plan.verdict.name}'),
     );
+
+    // 제안이 서는 자리에서 못 물어본 문항을 하나만 더 묻는다.
+    //
+    // 첫 진입에는 세 개까지만 물었다. 나머지를 영영 안 물으면 그 문항들은
+    // 있으나 마나가 되고, 그렇다고 처음에 다 물으면 코치를 여는 자리가
+    // 설문지가 된다. 제안 뒤가 그 문항이 설 자리다 — 방금 한 말의 근거를
+    // 확인하는 모양이 되어 설문이 아니라 대화로 읽힌다.
+    final followUp = await LifePatternService.nextFollowUp(coachId);
+    if (!mounted || followUp == null) return true;
+    _askLifeQuestion(followUp);
     return true;
   }
 
@@ -5650,12 +5671,33 @@ $block
   /// 여러 개를 고르는 문항에서 지금 골라둔 것들.
   final Set<String> _pickedLifeOptions = <String>{};
 
-  /// 답 하나를 받고, 첫 진입 몫이 남았으면 이어서 묻는다.
+  /// 다시 확인하는 중에 아직 안 물어본 문항들.
+  ///
+  /// 바뀐 게 있다고 했으면 확인 대상 문항을 다 물어야 한다. 하나만 묻고 끝내면
+  /// 나머지는 옛 답 그대로 남는데, 사용자는 방금 "바뀌었다"고 말한 참이라
+  /// 고쳐진 줄 안다.
+  final List<String> _lifeReviewQueue = [];
+
+  /// 답 하나를 받고, 아직 물을 것이 남았으면 이어서 묻는다.
   Future<void> _saveLifeAnswer(String questionId, List<String> picked) async {
     final coachId = _coach.id;
     await LifePatternService.saveAnswer(coachId, questionId, picked);
     await AnalyticsService.logFeatureUsage('life_pattern_answered');
     if (!mounted) return;
+
+    // 다시 확인하는 중이면 그 줄을 먼저 비운다.
+    _lifeReviewQueue.remove(questionId);
+    if (_lifeReviewQueue.isNotEmpty) {
+      final next = LifePatternService.questionById(
+        coachId,
+        _lifeReviewQueue.first,
+      );
+      if (next != null) {
+        _askLifeQuestion(next);
+        return;
+      }
+      _lifeReviewQueue.clear();
+    }
 
     final remaining = await LifePatternService.firstAsk(coachId);
     if (!mounted) return;
@@ -5663,13 +5705,27 @@ $block
       _askLifeQuestion(remaining.first);
       return;
     }
+
+    // 첫 진입 몫을 방금 채운 사람에게만 마무리 인사를 한다.
+    //
+    // 제안 뒤에 하나씩 묻는 문항에도 같은 말을 하면, 이미 몇 주 전에 들은
+    // "이제 보고 있을게"를 또 듣는다. 그때는 짧게 받기만 한다.
+    final answered = (await LifePatternService.answers(coachId)).length;
+    if (!mounted) return;
     _injectAiMessage(
-      _voice(
-        cat: '알겠다냥. 이제 뭘 챙기면 좋을지 보고 있을게냥.',
-        bro: '알겠다. 이제 뭘 챙기면 좋을지 내가 보고 있을게.',
-        halmae: '알겠다. 이제 무얼 챙기면 좋을지 할미가 보고 있으마.',
-        boyfriend: '알겠어. 이제 뭘 챙기면 좋을지 내가 보고 있을게.',
-      ),
+      answered == LifePatternService.firstAskLimit
+          ? _voice(
+              cat: '알겠다냥. 이제 뭘 챙기면 좋을지 보고 있을게냥.',
+              bro: '알겠다. 이제 뭘 챙기면 좋을지 내가 보고 있을게.',
+              halmae: '알겠다. 이제 무얼 챙기면 좋을지 할미가 보고 있으마.',
+              boyfriend: '알겠어. 이제 뭘 챙기면 좋을지 내가 보고 있을게.',
+            )
+          : _voice(
+              cat: '알겠다냥.',
+              bro: '알겠다.',
+              halmae: '알겠다.',
+              boyfriend: '알겠어.',
+            ),
     );
   }
 
@@ -5730,6 +5786,9 @@ $block
     if (!mounted) return;
     final questions = LifePatternService.reviewableQuestions(coachId);
     if (questions.isEmpty) return;
+    _lifeReviewQueue
+      ..clear()
+      ..addAll(questions.map((question) => question.id));
     _askLifeQuestion(questions.first);
   }
 
@@ -6576,8 +6635,17 @@ Rules:
   /// 지난번 답이 아직 맞는지 확인하는 카드.
   static const _lifeReviewKind = 'auto:life_pattern_review';
 
+  /// 담당 영역 루틴을 두고 건네는 제안.
+  static const _lifeOfferKind = 'auto:life_routine_offer';
+
   static const String _lifeReviewSameLabel = '그대로야';
   static const String _lifeReviewChangedLabel = '바뀐 게 있어';
+
+  /// 제안과 제안 사이의 최소 간격.
+  ///
+  /// 같은 제안을 두 번 잇달아 하지 않는 것만으로는 모자란다. 판정이 다르면
+  /// 바로 다음 날 또 나가는데, 매일 새 제안을 받는 건 코칭이 아니라 재촉이다.
+  static const Duration _lifeOfferInterval = Duration(days: 7);
 
   static const _conditionOtherLabel = '다른 이유가 있어';
   static final List<String> _conditionAskLabels = [
@@ -14675,6 +14743,15 @@ Rules:
               '계획이 실제로 끝나게 돕는 자리. 계획을 얼마나 잡을지, 한 가지에 걸리는 시간을 어떻게 어림할지, 언제 첫 발을 뗄지, 무엇을 루틴으로 굳힐지 — 그날 대화에 맞는 것을 골라 쓸 것.',
         ),
       );
+    }
+
+    // 담당 영역 코치가 물어서 받아둔 답. 그 코치의 대화에만 싣는다.
+    //
+    // 한동안 이 답이 30일에 한 번 나가는 제안에만 실렸다. 그래서 물어놓고
+    // 며칠 뒤에 그 이야기를 꺼내면 코치는 자기가 뭘 물었는지도 몰랐다.
+    // 사용자에게는 답한 것이 사라진 것으로 보인다.
+    if (!resistanceTurn) {
+      sb.write(await LifePatternService.promptBlock(_coach.id));
     }
 
     // 생활 정보는 마스터만 받는다. 실행 패턴은 앱이 센 값이라 지어낼 여지가
