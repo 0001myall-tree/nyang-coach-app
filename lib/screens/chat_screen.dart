@@ -14395,12 +14395,19 @@ Rules:
       // 이 둘은 계획을 적는 자리에서만 쓰이고 있었는데, 정작 "어떻게 하면
       // 더 해낼까"를 묻는 자리는 여기다. 앱이 세는 것으로는 알 수 없고
       // 본인만 아는 것이라, 없으면 코치는 일반론으로 답할 수밖에 없다.
+      // 생활 형태는 나머지 둘이 비어 있어도 싣는다.
+      //
+      // 예전에는 조건이나 막힌 기록이 있을 때만 이 묶음을 열었다. 그래서
+      // 아직 아무것도 안 고른 사람에게는 생활 형태도 함께 사라졌는데, 그
+      // 사람이야말로 코치가 아무것도 모르는 상대다. 아무 말도 없으면 코치는
+      // 종일 한가한 줄 알고 말한다. 모른다는 것 자체가 알려줄 값이라,
+      // 그때 쓰라고 "아직 모름" 줄을 따로 만들어 두기까지 했었다.
       final life = await LifeContextService.promptLine();
       final condition = await LifeContextService.executionConditionLine();
       final blocker = await ExecutionBlockerService.promptLine();
-      if (condition.isNotEmpty || blocker.isNotEmpty) {
+      if (life.isNotEmpty || condition.isNotEmpty || blocker.isNotEmpty) {
         sb.writeln('\n[이 사람의 생활]');
-        sb.writeln(life);
+        if (life.isNotEmpty) sb.writeln(life);
         if (condition.isNotEmpty) sb.writeln(condition);
         if (blocker.isNotEmpty) {
           sb.writeln(blocker);
@@ -14408,9 +14415,13 @@ Rules:
             '*시작을 막는 것은 막혀 있던 그 순간에 사용자가 직접 고른 답입니다. 같은 자리에서 또 막혔을 때 그쪽부터 보세요. 다만 매번 이것 때문이라고 단정하지는 마세요.',
           );
         }
-        sb.writeln(
-          '*실행이 잘 되는 날의 조건은 사용자가 직접 고른 답입니다. 짐작이 아니라 본인이 한 말이니 이것부터 붙잡으세요. 다만 이게 유일한 조건은 아닙니다 — 대화에서 다른 조건이 보이면 그쪽을 따라가세요. 여러 조건을 한꺼번에 갖추라고는 하지 마세요. 다 맞는 날은 거의 없어서 오히려 못 하는 이유가 늘어납니다.',
-        );
+        // 조건 줄을 설명하는 말이라 그 줄이 있을 때만 붙인다. 없는 것을
+        // 두고 "이것부터 붙잡으세요"라고 하면 붙잡을 것을 지어내게 된다.
+        if (condition.isNotEmpty) {
+          sb.writeln(
+            '*실행이 잘 되는 날의 조건은 사용자가 직접 고른 답입니다. 짐작이 아니라 본인이 한 말이니 이것부터 붙잡으세요. 다만 이게 유일한 조건은 아닙니다 — 대화에서 다른 조건이 보이면 그쪽을 따라가세요. 여러 조건을 한꺼번에 갖추라고는 하지 마세요. 다 맞는 날은 거의 없어서 오히려 못 하는 이유가 늘어납니다.',
+          );
+        }
       }
     }
 
