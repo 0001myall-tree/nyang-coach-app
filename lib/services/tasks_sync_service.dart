@@ -27,6 +27,9 @@ class TasksSyncService {
     'nyang_premium_min_sleep_time',
     'nyang_premium_sleep_duration',
     'nyang_premium_routines',
+    // 프렌즈 코치가 설문으로 받아둔 생활 맥락. 기기를 바꿔도 다시 묻지
+    // 않으려면 실려야 한다.
+    'nyang_life_pattern',
     // 주간 코치 한마디 캐시. 빠져 있던 동안에는 방금 만든 한마디를 실시간
     // 리스너가 옛 값으로 되돌렸고, 기록탭에 들어갈 때마다 다시 만들어졌다.
     // 만드는 데 API를 쓰기 때문에 들어갈 때마다 비용이 나갔다.
