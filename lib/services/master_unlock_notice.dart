@@ -24,15 +24,11 @@ import 'daily_reset_service.dart';
 /// 대화 중에 말해준다. 마스터 코치 방에서는 말하지 않는다 — 이미 만난
 /// 사람에게 열렸다고 알릴 일은 없다.
 ///
-/// 어떤 구독을 두고 안내했는지 적어두는 자리.
+/// 기기에 적어두던 자리. 이제 읽기만 한다 — 적는 곳은 계정 데이터로 옮겼다.
 ///
-/// 예전에는 "알렸다/안 알렸다" 한 칸이었고, 마스터가 아닌 것으로 읽히면 그 칸을
-/// 지웠다. 해지 뒤 다시 결제한 사람에게 한 번 더 알려주려던 것이었는데, 등급이
-/// 잠깐 다르게 읽히는 순간마다 표시가 함께 지워졌다. 그래서 같은 안내가 며칠씩
-/// 다시 떴다.
-///
-/// 이제 지우지 않는다. 대신 무엇을 두고 알렸는지를 적어두고, 그것과 다를 때만
-/// 다시 알린다. 잘못 읽힌 순간은 아무것도 건드리지 않고 지나간다.
+/// 이 키는 클라우드 동기화 대상이 아니다(그쪽은 'nyang_'으로 시작하는 키만
+/// 실어 나른다). 그래서 앱을 지우고 다시 깔거나 기기를 바꾸면 표시가 사라지고,
+/// 같은 사람이 같은 안내를 또 받았다.
 const String _masterUnlockNoticeKey = 'master_unlock_notice_plan';
 
 /// 예전의 "알렸다" 한 칸. 이미 안내를 받은 사람에게 한 번 더 띄우지 않으려고
@@ -51,17 +47,21 @@ enum MasterUnlockDecision {
   show,
 }
 
-/// 이 구독을 알아보는 이름. 마스터가 아니면 null.
+/// 이 안내를 알아보는 이름. 마스터가 아니면 null.
 ///
-/// 만료일까지 넣는다. 해지하고 다시 결제하면 만료일이 달라지므로, 새 구독으로
-/// 보고 한 번 더 알려줄 수 있다.
+/// 한동안 만료일까지 넣었다. 해지하고 다시 결제한 사람에게 한 번 더 알려주려던
+/// 것인데, 만료일이 흔들릴 때마다 새 구독으로 보여서 안내가 매일 다시 떴다.
+/// 값이 들어오는 길이 둘이라 그렇다 — 화이트리스트 문서가 로그인마다 덮어쓰고,
+/// 계정 데이터 동기화가 또 덮어쓴다. 둘이 다른 값을 들고 있으면 켤 때마다
+/// 오간다.
+///
+/// 재결제 재안내는 있어도 그만인 기능이라, 등급만 보고 이름을 짓는다.
 String? masterUnlockSignature({
   required bool isPlanActive,
   required String planType,
-  required DateTime? planExpiresAt,
 }) {
   if (!isPlanActive || planType != 'master') return null;
-  return 'master|${planExpiresAt?.toIso8601String() ?? 'forever'}';
+  return 'master';
 }
 
 /// 판단만 떼어낸 것. 화면도 저장소도 없이 시험할 수 있다.
@@ -79,9 +79,14 @@ MasterUnlockDecision decideMasterUnlockNotice({
   return MasterUnlockDecision.show;
 }
 
-/// 적어두는 키는 'nyang_'으로 시작하지 않는다. 그 접두어를 쓰면 클라우드 복원이
-/// 덮어써서 앱을 켤 때마다 같은 안내가 다시 뜬다.
 /// 지금 알릴 차례면 참을 돌려주고, 알렸다고 적어둔다.
+///
+/// 적는 곳은 계정 데이터다. 그쪽은 로그인해 있으면 Firestore로 올라가므로,
+/// 앱을 다시 깔아도 기기를 바꿔도 같은 안내를 두 번 받지 않는다.
+///
+/// 기기에 적어둔 옛 표시는 읽기만 한다. 이미 안내를 받은 사람에게 이번 변경
+/// 때문에 한 번 더 띄우지 않으려는 것이다. 옛 표시에는 만료일이 붙어 있어서
+/// 지금 이름과 글자가 다르므로, 값을 견주지 않고 있다는 사실만 본다.
 ///
 /// 참이 돌아온 뒤 실제로 말하지 못하면 그 안내는 사라진다. 부르는 쪽에서 바로
 /// 말할 수 있을 때만 부른다.
@@ -92,12 +97,12 @@ Future<bool> claimMasterUnlockNotice() async {
   final signature = masterUnlockSignature(
     isPlanActive: data.isPlanActive,
     planType: data.planType,
-    planExpiresAt: data.planExpiresAt,
   );
-  // 옛 표시가 남아 있으면 그 사람은 이미 받은 것으로 본다.
+  final seenOnThisDevice =
+      prefs.getString(_masterUnlockNoticeKey) != null ||
+      prefs.getBool(_legacyMasterUnlockNoticeKey) == true;
   final announced =
-      prefs.getString(_masterUnlockNoticeKey) ??
-      (prefs.getBool(_legacyMasterUnlockNoticeKey) == true ? signature : null);
+      data.masterUnlockAnnounced ?? (seenOnThisDevice ? signature : null);
 
   final decision = decideMasterUnlockNotice(
     restorePending: DailyResetService.isCloudRestorePending(prefs),
@@ -106,6 +111,7 @@ Future<bool> claimMasterUnlockNotice() async {
   );
   if (decision != MasterUnlockDecision.show) return false;
 
-  await prefs.setString(_masterUnlockNoticeKey, signature!);
+  data.masterUnlockAnnounced = signature;
+  await UserDataService.save(data);
   return true;
 }

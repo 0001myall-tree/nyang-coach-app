@@ -29,6 +29,13 @@ class UserData {
   /// 선택한 코치 ID
   String? selectedCoachId;
 
+  /// "마스터 코치가 열렸다"는 안내를 무엇을 두고 했는지.
+  ///
+  /// 기기 prefs에 적어두던 것을 여기로 옮겼다. 그쪽은 앱을 지우고 다시 깔거나
+  /// 기기를 바꾸면 사라져서, 같은 사람이 같은 안내를 또 받았다. 이 모델은
+  /// 통째로 Firestore에 올라가고 로그인하면 내려온다.
+  String? masterUnlockAnnounced;
+
   UserData({
     this.planType = 'none',
     this.points = 0,
@@ -36,6 +43,7 @@ class UserData {
     Map<String, DateTime?>? ownedCoachExpiresAt,
     this.planExpiresAt,
     this.selectedCoachId,
+    this.masterUnlockAnnounced,
   }) : ownedCoaches = ownedCoaches ?? [],
        ownedCoachExpiresAt = ownedCoachExpiresAt ?? {};
 
@@ -49,6 +57,7 @@ class UserData {
     ),
     'plan_expires_at': planExpiresAt?.toIso8601String(),
     'selected_coach_id': selectedCoachId,
+    'master_unlock_announced': masterUnlockAnnounced,
   };
 
   factory UserData.fromJson(Map<String, dynamic> j) {
@@ -74,6 +83,7 @@ class UserData {
       selectedCoachId: j['selected_coach_id'] == null
           ? null
           : CoachIdService.normalize(j['selected_coach_id'].toString()),
+      masterUnlockAnnounced: j['master_unlock_announced']?.toString(),
     );
   }
 

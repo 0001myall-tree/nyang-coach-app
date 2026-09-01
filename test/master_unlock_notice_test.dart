@@ -1,14 +1,14 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nyang_coach/services/master_unlock_notice.dart';
 
-/// "마스터 코치가 열렸어요"는 한 구독에 한 번만 나와야 한다.
+/// "마스터 코치가 열렸어요"는 한 사람에게 한 번만 나와야 한다.
 ///
-/// 반복해서 뜨던 이유는 표시를 지우는 길이 있었기 때문이다. 마스터가 아닌 것으로
-/// 읽히면 "다음 결제 때 다시 알려주려고" 표시를 지웠는데, 등급이 잠깐 다르게
-/// 읽히는 순간마다 그 표시가 함께 지워졌다. 이제 지우지 않고, 무엇을 두고
-/// 알렸는지를 적어둔 뒤 그것과 다를 때만 다시 알린다.
+/// 두 번 새어 나간 적이 있다. 처음에는 표시를 지우는 길이 있어서 — 등급이 잠깐
+/// 다르게 읽히는 순간마다 지워졌다. 그다음에는 표시에 만료일이 붙어 있어서 —
+/// 만료일이 흔들릴 때마다 새 구독으로 보였다. 이제 지우지 않고, 등급만 보고
+/// 이름을 짓는다.
 void main() {
-  const currentPlan = 'master|2027-01-01T00:00:00.000';
+  const currentPlan = 'master';
 
   group('알릴 때와 알리지 않을 때', () {
     test('처음 마스터가 되면 알린다', () {
@@ -82,55 +82,30 @@ void main() {
   group('구독을 알아보는 이름', () {
     test('마스터가 아니면 없다', () {
       expect(
-        masterUnlockSignature(
-          isPlanActive: true,
-          planType: 'friends',
-          planExpiresAt: DateTime(2027),
-        ),
+        masterUnlockSignature(isPlanActive: true, planType: 'friends'),
         isNull,
       );
       expect(
-        masterUnlockSignature(
-          isPlanActive: false,
-          planType: 'master',
-          planExpiresAt: DateTime(2020),
-        ),
+        masterUnlockSignature(isPlanActive: false, planType: 'master'),
         isNull,
       );
     });
 
-    // 해지하고 다시 결제하면 만료일이 달라진다. 그때는 새 구독으로 보고
-    // 한 번 더 알려준다.
-    test('다시 결제하면 이름이 달라진다', () {
-      final first = masterUnlockSignature(
-        isPlanActive: true,
-        planType: 'master',
-        planExpiresAt: DateTime(2026, 9, 1),
+    // 만료일이 이름에 들어 있던 동안에는, 값이 오갈 때마다 새 구독으로 보여서
+    // 안내가 매일 다시 떴다. 만료일이 어떻게 흔들리든 이름은 같아야 한다.
+    test('만료일이 달라져도 이름은 그대로다', () {
+      const same = 'master';
+      expect(
+        masterUnlockSignature(isPlanActive: true, planType: 'master'),
+        same,
       );
-      final again = masterUnlockSignature(
-        isPlanActive: true,
-        planType: 'master',
-        planExpiresAt: DateTime(2027, 3, 1),
-      );
-      expect(first, isNot(again));
       expect(
         decideMasterUnlockNotice(
           restorePending: false,
-          signature: again,
-          announced: first,
+          signature: same,
+          announced: same,
         ),
-        MasterUnlockDecision.show,
-      );
-    });
-
-    test('만료일이 없는 구독도 이름이 생긴다', () {
-      expect(
-        masterUnlockSignature(
-          isPlanActive: true,
-          planType: 'master',
-          planExpiresAt: null,
-        ),
-        'master|forever',
+        MasterUnlockDecision.alreadyShown,
       );
     });
   });
