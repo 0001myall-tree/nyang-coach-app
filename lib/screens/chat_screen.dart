@@ -15564,10 +15564,6 @@ Rules:
     // 다음 것이 나온다. 모델에게 여러 전략을 주고 고르게 하면 매번 가장 흔한
     // 하나로 수렴하고, 사용자가 싫다고 해도 같은 걸 다시 밀게 된다.
     var interventionSection = '';
-    // 코치가 가진 청소 노하우를 이번 턴에 개입 안으로 넣었는지. 넣었으면 위쪽
-    // 청소 섹션에서는 뺀다 — 같은 목록이 한 프롬프트에 두 번 실리면, 읊으라는
-    // 쪽과 골라 쓰라는 쪽 두 벌이 생겨서 어느 규칙으로 읽을지 흔들린다.
-    var cleaningSmallStepMovedIntoIntervention = false;
     // 글쓰기 이름 규칙도 같은 사정이라 같은 값을 하나 더 둔다.
     var writingNamingMovedIntoIntervention = false;
     if (shouldIncludeResistanceInterventionSection) {
@@ -15624,9 +15620,6 @@ Rules:
           interventionSection = '''$interventionSection
 - 행동은 아래에서 고릅니다. 위 예시보다 이쪽이 우선이고, 이 대화에서 아직 말하지 않은 것 하나를 이름만 짧게 말하세요.
 $playbook''';
-          // 위쪽 청소 섹션에서 뺄지를 정하는 값이라, 청소 목록을 실은 턴에만
-          // 켠다. 운동 목록은 위쪽에 따로 실리는 것이 없어 뺄 것도 없다.
-          if (isCleaning) cleaningSmallStepMovedIntoIntervention = true;
         }
         // 글쓰기는 고를 목록이 아니라 이름 붙이는 법이라 같은 자리에 붙이되
         // "여기서 고르세요"는 붙이지 않는다. 고를 것을 주면 그 몇 개로 굳는다.
@@ -15747,17 +15740,16 @@ $resistanceFlowRule'''
         : '';
     // 청소 얘기가 오갈 때만 청소 지침을 붙인다.
     //
-    // 노하우를 개입 안으로 옮긴 턴에는 여기서 뺀다. 공통 대응은 그대로 둔다 —
-    // 짧고, 하는 일도 다르다. 끝나고 느낄 보상을 붙이라는 쪽이라 행동 목록과
-    // 겹치지 않는다.
+    // 이제 공통 대응 한 줄뿐이다. 코치별 노하우는 통째로 걷어냈다 — 청소
+    // 순서나 수납 기준은 모델이 아는 것이고, 무게를 상황에 맞추라거나 범위를
+    // 넓히지 말라는 것은 담당 영역 코치의 역할 줄이 이미 한다.
     //
     // 조각 목록은 여기 붙이지 않는다. 개입이 행동을 고르는 자리에서만 쓴다.
     // 그 자리에는 개입이 준 예시 하나("물건 하나 치우기")를 이겨야 할 이유가
     // 있지만, 개입이 없는 턴에는 이길 대상도 없다. 목록만 놓아두면 코치가
     // 아는 것을 말하지 못하고 그 안에서만 고른다.
     final cleaningSection = _isCleaningContext(userText)
-        ? '${CoachConfigs.commonCleaningRules}'
-              '${cleaningSmallStepMovedIntoIntervention ? '' : _coach.cleaningPlaybook ?? ''}'
+        ? CoachConfigs.commonCleaningRules
         : '';
 
     // 운동 얘기가 오갈 때만 운동 지침을 붙인다. 청소와 같은 이유다 — 늘 실으면

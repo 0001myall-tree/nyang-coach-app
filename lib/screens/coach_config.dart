@@ -38,9 +38,8 @@ class CoachConfig {
   /// 청소·정리 얘기가 오갈 때만 붙이는 코치별 노하우.
   /// 청소가 특기인 코치는 이 대목이 길어서, 늘 실으면 밥·잠 얘기를 할 때도
   /// 청소 팁이 프롬프트의 절반을 차지한다.
-  final String? cleaningPlaybook;
 
-  /// 코치가 아는 청소 조각들. [cleaningPlaybook]에서 떼어냈다.
+  /// 코치가 아는 청소 조각들.
   ///
   /// 규칙은 한 줄도 없이 이름만 있다. 무엇을 고를지는 여기서 가져오고, 어떻게
   /// 할지는 공통 실행 저항 개입이 정한다.
@@ -77,7 +76,7 @@ class CoachConfig {
   ///
   /// 원래 운동 코치의 [systemPrompt] 안에 있었다. 그래서 무슨 얘기를 하든
   /// 따라다녔고, 맥락과 상관없이 스트레칭부터 하자는 말이 튀어나왔다.
-  /// [cleaningPlaybook]과 같은 이유로 밖으로 뺀다.
+  /// 청소 조각과 같은 이유로 밖으로 뺀다.
   final String? workoutPlaybook;
 
   /// 시간대별 생활 루틴 지침. 키는 morning/lunch/evening/night.
@@ -106,7 +105,6 @@ class CoachConfig {
     this.flirtCore = const [],
     required this.systemPrompt,
     this.bedtimeCarryOverRule,
-    this.cleaningPlaybook,
     this.cleaningFragments,
     this.workoutSmallStepPlaybook,
     this.workoutPlaybook,
@@ -498,22 +496,6 @@ class CoachConfigs {
         'night':
             '씻기, 폰 내려놓기, 기지개처럼 수면 루틴을 우선하고 잠자리에 들게 한다. 이 시간에는 생산성 과제나 청소 추천을 하지 않는다.',
       },
-      // 청소 순서, 세제 불리기, 같은 종류끼리 모으기 같은 일반 지식은 뺐다.
-      // 모델이 아는 것이고, 무엇보다 목록으로 적어두면 코치가 상황을 보고
-      // 답하는 대신 그 순서를 읊는다. 20분 있다는 사람에게 대청소 다섯 단계가
-      // 나가던 자리다.
-      //
-      // 남긴 것은 안 시키면 안 하는 것들이다 — 범위를 넓히지 않게 막는 줄과,
-      // 무게를 상황에 맞추라는 줄.
-      //
-      // 분량을 판단하고 첫 조각을 짚으라는 말은 담당 영역 코치의 역할 줄로
-      // 올렸다. 영역을 가리지 않고 필요한 말이라 여기에 적을 이유가 없다.
-      cleaningPlaybook: '''
-
-[정리/청소를 도울 때]
-- 기운이 없으면 몸을 깨우는 정도로, 여유가 좀 있으면 한 구역 정리로, 시간과 여유가 충분하면 깊은 정리로. 시간대 맥락과도 자연스럽게 맞춘다.
-- 한 번에 한 곳만 연다. 범위를 넓히지 않는다. 정리를 도울 때 전체 수납을 다시 짜게 하지 않는다.
-- 버리기 어려워하면 "버리기 애매한 물건"을 모아두는 상자를 활용하도록 제안하고, 버릴 물건을 정할 때는 고장 났거나 오랫동안 사용하지 않은 물건부터 권한다.''',
       cleaningFragments: [
         CleaningFragment(
           signals: ['이불', '침대', '침구', '베개'],
