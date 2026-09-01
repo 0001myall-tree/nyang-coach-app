@@ -286,6 +286,15 @@ void main() {
       expect(await LifePatternService.promptBlock('bro'), contains('본인이 고른 답'));
     });
 
+    test('그 방식대로 잡으라고 못박는다', () async {
+      // 실어주기만 하면 코치는 이 답을 읽고도 자기가 아는 일반적인 방법을
+      // 권한다. 그 사람이 아니라고 말해둔 방식으로.
+      await LifePatternService.saveAnswer('halmae', 'style', ['몰아서 하고 싶어']);
+      final block = await LifePatternService.promptBlock('halmae');
+      expect(block, contains('언제 어떻게 넣을지도 이 답 안에서'));
+      expect(block, contains('어긋나게 권하지 마세요'));
+    });
+
     test('맡지 않는 코치에는 실리지 않는다', () async {
       expect(await LifePatternService.promptBlock('cat'), isEmpty);
     });
