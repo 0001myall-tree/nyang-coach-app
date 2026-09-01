@@ -10,6 +10,10 @@
 /// 이름에 처방을 달지 않는다. 무엇을 할지는 그 주의 숫자를 보고 코치가 정한다.
 library;
 
+import 'dart:convert';
+
+import 'package:shared_preferences/shared_preferences.dart';
+
 import 'execution_funnel.dart';
 
 class ExecutionTypeLabels {
@@ -17,6 +21,13 @@ class ExecutionTypeLabels {
 
   /// 어디에도 맞지 않을 때. 배지를 띄우지 않는다.
   static const String none = '없음';
+
+  /// 프렌즈 등급이 이번 주 이름을 적어두는 자리.
+  static const String weekCacheKey = 'execution_type_week';
+
+  /// 마스터 등급은 주간 한마디 캐시 안에 같이 적어둔다.
+  static const String masterCacheKey =
+      'nyang_coach_weekly_feedback_nyang_halbae';
 
   /// 이름과 그 이름이 가리키는 모양.
   ///
@@ -94,6 +105,47 @@ class ExecutionTypeLabels {
 
   static String? commentFor(String? label) =>
       label == null ? null : comments[label];
+
+  /// 이번 주에 정해진 이름. 아직 없으면 null.
+  ///
+  /// 등급마다 적어두는 자리가 달라 둘 다 본다. 기록 탭이 정하고 채팅이
+  /// 읽어가는 값이라, 어느 쪽이 먼저 도는지에 기대지 않는다.
+  static String? savedLabel(SharedPreferences prefs) {
+    String? read(String key, String field) {
+      final raw = prefs.getString(key);
+      if (raw == null || raw.isEmpty) return null;
+      try {
+        final decoded = jsonDecode(raw);
+        if (decoded is! Map) return null;
+        final label = decoded[field]?.toString();
+        return (label == null || label.isEmpty) ? null : label;
+      } catch (_) {
+        return null;
+      }
+    }
+
+    final label =
+        read(weekCacheKey, 'label') ??
+        read(masterCacheKey, 'executionTypeLabel');
+    return (label != null && meanings.containsKey(label)) ? label : null;
+  }
+
+  /// 담당 영역 코치에게 넘길 한 줄. 이름과 그 이름이 가리키는 모양.
+  ///
+  /// 이 코치들에게는 계획·시작·완료 숫자를 통째로 주지 않는다. 그건 하루
+  /// 전체를 보는 자리의 재료고, 숫자를 쥐여주면 자기 영역 대신 하루 전체를
+  /// 코칭하기 시작한다. 여기서 알아야 하는 건 이 사람이 요즘 어떤 식으로
+  /// 굴러가는지 한마디뿐이다.
+  static String promptLine(String? label) {
+    final meaning = label == null ? null : meanings[label];
+    if (meaning == null) return '';
+    return '''
+
+[이 사람의 실행 유형 - 앱이 최근 기록에서 정한 것]
+- $label: $meaning
+*요즘 어떤 식으로 굴러가는 사람인지만 참고하세요. 하루 전체의 실행을 코칭하는 자리가 아닙니다.
+''';
+  }
 
   /// 코치 답변 끝에 붙은 `유형: 이름` 줄을 읽는다.
   ///

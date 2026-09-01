@@ -52,6 +52,7 @@ import 'package:nyang_coach/services/execution_type_labels.dart';
 import 'package:nyang_coach/services/life_pattern_service.dart';
 import 'package:nyang_coach/services/life_routine_analysis.dart';
 import 'package:nyang_coach/services/life_routine_offer.dart';
+import 'package:nyang_coach/services/recent_task_digest.dart';
 import 'package:nyang_coach/services/routine_domain_check.dart';
 import 'package:nyang_coach/services/same_work_check.dart';
 import 'package:nyang_coach/services/task_name_similarity.dart';
@@ -14763,12 +14764,25 @@ Rules:
     // 유형 이름 대신 축별 숫자를 넘긴다. 이름은 정보를 잃는 압축이라, 앞뒤가
     // 정반대인 두 사람이 같은 이름으로 묶이면 처방까지 같이 틀린다.
     if (!resistanceTurn) {
-      sb.write(
-        ExecutionFunnel.from(prefs.getString('nyang_history')).promptBlock(
-          purpose:
-              '계획이 실제로 끝나게 돕는 자리. 계획을 얼마나 잡을지, 한 가지에 걸리는 시간을 어떻게 어림할지, 언제 첫 발을 뗄지, 무엇을 루틴으로 굳힐지 — 그날 대화에 맞는 것을 골라 쓸 것.',
-        ),
-      );
+      if (LifePatternService.handles(_coach.id)) {
+        // 담당 영역이 있는 코치에게는 축별 숫자를 주지 않는다. 그건 하루
+        // 전체를 보는 자리의 재료고, 쥐여주면 자기 영역 대신 하루 전체를
+        // 코칭하기 시작한다. 이쪽이 알아야 하는 건 요즘 어떤 식으로 굴러가는
+        // 사람인지 한마디와, 자기 영역이 실제로 어디까지 가고 있는지다.
+        sb.write(
+          ExecutionTypeLabels.promptLine(
+            ExecutionTypeLabels.savedLabel(prefs),
+          ),
+        );
+        sb.write(RecentTaskDigest.promptBlock(prefs.getString('nyang_history')));
+      } else {
+        sb.write(
+          ExecutionFunnel.from(prefs.getString('nyang_history')).promptBlock(
+            purpose:
+                '계획이 실제로 끝나게 돕는 자리. 계획을 얼마나 잡을지, 한 가지에 걸리는 시간을 어떻게 어림할지, 언제 첫 발을 뗄지, 무엇을 루틴으로 굳힐지 — 그날 대화에 맞는 것을 골라 쓸 것.',
+          ),
+        );
+      }
     }
 
     // 담당 영역 코치가 물어서 받아둔 답. 그 코치의 대화에만 싣는다.

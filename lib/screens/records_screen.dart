@@ -182,7 +182,7 @@ class _RecordsScreenState extends State<RecordsScreen> {
   }
 
   /// 이 기기에서만 뜻이 있는 값이라 'nyang_' 접두어를 쓰지 않는다.
-  static const String _executionTypeCacheKey = 'execution_type_week';
+  static const String _executionTypeCacheKey = ExecutionTypeLabels.weekCacheKey;
 
   bool get _isMaster => _hasMasterPlan;
   CoachConfig get _coach => CoachConfigs.get(widget.coachId);
