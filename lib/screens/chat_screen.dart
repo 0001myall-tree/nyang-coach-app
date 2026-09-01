@@ -5596,13 +5596,32 @@ $block
     );
     if (!mounted || line == null) return false;
 
+    // 평소 답변과 같은 길로 태운다. 오늘 하루 안에서 권하는 자리에는 코치가
+    // [TASK] 하나를 붙이는데, 그걸 그대로 두면 사용자에게 대괄호가 보이고
+    // 떼어내기만 하면 권해놓고 목록엔 아무것도 안 남는다.
+    //
+    // 자동으로 저장하지는 않는다. 카드가 뜨고 사용자가 누른 뒤에 들어간다 —
+    // 값을 대신 바꿔주던 때는 조용히 실패해도 아무도 몰랐다.
+    final parsed = _parseReply(line);
+    final body = LifeRoutineOffer.clean(parsed.text);
+    if (!mounted || body == null) return false;
+
+    final offered = _keepableSuggestedTasks(
+      await _filterDuplicateSuggestedTasks(parsed.suggestedTasks),
+      '',
+    );
+    if (!mounted) return false;
+
     await LifePatternService.update(coachId, {
       'lastOffer': mark,
       'lastOfferedAt': DateTime.now().toIso8601String(),
     });
     if (!mounted) return false;
 
-    _injectAiMessage(line, kind: _lifeOfferKind);
+    _injectAiMessage(body, kind: _lifeOfferKind);
+    if (offered.isNotEmpty) {
+      setState(() => _suggestedTasks = offered);
+    }
     unawaited(
       AnalyticsService.logFeatureUsage('life_routine_${plan.verdict.name}'),
     );
