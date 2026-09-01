@@ -47,6 +47,7 @@ import 'package:nyang_coach/services/planner_routine_prompt_service.dart';
 import 'package:nyang_coach/widgets/alarm_permission_notice.dart';
 import 'package:nyang_coach/services/planner_edit_service.dart';
 import 'package:nyang_coach/services/registration_target.dart';
+import 'package:nyang_coach/services/life_pattern_service.dart';
 import 'package:nyang_coach/services/same_work_check.dart';
 import 'package:nyang_coach/services/task_name_similarity.dart';
 import 'package:nyang_coach/services/task_resistance_service.dart';
@@ -3849,6 +3850,7 @@ ${lines.join('\n')}
     String text, {
     String? kind,
     List<String> choices = const [],
+    String? payload,
   }) {
     if (!mounted) return;
     setState(() {
@@ -3859,6 +3861,7 @@ ${lines.join('\n')}
           time: DateTime.now(),
           kind: kind,
           choices: choices,
+          payload: payload,
         ),
       );
     });
@@ -5487,6 +5490,176 @@ $block
 
   /// 시작해두고 멈춘 것 같은 일을 물어봤으면 true.
   ///
+  /// 담당 영역이 있는 프렌즈 코치가 그 사람의 생활을 알아보는 자리.
+  ///
+  /// 마스터에는 인사 자리에 슬롯이 여럿 있지만 프렌즈에는 먼저 말 거는 자리가
+  /// 하나도 없었다. 그래서 이 코치들은 사용자가 먼저 말을 걸어야만 자기 영역
+  /// 이야기를 시작할 수 있었다.
+  ///
+  /// 하루 한 번이다. 들어올 때마다 뜨면 그게 곧 잔소리다.
+  ///
+  /// 묻는 것은 앱이 알 수 없는 것뿐이다. 요일별로 얼마나 해내는지, 몇 시에
+  /// 시작하는지는 기록에 있으니 묻지 않는다.
+  Future<bool> _startLifePatternSlot(DateTime now) async {
+    final coachId = _coach.id;
+    if (!LifePatternService.handles(coachId)) return false;
+    if (_spokeKindToday({
+      _lifeAskKind,
+      _lifeAskMultiKind,
+      _lifeReviewKind,
+    }, now)) {
+      return false;
+    }
+
+    final firstAsk = await LifePatternService.firstAsk(coachId);
+    if (firstAsk.isNotEmpty) {
+      if (!mounted) return false;
+      _askLifeQuestion(firstAsk.first, opening: true);
+      unawaited(AnalyticsService.logFeatureUsage('life_pattern_ask'));
+      return true;
+    }
+
+    if (await LifePatternService.dueForReview(coachId)) {
+      if (!mounted) return false;
+      final summary = await LifePatternService.reviewSummary(coachId);
+      if (!mounted) return false;
+      _injectAiMessage(
+        _lifeReviewOpening(summary),
+        kind: _lifeReviewKind,
+        choices: const [_lifeReviewSameLabel, _lifeReviewChangedLabel],
+      );
+      unawaited(AnalyticsService.logFeatureUsage('life_pattern_review'));
+      return true;
+    }
+
+    return false;
+  }
+
+  /// 문항 하나를 카드로 띄운다.
+  ///
+  /// [opening]은 이 대화에서 처음 묻는 자리라는 뜻이다. 다짜고짜 물으면
+  /// 설문지처럼 읽혀서, 물어볼 게 있다고 한마디 먼저 얹는다.
+  void _askLifeQuestion(LifePatternQuestion question, {bool opening = false}) {
+    _pickedLifeOptions.clear();
+    final ask = opening ? '${_lifeAskOpening()}\n${question.ask}' : question.ask;
+    _injectAiMessage(
+      ask,
+      kind: question.multi ? _lifeAskMultiKind : _lifeAskKind,
+      choices: question.labels,
+      payload: question.id,
+    );
+  }
+
+  String _lifeAskOpening() => _voice(
+    cat: '물어볼 게 하나 있다냥.',
+    bro: '하나만 물어보자.',
+    halmae: '하나만 물어보자꾸나.',
+    boyfriend: '하나만 물어봐도 돼?',
+  );
+
+  String _lifeReviewOpening(String summary) {
+    if (summary.isEmpty) {
+      return _voice(
+        cat: '요즘도 그때랑 비슷하냥?',
+        bro: '요즘도 그때랑 비슷하냐?',
+        halmae: '요즘도 그때와 비슷하냐?',
+        boyfriend: '요즘도 그때랑 비슷해?',
+      );
+    }
+    return _voice(
+      cat: '지난번엔 $summary라고 했었다냥. 이 중에 바뀐 거 있냥?',
+      bro: '지난번엔 $summary라고 했었다. 이 중에 바뀐 거 있냐?',
+      halmae: '지난번엔 $summary라고 했었지. 이 중에 바뀐 게 있느냐?',
+      boyfriend: '지난번엔 $summary라고 했었잖아. 이 중에 바뀐 거 있어?',
+    );
+  }
+
+  /// 여러 개를 고르는 문항에서 지금 골라둔 것들.
+  final Set<String> _pickedLifeOptions = <String>{};
+
+  /// 답 하나를 받고, 첫 진입 몫이 남았으면 이어서 묻는다.
+  Future<void> _saveLifeAnswer(String questionId, List<String> picked) async {
+    final coachId = _coach.id;
+    await LifePatternService.saveAnswer(coachId, questionId, picked);
+    await AnalyticsService.logFeatureUsage('life_pattern_answered');
+    if (!mounted) return;
+
+    final remaining = await LifePatternService.firstAsk(coachId);
+    if (!mounted) return;
+    if (remaining.isNotEmpty) {
+      _askLifeQuestion(remaining.first);
+      return;
+    }
+    _injectAiMessage(
+      _voice(
+        cat: '알겠다냥. 이제 뭘 챙기면 좋을지 보고 있을게냥.',
+        bro: '알겠다. 이제 뭘 챙기면 좋을지 내가 보고 있을게.',
+        halmae: '알겠다. 이제 무얼 챙기면 좋을지 할미가 보고 있으마.',
+        boyfriend: '알겠어. 이제 뭘 챙기면 좋을지 내가 보고 있을게.',
+      ),
+    );
+  }
+
+  Future<void> _handleLifeAskChoice(ChatMessage msg, String label) async {
+    if (_isLoading) return;
+    HapticFeedback.lightImpact();
+    final questionId = msg.payload;
+    if (questionId == null) return;
+    _injectUserChoice(label);
+    await _saveLifeAnswer(questionId, [label]);
+  }
+
+  void _toggleLifeOption(String label) {
+    HapticFeedback.selectionClick();
+    setState(() {
+      if (!_pickedLifeOptions.remove(label)) _pickedLifeOptions.add(label);
+    });
+  }
+
+  Future<void> _submitLifeOptions(ChatMessage msg) async {
+    if (_isLoading || _pickedLifeOptions.isEmpty) return;
+    HapticFeedback.lightImpact();
+    final questionId = msg.payload;
+    if (questionId == null) return;
+    final picked = _pickedLifeOptions.toList(growable: false);
+    _injectUserChoice(picked.join(', '));
+    await _saveLifeAnswer(questionId, picked);
+  }
+
+  /// 지난번 답이 아직 맞는지 물은 뒤.
+  ///
+  /// 그대로라고 하면 확인만 남기고 끝낸다. 바뀌었다고 할 때만 문항을 다시
+  /// 띄운다 — 설문을 통째로 다시 돌리면 그게 곧 잔소리다.
+  Future<void> _handleLifeReviewChoice(String label) async {
+    if (_isLoading) return;
+    HapticFeedback.lightImpact();
+    _injectUserChoice(label);
+
+    final coachId = _coach.id;
+    await LifePatternService.markReviewed(coachId);
+    if (!mounted) return;
+
+    if (label == _lifeReviewSameLabel) {
+      await AnalyticsService.logFeatureUsage('life_pattern_review_same');
+      if (!mounted) return;
+      _injectAiMessage(
+        _voice(
+          cat: '알겠다냥. 그럼 그대로 보고 있을게냥.',
+          bro: '알겠다. 그럼 그대로 간다.',
+          halmae: '알겠다. 그럼 그대로 두마.',
+          boyfriend: '알겠어. 그럼 그대로 갈게.',
+        ),
+      );
+      return;
+    }
+
+    await AnalyticsService.logFeatureUsage('life_pattern_review_changed');
+    if (!mounted) return;
+    final questions = LifePatternService.reviewableQuestions(coachId);
+    if (questions.isEmpty) return;
+    _askLifeQuestion(questions.first);
+  }
+
   /// 저녁에만 묻는다. 낮에 3시간이면 아직 붙잡고 있을 때가 많아 방해가 되지만,
   /// 하루가 저물도록 그대로면 멈췄거나 완료를 안 누른 쪽일 가능성이 크다.
   Future<bool> _startMasterStalledAsk(
@@ -6318,6 +6491,18 @@ Rules:
 
   /// 오늘 쓸 수 있는 시간을 묻는 카드.
   static const _capacityAskKind = 'auto:day_capacity';
+
+  /// 담당 영역 코치가 생활을 물어보는 카드. 하나만 고른다.
+  static const _lifeAskKind = 'auto:life_pattern_ask';
+
+  /// 같은 물음인데 여러 개를 고르는 것. 무엇을 챙기고 싶은지가 그렇다.
+  static const _lifeAskMultiKind = 'auto:life_pattern_multi';
+
+  /// 지난번 답이 아직 맞는지 확인하는 카드.
+  static const _lifeReviewKind = 'auto:life_pattern_review';
+
+  static const String _lifeReviewSameLabel = '그대로야';
+  static const String _lifeReviewChangedLabel = '바뀐 게 있어';
 
   static const _conditionOtherLabel = '다른 이유가 있어';
   static final List<String> _conditionAskLabels = [
@@ -7325,6 +7510,17 @@ Rules:
       }
 
       if (await _tryOfferOngoingNudge(prefs, now)) {
+        _greetedOnThisEntry = true;
+        await prefs.setString(
+          'last_visit_${widget.coachId}',
+          now.toIso8601String(),
+        );
+        return;
+      }
+
+      // 진행 중인 일 확인 다음이다. 지금 붙잡고 있는 일이 더 급하고, 이쪽은
+      // 오늘 안에 아무 때나 해도 되는 이야기다.
+      if (await _startLifePatternSlot(now)) {
         _greetedOnThisEntry = true;
         await prefs.setString(
           'last_visit_${widget.coachId}',
@@ -17681,6 +17877,18 @@ ${Prompts.outputRulesTail}$plannerActionSection$coachOfferTaskRule$halmaeHint$re
     if (msg.kind == _capacityAskKind && msg.choices.isNotEmpty) {
       return _buildChoiceBubbleCard(msg, _handleCapacityAskChoice);
     }
+    if (msg.kind == _lifeAskKind && msg.choices.isNotEmpty) {
+      return _buildChoiceBubbleCard(
+        msg,
+        (label) => _handleLifeAskChoice(msg, label),
+      );
+    }
+    if (msg.kind == _lifeAskMultiKind && msg.choices.isNotEmpty) {
+      return _buildLifeMultiChoiceCard(msg);
+    }
+    if (msg.kind == _lifeReviewKind && msg.choices.isNotEmpty) {
+      return _buildChoiceBubbleCard(msg, _handleLifeReviewChoice);
+    }
     if (msg.kind == 'grooming_care_choice') {
       return _buildGroomingCareChoiceCard(msg);
     }
@@ -18592,6 +18800,121 @@ ${Prompts.outputRulesTail}$plannerActionSection$coachOfferTaskRule$halmaeHint$re
     await ExecutionBlockerService.saveAnswer(label);
     await AnalyticsService.logFeatureUsage('blocker_answered');
     _injectAiMessage(_greetingBuilder.buildBlockerReply());
+  }
+
+  /// 무엇을 챙기고 싶은지 고르는 카드. 여러 개를 고른다.
+  ///
+  /// 여기서 고른 것이 곧 이 코치가 다룰 범위다. 하나만 고르게 하면 나머지는
+  /// 없는 셈이 되는데, 챙기고 싶은 것이 하나뿐인 사람은 드물다.
+  ///
+  /// 개수를 막지 않는다. 되는 날의 조건과 달리 이건 문턱이 아니라 범위라,
+  /// 여러 개를 골라도 못 하는 이유가 늘지 않는다.
+  Widget _buildLifeMultiChoiceCard(ChatMessage msg) {
+    final accent = _coach.accentColor;
+    final picked = _pickedLifeOptions;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12, left: 44, right: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (msg.text.trim().isNotEmpty) ...[
+            Text(
+              msg.text,
+              style: GoogleFonts.notoSansKr(
+                fontSize: AppDesignTokens.textBody,
+                fontWeight: FontWeight.w500,
+                height: 1.6,
+                color: AppDesignTokens.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 10),
+          ],
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(
+              '해당하는 걸 다 골라도 돼요.',
+              style: GoogleFonts.notoSansKr(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: AppDesignTokens.textSecondary,
+              ),
+            ),
+          ),
+          for (final label in msg.choices)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: GestureDetector(
+                onTap: _isLoading ? null : () => _toggleLifeOption(label),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 12,
+                  ),
+                  decoration: BoxDecoration(
+                    color: picked.contains(label)
+                        ? accent.withValues(alpha: 0.14)
+                        : const Color(0xFFF8F5FF),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: picked.contains(label)
+                          ? accent
+                          : const Color(0xFFE5DEFF),
+                      width: picked.contains(label) ? 1.6 : 1,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        picked.contains(label)
+                            ? Icons.check_circle_rounded
+                            : Icons.circle_outlined,
+                        size: 18,
+                        color: picked.contains(label)
+                            ? accent
+                            : const Color(0xFFC9C2E0),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          label,
+                          style: GoogleFonts.notoSansKr(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w800,
+                            color: accent,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          if (picked.isNotEmpty)
+            GestureDetector(
+              onTap: _isLoading ? null : () => _submitLifeOptions(msg),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: accent,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  '이걸로 할게',
+                  style: GoogleFonts.notoSansKr(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w900,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
   }
 
   /// 되는 날의 조건을 고르는 카드. 이것만 여러 개를 고른다.

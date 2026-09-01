@@ -403,6 +403,12 @@ class LifePatternService {
   /// 자체가 잔소리가 된다.
   static const Set<String> _worthReviewing = {'want', 'style', 'doing'};
 
+  /// 다시 확인할 만한 문항들. 바뀐 게 있다고 할 때 이것부터 다시 묻는다.
+  static List<LifePatternQuestion> reviewableQuestions(String coachId) =>
+      questionsFor(coachId)
+          .where((question) => _worthReviewing.contains(question.id))
+          .toList(growable: false);
+
   static Future<String> reviewSummary(String coachId) async {
     final saved = await answers(coachId);
     final parts = <String>[];
