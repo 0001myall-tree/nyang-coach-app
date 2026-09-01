@@ -15801,6 +15801,7 @@ $resistanceFlowRule'''
           '''$baseSystemPrompt
 ${LifePatternService.roleLine(_coach.id)}
 ${Prompts.executionSupportRule}
+${Prompts.goalBackcastRule}
 ${context.isNotEmpty ? '\n$context' : ''}
 $lifeRoutineSection
 $cleaningSection
