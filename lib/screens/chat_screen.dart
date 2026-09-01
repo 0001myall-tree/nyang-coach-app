@@ -47,6 +47,7 @@ import 'package:nyang_coach/services/planner_routine_prompt_service.dart';
 import 'package:nyang_coach/widgets/alarm_permission_notice.dart';
 import 'package:nyang_coach/services/planner_edit_service.dart';
 import 'package:nyang_coach/services/registration_target.dart';
+import 'package:nyang_coach/services/task_name_similarity.dart';
 import 'package:nyang_coach/services/task_resistance_service.dart';
 import 'package:nyang_coach/services/execution_resistance_service.dart';
 import 'package:nyang_coach/services/focus_fatigue_service.dart';
@@ -7965,34 +7966,23 @@ Rules:
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString('nyang_tasks') ?? '[]';
     final List<dynamic> tasks = jsonDecode(raw);
+    // 띄어쓰기를 지우지 않고 들고 있는다. 끝말만 다른 이름을 견주려면 낱말이
+    // 어디서 갈리는지를 알아야 한다.
     final existingTaskTexts = tasks
-        .map((t) => _normalizeTaskSuggestionText((t['text'] ?? '').toString()))
+        .map((t) => (t['text'] ?? '').toString().trim())
         .where((text) => text.isNotEmpty)
         .toSet();
 
     // 이번 답변 안에서 같은 이름의 태그가 두 번 나오는 경우도 걸러낸다.
     // 안 그러면 카드는 하나만 보이는데 목록엔 똑같은 게 두 개 실려서,
     // "추가하기"를 눌러도 하나가 남아 카드가 안 사라지는 것처럼 보인다.
-    //
-    // 완전히 같은 문자열인지만 보면 "사업계획서 쓰기"가 이미 있는데 코치가
-    // "오늘 사업계획서 쓰기"라고 살짝 다르게 적은 것까지는 못 잡는다. 그래서
-    // 한쪽이 다른 쪽을 통째로 포함하는지도 함께 본다. 너무 짧은 이름끼리는
-    // 우연히 겹칠 수 있어 그 경우는 제외한다.
-    const minSubstringLen = 3;
-    bool overlapsExisting(String text) {
-      return existingTaskTexts.any((existing) {
-        if (existing.length < minSubstringLen ||
-            text.length < minSubstringLen) {
-          return existing == text;
-        }
-        return text.contains(existing) || existing.contains(text);
-      });
-    }
-
     final seenInBatch = <String>{};
     return suggestions.where((suggestion) {
       final suggestedText = _normalizeTaskSuggestionText(suggestion.text);
-      if (suggestedText.isEmpty || overlapsExisting(suggestedText)) {
+      if (suggestedText.isEmpty) return false;
+      if (existingTaskTexts.any(
+        (existing) => TaskNameSimilarity.isSameWork(existing, suggestion.text),
+      )) {
         return false;
       }
       return seenInBatch.add(suggestedText);
