@@ -314,6 +314,29 @@ void main() {
       expect(block, contains('제일 많이 새는 곳'));
     });
 
+    test('앱이 쓰는 말로 부른다', () {
+      // 지어낸 이름을 쓰면 코치가 그대로 받아 써서, 사용자에게 "첫 발 떼기가
+      // 새고 있다" 같은 문장이 나간다.
+      for (final name in ExecutionFunnel.leakNames.values) {
+        expect(name, isNot(contains('첫 발')));
+      }
+      expect(
+        ExecutionFunnel.leakNames[FunnelLeak.starting],
+        startsWith('시작'),
+      );
+      expect(
+        ExecutionFunnel.leakNames[FunnelLeak.finishing],
+        startsWith('완료'),
+      );
+    });
+
+    test('헷갈리는 짝에는 설명을 붙인다', () {
+      // '계획한 양'과 '시작'은 둘 다 적어둔 것의 일부만 손댄 모습이라,
+      // 이름만으로는 갈리지 않는다.
+      expect(ExecutionFunnel.leakNames[FunnelLeak.amount], contains('매일 손은 대는데'));
+      expect(ExecutionFunnel.leakNames[FunnelLeak.starting], contains('손도 안 댄 날'));
+    });
+
     test('앱이 센 값이라는 것을 밝힌다', () {
       final block = ExecutionFunnel.from(
         history([task(done: true, started: true)]),

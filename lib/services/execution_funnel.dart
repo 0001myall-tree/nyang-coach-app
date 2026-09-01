@@ -184,12 +184,21 @@ class ExecutionFunnel {
     return lowest.key;
   }
 
+  /// 새는 자리의 이름과, 헷갈리기 쉬운 자리에 붙이는 한 줄.
+  ///
+  /// 앱이 쓰는 말 그대로 계획·시작·완료로 부른다. 지어낸 이름을 쓰던 때는
+  /// 코치가 그 말을 그대로 받아 써서, 사용자에게 "첫 발 떼기가 새고 있다"는
+  /// 문장이 나갔다.
+  ///
+  /// '계획한 양'과 '시작'이 제일 헷갈리는 짝이다. 둘 다 적어둔 것의 일부만
+  /// 손댄 모습인데, 앞은 매일 손대면서 일부만 건드리는 것이고 뒤는 손도 안
+  /// 댄 날이 따로 있는 것이다. 그래서 이름만 주지 않고 설명을 붙인다.
   static const Map<FunnelLeak, String> leakNames = {
-    FunnelLeak.notStarted: '아직 시작 전',
-    FunnelLeak.planning: '목록을 만드는 것',
-    FunnelLeak.amount: '한 번에 잡는 양',
-    FunnelLeak.starting: '첫 발 떼기',
-    FunnelLeak.finishing: '끝까지 가는 것',
+    FunnelLeak.notStarted: '아직 판단할 만큼 하지 않음',
+    FunnelLeak.planning: '계획 (목록을 만든 날 자체가 드묾)',
+    FunnelLeak.amount: '계획한 양 (매일 손은 대는데 적어둔 것의 일부만 건드림)',
+    FunnelLeak.starting: '시작 (적어두고 손도 안 댄 날이 있음)',
+    FunnelLeak.finishing: '완료 (손은 대는데 끝까지 안 감)',
     FunnelLeak.none: '없음',
   };
 
