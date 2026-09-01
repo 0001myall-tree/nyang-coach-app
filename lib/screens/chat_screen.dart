@@ -15098,14 +15098,13 @@ Rules:
         !isFocusFatigueTurn;
     final isGoalPushTurn =
         canPushThisTurn && GoalPushService.isGoalPushExpression(userText);
-    // 마감이 없어도 하겠다는 마음이 보이면 크기를 줄이지 않는다.
-    // 마감 지시가 이미 붙는 턴에는 그쪽이 같은 말을 담고 있어 겹쳐 싣지 않는다.
-    final isDriveTurn =
-        canPushThisTurn &&
-        !isGoalPushTurn &&
-        !isReluctantDeadlineTurn &&
-        GoalPushService.showsDrive(userText);
 
+    // 하겠다는 마음이 보이는 턴에 따로 붙이던 지시가 있었다. 걷어냈다.
+    //
+    // 크기를 줄이지 말라는 말이 그 절반이었는데, 크기를 줄이라고 시키던 줄을
+    // 코치마다 걷어내면서 막을 상대가 사라졌다. 나머지 절반인 "언제까지
+    // 어디까지인지 잡아 거꾸로 나눠라"는 아래 마감 지시가 이미 하는 말이다.
+    //
     // 프렌즈는 오늘과 이번 주까지, 마스터는 그 일이 어디로 가는 길인지까지 본다.
     final goalPushSection = isReluctantDeadlineTurn
         ? Prompts.goalPushWithResistance
@@ -15115,8 +15114,6 @@ Rules:
                   ? Prompts.goalPushUrge
                   : '') +
               (_coach.isMaster ? Prompts.goalPushMaster : '')
-        : isDriveTurn
-        ? Prompts.driveBoost + (_coach.isMaster ? Prompts.driveBoostMaster : '')
         : '';
 
     // 이번 턴에 쓸 개입을 앱이 하나만 고른다.

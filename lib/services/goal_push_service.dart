@@ -91,68 +91,17 @@ class GoalPushService {
     return mentionsDeadlineOrPlan(text);
   }
 
-  /// 하겠다는 마음이 드러난 표현. 마감이 없어도 밀어줄 자리다.
-  ///
-  /// 시작하면 잘하고 싶어지는 게 사람 마음인데, 이 앱의 기본기가 "작게
-  /// 쪼개기"라서 그때마다 브레이크가 걸렸다. 하겠다는 사람에게 "천천히 해도
-  /// 된다"고 하면 답답하고, 무엇보다 코치의 수가 하나뿐이라는 게 드러난다.
-  /// 뭘 말하든 같은 답이 돌아오면 그때부터 코치가 아니라 자동응답기다.
-  static const List<String> _driveSignals = [
-    '다끝낼',
-    '다끝내',
-    '끝장',
-    '몰아서',
-    '한번에끝',
-    '오늘안에끝',
-    '더할래',
-    '더하고싶',
-    '제대로하고싶',
-    '제대로해보',
-    '열심히해보',
-    '달려볼',
-    '해치우',
-    '이번엔진짜',
-    '이번엔제대로',
-    '각잡고',
-    '풀로',
-    '밤새서',
-  ];
-
-  /// 하겠다는 어미. "대청소할래", "정리할 거야"처럼 의욕이 어미에만 실릴 때가
-  /// 많은데, 위의 목록은 전부 강도가 센 표현이라 그런 말을 다 놓쳤다.
-  ///
-  /// 하다 계열만 본다. '~려고'까지 넓히면 "쓰려고"를 잡는 대신 "자려고",
-  /// "쉬려고", "미루려고"까지 하겠다는 말로 읽는다. 못 잡는 것보다 잘못 잡는
-  /// 쪽이 나쁘다 — 자려는 사람을 밀어붙이게 된다.
-  static final RegExp _intentEnding = RegExp(r'할래|할거야|할게|해야지|하려고');
-
-  /// 같은 어미를 쓰면서 뜻은 정반대인 말들. 어미 바로 앞에 이것들이 붙는다.
-  /// "안 할래", "그만할래", "내일 할래"를 하겠다는 말로 읽으면 안 된다.
-  static const List<String> _intentReversers = [
-    '안',
-    '못',
-    '그만',
-    '포기',
-    '내일',
-    '나중에',
-    '이따',
-    '주말에',
-  ];
-
-  static bool _showsIntent(String normalized) {
-    for (final match in _intentEnding.allMatches(normalized)) {
-      final before = normalized.substring(0, match.start);
-      if (_intentReversers.any(before.endsWith)) continue;
-      return true;
-    }
-    return false;
-  }
-
-  static bool showsDrive(String text) {
-    final normalized = _normalize(text);
-    if (_resistanceSignals.any(normalized.contains)) return false;
-    return _driveSignals.any(normalized.contains) || _showsIntent(normalized);
-  }
+  // 하겠다는 마음이 드러난 표현을 잡던 자리가 여기 있었다.
+  //
+  // 코치의 기본기가 "작게 쪼개기"라서 의욕이 보일 때도 브레이크가 걸렸고,
+  // 그래서 그런 말을 따로 잡아 "크기를 줄이지 마라"를 실었다. 그 기본기를
+  // 코치마다 걷어내면서 막을 상대가 사라졌다.
+  //
+  // 남은 절반은 마감 쪽과 같은 말이었다. 언제까지 어디까지인지 잡아 거꾸로
+  // 세어 나누라는 것은 [마감·속도]가 이미 한다.
+  //
+  // 무엇보다 트리거가 넓었다. 어미만 보고 잡느라 "청소해야지" 한마디에도
+  // 걸렸다. 넓게 잡는 판정에 강한 지시를 매달면 평소 대화가 그쪽으로 기운다.
 
   /// 하기 싫다는 말과 마감이 함께 있는 자리.
   ///
