@@ -223,12 +223,22 @@ void main() {
       expect(lines.length, LifePatternService.domains.length);
     });
 
-    test('기회가 안 보이면 만들어내지 말라고 못박는다', () {
+    test('기회가 안 보이면 그냥 대화하라고 해둔다', () {
       // 대상을 찾아야 하는 동사는 이 앱에서 여러 번 지어내기로 이어졌다.
       for (final coachId in LifePatternService.domains.keys) {
         expect(
           LifePatternService.roleLine(coachId),
-          contains('만들어내지 않는다'),
+          contains('안 보이면 그냥 대화한다'),
+          reason: coachId,
+        );
+      }
+    });
+
+    test('분량을 안 정했으면 억지로 끌지 않는다', () {
+      for (final coachId in LifePatternService.domains.keys) {
+        expect(
+          LifePatternService.roleLine(coachId),
+          contains('한 것을 인정해준다'),
           reason: coachId,
         );
       }
