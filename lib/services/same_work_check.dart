@@ -1,6 +1,7 @@
 import 'package:cloud_functions/cloud_functions.dart';
 
 import 'analytics_service.dart';
+import 'numbered_answer.dart';
 import 'api_usage_limit_service.dart';
 
 /// 새로 제안된 할 일이 이미 목록에 있는 일인지 뜻을 보고 가른다.
@@ -68,7 +69,7 @@ class SameWorkCheck {
 
       final data = response.data;
       final content = (data is Map ? data['content'] : null)?.toString() ?? '';
-      final picked = readAnswer(content, count: asked.length);
+      final picked = NumberedAnswer.read(content, count: asked.length);
 
       final usageData = data is Map ? data : const {};
       await AnalyticsService.logApiUsage(
@@ -132,23 +133,4 @@ class SameWorkCheck {
     return buffer.toString();
   }
 
-  /// 답에서 번호를 읽는다. 0부터로 돌려주고, 범위 밖은 버린다.
-  ///
-  /// 형식을 지키라고 일러두지만 "2번요" 같은 답이 온다. 숫자만 훑어 읽는다.
-  /// NONE이라고 했으면 숫자가 섞여 있어도 아무것도 고르지 않은 것으로 본다.
-  static Set<int> readAnswer(String content, {required int count}) {
-    final trimmed = content.trim();
-    if (trimmed.isEmpty) return const {};
-    if (RegExp(r'\bnone\b', caseSensitive: false).hasMatch(trimmed)) {
-      return const {};
-    }
-
-    final picked = <int>{};
-    for (final match in RegExp(r'\d+').allMatches(trimmed)) {
-      final number = int.tryParse(match.group(0)!);
-      if (number == null || number < 1 || number > count) continue;
-      picked.add(number - 1);
-    }
-    return picked;
-  }
 }

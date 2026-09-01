@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:nyang_coach/services/same_work_check.dart';
+import 'package:nyang_coach/services/numbered_answer.dart';
 
 /// 답을 읽어내는 부분만 본다. 부르는 쪽은 통신이라 여기서 돌릴 수 없다.
 ///
@@ -7,7 +7,7 @@ import 'package:nyang_coach/services/same_work_check.dart';
 /// 엉뚱한 제안이 사라지거나, 목록에 이미 있는 것이 다시 뜬다.
 void main() {
   Set<int> read(String content, {int count = 3}) =>
-      SameWorkCheck.readAnswer(content, count: count);
+      NumberedAnswer.read(content, count: count);
 
   group('번호를 읽는다', () {
     test('하나만 왔을 때', () {

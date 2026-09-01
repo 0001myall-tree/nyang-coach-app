@@ -207,6 +207,31 @@ void main() {
     });
   });
 
+  group('담당으로 가려둔 루틴', () {
+    test('아직 안 갈랐으면 빈 집합', () async {
+      expect(await LifePatternService.domainHabitIds('halmae'), isEmpty);
+    });
+
+    test('적어두면 그대로 읽힌다', () async {
+      await LifePatternService.saveDomainHabitIds('halmae', {'h1', 'h4'});
+      expect(await LifePatternService.domainHabitIds('halmae'), {'h1', 'h4'});
+    });
+
+    test('가른 시각도 함께 남는다', () async {
+      await LifePatternService.saveDomainHabitIds('halmae', {'h1'});
+      expect(
+        (await LifePatternService.profile('halmae'))['analyzedAt'],
+        isNotNull,
+      );
+    });
+
+    test('설문 답을 덮어쓰지 않는다', () async {
+      await LifePatternService.saveAnswer('halmae', 'share', ['대부분 내가 해']);
+      await LifePatternService.saveDomainHabitIds('halmae', {'h1'});
+      expect((await LifePatternService.answers('halmae'))['share'], '대부분 내가 해');
+    });
+  });
+
   group('코치에게 넘기는 묶음', () {
     test('답이 없으면 아무것도 안 싣는다', () async {
       expect(await LifePatternService.promptBlock('halmae'), isEmpty);

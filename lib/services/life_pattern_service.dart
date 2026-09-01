@@ -348,6 +348,24 @@ class LifePatternService {
     return remaining.isEmpty ? null : remaining.first;
   }
 
+  // ── 담당으로 가려둔 루틴 ──────────────────────
+
+  /// 이 코치 담당으로 가려둔 루틴들. 아직 안 갈랐으면 빈 집합.
+  static Future<Set<String>> domainHabitIds(String coachId) async {
+    final saved = (await profile(coachId))['routineIds'];
+    if (saved is! List) return const {};
+    return saved.map((e) => e.toString()).toSet();
+  }
+
+  static Future<void> saveDomainHabitIds(
+    String coachId,
+    Set<String> ids, {
+    DateTime? now,
+  }) => update(coachId, {
+    'routineIds': ids.toList(growable: false),
+    'analyzedAt': (now ?? DateTime.now()).toIso8601String(),
+  });
+
   // ── 다시 확인할 때 ────────────────────────────
 
   /// 파악한 것을 다시 확인할 때가 됐는지.
