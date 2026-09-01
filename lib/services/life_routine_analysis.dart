@@ -4,12 +4,21 @@
 /// 문장으로 시키면 매번 무언가를 제안한다. 이 앱이 여러 번 겪은 일이라, 개입할지
 /// 말지는 앱이 정하고 코치는 정해진 판정에 맞는 말만 한다.
 ///
-/// 네 갈래뿐이다.
+/// 다섯 갈래뿐이다.
 /// - [LifeVerdict.hold]: 아무 말도 하지 않는다. 잘 되고 있거나, 담당이 아니거나,
 ///   하루가 이미 빡빡하거나, 아직 셀 것이 모자라거나.
 /// - [LifeVerdict.move]: 되는 요일이 따로 있다. 그 자리로 옮긴다.
 /// - [LifeVerdict.reduce]: 잡은 횟수가 실제로 되는 횟수보다 많다. 내린다.
-/// - [LifeVerdict.add]: 담당 영역에 아무것도 없고 넣을 자리가 보인다. 하나만.
+///
+/// 이 둘은 이미 있는 루틴을 건드리는 것이라 문턱이 높다. 루틴은 한 번 넣으면
+/// 거의 고정으로 두는 것인데, 어지간한 것마다 옮겨라 줄여라 하면 도와주는 게
+/// 아니라 참견이 된다. 실제로 안 굴러가는 것만 짚는다.
+/// - [LifeVerdict.today]: 오늘 하루 안에서 하나. 반복 약속을 걸지 않는다.
+/// - [LifeVerdict.add]: 루틴으로 굳힌다. 반복이 이 사람 도구일 때만.
+///
+/// 루틴만 다루지 않는다. 루틴은 앞으로 계속 하겠다는 약속이라 무겁고, 필요할
+/// 때만 하고 싶다는 사람에게 권하면 안 지킬 것을 하나 더 떠안기는 셈이 된다.
+/// 그런 사람에게는 오늘 하루 안에서 할 것 하나를 짚는다.
 ///
 /// 기본값은 [LifeVerdict.hold]다. 셀 것이 모자라면 아무것도 하지 않는다 —
 /// 근거 없이 권하는 것보다 조용한 편이 낫다.
@@ -18,7 +27,7 @@ library;
 import 'dart:convert';
 
 /// 이번 주기에 무엇을 할지.
-enum LifeVerdict { hold, move, reduce, add }
+enum LifeVerdict { hold, move, reduce, today, add }
 
 /// 요일 하나와 두 시간짜리 구간.
 ///
@@ -121,7 +130,20 @@ class LifeRoutinePlan {
             ? ''
             : ' 넣을 자리 후보: ${openWindows.take(2).map((w) => w.label).join(', ')}.';
         buffer.writeln(
-          '*할 일: 이 영역에서 시작할 것 하나만, 시각과 크기까지 정해서 권하세요. 여러 개를 늘어놓지 마세요.$where',
+          '*할 일: 이 영역에서 반복으로 굳힐 것 하나만, 요일과 시각과 크기까지 정해서 권하세요. 여러 개를 늘어놓지 마세요.$where',
+        );
+      case LifeVerdict.today:
+        final when = openWindows.isEmpty
+            ? ''
+            : ' 이 사람이 실제로 손대는 시간대: ${openWindows.take(2).map((w) => w.label).join(', ')}.';
+        buffer.writeln(
+          '*할 일: 오늘 하루 안에서 할 것 하나만, 언제 얼마나 할지까지 정해서 권하세요.$when',
+        );
+        buffer.writeln(
+          '*루틴으로 만들자고 하지 마세요. 앞으로 계속 하겠다는 약속은 이 사람이 원한다고 하지 않았습니다. 오늘 한 번이면 됩니다.',
+        );
+        buffer.writeln(
+          '*이미 하는 일에 붙이는 것도 방법입니다. 새 자리를 만드는 것보다 잊을 일이 적습니다. (예: 샤워 직후, 저녁 먹고 바로)',
         );
       case LifeVerdict.hold:
         break;
@@ -142,12 +164,27 @@ class LifeRoutineAnalysis {
   /// 우연히 어긋난 며칠이 그 사람의 리듬이 된다.
   static const int minRecordedDays = 10;
 
-  /// 이만큼 해내고 있으면 잘 되는 중이다. 건드리지 않는다.
-  ///
-  /// 문턱은 이 하나뿐이다. 잘 되는 선과 어긋난 선을 따로 두었더니 그 사이에
-  /// 낀 사람에게 아무 판정도 안 나왔고, 그때 붙는 이유가 엉뚱한 것("넣을
-  /// 시간대를 못 찾음")이라 왜 조용한지 알 수도 없었다.
+  /// 이만큼 해내고 있으면 잘 되는 중이다.
   static const double keepingWellRate = 0.7;
+
+  /// 이 아래로 떨어져야 루틴을 건드린다.
+  ///
+  /// 루틴은 한 번 넣으면 거의 고정으로 두는 것이다. 그런데 70%를 기준으로
+  /// 삼았더니 65%짜리에도 "옮기자"가 나갔다. 그건 도와주는 게 아니라 참견이다.
+  /// 웬만하면 굴러가는 것은 그대로 두고, 실제로 안 굴러가는 것만 짚는다.
+  ///
+  /// 그 사이(40~70%)에는 아무 말도 안 한다. 새로 넣자고도 하지 않는다 —
+  /// 반쯤 굴러가는 것을 둔 채 하나를 더 얹는 것도 참견이다.
+  ///
+  /// 이 구간이 조용한 이유는 반드시 판정에 적는다. 예전에 문턱 둘 사이에 낀
+  /// 사람이 엉뚱한 이유("넣을 시간대를 못 찾음")를 달고 조용해진 적이 있다.
+  static const double brokenRate = 0.4;
+
+  /// 루틴을 판정하기 전에 이만큼은 지나야 한다.
+  ///
+  /// 지난주에 만든 루틴을 두고 "안 되고 있으니 옮기자"고 하면, 자리를 잡을
+  /// 시간을 준 적이 없는 셈이다.
+  static const Duration minRoutineAge = Duration(days: 21);
 
   /// 그 요일에 이만큼은 기회가 있어야 "되는 요일"이라고 말할 수 있다.
   static const int minChancesPerDay = 2;
@@ -175,6 +212,7 @@ class LifeRoutineAnalysis {
     String? schedulesRaw,
     Map<String, dynamic> answers = const {},
     Set<String> domainHabitIds = const {},
+    bool? prefersRoutine,
     DateTime? now,
   }) {
     final at = now ?? DateTime.now();
@@ -203,11 +241,23 @@ class LifeRoutineAnalysis {
     // 것보다 늘 먼저다.
     final spots = <WeakSpot>[];
     var keepingWell = false;
+    var runningish = false;
     for (final habit in habits) {
+      // 만든 지 얼마 안 된 루틴은 판정하지 않는다. 다만 있는 것으로는 치므로
+      // 그 사람에게 새 루틴을 얹지도 않는다.
+      final createdAt = DateTime.tryParse(habit['createdAt']?.toString() ?? '');
+      if (createdAt != null && at.difference(createdAt) < minRoutineAge) {
+        runningish = true;
+        continue;
+      }
       final spot = _measure(habit, logs, records, at);
       if (spot == null) continue;
       if (spot.rate >= keepingWellRate) {
         keepingWell = true;
+        continue;
+      }
+      if (spot.rate >= brokenRate) {
+        runningish = true;
         continue;
       }
       spots.add(spot);
@@ -249,6 +299,13 @@ class LifeRoutineAnalysis {
       );
     }
 
+    if (runningish) {
+      return const LifeRoutinePlan(
+        verdict: LifeVerdict.hold,
+        reason: '담당 영역 루틴이 완벽하진 않아도 굴러가는 중이거나 아직 자리를 잡는 중. 루틴은 한 번 정하면 두는 것이라 이 정도로는 건드리지 않음.',
+      );
+    }
+
     // 여기부터는 담당 영역에 굴러가는 루틴이 없는 사람이다.
     if (_crowded(records)) {
       return const LifeRoutinePlan(
@@ -270,9 +327,18 @@ class LifeRoutineAnalysis {
       );
     }
 
+    // 반복이 이 사람 도구일 때만 루틴으로 권한다. 모르겠으면 가벼운 쪽부터 —
+    // 루틴이 맞는 사람이면 오늘 한 번 해본 뒤에 스스로 반복으로 만든다.
+    if (prefersRoutine == true) {
+      return LifeRoutinePlan(
+        verdict: LifeVerdict.add,
+        reason: '담당 영역에 굴러가는 루틴이 없고, 비어 있으면서 실제로 뭔가 하는 시간대가 있음. 반복을 원한다고 답한 사람임.',
+        openWindows: windows,
+      );
+    }
     return LifeRoutinePlan(
-      verdict: LifeVerdict.add,
-      reason: '담당 영역에 굴러가는 루틴이 없고, 비어 있으면서 실제로 뭔가 하는 시간대가 있음.',
+      verdict: LifeVerdict.today,
+      reason: '담당 영역에 굴러가는 루틴이 없음. 반복을 원한다고 하지 않았으므로 오늘 하루 안에서 하나만.',
       openWindows: windows,
     );
   }

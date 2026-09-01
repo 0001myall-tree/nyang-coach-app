@@ -5570,6 +5570,13 @@ $block
       schedulesRaw: prefs.getString('nyang_schedules'),
       answers: await LifePatternService.answers(coachId),
       domainHabitIds: domainIds,
+      // 반복이 이 사람 도구인지. 필요할 때만 하고 싶다고 한 사람에게 루틴을
+      // 권하면 안 지킬 약속을 하나 더 얹는 셈이라, 그때는 오늘 안에서 시각을
+      // 정해준다.
+      prefersRoutine: LifePatternService.prefersRoutineFrom(
+        coachId,
+        await LifePatternService.answers(coachId),
+      ),
     );
     if (!mounted || !plan.speaks) return false;
 

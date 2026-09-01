@@ -137,9 +137,12 @@ void main() {
     });
   });
 
-  group('자리를 옮긴다', () {
-    test('되는 요일이 따로 있으면', () {
-      // 화·목으로 잡았는데 화요일만 되고 있다.
+  group('루틴은 웬만하면 건드리지 않는다', () {
+    test('절반쯤 되고 있으면 그대로 둔다', () {
+      // 화·목으로 잡았는데 화요일만 되고 있다. 50%다.
+      //
+      // 루틴은 한 번 넣으면 거의 고정으로 두는 것이라, 이 정도로 옮기라
+      // 줄이라 하면 도와주는 게 아니라 참견이 된다.
       final plan = LifeRoutineAnalysis.analyze(
         historyRaw: history(days: 28),
         habitsRaw: jsonEncode([
@@ -149,7 +152,58 @@ void main() {
         domainHabitIds: const {'h1'},
         now: now,
       );
-      // 잡은 요일이 둘인데 되는 요일이 하나라 횟수를 내리는 쪽으로 간다.
+      expect(plan.verdict, LifeVerdict.hold);
+      expect(plan.reason, contains('건드리지 않음'));
+    });
+
+    test('반쯤 굴러가는 루틴을 둔 채 새로 얹지도 않는다', () {
+      final plan = LifeRoutineAnalysis.analyze(
+        historyRaw: history(days: 28, startHour: 10),
+        habitsRaw: jsonEncode([
+          habit('h1', '운동', days: [1, 3]),
+        ]),
+        habitLogsRaw: logs('h1', {1}),
+        domainHabitIds: const {'h1'},
+        now: now,
+      );
+      expect(plan.verdict, LifeVerdict.hold);
+    });
+
+    test('만든 지 얼마 안 된 루틴은 판정하지 않는다', () {
+      // 자리를 잡을 시간을 준 적이 없는데 안 되고 있다고 짚을 수는 없다.
+      final plan = LifeRoutineAnalysis.analyze(
+        historyRaw: history(days: 28, startHour: 10),
+        habitsRaw: jsonEncode([
+          {
+            ...habit('h1', '새 루틴'),
+            'createdAt': DateTime(
+              now.year,
+              now.month,
+              now.day - 3,
+            ).toIso8601String(),
+          },
+        ]),
+        habitLogsRaw: jsonEncode({'h1': <String, dynamic>{}}),
+        domainHabitIds: const {'h1'},
+        now: now,
+      );
+      expect(plan.verdict, LifeVerdict.hold);
+    });
+  });
+
+  group('자리를 옮긴다', () {
+    test('되는 요일이 따로 있으면', () {
+      // 평일 다섯 날로 잡았는데 화요일만 되고 있다. 20%라 확실히 안 굴러간다.
+      final plan = LifeRoutineAnalysis.analyze(
+        historyRaw: history(days: 28),
+        habitsRaw: jsonEncode([
+          habit('h1', '운동', days: [0, 1, 2, 3, 4]),
+        ]),
+        habitLogsRaw: logs('h1', {1}),
+        domainHabitIds: const {'h1'},
+        now: now,
+      );
+      // 잡은 요일이 다섯인데 되는 요일이 하나라 횟수를 내리는 쪽으로 간다.
       expect(plan.verdict, LifeVerdict.reduce);
       expect(plan.target?.name, '운동');
       expect(plan.target?.workingDays, [1]);
@@ -186,18 +240,49 @@ void main() {
   });
 
   group('하나 넣는다', () {
-    test('담당에 아무것도 없고 자리가 보이면', () {
+    test('반복을 원한다고 한 사람에게만 루틴을 권한다', () {
       final plan = LifeRoutineAnalysis.analyze(
         historyRaw: history(startHour: 10),
+        prefersRoutine: true,
         now: now,
       );
       expect(plan.verdict, LifeVerdict.add);
       expect(plan.openWindows, isNotEmpty);
     });
 
+    test('필요할 때만 하고 싶다고 하면 오늘 하루 안에서', () {
+      // 루틴은 앞으로 계속 하겠다는 약속이라, 그걸 원한다고 하지 않은 사람에게
+      // 권하면 안 지킬 것을 하나 더 떠안기는 셈이 된다.
+      final plan = LifeRoutineAnalysis.analyze(
+        historyRaw: history(startHour: 10),
+        prefersRoutine: false,
+        now: now,
+      );
+      expect(plan.verdict, LifeVerdict.today);
+    });
+
+    test('모르겠으면 가벼운 쪽부터', () {
+      final plan = LifeRoutineAnalysis.analyze(
+        historyRaw: history(startHour: 10),
+        now: now,
+      );
+      expect(plan.verdict, LifeVerdict.today);
+    });
+
+    test('오늘 갈래에는 루틴을 만들자고 하지 말라고 못박는다', () {
+      final plan = LifeRoutineAnalysis.analyze(
+        historyRaw: history(startHour: 10),
+        prefersRoutine: false,
+        now: now,
+      );
+      expect(plan.promptBlock(), contains('루틴으로 만들자고 하지 마세요'));
+      expect(plan.promptBlock(), contains('이미 하는 일에 붙이는 것'));
+    });
+
     test('자리는 근거가 많은 순서로', () {
       final plan = LifeRoutineAnalysis.analyze(
         historyRaw: history(startHour: 10),
+        prefersRoutine: true,
         now: now,
       );
       final evidences = plan.openWindows.map((w) => w.evidence).toList();
@@ -260,6 +345,7 @@ void main() {
     test('넣을 때는 자리 후보까지 준다', () {
       final plan = LifeRoutineAnalysis.analyze(
         historyRaw: history(startHour: 10),
+        prefersRoutine: true,
         now: now,
       );
       final block = plan.promptBlock();
@@ -292,6 +378,7 @@ void main() {
     test('앱이 센 값이라는 것을 밝힌다', () {
       final plan = LifeRoutineAnalysis.analyze(
         historyRaw: history(startHour: 10),
+        prefersRoutine: true,
         now: now,
       );
       expect(plan.promptBlock(), contains('여기 없는 것은 세지 않았'));

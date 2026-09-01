@@ -348,6 +348,41 @@ class LifePatternService {
     return remaining.isEmpty ? null : remaining.first;
   }
 
+  /// 이 사람에게 루틴이 도구인지.
+  ///
+  /// 루틴은 앞으로 계속 하겠다는 약속이라 무겁다. 필요할 때만 하고 싶다고 한
+  /// 사람에게 반복 약속을 권하면, 권한 쪽은 도와준 셈이지만 받는 쪽은 안 지킬
+  /// 것을 하나 더 떠안는다.
+  ///
+  /// 모르겠으면 null. 그때는 가벼운 쪽(오늘 하나)부터 간다 — 루틴이 맞는
+  /// 사람이라면 오늘 한 번 해본 뒤에 스스로 반복으로 만든다.
+  static bool? prefersRoutineFrom(String coachId, Map<String, dynamic> saved) {
+    switch (coachId) {
+      case 'halmae':
+        return switch (saved['style']) {
+          // 몰아서 하는 것도 반복이다. 주말 한 번짜리 루틴이 그 사람 모양이다.
+          '조금씩 자주 하고 싶어' || '몰아서 하고 싶어' => true,
+          '필요할 때 가끔 하고 싶어' => false,
+          _ => null,
+        };
+      case 'boyfriend':
+        return switch (saved['style']) {
+          '아침이나 저녁 시간을 정해서' || '특정 요일에 몰아서' => true,
+          '필요할 때 그때그때' => false,
+          _ => null,
+        };
+      case 'bro':
+        // 운동은 방식을 따로 묻지 않는다. 이미 뭔가 하고 있으면 반복이 도구인
+        // 사람이고, 아무것도 안 하는 사람에게 주 몇 회부터 권할 일은 아니다.
+        return switch (saved['doing']) {
+          null || '따로 안 해' => null,
+          _ => true,
+        };
+      default:
+        return null;
+    }
+  }
+
   // ── 담당으로 가려둔 루틴 ──────────────────────
 
   /// 이 코치 담당으로 가려둔 루틴들. 아직 안 갈랐으면 빈 집합.
