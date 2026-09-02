@@ -5651,6 +5651,18 @@ $block
     boyfriend: '하나만 물어봐도 돼?',
   );
 
+  /// 여럿 골라도 된다는 말. 코치 목소리로 한다.
+  ///
+  /// 앱 목소리로 "해당하는 걸 다 골라도 돼요"라고 적혀 있었다. 바로 위에서
+  /// 할미가 "하나만 물어보자꾸나"라고 반말로 물어놓고 그 밑에 존댓말이 붙어,
+  /// 말하는 사람이 둘인 것처럼 보였다.
+  String _lifeMultiHint() => _voice(
+    cat: '해당하는 거 다 골라도 된다냥.',
+    bro: '해당하는 거 다 골라도 된다.',
+    halmae: '해당하는 거 다 골라도 된다.',
+    boyfriend: '해당하는 거 다 골라도 돼.',
+  );
+
   String _lifeReviewOpening(String summary) {
     if (summary.isEmpty) {
       return _voice(
@@ -16668,13 +16680,10 @@ ${Prompts.outputRulesTail}${Prompts.screenMap}$plannerActionSection$coachOfferTa
       return _buildChoiceBubbleCard(msg, _handleCapacityAskChoice);
     }
     if (msg.kind == _lifeAskKind && msg.choices.isNotEmpty) {
-      return _buildChoiceBubbleCard(
-        msg,
-        (label) => _handleLifeAskChoice(msg, label),
-      );
+      return _buildLifeChoiceCard(msg, multi: false);
     }
     if (msg.kind == _lifeAskMultiKind && msg.choices.isNotEmpty) {
-      return _buildLifeMultiChoiceCard(msg);
+      return _buildLifeChoiceCard(msg, multi: true);
     }
     if (msg.kind == _lifeReviewKind && msg.choices.isNotEmpty) {
       return _buildChoiceBubbleCard(msg, _handleLifeReviewChoice);
@@ -17577,16 +17586,22 @@ ${Prompts.outputRulesTail}${Prompts.screenMap}$plannerActionSection$coachOfferTa
     _injectAiMessage(_greetingBuilder.buildBlockerReply());
   }
 
-  /// 무엇을 챙기고 싶은지 고르는 카드. 여러 개를 고른다.
+  /// 생활 패턴 설문 카드. 하나만 고르는 문항과 여럿 고르는 문항이 같이 쓴다.
   ///
-  /// 여기서 고른 것이 곧 이 코치가 다룰 범위다. 하나만 고르게 하면 나머지는
-  /// 없는 셈이 되는데, 챙기고 싶은 것이 하나뿐인 사람은 드물다.
+  /// 나눠져 있었다. 하나만 고르는 문항은 앱 공용 선택 카드(말풍선 + 프로필
+  /// 사진)를 썼고, 여럿 고르는 문항만 "고르고 → 확인" 두 단계가 필요해서
+  /// 여기 따로 있었다. 그래서 같은 설문을 이어서 받는데 두 번째 질문에서
+  /// 생김새가 바뀌었다.
   ///
-  /// 개수를 막지 않는다. 되는 날의 조건과 달리 이건 문턱이 아니라 범위라,
-  /// 여러 개를 골라도 못 하는 이유가 늘지 않는다.
-  Widget _buildLifeMultiChoiceCard(ChatMessage msg) {
+  /// 두 단계가 필요한 것은 여럿 고르는 쪽뿐이라, 하나만 고르는 문항은 확인
+  /// 버튼 없이 누르는 즉시 넘어간다. 눌러서 답이 되는 동작은 그대로다.
+  ///
+  /// 여럿 고르는 문항은 개수를 막지 않는다. 무엇을 챙기고 싶은지는 문턱이
+  /// 아니라 범위라, 여러 개를 골라도 못 하는 이유가 늘지 않는다. 여기서 고른
+  /// 것이 곧 이 코치가 다룰 범위다.
+  Widget _buildLifeChoiceCard(ChatMessage msg, {required bool multi}) {
     final accent = _coach.accentColor;
-    final picked = _pickedLifeOptions;
+    final picked = multi ? _pickedLifeOptions : const <String>{};
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 12, left: 44, right: 8),
@@ -17605,22 +17620,28 @@ ${Prompts.outputRulesTail}${Prompts.screenMap}$plannerActionSection$coachOfferTa
             ),
             const SizedBox(height: 10),
           ],
-          Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: Text(
-              '해당하는 걸 다 골라도 돼요.',
-              style: GoogleFonts.notoSansKr(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: AppDesignTokens.textSecondary,
+          // 여럿 고를 수 있다는 말은 여럿 고르는 문항에만 붙인다.
+          if (multi)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(
+                _lifeMultiHint(),
+                style: GoogleFonts.notoSansKr(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: AppDesignTokens.textSecondary,
+                ),
               ),
             ),
-          ),
           for (final label in msg.choices)
             Padding(
               padding: const EdgeInsets.only(bottom: 6),
               child: GestureDetector(
-                onTap: _isLoading ? null : () => _toggleLifeOption(label),
+                onTap: _isLoading
+                    ? null
+                    : () => multi
+                          ? _toggleLifeOption(label)
+                          : _handleLifeAskChoice(msg, label),
                 child: Container(
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(
