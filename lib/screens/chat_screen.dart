@@ -61,6 +61,7 @@ import 'package:nyang_coach/services/execution_resistance_service.dart';
 import 'package:nyang_coach/services/focus_fatigue_service.dart';
 import 'package:nyang_coach/services/goal_push_service.dart';
 import 'package:nyang_coach/services/resistance_intervention_service.dart';
+import 'package:nyang_coach/services/screen_open_target.dart';
 import 'package:nyang_coach/services/start_pattern_service.dart';
 import 'package:nyang_coach/services/time_expression.dart';
 import 'package:nyang_coach/services/today_goal_task_intent.dart';
@@ -1005,6 +1006,10 @@ class _ParsedReply {
   final String? habitToConfirm;
   final String? goalToConfirm;
 
+  /// 코치가 열어달라고 짚은 화면. 여는 것은 되돌릴 것이 없어서 확인 카드가
+  /// 없다 — 잘못 열려도 사용자가 돌아오면 그만이다.
+  final String? openLocation;
+
   _ParsedReply({
     required this.text,
     required this.chips,
@@ -1020,6 +1025,7 @@ class _ParsedReply {
     this.doneTargets = const [],
     this.habitToConfirm,
     this.goalToConfirm,
+    this.openLocation,
     List<_SuggestedTask>? suggestedTasks,
   }) : suggestedTasks = suggestedTasks ?? [];
 }
@@ -1203,18 +1209,6 @@ class ChatScreen extends StatefulWidget {
 
   @override
   State<ChatScreen> createState() => _ChatScreenState();
-}
-
-class _FeatureLocationReply {
-  final String message;
-  final String location;
-  final bool shouldNavigate;
-
-  const _FeatureLocationReply(
-    this.message,
-    this.location, {
-    this.shouldNavigate = true,
-  });
 }
 
 // 외부(TasksScreen 등)에서 ChatScreen에 AI 메시지를 주입하기 위한 컨트롤러
@@ -7966,6 +7960,11 @@ Rules:
     String? goalToConfirm;
     String text = raw;
 
+    // 화면 열기는 다른 태그보다 먼저 읽는다. 이름을 못 알아들어 안 열더라도
+    // 대괄호는 지워야 한다 — 사용자에게 보이는 건 답변 본문뿐이다.
+    final openLocation = ScreenOpenTarget.read(text);
+    text = ScreenOpenTarget.strip(text);
+
     // ── CORE_REC 태그를 읽기 좋은 텍스트로 변환 ──
     final coreRecMatches = coreRecRegex.allMatches(text).toList();
     if (coreRecMatches.isNotEmpty) {
@@ -8123,6 +8122,7 @@ Rules:
       goalToConfirm: goalToConfirm,
       plannerAction: plannerAction,
       doneTargets: PlannerAction.doneTargets(raw),
+      openLocation: openLocation,
     );
   }
 
@@ -11796,45 +11796,16 @@ Rules:
       return;
     }
 
-    final navigationReply = _featureLocationReply(trimmed);
-    if (navigationReply != null) {
-      final navMessage = await UserTitleService.applyForCoach(
-        navigationReply.message,
-        _coach.id,
-      );
-      setState(() {
-        _messages.add(
-          ChatMessage(text: trimmed, isUser: true, time: DateTime.now()),
-        );
-        _messages.add(
-          ChatMessage(
-            text: navMessage,
-            isUser: false,
-            time: DateTime.now(),
-            kind: navigationReply.location == 'picker'
-                ? 'feature_location_picker'
-                : null,
-          ),
-        );
-        _suggestedTasks = [];
-        _dynamicChips = [];
-        _suppressDefaultChips = navigationReply.location == 'picker';
-      });
-      _scrollToBottom();
-      await _saveHistory();
-      await AnalyticsService.logConversationMessage(
-        coachId: widget.coachId,
-        usedApi: false,
-      );
-      if (navigationReply.location == 'picker' ||
-          !navigationReply.shouldNavigate) {
-        return;
-      }
-      await Future.delayed(const Duration(milliseconds: 260));
-      widget.onOpenFeatureLocation?.call(navigationReply.location);
-      return;
-    }
-
+    // 어디 있냐고 묻는 말을 여기서 가로채던 자리다.
+    //
+    // 키워드로 골랐다. '어디'와 '할일'이 같이 들어 있으면 화면을 열었고, 뜻을
+    // 못 보니 "할 일이 너무 많아서 어디서부터 손대야 할지 모르겠어"에도 탭이
+    // 열렸다. 그걸 막으려고 30자가 넘으면 아예 안 받게 했더니, 이번에는 길게
+    // 물어본 사람이 안내를 못 받고 모델의 짐작을 들었다. 짐작의 근거가 될
+    // 화면 지도도 프롬프트에 없어서, 완료를 캘린더에서 하라는 답이 나갔다.
+    //
+    // 이제 코치가 [OPEN: 화면]으로 정한다. 앱에는 화면 지도가 실려 있고,
+    // 여는 일은 답변을 받은 자리에서 한다.
     if (canInputTasks && _isDeletionCommand(trimmed)) {
       final parsed = _parseDeletionCommand(trimmed);
       setState(() {
@@ -12257,6 +12228,20 @@ Rules:
       if (_coach.isMaster && parsed.startCountdown && mounted) {
         _openCountdownFocusMode();
       }
+      // 코치가 열어달라고 한 화면으로 데려간다.
+      //
+      // 확인 카드가 떠 있으면 열지 않는다. 카드는 사용자가 눌러야 넘어가는
+      // 것인데 그 위로 화면을 덮으면, 물어본 적도 없이 안 하기로 한 것이 된다.
+      final hasConfirmCard =
+          parsed.plannerAction != null ||
+          parsed.doneTargets.isNotEmpty ||
+          suggestedTasks.isNotEmpty ||
+          (parsed.scheduleToConfirm ?? '').isNotEmpty ||
+          (parsed.habitToConfirm ?? '').isNotEmpty ||
+          (parsed.goalToConfirm ?? '').isNotEmpty;
+      if (mounted && parsed.openLocation != null && !hasConfirmCard) {
+        widget.onOpenFeatureLocation?.call(parsed.openLocation!);
+      }
       await AnalyticsService.logConversationMessage(
         coachId: widget.coachId,
         usedApi: true,
@@ -12365,209 +12350,6 @@ Rules:
         text.contains('가능');
   }
 
-  _FeatureLocationReply? _featureLocationReply(String rawText) {
-    final text = rawText.trim().toLowerCase().replaceAll(' ', '');
-    if (text.isEmpty) return null;
-    // 어디 있냐고 묻는 짧은 말만 받는다. 길이를 안 보면 "할 일이 너무 많아서
-    // 어디서부터 손대야 할지 모르겠어"처럼 사연을 털어놓는 문장에도 '어디'와
-    // '할일'이 함께 들어 있어서, 대답 대신 탭이 열린다.
-    if (!_isShortDirectRequest(text, maxChars: 30)) return null;
-    if (_isDeletionCommand(rawText)) return null;
-    if (TodayGoalTaskIntent.isTodayTaskGoalExpression(rawText)) return null;
-
-    final mentionsFeatureSurface =
-        text.contains('탭') ||
-        text.contains('텝') ||
-        text.contains('창') ||
-        text.contains('화면');
-    final mentionsFeature =
-        text.contains('장기비전') ||
-        text.contains('비전') ||
-        text.contains('마일스톤') ||
-        text.contains('목표') ||
-        text.contains('오늘할일') ||
-        text.contains('오늘의할일') ||
-        text.contains('할일') ||
-        text.contains('태스크') ||
-        text.contains('설정') ||
-        text.contains('알림') ||
-        text.contains('모닝콜') ||
-        text.contains('위젯') ||
-        text.contains('채팅배경') ||
-        text.contains('비서학습') ||
-        text.contains('일정') ||
-        text.contains('캘린더') ||
-        text.contains('달력') ||
-        text.contains('습관') ||
-        text.contains('루틴') ||
-        text.contains('기록') ||
-        text.contains('리포트') ||
-        text.contains('통계');
-    final asksTaskCheck = _asksTaskCheckGuide(text);
-    final asksTodoReset = _asksTodoResetGuide(text);
-    final asksRepeatScheduleGuide = _asksRepeatScheduleGuide(text);
-
-    final asksLocation =
-        text.contains('어디') ||
-        text.contains('어떻게들어') ||
-        text.contains('어떻게가') ||
-        text.contains('찾아') ||
-        text.contains('보여줘') ||
-        text.contains('열어줘') ||
-        text.contains('가줘') ||
-        (mentionsFeatureSurface && mentionsFeature) ||
-        asksTaskCheck ||
-        asksTodoReset ||
-        asksRepeatScheduleGuide;
-    if (!asksLocation) return null;
-
-    final asksGenericLocation =
-        text.contains('어디서보') ||
-        text.contains('어디서봐') ||
-        text.contains('어디인지') ||
-        text.contains('어디에있는지') ||
-        text.contains('어딨') ||
-        text.contains('모르겠');
-
-    if (text.contains('장기비전') ||
-        text.contains('비전창') ||
-        text.contains('비전어디') ||
-        text.contains('마일스톤')) {
-      return _FeatureLocationReply(_featureLocationMessage('vision'), 'vision');
-    }
-
-    if (text.contains('목표')) {
-      return _FeatureLocationReply(_featureLocationMessage('goals'), 'goals');
-    }
-
-    if (asksTaskCheck) {
-      return _FeatureLocationReply(
-        _featureLocationMessage('task_check'),
-        'today',
-        shouldNavigate: false,
-      );
-    }
-
-    if (asksTodoReset) {
-      return _FeatureLocationReply(
-        _featureLocationMessage('todo_reset'),
-        'today',
-        shouldNavigate: false,
-      );
-    }
-
-    if (text.contains('설정') ||
-        text.contains('알림') ||
-        text.contains('모닝콜') ||
-        text.contains('일정알람') ||
-        text.contains('캘린더알람') ||
-        text.contains('위젯') ||
-        text.contains('채팅배경') ||
-        text.contains('배경') ||
-        text.contains('오늘할일초기화') ||
-        text.contains('오늘의할일초기화') ||
-        text.contains('할일초기화') ||
-        text.contains('오늘할일리셋') ||
-        text.contains('오늘의할일리셋') ||
-        text.contains('할일리셋') ||
-        text.contains('초기화시간') ||
-        text.contains('리셋시간') ||
-        text.contains('비서학습') ||
-        text.contains('학습설정') ||
-        text.contains('호칭')) {
-      return _FeatureLocationReply(
-        _featureLocationMessage('settings'),
-        'settings',
-      );
-    }
-
-    if (asksRepeatScheduleGuide) {
-      final repeatLocation =
-          text.contains('삭제') ||
-              text.contains('지우') ||
-              text.contains('없애') ||
-              text.contains('취소')
-          ? 'repeat_schedule_delete'
-          : (text.contains('수정') ||
-                text.contains('변경') ||
-                text.contains('바꾸') ||
-                text.contains('편집') ||
-                text.contains('고치'))
-          ? 'repeat_schedule_edit'
-          : 'repeat_schedule';
-      return _FeatureLocationReply(
-        _featureLocationMessage(repeatLocation),
-        'schedule',
-      );
-    }
-
-    if (text.contains('오늘할일') ||
-        text.contains('오늘의할일') ||
-        text.contains('할일') ||
-        text.contains('태스크')) {
-      return _FeatureLocationReply(_featureLocationMessage('today'), 'today');
-    }
-
-    final asksDatedPlan =
-        text.contains('내일계획') ||
-        text.contains('내일플랜') ||
-        text.contains('내일뭐') ||
-        text.contains('내일할거') ||
-        text.contains('내일할일') ||
-        (text.contains('계획') &&
-            (text.contains('내일') ||
-                text.contains('날짜') ||
-                text.contains('이번주') ||
-                text.contains('다음주')));
-
-    if (text.contains('일정') ||
-        text.contains('캘린더') ||
-        text.contains('달력') ||
-        asksDatedPlan) {
-      return _FeatureLocationReply(
-        _featureLocationMessage('schedule'),
-        'schedule',
-      );
-    }
-
-    if (text.contains('습관') || text.contains('루틴')) {
-      return _FeatureLocationReply(_featureLocationMessage('habit'), 'habit');
-    }
-
-    if (text.contains('기록') || text.contains('리포트') || text.contains('통계')) {
-      return _FeatureLocationReply(
-        _featureLocationMessage('records'),
-        'records',
-      );
-    }
-
-    if (asksGenericLocation) {
-      return _FeatureLocationReply(_featureLocationMessage('picker'), 'picker');
-    }
-
-    return null;
-  }
-
-  /// 할 일을 완료로 만드는 법을 **묻는** 말.
-  ///
-  /// 해달라는 말은 여기 오면 안 된다. 이제 코치가 [DONE] 태그로 확인 카드를
-  /// 띄워주기 때문에, "완료 처리해줘"가 여기 걸리면 눌러서 끝날 일이 "할 일 탭에서
-  /// 미세요"라는 안내로 바뀐다. 그래서 방법을 묻는 말투만 남기고 '표시·처리·누르'는
-  /// 뺐다 — 그 세 개는 부탁하는 문장에 더 자주 들어간다.
-  ///
-  /// 미는 동작은 눌러서는 안 되는
-  /// 것이라, 처음 쓰는 사람이 스스로 알아내기 어렵다.
-  bool _asksTaskCheckGuide(String normalized) {
-    if (!RegExp(r'완료|체크|다했|끝냈|끝난').hasMatch(normalized)) return false;
-    return RegExp(r'어떻게|어디서|어디에|방법|하는법|하려면').hasMatch(normalized);
-  }
-
-  String _featureLocationMessage(String location) {
-    return LocalReplyTexts.featureLocationMessage(
-      coachId: _coach.id,
-      location: location,
-    );
-  }
 
   bool _isSimpleScheduleOverviewRequest(String input) {
     final compact = input.trim().toLowerCase().replaceAll(
@@ -14635,7 +14417,7 @@ $habitAutomationSection
 
 ${Prompts.outputRulesHead}
 $timerOutputRule
-${Prompts.outputRulesTail}$plannerActionSection$coachOfferTaskRule$halmaeHint$resistanceTurnDirective$contextRequestRule$masterStyleRule''';
+${Prompts.outputRulesTail}${Prompts.screenMap}$plannerActionSection$coachOfferTaskRule$halmaeHint$resistanceTurnDirective$contextRequestRule$masterStyleRule''';
 
       // 마스터 코치는 하드코딩된 "대표님"을 사용자가 지정한 호칭으로 치환한다.
       // baseSystemPrompt 뒤에 이어붙인 모든 조각까지 함께 반영된다.
