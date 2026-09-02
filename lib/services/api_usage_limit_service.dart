@@ -69,9 +69,16 @@ class ApiUsageLimitService {
   static const int masterPlanDailyTokenLimit = 400000;
   static const int masterDailyOrganizeLimit = 7;
 
-  /// 플랜을 안 쓰는 사람도 냥냥코치와는 대화할 수 있다. 프렌즈의 4분의 1이니
-  /// 하루 12턴쯤. 써보기엔 넉넉하고 하루 종일 붙잡기엔 모자란 선이다.
-  static const int freePlanDailyTokenLimit = friendsPlanDailyTokenLimit ~/ 4;
+  /// 플랜을 안 쓰는 사람도 냥냥코치와는 대화할 수 있다.
+  ///
+  /// 5만이었다. 프렌즈의 4분의 1이라 하루 12턴쯤이었는데, 이 통에서 빠져나가는
+  /// 것이 대화만이 아니다 — 코치가 먼저 거는 인사, 생활 패턴 설문 세 문항,
+  /// 등록 확인 카드가 전부 여기서 나간다. 실제로 주고받는 말은 그보다 적었다.
+  ///
+  /// 무료 구간을 하루로 줄이면서 그 하루를 넉넉하게 바꿨다. 날수로 아끼는 것과
+  /// 한도로 아끼는 것을 둘 다 하면, 맛보기로 쓰기에도 모자란 하루가 된다.
+  /// 8만이면 한 사람 하루 최대가 66원이다.
+  static const int freePlanDailyTokenLimit = 80000;
 
   /// 무료 대화는 매일 주는 게 아니라 계정당 하루뿐이다. 며칠째인지 세는 일은
   /// [FreeAccessService]가 맡고, 여기서는 그날 하루의 토큰 상한만 본다.

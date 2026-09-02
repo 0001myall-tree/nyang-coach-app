@@ -21,13 +21,21 @@ class FreeAccessService {
   static const int defaultChatDays = 1;
 
   /// 일정·루틴·목표를 적을 수 있는 날수.
-  static const int defaultInputDays = 2;
+  ///
+  /// 대화와 같은 날수로 맞춘다. 2였을 때는 둘째 날에 코치가 사라지고 할 일
+  /// 적기만 남는 구간이 생겼는데, 코치 빠진 이 앱은 그냥 할 일 목록이라
+  /// 그 하루가 "별거 없네"로 읽혔다. 무료 구간이 이 앱의 제일 밋밋한 모습으로
+  /// 끝나는 셈이었다.
+  static const int defaultInputDays = 1;
 
   /// 이 두 날수는 앱을 다시 올리지 않고도 바꿀 수 있어야 한다. 심사 기간에만
   /// 넉넉히 열어두는 식으로 쓰게 되기 때문이다. 그래서 콘솔에서 고칠 수 있는
   /// 문서 하나(config/free_access)에서 읽고, 못 읽으면 위 기본값으로 돌아간다.
   ///
-  /// 문서 모양: { "chat_days": 1, "input_days": 2 }
+  /// 0을 넣으면 그 쪽이 통째로 닫힌다. 비용이 튀었을 때 심사 없이 잠글 수
+  /// 있는 자리가 여기다.
+  ///
+  /// 문서 모양: { "chat_days": 1, "input_days": 1 }
   static const String configDocPath = 'config/free_access';
 
   /// 시작한 날. 기기에 두면 지우고 다시 깔아서 계속 쓸 수 있어 클라우드에 적는다.
