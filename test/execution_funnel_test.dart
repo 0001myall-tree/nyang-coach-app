@@ -345,4 +345,154 @@ void main() {
       expect(block, contains('여기 없는 것은 세지 않았음'));
     });
   });
+
+  group('앞뒤 견주기', () {
+    /// 앞 절반(4~7일 전)과 뒤 절반(1~3일 전)에 각각 다른 목록을 깐다.
+    String halves({
+      required List<Map<String, dynamic>> earlier,
+      required List<Map<String, dynamic>> recent,
+    }) => historyByDay({
+      for (var back = 1; back <= 4; back++) back: recent,
+      for (var back = 5; back <= 7; back++) back: earlier,
+    });
+
+    test('해내는 양이 늘었는데 목록이 더 크게 늘면 앞서간 것으로 본다', () {
+      // 이 사람은 완료가 1개에서 3개로 늘었다. 그런데 계획이 2개에서 9개로
+      // 늘어서 완료율은 50%에서 33%로 떨어진다. 완료율만 보면 나빠진 사람이다.
+      final funnel = ExecutionFunnel.from(
+        halves(
+          earlier: [task(done: true, started: true), task(started: true)],
+          recent: [
+            for (var i = 0; i < 3; i++) task(done: true, started: true),
+            for (var i = 0; i < 6; i++) task(started: true),
+          ],
+        ),
+        now: now,
+      );
+      expect(funnel.trend, FunnelTrend.outpaced);
+      expect(funnel.promptBlock(), contains('전보다 더 해내고 있습니다'));
+      expect(funnel.promptBlock(), contains('못 끝낸 것을 짚지 말고'));
+    });
+
+    test('늘릴수록 덜 해내면 과부하다', () {
+      // 위와 완료율 방향은 같은데 완료 개수가 줄었다. 할 말은 정반대다.
+      final funnel = ExecutionFunnel.from(
+        halves(
+          earlier: [
+            for (var i = 0; i < 3; i++) task(done: true, started: true),
+          ],
+          recent: [
+            task(done: true, started: true),
+            for (var i = 0; i < 8; i++) task(started: true),
+          ],
+        ),
+        now: now,
+      );
+      expect(funnel.trend, FunnelTrend.overloaded);
+    });
+
+    test('목록은 그대로인데 더 해내면 그냥 좋아지는 중', () {
+      final funnel = ExecutionFunnel.from(
+        halves(
+          earlier: [
+            task(done: true, started: true),
+            task(started: true),
+            task(started: true),
+          ],
+          recent: [
+            for (var i = 0; i < 3; i++) task(done: true, started: true),
+          ],
+        ),
+        now: now,
+      );
+      expect(funnel.trend, FunnelTrend.growing);
+    });
+
+    test('둘 다 줄면 힘이 빠지는 중', () {
+      final funnel = ExecutionFunnel.from(
+        halves(
+          earlier: [
+            for (var i = 0; i < 4; i++) task(done: true, started: true),
+          ],
+          recent: [task(done: true, started: true)],
+        ),
+        now: now,
+      );
+      expect(funnel.trend, FunnelTrend.fading);
+    });
+
+    test('조금 달라진 것은 달라졌다고 하지 않는다', () {
+      final funnel = ExecutionFunnel.from(
+        history([task(done: true, started: true), task(started: true)]),
+        now: now,
+      );
+      expect(funnel.trend, FunnelTrend.steady);
+      expect(funnel.promptBlock(), isNot(contains('추세')));
+    });
+
+    test('견줄 만큼 없으면 아무 말도 안 한다', () {
+      final funnel = ExecutionFunnel.from(
+        history([task(done: true, started: true)], days: 3),
+        now: now,
+      );
+      expect(funnel.trend, FunnelTrend.unknown);
+      expect(funnel.promptBlock(), isNot(contains('추세')));
+    });
+
+    test('안 적은 날도 추세에는 센다', () {
+      // 목록이 있던 날만 세면, 뜸해진 사람이 "남은 날엔 잘하네"로 보인다.
+      final funnel = ExecutionFunnel.from(
+        historyByDay({
+          for (var back = 5; back <= 7; back++)
+            back: [for (var i = 0; i < 3; i++) task(done: true, started: true)],
+          1: [task(done: true, started: true)],
+        }),
+        now: now,
+      );
+      expect(funnel.recentDays, 4);
+      expect(funnel.trend, FunnelTrend.fading);
+    });
+  });
+
+  group('추세만 떼어내기', () {
+    String halves({
+      required List<Map<String, dynamic>> earlier,
+      required List<Map<String, dynamic>> recent,
+    }) => historyByDay({
+      for (var back = 1; back <= 4; back++) back: recent,
+      for (var back = 5; back <= 7; back++) back: earlier,
+    });
+
+    test('단계 비교는 빼고 추세만 준다', () {
+      // 실행 회고형이 받는 조각이다. 세 축까지 주면 무슨 회고든 유형
+      // 이야기가 되어버린다.
+      final block = ExecutionFunnel.from(
+        halves(
+          earlier: [task(done: true, started: true), task(started: true)],
+          recent: [
+            for (var i = 0; i < 3; i++) task(done: true, started: true),
+            for (var i = 0; i < 6; i++) task(started: true),
+          ],
+        ),
+        now: now,
+      ).trendBlock();
+
+      expect(block, contains('추세'));
+      expect(block, contains('전보다 더 해내고 있습니다'));
+      expect(block, isNot(contains('제일 많이 새는 곳')));
+      expect(block, isNot(contains('시작  ')));
+    });
+
+    test('달라진 것이 없으면 아무것도 안 준다', () {
+      final block = ExecutionFunnel.from(
+        history([task(done: true, started: true), task(started: true)]),
+        now: now,
+      ).trendBlock();
+      expect(block, isEmpty);
+    });
+
+    test('셀 것이 모자라면 아무것도 안 준다', () {
+      expect(ExecutionFunnel.from(null, now: now).trendBlock(), isEmpty);
+    });
+  });
 }

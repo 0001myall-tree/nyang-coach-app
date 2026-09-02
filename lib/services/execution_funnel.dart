@@ -40,6 +40,37 @@ enum FunnelLeak {
   none,
 }
 
+/// 최근 절반이 그 앞 절반보다 어떻게 달라졌는지.
+///
+/// 단계 비교는 이레를 한 덩어리로 본다. 그래서 사흘 전보다 나아졌는지
+/// 나빠졌는지가 평균에 뭉개진다 — 코치가 매일 같은 판정을 들고 나오는
+/// 이유이기도 하다.
+///
+/// 개수로 본다. 완료율로 보면 **해내는 양이 늘었는데 목록이 더 크게 늘어난
+/// 사람**과 **늘릴수록 덜 해내는 사람**이 똑같이 "완료율 떨어짐"으로 보인다.
+/// 앞 사람에게 할 말은 "잘하고 있는데 목록이 앞서갔다"이고 뒤 사람에게 할
+/// 말은 "양이 감당이 안 된다"라, 정반대다. 문턱 하나로 앞뒤 다른 두 사람을
+/// 같은 칸에 넣던 것과 같은 실수를 비율에서 또 하게 된다.
+enum FunnelTrend {
+  /// 가를 만큼 쌓이지 않았다.
+  unknown,
+
+  /// 해내는 양이 늘었다. 계획도 늘었지만 그만큼은 아니다.
+  growing,
+
+  /// 해내는 양이 늘었는데 계획이 더 크게 늘었다. 완료율만 보면 나빠 보인다.
+  outpaced,
+
+  /// 계획은 늘리는데 해내는 양이 줄었다.
+  overloaded,
+
+  /// 해내는 양이 줄었고 계획도 줄었다.
+  fading,
+
+  /// 눈에 띄게 달라진 것이 없다.
+  steady,
+}
+
 class ExecutionFunnel {
   const ExecutionFunnel({
     required this.evaluatedDays,
@@ -56,6 +87,12 @@ class ExecutionFunnel {
     required this.minPlanInDay,
     this.lateNightDays = 0,
     this.startHours = const [],
+    this.recentPlanned = 0,
+    this.recentDone = 0,
+    this.earlierPlanned = 0,
+    this.earlierDone = 0,
+    this.recentDays = 0,
+    this.earlierDays = 0,
   });
 
   /// 셀 수 있었던 날. 오늘과 첫 기록 이전은 뺀다.
@@ -97,6 +134,17 @@ class ExecutionFunnel {
   /// 무언가를 시작한 시각들. 주로 언제 손대는 사람인지 여기서 나온다.
   final List<int> startHours;
 
+  /// 창을 반으로 갈라 센 값. 앞쪽이 오래된 절반, recent 쪽이 최근 절반이다.
+  ///
+  /// 개수만 들고 있는다. 비율은 여기서 다시 만들 수 있고, 무엇보다 이 축을
+  /// 만든 이유가 비율로는 안 보이는 것을 보려는 것이다.
+  final int recentPlanned;
+  final int recentDone;
+  final int earlierPlanned;
+  final int earlierDone;
+  final int recentDays;
+  final int earlierDays;
+
   /// 하루 몇 개 이상이 밤에 몰려야 벼락치기로 보는지.
   static const int crammedTaskThreshold = 3;
 
@@ -137,6 +185,22 @@ class ExecutionFunnel {
   /// 문제가 아니라 한 번에 잡는 양이 많은 것이다.
   static const double amountGap = 0.3;
 
+  /// 앞뒤를 견주려면 양쪽에 이만큼씩은 있어야 한다.
+  ///
+  /// 하루씩 견주면 그날 아팠던 것이 추세가 된다.
+  static const int minTrendDays = 2;
+
+  /// 하루 평균이 이만큼 달라져야 늘었다 줄었다고 말한다.
+  ///
+  /// 개수를 세니 0.5개 차이도 숫자로는 변화지만, 사람에게는 아무 일도 안
+  /// 일어난 것이다. 이 선이 없으면 매주 "달라졌다"는 말이 나간다.
+  static const double trendStep = 0.5;
+
+  /// 계획이 완료보다 이만큼 더 늘어야 "목록이 앞서갔다"고 본다.
+  ///
+  /// 둘이 나란히 늘어난 것은 잘 굴러가는 모습이지 앞서간 것이 아니다.
+  static const double outpaceGap = 1.0;
+
   bool get hasEnough => evaluatedDays >= minEvaluatedDays && planned > 0;
 
   /// 시작과 완료를 갈라 말할 수 있는지.
@@ -159,6 +223,43 @@ class ExecutionFunnel {
   /// 목록이 있던 날엔 평균 몇 개를 잡는지.
   double get planPerPlannedDay =>
       daysWithPlan == 0 ? 0 : planned / daysWithPlan;
+
+  /// 하루 평균으로 고쳐 센 값. 앞뒤 날수가 다를 수 있어 개수를 그냥 못 견준다.
+  double get recentDonePerDay =>
+      recentDays == 0 ? 0 : recentDone / recentDays;
+  double get earlierDonePerDay =>
+      earlierDays == 0 ? 0 : earlierDone / earlierDays;
+  double get recentPlanPerDay =>
+      recentDays == 0 ? 0 : recentPlanned / recentDays;
+  double get earlierPlanPerDay =>
+      earlierDays == 0 ? 0 : earlierPlanned / earlierDays;
+
+  /// 최근 절반이 그 앞과 견주어 어떻게 달라졌는지.
+  ///
+  /// 완료 개수의 증감을 먼저 보고, 계획이 그보다 더 늘었는지를 나중에 본다.
+  /// 순서가 중요하다 — 계획부터 보면 "많이 적는 사람"으로 묶여서, 해내는 양이
+  /// 늘고 있다는 사실이 그 이름 뒤로 사라진다.
+  FunnelTrend get trend {
+    if (recentDays < minTrendDays || earlierDays < minTrendDays) {
+      return FunnelTrend.unknown;
+    }
+
+    final doneShift = recentDonePerDay - earlierDonePerDay;
+    final planShift = recentPlanPerDay - earlierPlanPerDay;
+
+    if (doneShift >= trendStep) {
+      // 해내는 양이 늘었다. 목록이 그보다 더 늘었으면 완료율은 떨어져 보인다.
+      return planShift - doneShift >= outpaceGap
+          ? FunnelTrend.outpaced
+          : FunnelTrend.growing;
+    }
+    if (doneShift <= -trendStep) {
+      return planShift >= trendStep
+          ? FunnelTrend.overloaded
+          : FunnelTrend.fading;
+    }
+    return FunnelTrend.steady;
+  }
 
   FunnelLeak get leak {
     if (!hasEnough) return FunnelLeak.notStarted;
@@ -201,6 +302,47 @@ class ExecutionFunnel {
     FunnelLeak.finishing: '완료 (손은 대는데 끝까지 안 감)',
     FunnelLeak.none: '없음',
   };
+
+  /// 추세를 한 줄로. 이름만 주지 않고 무엇을 뜻하는지까지 적는다.
+  ///
+  /// 특히 '앞서감'은 이름만 보면 나무랄 일처럼 읽힌다. 실제로는 해내는 양이
+  /// 늘고 있는 사람이라, 무엇이 늘었는지를 같이 적어야 코치가 혼내지 않는다.
+  static const Map<FunnelTrend, String> trendNames = {
+    FunnelTrend.unknown: '아직 앞뒤를 견줄 만큼 쌓이지 않음',
+    FunnelTrend.growing: '해내는 양이 늘고 있음',
+    FunnelTrend.outpaced:
+        '해내는 양은 늘었는데 목록이 더 크게 늘어남 (완료율만 보면 떨어져 보이지만 실제로는 나아지는 중)',
+    FunnelTrend.overloaded: '목록은 늘리는데 해내는 양은 줄고 있음',
+    FunnelTrend.fading: '해내는 양이 줄고 있음 (목록도 같이 줄어듦)',
+    FunnelTrend.steady: '눈에 띄게 달라진 것 없음',
+  };
+
+  /// 추세만 떼어낸 묶음. 달라진 것이 없으면 빈 문자열.
+  ///
+  /// 단계 비교(계획·시작·완료)는 실행 유형형 회고만 받는다. 다른 회고까지
+  /// 그 숫자를 받으면 무슨 회고든 유형 이야기가 되어버린다.
+  ///
+  /// 그런데 **더 해내고 있는지 아닌지는 어느 회고에서든 틀리면 안 되는 것**이다.
+  /// 이번 주를 되짚는 자리에서 "완료율이 떨어졌네요"가 나가면, 목록이 커진
+  /// 사람은 더 해내고도 혼난다. 그래서 이 한 조각만 따로 뗀다.
+  String trendBlock() {
+    if (!hasEnough) return '';
+    if (trend == FunnelTrend.unknown || trend == FunnelTrend.steady) return '';
+
+    final buffer = StringBuffer();
+    buffer.writeln(
+      '추세  최근 $recentDays일 하루 평균 완료 ${recentDonePerDay.toStringAsFixed(1)}개 · 계획 ${recentPlanPerDay.toStringAsFixed(1)}개 / '
+      '그 앞 $earlierDays일은 완료 ${earlierDonePerDay.toStringAsFixed(1)}개 · 계획 ${earlierPlanPerDay.toStringAsFixed(1)}개',
+    );
+    buffer.writeln('→ ${trendNames[trend]}');
+    if (trend == FunnelTrend.outpaced) {
+      buffer.writeln(
+        '*이 사람은 전보다 더 해내고 있습니다. 완료율이 떨어진 것은 못 해서가 아니라 목록이 더 빨리 늘었기 때문입니다. '
+        '못 끝낸 것을 짚지 말고, 늘어난 양을 먼저 알아본 뒤에 목록 쪽을 이야기하세요.',
+      );
+    }
+    return buffer.toString();
+  }
 
   /// 코치에게 넘길 묶음. 셀 것이 모자라면 빈 문자열.
   ///
@@ -251,6 +393,9 @@ class ExecutionFunnel {
     }
     if (aside.isNotEmpty) buffer.writeln('곁들여  ${aside.join(' / ')}');
 
+    // 추세는 새는 곳 위에 둔다. 나아지는 중인 사람에게 병목부터 들이밀면
+    // 잘하고 있다는 사실이 지적 뒤로 밀린다.
+    buffer.write(trendBlock());
     buffer.writeln('→ 제일 많이 새는 곳: ${leakNames[leak]}');
     buffer.writeln('- 위 숫자는 앱이 기록에서 센 값. 여기 없는 것은 세지 않았음.');
     return buffer.toString();
@@ -302,11 +447,29 @@ class ExecutionFunnel {
     var minPlanInDay = 0;
     var lateNightDays = 0;
     final startHours = <int>[];
+    // 창을 반으로 가른다. 홀수면 최근 쪽이 하나 더 갖는다 — 지금에 가까운
+    // 절반이 더 두꺼운 편이 낫다.
+    final recentSpan = (windowDays / 2).ceil();
+    var recentPlanned = 0;
+    var recentDone = 0;
+    var earlierPlanned = 0;
+    var earlierDone = 0;
+    var recentDays = 0;
+    var earlierDays = 0;
 
     for (var back = 1; back <= windowDays; back++) {
       final day = DateTime(at.year, at.month, at.day - back);
       if (day.isBefore(firstDay)) continue;
       evaluatedDays++;
+
+      // 추세는 목록이 없던 날도 센다. 안 적은 날을 빼면 뜸해진 사람이
+      // "남은 날엔 잘하네"로 보여서, 힘 빠지는 중인 것이 안 보인다.
+      final isRecentHalf = back <= recentSpan;
+      if (isRecentHalf) {
+        recentDays++;
+      } else {
+        earlierDays++;
+      }
 
       final record = byDate[_key(day)];
       final tasks = _asList(record?['tasks']);
@@ -347,6 +510,13 @@ class ExecutionFunnel {
       planned += dayPlanned;
       touched += dayTouched;
       done += dayDone;
+      if (isRecentHalf) {
+        recentPlanned += dayPlanned;
+        recentDone += dayDone;
+      } else {
+        earlierPlanned += dayPlanned;
+        earlierDone += dayDone;
+      }
       if (dayDirect > 0) daysDirectPlan++;
       if (dayTouched > 0) daysTouched++;
       if (dayDone > 0) daysAnyDone++;
@@ -372,6 +542,12 @@ class ExecutionFunnel {
       minPlanInDay: minPlanInDay,
       lateNightDays: lateNightDays,
       startHours: startHours,
+      recentPlanned: recentPlanned,
+      recentDone: recentDone,
+      earlierPlanned: earlierPlanned,
+      earlierDone: earlierDone,
+      recentDays: recentDays,
+      earlierDays: earlierDays,
     );
   }
 
