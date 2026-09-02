@@ -261,6 +261,35 @@ void main() {
       expect(plan.verdict, LifeVerdict.today);
     });
 
+    test('루틴이 이미 5개면 반복을 더 얹지 않는다', () {
+      // 담당이 다른 루틴이라 앞의 판정에는 하나도 안 걸리지만, 지키는 것은
+      // 영역이 아니라 사람이다. 총량으로 막는 자리는 여기 하나뿐이다.
+      final plan = LifeRoutineAnalysis.analyze(
+        historyRaw: history(startHour: 10),
+        habitsRaw: jsonEncode([
+          for (var i = 0; i < LifeRoutineAnalysis.maxRoutinesForNew; i++)
+            habit('other$i', '남의 영역 루틴 $i'),
+        ]),
+        prefersRoutine: true,
+        now: now,
+      );
+      expect(plan.verdict, LifeVerdict.today);
+      expect(plan.reason, contains('5개'));
+    });
+
+    test('루틴이 4개면 아직 권한다', () {
+      final plan = LifeRoutineAnalysis.analyze(
+        historyRaw: history(startHour: 10),
+        habitsRaw: jsonEncode([
+          for (var i = 0; i < LifeRoutineAnalysis.maxRoutinesForNew - 1; i++)
+            habit('other$i', '남의 영역 루틴 $i'),
+        ]),
+        prefersRoutine: true,
+        now: now,
+      );
+      expect(plan.verdict, LifeVerdict.add);
+    });
+
     test('모르겠으면 가벼운 쪽부터', () {
       final plan = LifeRoutineAnalysis.analyze(
         historyRaw: history(startHour: 10),

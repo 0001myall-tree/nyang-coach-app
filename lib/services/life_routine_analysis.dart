@@ -198,6 +198,16 @@ class LifeRoutineAnalysis {
   /// 넣을 자리로 내놓으려면 그 구간에서 실제로 시작한 날이 이만큼은 있어야 한다.
   static const int minWindowEvidence = 2;
 
+  /// 루틴이 이만큼 있으면 새 루틴을 권하지 않는다.
+  ///
+  /// 앞의 판정들은 전부 **담당 영역** 루틴만 센다. 그래서 햇살·할매·형이
+  /// 각자 "내 영역엔 굴러가는 게 없네"라고 보고 하나씩 얹으면, 사용자 쪽에는
+  /// 아무도 세지 않은 총량이 쌓인다. 매주 하나씩 늘어나는 그림이 여기서 난다.
+  ///
+  /// 그래서 이 문턱만 담당을 가리지 않고 **전체 루틴**을 센다. 지킬 수 있는
+  /// 반복의 개수는 영역별로 따로 있는 것이 아니라 그 사람 하루에 하나뿐이다.
+  static const int maxRoutinesForNew = 5;
+
   /// 담당이 아니라고 답한 경우들.
   ///
   /// 남이 주로 하는 집안일에 제안할 것은 없고, 챙기고 싶은 것이 없다고 한
@@ -327,9 +337,13 @@ class LifeRoutineAnalysis {
       );
     }
 
+    // 이미 지고 있는 반복이 많으면 새 반복을 얹지 않는다. 담당 영역이 비었어도
+    // 마찬가지다 — 비어 있는 것은 영역이고, 지키는 것은 사람이다.
+    final routineCount = _decodeList(habitsRaw).length;
+
     // 반복이 이 사람 도구일 때만 루틴으로 권한다. 모르겠으면 가벼운 쪽부터 —
     // 루틴이 맞는 사람이면 오늘 한 번 해본 뒤에 스스로 반복으로 만든다.
-    if (prefersRoutine == true) {
+    if (prefersRoutine == true && routineCount < maxRoutinesForNew) {
       return LifeRoutinePlan(
         verdict: LifeVerdict.add,
         reason: '담당 영역에 굴러가는 루틴이 없고, 비어 있으면서 실제로 뭔가 하는 시간대가 있음. 반복을 원한다고 답한 사람임.',
@@ -338,7 +352,9 @@ class LifeRoutineAnalysis {
     }
     return LifeRoutinePlan(
       verdict: LifeVerdict.today,
-      reason: '담당 영역에 굴러가는 루틴이 없음. 반복을 원한다고 하지 않았으므로 오늘 하루 안에서 하나만.',
+      reason: routineCount >= maxRoutinesForNew
+          ? '담당 영역에 굴러가는 루틴은 없지만 이미 지고 있는 루틴이 $routineCount개임. 반복을 더 얹지 말고 오늘 하루 안에서 하나만.'
+          : '담당 영역에 굴러가는 루틴이 없음. 반복을 원한다고 하지 않았으므로 오늘 하루 안에서 하나만.',
       openWindows: windows,
     );
   }
