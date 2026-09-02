@@ -504,7 +504,7 @@ class _MainTabScreenState extends State<MainTabScreen>
   Future<String> _savedChatBgStyle() async {
     final prefs = await SharedPreferences.getInstance();
     final savedStyle = prefs.getString('nyang_chat_bg_style');
-    return savedStyle == 'emotional' ? 'emotional' : 'simple';
+    return savedStyle == 'simple' ? 'simple' : 'emotional';
   }
 
   Future<void> _loadBgStyle() async {
@@ -610,7 +610,7 @@ class _MainTabScreenState extends State<MainTabScreen>
   void initState() {
     super.initState();
     _loadPlannerHelpSeen();
-    _chatBgStyle = widget.initialChatBgStyle ?? 'simple';
+    _chatBgStyle = widget.initialChatBgStyle ?? 'emotional';
     _chatBgStyleLoaded = widget.initialChatBgStyle != null;
     _loadBgStyle();
     _openDrawerIndex = widget.initialDrawerIndex;

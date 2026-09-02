@@ -1198,7 +1198,7 @@ class ChatScreen extends StatefulWidget {
     this.onOpenCatWidgetPrompt,
     this.handoffFromCoachId,
     this.controller,
-    this.chatBgStyle = 'simple',
+    this.chatBgStyle = 'emotional',
   });
 
   @override

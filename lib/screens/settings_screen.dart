@@ -85,7 +85,7 @@ class _SettingsScreenState extends State<SettingsScreen>
   static final Uri _privacyUrl = Uri.parse('https://joflowapp.com/privacy');
   static final Uri _refundUrl = Uri.parse('https://joflowapp.com/refund');
 
-  String _chatBgStyle = 'simple'; // 'simple' or 'emotional'
+  String _chatBgStyle = 'emotional'; // 'simple' or 'emotional'
   bool _morningCallEnabled = true;
   TimeOfDay _morningCallTime = const TimeOfDay(hour: 7, minute: 0);
   String _morningCallCoachId = 'cat';
@@ -255,7 +255,7 @@ class _SettingsScreenState extends State<SettingsScreen>
       _gapCoachingTimes = GapCoachingService.parseTimes(
         prefs.getString(GapCoachingService.timesKey),
       );
-      _chatBgStyle = prefs.getString('nyang_chat_bg_style') ?? 'simple';
+      _chatBgStyle = prefs.getString('nyang_chat_bg_style') ?? 'emotional';
       _homeWidgetStatus = _buildHomeWidgetStatus(
         nyang: prefs.getBool('widget_nyang_enabled') ?? false,
         catCharacter: prefs.getBool('widget_cat_character_enabled') ?? false,
