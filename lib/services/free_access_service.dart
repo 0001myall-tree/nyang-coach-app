@@ -16,26 +16,36 @@ class FreeAccessService {
 
   static final instance = FreeAccessService._();
 
-  /// 코치와 대화할 수 있는 날수. 1이면 처음 쓴 그날 하루.
+  /// 무료로 쓸 수 있는 날수. 1이면 처음 쓴 그날 하루.
   /// 서버 값을 못 읽을 때 쓰는 기본값이다.
-  static const int defaultChatDays = 1;
-
-  /// 일정·루틴·목표를 적을 수 있는 날수.
   ///
-  /// 대화와 같은 날수로 맞춘다. 2였을 때는 둘째 날에 코치가 사라지고 할 일
-  /// 적기만 남는 구간이 생겼는데, 코치 빠진 이 앱은 그냥 할 일 목록이라
-  /// 그 하루가 "별거 없네"로 읽혔다. 무료 구간이 이 앱의 제일 밋밋한 모습으로
-  /// 끝나는 셈이었다.
-  static const int defaultInputDays = 1;
+  /// 대화와 입력을 따로 세던 때가 있었다. 대화만 돈이 들고 할 일 적기는
+  /// 공짜라, 대화를 하루로 닫고 입력은 이틀까지 열어뒀다. 그런데 둘째 날에
+  /// 남는 것이 **코치 없는 할 일 목록**이었다. 이 앱의 제일 밋밋한 모습으로
+  /// 무료 구간이 끝나는 셈이라, 공짜로 열어둔 것이 오히려 손해였다.
+  ///
+  /// 이제 하나로 센다. 하루가 끝나면 대화도 입력도 같이 닫히고, 그 자리가
+  /// 다음 체험으로 넘어가는 자리가 된다.
+  static const int defaultFreeDays = 1;
 
-  /// 이 두 날수는 앱을 다시 올리지 않고도 바꿀 수 있어야 한다. 심사 기간에만
+  /// 마스터 체험 날수. 하루가 끝난 사람을 여기로 안내한다.
+  ///
+  /// 이 값을 앱이 세지는 않는다 — 체험 기간은 구글이 구독 상품에 걸고, 앱은
+  /// 영수증으로 받은 플랜 기간을 그대로 따른다. 여기 적어두는 것은 안내
+  /// 문구가 "이틀"이라고 말해야 하기 때문이고, 콘솔 설정을 바꾸면 이 값도
+  /// 같이 고쳐야 한다.
+  static const int masterTrialDays = 2;
+
+  /// 이 날수는 앱을 다시 올리지 않고도 바꿀 수 있어야 한다. 심사 기간에만
   /// 넉넉히 열어두는 식으로 쓰게 되기 때문이다. 그래서 콘솔에서 고칠 수 있는
   /// 문서 하나(config/free_access)에서 읽고, 못 읽으면 위 기본값으로 돌아간다.
   ///
-  /// 0을 넣으면 그 쪽이 통째로 닫힌다. 비용이 튀었을 때 심사 없이 잠글 수
+  /// 0을 넣으면 무료 구간이 통째로 닫힌다. 비용이 튀었을 때 심사 없이 잠글 수
   /// 있는 자리가 여기다.
   ///
-  /// 문서 모양: { "chat_days": 1, "input_days": 1 }
+  /// 문서 모양: { "free_days": 1 }
+  /// 둘로 나눠 세던 때의 `chat_days`도 아직 받는다 — 콘솔에 그 값이 적혀 있는
+  /// 곳이 있으면 무시하고 기본값으로 도는 편보다 낫다.
   static const String configDocPath = 'config/free_access';
 
   /// 시작한 날. 기기에 두면 지우고 다시 깔아서 계속 쓸 수 있어 클라우드에 적는다.
@@ -46,24 +56,26 @@ class FreeAccessService {
 
   String? _cachedStartedOn;
   String? _cachedForUid;
-  int? _chatDays;
-  int? _inputDays;
+  int? _freeDays;
   DateTime? _configReadAt;
 
-  Future<bool> canChat() async {
+  /// 무료 구간이 아직 열려 있는지.
+  ///
+  /// 대화와 입력이 같은 날수를 본다. 이름을 둘로 남겨둔 것은 부르는 곳이
+  /// 많아서지, 세는 값이 다르기 때문이 아니다.
+  Future<bool> _isOpen() async {
     await _loadConfig();
-    return await _dayIndex() < (_chatDays ?? defaultChatDays);
+    return await _dayIndex() < (_freeDays ?? defaultFreeDays);
   }
 
-  Future<bool> canInput() async {
-    await _loadConfig();
-    return await _dayIndex() < (_inputDays ?? defaultInputDays);
-  }
+  Future<bool> canChat() => _isOpen();
+
+  Future<bool> canInput() => _isOpen();
 
   /// 남은 날수. 안내 문구에 쓴다. 이미 끝났으면 0.
-  Future<int> remainingInputDays() async {
+  Future<int> remainingFreeDays() async {
     await _loadConfig();
-    final left = (_inputDays ?? defaultInputDays) - await _dayIndex();
+    final left = (_freeDays ?? defaultFreeDays) - await _dayIndex();
     return left < 0 ? 0 : left;
   }
 
@@ -84,8 +96,8 @@ class FreeAccessService {
       // 콘솔에서 칸을 나눠 넣어도 되고, `json` 칸 하나에 통째로 붙여넣어도 된다.
       final data = _readConfig(doc.data());
       if (data != null) {
-        _chatDays = _positiveInt(data['chat_days']);
-        _inputDays = _positiveInt(data['input_days']);
+        _freeDays =
+            _positiveInt(data['free_days']) ?? _positiveInt(data['chat_days']);
       }
       _configReadAt = DateTime.now();
     } catch (e) {
