@@ -13388,8 +13388,21 @@ Rules:
       sb.write(await LifePatternService.promptBlock(_coach.id));
     }
 
-    // 생활 정보는 마스터만 받는다. 실행 패턴은 앱이 센 값이라 지어낼 여지가
-    // 없지만, 이쪽은 사람에 대한 이야기라 다루는 무게가 다르다.
+    // 생활 형태만은 프렌즈도 받는다.
+    //
+    // 이 줄은 사람에 대한 평가가 아니라 시계 읽는 법이다. 같은 "저녁 8시"가
+    // 6시에 퇴근한 사람에게는 하루의 시작이고, 야간 근무를 앞둔 사람에게는
+    // 곧 나가야 하는 시각이다. 모르면 코치는 시계만 보고 일반론을 말한다.
+    //
+    // 나머지 둘은 마스터에 둔다. 실행이 잘 되는 날의 조건도, 시작을 막는
+    // 것도 사용자가 자기를 들여다보고 고른 답이라 다루는 무게가 다르다.
+    if (!_coach.isMaster && !resistanceTurn) {
+      final life = await LifeContextService.promptLine();
+      if (life.isNotEmpty) {
+        sb.writeln('\n[이 사람의 생활]');
+        sb.writeln(life);
+      }
+    }
     if (_coach.isMaster && !resistanceTurn) {
       // 앱이 센 것 옆에 사용자가 말해준 것을 나란히 둔다.
       //
