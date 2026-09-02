@@ -58,6 +58,21 @@ void main() {
     test('아무 자취도 없으면 빈손이다', () {
       expect(LifeContextService.kindsIn('오늘 너무 피곤해'), isEmpty);
     });
+
+    test('교대 근무를 따로 가려낸다', () {
+      // 이 갈래가 없을 때는 'job'으로 세어졌다. 그러면 코치가 낮에 일하고
+      // 저녁에 쉬는 사람으로 알고 말하는데, 야간 근무자에게는 정반대다.
+      expect(LifeContextService.kindsIn('이번 주는 야간 근무야'), contains('shift'));
+      expect(LifeContextService.kindsIn('3교대라 일정이 들쭉날쭉해'), contains('shift'));
+      expect(LifeContextService.kindsIn('오늘 당직이라 못 해'), contains('shift'));
+    });
+
+    test('야근은 교대가 아니다', () {
+      // '야근'과 '야간'은 글자가 비슷하다. '야간'만으로 세면 정시 퇴근하는
+      // 사람이 야근 한 번 했다고 교대 근무자가 된다.
+      expect(LifeContextService.kindsIn('오늘 야근이야'), {'job'});
+      expect(LifeContextService.kindsIn('야간에 뭐 좀 하려고'), isEmpty);
+    });
   });
 
   group('아니라고 하면', () {
