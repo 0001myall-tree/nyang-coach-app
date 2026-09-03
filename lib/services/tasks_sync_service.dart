@@ -73,13 +73,52 @@ class TasksSyncService {
       _pendingUploadKeys.contains(key) ||
       (_criticalPrefixesPending && _criticalKeyPrefixes.any(key.startsWith));
 
+  /// 아직 클라우드로 못 올린 로컬 변경이 남아 있는지. 앱을 껐다 켜도 살아남아야
+  /// 하므로 prefs에 적는다.
+  ///
+  /// 'nyang_' 접두어를 쓰지 않는다 — 그 접두어는 클라우드 복원이 덮어쓰는데,
+  /// 이건 이 기기에서 방금 일어난 사실이라 덮이면 안 된다.
+  static const String pendingUploadFlagKey = 'pending_cloud_upload';
+
+  /// 올리지 못한 변경이 남아 있으면 덮어쓰기 보호를 다시 세운다.
+  ///
+  /// 보호 표시는 메모리에만 있어서 앱을 다시 켜면 사라진다. 그 사이에 클라우드
+  /// 복원이 돌면, 아직 못 올린 로컬 값이 옛 클라우드 값으로 덮인다.
+  static Future<void> _restorePendingProtection(SharedPreferences prefs) async {
+    if (!(prefs.getBool(pendingUploadFlagKey) ?? false)) return;
+    _pendingUploadKeys.addAll(_criticalDataKeys);
+    _criticalPrefixesPending = true;
+  }
+
+  /// 로그인 전에 밀린 업로드가 있으면 지금 올린다.
+  ///
+  /// 클라우드에서 받아오기 전에 불러야 한다. 안 그러면 옛 클라우드 값이 아직
+  /// 안 올라간 로컬 값을 덮어쓰고, 그 대화는 양쪽에서 사라진다.
+  static Future<void> flushPendingUpload() async {
+    final prefs = await SharedPreferences.getInstance();
+    await _restorePendingProtection(prefs);
+    if (!(prefs.getBool(pendingUploadFlagKey) ?? false)) return;
+    if (FirebaseAuth.instance.currentUser == null) return;
+    await syncToCloud();
+  }
+
+  /// 업로드를 예약한다.
+  ///
+  /// 로그인 전이어도 그냥 돌아서지 않는다. 자정 정리는 로그인 복원보다 먼저
+  /// 끝나는 일이 잦은데, 여기서 아무 표시도 안 남기면 잠시 뒤 도착하는 클라우드
+  /// 복원이 방금 보관함으로 옮긴 어제 대화를 정리 이전 값으로 되돌린다.
+  /// 올리지도 못했으니 클라우드에도 없어서, 양쪽에서 사라진다.
   static void scheduleSyncToCloud({
     Duration delay = const Duration(seconds: 4),
   }) {
-    if (FirebaseAuth.instance.currentUser == null) return;
     // 업로드가 확정되기 전까지 핵심 데이터를 "로컬이 최신" 상태로 표시한다.
     _pendingUploadKeys.addAll(_criticalDataKeys);
     _criticalPrefixesPending = true;
+    unawaited(
+      SharedPreferences.getInstance().then(
+        (prefs) => prefs.setBool(pendingUploadFlagKey, true),
+      ),
+    );
     _syncTimer?.cancel();
     _syncTimer = Timer(delay, () {
       syncToCloud();
@@ -174,6 +213,7 @@ class TasksSyncService {
       // 클라우드 복원을 계속 막는 누수가 생긴다.)
       _pendingUploadKeys.clear();
       _criticalPrefixesPending = false;
+      await prefs.remove(pendingUploadFlagKey);
       debugPrint('✅ TasksSyncService: 로컬 데이터를 클라우드에 성공적으로 백업했습니다.');
     } catch (e) {
       debugPrint('❌ TasksSyncService syncToCloud 오류: $e');
@@ -218,6 +258,9 @@ class TasksSyncService {
 
     try {
       final prefs = await SharedPreferences.getInstance();
+      // 받아오기 전에, 못 올린 게 있으면 먼저 올린다. 순서가 뒤집히면 옛
+      // 클라우드 값이 아직 안 올라간 로컬 값을 덮는다.
+      await flushPendingUpload();
       await UserDataService.syncFromCloud();
       final snapshot = await FirebaseFirestore.instance
           .collection('users')
@@ -302,6 +345,9 @@ class TasksSyncService {
         .listen(
           (snapshot) async {
             final prefs = await SharedPreferences.getInstance();
+            // 앱을 다시 켠 직후라면 보호 표시가 메모리에서 사라졌을 수 있다.
+            // 아직 못 올린 게 있으면 여기서 다시 세운다.
+            await _restorePendingProtection(prefs);
             bool changed = false;
 
             for (final doc in snapshot.docs) {

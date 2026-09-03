@@ -171,6 +171,9 @@ class AuthService {
         await prefs.remove(key);
       }
       await prefs.remove(DistractionCoachQuota.unlimitedKey);
+      // 앞사람 데이터를 지웠으니 올릴 것도 없다. 표시를 남겨두면 새 계정
+      // 클라우드에 앞사람의 빈 자리를 올리려 든다.
+      await prefs.remove(TasksSyncService.pendingUploadFlagKey);
       UserDataService.clearCache();
       MemoryService().clearCache();
       FreeAccessService.instance.clearCache();

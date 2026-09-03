@@ -35,6 +35,16 @@ void main() {
       expect(TasksSyncService.isCriticalKey('nyang_habit_logs'), isTrue);
     });
 
+    test('못 올린 변경이 있다는 표시는 클라우드가 건드리지 못한다', () {
+      // 'nyang_'으로 시작하면 클라우드 복원이 이 표시까지 덮어쓴다. 그러면
+      // 로그인 전에 자정 정리가 끝난 기기가 보호를 잃고, 어제 대화가 옛
+      // 클라우드 값으로 되돌아간다.
+      expect(
+        TasksSyncService.pendingUploadFlagKey.startsWith('nyang_'),
+        isFalse,
+      );
+    });
+
     test('다시 만들 수 있는 화면 설정까지 붙잡지는 않는다', () {
       expect(TasksSyncService.isCriticalKey('nyang_chat_bg_style'), isFalse);
       expect(
