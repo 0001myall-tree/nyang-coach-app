@@ -4515,6 +4515,9 @@ ${lines.join('\n')}
   // 삭제됨). 잘 해내는 사람에게도 매번 말을 걸게 돼서, 지금은 계획 하나하나를
   // 짚지 않고 인사 자리에서 주 1회, 일반적인 이야기만 건넨다. 냥냥이와 마스터가
   // 쿨다운을 공유한다 — 방을 옮겨 다녀도 같은 주에 두 번 듣지 않는다.
+  //
+  // 프렌즈 코치(남친/할매/형)는 이 이야기를 하지 않는다. 계획을 다루는 방이
+  // 아니고, 말투도 이 문구와 맞지 않는다.
   static const _weeklyConcretizeGreetingKind = 'auto:weekly_concretize';
 
   static const String _weeklyConcretizeTimePlaceText =
@@ -4527,6 +4530,18 @@ ${lines.join('\n')}
       "미리 정해두는 거 좀 귀찮을 수도 있는데, 오늘 뭘 어디까지 할지 정해두면 막상 "
       "시작할 때는 훨씬 편해져. 목표가 구체적일수록 실제로 해낼 확률이 높다는 연구도 "
       "있고. 이미 정해뒀으면 그대로 가도 좋아!";
+
+  // 냥냥이는 같은 이야기를 냥체로 한다. 내용은 위와 같고 말투만 다르다.
+  static const String _weeklyConcretizeTimePlaceTextCat =
+      "안 하던 걸 하려면 처음엔 좀 귀찮을 수도 있다냥. 근데 시간이랑 장소를 미리 "
+      "정해두면 실제로 할 확률이 확 올라간다냥. 사람들은 이걸 '실행 의도'라고 "
+      "부른다냥. 언제 어디서 할지만 딱 정해도 실천율이 꽤 달라진다냥. 이미 "
+      "생각해뒀으면 그대로 가면 된다냥!";
+
+  static const String _weeklyConcretizeScopeTextCat =
+      "미리 정해두는 게 좀 귀찮을 수도 있다냥. 그래도 오늘 뭘 어디까지 할지 "
+      "정해두면 막상 시작할 땐 훨씬 편해진다냥. 목표가 구체적일수록 실제로 해낼 "
+      "확률이 높다는 연구도 있다냥. 이미 정해뒀으면 그대로 가도 좋다냥!";
 
   /// 마스터의 이 슬롯이 몇 번째로 발화했는지 세는 로컬 카운터.
   ///
@@ -4586,6 +4601,7 @@ ${lines.join('\n')}
     SharedPreferences prefs,
     DateTime now,
   ) async {
+    if (!_coach.isMaster && widget.coachId != 'cat') return false;
     if (now.hour >= MasterGreetingContext.quietFromHour) return false;
 
     final last = _lastAutoMessage(prefs, _weeklyConcretizeGreetingKind);
@@ -4620,9 +4636,17 @@ ${lines.join('\n')}
         }
       }
     }
-    line ??= last?.text == _weeklyConcretizeTimePlaceText
-        ? _weeklyConcretizeScopeText
-        : _weeklyConcretizeTimePlaceText;
+    // 방을 옮겨 다녀도 같은 이야기를 두 번 듣지 않게, 지난번이 어느 쪽이었는지는
+    // 말투를 가리지 않고 본다(냥냥이판과 마스터판은 같은 이야기다).
+    final isCat = widget.coachId == 'cat';
+    final saidTimePlace =
+        last?.text == _weeklyConcretizeTimePlaceText ||
+        last?.text == _weeklyConcretizeTimePlaceTextCat;
+    line ??= saidTimePlace
+        ? (isCat ? _weeklyConcretizeScopeTextCat : _weeklyConcretizeScopeText)
+        : (isCat
+              ? _weeklyConcretizeTimePlaceTextCat
+              : _weeklyConcretizeTimePlaceText);
     if (line.isEmpty || !mounted) return false;
 
     _injectAiMessage(line, kind: _weeklyConcretizeGreetingKind);
