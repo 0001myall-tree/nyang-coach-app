@@ -64,7 +64,6 @@ import 'package:nyang_coach/services/resistance_intervention_service.dart';
 import 'package:nyang_coach/services/screen_open_target.dart';
 import 'package:nyang_coach/services/start_pattern_service.dart';
 import 'package:nyang_coach/services/time_expression.dart';
-import 'package:nyang_coach/services/today_goal_task_intent.dart';
 import 'package:nyang_coach/prompts/coach_prompt.dart';
 import 'package:nyang_coach/services/prep_time_service.dart';
 import 'package:nyang_coach/services/widget_sync_service.dart';
@@ -2784,17 +2783,6 @@ class _ChatScreenState extends State<ChatScreen>
       'nyang_halbae' => "'$title' $where에 넣어두었다냥. 세부 내용은 목표 탭에서 살펴보자냥.",
       'sec_female' => "'$title' 항목을 $where에 넣어두었어요. 세부 내용은 목표 탭에서 확인해 주세요.",
       _ => "'$title' $where에 넣어뒀다냥. 목표 탭에서 확인해달라냥.",
-    };
-  }
-
-  String _todayGoalTaskRegistrationReply(String title) {
-    return switch (_coach.id) {
-      'bro' => "'$title', 오늘 할 일로 잡으면 되겠다. 추가할까?",
-      'halmae' => "'$title', 오늘 해볼 일로 잡아두면 좋겠구나. 추가하마?",
-      'boyfriend' => "'$title', 오늘 할 일로 잡아둘까?",
-      'nyang_halbae' => "'$title', 오늘 할 일로 두면 되겠다냥. 추가하겠냥?",
-      'sec_female' => "'$title' 항목을 오늘 할 일로 두면 되겠습니다. 추가할까요?",
-      _ => "'$title', 오늘 할 일로 잡으면 되겠다냥. 추가할까냥?",
     };
   }
 
@@ -11936,32 +11924,6 @@ Rules:
     // 넣는 것도 함께 닫힌다 — 코치를 못 부르는데 등록만 되게 하려면 그 사람만
     // 예전의 기계적인 이름 뽑기를 겪게 되고, 써보라고 열어둔 기간에 제일 나쁜
     // 판을 보여주는 셈이 된다.
-
-    final todayGoalTask = TodayGoalTaskIntent.parse(trimmed);
-    if (canInputTasks && todayGoalTask != null) {
-      setState(() {
-        _messages.add(
-          ChatMessage(text: trimmed, isUser: true, time: DateTime.now()),
-        );
-        _messages.add(
-          ChatMessage(
-            text: _todayGoalTaskRegistrationReply(todayGoalTask.title),
-            isUser: false,
-            time: DateTime.now(),
-          ),
-        );
-        _suggestedTasks = [_SuggestedTask(text: todayGoalTask.title)];
-        _dynamicChips = [];
-        _suppressDefaultChips = false;
-      });
-      _scrollToBottom();
-      await _saveHistory();
-      await AnalyticsService.logConversationMessage(
-        coachId: widget.coachId,
-        usedApi: false,
-      );
-      return;
-    }
 
     // 어디 있냐고 묻는 말을 여기서 가로채던 자리다.
     //
