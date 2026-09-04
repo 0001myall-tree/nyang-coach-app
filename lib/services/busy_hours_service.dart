@@ -27,11 +27,37 @@ class BusyHoursService {
     r'(\d{1,2})\s*(?::|시)?\s*(\d{2})?\s*[-~]\s*(\d{1,2})\s*(?::|시)?\s*(\d{2})?',
   );
 
-  /// 답변에서 [BUSY: ...]를 읽는다. 못 알아들을 모양이면 null.
-  static BusyHours? read(String raw) {
-    final match = _tagRegex.firstMatch(raw);
-    if (match == null) return null;
-    final parts = match.group(1)!.split('|').map((p) => p.trim()).toList();
+  /// 태그가 하나도 없으면 null — 저장된 것을 건드리지 않는다.
+  ///
+  /// 태그가 있으면 그 답변에 붙은 것 전부가 지금 맞는 값이다. 하나씩 더하고
+  /// 지우는 태그를 따로 두지 않는 것은, 그러면 '바뀌었다'와 '없어졌다'와
+  /// '하나만 빠졌다'를 앱이 각각 알아들어야 하기 때문이다. 무엇이 어떻게
+  /// 달라졌는지는 대화를 본 코치가 안다. 앱은 받아 적기만 한다.
+  ///
+  /// [BUSY: 없음]은 빈 목록 — 이제 그런 때가 없다는 말이다.
+  static List<BusyHours>? readAll(String raw) {
+    final matches = _tagRegex.allMatches(raw).toList();
+    if (matches.isEmpty) return null;
+    final hours = <BusyHours>[];
+    for (final match in matches) {
+      final body = match.group(1)!.trim();
+      if (_noneWords.contains(body)) continue;
+      final parsed = _readOne(body);
+      if (parsed != null) hours.add(parsed);
+    }
+    // 알아들은 게 하나도 없는데 '없음'도 아니면 형식이 깨진 것이다. 그걸
+    // 비었다고 받아들이면 멀쩡한 값이 통째로 지워진다.
+    if (hours.isEmpty &&
+        !matches.any((m) => _noneWords.contains(m.group(1)!.trim()))) {
+      return null;
+    }
+    return hours;
+  }
+
+  static const Set<String> _noneWords = {'없음', '없다', 'none', '-'};
+
+  static BusyHours? _readOne(String body) {
+    final parts = body.split('|').map((p) => p.trim()).toList();
     if (parts.length < 2) return null;
 
     final name = parts[0];
@@ -81,17 +107,19 @@ class BusyHoursService {
     return _dayNames.where(picked.contains).toList();
   }
 
-  /// 같은 이름이 있으면 갈아끼운다. 시간을 고쳐 말한 것을 새 항목으로 쌓으면
-  /// 옛 시간대가 남아 하루 종일 바쁜 사람이 된다.
-  static Future<void> save(BusyHours hours) async {
+  /// 받아 적은 것으로 통째로 바꾼다.
+  ///
+  /// 있던 것에 더하지 않는다. 코치가 넘기는 것은 '이번에 알게 된 것'이 아니라
+  /// '지금 맞는 것 전부'라, 빠진 항목은 없어졌다는 뜻이다.
+  static Future<void> replaceAll(List<BusyHours> hours) async {
     final prefs = await SharedPreferences.getInstance();
-    final entries = _decode(prefs.getString(prefsKey))
-      ..removeWhere((e) => e['name']?.toString().trim() == hours.name)
-      ..add(hours.toJson());
-    while (entries.length > _maxEntries) {
-      entries.removeAt(0);
-    }
-    await prefs.setString(prefsKey, jsonEncode(entries));
+    final kept = hours.length > _maxEntries
+        ? hours.sublist(hours.length - _maxEntries)
+        : hours;
+    await prefs.setString(
+      prefsKey,
+      jsonEncode(kept.map((h) => h.toJson()).toList()),
+    );
     TasksSyncService.scheduleSyncToCloud();
   }
 
@@ -114,30 +142,18 @@ class BusyHoursService {
     return null;
   }
 
-  /// 오늘 걸리는 시간대를 프롬프트에 실을 모양으로. 없으면 빈 문자열.
+  /// 받아둔 시간대를 프롬프트에 실을 모양으로. 없으면 빈 문자열.
   ///
-  /// 대화와 루틴 추천이 같은 문장을 쓴다. 자리마다 따로 적어두면 한쪽만 고쳐져
-  /// 코치가 자리에 따라 다른 것을 아는 상태가 된다.
-  static String promptBlock(SharedPreferences prefs, DateTime now) {
-    final today = _dayNames[now.weekday % 7];
-    final lines = <String>[];
-    for (final entry in _decode(prefs.getString(prefsKey))) {
-      final days = ((entry['days'] as List?) ?? []).cast<String>();
-      if (days.isNotEmpty && !days.contains(today)) continue;
-      final start = _label(entry['start']?.toString());
-      final end = _label(entry['end']?.toString());
-      if (start == null || end == null) continue;
-      lines.add('- ${entry['name']}: $start ~ $end');
-    }
-    if (lines.isEmpty) return '';
-    return '\n[오늘 고정 루틴 (일정 배치 시 이 시간대 피할 것)]\n${lines.join('\n')}\n';
-  }
-
-  /// 요일까지 포함한 한 주치. 루틴을 어느 요일에 넣을지 고르는 자리에 쓴다.
+  /// 오늘 걸리는 것만 추리지 않는다. 코치가 태그로 다시 적을 때 지금 맞는 것
+  /// 전부를 적어야 하는데, 오늘 것만 보여주면 다른 요일 것을 없어진 줄 알고
+  /// 빠뜨린다. 루틴을 어느 요일에 넣을지 고르는 자리에도 한 주가 다 필요하다.
   ///
-  /// 그 자리에 오늘 것만 보내면 토요일 오전을 권하면서 토요일에 뭐가 있는지는
-  /// 모르는 상태가 된다.
-  static String weeklyPromptBlock(SharedPreferences prefs) {
+  /// [withUpdateRule]은 대화에서만 붙인다. 자동 발화나 추천처럼 사용자의 답을
+  /// 받을 수 없는 자리에서는 확인하라고 해봐야 물을 상대가 없다.
+  static String promptBlock(
+    SharedPreferences prefs, {
+    bool withUpdateRule = false,
+  }) {
     final lines = <String>[];
     for (final entry in _decode(prefs.getString(prefsKey))) {
       final start = _label(entry['start']?.toString());
@@ -148,7 +164,14 @@ class BusyHoursService {
       lines.add('- ${entry['name']}: $when $start ~ $end');
     }
     if (lines.isEmpty) return '';
-    return '\n[늘 시간을 못 내는 때]\n${lines.join('\n')}\n';
+    final block =
+        '\n[늘 시간을 못 내는 때 - 일정 배치 시 이 시간대 피할 것]\n${lines.join('\n')}\n';
+    if (!withUpdateRule) return block;
+    // 어긋난 것을 찾으라고 시키지 않는다. 찾으라고 하면 없는 어긋남을 지어내
+    // 매일 같은 것을 묻는다. 무엇이 어긋남이 아닌지를 알려주는 편이 낫다.
+    return '$block'
+        '- 이 시간대에 시작·완료 표시가 있어도 대개는 짬을 낸 것이다(점심시간 등). '
+        '그 시간이 통째로 바뀐 것으로 보일 때만 한 번 확인하고, 답을 들으면 태그로 다시 적을 것.\n';
   }
 
   static String? _label(String? hhmm) {

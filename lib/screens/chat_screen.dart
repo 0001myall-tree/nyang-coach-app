@@ -1010,9 +1010,12 @@ class _ParsedReply {
   /// 없다 — 잘못 열려도 사용자가 돌아오면 그만이다.
   final String? openLocation;
 
-  /// 코치가 받아둔 '늘 시간을 못 내는 때'. 확인 카드가 없는 것은, 늘 그런지를
-  /// 코치가 대화에서 이미 되물은 뒤에만 붙는 태그이기 때문이다.
-  final BusyHours? busyHours;
+  /// 코치가 받아둔 '늘 시간을 못 내는 때' 전부. null이면 이번 답변에 태그가
+  /// 없었다는 뜻이라 저장된 것을 건드리지 않는다.
+  ///
+  /// 확인 카드가 없는 것은, 늘 그런지를 코치가 대화에서 이미 되물은 뒤에만
+  /// 붙는 태그이기 때문이다.
+  final List<BusyHours>? busyHours;
 
   _ParsedReply({
     required this.text,
@@ -5721,7 +5724,7 @@ $block
       //
       // 오늘 것만 보내지 않는다. 어느 요일에 넣을지를 고르는 자리라, 오늘
       // 것만 주면 토요일을 권하면서 토요일에 뭐가 있는지는 모르게 된다.
-      busyBlock: BusyHoursService.weeklyPromptBlock(prefs),
+      busyBlock: BusyHoursService.promptBlock(prefs),
       domainRoutineNames: habits
           .where((habit) => domainIds.contains(habit['id']?.toString()))
           .map((habit) => habit['name']?.toString() ?? '')
@@ -8161,7 +8164,7 @@ Rules:
     final openLocation = ScreenOpenTarget.read(text);
     text = ScreenOpenTarget.strip(text);
 
-    final busyHours = BusyHoursService.read(text);
+    final busyHours = BusyHoursService.readAll(text);
     text = BusyHoursService.strip(text);
 
     // ── CORE_REC 태그를 읽기 좋은 텍스트로 변환 ──
@@ -12386,7 +12389,7 @@ Rules:
       _scrollToBottom();
       await _saveHistory();
       if (parsed.busyHours != null) {
-        await BusyHoursService.save(parsed.busyHours!);
+        await BusyHoursService.replaceAll(parsed.busyHours!);
       }
       if (mounted) {
         // 한 턴에 카드 하나. 조작과 등록이 같이 오면 조작이 먼저다 — 이미 있는
@@ -13337,7 +13340,7 @@ Rules:
       }
     }
 
-    // 12. 오늘 고정 루틴
+    // 12. 늘 시간을 못 내는 때
     //
     // 마스터 전용이었지만 이제 코치가 대화에서 직접 받아 채우는 값이라
     // (`BusyHoursService`) 받아둔 코치가 그걸 볼 수 있어야 한다. 안 그러면
@@ -13346,7 +13349,7 @@ Rules:
     // 할 일 이야기이기 때문이다.
     final routinesRaw = prefs.getString('nyang_premium_routines');
     if (needsGoalContext || needsTaskContext) {
-      sb.write(BusyHoursService.promptBlock(prefs, now));
+      sb.write(BusyHoursService.promptBlock(prefs, withUpdateRule: true));
     }
 
     // 12-1. 비서 학습 설정 미완료 (master only)
