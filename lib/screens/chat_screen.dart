@@ -6552,11 +6552,15 @@ Rules:
       // 할 시각을 정해둔 일은 그 시각 전에 짚지 않는다. 저녁 8시에 하기로
       // 한 일을 오후 1시에 "아직 그대로네요"라고 하면 재촉이기 이전에 틀린
       // 말이다. 핵심 일정에는 이미 같은 기준이 걸려 있다.
-      //
-      // 시각을 안 적은 일은 그대로 둔다. 이쪽 문구는 "이미 하셨으면 표시만
-      // 눌러주세요" 정도라, 잡무를 바로 짚어도 재촉으로 읽히지 않는다.
       final startAt = _todayTimeOf(task['timeStart']?.toString(), now);
       if (startAt != null && !now.isAfter(startAt)) continue;
+      // 적어 넣자마자 바로 짚으면 재촉으로 읽힌다. 방금 등록한 일도 최소한의
+      // 여유는 준다 - 핵심 일정과 같은 기준([_coreAskGrace])이다. 언제
+      // 적었는지 모르는 일정(예전 기록)은 막지 않는다.
+      final createdAt = DateTime.tryParse(task['createdAt']?.toString() ?? '');
+      if (createdAt != null && now.difference(createdAt) < _coreAskGrace) {
+        continue;
+      }
       final name = _shortTaskName(task);
       if (name != null) return name;
     }
