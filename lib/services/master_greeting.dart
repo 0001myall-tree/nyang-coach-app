@@ -376,6 +376,12 @@ class GreetingVoice {
   /// 말하던 때는 목록에 적어두기만 하고 못 한 일에도 그렇게 말했다.
   final List<String> repeatingAsk;
 
+  /// 받아둔 시간대(근무 등) 안에서 낮에 말을 걸 때. `{{busy}}`는 그 시간대 이름.
+  ///
+  /// 안 했다고 짚는 대신 지금도 그 시간인지 묻는다. 못 하는 게 뻔한 시간에
+  /// 왜 안 했느냐고 물으면, 알면서 묻는 말이 된다.
+  final List<String> busyAsk;
+
   /// 시작은 했다고 답했을 때. 마스터 코치는 표시를 대신 켜주고 그 사실을 알린다.
   final List<String> coreAskStartedReply;
 
@@ -522,6 +528,7 @@ class GreetingVoice {
     required this.adviceWorked,
     required this.carriedAsk,
     required this.repeatingAsk,
+    required this.busyAsk,
     required this.coreAskStartedReply,
     required this.coreAskAlreadyReply,
     required this.coreAskBusyReply,
@@ -905,6 +912,12 @@ class MasterGreetingCopy {
           '{지금 짧게 손대보실까요|잠깐이라도 시작해보시겠어요}?',
       '{{task}}는 {어떻게 되어가고 있을까요|아직 손대기 전이신가요}?\n'
           '{오늘 목록에 남아 있어 여쭤봅니다|목록에 그대로 있어 여쭤보는 겁니다}. 이미 하셨다면 표시만 눌러주세요.',
+    ],
+    busyAsk: [
+      '{{task}}가 아직 그대로인데, 지금도 {{busy}} 중이신가요?\n'
+          '{그러시면 이따 다시 여쭙겠습니다|그러시면 나중에 다시 여쭙겠습니다}.',
+      '{{task}}, {아직 시작 표시가 비어 있습니다|시작 표시가 아직 그대로입니다}. 지금도 {{busy}} 중이시겠지요?\n'
+          '{여유 생기시면 말씀만 주세요|짬이 나시면 말씀만 주세요}. 그때 이어서 도와드리겠습니다.',
     ],
     coreAskStartedReply: [
       '{이미 진행 중이셨군요|역시 하고 계셨군요}. {안심이 되네요|마음이 놓입니다}.\n'
@@ -1377,6 +1390,12 @@ class MasterGreetingCopy {
           '{지금 짧게 손대볼까냥|잠깐이라도 시작해볼까냥}?',
       '{{task}}는 {어떻게 되어가고 있냥|아직 손대기 전이냥}?\n'
           '{오늘 목록에 남아 있어서 물어본다냥|목록에 그대로 있어서 묻는다냥}. 이미 했으면 표시만 눌러주라냥.',
+    ],
+    busyAsk: [
+      '{{task}}가 아직 그대로인데, 지금도 {{busy}} 중이냥?\n'
+          '{그러면 이따 다시 물어보겠다냥|그러면 나중에 다시 묻겠다냥}.',
+      '{{task}}, {아직 시작 표시가 비어 있다냥|시작 표시가 아직 그대로다냥}. 지금도 {{busy}} 중이겠구냥?\n'
+          '{여유 생기면 말만 하라냥|짬이 나면 말만 하라냥}. 그때 이어서 도와주겠다냥.',
     ],
     coreAskStartedReply: [
       '{이미 하는 중이었구나냥|역시 하고 있었구나냥}. {안심이 된다냥|마음이 놓인다냥}.\n'
@@ -1965,6 +1984,21 @@ class MasterGreetingBuilder extends GreetingLinePicker {
   /// 지정해둔 것은 없지만 오늘 목록에 남아 있는 일을 묻는 말.
   String buildRepeatingAsk(String taskName) =>
       _fill(voice.repeatingAsk, taskName);
+
+  /// 받아둔 시간대 안에서 낮에 건네는 말. 안 한 것을 짚는 대신 지금도 그
+  /// 시간인지 묻는다.
+  ///
+  /// 시간대 이름은 사용자가 한 말이 아니라 코치가 정리해 적어둔 것이라
+  /// 따옴표로 묶지 않는다.
+  String buildBusyAsk(String taskName, String busyName) => pickLine(
+    voice.busyAsk
+        .map(
+          (line) => line
+              .replaceAll('{{task}}', '\'$taskName\'')
+              .replaceAll('{{busy}}', busyName),
+        )
+        .toList(growable: false),
+  );
 
   /// 시작해두고 완료가 안 된 일을 물어보는 말.
   String buildStalledAsk(String taskName) => _fill(voice.stalledAsk, taskName);

@@ -23,6 +23,7 @@ import 'package:nyang_coach/services/overplan_nudge_service.dart';
 import 'package:nyang_coach/services/analytics_service.dart';
 import 'package:nyang_coach/services/master_unlock_notice.dart';
 import 'package:nyang_coach/services/api_usage_limit_service.dart';
+import 'package:nyang_coach/services/busy_hours_service.dart';
 import 'package:nyang_coach/services/apple_calendar_sync_service.dart';
 import 'package:nyang_coach/services/execution_pattern_service.dart';
 import 'package:nyang_coach/services/task_completion_service.dart';
@@ -1009,6 +1010,10 @@ class _ParsedReply {
   /// 없다 — 잘못 열려도 사용자가 돌아오면 그만이다.
   final String? openLocation;
 
+  /// 코치가 받아둔 '늘 시간을 못 내는 때'. 확인 카드가 없는 것은, 늘 그런지를
+  /// 코치가 대화에서 이미 되물은 뒤에만 붙는 태그이기 때문이다.
+  final BusyHours? busyHours;
+
   _ParsedReply({
     required this.text,
     required this.chips,
@@ -1025,6 +1030,7 @@ class _ParsedReply {
     this.habitToConfirm,
     this.goalToConfirm,
     this.openLocation,
+    this.busyHours,
     List<_SuggestedTask>? suggestedTasks,
   }) : suggestedTasks = suggestedTasks ?? [];
 }
@@ -5508,8 +5514,14 @@ $block
 
     _pendingRepeatingAskTask = other;
     _pendingCarriedOverTask = null;
+    // 시간을 못 낸다고 말해둔 시간대 안이면 묻는 말을 바꾼다. 낮에 일하는
+    // 사람에게 낮마다 왜 안 했느냐고 묻던 자리다. 버튼은 그대로 쓴다 —
+    // '일이 있어서 못했어요'가 여기서도 그대로 답이 된다.
+    final busy = BusyHoursService.busyNow(prefs, now);
     _injectAiMessage(
-      core != null
+      busy != null
+          ? _greetingBuilder.buildBusyAsk(core ?? other!, busy)
+          : core != null
           ? _greetingBuilder.buildCoreAsk(core)
           : _greetingBuilder.buildRepeatingAsk(other!),
       kind: _masterCoreGreetingKind,
@@ -5704,6 +5716,12 @@ $block
       coachId: coachId,
       plan: plan,
       surveyBlock: await LifePatternService.promptBlock(coachId),
+      // 자리를 잡아주는 자리라 여기가 제일 어긋나기 쉽다. 기록에서 찾은 후보가
+      // 없으면 코치가 시각을 직접 정하는데, 그때 근무 시간 한가운데를 짚는다.
+      //
+      // 오늘 것만 보내지 않는다. 어느 요일에 넣을지를 고르는 자리라, 오늘
+      // 것만 주면 토요일을 권하면서 토요일에 뭐가 있는지는 모르게 된다.
+      busyBlock: BusyHoursService.weeklyPromptBlock(prefs),
       domainRoutineNames: habits
           .where((habit) => domainIds.contains(habit['id']?.toString()))
           .map((habit) => habit['name']?.toString() ?? '')
@@ -6696,6 +6714,20 @@ Rules:
     return texts[Random().nextInt(texts.length)];
   }
 
+  /// 시간을 못 낸다고 말해둔 시간대에 건네는 오후 인사.
+  ///
+  /// 왜 안 했느냐고 묻지 않는다. 못 하는 시간이라고 본인이 알려준 자리라,
+  /// 여기서 짚으면 알면서 묻는 말이 된다.
+  String _buildCatBusyAskText(String task, String busy) {
+    final texts = [
+      '집사, \'$task\'가 아직 그대로인데 지금도 $busy 중이냥?\n'
+          '그러면 이따 다시 물어보겠다냥.',
+      '\'$task\' 시작 표시가 아직 비어 있다냥. 지금 $busy 중이지 않냥?\n'
+          '여유 생기면 말만 하라냥. 그때 같이 보자냥.',
+    ];
+    return texts[Random().nextInt(texts.length)];
+  }
+
   /// 아직 체크 안 된 습관을 짚어주는 오후 인사. 재촉하지 않는다 — 이미 했는데
   /// 체크만 안 했을 수도 있어서 양쪽을 다 열어둔다.
   String _buildCatHabitCheckText(List<String> habits) {
@@ -7541,7 +7573,13 @@ Rules:
             await _canAskCoreToday(now)
         ? _otherTaskDueToday(prefs, now)
         : null;
-    final text = notStartedCore != null
+    // 못 하는 게 뻔한 시간대면 안 했다고 짚는 대신 지금도 그 시간인지 묻는다.
+    // 마스터의 낮 질문과 같은 판단이다.
+    final busy = BusyHoursService.busyNow(prefs, now);
+    final nagTarget = notStartedCore ?? repeatingTask;
+    final text = busy != null && nagTarget != null
+        ? _buildCatBusyAskText(nagTarget, busy)
+        : notStartedCore != null
         ? _buildCatAfternoonCoreAskText(notStartedCore)
         : pendingHabits.isNotEmpty
         ? _buildCatHabitCheckText(pendingHabits)
@@ -8123,6 +8161,9 @@ Rules:
     final openLocation = ScreenOpenTarget.read(text);
     text = ScreenOpenTarget.strip(text);
 
+    final busyHours = BusyHoursService.read(text);
+    text = BusyHoursService.strip(text);
+
     // ── CORE_REC 태그를 읽기 좋은 텍스트로 변환 ──
     final coreRecMatches = coreRecRegex.allMatches(text).toList();
     if (coreRecMatches.isNotEmpty) {
@@ -8281,6 +8322,7 @@ Rules:
       plannerAction: plannerAction,
       doneTargets: PlannerAction.doneTargets(raw),
       openLocation: openLocation,
+      busyHours: busyHours,
     );
   }
 
@@ -12343,6 +12385,9 @@ Rules:
       // 모델이 실수로 [TIMER_CONFIRM]을 붙여도 기존 코칭 단계를 건너뛰지 않도록 여기서는 무시한다.
       _scrollToBottom();
       await _saveHistory();
+      if (parsed.busyHours != null) {
+        await BusyHoursService.save(parsed.busyHours!);
+      }
       if (mounted) {
         // 한 턴에 카드 하나. 조작과 등록이 같이 오면 조작이 먼저다 — 이미 있는
         // 것을 고치는 쪽이 새로 만드는 쪽보다 방금 한 말에 가깝다.
@@ -13292,32 +13337,20 @@ Rules:
       }
     }
 
-    // 12. 오늘 고정 루틴 (master only)
-    if (_coach.isMaster && needsGoalContext) {
-      final routinesRaw = prefs.getString('nyang_premium_routines');
-      if (routinesRaw != null) {
-        try {
-          final routines = jsonDecode(routinesRaw) as List;
-          final todayDay = dayNames[now.weekday % 7];
-          final todayRoutines = routines.where((r) {
-            final rDays = ((r['days'] as List?) ?? []).cast<String>();
-            return rDays.isEmpty || rDays.contains(todayDay);
-          }).toList();
-          if (todayRoutines.isNotEmpty) {
-            sb.writeln('\n[오늘 고정 루틴 (일정 배치 시 이 시간대 피할 것)]');
-            for (final r in todayRoutines) {
-              final sp = (r['start'] as String).split(':');
-              final ep = (r['end'] as String).split(':');
-              final sh = int.tryParse(sp[0]) ?? 0;
-              final eh = int.tryParse(ep[0]) ?? 0;
-              sb.writeln(
-                '- ${r['name']}: ${sh >= 12 ? '오후' : '오전'} ${sh > 12 ? sh - 12 : sh}:${sp[1]} ~ ${eh >= 12 ? '오후' : '오전'} ${eh > 12 ? eh - 12 : eh}:${ep[1]}',
-              );
-            }
-          }
-        } catch (_) {}
-      }
+    // 12. 오늘 고정 루틴
+    //
+    // 마스터 전용이었지만 이제 코치가 대화에서 직접 받아 채우는 값이라
+    // (`BusyHoursService`) 받아둔 코치가 그걸 볼 수 있어야 한다. 안 그러면
+    // 같은 것을 다음 대화에서 또 묻는다. 할 일 이야기에도 싣는 것은 그
+    // 태그가 붙는 자리가 대개 목표 이야기가 아니라 "시간이 없어서 못 했다"는
+    // 할 일 이야기이기 때문이다.
+    final routinesRaw = prefs.getString('nyang_premium_routines');
+    if (needsGoalContext || needsTaskContext) {
+      sb.write(BusyHoursService.promptBlock(prefs, now));
+    }
 
+    // 12-1. 비서 학습 설정 미완료 (master only)
+    if (_coach.isMaster && needsGoalContext) {
       bool isListEmpty(String? raw) {
         if (raw == null) return true;
         try {
@@ -13342,7 +13375,9 @@ Rules:
 
       if (isAllEmpty) {
         sb.writeln('\n[비서 학습 설정 미완료 상태]');
-        sb.writeln('- 현재 사용자의 취침 예정 시간, 고정 루틴, 장기 비전, 목표 등이 전혀 설정되어 있지 않습니다.');
+        // 고정 루틴은 여기서 빼둔다. 설정 화면에 그 입력란이 없어서, 안내하면
+        // 없는 자리를 찾아 헤매게 된다. 그 값은 대화에서 받는다.
+        sb.writeln('- 현재 사용자의 취침 예정 시간, 장기 비전, 목표 등이 전혀 설정되어 있지 않습니다.');
         sb.writeln(
           '- 사용자가 "일정을 짜달라", "오늘 뭐부터 할까" 등 일정 관리와 관련된 대화를 시작할 때 한하여 자연스럽게 다음 내용을 덧붙여 유도하세요.',
         );
