@@ -40,6 +40,14 @@ class NyangBannerNudge {
   /// 이 기기에서만 쓰이고 곧 지워질 값을 담기에 맞지 않는다.
   static const String focusTaskKey = 'banner_focus_task_id';
 
+  /// 어느 배너를 눌렀는지('start'/'running'/'resume'/'nextTask'). 할 일 창이
+  /// 이 값을 보고 안드로이드 딴짓 방지 카드와 같은 질문을 팝업으로 띄운다.
+  static const String answerKindKey = 'banner_answer_kind';
+
+  /// 팝업에 그대로 쓸 일정 이름. 목록을 다시 뒤져 찾을 필요 없게 payload에
+  /// 실려온 것을 그대로 남겨둔다.
+  static const String answerTaskTextKey = 'banner_answer_task_text';
+
   /// 시작하고 처음 확인하기까지. 안드로이드 냥냥이와 같은 간격이다.
   static const Duration firstCheck = Duration(minutes: 30);
 
@@ -480,7 +488,7 @@ class NyangBannerNudge {
   }) async {
     _ensureTimeZone();
     final payload =
-        '$payloadPrefix:${jsonEncode({'taskId': taskId, 'taskText': taskText})}';
+        '$payloadPrefix:${jsonEncode({'kind': 'resume', 'taskId': taskId, 'taskText': taskText})}';
 
     final details = NotificationDetails(
       iOS: DarwinNotificationDetails(
@@ -582,7 +590,7 @@ class NyangBannerNudge {
   }) async {
     _ensureTimeZone();
     final payload =
-        '$payloadPrefix:${jsonEncode({'taskId': taskId, 'taskText': taskText})}';
+        '$payloadPrefix:${jsonEncode({'kind': 'nextTask', 'taskId': taskId, 'taskText': taskText})}';
 
     final details = NotificationDetails(
       iOS: DarwinNotificationDetails(
@@ -758,7 +766,7 @@ class NyangBannerNudge {
     _ensureTimeZone();
 
     final payload =
-        '$payloadPrefix:${jsonEncode({'taskId': taskId, 'taskText': taskText, 'deadline': deadline.millisecondsSinceEpoch})}';
+        '$payloadPrefix:${jsonEncode({'kind': 'start', 'taskId': taskId, 'taskText': taskText, 'deadline': deadline.millisecondsSinceEpoch})}';
 
     final details = NotificationDetails(
       iOS: DarwinNotificationDetails(
@@ -819,6 +827,27 @@ class NyangBannerNudge {
     // 어느 칸을 볼지 적어두면 할 일 화면이 그 칸을 번쩍여준다.
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(focusTaskKey, taskId);
+
+    // 어느 배너였는지도 같이 남긴다 - 안드로이드 딴짓 방지 카드와 같은
+    // 질문을 팝업으로 띄우는 데 쓴다([answerKindKey] 참고).
+    final kind = data['kind']?.toString() ?? '';
+    if (kind.isEmpty) {
+      await prefs.remove(answerKindKey);
+      await prefs.remove(answerTaskTextKey);
+    } else {
+      await prefs.setString(answerKindKey, kind);
+      await prefs.setString(
+        answerTaskTextKey,
+        data['taskText']?.toString() ?? '',
+      );
+    }
+
+    // 이것만으로는 화면이 안 바뀐다 - 배너를 눌러도 앱이 있던 자리 그대로
+    // 켜지고, 할 일 탭이 열려 있을 때만 번쩍임이 보였다. 위젯 눌렀을 때
+    // 쓰는 것과 같은 자리표를 남겨서, 콜드 스타트(main.dart)와 웜
+    // 리줌(main_tab_screen.dart의 _checkWidgetIntent) 양쪽이 이미 하던
+    // 대로 할 일 창을 열게 한다.
+    await prefs.setString('widget_route', 'tasks');
   }
 }
 

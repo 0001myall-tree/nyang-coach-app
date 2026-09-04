@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart'; // kIsWeb 추가
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -30,7 +31,9 @@ class AuthService {
   Future<bool> ensureCurrentUserAllowed() async {
     final user = _auth.currentUser;
     if (user == null) return false;
-    await AccountRetentionService.instance.markLoggedIn(user);
+    // 부가 기록이라 앱이 뜨는 걸 막으면 안 된다. 네트워크가 느리면 여기서
+    // 기다리다 시작 화면에 멈춰 있던 문제가 있었다.
+    unawaited(AccountRetentionService.instance.markLoggedIn(user));
     await _applyAllowedEmailEntitlement(await _allowedEmailData(user.email));
     return true;
   }
@@ -139,7 +142,7 @@ class AuthService {
     final user = cred?.user;
     if (user == null) return;
     await _clearDataOfPreviousAccount(user);
-    await AccountRetentionService.instance.markLoggedIn(user);
+    unawaited(AccountRetentionService.instance.markLoggedIn(user));
     final allowData = await _allowedEmailData(user.email);
     await UserDataService.syncFromCloud();
     await _applyAllowedEmailEntitlement(allowData);

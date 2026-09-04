@@ -929,12 +929,127 @@ class _TasksScreenState extends State<TasksScreen>
     final taskId = prefs.getString(NyangBannerNudge.focusTaskKey);
     if (taskId == null || taskId.isEmpty) return;
     await prefs.remove(NyangBannerNudge.focusTaskKey);
+    final kind = prefs.getString(NyangBannerNudge.answerKindKey);
+    final taskText = prefs.getString(NyangBannerNudge.answerTaskTextKey) ?? '';
+    await prefs.remove(NyangBannerNudge.answerKindKey);
+    await prefs.remove(NyangBannerNudge.answerTaskTextKey);
     if (!mounted) return;
     // 화면이 자리를 잡은 뒤에 움직인다. 그리기가 끝나기 전에는 칸의 자리를
     // 알 수 없어서 스크롤이 엉뚱한 데로 간다.
     await Future.delayed(const Duration(milliseconds: 350));
     if (!mounted) return;
     await _pulseBannerFocus(taskId);
+    if (kind != null && kind.isNotEmpty && mounted) {
+      await _showBannerAnswerDialog(
+        kind: kind,
+        taskId: taskId,
+        taskText: taskText,
+      );
+    }
+  }
+
+  /// 배너를 눌러 들어왔을 때, 안드로이드 딴짓 방지 카드와 같은 질문을 팝업으로
+  /// 띄운다. 화면 전체를 덮지 않는다 - 방금 번쩍인 칸이 뒤에서 계속 보여야
+  /// 무엇에 대한 질문인지 알 수 있다.
+  Future<void> _showBannerAnswerDialog({
+    required String kind,
+    required String taskId,
+    required String taskText,
+  }) async {
+    final name = taskText.isEmpty ? null : taskText;
+    final String message;
+    final List<(String, VoidCallback)> actions;
+    switch (kind) {
+      case 'start':
+        message = name == null
+            ? '지금 시작하기로 한 일,\n잊지 않았지?'
+            : "'$name' 시작할 시간이야.\n준비됐으면 눌러줘.";
+        actions = [
+          ('시작하기', () => _startTaskFromBanner(taskId)),
+          ('나중에', () {}),
+        ];
+        break;
+      case 'resume':
+        message = name == null
+            ? '하다가 멈춘 일,\n다시 시작할까?'
+            : "'$name' 하다가 멈췄네.\n다시 시작할까?";
+        actions = [
+          ('다시 시작', () => _startTaskFromBanner(taskId)),
+          ('나중에', () {}),
+        ];
+        break;
+      case 'nextTask':
+        message = name == null
+            ? '냥이랑 남은 일정도\n시작할까?'
+            : "'$name'\n냥이랑 지금 시작할까?";
+        actions = [
+          ('지금 할게', () => _startTaskFromBanner(taskId)),
+          ('더 있다 할게', () {}),
+        ];
+        break;
+      case 'running':
+      default:
+        message = name == null
+            ? '아까 시작한 일,\n지금도 하는 중이야?'
+            : "아까 시작한 '$name',\n지금도 하는 중이야?";
+        actions = [
+          ('다 했어', () => _completeTaskFromBanner(taskId)),
+          ('계속하는 중', () {}),
+          ('다시 시작할게', () {}),
+        ];
+        break;
+    }
+
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        content: Text(
+          message,
+          style: GoogleFonts.notoSansKr(
+            fontSize: 15,
+            height: 1.5,
+            color: const Color(0xFF3D3A4E),
+          ),
+        ),
+        actions: [
+          for (final action in actions)
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+                action.$2();
+              },
+              child: Text(
+                action.$1,
+                style: GoogleFonts.notoSansKr(
+                  fontWeight: FontWeight.w600,
+                  color: const Color(0xFF6C5CE7),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// 아직 시작 전일 때만 시작 상태로 넘긴다. 이미 진행 중이거나 끝낸 일이면
+  /// 손대지 않는다 - 배너를 늦게 눌렀을 때 완료 취소 확인창이 튀어나오면
+  /// 안 된다.
+  void _startTaskFromBanner(String taskId) {
+    for (final t in _activeTodayTasksWithSchedules) {
+      if (t.id.toString() != taskId) continue;
+      if (!t.done && !t.inProgress) _toggleTask(taskId);
+      return;
+    }
+  }
+
+  /// 이미 완료된 일이면 손대지 않는다. 위와 같은 이유다.
+  void _completeTaskFromBanner(String taskId) {
+    for (final t in _activeTodayTasksWithSchedules) {
+      if (t.id.toString() != taskId) continue;
+      if (!t.done) _toggleTask(taskId, forceComplete: true);
+      return;
+    }
   }
 
   Future<void> _pulseBannerFocus(String taskId) async {
