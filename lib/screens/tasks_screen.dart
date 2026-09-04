@@ -4072,19 +4072,29 @@ class _TasksScreenState extends State<TasksScreen>
   Future<void> _checkOverplan() async {
     debugPrint('[overplan] _checkOverplan called');
     final prefs = await SharedPreferences.getInstance();
-    final recentMax = await OverplanNudgeService.shouldFire(
-      todayTasks: _activeTodayTasks.map((t) => t.toJson()).toList(),
+    final fire = await OverplanNudgeService.shouldFire(
+      plannedCount: _activeTodayTasks.length,
       historyRaw: prefs.getString('nyang_history'),
     );
-    debugPrint('[overplan] shouldFire returned $recentMax, mounted=$mounted');
-    if (recentMax == null || !mounted) return;
+    debugPrint('[overplan] shouldFire returned $fire, mounted=$mounted');
+    if (fire == null || !mounted) return;
 
     final turns = <Map<String, dynamic>>[];
 
-    final primary = OverplanNudgeService.primaryMessage(_coach.id, recentMax);
+    final primary = OverplanNudgeService.primaryMessage(
+      _coach.id,
+      fire.recentMax,
+      tone: fire.tone,
+    );
     turns.add({'isUser': false, 'text': primary});
     final firstChoice = await _showOverplanChoiceDialog(primary);
     turns.add({'isUser': true, 'text': firstChoice});
+
+    // 지금은 듣고 싶지 않다는 답이다. 사흘 뒤에 또 꺼내면 답을 못 들은 것처럼
+    // 군다. 이 자리를 일주일 쉰다.
+    if (firstChoice == _overplanLeaveIt) {
+      await OverplanNudgeService.recordDismissed();
+    }
 
     if (firstChoice == _overplanGoAhead && mounted) {
       final followup = OverplanNudgeService.followupMessage(_coach.id);

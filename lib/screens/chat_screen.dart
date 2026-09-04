@@ -1634,6 +1634,47 @@ class _ChatScreenState extends State<ChatScreen>
     }
   }
 
+  static const String _overplanChatAskKind = 'overplan_chat_ask';
+  static const String _overplanChatGoAhead = '그렇게 할게';
+  static const String _overplanChatLeaveIt = '알아서 할게';
+
+  /// 채팅 중에 코치가 오늘 일정을 방금 넣어준 직후, 그 계획이 최근 최대
+  /// 완료량보다 훨씬 많아졌으면 짚는다. 등록창(할 일 탭)에서 직접 적을 때와
+  /// 같은 조건([OverplanNudgeService.shouldFire])을 쓰지만, 다이얼로그
+  /// 대신 채팅 말풍선으로 물어본다 - 이미 대화 중이라 팝업이 끊고 들어오면
+  /// 어색하다.
+  ///
+  /// [scheduleDate]가 오늘이 아니면 애초에 오늘 계획이 느는 게 아니라 묻지
+  /// 않는다.
+  Future<void> _checkOverplanFromChat(DateTime scheduleDate) async {
+    if (_dateKey(scheduleDate) != _dateKey(DateTime.now())) return;
+    final prefs = await SharedPreferences.getInstance();
+    // 방금 넣은 일정은 아직 nyang_tasks에 반영되지 않았을 수 있다(할 일
+    // 탭이 다음에 열릴 때 동기화된다). 그래서 저장된 개수에 1을 더해 센다.
+    final existingCount = _decodeMapList(prefs.getString('nyang_tasks')).length;
+    final fire = await OverplanNudgeService.shouldFire(
+      plannedCount: existingCount + 1,
+      historyRaw: prefs.getString('nyang_history'),
+    );
+    if (fire == null || !mounted) return;
+    _injectAiMessage(
+      OverplanNudgeService.chatAddMessage(_coach.id),
+      kind: _overplanChatAskKind,
+      choices: const [_overplanChatGoAhead, _overplanChatLeaveIt],
+    );
+  }
+
+  Future<void> _handleOverplanChatChoice(String label) async {
+    if (_isLoading) return;
+    HapticFeedback.lightImpact();
+    _injectUserChoice(label);
+    if (label == _overplanChatLeaveIt) {
+      await OverplanNudgeService.recordDismissed();
+      return;
+    }
+    _injectAiMessage(OverplanNudgeService.followupMessage(_coach.id));
+  }
+
   Future<void> _recordCatChatEntry(
     SharedPreferences prefs,
     String todayStr,
@@ -2133,6 +2174,7 @@ class _ChatScreenState extends State<ChatScreen>
         sec: "$when '$name' 넣었어요 ✓",
       ),
     );
+    unawaited(_checkOverplanFromChat(plan.date));
     if (!alarmOn) return;
 
     // 일정 알람 자체가 꺼져 있어서 함께 켠 경우다. 채팅에 한 줄 적어두면
@@ -11193,6 +11235,7 @@ Rules:
                                     confirmedTime != null,
                                 confirmedRepeatRule,
                               );
+                              unawaited(_checkOverplanFromChat(confirmedDate));
                               if ((reminderEnabled ||
                                       autoEnabledTimedReminder) &&
                                   confirmedTime != null) {
@@ -16799,6 +16842,9 @@ ${Prompts.outputRulesTail}${Prompts.screenMap}$plannerActionSection$coachOfferTa
     }
     if (msg.kind == _lifeReviewKind && msg.choices.isNotEmpty) {
       return _buildChoiceBubbleCard(msg, _handleLifeReviewChoice);
+    }
+    if (msg.kind == _overplanChatAskKind && msg.choices.isNotEmpty) {
+      return _buildChoiceBubbleCard(msg, _handleOverplanChatChoice);
     }
     if (msg.kind == 'ultra_low_resistance_check') {
       return _buildUltraLowResistanceCheckCard(msg);
