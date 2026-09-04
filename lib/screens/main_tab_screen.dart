@@ -492,6 +492,7 @@ class _MainTabScreenState extends State<MainTabScreen>
 
   Timer? _morningCallTimer;
   Timer? _coreReminderTimer;
+  Timer? _dailyRolloverTimer;
   final AudioPlayer _audioPlayer = AudioPlayer();
   String? _lastMorningCallDate;
   final Set<String> _firedCoreReminders = {};
@@ -617,6 +618,7 @@ class _MainTabScreenState extends State<MainTabScreen>
     _widgetIntentDrawerMode = widget.initialDrawerIndex != 0;
     WidgetsBinding.instance.addObserver(this);
     DailyResetService.checkAndExecuteReset();
+    _startDailyRolloverWatcher();
     _audioPlayer.setAudioContext(
       AudioContext(
         android: const AudioContextAndroid(
@@ -681,6 +683,7 @@ class _MainTabScreenState extends State<MainTabScreen>
     _tabCtrl.dispose();
     _morningCallTimer?.cancel();
     _coreReminderTimer?.cancel();
+    _dailyRolloverTimer?.cancel();
     MorningCallAlarmSession().stop();
     _audioPlayer.dispose();
     super.dispose();
@@ -692,6 +695,31 @@ class _MainTabScreenState extends State<MainTabScreen>
       AnalyticsService.logAppOpen();
       _handleAppResumed();
     }
+  }
+
+  /// 앱을 배경으로 보내지 않은 채 자정을 넘기는 경우를 잡는다.
+  ///
+  /// 자정 정리는 원래 앱을 껐다 켤 때(리줌)만 돌았다. 켜둔 채로 날짜가
+  /// 넘어가면 화면은 실시간으로 오늘을 계산해 보여주는데, 어제 목록을
+  /// 보관하고 오늘 걸 새로 채우는 정리는 안 도는 채로 남아 있었다. 그 틈에
+  /// 추가한 일정이 나중에 뒤늦게 도는 정리에 통째로 어제 날짜로 딸려가는
+  /// 문제가 있었다. 분 단위로 짧게 확인해서 그 틈을 없앤다.
+  void _startDailyRolloverWatcher() {
+    _dailyRolloverTimer = Timer.periodic(const Duration(minutes: 1), (_) {
+      unawaited(_checkDailyRollover());
+    });
+  }
+
+  Future<void> _checkDailyRollover() async {
+    final prefs = await SharedPreferences.getInstance();
+    final before = prefs.getString('nyang_last_date');
+    await DailyResetService.checkAndExecuteReset();
+    final after = prefs.getString('nyang_last_date');
+    if (before == after) return;
+    if (!mounted) return;
+    _tasksController.refresh();
+    _chatController.refreshTaskProgress();
+    setState(() {});
   }
 
   Future<void> _handleAppResumed() async {

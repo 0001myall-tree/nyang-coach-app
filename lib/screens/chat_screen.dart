@@ -17633,13 +17633,26 @@ ${Prompts.outputRulesTail}${Prompts.screenMap}$plannerActionSection$coachOfferTa
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (msg.text.trim().isNotEmpty) ...[
-            Text(
-              msg.text,
-              style: GoogleFonts.notoSansKr(
-                fontSize: AppDesignTokens.textBody,
-                fontWeight: FontWeight.w500,
-                height: 1.6,
-                color: AppDesignTokens.textPrimary,
+            // 코치 배경 사진이 어두울 때 글자가 묻히지 않도록, 사진 밝기와
+            // 무관하게 항상 밝은 바탕을 뒤에 깐다. 글자색만 밝게 바꾸는
+            // 방식은 배경이 밝은 사진일 때 반대로 안 보이게 된다.
+            Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 10,
+              ),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.88),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Text(
+                msg.text,
+                style: GoogleFonts.notoSansKr(
+                  fontSize: AppDesignTokens.textBody,
+                  fontWeight: FontWeight.w500,
+                  height: 1.6,
+                  color: AppDesignTokens.textPrimary,
+                ),
               ),
             ),
             const SizedBox(height: 10),
@@ -17648,12 +17661,22 @@ ${Prompts.outputRulesTail}${Prompts.screenMap}$plannerActionSection$coachOfferTa
           if (multi)
             Padding(
               padding: const EdgeInsets.only(bottom: 8),
-              child: Text(
-                _lifeMultiHint(),
-                style: GoogleFonts.notoSansKr(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: AppDesignTokens.textSecondary,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.88),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  _lifeMultiHint(),
+                  style: GoogleFonts.notoSansKr(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: AppDesignTokens.textSecondary,
+                  ),
                 ),
               ),
             ),
@@ -17757,13 +17780,26 @@ ${Prompts.outputRulesTail}${Prompts.screenMap}$plannerActionSection$coachOfferTa
           // 코치가 무엇을 물었는지부터 보여준다. 이게 빠져 있어서 보기만
           // 덩그러니 떴고, 무엇에 답하는 건지 알 수 없는 화면이 됐다.
           if (msg.text.trim().isNotEmpty) ...[
-            Text(
-              msg.text,
-              style: GoogleFonts.notoSansKr(
-                fontSize: AppDesignTokens.textBody,
-                fontWeight: FontWeight.w500,
-                height: 1.6,
-                color: AppDesignTokens.textPrimary,
+            // 코치 배경 사진이 어두울 때 글자가 묻히지 않도록, 사진 밝기와
+            // 무관하게 항상 밝은 바탕을 뒤에 깐다. 글자색만 밝게 바꾸는
+            // 방식은 배경이 밝은 사진일 때 반대로 안 보이게 된다.
+            Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 10,
+              ),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.88),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Text(
+                msg.text,
+                style: GoogleFonts.notoSansKr(
+                  fontSize: AppDesignTokens.textBody,
+                  fontWeight: FontWeight.w500,
+                  height: 1.6,
+                  color: AppDesignTokens.textPrimary,
+                ),
               ),
             ),
             const SizedBox(height: 10),
@@ -17772,14 +17808,24 @@ ${Prompts.outputRulesTail}${Prompts.screenMap}$plannerActionSection$coachOfferTa
           // 눌렀을 때 아무 일도 일어나지 않아, 눌리지 않는 화면으로 읽힌다.
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
-            child: Text(
-              picked.length >= _conditionPickLimit
-                  ? '$_conditionPickLimit개까지 고를 수 있어요. 바꾸려면 고른 걸 눌러서 빼주세요.'
-                  : '해당하는 걸로 최대 $_conditionPickLimit개까지 고를 수 있어요.',
-              style: GoogleFonts.notoSansKr(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: AppDesignTokens.textSecondary,
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 10,
+                vertical: 6,
+              ),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.88),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                picked.length >= _conditionPickLimit
+                    ? '$_conditionPickLimit개까지 고를 수 있어요. 바꾸려면 고른 걸 눌러서 빼주세요.'
+                    : '해당하는 걸로 최대 $_conditionPickLimit개까지 고를 수 있어요.',
+                style: GoogleFonts.notoSansKr(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: AppDesignTokens.textSecondary,
+                ),
               ),
             ),
           ),
