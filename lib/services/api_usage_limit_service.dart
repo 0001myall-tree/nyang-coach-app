@@ -44,30 +44,70 @@ class ApiUsageNotice {
 }
 
 class ApiUsageLimitService {
-  // 한도를 정할 때 비용을 실제보다 훨씬 크게 잡고 있었다. 테스터 5명이 15일간
-  // 쓴 API 비용이 550원, 1인당 하루 7원꼴이다. 그래서 한 번 올렸다.
+  // 한도는 최악의 경우에 얼마까지 나갈 수 있는가를 정하는 값이다. 실사용은
+  // 테스터 기준 1인당 하루 7원(월 210원)이라 한도 근처에 가지도 않는다.
   //
-  // 다만 한도는 최악의 경우에 얼마까지 나갈 수 있는가를 정하는 값이다. 한 턴에
-  // 4천 토큰으로 잡으면 아래 숫자에서 나오는 월 최대 비용은 프렌즈 4천 원,
-  // 마스터 7천 2백 원쯤이다. 정상가(8,900원) 아래이되, 얼리버드 1년권(월 5,900원)
-  // 사용자가 마스터 한도를 매일 꽉 채우면 적자다. 실사용의 20배가 넘는 경우라
-  // 현실성은 낮지만, 더 올리려면 이 계산부터 다시 할 것.
+  // 계산은 gpt-5-mini 혼합 단가 100만 토큰당 868원
+  // ([AnalyticsService] 참고, 실측으로 맞춰본 적 없는 어림값), 한 턴 4천 토큰
+  // 기준이다. 구글 수수료 15%를 뗀 실수령은 마스터 월간 7,565원 / 6개월권
+  // 월 6,715원, 프렌즈 월간 5,015원 / 6개월권 월 4,165원이다.
+  //
+  // 기본 한도를 매일 꽉 채우면 프렌즈 3,900원, 마스터 7,800원이다. 마스터
+  // 6개월권은 이 상태로 적자여서, 많이 쓴 다음 날은 한도를 낮춘다
+  // ([adjustedDailyLimit]). 계속 많이 쓰는 사람은 낮아진 한도에 머물러
+  // 프렌즈 3,100원 / 마스터 6,200원 선에서 묶인다 — 어느 상품이든 안 밑진다.
   //
   // 조여야 할 때는 고급 모델 횟수보다 이 토큰 한도를 먼저 건드린다. 비용의 절반
   // 이상이 평범한 대화가 쌓여서 나오고, 답이 나빠지는 건 모델을 내릴 때가 크다.
 
   // 아래 둘은 코치가 아니라 플랜에 걸리는 한도다. 쓴 양도 사용자 한 명의 하루
   // 총합으로 세므로, 어느 코치와 대화하든 같은 통에서 빠져나간다. 마스터 플랜
-  // 사용자가 냥냥이와 20만을 쓰면 마스터 코치에게 남는 것도 그만큼 줄어든다.
+  // 사용자가 냥냥이와 15만을 쓰면 마스터 코치에게 남는 것도 그만큼 줄어든다.
 
-  /// 10만 → 20만. 하루 50턴쯤.
-  static const int friendsPlanDailyTokenLimit = 200000;
+  /// 10만 → 20만 → 15만. 하루 37턴쯤.
+  static const int friendsPlanDailyTokenLimit = 150000;
 
-  /// 20만 → 30만 → 40만. 마스터 코치는 목표와 기록까지 실어서 턴당 소모가
-  /// 크고, 이 플랜은 그 코치를 쓸 수 있어 한도를 두 배로 준다. 40만이면
-  /// 100턴쯤 된다.
-  static const int masterPlanDailyTokenLimit = 400000;
+  /// 20만 → 30만 → 40만 → 30만. 마스터 코치는 목표와 기록까지 실어서 턴당
+  /// 소모가 크고, 이 플랜은 그 코치를 쓸 수 있어 한도를 두 배로 준다. 30만이면
+  /// 75턴쯤 된다.
+  static const int masterPlanDailyTokenLimit = 300000;
   static const int masterDailyOrganizeLimit = 7;
+
+  /// 어제 쓴 양에 따라 오늘 한도를 올리거나 내리는 폭.
+  static const int dailyLimitFlexStep = 50000;
+
+  /// 이만큼 이하로 쓴 날은 '아껴 쓴 날'이다.
+  static const int lightDayTokens = 50000;
+
+  /// 기본 한도의 이 비율 이상 쓴 날은 '많이 쓴 날'이다.
+  ///
+  /// 90%로 두면, 매일 89%씩 쓰는 사람은 한 번도 안 걸리면서 마스터 6개월권
+  /// 실수령을 넘긴다. 80%면 그 자리에서도 안 밑진다.
+  static const double heavyDayRatio = 0.8;
+
+  /// 어제 쓴 양을 보고 오늘 한도를 정한다.
+  ///
+  /// 아껴 쓴 다음 날은 [dailyLimitFlexStep]만큼 더 주고, 많이 쓴 다음 날은 그만큼
+  /// 덜 준다. 하루를 크게 쓸 일이 있는 사람은 그 앞뒤로 아끼면 되고, 매일 크게
+  /// 쓰는 사람은 낮아진 한도에 머문다.
+  ///
+  /// 어제 기록이 없는 사람(처음 쓰거나 어제 안 연 사람)은 0으로 들어와 올려주는
+  /// 쪽에 걸린다. 그게 뜻이다 — 안 쓴 만큼 다음 날 여유를 준다.
+  ///
+  /// 판정 기준은 어제 실제로 걸려 있던 한도가 아니라 늘 기본 한도다. 어제 한도를
+  /// 알려면 그 앞날까지 봐야 하고, 대화 한 턴마다 읽는 자리라 조회를 늘리지
+  /// 않는다.
+  static int adjustedDailyLimit({
+    required int base,
+    required int yesterdayUsed,
+  }) {
+    if (base <= 0) return base;
+    if (yesterdayUsed <= lightDayTokens) return base + dailyLimitFlexStep;
+    if (yesterdayUsed >= base * heavyDayRatio) {
+      return base - dailyLimitFlexStep;
+    }
+    return base;
+  }
 
   /// 플랜을 안 쓰는 사람도 냥냥코치와는 대화할 수 있다.
   ///
@@ -98,7 +138,7 @@ class ApiUsageLimitService {
     }
 
     final userData = await UserDataService.load();
-    final limits = _tokenLimitsFor(userData);
+    final limits = await _tokenLimitsFor(userData, user.uid);
     if (limits == null) {
       return const ApiUsageLimitResult(
         allowed: false,
@@ -195,7 +235,7 @@ class ApiUsageLimitService {
     if (user == null) return null;
 
     final userData = await UserDataService.load();
-    final limits = _tokenLimitsFor(userData);
+    final limits = await _tokenLimitsFor(userData, user.uid);
     if (limits == null) return null;
 
     final today = DateTime.now();
@@ -220,17 +260,30 @@ class ApiUsageLimitService {
     );
   }
 
-  static _TokenLimits? _tokenLimitsFor(UserData userData) {
+  /// 오늘 이 사람에게 걸리는 한도. 플랜이 아니면 null.
+  ///
+  /// 무료 구간은 어제를 보지 않는다 — 계정당 하루뿐이라 어제가 없다.
+  static Future<_TokenLimits?> _tokenLimitsFor(
+    UserData userData,
+    String uid,
+  ) async {
     if (!userData.isPlanActive) {
       return const _TokenLimits(daily: freePlanDailyTokenLimit);
     }
-    if (userData.planType == 'friends') {
-      return const _TokenLimits(daily: friendsPlanDailyTokenLimit);
-    }
-    if (userData.planType == 'master') {
-      return const _TokenLimits(daily: masterPlanDailyTokenLimit);
-    }
-    return null;
+    final base = switch (userData.planType) {
+      'friends' => friendsPlanDailyTokenLimit,
+      'master' => masterPlanDailyTokenLimit,
+      _ => 0,
+    };
+    if (base == 0) return null;
+
+    final yesterdayUsed = await _dailyTokenUsage(
+      uid,
+      DateTime.now().subtract(const Duration(days: 1)),
+    );
+    return _TokenLimits(
+      daily: adjustedDailyLimit(base: base, yesterdayUsed: yesterdayUsed),
+    );
   }
 
   static Future<int> _dailyTokenUsage(String uid, DateTime date) async {

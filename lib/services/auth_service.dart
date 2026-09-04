@@ -4,6 +4,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import '../models/user_data.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../services/account_retention_service.dart';
+import '../services/coach_id_service.dart';
 import '../services/distraction_coach_quota.dart';
 import '../services/free_access_service.dart';
 import '../services/memory_service.dart';
@@ -28,6 +30,7 @@ class AuthService {
   Future<bool> ensureCurrentUserAllowed() async {
     final user = _auth.currentUser;
     if (user == null) return false;
+    await AccountRetentionService.instance.markLoggedIn(user);
     await _applyAllowedEmailEntitlement(await _allowedEmailData(user.email));
     return true;
   }
@@ -136,6 +139,7 @@ class AuthService {
     final user = cred?.user;
     if (user == null) return;
     await _clearDataOfPreviousAccount(user);
+    await AccountRetentionService.instance.markLoggedIn(user);
     final allowData = await _allowedEmailData(user.email);
     await UserDataService.syncFromCloud();
     await _applyAllowedEmailEntitlement(allowData);
@@ -259,7 +263,10 @@ class AuthService {
 
   List<String>? _stringListFromValue(Object? value) {
     if (value is Iterable) {
-      return value.map((item) => item.toString()).toList(growable: true);
+      return value
+          .map((item) => CoachIdService.normalize(item.toString()))
+          .toSet()
+          .toList(growable: true);
     }
     return null;
   }
@@ -267,7 +274,10 @@ class AuthService {
   Map<String, DateTime?>? _coachExpiryMapFromValue(Object? value) {
     if (value is! Map) return null;
     return value.map(
-      (key, expiry) => MapEntry(key.toString(), _parseNullableDate(expiry)),
+      (key, expiry) => MapEntry(
+        CoachIdService.normalize(key.toString()),
+        _parseNullableDate(expiry),
+      ),
     );
   }
 

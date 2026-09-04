@@ -1,6 +1,8 @@
 class CoachIdService {
   static const String legacyNyangHalbaeId = 'sec_male';
+  static const String legacyGodlifeBroId = 'godlife_bro';
   static const String nyangHalbaeId = 'nyang_halbae';
+  static const String broId = 'bro';
   static const String secretaryChiefId = 'sec_female';
   static const String defaultCoachId = 'cat';
 
@@ -8,6 +10,7 @@ class CoachIdService {
     final id = coachId?.trim();
     if (id == null || id.isEmpty) return fallback;
     if (id == legacyNyangHalbaeId) return nyangHalbaeId;
+    if (id == legacyGodlifeBroId) return broId;
     return id;
   }
 
