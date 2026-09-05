@@ -2321,10 +2321,15 @@ class _TasksScreenState extends State<TasksScreen>
     // 첫 클라우드 복원 전에는 리셋하지 않는다 (재설치 직후 데이터 유실 방지).
     if (DailyResetService.isCloudRestorePending(prefs)) return;
     final today = _getTodayStr();
-    final lastDate = prefs.getString('nyang_last_date');
+    // 이 기기에서 오늘 정리를 이미 끝냈으면 다시 돌지 않는다. 클라우드에서
+    // 옛 날짜가 돌아왔을 뿐인데 정리가 한 번 더 돌면, 오늘 적어둔 것이
+    // 어제 칸으로 넘어가고 오늘 목록은 루틴과 일정으로만 다시 만들어진다.
+    if (await DailyResetService.alreadyResetToday(prefs, today)) return;
+    final lastDate = prefs.getString(DailyResetService.lastDateKey);
 
     if (lastDate == null) {
-      await prefs.setString('nyang_last_date', today);
+      await prefs.setString(DailyResetService.lastDateKey, today);
+      await prefs.setString(DailyResetService.resetDoneDateKey, today);
       return;
     }
 
@@ -2418,7 +2423,8 @@ class _TasksScreenState extends State<TasksScreen>
         await prefs.setString('nyang_chat_history_$id', '[]');
       }
 
-      await prefs.setString('nyang_last_date', today);
+      await prefs.setString(DailyResetService.lastDateKey, today);
+      await prefs.setString(DailyResetService.resetDoneDateKey, today);
     }
   }
 
@@ -3057,6 +3063,7 @@ class _TasksScreenState extends State<TasksScreen>
       stored: stored,
       encoded: encoded,
       knownKeys: plannedTodayTasksByDate.keys.toSet(),
+      justArchivedKey: prefs.getString(DailyResetService.lastResetFromDateKey),
     );
 
     // 저장소에만 있던 날짜는 화면도 알고 있어야 한다. 그래야 어제를 열었을 때
@@ -4318,10 +4325,14 @@ class _TasksScreenState extends State<TasksScreen>
     }
 
     final currentTasks = _activeTodayTasksWithSchedules;
-    var t = currentTasks.firstWhere(
+    // 없는 것을 눌렀으면 아무 일도 하지 않는다. 예전에는 맨 앞 항목을 대신
+    // 집었는데, 알림에서 넘어온 항목이 목록에 없을 때(정리가 목록을 다시 만든
+    // 뒤 같은 때) 엉뚱한 할 일이 시작되거나 완료됐다.
+    final currentIndex = currentTasks.indexWhere(
       (t) => t.id.toString() == id.toString(),
-      orElse: () => currentTasks.first,
     );
+    if (currentIndex < 0) return;
+    var t = currentTasks[currentIndex];
     if (!_isViewingActualToday && t.category == 'schedule') {
       final scheduleId = t.id.toString().replaceAll('schedule_', '');
       final daySchedules = schedules[_activeTodayDateKey];

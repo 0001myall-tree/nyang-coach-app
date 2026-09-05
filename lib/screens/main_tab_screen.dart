@@ -703,18 +703,29 @@ class _MainTabScreenState extends State<MainTabScreen>
   /// 넘어가면 화면은 실시간으로 오늘을 계산해 보여주는데, 어제 목록을
   /// 보관하고 오늘 걸 새로 채우는 정리는 안 도는 채로 남아 있었다. 그 틈에
   /// 추가한 일정이 나중에 뒤늦게 도는 정리에 통째로 어제 날짜로 딸려가는
-  /// 문제가 있었다. 분 단위로 짧게 확인해서 그 틈을 없앤다.
+  /// 문제가 있었다.
+  ///
+  /// 처음에는 분 단위로 계속 확인했는데, 하루에 한 번 일어나는 일을 1440번
+  /// 물어보는 셈이었다. 다음 자정에 딱 한 번 깨우고, 깨어난 자리에서 그다음
+  /// 자정을 다시 예약한다.
   void _startDailyRolloverWatcher() {
-    _dailyRolloverTimer = Timer.periodic(const Duration(minutes: 1), (_) {
+    _dailyRolloverTimer?.cancel();
+    final now = DateTime.now();
+    final nextMidnight = DateTime(now.year, now.month, now.day + 1);
+    // 기기 시계가 자정을 막 지난 순간에 깨면 아직 어제로 읽힐 수 있다.
+    // 몇 초 지나서 깨운다.
+    final wait = nextMidnight.difference(now) + const Duration(seconds: 5);
+    _dailyRolloverTimer = Timer(wait, () {
       unawaited(_checkDailyRollover());
+      if (mounted) _startDailyRolloverWatcher();
     });
   }
 
   Future<void> _checkDailyRollover() async {
     final prefs = await SharedPreferences.getInstance();
-    final before = prefs.getString('nyang_last_date');
+    final before = prefs.getString(DailyResetService.lastDateKey);
     await DailyResetService.checkAndExecuteReset();
-    final after = prefs.getString('nyang_last_date');
+    final after = prefs.getString(DailyResetService.lastDateKey);
     if (before == after) return;
     if (!mounted) return;
     _tasksController.refresh();

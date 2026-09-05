@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
@@ -14,6 +15,20 @@ class DailyResetService {
   static const String previousDayHadTasksKey = 'nyang_previous_day_had_tasks';
   static const String previousDayAllDoneKey =
       'nyang_previous_day_all_tasks_done';
+
+  /// 이 기기에서 어느 날짜의 정리를 이미 끝냈는지.
+  ///
+  /// 'nyang_' 접두어를 쓰지 않는다. 그 접두어는 클라우드가 덮어쓰는데, 정리를
+  /// 이미 했다는 것은 이 기기에서 일어난 사실이라 덮이면 안 된다.
+  ///
+  /// 정리를 돌릴지는 원래 [lastDateKey] 하나로 정했다. 그 값은 클라우드로
+  /// 오가기 때문에 오래된 값이 도착하면 되돌아갈 수 있고, 그러면 앱은 이미
+  /// 끝낸 정리를 낮에 다시 실행했다. 그 순간 오늘 목록은 통째로 어제 칸으로
+  /// 넘어가고, 루틴과 일정에서 새로 만들어진다 — 오늘 직접 적은 할 일은
+  /// 만들 재료가 없어서 그대로 사라졌다.
+  static const String resetDoneDateKey = 'daily_reset_done_date';
+
+  static const String lastDateKey = 'nyang_last_date';
 
   /// "지난 대화 보기"용 코치별 로컬 보관함 키 접두사. 최근 7일치만 유지한다.
   static const String chatArchivePrefix = 'nyang_chat_archive_';
@@ -186,15 +201,27 @@ class DailyResetService {
   ///
   /// 그래서 화면이 아예 모르는 날짜는 저장소 쪽을 남긴다. 화면이 아는 날짜는
   /// 비어 있더라도 화면이 이긴다 — 지운 것이 되살아나면 안 되기 때문이다.
+  ///
+  /// [justArchivedKey]는 예외다. 정리가 방금 어제 목록을 넣어둔 날짜인데,
+  /// 화면은 그 칸을 빈손으로 알고 있어서 곧바로 다시 비웠다. 오늘 목록에서도
+  /// 없고 어제 칸에서도 없어지던 자리가 여기다. 화면이 빈손일 때만 저장소를
+  /// 남긴다 — 화면에 뭔가 들고 있으면 사용자가 실제로 고친 것이므로 그대로 둔다.
   static Map<String, dynamic> mergePlannedTasksForSave({
     required Map<String, dynamic> stored,
     required Map<String, dynamic> encoded,
     required Set<String> knownKeys,
+    String? justArchivedKey,
   }) {
     final merged = Map<String, dynamic>.from(encoded);
     stored.forEach((key, value) {
-      if (knownKeys.contains(key)) return;
-      merged[key] = value;
+      if (!knownKeys.contains(key)) {
+        merged[key] = value;
+        return;
+      }
+      if (key != justArchivedKey) return;
+      final mine = merged[key];
+      final emptyHere = mine == null || (mine is List && mine.isEmpty);
+      if (emptyHere) merged[key] = value;
     });
     return merged;
   }
@@ -248,15 +275,30 @@ class DailyResetService {
     return !(prefs.getBool('nyang_has_synced_from_cloud') ?? false);
   }
 
+  /// 오늘 정리를 이미 끝냈는지. 끝냈으면 되돌아온 날짜만 바로잡고 목록은
+  /// 건드리지 않는다.
+  static Future<bool> alreadyResetToday(
+    SharedPreferences prefs,
+    String today,
+  ) async {
+    if (prefs.getString(resetDoneDateKey) != today) return false;
+    if (prefs.getString(lastDateKey) != today) {
+      await prefs.setString(lastDateKey, today);
+    }
+    return true;
+  }
+
   static Future<void> checkAndExecuteReset() async {
     final prefs = await SharedPreferences.getInstance();
     if (isCloudRestorePending(prefs)) return;
     const resetHour = 0.0;
     final today = _getTodayStr(resetHour);
-    final lastDate = prefs.getString('nyang_last_date');
+    if (await alreadyResetToday(prefs, today)) return;
+    final lastDate = prefs.getString(lastDateKey);
 
     if (lastDate == null) {
-      await prefs.setString('nyang_last_date', today);
+      await prefs.setString(lastDateKey, today);
+      await prefs.setString(resetDoneDateKey, today);
       return;
     }
 
@@ -350,10 +392,15 @@ class DailyResetService {
         );
       }
 
-      await prefs.setString('nyang_last_date', today);
+      await prefs.setString(lastDateKey, today);
+      await prefs.setString(resetDoneDateKey, today);
 
       // 5. Inject habits & schedules to prefs for the new day
-      await _injectTodayHabitsAndSchedulesDirectly(prefs, today);
+      await _injectTodayHabitsAndSchedulesDirectly(
+        prefs,
+        today,
+        previousTasks: previousTasks,
+      );
       TasksSyncService.scheduleSyncToCloud();
     }
 
@@ -379,10 +426,18 @@ class DailyResetService {
     }
   }
 
+  /// 오늘 목록을 루틴·일정·미리 세운 계획으로 다시 만든다.
+  ///
+  /// [previousTasks]는 정리 직전의 목록이다. 이 셋 어디에도 재료가 없는 항목,
+  /// 곧 오늘 탭에서 손으로 적은 할 일은 여기서 다시 만들어질 수 없다. 그래서
+  /// 그중 오늘 적은 것만 그대로 들고 간다 — 자정 정리라면 어제 것뿐이라 아무
+  /// 일도 일어나지 않고, 정리가 엉뚱한 때에 한 번 더 돌더라도 오늘 적은 것이
+  /// 사라지지 않는다.
   static Future<void> _injectTodayHabitsAndSchedulesDirectly(
     SharedPreferences prefs,
-    String today,
-  ) async {
+    String today, {
+    List<dynamic> previousTasks = const [],
+  }) async {
     final parts = today.split('-');
     int todayDow = DateTime.now().weekday;
     if (parts.length >= 3) {
@@ -536,8 +591,37 @@ class DailyResetService {
       } catch (_) {}
     }
 
+    // 4. 다시 만들 재료가 없는 항목 중, 오늘 적은 것만 그대로 들고 간다.
+    final existingIds = injectedTasks.map((t) => t['id'].toString()).toSet();
+    for (final t in previousTasks) {
+      if (t is! Map) continue;
+      final task = Map<String, dynamic>.from(t);
+      if (!existingIds.add(task['id'].toString())) continue;
+      if (!shouldCarryOverTask(task, today)) continue;
+      injectedTasks.add(task);
+    }
+
     await prefs.setString('nyang_tasks', jsonEncode(injectedTasks));
     await _saveTodayRecordDirectly(prefs, today, injectedTasks);
+  }
+
+  /// 정리가 목록을 다시 만들 때, 이 항목을 그대로 들고 가야 하는지.
+  ///
+  /// 루틴과 일정은 각자의 저장소에서 다시 만들어지므로 들고 가지 않는다.
+  /// 남는 건 오늘 탭에서 손으로 적은 할 일이고, 그건 다시 만들 재료가 없다.
+  /// 오늘 적은 것만 본다 — 어제 것을 들고 가면 자정 정리가 아무것도 안 지운
+  /// 셈이 된다.
+  @visibleForTesting
+  static bool shouldCarryOverTask(Map<String, dynamic> task, String today) {
+    if (task['habitId'] != null) return false;
+    if (task['category'] == 'schedule') return false;
+    return _dateOfIso(task['createdAt']) == today;
+  }
+
+  /// ISO 시각에서 날짜만. 못 읽으면 null.
+  static String? _dateOfIso(Object? raw) {
+    final parsed = DateTime.tryParse(raw?.toString() ?? '');
+    return parsed == null ? null : DateFormat('yyyy-MM-dd').format(parsed);
   }
 
   static String? _displayTimeFromStored({dynamic timeStart, dynamic timeEnd}) {

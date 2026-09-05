@@ -12,7 +12,9 @@ import 'coach_config.dart';
 import 'landing_screen.dart';
 import '../services/account_deletion_service.dart';
 import '../services/content_report_service.dart';
+import '../services/daily_reset_service.dart';
 import '../services/last_reply_log.dart';
+import '../services/routine_diagnostics.dart';
 import '../services/notification_service.dart';
 import '../services/auth_service.dart';
 import '../services/tasks_sync_service.dart';
@@ -2688,6 +2690,14 @@ class _SettingsScreenState extends State<SettingsScreen>
                         subtitle: '마지막으로 받은 답변을 그대로 보고 신고할 수 있어요.',
                         onTap: _showLastReplyDialog,
                       ),
+                      const SizedBox(height: 10),
+
+                      _buildSettingsNavigationTile(
+                        icon: Icons.search_outlined,
+                        label: '루틴이 오늘 탭에 없을 때',
+                        subtitle: '저장된 값을 그대로 보여줘요. 왜 안 올라왔는지 확인할 수 있어요.',
+                        onTap: _showRoutineDiagnosticsDialog,
+                      ),
                       const SizedBox(height: 20),
 
                       _buildLogoutButton(),
@@ -4971,6 +4981,77 @@ class _SettingsScreenState extends State<SettingsScreen>
     if (opened || !mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('링크를 열 수 없어요. 잠시 후 다시 시도해주세요.')),
+    );
+  }
+
+  /// 루틴이 오늘 탭에 안 올라왔을 때, 저장된 값을 그대로 펼쳐 보여준다.
+  ///
+  /// 화면에는 결과만 나와서, 반복 설정이 매일이 아닌 것인지 그날 쉬기로 찍힌
+  /// 것인지 목록을 만들다 빠진 것인지 구분할 수가 없었다. 셋은 고치는 자리가
+  /// 전혀 다르다.
+  Future<void> _showRoutineDiagnosticsDialog() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.reload();
+    final text = RoutineDiagnostics.build(
+      rawHabits: prefs.getString('nyang_habits'),
+      rawHabitLogs: prefs.getString('nyang_habit_logs'),
+      rawTasks: prefs.getString('nyang_tasks'),
+      lastDate: prefs.getString(DailyResetService.lastDateKey),
+      resetDoneDate: prefs.getString(DailyResetService.resetDoneDateKey),
+      now: DateTime.now(),
+    );
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(
+          '루틴이 오늘 탭에 없을 때',
+          style: GoogleFonts.notoSansKr(
+            fontSize: 16,
+            fontWeight: FontWeight.w900,
+            color: const Color(0xFF1E1E2D),
+          ),
+        ),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: SingleChildScrollView(
+            child: SelectableText(
+              text,
+              style: GoogleFonts.notoSansKr(
+                fontSize: 12,
+                height: 1.6,
+                color: const Color(0xFF3D3A4E),
+              ),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () async {
+              await Clipboard.setData(ClipboardData(text: text));
+              if (!ctx.mounted) return;
+              Navigator.pop(ctx);
+              if (!mounted) return;
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(const SnackBar(content: Text('복사했어요')));
+            },
+            child: Text(
+              '복사',
+              style: GoogleFonts.notoSansKr(fontWeight: FontWeight.w900),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(
+              '닫기',
+              style: GoogleFonts.notoSansKr(fontWeight: FontWeight.w900),
+            ),
+          ),
+        ],
+      ),
     );
   }
 

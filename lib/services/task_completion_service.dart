@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'daily_reset_service.dart';
@@ -148,7 +149,7 @@ class TaskCompletionService {
     final task = _findById(tasks, taskId);
     if (task == null) return false;
 
-    final dateKeyForDone = prefs.getString('nyang_last_date') ?? _todayKey(at);
+    final dateKeyForDone = _dateKeyForCompletion(prefs, at);
     if (done && task['done'] == true) {
       // 네이티브가 앱 밖에서 먼저 표시해둔 경우다. 바꿀 것은 없지만 그날 기록은
       // 여기서 정확히 다시 센다 — 네이티브는 주 n회 습관 같은 걸 가릴 수 없다.
@@ -420,6 +421,27 @@ class TaskCompletionService {
 
   static String _todayKey(DateTime at) =>
       '${at.year}-${at.month.toString().padLeft(2, '0')}-${at.day.toString().padLeft(2, '0')}';
+
+  /// 지금 완료한 것을 어느 날 칸에 적을지.
+  ///
+  /// 오늘 목록은 자정을 넘겨도 앱을 열기 전까지는 어제 것이다. 그래서 목록이
+  /// 어느 날의 것인지 적어둔 값을 따라간다.
+  ///
+  /// 다만 그 값은 클라우드로 오가서 옛 날짜로 되돌려질 수 있다. 되돌려진 채로
+  /// 완료를 누르면 오늘 한 일이 어제 칸에 찍히고, 주 n회 루틴이라면 그 한 번이
+  /// 지난 주치를 채워 오늘 목록에서 사라지게 만든다. 이 기기가 오늘 정리를
+  /// 끝냈다면 목록은 오늘 것이 맞으므로, 되돌려진 값보다 그쪽을 믿는다.
+  @visibleForTesting
+  static String dateKeyForCompletion(SharedPreferences prefs, DateTime at) =>
+      _dateKeyForCompletion(prefs, at);
+
+  static String _dateKeyForCompletion(SharedPreferences prefs, DateTime at) {
+    final today = _todayKey(at);
+    if (prefs.getString(DailyResetService.resetDoneDateKey) == today) {
+      return today;
+    }
+    return prefs.getString(DailyResetService.lastDateKey) ?? today;
+  }
 
   static List<Map<String, dynamic>> _decodeList(String? raw) {
     if (raw == null || raw.isEmpty) return [];
