@@ -45,6 +45,16 @@ class OngoingTaskNudgeService {
     debugPrint('[OngoingNudge] $message');
   }
 
+  /// 할 일 화면에서 타이머를 켜뒀는지. (할 일 화면이 쓰는 값과 같은 자리다)
+  ///
+  /// 끈 사람에게는 잠금화면과 다이내믹 아일랜드에서도 숫자를 안 보여준다.
+  /// 타이머를 끄는 이유는 대개 쫓기는 느낌이 싫어서인데, 거기는 앱보다 더 자주
+  /// 눈에 띄는 자리라 계속 흐르면 끈 의미가 없어진다.
+  static Future<bool> _showsTimer() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool('nyang_show_task_timer') ?? true;
+  }
+
   /// 이 기능이 쓰는 키는 'nyang_'으로 시작하지 않는다.
   ///
   /// 그 접두어가 붙은 값은 통째로 클라우드에 올라갔다 내려온다. 여기 담기는 건
@@ -297,6 +307,7 @@ class OngoingTaskNudgeService {
         'taskId': taskId,
         'taskText': taskText,
         'startedAtMillis': startedAt.millisecondsSinceEpoch,
+        'showsTimer': await _showsTimer(),
       });
       _log('start channel call completed');
     } on PlatformException catch (error) {

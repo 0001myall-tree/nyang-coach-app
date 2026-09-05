@@ -1131,6 +1131,9 @@ class _TasksScreenState extends State<TasksScreen>
     setState(() => _showTaskTimer = value);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_showTaskTimerKey, value);
+    // 아이폰은 잠금화면에도 같은 숫자가 떠 있다. 여기서 껐는데 거기서 계속
+    // 흐르면 끈 것이 아니게 된다. 지금 도는 일정이 있으면 다시 맞춘다.
+    unawaited(_syncOngoingNudge());
   }
 
   /// 길게 눌렀을 때 카드를 살짝 밀어 보이는 시늉.

@@ -748,14 +748,16 @@ struct NyangTaskLiveActivity: Widget {
                         .foregroundColor(Color(red: 0.420, green: 0.400, blue: 0.463))
                 }
                 Spacer()
-                Text(context.state.startedAt, style: .timer)
-                    .font(.system(size: 20, weight: .heavy, design: .rounded))
-                    .monospacedDigit()
-                    .foregroundColor(Color(red: 0.545, green: 0.486, blue: 1.0))
-                    // 한 시간을 넘기면 "1:05:23"이 되어 자리가 모자란다. 줄여서라도 다 보여준다.
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.6)
-                    .fixedSize(horizontal: true, vertical: false)
+                if context.state.showsTimer {
+                    Text(context.state.startedAt, style: .timer)
+                        .font(.system(size: 20, weight: .heavy, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundColor(Color(red: 0.545, green: 0.486, blue: 1.0))
+                        // 한 시간을 넘기면 "1:05:23"이 되어 자리가 모자란다. 줄여서라도 다 보여준다.
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
+                        .fixedSize(horizontal: true, vertical: false)
+                }
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
@@ -785,13 +787,21 @@ struct NyangTaskLiveActivity: Widget {
                     NyangLiveActivityCat(size: 36)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
-                    Text(context.state.startedAt, style: .timer)
-                        .font(.system(size: 18, weight: .heavy, design: .rounded))
-                        .monospacedDigit()
-                        .foregroundColor(Color(red: 0.545, green: 0.486, blue: 1.0))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.6)
-                        .frame(maxWidth: 88, alignment: .trailing)
+                    if context.state.showsTimer {
+                        Text(context.state.startedAt, style: .timer)
+                            .font(.system(size: 18, weight: .heavy, design: .rounded))
+                            .monospacedDigit()
+                            .foregroundColor(Color(red: 0.545, green: 0.486, blue: 1.0))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.6)
+                            .frame(maxWidth: 88, alignment: .trailing)
+                    } else {
+                        Text("진행 중")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundColor(Color(red: 0.545, green: 0.486, blue: 1.0))
+                            .lineLimit(1)
+                            .frame(maxWidth: 88, alignment: .trailing)
+                    }
                 }
                 DynamicIslandExpandedRegion(.bottom) {
                     Text(context.state.taskText.isEmpty ? "진행 중인 일정" : context.state.taskText)
@@ -802,13 +812,13 @@ struct NyangTaskLiveActivity: Widget {
                 NyangLiveActivityCat(size: 20)
             } compactTrailing: {
                 // 알약에서 가장 좁은 자리다. 시간이 길어지면 글자를 줄여서 맞춘다.
-                Text(context.state.startedAt, style: .timer)
-                    .font(.system(size: 13, weight: .bold, design: .rounded))
-                    .monospacedDigit()
-                    .foregroundColor(Color(red: 0.545, green: 0.486, blue: 1.0))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.5)
-                    .frame(maxWidth: 56)
+                //
+                // 가운데는 카메라와 센서가 있어 못 쓴다. 왼쪽과 오른쪽 두 칸이
+                // 전부라, 여기 들어갈 것은 최대한 짧아야 한다.
+                NyangLiveActivityTrailing(
+                    startedAt: context.state.startedAt,
+                    showsTimer: context.state.showsTimer
+                )
             } minimal: {
                 NyangLiveActivityCat(size: 18)
             }
@@ -842,6 +852,45 @@ struct NyangTaskLiveActivity: Widget {
             URLQueryItem(name: "text", value: taskText),
         ]
         return components?.url
+    }
+}
+
+/// 알약 오른쪽 칸. 흐르는 시간, 또는 그걸 끈 사람에게는 상태 한마디.
+///
+/// 앞에 멈춤 표시를 세운다. 시간만 있으면 무엇을 세는 숫자인지 알 수 없고,
+/// 무엇보다 지금 도는 중이라는 것이 한눈에 안 들어온다.
+///
+/// 재생(▶)이 아니라 멈춤(⏸)이다. 라이브 액티비티는 도는 동안에만 떠 있으므로,
+/// 재생 표시는 "아직 시작 안 했다"는 정반대 신호가 된다. 앱 안의 할 일 칸도
+/// 같은 규칙으로 갈라져 있다.
+@available(iOSApplicationExtension 16.1, *)
+struct NyangLiveActivityTrailing: View {
+    let startedAt: Date
+    let showsTimer: Bool
+
+    private let accent = Color(red: 0.545, green: 0.486, blue: 1.0)
+
+    var body: some View {
+        HStack(spacing: 3) {
+            Image(systemName: "pause.fill")
+                .font(.system(size: 10, weight: .black))
+                .foregroundColor(accent)
+            if showsTimer {
+                Text(startedAt, style: .timer)
+                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundColor(accent)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.5)
+            } else {
+                Text("진행 중")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(accent)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
+        }
+        .frame(maxWidth: 62)
     }
 }
 

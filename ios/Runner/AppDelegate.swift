@@ -114,6 +114,8 @@ import ActivityKit
         let taskId = args["taskId"] as? String ?? ""
         let taskText = args["taskText"] as? String ?? ""
         let startedAtMillis = args["startedAtMillis"] as? NSNumber
+        // 값을 안 보내던 시절의 호출도 있다. 그때는 보여주는 쪽이 여태 하던 일이다.
+        let showsTimer = args["showsTimer"] as? Bool ?? true
         if taskId.isEmpty {
           result(FlutterError(code: "INVALID_ARGS", message: "Missing taskId", details: nil))
           return
@@ -121,7 +123,8 @@ import ActivityKit
         self.startOrUpdateActivity(
           taskId: taskId,
           taskText: taskText,
-          startedAtMillis: startedAtMillis?.doubleValue
+          startedAtMillis: startedAtMillis?.doubleValue,
+          showsTimer: showsTimer
         )
         result(nil)
       case "stop":
@@ -196,7 +199,8 @@ import ActivityKit
   private func startOrUpdateActivity(
     taskId: String,
     taskText: String,
-    startedAtMillis: Double?
+    startedAtMillis: Double?,
+    showsTimer: Bool
   ) {
     #if canImport(ActivityKit)
     guard #available(iOS 16.1, *) else {
@@ -213,7 +217,8 @@ import ActivityKit
     let startedAt = startedAtMillis.map { Date(timeIntervalSince1970: $0 / 1000) } ?? Date()
     let state = NyangTaskActivityAttributes.ContentState(
       taskText: taskText,
-      startedAt: startedAt
+      startedAt: startedAt,
+      showsTimer: showsTimer
     )
 
     let running = Activity<NyangTaskActivityAttributes>.activities
