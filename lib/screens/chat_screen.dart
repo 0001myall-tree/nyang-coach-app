@@ -27,6 +27,7 @@ import 'package:nyang_coach/services/busy_hours_service.dart';
 import 'package:nyang_coach/services/apple_calendar_sync_service.dart';
 import 'package:nyang_coach/services/execution_pattern_service.dart';
 import 'package:nyang_coach/services/routine_frequency.dart';
+import 'package:nyang_coach/services/schedule_repeat_end.dart';
 import 'package:nyang_coach/services/routine_spread_analysis.dart';
 import 'package:nyang_coach/services/routine_spread_apply.dart';
 import 'package:nyang_coach/services/routine_spread_budget.dart';
@@ -1009,6 +1010,10 @@ class _ParsedReply {
   /// 끝냈다고 짚은 이름 전부. 완료만 한 장에 모아 물어본다.
   final List<String> doneTargets;
   final String? habitToConfirm;
+
+  /// 반복 일정의 마지막 날. 코치가 "10월 말까지" 같은 말을 날짜로 옮겨 보낸다.
+  /// 없으면 반복이 끝나지 않아 1년치가 들어간다.
+  final DateTime? scheduleUntil;
   final String? goalToConfirm;
 
   /// 코치가 열어달라고 짚은 화면. 여는 것은 되돌릴 것이 없어서 확인 카드가
@@ -1036,6 +1041,7 @@ class _ParsedReply {
     this.plannerAction,
     this.doneTargets = const [],
     this.habitToConfirm,
+    this.scheduleUntil,
     this.goalToConfirm,
     this.openLocation,
     this.busyHours,
@@ -2147,7 +2153,13 @@ class _ChatScreenState extends State<ChatScreen>
       await _showScheduleRegistrationDialog(
         '$title 추가해줘',
         reminderOverride: withAlarm ? true : null,
+        // 코치가 "10월 말까지"를 날짜로 옮겨 보냈으면 그걸 반복에 넣는다.
+        // 없으면 끝나지 않는 반복이 되어 1년치가 들어간다.
+        repeatUntil: _pendingScheduleUntil,
       );
+      // 한 번 쓰면 비운다. 남겨두면 다음에 등록하는 다른 일정에 엉뚱한
+      // 마지막 날이 따라붙는다.
+      _pendingScheduleUntil = null;
       return;
     }
 
@@ -2705,6 +2717,10 @@ class _ChatScreenState extends State<ChatScreen>
         ? _parseScheduleRegistration('$title 추가해줘')
         : null;
 
+    // 반복 일정의 마지막 날. 카드를 누를 때까지 들고 있는다 — payload는
+    // 이름과 종류만 담는 자리라 여기에 더 실으면 읽는 쪽이 어긋난다.
+    _pendingScheduleUntil = parsed.scheduleUntil;
+
     // 루틴은 이름 뒤에 |로 반복이 붙어 온다. 카드에는 이름만 보이고 반복은
     // 옆에 적는다 — 대괄호 안의 형식이 사용자에게 그대로 보이면 안 된다.
     final habitBar = type == 'habit' ? title.indexOf('|') : -1;
@@ -2747,6 +2763,9 @@ class _ChatScreenState extends State<ChatScreen>
 
   /// 카드에 적을 반복. 매일이거나 모르면 빈 문자열 — 굳이 "매일"이라고
   /// 적지 않는다. 루틴은 매일이 예사라, 적어두면 다른 것이 있는 줄 알게 된다.
+  /// 코치가 짚은 반복 일정의 마지막 날.
+  DateTime? _pendingScheduleUntil;
+
   String _habitFrequencyLabel(RoutineFrequency? freq) {
     if (freq == null || freq.freq == 'daily') return '';
     if (freq.freq == 'weekly_count') {
@@ -8369,6 +8388,8 @@ Rules:
     String? scheduleToConfirm;
     var scheduleReminder = false;
     String? habitToConfirm;
+    /// 반복 일정의 마지막 날. 없으면 끝나지 않는 반복이다.
+    DateTime? scheduleUntil;
     String? goalToConfirm;
     String text = raw;
 
@@ -8473,16 +8494,23 @@ Rules:
 
     final scheduleMatch = scheduleRegex.firstMatch(raw);
     if (scheduleMatch != null) {
-      // "[SCHEDULE: 글쓰기|알람]"처럼 알람까지 부탁한 경우가 있다. 이름과 갈라둔다.
-      final body = scheduleMatch.group(1)!.trim();
-      final bar = body.indexOf('|');
-      if (bar < 0) {
-        scheduleToConfirm = body;
-      } else {
-        scheduleToConfirm = body.substring(0, bar).trim();
-        scheduleReminder = RegExp(
-          r'알람|알려|리마인드|remind',
-        ).hasMatch(body.substring(bar + 1));
+      // "[SCHEDULE: 글쓰기|알람]"처럼 뒤에 조건이 붙는다. 이름과 갈라둔다.
+      //
+      // 조각은 순서를 안 따진다. 알람과 종료일이 함께 올 수 있고, 코치가
+      // 어느 쪽을 먼저 적을지는 매번 다르다.
+      final pieces = scheduleMatch.group(1)!.split('|');
+      scheduleToConfirm = pieces.first.trim();
+      for (final piece in pieces.skip(1)) {
+        if (ScheduleRepeatEnd.looksLikeEnd(piece)) {
+          scheduleUntil ??= ScheduleRepeatEnd.parse(
+            piece,
+            today: DateTime.now(),
+          );
+          continue;
+        }
+        if (RegExp(r'알람|알려|리마인드|remind').hasMatch(piece)) {
+          scheduleReminder = true;
+        }
       }
     }
     final habitMatch = habitRegex.firstMatch(raw);
@@ -8534,6 +8562,7 @@ Rules:
       scheduleToConfirm: scheduleToConfirm,
       scheduleReminder: scheduleReminder,
       habitToConfirm: habitToConfirm,
+      scheduleUntil: scheduleUntil,
       goalToConfirm: goalToConfirm,
       plannerAction: plannerAction,
       doneTargets: PlannerAction.doneTargets(raw),
@@ -10740,6 +10769,15 @@ Rules:
 
   String _repeatRuleLabel(Map<String, dynamic>? rule) {
     if (rule == null) return '';
+    final base = _repeatRuleCycleLabel(rule);
+    // 언제까지인지가 반복 자체보다 중요할 때가 있다. 학원이 10월에 끝나는데
+    // 끝나지 않는 반복으로 들어가면 그 뒤로도 계속 뜬다.
+    final until = DateTime.tryParse(rule['endDate']?.toString() ?? '');
+    if (rule['endType']?.toString() != 'date' || until == null) return base;
+    return '$base, ${ScheduleRepeatEnd.label(until)}';
+  }
+
+  String _repeatRuleCycleLabel(Map<String, dynamic> rule) {
     final type = rule['type']?.toString() ?? 'daily';
     if (type == 'daily') return '매일';
     if (type == 'weekly') {
@@ -11069,13 +11107,22 @@ Rules:
   Future<void> _showScheduleRegistrationDialog(
     String speechText, {
     bool? reminderOverride,
+    DateTime? repeatUntil,
   }) async {
     final parsed = _parseScheduleRegistration(speechText);
     final titleCtrl = TextEditingController(text: parsed.title);
     DateTime confirmedDate = parsed.date;
     TimeOfDay? confirmedTime = parsed.time;
     TimeOfDay? confirmedEndTime = parsed.endTime;
-    Map<String, dynamic>? confirmedRepeatRule = parsed.repeatRule;
+    Map<String, dynamic>? confirmedRepeatRule = parsed.repeatRule == null
+        ? null
+        : {
+            ...parsed.repeatRule!,
+            if (repeatUntil != null) ...{
+              'endType': 'date',
+              'endDate': repeatUntil.toIso8601String(),
+            },
+          };
     bool reminderEnabled = false;
 
     final prefs = await SharedPreferences.getInstance();
