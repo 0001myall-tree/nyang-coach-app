@@ -1,0 +1,12 @@
+// 위젯 익스텐션이 Flutter의 빌드 값을 읽는 통로.
+//
+// 앱 본체는 Debug/Release.xcconfig를 거쳐 Generated.xcconfig를 읽는데, 위젯
+// 타겟에는 그 연결이 없었다. 그래서 위젯의 CURRENT_PROJECT_VERSION이
+// $(FLUTTER_BUILD_NUMBER)라고만 적힌 채 빈 값이 됐고, CFBundleVersion이 없는
+// 익스텐션이 만들어졌다. 시뮬레이터는 설치를 거부하고("Invalid placeholder
+// attributes"), 앱스토어는 익스텐션 버전이 본체와 같기를 요구한다.
+//
+// 본체가 쓰는 Debug/Release.xcconfig를 그대로 가져오지 않는다. 그쪽은
+// Pods-Runner 설정까지 함께 들여서, 앱 본체용 링커 플래그가 위젯에 섞인다.
+// 여기서 필요한 것은 버전 값뿐이다.
+#include "Generated.xcconfig"

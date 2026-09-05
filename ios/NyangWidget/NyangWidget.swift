@@ -773,7 +773,12 @@ struct NyangTaskLiveActivity: Widget {
             //
             // 이걸 달기 전에는 앱이 마지막에 보던 화면으로 그냥 열렸다. 진행 중인
             // 일정을 눌렀는데 어제 보던 기록 화면이 뜨면, 누른 보람이 없다.
-            .widgetURL(URL(string: NyangTaskLiveActivity.plannerURL))
+            .widgetURL(
+                NyangTaskLiveActivity.plannerURL(
+                    taskId: context.attributes.taskId,
+                    taskText: context.state.taskText
+                )
+            )
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
@@ -808,12 +813,36 @@ struct NyangTaskLiveActivity: Widget {
                 NyangLiveActivityCat(size: 18)
             }
             // 알약을 눌렀을 때도 같은 곳으로. 펼친 카드와 갈 곳이 다르면 안 된다.
-            .widgetURL(URL(string: NyangTaskLiveActivity.plannerURL))
+            .widgetURL(
+                NyangTaskLiveActivity.plannerURL(
+                    taskId: context.attributes.taskId,
+                    taskText: context.state.taskText
+                )
+            )
         }
     }
 
     /// 눌렀을 때 열리는 곳. 홈 화면 위젯이 쓰는 주소를 그대로 쓴다.
     static let plannerURL = "nyangcoach://widget/cat/tasks"
+
+    /// 어느 일정을 눌렀는지까지 실어 보낸다.
+    ///
+    /// 주소만 열면 할 일 창이 열리는 데서 끝난다. 다이내믹 아일랜드가 없는
+    /// 아이폰은 같은 자리에서 배너를 받는데, 그쪽은 누른 일정을 번쩍여주고
+    /// "지금도 하는 중이야?"까지 물어본다. 좋은 폰을 쓰는 쪽이 오히려 덜 받고
+    /// 있었다.
+    ///
+    /// 받는 쪽은 배너가 쓰던 길을 그대로 탄다. 앱에 새로 만들 것이 없다.
+    static func plannerURL(taskId: String, taskText: String) -> URL? {
+        var components = URLComponents(string: plannerURL)
+        components?.queryItems = [
+            URLQueryItem(name: "focus", value: taskId),
+            // 라이브 액티비티는 진행 중일 때만 떠 있다. 물어볼 것은 하나뿐이다.
+            URLQueryItem(name: "kind", value: "running"),
+            URLQueryItem(name: "text", value: taskText),
+        ]
+        return components?.url
+    }
 }
 
 /// 어느 코치를 쓰든 밖으로 나가는 얼굴은 냥냥이 하나다. 앱의 상징이라서다.

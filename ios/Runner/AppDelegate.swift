@@ -32,6 +32,15 @@ import ActivityKit
         defaults.set(item.value, forKey: "flutter.widget_date")
       } else if item.name == "id" {
         defaults.set(item.value, forKey: "flutter.widget_item_id")
+      } else if item.name == "focus" {
+        // 라이브 액티비티를 눌러 들어온 경우다. 배너가 남기는 자리에 그대로
+        // 적어두면, 할 일 화면이 이미 아는 길로 그 칸을 번쩍이고 물어본다.
+        // (키 이름은 Dart의 NyangBannerNudge와 짝이 맞아야 한다.)
+        defaults.set(item.value, forKey: "flutter.banner_focus_task_id")
+      } else if item.name == "kind" {
+        defaults.set(item.value, forKey: "flutter.banner_answer_kind")
+      } else if item.name == "text" {
+        defaults.set(item.value, forKey: "flutter.banner_answer_task_text")
       }
     }
     defaults.synchronize()

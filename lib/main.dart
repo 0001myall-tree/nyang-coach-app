@@ -208,7 +208,14 @@ class _StartupGateScreenState extends State<StartupGateScreen> {
   @override
   void initState() {
     super.initState();
-    unawaited(_routeInitialScreen());
+    // 첫 프레임을 그린 뒤에 시작한다.
+    //
+    // 이 안에서 마지막에 ModalRoute를 찾는데, 로그인 전이라 앞의 기다림이 전부
+    // 건너뛰어지면 initState가 끝나기도 전에 거기 닿는다. 그러면 화면을 넘기지
+    // 못하고 흰 화면에 멈춘다 — 새로 설치하고 처음 켠 자리가 정확히 그렇다.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_routeInitialScreen());
+    });
   }
 
   Future<void> _routeInitialScreen() async {
