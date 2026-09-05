@@ -4,6 +4,7 @@ import 'dart:io' show Platform;
 import 'dart:ui' show Color;
 
 import 'package:device_calendar/device_calendar.dart';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/timezone.dart' as tz;
@@ -167,6 +168,68 @@ class AppleCalendarSyncService {
   Future<void> _saveEventMap(Map<String, String> map) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_kEventMapKey, jsonEncode(map));
+  }
+
+  /// 캘린더에서 안 보이기 시작한 항목과 그 시각.
+  ///
+  /// 'nyang_' 접두어를 쓰지 않는다. 이 기기의 캘린더가 지금 어떻게 보이는지는
+  /// 기기별 사실이라, 클라우드에서 다른 기기 것이 내려오면 안 된다.
+  static const String _kPendingDeleteKey = 'apple_calendar_pending_delete';
+
+  /// 안 보인다고 바로 지우지 않고 이만큼 기다린다.
+  ///
+  /// 방금 내보낸 이벤트는 캘린더에 자리 잡기 전이라 조회에 안 잡힐 수 있다.
+  /// 그걸 삭제로 받아들이면, 사용자가 앱에서 만든 일정이 만든 그날 사라진다.
+  /// 실제로 그렇게 사라졌다 — 9월 2일에 만든 루틴은 당하고 8월에 만든 것은
+  /// 멀쩡했다. 캘린더에서 진짜 지운 것은 조금 늦게 반영되지만, 늦는 쪽이
+  /// 지워지는 쪽보다 낫다.
+  static const Duration _deleteGrace = Duration(minutes: 10);
+
+  /// 여러 개가 한꺼번에 안 잡혔는지. 그렇다면 사람이 지운 것보다 조회가
+  /// 어긋난 쪽이 그럴듯하다. 이번에는 아무것도 지우지 않고 다음에 다시 본다.
+  /// (매핑은 그대로 둔다. 여기서 비우면 멀쩡한 나머지가 캘린더에 두 번 생긴다.)
+  @visibleForTesting
+  static bool looksLikeLookupGlitch({
+    required int missing,
+    required int mapped,
+  }) {
+    if (missing <= 1) return false;
+    return missing * 2 >= mapped;
+  }
+
+  /// 안 보이는 항목을 이제 지운 것으로 받아들일지.
+  ///
+  /// 처음 안 보이는 것은 기억만 해두고 넘어간다. 얼마 뒤에도 여전히 안 보이면
+  /// 그때 받아들인다.
+  @visibleForTesting
+  static bool shouldApplyDelete({
+    required String? firstMissedAtIso,
+    required DateTime now,
+  }) {
+    final firstMissedAt = DateTime.tryParse(firstMissedAtIso ?? '');
+    if (firstMissedAt == null) return false;
+    return now.difference(firstMissedAt) >= _deleteGrace;
+  }
+
+  Future<Map<String, String>> _loadPendingDeletes() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_kPendingDeleteKey);
+    if (raw == null) return {};
+    try {
+      final decoded = jsonDecode(raw) as Map<String, dynamic>;
+      return decoded.map((k, v) => MapEntry(k, v.toString()));
+    } catch (_) {
+      return {};
+    }
+  }
+
+  Future<void> _savePendingDeletes(Map<String, String> map) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (map.isEmpty) {
+      await prefs.remove(_kPendingDeleteKey);
+      return;
+    }
+    await prefs.setString(_kPendingDeleteKey, jsonEncode(map));
   }
 
   /// 연동 켜기: 권한 요청 → 전용 캘린더 확보 → 현재 일정 전체 내보내기.
@@ -499,10 +562,12 @@ class AppleCalendarSyncService {
         if (event.eventId != null) event.eventId!: event,
     };
     final mappedSourceIds = oldMap.keys.where(entryById.containsKey).toList();
+    final missing = mappedSourceIds
+        .where((sourceId) => !eventById.containsKey(oldMap[sourceId]))
+        .toList();
+
     if (mappedSourceIds.isNotEmpty &&
-        mappedSourceIds.every(
-          (sourceId) => !eventById.containsKey(oldMap[sourceId]),
-        )) {
+        missing.length == mappedSourceIds.length) {
       // 캘린더 계정/전용 캘린더가 사라지거나 일시적으로 이벤트 조회가 빈 값이면
       // 모든 앱 일정을 삭제로 오판할 수 있다. 전부 사라진 경우는 앱 데이터를
       // 지우지 않고 매핑만 재생성하도록 한다.
@@ -510,17 +575,40 @@ class AppleCalendarSyncService {
       return false;
     }
 
+    if (looksLikeLookupGlitch(
+      missing: missing.length,
+      mapped: mappedSourceIds.length,
+    )) {
+      return false;
+    }
+
+    final pending = await _loadPendingDeletes();
+    final now = DateTime.now();
     var didChange = false;
     for (final mapEntry in oldMap.entries) {
       final source = entryById[mapEntry.key];
       if (source == null) continue;
       final event = eventById[mapEntry.value];
       if (event == null) {
+        // 처음 안 보이는 것은 기억만 해두고 넘어간다. 얼마 뒤에도 여전히
+        // 안 보이면 그때 지운 것으로 받아들인다.
+        if (!shouldApplyDelete(
+          firstMissedAtIso: pending[mapEntry.key],
+          now: now,
+        )) {
+          pending[mapEntry.key] ??= now.toIso8601String();
+          continue;
+        }
+        pending.remove(mapEntry.key);
         didChange = await _applyExternalDelete(source) || didChange;
       } else {
+        pending.remove(mapEntry.key);
         didChange = await _applyExternalUpdate(source, event) || didChange;
       }
     }
+    // 이미 없어진 항목의 표시는 들고 있어봐야 쓸 데가 없다.
+    pending.removeWhere((sourceId, _) => !oldMap.containsKey(sourceId));
+    await _savePendingDeletes(pending);
     return didChange;
   }
 
