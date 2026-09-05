@@ -26,6 +26,11 @@ import 'package:nyang_coach/services/api_usage_limit_service.dart';
 import 'package:nyang_coach/services/busy_hours_service.dart';
 import 'package:nyang_coach/services/apple_calendar_sync_service.dart';
 import 'package:nyang_coach/services/execution_pattern_service.dart';
+import 'package:nyang_coach/services/routine_frequency.dart';
+import 'package:nyang_coach/services/routine_spread_analysis.dart';
+import 'package:nyang_coach/services/routine_spread_apply.dart';
+import 'package:nyang_coach/services/routine_spread_budget.dart';
+import 'package:nyang_coach/services/routine_spread_plan.dart';
 import 'package:nyang_coach/services/task_completion_service.dart';
 import 'package:nyang_coach/services/tasks_sync_service.dart';
 import 'package:nyang_coach/services/user_title_service.dart';
@@ -2699,17 +2704,32 @@ class _ChatScreenState extends State<ChatScreen>
     final plan = type == 'schedule'
         ? _parseScheduleRegistration('$title 추가해줘')
         : null;
-    final detail = plan == null
-        ? ''
-        : _registrationWhenLabel(
+
+    // 루틴은 이름 뒤에 |로 반복이 붙어 온다. 카드에는 이름만 보이고 반복은
+    // 옆에 적는다 — 대괄호 안의 형식이 사용자에게 그대로 보이면 안 된다.
+    final habitBar = type == 'habit' ? title.indexOf('|') : -1;
+    final displayTitle = habitBar < 0
+        ? title
+        : title.substring(0, habitBar).trim();
+    final habitFreq = habitBar < 0
+        ? null
+        : RoutineFrequency.parse(title.substring(habitBar + 1));
+
+    final detail = plan != null
+        ? _registrationWhenLabel(
             plan,
             withAlarm: plan.time != null && withAlarm,
-          );
+          )
+        : _habitFrequencyLabel(habitFreq);
 
     setState(() {
       _messages.add(
         ChatMessage(
-          text: _registerConfirmQuestion(title!, type: type, detail: detail),
+          text: _registerConfirmQuestion(
+            displayTitle!,
+            type: type,
+            detail: detail,
+          ),
           isUser: false,
           time: DateTime.now(),
           kind: _registerConfirmKind,
@@ -2723,6 +2743,26 @@ class _ChatScreenState extends State<ChatScreen>
       );
     });
     _scrollToBottom();
+  }
+
+  /// 카드에 적을 반복. 매일이거나 모르면 빈 문자열 — 굳이 "매일"이라고
+  /// 적지 않는다. 루틴은 매일이 예사라, 적어두면 다른 것이 있는 줄 알게 된다.
+  String _habitFrequencyLabel(RoutineFrequency? freq) {
+    if (freq == null || freq.freq == 'daily') return '';
+    if (freq.freq == 'weekly_count') {
+      final count = freq.weeklyTargetCount ?? 0;
+      return count > 0 ? '주 $count회' : '';
+    }
+    if (freq.days.isEmpty) return '';
+    const names = ['월', '화', '수', '목', '금', '토', '일'];
+    if (freq.days.length == 5 &&
+        freq.days.every((d) => d < 5)) {
+      return '평일마다';
+    }
+    if (freq.days.length == 2 && freq.days.every((d) => d >= 5)) {
+      return '주말마다';
+    }
+    return '${freq.days.map((d) => names[d]).join('·')}마다';
   }
 
   Future<void> _handleRegisterConfirmChoice(
@@ -2810,15 +2850,26 @@ class _ChatScreenState extends State<ChatScreen>
     await _saveHistory();
   }
 
-  Future<void> _registerHabitByTitle(String title) async {
+  Future<void> _registerHabitByTitle(String rawTitle) async {
+    // 코치가 이름 뒤에 |로 반복을 적어 보낸다. "평일만"이나 "하루 걸러" 같은
+    // 말을 요일로 옮기는 일은 코치가 한다 — 사람이 반복을 말하는 방법은
+    // 정규식으로 다 적을 수 없어서, 예전에는 "평일만"이 그냥 매일이 됐다.
+    final bar = rawTitle.indexOf('|');
+    final title = bar < 0 ? rawTitle : rawTitle.substring(0, bar).trim();
+    final coachFreq = bar < 0
+        ? null
+        : RoutineFrequency.parse(rawTitle.substring(bar + 1));
+
+    // 시각과 수량은 이름 안에 남아 있다. 그건 예전 길이 잘 뽑는다.
     final parsed = _parseHabitRegistration('$title 습관 추가해줘');
     final name = parsed.title.isNotEmpty ? parsed.title : title;
     final registered =
         await widget.onRegisterHabit?.call(
           name,
-          freq: parsed.freq,
-          days: parsed.days,
-          weeklyTargetCount: parsed.weeklyTargetCount,
+          freq: coachFreq?.freq ?? parsed.freq,
+          days: coachFreq?.days ?? parsed.days,
+          weeklyTargetCount:
+              coachFreq?.weeklyTargetCount ?? parsed.weeklyTargetCount,
           countGoal: parsed.countGoal,
           unit: parsed.unit,
           time: parsed.time,
@@ -5672,6 +5723,148 @@ $block
     return _offerLifeRoutine(coachId);
   }
 
+  /// 매일 루틴이 하루에 다 얹혀 있으면 요일로 나누자고 권한다. 건넸으면 true.
+  ///
+  /// 금요일에만 묻는다. 주말에는 플래너를 잘 안 보니, 금요일에 정해두면
+  /// 월요일부터 새 배치로 시작한다.
+  ///
+  /// 어느 루틴을 나눌지는 **사용자가 고른다**. 코치가 대신 고르면 목표를 향해
+  /// 매일 쌓는 중인 일이나, 영양제처럼 매일 해야 뜻이 서는 일을 건드릴 수
+  /// 있다. 이름만 보고 그걸 가려낼 방법이 없고, 한 번 틀리면 사용자가 하려던
+  /// 것을 코치가 막은 셈이 된다.
+  ///
+  /// 그래서 여기에는 코치 호출이 없다. 앱이 물을 것은 "이 중에 있나요"뿐이고,
+  /// 고르는 일에는 판단이 필요 없다.
+  Future<bool> _tryOfferRoutineSpread(
+    SharedPreferences prefs,
+    DateTime now,
+  ) async {
+    if (!RoutineSpreadAnalysis.isAskDay(now)) return false;
+    if (!await RoutineSpreadBudget.canAsk(prefs, now)) return false;
+    if (!mounted) return false;
+
+    await prefs.reload();
+    final habitsRaw = prefs.getString('nyang_habits');
+    final candidates = RoutineSpreadAnalysis.candidates(
+      habitsRaw: habitsRaw,
+      habitLogsRaw: prefs.getString('nyang_habit_logs'),
+      now: now,
+    );
+    if (candidates.isEmpty || !mounted) return false;
+
+    await RoutineSpreadBudget.markAsked(prefs, now);
+    if (!mounted) return false;
+
+    final dayLabel = RoutineSpreadPlan.label(RoutineSpreadPlan.defaultDays);
+    final count = RoutineSpreadAnalysis.dailyRoutineCount(habitsRaw);
+    _injectAiMessage(
+      _routineSpreadOpening(count: count, dayLabel: dayLabel),
+      kind: _routineSpreadKind,
+      choices: [
+        ...candidates.map((c) => c.name),
+        _routineSpreadNoLabel,
+      ],
+    );
+    unawaited(AnalyticsService.logFeatureUsage('routine_spread_offer'));
+    return true;
+  }
+
+  /// 못 한 날을 세지 않는다. "사흘이나 빠뜨렸다"는 지적이고, 이 자리는 하루에
+  /// 다 얹혀 있어 빠듯하다는 이야기다.
+  String _routineSpreadOpening({required int count, required String dayLabel}) {
+    return _voice(
+      cat:
+          '매일 루틴이 $count개나 된다냥. 하루에 다 얹혀 있으면 빠듯하지 않냥? '
+          '이 중에 $dayLabel요일만 해도 되는 게 있으면 골라달라냥. 다음 주부터 그렇게 뜰 거다냥.',
+      bro:
+          '매일 루틴이 $count개다. 하루에 다 몰려 있으면 빠듯하다. '
+          '이 중에 $dayLabel요일만 해도 되는 게 있으면 골라라. 다음 주부터 그렇게 뜬다.',
+      halmae:
+          '매일 하기로 한 게 $count개나 되는구나. 하루에 다 얹혀 있으면 벅차지. '
+          '이 중에 $dayLabel요일만 해도 될 게 있으면 골라보렴. 다음 주부터 그리 뜰 게다.',
+      boyfriend:
+          '매일 루틴이 $count개네. 하루에 다 있으면 좀 빠듯하지 않아? '
+          '이 중에 $dayLabel요일만 해도 되는 거 있으면 골라줘. 다음 주부터 그렇게 떠.',
+      nyangHalbae:
+          '매일 루틴이 $count개다냥. 하루에 다 얹혀 있으면 벅차지 않겠냥? '
+          '이 중에 $dayLabel요일만 해도 될 것이 있으면 골라달라냥. 다음 주부터 그리 뜬다냥.',
+      sec:
+          '매일 루틴이 $count개예요. 하루에 모두 있으면 부담이 될 수 있어요. '
+          '이 중 $dayLabel요일만 해도 되는 항목이 있으면 골라주세요. 다음 주부터 그렇게 표시됩니다.',
+    );
+  }
+
+  Future<void> _handleRoutineSpreadChoice(
+    ChatMessage msg,
+    String label,
+  ) async {
+    if (_isLoading) return;
+    HapticFeedback.lightImpact();
+    await _consumeChoiceCard(msg);
+    _injectUserChoice(label);
+
+    final prefs = await SharedPreferences.getInstance();
+
+    if (label == _routineSpreadNoLabel) {
+      await RoutineSpreadBudget.markDeclined(prefs, DateTime.now());
+      unawaited(AnalyticsService.logFeatureUsage('routine_spread_declined'));
+      if (!mounted) return;
+      _injectAiMessage(
+        _voice(
+          cat: '알겠다냥. 그럼 그대로 두자냥.',
+          bro: '알겠다. 그대로 간다.',
+          halmae: '알겠다. 그럼 그대로 두마.',
+          boyfriend: '알겠어. 그대로 둘게.',
+          nyangHalbae: '알겠다냥. 그대로 두겠다냥.',
+          sec: '네, 그대로 둘게요.',
+        ),
+      );
+      return;
+    }
+
+    final applied = await RoutineSpreadApply.apply([
+      RoutineDayAssignment(
+        name: label,
+        days: RoutineSpreadPlan.defaultDays,
+      ),
+    ]);
+    if (!mounted) return;
+
+    if (applied.isEmpty) {
+      _injectAiMessage(
+        _voice(
+          cat: '어라, 그 루틴을 못 찾았다냥. 루틴 탭에서 직접 요일을 골라줄래냥?',
+          bro: '그 루틴을 못 찾았다. 루틴 탭에서 직접 요일을 골라라.',
+          halmae: '그 루틴을 못 찾았구나. 루틴 탭에서 직접 골라보렴.',
+          boyfriend: '그 루틴을 못 찾았어. 루틴 탭에서 직접 골라줄래?',
+          nyangHalbae: '그 루틴을 못 찾았다냥. 루틴 탭에서 직접 골라달라냥.',
+          sec: '해당 루틴을 찾지 못했어요. 루틴 탭에서 직접 요일을 선택해주세요.',
+        ),
+      );
+      return;
+    }
+
+    unawaited(AnalyticsService.logFeatureUsage('routine_spread_applied'));
+    final dayLabel = RoutineSpreadPlan.label(RoutineSpreadPlan.defaultDays);
+    _injectAiMessage(
+      _voice(
+        cat: "'$label'은 $dayLabel요일로 바꿨다냥. 다른 요일이 낫다면 루틴 탭에서 고쳐도 된다냥.",
+        bro: "'$label'은 $dayLabel요일로 바꿨다. 다른 요일이 낫다면 루틴 탭에서 고쳐라.",
+        halmae: "'$label'은 $dayLabel요일로 바꿔뒀다. 다른 요일이 낫거든 루틴 탭에서 고치렴.",
+        boyfriend: "'$label'은 $dayLabel요일로 바꿨어. 다른 요일이 좋으면 루틴 탭에서 고쳐도 돼.",
+        nyangHalbae: "'$label'은 $dayLabel요일로 바꿔뒀다냥. 다른 요일이 낫다면 루틴 탭에서 고치면 된다냥.",
+        sec: "'$label'을 $dayLabel요일로 변경했어요. 다른 요일이 좋으시면 루틴 탭에서 수정할 수 있어요.",
+      ),
+    );
+    // 바꾼 것을 눈으로 확인할 자리로 데려간다. 값만 바꾸고 말면 무엇이 어떻게
+    // 됐는지 알 수 없고, 다른 요일이 낫다 싶어도 어디로 가야 하는지 모른다.
+    // 수정 창까지 열리므로 그 자리에서 요일을 고칠 수 있다.
+    unawaited(
+      widget.onEditCommand?.call({'target': label, 'kind': 'habit'}) ??
+          Future<String>.value(''),
+    );
+  }
+
   /// 판정이 났으면 코치 목소리로 한마디 건넨다. 건넸으면 true.
   ///
   /// 같은 제안을 두 번 잇달아 하지 않는다. 지난번과 판정도 대상도 같다면
@@ -6834,6 +7027,14 @@ Rules:
   static const String _lifeReviewSameLabel = '그대로야';
   static const String _lifeReviewChangedLabel = '바뀐 게 있어';
 
+  /// 매일 루틴을 요일로 나누자는 제안.
+  ///
+  /// 코치를 가리지 않는다. 냥냥이가 묻든 마스터가 묻든 사용자에게는 같은
+  /// 이야기라, 코치를 바꿔 가며 두 번 듣게 하면 안 된다. 예산도 하나를 쓴다.
+  static const _routineSpreadKind = 'auto:routine_spread';
+
+  static const String _routineSpreadNoLabel = '그대로 둘게';
+
   /// 제안과 제안 사이의 최소 간격.
   ///
   /// 같은 제안을 두 번 잇달아 하지 않는 것만으로는 모자란다. 판정이 다르면
@@ -7833,6 +8034,9 @@ Rules:
             _greetedOnThisEntry || await _tryOfferOngoingNudge(prefs, now);
         _greetedOnThisEntry =
             _greetedOnThisEntry || await _startWeeklyConcretizeTip(prefs, now);
+        // 금요일에 한 번, 매일 루틴이 하루에 다 얹혀 있을 때만.
+        _greetedOnThisEntry =
+            _greetedOnThisEntry || await _tryOfferRoutineSpread(prefs, now);
         await prefs.setString(
           'last_visit_${widget.coachId}',
           now.toIso8601String(),
@@ -7863,6 +8067,15 @@ Rules:
       // 진행 중인 일 확인 다음이다. 지금 붙잡고 있는 일이 더 급하고, 이쪽은
       // 오늘 안에 아무 때나 해도 되는 이야기다.
       if (await _startLifePatternSlot(now)) {
+        _greetedOnThisEntry = true;
+        await prefs.setString(
+          'last_visit_${widget.coachId}',
+          now.toIso8601String(),
+        );
+        return;
+      }
+
+      if (await _tryOfferRoutineSpread(prefs, now)) {
         _greetedOnThisEntry = true;
         await prefs.setString(
           'last_visit_${widget.coachId}',
@@ -16846,6 +17059,12 @@ ${Prompts.outputRulesTail}${Prompts.screenMap}$plannerActionSection$coachOfferTa
     }
     if (msg.kind == _lifeReviewKind && msg.choices.isNotEmpty) {
       return _buildChoiceBubbleCard(msg, _handleLifeReviewChoice);
+    }
+    if (msg.kind == _routineSpreadKind && msg.choices.isNotEmpty) {
+      return _buildChoiceBubbleCard(
+        msg,
+        (label) => _handleRoutineSpreadChoice(msg, label),
+      );
     }
     if (msg.kind == _overplanChatAskKind && msg.choices.isNotEmpty) {
       return _buildChoiceBubbleCard(msg, _handleOverplanChatChoice);
