@@ -383,9 +383,12 @@ void main() {
 
   // 상황 문장과 질문 문장을 각각 두면 둘이 같은 말을 하게 된다. 실제로
   // "막히는 점 있으면 말씀해 주세요. 필요하신 게 있으면 말씀해 주세요."가 나갔다.
+  // 지친 날에는 개수를 줄이는 쪽으로만 말한다. '최소 성공 기준'이라는 앱
+  // 용어는 저녁 문구에 두고 여기서는 쓰지 않는다 — 아침에 갑자기 꺼내면
+  // 무슨 말인지 알 수 없고, 하려는 말은 결국 한두 개만 하자는 것이다.
   group('늦게 잔 다음 날 첫 낮 인사', () {
     for (final voice in voices.entries) {
-      test('${voice.key} / 체력을 묻고 최소 성공 기준을 허용한다', () {
+      test('${voice.key} / 오늘 할 개수를 줄이자고 말한다', () {
         final context = ctx(hour: 10, planTotal: 3, lateNight: true);
         for (var seed = 0; seed < 50; seed++) {
           final text = MasterGreetingBuilder(
@@ -394,9 +397,8 @@ void main() {
           ).build(context).text;
           final where = '씨앗 $seed: $text';
 
-          expect(text, contains('최소 성공 기준'), reason: where);
           expect(
-            text.contains('체력') || text.contains('컨디션'),
+            text.contains('한두 개') || text.contains('하나'),
             isTrue,
             reason: where,
           );
@@ -405,9 +407,11 @@ void main() {
     }
   });
 
+  // 며칠째 늦게 잔 사람에게 산책이나 스트레칭을 하나 넣어보라고 하던 자리다.
+  // 지친 사람에게 할 일을 하나 더 얹는 말이라, 줄이자는 쪽으로 바꿨다.
   group('늦은 패턴이 반복된 다음 날 첫 낮 인사', () {
     for (final voice in voices.entries) {
-      test('${voice.key} / 일을 늘리기보다 체력 활동을 제안한다', () {
+      test('${voice.key} / 할 일을 더 얹지 않고 줄이자고 말한다', () {
         final context = ctx(
           hour: 10,
           planTotal: 3,
@@ -421,12 +425,84 @@ void main() {
           ).build(context).text;
           final where = '씨앗 $seed: $text';
 
-          expect(text, contains('체력'), reason: where);
-          expect(text, contains('일정'), reason: where);
           expect(
-            text.contains('일을 더 늘리기보다') ||
-                text.contains('계획을 더 늘리기보다') ||
-                text.contains('할 일을 더 보태기보다'),
+            text.contains('한두 개') || text.contains('하나'),
+            isTrue,
+            reason: where,
+          );
+          for (final word in ['넣어', '보태', '추가']) {
+            expect(text, isNot(contains(word)), reason: where);
+          }
+        }
+      });
+    }
+  });
+
+  // 하루를 여는 말이라 오전에만, 그리고 아직 아무것도 못 끝냈을 때만 선다.
+  // 한동안 이 갈래가 낮 슬롯 전체(7~17시)를 조건 없이 가져가서, 오후 문구가
+  // 통째로 나가지 못했다.
+  group('컨디션 문구가 서는 자리', () {
+    for (final voice in voices.entries) {
+      String textOf(MasterGreetingContext context) => MasterGreetingBuilder(
+        voice: voice.value,
+        random: Random(7),
+      ).build(context).text;
+
+      bool saysCondition(String text) => [
+        ...voice.value.afterSick,
+        ...voice.value.afterLateNight,
+        ...voice.value.afterRepeatedLateNights,
+      ].any((t) => text.contains(GreetingLinePicker().anchor(t)));
+
+      test('${voice.key} / 오후에는 낮 문구가 나온다', () {
+        expect(
+          saysCondition(textOf(ctx(hour: 10, planTotal: 3, lateNight: true))),
+          isTrue,
+        );
+        expect(
+          saysCondition(textOf(ctx(hour: 15, planTotal: 3, lateNight: true))),
+          isFalse,
+        );
+        expect(
+          saysCondition(textOf(ctx(hour: 15, planTotal: 3, feltSick: true))),
+          isFalse,
+        );
+      });
+
+      test('${voice.key} / 이미 끝낸 게 있으면 격려가 받는다', () {
+        // 늦게 잤어도 오전에 두 개를 끝낸 사람에게 줄이자는 말은 뒷북이다.
+        expect(
+          saysCondition(
+            textOf(
+              ctx(
+                hour: 10,
+                planTotal: 3,
+                planDone: 2,
+                doneCount: 2,
+                lateNight: true,
+              ),
+            ),
+          ),
+          isFalse,
+        );
+      });
+    }
+  });
+
+  // 아픈 다음 날도 같다. 안부만 묻고 끝내면 오늘을 어떻게 갈지가 안 정해진다.
+  group('아팠던 다음 날 첫 낮 인사', () {
+    for (final voice in voices.entries) {
+      test('${voice.key} / 오늘 할 개수를 줄이자고 말한다', () {
+        final context = ctx(hour: 10, planTotal: 3, feltSick: true);
+        for (var seed = 0; seed < 50; seed++) {
+          final text = MasterGreetingBuilder(
+            voice: voice.value,
+            random: Random(seed),
+          ).build(context).text;
+          final where = '씨앗 $seed: $text';
+
+          expect(
+            text.contains('한두 개') || text.contains('하나'),
             isTrue,
             reason: where,
           );

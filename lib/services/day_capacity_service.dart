@@ -37,12 +37,15 @@ class DayCapacityService {
   /// 사람에게는 잴 것이 없어서, 매일 아침 묻는 것이 순수한 부담만 된다.
   static const int asksFromPlanCount = 5;
 
-  /// 잘 굴러가는 사람에게는 묻지 않는다. 자기 하루를 이미 맞춰 잡고 있는
-  /// 사람에게 시간을 묻는 것은 검사에 가깝다.
-  static const double asksBelowRate = 0.7;
-
-  /// 물어볼 만한 사람인지. 최근 이레에 많이 잡은 날이 있고, 그날들이
-  /// 실제로 잘 안 끝났을 때만.
+  /// 물어볼 만한 사람인지. 최근 이레에 많이 잡은 날이 있으면 묻는다.
+  ///
+  /// 완료율은 보지 않는다. 한동안 "잘 굴러가는 사람에게 묻는 건 검사에
+  /// 가깝다"고 문턱을 두었는데, 그건 매일 묻던 시절의 이야기다. 사흘에 한
+  /// 번이면 검사가 아니라 챙기는 말이고, 무엇보다 다 해내는 사람에게도 오늘
+  /// 두 시간뿐인 날은 온다. 그날 여섯 개를 짜주면 잘 해내던 사람을 실패시킨다.
+  ///
+  /// 눈금이 애초에 다르기도 하다. 완료율은 어제까지의 이야기이고 이 질문은
+  /// 오늘 이야기라, 어제로 오늘을 거를 이유가 없다.
   static bool worthAsking(String? historyRaw) {
     if (historyRaw == null || historyRaw.isEmpty) return false;
     List<dynamic> list;
@@ -53,24 +56,17 @@ class DayCapacityService {
     }
     final from = DateTime.now().subtract(const Duration(days: 7));
     final today = _todayKey();
-    var bigDays = 0;
-    var planned = 0;
-    var done = 0;
     for (final item in list) {
       if (item is! Map) continue;
       final date = DateTime.tryParse(item['date']?.toString() ?? '');
       if (date == null || date.isBefore(from)) continue;
+      // 오늘은 아직 안 끝났다. 아침에 여섯 개 적어둔 것만 보고 판단하면
+      // 그날 하루를 지켜보지도 않고 세는 셈이다.
       if ('${date.year}-${date.month}-${date.day}' == today) continue;
       final tasks = (item['tasks'] as List?) ?? const [];
-      if (tasks.length >= asksFromPlanCount) bigDays++;
-      for (final task in tasks) {
-        if (task is! Map) continue;
-        planned++;
-        if (task['done'] == true) done++;
-      }
+      if (tasks.length >= asksFromPlanCount) return true;
     }
-    if (bigDays == 0 || planned == 0) return false;
-    return done / planned < asksBelowRate;
+    return false;
   }
 
   /// 오늘 이미 물어봤거나 답했는지.

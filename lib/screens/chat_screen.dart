@@ -2638,12 +2638,18 @@ class _ChatScreenState extends State<ChatScreen>
         }
         // 루틴을 미뤄달라는 말. 루틴에는 "오늘만 미루기"가 없다.
         return _voice(
-          cat: "'$name'$eunNeun 루틴이라 하루만 미루는 건 안 된다냥. 시각이나 요일을 아예 바꾸는 거면 루틴에서 고칠 수 있다냥",
-          bro: "'$name'$eunNeun 루틴이라 하루만 미루는 건 안 된다. 시각이나 요일을 아예 바꾸는 거면 루틴에서 고쳐라.",
-          halmae: "'$name'$eunNeun 루틴이라 하루만 미루지는 못한다. 시각이나 요일을 아주 바꾸는 거라면 루틴에서 고치면 된다.",
-          boyfriend: "'$name'$eunNeun 루틴이라 하루만 미루는 건 안 돼. 시각이나 요일을 아예 바꾸는 거면 루틴에서 고칠 수 있어.",
-          nyangHalbae: "'$name'$eunNeun 루틴이라 하루만 미루는 건 안 된다냥. 시각이나 요일을 아주 바꾸는 거면 루틴에서 고치면 된다냥.",
-          sec: "'$name'$eunNeun 루틴이라 하루만 미뤄두는 건 안 돼요. 시각이나 요일 자체를 바꾸시려면 루틴에서 수정하시면 됩니다.",
+          cat:
+              "'$name'$eunNeun 루틴이라 하루만 미루는 건 안 된다냥. 시각이나 요일을 아예 바꾸는 거면 루틴에서 고칠 수 있다냥",
+          bro:
+              "'$name'$eunNeun 루틴이라 하루만 미루는 건 안 된다. 시각이나 요일을 아예 바꾸는 거면 루틴에서 고쳐라.",
+          halmae:
+              "'$name'$eunNeun 루틴이라 하루만 미루지는 못한다. 시각이나 요일을 아주 바꾸는 거라면 루틴에서 고치면 된다.",
+          boyfriend:
+              "'$name'$eunNeun 루틴이라 하루만 미루는 건 안 돼. 시각이나 요일을 아예 바꾸는 거면 루틴에서 고칠 수 있어.",
+          nyangHalbae:
+              "'$name'$eunNeun 루틴이라 하루만 미루는 건 안 된다냥. 시각이나 요일을 아주 바꾸는 거면 루틴에서 고치면 된다냥.",
+          sec:
+              "'$name'$eunNeun 루틴이라 하루만 미뤄두는 건 안 돼요. 시각이나 요일 자체를 바꾸시려면 루틴에서 수정하시면 됩니다.",
         );
       case PlannerActionStatus.failed:
         if (action.kind == PlannerActionKind.remind) {
@@ -2774,8 +2780,7 @@ class _ChatScreenState extends State<ChatScreen>
     }
     if (freq.days.isEmpty) return '';
     const names = ['월', '화', '수', '목', '금', '토', '일'];
-    if (freq.days.length == 5 &&
-        freq.days.every((d) => d < 5)) {
+    if (freq.days.length == 5 && freq.days.every((d) => d < 5)) {
       return '평일마다';
     }
     if (freq.days.length == 2 && freq.days.every((d) => d >= 5)) {
@@ -3555,18 +3560,24 @@ ${lines.join('\n')}
     return entries.where(recentDays.contains).toSet().length >= minDays;
   }
 
+  /// 어젯밤 늦게까지 안 잔 흔적이 있는지.
+  ///
+  /// 대화 흔적은 **오늘 날짜의** 새벽 2~5시만 본다. 그게 어젯밤이다. 한동안
+  /// 어제 날짜 것도 같이 봤는데, 어제의 새벽 3시는 어젯밤이 아니라 그저께
+  /// 밤이라서 새벽에 한 번 앱을 켜면 이틀 연속 "어제 늦게 주무셨네요"가
+  /// 나갔다. 플래너 진입 기록 쪽은 새벽을 전날 밤으로 당겨 적으므로 어제
+  /// 날짜를 보는 것이 맞고, 이제 두 갈래가 같은 밤을 가리킨다.
   bool _hasLateNightTraceForGreeting(SharedPreferences prefs, DateTime now) {
-    final yesterday = now.subtract(const Duration(days: 1));
     final seen = [
       ..._messages,
       ..._decodeRecentArchive(prefs.getString(_chatArchiveKey)),
-    ].where((m) => _isSameDay(m.time, now) || _isSameDay(m.time, yesterday));
+    ].where((m) => _isSameDay(m.time, now));
     if (seen.any((m) => m.time.hour >= 2 && m.time.hour < 5)) {
       return true;
     }
 
     final entries = prefs.getStringList('nyang_late_planner_entry_dates') ?? [];
-    return entries.contains(_dateKey(yesterday));
+    return entries.contains(_dateKey(now.subtract(const Duration(days: 1))));
   }
 
   Future<String> _getEffectiveTodayStr() async {
@@ -5526,9 +5537,20 @@ $block
 
     // 오늘 쓸 수 있는 시간을 묻는다. 계획을 짜기 전에 알아야 뜻이 있어서
     // 정오 전에만 묻는다 — 오후에 물으면 이미 짜놓은 계획 위에 얹는 말이 된다.
+    //
+    // 사흘에 한 번으로 묶는다([_capacityAskGap] 참고). 여기서 발화하면
+    // 뒤의 조건 질문도 슬롯 인사도 그날은 나가지 못하므로, 매일 물으면
+    // 이 질문 하나가 아침을 통째로 가져간다.
+    final capacityAskedAt = DateTime.tryParse(
+      prefs.getString(_capacityAskDateKey) ?? '',
+    );
     if (now.hour < _masterCoreAskFromHour &&
+        (capacityAskedAt == null ||
+            now.difference(capacityAskedAt) >= _capacityAskGap) &&
         DayCapacityService.worthAsking(prefs.getString('nyang_history')) &&
         !await DayCapacityService.answeredToday()) {
+      if (!mounted) return false;
+      await prefs.setString(_capacityAskDateKey, now.toIso8601String());
       if (!mounted) return false;
       _injectAiMessage(
         _greetingBuilder.buildCapacityAsk(),
@@ -5779,10 +5801,7 @@ $block
     _injectAiMessage(
       _routineSpreadOpening(count: count, dayLabel: dayLabel),
       kind: _routineSpreadKind,
-      choices: [
-        ...candidates.map((c) => c.name),
-        _routineSpreadNoLabel,
-      ],
+      choices: [...candidates.map((c) => c.name), _routineSpreadNoLabel],
     );
     unawaited(AnalyticsService.logFeatureUsage('routine_spread_offer'));
     return true;
@@ -5813,10 +5832,7 @@ $block
     );
   }
 
-  Future<void> _handleRoutineSpreadChoice(
-    ChatMessage msg,
-    String label,
-  ) async {
+  Future<void> _handleRoutineSpreadChoice(ChatMessage msg, String label) async {
     if (_isLoading) return;
     HapticFeedback.lightImpact();
     await _consumeChoiceCard(msg);
@@ -5842,10 +5858,7 @@ $block
     }
 
     final applied = await RoutineSpreadApply.apply([
-      RoutineDayAssignment(
-        name: label,
-        days: RoutineSpreadPlan.defaultDays,
-      ),
+      RoutineDayAssignment(name: label, days: RoutineSpreadPlan.defaultDays),
     ]);
     if (!mounted) return;
 
@@ -5999,7 +6012,8 @@ $block
     final analyzedAt = DateTime.tryParse(saved['analyzedAt']?.toString() ?? '');
     final fresh =
         analyzedAt != null &&
-        DateTime.now().difference(analyzedAt) < LifePatternService.reviewInterval;
+        DateTime.now().difference(analyzedAt) <
+            LifePatternService.reviewInterval;
     if (fresh) return LifePatternService.domainHabitIds(coachId);
     return RoutineDomainCheck.refresh(coachId: coachId, habits: habits);
   }
@@ -6010,7 +6024,9 @@ $block
   /// 설문지처럼 읽혀서, 물어볼 게 있다고 한마디 먼저 얹는다.
   void _askLifeQuestion(LifePatternQuestion question, {bool opening = false}) {
     _pickedLifeOptions.clear();
-    final ask = opening ? '${_lifeAskOpening()}\n${question.ask}' : question.ask;
+    final ask = opening
+        ? '${_lifeAskOpening()}\n${question.ask}'
+        : question.ask;
     _injectAiMessage(
       ask,
       kind: question.multi ? _lifeAskMultiKind : _lifeAskKind,
@@ -6549,6 +6565,12 @@ Rules:
   ///
   /// 이 시간에 남은 것을 다 하라는 말은 쓸모가 없다. 미룰 것은 미루고 하나를
   /// 골라 "여기까지면 오늘은 성공"이라는 기준을 스스로 정하게 한다.
+  ///
+  /// 하나만 남은 날은 대개 조용히 지나가도 된다 — 고를 것이 없는데 고르라는
+  /// 말이 되기 때문이다. 딱 한 자리만 예외로 둔다. 오늘 잡은 것이 처음부터
+  /// 하나였고 그마저 밤까지 손도 못 댔다면, 그건 남은 개수의 문제가 아니라
+  /// 그 하나가 너무 커서 못 붙잡고 있는 것이다. 크기를 줄여보자는 말이 제일
+  /// 맞는 자리이기도 하다.
   bool _startCatMinimumBarGreeting({
     required List<Map<String, dynamic>> tasks,
     required DateTime now,
@@ -6557,14 +6579,25 @@ Rules:
     if (_spokeKindToday({_minimumBarGreetingKind}, now)) return false;
 
     // 습관도 오늘 몫이라 함께 센다. 계획 유무 판정과 달리 여기는 개수만 본다.
-    final pending = tasks
+    final countable = tasks
         .where((task) => task['category'] != 'core')
+        .toList(growable: false);
+    final pending = countable
         .where((task) => task['done'] != true)
-        .length;
+        .toList(growable: false);
     final done = tasks.where((task) => task['done'] == true).length;
-    if (pending < MasterGreetingCopy.minimumBarPendingCount) return false;
+    final onlyPlanNotStarted =
+        countable.length == 1 &&
+        pending.length == 1 &&
+        _isPendingNotInProgressTask(pending.first);
+    if (pending.length < MasterGreetingCopy.catMinimumBarPendingCount &&
+        !onlyPlanNotStarted) {
+      return false;
+    }
     // 이미 절반을 넘겼으면 좁힐 것이 별로 없다.
-    if (pending + done > 0 && done / (pending + done) > 0.5) return false;
+    if (pending.length + done > 0 && done / (pending.length + done) > 0.5) {
+      return false;
+    }
 
     final line = _catLinePicker.pickLine(
       MasterGreetingCopy.catEveningMinimumBar,
@@ -7030,6 +7063,20 @@ Rules:
 
   /// 오늘 쓸 수 있는 시간을 묻는 카드.
   static const _capacityAskKind = 'auto:day_capacity';
+
+  /// 시간을 마지막으로 물어본 날. 이 기기에서만 뜻이 있는 값이라
+  /// 'nyang_' 접두어를 쓰지 않는다(클라우드 복원이 덮어쓰는 자리를 피한다).
+  static const String _capacityAskDateKey = 'master_capacity_ask_at';
+
+  /// 시간을 얼마 만에 다시 물을지.
+  ///
+  /// 답은 하루짜리라 매일 물어야 맞는 것처럼 보이지만, 이 질문은 인사보다
+  /// 앞에 서면서 예산은 안 쓰고 있었다. 조건에 걸리는 사람은 대개 매일
+  /// 걸려서, 아침에 인사도 다른 질문도 영영 못 받았다.
+  ///
+  /// 안 묻는 날의 손해는 작다 — 코치 프롬프트에 한 줄이 안 얹힐 뿐,
+  /// 이 질문이 생기기 전으로 돌아가는 것뿐이다.
+  static const Duration _capacityAskGap = Duration(days: 3);
 
   /// 담당 영역 코치가 생활을 물어보는 카드. 하나만 고른다.
   static const _lifeAskKind = 'auto:life_pattern_ask';
@@ -8008,110 +8055,144 @@ Rules:
       return;
     }
 
-    // 히스토리가 비어있거나 없는 경우에만 새롭게 인사 처리
-    if (_messages.isEmpty) {
-      // 플랜 없이 처음 온 사람에게는 앱이 뭘 하는 곳인지부터 알린다.
-      // 인사와 시연은 코치를 부르지 않고 앱이 직접 한다.
-      if (widget.coachId == 'cat' && !_userData.isPlanActive) {
-        await Future.delayed(const Duration(milliseconds: 600));
-        if (!mounted) return;
-        const intro =
-            '안녕! 나는 냥냥코치다냥 🐾\n'
-            '오늘 해야 할 일이나 루틴, 목표들을 같이 챙겨주고 있어!\n'
-            '주변의 할 일창이나 루틴 트래커도 자유롭게 눌러보라냥~';
-        setState(() {
-          _messages.add(
-            ChatMessage(
-              text: intro,
-              isUser: false,
-              time: DateTime.now(),
-              kind: 'auto_greeting',
-            ),
-          );
-        });
-        await _saveHistory();
-        _scrollToBottom();
-        await prefs.setString(
-          'last_visit_${widget.coachId}',
-          now.toIso8601String(),
+    // 플랜 없이 처음 온 사람에게는 앱이 뭘 하는 곳인지부터 알린다. 자동
+    // 발화보다 앞에 둔다 — 소개도 못 들은 사람에게 오늘 계획 이야기부터
+    // 꺼낼 수는 없다. 인사와 시연은 코치를 부르지 않고 앱이 직접 한다.
+    if (_messages.isEmpty &&
+        widget.coachId == 'cat' &&
+        !_userData.isPlanActive) {
+      await Future.delayed(const Duration(milliseconds: 600));
+      if (!mounted) return;
+      const intro =
+          '안녕! 나는 냥냥코치다냥 🐾\n'
+          '오늘 해야 할 일이나 루틴, 목표들을 같이 챙겨주고 있어!\n'
+          '주변의 할 일창이나 루틴 트래커도 자유롭게 눌러보라냥~';
+      setState(() {
+        _messages.add(
+          ChatMessage(
+            text: intro,
+            isUser: false,
+            time: DateTime.now(),
+            kind: 'auto_greeting',
+          ),
         );
+      });
+      await _saveHistory();
+      _scrollToBottom();
+      await prefs.setString(
+        'last_visit_${widget.coachId}',
+        now.toIso8601String(),
+      );
+      await _maybeShowCatPreview(
+        initialDelay: const Duration(milliseconds: 700),
+      );
+      return;
+    }
+
+    // 플랜 없는 냥냥이는 여기서 끊는다. 아래 자동 발화는 오늘 계획을 두고
+    // 하는 말이라 아직 쓸 수 없는 사람에게는 뜻이 없고, 시연을 아직 안 본
+    // 사람에게는 그것부터 보여주는 게 맞다.
+    if (widget.coachId == 'cat' && !_userData.isPlanActive) {
+      await prefs.setString(
+        'last_visit_${widget.coachId}',
+        now.toIso8601String(),
+      );
+      if (!(prefs.getBool(_kCatPreviewSeen) ?? false)) {
         await _maybeShowCatPreview(
-          initialDelay: const Duration(milliseconds: 700),
+          initialDelay: const Duration(milliseconds: 500),
         );
-        return;
       }
+      return;
+    }
 
-      // 마스터 코치(비서/냥할배): 슬롯별 자동 발화
-      if (_coach.isMaster) {
-        _greetedOnThisEntry = await _startMasterGreeting(
-          prefs: prefs,
-          now: now,
-          lastVisit: lastVisit,
-        );
-        // 할 말이 없던 자리에서만 권한다. 한 번 들어올 때 두 마디 하지 않는다.
-        _greetedOnThisEntry =
-            _greetedOnThisEntry || await _tryOfferOngoingNudge(prefs, now);
-        _greetedOnThisEntry =
-            _greetedOnThisEntry || await _startWeeklyConcretizeTip(prefs, now);
-        // 금요일에 한 번, 매일 루틴이 하루에 다 얹혀 있을 때만.
-        _greetedOnThisEntry =
-            _greetedOnThisEntry || await _tryOfferRoutineSpread(prefs, now);
-        await prefs.setString(
-          'last_visit_${widget.coachId}',
-          now.toIso8601String(),
-        );
-        return;
-      }
+    // 여기부터의 자동 발화는 오늘 대화가 있었는지를 따지지 않는다.
+    //
+    // 한동안 이 묶음이 "오늘 대화가 하나도 없을 때" 안에 들어 있었다. 자정
+    // 정리가 어제 것만 보관함으로 넘기고 오늘 것은 남기므로, 그 조건이 참인
+    // 순간은 하루에 딱 한 번 — 그날의 첫 진입뿐이었다. 한마디라도 나눈
+    // 뒤에는 코치가 하루 종일 먼저 말을 걸 수 없었고, 시각에 매인 발화가
+    // 특히 죽었다. 곧 시작할 일정은 첫 진입이 하필 그 한 시간 안이어야
+    // 했고, 밤에 계획을 좁히자는 말은 첫 진입이 9시를 넘겨야 했다.
+    //
+    // 반복은 껍질이 아니라 각 발화가 안에서 막는다. 같은 일정을 하루에 두 번
+    // 짚지 않고, 밤 이야기도 하루 한 번이고, 권유는 한 번 하면 그걸로 끝이다.
+    // 껍질은 그 위에 덧씌운 한 겹이었을 뿐인데 훨씬 거칠어서, 막아야 할 것과
+    // 함께 필요한 것까지 막았다.
 
-      // 냥냥이도 앱만 아는 사실 두 가지는 짚어준다. 슬롯 인사는 없지만
-      // 곧 시작할 일정과 밤에 남은 계획은 대화가 대신할 수 없다.
-      if (await _startCatAutoGreeting(prefs: prefs, now: now)) {
-        _greetedOnThisEntry = true;
-        await prefs.setString(
-          'last_visit_${widget.coachId}',
-          now.toIso8601String(),
-        );
-        return;
-      }
+    // 마스터 코치(비서/냥할배): 슬롯별 자동 발화
+    if (_coach.isMaster) {
+      _greetedOnThisEntry = await _startMasterGreeting(
+        prefs: prefs,
+        now: now,
+        lastVisit: lastVisit,
+      );
+      // 할 말이 없던 자리에서만 권한다. 한 번 들어올 때 두 마디 하지 않는다.
+      _greetedOnThisEntry =
+          _greetedOnThisEntry || await _tryOfferOngoingNudge(prefs, now);
+      _greetedOnThisEntry =
+          _greetedOnThisEntry || await _startWeeklyConcretizeTip(prefs, now);
+      // 금요일에 한 번, 매일 루틴이 하루에 다 얹혀 있을 때만.
+      _greetedOnThisEntry =
+          _greetedOnThisEntry || await _tryOfferRoutineSpread(prefs, now);
+      await prefs.setString(
+        'last_visit_${widget.coachId}',
+        now.toIso8601String(),
+      );
+      return;
+    }
 
-      if (await _tryOfferOngoingNudge(prefs, now)) {
-        _greetedOnThisEntry = true;
-        await prefs.setString(
-          'last_visit_${widget.coachId}',
-          now.toIso8601String(),
-        );
-        return;
-      }
+    // 냥냥이도 앱만 아는 사실 두 가지는 짚어준다. 슬롯 인사는 없지만
+    // 곧 시작할 일정과 밤에 남은 계획은 대화가 대신할 수 없다.
+    if (await _startCatAutoGreeting(prefs: prefs, now: now)) {
+      _greetedOnThisEntry = true;
+      await prefs.setString(
+        'last_visit_${widget.coachId}',
+        now.toIso8601String(),
+      );
+      return;
+    }
 
-      // 진행 중인 일 확인 다음이다. 지금 붙잡고 있는 일이 더 급하고, 이쪽은
-      // 오늘 안에 아무 때나 해도 되는 이야기다.
-      if (await _startLifePatternSlot(now)) {
-        _greetedOnThisEntry = true;
-        await prefs.setString(
-          'last_visit_${widget.coachId}',
-          now.toIso8601String(),
-        );
-        return;
-      }
+    if (await _tryOfferOngoingNudge(prefs, now)) {
+      _greetedOnThisEntry = true;
+      await prefs.setString(
+        'last_visit_${widget.coachId}',
+        now.toIso8601String(),
+      );
+      return;
+    }
 
-      if (await _tryOfferRoutineSpread(prefs, now)) {
-        _greetedOnThisEntry = true;
-        await prefs.setString(
-          'last_visit_${widget.coachId}',
-          now.toIso8601String(),
-        );
-        return;
-      }
+    // 진행 중인 일 확인 다음이다. 지금 붙잡고 있는 일이 더 급하고, 이쪽은
+    // 오늘 안에 아무 때나 해도 되는 이야기다.
+    if (await _startLifePatternSlot(now)) {
+      _greetedOnThisEntry = true;
+      await prefs.setString(
+        'last_visit_${widget.coachId}',
+        now.toIso8601String(),
+      );
+      return;
+    }
 
-      if (await _startWeeklyConcretizeTip(prefs, now)) {
-        _greetedOnThisEntry = true;
-        await prefs.setString(
-          'last_visit_${widget.coachId}',
-          now.toIso8601String(),
-        );
-        return;
-      }
+    if (await _tryOfferRoutineSpread(prefs, now)) {
+      _greetedOnThisEntry = true;
+      await prefs.setString(
+        'last_visit_${widget.coachId}',
+        now.toIso8601String(),
+      );
+      return;
+    }
 
+    if (await _startWeeklyConcretizeTip(prefs, now)) {
+      _greetedOnThisEntry = true;
+      await prefs.setString(
+        'last_visit_${widget.coachId}',
+        now.toIso8601String(),
+      );
+      return;
+    }
+
+    // 오랜만에 온 사람에게 건네는 인사만 첫 진입 자리에 남는다. 방을 여는
+    // 말이라 대화가 이미 있으면 뜻이 없다.
+    if (_messages.isEmpty) {
       // 프렌즈 코치: 3일 이상 미접속 시 로컬 인사말 출력, 그 외엔 유저 메시지 대기
       if (lastVisitStr != null) {
         final lastVisit = DateTime.parse(lastVisitStr);
@@ -8153,36 +8234,6 @@ Rules:
         now.toIso8601String(),
       );
       return;
-    } else {
-      if (_coach.isMaster) {
-        _greetedOnThisEntry = await _startMasterGreeting(
-          prefs: prefs,
-          now: now,
-          lastVisit: lastVisit,
-        );
-        _greetedOnThisEntry =
-            _greetedOnThisEntry || await _startWeeklyConcretizeTip(prefs, now);
-        await prefs.setString(
-          'last_visit_${widget.coachId}',
-          now.toIso8601String(),
-        );
-        return;
-      }
-
-      // 대화 기록이 있어도 시연을 아직 안 봤으면 그것부터 보여준다.
-      // 이미 본 사람은 여기서 멈추지 않고 아래 인사 흐름으로 그대로 간다.
-      if (widget.coachId == 'cat' &&
-          !_userData.isPlanActive &&
-          !(prefs.getBool(_kCatPreviewSeen) ?? false)) {
-        await prefs.setString(
-          'last_visit_${widget.coachId}',
-          now.toIso8601String(),
-        );
-        await _maybeShowCatPreview(
-          initialDelay: const Duration(milliseconds: 500),
-        );
-        return;
-      }
     }
 
     // 마지막 방문일 업데이트
@@ -8388,6 +8439,7 @@ Rules:
     String? scheduleToConfirm;
     var scheduleReminder = false;
     String? habitToConfirm;
+
     /// 반복 일정의 마지막 날. 없으면 끝나지 않는 반복이다.
     DateTime? scheduleUntil;
     String? goalToConfirm;
@@ -12791,7 +12843,6 @@ Rules:
         text.contains('가능');
   }
 
-
   bool _isSimpleScheduleOverviewRequest(String input) {
     final compact = input.trim().toLowerCase().replaceAll(
       RegExp(r'[\s.。!！?？~〜]+'),
@@ -13795,11 +13846,11 @@ Rules:
         // 코칭하기 시작한다. 이쪽이 알아야 하는 건 요즘 어떤 식으로 굴러가는
         // 사람인지 한마디와, 자기 영역이 실제로 어디까지 가고 있는지다.
         sb.write(
-          ExecutionTypeLabels.promptLine(
-            ExecutionTypeLabels.savedLabel(prefs),
-          ),
+          ExecutionTypeLabels.promptLine(ExecutionTypeLabels.savedLabel(prefs)),
         );
-        sb.write(RecentTaskDigest.promptBlock(prefs.getString('nyang_history')));
+        sb.write(
+          RecentTaskDigest.promptBlock(prefs.getString('nyang_history')),
+        );
       } else {
         sb.write(
           ExecutionFunnel.from(prefs.getString('nyang_history')).promptBlock(
@@ -18041,10 +18092,7 @@ ${Prompts.outputRulesTail}${Prompts.screenMap}$plannerActionSection$coachOfferTa
             // 무관하게 항상 밝은 바탕을 뒤에 깐다. 글자색만 밝게 바꾸는
             // 방식은 배경이 밝은 사진일 때 반대로 안 보이게 된다.
             Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 10,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               decoration: BoxDecoration(
                 color: Colors.white.withValues(alpha: 0.88),
                 borderRadius: BorderRadius.circular(14),
@@ -18188,10 +18236,7 @@ ${Prompts.outputRulesTail}${Prompts.screenMap}$plannerActionSection$coachOfferTa
             // 무관하게 항상 밝은 바탕을 뒤에 깐다. 글자색만 밝게 바꾸는
             // 방식은 배경이 밝은 사진일 때 반대로 안 보이게 된다.
             Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 10,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               decoration: BoxDecoration(
                 color: Colors.white.withValues(alpha: 0.88),
                 borderRadius: BorderRadius.circular(14),
@@ -18213,10 +18258,7 @@ ${Prompts.outputRulesTail}${Prompts.screenMap}$plannerActionSection$coachOfferTa
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
             child: Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 10,
-                vertical: 6,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(
                 color: Colors.white.withValues(alpha: 0.88),
                 borderRadius: BorderRadius.circular(10),

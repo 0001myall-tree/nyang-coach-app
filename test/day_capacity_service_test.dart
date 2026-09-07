@@ -33,8 +33,9 @@ void main() {
       );
     });
 
-    test('많이 잡아도 다 해내면 묻지 않는다', () {
-      // 자기 하루를 이미 맞춰 잡고 있는 사람에게 시간을 묻는 건 검사가 된다.
+    test('많이 잡고 다 해내는 사람에게도 묻는다', () {
+      // 잘 해내는 사람에게도 오늘 두 시간뿐인 날은 온다. 그날 여섯 개를
+      // 짜주면 잘 해내던 사람을 실패시킨다.
       expect(
         DayCapacityService.worthAsking(
           history([
@@ -43,7 +44,7 @@ void main() {
             day(3, planned: 5, done: 4),
           ]),
         ),
-        isFalse,
+        isTrue,
       );
     });
 
