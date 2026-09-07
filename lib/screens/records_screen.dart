@@ -32,16 +32,16 @@ class RecordsScreen extends StatefulWidget {
   /// 나왔는데 사용자는 모르는 일이 생겼다.
   /// 이 값을 올리면 캐시해둔 한마디를 버리고 다시 만든다.
   ///
-  /// 8로 올린 이유: 유형 이름을 앱이 문턱으로 붙이다가 코치가 고르는 것으로
-  /// 바꿨다. 캐시에 남은 옛 이름은 문턱이 붙인 것이라 이번 주 숫자와 안 맞는다.
-  static const int weeklyFeedbackVersion = 8;
+  /// 9로 올린 이유: 실행 회고형이 숫자 하나(손댄 것 중 완료 비율)만 보고
+  /// 계획을 줄이자는 말을 못 하게 막고 있었다. 캐시에 남은 한마디는 그 지시로
+  /// 쓰인 것이라, 계획 과다인 사람에게 정반대 처방이 그대로 걸려 있다.
+  static const int weeklyFeedbackVersion = 9;
 
   @override
   State<RecordsScreen> createState() => _RecordsScreenState();
 }
 
 class _RecordsScreenState extends State<RecordsScreen> {
-
   bool _isLoading = true;
   List<Map<String, dynamic>> _history = [];
 
@@ -111,7 +111,6 @@ class _RecordsScreenState extends State<RecordsScreen> {
         ),
       );
     }
-
 
     _userTitle = await UserTitleService.getTitle();
     _lastDate = prefs.getString('nyang_last_date') ?? '';
@@ -709,8 +708,7 @@ class _RecordsScreenState extends State<RecordsScreen> {
     final consistentTasks = <String>[];
     final consistentStartTasks = <String>[];
     final heldOverDayCounts = <String, int>{};
-    final activeRecords = records
-        .toList();
+    final activeRecords = records.toList();
 
     /// 3일 이상 비어 있다가 다시 걸린 적이 있는지.
     bool resumedAfterGap(List<bool> status) {
@@ -777,12 +775,13 @@ class _RecordsScreenState extends State<RecordsScreen> {
       }
     }
 
-    // 시작한 일이 끝까지 간 비율.
+    // 계획 → 시작 → 완료를 두 비율로 나눠 센다.
     //
-    // 완료율과 재는 것이 다르다. 완료율은 계획한 것 중 몇 개를 끝냈는지라
-    // 계획을 크게 세운 사람은 낮게 나오는데, 이 값은 손을 댄 것 중 몇 개가
-    // 끝났는지다. 이게 높으면 그 사람의 문턱은 지속이 아니라 시작이고,
-    // 다음 주에 필요한 것도 "덜 계획하기"가 아니라 "시작하는 자리 만들기"다.
+    // 한동안 뒤엣것만 줬다. 손댄 것 중 몇 개를 끝냈는지. 그 하나로는 계획
+    // 과다인 사람과 시작을 못 하는 사람이 똑같이 보인다 — 열 개 적고 세 개만
+    // 건드려 셋 다 끝낸 사람도 100%이고, 세 개 적고 셋 다 끝낸 사람도
+    // 100%다. 앞은 잡는 양을 줄여야 하고 뒤는 잘 가고 있는데, 숫자 하나로는
+    // 가를 수가 없었다. 앞엣것(적어둔 것 중 손댄 비율)이 그 차이를 낸다.
     var startedTaskCount = 0;
     var startedThenDoneCount = 0;
     for (final text in allTaskTexts) {
@@ -801,8 +800,11 @@ class _RecordsScreenState extends State<RecordsScreen> {
       if (finished) startedThenDoneCount++;
     }
     // 두세 개로는 사람의 패턴이라고 말할 수 없다. 그 아래는 숫자를 주지 않는다.
+    final plannedTaskCount = allTaskTexts.length;
     final startToFinishText = startedTaskCount >= 4
-        ? '손댄 일 $startedTaskCount개 중 $startedThenDoneCount개 완료 '
+        ? '적어둔 일 $plannedTaskCount개 중 $startedTaskCount개에 손댐 '
+              '(${(startedTaskCount * 100 / plannedTaskCount).round()}%) / '
+              '손댄 일 $startedTaskCount개 중 $startedThenDoneCount개 완료 '
               '(${(startedThenDoneCount * 100 / startedTaskCount).round()}%)'
         : '표본이 적어 판단 보류';
 
@@ -888,10 +890,10 @@ class _RecordsScreenState extends State<RecordsScreen> {
       '- 일부 미완료가 있던 날: ${partialCompletionDays.isEmpty ? '없음' : partialCompletionDays.join(', ')}',
     );
     completionSummaryBuffer.writeln(
-      '- 저조한 완료율(40% 이하)인 날: ${lowCompletionDays.isEmpty ? '없음' : lowCompletionDays.join(', ')}',
+      '- 완료가 아쉬웠던 날(40% 이하): ${lowCompletionDays.isEmpty ? '없음' : lowCompletionDays.join(', ')}',
     );
     completionSummaryBuffer.writeln(
-      '- 저조한 날이 많은 주인가: ${manyLowCompletionDays ? '예' : '아니오'}',
+      '- 완료가 아쉬웠던 날이 많은 주인가: ${manyLowCompletionDays ? '예' : '아니오'}',
     );
     completionSummaryBuffer.writeln(
       '- 플래너 기록일이 적은 주인가: ${lowPlannerAttendance ? '예' : '아니오'}',
@@ -1002,6 +1004,46 @@ class _RecordsScreenState extends State<RecordsScreen> {
       }
     }
 
+    // 체력 신호. 완료가 아쉬웠던 주의 원인을 의지가 아닌 쪽에서도 찾게 한다.
+    //
+    // 늦게까지 붙잡고 있던 주는 다음 날들이 무너진다. 그런데 코치에게 가는
+    // 자료에는 몇 개를 끝냈는지만 있어서, 그 주는 "계획이 컸던 주"로만
+    // 읽혔다. 밤에 일한 흔적은 앱이 이미 두 군데에 남기고 있으니 그대로
+    // 넘긴다 — 시작 표시에 찍힌 시각과, 정해둔 취침 시각 뒤의 플래너 진입.
+    final lateStartDays = <String>[];
+    for (final record in records) {
+      final tasks = (record['tasks'] as List?) ?? [];
+      final hasLateStart = tasks.any((task) {
+        final startedAt = DateTime.tryParse(
+          (task as Map?)?['startedAt']?.toString() ?? '',
+        );
+        if (startedAt == null) return false;
+        return startedAt.hour >= 22 || startedAt.hour < 5;
+      });
+      if (hasLateStart) {
+        final label = _getDayLabel(record['date']?.toString() ?? '');
+        if (label.isNotEmpty) lateStartDays.add(label);
+      }
+    }
+    final weekDateKeys = records
+        .map((record) => record['date']?.toString() ?? '')
+        .where((date) => date.isNotEmpty)
+        .toSet();
+    final latePlannerDays =
+        (prefs.getStringList('nyang_late_planner_entry_dates') ?? const [])
+            .where(weekDateKeys.contains)
+            .length;
+
+    // 짚을 것이 없으면 아예 넘기지 않는다. "없음"만 적힌 칸이 늘면 코치가
+    // 없는 것을 굳이 언급한다.
+    final staminaSection = (lateStartDays.isEmpty && latePlannerDays == 0)
+        ? ''
+        : '\n[체력 신호]\n'
+              '${lateStartDays.isEmpty ? '' : '- 밤 10시~새벽 5시에 시작한 날: ${lateStartDays.join(', ')} (${lateStartDays.length}일)\n'}'
+              '${latePlannerDays == 0 ? '' : '- 정해둔 취침 시각 뒤에 플래너를 연 날: $latePlannerDays일\n'}'
+              '(완료가 아쉬웠던 주에 이런 날이 여럿이면 의지가 아니라 체력이 원인일 수 있습니다. '
+              '단정하지 말고 가능성으로만 짚고, 다음 주 제안도 거기에 맞추세요.)';
+
     // 지난 주 일일 대화 요약 (메모리 시스템 산출물). 저조한 주의 원인을
     // 추측이 아니라 실제 컨디션/고민 기록으로 해석하기 위한 근거로 쓴다.
     String chatSummarySection = '';
@@ -1040,7 +1082,7 @@ ${completionSummaryBuffer.toString().trim()}
 - 꾸준히 해낸 일 (3일 이상 연속 완료): ${consistentTasks.join(', ').isEmpty ? '없음' : consistentTasks.join(', ')}
 - 꾸준히 손댄 일 (완료까지는 아니어도 3일 이상 연속으로 시작): ${consistentStartTasks.join(', ').isEmpty ? '없음' : consistentStartTasks.join(', ')}
 - 이번 주 주력한 일 (하루에 끝나지 않아 여러 날 붙잡은 일, 괄호는 손댄 날 수): ${heldOverText.isEmpty ? '없음' : heldOverText}
-${feedbackType == 0 ? '- 시작한 일이 완료로 이어진 비율: $startToFinishText\n' : ''}
+${feedbackType == 0 ? '- 실행 비율: $startToFinishText\n  (두 비율을 함께 보세요. 손댄 것은 잘 끝내는데 손댄 비율이 낮다면, 못 해내는 사람이 아니라 한 번에 잡는 양이 많은 사람입니다. 두 비율 중 낮은 쪽이 그 주의 병목입니다.)\n' : ''}
 - 미루다 다시 완료한 일 (3일 이상 미루다 최근 다시 완료): ${resumedTasks.join(', ').isEmpty ? '없음' : resumedTasks.join(', ')}
 - 미루다 다시 시작한 일 (3일 이상 손대지 못하다 최근 다시 시작, 완료는 아직): ${resumedStartTasks.join(', ').isEmpty ? '없음' : resumedStartTasks.join(', ')}
 ${feedbackType == 3 ? '$executionPatternBlock\n' : ''}${feedbackType == 0 && executionTrendBlock.isNotEmpty ? '\n[실행 - 앱이 최근 이레 기록에서 센 값]\n$executionTrendBlock' : ''}
@@ -1058,7 +1100,7 @@ ${feedbackType == 3 ? '$executionPatternBlock\n' : ''}${feedbackType == 0 && exe
 
 [현재 설정된 루틴 트래킹 빈도]
 ${habitFreqBuffer.toString().trim()}
-$chatSummarySection
+$staminaSection$chatSummarySection
 
 [회고 유형: ${feedbackType == 0
         ? '실행 회고형'
@@ -1071,9 +1113,9 @@ $chatSummarySection
 2. 공통 원칙:
    - "시작했지만 끝내지 못한 일"과 "손대지 못한 일"을 한데 묶어 미완료로 말하지 마세요. 시작한 일은 아무것도 하지 않은 일이 아닙니다.
    - [현재 설정된 루틴 트래킹 빈도]를 반드시 참고하세요. 특정 요일에만 하기로 한 루틴이라면 그 빈도에 맞게 평가해 주세요.
-   - 인상이 아니라 [주간 완료율 요약]의 수치를 보고 말하세요. 완료율과 해낸 개수 위주로 살피세요. 100% 완료한 날이 대부분이고 저조한 날이 하루뿐이면 "계획대로 진행되지 않은 날이 많았다", "저조한 날이 많았다", "대부분 미완료였다" 같은 복수/다수 표현을 절대 쓰지 마세요.
+   - 인상이 아니라 [주간 완료율 요약]의 수치를 보고 말하세요. 100% 완료한 날이 대부분이고 완료가 아쉬웠던 날이 하루뿐이면 "계획대로 진행되지 않은 날이 많았다", "저조한 날이 많았다", "대부분 미완료였다" 같은 복수/다수 표현을 절대 쓰지 마세요.
    - 플래너 기록일이 적은 주(플래너 기록일이 적은 주인가: 예)에는 완료율을 강하게 평가하지 말고, 먼저 플래너로 돌아오는 리듬을 부드럽게 제안하세요.
-   - 완료율이 저조한 주(저조한 날이 많은 주인가: 예)에는 원인을 추측으로 단정하지 말고, [지난 주 대화 기록 요약]이 있다면 거기 나타난 컨디션과 고민을 근거로 원인을 해석해 주세요. 요약에 없는 사정을 지어내지 마세요.
+   - 완료가 아쉬웠던 날이 많은 주(완료가 아쉬웠던 날이 많은 주인가: 예)에는 원인을 추측으로 단정하지 말고, [체력 신호]와 [지난 주 대화 기록 요약]에 나타난 것을 근거로 원인을 해석해 주세요. 그 자료에 없는 사정을 지어내지 마세요.
 3. 유형별 작성 방식:
 ${feedbackType == 0
         ? '''   [실행 회고형]
@@ -1081,12 +1123,11 @@ ${feedbackType == 0
    - 목표/비전과 연결되는 중요한 활동 1~2개를 콕 집어 구체적으로 칭찬하세요. (추상적 칭찬 금지) 후보는 [이번 주 주력한 일]과 완료한 일 양쪽에서 고르세요.
    - 여러 날 붙잡은 일은 끝내지 못했어도 그 주의 주력으로 인정하고, 끝낸 일은 끝낸 것으로 칭찬하세요. (예: "이번 주는 보고서에 나흘을 쓰셨네요." / "수요일에 보고서를 끝내셨네요.")
    - 미루다 다시 완료한 일이나 다시 시작한 일이 있다면 특별히 언급해 주세요. 완료까지 가지 못했어도 다시 손을 댄 것 자체를 인정해 주세요.
-   - '시작한 일이 완료로 이어진 비율'이 7할을 넘으면, 완료율이 낮은 주라도 그 사람은 일단 손을 대면 끝내는 사람입니다. 그 점을 이번 주의 강점으로 짚고, 다음 주 제안은 계획을 줄이는 쪽보다 시작하는 자리를 만드는 쪽으로 하세요. (예: 첫 10분만 정해두기, 시작 시각을 미리 잡아두기)
    - 다시 시작은 했는데 완료 기록이 적다면, 의지나 성실함의 문제로 읽지 말고 하루에 실행 가능한 크기로 계획을 나누자고 제안해 주세요.
    - 반복적으로 밀린 중요한 일이 있다면 부드럽게 지적하고 다음 주 우선순위로 권유하세요. 단, 시작 기록이 있는 일은 밀린 일로 지적하지 마세요. 손을 댄 일은 진행 중인 일입니다.
-   - 단, [주간 완료율 요약]에서 "저조한 날이 많은 주인가: 예"인 경우에만 밀린 항목을 나열하거나 지적하지 말고 이 구조로 쓰세요: 수고 인정 → 원인 해석([지난 주 대화 기록 요약]이 있으면 그 근거로, 없으면 계획이 컨디션보다 컸을 가능성으로) → 다음 주에는 확실히 해낼 수 있는 만큼만 계획하자는 제안.
+   - 단, [주간 완료율 요약]에서 "완료가 아쉬웠던 날이 많은 주인가: 예"인 경우에만 밀린 항목을 나열하거나 지적하지 말고 이 구조로 쓰세요: 수고 인정 → 원인 해석([지난 주 대화 기록 요약]이 있으면 그 근거로, 없으면 계획이 컨디션보다 컸을 가능성으로) → 다음 주에는 확실히 해낼 수 있는 만큼만 계획하자는 제안.
    - 플래너 기록일이 적은 주라면 아래 구조를 따르세요: "이번 주는 완료율보다 플래너에 다시 돌아오는 리듬을 먼저 잡는 것이 좋아 보입니다. 기록이 적었던 만큼 성과를 크게 판단하기는 어렵겠습니다. 해야 할 일이 있는데 하기 싫을 때는 냥냥코치를 기억해 주세요. 하기 싫은 마음까지 달래드리겠습니다." 성과 판단 보류 문장과 냥냥코치 안내 문장은 반드시 서로 다른 문장으로 분리하세요. "판단하기보다는, 냥냥코치를..."처럼 하나의 비교 문장으로 연결하지 마세요.
-   - 저조한 날이 하루뿐이면 전체 주간은 긍정적으로 평가하고, 해당 날짜만 "토요일 하루 완료율이 낮았습니다"처럼 단수로 정확히 언급하세요.'''
+   - 완료가 아쉬웠던 날이 하루뿐이면 전체 주간은 긍정적으로 평가하고, 해당 날짜만 "토요일 하루만 조금 아쉬웠어요"처럼 단수로 정확히 언급하세요.'''
         : feedbackType == 1
         ? '''   [장기 비전형]
    - 현재 장기 비전과 마일스톤을 중심으로 회고합니다. [장기 비전 상세 데이터]를 반드시 참고하세요.
