@@ -343,6 +343,25 @@ class _MainTabScreenState extends State<MainTabScreen>
             .where((c) => c.tier != 'master')
             .toList();
 
+        // 마스터 플랜인 사람에게는 마스터 코치를 위에 둔다. 쓰는 코치가
+        // 위에 있어야 하고, 마스터 플랜이면 마스터가 주 코치다. 프렌즈
+        // 플랜이면 반대로 마스터 쪽은 잠겨 있는 목록이라 아래가 맞다.
+        //
+        // 플랜 이름이 아니라 실제로 들어갈 수 있는지로 가른다. 만료된 마스터
+        // 플랜은 이름이 남아 있어도 자물쇠가 걸린 목록이라 위로 올릴 것이 없다.
+        final hasMasterAccess = masterCoaches.any(
+          (c) => userData.canAccessCoach(c.id),
+        );
+        final sections = <(String, List<CoachConfig>)>[
+          if (hasMasterAccess) ...[
+            if (masterCoaches.isNotEmpty) ('마스터 코치', masterCoaches),
+            if (friendsCoaches.isNotEmpty) ('프렌즈 코치', friendsCoaches),
+          ] else ...[
+            if (friendsCoaches.isNotEmpty) ('프렌즈 코치', friendsCoaches),
+            if (masterCoaches.isNotEmpty) ('마스터 코치', masterCoaches),
+          ],
+        ];
+
         Widget buildTile(CoachConfig c) {
           final isSelected = c.id == widget.coachId;
           final isOwned = userData.canAccessCoach(c.id);
@@ -440,26 +459,8 @@ class _MainTabScreenState extends State<MainTabScreen>
                       shrinkWrap: true,
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       children: [
-                        if (friendsCoaches.isNotEmpty) ...[
-                          Padding(
-                            padding: const EdgeInsets.symmetric(
-                              vertical: 4,
-                              horizontal: 8,
-                            ),
-                            child: Text(
-                              '프렌즈 코치',
-                              style: GoogleFonts.notoSansKr(
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.grey,
-                              ),
-                            ),
-                          ),
-                          ...friendsCoaches.map(buildTile),
-                          const SizedBox(height: 8),
-                        ],
-                        if (masterCoaches.isNotEmpty) ...[
-                          if (friendsCoaches.isNotEmpty)
+                        for (final section in sections) ...[
+                          if (section != sections.first)
                             const Divider(height: 16, color: Color(0xFFF0F0F5)),
                           Padding(
                             padding: const EdgeInsets.symmetric(
@@ -467,7 +468,7 @@ class _MainTabScreenState extends State<MainTabScreen>
                               horizontal: 8,
                             ),
                             child: Text(
-                              '마스터 코치',
+                              section.$1,
                               style: GoogleFonts.notoSansKr(
                                 fontSize: 12,
                                 fontWeight: FontWeight.bold,
@@ -475,7 +476,7 @@ class _MainTabScreenState extends State<MainTabScreen>
                               ),
                             ),
                           ),
-                          ...masterCoaches.map(buildTile),
+                          ...section.$2.map(buildTile),
                         ],
                         const SizedBox(height: 16),
                       ],
@@ -2108,8 +2109,8 @@ class _MainTabScreenState extends State<MainTabScreen>
 
   Widget _buildAppBarTitle({required bool isImmersive}) {
     final nameColor = (_chatBgStyle == 'simple'
-              ? const Color(0xFF3A3652)
-              : (isImmersive ? Colors.white : const Color(0xFF1A1A2E)));
+        ? const Color(0xFF3A3652)
+        : (isImmersive ? Colors.white : const Color(0xFF1A1A2E)));
 
     return Row(
       children: [
