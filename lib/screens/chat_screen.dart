@@ -19800,10 +19800,12 @@ ${Prompts.outputRulesTail}${Prompts.screenMap}$plannerActionSection$coachOfferTa
                         decoration: BoxDecoration(
                           color: _isListening
                               ? Colors.redAccent.withOpacity(0.15)
+                              // 입력창과 한 줄로 붙어 있어서 따로 놀면 눈에 띈다.
+                              // 옆이 흰색에 가까워졌으니 같이 올린다.
                               : (widget.chatBgStyle == 'simple'
                                     ? const Color(0xFFF5F3FF)
                                     : (isNyang
-                                          ? Colors.white.withOpacity(0.3)
+                                          ? Colors.white.withValues(alpha: 0.88)
                                           : (isImmersiveInput
                                                 ? Colors.white.withOpacity(0.2)
                                                 : Colors.white))),
@@ -19861,11 +19863,19 @@ ${Prompts.outputRulesTail}${Prompts.screenMap}$plannerActionSection$coachOfferTa
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
                         decoration: BoxDecoration(
+                          // 냥냥이는 글자가 진한 색이라 유리판이 흐리면 사진 위에
+                          // 바로 얹힌 꼴이 된다. 밝은 배경에선 묻히고 어두운 데선
+                          // 떠서 읽는 자리가 일정하지 않았다. 같은 화면의 말풍선이
+                          // 거의 불투명한 흰색이라 그쪽에 맞춘다.
+                          //
+                          // 글자가 흰색인 다른 프렌즈 코치는 올리면 안 된다.
                           color: widget.chatBgStyle == 'simple'
                               ? Colors.white
-                              : (isFriends
-                                    ? Colors.white.withOpacity(0.25)
-                                    : Colors.white),
+                              : (isNyang
+                                    ? Colors.white.withValues(alpha: 0.88)
+                                    : (isFriends
+                                          ? Colors.white.withValues(alpha: 0.25)
+                                          : Colors.white)),
                           borderRadius: BorderRadius.circular(
                             AppDesignTokens.radiusPill,
                           ),
