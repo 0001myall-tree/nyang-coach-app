@@ -65,6 +65,7 @@ import 'package:nyang_coach/services/same_work_check.dart';
 import 'package:nyang_coach/services/task_name_similarity.dart';
 import 'package:nyang_coach/services/task_resistance_service.dart';
 import 'package:nyang_coach/services/execution_resistance_service.dart';
+import 'package:nyang_coach/services/execution_state_check.dart';
 import 'package:nyang_coach/services/focus_fatigue_service.dart';
 import 'package:nyang_coach/services/goal_push_service.dart';
 import 'package:nyang_coach/services/resistance_intervention_service.dart';
@@ -1922,6 +1923,27 @@ class _ChatScreenState extends State<ChatScreen>
     return signals.any(normalized.contains);
   }
 
+  /// 상태 판별기에 넘길 사용자 발화. 오래된 것부터 담고 이번 말이 맨 뒤다.
+  ///
+  /// 이번 말이 이미 목록에 들어와 있는 경로와 아직 아닌 경로가 둘 다 있어서,
+  /// 마지막 줄을 보고 없을 때만 붙인다. 두 번 들어가면 판별기가 같은 말을
+  /// 두 번 세게 된다.
+  List<String> _recentUserLines(String userText) {
+    final lines = [
+      for (final message in _messages)
+        if (message.isUser && message.text.trim().isNotEmpty)
+          message.text.trim(),
+    ];
+    final current = userText.trim();
+    if (current.isNotEmpty && (lines.isEmpty || lines.last != current)) {
+      lines.add(current);
+    }
+    const window = ExecutionStateCheck.maxLines;
+    return lines.length > window
+        ? lines.sublist(lines.length - window)
+        : lines;
+  }
+
   /// 최근 대화가 생각 정리 흐름이었는지. 사용자가 "머리가 복잡하다"고 말한
   /// 뒤 코치가 30분 쓰기를 권하는 흐름이라, 그 말이 몇 턴 전에 있어도 잡는다.
   bool _isThoughtOverloadContext() {
@@ -3306,27 +3328,6 @@ $role
       '짧게여러번',
       '이미지트레이닝',
       '상상훈련',
-    ];
-    return signals.any(normalized.contains);
-  }
-
-  bool _containsLowEnergyStarterSignal(String text) {
-    final normalized = text.replaceAll(RegExp(r'\s+'), '').toLowerCase();
-    const signals = [
-      '무기력',
-      '기력이없',
-      '기운이없',
-      '에너지가없',
-      '에너지없',
-      '힘이없',
-      '몸에힘이없',
-      '축처',
-      '방전',
-      '완전방전',
-      '몸이안움직',
-      '일어날힘',
-      '누워만있',
-      '아무것도못하',
     ];
     return signals.any(normalized.contains);
   }
@@ -14446,11 +14447,16 @@ Rules:
     // 글쓰기 턴을 비켜가던 조건도 같이 걷었다. 그건 두 층이 부딪히는 걸 막으려
     // 붙인 반창고였는데, 한 층이 된 지금은 "원고 쓸 기력이 없어"에도 몸부터
     // 깨우는 게 맞다. 글쓰기 말투는 전용 코칭이 따로 입힌다.
+    //
+    // 어느 쪽인지는 단어가 아니라 뜻으로 가른다. 같은 "하기 싫어"가 양쪽에서
+    // 나오기 때문이다. 저항으로 이미 판정된 턴에만 물어서, 평범한 대화에는
+    // 호출이 붙지 않게 한다.
     final shouldOfferLowEnergyStarter =
-        _containsLowEnergyStarterSignal(userText) &&
+        isResistanceTurn &&
         !isLowEnergyStarterFollowup &&
         !isSelfHarmRiskTurn &&
-        !isSleepResistanceTurn;
+        !isSleepResistanceTurn &&
+        await ExecutionStateCheck.looksLowEnergy(_recentUserLines(userText));
     // 집중력 저하는 "이미 붙잡고 있었는데 흐트러진" 상태다. 아직 못 붙은
     // 실행 저항과 대응이 반대라 따로 세운다. 자해·수면·저에너지는 더 급하고
     // 결과 불안·생각 과부하는 더 구체적인 진단이라 전부 그쪽에 양보한다.
