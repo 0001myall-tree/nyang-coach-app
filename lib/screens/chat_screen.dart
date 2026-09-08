@@ -16291,11 +16291,13 @@ ${Prompts.outputRulesTail}${Prompts.screenMap}$plannerActionSection$coachOfferTa
                   '간편 실행',
                   overflow: TextOverflow.ellipsis,
                   maxLines: 1,
-                  // 개구는 획이 가늘어서 보라 바탕에 흰 글씨로 앉히면 묽어진다.
-                  // 정자체 13에 맞추려면 두 단계는 올려야 눈에 같은 굵기로 보인다.
-                  style: GoogleFonts.gaegu(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
+                  // 손글씨를 대봤다가 되돌렸다. 이 버튼이 앉은 줄은 오늘 목표,
+                  // 진행률, 연속 일수가 늘어선 데이터 줄이라 거기 손글씨가 하나
+                  // 끼면 규칙이 아니라 실수로 보인다. 개구는 획도 가늘어서 진한
+                  // 보라 위 흰 글씨로는 지금보다 약해진다.
+                  style: GoogleFonts.notoSansKr(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w900,
                     color: Colors.white,
                   ),
                 ),
