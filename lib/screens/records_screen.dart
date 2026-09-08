@@ -1362,7 +1362,10 @@ ${ExecutionTypeLabels.listForPrompt}
         _summaryCard(
           // 하루라도 끝낸 날의 비율. 완료율이 아니라 "손댄 날"을 센다 —
           // 하나만 해낸 날도 아무것도 안 한 날과는 다르다.
-          '해낸 날',
+          //
+          // 채팅 상단 카드와 코치 발화가 이 값을 같은 이름으로 부른다. 세 곳이
+          // 다른 말을 쓰면 사용자는 같은 숫자를 세 번 새로 배워야 한다.
+          '움직인 날',
           '$successDays일',
           '$flowPct%',
           Icons.check_circle_outline,

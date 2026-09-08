@@ -37,6 +37,13 @@ class MasterGreetingContext {
   /// 오늘 일정/습관 중 시작 또는 완료 흔적이 있는 개수.
   final int startedCount;
 
+  /// 최근 7일 중 하나라도 끝낸 날의 수. 오늘까지 포함한다.
+  ///
+  /// 채팅 상단 카드와 기록 탭이 '움직인 날'이라는 같은 이름으로 부르는 값이다.
+  /// 코치가 이 숫자를 말할 때도 그 이름을 그대로 쓴다 — 세 곳이 다른 말을 쓰면
+  /// 사용자는 같은 숫자를 세 번 새로 배워야 한다.
+  final int movedDays;
+
   /// 격려에 녹일 완료 항목 이름. 제목이 길거나 완료가 없으면 null.
   final String? doneLabel;
 
@@ -98,6 +105,7 @@ class MasterGreetingContext {
     this.habitDone = 0,
     required this.doneCount,
     this.startedCount = 0,
+    this.movedDays = 0,
     required this.doneLabel,
     required this.pendingPlans,
     required this.lateNight,
@@ -278,6 +286,17 @@ class GreetingVoice {
   final List<(String, String)> encStarted; // 오전 1~2개 완료
   final List<(String, String)> encStrong; // 오전 3개 이상 완료
   final List<(String, String)> encFlow; // 오후 절반 이상 완료
+
+  /// 오늘 하나 끝냈고, 이번 주 움직인 날이 여러 날일 때. `{{days}}`에 날 수.
+  ///
+  /// 숫자가 오르는 순간을 사용자는 못 본다 — 앱을 열면 이미 올라 있다. 그래서
+  /// 상단 카드에 며칠씩 떠 있어도 눈에 안 들어온다. 끝낸 직후에 코치가 말로
+  /// 짚어주는 편이 훨씬 세다.
+  ///
+  /// 애니메이션이 아니라 말인 것은, 칭찬과 같은 순간에 숫자가 따로 움직이면
+  /// 둘이 서로 잡아먹기 때문이다. 칭찬은 "누가 나를 알아봤다"이고 숫자는
+  /// "기록이 올랐다"라 종류가 다르다. 한 문장에 실으면 신호가 하나로 남는다.
+  final List<(String, String)> encMovedDays;
   final List<(String, String)> encEvening; // 저녁 발화용
 
   /// 하기 싫다던 일을 끝낸 날 저녁. 해낸 것을 짚고, 다음에도 도와주겠다고 한다.
@@ -507,6 +526,7 @@ class GreetingVoice {
     required this.encStarted,
     required this.encStrong,
     required this.encFlow,
+    required this.encMovedDays,
     required this.encEvening,
     required this.eveningResistedDone,
     required this.eveningResistedInProgress,
@@ -785,6 +805,16 @@ class MasterGreetingCopy {
     encFlow: [
       ('{{task}}까지 마치셨으니 남은 건 천천히 보셔도 됩니다.', '여기까지 오셨으니 남은 건 천천히 보셔도 됩니다.'),
       ('{{task}} 끝내신 걸 보면 오늘은 서두르지 않으셔도 되겠어요.', '지금 흐름이면 서두르지 않으셔도 되겠어요.'),
+    ],
+    encMovedDays: [
+      (
+        '{{task}} 해두셨네요. 이걸로 이번 주 움직인 날이 {{days}}일입니다.',
+        '오늘도 하나 해두셨네요. 이걸로 이번 주 움직인 날이 {{days}}일입니다.',
+      ),
+      (
+        '{{task}} 마치셨군요. 이번 주 움직인 날이 벌써 {{days}}일이 됐습니다.',
+        '하나 마치셨군요. 이번 주 움직인 날이 벌써 {{days}}일이 됐습니다.',
+      ),
     ],
     encEvening: [
       ('{{task}} 챙기신 게 눈에 띕니다.', '오늘 챙기신 것들이 눈에 띕니다.'),
@@ -1263,6 +1293,16 @@ class MasterGreetingCopy {
     encFlow: [
       ('{{task}}까지 마쳤으니 남은 건 천천히 봐도 된다냥.', '여기까지 왔으니 남은 건 천천히 봐도 된다냥.'),
       ('{{task}} 끝낸 걸 보면 오늘은 서두르지 않아도 되겠다냥.', '지금 흐름이면 서두르지 않아도 되겠다냥.'),
+    ],
+    encMovedDays: [
+      (
+        '{{task}} 해뒀구나냥. 이걸로 이번 주 움직인 날이 {{days}}일이다냥.',
+        '오늘도 하나 해뒀구나냥. 이걸로 이번 주 움직인 날이 {{days}}일이다냥.',
+      ),
+      (
+        '{{task}} 마쳤구나냥. 이번 주 움직인 날이 벌써 {{days}}일이 됐다냥.',
+        '하나 마쳤구나냥. 이번 주 움직인 날이 벌써 {{days}}일이 됐다냥.',
+      ),
     ],
     encEvening: [
       ('{{task}} 챙긴 게 눈에 띈다냥.', '오늘 챙긴 것들이 눈에 띈다냥.'),
@@ -2119,10 +2159,31 @@ class MasterGreetingBuilder extends GreetingLinePicker {
     );
   }
 
+  /// 움직인 날을 짚어도 되는 턴인지.
+  ///
+  /// 오늘 완료가 정확히 하나일 때만이다. 그 하나가 오늘을 움직인 날로 만든
+  /// 완료라서, 숫자가 방금 오른 자리가 거기다. 두 번째 세 번째 완료에도
+  /// 같은 말을 하면 숫자는 그대로인데 말만 반복된다.
+  ///
+  /// 이 조건이 쿨다운 노릇도 한다. 하루에 한 번밖에 성립하지 않아 다른 격려의
+  /// 자리를 굶기지 않는다.
+  ///
+  /// 사흘부터 꺼내는 것은, 하루 이틀짜리 숫자는 짚어봐야 시시하기 때문이다.
+  static const movedDaysFromCount = 3;
+
+  bool _canSayMovedDays(MasterGreetingContext context) =>
+      context.doneCount == 1 && context.movedDays >= movedDaysFromCount;
+
   /// 오전·오후 격려. 완료가 있으면 시각과 무관하게 붙는다.
   /// 기준은 완료율이 아니라 개수다 — 자동 주입된 습관이 분모를 오염시키기 때문.
   String _dayEncouragement(MasterGreetingContext context) {
     if (context.doneCount == 0) return '';
+    if (_canSayMovedDays(context)) {
+      final line = pickEncouragement(voice.encMovedDays, context.doneLabel);
+      if (line.isNotEmpty) {
+        return line.replaceAll('{{days}}', '${context.movedDays}');
+      }
+    }
     if (context.now.hour < 12) {
       return pickEncouragement(
         context.doneCount >= 3 ? voice.encStrong : voice.encStarted,

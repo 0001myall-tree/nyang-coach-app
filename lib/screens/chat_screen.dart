@@ -1341,7 +1341,7 @@ class _ChatScreenState extends State<ChatScreen>
   Map<String, String> _quickChipSendOverrides = {};
   Map<String, String> _quickChipApiOverrides = {};
   Map<String, String> _quickChipKindOverrides = {};
-  int _attendanceStreak = 0;
+  int _movedDays = 0;
   int _catTodayEntryCount = 1;
 
   // 음성 인식 관련
@@ -1629,7 +1629,7 @@ class _ChatScreenState extends State<ChatScreen>
       await _recordCatChatEntry(prefs, todayStr);
     }
     await _updateTodayRecord(prefs);
-    await _refreshAttendanceStreak(prefs);
+    await _refreshMovedDays(prefs);
     await _loadHistoryAndGreet();
     await _restoreActiveFocusTimer();
     await _checkBedtimeMoveOffer();
@@ -1759,7 +1759,7 @@ class _ChatScreenState extends State<ChatScreen>
     await manager.saveState();
   }
 
-  Future<void> _refreshAttendanceStreak([SharedPreferences? prefs]) async {
+  Future<void> _refreshMovedDays([SharedPreferences? prefs]) async {
     prefs ??= await SharedPreferences.getInstance();
     final rawHistory = prefs.getString('nyang_history');
     List<Map<String, dynamic>> history = [];
@@ -1784,20 +1784,21 @@ class _ChatScreenState extends State<ChatScreen>
       );
     });
 
-    // 기록 탭의 "연속 출석"과 동일하게 최근 7일 기준으로 계산합니다.
-    var streak = 0;
-    for (var i = records.length - 1; i >= 0; i--) {
-      if ((records[i]['doneCount'] ?? 0) <= 0) {
-        // 오늘은 아직 끝나지 않은 하루라 연속을 끊지 않는다. 아침에 열 때마다
-        // 0을 보여주면 하루가 시작도 하기 전에 기운이 빠진다.
-        if (i == records.length - 1) continue;
-        break;
-      }
-      streak++;
+    // 최근 7일 중 하나라도 끝낸 날이 며칠인지 센다. 기록 탭의 '움직인 날'과
+    // 같은 값이다.
+    //
+    // 전에는 연속으로 셌다. 하루 빠지면 0부터 다시 시작하는 값이라, 닷새를
+    // 움직이고 하루 쉰 사람에게 1이 나갔다. 문턱이 "하나라도"인 지표에서
+    // 그게 제일 아프다 — 하나만 하면 됐는데 그것도 못 했다는 말로 읽힌다.
+    //
+    // 세는 값은 하루 빠져도 안 무너진다. 그리고 이름이 값을 설명한다.
+    var movedDays = 0;
+    for (final record in records) {
+      if (((record['doneCount'] ?? 0) as num) > 0) movedDays++;
     }
 
     if (!mounted) return;
-    setState(() => _attendanceStreak = streak);
+    setState(() => _movedDays = movedDays);
   }
 
   String _friendStatusMessage() {
@@ -2579,7 +2580,7 @@ class _ChatScreenState extends State<ChatScreen>
     try {
       final prefs = await SharedPreferences.getInstance();
       await _updateTodayRecord(prefs);
-      await _refreshAttendanceStreak(prefs);
+      await _refreshMovedDays(prefs);
       TasksSyncService.scheduleSyncToCloud();
     } catch (e) {
       debugPrint('완료 체크 후 기록 갱신 실패: $e');
@@ -5401,6 +5402,9 @@ $block
       habitDone: doneHabits.length,
       doneCount: doneCount,
       startedCount: startedCount,
+      // 상단 카드가 이미 세어 둔 값을 그대로 넘긴다. 여기서 다시 세면 카드에
+      // 적힌 숫자와 코치가 말하는 숫자가 갈릴 수 있다.
+      movedDays: _movedDays,
       doneLabel: doneLabel,
       pendingPlans: pendingPlans,
       lateNight: lateNight,
@@ -7487,7 +7491,7 @@ Rules:
     }
 
     await _updateTodayRecord(prefs);
-    await _refreshAttendanceStreak(prefs);
+    await _refreshMovedDays(prefs);
     await WidgetSyncService.syncFromStoredTasks();
     unawaited(NotificationService().syncDailyPlannerNudge());
     TasksSyncService.scheduleSyncToCloud();
@@ -11144,7 +11148,7 @@ Rules:
       (targetDate) => _dateKey(targetDate) == _dateKey(DateTime.now()),
     )) {
       await _updateTodayRecord(prefs);
-      await _refreshAttendanceStreak(prefs);
+      await _refreshMovedDays(prefs);
     }
 
     TasksSyncService.scheduleSyncToCloud();
@@ -15605,7 +15609,7 @@ ${Prompts.outputRulesTail}${Prompts.screenMap}$plannerActionSection$coachOfferTa
     // 뒤따르는 기록 갱신은 실패해도 등록 자체를 되돌리지 않는다.
     try {
       await _updateTodayRecord(prefs);
-      await _refreshAttendanceStreak(prefs);
+      await _refreshMovedDays(prefs);
       // 계획이 생겼으니 낮에 건넬 말도 달라진다.
       unawaited(NotificationService().syncDailyPlannerNudge());
       TasksSyncService.scheduleSyncToCloud();
@@ -16854,7 +16858,7 @@ ${Prompts.outputRulesTail}${Prompts.screenMap}$plannerActionSection$coachOfferTa
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        '이번 주 연속',
+                        '이번 주 움직인 날',
                         style: GoogleFonts.notoSansKr(
                           fontSize: 10,
                           fontWeight: FontWeight.w700,
@@ -16863,8 +16867,12 @@ ${Prompts.outputRulesTail}${Prompts.screenMap}$plannerActionSection$coachOfferTa
                       ),
                       Text(
                         // 들어온 날이 아니라 할 일을 하나라도 끝낸 날을 센다.
-                        // 기록 탭의 '연속 달성'과 같은 값이라 말도 맞춰 둔다.
-                        '$_attendanceStreak일 달성',
+                        // 기록 탭의 '움직인 날'과 같은 값이라 말도 맞춰 둔다.
+                        //
+                        // 지표에 이름이 있어야 코치도 짧게 말할 수 있다. 이름이
+                        // 없으면 발화할 때마다 "이번 주에 뭐라도 해낸 날이"처럼
+                        // 풀어 써야 하고, 짧게 줄이면 뭘 센 건지 안 통한다.
+                        '$_movedDays일',
                         style: GoogleFonts.notoSansKr(
                           fontSize: 12,
                           fontWeight: FontWeight.w900,

@@ -11,6 +11,7 @@ MasterGreetingContext ctx({
   int planDone = 0,
   int doneCount = 0,
   int startedCount = 0,
+  int movedDays = 0,
   String? doneLabel,
   List<String> pendingPlans = const [],
   int? daysSinceLastVisit,
@@ -31,6 +32,7 @@ MasterGreetingContext ctx({
     planDone: planDone,
     doneCount: doneCount,
     startedCount: startedCount,
+    movedDays: movedDays,
     doneLabel: doneLabel,
     pendingPlans: pendingPlans,
     lateNight: lateNight,
@@ -1748,6 +1750,53 @@ void main() {
       );
       expect(builder.buildTypeAdvice('없는유형', planCount: 3), isNull);
       expect(builder.buildTypeAdvice('없는유형', planCount: 0), isNull);
+    });
+  });
+
+  group('움직인 날 짚기', () {
+    String line(MasterGreetingContext context) =>
+        MasterGreetingBuilder(voice: MasterGreetingCopy.nyangHalbae)
+            .build(context)
+            .text;
+
+    test('오늘 첫 완료에 이번 주 며칠인지 같이 말한다', () {
+      final text = line(ctx(hour: 14, doneCount: 1, movedDays: 5));
+      expect(text.contains('움직인 날'), isTrue, reason: text);
+      expect(text.contains('5일'), isTrue, reason: text);
+    });
+
+    test('자리가 비지 않게 숫자를 반드시 채운다', () {
+      final text = line(ctx(hour: 10, doneCount: 1, movedDays: 4));
+      expect(text.contains('{{days}}'), isFalse, reason: text);
+    });
+
+    test('두 번째 완료부터는 말하지 않는다', () {
+      // 숫자는 그대로인데 말만 반복되면 다른 격려가 굶는다.
+      final text = line(ctx(hour: 14, doneCount: 2, movedDays: 5));
+      expect(text.contains('움직인 날'), isFalse, reason: text);
+    });
+
+    test('아직 며칠 안 됐으면 짚지 않는다', () {
+      final text = line(ctx(hour: 14, doneCount: 1, movedDays: 2));
+      expect(text.contains('움직인 날'), isFalse, reason: text);
+    });
+
+    test('오늘 아무것도 안 끝냈으면 짚지 않는다', () {
+      final text = line(ctx(hour: 14, doneCount: 0, movedDays: 6));
+      expect(text.contains('움직인 날'), isFalse, reason: text);
+    });
+
+    test('할 일 이름을 알면 문장에 넣는다', () {
+      final text = line(
+        ctx(hour: 11, doneCount: 1, movedDays: 5, doneLabel: '설거지'),
+      );
+      expect(text.contains('설거지'), isTrue, reason: text);
+      expect(text.contains('움직인 날'), isTrue, reason: text);
+    });
+
+    test('두 코치 모두 문구를 갖고 있다', () {
+      expect(MasterGreetingCopy.secretary.encMovedDays, isNotEmpty);
+      expect(MasterGreetingCopy.nyangHalbae.encMovedDays, isNotEmpty);
     });
   });
 }
