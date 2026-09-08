@@ -2108,9 +2108,20 @@ class _MainTabScreenState extends State<MainTabScreen>
   }
 
   Widget _buildAppBarTitle({required bool isImmersive}) {
+    // 배경 그림 위에 얹히는 글씨라 그림 밝기를 따라간다.
+    //
+    // 프렌즈 방을 전부 흰색으로 두고 있었는데, 냥냥이 방만 햇살 드는 밝은
+    // 거실이라 이름이 배경에 묻혔다. 나머지는 밤 헬스장이나 어두운 실내라
+    // 흰색이 맞다. 재보니 냥냥이만 확연히 밝고(189) 나머지는 절반 아래다
+    // (형 42, 남친 94, 할매 110).
+    //
+    // 배경 그림을 바꾸면 이 짝도 다시 봐야 한다.
+    final isBrightRoom = widget.coachId == 'cat';
     final nameColor = (_chatBgStyle == 'simple'
         ? const Color(0xFF3A3652)
-        : (isImmersive ? Colors.white : const Color(0xFF1A1A2E)));
+        : (isImmersive && !isBrightRoom
+              ? Colors.white
+              : const Color(0xFF1A1A2E)));
 
     return Row(
       children: [

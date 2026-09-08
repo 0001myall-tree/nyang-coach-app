@@ -16288,12 +16288,14 @@ ${Prompts.outputRulesTail}${Prompts.screenMap}$plannerActionSection$coachOfferTa
               const SizedBox(width: 6),
               Flexible(
                 child: Text(
-                  '빠른 실행',
+                  '간편 실행',
                   overflow: TextOverflow.ellipsis,
                   maxLines: 1,
-                  style: GoogleFonts.notoSansKr(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w900,
+                  // 개구는 획이 가늘어서 보라 바탕에 흰 글씨로 앉히면 묽어진다.
+                  // 정자체 13에 맞추려면 두 단계는 올려야 눈에 같은 굵기로 보인다.
+                  style: GoogleFonts.gaegu(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
                     color: Colors.white,
                   ),
                 ),
@@ -17758,9 +17760,12 @@ ${Prompts.outputRulesTail}${Prompts.screenMap}$plannerActionSection$coachOfferTa
                 // 아이콘이 붙은 줄만 왼쪽에서 시작한다. 가운데로 두면 아이콘과
                 // 글씨 사이가 버튼마다 달라져 줄이 안 맞는다.
                 textAlign: icon == null ? TextAlign.center : TextAlign.left,
-                style: GoogleFonts.notoSansKr(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w800,
+                // 골라서 말하는 자리라 손글씨로 둔다. 아래 빠른 답장 칩과 같은
+                // 부류다 — 둘 다 아직 안 한 말이고, 누르면 내 말이 된다.
+                // 이미 한 말(내 말풍선)까지 손글씨로 가면 긴 문장이 읽기 힘들다.
+                style: GoogleFonts.gaegu(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
                   color: ink,
                 ),
               ),
@@ -19556,20 +19561,27 @@ ${Prompts.outputRulesTail}${Prompts.screenMap}$plannerActionSection$coachOfferTa
     return const BoxDecoration(color: Colors.transparent);
   }
 
-  /// [slot]은 칩이 놓인 자리. 이름이 아니라 자리로 색을 고르는 것은, 칩 이름에
-  /// 그날 일정이 그대로 들어오기도 해서 이름으로는 짝을 맞출 수가 없어서다.
+  /// 칩은 자리마다 색을 돌려 쓰다가 한 가지 연보라로 모았다.
+  ///
+  /// 색이 네 가지였는데 뜻하는 바가 없었다. 뜻 없는 색이 있으면 사용자는
+  /// 뜻을 찾느라 한 번 멈추고, 아무 뜻도 없다는 걸 알고 나면 그다음부터는
+  /// 색을 안 본다. 그러면 정작 색을 써야 할 자리에서 안 먹힌다.
+  ///
+  /// 회색이 아니라 연보라인 것은, 회색 바탕이 꺼진 버튼처럼 보이기 때문이다.
+  /// 이건 눌러서 말하는 자리다.
+  ///
+  /// [slot]은 아직 받는다. 칩을 다시 색으로 나눌 일이 생기면 여기서 쓴다.
   Widget _buildMasterQuickChip(String chip, int slot) {
-    final tone = AppDesignTokens.chatAccentSlot(slot);
-    final chipInk = AppDesignTokens.chatAccentInks[tone];
+    const chipInk = AppDesignTokens.brandPressed;
     return AppChip(
       label: chip,
       icon: _chipIcon(chip, color: chipInk),
-      backgroundColor: AppDesignTokens.chatAccentSurfaces[tone],
+      backgroundColor: AppDesignTokens.brandSoft,
       foregroundColor: chipInk,
-      borderColor: AppDesignTokens.chatAccentBorders[tone],
+      borderColor: AppDesignTokens.brandBorder,
       boxShadow: [
         BoxShadow(
-          color: chipInk.withValues(alpha: 0.14),
+          color: chipInk.withValues(alpha: 0.10),
           blurRadius: 14,
           offset: const Offset(0, 4),
         ),

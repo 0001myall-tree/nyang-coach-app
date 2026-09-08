@@ -23,7 +23,7 @@ abstract final class AppDesignTokens {
   /// 앱 곳곳에서 이미 쓰던 값을 이름만 붙여 끌어올렸다.
   static const Color brandVivid = Color(0xFF6C5CE7);
 
-  /// 채워서 눌러야 하는 버튼(빠른 실행, 전송)의 바탕.
+  /// 채워서 눌러야 하는 버튼(간편 실행, 전송)의 바탕.
   static const Gradient brandVividGradient = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,

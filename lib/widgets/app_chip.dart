@@ -83,9 +83,15 @@ class AppChip extends StatelessWidget {
                 label,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: GoogleFonts.notoSansKr(
-                  fontSize: fontSize ?? AppDesignTokens.textMeta,
-                  fontWeight: FontWeight.w600,
+                // 칩에 적히는 건 전부 사용자가 할 말이다. 코치 말풍선이 정자체라
+                // 여기가 손글씨면 누가 말하는지가 글씨체로 갈린다. 정자체로 두면
+                // 내 대답이 아니라 설문 보기처럼 읽힌다.
+                //
+                // 개구는 글자가 작게 앉아서 같은 숫자를 주면 옆의 정자체보다
+                // 작아 보인다. 그래서 2를 더한다.
+                style: GoogleFonts.gaegu(
+                  fontSize: (fontSize ?? AppDesignTokens.textMeta) + 2,
+                  fontWeight: FontWeight.w700,
                   color: enabled
                       ? effectiveForeground
                       : AppDesignTokens.textDisabled,
