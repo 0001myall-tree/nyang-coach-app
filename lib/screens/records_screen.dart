@@ -1229,29 +1229,19 @@ ${ExecutionTypeLabels.listForPrompt}
       return const Center(child: CircularProgressIndicator());
     }
 
+    // 두 숫자가 서로 다른 질문에 답하게 둔다. 며칠 움직였나와 몇 개를 끝냈나.
+    //
+    // 전에는 '연속 달성'과 '해낸 날'이 나란히 있었다. 둘 다 단위가 날이라
+    // 사용자가 왜 다른지 견주느라 멈췄고, 연속 쪽은 하루 빠지면 0으로 돌아가
+    // 문턱이 낮은 지표에서 제일 아픈 모양이었다.
     final records = _getLast7Records();
-    int successDays = 0;
-    int streak = 0;
-    final trackableDays = records.length;
+    int movedDays = 0;
+    int doneTotal = 0;
     for (final r in records) {
-      if (_recordDoneCount(r) > 0) {
-        successDays++;
-      }
+      final done = _recordDoneCount(r);
+      if (done > 0) movedDays++;
+      doneTotal += done;
     }
-    for (int i = records.length - 1; i >= 0; i--) {
-      if (_recordDoneCount(records[i]) > 0) {
-        streak++;
-      } else {
-        // 오늘은 아직 끝나지 않은 하루다. 아침에 연 사람에게 어제까지 쌓은
-        // 숫자를 0으로 되돌려 보여주면, 하루가 시작도 하기 전에 기운이 빠진다.
-        // 오늘이 그대로 지나가면 자정 뒤에 어제로서 끊긴다.
-        if (i == records.length - 1) continue;
-        break;
-      }
-    }
-    final flowPct = trackableDays == 0
-        ? 100
-        : ((successDays / trackableDays) * 100).round();
 
     return Container(
       color: _isMaster ? Colors.transparent : Colors.white,
@@ -1308,7 +1298,7 @@ ${ExecutionTypeLabels.listForPrompt}
                 child: Column(
                   children: [
                     // 4칸 통계 요약 (패턴 써머리) -> 2칸으로 축소됨
-                    _buildSummaryGrid(successDays, flowPct, streak),
+                    _buildSummaryGrid(movedDays, doneTotal),
                     const SizedBox(height: 4),
 
                     // 코치의 한마디
@@ -1340,7 +1330,7 @@ ${ExecutionTypeLabels.listForPrompt}
     );
   }
 
-  Widget _buildSummaryGrid(int successDays, int flowPct, int streak) {
+  Widget _buildSummaryGrid(int movedDays, int doneTotal) {
     return GridView.count(
       crossAxisCount: 2,
       crossAxisSpacing: 12,
@@ -1352,23 +1342,21 @@ ${ExecutionTypeLabels.listForPrompt}
         _summaryCard(
           // 들어온 날이 아니라 할 일을 하나라도 끝낸 날을 센다. "출석"이라고
           // 하면 매일 들어오는 사람이 0을 보고 고장인 줄 안다.
-          '연속 달성',
-          '$streak일',
-          '최고 -일',
-          Icons.local_fire_department_outlined,
-          _recordCoach.accentColor,
-          true,
-        ),
-        _summaryCard(
-          // 하루라도 끝낸 날의 비율. 완료율이 아니라 "손댄 날"을 센다 —
-          // 하나만 해낸 날도 아무것도 안 한 날과는 다르다.
           //
           // 채팅 상단 카드와 코치 발화가 이 값을 같은 이름으로 부른다. 세 곳이
           // 다른 말을 쓰면 사용자는 같은 숫자를 세 번 새로 배워야 한다.
           '움직인 날',
-          '$successDays일',
-          '$flowPct%',
+          '$movedDays일',
           Icons.check_circle_outline,
+          _recordCoach.accentColor,
+          true,
+        ),
+        _summaryCard(
+          // 며칠이 아니라 몇 개다. 옆 카드와 단위가 달라야 둘을 견주지 않고
+          // 각각 읽는다. 자주 움직였는지와 많이 끝냈는지는 다른 질문이다.
+          '끝낸 일',
+          '$doneTotal개',
+          Icons.task_alt_rounded,
           const Color(0xFF6EBF8B),
           false,
         ),
@@ -1376,10 +1364,12 @@ ${ExecutionTypeLabels.listForPrompt}
     );
   }
 
+  /// 카드는 아이콘·숫자·이름 세 줄이다. 넷째 값(최고 기록, 완료율)을 받아
+  /// 두고 한 번도 그리지 않던 자리가 있어 걷어냈다 — 계산해 놓고 아무도 안
+  /// 보는 값이었다.
   Widget _summaryCard(
     String title,
     String value,
-    String sub,
     IconData icon,
     Color color,
     bool isAccent,
