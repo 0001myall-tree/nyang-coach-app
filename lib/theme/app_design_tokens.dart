@@ -80,7 +80,7 @@ abstract final class AppDesignTokens {
 
   /// 비서 실장. 민트에서 시작해 거의 흰색을 지나 아주 옅은 라벤더로 내려간다.
   /// 깨끗하고 정돈된 인상을 지키는 쪽이다.
-  static const Gradient secretaryChatBackground = LinearGradient(
+  static const LinearGradient secretaryChatBackground = LinearGradient(
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
     colors: [Color(0xFFEDF7F4), Color(0xFFF9FBFB), Color(0xFFF7F5FD)],
@@ -88,11 +88,25 @@ abstract final class AppDesignTokens {
 
   /// 냥할배. 옅은 라벤더에서 시작해 분홍 기운을 지나 따뜻한 크림으로 내려간다.
   /// 같은 앱이되 비서보다 포근한 쪽이다.
-  static const Gradient nyangHalbaeChatBackground = LinearGradient(
+  static const LinearGradient nyangHalbaeChatBackground = LinearGradient(
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
     colors: [Color(0xFFF7F3FF), Color(0xFFFBF5FA), Color(0xFFFDF6F0)],
   );
+
+  /// 이 마스터 코치의 대화 바탕.
+  static LinearGradient masterChatBackground(String coachId) =>
+      coachId == 'nyang_halbae'
+      ? nyangHalbaeChatBackground
+      : secretaryChatBackground;
+
+  /// 대화 바탕의 맨 윗색.
+  ///
+  /// 헤더 그림 뒤를 이 색으로 칠한다. 그림은 화면 위에서 160만큼만 차지하는데,
+  /// 상태바가 높은 기기에서는 대화 영역이 그보다 아래에서 시작한다. 그 사이를
+  /// 흰색으로 두면 그림과 대화 사이에 흰 띠가 생긴다.
+  static Color masterChatBackgroundTop(String coachId) =>
+      masterChatBackground(coachId).colors.first;
 
   // Backward-compatible brand aliases
   static const Color brandDark = brandPressed;

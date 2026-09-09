@@ -17006,9 +17006,7 @@ ${Prompts.outputRulesTail}${Prompts.screenMap}$plannerActionSection$coachOfferTa
       return const BoxDecoration(color: Colors.transparent);
     }
     return BoxDecoration(
-      gradient: _coach.id == 'nyang_halbae'
-          ? AppDesignTokens.nyangHalbaeChatBackground
-          : AppDesignTokens.secretaryChatBackground,
+      gradient: AppDesignTokens.masterChatBackground(_coach.id),
     );
   }
 

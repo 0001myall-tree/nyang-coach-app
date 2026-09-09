@@ -33,6 +33,7 @@ import '../services/task_completion_service.dart';
 import '../services/apple_calendar_sync_service.dart';
 import '../services/routine_schedule.dart';
 import '../theme/app_design_tokens.dart';
+import '../widgets/banner_answer_dialog.dart';
 import '../widgets/alarm_permission_notice.dart';
 import '../widgets/core_reminder_settings_sheet.dart';
 
@@ -665,6 +666,7 @@ class TasksScreen extends StatefulWidget {
   final String coachId;
   final void Function(String message)? onCoreTaskSet;
   final VoidCallback? onProgressChanged;
+
   /// 오버플랜 다이얼로그에서 오간 문답. 있으면 채팅으로 바로 재생하고,
   /// 없으면(예: 컨트롤러 없이 이 화면만 단독으로 띄운 자리) 다음에 채팅을
   /// 열 때 재생하도록 [OverplanNudgeService]에 남겨둔다.
@@ -958,15 +960,20 @@ class _TasksScreenState extends State<TasksScreen>
   }) async {
     final name = taskText.isEmpty ? null : taskText;
     final String message;
-    final List<(String, VoidCallback)> actions;
+    final List<BannerAnswerAction> actions;
     switch (kind) {
       case 'start':
         message = name == null
             ? '지금 시작하기로 한 일,\n잊지 않았지?'
             : "'$name' 시작할 시간이야.\n준비됐으면 눌러줘.";
         actions = [
-          ('시작하기', () => _startTaskFromBanner(taskId)),
-          ('나중에', () {}),
+          BannerAnswerAction(
+            label: '시작하기',
+            icon: 'fa-circle-play-solid',
+            isPrimary: true,
+            onTap: () => _startTaskFromBanner(taskId),
+          ),
+          const BannerAnswerAction(label: '나중에', icon: 'fa-clock-regular'),
         ];
         break;
       case 'resume':
@@ -974,28 +981,49 @@ class _TasksScreenState extends State<TasksScreen>
             ? '하다가 멈춘 일,\n다시 시작할까?'
             : "'$name' 하다가 멈췄네.\n다시 시작할까?";
         actions = [
-          ('다시 시작', () => _startTaskFromBanner(taskId)),
-          ('나중에', () {}),
+          BannerAnswerAction(
+            label: '다시 시작',
+            icon: 'fa-arrow-rotate-left-solid',
+            isPrimary: true,
+            onTap: () => _startTaskFromBanner(taskId),
+          ),
+          const BannerAnswerAction(label: '나중에', icon: 'fa-clock-regular'),
         ];
         break;
       case 'nextTask':
-        message = name == null
-            ? '냥이랑 남은 일정도\n시작할까?'
-            : "'$name'\n냥이랑 지금 시작할까?";
+        message = name == null ? '냥이랑 남은 일정도\n시작할까?' : "'$name'\n냥이랑 지금 시작할까?";
         actions = [
-          ('지금 할게', () => _startTaskFromBanner(taskId)),
-          ('더 있다 할게', () {}),
+          BannerAnswerAction(
+            label: '지금 할게',
+            icon: 'fa-circle-play-solid',
+            isPrimary: true,
+            onTap: () => _startTaskFromBanner(taskId),
+          ),
+          const BannerAnswerAction(label: '더 있다 할게', icon: 'fa-clock-regular'),
         ];
         break;
       case 'running':
       default:
+        // "지금도 하는 중이야?"는 예/아니오를 묻는 말인데 답은 셋이다. 지금
+        // 어떤 상태인지를 물어야 세 보기가 나란히 선다.
         message = name == null
-            ? '아까 시작한 일,\n지금도 하는 중이야?'
-            : "아까 시작한 '$name',\n지금도 하는 중이야?";
+            ? '아까 시작한 일,\n지금은 어떻게 하고 있어?'
+            : "아까 시작한 '$name',\n지금은 어떻게 하고 있어?";
         actions = [
-          ('다 했어', () => _completeTaskFromBanner(taskId)),
-          ('계속하는 중', () {}),
-          ('다시 시작할게', () {}),
+          BannerAnswerAction(
+            label: '다 했어',
+            icon: 'circle-check',
+            onTap: () => _completeTaskFromBanner(taskId),
+          ),
+          const BannerAnswerAction(
+            label: '계속하는 중',
+            icon: 'fa-circle-play-solid',
+            isPrimary: true,
+          ),
+          const BannerAnswerAction(
+            label: '다시 시작할게',
+            icon: 'fa-arrow-rotate-left-solid',
+          ),
         ];
         break;
     }
@@ -1003,32 +1031,8 @@ class _TasksScreenState extends State<TasksScreen>
     if (!mounted) return;
     await showDialog<void>(
       context: context,
-      builder: (context) => AlertDialog(
-        content: Text(
-          message,
-          style: GoogleFonts.notoSansKr(
-            fontSize: 15,
-            height: 1.5,
-            color: const Color(0xFF3D3A4E),
-          ),
-        ),
-        actions: [
-          for (final action in actions)
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-                action.$2();
-              },
-              child: Text(
-                action.$1,
-                style: GoogleFonts.notoSansKr(
-                  fontWeight: FontWeight.w600,
-                  color: const Color(0xFF6C5CE7),
-                ),
-              ),
-            ),
-        ],
-      ),
+      builder: (context) =>
+          BannerAnswerDialog(message: message, actions: actions),
     );
   }
 
@@ -2777,8 +2781,8 @@ class _TasksScreenState extends State<TasksScreen>
       // 정확한 알람 쪽을 놓치면 나중에 아무 말 없이 늦게 뜨는 채로 남는다.
       // 두 개 다 여기서 한 번에 물어본다.
       final needsOverlay = !await OngoingTaskNudgeService.isAvailable();
-      final needsExactAlarm =
-          !await NotificationService().canScheduleExactAlarms();
+      final needsExactAlarm = !await NotificationService()
+          .canScheduleExactAlarms();
       if (!mounted) return;
       if (needsOverlay || needsExactAlarm) {
         final title = needsOverlay && needsExactAlarm
@@ -2813,7 +2817,8 @@ class _TasksScreenState extends State<TasksScreen>
         return;
       }
     } else {
-      final needsLiveActivity = await OngoingTaskNudgeService.showsOverOtherApps();
+      final needsLiveActivity =
+          await OngoingTaskNudgeService.showsOverOtherApps();
       final available =
           !needsLiveActivity || await OngoingTaskNudgeService.isAvailable();
       if (!mounted) return;
@@ -3338,7 +3343,6 @@ class _TasksScreenState extends State<TasksScreen>
     TasksSyncService.scheduleSyncToCloud();
   }
 
-
   /// 채팅에서 말로 등록하는 주간·월간 목표.
   ///
   /// 장기 비전은 마일스톤과 기한이 함께 있어야 뜻이 서기 때문에 여기로 받지
@@ -3439,9 +3443,7 @@ class _TasksScreenState extends State<TasksScreen>
     await NotificationService().syncCoreReminders();
     widget.onProgressChanged?.call();
     // 애플 캘린더 연동(iOS)이 켜져 있으면 변경을 미러링. 실패해도 앱 흐름엔 영향 없음.
-    unawaited(
-      AppleCalendarSyncService.instance.syncAll(),
-    );
+    unawaited(AppleCalendarSyncService.instance.syncAll());
   }
 
   Future<bool> _hasActivePlan() async {

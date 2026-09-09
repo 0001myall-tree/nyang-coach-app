@@ -2098,7 +2098,17 @@ class _MainTabScreenState extends State<MainTabScreen>
     return Stack(
       children: [
         ...[
-          Positioned.fill(child: Container(color: Colors.white)),
+          // 헤더 그림 뒤를 대화 바탕의 맨 윗색으로 칠한다.
+          //
+          // 흰색이었다. 그림은 화면 위에서 160만큼만 차지하는데, 상태바가 높은
+          // 기기에서는 앱바가 아래로 밀려 대화 영역이 그보다 낮은 데서 시작한다.
+          // 그 사이가 흰 띠로 남아, 오늘 목표 카드와 대화 사이에 색이 빈 구역이
+          // 보였다. 대화 바탕과 같은 색으로 칠하면 어느 기기에서든 이어진다.
+          Positioned.fill(
+            child: Container(
+              color: AppDesignTokens.masterChatBackgroundTop(widget.coachId),
+            ),
+          ),
           Positioned(
             top: 0,
             left: 0,
