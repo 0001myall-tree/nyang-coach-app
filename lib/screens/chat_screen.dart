@@ -7924,12 +7924,19 @@ Rules:
     // 그 사이 상황이 달라졌으면 방금 한 말이 이미 틀린 말이 된다. 같은 판단이
     // 다시 나올 때만 그대로 띄운다. 계획을 세웠거나 뭔가 시작했으면 여기서
     // 걸러지고, 평소 인사 흐름으로 넘어간다.
-    final current = PreemptiveNudgeService.decide(
-      todayTasks: _decodeMapList(prefs.getString('nyang_tasks')),
-      coreTasks: _decodeMapList(prefs.getString('nyang_core_tasks')),
-      history: _decodeMapList(prefs.getString('nyang_history')),
-    );
-    if (current == null || current.kind != nudge.kind) return false;
+    //
+    // 알아봐주는 말은 예외다. 어제와 이번 주 이야기라 오늘 뭘 하든 틀려지지
+    // 않는다. 게다가 한 번 나가면 다음 한 주는 안 나오도록 날짜를 적어두기
+    // 때문에, 여기서 다시 물으면 늘 "지금은 그 말을 할 때가 아니다"가 나와
+    // 정작 받은 말이 채팅에 안 뜬다.
+    if (nudge.kind != NudgeKind.praise) {
+      final current = PreemptiveNudgeService.decide(
+        todayTasks: _decodeMapList(prefs.getString('nyang_tasks')),
+        coreTasks: _decodeMapList(prefs.getString('nyang_core_tasks')),
+        history: _decodeMapList(prefs.getString('nyang_history')),
+      );
+      if (current == null || current.kind != nudge.kind) return false;
+    }
 
     if (!mounted) return false;
     setState(() {
@@ -7941,9 +7948,13 @@ Rules:
           kind: _preemptiveNudgeGreetingKind,
         ),
       );
-      _dynamicChips = nudge.kind == NudgeKind.noPlan
-          ? const ['오늘 할 일 정해줘', '뭐부터 할지 모르겠어', '오늘은 쉬고 싶어']
-          : const ['하기 싫은 일 있어', '가볍게 줄여줘', '지금 뭐하지?'];
+      // 알아봐주는 말에는 답을 재촉하지 않는다. 칭찬 옆에 "그럼 오늘은?"을
+      // 붙이면 인정이 아니라 다음 요구가 된다.
+      _dynamicChips = switch (nudge.kind) {
+        NudgeKind.praise => const [],
+        NudgeKind.noPlan => const ['오늘 할 일 정해줘', '뭐부터 할지 모르겠어', '오늘은 쉬고 싶어'],
+        _ => const ['하기 싫은 일 있어', '가볍게 줄여줘', '지금 뭐하지?'],
+      };
       _suppressDefaultChips = false;
     });
     await _saveHistory();

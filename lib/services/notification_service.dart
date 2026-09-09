@@ -16,6 +16,7 @@ import 'analytics_service.dart';
 import 'coach_id_service.dart';
 import 'morning_call_alarm_session.dart';
 import 'nyang_banner_nudge.dart';
+import 'execution_type_labels.dart';
 import 'preemptive_nudge_service.dart';
 import 'tasks_sync_service.dart';
 import 'user_title_service.dart';
@@ -42,6 +43,24 @@ class NotificationService {
   static const int _maxScheduledCoreReminders = 50;
   static const Set<int> _coreReminderSoundMinutes = {10, 30};
   static const int _dailyPlannerNudgeNotificationId = 889;
+
+  /// 며칠째 안 오는 사람을 부르는 자리. 위 알림과 같은 시각에 며칠 뒤로
+  /// 걸어둔다.
+  ///
+  /// 이 알림은 원래 한 칸짜리였다. 예약을 다시 거는 자리가 전부 앱을 열어야
+  /// 도는데 예약은 한 번만 걸려서, **떠난 사람은 딱 한 번 더 불리고 그 뒤로는
+  /// 영영 조용했다.** 정작 부르는 게 목적인 사람에게만 안 가던 셈이다.
+  ///
+  /// 며칠치를 미리 걸어두면 그 자리가 메워진다. 앱을 열면 전부 지우고 다시
+  /// 거니까, 이 칸들이 울렸다는 것은 그 사이 한 번도 안 왔다는 뜻이다 —
+  /// 그래서 "오래 안 온 사람" 문구가 정확히 그날 울린다.
+  static const List<int> _absenceNudgeNotificationIds = [890, 891];
+
+  /// 위 칸들이 며칠 뒤에 울리는지.
+  ///
+  /// 마지막 칸 뒤로는 조용하다. 계속 걸어두면 앱을 지운 것과 다름없는 사람에게
+  /// 몇 달째 말을 거는 꼴이 된다.
+  static const List<int> _absenceNudgeDays = [3, 7];
   static const int _dailyPlannerNudgeHour = 12;
   static const int _dailyPlannerNudgeMinute = 5;
   static const String _androidMorningChannelVersion = 'v10';
@@ -62,6 +81,17 @@ class NotificationService {
   /// 이미 울려서 채팅이 이어받을 차례인 선제 메시지.
   static const String firedNudgeKey = 'preemptive_nudge_fired';
 
+  /// 유형을 짚는 말과 알아봐주는 말을 마지막으로 건넨 때.
+  ///
+  /// 'nyang_'으로 시작한다. 이 사람에게 언제 건넸는지는 기기가 아니라 사람에게
+  /// 붙는 사실이라, 폰에서 받은 말을 태블릿에서 또 받으면 안 된다.
+  ///
+  /// 예약을 거는 시점이 아니라 **울린 시점**에 적는다. 예약은 앱을 열 때마다
+  /// 다시 걸려서 하루에도 수십 번 도는데, 거기서 적으면 첫 예약 한 번으로
+  /// 이번 주 몫이 다 쓰인 것이 된다.
+  static const String lastPatternNudgeKey = 'nyang_preemptive_pattern_at';
+  static const String lastPraiseNudgeKey = 'nyang_preemptive_praise_at';
+
   /// 예약해둔 선제 메시지가 이미 울렸으면 채팅이 이어받을 자리로 옮긴다.
   ///
   /// 울리는 순간에 코드가 도는 게 아니라서, 예약 시각이 지났다는 사실로 울린
@@ -76,16 +106,77 @@ class NotificationService {
   ) async {
     final raw = prefs.getString(pendingNudgeKey);
     if (raw == null) return;
-    DateTime? firesAt;
+
+    final entries = _decodePendingNudges(raw);
+    if (entries.isEmpty) return;
+
+    // 이미 울린 것 중 제일 나중 것이 방금 받은 말이다. 며칠 만에 열었으면
+    // 그 사이 여러 칸이 울렸을 수 있는데, 그중 마지막 것만 이야기가 된다.
+    Map<String, dynamic>? latest;
+    DateTime? latestAt;
+    final upcoming = <Map<String, dynamic>>[];
+    for (final entry in entries) {
+      final at = DateTime.tryParse(entry['firesAt']?.toString() ?? '');
+      if (at == null) continue;
+      if (now.isBefore(at)) {
+        upcoming.add(entry);
+        continue;
+      }
+      if (latestAt == null || at.isAfter(latestAt)) {
+        latest = entry;
+        latestAt = at;
+      }
+    }
+    if (latest == null || latestAt == null) return;
+
+    await prefs.setString(firedNudgeKey, jsonEncode(latest));
+    // 아직 안 울린 칸은 그대로 둔다. 여기서 통째로 지우면 며칠 뒤 칸이
+    // 울렸을 때 채팅이 이어받을 말이 없다.
+    if (upcoming.isEmpty) {
+      await prefs.remove(pendingNudgeKey);
+    } else {
+      await prefs.setString(pendingNudgeKey, jsonEncode(upcoming));
+    }
+    await _stampSpecialNudge(prefs, jsonEncode(latest), latestAt);
+  }
+
+  /// 예약해둔 말들. 예전에는 하나만 적었어서 그 모양도 받아준다.
+  static List<Map<String, dynamic>> _decodePendingNudges(String raw) {
     try {
       final decoded = jsonDecode(raw);
       if (decoded is Map) {
-        firesAt = DateTime.tryParse(decoded['firesAt']?.toString() ?? '');
+        return [Map<String, dynamic>.from(decoded)];
+      }
+      if (decoded is List) {
+        return decoded
+            .whereType<Map>()
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList();
       }
     } catch (_) {}
-    if (firesAt == null || now.isBefore(firesAt)) return;
-    await prefs.setString(firedNudgeKey, raw);
-    await prefs.remove(pendingNudgeKey);
+    return const [];
+  }
+
+  /// 주에 한 번짜리 말이 실제로 나갔으면 그 날짜를 적는다.
+  static Future<void> _stampSpecialNudge(
+    SharedPreferences prefs,
+    String raw,
+    DateTime firesAt,
+  ) async {
+    Map<String, dynamic>? decoded;
+    try {
+      final value = jsonDecode(raw);
+      if (value is Map) decoded = Map<String, dynamic>.from(value);
+    } catch (_) {}
+    final nudge = PreemptiveNudge.fromJson(decoded);
+    if (nudge == null) return;
+    if (nudge.kind == NudgeKind.praise) {
+      await prefs.setString(lastPraiseNudgeKey, firesAt.toIso8601String());
+      TasksSyncService.scheduleSyncToCloud();
+    } else if (nudge.isPattern) {
+      await prefs.setString(lastPatternNudgeKey, firesAt.toIso8601String());
+      TasksSyncService.scheduleSyncToCloud();
+    }
   }
 
   String? _lastMorningPayload;
@@ -656,6 +747,14 @@ class NotificationService {
             todayTasks: _decodeList(prefs.getString('nyang_tasks')),
             coreTasks: _decodeList(prefs.getString('nyang_core_tasks')),
             history: _decodeList(prefs.getString('nyang_history')),
+            typeLabel: ExecutionTypeLabels.savedLabel(prefs),
+            now: now,
+            lastPatternAt: DateTime.tryParse(
+              prefs.getString(lastPatternNudgeKey) ?? '',
+            ),
+            lastPraiseAt: DateTime.tryParse(
+              prefs.getString(lastPraiseNudgeKey) ?? '',
+            ),
           )
         : PreemptiveNudge(
             kind: NudgeKind.noPlan,
@@ -663,6 +762,9 @@ class NotificationService {
           );
 
     await _plugin.cancel(id: _dailyPlannerNudgeNotificationId);
+    for (final id in _absenceNudgeNotificationIds) {
+      await _plugin.cancel(id: id);
+    }
     await prefs.remove(pendingNudgeKey);
     // 이미 움직이고 있는 사람에게는 보내지 않는다.
     if (nudge == null) return;
@@ -690,10 +792,12 @@ class NotificationService {
 
     // 보낸 말을 남겨둔다. 푸시를 보고 곧바로 들어온 사람에게 채팅에서도 같은
     // 말을 보여주려면, 무엇을 보냈는지와 언제 울렸는지가 필요하다.
-    await prefs.setString(
-      pendingNudgeKey,
-      jsonEncode({...nudge.toJson(), 'firesAt': scheduled.toIso8601String()}),
-    );
+    //
+    // 여러 칸을 한꺼번에 걸기 때문에 목록으로 적는다. 어느 칸이 울렸는지는
+    // 시각으로 가린다.
+    final scheduledEntries = <Map<String, dynamic>>[
+      {...nudge.toJson(), 'firesAt': scheduled.toIso8601String()},
+    ];
 
     await _plugin.zonedSchedule(
       id: _dailyPlannerNudgeNotificationId,
@@ -704,6 +808,40 @@ class NotificationService {
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
       payload: 'daily_planner_nudge:cat',
     );
+
+    for (var i = 0; i < _absenceNudgeNotificationIds.length; i++) {
+      final at = scheduled.add(Duration(days: _absenceNudgeDays[i]));
+      final long = i == _absenceNudgeNotificationIds.length - 1;
+      final history = long
+          ? _decodeList(prefs.getString('nyang_history'))
+          : const <dynamic>[];
+      final message = PreemptiveNudgeService.absenceMessage(
+        long: long,
+        recentDoneName: long
+            ? PreemptiveNudgeService.recentDoneTaskName(
+                history: history,
+                now: now,
+              )
+            : null,
+        hasEverDone: long && PreemptiveNudgeService.hasEverDone(history),
+      );
+      scheduledEntries.add({
+        'kind': NudgeKind.noPlan.name,
+        'message': message,
+        'firesAt': at.toIso8601String(),
+      });
+      await _plugin.zonedSchedule(
+        id: _absenceNudgeNotificationIds[i],
+        title: '냥냥코치',
+        body: message,
+        scheduledDate: tz.TZDateTime.from(at, tz.local),
+        notificationDetails: details,
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        payload: 'daily_planner_nudge:cat',
+      );
+    }
+
+    await prefs.setString(pendingNudgeKey, jsonEncode(scheduledEntries));
   }
 
   Future<void> handleNativeMorningAlarm() async {
@@ -724,8 +862,27 @@ class NotificationService {
   /// 그대로 쓴다 — 대부분의 사용자가 매일을 고를 텐데, 그 흔한 경우까지
   /// 매번 요일별 사슬로 깔면 iOS에 걸어야 하는 예약 개수만 늘어난다.
   static const List<int> _morningCallWeekdayIds = [
-    20, 21, 22, 30, 31, 32, 40, 41, 42, 50, 51, 52,
-    60, 61, 62, 70, 71, 72, 80, 81, 82,
+    20,
+    21,
+    22,
+    30,
+    31,
+    32,
+    40,
+    41,
+    42,
+    50,
+    51,
+    52,
+    60,
+    61,
+    62,
+    70,
+    71,
+    72,
+    80,
+    81,
+    82,
   ];
 
   Future<void> scheduleDailyMorningCall({
