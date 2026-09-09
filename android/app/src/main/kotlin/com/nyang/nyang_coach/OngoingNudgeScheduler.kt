@@ -89,10 +89,16 @@ object OngoingNudgeScheduler {
     /**
      * 틈새 코칭 냥냥이가 스스로 사라지기까지.
      *
-     * 다른 자리보다 짧다. "지금 잠깐 여유 있나"라고 묻는 말이라, 15분 뒤에
-     * 눌러서는 묻는 뜻이 이미 흐려져 있다.
+     * 한동안 5분이었다. "지금 잠깐 여유 있나"라고 묻는 말이라 15분 뒤에
+     * 눌러서는 묻는 뜻이 흐려진다고 봤기 때문이다.
+     *
+     * 지금은 묻는 말이 아니다. "'분기 리포트' 15분만 개요 잡기에 써볼까"는
+     * 30분 뒤에 봐도 그대로 유효하다. 그리고 이 카드는 폰을 보다가 우연히
+     * 걸리라고 띄우는 것이라, 5분은 그 우연이 일어나기에 짧다.
+     *
+     * 다른 자리와 같은 값으로 맞춘다.
      */
-    const val GAP_VISIBLE_MILLIS = 5L * 60_000L
+    const val GAP_VISIBLE_MILLIS = VISIBLE_MILLIS
 
     fun scheduleIn(context: Context, delayMillis: Long, stage: String) {
         scheduleAt(context, System.currentTimeMillis() + delayMillis, stage)

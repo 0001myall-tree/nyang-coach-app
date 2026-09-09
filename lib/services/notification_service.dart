@@ -769,25 +769,30 @@ class NotificationService {
     // 이미 움직이고 있는 사람에게는 보내지 않는다.
     if (nudge == null) return;
 
-    const androidDetails = AndroidNotificationDetails(
-      'nyang_daily_planner_nudge_v1',
-      '냥냥코치 플래너 알림',
-      channelDescription: '낮까지 플래너에 들어오지 않았을 때 냥냥코치가 가볍게 부릅니다.',
-      importance: Importance.high,
-      priority: Priority.high,
-      playSound: true,
-      audioAttributesUsage: AudioAttributesUsage.notification,
-    );
-    const iosDetails = DarwinNotificationDetails(
-      presentSound: true,
-      presentAlert: true,
-      presentBadge: true,
-      presentBanner: true,
-      presentList: true,
-    );
-    const details = NotificationDetails(
-      android: androidDetails,
-      iOS: iosDetails,
+    // 펼쳤을 때 보일 글은 알림마다 다르다. 하나를 돌려 쓰면 접힌 줄과 펼친
+    // 글이 서로 다른 알림이 생긴다 — 며칠째 안 오는 사람에게 걸어둔 칸이
+    // 특히 그렇다.
+    NotificationDetails detailsFor(String body) => NotificationDetails(
+      android: AndroidNotificationDetails(
+        'nyang_daily_planner_nudge_v1',
+        '냥냥코치 플래너 알림',
+        channelDescription: '낮까지 플래너에 들어오지 않았을 때 냥냥코치가 가볍게 부릅니다.',
+        importance: Importance.high,
+        priority: Priority.high,
+        playSound: true,
+        audioAttributesUsage: AudioAttributesUsage.notification,
+        // 접힌 알림은 한 줄만 보이고 나머지는 잘린다. 펼치면 전문이 보이게
+        // 해둔다 — 넘치는 부분이 그냥 사라지면, 이름을 부르며 건넨 말의 뒤가
+        // 통째로 안 읽힌다.
+        styleInformation: BigTextStyleInformation(body),
+      ),
+      iOS: const DarwinNotificationDetails(
+        presentSound: true,
+        presentAlert: true,
+        presentBadge: true,
+        presentBanner: true,
+        presentList: true,
+      ),
     );
 
     // 보낸 말을 남겨둔다. 푸시를 보고 곧바로 들어온 사람에게 채팅에서도 같은
@@ -799,12 +804,13 @@ class NotificationService {
       {...nudge.toJson(), 'firesAt': scheduled.toIso8601String()},
     ];
 
+    final primaryBody = nudge.message.replaceAll('\n', ' ');
     await _plugin.zonedSchedule(
       id: _dailyPlannerNudgeNotificationId,
       title: '냥냥코치',
-      body: nudge.message.replaceAll('\n', ' '),
+      body: primaryBody,
       scheduledDate: tz.TZDateTime.from(scheduled, tz.local),
-      notificationDetails: details,
+      notificationDetails: detailsFor(primaryBody),
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
       payload: 'daily_planner_nudge:cat',
     );
@@ -835,7 +841,7 @@ class NotificationService {
         title: '냥냥코치',
         body: message,
         scheduledDate: tz.TZDateTime.from(at, tz.local),
-        notificationDetails: details,
+        notificationDetails: detailsFor(message),
         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
         payload: 'daily_planner_nudge:cat',
       );

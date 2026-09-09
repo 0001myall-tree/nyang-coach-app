@@ -108,18 +108,40 @@ void main() {
       expect(suggestion.taskId, isNull);
     });
 
-    test('핵심을 이미 정했으면 하나 고르자고 한다', () {
+    test('핵심을 이미 정했으면 그 핵심을 부른다', () {
+      // 고른 사람에게 또 고르라고 하는 것은 그 선택을 못 본 척하는 것이다.
       final suggestion = GapLateMenu.suggest(
         tasks: const [
           {'id': 't1', 'text': '방 정리'},
+          {'id': 't2', 'text': '분기 리포트'},
         ],
         coreTasks: const [
-          {'id': 't1', 'text': '방 정리'},
+          {'id': 't2', 'text': '분기 리포트'},
         ],
       );
 
-      expect(suggestion!.body, contains('하나만'));
+      expect(suggestion!.body, contains('분기 리포트'));
+      expect(suggestion.body, contains('핵심'));
+      expect(suggestion.body, contains('15분'));
+      expect(suggestion.taskId, 't2');
+    });
+
+    test('핵심을 다 했으면 남은 것을 이름으로 부른다', () {
+      // "하나만 골라볼까"는 무엇을 고르라는 건지가 없어서, 고르는 일까지
+      // 사용자 몫이 된다.
+      final suggestion = GapLateMenu.suggest(
+        tasks: const [
+          {'id': 't1', 'text': '방 정리'},
+          {'id': 't2', 'text': '분기 리포트', 'done': true},
+        ],
+        coreTasks: const [
+          {'id': 't2', 'text': '분기 리포트', 'done': true},
+        ],
+      );
+
+      expect(suggestion!.body, contains('방 정리'));
       expect(suggestion.body.contains('핵심'), isFalse);
+      expect(suggestion.taskId, 't1');
     });
 
     test('오늘 건질 게 없으면 내일 것을 정하자고 한다', () {
@@ -150,6 +172,15 @@ void main() {
             ],
             const [
               {'id': 't1', 'text': '방 정리'},
+            ],
+          ),
+          (
+            const [
+              {'id': 't1', 'text': '방 정리'},
+              {'id': 't2', 'text': '분기 리포트', 'done': true},
+            ],
+            const [
+              {'id': 't2', 'text': '분기 리포트', 'done': true},
             ],
           ),
         ])

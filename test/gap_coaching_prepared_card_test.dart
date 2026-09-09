@@ -183,8 +183,8 @@ void main() {
       ]);
 
       expect(card['body'], contains('핵심'));
-      expect(card['body'].toString().contains('15분'), isFalse);
       expect(card['body'].toString().contains('미리'), isFalse);
+      expect(card['body'].toString().contains('이따'), isFalse);
     });
 
     test('멈춘 일을 부르면 그 일 id도 적어둔다', () async {

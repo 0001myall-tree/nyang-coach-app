@@ -90,12 +90,45 @@ class GapLateMenu {
       return const GapLateSuggestion(body: '집사, 내일 할 것 하나만 정해두고 잘까냥?');
     }
 
+    // 이미 골라둔 것이 있으면 그걸 부른다. 고른 사람에게 또 고르라고 하는 것은
+    // 그 선택을 못 본 척하는 것이다.
+    final core = _firstUndone(coreTasks);
+    if (core != null) return _fifteenMinutes(core, isCore: true);
+
     // 핵심은 알림이 붙는다. 하나 짚어두는 것이 오늘 완료율에 제일 곧게 닿는다.
     if (coreTasks.whereType<Map>().isEmpty) {
       return const GapLateSuggestion(body: '집사, 핵심 하나만 짚고 갈까냥?');
     }
 
-    return const GapLateSuggestion(body: '집사, 오늘 남은 것 중 하나만 골라볼까냥?');
+    // 핵심은 다 했는데 남은 것이 있다. 여기서도 이름을 부른다 — "하나만
+    // 골라볼까"는 무엇을 고르라는 건지가 없어서, 고르는 일까지 사용자 몫이 된다.
+    final next = _firstUndone(remaining);
+    if (next != null) return _fifteenMinutes(next, isCore: false);
+
+    return const GapLateSuggestion(body: '집사, 내일 할 것 하나만 정해두고 잘까냥?');
+  }
+
+  /// 지금 15분만 붙어보자는 말.
+  ///
+  /// 이른 시각의 "앞 15분을 미리 해두자"와 다르다. 저쪽은 이따 할 것을 당기는
+  /// 말이고 이쪽은 지금 그걸 하자는 말이다 — 하루가 얼마 안 남았을 때 남은 것을
+  /// 건지는 방법은 미루는 것이 아니라 지금 붙는 것뿐이다.
+  static GapLateSuggestion _fifteenMinutes(Map task, {required bool isCore}) {
+    final name = _shorten(task['text']?.toString().trim() ?? '');
+    return GapLateSuggestion(
+      body: isCore ? "집사, 오늘 핵심 '$name' 15분만 해볼까냥?" : "집사, '$name' 15분만 해볼까냥?",
+      taskId: task['id']?.toString(),
+    );
+  }
+
+  /// 아직 안 끝낸 것 하나. 이름이 없는 것은 부를 수 없어 건너뛴다.
+  static Map? _firstUndone(List<dynamic> items) {
+    for (final item in items.whereType<Map>()) {
+      if (item['done'] == true) continue;
+      if ((item['text']?.toString().trim() ?? '').isEmpty) continue;
+      return item;
+    }
+    return null;
   }
 
   /// 하다가 멈춘 일 하나. 없으면 null.
