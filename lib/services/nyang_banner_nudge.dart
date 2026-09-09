@@ -168,7 +168,8 @@ class NyangBannerNudge {
     // "다음 일" 카드는 딴짓 방지 스위치나 일정 알림과 무관하게, 마스터 플랜이면
     // 그 자체로 켜져 있는 기본 동작이다.
     final userData = await UserDataService.load();
-    final masterEligible = userData.isPlanActive && userData.planType == 'master';
+    final masterEligible =
+        userData.isPlanActive && userData.planType == 'master';
     if (!needed && !masterEligible) return;
 
     final prefs = await SharedPreferences.getInstance();
@@ -283,9 +284,11 @@ class NyangBannerNudge {
 
     final result = <DateTime>[];
     for (var day = 0; day < 2; day++) {
-      final date = DateTime(now.year, now.month, now.day).add(
-        Duration(days: day),
-      );
+      final date = DateTime(
+        now.year,
+        now.month,
+        now.day,
+      ).add(Duration(days: day));
       for (final slot in slots) {
         if (result.length >= gapNotificationIds.length) break;
         final at = DateTime(
@@ -342,6 +345,7 @@ class NyangBannerNudge {
     List<DateTime> slots,
     List<DateTime> blocking,
   ) async {
+    final prefs = await SharedPreferences.getInstance();
     final today = DateTime(now.year, now.month, now.day);
     // 오늘 할 일을 다 끝냈으면 오늘 남은 자리는 접는다. 내일 자리는 그대로 둔다 —
     // 저녁에 다 끝내고 앱을 닫는 사람이 대부분이라, 이걸 내일까지 끌고 가면
@@ -358,7 +362,12 @@ class NyangBannerNudge {
         at: at,
         // 지금 남아 있는 일을 보고 문장을 고른다. 내일 자리는 오늘 목록으로
         // 고르게 되지만, 앱을 한 번이라도 열면 그날 것으로 다시 깔린다.
-        body: GapCoachingService.bodyFor(tasks, at),
+        //
+        // 여기서는 모델에게 묻지 않는다(mayAsk 기본값 false). 자리가 넷인데
+        // 자리마다 물어보면 하루 한 번이 네 번이 된다. 물어보는 것은
+        // GapCoachingService.sync가 한 번 하고, 여기서는 그 답이 이 자리가
+        // 고른 일과 맞을 때만 가져다 쓴다. 안 맞으면 사전으로 떨어진다.
+        body: await GapCoachingService.bodyForSlot(prefs, tasks, at),
       );
     }
   }
@@ -384,7 +393,8 @@ class NyangBannerNudge {
         item['completedAt']?.toString() ?? '',
       );
       if (completedAt != null &&
-          at.difference(completedAt).inMinutes.abs() < _gapAfterDone.inMinutes) {
+          at.difference(completedAt).inMinutes.abs() <
+              _gapAfterDone.inMinutes) {
         return true;
       }
 
