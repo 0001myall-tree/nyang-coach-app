@@ -602,7 +602,47 @@ class DailyResetService {
     }
 
     await prefs.setString('nyang_tasks', jsonEncode(injectedTasks));
+    await pruneOrphanCoreTasks(prefs, injectedTasks);
     await _saveTodayRecordDirectly(prefs, today, injectedTasks);
+  }
+
+  /// 오늘 목록에 없는 핵심을 걷어낸다.
+  ///
+  /// 핵심은 오늘 목록에서 골라 담는 것이라, 목록에 없는 핵심은 어제 것이
+  /// 남은 자리다. 정리는 목록과 핵심을 같이 비우는데, 마지막에 목록만 다시
+  /// 쓴다 — 그 사이에 플래너 화면이 자기 기억에 있던 어제 핵심을 저장하면
+  /// 그 값이 마지막 기록이 되어 살아남는다. 오늘의 핵심 칸에 오늘 목록에도
+  /// 없는 어제 항목이 올라와 있던 이유가 이것이다.
+  ///
+  /// 목표 마일스톤은 예외다. 그건 오늘 목록이 아니라 목표 탭에서 오는 것이라
+  /// 원래 목록에 없고, 걷어내는 규칙도 따로 있다.
+  static Future<void> pruneOrphanCoreTasks(
+    SharedPreferences prefs,
+    List<dynamic> todayTasks,
+  ) async {
+    // 비교할 목록이 없으면 아무것도 지우지 않는다. 빈 목록을 기준으로 삼으면
+    // 걷어내는 것이 아니라 통째로 비우는 일이 된다.
+    if (todayTasks.isEmpty) return;
+    final raw = prefs.getString('nyang_core_tasks');
+    if (raw == null) return;
+    List<dynamic> coreList;
+    try {
+      coreList = jsonDecode(raw) as List;
+    } catch (_) {
+      return;
+    }
+    final todayIds = todayTasks
+        .whereType<Map>()
+        .map((t) => t['id'].toString())
+        .toSet();
+    final kept = coreList.where((c) {
+      if (c is! Map) return false;
+      final id = c['id'].toString();
+      if (id.startsWith('milestone_')) return true;
+      return todayIds.contains(id);
+    }).toList();
+    if (kept.length == coreList.length) return;
+    await prefs.setString('nyang_core_tasks', jsonEncode(kept));
   }
 
   /// 정리가 목록을 다시 만들 때, 이 항목을 그대로 들고 가야 하는지.

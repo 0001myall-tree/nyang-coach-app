@@ -57,7 +57,16 @@ class TasksSyncService {
   /// 기기 로컬 전용 키. 클라우드에 백업/복원하지 않는다.
   /// ('이 기기가 첫 복원을 마쳤는가'는 기기별 사실이라, 클라우드에서 true를
   /// 물려받으면 새 기기의 덮어쓰기 보호가 무력화된다.)
-  static const _localOnlyKeys = {'nyang_has_synced_from_cloud'};
+  ///
+  /// 애플 캘린더 이벤트 표도 마찬가지다. 그 안의 id는 그 아이폰의 EventKit이
+  /// 발급한 것이라 다른 기기에서는 뜻이 없는데, 접두어 때문에 클라우드로
+  /// 오르내렸다. 옛 표가 아이폰으로 내려오면 이미 없는 이벤트를 찾게 되고,
+  /// 안 잡힌 루틴은 그날이 쉬기로 찍혔다. 지금은 접두어 없는 자리로 옮겼고,
+  /// 여기 남은 옛 이름은 클라우드에 있는 것을 지우기 위한 것이다.
+  static const _localOnlyKeys = {
+    'nyang_has_synced_from_cloud',
+    'nyang_apple_calendar_event_map',
+  };
 
   /// 로컬에서 막 수정됐지만 아직 클라우드로 업로드되지 않은 키.
   /// 이 키들은 클라우드 스냅샷/다운로드가 로컬을 덮어쓰지 못하게 막아,
@@ -311,7 +320,7 @@ class TasksSyncService {
       diag['keys_found'] = foundKeys;
       await WidgetSyncService.syncFromStoredTasks();
       unawaited(
-        AppleCalendarSyncService.instance.syncAll(pullExternalChanges: false),
+        AppleCalendarSyncService.instance.syncAll(),
       );
       debugPrint('✅ TasksSyncService: 클라우드 데이터를 로컬에 성공적으로 복원했습니다.');
       diag['status'] = 'SUCCESS';
@@ -389,9 +398,7 @@ class TasksSyncService {
               );
               await WidgetSyncService.syncFromStoredTasks();
               unawaited(
-                AppleCalendarSyncService.instance.syncAll(
-                  pullExternalChanges: false,
-                ),
+                AppleCalendarSyncService.instance.syncAll(),
               );
               onDataChanged();
             }

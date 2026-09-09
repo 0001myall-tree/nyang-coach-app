@@ -1,85 +1,23 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nyang_coach/services/apple_calendar_sync_service.dart';
 
-/// 아이폰 캘린더에서 일정이 안 보일 때, 그걸 곧바로 "지웠다"로 받아들이지
-/// 않는다.
+/// 아이폰 캘린더로는 내보내기만 한다.
 ///
-/// 방금 내보낸 이벤트는 캘린더에 자리 잡기 전이라 조회에 안 잡힐 수 있는데,
-/// 그걸 삭제로 받아들이면 앱에서 만든 일정이 만든 그날 사라진다. 루틴은 그날
-/// 쉬기로 찍히고 일반 일정은 아예 지워진다 — 2026-09-05에 실제로 그렇게
-/// 사라졌고, 9월 2일에 만든 루틴은 당했지만 8월에 만든 것은 멀쩡했다.
+/// 한동안은 양방향이었다. 캘린더에서 이벤트가 조회에 안 잡히면 "사용자가
+/// 지웠다"로 읽고, 루틴이면 그날을 쉬기로 찍고 일정이면 아예 지웠다. 그런데
+/// 안 잡히는 이유는 사람이 지운 것 말고도 많다 — 아이클라우드가 이벤트를 다시
+/// 만들거나, 들고 있던 이벤트 번호표가 옛것이거나. 그렇게 찍힌 쉬기는 화면에
+/// 보이지도 되돌려지지도 않아서, 쉰다고 한 적 없는 날에 루틴이 사라졌다.
+///
+/// 애초에 캘린더에서 냥냥코치 일정을 고치는 것은 계획에 없던 쓰임이었다.
+/// 지우기 감지는 통째로 걷어냈고(그 판단을 하던 `looksLikeLookupGlitch`,
+/// `shouldApplyDelete`도 같이 사라졌다), 캘린더에서 지운 것은 다음 내보내기가
+/// 다시 만든다. 시간을 옮기는 것만 앱으로 돌아온다.
 void main() {
-  group('여러 개가 한꺼번에 안 잡히면', () {
-    test('조회가 어긋난 것으로 보고 넘어간다', () {
-      expect(
-        AppleCalendarSyncService.looksLikeLookupGlitch(missing: 3, mapped: 5),
-        isTrue,
-      );
-    });
-
-    test('하나만 안 잡히면 사람이 지운 것으로 본다', () {
-      expect(
-        AppleCalendarSyncService.looksLikeLookupGlitch(missing: 1, mapped: 5),
-        isFalse,
-      );
-    });
-
-    test('한둘 빠진 정도는 그대로 진행한다', () {
-      expect(
-        AppleCalendarSyncService.looksLikeLookupGlitch(missing: 2, mapped: 9),
-        isFalse,
-      );
-    });
-
-    test('없어진 게 없으면 아무 일도 없다', () {
-      expect(
-        AppleCalendarSyncService.looksLikeLookupGlitch(missing: 0, mapped: 4),
-        isFalse,
-      );
-    });
-  });
-
-  group('안 보이는 항목을 지운 것으로 받아들일지', () {
-    final now = DateTime(2026, 9, 5, 10, 30);
-
-    test('처음 안 보이는 것은 기다린다', () {
-      expect(
-        AppleCalendarSyncService.shouldApplyDelete(
-          firstMissedAtIso: null,
-          now: now,
-        ),
-        isFalse,
-      );
-    });
-
-    test('방금 안 보이기 시작한 것도 기다린다', () {
-      expect(
-        AppleCalendarSyncService.shouldApplyDelete(
-          firstMissedAtIso: DateTime(2026, 9, 5, 10, 25).toIso8601String(),
-          now: now,
-        ),
-        isFalse,
-      );
-    });
-
-    test('한참 지나도 안 보이면 받아들인다', () {
-      expect(
-        AppleCalendarSyncService.shouldApplyDelete(
-          firstMissedAtIso: DateTime(2026, 9, 5, 10, 5).toIso8601String(),
-          now: now,
-        ),
-        isTrue,
-      );
-    });
-
-    test('읽을 수 없는 시각이면 기다린다', () {
-      expect(
-        AppleCalendarSyncService.shouldApplyDelete(
-          firstMissedAtIso: '언젠가',
-          now: now,
-        ),
-        isFalse,
-      );
-    });
+  test('이벤트 번호표는 클라우드로 오르내리지 않는다', () {
+    // 번호표 속 id는 이 아이폰의 EventKit이 발급한 값이라 다른 기기에서는
+    // 뜻이 없다. 'nyang_' 접두어가 붙은 값은 전부 클라우드를 타기 때문에,
+    // 옛 표가 내려와 이미 없는 이벤트를 찾게 만들던 자리다.
+    expect(AppleCalendarSyncService.eventMapKey.startsWith('nyang_'), isFalse);
   });
 }

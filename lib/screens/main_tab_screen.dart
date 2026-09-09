@@ -14,6 +14,7 @@ import '../services/notification_service.dart';
 import '../services/analytics_service.dart';
 import '../services/apple_calendar_sync_service.dart';
 import '../services/morning_call_alarm_session.dart';
+import '../services/calendar_pullback_cleanup.dart';
 import '../services/daily_reset_service.dart';
 import '../services/life_context_service.dart';
 import '../services/widget_sync_service.dart';
@@ -619,6 +620,9 @@ class _MainTabScreenState extends State<MainTabScreen>
     _widgetIntentDrawerMode = widget.initialDrawerIndex != 0;
     WidgetsBinding.instance.addObserver(this);
     DailyResetService.checkAndExecuteReset();
+    // 아이폰 캘린더를 되읽던 시절이 남긴 유령 할 일과 미래 쉬기 기록을 한 번
+    // 치운다. 클라우드 복원이 끝난 뒤에만 돈다.
+    unawaited(_cleanUpCalendarPullbackLeftovers());
     _startDailyRolloverWatcher();
     _audioPlayer.setAudioContext(
       AudioContext(
@@ -720,6 +724,14 @@ class _MainTabScreenState extends State<MainTabScreen>
       unawaited(_checkDailyRollover());
       if (mounted) _startDailyRolloverWatcher();
     });
+  }
+
+  Future<void> _cleanUpCalendarPullbackLeftovers() async {
+    final cleaned = await CalendarPullbackCleanup.runOnce();
+    if (!cleaned || !mounted) return;
+    _tasksController.refresh();
+    _chatController.refreshTaskProgress();
+    setState(() {});
   }
 
   Future<void> _checkDailyRollover() async {

@@ -1351,7 +1351,13 @@ class _TasksScreenState extends State<TasksScreen>
     _injectTodayHabits();
     _injectTodaySchedules();
     final coreMilestonesChanged = _syncTodayMilestonesIntoCoreTasks();
-    if (coreMilestonesChanged) {
+    // 첫 클라우드 복원 전에는 걷어내지 않는다. 그때는 오늘 목록이 아직 비어
+    // 있을 수 있는데, 그 빈 목록을 기준으로 삼으면 멀쩡한 핵심을 전부 지우고
+    // 그 빈 값을 클라우드로 올려버린다.
+    final coreOrphansRemoved =
+        !DailyResetService.isCloudRestorePending(prefs) &&
+        _pruneOrphanCoreTasks();
+    if (coreMilestonesChanged || coreOrphansRemoved) {
       if (mounted) setState(() {});
       await _saveCoreTasks();
     }
@@ -3434,7 +3440,7 @@ class _TasksScreenState extends State<TasksScreen>
     widget.onProgressChanged?.call();
     // 애플 캘린더 연동(iOS)이 켜져 있으면 변경을 미러링. 실패해도 앱 흐름엔 영향 없음.
     unawaited(
-      AppleCalendarSyncService.instance.syncAll(pullExternalChanges: false),
+      AppleCalendarSyncService.instance.syncAll(),
     );
   }
 
@@ -5393,6 +5399,28 @@ class _TasksScreenState extends State<TasksScreen>
     return _getMilestonesForDay(
       DateTime(year, month, day),
     ).map((mv) => _milestoneTaskItem(mv.vision, mv.milestone)).toList();
+  }
+
+  /// 오늘 목록에 없는 핵심을 걷어낸다. 걷어냈으면 true.
+  ///
+  /// 핵심은 오늘 목록에서 골라 담는 것이라, 목록에 없는 핵심은 어제 것이
+  /// 남은 자리다. 자정 정리가 목록과 핵심을 같이 비운 뒤 목록만 다시 쓰는
+  /// 사이에, 이 화면이 기억하고 있던 어제 핵심을 저장하면 그 값이 마지막
+  /// 기록으로 살아남는다. 목표 마일스톤은 애초에 오늘 목록에서 오지 않으므로
+  /// 건드리지 않는다. ([DailyResetService.pruneOrphanCoreTasks]와 같은 규칙)
+  bool _pruneOrphanCoreTasks() {
+    if (!_isViewingActualToday) return false;
+    // 목록이 비어 있는 것은 "핵심이 전부 남는 것"이 아니라 아직 못 읽었다는
+    // 뜻일 수 있다. 비교할 것이 없을 때는 아무것도 지우지 않는다.
+    if (tasks.isEmpty) return false;
+    final todayIds = tasks.map((t) => t.id.toString()).toSet();
+    final before = coreTasks.length;
+    coreTasks.removeWhere((core) {
+      final id = core.id.toString();
+      if (id.startsWith('milestone_')) return false;
+      return !todayIds.contains(id);
+    });
+    return coreTasks.length != before;
   }
 
   bool _syncTodayMilestonesIntoCoreTasks() {

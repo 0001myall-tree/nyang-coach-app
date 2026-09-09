@@ -4,7 +4,6 @@ import 'dart:io' show Platform;
 import 'dart:ui' show Color;
 
 import 'package:device_calendar/device_calendar.dart';
-import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/timezone.dart' as tz;
@@ -50,8 +49,20 @@ class AppleCalendarSyncService {
 
   static const String _kEnabledKey = 'nyang_apple_calendar_enabled';
   static const String _kCalendarIdKey = 'nyang_apple_calendar_id';
-  // 냥냥코치 일정 id -> 애플 캘린더 이벤트 id 매핑 (기기 로컬에만 저장)
-  static const String _kEventMapKey = 'nyang_apple_calendar_event_map';
+
+  /// 냥냥코치 일정 id -> 애플 캘린더 이벤트 id 매핑.
+  ///
+  /// 'nyang_' 접두어를 쓰지 않는다. 이벤트 id는 이 기기의 EventKit이 발급한
+  /// 것이라 다른 기기에서는 아무 뜻이 없다. 접두어가 붙어 있던 동안에는 이
+  /// 표가 클라우드로 오르내렸고, 다른 기기가 들고 있던 옛 표가 내려오면
+  /// 아이폰은 이미 없는 이벤트 id를 들고 캘린더를 뒤졌다. 안 잡히는 것은
+  /// "사용자가 지웠다"로 읽혔으므로, 그 항목이 루틴이면 그날이 쉬기로 찍혔다 —
+  /// 쉰다고 한 적 없는데 루틴이 사라지던 길이 이것이다.
+  /// (지금은 지운 것으로 받아들이는 길 자체를 없앴다.)
+  static const String _kEventMapKey = 'apple_calendar_event_map';
+
+  /// 접두어가 붙어 있던 시절의 자리. 한 번 옮겨 오고 지운다.
+  static const String _kLegacyEventMapKey = 'nyang_apple_calendar_event_map';
   // tasks_screen이 저장하는 SharedPreferences 키. 서비스는 여기서 직접 읽는다.
   static const String _kSchedulesPrefsKey = 'nyang_schedules';
   static const String _kTasksPrefsKey = 'nyang_tasks';
@@ -155,7 +166,18 @@ class AppleCalendarSyncService {
 
   Future<Map<String, String>> _loadEventMap() async {
     final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_kEventMapKey);
+    var raw = prefs.getString(_kEventMapKey);
+    if (raw == null) {
+      // 옛 자리에 있던 표를 한 번 옮겨 온다. 빈손으로 시작하면 이미 캘린더에
+      // 있는 이벤트를 못 알아보고 전부 다시 만들어, 같은 일정이 두 벌 생긴다.
+      final legacy = prefs.getString(_kLegacyEventMapKey);
+      if (legacy != null) {
+        await prefs.setString(_kEventMapKey, legacy);
+        raw = legacy;
+      }
+      // 옛 자리는 비운다. 로컬에서 사라지면 클라우드에서도 지워진다.
+      await prefs.remove(_kLegacyEventMapKey);
+    }
     if (raw == null) return {};
     try {
       final decoded = jsonDecode(raw) as Map<String, dynamic>;
@@ -170,67 +192,9 @@ class AppleCalendarSyncService {
     await prefs.setString(_kEventMapKey, jsonEncode(map));
   }
 
-  /// 캘린더에서 안 보이기 시작한 항목과 그 시각.
-  ///
-  /// 'nyang_' 접두어를 쓰지 않는다. 이 기기의 캘린더가 지금 어떻게 보이는지는
-  /// 기기별 사실이라, 클라우드에서 다른 기기 것이 내려오면 안 된다.
-  static const String _kPendingDeleteKey = 'apple_calendar_pending_delete';
-
-  /// 안 보인다고 바로 지우지 않고 이만큼 기다린다.
-  ///
-  /// 방금 내보낸 이벤트는 캘린더에 자리 잡기 전이라 조회에 안 잡힐 수 있다.
-  /// 그걸 삭제로 받아들이면, 사용자가 앱에서 만든 일정이 만든 그날 사라진다.
-  /// 실제로 그렇게 사라졌다 — 9월 2일에 만든 루틴은 당하고 8월에 만든 것은
-  /// 멀쩡했다. 캘린더에서 진짜 지운 것은 조금 늦게 반영되지만, 늦는 쪽이
-  /// 지워지는 쪽보다 낫다.
-  static const Duration _deleteGrace = Duration(minutes: 10);
-
-  /// 여러 개가 한꺼번에 안 잡혔는지. 그렇다면 사람이 지운 것보다 조회가
-  /// 어긋난 쪽이 그럴듯하다. 이번에는 아무것도 지우지 않고 다음에 다시 본다.
-  /// (매핑은 그대로 둔다. 여기서 비우면 멀쩡한 나머지가 캘린더에 두 번 생긴다.)
-  @visibleForTesting
-  static bool looksLikeLookupGlitch({
-    required int missing,
-    required int mapped,
-  }) {
-    if (missing <= 1) return false;
-    return missing * 2 >= mapped;
-  }
-
-  /// 안 보이는 항목을 이제 지운 것으로 받아들일지.
-  ///
-  /// 처음 안 보이는 것은 기억만 해두고 넘어간다. 얼마 뒤에도 여전히 안 보이면
-  /// 그때 받아들인다.
-  @visibleForTesting
-  static bool shouldApplyDelete({
-    required String? firstMissedAtIso,
-    required DateTime now,
-  }) {
-    final firstMissedAt = DateTime.tryParse(firstMissedAtIso ?? '');
-    if (firstMissedAt == null) return false;
-    return now.difference(firstMissedAt) >= _deleteGrace;
-  }
-
-  Future<Map<String, String>> _loadPendingDeletes() async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_kPendingDeleteKey);
-    if (raw == null) return {};
-    try {
-      final decoded = jsonDecode(raw) as Map<String, dynamic>;
-      return decoded.map((k, v) => MapEntry(k, v.toString()));
-    } catch (_) {
-      return {};
-    }
-  }
-
-  Future<void> _savePendingDeletes(Map<String, String> map) async {
-    final prefs = await SharedPreferences.getInstance();
-    if (map.isEmpty) {
-      await prefs.remove(_kPendingDeleteKey);
-      return;
-    }
-    await prefs.setString(_kPendingDeleteKey, jsonEncode(map));
-  }
+  /// 진단 화면이 읽는 자리.
+  static String get enabledKey => _kEnabledKey;
+  static String get eventMapKey => _kEventMapKey;
 
   /// 연동 켜기: 권한 요청 → 전용 캘린더 확보 → 현재 일정 전체 내보내기.
   Future<AppleCalendarEnableResult> enable() async {
@@ -277,7 +241,22 @@ class AppleCalendarSyncService {
   }
 
   /// 현재 일정 전체를 캘린더에 반영한다. 연동이 꺼져 있으면 아무 것도 하지 않는다.
-  Future<bool> syncAll({bool pullExternalChanges = true}) async {
+  /// 앱의 일정을 아이폰 캘린더로 내보낸다. **한 방향뿐이다.**
+  ///
+  /// 한동안은 캘린더 쪽 변화를 앱으로 되읽었다. 그 길에서 두 가지가 나왔다.
+  ///
+  /// 이벤트가 조회에 안 잡히면 "사용자가 지웠다"로 읽어 루틴을 그날 쉬기로
+  /// 찍었다. 그리고 되읽은 시각이 내보낸 값과 조금이라도 다르면 "옮겼다"로
+  /// 읽어, 그날을 쉬기로 찍고 그 자리에 일회성 할 일을 하나 만들었다. 루틴은
+  /// 90일치를 미리 내보내므로, 한 루틴이 계속 어긋나면 **90일이 통째로**
+  /// 쉬는 날이 되고 90개의 유령 할 일이 생긴다. 2026-09-09에 실제로 그랬다 —
+  /// 매일 루틴 하나가 오늘도 내일도 안 보였고, 그날 찍힌 쉬기의 시각은 아직
+  /// 오지도 않은 시각이었다(며칠 전에 미리 찍혔으니까).
+  ///
+  /// 애초에 캘린더에서 냥냥코치 일정을 고치는 것은 계획에 없던 쓰임이다.
+  /// 되읽는 길을 통째로 없앴다. 캘린더에서 지우거나 옮긴 것은 다음 내보내기가
+  /// 제자리로 되돌린다.
+  Future<bool> syncAll() async {
     if (!await isEnabled()) return false;
     await _ensureTimezone();
     final prefs = await SharedPreferences.getInstance();
@@ -287,26 +266,14 @@ class AppleCalendarSyncService {
     final calendarWasReplaced =
         previousCalendarId != null && previousCalendarId != calId;
     return _serializeSync(() async {
-      var entries = await _loadEntriesFromPrefs();
-      final oldMap = await _loadEventMap();
+      final entries = await _loadEntriesFromPrefs();
       if (calendarWasReplaced) {
         // 사용자가 전용 캘린더 자체를 삭제하면 EventKit 이벤트 id가 전부 사라진다.
-        // 이를 "모든 일정을 삭제"로 오해하지 않고 새 캘린더에 다시 내보낸다.
+        // 새 캘린더에 다시 내보내도록 매핑만 비운다.
         await _saveEventMap({});
-        await _syncInternal(entries, calId);
-        return false;
-      }
-      var pulledExternalChanges = false;
-      if (pullExternalChanges && oldMap.isNotEmpty) {
-        pulledExternalChanges = await _pullExternalChanges(
-          calId,
-          entries,
-          oldMap,
-        );
-        entries = await _loadEntriesFromPrefs();
       }
       await _syncInternal(entries, calId);
-      return pulledExternalChanges;
+      return false;
     });
   }
 
@@ -542,545 +509,6 @@ class AppleCalendarSyncService {
     await _saveEventMap(newMap);
   }
 
-  Future<bool> _pullExternalChanges(
-    String calId,
-    List<CalendarScheduleEntry> entries,
-    Map<String, String> oldMap,
-  ) async {
-    final entryById = {for (final entry in entries) entry.id: entry};
-    final ids = oldMap.values.toList();
-    if (ids.isEmpty) return false;
-
-    final res = await _plugin.retrieveEvents(
-      calId,
-      RetrieveEventsParams(eventIds: ids),
-    );
-    if (!res.isSuccess) return false;
-    final events = res.data ?? const <Event>[];
-    final eventById = {
-      for (final event in events)
-        if (event.eventId != null) event.eventId!: event,
-    };
-    final mappedSourceIds = oldMap.keys.where(entryById.containsKey).toList();
-    final missing = mappedSourceIds
-        .where((sourceId) => !eventById.containsKey(oldMap[sourceId]))
-        .toList();
-
-    if (mappedSourceIds.isNotEmpty &&
-        missing.length == mappedSourceIds.length) {
-      // 캘린더 계정/전용 캘린더가 사라지거나 일시적으로 이벤트 조회가 빈 값이면
-      // 모든 앱 일정을 삭제로 오판할 수 있다. 전부 사라진 경우는 앱 데이터를
-      // 지우지 않고 매핑만 재생성하도록 한다.
-      await _saveEventMap({});
-      return false;
-    }
-
-    if (looksLikeLookupGlitch(
-      missing: missing.length,
-      mapped: mappedSourceIds.length,
-    )) {
-      return false;
-    }
-
-    final pending = await _loadPendingDeletes();
-    final now = DateTime.now();
-    var didChange = false;
-    for (final mapEntry in oldMap.entries) {
-      final source = entryById[mapEntry.key];
-      if (source == null) continue;
-      final event = eventById[mapEntry.value];
-      if (event == null) {
-        // 처음 안 보이는 것은 기억만 해두고 넘어간다. 얼마 뒤에도 여전히
-        // 안 보이면 그때 지운 것으로 받아들인다.
-        if (!shouldApplyDelete(
-          firstMissedAtIso: pending[mapEntry.key],
-          now: now,
-        )) {
-          pending[mapEntry.key] ??= now.toIso8601String();
-          continue;
-        }
-        pending.remove(mapEntry.key);
-        didChange = await _applyExternalDelete(source) || didChange;
-      } else {
-        pending.remove(mapEntry.key);
-        didChange = await _applyExternalUpdate(source, event) || didChange;
-      }
-    }
-    // 이미 없어진 항목의 표시는 들고 있어봐야 쓸 데가 없다.
-    pending.removeWhere((sourceId, _) => !oldMap.containsKey(sourceId));
-    await _savePendingDeletes(pending);
-    return didChange;
-  }
-
-  Future<bool> _applyExternalDelete(CalendarScheduleEntry source) async {
-    final parts = source.id.split(':');
-    if (parts.isEmpty) return false;
-    switch (parts.first) {
-      case 'schedule':
-        if (parts.length >= 3) {
-          await _deleteSchedule(parts[1], parts.sublist(2).join(':'));
-          return true;
-        }
-        break;
-      case 'task':
-        if (parts.length >= 3) {
-          await _deleteTask(
-            parts[1],
-            parts.sublist(2).join(':'),
-            fromToday: true,
-          );
-          return true;
-        }
-        break;
-      case 'planned':
-        if (parts.length >= 3) {
-          await _deleteTask(
-            parts[1],
-            parts.sublist(2).join(':'),
-            fromToday: false,
-          );
-          return true;
-        }
-        break;
-      case 'habit':
-        if (parts.length >= 3) {
-          await _skipHabitOnDate(parts[1], parts.sublist(2).join(':'));
-          return true;
-        }
-        break;
-      case 'milestone':
-        if (parts.length >= 4) {
-          await _clearMilestoneDate(
-            dateKey: parts[1],
-            visionId: parts[2],
-            milestoneIndex: int.tryParse(parts[3]),
-          );
-          return true;
-        }
-        break;
-    }
-    return false;
-  }
-
-  Future<bool> _applyExternalUpdate(
-    CalendarScheduleEntry source,
-    Event event,
-  ) async {
-    final parts = source.id.split(':');
-    if (parts.isEmpty) return false;
-
-    final patch = _eventPatch(source, event);
-    if (!patch.hasChanges) return false;
-
-    switch (parts.first) {
-      case 'schedule':
-        if (parts.length >= 3) {
-          await _updateSchedule(
-            oldDateKey: parts[1],
-            id: parts.sublist(2).join(':'),
-            patch: patch,
-          );
-          return true;
-        }
-        break;
-      case 'task':
-        if (parts.length >= 3) {
-          await _updateTask(
-            oldDateKey: parts[1],
-            id: parts.sublist(2).join(':'),
-            fromToday: true,
-            patch: patch,
-          );
-          return true;
-        }
-        break;
-      case 'planned':
-        if (parts.length >= 3) {
-          await _updateTask(
-            oldDateKey: parts[1],
-            id: parts.sublist(2).join(':'),
-            fromToday: false,
-            patch: patch,
-          );
-          return true;
-        }
-        break;
-      case 'habit':
-        if (parts.length >= 3) {
-          await _createHabitException(
-            oldDateKey: parts[1],
-            habitId: parts.sublist(2).join(':'),
-            patch: patch,
-          );
-          return true;
-        }
-        break;
-      case 'milestone':
-        if (parts.length >= 4) {
-          await _updateMilestone(
-            dateKey: parts[1],
-            visionId: parts[2],
-            milestoneIndex: int.tryParse(parts[3]),
-            patch: patch,
-          );
-          return true;
-        }
-        break;
-    }
-    return false;
-  }
-
-  _ExternalEventPatch _eventPatch(CalendarScheduleEntry source, Event event) {
-    final title = (event.title ?? '').trim().isEmpty
-        ? source.title
-        : event.title!.trim();
-    final start = event.start;
-    final dateKey = start == null ? source.dateKey : _dateKey(start);
-    String? timeStart;
-    String? timeEnd;
-    if (event.allDay != true && start != null) {
-      timeStart = _storedTime(start);
-      if (event.end != null && event.end!.isAfter(start)) {
-        timeEnd = _storedTime(event.end!);
-      }
-    }
-    return _ExternalEventPatch(
-      title: title,
-      dateKey: dateKey,
-      timeStart: timeStart,
-      timeEnd: timeEnd,
-      hasChanges:
-          title != source.title ||
-          dateKey != source.dateKey ||
-          timeStart != source.timeStart ||
-          timeEnd != source.timeEnd,
-    );
-  }
-
-  Future<void> _deleteSchedule(String dateKey, String id) async {
-    final prefs = await SharedPreferences.getInstance();
-    final schedules = _decodeMap(prefs.getString(_kSchedulesPrefsKey));
-    final list = List<dynamic>.from(schedules[dateKey] as List? ?? const []);
-    list.removeWhere((item) => item is Map && item['id']?.toString() == id);
-    if (list.isEmpty) {
-      schedules.remove(dateKey);
-    } else {
-      schedules[dateKey] = list;
-    }
-    await prefs.setString(_kSchedulesPrefsKey, jsonEncode(schedules));
-  }
-
-  Future<void> _updateSchedule({
-    required String oldDateKey,
-    required String id,
-    required _ExternalEventPatch patch,
-  }) async {
-    final prefs = await SharedPreferences.getInstance();
-    final schedules = _decodeMap(prefs.getString(_kSchedulesPrefsKey));
-    Map<String, dynamic>? target;
-    String? foundKey;
-    schedules.forEach((dateKey, value) {
-      if (target != null || value is! List) return;
-      for (final item in value) {
-        if (item is Map && item['id']?.toString() == id) {
-          target = Map<String, dynamic>.from(item);
-          foundKey = dateKey;
-          break;
-        }
-      }
-    });
-    if (target == null) return;
-
-    final sourceKey = foundKey ?? oldDateKey;
-    final oldList = List<dynamic>.from(
-      schedules[sourceKey] as List? ?? const [],
-    );
-    oldList.removeWhere((item) => item is Map && item['id']?.toString() == id);
-    if (oldList.isEmpty) {
-      schedules.remove(sourceKey);
-    } else {
-      schedules[sourceKey] = oldList;
-    }
-
-    _applyPatchToItem(target!, patch);
-    _detachRecurringException(target!);
-    final newList = List<dynamic>.from(
-      schedules[patch.dateKey] as List? ?? const [],
-    );
-    newList.add(target);
-    schedules[patch.dateKey] = newList;
-    await prefs.setString(_kSchedulesPrefsKey, jsonEncode(schedules));
-  }
-
-  Future<void> _deleteTask(
-    String dateKey,
-    String id, {
-    required bool fromToday,
-  }) async {
-    final prefs = await SharedPreferences.getInstance();
-    if (fromToday || dateKey == _getTodayKey(prefs)) {
-      final tasks = _decodeList(prefs.getString(_kTasksPrefsKey));
-      tasks.removeWhere((item) => item is Map && item['id']?.toString() == id);
-      await prefs.setString(_kTasksPrefsKey, jsonEncode(tasks));
-      return;
-    }
-
-    final planned = _decodeMap(prefs.getString(_kPlannedTasksPrefsKey));
-    final list = List<dynamic>.from(planned[dateKey] as List? ?? const []);
-    list.removeWhere((item) => item is Map && item['id']?.toString() == id);
-    if (list.isEmpty) {
-      planned.remove(dateKey);
-    } else {
-      planned[dateKey] = list;
-    }
-    await prefs.setString(_kPlannedTasksPrefsKey, jsonEncode(planned));
-  }
-
-  Future<void> _updateTask({
-    required String oldDateKey,
-    required String id,
-    required bool fromToday,
-    required _ExternalEventPatch patch,
-  }) async {
-    final prefs = await SharedPreferences.getInstance();
-    final todayKey = _calendarTodayKey();
-    final tasks = _decodeList(prefs.getString(_kTasksPrefsKey));
-    final planned = _decodeMap(prefs.getString(_kPlannedTasksPrefsKey));
-
-    Map<String, dynamic>? target;
-    final emptyKeys = <String>[];
-    tasks.removeWhere((item) {
-      final matches = item is Map && item['id']?.toString() == id;
-      if (matches) target = Map<String, dynamic>.from(item);
-      return matches;
-    });
-    planned.forEach((dateKey, value) {
-      if (value is! List) return;
-      final list = List<dynamic>.from(value);
-      list.removeWhere((item) {
-        final matches = item is Map && item['id']?.toString() == id;
-        if (matches && target == null) target = Map<String, dynamic>.from(item);
-        return matches;
-      });
-      if (list.isEmpty) emptyKeys.add(dateKey);
-      planned[dateKey] = list;
-    });
-    for (final key in emptyKeys) {
-      planned.remove(key);
-    }
-    if (target == null) return;
-
-    _applyPatchToItem(target!, patch);
-    target!.putIfAbsent('category', () => 'today');
-    if (patch.dateKey == todayKey) {
-      tasks.add(target);
-    } else {
-      final newList = List<dynamic>.from(
-        planned[patch.dateKey] as List? ?? const [],
-      );
-      newList.add(target);
-      planned[patch.dateKey] = newList;
-    }
-    await prefs.setString(_kTasksPrefsKey, jsonEncode(tasks));
-    await prefs.setString(_kPlannedTasksPrefsKey, jsonEncode(planned));
-  }
-
-  Future<void> _skipHabitOnDate(String dateKey, String habitId) async {
-    final prefs = await SharedPreferences.getInstance();
-    final logs = _decodeMap(prefs.getString(_kHabitLogsPrefsKey));
-    final habitLogs = Map<String, dynamic>.from(
-      logs[habitId] as Map? ?? const <String, dynamic>{},
-    );
-    habitLogs[dateKey] = {
-      'done': false,
-      'status': 'skipped',
-      'skippedAt': DateTime.now().toIso8601String(),
-    };
-    logs[habitId] = habitLogs;
-    await prefs.setString(_kHabitLogsPrefsKey, jsonEncode(logs));
-  }
-
-  Future<void> _createHabitException({
-    required String oldDateKey,
-    required String habitId,
-    required _ExternalEventPatch patch,
-  }) async {
-    final prefs = await SharedPreferences.getInstance();
-    final habits = _decodeList(prefs.getString(_kHabitsPrefsKey));
-    Map<String, dynamic>? habit;
-    for (final item in habits) {
-      if (item is Map && item['id']?.toString() == habitId) {
-        habit = Map<String, dynamic>.from(item);
-        break;
-      }
-    }
-    if (habit == null) return;
-
-    await _skipHabitOnDate(oldDateKey, habitId);
-
-    final exceptionId = _habitExceptionTaskId(habitId, patch.dateKey);
-    final task = _habitExceptionTask(
-      habit: habit,
-      habitId: habitId,
-      id: exceptionId,
-      patch: patch,
-    );
-
-    final todayKey = _getTodayKey(prefs);
-    final todayTasks = _decodeList(prefs.getString(_kTasksPrefsKey));
-    final planned = _decodeMap(prefs.getString(_kPlannedTasksPrefsKey));
-
-    todayTasks.removeWhere(
-      (item) =>
-          item is Map &&
-          (item['id']?.toString() == exceptionId ||
-              item['id']?.toString() == _habitTaskId(habitId, oldDateKey)),
-    );
-    final emptyKeys = <String>[];
-    planned.forEach((dateKey, value) {
-      if (value is! List) return;
-      final list = List<dynamic>.from(value)
-        ..removeWhere(
-          (item) =>
-              item is Map &&
-              (item['id']?.toString() == exceptionId ||
-                  item['id']?.toString() == _habitTaskId(habitId, oldDateKey)),
-        );
-      if (list.isEmpty) emptyKeys.add(dateKey);
-      planned[dateKey] = list;
-    });
-    for (final key in emptyKeys) {
-      planned.remove(key);
-    }
-
-    if (patch.dateKey == todayKey) {
-      todayTasks.add(task);
-    } else {
-      final list = List<dynamic>.from(
-        planned[patch.dateKey] as List? ?? const [],
-      );
-      list.add(task);
-      planned[patch.dateKey] = list;
-    }
-
-    await prefs.setString(_kTasksPrefsKey, jsonEncode(todayTasks));
-    await prefs.setString(_kPlannedTasksPrefsKey, jsonEncode(planned));
-  }
-
-  Map<String, dynamic> _habitExceptionTask({
-    required Map<String, dynamic> habit,
-    required String habitId,
-    required String id,
-    required _ExternalEventPatch patch,
-  }) {
-    final timeStart = patch.timeStart ?? habit['timeStart']?.toString();
-    final timeEnd = patch.timeEnd ?? habit['timeEnd']?.toString();
-    String? time;
-    if (timeStart != null) {
-      time = timeEnd != null ? '$timeStart ~ $timeEnd' : timeStart;
-    }
-    return {
-      'id': id,
-      'habitId': habitId,
-      'text': patch.title.trim().isEmpty
-          ? (habit['name']?.toString() ?? '')
-          : patch.title,
-      'category': 'habit',
-      'done': false,
-      'isHabit': true,
-      if (time != null) 'time': time,
-      if (habit['habitDuration'] != null) 'duration': habit['habitDuration'],
-      if (timeStart != null) 'timeStart': timeStart,
-      if (timeEnd != null) 'timeEnd': timeEnd,
-      'createdAt': DateTime.now().toIso8601String(),
-      'isReminderEnabled': habit['isReminderEnabled'] ?? false,
-      'source': 'apple_calendar_exception',
-    };
-  }
-
-  String _habitTaskId(String habitId, String dateKey) {
-    return 'habit_${habitId.replaceAll('.', '_')}_$dateKey';
-  }
-
-  String _habitExceptionTaskId(String habitId, String dateKey) {
-    final normalized = habitId.replaceAll(RegExp(r'[^A-Za-z0-9_]'), '_');
-    return 'habit_exception_${normalized}_$dateKey';
-  }
-
-  Future<void> _clearMilestoneDate({
-    required String dateKey,
-    required String visionId,
-    required int? milestoneIndex,
-  }) async {
-    if (milestoneIndex == null) return;
-    await _editMilestone(
-      visionId: visionId,
-      milestoneIndex: milestoneIndex,
-      edit: (milestone) {
-        if (milestone['date']?.toString() == dateKey) {
-          milestone.remove('date');
-        }
-      },
-    );
-  }
-
-  Future<void> _updateMilestone({
-    required String dateKey,
-    required String visionId,
-    required int? milestoneIndex,
-    required _ExternalEventPatch patch,
-  }) async {
-    if (milestoneIndex == null) return;
-    await _editMilestone(
-      visionId: visionId,
-      milestoneIndex: milestoneIndex,
-      edit: (milestone) {
-        if (patch.title.trim().isNotEmpty) milestone['text'] = patch.title;
-        milestone['date'] = patch.dateKey;
-      },
-    );
-  }
-
-  Future<void> _editMilestone({
-    required String visionId,
-    required int milestoneIndex,
-    required void Function(Map<String, dynamic> milestone) edit,
-  }) async {
-    final prefs = await SharedPreferences.getInstance();
-    final visions = _decodeList(prefs.getString(_kVisionsPrefsKey));
-    for (final vision in visions) {
-      if (vision is! Map || vision['id']?.toString() != visionId) continue;
-      final milestones = vision['milestones'];
-      if (milestones is! List || milestoneIndex >= milestones.length) return;
-      final milestone = milestones[milestoneIndex];
-      if (milestone is! Map) return;
-      final edited = Map<String, dynamic>.from(milestone);
-      edit(edited);
-      milestones[milestoneIndex] = edited;
-      await prefs.setString(_kVisionsPrefsKey, jsonEncode(visions));
-      return;
-    }
-  }
-
-  void _applyPatchToItem(Map<String, dynamic> item, _ExternalEventPatch patch) {
-    if (patch.title.trim().isNotEmpty) item['text'] = patch.title;
-    item
-      ..remove('time')
-      ..remove('timeStart')
-      ..remove('timeEnd')
-      ..remove('duration');
-    if (patch.timeStart != null) item['timeStart'] = patch.timeStart;
-    if (patch.timeEnd != null) item['timeEnd'] = patch.timeEnd;
-  }
-
-  void _detachRecurringException(Map<String, dynamic> item) {
-    if (item['isRecurring'] != true) return;
-    item['isRecurring'] = false;
-    item
-      ..remove('recurrenceGroupId')
-      ..remove('recurrenceRule');
-  }
-
   Future<String?> _upsertEvent(
     String calId,
     CalendarScheduleEntry entry,
@@ -1178,16 +606,6 @@ class AppleCalendarSyncService {
     return (h, m);
   }
 
-  String _storedTime(DateTime time) {
-    return '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
-  }
-
-  String _getTodayKey(SharedPreferences _) {
-    final now = DateTime.now();
-    final base = DateTime(now.year, now.month, now.day);
-    return _dateKey(base);
-  }
-
   String _calendarTodayKey() {
     return _dateKey(DateTime.now());
   }
@@ -1223,32 +641,6 @@ class AppleCalendarSyncService {
       return <String, dynamic>{};
     }
   }
-
-  List<dynamic> _decodeList(String? raw) {
-    if (raw == null || raw.trim().isEmpty) return <dynamic>[];
-    try {
-      final decoded = jsonDecode(raw);
-      return decoded is List ? List<dynamic>.from(decoded) : <dynamic>[];
-    } catch (_) {
-      return <dynamic>[];
-    }
-  }
-}
-
-class _ExternalEventPatch {
-  final String title;
-  final String dateKey;
-  final String? timeStart;
-  final String? timeEnd;
-  final bool hasChanges;
-
-  const _ExternalEventPatch({
-    required this.title,
-    required this.dateKey,
-    this.timeStart,
-    this.timeEnd,
-    required this.hasChanges,
-  });
 }
 
 class _EventTiming {

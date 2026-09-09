@@ -11153,7 +11153,7 @@ Rules:
 
     TasksSyncService.scheduleSyncToCloud();
     unawaited(
-      AppleCalendarSyncService.instance.syncAll(pullExternalChanges: false),
+      AppleCalendarSyncService.instance.syncAll(),
     );
   }
 
