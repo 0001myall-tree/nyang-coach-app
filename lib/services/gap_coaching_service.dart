@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/user_data.dart';
 import 'gap_fragment_check.dart';
+import 'gap_late_menu.dart';
 import 'nyang_banner_nudge.dart';
 
 /// 여유 있어 보이는 시각에 냥냥이가 한 마디만 건네는 자리.
@@ -315,23 +316,31 @@ class GapCoachingService {
   /// 그 일을 끝낸 오후에 띄우면 엉뚱하다. 그래서 고른 일의 id를 함께 적어두고,
   /// 네이티브는 띄우기 전에 그 일이 아직 남아 있는지만 확인한다. 확인이
   /// 목록 하나만 보면 되므로 판단이 두 벌로 늘지 않는다.
-  static Future<void> prepareCard(SharedPreferences prefs) async {
+  static Future<void> prepareCard(
+    SharedPreferences prefs, {
+    DateTime? at,
+  }) async {
     final tasks = _decodeTasks(prefs.getString('nyang_tasks'));
-    final now = DateTime.now();
-    final picked = _pickTask(tasks, now);
+    final now = at ?? DateTime.now();
+    final late = lateSuggestionFor(prefs, tasks, now);
+    final picked = late == null ? _pickTask(tasks, now) : null;
 
     final body = await bodyForSlot(prefs, tasks, now, mayAsk: true);
     final name = picked?['text']?.toString().trim();
-    final button = (name == null || name.isEmpty) && !hasAnyRemaining(tasks)
-        ? buttonPlan
+    final button = late == null && (name == null || name.isEmpty)
+        ? (hasAnyRemaining(tasks) ? buttonDefault : buttonPlan)
         : buttonDefault;
+
+    // 늦은 쪽 문장이 부른 일도 함께 적어둔다. 그 일을 그새 끝냈으면 다른 말이
+    // 나가야 한다.
+    final taskId = late?.taskId ?? picked?['id']?.toString();
 
     await prefs.setString(
       preparedCardKey,
       jsonEncode({
         'body': body,
         'button': button,
-        if (picked?['id'] != null) 'taskId': picked!['id'].toString(),
+        if (taskId != null) 'taskId': taskId,
       }),
     );
   }
@@ -350,6 +359,11 @@ class GapCoachingService {
     DateTime at, {
     bool mayAsk = false,
   }) async {
+    // 하루가 얼마 안 남았으면 앞당기자는 말이 안 통한다. 이따 할 시간이
+    // 없는데 미리 해두라는 말이 되기 때문이다.
+    final late = lateSuggestionFor(prefs, tasks, at);
+    if (late != null) return late.body;
+
     final name = _pickTaskName(tasks, at);
     if (name == null || name.isEmpty) {
       return hasAnyRemaining(tasks) ? fallbackBody : emptyBody;
@@ -376,6 +390,24 @@ class GapCoachingService {
     required String name,
     required String fragment,
   }) => "이따 할 '${_shorten(name)}' 15분만 $fragment에 써볼까냥?";
+
+  /// 늦은 시각이면 그때 건넬 한 수. 이른 시각이거나 건넬 것이 없으면 null.
+  static GapLateSuggestion? lateSuggestionFor(
+    SharedPreferences prefs,
+    List tasks,
+    DateTime at,
+  ) {
+    if (!GapLateMenu.isLate(
+      at,
+      bedtime: prefs.getString('nyang_premium_min_sleep_time'),
+    )) {
+      return null;
+    }
+    return GapLateMenu.suggest(
+      tasks: tasks,
+      coreTasks: _decodeTasks(prefs.getString('nyang_core_tasks')),
+    );
+  }
 
   /// 오늘 조각을 받아둔 자리. `{"date","taskId","fragment","asked"}`.
   ///

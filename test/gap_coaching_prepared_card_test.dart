@@ -12,10 +12,15 @@ import 'package:nyang_coach/services/gap_coaching_service.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  // 시계를 못 바꾸므로 시각을 넘겨서 잡는다. 안 그러면 테스트를 저녁에 돌릴 때
+  // 늦은 쪽으로 갈려서 앞엣것들이 통째로 깨진다.
+  final morning = DateTime(2026, 9, 9, 10);
+  final evening = DateTime(2026, 9, 9, 21);
+
   Future<Map<String, dynamic>> cardFor(List<Map<String, dynamic>> tasks) async {
     SharedPreferences.setMockInitialValues({'nyang_tasks': jsonEncode(tasks)});
     final prefs = await SharedPreferences.getInstance();
-    await GapCoachingService.prepareCard(prefs);
+    await GapCoachingService.prepareCard(prefs, at: morning);
     return jsonDecode(prefs.getString(GapCoachingService.preparedCardKey)!)
         as Map<String, dynamic>;
   }
@@ -94,7 +99,7 @@ void main() {
     ];
     SharedPreferences.setMockInitialValues({'nyang_tasks': jsonEncode(tasks)});
     final prefs = await SharedPreferences.getInstance();
-    await GapCoachingService.prepareCard(prefs);
+    await GapCoachingService.prepareCard(prefs, at: morning);
     final stored =
         jsonDecode(prefs.getString(GapCoachingService.preparedCardKey)!)
             as Map<String, dynamic>;
@@ -121,7 +126,7 @@ void main() {
             {'id': name, 'text': name},
           ]),
         );
-        await GapCoachingService.prepareCard(prefs);
+        await GapCoachingService.prepareCard(prefs, at: now);
       }
       return prefs;
     }
@@ -152,6 +157,44 @@ void main() {
           jsonDecode(prefs.getString(GapCoachingService.preparedCardKey)!)
               as Map<String, dynamic>;
       expect(card['body'].toString(), isNotEmpty);
+    });
+  });
+
+  group('늦은 시각', () {
+    // 이따 할 시간이 없는데 미리 해두라는 말은 이상하다. 그때는 오늘 남은 것을
+    // 건지는 쪽으로 간다.
+    Future<Map<String, dynamic>> lateCardFor(
+      List<Map<String, dynamic>> tasks, {
+      List<Map<String, dynamic>> core = const [],
+    }) async {
+      SharedPreferences.setMockInitialValues({
+        'nyang_tasks': jsonEncode(tasks),
+        'nyang_core_tasks': jsonEncode(core),
+      });
+      final prefs = await SharedPreferences.getInstance();
+      await GapCoachingService.prepareCard(prefs, at: evening);
+      return jsonDecode(prefs.getString(GapCoachingService.preparedCardKey)!)
+          as Map<String, dynamic>;
+    }
+
+    test('앞당기자는 말 대신 건지는 말이 나간다', () async {
+      final card = await lateCardFor([
+        {'id': 't1', 'text': '분기 리포트'},
+      ]);
+
+      expect(card['body'], contains('핵심'));
+      expect(card['body'].toString().contains('15분'), isFalse);
+      expect(card['body'].toString().contains('미리'), isFalse);
+    });
+
+    test('멈춘 일을 부르면 그 일 id도 적어둔다', () async {
+      // 그새 다시 시작했으면 다른 말이 나가야 한다.
+      final card = await lateCardFor([
+        {'id': 't2', 'text': '분기 리포트', 'elapsedSeconds': 720},
+      ]);
+
+      expect(card['body'], contains('분기 리포트'));
+      expect(card['taskId'], 't2');
     });
   });
 
