@@ -2412,6 +2412,7 @@ class _ChatScreenState extends State<ChatScreen>
       return _offerDoneCheck(action, doneTargets);
     }
 
+
     // 모닝콜은 플래너가 아니라 설정에 있다. 찾을 일정도 없다.
 
     if (action.kind == PlannerActionKind.morning) {
@@ -5249,9 +5250,29 @@ $block
     final doneHabits = habits
         .where((task) => task['done'] == true)
         .toList(growable: false);
+    // 아직 시각이 안 된 일은 밀린 일이 아니다.
+    //
+    // 완료가 아닌 것을 전부 "안 한 일"로 묶던 자리다. 그래서 저녁 여섯 시
+    // 반에, 여덟 시 반으로 잡아둔 일이 "제일 손이 안 간 일"을 고르는 목록에
+    // 올라왔다. 사용자는 예정대로 여덟 시 반에 시작했는데, 앱은 두 시간
+    // 앞서 재촉하고 그 일을 하기 싫어하는 일로 코치에게 넘겼다.
+    //
+    // 시각이 없는 할 일과 루틴은 그대로 센다. 그건 언제 해도 되는 것이라
+    // 하루가 저물면 정말로 밀린 것이 맞다.
+    bool notYetDue(Map<String, dynamic> task) {
+      final parts = task['timeStart']?.toString().split(':') ?? const [];
+      if (parts.length != 2) return false;
+      final hour = int.tryParse(parts[0]);
+      final minute = int.tryParse(parts[1]);
+      if (hour == null || minute == null) return false;
+      return now.isBefore(
+        DateTime(now.year, now.month, now.day, hour, minute),
+      );
+    }
+
     final pendingPlans = [
-      ...plans.where((task) => task['done'] != true),
-      ...habits.where((task) => task['done'] != true),
+      ...plans.where((task) => task['done'] != true && !notYetDue(task)),
+      ...habits.where((task) => task['done'] != true && !notYetDue(task)),
     ].map(_taskText).whereType<String>().toList(growable: false);
     bool hasStartTrace(Map<String, dynamic> task) {
       final inProgressAt = task['inProgressAt']?.toString().trim() ?? '';
@@ -14971,7 +14992,7 @@ $resistanceFlowRule'''
       final assembledSystemPrompt =
           '''$baseSystemPrompt
 ${LifePatternService.roleLine(_coach.id)}$lifePatternSection
-${Prompts.executionSupportRule}
+${Prompts.executionSupportRule}${_coach.isMaster ? Prompts.completionSupportMaster : ''}
 ${Prompts.goalBackcastRule}
 ${context.isNotEmpty ? '\n$context' : ''}
 $cleaningSection
@@ -15004,7 +15025,7 @@ $habitAutomationSection
 
 ${Prompts.outputRulesHead}
 $timerOutputRule
-${Prompts.outputRulesTail}${Prompts.screenMap}$plannerActionSection$coachOfferTaskRule$halmaeHint$resistanceTurnDirective$contextRequestRule$masterStyleRule''';
+${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.screenMapBrief}$plannerActionSection$coachOfferTaskRule$halmaeHint$resistanceTurnDirective$contextRequestRule$masterStyleRule''';
 
       // 마스터 코치는 하드코딩된 "대표님"을 사용자가 지정한 호칭으로 치환한다.
       // baseSystemPrompt 뒤에 이어붙인 모든 조각까지 함께 반영된다.
@@ -15198,6 +15219,8 @@ ${Prompts.outputRulesTail}${Prompts.screenMap}$plannerActionSection$coachOfferTa
             // 지난 날 대화 원문도 마찬가지다. 이레치가 보관돼 있지만 매 턴
             // 싣기에는 커서, 코치가 부를 때만 간다.
             pastChatMissing: !contextScope.pastChat,
+            // 화면 지도도 부를 때만 간다. 늘 싣던 900자가 잡담에도 따라다녔다.
+            screenMissing: !contextScope.screen,
           )
         : '';
 
@@ -15214,6 +15237,7 @@ ${Prompts.outputRulesTail}${Prompts.screenMap}$plannerActionSection$coachOfferTa
           tasks: requested.tasks,
           pastDay: requested.pastDay,
           pastChat: requested.pastChat,
+          screen: requested.screen,
         );
         contextString = await _buildContextString(
           userText,

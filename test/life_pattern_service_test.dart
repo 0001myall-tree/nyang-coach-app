@@ -228,7 +228,7 @@ void main() {
       for (final coachId in LifePatternService.domains.keys) {
         expect(
           LifePatternService.roleLine(coachId),
-          contains('안 보이면 그냥 대화한다'),
+          contains('안 보이면 그냥 대화함'),
           reason: coachId,
         );
       }
@@ -239,7 +239,7 @@ void main() {
       for (final coachId in LifePatternService.domains.keys) {
         expect(
           LifePatternService.roleLine(coachId),
-          contains('그때 정한다'),
+          contains('그때 정함'),
           reason: coachId,
         );
       }

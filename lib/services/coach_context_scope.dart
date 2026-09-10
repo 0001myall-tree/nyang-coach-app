@@ -40,6 +40,7 @@ class CoachContextScope {
     this.allowsGoals = false,
     this.pastDay = false,
     this.pastChat = false,
+    this.screen = false,
   });
 
   /// 목표·비전·기록의 범위.
@@ -81,6 +82,12 @@ class CoachContextScope {
   /// 꺼내오는 자리다. 다만 매 턴 싣기에는 크므로, 코치가 부를 때만 간다.
   final bool pastChat;
 
+  /// 앱 화면 지도를 통째로 실을지.
+  ///
+  /// 늘 싣던 자리다. 900자가 잡담에도 따라다녔는데, 정작 쓰이는 것은 어디서
+  /// 무엇을 하는지 물은 턴뿐이다. 탭 이름 한 줄만 늘 두고 나머지는 부를 때만.
+  final bool screen;
+
   bool get needsFullGoal => goal == GoalContextScope.full;
   bool get needsLightGoal => goal == GoalContextScope.light;
   bool get needsAnyGoal => goal != GoalContextScope.none;
@@ -93,6 +100,7 @@ class CoachContextScope {
     bool tasks = false,
     bool pastDay = false,
     bool pastChat = false,
+    bool screen = false,
   }) {
     final openGoals = goals && allowsGoals;
     return CoachContextScope(
@@ -102,6 +110,7 @@ class CoachContextScope {
       allowsGoals: allowsGoals,
       pastDay: this.pastDay || pastDay,
       pastChat: this.pastChat || pastChat,
+      screen: this.screen || screen,
     );
   }
 
@@ -109,7 +118,7 @@ class CoachContextScope {
   String toString() =>
       'CoachContextScope(goal: ${goal.name}, tasks: $tasks, '
       'avoidanceLink: $avoidanceLink, allowsGoals: $allowsGoals, '
-      'pastDay: $pastDay, pastChat: $pastChat)';
+      'pastDay: $pastDay, pastChat: $pastChat, screen: $screen)';
 }
 
 /// 코치가 "이걸론 답을 못 하겠다"고 알려온 요청.
@@ -124,6 +133,7 @@ class CoachContextRequest {
     required this.tasks,
     this.pastDay = false,
     this.pastChat = false,
+    this.screen = false,
   });
 
   static const CoachContextRequest none = CoachContextRequest(
@@ -140,7 +150,10 @@ class CoachContextRequest {
   /// 지난 날 대화 원문을 달라는 요청.
   final bool pastChat;
 
-  bool get isEmpty => !goals && !tasks && !pastDay && !pastChat;
+  /// 앱 화면 지도를 달라는 요청.
+  final bool screen;
+
+  bool get isEmpty => !goals && !tasks && !pastDay && !pastChat && !screen;
   bool get isNotEmpty => !isEmpty;
 
   static final RegExp _pattern = RegExp(
@@ -156,6 +169,7 @@ class CoachContextRequest {
     var tasks = false;
     var pastDay = false;
     var pastChat = false;
+    var screen = false;
     for (final match in matches) {
       for (final raw in (match.group(1) ?? '').split(',')) {
         switch (raw.trim().toLowerCase()) {
@@ -171,6 +185,9 @@ class CoachContextRequest {
           case 'chat':
           case 'talk':
             pastChat = true;
+          case 'screen':
+          case 'app':
+            screen = true;
         }
       }
     }
@@ -179,6 +196,7 @@ class CoachContextRequest {
       tasks: tasks,
       pastDay: pastDay,
       pastChat: pastChat,
+      screen: screen,
     );
   }
 

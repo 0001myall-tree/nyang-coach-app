@@ -7,11 +7,13 @@ String rule({
   bool tasks = false,
   bool past = false,
   bool chat = false,
+  bool screen = false,
 }) => Prompts.contextRequestRule(
   goalsMissing: goals,
   tasksMissing: tasks,
   pastDayMissing: past,
   pastChatMissing: chat,
+  screenMissing: screen,
 );
 
 void main() {
@@ -47,6 +49,13 @@ void main() {
       final text = rule(chat: true);
       expect(text, contains('[NEED: chat]'));
       expect(text, isNot(contains('[NEED: past]')));
+    });
+
+    // 화면 지도는 900자다. 어디서 무엇을 하는지 물은 턴에만 실으면 된다.
+    test('화면 지도도 따로 부를 수 있다', () {
+      final text = rule(screen: true);
+      expect(text, contains('[NEED: screen]'));
+      expect(text, isNot(contains('[NEED: chat]')));
     });
   });
 

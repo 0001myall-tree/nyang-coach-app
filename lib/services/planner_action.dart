@@ -34,6 +34,7 @@ enum PlannerActionKind {
   /// 완료로 표시한다. 지난 날의 일도 된다.
   done,
 
+
   /// 그 일정의 알람을 켜거나 끈다.
   remind,
 

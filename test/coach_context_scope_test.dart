@@ -173,6 +173,12 @@ void main() {
       expect(request.pastDay, isFalse);
     });
 
+    test('화면 지도 요청을 읽는다', () {
+      final request = CoachContextRequest.parse('[NEED: screen]');
+      expect(request.screen, isTrue);
+      expect(request.isNotEmpty, isTrue);
+    });
+
     test('모르는 이름은 무시한다', () {
       final request = CoachContextRequest.parse('[NEED: weather]');
       expect(request.isEmpty, isTrue);
