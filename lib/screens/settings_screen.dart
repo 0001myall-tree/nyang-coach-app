@@ -30,7 +30,6 @@ import '../widgets/alarm_permission_notice.dart';
 class SettingsScreen extends StatefulWidget {
   final String coachId;
   final bool autoOpenPremiumLearnSettings;
-  final ValueChanged<String>? onChatBgStyleChanged;
 
   /// 열자마자 펼칠 설정 시트. 채팅에서 데려올 때 쓴다.
   ///
@@ -43,7 +42,6 @@ class SettingsScreen extends StatefulWidget {
     required this.coachId,
     this.autoOpenPremiumLearnSettings = false,
     this.autoOpenSection,
-    this.onChatBgStyleChanged,
   });
 
   @override
@@ -87,7 +85,6 @@ class _SettingsScreenState extends State<SettingsScreen>
   static final Uri _privacyUrl = Uri.parse('https://joflowapp.com/privacy');
   static final Uri _refundUrl = Uri.parse('https://joflowapp.com/refund');
 
-  String _chatBgStyle = 'emotional'; // 'simple' or 'emotional'
   bool _morningCallEnabled = true;
   TimeOfDay _morningCallTime = const TimeOfDay(hour: 7, minute: 0);
   String _morningCallCoachId = 'cat';
@@ -257,7 +254,6 @@ class _SettingsScreenState extends State<SettingsScreen>
       _gapCoachingTimes = GapCoachingService.parseTimes(
         prefs.getString(GapCoachingService.timesKey),
       );
-      _chatBgStyle = prefs.getString('nyang_chat_bg_style') ?? 'emotional';
       _homeWidgetStatus = _buildHomeWidgetStatus(
         nyang: prefs.getBool('widget_nyang_enabled') ?? false,
         catCharacter: prefs.getBool('widget_cat_character_enabled') ?? false,
@@ -2609,30 +2605,14 @@ class _SettingsScreenState extends State<SettingsScreen>
                       ),
                       const SizedBox(height: 10),
 
-                      _buildSettingsSectionTile(
-                        id: 'display',
-                        icon: Icons.tune_rounded,
-                        label: '화면 및 사용',
-                        status: _displaySectionStatus,
-                        children: [
-                          _buildSettingsDetailRow(
-                            icon: Icons.widgets_rounded,
-                            label: '홈 화면 위젯',
-                            status: _homeWidgetStatus ?? '미사용',
-                            onTap: _paidSettingsTap(
-                              _showHomeWidgetSettingsModal,
-                            ),
-                          ),
-                          if (!_isMaster)
-                            _buildSettingsDetailRow(
-                              icon: Icons.wallpaper_rounded,
-                              label: '채팅 배경',
-                              status: _chatBgStyle == 'emotional'
-                                  ? '감성 버전'
-                                  : '심플 버전',
-                              onTap: _paidSettingsTap(_showBgStylePicker),
-                            ),
-                        ],
+                      // 배경 고르기를 없애면서 이 자리에 남은 것이 위젯
+                      // 하나다. 펴야 한 줄 나오는 서랍은 헛수고라 바깥으로
+                      // 올린다.
+                      _buildSettingsNavigationTile(
+                        icon: Icons.widgets_rounded,
+                        label: '홈 화면 위젯',
+                        status: _homeWidgetStatus ?? '미사용',
+                        onTap: _paidSettingsTap(_showHomeWidgetSettingsModal),
                       ),
                       const SizedBox(height: 10),
 
@@ -2728,13 +2708,6 @@ class _SettingsScreenState extends State<SettingsScreen>
       return _morningCallEnabled ? '모닝콜 켜짐' : '일정 알림 켜짐';
     }
     return '2개 켜짐';
-  }
-
-  String get _displaySectionStatus {
-    final active = <String>[];
-    if (_homeWidgetStatus != null) active.add('위젯');
-    active.add(_chatBgStyle == 'emotional' ? '감성 배경' : '심플 배경');
-    return active.first;
   }
 
   Widget _buildSettingsNavigationTile({
@@ -3086,101 +3059,6 @@ class _SettingsScreenState extends State<SettingsScreen>
               ),
             ),
           ],
-        );
-      },
-    );
-  }
-
-  Future<void> _showBgStylePicker() async {
-    final styles = ['simple', 'emotional'];
-    final labels = ['심플 버전', '감성 버전'];
-    int selectedIndex = styles.indexOf(_chatBgStyle);
-    if (selectedIndex == -1) selectedIndex = 0;
-
-    final controller = FixedExtentScrollController(initialItem: selectedIndex);
-
-    await showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (context) {
-        return SafeArea(
-          top: false,
-          child: SizedBox(
-            height: 280,
-            child: Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 16, 12, 8),
-                  child: Row(
-                    children: [
-                      Text(
-                        '채팅 배경 선택',
-                        style: GoogleFonts.notoSansKr(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w900,
-                          color: const Color(0xFF3D3A4E),
-                        ),
-                      ),
-                      const Spacer(),
-                      TextButton(
-                        onPressed: () async {
-                          final selectedStyle = styles[selectedIndex];
-                          setState(() => _chatBgStyle = selectedStyle);
-                          final prefs = await SharedPreferences.getInstance();
-                          await prefs.setString(
-                            'nyang_chat_bg_style',
-                            selectedStyle,
-                          );
-                          widget.onChatBgStyleChanged?.call(selectedStyle);
-                          if (context.mounted) Navigator.pop(context);
-                        },
-                        child: Text(
-                          '완료',
-                          style: GoogleFonts.notoSansKr(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w900,
-                            color: const Color(0xFF8B7CFF),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Expanded(
-                  child: CupertinoPicker(
-                    scrollController: controller,
-                    itemExtent: 44,
-                    magnification: 1.08,
-                    useMagnifier: true,
-                    selectionOverlay: Container(
-                      margin: const EdgeInsets.symmetric(horizontal: 36),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF3F0FF).withValues(alpha: 0.72),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    onSelectedItemChanged: (index) => selectedIndex = index,
-                    children: List.generate(labels.length, (index) {
-                      return Center(
-                        child: Text(
-                          labels[index],
-                          style: GoogleFonts.notoSansKr(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w800,
-                            color: const Color(0xFF3D3A4E),
-                          ),
-                        ),
-                      );
-                    }),
-                  ),
-                ),
-                const SizedBox(height: 12),
-              ],
-            ),
-          ),
         );
       },
     );

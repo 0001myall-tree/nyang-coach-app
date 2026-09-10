@@ -1208,7 +1208,6 @@ class ChatScreen extends StatefulWidget {
   final Future<void> Function()? onOpenCatWidgetPrompt;
   final String? handoffFromCoachId;
   final ChatScreenController? controller;
-  final String chatBgStyle;
   const ChatScreen({
     super.key,
     required this.coachId,
@@ -1224,7 +1223,6 @@ class ChatScreen extends StatefulWidget {
     this.onOpenCatWidgetPrompt,
     this.handoffFromCoachId,
     this.controller,
-    this.chatBgStyle = 'emotional',
   });
 
   @override
@@ -17269,9 +17267,7 @@ ${Prompts.outputRulesTail}${Prompts.screenMap}$plannerActionSection$coachOfferTa
                 time,
                 style: GoogleFonts.notoSansKr(
                   fontSize: AppDesignTokens.textMeta,
-                  color: widget.chatBgStyle == 'simple'
-                      ? AppDesignTokens.brand
-                      : AppDesignTokens.textDisabled,
+                  color: AppDesignTokens.textDisabled,
                 ),
               ),
             ),
@@ -17314,9 +17310,7 @@ ${Prompts.outputRulesTail}${Prompts.screenMap}$plannerActionSection$coachOfferTa
                 time,
                 style: GoogleFonts.notoSansKr(
                   fontSize: AppDesignTokens.textMeta,
-                  color: widget.chatBgStyle == 'simple'
-                      ? AppDesignTokens.brand
-                      : AppDesignTokens.textDisabled,
+                  color: AppDesignTokens.textDisabled,
                 ),
               ),
             ),
@@ -19763,10 +19757,8 @@ ${Prompts.outputRulesTail}${Prompts.screenMap}$plannerActionSection$coachOfferTa
     final isFriends = !_coach.isMaster;
     final isImmersiveInput = isFriends;
     final isNyang = widget.coachId == 'cat';
-    // 심플 배경(흰 바탕)에서는 프렌즈도 흰 판을 깔아야 칩이 하단 UI에 박혀 보인다.
-    // 감성 배경·휴식 배경은 배경 그림을 살려야 해서 투명을 유지한다.
-    final hasSolidPanel =
-        !isImmersiveInput || (isFriends && widget.chatBgStyle == 'simple');
+    // 프렌즈는 배경 그림을 살려야 해서 투명을 유지한다.
+    final hasSolidPanel = !isImmersiveInput;
     const masterLavenderBorder = AppDesignTokens.brandCardBorder;
     const masterLavenderIcon = AppDesignTokens.brandMuted;
     const masterLavenderShadow = AppDesignTokens.brand;
@@ -19833,30 +19825,22 @@ ${Prompts.outputRulesTail}${Prompts.screenMap}$plannerActionSection$coachOfferTa
                               ? Colors.redAccent.withOpacity(0.15)
                               // 입력창과 한 줄로 붙어 있어서 따로 놀면 눈에 띈다.
                               // 옆이 흰색에 가까워졌으니 같이 올린다.
-                              : (widget.chatBgStyle == 'simple'
-                                    ? const Color(0xFFF5F3FF)
-                                    : (isNyang
-                                          ? Colors.white.withValues(alpha: 0.88)
-                                          : (isImmersiveInput
-                                                ? Colors.white.withOpacity(0.2)
-                                                : Colors.white))),
+                              : (isNyang
+                                    ? Colors.white.withValues(alpha: 0.88)
+                                    : (isImmersiveInput
+                                          ? Colors.white.withOpacity(0.2)
+                                          : Colors.white)),
                           borderRadius: BorderRadius.circular(
                             AppDesignTokens.radiusPill,
                           ),
                           border: Border.all(
                             color: _isListening
                                 ? Colors.redAccent
-                                : (widget.chatBgStyle == 'simple'
-                                      ? _coach.accentColor.withOpacity(0.4)
-                                      : (isNyang
-                                            ? _coach.accentColor.withOpacity(
-                                                0.6,
-                                              )
-                                            : (isImmersiveInput
-                                                  ? Colors.white.withOpacity(
-                                                      0.3,
-                                                    )
-                                                  : masterLavenderBorder))),
+                                : (isNyang
+                                      ? _coach.accentColor.withOpacity(0.6)
+                                      : (isImmersiveInput
+                                            ? Colors.white.withOpacity(0.3)
+                                            : masterLavenderBorder)),
                             width: _isListening ? 2.0 : 1.2,
                           ),
                           boxShadow: isImmersiveInput
@@ -19877,13 +19861,11 @@ ${Prompts.outputRulesTail}${Prompts.screenMap}$plannerActionSection$coachOfferTa
                               : Icons.mic_none_rounded,
                           color: _isListening
                               ? Colors.redAccent
-                              : (widget.chatBgStyle == 'simple'
+                              : (isNyang
                                     ? _coach.accentColor
-                                    : (isNyang
-                                          ? _coach.accentColor
-                                          : (isFriends
-                                                ? Colors.white
-                                                : masterLavenderIcon))),
+                                    : (isFriends
+                                          ? Colors.white
+                                          : masterLavenderIcon)),
                           size: 20,
                         ),
                       ),
@@ -19900,24 +19882,20 @@ ${Prompts.outputRulesTail}${Prompts.screenMap}$plannerActionSection$coachOfferTa
                           // 거의 불투명한 흰색이라 그쪽에 맞춘다.
                           //
                           // 글자가 흰색인 다른 프렌즈 코치는 올리면 안 된다.
-                          color: widget.chatBgStyle == 'simple'
-                              ? Colors.white
-                              : (isNyang
-                                    ? Colors.white.withValues(alpha: 0.88)
-                                    : (isFriends
-                                          ? Colors.white.withValues(alpha: 0.25)
-                                          : Colors.white)),
+                          color: isNyang
+                              ? Colors.white.withValues(alpha: 0.88)
+                              : (isFriends
+                                    ? Colors.white.withValues(alpha: 0.25)
+                                    : Colors.white),
                           borderRadius: BorderRadius.circular(
                             AppDesignTokens.radiusPill,
                           ),
                           border: Border.all(
-                            color: widget.chatBgStyle == 'simple'
-                                ? _coach.accentColor.withOpacity(0.4)
-                                : (isNyang
-                                      ? _coach.accentColor.withOpacity(0.5)
-                                      : (isFriends
-                                            ? Colors.white.withOpacity(0.3)
-                                            : masterLavenderBorder)),
+                            color: isNyang
+                                ? _coach.accentColor.withOpacity(0.5)
+                                : (isFriends
+                                      ? Colors.white.withOpacity(0.3)
+                                      : masterLavenderBorder),
                             width: 1.2,
                           ),
                         ),
@@ -19929,26 +19907,23 @@ ${Prompts.outputRulesTail}${Prompts.screenMap}$plannerActionSection$coachOfferTa
                           onSubmitted: _send,
                           style: GoogleFonts.notoSansKr(
                             fontSize: AppDesignTokens.textBody,
-                            color: widget.chatBgStyle == 'simple'
-                                ? const Color(0xFF3D3A4E)
-                                : (isNyang
-                                      ? AppDesignTokens.textPrimary
-                                      : (isFriends
-                                            ? Colors.white
-                                            : AppDesignTokens.textPrimary)),
+                            color: isNyang
+                                ? AppDesignTokens.textPrimary
+                                : (isFriends
+                                      ? Colors.white
+                                      : AppDesignTokens.textPrimary),
                           ),
                           decoration: InputDecoration(
                             hintText: '메시지를 입력하세요...',
                             hintStyle: GoogleFonts.notoSansKr(
                               fontSize: AppDesignTokens.textBody,
-                              color: widget.chatBgStyle == 'simple'
-                                  ? const Color(0xFF9A96A8)
-                                  : (isNyang
-                                        ? AppDesignTokens.textPrimary
-                                              .withValues(alpha: 0.62)
-                                        : (isFriends
-                                              ? Colors.white.withOpacity(0.6)
-                                              : AppDesignTokens.textDisabled)),
+                              color: isNyang
+                                  ? AppDesignTokens.textPrimary.withValues(
+                                      alpha: 0.62,
+                                    )
+                                  : (isFriends
+                                        ? Colors.white.withOpacity(0.6)
+                                        : AppDesignTokens.textDisabled),
                             ),
                             border: InputBorder.none,
                             contentPadding: const EdgeInsets.symmetric(

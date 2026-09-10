@@ -162,7 +162,6 @@ class MainTabScreen extends StatefulWidget {
   final int initialPlannerTabIndex;
   final String? initialPlannerDateKey;
   final String? initialPlannerItemId;
-  final String? initialChatBgStyle;
   const MainTabScreen({
     super.key,
     required this.coachId,
@@ -173,7 +172,6 @@ class MainTabScreen extends StatefulWidget {
     this.initialPlannerTabIndex = 0,
     this.initialPlannerDateKey,
     this.initialPlannerItemId,
-    this.initialChatBgStyle,
   });
 
   @override
@@ -306,7 +304,6 @@ class _MainTabScreenState extends State<MainTabScreen>
     if (!userData.canAccessCoach(coachId)) return;
 
     await UserDataService.setSelectedCoach(coachId);
-    final chatBgStyle = await _savedChatBgStyle();
     if (!mounted) return;
     final isFromSecretary =
         widget.coachId == 'nyang_halbae' || widget.coachId == 'sec_female';
@@ -318,7 +315,6 @@ class _MainTabScreenState extends State<MainTabScreen>
         builder: (_) => MainTabScreen(
           coachId: coachId,
           handoffFromCoachId: handoffFromCoachId,
-          initialChatBgStyle: chatBgStyle,
         ),
       ),
     );
@@ -409,19 +405,12 @@ class _MainTabScreenState extends State<MainTabScreen>
               if (!isOwned) return;
               Navigator.pop(context);
               if (!isSelected) {
-                () async {
-                  final chatBgStyle = await _savedChatBgStyle();
-                  if (!mounted) return;
-                  Navigator.pushReplacement(
-                    this.context,
-                    MaterialPageRoute(
-                      builder: (_) => MainTabScreen(
-                        coachId: c.id,
-                        initialChatBgStyle: chatBgStyle,
-                      ),
-                    ),
-                  );
-                }();
+                Navigator.pushReplacement(
+                  this.context,
+                  MaterialPageRoute(
+                    builder: (_) => MainTabScreen(coachId: c.id),
+                  ),
+                );
               }
             },
           );
@@ -498,27 +487,9 @@ class _MainTabScreenState extends State<MainTabScreen>
   final AudioPlayer _audioPlayer = AudioPlayer();
   String? _lastMorningCallDate;
   final Set<String> _firedCoreReminders = {};
-  late String _chatBgStyle;
-  bool _chatBgStyleLoaded = false;
   bool _showRecordsNewBadge = false;
   bool _hasMasterPlanForRecordsBadge = false;
   StreamSubscription<User?>? _authSubscription;
-
-  Future<String> _savedChatBgStyle() async {
-    final prefs = await SharedPreferences.getInstance();
-    final savedStyle = prefs.getString('nyang_chat_bg_style');
-    return savedStyle == 'simple' ? 'simple' : 'emotional';
-  }
-
-  Future<void> _loadBgStyle() async {
-    final savedStyle = await _savedChatBgStyle();
-    if (mounted) {
-      setState(() {
-        _chatBgStyle = savedStyle;
-        _chatBgStyleLoaded = true;
-      });
-    }
-  }
 
   String _dateKey(DateTime date) {
     return '${date.year.toString().padLeft(4, '0')}-'
@@ -613,9 +584,6 @@ class _MainTabScreenState extends State<MainTabScreen>
   void initState() {
     super.initState();
     _loadPlannerHelpSeen();
-    _chatBgStyle = widget.initialChatBgStyle ?? 'emotional';
-    _chatBgStyleLoaded = widget.initialChatBgStyle != null;
-    _loadBgStyle();
     _openDrawerIndex = widget.initialDrawerIndex;
     _widgetIntentDrawerMode = widget.initialDrawerIndex != 0;
     WidgetsBinding.instance.addObserver(this);
@@ -1702,20 +1670,13 @@ class _MainTabScreenState extends State<MainTabScreen>
       onSwitchCoach: _switchCoachFromChat,
       onOpenCatWidgetPrompt: _openCatWidgetPromptFromChat,
       handoffFromCoachId: widget.handoffFromCoachId,
-      chatBgStyle: _chatBgStyle,
     ),
     const TasksPlaceholderScreen(),
     RecordsScreen(coachId: widget.coachId),
     // 이 목록은 매 build마다 네 화면을 다 만들지만 화면에 나가는 건 첫 번째뿐이다.
     // 설정 화면은 서랍이 그린다. 그래서 여기서는 부탁받은 시트를 건드리지
     // 않는다 — 여기서 가져가버리면 정작 서랍에 뜨는 설정 화면이 빈손이 된다.
-    SettingsScreen(
-      coachId: widget.coachId,
-      onChatBgStyleChanged: (style) {
-        if (style == _chatBgStyle) return;
-        setState(() => _chatBgStyle = style);
-      },
-    ),
+    SettingsScreen(coachId: widget.coachId),
   ];
 
   String? _takePendingSettingsSection() {
@@ -1729,10 +1690,6 @@ class _MainTabScreenState extends State<MainTabScreen>
   Color get _tabActiveColor => _activeColor;
 
   Color get _tabInactiveColor {
-    if (_chatBgStyle == 'simple') {
-      // 심플 버전 선택되지 않은 탭: 짙은 보라회색
-      return const Color(0xFF3A3652);
-    }
     if (_isMaster) {
       return const Color(0xFF888899);
     }
@@ -1766,7 +1723,6 @@ class _MainTabScreenState extends State<MainTabScreen>
       _isMaster ? const Color(0xFFD4A017) : const Color(0xFF8B7CFF);
 
   void _onTabTapped(int index) {
-    _loadBgStyle();
     if (index == 0) {
       if (_openDrawerIndex != 0) {
         HapticFeedback.lightImpact();
@@ -1813,16 +1769,11 @@ class _MainTabScreenState extends State<MainTabScreen>
   }
 
   // 배경 이미지 경로
-  String get _bgImagePath {
-    if (_chatBgStyle == 'simple') {
-      return 'assets/images/bg_${widget.coachId}_simple.png';
-    }
-    return 'assets/images/bg_${widget.coachId}.png';
-  }
+  String get _bgImagePath => 'assets/images/bg_${widget.coachId}.png';
 
   @override
   Widget build(BuildContext context) {
-    if (!_coachAccessChecked || !_chatBgStyleLoaded) {
+    if (!_coachAccessChecked) {
       return const Scaffold(
         backgroundColor: Colors.white,
         body: Center(child: CircularProgressIndicator()),
@@ -1839,85 +1790,17 @@ class _MainTabScreenState extends State<MainTabScreen>
 
   // ── 프렌즈: 전체 배경 이미지 (헤더/탭바 투명) ────────────
   Widget _buildFriendsLayout() {
-    final isSimple = _chatBgStyle == 'simple';
-
-    // 심플 모드일 때는 밝은 배경이므로 검은색 상태바 아이콘 적용
-    final systemUiStyle = isSimple
-        ? SystemUiOverlayStyle.dark.copyWith(
-            statusBarColor: Colors.transparent,
-            systemNavigationBarColor: const Color(0xFFFFFCFF),
-            systemNavigationBarIconBrightness: Brightness.dark,
-          )
-        : SystemUiOverlayStyle.light.copyWith(
-            statusBarColor: Colors.transparent,
-            systemNavigationBarColor: Colors.transparent,
-            systemNavigationBarIconBrightness: Brightness.light,
-          );
+    final systemUiStyle = SystemUiOverlayStyle.light.copyWith(
+      statusBarColor: Colors.transparent,
+      systemNavigationBarColor: Colors.transparent,
+      systemNavigationBarIconBrightness: Brightness.light,
+    );
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: systemUiStyle,
       child: Stack(
         children: [
-          // 배경 전체 (심플 모드 시 단색+물결/원 무늬)
-          if (isSimple)
-            Positioned.fill(
-              child: Container(
-                decoration: const BoxDecoration(
-                  color: AppDesignTokens.brandSurface,
-                ),
-                child: Stack(
-                  children: [
-                    // 은은한 원 모양 무늬 1
-                    Positioned(
-                      top: -80,
-                      right: -80,
-                      child: Container(
-                        width: 320,
-                        height: 320,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: AppDesignTokens.brand.withValues(alpha: 0.03),
-                        ),
-                      ),
-                    ),
-                    // 은은한 원 모양 무늬 2
-                    Positioned(
-                      top: 150,
-                      right: -30,
-                      child: Container(
-                        width: 240,
-                        height: 240,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: AppDesignTokens.brand.withValues(
-                              alpha: 0.04,
-                            ),
-                            width: 2,
-                          ),
-                        ),
-                      ),
-                    ),
-                    // 은은한 원 모양 무늬 3
-                    Positioned(
-                      bottom: 100,
-                      left: -100,
-                      child: Container(
-                        width: 400,
-                        height: 400,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: AppDesignTokens.brandAccent.withValues(
-                            alpha: 0.02,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          // 배경 이미지 전체에 깔기 (심플 모드는 캐릭터만 있는 투명 배경)
+          // 배경 이미지 전체에 깔기
           Positioned.fill(
             child: Image.asset(
               _bgImagePath,
@@ -1955,16 +1838,9 @@ class _MainTabScreenState extends State<MainTabScreen>
               activeIcons: _activeIcons,
               showNewBadges: _tabNewBadges,
               activeColor: _activeColor,
-              bgColor: isSimple
-                  ? const Color(0xFFFFFCFF)
-                  : Colors.black.withOpacity(0.35),
+              bgColor: Colors.black.withOpacity(0.35),
               inactiveColor: _tabInactiveColor,
-              isImmersive: !isSimple,
-              border: isSimple
-                  ? const Border(
-                      top: BorderSide(color: Color(0xFFE8E3F8), width: 1.0),
-                    )
-                  : null,
+              isImmersive: true,
             ),
           ),
           // 서랍 오버레이 + 패널
@@ -2151,11 +2027,9 @@ class _MainTabScreenState extends State<MainTabScreen>
     //
     // 배경 그림을 바꾸면 이 짝도 다시 봐야 한다.
     final isBrightRoom = widget.coachId == 'cat';
-    final nameColor = (_chatBgStyle == 'simple'
-        ? const Color(0xFF3A3652)
-        : (isImmersive && !isBrightRoom
-              ? Colors.white
-              : const Color(0xFF1A1A2E)));
+    final nameColor = isImmersive && !isBrightRoom
+        ? Colors.white
+        : const Color(0xFF1A1A2E);
 
     return Row(
       children: [
@@ -2708,10 +2582,6 @@ class _MainTabScreenState extends State<MainTabScreen>
       drawerContent = SettingsScreen(
         coachId: widget.coachId,
         autoOpenSection: _takePendingSettingsSection(),
-        onChatBgStyleChanged: (style) {
-          if (style == _chatBgStyle) return;
-          setState(() => _chatBgStyle = style);
-        },
       );
     } else {
       drawerContent = const SizedBox.shrink();
