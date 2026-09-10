@@ -18,7 +18,6 @@ import 'package:nyang_coach/screens/coach_selection_screen.dart';
 import 'package:nyang_coach/services/day_capacity_service.dart';
 import 'package:nyang_coach/services/execution_blocker_service.dart';
 import 'package:nyang_coach/services/life_context_service.dart';
-import 'package:nyang_coach/services/plan_feedback_service.dart';
 import 'package:nyang_coach/services/overplan_nudge_service.dart';
 import 'package:nyang_coach/services/analytics_service.dart';
 import 'package:nyang_coach/services/master_unlock_notice.dart';
@@ -4638,8 +4637,7 @@ ${lines.join('\n')}
   }
 
   // ── 계획 구체화 이야기 (주 1회) ──────────────────────
-  // 예전에는 계획을 저장할 때마다 코치가 참견했다(PlanFeedbackService.onTaskSaved,
-  // 삭제됨). 잘 해내는 사람에게도 매번 말을 걸게 돼서, 지금은 계획 하나하나를
+  // 예전에는 계획을 저장할 때마다 코치가 참견했다(삭제됨). 잘 해내는 사람에게도 매번 말을 걸게 돼서, 지금은 계획 하나하나를
   // 짚지 않고 인사 자리에서 주 1회, 일반적인 이야기만 건넨다. 냥냥이·마스터·
   // 프렌즈 코치가 쿨다운을 공유한다 — 방을 옮겨 다녀도 같은 주에 두 번 듣지
   // 않는다.
@@ -4762,11 +4760,16 @@ ${lines.join('\n')}
   ///
   /// 마스터는 이 슬롯의 두 번에 한 번(짝수 번째)을 구체화 멘트 대신 실행
   /// 병목 진단으로 대신한다([_buildExecutionBottleneckLine]). 병목을 셀
-  /// 데이터가 없으면(기록이 모자람) 조용히 원래 순서로 돌아간다 — 오늘
-  /// 적어둔 계획 중 봐도 뭘 해야 할지 모를 만큼 막막해 보이는 게 하나라도
-  /// 있으면 그걸 콕 집고([PlanFeedbackService.pinpointConfusingTask]),
-  /// 확실한 게 없으면(코치가 SKIP을 내면) 냥냥이와 똑같이 로테이션 문구로
-  /// 대신한다.
+  /// 데이터가 없으면(기록이 모자람) 조용히 로테이션 문구로 돌아간다.
+  ///
+  /// 오늘 계획 중 막막해 보이는 것을 콕 집어주는 갈래가 하나 더 있었다.
+  /// 뺐다. 그 문장은 모델을 따로 한 번 더 불러 만들었는데, 넘기는 것이 오늘
+  /// 할 일 목록뿐이라 방금 나눈 대화를 몰랐다. 그래서 코치가 47초 전에
+  /// 직접 한 말을 심리학 설명까지 붙여 다시 했다.
+  ///
+  /// 그 일은 이제 프롬프트가 한다 — 마스터에게 계획을 정할 때 끝을 선명하게
+  /// 만들도록 도우라고 적어뒀고, 그쪽은 대화를 보면서 말하므로 자리가
+  /// 어긋나지 않는다. 호출도 하나 줄었다.
   ///
   /// 로테이션 문구 네 개(시간/장소 → 오늘 범위 → 실행 의도 조건문 → 유혹
   /// 묶기)는 돌아가며 나간다 — 마지막으로 이 kind로 무엇을 말했는지를 채팅
@@ -4795,7 +4798,6 @@ ${lines.join('\n')}
       return false;
     }
 
-    String? pinpointTask;
     String? line;
     var isBottleneck = false;
     if (_coach.isMaster) {
@@ -4811,16 +4813,6 @@ ${lines.join('\n')}
         isBottleneck = line != null;
       }
 
-      if (line == null) {
-        final pinpoint = await PlanFeedbackService.pinpointConfusingTask(
-          coachId: widget.coachId,
-          todayTasks: _decodeMapList(prefs.getString('nyang_tasks')),
-        );
-        if (pinpoint != null) {
-          pinpointTask = pinpoint.task;
-          line = pinpoint.line;
-        }
-      }
     }
     // 방을 옮겨 다녀도 같은 이야기를 두 번 듣지 않게, 지난번이 어느 쪽이었는지는
     // 말투를 가리지 않고 본다(냥냥이판과 마스터판은 같은 이야기다).
@@ -4867,8 +4859,6 @@ ${lines.join('\n')}
       AnalyticsService.logFeatureUsage(
         isBottleneck
             ? 'weekly_concretize_bottleneck'
-            : pinpointTask != null
-            ? 'weekly_concretize_pinpoint'
             : (habitStackLine.isNotEmpty && line == habitStackLine)
             ? 'weekly_concretize_habit_stack'
             : 'weekly_concretize_rotation',
@@ -4881,7 +4871,7 @@ ${lines.join('\n')}
   /// 호출이 실패하면 null — 그러면 부르는 쪽이 원래 순서(콕집기/로테이션)로
   /// 대신한다.
   ///
-  /// [PlanFeedbackService._askPinpoint]와 같은 패턴이다: 코치의 systemPrompt를
+  /// 코치의 systemPrompt를
   /// 그대로 얹어 코치 말투를 지키고, 앱이 센 값(계획/시작/완료 세 축의 숫자와
   /// 제일 많이 새는 곳)만 관찰로 건네 코치가 지어내지 않게 한다.
   Future<String?> _buildExecutionBottleneckLine(SharedPreferences prefs) async {
@@ -5532,23 +5522,6 @@ $block
     // 말과 준비를 돕는 말은 일을 시키지 않으니 매일 나가도 된다. 하나로 묶어
     // 두었더니 어제 이월을 물었다는 이유로 오늘 해낸 것을 알아주지 못했다.
     final canNudge = await _canAskCoreToday(now);
-
-    // 권한 대로 해낸 것이 있으면 그 이야기부터. 며칠 전 이야기를 이어받는
-    // 말이고, 무엇보다 좋은 소식이다.
-    //
-    // 시간을 가리지 않는다. 오전에만 두었더니 점심에 앱을 여는 사람은 이
-    // 이야기도 아래 이월 이야기도 영영 못 들었다. 이건 몇 시냐가 아니라
-    // 오늘 아직 안 했느냐의 문제다.
-    final worked = await PlanFeedbackService.adviceThatWorked();
-    if (worked != null) {
-      if (!mounted) return false;
-      _injectAiMessage(
-        _greetingBuilder.buildAdviceWorked(worked.task, worked.advice),
-        kind: _masterAdviceWorkedKind,
-      );
-      unawaited(AnalyticsService.logFeatureUsage('master_advice_worked'));
-      return true;
-    }
 
     // 그다음은 이월된 일. 며칠째 걸려 있는 것이 오늘 처음 적은 것보다 급하다.
     final carried = canNudge ? _carriedOverTask(prefs) : null;
@@ -6705,36 +6678,6 @@ Rules:
     return names;
   }
 
-  /// 조금 전 코치가 먼저 꺼낸 계획 이야기를 프롬프트에 싣는다.
-  ///
-  /// 세 시간이 지났으면 싣지 않는다. 그때쯤이면 사용자도 코치도 다른 이야기를
-  /// 하고 있어서, 굳이 끌어오면 지난 이야기로 되돌리는 말이 된다.
-  void _writeRecentPlanNudge(StringBuffer sb, SharedPreferences prefs) {
-    final raw = prefs.getString(PlanFeedbackService.lastNudgeKey);
-    if (raw == null || raw.isEmpty) return;
-    Map<String, dynamic> nudge;
-    try {
-      nudge = Map<String, dynamic>.from(jsonDecode(raw) as Map);
-    } catch (_) {
-      return;
-    }
-    final at = DateTime.tryParse(nudge['at']?.toString() ?? '');
-    if (at == null) return;
-    if (DateTime.now().difference(at) > PlanFeedbackService.lastNudgeLife) {
-      return;
-    }
-    final task = nudge['task']?.toString() ?? '';
-    final topic = nudge['topic']?.toString() ?? '';
-    if (task.isEmpty || topic.isEmpty) return;
-
-    sb.writeln('\n[조금 전 당신이 먼저 꺼낸 이야기]');
-    sb.writeln('사용자가 \'$task\'를 적었을 때, 당신이 $topic를 먼저 건넸습니다.');
-    sb.writeln(
-      '*사용자의 이번 말이 그 이야기에 대한 답이나 항변일 수 있습니다. 그렇다면 사정을 먼저 듣고, 사용자가 이미 그렇게 하고 있거나 그럴 만한 이유가 있으면 물러나세요.',
-    );
-    sb.writeln('*다른 이야기로 넘어갔다면 해당 이야기의 맥락에 맞춰 새로 반응해주세요.');
-  }
-
   /// 하는 날엔 다 하고, 안 하는 날엔 아예 손도 안 대는 사람인지.
   ///
   /// 완료율만 보면 절반쯤 하는 사람으로 읽히는데, 날짜별로 보면 100%인 날과
@@ -7066,7 +7009,6 @@ Rules:
   /// 안 한 일을 짚는 말들과 kind를 나눈다. 같이 세면 어제 이월을 물었다는
   /// 이유로 오늘 해낸 것을 못 알아주게 된다. 이건 시키는 말이 아니라서
   /// 매일 나가도 된다.
-  static const _masterAdviceWorkedKind = 'auto:master_advice_worked';
 
   /// 핵심 일정을 시작했는지 물었을 때 누르는 버튼. 세 갈래로 나눈 이유는
   /// 못 한 이유가 부담인지 상황인지에 따라 이어갈 말이 완전히 다르기 때문이다.
@@ -7987,6 +7929,12 @@ Rules:
     return true;
   }
 
+  /// 마지막 말이 이 안쪽이면 아직 대화 중으로 본다.
+  ///
+  /// 26초 만에 끼어든 적이 있고, 30분 뒤 저녁 발화는 끼어든 것이 아니라 새
+  /// 자리였다. 그 사이 어딘가면 되고, 짧게 잡으면 막으려던 것을 못 막는다.
+  static const Duration _stillTalkingWindow = Duration(minutes: 10);
+
   Future<void> _loadHistoryAndGreet() async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString('nyang_chat_history_${widget.coachId}');
@@ -8159,6 +8107,23 @@ Rules:
     // 짚지 않고, 밤 이야기도 하루 한 번이고, 권유는 한 번 하면 그걸로 끝이다.
     // 껍질은 그 위에 덧씌운 한 겹이었을 뿐인데 훨씬 거칠어서, 막아야 할 것과
     // 함께 필요한 것까지 막았다.
+
+    // 대화가 진행 중이면 먼저 말을 걸지 않는다.
+    //
+    // 인사 검사는 채팅 화면이 만들어질 때 돈다. 그런데 이 화면은 탭을 오가거나
+    // 카드를 눌러 다른 화면을 다녀오면 다시 만들어져서, 방금까지 이야기하던
+    // 중에도 인사가 끼어들었다. 등록 카드를 누르고 26초 만에 주 1회 계획
+    // 이야기가 대화 한복판에 떨어진 적이 있다.
+    //
+    // 각 발화가 하루 한 번씩만 나가도록 안에서 막고 있어서 반복되지는 않는다.
+    // 다만 자리가 어긋나는 것은 다른 문제다 — 하던 이야기가 끊긴다.
+    //
+    // 미루기만 한다. 다음에 들어올 때 그 발화는 그대로 살아 있다.
+    final lastMessageAt = _messages.isEmpty ? null : _messages.last.time;
+    if (lastMessageAt != null &&
+        now.difference(lastMessageAt) < _stillTalkingWindow) {
+      return;
+    }
 
     // 마스터 코치(비서/냥할배): 슬롯별 자동 발화
     if (_coach.isMaster) {
@@ -13581,7 +13546,6 @@ Rules:
     // 그 말은 채팅에도 한 줄로 남지만, 남는 것은 문장뿐이다. 사용자가 "그거
     // 오늘 다 해야 해"라고 답할 때 코치가 무엇에 대한 답인지 알아야 대화가
     // 이어진다. 무슨 일을 두고 꺼낸 말이었는지 여기서 알려준다.
-    _writeRecentPlanNudge(sb, prefs);
 
     // 7. 이번 주/달 목표 (pro + master)
     if (_coach.isMaster && (needsGoalContext || needsLightGoalContext)) {

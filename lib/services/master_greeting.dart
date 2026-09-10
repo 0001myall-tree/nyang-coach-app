@@ -371,14 +371,6 @@ class GreetingVoice {
   /// 목록에 없는 답이라고 했을 때. 그 자리에서 적어달라고 청한다.
   final List<String> conditionFreeAsk;
 
-  /// 권한 대로 해내고 온 날 아침에 건네는 말. `{{task}}`가 그 일,
-  /// `{{advice}}`는 그때 무엇을 권했는지.
-  ///
-  /// 오늘 무엇을 하라는 말은 붙이지 않는다. 챙겨주는 자리지 시키는 자리가
-  /// 아니다. 그리고 내 말 덕이라고 하지 않는다 — 다른 코치가 건넨 말일 수도
-  /// 있고, 무엇보다 해낸 것은 사용자다.
-  final List<String> adviceWorked;
-
   /// 며칠째 못 끝내고 넘어온 일을 묻는 말. `{{task}}`가 그 일, `{{days}}`는
   /// 며칠째인지.
   ///
@@ -545,7 +537,6 @@ class GreetingVoice {
     required this.blockerReply,
     required this.conditionAskImproved,
     required this.conditionFreeAsk,
-    required this.adviceWorked,
     required this.carriedAsk,
     required this.repeatingAsk,
     required this.busyAsk,
@@ -932,12 +923,6 @@ class MasterGreetingCopy {
       '{어떤 점이 달랐는지 한 줄로 적어주시겠어요|무엇이 달랐는지 편하게 적어주세요}?\n'
           '{길게 안 쓰셔도 됩니다|짧아도 괜찮습니다}.',
       '{그럼 직접 들려주시죠|그 이야기가 궁금하네요}. 되는 날에는 무엇이 달랐나요?',
-    ],
-    adviceWorked: [
-      '{{advice}} 했던 {{task}}, 어제 {끝내셨더군요|해내셨더군요}.\n'
-          '{코칭이 먹힌 걸까요|제 말이 통한 걸까요}. {기분이 좋네요|괜히 뿌듯합니다}. 오늘도 그 흐름으로 가시죠.',
-      '{{task}} 어제 {끝난 걸 봤습니다|완료된 걸 봤습니다}. {{advice}} 했던 그것 말입니다.\n'
-          '{코칭이 먹힌 걸까요|덕분인지는 모르겠지만}, {기분이 좋습니다|보기 좋네요}.',
     ],
     carriedAsk: [
       '{{task}}, {{days}}일째 이월된 항목입니다.\n'
@@ -1420,12 +1405,6 @@ class MasterGreetingCopy {
       '{뭐가 달랐는지 한 줄로 적어줄래냥|뭐가 달랐는지 편하게 적어보라냥}?\n'
           '{길게 안 써도 된다냥|짧아도 괜찮다냥}.',
       '{그럼 직접 들려달라냥|그 이야기가 궁금하다냥}. 되는 날엔 뭐가 달랐냥?',
-    ],
-    adviceWorked: [
-      '{{advice}} 했던 {{task}}, 어제 {끝났더라냥|끝냈더라냥}.\n'
-          '{코칭이 먹힌 건가냥|내 말이 통한 건가냥}? {기분 좋다냥|괜히 뿌듯하다냥}. 오늘도 파이팅이다냥.',
-      '{{task}} 어제 {끝난 거 봤다냥|완료된 거 봤다냥}. {{advice}} 했던 그거 말이다냥.\n'
-          '{코칭이 먹힌 건가냥|덕분인지는 모르겠다만}, {기분 좋다냥|보기 좋다냥}.',
     ],
     carriedAsk: [
       '{{task}}, {{days}}일째 이월된 항목이다냥.\n'
@@ -2018,16 +1997,6 @@ class MasterGreetingBuilder extends GreetingLinePicker {
   String buildConditionFreeAsk() => pickLine(voice.conditionFreeAsk);
 
   /// 권한 대로 해내고 온 날의 인사.
-  String buildAdviceWorked(String taskName, String advice) => pickLine(
-    voice.adviceWorked
-        .map(
-          (line) => line
-              .replaceAll('{{task}}', '\'$taskName\'')
-              .replaceAll('{{advice}}', advice),
-        )
-        .toList(growable: false),
-  );
-
   /// 며칠째 넘어온 일을 묻는 말.
   String buildCarriedAsk(String taskName, int days) => pickLine(
     voice.carriedAsk
