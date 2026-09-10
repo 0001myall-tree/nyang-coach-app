@@ -166,6 +166,15 @@ class MemoryService {
 
   /// 하루 요약의 '요즘 신경 쓰는 일'을 한 줄로 편다.
   /// 이 칸이 생기기 전에 쌓인 요약에는 없으니 빈 값을 견뎌야 한다.
+  /// 그날 코치와 함께 만들거나 정한 것. 없으면 빈 문자열.
+  ///
+  /// 요약의 다른 칸은 무엇을 했는지를 적는데, 이 칸만 무엇이 나왔는지를 적는다.
+  /// "등장인물 정리"로는 다음 날 이어갈 수 없고, 이름과 설정이 남아야 이어진다.
+  static String _made(dynamic summary) {
+    if (summary is! Map) return '';
+    return (summary['made'] ?? '').toString().trim();
+  }
+
   static String formatOnMind(dynamic value) {
     if (value is String) return value.trim();
     if (value is! List) return '';
@@ -316,7 +325,8 @@ $profileCtx
           final onMind = formatOnMind(s['on_mind']);
           ctx +=
               '${s['date']}: 달성(${s['achieved']}) / 못함(${s['missed']}) / 컨디션(${s['condition']}) / 고민(${s['concern']})'
-              '${onMind.isEmpty ? '' : ' / 신경($onMind)'}\n';
+              '${onMind.isEmpty ? '' : ' / 신경($onMind)'}'
+              '${_made(s).isEmpty ? '' : ' / 만든 것(${_made(s)})'}\n';
         }
       }
     }
@@ -359,6 +369,10 @@ $textLogs
   ("공모전 준비해야 되는데" -> 공모전 / "알바 갔다 왔어" -> 알바 / "이사 짐 싸느라 늦었어" -> 이사 준비)
   대부분의 날은 빈 배열이거나 한 개다. 많아도 두 개.
   힘들다/지친다 같은 평가는 붙이지 않는다. 고민이 아니어도 일상이면 적는다.
+- 만든 것: 오늘 코치와 함께 만들거나 정한 것의 알맹이. 이름과 설정을 그대로 적는다.
+  ("주인공: 손해 보기 싫은데 자꾸 손해 보는 성격 / 로맨스 상대 서린: 계산적, 이면 동기")
+  다음 날 이어가려면 이 줄만 보고도 무엇이었는지 알 수 있어야 한다. "등장인물 정리"처럼 무엇을 했는지만 적으면 이어갈 수 없다.
+  일을 끝냈다는 이야기뿐이면 빈 문자열로 둔다. 달성 칸과 겹쳐 적지 말 것 — 거기는 무엇을 했는지, 여기는 무엇이 나왔는지다.
 - 실행저항: 사용자가 하기 싫어하거나 미룬 과업, 막힌 이유, 수락/거부한 개입이 있으면 행동 기반으로 간결하게 기록. ADHD 등 진단명은 붙이지 말 것.
 
 반드시 아래 JSON 형식으로 응답하세요:
@@ -369,6 +383,7 @@ $textLogs
   "concern": "문자열",
   "emotion": "문자열",
   "on_mind": ["문자열"],
+  "made": "문자열",
   "execution_resistance": {
     "resisted_task_types": ["cleaning|writing|reading|study|work|self_care|sleep|exercise|other"],
     "blockers": ["task_switching|decision_overload|result_anxiety|low_energy|unclear_first_step|sensory_friction|time_pressure|other"],

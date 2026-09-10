@@ -12966,6 +12966,58 @@ Rules:
   /// 어제까지다.
   static const int _yesterdayContextLimit = 8;
 
+  /// 지난 날 나눈 대화 원문. 코치가 [NEED: chat]으로 부른 턴에만 실린다.
+  ///
+  /// 프롬프트에 실리는 대화는 오늘 것뿐이다. 그래서 어제 코치와 함께 만든
+  /// 것을 오늘 이어가자고 하면 코치는 그게 무엇인지 모른다 — 하루 요약에는
+  /// "달성: 등장인물 정리" 같은 한 줄만 남고, 이름도 설정도 거기 없다.
+  ///
+  /// 원문은 "지난 대화 보기"용으로 이레치가 이미 보관돼 있다. 없는 것을 새로
+  /// 쌓는 것이 아니라 있는 것을 꺼내오는 자리다.
+  ///
+  /// 최근 것부터 [_pastChatCharBudget]자까지만 담는다. 이레치를 통째로 실으면
+  /// 이 한 턴이 평소의 몇 배가 되고, 오래된 잡담이 어제 만든 것을 밀어낸다.
+  String _pastChatSection(SharedPreferences prefs) {
+    final raw = prefs.getString(
+      '${DailyResetService.chatArchivePrefix}${_coach.id}',
+    );
+    if (raw == null || raw.isEmpty) return '';
+
+    List<dynamic> archive;
+    try {
+      archive = jsonDecode(raw) as List;
+    } catch (_) {
+      return '';
+    }
+    if (archive.isEmpty) return '';
+
+    final lines = <String>[];
+    var used = 0;
+    for (final message in archive.reversed) {
+      if (message is! Map) continue;
+      final text = (message['text'] ?? '').toString().trim();
+      if (text.isEmpty) continue;
+      final time = DateTime.tryParse(message['time']?.toString() ?? '');
+      final day = time == null ? '' : '${time.month}/${time.day} ';
+      final who = message['isUser'] == true ? '사용자' : '코치';
+      final line = '- $day$who: $text';
+      if (used + line.length > _pastChatCharBudget) break;
+      used += line.length;
+      lines.add(line);
+    }
+    if (lines.isEmpty) return '';
+
+    final buffer = StringBuffer('\n[지난 날 나눈 대화 - 오늘 것은 위에 있음]\n');
+    for (final line in lines.reversed) {
+      buffer.writeln(line);
+    }
+    buffer.writeln('*이어가자는 말에 답하는 데만 쓰세요. 여기 있는 일을 오늘 다시 하라고 권하지는 마세요.');
+    return buffer.toString();
+  }
+
+  /// 지난 대화를 이만큼까지만 담는다.
+  static const int _pastChatCharBudget = 2400;
+
   String _yesterdayLeftoverSection(SharedPreferences prefs, DateTime now) {
     final yesterday = DateTime(now.year, now.month, now.day - 1);
     final key = PlannerEditService.dateKey(yesterday);
@@ -13461,6 +13513,11 @@ Rules:
     // 5-2. 어제 남은 일 — 코치가 [NEED: past]로 부른 턴에만.
     if (resolvedScope.pastDay) {
       sb.write(_yesterdayLeftoverSection(prefs, now));
+    }
+
+    // 5-3. 지난 날 대화 원문 — 코치가 [NEED: chat]으로 부른 턴에만.
+    if (resolvedScope.pastChat) {
+      sb.write(_pastChatSection(prefs));
     }
 
     // 6. 오늘의 핵심
@@ -14094,8 +14151,10 @@ Rules:
         if (recent.isNotEmpty) {
           sb.writeln('\n[최근 흐름 요약 - 최대 5일, 오늘 제외]');
           for (final s in recent) {
+            final made = clip((s['made'] ?? '').toString().trim(), 120);
             sb.writeln(
-              '- ${s['date']}: 달성(${clip((s['achieved'] ?? '').toString(), 80)}) / 못함(${clip((s['missed'] ?? '').toString(), 80)}) / 컨디션(${clip((s['condition'] ?? '').toString(), 50)})',
+              '- ${s['date']}: 달성(${clip((s['achieved'] ?? '').toString(), 80)}) / 못함(${clip((s['missed'] ?? '').toString(), 80)}) / 컨디션(${clip((s['condition'] ?? '').toString(), 50)})'
+              '${made.isEmpty ? '' : ' / 만든 것($made)'}',
             );
           }
         }
@@ -15136,6 +15195,9 @@ ${Prompts.outputRulesTail}${Prompts.screenMap}$plannerActionSection$coachOfferTa
             // 어제 목록은 앱이 미리 싣지 않는다. 늘 빠져 있으므로 늘 부를 수
             // 있어야 한다.
             pastDayMissing: !contextScope.pastDay,
+            // 지난 날 대화 원문도 마찬가지다. 이레치가 보관돼 있지만 매 턴
+            // 싣기에는 커서, 코치가 부를 때만 간다.
+            pastChatMissing: !contextScope.pastChat,
           )
         : '';
 
@@ -15151,6 +15213,7 @@ ${Prompts.outputRulesTail}${Prompts.screenMap}$plannerActionSection$coachOfferTa
           goals: requested.goals,
           tasks: requested.tasks,
           pastDay: requested.pastDay,
+          pastChat: requested.pastChat,
         );
         contextString = await _buildContextString(
           userText,

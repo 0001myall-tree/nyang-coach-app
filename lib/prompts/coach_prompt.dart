@@ -707,8 +707,14 @@ class Prompts {
     required bool goalsMissing,
     required bool tasksMissing,
     required bool pastDayMissing,
+    required bool pastChatMissing,
   }) {
-    if (!goalsMissing && !tasksMissing && !pastDayMissing) return '';
+    if (!goalsMissing &&
+        !tasksMissing &&
+        !pastDayMissing &&
+        !pastChatMissing) {
+      return '';
+    }
     final lines = [
       if (goalsMissing)
         '  - 사용자가 요즘 흐름, 진도, 방향, 놓치고 있는 것, 잘 가고 있는지, 뒤처졌는지를 물었다 → [NEED: goals]',
@@ -717,6 +723,9 @@ class Prompts {
       if (pastDayMissing)
         '  - 사용자가 어제 한 일을 말하고 있다. 어제 끝낸 것을 체크해달라고 했거나, 어제 무엇을 했는지 짚어야 답할 수 있다 → [NEED: past]\n'
             '    ("어제", "그저께", "자기 전에", "체크를 깜빡했다"처럼 지난 날을 가리키는 말이면 단어와 상관없이 해당한다. 위 목록은 오늘 것뿐이라 어제 이름은 여기 없다.)',
+      if (pastChatMissing)
+        '  - 지난 날 나눈 이야기를 이어가려 하는데, 오늘 대화만으로는 그게 무엇인지 알 수 없다 → [NEED: chat]\n'
+            '    (함께 만들던 것을 이어가자고 하거나, 지난번에 정한 것·이야기한 것을 가리키는 말이다. 오늘 대화 안에 그 내용이 이미 있으면 쓰지 마세요.)',
     ].join('\n');
     return '''
 

@@ -2,12 +2,17 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:nyang_coach/prompts/coach_prompt.dart';
 import 'package:nyang_coach/services/coach_context_scope.dart';
 
-String rule({bool goals = false, bool tasks = false, bool past = false}) =>
-    Prompts.contextRequestRule(
-      goalsMissing: goals,
-      tasksMissing: tasks,
-      pastDayMissing: past,
-    );
+String rule({
+  bool goals = false,
+  bool tasks = false,
+  bool past = false,
+  bool chat = false,
+}) => Prompts.contextRequestRule(
+  goalsMissing: goals,
+  tasksMissing: tasks,
+  pastDayMissing: past,
+  pastChatMissing: chat,
+);
 
 void main() {
   group('요청 규칙을 붙이는 조건', () {
@@ -34,6 +39,14 @@ void main() {
       final text = rule(past: true);
       expect(text, contains('[NEED: past]'));
       expect(text, isNot(contains('[NEED: tasks]')));
+    });
+
+    // 오늘 대화만 프롬프트에 실린다. 어제 함께 만든 것을 이어가자고 하면
+    // 코치는 그게 무엇인지 알 길이 없어서, 원문을 따로 부를 수 있어야 한다.
+    test('지난 날 대화도 따로 부를 수 있다', () {
+      final text = rule(chat: true);
+      expect(text, contains('[NEED: chat]'));
+      expect(text, isNot(contains('[NEED: past]')));
     });
   });
 

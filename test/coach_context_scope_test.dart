@@ -165,6 +165,14 @@ void main() {
       expect(request.tasks, isTrue);
     });
 
+    // 지난 날 대화 원문. 오늘 것만 실리는 자리라 이것도 따로 불러야 한다.
+    test('지난 대화 요청을 읽는다', () {
+      final request = CoachContextRequest.parse('[NEED: chat]');
+      expect(request.pastChat, isTrue);
+      expect(request.isNotEmpty, isTrue);
+      expect(request.pastDay, isFalse);
+    });
+
     test('모르는 이름은 무시한다', () {
       final request = CoachContextRequest.parse('[NEED: weather]');
       expect(request.isEmpty, isTrue);

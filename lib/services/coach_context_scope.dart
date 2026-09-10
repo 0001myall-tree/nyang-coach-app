@@ -39,6 +39,7 @@ class CoachContextScope {
     required this.avoidanceLink,
     this.allowsGoals = false,
     this.pastDay = false,
+    this.pastChat = false,
   });
 
   /// 목표·비전·기록의 범위.
@@ -69,6 +70,17 @@ class CoachContextScope {
   /// 대신 대화를 보는 코치가 [NEED: past]로 부르면 그때만 채워 보낸다.
   final bool pastDay;
 
+  /// 지난 날 대화 원문을 실을지.
+  ///
+  /// 오늘 대화만 프롬프트에 실린다. 그래서 어제 코치와 함께 만든 것 — 소설
+  /// 인물이든 정리한 생각이든 — 을 오늘 이어가자고 하면 코치는 그게 뭔지
+  /// 모른다. 하루 요약에는 "달성: 등장인물 정리" 같은 한 줄만 남아서, 이름도
+  /// 설정도 거기 없다.
+  ///
+  /// 원문은 이미 이레치가 보관돼 있다. 없는 것을 만드는 것이 아니라 있는 것을
+  /// 꺼내오는 자리다. 다만 매 턴 싣기에는 크므로, 코치가 부를 때만 간다.
+  final bool pastChat;
+
   bool get needsFullGoal => goal == GoalContextScope.full;
   bool get needsLightGoal => goal == GoalContextScope.light;
   bool get needsAnyGoal => goal != GoalContextScope.none;
@@ -80,6 +92,7 @@ class CoachContextScope {
     bool goals = false,
     bool tasks = false,
     bool pastDay = false,
+    bool pastChat = false,
   }) {
     final openGoals = goals && allowsGoals;
     return CoachContextScope(
@@ -88,6 +101,7 @@ class CoachContextScope {
       avoidanceLink: avoidanceLink,
       allowsGoals: allowsGoals,
       pastDay: this.pastDay || pastDay,
+      pastChat: this.pastChat || pastChat,
     );
   }
 
@@ -95,7 +109,7 @@ class CoachContextScope {
   String toString() =>
       'CoachContextScope(goal: ${goal.name}, tasks: $tasks, '
       'avoidanceLink: $avoidanceLink, allowsGoals: $allowsGoals, '
-      'pastDay: $pastDay)';
+      'pastDay: $pastDay, pastChat: $pastChat)';
 }
 
 /// 코치가 "이걸론 답을 못 하겠다"고 알려온 요청.
@@ -109,6 +123,7 @@ class CoachContextRequest {
     required this.goals,
     required this.tasks,
     this.pastDay = false,
+    this.pastChat = false,
   });
 
   static const CoachContextRequest none = CoachContextRequest(
@@ -122,7 +137,10 @@ class CoachContextRequest {
   /// 어제 남은 일 목록을 달라는 요청.
   final bool pastDay;
 
-  bool get isEmpty => !goals && !tasks && !pastDay;
+  /// 지난 날 대화 원문을 달라는 요청.
+  final bool pastChat;
+
+  bool get isEmpty => !goals && !tasks && !pastDay && !pastChat;
   bool get isNotEmpty => !isEmpty;
 
   static final RegExp _pattern = RegExp(
@@ -137,6 +155,7 @@ class CoachContextRequest {
     var goals = false;
     var tasks = false;
     var pastDay = false;
+    var pastChat = false;
     for (final match in matches) {
       for (final raw in (match.group(1) ?? '').split(',')) {
         switch (raw.trim().toLowerCase()) {
@@ -149,10 +168,18 @@ class CoachContextRequest {
           case 'past':
           case 'yesterday':
             pastDay = true;
+          case 'chat':
+          case 'talk':
+            pastChat = true;
         }
       }
     }
-    return CoachContextRequest(goals: goals, tasks: tasks, pastDay: pastDay);
+    return CoachContextRequest(
+      goals: goals,
+      tasks: tasks,
+      pastDay: pastDay,
+      pastChat: pastChat,
+    );
   }
 
   /// 태그가 답변에 섞여 나왔을 때 지운다. 재시도 뒤에도 남아 있으면 사용자
