@@ -2708,7 +2708,10 @@ class _ChatScreenState extends State<ChatScreen>
   /// 권한이 막혀 있으면 켜도 울리지 않는다. 그건 설정 화면에서 안내하는 일이라
   /// 여기서는 상태만 확인해 사실대로 말한다.
   void _offerRegistrationConfirm(_ParsedReply parsed) {
-    if (!_userData.isPlanActive) return;
+    // 구독만 보면 안 된다. 말로 적어 넣는 길은 무료 기간에도 열려 있어서,
+    // 코치는 태그를 다는데 카드만 여기서 막혔다. 그러면 사용자는 "알려줄게"를
+    // 듣고 아무 일도 안 일어나는 하루를 겪는다 — 써보라고 열어둔 그 하루에.
+    if (!_canInputTasksNow) return;
     final withAlarm = parsed.scheduleReminder;
 
     // 한 턴에 하나만 물어본다. 카드가 겹치면 뭘 고르는 건지 알기 어렵다.
@@ -2792,6 +2795,9 @@ class _ChatScreenState extends State<ChatScreen>
   /// 적지 않는다. 루틴은 매일이 예사라, 적어두면 다른 것이 있는 줄 알게 된다.
   /// 코치가 짚은 반복 일정의 마지막 날.
   DateTime? _pendingScheduleUntil;
+
+  /// 지금 말로 적어 넣을 수 있는 상태인지. 구독 중이거나 무료 기간 안이면 참.
+  bool _canInputTasksNow = false;
 
   String _habitFrequencyLabel(RoutineFrequency? freq) {
     if (freq == null || freq.freq == 'daily') return '';
@@ -12283,6 +12289,9 @@ Rules:
     // 뒤에도 여기까지는 닿는다.
     final canInputTasks =
         _userData.isPlanActive || await FreeAccessService.instance.canInput();
+    // 답변이 돌아온 뒤 등록 카드를 띄울지 정할 때 같은 값을 본다. 그쪽은
+    // 비동기로 물어볼 자리가 아니라 여기서 재어둔다.
+    _canInputTasksNow = canInputTasks;
 
     // 등록할 이름은 여기서 뽑지 않는다. 코치가 짚는다.
     //
