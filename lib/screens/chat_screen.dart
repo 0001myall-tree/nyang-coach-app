@@ -76,8 +76,6 @@ import 'package:nyang_coach/services/prep_time_service.dart';
 import 'package:nyang_coach/services/widget_sync_service.dart';
 import 'coach_config.dart';
 import 'focus_timer_widget.dart';
-import 'cat_preview/cat_preview_intro_dialog.dart';
-import 'cat_preview/cat_onboarding_preview_screen.dart';
 import '../models/user_data.dart';
 import '../theme/app_design_tokens.dart';
 import '../widgets/app_chip.dart';
@@ -2399,7 +2397,17 @@ class _ChatScreenState extends State<ChatScreen>
     bool canRegisterInstead = false,
     List<String> doneTargets = const [],
   }) async {
-    if (!_userData.isPlanActive) return false;
+    // 완료 체크와 옮기기는 적어 넣는 것과 같은 결이라 무료 기간에도 연다.
+    // 할 일을 적을 수는 있는데 체크는 못 하는 상태였다.
+    //
+    // 알람만 닫는다. 무료 창에 돈 드는 기능은 딸려오지 않는다는 기준이
+    // 따로 있고, 그 기준은 그대로 둔다.
+    final isAlarmAction =
+        action.kind == PlannerActionKind.remind ||
+        action.kind == PlannerActionKind.morning;
+    if (!_userData.isPlanActive && (isAlarmAction || !_canInputTasksNow)) {
+      return false;
+    }
 
     // 체크해달라는 부탁에는 그 자리에서 카드를 띄운다.
     //
@@ -2798,6 +2806,16 @@ class _ChatScreenState extends State<ChatScreen>
 
   /// 지금 말로 적어 넣을 수 있는 상태인지. 구독 중이거나 무료 기간 안이면 참.
   bool _canInputTasksNow = false;
+
+  /// 플랜 없이도 지금 쓸 수 있는 상태인지.
+  ///
+  /// 무료로 열어둔 며칠은 써보라고 연 시간이다. 그런데 '쓸 수 있는 사람인가'를
+  /// 곳곳에서 구독 여부만으로 판단하고 있어서, 그 며칠 동안 정작 앱이 하는
+  /// 일을 못 보는 자리가 남아 있었다.
+  ///
+  /// 알람처럼 돈이 드는 기능은 여기 딸려오지 않는다. 그건 따로 막는다.
+  Future<bool> _usableWithoutPlan() async =>
+      _userData.isPlanActive || await FreeAccessService.instance.canInput();
 
   String _habitFrequencyLabel(RoutineFrequency? freq) {
     if (freq == null || freq.freq == 'daily') return '';
@@ -4030,8 +4048,11 @@ ${lines.join('\n')}
           children: [
             Image.asset('assets/images/logo.png', width: 76, height: 76),
             const SizedBox(height: 16),
+            // 무엇을 해주는 앱인지부터 말한다. "계속 대화하려면"만 있던 때는
+            // 처음 온 사람에게 유료 챗봇으로 보였다 — 이 앱이 파는 것은 대화가
+            // 아니라 시작하고 끝내는 일이다.
             const Text(
-              '냥냥코치와 계속 대화하려면',
+              '계획은 세웠는데 시작이 안 될 때',
               style: TextStyle(
                 fontSize: 17,
                 fontWeight: FontWeight.w700,
@@ -4040,7 +4061,7 @@ ${lines.join('\n')}
             ),
             const SizedBox(height: 6),
             const Text(
-              '플랜을 시작하면 냥냥코치와\n대화를 시작할 수 있습니다!',
+              '냥냥코치는 할 일을 대신 적어주고,\n막히면 잘게 쪼개 시작까지 데려가요.\n루틴과 목표, 알람까지 한자리에서 챙깁니다.',
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 14,
@@ -7112,7 +7133,7 @@ Rules:
     DateTime now,
   ) async {
     if (widget.coachId != 'cat') return false;
-    if (!_userData.isPlanActive) return false;
+    if (!await _usableWithoutPlan()) return false;
     if (now.hour < 18) return false;
     if (widget.handoffFromCoachId == 'nyang_halbae' ||
         widget.handoffFromCoachId == 'sec_female') {
@@ -7729,7 +7750,7 @@ Rules:
     DateTime now,
   ) async {
     if (widget.coachId != 'cat') return false;
-    if (!_userData.isPlanActive) return false;
+    if (!await _usableWithoutPlan()) return false;
     if (now.hour < 7 || now.hour >= 15) return false;
     if (widget.handoffFromCoachId == 'nyang_halbae' ||
         widget.handoffFromCoachId == 'sec_female') {
@@ -7763,7 +7784,7 @@ Rules:
     DateTime now,
   ) async {
     if (widget.coachId != 'cat') return false;
-    if (!_userData.isPlanActive) return false;
+    if (!await _usableWithoutPlan()) return false;
     if (now.hour < 15 || now.hour >= 18) return false;
     if (widget.handoffFromCoachId == 'nyang_halbae' ||
         widget.handoffFromCoachId == 'sec_female') {
@@ -8046,10 +8067,18 @@ Rules:
         !_userData.isPlanActive) {
       await Future.delayed(const Duration(milliseconds: 600));
       if (!mounted) return;
-      const intro =
+      // 무료 날수는 서버에서 바꿀 수 있는 값이라 문구에 박아두지 않는다.
+      // 콘솔에서 줄이거나 닫았는데 인사만 "이틀 무료"라고 하면 그 자리에서
+      // 거짓말이 된다.
+      final freeDays = await FreeAccessService.instance.remainingFreeDays();
+      final freeLine = freeDays > 0
+          ? '\n$freeDays일 동안은 무료니까 편하게 시켜보라냥!'
+          : '';
+      final intro =
           '안녕! 나는 냥냥코치다냥 🐾\n'
-          '오늘 해야 할 일이나 루틴, 목표들을 같이 챙겨주고 있어!\n'
-          '주변의 할 일창이나 루틴 트래커도 자유롭게 눌러보라냥~';
+          '할 일을 적어두는 것까지는 다들 하는데, 막상 시작이 안 될 때가 있잖아.\n'
+          '그때 옆에서 잘게 쪼개주고 끝까지 같이 가는 게 내 일이다냥. '
+          '루틴이랑 목표도 같이 챙겨주고!$freeLine';
       setState(() {
         _messages.add(
           ChatMessage(
@@ -8066,25 +8095,26 @@ Rules:
         'last_visit_${widget.coachId}',
         now.toIso8601String(),
       );
-      await _maybeShowCatPreview(
+      await _maybeShowCatUpsell(
         initialDelay: const Duration(milliseconds: 700),
       );
       return;
     }
 
-    // 플랜 없는 냥냥이는 여기서 끊는다. 아래 자동 발화는 오늘 계획을 두고
-    // 하는 말이라 아직 쓸 수 없는 사람에게는 뜻이 없고, 시연을 아직 안 본
-    // 사람에게는 그것부터 보여주는 게 맞다.
-    if (widget.coachId == 'cat' && !_userData.isPlanActive) {
+    // 아직 쓸 수 없는 냥냥이는 여기서 끊는다. 아래 자동 발화는 오늘 계획을
+    // 두고 하는 말이라 쓸 수 없는 사람에게는 뜻이 없다.
+    //
+    // 무료로 열어둔 며칠은 예외다. 그 며칠 동안 코치가 한 번도 먼저 말을 걸지
+    // 않으면, 사용자는 말을 걸어야만 반응하는 챗봇을 보고 간다. 이 발화들은
+    // 미리 써둔 문구라 코치를 부르지도 않는다.
+    if (widget.coachId == 'cat' && !await _usableWithoutPlan()) {
       await prefs.setString(
         'last_visit_${widget.coachId}',
         now.toIso8601String(),
       );
-      if (!(prefs.getBool(_kCatPreviewSeen) ?? false)) {
-        await _maybeShowCatPreview(
-          initialDelay: const Duration(milliseconds: 500),
-        );
-      }
+      await _maybeShowCatUpsell(
+        initialDelay: const Duration(milliseconds: 500),
+      );
       return;
     }
 
@@ -8226,49 +8256,17 @@ Rules:
     );
   }
 
-  // 냥냥코치 무료체험 미리보기 팝업 -> (시작 시) 시연 화면 -> CTA 결과에 따라 플랜 안내.
-  // 미리보기를 이미 한 번 본(또는 건너뛴) 비구독자는 바로 업셀 시트로 이동.
-  // SharedPreferences 키: 'cat_preview_seen' (bool)
-  static const _kCatPreviewSeen = 'cat_preview_seen';
-
-  Future<void> _maybeShowCatPreview({required Duration initialDelay}) async {
+  /// 플랜 없는 사람에게 안내 시트를 띄운다.
+  ///
+  /// 예전에는 여기서 자동 시연 화면을 먼저 보여줬다. 플래너가 그때와 많이
+  /// 달라져서, 시연이 보여주는 것과 실제 화면이 어긋나게 됐다 — 처음 온
+  /// 사람에게 지금 없는 모습을 보여주는 셈이라 걷어냈다.
+  Future<void> _maybeShowCatUpsell({required Duration initialDelay}) async {
     await Future.delayed(initialDelay);
     if (!mounted) return;
-
-    // ── 이미 미리보기를 본 적 있으면 시연 없이 바로 업셀 ──
-    final prefs = await SharedPreferences.getInstance();
-    final alreadySeen = prefs.getBool(_kCatPreviewSeen) ?? false;
-    if (alreadySeen) {
-      // 살 수 없는 동안에는 권하지 않는다. 들어올 때마다 뜨는 팝업에 눌러도
-      // 아무 일이 없는 버튼만 있으면 앱이 고장난 것처럼 보인다.
-      if (mounted && _canOpenSubscriptionGuide) _showCatUpsellBottomSheet();
-      return;
-    }
-
-    // ── 첫 진입: 인트로 다이얼로그 표시 ──
-    if (!mounted) return;
-    final startPreview = await showCatPreviewIntroDialog(context);
-    if (!mounted) return;
-
-    // 건너뛰기 선택 → "봤음"으로 표시하고 업셀
-    if (!startPreview) {
-      await prefs.setBool(_kCatPreviewSeen, true);
-      if (mounted && _canOpenSubscriptionGuide) _showCatUpsellBottomSheet();
-      return;
-    }
-
-    // 시연 화면 실행
-    final startPlan = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(builder: (_) => const CatOnboardingPreviewScreen()),
-    );
-    if (!mounted) return;
-
-    // 시연 완료(끝까지 보거나 내부 건너뛰기) → 플래그 저장
-    await prefs.setBool(_kCatPreviewSeen, true);
-
-    if (startPlan == true) {
-      Future.delayed(Duration.zero, _showPlanGuideBottomSheet);
-    }
+    // 살 수 없는 동안에는 권하지 않는다. 들어올 때마다 뜨는 팝업에 눌러도
+    // 아무 일이 없는 버튼만 있으면 앱이 고장난 것처럼 보인다.
+    if (_canOpenSubscriptionGuide) _showCatUpsellBottomSheet();
   }
 
   Future<void> _saveHistory() async {
@@ -12250,8 +12248,7 @@ Rules:
     // 말로 적어 넣는 길들. 플랜이 있으면 언제든 열려 있고, 없으면 무료로
     // 열린 며칠 동안만 통한다. 이 길들은 코치를 부르지 않아서, 대화가 닫힌
     // 뒤에도 여기까지는 닿는다.
-    final canInputTasks =
-        _userData.isPlanActive || await FreeAccessService.instance.canInput();
+    final canInputTasks = await _usableWithoutPlan();
     // 답변이 돌아온 뒤 등록 카드를 띄울지 정할 때 같은 값을 본다. 그쪽은
     // 비동기로 물어볼 자리가 아니라 여기서 재어둔다.
     _canInputTasksNow = canInputTasks;
