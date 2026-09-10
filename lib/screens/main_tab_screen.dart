@@ -1697,14 +1697,14 @@ class _MainTabScreenState extends State<MainTabScreen>
   }
 
   List<Widget> get _inactiveIcons => [
-    _catFaceIcon(active: false, color: _tabInactiveColor),
+    _chatBubbleIcon(active: false, color: _tabInactiveColor),
     _clipboardIcon(color: _tabInactiveColor),
     _barChartIcon(color: _tabInactiveColor),
     _gearIcon(active: false, color: _tabInactiveColor),
   ];
 
   List<Widget> get _activeIcons => [
-    _catFaceIcon(active: true, color: _tabActiveColor),
+    _chatBubbleIcon(active: true, color: _tabActiveColor),
     _clipboardIcon(color: _tabActiveColor),
     _barChartIcon(color: _tabActiveColor),
     _gearIcon(active: true, color: _tabActiveColor),
@@ -2638,12 +2638,13 @@ class _MainTabScreenState extends State<MainTabScreen>
     );
   }
 
-  Widget _catFaceIcon({required bool active, required Color color}) {
-    return SvgPicture.asset(
-      'assets/icons/cat-face-tab.svg',
+  Widget _chatBubbleIcon({required bool active, required Color color}) {
+    return SizedBox(
       width: 26,
       height: 26,
-      colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
+      child: CustomPaint(
+        painter: _ChatBubblePainter(active: active, color: color),
+      ),
     );
   }
 
@@ -3006,6 +3007,54 @@ class _TabItemState extends State<_TabItem>
 // ─────────────────────────────────────────────────────────────
 // Custom Painters
 // ─────────────────────────────────────────────────────────────
+class _ChatBubblePainter extends CustomPainter {
+  final bool active;
+  final Color color;
+  _ChatBubblePainter({required this.active, required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.0
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+
+    final w = size.width;
+    final h = size.height;
+
+    final path = Path()
+      ..moveTo(w * 0.1, h * 0.15)
+      ..quadraticBezierTo(w * 0.1, h * 0.05, w * 0.2, h * 0.05)
+      ..lineTo(w * 0.8, h * 0.05)
+      ..quadraticBezierTo(w * 0.9, h * 0.05, w * 0.9, h * 0.15)
+      ..lineTo(w * 0.9, h * 0.68)
+      ..quadraticBezierTo(w * 0.9, h * 0.78, w * 0.8, h * 0.78)
+      ..lineTo(w * 0.38, h * 0.78)
+      ..lineTo(w * 0.2, h * 0.96)
+      ..lineTo(w * 0.22, h * 0.78)
+      ..lineTo(w * 0.2, h * 0.78)
+      ..quadraticBezierTo(w * 0.1, h * 0.78, w * 0.1, h * 0.68)
+      ..close();
+
+    if (active) {
+      canvas.drawPath(
+        path,
+        Paint()
+          ..color = color
+          ..style = PaintingStyle.fill,
+      );
+    } else {
+      canvas.drawPath(path, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_ChatBubblePainter old) =>
+      old.active != active || old.color != color;
+}
+
 class _ClipboardPainter extends CustomPainter {
   final Color color;
   _ClipboardPainter({required this.color});
