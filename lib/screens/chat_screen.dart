@@ -7929,12 +7929,6 @@ Rules:
     return true;
   }
 
-  /// 마지막 말이 이 안쪽이면 아직 대화 중으로 본다.
-  ///
-  /// 26초 만에 끼어든 적이 있고, 30분 뒤 저녁 발화는 끼어든 것이 아니라 새
-  /// 자리였다. 그 사이 어딘가면 되고, 짧게 잡으면 막으려던 것을 못 막는다.
-  static const Duration _stillTalkingWindow = Duration(minutes: 10);
-
   Future<void> _loadHistoryAndGreet() async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString('nyang_chat_history_${widget.coachId}');
@@ -8107,23 +8101,6 @@ Rules:
     // 짚지 않고, 밤 이야기도 하루 한 번이고, 권유는 한 번 하면 그걸로 끝이다.
     // 껍질은 그 위에 덧씌운 한 겹이었을 뿐인데 훨씬 거칠어서, 막아야 할 것과
     // 함께 필요한 것까지 막았다.
-
-    // 대화가 진행 중이면 먼저 말을 걸지 않는다.
-    //
-    // 인사 검사는 채팅 화면이 만들어질 때 돈다. 그런데 이 화면은 탭을 오가거나
-    // 카드를 눌러 다른 화면을 다녀오면 다시 만들어져서, 방금까지 이야기하던
-    // 중에도 인사가 끼어들었다. 등록 카드를 누르고 26초 만에 주 1회 계획
-    // 이야기가 대화 한복판에 떨어진 적이 있다.
-    //
-    // 각 발화가 하루 한 번씩만 나가도록 안에서 막고 있어서 반복되지는 않는다.
-    // 다만 자리가 어긋나는 것은 다른 문제다 — 하던 이야기가 끊긴다.
-    //
-    // 미루기만 한다. 다음에 들어올 때 그 발화는 그대로 살아 있다.
-    final lastMessageAt = _messages.isEmpty ? null : _messages.last.time;
-    if (lastMessageAt != null &&
-        now.difference(lastMessageAt) < _stillTalkingWindow) {
-      return;
-    }
 
     // 마스터 코치(비서/냥할배): 슬롯별 자동 발화
     if (_coach.isMaster) {
