@@ -234,17 +234,31 @@ class LifeRoutineAnalysis {
       );
     }
 
-    final records = _recordsWithin(historyRaw, at);
-    if (records.length < minRecordedDays) {
-      return const LifeRoutinePlan(
-        verdict: LifeVerdict.hold,
-        reason: '아직 기록이 모자라 판정하지 않음.',
-      );
-    }
-
     final habits = _decodeList(habitsRaw)
         .where((h) => domainHabitIds.contains(h['id']?.toString()))
         .toList(growable: false);
+
+    final records = _recordsWithin(historyRaw, at);
+    if (records.length < minRecordedDays) {
+      // 자리를 짚으려면 기록이 있어야 한다. 하지만 담당 영역에 루틴이 하나도
+      // 없는 사람에게는 짚을 자리랄 것도 없고, 설문에서 챙기고 싶다고 말한
+      // 것이 이미 있다.
+      //
+      // 여기서 입을 다물면 설문에 답한 사람이 열흘 동안 아무것도 못 받는다.
+      // 답을 다 받고 "이제 보고 있을게"라고 해놓고 열흘을 잠자코 있는 셈이라,
+      // 물어본 것이 통째로 헛일이 된다.
+      if (habits.isNotEmpty) {
+        return const LifeRoutinePlan(
+          verdict: LifeVerdict.hold,
+          reason: '아직 기록이 모자라 판정하지 않음. 담당 영역 루틴은 이미 있음.',
+        );
+      }
+      return const LifeRoutinePlan(
+        verdict: LifeVerdict.today,
+        reason:
+            '기록이 아직 모자라 자리를 짚을 수는 없음. 다만 담당 영역에 굴러가는 루틴이 없고, 설문에서 챙기고 싶다고 한 것이 있음.',
+      );
+    }
     final logs = _decodeMap(habitLogsRaw);
 
     // 담당 영역 루틴부터 본다. 이미 있는 것을 굴러가게 하는 쪽이 새로 넣는

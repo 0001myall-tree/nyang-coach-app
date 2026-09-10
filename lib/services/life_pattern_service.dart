@@ -567,6 +567,12 @@ class LifePatternService {
       if (notes.isEmpty) continue;
       buffer.writeln('- ${notes.join(' / ')}');
     }
+    // 답만 실어주면 배경처럼 읽고 지나간다. 무엇을 도울지 정하는 자리에서
+    // 이 답을 쓰라는 말이 한 줄 있어야 물어본 것이 답으로 돌아온다.
+    //
+    // '찾으세요'라고 쓰지 않는다. 찾으라고 하면 안 보일 때 지어낸다. 답은 바로
+    // 윗줄에 있으니 이건 찾는 일이 아니라 고르는 일이다.
+    buffer.writeln('*무엇을 도울지 정할 때는 이 답 안에서 고르세요.');
     return buffer.toString();
   }
 }

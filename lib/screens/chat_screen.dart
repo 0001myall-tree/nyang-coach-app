@@ -14898,6 +14898,11 @@ $resistanceFlowRule'''
     // 약속 준비를 역산하는 대화일 때만 붙인다. 숫자는 앱이 낸다.
     final prepTimeSection = await _prepTimeSection(userText);
 
+    // 설문으로 받아둔 답. 여태 코치가 먼저 루틴을 권하는 자리에서만 실렸다.
+    // 평소 답변에는 담당 영역만 알려주고 그 사람 답은 안 줬으니, 무엇을 도울지
+    // 물을 때마다 이미 받아둔 답을 다시 묻게 됐다.
+    final lifePatternSection = await LifePatternService.promptBlock(_coach.id);
+
     // 실린 기록만 바꿔서 두 번 조립할 수 있게 묶어둔다. 나머지 조각은 재시도
     // 턴에도 그대로 쓴다. 코치가 요청한 건 정보지 다른 지침이 아니다.
     String assemble(String context, String contextRequestRule) {
@@ -14906,7 +14911,7 @@ $resistanceFlowRule'''
       // 쪽에 붙어야 읽힌다.
       final assembledSystemPrompt =
           '''$baseSystemPrompt
-${LifePatternService.roleLine(_coach.id)}
+${LifePatternService.roleLine(_coach.id)}$lifePatternSection
 ${Prompts.executionSupportRule}
 ${Prompts.goalBackcastRule}
 ${context.isNotEmpty ? '\n$context' : ''}

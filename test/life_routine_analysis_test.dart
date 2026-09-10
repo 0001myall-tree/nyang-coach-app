@@ -96,9 +96,23 @@ void main() {
       expect(plan.verdict, LifeVerdict.hold);
     });
 
-    test('기록이 모자라면', () {
+    // 자리를 짚으려면 기록이 있어야 한다. 다만 여기서 통째로 입을 다물면
+    // 설문에 답한 사람이 열흘 동안 아무것도 못 받는다 — 답을 다 받고
+    // "이제 보고 있을게"라고 해놓고서.
+    test('기록이 모자라도 담당 영역이 비어 있으면 오늘 하나는 권한다', () {
       final plan = LifeRoutineAnalysis.analyze(
         historyRaw: history(days: 5),
+        now: now,
+      );
+      expect(plan.verdict, LifeVerdict.today);
+      expect(plan.reason, contains('모자라'));
+    });
+
+    test('기록이 모자라고 담당 루틴이 이미 있으면 판정하지 않는다', () {
+      final plan = LifeRoutineAnalysis.analyze(
+        historyRaw: history(days: 5),
+        habitsRaw: jsonEncode([habit('h1', '설거지')]),
+        domainHabitIds: {'h1'},
         now: now,
       );
       expect(plan.verdict, LifeVerdict.hold);
