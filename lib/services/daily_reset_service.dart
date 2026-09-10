@@ -856,6 +856,9 @@ class DailyResetService {
           if (t['inProgressAt'] != null) 'startedAt': t['inProgressAt'],
           if (t['completedAt'] != null) 'completedAt': t['completedAt'],
           'category': t['category'] ?? 'today',
+          // 시각을 지정해둔 일이 더 많이 끝나는지 보려면, 지정 여부가 그날
+          // 기록에 남아 있어야 한다. 기록에 없는 것은 나중에 못 센다.
+          'hasTime': t['timeStart'] != null || t['time'] != null,
           'deferred': false,
         },
       ),

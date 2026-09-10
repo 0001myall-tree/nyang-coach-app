@@ -4,6 +4,7 @@ import 'package:nyang_coach/theme/app_design_tokens.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:nyang_coach/services/condition_insight.dart';
 import 'package:nyang_coach/services/execution_blocker_service.dart';
 import 'package:nyang_coach/services/execution_funnel.dart';
 import 'package:nyang_coach/services/execution_type_labels.dart';
@@ -488,10 +489,17 @@ class _RecordsScreenState extends State<RecordsScreen> {
     final hasVisibleVisions =
         _formatVisionText(prefs.getString('nyang_visions')) != '없음';
 
+    // 조건 발견형(4)은 견줄 것이 실제로 걸렸을 때만 후보가 된다. 이레치로는
+    // 한쪽에 사흘밖에 안 모여서, 하루가 들고 날 때마다 결론이 뒤집힌다.
+    final hasConditionInsight = ConditionInsights.from(
+      prefs.getString('nyang_history'),
+    ).hasEnough;
+
     final candidates = [
       0,
       if (hasVisibleVisions) 1,
       if (hasExecutionPattern) 3,
+      if (hasConditionInsight) 4,
     ];
     final available = candidates.where((t) => !usedTypes.contains(t)).toList()
       ..shuffle();
@@ -690,6 +698,12 @@ class _RecordsScreenState extends State<RecordsScreen> {
     // 안 된다 — 목록이 커진 사람은 더 해내고도 "완료율이 떨어졌네요"를 듣는다.
     final executionTrendBlock = executionFunnel.trendBlock();
 
+    // 조건 발견형이 쓸 값. 견준 것은 하나뿐이다 — 다섯 축을 재면 그중 하나쯤은
+    // 우연히 크게 벌어지므로, 나열하는 순간 가짜가 섞인다.
+    final conditionInsights = ConditionInsights.from(
+      prefs.getString('nyang_history'),
+    );
+
     // 지난주에 뭐라고 불렀는지. 같은 사람이 한 주 만에 다른 사람이 되지는
     // 않는데, 배지 이름이 주마다 바뀌면 사용자는 앱이 자기를 모른다고 느낀다.
     final lastLabel = _weeklyExecutionTypeLabel;
@@ -814,6 +828,38 @@ class _RecordsScreenState extends State<RecordsScreen> {
         .take(3)
         .map((e) => '${e.key}(${e.value}일)')
         .join(', ');
+
+    // 조건 이야기를 이번 주 주력한 일에 비추어 본다. 조건만 말하면 사람이 빠진
+    // 분석표가 되고, 반대로 그 일의 원인이라고 말하면 견준 적 없는 것을
+    // 말하는 셈이 된다. 그래서 겹친 날 수라는 사실만 넘긴다.
+    final topCondition = conditionInsights.top;
+    var conditionFocusNote = '';
+    if (topCondition != null && heldOverRanked.isNotEmpty) {
+      final focus = heldOverRanked.first.key;
+      final touchedDates = <String>{};
+      for (final record in activeRecords) {
+        final date = record['date']?.toString() ?? '';
+        if (date.isEmpty) continue;
+        final tasks = (record['tasks'] as List?) ?? [];
+        final touched = tasks.any((task) {
+          final map = task as Map?;
+          if (map == null || map['text'] != focus) return false;
+          return map['done'] == true || _taskWasStarted(map);
+        });
+        if (touched) touchedDates.add(date);
+      }
+      if (touchedDates.isNotEmpty) {
+        final overlap = touchedDates
+            .where(topCondition.trueDates.contains)
+            .length;
+        conditionFocusNote =
+            "이번 주 주력한 일 '\$focus'에 손댄 \${touchedDates.length}일 중, "
+            "\${topCondition.label}에 해당한 날은 \$overlap일";
+      }
+    }
+    final conditionBlock = conditionInsights.promptBlock(
+      focusNote: conditionFocusNote,
+    );
 
     final recordBuffer = StringBuffer();
     final completionSummaryBuffer = StringBuffer();
@@ -1085,7 +1131,7 @@ ${completionSummaryBuffer.toString().trim()}
 ${feedbackType == 0 ? '- 실행 비율: $startToFinishText\n  (두 비율을 함께 보세요. 손댄 것은 잘 끝내는데 손댄 비율이 낮다면, 못 해내는 사람이 아니라 한 번에 잡는 양이 많은 사람입니다. 두 비율 중 낮은 쪽이 그 주의 병목입니다.)\n' : ''}
 - 미루다 다시 완료한 일 (3일 이상 미루다 최근 다시 완료): ${resumedTasks.join(', ').isEmpty ? '없음' : resumedTasks.join(', ')}
 - 미루다 다시 시작한 일 (3일 이상 손대지 못하다 최근 다시 시작, 완료는 아직): ${resumedStartTasks.join(', ').isEmpty ? '없음' : resumedStartTasks.join(', ')}
-${feedbackType == 3 ? '$executionPatternBlock\n' : ''}${feedbackType == 0 && executionTrendBlock.isNotEmpty ? '\n[실행 - 앱이 최근 이레 기록에서 센 값]\n$executionTrendBlock' : ''}
+${feedbackType == 3 ? '$executionPatternBlock\n' : ''}${feedbackType == 4 ? '$conditionBlock\n' : ''}${feedbackType == 0 && executionTrendBlock.isNotEmpty ? '\n[실행 - 앱이 최근 이레 기록에서 센 값]\n$executionTrendBlock' : ''}
 
 [사용자의 현재 목표 및 장기 비전]
 - 주간 목표: $weekGoalText
@@ -1106,7 +1152,9 @@ $staminaSection$chatSummarySection
         ? '실행 회고형'
         : feedbackType == 1
         ? '장기 비전형'
-        : '실행 유형형'}]
+        : feedbackType == 3
+        ? '실행 유형형'
+        : '조건 발견형'}]
 
 [작성 지침]
 1. 어투: ${isMale ? '냥할배로서 부드럽고 느긋한 반말 기반 말투. 존댓말과 냥 말투를 섞지 말고, "$title" 호칭도 남발하지 마세요.' : '여비서로서 지적이고 부드러운 "$title" 호칭의 격식체 (~했어요, ~어떨까요).'}
@@ -1137,7 +1185,8 @@ ${feedbackType == 0
    - 마감일이 지난 미완료 마일스톤이 있다면 부드럽게 확인을 권유하세요.
    $visionEmptyGuidance
    - 마지막으로 미래를 응원하는 한마디로 마무리하세요.'''
-        : '''   [실행 유형형]
+        : feedbackType == 3
+        ? '''   [실행 유형형]
    - 이번 주 "무엇을 했는지"가 아니라 "이 사람이 어떤 식으로 계획을 실행하는 사람인지"에 초점을 맞춥니다. [분석 참고 데이터]의 [실행 패턴 - 앱이 최근 이레 기록에서 센 값]을 반드시 참고하세요. 거기 없는 숫자나 패턴은 지어내지 마세요.
    - "당신은 이런 식으로 계획을 실행하는 사람이에요"라는 투로 먼저 유형을 짚어주세요. 세 축의 숫자를 근거로 풀어서 설명하되, 숫자를 그대로 읽지 말고 사람 말로 옮기세요.
    - "추세"가 실려 있으면 유형보다 그것을 먼저 말하세요.
@@ -1149,7 +1198,17 @@ ${feedbackType == 0
      - 반드시 다음 중에서만 고르세요. 각 이름이 가리키는 모양이 정해져 있으니, 그 뜻과 다른 사람에게 그 이름을 붙이지 마세요.
 ${ExecutionTypeLabels.listForPrompt}
      - 어디에도 맞지 않으면 `유형: 없음`이라고 적으세요. 새 이름을 지어내면 앱이 알아보지 못합니다.
-     - 지난주에는 `${lastLabel ?? '없음'}`이라고 불렀습니다. 숫자가 뚜렷하게 달라졌을 때만 바꾸세요. 같은 사람이 한 주 만에 다른 사람이 되지는 않습니다.'''}
+     - 지난주에는 `${lastLabel ?? '없음'}`이라고 불렀습니다. 숫자가 뚜렷하게 달라졌을 때만 바꾸세요. 같은 사람이 한 주 만에 다른 사람이 되지는 않습니다.'''
+        : '''   [조건 발견형]
+   - 이 회고가 답하는 질문은 하나입니다 — **"나는 어떤 조건에서 더 자연스럽게 움직이는 사람인가."**
+   - 세 걸음으로 쓰세요. 조건만 말하면 사람이 빠진 분석표가 되고, 한 일부터 말하면 여느 회고와 다를 게 없어집니다.
+     1) **조건이 먼저.** [조건 - 앱이 견준 값]에서 어떤 날에 실행이 함께 높았는지를 짚으세요.
+     2) **그 조건을 이번 주 주력한 일에 비추기.** 겹친 날 수가 함께 실려 있으면 그 일 이름을 넣어 그림이 그려지게 쓰세요. 실려 있지 않으면 [이번 주 주력한 일]에서 하나만 골라 가볍게 곁들이고, 조건이 그 일을 되게 했다고는 하지 마세요.
+     3) **마지막에 다음 주.** 아래 별표 줄이 허락하는 만큼만.
+   - [조건 - 앱이 견준 값]에 있는 것만 쓰세요. 거기 견줘둔 것은 하나뿐입니다. 다른 관계를 떠올려 덧붙이지 마세요.
+   - 그 블록 안의 별표(*) 줄이 어디까지 말해도 되는지를 정합니다. 제안하라고 되어 있으면 다음 주에 해볼 것을 하나만, 며칠만 해보는 크기로 내세요. 주고받기로 전하라고 되어 있으면 권하지 말고, 그 대신 이틀을 묶어 보자고만 하세요.
+   - 숫자를 그대로 읽지 말고 사람 말로 옮기세요. 퍼센트는 한 번만 쓰거나 아예 쓰지 마세요.
+   - 이건 발견이지 성적표가 아닙니다. 잘했다 못했다로 시작하지 말고, 알아낸 것 하나를 건네는 투로 쓰세요.'''}
 4. 분량: ${feedbackType == 3 ? '6문장 이내. 다른 회고보다 짚을 것이 많아 조금 길어도 됩니다 — 채우라는 칸이 아니라 넘지 말라는 선입니다.' : '3~4문장으로 간결하게.'} JSON이나 마크다운 없이 순수 텍스트로만 답변해 주세요.
 5. 가독성: 문장 앞에 접속어가 올 때는 그 접속어 앞에서 한 줄을 비우고, 들여쓰기 없이 문단을 시작해 주세요. 예: "또한,", "특히,", "다만,", "하지만,", "그리고,", "앞으로,".''';
   }

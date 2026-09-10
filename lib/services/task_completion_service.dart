@@ -334,6 +334,7 @@ class TaskCompletionService {
             if (task['inProgressAt'] != null) 'startedAt': task['inProgressAt'],
             if (task['completedAt'] != null) 'completedAt': task['completedAt'],
             'category': task['category'],
+            'hasTime': task['timeStart'] != null || task['time'] != null,
             'deferred': false,
           },
         )
