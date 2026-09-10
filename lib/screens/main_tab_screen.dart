@@ -619,7 +619,7 @@ class _MainTabScreenState extends State<MainTabScreen>
     _openDrawerIndex = widget.initialDrawerIndex;
     _widgetIntentDrawerMode = widget.initialDrawerIndex != 0;
     WidgetsBinding.instance.addObserver(this);
-    DailyResetService.checkAndExecuteReset();
+    unawaited(_runStartupDailyReset());
     // 아이폰 캘린더를 되읽던 시절이 남긴 유령 할 일과 미래 쉬기 기록을 한 번
     // 치운다. 클라우드 복원이 끝난 뒤에만 돈다.
     unawaited(_cleanUpCalendarPullbackLeftovers());
@@ -724,6 +724,18 @@ class _MainTabScreenState extends State<MainTabScreen>
       unawaited(_checkDailyRollover());
       if (mounted) _startDailyRolloverWatcher();
     });
+  }
+
+  /// 앱을 처음 켤 때 도는 자정 정리.
+  ///
+  /// 정리와 화면의 첫 읽기가 나란히 달린다. 정리가 조금 늦게 끝나면 화면은
+  /// 정리 이전 목록을 그대로 들고 있는데, 끝났다고 알려주는 자리가 없어서 그
+  /// 상태가 앱을 끌 때까지 갔다. 어제 칸이 비어 보이던 나머지 절반이 여기다.
+  Future<void> _runStartupDailyReset() async {
+    final rebuilt = await DailyResetService.checkAndExecuteReset();
+    if (!rebuilt || !mounted) return;
+    _tasksController.refresh();
+    _chatController.refreshTaskProgress();
   }
 
   Future<void> _cleanUpCalendarPullbackLeftovers() async {

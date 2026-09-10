@@ -30,6 +30,16 @@ class DailyResetService {
 
   static const String lastDateKey = 'nyang_last_date';
 
+  /// 이 기기가 들고 있는 오늘 목록이 어느 날 것인지.
+  ///
+  /// 'nyang_' 접두어를 쓰지 않는다. [lastDateKey]가 바로 그 접두어 때문에
+  /// 기기 사이를 오갔고, 그 하나로 정리 여부를 정한 것이 화근이었다. 다른
+  /// 기기가 먼저 정리를 끝내고 오늘 날짜를 올리면, 아직 어제 목록을 들고 있는
+  /// 기기는 "저장된 날짜가 이미 오늘"이라며 보관을 통째로 건너뛰었다. 건너뛴
+  /// 사실도 안 남겨서 그날은 몇 번을 열어도 같은 자리를 다시 밟았다.
+  /// 2026-09-08과 09-09 목록이 보관함에 없던 이유가 이것이다.
+  static const String localListDateKey = 'daily_list_date';
+
   /// "지난 대화 보기"용 코치별 로컬 보관함 키 접두사. 최근 7일치만 유지한다.
   static const String chatArchivePrefix = 'nyang_chat_archive_';
   static const int chatArchiveDays = 7;
@@ -285,29 +295,127 @@ class DailyResetService {
     if (prefs.getString(lastDateKey) != today) {
       await prefs.setString(lastDateKey, today);
     }
+    if (prefs.getString(localListDateKey) != today) {
+      await prefs.setString(localListDateKey, today);
+    }
     return true;
   }
 
-  static Future<void> checkAndExecuteReset() async {
+  /// 오늘 정리가 끝났다고 적는다.
+  ///
+  /// 정리할 것이 없어 지나갈 때도 적어야 한다. 안 적으면 앱을 열 때마다 같은
+  /// 자리를 다시 밟고, 그러는 동안 이 기기는 자기가 오늘 정리를 안 했다고
+  /// 계속 생각한다.
+  static Future<void> markResetDone(
+    SharedPreferences prefs,
+    String today,
+  ) async {
+    await prefs.setString(lastDateKey, today);
+    await prefs.setString(resetDoneDateKey, today);
+    await prefs.setString(localListDateKey, today);
+  }
+
+  /// 목록이 어느 날 것인지 목록 스스로 말하게 한다.
+  ///
+  /// 루틴 항목은 id에 그날 날짜가 박혀 있다(`habit_<루틴id>_<날짜>`). 그게
+  /// 없으면 손으로 적은 할 일의 적은 시각을 본다. 일정은 보지 않는다 — 일정을
+  /// 만든 날은 그 일정이 놓인 날이 아니다.
+  ///
+  /// 저장된 날짜값과 달리 이건 클라우드가 덮을 수 없다. 목록을 옮기는 일이니
+  /// 어느 날 것인지는 옮길 목록에게 묻는 것이 맞다.
+  ///
+  /// 날짜가 섞여 있으면 **가장 이른 날**이 답이다. 화면은 정리와 상관없이 오늘
+  /// 루틴을 목록에 채워 넣기 때문에, 어제 목록에 오늘 만든 루틴 하나가 얹힐 수
+  /// 있다. 그걸 보고 "이 목록은 오늘 것"이라고 읽으면 어제 목록이 통째로 보관을
+  /// 건너뛴다 — 고치려던 바로 그 일이 다른 문으로 들어온다.
+  @visibleForTesting
+  static String? listDateOf(List<dynamic> tasks) {
+    final habitDate = RegExp(r'_(\d{4}-\d{2}-\d{2})$');
+    String? fromHabits;
+    String? fromCreated;
+    for (final task in tasks) {
+      if (task is! Map) continue;
+      final id = task['id']?.toString() ?? '';
+      if (id.startsWith('habit_')) {
+        final match = habitDate.firstMatch(id);
+        final date = match?.group(1);
+        if (date != null &&
+            (fromHabits == null || date.compareTo(fromHabits) < 0)) {
+          fromHabits = date;
+        }
+        continue;
+      }
+      if (task['category'] == 'schedule') continue;
+      final date = _dateOfIso(task['createdAt']);
+      if (date != null &&
+          (fromCreated == null || date.compareTo(fromCreated) < 0)) {
+        fromCreated = date;
+      }
+    }
+    return fromHabits ?? fromCreated;
+  }
+
+  /// 지금 들고 있는 목록이 어느 날 것인지. null이면 정리할 목록이 없다.
+  ///
+  /// 목록이 먼저다. 적어둔 날짜는 목록이 아무 말도 못 할 때만 쓴다. 그중에서도
+  /// 이 기기에 적은 것을 먼저 보고, 그것마저 없을 때에만 클라우드로 오가는
+  /// 값을 본다.
+  ///
+  /// 아직 오지 않은 날은 답으로 삼지 않는다. 폰 시계가 앞서 있거나 시차가 다른
+  /// 곳에서 만든 목록이 넘어오면 그럴 수 있는데, 그 날짜로 정리를 돌리면
+  /// "지난 날 보관"이 성립하지 않아 목록이 보관 없이 버려진다. 그때는 오늘로
+  /// 읽어 아무것도 옮기지 않는다 — 아직 오지 않은 날의 목록이라면 옮길 이유도
+  /// 없다.
+  static String? resetFromDate({
+    required List<dynamic> tasks,
+    required String? localListDate,
+    required String? lastDate,
+    required String today,
+  }) {
+    final found = listDateOf(tasks) ?? localListDate ?? lastDate;
+    if (found == null) return null;
+    return found.compareTo(today) > 0 ? today : found;
+  }
+
+  /// 목록을 실제로 옮기고 다시 만들었으면 true.
+  ///
+  /// 부르는 쪽이 화면을 다시 읽을지 정하는 데 쓴다. 앱을 처음 켤 때는 이 정리와
+  /// 화면의 첫 읽기가 나란히 달리는데, 정리가 조금 늦게 끝나면 화면은 정리
+  /// 이전 목록을 그대로 들고 있었다. 그 상태에서 어제 칸을 열면 방금 보관된
+  /// 목록이 화면에는 없어서 빈칸으로 보인다.
+  static Future<bool> checkAndExecuteReset() async {
     final prefs = await SharedPreferences.getInstance();
-    if (isCloudRestorePending(prefs)) return;
+    if (isCloudRestorePending(prefs)) return false;
     const resetHour = 0.0;
     final today = _getTodayStr(resetHour);
-    if (await alreadyResetToday(prefs, today)) return;
-    final lastDate = prefs.getString(lastDateKey);
+    if (await alreadyResetToday(prefs, today)) return false;
+
+    final previousTasksRaw = prefs.getString('nyang_tasks') ?? '[]';
+    List<dynamic> previousTasks = [];
+    try {
+      previousTasks = jsonDecode(previousTasksRaw) as List;
+    } catch (_) {}
+
+    final lastDate = resetFromDate(
+      tasks: previousTasks,
+      localListDate: prefs.getString(localListDateKey),
+      lastDate: prefs.getString(lastDateKey),
+      today: today,
+    );
 
     if (lastDate == null) {
-      await prefs.setString(lastDateKey, today);
-      await prefs.setString(resetDoneDateKey, today);
-      return;
+      await markResetDone(prefs, today);
+      return false;
+    }
+
+    var rebuiltList = false;
+
+    if (lastDate == today) {
+      // 목록이 이미 오늘 것이다. 옮길 것이 없어도 지나갔다는 표시는 남긴다.
+      await markResetDone(prefs, today);
     }
 
     if (lastDate != today) {
-      final previousTasksRaw = prefs.getString('nyang_tasks') ?? '[]';
-      List<dynamic> previousTasks = [];
-      try {
-        previousTasks = jsonDecode(previousTasksRaw) as List;
-      } catch (_) {}
       final previousDayHadTasks = previousTasks.isNotEmpty;
       final previousDayAllDone =
           previousDayHadTasks &&
@@ -392,8 +500,7 @@ class DailyResetService {
         );
       }
 
-      await prefs.setString(lastDateKey, today);
-      await prefs.setString(resetDoneDateKey, today);
+      await markResetDone(prefs, today);
 
       // 5. Inject habits & schedules to prefs for the new day
       await _injectTodayHabitsAndSchedulesDirectly(
@@ -402,6 +509,7 @@ class DailyResetService {
         previousTasks: previousTasks,
       );
       TasksSyncService.scheduleSyncToCloud();
+      rebuiltList = true;
     }
 
     // Weekly/Monthly Reset Check
@@ -424,6 +532,8 @@ class DailyResetService {
       await prefs.setString('nyang_last_month', thisMonth);
       await prefs.setString('nyang_month_goals', '[]');
     }
+
+    return rebuiltList;
   }
 
   /// 오늘 목록을 루틴·일정·미리 세운 계획으로 다시 만든다.

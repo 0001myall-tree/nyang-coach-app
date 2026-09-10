@@ -22,6 +22,7 @@ class RoutineDiagnostics {
     required String? lastDate,
     required String? resetDoneDate,
     required DateTime now,
+    String? localListDate,
     String? rawCoreTasks,
     String? rawTasksByDate,
     bool? hasSyncedFromCloud,
@@ -35,6 +36,7 @@ class RoutineDiagnostics {
     lines.add('오늘 $today');
     lines.add('저장된 날짜 ${lastDate ?? '없음'}');
     lines.add('이 기기 정리 완료 ${resetDoneDate ?? '없음'}');
+    lines.add('이 기기 목록 날짜 ${localListDate ?? '없음'}');
     if (hasSyncedFromCloud != null) {
       lines.add('클라우드 복원 ${hasSyncedFromCloud ? '끝남' : '아직'}');
     }

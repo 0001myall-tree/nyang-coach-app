@@ -2338,12 +2338,25 @@ class _TasksScreenState extends State<TasksScreen>
     // 옛 날짜가 돌아왔을 뿐인데 정리가 한 번 더 돌면, 오늘 적어둔 것이
     // 어제 칸으로 넘어가고 오늘 목록은 루틴과 일정으로만 다시 만들어진다.
     if (await DailyResetService.alreadyResetToday(prefs, today)) return;
-    final lastDate = prefs.getString(DailyResetService.lastDateKey);
+
+    // 어느 날 목록을 정리하는 것인지는 목록에게 묻는다. 저장된 날짜 하나로
+    // 정하면, 다른 기기가 먼저 올려둔 오늘 날짜에 밀려 이 기기가 들고 있는
+    // 어제 목록이 보관되지 못한 채 사라진다.
+    final lastDate = DailyResetService.resetFromDate(
+      tasks: tasks.map((t) => t.toJson()).toList(),
+      localListDate: prefs.getString(DailyResetService.localListDateKey),
+      lastDate: prefs.getString(DailyResetService.lastDateKey),
+      today: today,
+    );
 
     if (lastDate == null) {
-      await prefs.setString(DailyResetService.lastDateKey, today);
-      await prefs.setString(DailyResetService.resetDoneDateKey, today);
+      await DailyResetService.markResetDone(prefs, today);
       return;
+    }
+
+    if (lastDate == today) {
+      // 목록이 이미 오늘 것이다. 옮길 것은 없어도 지나갔다는 표시는 남긴다.
+      await DailyResetService.markResetDone(prefs, today);
     }
 
     if (lastDate != today) {
@@ -2436,8 +2449,7 @@ class _TasksScreenState extends State<TasksScreen>
         await prefs.setString('nyang_chat_history_$id', '[]');
       }
 
-      await prefs.setString(DailyResetService.lastDateKey, today);
-      await prefs.setString(DailyResetService.resetDoneDateKey, today);
+      await DailyResetService.markResetDone(prefs, today);
     }
   }
 

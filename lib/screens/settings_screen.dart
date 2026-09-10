@@ -5075,6 +5075,7 @@ class _SettingsScreenState extends State<SettingsScreen>
       rawTasks: prefs.getString('nyang_tasks'),
       lastDate: prefs.getString(DailyResetService.lastDateKey),
       resetDoneDate: prefs.getString(DailyResetService.resetDoneDateKey),
+      localListDate: prefs.getString(DailyResetService.localListDateKey),
       now: DateTime.now(),
       rawCoreTasks: prefs.getString('nyang_core_tasks'),
       rawTasksByDate: prefs.getString(DailyResetService.plannedTasksByDateKey),
