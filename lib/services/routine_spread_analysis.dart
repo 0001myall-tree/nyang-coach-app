@@ -22,6 +22,14 @@ class RoutineSpreadAnalysis {
   /// 줄이라는 말로 들린다.
   static const int minDailyRoutines = 5;
 
+  /// 루틴을 새로 만들어달라고 한 자리에서 짚기 시작하는 개수.
+  ///
+  /// 금요일 제안보다 하나 높다. 그쪽은 못 하고 있는 것이 이미 보인 뒤라 문턱이
+  /// 낮아도 되지만, 이쪽은 아직 아무 실패도 없는데 미리 묻는 자리다. 물 마시기·
+  /// 영양제·스트레칭처럼 정말 매일이어야 하는 것만으로도 대여섯은 쉽게 차서,
+  /// 너무 이르게 물으면 멀쩡한 습관을 말리는 말이 된다.
+  static const int askAtRegistrationFrom = 6;
+
   /// 최근 평일 이만큼을 본다.
   ///
   /// 주말은 세지 않는다. 주말에는 플래너를 잘 안 보고, 그러면 완료 표시도 안
@@ -141,6 +149,55 @@ class RoutineSpreadAnalysis {
         )
         .join('\n');
     return '[매일 루틴 $dailyRoutineCount개 중 요즘 자주 비는 것]\n$lines\n';
+  }
+
+  /// 매일 루틴 전부와 최근 현황. 코치가 무엇을 나눌지 고르는 재료다.
+  ///
+  /// [promptBlock]과 달리 자주 비는 것만 주지 않는다. 매일 유지할 것과 나눌
+  /// 것을 갈라야 하는 자리라, 잘 지키고 있는 루틴도 보여야 "이건 그대로 두자"고
+  /// 말할 수 있다. 빈 것만 주면 목록 전체가 문제처럼 보인다.
+  ///
+  /// 만든 지 얼마 안 된 것은 표시해서 넘긴다. 아직 못 한 날을 셀 자리가 없는데
+  /// 숫자만 보면 제일 심하게 비는 루틴으로 보인다.
+  static String allDailyRoutinesBlock({
+    required String? habitsRaw,
+    required String? habitLogsRaw,
+    required DateTime now,
+  }) {
+    final logs = _decodeMap(habitLogsRaw);
+    final days = recentWeekdays(now);
+
+    final lines = <String>[];
+    for (final item in _decodeList(habitsRaw)) {
+      if (item is! Map) continue;
+      final habit = Map<String, dynamic>.from(item);
+      if ((habit['freq']?.toString() ?? 'daily') != 'daily') continue;
+      final id = habit['id']?.toString() ?? '';
+      final name = habit['name']?.toString().trim() ?? '';
+      if (id.isEmpty || name.isEmpty) continue;
+
+      final forHabit = logs[id];
+      var done = 0;
+      for (final day in days) {
+        final log = forHabit is Map ? forHabit[day] : null;
+        if (log is Map && log['done'] == true) done += 1;
+      }
+
+      final createdAt = DateTime.tryParse(habit['createdAt']?.toString() ?? '');
+      final isNew = createdAt != null && now.difference(createdAt).inDays < 7;
+      final timeStart = habit['timeStart']?.toString();
+      final timeInfo = (timeStart == null || timeStart.isEmpty)
+          ? ''
+          : ', $timeStart';
+      lines.add(
+        '- $name (${days.length}일 중 $done일 함$timeInfo)'
+        '${isNew ? ' *만든 지 일주일이 안 됨' : ''}',
+      );
+    }
+
+    if (lines.isEmpty) return '';
+    return '[매일 하는 루틴 ${lines.length}개 — 최근 평일 ${days.length}일]\n'
+        '${lines.join('\n')}\n';
   }
 
   static List<dynamic> _decodeList(String? raw) {

@@ -1651,6 +1651,14 @@ class _TasksScreenState extends State<TasksScreen>
     // 것보다 반복 요일을 고칠 수 있는 자리로 데려다주는 편이 빠르다.
     if (kind == 'habit') {
       _openTab(3);
+      // 저장소를 다시 읽고 나서 찾는다.
+      //
+      // 여기로 오는 길 중에는 채팅이 저장소의 루틴을 직접 고쳐놓고 부르는 것이
+      // 있다(요일 나누기). 그때 화면이 들고 있는 목록은 고치기 전 값이라, 그대로
+      // 수정 창을 열면 방금 바꾼 요일이 아니라 옛 '매일'이 떠 있다. 거기서
+      // 저장을 누르면 방금 바꾼 것이 그대로 되돌아가고, 되돌아간 줄도 모른다.
+      await _loadAll();
+      if (!mounted) return _editCommandReply('habitOpened', target);
       final found = habits.where((h) => _titleMatches(h.name, target)).toList();
       if (found.length == 1) {
         await Future.delayed(const Duration(milliseconds: 360));

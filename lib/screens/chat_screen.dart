@@ -31,6 +31,7 @@ import 'package:nyang_coach/services/routine_spread_analysis.dart';
 import 'package:nyang_coach/services/routine_spread_apply.dart';
 import 'package:nyang_coach/services/routine_spread_budget.dart';
 import 'package:nyang_coach/services/routine_spread_plan.dart';
+import 'package:nyang_coach/services/routine_spread_offer.dart';
 import 'package:nyang_coach/services/task_completion_service.dart';
 import 'package:nyang_coach/services/tasks_sync_service.dart';
 import 'package:nyang_coach/services/user_title_service.dart';
@@ -5820,6 +5821,35 @@ $block
     await RoutineSpreadBudget.markAsked(prefs, now);
     if (!mounted) return false;
 
+    // 나누는 안은 코치가 짠다. 무엇이 매일이어야 하는지는 이름을 읽어야 나오고
+    // (영양제는 나누면 뜻이 없고 운동은 나눠도 된다), 나눈 것끼리 같은 날로
+    // 몰리지 않게 흩는 일도 목록 전체를 봐야 한다. 앱이 정해둔 요일 하나를
+    // 모든 루틴에 똑같이 붙이던 자리다.
+    final proposal = await RoutineSpreadOffer.compose(
+      coachId: widget.coachId,
+      routinesBlock: RoutineSpreadAnalysis.allDailyRoutinesBlock(
+        habitsRaw: habitsRaw,
+        habitLogsRaw: prefs.getString('nyang_habit_logs'),
+        now: now,
+      ),
+      busyBlock: BusyHoursService.promptBlock(prefs),
+    );
+    if (!mounted) return false;
+
+    if (proposal != null) {
+      _pendingRoutineSpread = proposal.assignments;
+      _injectAiMessage(
+        proposal.message,
+        kind: _routineSpreadKind,
+        choices: [_routineSpreadYesLabel, _routineSpreadNoLabel],
+      );
+      unawaited(AnalyticsService.logFeatureUsage('routine_spread_offer'));
+      return true;
+    }
+
+    // 코치를 못 불렀다. 그날치를 통째로 거르면 다음 기회가 2주 뒤라,
+    // 앱이 고르게 하던 길로 간다.
+    _pendingRoutineSpread = const [];
     final dayLabel = RoutineSpreadPlan.label(RoutineSpreadPlan.defaultDays);
     final count = RoutineSpreadAnalysis.dailyRoutineCount(habitsRaw);
     _injectAiMessage(
@@ -5865,6 +5895,7 @@ $block
     final prefs = await SharedPreferences.getInstance();
 
     if (label == _routineSpreadNoLabel) {
+      _pendingRoutineSpread = const [];
       await RoutineSpreadBudget.markDeclined(prefs, DateTime.now());
       unawaited(AnalyticsService.logFeatureUsage('routine_spread_declined'));
       if (!mounted) return;
@@ -5881,9 +5912,21 @@ $block
       return;
     }
 
-    final applied = await RoutineSpreadApply.apply([
-      RoutineDayAssignment(name: label, days: RoutineSpreadPlan.defaultDays),
-    ]);
+    // 코치가 안을 짜온 경우다. 루틴마다 요일이 다르므로 한꺼번에 적는다.
+    final coachPlan = label == _routineSpreadYesLabel
+        ? _pendingRoutineSpread
+        : const <RoutineDayAssignment>[];
+    _pendingRoutineSpread = const [];
+    final applied = await RoutineSpreadApply.apply(
+      coachPlan.isNotEmpty
+          ? coachPlan
+          : [
+              RoutineDayAssignment(
+                name: label,
+                days: RoutineSpreadPlan.defaultDays,
+              ),
+            ],
+    );
     if (!mounted) return;
 
     if (applied.isEmpty) {
@@ -5901,22 +5944,34 @@ $block
     }
 
     unawaited(AnalyticsService.logFeatureUsage('routine_spread_applied'));
-    final dayLabel = RoutineSpreadPlan.label(RoutineSpreadPlan.defaultDays);
+    // 무엇이 어떤 요일로 갔는지 그대로 되읽어준다. 코치가 짠 안은 루틴마다
+    // 요일이 다르고 여러 개일 수 있어서, 한 줄로 뭉뚱그리면 방금 무엇이
+    // 바뀌었는지 알 수 없다.
+    final changed = coachPlan.isNotEmpty
+        ? coachPlan
+              .where((a) => applied.contains(a.name))
+              .map((a) => "'${a.name}'은 ${a.dayLabel}요일")
+              .join(', ')
+        : "'$label'은 "
+              '${RoutineSpreadPlan.label(RoutineSpreadPlan.defaultDays)}요일';
     _injectAiMessage(
       _voice(
-        cat: "'$label'은 $dayLabel요일로 바꿨다냥. 다른 요일이 낫다면 루틴 탭에서 고쳐도 된다냥.",
-        bro: "'$label'은 $dayLabel요일로 바꿨다. 다른 요일이 낫다면 루틴 탭에서 고쳐라.",
-        halmae: "'$label'은 $dayLabel요일로 바꿔뒀다. 다른 요일이 낫거든 루틴 탭에서 고치렴.",
-        boyfriend: "'$label'은 $dayLabel요일로 바꿨어. 다른 요일이 좋으면 루틴 탭에서 고쳐도 돼.",
-        nyangHalbae: "'$label'은 $dayLabel요일로 바꿔뒀다냥. 다른 요일이 낫다면 루틴 탭에서 고치면 된다냥.",
-        sec: "'$label'을 $dayLabel요일로 변경했어요. 다른 요일이 좋으시면 루틴 탭에서 수정할 수 있어요.",
+        cat: '$changed로 바꿨다냥. 다른 요일이 낫다면 루틴 탭에서 고쳐도 된다냥.',
+        bro: '$changed로 바꿨다. 다른 요일이 낫다면 루틴 탭에서 고쳐라.',
+        halmae: '$changed로 바꿔뒀다. 다른 요일이 낫거든 루틴 탭에서 고치렴.',
+        boyfriend: '$changed로 바꿨어. 다른 요일이 좋으면 루틴 탭에서 고쳐도 돼.',
+        nyangHalbae: '$changed로 바꿔뒀다냥. 다른 요일이 낫다면 루틴 탭에서 고치면 된다냥.',
+        sec: '$changed로 변경했어요. 다른 요일이 좋으시면 루틴 탭에서 수정할 수 있어요.',
       ),
     );
     // 바꾼 것을 눈으로 확인할 자리로 데려간다. 값만 바꾸고 말면 무엇이 어떻게
     // 됐는지 알 수 없고, 다른 요일이 낫다 싶어도 어디로 가야 하는지 모른다.
     // 수정 창까지 열리므로 그 자리에서 요일을 고칠 수 있다.
+    //
+    // 여러 개를 바꿨어도 데려가는 곳은 하나다. 창이 연달아 열리면 어느 것을
+    // 보고 있는지 모른다. 첫 번째를 열면 루틴 탭에 나머지도 같이 보인다.
     unawaited(
-      widget.onEditCommand?.call({'target': label, 'kind': 'habit'}) ??
+      widget.onEditCommand?.call({'target': applied.first, 'kind': 'habit'}) ??
           Future<String>.value(''),
     );
   }
@@ -7093,6 +7148,19 @@ Rules:
   static const _routineSpreadKind = 'auto:routine_spread';
 
   static const String _routineSpreadNoLabel = '그대로 둘게';
+
+  /// 코치가 짜온 안을 그대로 받는 보기.
+  ///
+  /// 코치가 안을 낸 경우에만 쓴다. 앱이 보기를 내밀 때는 루틴 이름들이 보기가
+  /// 되므로 이 자리가 없다.
+  static const String _routineSpreadYesLabel = '그렇게 할게';
+
+  /// 코치가 짜온 배정을 담아두는 자리.
+  ///
+  /// 보기를 누른 뒤에야 적용하기 때문에, 그 사이 어딘가에 들고 있어야 한다.
+  /// 화면을 벗어나면 사라져도 된다 - 다음 금요일에 다시 짜면 그만이고, 그때
+  /// 루틴이 달라져 있으면 옛 안은 어차피 틀린 안이다.
+  List<RoutineDayAssignment> _pendingRoutineSpread = const [];
 
   /// 제안과 제안 사이의 최소 간격.
   ///
@@ -13466,6 +13534,38 @@ Rules:
         // 같은데요"는 알려주는 말이 아니라 되돌려주는 말이다.
         sb.writeln(
           '*목록을 줄이라고 먼저 말하지는 마세요. 무엇부터 할지 순서로 답하고, 이 시간 안에 어디까지가 확실한지 짚어 주세요.',
+        );
+      }
+    }
+
+    // 5-1-1. 매일 루틴이 이미 여럿일 때.
+    //
+    // 매일 루틴은 매일 뜬다. 여덟 개를 매일로 걸어두면 매일 여덟 개가 오늘 칸에
+    // 앉고, 둘만 해도 여섯 개가 못 한 것으로 남는다. 총량이 문제가 아니라
+    // 하루에 다 얹혀 있는 것이 문제다.
+    //
+    // 금요일에 나누자고 묻는 자리가 따로 있지만, 그쪽은 못 하고 있는 것이 보인
+    // 뒤에 온다. 이미 매일로 굳은 것을 나중에 바꾸라고 하는 셈이라 하던 것을
+    // 줄이라는 말로 들리기 쉽다. 새로 세우는 순간은 아직 아무 실패도 없고
+    // 사용자가 그 루틴을 정하는 중이라, 요일을 고르는 데 저항이 거의 없다.
+    //
+    // 개수만 넘긴다. 물 마시기와 영양제는 여덟 개라도 매일이 맞고, 운동은
+    // 나눠도 된다. 그 판단은 이름을 읽어야 나와서 코드로는 가를 수 없다.
+    if (needsTaskContext) {
+      final dailyRoutines = RoutineSpreadAnalysis.dailyRoutineCount(
+        prefs.getString('nyang_habits'),
+      );
+      if (dailyRoutines >= RoutineSpreadAnalysis.askAtRegistrationFrom) {
+        sb.writeln('\n[매일 하는 루틴]');
+        sb.writeln('- $dailyRoutines개');
+        sb.writeln(
+          '*사용자가 매일 하는 루틴을 하나 더 만들어달라고 한 턴에서만 씁니다. '
+          '[HABIT] 태그를 붙이기 전에 먼저 묻습니다 — 이미 $dailyRoutines개가 매일 뜨고 있다는 것을 짚고, '
+          '요일을 정해 나누는 게 나을지. '
+          '(예: "근데 매일 하는 루틴이 벌써 $dailyRoutines개다냥. 요일로 정해서 나누는 게 좋을 것 같은데?")',
+        );
+        sb.writeln(
+          '*나누겠다고 하면 그때 요일을 넣어 태그를 붙이고, 매일 하겠다고 하면 |매일로 붙입니다.',
         );
       }
     }
