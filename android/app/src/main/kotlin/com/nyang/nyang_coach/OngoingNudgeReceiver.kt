@@ -64,6 +64,21 @@ class OngoingNudgeReceiver : BroadcastReceiver() {
             OngoingNudgeScheduler.cancelStart(context)
             return
         }
+        // 아직 그 시각이 아니다. 여기로 오는 길은 정해둔 시각의 알람만이 아니다 —
+        // 재부팅과 앱 교체는 10분 뒤 점검을 걸고, 카드를 띄우다 실패해도 다시
+        // 건다. 그 점검이 늦었는지만 보고 이르다는 것은 보지 않으면, 아침 10시
+        // 일정이 새벽 1시에 "시작하는 거 잊지 않았지?"로 튀어나온다.
+        //
+        // 자정 정리가 오늘 목록을 다시 깔면서 만료 시각도 오늘 것으로 새로
+        // 쓰기 때문에, 정리가 끝난 뒤의 새벽이 정확히 이 구멍이 열리는 때다.
+        if (OngoingNudgeState.isBeforeStartTime(context)) {
+            OngoingNudgeScheduler.scheduleStartAt(
+                context,
+                OngoingNudgeState.startAt(context),
+                OngoingNudgeScheduler.STAGE_FIRST,
+            )
+            return
+        }
         if (OngoingNudgeState.shouldAppearNowForStart(context)) {
             OngoingNudgeService.showStart(context)
         } else {

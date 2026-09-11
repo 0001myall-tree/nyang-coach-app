@@ -51,6 +51,9 @@ object OngoingNudgeState {
     /** 시작을 권하는 것도 이 시각까지만. 네이티브만 쓴다. */
     private const val KEY_START_UNTIL = "ongoing_nudge_start_until"
 
+    /** 그 일을 시작하기로 한 시각. 네이티브만 쓴다. */
+    private const val KEY_START_AT = "ongoing_nudge_start_at"
+
     /** 냥냥코치가 화면 앞에 있는지. 앱 안에서는 이미 진행 중 카드가 보이므로 나가지 않는다. */
     private const val KEY_APP_FOREGROUND = "flutter.ongoing_nudge_app_foreground"
 
@@ -184,11 +187,39 @@ object OngoingNudgeState {
         return until > 0L && System.currentTimeMillis() > until
     }
 
+    /**
+     * 그 일을 시작하기로 한 시각.
+     *
+     * [setStartUntil]과 따로 적어둔다. 만료 시각에서 창 길이를 빼 역산할 수도
+     * 있지만, 그러면 나중에 창 길이를 손대는 순간 시작 시각까지 같이 틀어진다.
+     *
+     * 이 값을 적기 전에 깔린 기기가 있어서, 없으면 만료 시각에서 역산한다.
+     * 둘 다 없으면 0을 돌려주고, 받는 쪽은 "시각을 모른다"로 읽는다.
+     */
+    fun setStartAt(context: Context, atMillis: Long) {
+        prefs(context).edit().putLong(KEY_START_AT, atMillis).commit()
+    }
+
+    fun startAt(context: Context): Long {
+        val at = prefs(context).getLong(KEY_START_AT, 0L)
+        if (at > 0L) return at
+        val until = prefs(context).getLong(KEY_START_UNTIL, 0L)
+        if (until > 0L) return until - OngoingNudgeScheduler.START_WINDOW_MILLIS
+        return 0L
+    }
+
+    /** 아직 시작할 시각 전인가. 시각을 모르면 막지 않는다. */
+    fun isBeforeStartTime(context: Context): Boolean {
+        val at = startAt(context)
+        return at > 0L && System.currentTimeMillis() < at
+    }
+
     fun clearStart(context: Context) {
         prefs(context).edit()
             .remove(KEY_START_TASK_ID)
             .remove(KEY_START_TASK_TEXT)
             .remove(KEY_START_UNTIL)
+            .remove(KEY_START_AT)
             .commit()
     }
 

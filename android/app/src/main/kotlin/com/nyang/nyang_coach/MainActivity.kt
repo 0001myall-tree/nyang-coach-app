@@ -170,6 +170,7 @@ class MainActivity : FlutterFragmentActivity() {
                         // 있어도 그대로 걸린다.
                         val alreadyWaiting = OngoingNudgeState.startTaskId(this) == taskId
                         OngoingNudgeState.setStartTask(this, taskId, taskText)
+                        OngoingNudgeState.setStartAt(this, startAtMillis)
                         OngoingNudgeState.setStartUntil(
                             this,
                             startAtMillis + OngoingNudgeScheduler.START_WINDOW_MILLIS,
