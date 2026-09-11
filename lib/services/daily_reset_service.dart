@@ -92,6 +92,64 @@ class DailyResetService {
     return merged;
   }
 
+  /// 지나간 하루의 대화를 날짜로 모은다. 현재 기록과 보관함을 함께 본다.
+  ///
+  /// [collectChatHistoryForDailySummary]는 정리가 도는 순간에만 맞는다 — 그때는
+  /// 현재 기록에 들어 있는 것이 곧 어제 대화다. 정리가 이미 지나간 뒤에 뒤늦게
+  /// 요약을 만들려면 그 대화는 벌써 보관함으로 옮겨간 뒤라, 현재 기록만 보면
+  /// 오늘 것밖에 없다.
+  ///
+  /// 같은 말이 양쪽에 다 있는 일은 정상적으로는 없지만, 정리가 한 번 어긋나면
+  /// 생길 수 있어서 코치·시각·내용이 같으면 한 번만 센다.
+  static List<dynamic> collectChatHistoryForDate(
+    SharedPreferences prefs,
+    String date,
+  ) {
+    final merged = <Map<String, dynamic>>[];
+    final seen = <String>{};
+    for (final coachId in coachIds) {
+      final normalizedCoachId = CoachIdService.normalize(coachId);
+      for (final key in [
+        'nyang_chat_history_$normalizedCoachId',
+        '$chatArchivePrefix$normalizedCoachId',
+      ]) {
+        final raw = prefs.getString(key);
+        if (raw == null) continue;
+        try {
+          final history = jsonDecode(raw) as List;
+          for (final item in history) {
+            if (item is! Map) continue;
+            final text = (item['text'] ?? item['content'] ?? '')
+                .toString()
+                .trim();
+            if (text.isEmpty) continue;
+            final rawTime = item['time']?.toString() ?? '';
+            final time = DateTime.tryParse(rawTime);
+            // 시각을 모르면 어느 날 것인지도 모른다. 요약은 하루 단위라 여기서는
+            // 넣지 않는다 - 엉뚱한 날에 섞이면 그날 기억이 통째로 틀어진다.
+            if (time == null) continue;
+            if (DateFormat('yyyy-MM-dd').format(time) != date) continue;
+            if (!seen.add('$normalizedCoachId|$rawTime|$text')) continue;
+            merged.add({
+              ...item.cast<String, dynamic>(),
+              'coachId': normalizedCoachId,
+            });
+          }
+        } catch (_) {}
+      }
+    }
+
+    merged.sort((a, b) {
+      final at = DateTime.tryParse(a['time']?.toString() ?? '');
+      final bt = DateTime.tryParse(b['time']?.toString() ?? '');
+      if (at == null && bt == null) return 0;
+      if (at == null) return 1;
+      if (bt == null) return -1;
+      return at.compareTo(bt);
+    });
+    return merged;
+  }
+
   /// 리셋으로 지워지는 채팅 원문을 코치별 보관함에 합치고 7일 이전은 버린다.
   /// 서버로 올리지 않는 순수 로컬 저장이며, 열람 표시 용도로만 쓴다.
   static Future<List<dynamic>> _archiveChatHistory(
@@ -277,12 +335,60 @@ class DailyResetService {
     return DateFormat('yyyy-MM-dd').format(monday);
   }
 
+  /// 파이어베이스가 로그인 상태를 되살릴 때까지 기다린다.
+  ///
+  /// [FirebaseAuth.currentUser]는 앱이 막 켜진 순간 잠깐 비어 있을 수 있다.
+  /// 그 찰나를 "로그아웃"으로 읽으면 아래 가드가 통째로 열린다 - 아직 도착하지
+  /// 않은 클라우드 데이터를 없는 것으로 치고 정리가 달려버리고, 어제 대화는
+  /// 보관함에 들어가지도 남지도 못한 채 사라진다.
+  ///
+  /// 기기가 느리거나 네트워크가 느릴수록 잘 걸린다. 같은 앱 같은 계정인데
+  /// "지난 대화 보기"가 되는 사람과 안 되는 사람이 갈리던 것이 이것이다.
+  ///
+  /// 진짜 로그아웃 상태면 스트림이 곧바로 null을 내주므로 기다리지 않는다.
+  static Future<User?> resolvedUser({
+    Duration timeout = const Duration(seconds: 5),
+  }) async {
+    final current = FirebaseAuth.instance.currentUser;
+    if (current != null) return current;
+    try {
+      return await FirebaseAuth.instance.authStateChanges().first.timeout(
+        timeout,
+      );
+    } catch (_) {
+      // 스트림이 끝내 아무것도 안 주면 예전처럼 지금 값으로 판단한다.
+      return FirebaseAuth.instance.currentUser;
+    }
+  }
+
   /// 로그인 상태인데 이 기기에서 첫 클라우드 복원이 아직 성공하지 않았으면 true.
   /// 이 상태에서 리셋이 돌면 재설치 직후의 빈 로컬을 기준으로 하루 전환이
   /// 실행되어, 곧 복원될 데이터를 지우거나 빈 값을 서버로 역전파할 수 있다.
-  static bool isCloudRestorePending(SharedPreferences prefs) {
-    if (FirebaseAuth.instance.currentUser == null) return false;
+  static Future<bool> isCloudRestorePending(SharedPreferences prefs) async {
+    if (await resolvedUser() == null) return false;
+    await prefs.reload();
     return !(prefs.getBool('nyang_has_synced_from_cloud') ?? false);
+  }
+
+  /// 복원이 끝나기를 기다렸다가 정리한다. 앱을 켤 때 쓴다.
+  ///
+  /// 가드에 막히면 [checkAndExecuteReset]은 그냥 돌아서고, 그 판에서는 아무도
+  /// 다시 부르지 않았다. 그러면 정리는 앱을 껐다 켜거나 자정을 넘길 때까지
+  /// 밀리고, 그동안 오늘 목록은 어제 것을 그대로 들고 있다.
+  ///
+  /// 끝내 복원이 안 되면 정리하지 않는다. 늦는 것이 지우는 것보다 낫다 -
+  /// 아직 안 온 데이터를 없는 것으로 치고 하루를 넘기면 되돌릴 길이 없다.
+  static Future<bool> checkAndExecuteResetAfterRestore({
+    Duration timeout = const Duration(seconds: 15),
+  }) async {
+    final deadline = DateTime.now().add(timeout);
+    var prefs = await SharedPreferences.getInstance();
+    while (await isCloudRestorePending(prefs)) {
+      if (!DateTime.now().isBefore(deadline)) return false;
+      await Future.delayed(const Duration(milliseconds: 500));
+      prefs = await SharedPreferences.getInstance();
+    }
+    return checkAndExecuteReset();
   }
 
   /// 오늘 정리를 이미 끝냈는지. 끝냈으면 되돌아온 날짜만 바로잡고 목록은
@@ -377,6 +483,64 @@ class DailyResetService {
     return found.compareTo(today) > 0 ? today : found;
   }
 
+  /// 뒤늦은 하루 요약을 이 기기에서 어느 날 시도했는지.
+  ///
+  /// 'nyang_' 접두어를 쓰지 않는다. 그 접두어는 클라우드가 덮어쓰는데, 이건
+  /// 이 기기가 오늘 이미 한 번 불렀다는 사실이라 덮이면 안 된다.
+  static const String summaryCatchUpDateKey = 'daily_summary_catch_up_date';
+
+  /// 빠진 하루 요약을 뒤늦게 채운다.
+  ///
+  /// 요약은 원래 자정 정리의 "날짜가 넘어갔다" 갈래 안에서만 만들어졌다. 그
+  /// 판정은 네 군데서 돌아서는데(복원 대기, 오늘 이미 정리함, 어느 날 목록인지
+  /// 모름, 목록이 이미 오늘 것), 그중 하나라도 걸리면 그날 요약은 만들어지지
+  /// 않았고 다시 시도하는 길도 없었다. 다른 기기가 먼저 오늘 날짜를 올린 날이
+  /// 특히 그랬다 - 목록만 안 밀리는 줄 알았는데 기억도 같이 굶었다.
+  ///
+  /// 그래서 정리와 떼어놓는다. 앱을 열 때 "요약이 빠진 날이 있나"만 보고,
+  /// 있으면 그 하루를 만든다. 대부분의 날은 정리가 이미 만들어둔 것을 보고
+  /// 그냥 지나간다.
+  ///
+  /// 하루에 한 번만 시도한다. 실패해도 오늘 다시 부르지 않는다 - 이 자리는
+  /// 사용자가 부른 것이 아니라 배경에서 도는 것이라, 앱을 여닫을 때마다
+  /// 호출이 나가면 안 된다. 대신 대상은 보관함이 남아 있는 동안 그대로
+  /// 기다리므로 내일 다시 집는다.
+  static Future<void> catchUpMissedDailySummary() async {
+    final prefs = await SharedPreferences.getInstance();
+    // 아직 클라우드에서 받아오는 중이다. 지금 보이는 빈 기록은 이 사람이
+    // 대화를 안 한 것이 아니라 아직 안 온 것이다.
+    if (await isCloudRestorePending(prefs)) return;
+
+    const resetHour = 0.0;
+    final today = _getTodayStr(resetHour);
+    if (prefs.getString(summaryCatchUpDateKey) == today) return;
+    // 부르기 전에 적는다. 시작할 때와 자정 넘김이 나란히 달리면 같은 하루를
+    // 두 번 부를 수 있고, 그건 그대로 두 번의 API 요금이다.
+    await prefs.setString(summaryCatchUpDateKey, today);
+
+    final memory = MemoryService();
+    await memory.loadMemoryData();
+
+    final todayDate = DateTime.tryParse(today);
+    if (todayDate == null) return;
+
+    // 보관함이 들고 있는 날까지만 거슬러 본다. 그보다 오래된 날은 재료가
+    // 이미 버려져서 만들 수 없다.
+    for (var back = 1; back <= chatArchiveDays; back++) {
+      final date = DateFormat(
+        'yyyy-MM-dd',
+      ).format(todayDate.subtract(Duration(days: back)));
+      if (memory.hasDailySummary(date)) continue;
+      final messages = collectChatHistoryForDate(prefs, date);
+      // 그날 대화가 없었다. 요약할 것이 없는 것이지 빠진 것이 아니다.
+      if (messages.isEmpty) continue;
+      await memory.generateDailySummary(date, messages);
+      // 한 번에 하루만. 며칠이 비어 있어도 앱 한 번 여는 데 호출 여러 개가
+      // 나가면 안 된다. 나머지는 다음 날 같은 자리에서 집는다.
+      return;
+    }
+  }
+
   /// 목록을 실제로 옮기고 다시 만들었으면 true.
   ///
   /// 부르는 쪽이 화면을 다시 읽을지 정하는 데 쓴다. 앱을 처음 켤 때는 이 정리와
@@ -385,7 +549,7 @@ class DailyResetService {
   /// 목록이 화면에는 없어서 빈칸으로 보인다.
   static Future<bool> checkAndExecuteReset() async {
     final prefs = await SharedPreferences.getInstance();
-    if (isCloudRestorePending(prefs)) return false;
+    if (await isCloudRestorePending(prefs)) return false;
     const resetHour = 0.0;
     final today = _getTodayStr(resetHour);
     if (await alreadyResetToday(prefs, today)) return false;

@@ -105,7 +105,7 @@ Future<bool> claimMasterUnlockNotice() async {
       data.masterUnlockAnnounced ?? (seenOnThisDevice ? signature : null);
 
   final decision = decideMasterUnlockNotice(
-    restorePending: DailyResetService.isCloudRestorePending(prefs),
+    restorePending: await DailyResetService.isCloudRestorePending(prefs),
     signature: signature,
     announced: announced,
   );

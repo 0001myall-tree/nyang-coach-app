@@ -49,7 +49,8 @@ class CalendarPullbackCleanup {
     // 클라우드에서 아직 못 받아왔으면 치울 대상이 안 보인다. 여기서 끝냈다고
     // 적어버리면, 잠시 뒤 도착하는 값은 영영 안 치워진다.
     final pending =
-        cloudRestorePending ?? DailyResetService.isCloudRestorePending(prefs);
+        cloudRestorePending ??
+        await DailyResetService.isCloudRestorePending(prefs);
     if (pending) return false;
 
     final today = DateFormat('yyyy-MM-dd').format(now ?? DateTime.now());

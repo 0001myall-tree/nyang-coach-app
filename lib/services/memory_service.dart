@@ -164,6 +164,11 @@ class MemoryService {
     longTermMemory = [];
   }
 
+  /// 그날 요약이 이미 있는지. [loadMemoryData] 뒤에 부른다.
+  bool hasDailySummary(String date) => dailySummaries.any(
+    (summary) => summary is Map && summary['date']?.toString() == date,
+  );
+
   /// 하루 요약의 '요즘 신경 쓰는 일'을 한 줄로 편다.
   /// 이 칸이 생기기 전에 쌓인 요약에는 없으니 빈 값을 견뎌야 한다.
   /// 그날 코치와 함께 만들거나 정한 것. 없으면 빈 문자열.

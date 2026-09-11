@@ -1359,7 +1359,7 @@ class _TasksScreenState extends State<TasksScreen>
     // 있을 수 있는데, 그 빈 목록을 기준으로 삼으면 멀쩡한 핵심을 전부 지우고
     // 그 빈 값을 클라우드로 올려버린다.
     final coreOrphansRemoved =
-        !DailyResetService.isCloudRestorePending(prefs) &&
+        !(await DailyResetService.isCloudRestorePending(prefs)) &&
         _pruneOrphanCoreTasks();
     if (coreMilestonesChanged || coreOrphansRemoved) {
       if (mounted) setState(() {});
@@ -2332,7 +2332,7 @@ class _TasksScreenState extends State<TasksScreen>
 
   Future<void> _checkReset(SharedPreferences prefs) async {
     // 첫 클라우드 복원 전에는 리셋하지 않는다 (재설치 직후 데이터 유실 방지).
-    if (DailyResetService.isCloudRestorePending(prefs)) return;
+    if (await DailyResetService.isCloudRestorePending(prefs)) return;
     final today = _getTodayStr();
     // 이 기기에서 오늘 정리를 이미 끝냈으면 다시 돌지 않는다. 클라우드에서
     // 옛 날짜가 돌아왔을 뿐인데 정리가 한 번 더 돌면, 오늘 적어둔 것이
@@ -2455,7 +2455,7 @@ class _TasksScreenState extends State<TasksScreen>
 
   // ── checkWeekMonthReset ───────────────────────────────────
   Future<void> _checkWeekMonthReset(SharedPreferences prefs) async {
-    if (DailyResetService.isCloudRestorePending(prefs)) return;
+    if (await DailyResetService.isCloudRestorePending(prefs)) return;
     final thisWeek = _getWeekMondayStr();
     final todayStr = _getTodayStr();
     final parts = todayStr.split('-');

@@ -700,7 +700,12 @@ class _MainTabScreenState extends State<MainTabScreen>
   /// 정리 이전 목록을 그대로 들고 있는데, 끝났다고 알려주는 자리가 없어서 그
   /// 상태가 앱을 끌 때까지 갔다. 어제 칸이 비어 보이던 나머지 절반이 여기다.
   Future<void> _runStartupDailyReset() async {
-    final rebuilt = await DailyResetService.checkAndExecuteReset();
+    // 클라우드 복원이 끝나기를 기다렸다가 정리한다. 그냥 부르면 복원보다 먼저
+    // 달릴 수 있고, 그때는 아직 안 온 데이터를 없는 것으로 치고 하루를 넘긴다.
+    final rebuilt = await DailyResetService.checkAndExecuteResetAfterRestore();
+    // 정리가 건너뛰어 빠진 하루 요약이 있으면 여기서 채운다. 정리 뒤에 불러야
+    // 한다 - 정리가 방금 만든 것을 보고 그냥 지나가야 한다.
+    unawaited(DailyResetService.catchUpMissedDailySummary());
     if (!rebuilt || !mounted) return;
     _tasksController.refresh();
     _chatController.refreshTaskProgress();
@@ -718,6 +723,7 @@ class _MainTabScreenState extends State<MainTabScreen>
     final prefs = await SharedPreferences.getInstance();
     final before = prefs.getString(DailyResetService.lastDateKey);
     await DailyResetService.checkAndExecuteReset();
+    unawaited(DailyResetService.catchUpMissedDailySummary());
     final after = prefs.getString(DailyResetService.lastDateKey);
     if (before == after) return;
     if (!mounted) return;
