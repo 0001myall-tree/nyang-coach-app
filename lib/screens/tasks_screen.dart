@@ -19,6 +19,8 @@ import '../services/task_resistance_service.dart';
 import '../models/user_data.dart';
 import '../services/notification_service.dart';
 import '../services/tasks_sync_service.dart';
+import '../services/overplan_coach_line.dart';
+import '../services/execution_type_labels.dart';
 import '../services/analytics_service.dart';
 import '../services/api_usage_limit_service.dart';
 import '../services/widget_sync_service.dart';
@@ -4236,11 +4238,32 @@ class _TasksScreenState extends State<TasksScreen>
 
     final turns = <Map<String, dynamic>>[];
 
-    final primary = OverplanNudgeService.primaryMessage(
-      _coach.id,
-      fire.recentMax,
-      tone: fire.tone,
-    );
+    // 고정 문구는 늘 같은 말을 한다. "다 하려고 하기보다 하나만 먼저 골라볼까"는
+    // 맞는 말이지만 남의 말이라, 듣는 사람은 동의하고 그대로 여덟 개를 적는다.
+    // 동의한 것은 일반론이지 자기 이야기가 아니기 때문이다.
+    //
+    // 그래서 이 사람 기록을 근거로 코치가 짓게 한다. 아침에 본인이 고른 답과
+    // 그날 본인이 적고 해낸 개수를 나란히 놓으면 빠져나갈 구멍이 없다.
+    // 못 지었으면 고정 문구로 간다.
+    final primary =
+        await OverplanCoachLine.compose(
+          coachId: _coach.id,
+          plannedCount: _activeTodayTasks.length,
+          recentMax: fire.recentMax,
+          tone: fire.tone,
+          evidence: await OverplanCoachLine.findEvidence(
+            historyRaw: prefs.getString('nyang_history'),
+          ),
+          typeLine: ExecutionTypeLabels.promptLine(
+            ExecutionTypeLabels.savedLabel(prefs),
+          ),
+        ) ??
+        OverplanNudgeService.primaryMessage(
+          _coach.id,
+          fire.recentMax,
+          tone: fire.tone,
+        );
+    if (!mounted) return;
     turns.add({'isUser': false, 'text': primary});
     final firstChoice = await _showOverplanChoiceDialog(primary);
     turns.add({'isUser': true, 'text': firstChoice});
