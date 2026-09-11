@@ -61,13 +61,13 @@ void main() {
       expect(proposal!.assignments.map((a) => a.name), ['독서']);
     });
 
-    test('한 번에 세 개까지만 받는다', () {
+    test('한 번에 두 개까지만 받는다', () {
       final proposal = RoutineSpreadOffer.parse(
         '나누자. [SPREAD: 가|월; 나|화; 다|수; 라|목; 마|금]',
       );
 
       expect(proposal!.assignments.length, RoutineSpreadOffer.maxAssignments);
-      expect(proposal.assignments.map((a) => a.name), ['가', '나', '다']);
+      expect(proposal.assignments.map((a) => a.name), ['가', '나']);
     });
 
     test('같은 루틴이 두 번 나오면 한 번만 센다', () {
@@ -79,12 +79,19 @@ void main() {
       expect(proposal.assignments.first.days, [0, 2, 4]);
     });
 
-    test('태그가 없으면 제안이 아니다', () {
-      expect(RoutineSpreadOffer.parse('지금은 나눌 게 없어 보인다냥.'), isNull);
+    test('태그가 없으면 나눌 것이 없다는 답이다', () {
+      final proposal = RoutineSpreadOffer.parse('다 매일 해야 하는 것들이구나냥.');
+
+      expect(proposal, isNotNull);
+      expect(proposal!.assignments, isEmpty);
+      expect(proposal.message, '다 매일 해야 하는 것들이구나냥.');
     });
 
-    test('쓸 만한 배정이 하나도 없으면 제안이 아니다', () {
-      expect(RoutineSpreadOffer.parse('나누자. [SPREAD: 운동|]'), isNull);
+    test('쓸 만한 배정이 하나도 없어도 답은 답이다', () {
+      final proposal = RoutineSpreadOffer.parse('나누자. [SPREAD: 운동|]');
+
+      expect(proposal, isNotNull);
+      expect(proposal!.assignments, isEmpty);
     });
 
     test('태그만 있고 할 말이 없으면 제안이 아니다', () {

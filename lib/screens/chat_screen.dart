@@ -5836,7 +5836,7 @@ $block
     );
     if (!mounted) return false;
 
-    if (proposal != null) {
+    if (proposal != null && proposal.assignments.isNotEmpty) {
       _pendingRoutineSpread = proposal.assignments;
       _injectAiMessage(
         proposal.message,
@@ -5845,6 +5845,18 @@ $block
       );
       unawaited(AnalyticsService.logFeatureUsage('routine_spread_offer'));
       return true;
+    }
+
+    // 코치가 보고 나눌 것이 없다고 했다. 전부 매일이어야 뜻이 서는 것들이거나,
+    // 나눠도 될지 판단이 안 선 경우다. 그 위에 앱이 "이 중에 골라달라"를 띄우면
+    // 방금 코치가 한 말을 뒤집는 것이 된다.
+    //
+    // 아무 말도 하지 않는다. 사용자가 물은 것이 아니라 앱이 먼저 꺼낸 자리라,
+    // 바꿀 것이 없다는 말만 건네는 것은 알려주는 것이 아니라 한 번 부르는 것이다.
+    // 물어본 표시는 이미 남겼으니 다음 기회는 2주 뒤다.
+    if (proposal != null) {
+      unawaited(AnalyticsService.logFeatureUsage('routine_spread_nothing'));
+      return false;
     }
 
     // 코치를 못 불렀다. 그날치를 통째로 거르면 다음 기회가 2주 뒤라,
