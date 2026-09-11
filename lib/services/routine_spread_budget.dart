@@ -20,7 +20,12 @@ class RoutineSpreadBudget {
   ///
   /// 한 주 뒤에 또 물으면 그건 부탁이 아니라 조르는 것이다. 매일 루틴을 그대로
   /// 두는 것도 사용자의 선택이다.
-  static const Duration declineCooldown = Duration(days: 30);
+  ///
+  /// 한 달이었던 것을 세 주로 줄였다. 거절은 "지금은 됐다"이지 "앞으로도 됐다"가
+  /// 아니다. 그 사이에 루틴이 늘거나 사정이 달라지는데, 한 달을 통째로 비우면
+  /// 달라진 뒤에도 한참을 못 묻는다. 그래도 [askCooldown]보다는 길게 둔다 -
+  /// 거절한 사람과 그냥 지나간 사람을 같게 대할 수는 없다.
+  static const Duration declineCooldown = Duration(days: 21);
 
   /// 받아들였거나 그냥 지나간 뒤 이만큼은 쉰다.
   ///
