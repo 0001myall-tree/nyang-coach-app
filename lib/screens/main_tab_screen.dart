@@ -218,8 +218,22 @@ class _MainTabScreenState extends State<MainTabScreen>
 
   bool get _todoIsMain => _mainMode == mainModeTodo;
 
-  /// 본문 자리에 서는 화면의 번호. 이 번호가 곧 "서랍이 닫힌 상태"다.
+  /// 이 사람이 메인으로 고른 화면의 번호. 이 번호가 곧 "서랍이 닫힌 상태"다.
   int get _mainIndex => _todoIsMain ? 1 : 0;
+
+  /// 지금 본문 자리에 실제로 서는 화면의 번호.
+  ///
+  /// **채팅은 서랍에 넣지 않는다.** 코치 이름과 배경 그림을 채팅 화면이 아니라
+  /// 껍데기가 그려서, 서랍의 흰 통 안에 들어가면 헤더도 배경도 여백 기준도 다
+  /// 잃는다. 할 일이 메인일 때 채팅을 열면 화면이 망가져 보이던 것이 이것이다.
+  ///
+  /// 그래서 채팅을 고르면 본문 자리를 쓴다 — 가로로 꽉 차고 하단 탭은 그대로
+  /// 남아, 그 탭이 돌아가는 길이 된다.
+  ///
+  /// 기록과 설정은 서랍으로 둔다. 전체화면으로도 해봤는데(코치 헤더와 배경을
+  /// 접고 탭 줄 색까지 갈랐다) 옆에서 열리는 편이 낫다는 판단이었다. 채팅·할 일과
+  /// 달리 잠깐 들여다보고 돌아오는 자리다.
+  int get _bodyIndex => _openDrawerIndex == 0 ? 0 : _mainIndex;
 
   /// 하단 탭에 늘어서는 순서. 채팅과 할 일만 자리를 바꾼다.
   List<int> get _tabOrder =>
@@ -638,7 +652,7 @@ class _MainTabScreenState extends State<MainTabScreen>
         iOS: AudioContextIOS(category: AVAudioSessionCategory.playback),
       ),
     );
-    _tabCtrl = TabController(length: _screens.length, vsync: this);
+    _tabCtrl = TabController(length: _tabLabels.length, vsync: this);
     // 이미 쌓인 채팅에서 생활의 자취를 한 번 주워둔다. 두 번째부터는 아무
     // 일도 하지 않는다.
     unawaited(LifeContextService.seedFromChatHistory());
@@ -1737,23 +1751,21 @@ class _MainTabScreenState extends State<MainTabScreen>
     );
   }
 
-  List<Widget> get _screens => [
-    _buildChatScreen(),
-    _buildTasksScreen(),
-    RecordsScreen(coachId: widget.coachId),
-    // 이 목록은 매 build마다 네 화면을 다 만들지만 화면에 나가는 건 본문 자리
-    // 하나뿐이다([_mainIndex]). 설정 화면은 서랍이 그린다. 그래서 여기서는
-    // 부탁받은 시트를 건드리지 않는다 — 여기서 가져가버리면 정작 서랍에 뜨는
-    // 설정 화면이 빈손이 된다.
-    SettingsScreen(coachId: widget.coachId),
-  ];
+  /// 본문 자리에 세울 화면 하나.
+  ///
+  /// 넷을 다 만들어 목록에 담고 그중 하나만 쓰던 자리다. 쓰지 않는 셋까지 매
+  /// build마다 만들었고, 무엇보다 설정 화면은 그렇게 만들면 안 됐다 — 코치가
+  /// 부탁한 시트를 꺼내오는 자리가 있어서, 목록을 만드는 것만으로 그 값이
+  /// 소모돼 정작 설정 화면에 갔을 때 빈손이 된다.
+  Widget _buildBody() =>
+      _bodyIndex == 0 ? _buildChatScreen() : _buildTasksScreen();
 
   /// 채팅 화면. 본문 자리에도 서고 서랍에도 들어간다.
   ///
-  /// 두 자리가 같은 위젯을 쓰지만 **State는 공유하지 않는다.** 자리를 옮기면
-  /// 위젯 나무의 위치가 달라져서 새로 만들어진다 — 할 일이 메인인 모드에서는
-  /// 서랍을 여닫을 때마다 채팅이 다시 만들어지고, 쓰다 만 메시지가 날아간다.
-  /// 살려두는 일은 따로 잡을 것.
+  /// 본문 자리가 채팅과 할 일 사이를 오갈 때마다 **새로 만들어진다**(본문의
+  /// 키가 바뀐다). 할 일이 메인인 모드에서 채팅을 여닫으면 쓰다 만 메시지가
+  /// 날아간다는 뜻이다. 대화 내용과 타이머는 prefs에서 되살아나므로 잃는 것은
+  /// 그 한 가지다. 살려두는 일은 따로 잡을 것.
   Widget _buildChatScreen() => ChatScreen(
     coachId: widget.coachId,
     controller: _chatController,
@@ -2072,8 +2084,8 @@ class _MainTabScreenState extends State<MainTabScreen>
               transitionBuilder: (child, anim) =>
                   FadeTransition(opacity: anim, child: child),
               child: KeyedSubtree(
-                key: ValueKey(_mainIndex),
-                child: _screens[_mainIndex],
+                key: ValueKey(_bodyIndex),
+                child: _buildBody(),
               ),
             ),
             bottomNavigationBar: _NyangBottomTabBar(
@@ -2092,7 +2104,7 @@ class _MainTabScreenState extends State<MainTabScreen>
             ),
           ),
           // 서랍 오버레이 + 패널
-          if (_openDrawerIndex != _mainIndex) _buildSideDrawer(),
+          if (_openDrawerIndex != _bodyIndex) _buildSideDrawer(),
         ],
       ),
     );
@@ -2215,10 +2227,7 @@ class _MainTabScreenState extends State<MainTabScreen>
         duration: const Duration(milliseconds: 180),
         transitionBuilder: (child, anim) =>
             FadeTransition(opacity: anim, child: child),
-        child: KeyedSubtree(
-          key: ValueKey(_mainIndex),
-          child: _screens[_mainIndex],
-        ),
+        child: KeyedSubtree(key: ValueKey(_bodyIndex), child: _buildBody()),
       ),
       bottomNavigationBar: _NyangBottomTabBar(
         currentIndex: _currentTabSlot,
@@ -2265,7 +2274,7 @@ class _MainTabScreenState extends State<MainTabScreen>
           ),
         ],
         scaffold,
-        if (_openDrawerIndex != _mainIndex) _buildSideDrawer(),
+        if (_openDrawerIndex != _bodyIndex) _buildSideDrawer(),
       ],
     );
   }
@@ -2831,12 +2840,6 @@ class _MainTabScreenState extends State<MainTabScreen>
   Widget _buildSideDrawer() {
     final useCleanDrawer = _widgetIntentDrawerMode && _openDrawerIndex == 1;
     final screenWidth = MediaQuery.of(context).size.width;
-    // 채팅은 320으로는 못 담는다 — 입력창과 말풍선이 있는 화면이다. 그래서
-    // 가로를 꽉 채우고, **하단 탭 자리만 비켜 선다.** 그 탭이 할 일로 돌아가는
-    // 길이라, 덮어버리면 나올 방법이 없다.
-    final isChatDrawer = _openDrawerIndex == 0;
-    final navHeight =
-        _NyangBottomTabBar.barHeight + MediaQuery.of(context).padding.bottom;
     final drawerTopPadding = MediaQuery.of(context).padding.top + 12;
     Widget drawerContent;
     if (_openDrawerIndex == 1) {
@@ -2844,26 +2847,19 @@ class _MainTabScreenState extends State<MainTabScreen>
     } else if (_openDrawerIndex == 2) {
       drawerContent = RecordsScreen(coachId: widget.coachId);
     } else if (_openDrawerIndex == 3) {
-      // 서랍이 채팅에서 설정으로 넘어올 때 이 화면이 새로 만들어지므로,
-      // 부탁받은 시트는 그 첫 build에서 한 번만 넘어간다. 자리표를 따로 두면
-      // 값을 가져간 다음 build에서 화면이 통째로 다시 만들어진다.
+      // 서랍이 이 화면으로 넘어올 때 새로 만들어지므로, 코치가 부탁한 시트는
+      // 그 첫 build에서 한 번만 넘어간다.
       drawerContent = SettingsScreen(
         coachId: widget.coachId,
         autoOpenSection: _takePendingSettingsSection(),
       );
-    } else if (_openDrawerIndex == 0) {
-      // 할 일이 메인인 모드에서만 여기 온다. 채팅이 본문일 때 이 번호는
-      // "서랍이 닫힘"이라 서랍 자체가 그려지지 않는다.
-      drawerContent = _buildChatScreen();
     } else {
       drawerContent = const SizedBox.shrink();
     }
 
     return Stack(
       children: [
-        // 뒤를 어둡게 덮고 눌러서 닫는 자리. 채팅 서랍은 가로를 꽉 채우니
-        // 뒤가 보이지 않고, 눌러 닫을 바깥도 없다.
-        if (!useCleanDrawer && !isChatDrawer)
+        if (!useCleanDrawer)
           GestureDetector(
             onTap: () async {
               await _closeDrawerAndCheck();
@@ -2873,9 +2869,9 @@ class _MainTabScreenState extends State<MainTabScreen>
         // 서랍 패널 (오른쪽에서 슬라이드)
         Positioned(
           top: 0,
-          bottom: isChatDrawer ? navHeight : 0,
+          bottom: 0,
           right: 0,
-          width: useCleanDrawer || isChatDrawer ? screenWidth : 320,
+          width: useCleanDrawer ? screenWidth : 320,
           child: Container(
             decoration: BoxDecoration(
               color: Colors.white,
@@ -3051,10 +3047,6 @@ class _CatWidgetPromptOption extends StatelessWidget {
 // 하단 탭바
 // ─────────────────────────────────────────────────────────────
 class _NyangBottomTabBar extends StatelessWidget {
-  /// 탭 줄의 높이(안전 영역 제외). 채팅 서랍이 이만큼을 비켜 서야 하단 탭을
-  /// 눌러 돌아올 수 있다.
-  static const double barHeight = 68;
-
   final int currentIndex;
   final ValueChanged<int> onTap;
 
@@ -3095,7 +3087,7 @@ class _NyangBottomTabBar extends StatelessWidget {
     final tabContent = SafeArea(
       top: false,
       child: SizedBox(
-        height: barHeight,
+        height: 68,
         child: Padding(
           padding: const EdgeInsets.only(top: 8.0),
           child: Row(

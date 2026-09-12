@@ -3866,6 +3866,11 @@ class _SettingsScreenState extends State<SettingsScreen>
     List<Map<String, dynamic>> monthGoals = [];
     List<Map<String, dynamic>> visions = [];
     bool isLoaded = false;
+    // 읽기를 시작했는지. [isLoaded]와 따로 둔다 — 읽기가 끝나기 전에 화면이 다시
+    // 그려지면 그때마다 읽기를 새로 시작했고, 그 읽기들이 끝날 때마다 목록을
+    // 통째로 새 목록으로 갈아치웠다. 그 사이에 손으로 추가한 줄이 지워져서,
+    // '시간대 추가'를 눌러도 아무 일이 없는 것처럼 보였다.
+    bool loadStarted = false;
 
     showModalBottomSheet(
       context: context,
@@ -3874,7 +3879,8 @@ class _SettingsScreenState extends State<SettingsScreen>
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setState) {
-            if (!isLoaded) {
+            if (!isLoaded && !loadStarted) {
+              loadStarted = true;
               SharedPreferences.getInstance().then((prefs) {
                 final rawWeek = prefs.getString('nyang_week_goals');
                 final rawMonth = prefs.getString('nyang_month_goals');
@@ -4732,6 +4738,7 @@ class _SettingsScreenState extends State<SettingsScreen>
 
     Widget timeButton(TimeOfDay value, ValueChanged<TimeOfDay> onPicked) {
       return GestureDetector(
+        behavior: HitTestBehavior.opaque,
         onTap: () async {
           final picked = await _showFocusedTimePicker(
             context: context,
@@ -4761,6 +4768,7 @@ class _SettingsScreenState extends State<SettingsScreen>
     Widget dayChip(Map<String, dynamic> routine, String day) {
       final picked = (routine['days'] as List?)?.contains(day) ?? false;
       return GestureDetector(
+        behavior: HitTestBehavior.opaque,
         onTap: () => rebuild(() {
           final days = List<String>.from(routine['days'] ?? []);
           days.contains(day) ? days.remove(day) : days.add(day);
@@ -4868,6 +4876,7 @@ class _SettingsScreenState extends State<SettingsScreen>
             ),
           ),
         GestureDetector(
+          behavior: HitTestBehavior.opaque,
           onTap: routines.length >= BusyHoursService.maxEntries
               ? null
               : () => rebuild(
