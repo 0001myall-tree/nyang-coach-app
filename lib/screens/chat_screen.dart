@@ -4778,10 +4778,19 @@ ${lines.join('\n')}
 
   /// 계획 구체화 이야기를 인사 자리에서 건넨다. 건넸으면 true.
   ///
-  /// 마스터에게는 코치가 만든 말이 먼저 간다([_buildPsychologyTipLine]) — 최근
-  /// 기록에서 이 사람에게 걸리는 심리학 개념 하나를 골라 그 사람 이야기로
-  /// 풀어주는 자리다. 셀 데이터가 없거나 호출이 막히면 아래 로테이션 문구로
-  /// 조용히 돌아간다.
+  /// 고정 문구만 나간다. 한동안 코치가 그 사람 기록을 보고 만든 말을 여기 세웠는데
+  /// (절반씩 쓰다가 매번 쓰는 것까지 갔다), 접었다. 패턴을 읽어 코칭하는 일은
+  /// 기록 탭이 이미 하고 있고 그쪽 조건이 더 좋다 — 사용자가 보러 간 자리라 길게
+  /// 말할 수 있고, 주간 한마디와 유형 배지와 조건 회고가 한자리에 모인다. 인사
+  /// 한마디로 여섯 문장 안에 같은 일을 다시 하는 것은 더 나쁜 조건에서 같은 말을
+  /// 하는 셈이었다.
+  ///
+  /// 경계는 이렇게 둔다 — **채팅은 오늘, 기록 탭은 패턴.** 그래서 오늘을 두고
+  /// 말하는 페이스 코칭([_buildRecentPaceLine])은 남는다. 그건 지금 시각과 오늘
+  /// 남은 시간을 봐야 하고, 무엇보다 사용자가 찾아오지 않아도 가야 뜻이 있다.
+  ///
+  /// 여기 남은 네 문구는 패턴 분석이 아니라 일반적인 요령이라 기록 탭과 겹치지
+  /// 않는다.
   ///
   /// 오늘 계획 중 막막해 보이는 것을 콕 집어주는 갈래가 하나 더 있었다.
   /// 뺐다. 그 문장은 모델을 따로 한 번 더 불러 만들었는데, 넘기는 것이 오늘
@@ -4794,31 +4803,23 @@ ${lines.join('\n')}
   ///
   /// 로테이션 문구 네 개(시간/장소 → 오늘 범위 → 실행 의도 조건문 → 유혹
   /// 묶기)는 돌아가며 나간다 — 마지막으로 이 kind로 무엇을 말했는지를 채팅
-  /// 기록에서 읽어 다음 차례를 고른다. 코치가 만든 말이 나갔던 다음 차례는
-  /// 로테이션의 첫 문구(시간/장소)로 되돌아간다.
+  /// 기록에서 읽어 다음 차례를 고른다.
   ///
-  /// 그 네 개 중 첫째와 셋째는 사실 같은 이야기다(실행 의도). 예비 자리로
-  /// 내려가면서 거의 안 나오게 됐지만, 다시 앞에 세울 일이 있으면 그때 둘을
-  /// 하나로 합칠 것.
+  /// 그 네 개 중 첫째와 셋째는 사실 같은 이야기다(실행 의도). 넷이 다시 앞줄로
+  /// 나온 셈이니 둘을 하나로 합치고 빈 자리에 다른 요령을 넣을 것.
   ///
   /// 프렌즈 코치는 유혹 묶기 다음에 다섯 번째 차례(습관 쌓기, 페르소나별
   /// 예시)가 한 번 더 돈 뒤 첫 문구로 되돌아간다. 냥냥이·마스터는 그 목소리가
   /// 없어 네 개짜리 순환 그대로다.
+
   /// 이 자리가 서는 요일.
   ///
   /// 아무 날이나 섰다. 주 1회인 것은 맞았지만 언제 올지 알 수 없었고, 페이스
   /// 코칭(수·금 오전)이 먼저 나간 날에는 그날을 쉬고 다른 날로 밀렸다.
   ///
-  /// **월요일이 아니라 화요일이다.** 주말에는 플래너를 잘 안 봐서 기록이 비므로,
-  /// 월요일에 서면 셀 수 있는 최근 이틀이 목·금이 된다 — 가장 최근 기록이 사흘
-  /// 전인 셈이라 "최근"이 무색해진다. 화요일이면 어제(월요일)가 바로 들어온다.
-  ///
-  /// 수요일 페이스 코칭과 이틀 연속이 되는 것은 안다. 역할이 갈려 있고(이쪽은
-  /// 패턴에 듣는 지식, 그쪽은 오늘 할 것), 두 자리 다 그 진입에서 다른 말이 안
-  /// 나갔을 때만 서므로 이틀 내리 듣는 일은 드물다.
-  ///
-  /// 화요일에 앱을 안 여는 사람은 그 주를 건너뛴다. 페이스 코칭이 수·금을 고른
-  /// 것과 같은 맞바꿈이다.
+  /// 화요일인 이유는 비어 있어서다 — 수·금은 페이스 코칭, 금요일은 루틴 나누기가
+  /// 쓴다. 화요일에 앱을 안 여는 사람은 그 주를 건너뛴다. 페이스 코칭이 수·금을
+  /// 고른 것과 같은 맞바꿈이다.
   static const int _weeklyConcretizeWeekday = DateTime.tuesday;
 
   Future<bool> _startWeeklyConcretizeTip(
@@ -4841,22 +4842,6 @@ ${lines.join('\n')}
       return false;
     }
 
-    // 마스터에게는 매 차례 코치가 만든 말을 먼저 시도한다.
-    //
-    // 두 번에 한 번만 쓰고 나머지는 고정 문구로 돌던 자리다. 고정 문구 네 개
-    // 중 둘이 같은 이야기(실행 의도)여서, 두 번에 한 번꼴로 같은 개념을 다시
-    // 들었다. 어느 개념이 이 사람에게 지금 필요한지는 그 주의 숫자를 봐야
-    // 아는 것이라, 앱이 네 개를 돌려 정하는 일이 아니다.
-    //
-    // 페이스 코칭과 역할이 갈린다 — 그쪽은 오늘 할 것을 주고, 이쪽은 이 사람의
-    // 패턴에 효과가 있을 심리학 지식을 준다. 그래서 가까이 붙어도 같은 말이
-    // 되지 않는다.
-    String? line;
-    var byCoach = false;
-    if (_coach.isMaster) {
-      line = await _buildPsychologyTipLine(prefs);
-      byCoach = line != null;
-    }
     // 방을 옮겨 다녀도 같은 이야기를 두 번 듣지 않게, 지난번이 어느 쪽이었는지는
     // 말투를 가리지 않고 본다(냥냥이판과 마스터판은 같은 이야기다).
     final isCat = widget.coachId == 'cat';
@@ -4882,7 +4867,7 @@ ${lines.join('\n')}
             _ => '',
           }
         : '';
-    line ??= saidTimePlace
+    final line = saidTimePlace
         ? (isCat ? _weeklyConcretizeScopeTextCat : _weeklyConcretizeScopeText)
         : saidScope
         ? (isCat
@@ -4900,112 +4885,12 @@ ${lines.join('\n')}
     _injectAiMessage(line, kind: _weeklyConcretizeGreetingKind);
     unawaited(
       AnalyticsService.logFeatureUsage(
-        byCoach
-            ? 'weekly_concretize_psychology'
-            : (habitStackLine.isNotEmpty && line == habitStackLine)
+        habitStackLine.isNotEmpty && line == habitStackLine
             ? 'weekly_concretize_habit_stack'
             : 'weekly_concretize_rotation',
       ),
     );
     return true;
-  }
-
-  /// 이 사람의 패턴에 효과가 있을 심리학 지식 하나를 골라, 그 패턴에 어떻게
-  /// 적용하는지까지 풀어준다. 셀 데이터가 없거나 호출이 실패하면 null — 그러면
-  /// 부르는 쪽이 고정 문구 로테이션으로 대신한다.
-  ///
-  /// **무엇을 고를지 앱이 정하지 않는다.** 고정 문구 네 개를 돌리던 때는 그중 둘이
-  /// 같은 이야기(실행 의도)여서 두 번에 한 번꼴로 같은 것을 다시 들었다. 어느 지식이
-  /// 이 사람 패턴에 듣는지는 그 주의 숫자를 봐야 아는 일이다.
-  ///
-  /// 페이스 코칭과 같은 자료를 보지만 시키는 일이 다르다 — 그쪽은 오늘 할 것을
-  /// 주고, 이쪽은 이 사람 패턴에 효과가 있을 지식을 준다. 그래서 같은 주에 둘 다
-  /// 나가도 겹치지 않는다.
-  Future<String?> _buildPsychologyTipLine(SharedPreferences prefs) async {
-    try {
-      final now = DateTime.now();
-      final block = RecentPaceBrief.block(
-        historyRaw: prefs.getString('nyang_history'),
-        todayTasks: _decodeMapList(prefs.getString('nyang_tasks')),
-        now: now,
-        busyBlock: BusyHoursService.promptBlock(prefs),
-      );
-      if (block.isEmpty) return null;
-
-      final prompt =
-          '''${_coach.systemPrompt}
-
-[할 일]
-아래는 앱이 기록에서 센 값이다. 이 사람의 패턴에 효과가 있을 심리학 지식 하나를
-골라, 그 패턴에 어떻게 적용하면 되는지까지 말해줘.
-$block
-
-[지킬 것]
-- 이름을 알려주는 것이 목적이 아니다. 이 사람의 어느 대목에 그것이 걸리는지,
-그래서 어떻게 해보면 되는지까지 이어줄 것.
-- 매번 같은 것을 고르지 말 것. 지금 이 기록에 맞는 것을 고를 것.
-- 잘 되고 있는 대목이 있으면 그것부터 알아줄 것. 걸리는 자리는 결함이 아니라
-지금 그 자리에서 걸리는 것일 뿐이다.
-- 위 숫자에 없는 것은 말하지 말 것.
-- 길어도 여섯 문장 안에서 끝낼 것.
-
-[출력 형식]
-완성된 한 마디만 출력할 것. 다른 말은 덧붙이지 말 것.''';
-
-      const model = 'gpt-5-mini';
-      final messages = [
-        {'role': 'user', 'content': prompt},
-      ];
-      await ApiUsageLimitService.ensureChatAllowed(
-        estimatedTokens: AnalyticsService.estimateChatTokens(messages, ''),
-      );
-      final response = await _chatProxy.call({
-        'messages': messages,
-        'model': model,
-        'temperature': 0.7,
-      });
-
-      final content =
-          (response.data is Map
-                  ? (response.data as Map)['content'] as String? ?? ''
-                  : '')
-              .trim();
-      if (content.isEmpty) return null;
-
-      // 한도 검사와 사용량 기록이 없던 자리다. 두 번에 한 번만 돌던 동안에는
-      // 눈에 안 띄었는데, 주 1회로 늘면서 청구액에 보이지 않는 호출이 된다.
-      final usageData = response.data is Map ? response.data as Map : const {};
-      unawaited(
-        AnalyticsService.logApiUsage(
-          coachId: widget.coachId,
-          estimatedTokens: AnalyticsService.estimateChatTokens(
-            messages,
-            content,
-          ),
-          actualTokens: AnalyticsService.readIntValue(usageData, [
-            'totalTokens',
-            'total_tokens',
-            'tokens',
-            'usage.totalTokens',
-            'usage.total_tokens',
-          ]),
-          actualCostWon: AnalyticsService.readIntValue(usageData, [
-            'costWon',
-            'cost_won',
-            'estimatedCostWon',
-            'estimated_cost_won',
-            'usage.costWon',
-          ]),
-          model: model,
-          usageSource: 'weekly_psychology_tip',
-          countAsUserUsage: false,
-        ),
-      );
-      return content;
-    } catch (e) {
-      debugPrint('weekly psychology tip failed: $e');
-      return null;
-    }
   }
 
   List<Map<String, dynamic>> _decodeMapList(String? raw) {
