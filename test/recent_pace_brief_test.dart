@@ -310,17 +310,19 @@ void main() {
       expect(block, contains('첫 시작 오전 9시'));
     });
 
-    test('못 쓰는 시간대는 알려준 대로 적는다', () {
+    test('늘 시간을 못 내는 때는 받은 블록을 그대로 붙인다', () {
+      // 지금이 바쁜지만 넘기던 자리다. 오전에 연 사람에게 오후 근무가 안 보여서,
+      // 못 쓰는 시간에 하라는 말이 나올 수 있었다.
       final block = RecentPaceBrief.block(
         historyRaw: history([
           day('2026-09-15', [task('어제 것')]),
         ]),
         todayTasks: const [],
         now: now,
-        busyNow: '근무',
+        busyBlock: '\n[늘 시간을 못 내는 때]\n- 근무: 평일 오전 9:00 ~ 오후 6:00\n',
       );
 
-      expect(block, contains('근무'));
+      expect(block, contains('근무: 평일 오전 9:00 ~ 오후 6:00'));
     });
 
     test('남은 시간을 적는다', () {

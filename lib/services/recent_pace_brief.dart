@@ -179,13 +179,17 @@ class RecentPaceBrief {
   /// 프롬프트에 실을 블록. 셀 것이 없으면 빈 문자열.
   ///
   /// [todayTasks]는 오늘 목록, [now]는 지금, [minutesLeft]는 잠들기까지 남은
-  /// 시간(모르면 null), [busyNow]는 지금이 못 쓰는 시간대면 그 이름.
+  /// 시간(모르면 null), [busyBlock]은 늘 시간을 못 내는 때를 적어둔 블록.
+  ///
+  /// [busyBlock]은 "지금이 바쁜지"가 아니라 하루 전체를 담는다. 지금만 넘기던
+  /// 동안에는 오전에 연 사람에게 오후 근무가 안 보여서, 못 쓰는 시간에 하라는
+  /// 말이 나올 수 있었다.
   static String block({
     required String? historyRaw,
     required List<dynamic> todayTasks,
     required DateTime now,
     int? minutesLeft,
-    String? busyNow,
+    String busyBlock = '',
   }) {
     final days = recent(historyRaw, now: now);
     if (days.isEmpty) return '';
@@ -205,8 +209,9 @@ class RecentPaceBrief {
       buffer.writeln('*기록 없는 날은 앱을 안 열었을 수 있습니다. 아무것도 안 했다고 보지 마세요.');
     }
 
-    buffer.write(_todayBlock(todayTasks, now, minutesLeft, busyNow));
+    buffer.write(_todayBlock(todayTasks, now, minutesLeft));
     buffer.writeln('- 위 숫자는 앱이 기록에서 센 값. 여기 없는 것은 세지 않았음.');
+    buffer.write(busyBlock);
     return buffer.toString();
   }
 
@@ -242,7 +247,6 @@ class RecentPaceBrief {
     List<dynamic> todayTasks,
     DateTime now,
     int? minutesLeft,
-    String? busyNow,
   ) {
     final buffer = StringBuffer('\n[오늘 - 지금까지]\n');
     var planned = 0;
@@ -270,9 +274,6 @@ class RecentPaceBrief {
         '잠들기까지 약 ${hours > 0 ? '$hours시간' : ''}'
         '${mins > 0 ? '${hours > 0 ? ' ' : ''}$mins분' : ''}',
       );
-    }
-    if (busyNow != null && busyNow.isNotEmpty) {
-      buffer.writeln('지금은 $busyNow 시간대라고 알려주셨습니다.');
     }
     return buffer.toString();
   }

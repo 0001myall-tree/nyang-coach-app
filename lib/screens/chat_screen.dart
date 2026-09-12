@@ -7086,7 +7086,7 @@ Rules:
       todayTasks: _decodeMapList(prefs.getString('nyang_tasks')),
       now: now,
       minutesLeft: _minutesUntilBedtime(prefs, now),
-      busyNow: BusyHoursService.busyNow(prefs, now),
+      busyBlock: BusyHoursService.promptBlock(prefs),
     );
     if (block.isEmpty) return null;
 
@@ -7106,7 +7106,6 @@ $block
 쓸 것.
 - 위 숫자에 없는 것은 말하지 말 것. 시각은 적혀 있는 것만 쓸 것 — 무엇을 쓰면
 안 되는지는 위에 별표로 적어뒀다.
-- 못 쓴다고 알려준 시간대가 있으면 그 시간을 비켜서 말할 것.
 - 길어도 여섯 문장 안에서 끝낼 것.
 
 [출력 형식]
