@@ -1325,6 +1325,14 @@ class _ChatScreenState extends State<ChatScreen>
 
   UserData _userData = UserData();
 
+  /// 이 사람이 마스터 플랜인지. 코치가 마스터인지와 다르다.
+  ///
+  /// 개인 코칭 참고에 적어둔 값들은 이 플랜만 적을 수 있다. 그러니 그 값을
+  /// 실을지 말지는 어느 코치 방인지가 아니라 이 사람이 적을 수 있었는지로
+  /// 정하는 것이 맞다.
+  bool get _hasMasterPlan =>
+      _userData.isPlanActive && _userData.planType == 'master';
+
   int _completedTasks = 0;
   int _totalTasks = 0;
   String? _resistanceChipTaskName;
@@ -13996,8 +14004,23 @@ $block
       }
     }
 
-    // 11. 취침 시간 (master only)
-    if (_coach.isMaster && needsGoalContext) {
+    // 11. 취침 시간
+    //
+    // 코치가 아니라 **플랜**으로 가른다. 이 값을 적어둘 수 있는 사람이 마스터
+    // 플랜 구독자뿐이라, 없는 사람에게는 어차피 빈칸이다. 그런데 코치로 가르면
+    // 그 구독자가 냥냥이와 이야기할 때만 손해를 본다 — 밤 11시에 자는 사람에게
+    // 10시 반에 뭘 권하는 자리가 거기다.
+    //
+    // 비전과 목표는 이렇게 열지 않는다. 그건 하루 전체를 보는 자리의 재료이고,
+    // 담당 영역 코치에게 쥐여주면 자기 영역 대신 하루 전체를 코칭하기
+    // 시작한다([RecentTaskDigest] 참고). 못 내는 시간과 취침 시각은 다르다 —
+    // "언제 권하면 안 되는지"라 영역과 상관없이 필요하다.
+    //
+    // 할 일 이야기 턴에도 싣는다. 목표 범위는 마스터 코치만 열리므로 그 조건만
+    // 두면 프렌즈 코치에게는 영영 안 실린다. 그리고 밤에 무엇을 하자는 말이
+    // 나오는 자리가 목표 이야기가 아니라 할 일 이야기다 — 못 내는 시간을 같은
+    // 이유로 이미 그렇게 열어뒀다.
+    if (_hasMasterPlan && (needsGoalContext || needsTaskContext)) {
       final bedtime = prefs.getString('nyang_premium_min_sleep_time');
       if (bedtime != null) {
         final parts = bedtime.split(':');
@@ -17412,8 +17435,7 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
               initialMinutes: _timerActiveMinutes!,
               isMindTimer: _timerActiveIsMind,
               // 타이머 종류는 방이 아니라 그 사람이 산 플랜이 정한다.
-              isMasterPlan:
-                  _userData.isPlanActive && _userData.planType == 'master',
+              isMasterPlan: _hasMasterPlan,
               onMessage: (msg) {
                 setState(() {
                   _messages.add(
