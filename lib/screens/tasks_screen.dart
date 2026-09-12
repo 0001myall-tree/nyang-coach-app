@@ -5560,7 +5560,9 @@ class _TasksScreenState extends State<TasksScreen>
   Widget _buildCoreSection() {
     return Container(
       width: double.infinity,
-      margin: const EdgeInsets.only(top: 8, bottom: 14),
+      // 아래 여백을 14에서 6으로. 목록 위 여백(12)과 타이머 줄의 위 여백(4)이
+      // 그 아래 또 붙어서, 셋이 겹쳐 핵심 카드와 목록 사이가 크게 벌어졌다.
+      margin: const EdgeInsets.only(top: 8, bottom: 6),
       padding: const EdgeInsets.fromLTRB(28, 22, 28, 24),
       decoration: BoxDecoration(
         color: _coach.accentColor.withValues(alpha: 0.055),
@@ -6613,7 +6615,7 @@ class _TasksScreenState extends State<TasksScreen>
     );
 
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      padding: const EdgeInsets.fromLTRB(16, 2, 16, 0),
       children: [
         if (showLightenPlanCard) _buildLightenPlanCard(),
         if (!showLightenPlanCard && _shouldShowCorePickCard(remainingTasks))
@@ -6955,7 +6957,7 @@ class _TasksScreenState extends State<TasksScreen>
                 // 글자 자체가 상태이자 버튼이다. 옆에 스위치까지 두면 같은 말을
                 // 두 번 하는 셈이라, 한 줄뿐인 자리가 번잡해진다.
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(10, 4, 6, 8),
+                  padding: const EdgeInsets.fromLTRB(10, 0, 6, 4),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -8645,9 +8647,12 @@ class _TasksScreenState extends State<TasksScreen>
   Widget _buildTodayInput() {
     final keyboardInset = MediaQuery.of(context).viewInsets.bottom;
     final safeBottom = MediaQuery.of(context).padding.bottom;
+    // 하단 탭과의 사이. 48이었는데 그만큼 오늘 할 일이 덜 보였다. 절반으로
+    // 줄인다 — 탭 줄 자체가 안전 영역을 이미 받고 있어서 여기서 또 벌릴 필요가
+    // 없다.
     final bottomPadding = keyboardInset > 0
         ? keyboardInset + 18.0
-        : max(safeBottom + 16.0, 48.0);
+        : max(safeBottom + 8.0, 24.0);
 
     return Container(
       color: Colors.white,

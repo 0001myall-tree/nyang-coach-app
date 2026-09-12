@@ -635,6 +635,7 @@ class _MainTabScreenState extends State<MainTabScreen>
     _openDrawerIndex = widget.initialDrawerIndex;
     _widgetIntentDrawerMode = widget.initialDrawerIndex != 0;
     unawaited(_loadMainMode());
+    unawaited(_loadSwapHintState());
     unawaited(_maybeShowMainModeHint());
     WidgetsBinding.instance.addObserver(this);
     unawaited(_runStartupDailyReset());
@@ -775,6 +776,9 @@ class _MainTabScreenState extends State<MainTabScreen>
     if (mode == _mainMode) return;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(mainModeKey, mode);
+    // 한 번 바꿔본 사람은 길을 안다. 힌트 버튼은 여기서 끝난다.
+    await prefs.setBool(_swapHintDoneKey, true);
+    _swapHintDone = true;
     TasksSyncService.scheduleSyncToCloud();
     if (!mounted) return;
     setState(() {
@@ -1757,8 +1761,35 @@ class _MainTabScreenState extends State<MainTabScreen>
   /// build마다 만들었고, 무엇보다 설정 화면은 그렇게 만들면 안 됐다 — 코치가
   /// 부탁한 시트를 꺼내오는 자리가 있어서, 목록을 만드는 것만으로 그 값이
   /// 소모돼 정작 설정 화면에 갔을 때 빈손이 된다.
-  Widget _buildBody() =>
-      _bodyIndex == 0 ? _buildChatScreen() : _buildTasksScreen();
+  Widget _buildBody() {
+    final body = _bodyIndex == 0 ? _buildChatScreen() : _buildTasksScreen();
+    // 쓱 밀어서 채팅↔할일. 세로 스크롤이 살아 있어야 하니 가로 방향만 받는다.
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onHorizontalDragEnd: _onBodyHorizontalDrag,
+      child: body,
+    );
+  }
+
+  /// 본문에서 가로로 쓱 밀었을 때. 채팅과 할일 사이만 오간다.
+  void _onBodyHorizontalDrag(DragEndDetails details) {
+    // 서랍이 열려 있으면 본문 제스처가 아니다.
+    if (_openDrawerIndex != _bodyIndex) return;
+    final velocity = details.primaryVelocity ?? 0;
+    if (velocity.abs() < 220) return;
+
+    final chatSlot = _tabOrder.indexOf(0);
+    final todoSlot = _tabOrder.indexOf(1);
+    if (chatSlot < 0 || todoSlot < 0) return;
+
+    // 왼쪽으로 밀면 오른쪽 탭, 오른쪽으로 밀면 왼쪽 탭.
+    final wantRightTab = velocity < 0;
+    final currentSlot = _bodyIndex == 0 ? chatSlot : todoSlot;
+    final targetSlot = wantRightTab ? currentSlot + 1 : currentSlot - 1;
+    if (targetSlot != chatSlot && targetSlot != todoSlot) return;
+
+    _onTabSlotTapped(targetSlot);
+  }
 
   /// 채팅 화면. 본문 자리에도 서고 서랍에도 들어간다.
   ///
@@ -1960,7 +1991,68 @@ class _MainTabScreenState extends State<MainTabScreen>
   }
 
   /// 하단 탭이 누른 자리를 뜻으로 옮겨 [_onTabTapped]에 넘긴다.
-  void _onTabSlotTapped(int slot) => _onTabTapped(_tabOrder[slot]);
+  void _onTabSlotTapped(int slot) {
+    _countChatTodoSwitch(_tabOrder[slot]);
+    _onTabTapped(_tabOrder[slot]);
+  }
+
+  /// 채팅·할일 사이를 하단 탭으로 왕복한 횟수. 자리 바꾸기를 모르는 사람만
+  /// 이 숫자가 는다 — 길게 눌러 바꿔본 사람에게는 힌트를 안 띄운다.
+  static const String _swapHintCountKey = 'main_swap_hint_switches';
+  static const String _swapHintDoneKey = 'main_swap_hint_done';
+  static const int _swapHintThreshold = 6;
+  int _chatTodoSwitches = 0;
+  bool _swapHintDone = true;
+
+  /// 버튼이 숨을 쉬는 조건. 탭으로만 여러 번 왕복했고 아직 안 써본 사람.
+  bool get _pulseSwapHint =>
+      !_swapHintDone && _chatTodoSwitches >= _swapHintThreshold;
+
+  /// 자리 바꾸기 버튼을 끼울 자리. 채팅과 할일이 나란히 있을 때, 앞쪽 자리 뒤에
+  /// 붙인다. 조건 없이 늘 서 있고, 아직 안 써본 사람에게만 잠깐 숨을 쉰다.
+  int? get _swapHintAfterSlot {
+    final chatSlot = _tabOrder.indexOf(0);
+    final todoSlot = _tabOrder.indexOf(1);
+    if (chatSlot < 0 || todoSlot < 0) return null;
+    if ((chatSlot - todoSlot).abs() != 1) return null;
+    return chatSlot < todoSlot ? chatSlot : todoSlot;
+  }
+
+  Future<void> _countChatTodoSwitch(int target) async {
+    if (_swapHintDone) return;
+    if (target != 0 && target != 1) return;
+    // 같은 탭을 다시 누른 건 오간 게 아니다.
+    if (target == _openDrawerIndex) return;
+    if (_openDrawerIndex != 0 && _openDrawerIndex != 1) return;
+    _chatTodoSwitches++;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_swapHintCountKey, _chatTodoSwitches);
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _finishSwapHint() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_swapHintDoneKey, true);
+    if (!mounted) return;
+    setState(() => _swapHintDone = true);
+  }
+
+  Future<void> _loadSwapHintState() async {
+    final prefs = await SharedPreferences.getInstance();
+    final done = prefs.getBool(_swapHintDoneKey) ?? false;
+    final count = prefs.getInt(_swapHintCountKey) ?? 0;
+    if (!mounted) return;
+    setState(() {
+      _swapHintDone = done;
+      _chatTodoSwitches = count;
+    });
+  }
+
+  /// 힌트 버튼을 눌렀을 때. 길게 누르기와 같은 팝업으로 보내고, 힌트는 끝낸다.
+  Future<void> _onSwapHintTapped() async {
+    await _finishSwapHint();
+    await _askSwapMain();
+  }
 
   bool get _isMaster => _isMasterCoach(widget.coachId);
 
@@ -2093,6 +2185,9 @@ class _MainTabScreenState extends State<MainTabScreen>
               onTap: _onTabSlotTapped,
               onLongPressSwappable: (_) => _askSwapMain(),
               swappableSlots: _swappableSlots,
+              swapHintAfterSlot: _swapHintAfterSlot,
+              onSwapHintTap: _onSwapHintTapped,
+              swapHintPulse: _pulseSwapHint,
               labels: _inTabOrder(_tabLabels),
               inactiveIcons: _inTabOrder(_inactiveIcons),
               activeIcons: _inTabOrder(_activeIcons),
@@ -2234,6 +2329,9 @@ class _MainTabScreenState extends State<MainTabScreen>
         onTap: _onTabSlotTapped,
         onLongPressSwappable: (_) => _askSwapMain(),
         swappableSlots: _swappableSlots,
+        swapHintAfterSlot: _swapHintAfterSlot,
+        onSwapHintTap: _onSwapHintTapped,
+        swapHintPulse: _pulseSwapHint,
         labels: _inTabOrder(_tabLabels),
         inactiveIcons: _inTabOrder(_inactiveIcons),
         activeIcons: _inTabOrder(_activeIcons),
@@ -2857,19 +2955,32 @@ class _MainTabScreenState extends State<MainTabScreen>
       drawerContent = const SizedBox.shrink();
     }
 
+    // 기록·설정 서랍은 하단 탭 위에서 끝난다. 서랍이 덮어버리면 탭을 누르려고
+    // 먼저 서랍을 닫아야 해서, 다른 탭으로 가는 데 두 번이 든다.
+    final keepBottomTabsOut = _openDrawerIndex == 2 || _openDrawerIndex == 3;
+    final bottomTabsHeight = keepBottomTabsOut
+        ? 68 + MediaQuery.of(context).padding.bottom
+        : 0.0;
+
     return Stack(
       children: [
         if (!useCleanDrawer)
-          GestureDetector(
-            onTap: () async {
-              await _closeDrawerAndCheck();
-            },
-            child: Container(color: Colors.black.withValues(alpha: 0.5)),
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: bottomTabsHeight,
+            child: GestureDetector(
+              onTap: () async {
+                await _closeDrawerAndCheck();
+              },
+              child: Container(color: Colors.black.withValues(alpha: 0.5)),
+            ),
           ),
         // 서랍 패널 (오른쪽에서 슬라이드)
         Positioned(
           top: 0,
-          bottom: 0,
+          bottom: bottomTabsHeight,
           right: 0,
           width: useCleanDrawer ? screenWidth : 320,
           child: Container(
@@ -3043,6 +3154,74 @@ class _CatWidgetPromptOption extends StatelessWidget {
   }
 }
 
+/// 채팅 탭과 할일 탭 사이에 끼는 자리 바꾸기 버튼.
+///
+/// 늘 작게 서 있다. 아직 안 써본 사람에게만 [pulse]가 켜져 숨 쉬듯 커졌다
+/// 작아진다 — 가만히 있으면 탭 사이 구분선으로 보고 지나친다.
+class _SwapHintButton extends StatefulWidget {
+  final Color color;
+  final Color inactiveColor;
+  final bool pulse;
+  final VoidCallback onTap;
+
+  const _SwapHintButton({
+    required this.color,
+    required this.inactiveColor,
+    required this.pulse,
+    required this.onTap,
+  });
+
+  @override
+  State<_SwapHintButton> createState() => _SwapHintButtonState();
+}
+
+class _SwapHintButtonState extends State<_SwapHintButton>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _pulse;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulse = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _pulse.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tint = widget.pulse ? widget.color : widget.inactiveColor;
+    Widget dot = Container(
+      width: 24,
+      height: 24,
+      decoration: BoxDecoration(
+        color: tint.withValues(alpha: widget.pulse ? 0.12 : 0.07),
+        shape: BoxShape.circle,
+      ),
+      child: Icon(Icons.swap_horiz_rounded, size: 15, color: tint),
+    );
+    if (widget.pulse) {
+      dot = ScaleTransition(
+        scale: Tween<double>(begin: 0.88, end: 1.06).animate(
+          CurvedAnimation(parent: _pulse, curve: Curves.easeInOut),
+        ),
+        child: dot,
+      );
+    }
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: widget.onTap,
+      child: SizedBox(width: 30, child: Center(child: dot)),
+    );
+  }
+}
+
 // ─────────────────────────────────────────────────────────────
 // 하단 탭바
 // ─────────────────────────────────────────────────────────────
@@ -3055,6 +3234,15 @@ class _NyangBottomTabBar extends StatelessWidget {
 
   /// 자리를 바꿀 수 있는 탭의 자리들.
   final Set<int> swappableSlots;
+
+  /// 이 자리 바로 뒤에 자리 바꾸기 힌트 버튼을 끼워 넣는다. null이면 안 넣는다.
+  final int? swapHintAfterSlot;
+
+  /// 힌트 버튼을 눌렀을 때.
+  final VoidCallback? onSwapHintTap;
+
+  /// 힌트 버튼이 숨을 쉴지. 평소에는 가만히 작게 서 있는다.
+  final bool swapHintPulse;
 
   final List<String> labels;
   final List<Widget> inactiveIcons;
@@ -3071,6 +3259,9 @@ class _NyangBottomTabBar extends StatelessWidget {
     required this.onTap,
     this.onLongPressSwappable,
     this.swappableSlots = const {},
+    this.swapHintAfterSlot,
+    this.onSwapHintTap,
+    this.swapHintPulse = false,
     required this.labels,
     required this.inactiveIcons,
     required this.activeIcons,
@@ -3091,27 +3282,38 @@ class _NyangBottomTabBar extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.only(top: 8.0),
           child: Row(
-            children: List.generate(labels.length, (i) {
-              final isActive = currentIndex == i;
-              return Expanded(
-                child: _TabItem(
-                  label: labels[i],
-                  inactiveIcon: inactiveIcons[i],
-                  activeIcon: activeIcons[i],
-                  showNewBadge: showNewBadges.length > i
-                      ? showNewBadges[i]
-                      : false,
-                  isActive: isActive,
-                  activeColor: activeColor,
-                  inactiveColor: inactiveColor,
-                  onTap: () => onTap(i),
-                  onLongPress:
-                      onLongPressSwappable != null && swappableSlots.contains(i)
-                      ? () => onLongPressSwappable!(i)
-                      : null,
+            children: [
+              for (int i = 0; i < labels.length; i++) ...[
+                Expanded(
+                  child: _TabItem(
+                    label: labels[i],
+                    inactiveIcon: inactiveIcons[i],
+                    activeIcon: activeIcons[i],
+                    showNewBadge: showNewBadges.length > i
+                        ? showNewBadges[i]
+                        : false,
+                    isActive: currentIndex == i,
+                    activeColor: activeColor,
+                    inactiveColor: inactiveColor,
+                    onTap: () => onTap(i),
+                    onLongPress:
+                        onLongPressSwappable != null &&
+                            swappableSlots.contains(i)
+                        ? () => onLongPressSwappable!(i)
+                        : null,
+                  ),
                 ),
-              );
-            }),
+                // 두 탭 사이에 끼는 자리 바꾸기 힌트. 길게 누르기를 모르는 사람에게
+                // 눈에 보이는 길을 하나 열어준다.
+                if (swapHintAfterSlot == i && onSwapHintTap != null)
+                  _SwapHintButton(
+                    color: activeColor,
+                    inactiveColor: inactiveColor,
+                    pulse: swapHintPulse,
+                    onTap: onSwapHintTap!,
+                  ),
+              ],
+            ],
           ),
         ),
       ),
