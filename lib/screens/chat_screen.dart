@@ -60,6 +60,7 @@ import 'package:nyang_coach/services/execution_type_labels.dart';
 import 'package:nyang_coach/services/life_pattern_service.dart';
 import 'package:nyang_coach/services/life_routine_analysis.dart';
 import 'package:nyang_coach/services/life_routine_offer.dart';
+import 'package:nyang_coach/services/recent_pace_brief.dart';
 import 'package:nyang_coach/services/recent_task_digest.dart';
 import 'package:nyang_coach/services/routine_domain_check.dart';
 import 'package:nyang_coach/services/same_work_check.dart';
@@ -4744,6 +4745,11 @@ ${lines.join('\n')}
   static const String _weeklyConcretizeMasterFireCountKey =
       'weekly_concretize_master_fire_count';
 
+  /// 페이스 이야기 뒤로 병목 진단을 얼마나 비워둘지.
+  ///
+  /// 페이스가 수·금 오전에 서므로 닷새면 그 주에 둘이 겹치지 않는다.
+  static const Duration _bottleneckAfterPaceGap = Duration(days: 5);
+
   /// 이 kind로 가장 최근에 말한 메시지. 코치를 가리지 않고 본다(냥냥이 + 마스터
   /// 공통 쿨다운이라서다). 없으면 null.
   ///
@@ -4828,7 +4834,15 @@ ${lines.join('\n')}
           (prefs.getInt(_weeklyConcretizeMasterFireCountKey) ?? 0) + 1;
       await prefs.setInt(_weeklyConcretizeMasterFireCountKey, fireCount);
 
-      if (fireCount.isEven) {
+      // 며칠 전에 페이스 이야기를 건넸으면 병목은 쉰다. 둘 다 실행이 어디서
+      // 걸리는지를 두고 하는 말이라, 가까이 붙으면 같은 말을 두 번 듣는 것이
+      // 된다. 이 차례는 로테이션 문구가 대신 받는다.
+      final saidPace = _lastAutoMessage(prefs, _masterTypeAdviceKind);
+      final paceIsFresh =
+          saidPace != null &&
+          now.difference(saidPace.at) < _bottleneckAfterPaceGap;
+
+      if (fireCount.isEven && !paceIsFresh) {
         line = await _buildExecutionBottleneckLine(prefs);
         isBottleneck = line != null;
       }
@@ -5795,6 +5809,25 @@ $block
   ///
   /// 그래서 여기에는 코치 호출이 없다. 앱이 물을 것은 "이 중에 있나요"뿐이고,
   /// 고르는 일에는 판단이 필요 없다.
+  /// 오늘 나눌 것이 있는지만 본다. 묻지는 않는다.
+  ///
+  /// 같은 금요일 오전에 페이스 이야기와 이 제안이 겹치는데, 이쪽은 금요일
+  /// 하루뿐이라 양보를 받아야 한다. 그쪽이 먼저 서기 때문에 "낼 것이 있나"를
+  /// 여기서 대신 대답해준다.
+  Future<bool> _routineSpreadHasSomethingToday(
+    SharedPreferences prefs,
+    DateTime now,
+  ) async {
+    if (!RoutineSpreadAnalysis.isAskDay(now)) return false;
+    if (!await RoutineSpreadBudget.canAsk(prefs, now)) return false;
+    await prefs.reload();
+    return RoutineSpreadAnalysis.candidates(
+      habitsRaw: prefs.getString('nyang_habits'),
+      habitLogsRaw: prefs.getString('nyang_habit_logs'),
+      now: now,
+    ).isNotEmpty;
+  }
+
   Future<bool> _tryOfferRoutineSpread(
     SharedPreferences prefs,
     DateTime now,
@@ -6922,30 +6955,49 @@ Rules:
   /// 이 자리가 몇 번째로 돌았는지. 유형 처방과 조건 처방을 번갈아 내는 데 쓴다.
   static const String _masterTypeAdviceTurnKey = 'master_type_advice_turn';
 
-  /// 처방을 얼마 만에 다시 건넬지.
+  /// 처방을 건넬 요일.
   ///
-  /// 핵심 질문이 격일이고 이 자리는 그 사이 날에 서니, 나흘이면 그 사이 날
-  /// 두 번에 한 번꼴이다. 유형별 문구가 셋이라 열이틀에 한 바퀴 돈다.
-  static const Duration _masterTypeAdviceGap = Duration(days: 4);
+  /// 나흘마다 돌던 자리다. 요일로 옮긴 이유가 둘이다.
+  ///
+  /// 하나는 아무 때나 튀어나오지 않는다는 것. 다른 하나가 더 중요한데,
+  /// **수요일이면 최근 이틀이 거의 항상 평일(월·화)로 잡힌다.** 월요일에 서면
+  /// 최근 이틀이 주말이고, 주말에는 플래너를 잘 안 봐서 완료 표시가 안 남는다.
+  /// 그 이틀로 페이스를 재면 이 사람이 갑자기 아무것도 못 하는 사람이 된다.
+  ///
+  /// 금요일은 매일 루틴을 요일로 나누자는 제안이 서는 자리다. 이 발화가 그
+  /// 앞에 있어서, 금요일에 그냥 내보내면 그 제안이 그 주에 굶는다. 그래서
+  /// 금요일에는 나눌 것이 없는 날만 가져간다.
+  static const Set<int> _masterTypeAdviceWeekdays = {
+    DateTime.wednesday,
+    DateTime.friday,
+  };
+
+  /// 금요일에 이 자리를 양보해야 하는 상대.
+  static const int _routineSpreadWeekday = DateTime.friday;
 
   /// 처방을 건넬 시간대.
   ///
-  /// 저녁에는 문구가 어긋난다 — "밤이 오기 전에 끊어갈 지점을 정해두시죠"를
-  /// 밤에 하면 뜻이 없다. 아침은 열어둔다. 계획을 아직 안 적은 날이면 지금
-  /// 하나 적자는 말이 되고, 그건 아침일수록 잘 듣는다.
-  static const int _masterTypeAdviceFromHour = 9;
-  static const int _masterTypeAdviceUntilHour = 18;
-
-  /// 실행 유형에 맞는 처방을 건넸으면 true.
+  /// 오전만 쓴다. 오늘 페이스를 올려보자는 말은 들은 뒤에 쓸 시간이 있어야
+  /// 뜻이 있고, 하루가 열릴 때 들어야 의욕으로 이어진다.
   ///
-  /// 핵심 질문이 안 나가는 날의 슬롯 인사 자리를 나흘에 한 번 가져간다.
-  /// 핵심 질문 자리에서 대신 내보내지 않는 것은, 그쪽이 버튼으로 시작 표시를
-  /// 대신 켜주는 자리여서다 — 조언 때문에 실제로 일하는 자리가 반으로 줄면
-  /// 손해다.
+  /// 저녁을 막는 이유는 따로 있다. 그 시각에는 문구가 어긋난다 — 오늘을 두고
+  /// 하는 말이 밤에는 할 수 없는 말이 된다.
+  ///
+  /// 오후에만 앱을 여는 사람은 이 발화를 못 듣는다. 알고 좁힌 것이다.
+  static const int _masterTypeAdviceFromHour = 9;
+  static const int _masterTypeAdviceUntilHour = 12;
+
+  /// 오늘 페이스 이야기를 건넸으면 true.
+  ///
+  /// 핵심 질문이 안 나가는 날의 슬롯 인사 자리를 수요일·금요일 오전에
+  /// 가져간다. 핵심 질문 자리에서 대신 내보내지 않는 것은, 그쪽이 버튼으로
+  /// 시작 표시를 대신 켜주는 자리여서다 — 조언 때문에 실제로 일하는 자리가
+  /// 반으로 줄면 손해다.
   Future<bool> _startMasterTypeAdvice(
     SharedPreferences prefs,
     DateTime now,
   ) async {
+    if (!_masterTypeAdviceWeekdays.contains(now.weekday)) return false;
     if (now.hour < _masterTypeAdviceFromHour ||
         now.hour >= _masterTypeAdviceUntilHour) {
       return false;
@@ -6954,12 +7006,18 @@ Rules:
     // 같은 날 겹치면 하루에 두 번 잔소리한 것이 된다.
     if (await _coreAskedOnDay(now)) return false;
 
+    // 금요일에는 루틴 나누기에 양보한다. 그쪽은 금요일 하루뿐이라 여기서
+    // 가로채면 그 주에 아예 못 묻는다.
+    if (now.weekday == _routineSpreadWeekday &&
+        await _routineSpreadHasSomethingToday(prefs, now)) {
+      return false;
+    }
+
+    // 같은 날 두 번은 없다. 요일로 서는 자리라 같은 요일 안에서만 막으면 된다.
     final last = DateTime.tryParse(
       prefs.getString(_masterTypeAdviceDateKey) ?? '',
     );
-    if (last != null && now.difference(last) < _masterTypeAdviceGap) {
-      return false;
-    }
+    if (last != null && _isSameDay(last, now)) return false;
 
     final line = await _buildExecutionTypeAdvice(prefs);
     if (line == null || !mounted) return false;
@@ -6976,11 +7034,16 @@ Rules:
     return true;
   }
 
-  /// 실행 유형에 맞는 처방 한 마디. 유형을 셀 기록이 모자라면 null.
+  /// 오늘 건넬 한 마디. 셀 것이 모자라면 null.
   Future<String?> _buildExecutionTypeAdvice(SharedPreferences prefs) async {
     // 루틴도 함께 센다. 사용자에게는 오늘 화면에 늘어선 것이 곧 오늘의 몫이고,
     // 그중 어느 것이 매일 돌아오는 루틴인지로 개수를 가르지 않는다.
     final planCount = _decodeMapList(prefs.getString('nyang_tasks')).length;
+
+    // 최근 페이스를 보고 코치가 만든 말이 첫 자리다. 아래 고정 문구들은 이것이
+    // 안 될 때(기록이 모자라거나 호출이 막혔을 때)로 남는다.
+    final pace = await _buildRecentPaceLine(prefs);
+    if (pace != null) return pace;
 
     // 되는 날의 조건을 골라준 사람에게는 두 번에 한 번 그 답으로 건넨다.
     //
@@ -7004,6 +7067,120 @@ Rules:
     final type = _executionTypeLabel(prefs);
     if (type == null) return null;
     return _greetingBuilder.buildTypeAdvice(type, planCount: planCount);
+  }
+
+  /// 최근 페이스를 보고 코치가 만든 한 마디. 못 만들면 null.
+  ///
+  /// 무엇을 올릴지도, 얼마나 올릴지도, 올릴지 그대로 둘지도 앱이 정하지 않는다.
+  /// 앱은 세기만 하고 판단은 코치가 한다. 규칙을 여기 박으면 그 규칙이 틀리는
+  /// 사람이 반드시 나오는데, 틀린 줄도 모른다 — 문턱으로 유형을 나누던 때가
+  /// 정확히 그랬다. 다섯 개 적고 둘만 손대는 사람에게 "여섯 개 적으세요"가
+  /// 나가던 자리다.
+  ///
+  /// 프롬프트에 남긴 제약은 "무엇을 하라"가 아니라 "없는 것을 지어내지 말라"
+  /// 쪽뿐이다.
+  Future<String?> _buildRecentPaceLine(SharedPreferences prefs) async {
+    final now = DateTime.now();
+    final block = RecentPaceBrief.block(
+      historyRaw: prefs.getString('nyang_history'),
+      todayTasks: _decodeMapList(prefs.getString('nyang_tasks')),
+      now: now,
+      minutesLeft: _minutesUntilBedtime(prefs, now),
+      busyNow: BusyHoursService.busyNow(prefs, now),
+    );
+    if (block.isEmpty) return null;
+
+    final prompt =
+        '''${_coach.systemPrompt}
+
+[할 일]
+아래는 앱이 기록에서 센 값이다. 이 사람이 최근에 어떻게 지냈는지 보고, 오늘
+하루를 조금 더 보람 있게 보내려면 무엇을 어떻게 하면 좋을지 한 마디 건네줘.
+$block
+
+[지킬 것]
+- 지금 시각부터 할 수 있는 것만 말할 것. 이미 지난 시간을 두고 하는 말은
+쓸 데가 없다.
+- 오늘 이미 해둔 것이 있으면 그것부터 두고 말할 것. 오늘을 백지로 놓으면
+지켜보고 있었다는 말이 거짓이 된다.
+- 지난 날 한 일은 둘 다 아는 것으로 놓을 것. 그 일을 끝냈을 때 이미 축하를
+건넸으므로, 이제 처음 본 것처럼 알아채면 그 자리에 없었던 것처럼 들린다.
+- 위 숫자에 없는 것은 말하지 말 것. 특히 시각 이야기는 시작 시각이 적혀
+있을 때만.
+- 못 쓴다고 알려준 시간대가 있으면 그 시간을 비켜서 말할 것.
+- 두세 문장, 150자 안에서 끝낼 것. 태그나 머리말 없이 코치 말투 그대로.
+
+[출력 형식]
+완성된 한 마디만 출력할 것. 다른 말은 덧붙이지 말 것.''';
+
+    const model = 'gpt-5-mini';
+    final messages = [
+      {'role': 'user', 'content': prompt},
+    ];
+    try {
+      await ApiUsageLimitService.ensureChatAllowed(
+        estimatedTokens: AnalyticsService.estimateChatTokens(messages, ''),
+      );
+      final result = await _chatProxy.call({
+        'messages': messages,
+        'model': model,
+        'temperature': 0.7,
+      });
+      final content =
+          (result.data is Map
+                  ? (result.data as Map)['content'] as String? ?? ''
+                  : '')
+              .trim();
+      if (content.isEmpty) return null;
+
+      final usageData = result.data is Map ? result.data as Map : const {};
+      unawaited(
+        AnalyticsService.logApiUsage(
+          coachId: widget.coachId,
+          estimatedTokens: AnalyticsService.estimateChatTokens(
+            messages,
+            content,
+          ),
+          actualTokens: AnalyticsService.readIntValue(usageData, [
+            'totalTokens',
+            'total_tokens',
+            'tokens',
+            'usage.totalTokens',
+            'usage.total_tokens',
+          ]),
+          actualCostWon: AnalyticsService.readIntValue(usageData, [
+            'costWon',
+            'cost_won',
+            'estimatedCostWon',
+            'estimated_cost_won',
+            'usage.costWon',
+          ]),
+          model: model,
+          usageSource: 'recent_pace_advice',
+          countAsUserUsage: false,
+        ),
+      );
+      unawaited(AnalyticsService.logFeatureUsage('master_recent_pace_advice'));
+      return content;
+    } catch (e) {
+      debugPrint('recent pace advice failed: $e');
+      return null;
+    }
+  }
+
+  /// 지금부터 잠들 때까지 남은 분. 취침 시각을 안 적어둔 사람은 null.
+  int? _minutesUntilBedtime(SharedPreferences prefs, DateTime now) {
+    final bedtime = _todayTimeOf(
+      prefs.getString('nyang_premium_min_sleep_time'),
+      now,
+    );
+    if (bedtime == null) return null;
+    // 새벽에 자는 사람은 취침 시각이 오늘 자정 이전으로 읽힌다. 그때는 내일로 넘긴다.
+    final target = bedtime.isAfter(now)
+        ? bedtime
+        : bedtime.add(const Duration(days: 1));
+    final minutes = target.difference(now).inMinutes;
+    return minutes > 0 && minutes < 24 * 60 ? minutes : null;
   }
 
   /// 이 사람의 실행 유형 이름. 아직 정할 수 없으면 null.
