@@ -172,34 +172,6 @@ void main() {
     });
   });
 
-  group('기준선', () {
-    test('목록이 있던 날만 평균에 넣는다', () {
-      // 목록이 빈 날을 분모에 넣으면 평소보다 적게 잡는 사람으로 읽힌다.
-      final base = RecentPaceBrief.baseline(
-        history([
-          day('2026-09-15', [task('a'), task('b'), task('c', done: true)]),
-          day('2026-09-14', []),
-          day('2026-09-13', [task('d'), task('e', done: true)]),
-        ]),
-        now: now,
-      );
-
-      expect(base, isNotNull);
-      expect(base!.daysCounted, 2);
-      expect(base.plannedPerDay, closeTo(2.5, 0.01));
-      expect(base.donePerDay, closeTo(1.0, 0.01));
-    });
-
-    test('목록이 있던 날이 없으면 null', () {
-      final base = RecentPaceBrief.baseline(
-        history([day('2026-09-15', [])]),
-        now: now,
-      );
-
-      expect(base, isNull);
-    });
-  });
-
   group('넘기는 블록', () {
     test('셀 것이 없으면 빈 문자열', () {
       expect(

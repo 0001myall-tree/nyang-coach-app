@@ -84,12 +84,6 @@ class RecentPaceBrief {
   /// 빗나간다. 이틀이면 "둘 다 그랬다"와 "어제만 그랬다"를 가를 수 있다.
   static const int recentDays = 2;
 
-  /// 기준선을 며칠에서 낼지.
-  ///
-  /// 이틀이 평소와 같은지 다른지는 이틀만 보고는 알 수 없다. 이틀이 주인공이고
-  /// 이 값은 자막이다.
-  static const int baselineDays = 7;
-
   /// 한 날에 줄을 몇 개까지 적을지.
   ///
   /// 루틴을 여러 개 돌리는 사람은 하루에 열다섯 줄이 나온다. 목록을 통째로
@@ -129,30 +123,6 @@ class RecentPaceBrief {
     return out;
   }
 
-  /// 기준선. 오늘 이전 [days]일 중 목록이 있던 날의 평균 개수와 완료 개수.
-  ///
-  /// 판단이 아니라 값이다. 이틀이 이보다 낮은지 높은지는 코치가 견준다.
-  static ({int daysCounted, double plannedPerDay, double donePerDay})? baseline(
-    String? historyRaw, {
-    DateTime? now,
-    int days = baselineDays,
-  }) {
-    final all = recent(historyRaw, now: now, days: days);
-    final withPlan = all.where((day) => day.planned > 0).toList();
-    if (withPlan.isEmpty) return null;
-    var planned = 0;
-    var done = 0;
-    for (final day in withPlan) {
-      planned += day.planned;
-      done += day.done;
-    }
-    return (
-      daysCounted: withPlan.length,
-      plannedPerDay: planned / withPlan.length,
-      donePerDay: done / withPlan.length,
-    );
-  }
-
   /// 프롬프트에 실을 블록. 셀 것이 없으면 빈 문자열.
   ///
   /// [todayTasks]는 오늘 목록, [now]는 지금, [minutesLeft]는 잠들기까지 남은
@@ -177,14 +147,14 @@ class RecentPaceBrief {
       if (hidden > 0) buffer.writeln('  …외 $hidden개');
     }
 
-    final base = baseline(historyRaw, now: now);
-    if (base != null) {
-      buffer.writeln(
-        '기준선  최근 ${base.daysCounted}일 중 목록이 있던 날 평균 '
-        '${base.plannedPerDay.toStringAsFixed(1)}개 적고 '
-        '${base.donePerDay.toStringAsFixed(1)}개 끝냄',
-      );
-    }
+    // 더 긴 기준선은 넘기지 않는다.
+    //
+    // 이레 평균을 자막으로 곁들인 적이 있다. 뺀 이유가 둘이다. 맞출 기준이 둘이
+    // 되면 어느 쪽에 맞추라는 말인지가 흐려지고, 평균과 견주는 자리는 "평소보다
+    // 못하시네요"로 흐르기 쉽다. 여기서 보려는 것은 최근의 흐름 자체다.
+    //
+    // 잃는 것도 있다. 이틀이 유독 조용했던 사람과 원래 조용한 사람을 가를 수
+    // 없다. 코치가 그 이틀을 이 사람의 수준으로 다루기 시작하면 되돌릴 자리다.
 
     // 시각을 두고 하지 말라는 줄은 두지 않는다.
     //
