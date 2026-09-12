@@ -15,11 +15,13 @@ void main() {
     String text, {
     bool done = false,
     String? startedAt,
+    String? completedAt,
     int elapsedSeconds = 0,
   }) => {
     'text': text,
     'done': done,
     if (startedAt != null) 'startedAt': startedAt,
+    if (completedAt != null) 'completedAt': completedAt,
     if (elapsedSeconds > 0) 'elapsedSeconds': elapsedSeconds,
   };
 
@@ -98,6 +100,35 @@ void main() {
 
       expect(days.single.done, 2);
       expect(days.single.doneNames, ['이름 있는 것']);
+    });
+
+    test('마지막 완료 시각은 그날 가장 늦은 것', () {
+      final days = RecentPaceBrief.recent(
+        history([
+          day('2026-09-15', [
+            task('일찍', done: true, completedAt: '2026-09-15T11:00:00'),
+            task('늦게', done: true, completedAt: '2026-09-15T20:00:00'),
+          ]),
+        ]),
+        now: now,
+      );
+
+      expect(days.single.lastDoneHour, 20);
+    });
+
+    test('자정을 넘겨 찍힌 완료는 그날 것으로 세지 않는다', () {
+      // 그대로 쓰면 그날이 새벽에 끝난 것처럼 읽힌다.
+      final days = RecentPaceBrief.recent(
+        history([
+          day('2026-09-15', [
+            task('저녁에', done: true, completedAt: '2026-09-15T20:00:00'),
+            task('새벽에', done: true, completedAt: '2026-09-16T01:00:00'),
+          ]),
+        ]),
+        now: now,
+      );
+
+      expect(days.single.lastDoneHour, 20);
     });
 
     test('첫 시작 시각은 그날 가장 이른 것', () {
@@ -190,7 +221,7 @@ void main() {
       expect(block, contains('끝낸 것 1개'));
     });
 
-    test('시작 표시가 하나도 없으면 시간대를 말하지 말라고 적는다', () {
+    test('시각이 하나도 없으면 시간 이야기를 말라고 적는다', () {
       final block = RecentPaceBrief.block(
         historyRaw: history([
           day('2026-09-15', [task('체크만', done: true)]),
@@ -199,7 +230,24 @@ void main() {
         now: now,
       );
 
-      expect(block, contains('시간대 이야기는 하지 마세요'));
+      expect(block, contains('시간 이야기는 하지 마세요'));
+    });
+
+    test('완료 시각만 있으면 시작만 막고 완료는 쓰게 둔다', () {
+      // 시작 버튼을 안 쓰고 체크만 하는 사람이다. 그래도 하루가 몇 시에
+      // 끝났는지는 말할 수 있다.
+      final block = RecentPaceBrief.block(
+        historyRaw: history([
+          day('2026-09-15', [
+            task('체크만', done: true, completedAt: '2026-09-15T22:30:00'),
+          ]),
+        ]),
+        todayTasks: const [],
+        now: now,
+      );
+
+      expect(block, contains('마지막 완료 오후 10시'));
+      expect(block, contains('완료 시각은 써도 됩니다'));
     });
 
     test('시작 표시가 있으면 그 문구는 넣지 않는다', () {
@@ -211,7 +259,7 @@ void main() {
         now: now,
       );
 
-      expect(block, isNot(contains('시간대 이야기는 하지 마세요')));
+      expect(block, isNot(contains('하지 마세요')));
       expect(block, contains('첫 시작 오전 9시'));
     });
 

@@ -24,6 +24,7 @@ class PaceDay {
     required this.touched,
     required this.done,
     required this.firstStartHour,
+    required this.lastDoneHour,
     required this.doneNames,
     required this.leftNames,
   });
@@ -42,6 +43,17 @@ class PaceDay {
   ///
   /// 시작 시각은 시작 버튼을 누른 일에만 남는다. 체크만 하는 사람은 늘 빈다.
   final int? firstStartHour;
+
+  /// 그날 마지막으로 끝낸 시각. 끝낸 것이 없으면 null.
+  ///
+  /// 시작 시각과 달리 체크만 하는 사람에게도 남는다 — 완료를 미는 순간 찍히기
+  /// 때문이다. 그래서 시작 표시를 안 쓰는 사람에게는 시간을 말할 수 있는 유일한
+  /// 값이다.
+  ///
+  /// 첫 완료가 아니라 마지막 완료를 본다. 하루가 어디서 끝났는지가 궁금한
+  /// 자리다 — 밤 11시에 몰아서 끝내는 사람과 저녁에 접는 사람은 같은 개수를
+  /// 끝내도 다르게 지낸 것이다.
+  final int? lastDoneHour;
 
   final List<String> doneNames;
   final List<String> leftNames;
@@ -157,10 +169,20 @@ class RecentPaceBrief {
       );
     }
 
-    if (days.every((day) => day.firstStartHour == null)) {
+    // 시각을 말할 근거가 하나도 없으면 그렇다고 적는다. 시작 표시를 안 쓰는
+    // 사람에게 "늦게 시작하시네요"는 없는 패턴을 지어내는 말이다.
+    //
+    // 완료 시각은 따로 본다. 그건 체크만 하는 사람에게도 남아서, 시작 시각이
+    // 비어 있어도 "하루가 몇 시에 끝났는지"는 말할 수 있다. 둘을 한 덩어리로
+    // 묶으면 방금 넘긴 완료 시각을 쓰지 말라고 하는 셈이 된다.
+    final noStart = days.every((day) => day.firstStartHour == null);
+    final noDone = days.every((day) => day.lastDoneHour == null);
+    if (noStart && noDone) {
+      buffer.writeln('*시각이 남은 날이 없습니다. 시간 이야기는 하지 마세요.');
+    } else if (noStart) {
       buffer.writeln(
         '*시작 시각이 남은 날이 없습니다. 시작 버튼을 안 쓰고 체크만 하는 '
-        '사람일 수 있으니 시간대 이야기는 하지 마세요.',
+        '사람일 수 있으니 언제 시작했는지는 말하지 마세요. 완료 시각은 써도 됩니다.',
       );
     }
 
@@ -177,6 +199,9 @@ class RecentPaceBrief {
     ];
     if (day.firstStartHour != null) {
       parts.add('첫 시작 ${_clock(day.firstStartHour!)}');
+    }
+    if (day.lastDoneHour != null) {
+      parts.add('마지막 완료 ${_clock(day.lastDoneHour!)}');
     }
     return '${day.date}  ${parts.join(' / ')}';
   }
@@ -238,6 +263,7 @@ class RecentPaceBrief {
         touched: 0,
         done: 0,
         firstStartHour: null,
+        lastDoneHour: null,
         doneNames: const [],
         leftNames: const [],
       );
@@ -247,6 +273,7 @@ class RecentPaceBrief {
     var touched = 0;
     var done = 0;
     int? firstStartHour;
+    int? lastDoneHour;
     final doneNames = <String>[];
     final leftNames = <String>[];
 
@@ -261,6 +288,16 @@ class RecentPaceBrief {
       if (startedAt != null &&
           (firstStartHour == null || startedAt.hour < firstStartHour)) {
         firstStartHour = startedAt.hour;
+      }
+      final completedAt = DateTime.tryParse(
+        task['completedAt']?.toString() ?? '',
+      );
+      // 자정을 넘겨 끝낸 것은 다음 날 시각으로 찍힌다. 그걸 그대로 "마지막
+      // 완료"로 쓰면 그날이 새벽에 끝난 것처럼 읽혀서, 그날 것만 본다.
+      if (completedAt != null &&
+          DateFormat('yyyy-MM-dd').format(completedAt) == date &&
+          (lastDoneHour == null || completedAt.hour > lastDoneHour)) {
+        lastDoneHour = completedAt.hour;
       }
       // 이름을 못 읽는 항목도 셈에는 들어간다. 아래는 적어 보낼 이름만 고르는
       // 자리다 — 예전에는 셈이 이 안에 있어서, 이름이 빈 항목은 끝냈어도
@@ -280,6 +317,7 @@ class RecentPaceBrief {
       touched: touched,
       done: done,
       firstStartHour: firstStartHour,
+      lastDoneHour: lastDoneHour,
       doneNames: doneNames,
       leftNames: leftNames,
     );
