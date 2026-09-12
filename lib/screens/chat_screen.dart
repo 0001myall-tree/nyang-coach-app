@@ -4665,84 +4665,37 @@ ${lines.join('\n')}
     return pattern.window!.label;
   }
 
-  // ── 계획 구체화 이야기 (주 1회) ──────────────────────
-  // 예전에는 계획을 저장할 때마다 코치가 참견했다(삭제됨). 잘 해내는 사람에게도 매번 말을 걸게 돼서, 지금은 계획 하나하나를
-  // 짚지 않고 인사 자리에서 주 1회, 일반적인 이야기만 건넨다. 냥냥이·마스터·
-  // 프렌즈 코치가 쿨다운을 공유한다 — 방을 옮겨 다녀도 같은 주에 두 번 듣지
-  // 않는다.
+  // ── 습관과 미루기 지식 (2주 1회) ──────────────────────
   //
-  // 프렌즈 코치(남친/할매/형)도 앞의 네 문구(시간/장소, 오늘 범위, 실행
-  // 의도, 유혹 묶기)는 냥냥이와 같은 말투(일반 코치 톤)로 그대로 듣는다.
-  // 다섯 번째 차례(습관 쌓기)만 프렌즈 코치 전용으로, 로테이션에 남지 않고
-  // 각자 담당 구역 예시로 건넨다([_weeklyConcretizeFriendCoachIds] 참고).
+  // 예전에는 계획을 저장할 때마다 코치가 참견했다(삭제됨). 잘 해내는 사람에게도
+  // 매번 말을 걸게 돼서, 계획 하나하나를 짚지 않고 인사 자리에서 일반적인
+  // 이야기만 건네는 자리로 바뀌었다.
+  //
+  // 그 일반적인 이야기가 한동안 고정 문구 네 개(시간/장소, 오늘 범위, 실행
+  // 의도, 유혹 묶기)와 프렌즈 코치용 다섯 번째(습관 쌓기)였다. 그중 첫째와
+  // 셋째가 사실 같은 이야기여서, 네 번에 두 번은 실행 의도를 다시 들었다.
+  // 그리고 네 개뿐이라 한 달이면 한 바퀴가 돈다.
+  //
+  // 지금은 코치가 매번 만든다. 개인 기록은 넘기지 않는다 — 패턴을 읽어 코칭하는
+  // 일은 기록 탭 몫이고, 여기는 누구에게나 쓸모 있는 지식 자리다. 대신 지난번에
+  // 한 이야기들을 넘겨 같은 것을 다시 고르지 않게 한다.
+  //
+  // 냥냥이·마스터·프렌즈 코치가 쿨다운을 공유한다 — 방을 옮겨 다녀도 같은
+  // 기간에 두 번 듣지 않는다. 프렌즈 코치도 이 자리에 서고, 말투는 각자
+  // 지시문이 정한다([_weeklyConcretizeFriendCoachIds] 참고).
   static const _weeklyConcretizeGreetingKind = 'auto:weekly_concretize';
 
-  static const String _weeklyConcretizeTimePlaceText =
-      "안 하던 걸 하려면 처음엔 좀 귀찮을 수도 있는데, 시간이랑 장소, 그리고 "
-      "구체적으로 무엇을 할지 미리 정해두면 실제로 할 확률이 확 올라간대. "
-      "심리학에서는 이걸 '실행 의도'라고 부르는데, 언제 어디서 무엇을 할지만 "
-      "딱 정해도 실천율이 꽤 달라진다더라고. 이미 생각해뒀으면 그대로 가면 돼!";
+  /// 얼마 만에 다시 건넬지.
+  ///
+  /// 주 1회였다. 일반 지식이라 아껴 쓰는 편이 낫다 — 오늘 할 것을 주는 말과
+  /// 달리 지금 당장 쓰이지 않는 이야기라, 잦으면 소식지가 된다.
+  static const Duration _weeklyConcretizeGap = Duration(days: 14);
 
-  static const String _weeklyConcretizeScopeText =
-      "미리 정해두는 거 좀 귀찮을 수도 있는데, 오늘 뭘 어디까지 할지 정해두면 막상 "
-      "시작할 때는 훨씬 편해져. 목표가 구체적일수록 실제로 해낼 확률이 높다는 연구도 "
-      "있고. 이미 정해뒀으면 그대로 가도 좋아!";
-
-  // 냥냥이는 같은 이야기를 냥체로 한다. 내용은 위와 같고 말투만 다르다.
-  static const String _weeklyConcretizeTimePlaceTextCat =
-      "안 하던 걸 하려면 처음엔 좀 귀찮을 수도 있다냥. 근데 시간이랑 장소, 그리고 "
-      "구체적으로 무엇을 할지 미리 정해두면 실제로 할 확률이 확 올라간다냥. "
-      "사람들은 이걸 '실행 의도'라고 부른다냥. 언제 어디서 무엇을 할지만 딱 "
-      "정해도 실천율이 꽤 달라진다냥. 이미 생각해뒀으면 그대로 가면 된다냥!";
-
-  static const String _weeklyConcretizeScopeTextCat =
-      "미리 정해두는 게 좀 귀찮을 수도 있다냥. 그래도 오늘 뭘 어디까지 할지 "
-      "정해두면 막상 시작할 땐 훨씬 편해진다냥. 목표가 구체적일수록 실제로 해낼 "
-      "확률이 높다는 연구도 있다냥. 이미 정해뒀으면 그대로 가도 좋다냥!";
-
-  static const String _weeklyConcretizeConditionText =
-      "계획이 애매하면 막상 그 순간에 미루기 쉬운데, '이따가 해야지' 대신 "
-      "'[언제] [어디서] [무엇을] 한다'처럼 문장 하나로 딱 못 박아두면 그 순간이 "
-      "왔을 때 고민 없이 바로 움직이게 된대. 이번엔 그렇게 한 줄로 정해볼래?";
-
-  static const String _weeklyConcretizeConditionTextCat =
-      "계획이 애매하면 그 순간에 미루기 쉽다냥. '이따가 해야지' 대신 '[언제] "
-      "[어디서] [무엇을] 한다'처럼 문장 하나로 딱 못 박아두면, 그 순간이 왔을 때 "
-      "고민 없이 바로 움직이게 된다냥. 이번엔 그렇게 한 줄로 정해볼래냥?";
-
-  static const String _weeklyConcretizeBundleText =
-      "하기 싫은 일도 좋아하는 걸 딱 붙여두면 손이 더 잘 가더라고. 운동할 때 "
-      "좋아하는 노래 틀어놓는 것처럼. 혹시 오늘 하기 싫은 일 있으면 좋아하는 "
-      "거랑 한번 묶어보는 거 어때?";
-
-  static const String _weeklyConcretizeBundleTextCat =
-      "하기 싫은 일도 좋아하는 걸 딱 붙여두면 손이 더 잘 간다냥. 운동할 때 "
-      "좋아하는 노래 틀어놓는 것처럼. 혹시 오늘 하기 싫은 일 있으면 좋아하는 "
-      "거랑 한번 묶어보는 거 어때냥?";
-
-  /// 프렌즈 코치(형/할매/햇살)는 로테이션 없이 습관 쌓기 한 줄만, 각자
-  /// 담당 구역에 맞는 예시로 받는다. 나머지 네 문구는 계획을 다루는 방인
-  /// 냥냥이·마스터 전용으로 남긴다.
   static const Set<String> _weeklyConcretizeFriendCoachIds = {
     'bro',
     'halmae',
     'boyfriend',
   };
-
-  static const String _weeklyConcretizeHabitStackBroText =
-      "새로운 거 따로 하려면 자꾸 까먹는데, 하던 거 바로 뒤에 딱 붙이면 훨씬 "
-      "잘 이어진다. 씻고 나오자마자 바로 스트레칭 시작하는 것처럼. 오늘부터 "
-      "하고 싶은 운동, 뭐 뒤에 붙여볼래? 💪";
-
-  static const String _weeklyConcretizeHabitStackHalmaeText =
-      "새로운 거 억지로 따로 하려니까 자꾸 까먹는 기다. 하던 거 딱 끝내고 "
-      "바로 이어서 하면 훨씬 수월하게 된다. 저녁밥 다 먹고 바로 그릇 씻어놓는 "
-      "것처럼. 오늘부터 하고 싶은 거, 뭐 뒤에 붙여볼까 우리 강아지?";
-
-  static const String _weeklyConcretizeHabitStackBoyfriendText =
-      "새로운 거 따로 챙기려면 자꾸 잊어버리게 되잖아. 하던 거 바로 뒤에 딱 "
-      "붙이면 훨씬 잘 이어진대. 세수 끝나자마자 바로 스킨케어 하는 것처럼. "
-      "오늘 챙기고 싶은 거 있으면, 뭐 뒤에 붙여볼래? 💙";
 
   /// 이 kind로 가장 최근에 말한 메시지. 코치를 가리지 않고 본다(냥냥이 + 마스터
   /// 공통 쿨다운이라서다). 없으면 null.
@@ -4776,42 +4729,49 @@ ${lines.join('\n')}
     return latest;
   }
 
-  /// 계획 구체화 이야기를 인사 자리에서 건넨다. 건넸으면 true.
+  /// 이 kind로 최근에 한 말들. 새것부터, 많아도 [limit]개.
   ///
-  /// 고정 문구만 나간다. 한동안 코치가 그 사람 기록을 보고 만든 말을 여기 세웠는데
-  /// (절반씩 쓰다가 매번 쓰는 것까지 갔다), 접었다. 패턴을 읽어 코칭하는 일은
-  /// 기록 탭이 이미 하고 있고 그쪽 조건이 더 좋다 — 사용자가 보러 간 자리라 길게
-  /// 말할 수 있고, 주간 한마디와 유형 배지와 조건 회고가 한자리에 모인다. 인사
-  /// 한마디로 여섯 문장 안에 같은 일을 다시 하는 것은 더 나쁜 조건에서 같은 말을
-  /// 하는 셈이었다.
-  ///
-  /// 경계는 이렇게 둔다 — **채팅은 오늘, 기록 탭은 패턴.** 그래서 오늘을 두고
-  /// 말하는 페이스 코칭([_buildRecentPaceLine])은 남는다. 그건 지금 시각과 오늘
-  /// 남은 시간을 봐야 하고, 무엇보다 사용자가 찾아오지 않아도 가야 뜻이 있다.
-  ///
-  /// 여기 남은 네 문구는 패턴 분석이 아니라 일반적인 요령이라 기록 탭과 겹치지
-  /// 않는다.
-  ///
-  /// 오늘 계획 중 막막해 보이는 것을 콕 집어주는 갈래가 하나 더 있었다.
-  /// 뺐다. 그 문장은 모델을 따로 한 번 더 불러 만들었는데, 넘기는 것이 오늘
-  /// 할 일 목록뿐이라 방금 나눈 대화를 몰랐다. 그래서 코치가 47초 전에
-  /// 직접 한 말을 심리학 설명까지 붙여 다시 했다.
-  ///
-  /// 그 일은 이제 프롬프트가 한다 — 마스터에게 계획을 정할 때 끝을 선명하게
-  /// 만들도록 도우라고 적어뒀고, 그쪽은 대화를 보면서 말하므로 자리가
-  /// 어긋나지 않는다. 호출도 하나 줄었다.
-  ///
-  /// 로테이션 문구 네 개(시간/장소 → 오늘 범위 → 실행 의도 조건문 → 유혹
-  /// 묶기)는 돌아가며 나간다 — 마지막으로 이 kind로 무엇을 말했는지를 채팅
-  /// 기록에서 읽어 다음 차례를 고른다.
-  ///
-  /// 그 네 개 중 첫째와 셋째는 사실 같은 이야기다(실행 의도). 넷이 다시 앞줄로
-  /// 나온 셈이니 둘을 하나로 합치고 빈 자리에 다른 요령을 넣을 것.
-  ///
-  /// 프렌즈 코치는 유혹 묶기 다음에 다섯 번째 차례(습관 쌓기, 페르소나별
-  /// 예시)가 한 번 더 돈 뒤 첫 문구로 되돌아간다. 냥냥이·마스터는 그 목소리가
-  /// 없어 네 개짜리 순환 그대로다.
+  /// 모델에게 "이건 이미 했다"고 알려주는 데 쓴다. 유명한 개념은 몇 개뿐이라
+  /// 아무 안내 없이 고르게 하면 실행 의도와 작은 시작만 돌려 쓴다 — 고정 문구
+  /// 네 개 중 둘이 같은 이야기여서 겪었던 일이 그대로 돌아온다.
+  List<String> _recentAutoMessages(
+    SharedPreferences prefs,
+    String kind, {
+    int limit = 8,
+  }) {
+    final found = <({DateTime at, String text})>[];
+    for (final coachId in DailyResetService.coachIds) {
+      for (final key in [
+        'nyang_chat_history_$coachId',
+        '${DailyResetService.chatArchivePrefix}$coachId',
+      ]) {
+        final raw = prefs.getString(key);
+        if (raw == null || raw.isEmpty) continue;
+        for (final item in _decodeMapList(raw)) {
+          if (item['isUser'] == true) continue;
+          if (item['kind'] != kind) continue;
+          final time = DateTime.tryParse(item['time']?.toString() ?? '');
+          final text = item['text']?.toString().trim() ?? '';
+          if (time == null || text.isEmpty) continue;
+          found.add((at: time, text: text));
+        }
+      }
+    }
+    found.sort((a, b) => b.at.compareTo(a.at));
+    return found.take(limit).map((e) => e.text).toList(growable: false);
+  }
 
+  /// 습관과 미루기 지식을 인사 자리에서 건넨다. 건넸으면 true.
+  ///
+  /// 이 자리가 왜 이 모양인지는 위 섹션 주석에 적어뒀다. 요약하면 — 고정 문구
+  /// 네 개를 돌리다가, 개인 기록을 읽어 코칭하는 말을 세웠다가, 접었다. 패턴을
+  /// 읽는 일은 기록 탭이 더 좋은 조건에서 이미 하고 있다. 경계는 **채팅은 오늘,
+  /// 기록 탭은 패턴**이고, 오늘을 두고 말하는 페이스 코칭
+  /// ([_buildRecentPaceLine])이 채팅 쪽 몫이다.
+  ///
+  /// 그래서 여기 남은 것은 개인 분석이 아닌 일반 지식이다. 기록이 아직 없는
+  /// 사람에게도 나갈 수 있고, 기록 탭과 겹치지도 않는다.
+  ///
   /// 이 자리가 서는 요일.
   ///
   /// 아무 날이나 섰다. 주 1회인 것은 맞았지만 언제 올지 알 수 없었고, 페이스
@@ -4837,60 +4797,105 @@ ${lines.join('\n')}
     if (now.weekday != _weeklyConcretizeWeekday) return false;
     if (now.hour >= MasterGreetingContext.quietFromHour) return false;
 
+    // 쿨다운은 코치를 가리지 않는다. 방을 옮겨 다녀도 같은 기간에 두 번 듣지
+    // 않는다.
     final last = _lastAutoMessage(prefs, _weeklyConcretizeGreetingKind);
-    if (last != null && now.difference(last.at) < const Duration(days: 7)) {
+    if (last != null && now.difference(last.at) < _weeklyConcretizeGap) {
       return false;
     }
 
-    // 방을 옮겨 다녀도 같은 이야기를 두 번 듣지 않게, 지난번이 어느 쪽이었는지는
-    // 말투를 가리지 않고 본다(냥냥이판과 마스터판은 같은 이야기다).
-    final isCat = widget.coachId == 'cat';
-    final saidTimePlace =
-        last?.text == _weeklyConcretizeTimePlaceText ||
-        last?.text == _weeklyConcretizeTimePlaceTextCat;
-    final saidScope =
-        last?.text == _weeklyConcretizeScopeText ||
-        last?.text == _weeklyConcretizeScopeTextCat;
-    final saidCondition =
-        last?.text == _weeklyConcretizeConditionText ||
-        last?.text == _weeklyConcretizeConditionTextCat;
-    final saidBundle =
-        last?.text == _weeklyConcretizeBundleText ||
-        last?.text == _weeklyConcretizeBundleTextCat;
-    // 습관 쌓기는 프렌즈 코치만의 다섯 번째 차례다. 냥냥이·마스터는 공용
-    // 목소리가 없어 그대로 네 개짜리 순환으로 남는다.
-    final habitStackLine = isFriendHabitStackCoach
-        ? switch (widget.coachId) {
-            'bro' => _weeklyConcretizeHabitStackBroText,
-            'halmae' => _weeklyConcretizeHabitStackHalmaeText,
-            'boyfriend' => _weeklyConcretizeHabitStackBoyfriendText,
-            _ => '',
-          }
-        : '';
-    final line = saidTimePlace
-        ? (isCat ? _weeklyConcretizeScopeTextCat : _weeklyConcretizeScopeText)
-        : saidScope
-        ? (isCat
-              ? _weeklyConcretizeConditionTextCat
-              : _weeklyConcretizeConditionText)
-        : saidCondition
-        ? (isCat ? _weeklyConcretizeBundleTextCat : _weeklyConcretizeBundleText)
-        : (saidBundle && habitStackLine.isNotEmpty)
-        ? habitStackLine
-        : (isCat
-              ? _weeklyConcretizeTimePlaceTextCat
-              : _weeklyConcretizeTimePlaceText);
-    if (line.isEmpty || !mounted) return false;
+    final line = await _buildHabitKnowledgeLine(prefs);
+    if (line == null || !mounted) return false;
 
     _injectAiMessage(line, kind: _weeklyConcretizeGreetingKind);
-    unawaited(
-      AnalyticsService.logFeatureUsage(
-        habitStackLine.isNotEmpty && line == habitStackLine
-            ? 'weekly_concretize_habit_stack'
-            : 'weekly_concretize_rotation',
-      ),
-    );
+    unawaited(AnalyticsService.logFeatureUsage('habit_knowledge_tip'));
     return true;
+  }
+
+  /// 습관과 미루기에 도움이 되는 심리학 지식 한 가지. 못 만들면 null.
+  ///
+  /// **개인 기록을 넘기지 않는다.** 이 사람이 어떤 모양으로 굴러가는지를 읽어
+  /// 코칭하는 일은 기록 탭 몫이다([_startWeeklyConcretizeTip] 설명 참고). 여기는
+  /// 누구에게나 쓸모 있는 일반 지식 자리이고, 그래서 기록이 아직 없는 사람에게도
+  /// 나갈 수 있다.
+  ///
+  /// 지난번에 한 이야기들을 함께 넘긴다. 이게 없으면 모델은 유명한 몇 개(실행
+  /// 의도, 작은 시작, 조건문 계획)만 돌려 쓴다 — 고정 문구 네 개 중 둘이 같은
+  /// 이야기여서 겪었던 일이 그대로 돌아온다.
+  Future<String?> _buildHabitKnowledgeLine(SharedPreferences prefs) async {
+    final said = _recentAutoMessages(prefs, _weeklyConcretizeGreetingKind);
+    final saidBlock = said.isEmpty
+        ? ''
+        : '\n[전에 한 이야기 - 같은 것을 다시 하지 말 것]\n'
+              '${said.map((text) => '- $text').join('\n')}\n';
+
+    final prompt =
+        '''${_coach.systemPrompt}
+
+[할 일]
+습관을 들이거나 미루는 것을 줄이는 데 도움이 되는 심리학 지식 한 가지를, 알아두면
+써볼 수 있는 모양으로 건네줘.
+$saidBlock
+[지킬 것]
+- 이 사람의 기록은 받지 않았다. 일반적으로 그렇다는 이야기로 건넬 것.
+- 이름을 대는 것이 목적이 아니다. 무엇을 어떻게 해보면 되는지까지 있을 것.
+- 길어도 여섯 문장 안에서 끝낼 것.
+
+[출력 형식]
+완성된 한 마디만 출력할 것. 다른 말은 덧붙이지 말 것.''';
+
+    const model = 'gpt-5-mini';
+    final messages = [
+      {'role': 'user', 'content': prompt},
+    ];
+    try {
+      await ApiUsageLimitService.ensureChatAllowed(
+        estimatedTokens: AnalyticsService.estimateChatTokens(messages, ''),
+      );
+      final result = await _chatProxy.call({
+        'messages': messages,
+        'model': model,
+        'temperature': 0.8,
+      });
+      final content =
+          (result.data is Map
+                  ? (result.data as Map)['content'] as String? ?? ''
+                  : '')
+              .trim();
+      if (content.isEmpty) return null;
+
+      final usageData = result.data is Map ? result.data as Map : const {};
+      unawaited(
+        AnalyticsService.logApiUsage(
+          coachId: widget.coachId,
+          estimatedTokens: AnalyticsService.estimateChatTokens(
+            messages,
+            content,
+          ),
+          actualTokens: AnalyticsService.readIntValue(usageData, [
+            'totalTokens',
+            'total_tokens',
+            'tokens',
+            'usage.totalTokens',
+            'usage.total_tokens',
+          ]),
+          actualCostWon: AnalyticsService.readIntValue(usageData, [
+            'costWon',
+            'cost_won',
+            'estimatedCostWon',
+            'estimated_cost_won',
+            'usage.costWon',
+          ]),
+          model: model,
+          usageSource: 'habit_knowledge_tip',
+          countAsUserUsage: false,
+        ),
+      );
+      return content;
+    } catch (e) {
+      debugPrint('habit knowledge tip failed: $e');
+      return null;
+    }
   }
 
   List<Map<String, dynamic>> _decodeMapList(String? raw) {
