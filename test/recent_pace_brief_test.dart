@@ -338,4 +338,60 @@ void main() {
       expect(block, contains('12시간 30분'));
     });
   });
+
+  group('오늘 목록 블록', () {
+    test('목록이 비면 그렇다고 적는다', () {
+      // 빈손은 실패가 아니라 "적을 때 이렇게" 이야기가 가장 잘 맞는 날이다.
+      final block = RecentPaceBrief.todayListBlock(tasks: const [], now: now);
+
+      expect(block, contains('아직 적어둔 것이 없습니다'));
+    });
+
+    test('항목마다 어디까지 왔는지 적는다', () {
+      final block = RecentPaceBrief.todayListBlock(
+        tasks: [
+          task('운동', done: true, completedAt: '2026-09-16T09:00:00'),
+          task('보고서', elapsedSeconds: 300),
+          task('장보기'),
+        ],
+        now: now,
+      );
+
+      expect(block, contains('운동 — 끝냄(오전 9시)'));
+      expect(block, contains('보고서 — 손만 댐'));
+      expect(block, contains('장보기 — 그대로'));
+      expect(block, contains('적은 것 3개 / 손댄 것 2개 / 끝낸 것 1개'));
+    });
+
+    test('시각을 정해둔 일은 그 시각을 적는다', () {
+      // 몇 시에 하기로 해뒀는지를 모르면 "지금 해보세요"가 그 시각 전에 나간다.
+      final block = RecentPaceBrief.todayListBlock(
+        tasks: [
+          {'text': '회의 준비', 'done': false, 'timeStart': '14:30'},
+        ],
+        now: now,
+      );
+
+      expect(block, contains('회의 준비(오후 2시 30분)'));
+    });
+
+    test('지금 시각을 함께 적는다', () {
+      final block = RecentPaceBrief.todayListBlock(
+        tasks: [task('하나')],
+        now: now,
+      );
+
+      expect(block, contains('오전 10시 30분'));
+    });
+
+    test('많으면 상한까지 적고 몇 개가 빠졌는지 알린다', () {
+      final block = RecentPaceBrief.todayListBlock(
+        tasks: [for (var i = 0; i < 12; i++) task('일 $i')],
+        now: now,
+      );
+
+      expect(block, contains('적은 것 12개'));
+      expect(block, contains('…외 4개'));
+    });
+  });
 }

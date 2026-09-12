@@ -4832,21 +4832,21 @@ ${lines.join('\n')}
         : '\n[전에 한 이야기 - 같은 것을 다시 하지 말 것]\n'
               '${said.map((text) => '- $text').join('\n')}\n';
 
-    // 오늘 적어둔 것. 이름만, 앞에서 여덜 개까지.
-    final todayNames = _decodeMapList(
-      prefs.getString('nyang_tasks'),
-    ).map(_shortTaskName).whereType<String>().take(8).toList();
-    final todayBlock = todayNames.isEmpty
-        ? '\n[오늘 목록]\n아직 적어둔 것이 없습니다.\n'
-        : '\n[오늘 목록]\n${todayNames.map((name) => '- $name').join('\n')}\n';
+    // 이름만 넘기던 자리다. 무엇을 어떻게 하라고 말하려면 그 항목이 지금 어디까지
+    // 왔는지를 알아야 한다 — 끝낸 것에 "이렇게 시작해보세요"가 붙으면 안 된다.
+    final todayBlock = RecentPaceBrief.todayListBlock(
+      tasks: _decodeMapList(prefs.getString('nyang_tasks')),
+      now: DateTime.now(),
+    );
 
     final prompt =
         '''${_coach.systemPrompt}
 
 [할 일]
 습관을 들이거나 미루는 것을 줄이는 데 도움이 되는 심리학 지식 한 가지를 골라,
-오늘 목록에 그것을 어떻게 써보면 되는지까지 건네줘. 아직 적어둔 것이 없으면
-오늘 적을 때 그것을 어떻게 쓰면 되는지로.
+오늘 어떻게 활용하면 좋은지 제안해줘. 오늘 목록을 어떻게 짰고 시작과 완료가 지금
+어디까지 왔는지, 시각을 정해둔 일이 있는지를 참고할 것. 아직 적어둔 것이 없으면
+오늘 적을 때 어떻게 쓰면 되는지로.
 $saidBlock$todayBlock
 [지킬 것]
 - 최근 기록은 받지 않았다. 오늘 목록만 받았다. 지식 쪽은 일반적으로 그렇다는

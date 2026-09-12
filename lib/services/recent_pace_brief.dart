@@ -215,6 +215,72 @@ class RecentPaceBrief {
     return buffer.toString();
   }
 
+  /// 오늘 목록을 항목마다 한 줄씩. 목록이 비면 그렇다고 적는다.
+  ///
+  /// [block]의 오늘 칸은 개수만 센다. 그쪽은 오늘 어디까지 왔는지를 보는 자리라
+  /// 그걸로 충분하고, 이쪽은 어느 항목에 무엇을 해보라고 말하는 자리라 항목이
+  /// 필요하다.
+  ///
+  /// 시각을 정해둔 일은 그 시각을 함께 적는다. 몇 시에 하기로 해뒀는지를 모르면
+  /// "지금 해보세요"가 그 시각 전에 나갈 수 있다.
+  static String todayListBlock({
+    required List<dynamic> tasks,
+    required DateTime now,
+    int limit = maxTasksPerDay,
+  }) {
+    final lines = <String>[];
+    var planned = 0;
+    var touched = 0;
+    var done = 0;
+    for (final task in tasks) {
+      if (task is! Map) continue;
+      planned++;
+      final isDone = task['done'] == true;
+      final started = _isStarted(task);
+      if (isDone || started) touched++;
+      if (isDone) done++;
+      final name = _shortName(task['text']?.toString());
+      if (name == null || lines.length >= limit) continue;
+      final at = _hhmmLabel(task['timeStart']?.toString());
+      final state = isDone
+          ? '끝냄${_doneAtLabel(task['completedAt'])}'
+          : started
+          ? '손만 댐'
+          : '그대로';
+      lines.add('- $name${at == null ? '' : '($at)'} — $state');
+    }
+
+    final buffer = StringBuffer('\n[오늘 목록 - 지금 ${_clockMinutes(now)}]\n');
+    if (planned == 0) {
+      buffer.writeln('아직 적어둔 것이 없습니다.');
+      return buffer.toString();
+    }
+    buffer.writeln('적은 것 $planned개 / 손댄 것 $touched개 / 끝낸 것 $done개');
+    for (final line in lines) {
+      buffer.writeln(line);
+    }
+    final hidden = planned - lines.length;
+    if (hidden > 0) buffer.writeln('…외 $hidden개');
+    return buffer.toString();
+  }
+
+  static String _doneAtLabel(Object? raw) {
+    final at = DateTime.tryParse(raw?.toString() ?? '');
+    return at == null ? '' : '(${_clock(at.hour)})';
+  }
+
+  /// "14:00"을 "오후 2시"로. 못 읽으면 null.
+  static String? _hhmmLabel(String? hhmm) {
+    final parts = (hhmm ?? '').split(':');
+    if (parts.length < 2) return null;
+    final hour = int.tryParse(parts[0]);
+    if (hour == null) return null;
+    final minute = int.tryParse(parts[1]) ?? 0;
+    return minute == 0
+        ? _clock(hour)
+        : '${_clock(hour)} ${minute.toString().padLeft(2, '0')}분';
+  }
+
   static String _dayLine(PaceDay day) {
     if (!day.hasRecord) return '${day.date}  기록 없음';
     final parts = [
