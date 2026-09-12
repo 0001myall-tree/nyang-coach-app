@@ -5426,9 +5426,7 @@ $block
       now: now,
       daysSinceLastVisit: daysSinceLastVisit,
       // 며칠 만에 돌아온 날, 잘한 대목을 짚어주는 데 쓴다.
-      executionType: ExecutionTypeLabels.fromFunnel(
-        ExecutionFunnel.from(prefs.getString('nyang_history')),
-      ),
+      executionType: _executionTypeLabel(prefs),
       planTotal: plans.length,
       planDone: donePlans.length,
       habitTotal: habits.length,
@@ -7003,14 +7001,27 @@ Rules:
       }
     }
 
-    // 이름은 깔때기가 짚은 자리에서 나온다. 문턱으로 붙이던 이름은 앞뒤가
-    // 정반대인 두 사람을 같은 칸에 넣었고, 이름에 달린 처방까지 같이 틀렸다.
-    final type = ExecutionTypeLabels.fromFunnel(
-      ExecutionFunnel.from(prefs.getString('nyang_history')),
-    );
+    final type = _executionTypeLabel(prefs);
     if (type == null) return null;
     return _greetingBuilder.buildTypeAdvice(type, planCount: planCount);
   }
+
+  /// 이 사람의 실행 유형 이름. 아직 정할 수 없으면 null.
+  ///
+  /// 이번 주 이름은 코치가 고른다. 그걸 먼저 보고, 아직 없을 때만 앱이 센
+  /// 자리로 내려간다 — 기록 탭 배지와 낮 알림이 이미 그 순서로 본다. 여기만
+  /// 앱 계산을 쓰던 동안에는, 배지에 "시작 꾸준형"이 떠 있는 사람에게 인사는
+  /// "계획 과다형" 처방을 건넸다. 둘이 다른 축을 짚는 말이라 사용자에게는 앱이
+  /// 자기를 헷갈리는 것으로 보인다.
+  ///
+  /// 앱 계산도 문턱이 아니라 깔때기가 짚은 자리에서 나온다. 문턱으로 붙이던
+  /// 이름은 앞뒤가 정반대인 두 사람을 같은 칸에 넣었고, 이름에 달린 처방까지
+  /// 같이 틀렸다.
+  String? _executionTypeLabel(SharedPreferences prefs) =>
+      ExecutionTypeLabels.savedLabel(prefs) ??
+      ExecutionTypeLabels.fromFunnel(
+        ExecutionFunnel.from(prefs.getString('nyang_history')),
+      );
 
   /// 핵심도 습관도 없을 때, 오늘 목록에 남아 있는 일 하나를 짚어주는 오후 인사.
   ///
