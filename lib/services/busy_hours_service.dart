@@ -146,6 +146,29 @@ class BusyHoursService {
     return null;
   }
 
+  /// 오늘 걸리는 시간대 중 가장 늦게 끝나는 시각(시). 오늘 걸리는 게 없으면 null.
+  ///
+  /// 묻는 창을 퇴근 뒤까지 밀어주는 데 쓴다. 근무가 그 창을 통째로 먹는 사람이
+  /// 있어서(평일 9~18시가 낮 질문 창 정오~18시를 다 덮는다), 바쁜 시간에 안
+  /// 묻기만 하면 그 사람에게는 영영 안 물어보게 된다.
+  ///
+  /// 자정을 넘기는 시간대(야간 근무)는 세지 않는다. 그 사람의 "퇴근 뒤"는 다음
+  /// 날 새벽이라 오늘 창을 미루는 것으로 풀 일이 아니다.
+  static int? latestBusyEndHourToday(SharedPreferences prefs, DateTime now) {
+    final today = _dayNames[now.weekday % 7];
+    int? latest;
+    for (final entry in _decode(prefs.getString(prefsKey))) {
+      final days = ((entry['days'] as List?) ?? []).cast<String>();
+      if (days.isNotEmpty && !days.contains(today)) continue;
+      final start = _minutes(entry['start']?.toString());
+      final end = _minutes(entry['end']?.toString());
+      if (start == null || end == null || end <= start) continue;
+      final endHour = (end / 60).ceil();
+      if (latest == null || endHour > latest) latest = endHour;
+    }
+    return latest;
+  }
+
   /// 받아둔 시간대를 프롬프트에 실을 모양으로. 없으면 빈 문자열.
   ///
   /// 오늘 걸리는 것만 추리지 않는다. 코치가 태그로 다시 적을 때 지금 맞는 것

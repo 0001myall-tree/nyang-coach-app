@@ -249,7 +249,6 @@ List<String> allTemplates(GreetingVoice v) => [
   ...v.coreAskAlreadyReply,
   ...v.coreAskBusyReply,
   ...v.repeatingAsk,
-  ...v.busyAsk,
   ...v.stalledAsk,
   ...v.inProgressAck,
   ...v.inProgressAckOnly,
@@ -1709,7 +1708,9 @@ void main() {
           ], planCount: 3)!;
           expect(
             line,
-            isNot(equals(builder.buildConditionAdvice(['일부러 쉬었어'], planCount: 3))),
+            isNot(
+              equals(builder.buildConditionAdvice(['일부러 쉬었어'], planCount: 3)),
+            ),
             reason: '${entry.key}/$other',
           );
         }
@@ -1737,8 +1738,9 @@ void main() {
       );
       final line = builder.buildConditionAdvice(['일부러 쉬었어'], planCount: 0)!;
       expect(
-        MasterGreetingCopy.secretary.conditionAdvice['일부러 쉬었어']!
-            .any(line.endsWith),
+        MasterGreetingCopy.secretary.conditionAdvice['일부러 쉬었어']!.any(
+          line.endsWith,
+        ),
         isTrue,
         reason: line,
       );
@@ -1754,10 +1756,9 @@ void main() {
   });
 
   group('움직인 날 짚기', () {
-    String line(MasterGreetingContext context) =>
-        MasterGreetingBuilder(voice: MasterGreetingCopy.nyangHalbae)
-            .build(context)
-            .text;
+    String line(MasterGreetingContext context) => MasterGreetingBuilder(
+      voice: MasterGreetingCopy.nyangHalbae,
+    ).build(context).text;
 
     test('오늘 첫 완료에 이번 주 며칠인지 같이 말한다', () {
       final text = line(ctx(hour: 14, doneCount: 1, movedDays: 5));

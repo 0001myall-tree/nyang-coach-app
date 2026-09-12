@@ -5537,6 +5537,24 @@ $block
   static const _masterCoreAskFromHour = 12;
   static const _masterCoreAskUntilHour = 18;
 
+  /// 오늘 묻는 창이 몇 시에 닫히는지.
+  ///
+  /// 늘 시간을 못 내는 때가 이 창을 먹는 사람이 있다 — 평일 9~18시 근무면 낮
+  /// 질문 창(정오~18시)이 통째로 근무 시간이다. 바쁜 시간에 안 묻기로만 하면
+  /// 그 사람에게는 질문이 영영 안 나간다. 그래서 그런 날은 침묵 시각까지
+  /// 열어둔다 — 퇴근한 뒤 한 번.
+  ///
+  /// 늦추는 시각을 따로 정하지 않고 침묵 시각을 그대로 쓴다. 퇴근이 몇 시인지가
+  /// 사람마다 다른데 거기에 몇 시간을 더하는 규칙을 두면, 그 숫자가 맞는 사람과
+  /// 안 맞는 사람이 갈린다.
+  int _coreAskUntilHour(SharedPreferences prefs, DateTime now) {
+    final busyEnd = BusyHoursService.latestBusyEndHourToday(prefs, now);
+    if (busyEnd == null || busyEnd < _masterCoreAskFromHour) {
+      return _masterCoreAskUntilHour;
+    }
+    return MasterGreetingContext.quietFromHour;
+  }
+
   /// 이월된 일과 먹힌 조언은 이 시각부터 본다.
   ///
   /// 오늘 것을 묻는 것보다 이르게 연다. 어제 넘긴 것은 오늘 계획을 짜기 전에
@@ -5551,7 +5569,7 @@ $block
     DateTime now,
   ) async {
     if (now.hour < _masterCarriedAskFromHour ||
-        now.hour >= _masterCoreAskUntilHour) {
+        now.hour >= _coreAskUntilHour(prefs, now)) {
       return false;
     }
     // 예산을 셋으로 가른다. 말마다 부담이 달라서다.
@@ -5559,7 +5577,16 @@ $block
     // 시키는 말(안 한 일을 짚는 것)은 잦으면 재촉이 되어 격일로 둔다. 알아주는
     // 말과 준비를 돕는 말은 일을 시키지 않으니 매일 나가도 된다. 하나로 묶어
     // 두었더니 어제 이월을 물었다는 이유로 오늘 해낸 것을 알아주지 못했다.
-    final canNudge = await _canAskCoreToday(now);
+    //
+    // 못 낸다고 알려준 시간 안에서는 시키지 않는다. 한동안은 묻기는 묻고 문구만
+    // 바꿨는데("지금도 근무 중이신가요"), 사용자에게는 그것도 낮마다 오는 재촉
+    // 이다. 안 묻고 지나가면 예산도 안 쓰므로 퇴근한 뒤에 그대로 남아 있다.
+    //
+    // 준비를 돕는 말(오늘 쓸 수 있는 시간, 되는 날의 조건)은 막지 않는다. 일을
+    // 시키는 말이 아니라 근무 중에 물어도 답할 수 있는 것이다.
+    final canNudge =
+        await _canAskCoreToday(now) &&
+        BusyHoursService.busyNow(prefs, now) == null;
 
     // 그다음은 이월된 일. 며칠째 걸려 있는 것이 오늘 처음 적은 것보다 급하다.
     final carried = canNudge ? _carriedOverTask(prefs) : null;
@@ -5650,14 +5677,8 @@ $block
 
     _pendingRepeatingAskTask = other;
     _pendingCarriedOverTask = null;
-    // 시간을 못 낸다고 말해둔 시간대 안이면 묻는 말을 바꾼다. 낮에 일하는
-    // 사람에게 낮마다 왜 안 했느냐고 묻던 자리다. 버튼은 그대로 쓴다 —
-    // '일이 있어서 못했어요'가 여기서도 그대로 답이 된다.
-    final busy = BusyHoursService.busyNow(prefs, now);
     _injectAiMessage(
-      busy != null
-          ? _greetingBuilder.buildBusyAsk(core ?? other!, busy)
-          : core != null
+      core != null
           ? _greetingBuilder.buildCoreAsk(core)
           : _greetingBuilder.buildRepeatingAsk(other!),
       kind: _masterCoreGreetingKind,
@@ -7222,20 +7243,6 @@ $block
     return texts[Random().nextInt(texts.length)];
   }
 
-  /// 시간을 못 낸다고 말해둔 시간대에 건네는 오후 인사.
-  ///
-  /// 왜 안 했느냐고 묻지 않는다. 못 하는 시간이라고 본인이 알려준 자리라,
-  /// 여기서 짚으면 알면서 묻는 말이 된다.
-  String _buildCatBusyAskText(String task, String busy) {
-    final texts = [
-      '집사, \'$task\'가 아직 그대로인데 지금도 $busy 중이냥?\n'
-          '그러면 이따 다시 물어보겠다냥.',
-      '\'$task\' 시작 표시가 아직 비어 있다냥. 지금 $busy 중이지 않냥?\n'
-          '여유 생기면 말만 하라냥. 그때 같이 보자냥.',
-    ];
-    return texts[Random().nextInt(texts.length)];
-  }
-
   /// 아직 체크 안 된 습관을 짚어주는 오후 인사. 재촉하지 않는다 — 이미 했는데
   /// 체크만 안 했을 수도 있어서 양쪽을 다 열어둔다.
   String _buildCatHabitCheckText(List<String> habits) {
@@ -8072,11 +8079,15 @@ $block
 
     if (_spokeKindToday(_catAfternoonGreetingKinds, now)) return false;
 
+    // 못 낸다고 알려준 시간 안에서는 일을 시키지 않는다. 마스터 쪽과 같은
+    // 판단이다. 안부는 그대로 나가므로 사라지는 것이 아니라 재촉만 빠진다.
+    final busy = BusyHoursService.busyNow(prefs, now) != null;
+
     // 핵심으로 찍어둔 일이 아직 시작 표시도 없으면 그게 오후의 이야기다.
     // 다른 일을 붙들고 있어도 이쪽을 먼저 본다 — 진행 중인 일 얘기로 넘어가면
     // 정작 오늘 제일 중요한 일이 언급조차 안 된 채 오후가 지나간다.
     // 단, 오늘 마스터가 이미 물었으면 빠진다.
-    final notStartedCore = await _canAskCoreToday(now)
+    final notStartedCore = !busy && await _canAskCoreToday(now)
         ? _coreTaskDueForAsk(prefs, now)
         : null;
     // 핵심 일정을 묻는 자리는 쿨다운을 타지 않는다. 다른 코치가 상태를 짚은
@@ -8095,7 +8106,7 @@ $block
           (task) => task['done'] != true && _isInProgressTask(task),
         ) !=
         null;
-    final pendingHabits = notStartedCore == null && !coreInProgress
+    final pendingHabits = !busy && notStartedCore == null && !coreInProgress
         ? _pendingDailyHabits(prefs)
         : const <String>[];
     // 핵심도 습관도 없는 사람을 위한 세 번째 순위. 오늘 적어둔 것 중 아직
@@ -8108,20 +8119,15 @@ $block
     // 핵심과 같은 예산을 쓰는데 그 예산이 격일이라, 지금 잡무를 물어버리면
     // 핵심 시각이 지난 뒤에도 핵심을 못 묻는다.
     final repeatingTask =
-        notStartedCore == null &&
+        !busy &&
+            notStartedCore == null &&
             !coreInProgress &&
             !_hasPendingCoreTask(prefs) &&
             pendingHabits.isEmpty &&
             await _canAskCoreToday(now)
         ? _otherTaskDueToday(prefs, now)
         : null;
-    // 못 하는 게 뻔한 시간대면 안 했다고 짚는 대신 지금도 그 시간인지 묻는다.
-    // 마스터의 낮 질문과 같은 판단이다.
-    final busy = BusyHoursService.busyNow(prefs, now);
-    final nagTarget = notStartedCore ?? repeatingTask;
-    final text = busy != null && nagTarget != null
-        ? _buildCatBusyAskText(nagTarget, busy)
-        : notStartedCore != null
+    final text = notStartedCore != null
         ? _buildCatAfternoonCoreAskText(notStartedCore)
         : pendingHabits.isNotEmpty
         ? _buildCatHabitCheckText(pendingHabits)
