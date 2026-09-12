@@ -4744,20 +4744,6 @@ ${lines.join('\n')}
       "붙이면 훨씬 잘 이어진대. 세수 끝나자마자 바로 스킨케어 하는 것처럼. "
       "오늘 챙기고 싶은 거 있으면, 뭐 뒤에 붙여볼래? 💙";
 
-  /// 마스터의 이 슬롯이 몇 번째로 발화했는지 세는 로컬 카운터.
-  ///
-  /// 홀/짝으로 이번 차례가 구체화 멘트 차례인지 실행 병목 진단 차례인지를
-  /// 정한다. 기기 재설치 등으로 사라져도 로테이션이 처음부터 다시 도는
-  /// 것뿐이라 손해가 적다 — 그래서 클라우드 동기화되는 nyang_ 접두 prefs가
-  /// 아니라 기기 로컬 카운터로 둔다.
-  static const String _weeklyConcretizeMasterFireCountKey =
-      'weekly_concretize_master_fire_count';
-
-  /// 페이스 이야기 뒤로 병목 진단을 얼마나 비워둘지.
-  ///
-  /// 페이스가 수·금 오전에 서므로 닷새면 그 주에 둘이 겹치지 않는다.
-  static const Duration _bottleneckAfterPaceGap = Duration(days: 5);
-
   /// 이 kind로 가장 최근에 말한 메시지. 코치를 가리지 않고 본다(냥냥이 + 마스터
   /// 공통 쿨다운이라서다). 없으면 null.
   ///
@@ -4792,9 +4778,10 @@ ${lines.join('\n')}
 
   /// 계획 구체화 이야기를 인사 자리에서 건넨다. 건넸으면 true.
   ///
-  /// 마스터는 이 슬롯의 두 번에 한 번(짝수 번째)을 구체화 멘트 대신 실행
-  /// 병목 진단으로 대신한다([_buildExecutionBottleneckLine]). 병목을 셀
-  /// 데이터가 없으면(기록이 모자람) 조용히 로테이션 문구로 돌아간다.
+  /// 마스터에게는 코치가 만든 말이 먼저 간다([_buildPsychologyTipLine]) — 최근
+  /// 기록에서 이 사람에게 걸리는 심리학 개념 하나를 골라 그 사람 이야기로
+  /// 풀어주는 자리다. 셀 데이터가 없거나 호출이 막히면 아래 로테이션 문구로
+  /// 조용히 돌아간다.
   ///
   /// 오늘 계획 중 막막해 보이는 것을 콕 집어주는 갈래가 하나 더 있었다.
   /// 뺐다. 그 문장은 모델을 따로 한 번 더 불러 만들었는데, 넘기는 것이 오늘
@@ -4807,8 +4794,12 @@ ${lines.join('\n')}
   ///
   /// 로테이션 문구 네 개(시간/장소 → 오늘 범위 → 실행 의도 조건문 → 유혹
   /// 묶기)는 돌아가며 나간다 — 마지막으로 이 kind로 무엇을 말했는지를 채팅
-  /// 기록에서 읽어 다음 차례를 고른다. 콕 집은 말이나 병목 진단이 나갔던
-  /// 다음 차례는 로테이션의 첫 문구(시간/장소)로 되돌아간다.
+  /// 기록에서 읽어 다음 차례를 고른다. 코치가 만든 말이 나갔던 다음 차례는
+  /// 로테이션의 첫 문구(시간/장소)로 되돌아간다.
+  ///
+  /// 그 네 개 중 첫째와 셋째는 사실 같은 이야기다(실행 의도). 예비 자리로
+  /// 내려가면서 거의 안 나오게 됐지만, 다시 앞에 세울 일이 있으면 그때 둘을
+  /// 하나로 합칠 것.
   ///
   /// 프렌즈 코치는 유혹 묶기 다음에 다섯 번째 차례(습관 쌓기, 페르소나별
   /// 예시)가 한 번 더 돈 뒤 첫 문구로 되돌아간다. 냥냥이·마스터는 그 목소리가
@@ -4832,28 +4823,20 @@ ${lines.join('\n')}
       return false;
     }
 
+    // 마스터에게는 매 차례 코치가 만든 말을 먼저 시도한다.
+    //
+    // 두 번에 한 번만 쓰고 나머지는 고정 문구로 돌던 자리다. 고정 문구 네 개
+    // 중 둘이 같은 이야기(실행 의도)여서, 두 번에 한 번꼴로 같은 개념을 다시
+    // 들었다. 어느 개념이 이 사람에게 지금 필요한지는 그 주의 숫자를 봐야
+    // 아는 것이라, 앱이 네 개를 돌려 정하는 일이 아니다.
+    //
+    // 페이스 코칭과 역할이 갈린다 — 그쪽은 "오늘 무엇을 어떻게"고 이쪽은
+    // "왜 그게 듣는지"다. 그래서 가까이 붙어도 같은 말이 되지 않는다.
     String? line;
-    var isBottleneck = false;
+    var byCoach = false;
     if (_coach.isMaster) {
-      // 카운터는 이번 차례를 실제로 이 슬롯이 맡은 순간(쿨다운 통과) 늘린다.
-      // 병목 데이터가 없어 결국 로테이션/콕집기로 대신하더라도, 다음 차례
-      // 계산이 어긋나지 않도록 그대로 늘려둔다.
-      final fireCount =
-          (prefs.getInt(_weeklyConcretizeMasterFireCountKey) ?? 0) + 1;
-      await prefs.setInt(_weeklyConcretizeMasterFireCountKey, fireCount);
-
-      // 며칠 전에 페이스 이야기를 건넸으면 병목은 쉰다. 둘 다 실행이 어디서
-      // 걸리는지를 두고 하는 말이라, 가까이 붙으면 같은 말을 두 번 듣는 것이
-      // 된다. 이 차례는 로테이션 문구가 대신 받는다.
-      final saidPace = _lastAutoMessage(prefs, _masterTypeAdviceKind);
-      final paceIsFresh =
-          saidPace != null &&
-          now.difference(saidPace.at) < _bottleneckAfterPaceGap;
-
-      if (fireCount.isEven && !paceIsFresh) {
-        line = await _buildExecutionBottleneckLine(prefs);
-        isBottleneck = line != null;
-      }
+      line = await _buildPsychologyTipLine(prefs);
+      byCoach = line != null;
     }
     // 방을 옮겨 다녀도 같은 이야기를 두 번 듣지 않게, 지난번이 어느 쪽이었는지는
     // 말투를 가리지 않고 본다(냥냥이판과 마스터판은 같은 이야기다).
@@ -4898,8 +4881,8 @@ ${lines.join('\n')}
     _injectAiMessage(line, kind: _weeklyConcretizeGreetingKind);
     unawaited(
       AnalyticsService.logFeatureUsage(
-        isBottleneck
-            ? 'weekly_concretize_bottleneck'
+        byCoach
+            ? 'weekly_concretize_psychology'
             : (habitStackLine.isNotEmpty && line == habitStackLine)
             ? 'weekly_concretize_habit_stack'
             : 'weekly_concretize_rotation',
@@ -4908,48 +4891,58 @@ ${lines.join('\n')}
     return true;
   }
 
-  /// 실행 병목 진단을 인사 문구 하나로 만든다. 셀 데이터가 없거나(빈 문자열)
-  /// 호출이 실패하면 null — 그러면 부르는 쪽이 원래 순서(콕집기/로테이션)로
-  /// 대신한다.
+  /// 이 사람에게 지금 필요한 심리학 개념 하나를 골라 그 사람 이야기로 풀어준다.
+  /// 셀 데이터가 없거나 호출이 실패하면 null — 그러면 부르는 쪽이 고정 문구
+  /// 로테이션으로 대신한다.
   ///
-  /// 코치의 systemPrompt를
-  /// 그대로 얹어 코치 말투를 지키고, 앱이 센 값(계획/시작/완료 세 축의 숫자와
-  /// 제일 많이 새는 곳)만 관찰로 건네 코치가 지어내지 않게 한다.
-  Future<String?> _buildExecutionBottleneckLine(SharedPreferences prefs) async {
+  /// **개념을 앱이 고르지 않는다.** 고정 문구 네 개를 돌리던 때는 그중 둘이 같은
+  /// 이야기(실행 의도)여서 두 번에 한 번꼴로 같은 개념을 다시 들었다. 어느 개념이
+  /// 지금 이 사람에게 걸리는지는 그 주의 숫자를 봐야 아는 일이다.
+  ///
+  /// 페이스 코칭과 같은 자료를 보지만 시키는 일이 다르다 — 그쪽은 "오늘 무엇을
+  /// 어떻게"고 이쪽은 "왜 그게 듣는지"다. 그래서 같은 주에 둘 다 나가도 겹치지
+  /// 않는다.
+  Future<String?> _buildPsychologyTipLine(SharedPreferences prefs) async {
     try {
-      final block = ExecutionFunnel.from(
-        prefs.getString('nyang_history'),
-      ).promptBlock();
+      final now = DateTime.now();
+      final block = RecentPaceBrief.block(
+        historyRaw: prefs.getString('nyang_history'),
+        todayTasks: _decodeMapList(prefs.getString('nyang_tasks')),
+        now: now,
+        busyBlock: BusyHoursService.promptBlock(prefs),
+      );
       if (block.isEmpty) return null;
 
       final prompt =
           '''${_coach.systemPrompt}
 
 [할 일]
-아래는 앱이 최근 실행 기록에서 센 값이다. 이 관찰을 바탕으로, 인사 자리에서
-사용자에게 실행 병목을 짚어주는 짧은 말을 만들어줘.
+아래는 앱이 기록에서 센 값이다. 이 기록을 근거로, 이 사람에게 지금 도움이 될
+심리학 개념 하나를 골라 그 사람 이야기로 설명해줘.
 $block
 
-[말투 원칙 - 반드시 지킬 것]
-- 새는 곳을 결함처럼 다루지 말 것 - 지금 그 자리에서 걸릴 뿐이지 이 사람이
-잘못하고 있다는 뜻이 아니다. 잘 지나가고 있는 축이 있으면 그것부터 알아줄 것.
-- 격려는 부드럽게 하되, 개선 방향은 흐릿하게 뭉개지 말 것. 관찰에 적힌
-"제일 많이 새는 곳"에 맞춰, 왜 그
-방법이 효과가 있는지 심리학적 근거(예: 실행 의도, 작은 시작이 관성을
-만드는 것, 완료 경험이 다음 시도를 쉽게 만드는 것 등)를 바탕으로 무엇을
-어떻게 하라는 것인지 한 문장 안에서 선명하게 짚을 것 - "잘하고 있으니
-계속하세요" 같은 말로 끝내지 말 것.
-- 숫자를 그대로 읽지 말고, 자연스러운 문장으로 풀어 쓸 것.
-- 두 문장 안팎, 120자 안에서 끝낼 것. 태그나 따옴표, 머리말 없이 코치의
-말투 그대로 쓸 것.
+[지킬 것]
+- 개념 이름을 아는 것이 목적이 아니다. 이 사람의 어느 대목에 그것이 걸리는지,
+그래서 어떻게 해보면 되는지까지 이어줄 것.
+- 개념은 매번 같은 것을 고르지 말 것. 지금 이 기록에 맞는 것을 고를 것.
+- 잘 되고 있는 대목이 있으면 그것부터 알아줄 것. 걸리는 자리는 결함이 아니라
+지금 그 자리에서 걸리는 것일 뿐이다.
+- 위 숫자에 없는 것은 말하지 말 것.
+- 길어도 여섯 문장 안에서 끝낼 것.
 
 [출력 형식]
-완성된 멘트 하나만 출력할 것. 다른 말은 덧붙이지 말 것.''';
+완성된 한 마디만 출력할 것. 다른 말은 덧붙이지 말 것.''';
 
+      const model = 'gpt-5-mini';
+      final messages = [
+        {'role': 'user', 'content': prompt},
+      ];
+      await ApiUsageLimitService.ensureChatAllowed(
+        estimatedTokens: AnalyticsService.estimateChatTokens(messages, ''),
+      );
       final response = await _chatProxy.call({
-        'messages': [
-          {'role': 'user', 'content': prompt},
-        ],
+        'messages': messages,
+        'model': model,
         'temperature': 0.7,
       });
 
@@ -4958,9 +4951,40 @@ $block
                   ? (response.data as Map)['content'] as String? ?? ''
                   : '')
               .trim();
-      return content.isEmpty ? null : content;
+      if (content.isEmpty) return null;
+
+      // 한도 검사와 사용량 기록이 없던 자리다. 두 번에 한 번만 돌던 동안에는
+      // 눈에 안 띄었는데, 주 1회로 늘면서 청구액에 보이지 않는 호출이 된다.
+      final usageData = response.data is Map ? response.data as Map : const {};
+      unawaited(
+        AnalyticsService.logApiUsage(
+          coachId: widget.coachId,
+          estimatedTokens: AnalyticsService.estimateChatTokens(
+            messages,
+            content,
+          ),
+          actualTokens: AnalyticsService.readIntValue(usageData, [
+            'totalTokens',
+            'total_tokens',
+            'tokens',
+            'usage.totalTokens',
+            'usage.total_tokens',
+          ]),
+          actualCostWon: AnalyticsService.readIntValue(usageData, [
+            'costWon',
+            'cost_won',
+            'estimatedCostWon',
+            'estimated_cost_won',
+            'usage.costWon',
+          ]),
+          model: model,
+          usageSource: 'weekly_psychology_tip',
+          countAsUserUsage: false,
+        ),
+      );
+      return content;
     } catch (e) {
-      debugPrint('execution bottleneck greeting failed: $e');
+      debugPrint('weekly psychology tip failed: $e');
       return null;
     }
   }
