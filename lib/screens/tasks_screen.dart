@@ -6381,12 +6381,17 @@ class _TasksScreenState extends State<TasksScreen>
     ];
     return Container(
       color: Colors.white,
+      padding: const EdgeInsets.only(bottom: 6),
       child: TabBar(
         controller: _tabCtrl,
         labelColor: _coach.accentColor,
         unselectedLabelColor: const Color(0xFFA0A0B0),
-        indicatorColor: _coach.accentColor,
-        indicatorWeight: 2.5,
+        // 밑줄과 구분선을 둘 다 없앤다. 고른 탭은 글씨와 아이콘 색으로만
+        // 말한다 — 선이 붙으면 웹사이트 탭처럼 보여서 이 앱의 결과 안 맞았다.
+        indicator: const BoxDecoration(),
+        indicatorColor: Colors.transparent,
+        dividerHeight: 0,
+        overlayColor: const WidgetStatePropertyAll(Colors.transparent),
         labelStyle: GoogleFonts.notoSansKr(
           fontSize: 12,
           fontWeight: FontWeight.w800,
@@ -6395,12 +6400,20 @@ class _TasksScreenState extends State<TasksScreen>
           fontSize: 12,
           fontWeight: FontWeight.w500,
         ),
+        // 아이콘을 글씨 위가 아니라 옆에 둔다. 두 층이던 줄이 한 층이 되면서
+        // 세로로 30 가까이 벌고, 그만큼 할 일 목록이 더 보인다.
         tabs: tabs
             .map(
               (t) => Tab(
-                icon: Icon(t['icon'] as IconData, size: 20),
-                text: t['label'] as String,
-                iconMargin: const EdgeInsets.only(bottom: 2),
+                height: 42,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(t['icon'] as IconData, size: 15),
+                    const SizedBox(width: 4),
+                    Text(t['label'] as String),
+                  ],
+                ),
               ),
             )
             .toList(),
