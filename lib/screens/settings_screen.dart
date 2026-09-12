@@ -4591,6 +4591,23 @@ class _SettingsScreenState extends State<SettingsScreen>
                     height: 56,
                     child: ElevatedButton(
                       onPressed: () async {
+                        // 이름 없는 고정 일정은 저장할 때 걸러진다. 조용히
+                        // 빠지면 요일과 시각까지 정해둔 사람이 저장했다고
+                        // 믿은 채 나가므로, 여기서 되돌려보낸다.
+                        final unnamed = routines.any(
+                          (routine) =>
+                              (routine['name'] as String? ?? '').trim().isEmpty,
+                        );
+                        if (unnamed) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                '고정 일정에 이름을 적어주세요. 안 쓸 줄은 X로 지워주세요.',
+                              ),
+                            ),
+                          );
+                          return;
+                        }
                         final prefs = await SharedPreferences.getInstance();
                         await prefs.setString(
                           'nyang_master_title',
@@ -4859,7 +4876,7 @@ class _SettingsScreenState extends State<SettingsScreen>
           ),
         const SizedBox(height: 6),
         Text(
-          '요일을 안 고르면 매일로 봅니다. 이름을 비워두면 저장할 때 빠집니다.',
+          '요일을 안 고르면 매일로 봅니다.',
           style: GoogleFonts.notoSansKr(
             fontSize: 11,
             color: AppDesignTokens.textMuted,
