@@ -7,6 +7,10 @@
 ///
 /// 그래서 이 파일이 하는 일은 세는 것뿐이다. 판단하는 낱말을 쓰지 않는다.
 ///
+/// **적은 일정마다 한 줄씩 적는다.** 합친 숫자만 주면 무엇이 끝났는지가
+/// 지워지고, 시각만 따로 모아 주면 그게 무엇의 시각인지가 지워진다. 큰 일은
+/// 안 끝나고 짧은 일만 끝나는 사람과 그 반대인 사람은 개수로는 같아 보인다.
+///
 /// **분모를 조심해야 한다.** 완료는 **손댄 것 중** 몇을 끝냈는지로 센다.
 /// 적어둔 것 대비로 재면 "적게 시작한 것"과 "시작했는데 못 끝낸 것"이 한
 /// 숫자에 섞여, 앞뒤가 정반대인 두 사람이 같은 값으로 나온다.
@@ -16,7 +20,31 @@ import 'dart:convert';
 
 import 'package:intl/intl.dart';
 
-/// 하루치 셈.
+/// 적어둔 일 하나가 그날 어떻게 됐는지.
+class PaceTask {
+  const PaceTask({
+    required this.name,
+    required this.done,
+    required this.started,
+    required this.startHour,
+    required this.doneHour,
+  });
+
+  final String name;
+  final bool done;
+
+  /// 한 번이라도 손댔는지. 끝낸 것도 손댄 것에 든다.
+  final bool started;
+
+  /// 손댄 시각. 시작 버튼을 누른 일에만 남는다 — 체크만 하는 사람은 늘 빈다.
+  final int? startHour;
+
+  /// 끝낸 시각. 완료를 미는 순간 찍히므로 체크만 하는 사람에게도 남는다.
+  /// 그래서 시작 표시를 안 쓰는 사람에게 시간을 말할 수 있는 유일한 값이다.
+  final int? doneHour;
+}
+
+/// 하루치.
 class PaceDay {
   const PaceDay({
     required this.date,
@@ -24,9 +52,7 @@ class PaceDay {
     required this.touched,
     required this.done,
     required this.firstStartHour,
-    required this.doneHours,
-    required this.doneNames,
-    required this.leftNames,
+    required this.tasks,
   });
 
   final String date;
@@ -34,28 +60,19 @@ class PaceDay {
   /// 그날 목록에 있던 개수.
   final int planned;
 
-  /// 그중 한 번이라도 손댄 개수. 끝낸 것도 손댄 것에 든다.
+  /// 그중 한 번이라도 손댄 개수.
   final int touched;
 
   final int done;
 
   /// 그날 가장 이른 시작 시각. 시작 표시가 없으면 null.
   ///
-  /// 시작 시각은 시작 버튼을 누른 일에만 남는다. 체크만 하는 사람은 늘 빈다.
+  /// 아래 줄들에서도 보이지만 따로 둔다. 줄은 상한에 걸려 잘릴 수 있는데 이
+  /// 값은 잘리지 않는다.
   final int? firstStartHour;
 
-  /// 그날 끝낸 시각들. 이른 것부터.
-  ///
-  /// 마지막 하나만 보던 자리다. 그러면 하루 종일 조금씩 끝낸 날과 밤에 몰아
-  /// 끝낸 날이 똑같이 보인다 — 둘 다 마지막이 밤 11시다. 전체를 주면 갈린다.
-  ///
-  /// 시작 시각과 달리 체크만 하는 사람에게도 남는다 — 완료를 미는 순간 찍히기
-  /// 때문이다. 그래서 시작 표시를 안 쓰는 사람에게는 시간을 말할 수 있는 유일한
-  /// 값이다.
-  final List<int> doneHours;
-
-  final List<String> doneNames;
-  final List<String> leftNames;
+  /// 적어둔 일들. 적은 순서 그대로. 많으면 앞에서 상한까지만.
+  final List<PaceTask> tasks;
 }
 
 class RecentPaceBrief {
@@ -73,9 +90,11 @@ class RecentPaceBrief {
   /// 이 값은 자막이다.
   static const int baselineDays = 7;
 
-  /// 한 날에 이름을 몇 개까지 적을지. 목록을 통째로 실으면 이 한 턴이 평소의
-  /// 몇 배가 된다.
-  static const int maxNamesPerDay = 4;
+  /// 한 날에 줄을 몇 개까지 적을지.
+  ///
+  /// 루틴을 여러 개 돌리는 사람은 하루에 열다섯 줄이 나온다. 목록을 통째로
+  /// 실으면 이 한 턴이 평소의 몇 배가 된다. 잘린 개수는 따로 적어준다.
+  static const int maxTasksPerDay = 8;
 
   /// 이름 하나의 길이 상한. 긴 제목은 잘라 적는다.
   static const int maxNameLength = 24;
@@ -151,17 +170,11 @@ class RecentPaceBrief {
     final buffer = StringBuffer('\n[최근 - 앱이 기록에서 센 값]\n');
     for (final day in days) {
       buffer.writeln(_dayLine(day));
-      if (day.doneNames.isNotEmpty) {
-        buffer.writeln('  끝낸 것: ${day.doneNames.join(', ')}');
+      for (final task in day.tasks) {
+        buffer.writeln('  ${_taskLine(task)}');
       }
-      // 이름은 상한이 있어서, 많이 끝낸 날은 뒤쪽 시각이 묻힌다. 끝낸 시각이
-      // 몰려 있는지 흩어져 있는지는 개수가 아니라 이 줄에서 보인다.
-      if (day.doneHours.length > day.doneNames.length) {
-        buffer.writeln('  끝낸 시각: ${day.doneHours.map(_clock).join(', ')}');
-      }
-      if (day.leftNames.isNotEmpty) {
-        buffer.writeln('  남은 것: ${day.leftNames.join(', ')}');
-      }
+      final hidden = day.planned - day.tasks.length;
+      if (hidden > 0) buffer.writeln('  …외 $hidden개');
     }
 
     final base = baseline(historyRaw, now: now);
@@ -177,8 +190,8 @@ class RecentPaceBrief {
     //
     // 없는 시각으로는 말할 수도 없어서 "여기 없는 것은 세지 않았음"이 이미 그
     // 일을 한다. 시작 시각이 비고 완료 시각만 있는 사람도 따로 막지 않는다 —
-    // 라벨이 "끝낸 것"이라 시작으로 읽을 자리가 아니고, 그걸 보고 "밤에
-    // 끝내시네요"라고 하는 건 지어낸 말이 아니라 맞는 말이다.
+    // 줄마다 "끝냄"이라고 적혀 있어 시작으로 읽을 자리가 아니고, 그걸 보고
+    // "밤에 끝내시네요"라고 하는 건 지어낸 말이 아니라 맞는 말이다.
 
     buffer.write(_todayBlock(todayTasks, now, minutesLeft, busyNow));
     buffer.writeln('- 위 숫자는 앱이 기록에서 센 값. 여기 없는 것은 세지 않았음.');
@@ -195,6 +208,21 @@ class RecentPaceBrief {
       parts.add('첫 시작 ${_clock(day.firstStartHour!)}');
     }
     return '${day.date}  ${parts.join(' / ')}';
+  }
+
+  /// "보고서 — 끝냄(밤 11시)" 한 줄.
+  static String _taskLine(PaceTask task) {
+    if (task.done) {
+      final when = task.doneHour == null ? '' : '(${_clock(task.doneHour!)})';
+      return '${task.name} — 끝냄$when';
+    }
+    if (task.started) {
+      final when = task.startHour == null
+          ? ''
+          : '(${_clock(task.startHour!)} 시작)';
+      return '${task.name} — 손만 댐$when';
+    }
+    return '${task.name} — 그대로';
   }
 
   static String _todayBlock(
@@ -246,67 +274,42 @@ class RecentPaceBrief {
   static PaceDay? _dayOf(Map<String, dynamic> record) {
     final date = record['date']?.toString();
     if (date == null || date.isEmpty) return null;
-    final tasks = (record['tasks'] as List?) ?? const [];
-    if (tasks.isEmpty) {
-      return PaceDay(
-        date: date,
-        planned: 0,
-        touched: 0,
-        done: 0,
-        firstStartHour: null,
-        doneHours: const [],
-        doneNames: const [],
-        leftNames: const [],
-      );
-    }
 
     var planned = 0;
     var touched = 0;
     var done = 0;
     int? firstStartHour;
-    final doneHours = <int>[];
-    final doneNames = <String>[];
-    final leftNames = <String>[];
+    final out = <PaceTask>[];
 
-    for (final task in tasks) {
+    for (final task in (record['tasks'] as List?) ?? const []) {
       if (task is! Map) continue;
       planned++;
       final isDone = task['done'] == true;
       final started = _isStarted(task);
       if (isDone || started) touched++;
       if (isDone) done++;
-      final startedAt = DateTime.tryParse(task['startedAt']?.toString() ?? '');
-      if (startedAt != null &&
-          (firstStartHour == null || startedAt.hour < firstStartHour)) {
-        firstStartHour = startedAt.hour;
+
+      final startHour = _hourOnDate(task['startedAt'], date);
+      if (startHour != null &&
+          (firstStartHour == null || startHour < firstStartHour)) {
+        firstStartHour = startHour;
       }
-      final completedAt = DateTime.tryParse(
-        task['completedAt']?.toString() ?? '',
-      );
-      // 자정을 넘겨 끝낸 것은 다음 날 시각으로 찍힌다. 그걸 그날 것으로 세면
-      // 하루가 새벽에 끝난 것처럼 읽혀서, 날짜가 맞는 것만 본다.
-      final doneHour =
-          completedAt != null &&
-              DateFormat('yyyy-MM-dd').format(completedAt) == date
-          ? completedAt.hour
-          : null;
-      if (doneHour != null) doneHours.add(doneHour);
-      // 이름을 못 읽는 항목도 셈에는 들어간다. 아래는 적어 보낼 이름만 고르는
-      // 자리다 — 예전에는 셈이 이 안에 있어서, 이름이 빈 항목은 끝냈어도
-      // 완료로 세지지 않았다.
+
+      // 이름을 못 읽는 항목은 줄로 적지 않는다. 셈에는 이미 들어갔다 — 예전에는
+      // 셈이 이름 고르는 안쪽에 있어서, 이름이 빈 항목은 끝냈어도 완료로
+      // 세지지 않았다.
       final name = _shortName(task['text']?.toString());
-      if (name == null) continue;
-      if (isDone) {
-        // 이름 옆에 끝낸 시각을 붙인다. 어떤 종류의 일이 몇 시에 끝나는지는
-        // 개수만으로는 안 보인다.
-        if (doneNames.length < maxNamesPerDay) {
-          doneNames.add(doneHour == null ? name : '$name(${_clock(doneHour)})');
-        }
-      } else if (leftNames.length < maxNamesPerDay) {
-        leftNames.add(name);
-      }
+      if (name == null || out.length >= maxTasksPerDay) continue;
+      out.add(
+        PaceTask(
+          name: name,
+          done: isDone,
+          started: started,
+          startHour: startHour,
+          doneHour: _hourOnDate(task['completedAt'], date),
+        ),
+      );
     }
-    doneHours.sort();
 
     return PaceDay(
       date: date,
@@ -314,10 +317,18 @@ class RecentPaceBrief {
       touched: touched,
       done: done,
       firstStartHour: firstStartHour,
-      doneHours: doneHours,
-      doneNames: doneNames,
-      leftNames: leftNames,
+      tasks: out,
     );
+  }
+
+  /// 그날 것인 시각만 시로 돌려준다.
+  ///
+  /// 자정을 넘겨 찍힌 것은 다음 날 시각이다. 그걸 그날 것으로 세면 하루가
+  /// 새벽에 끝난 것처럼 읽힌다.
+  static int? _hourOnDate(Object? raw, String date) {
+    final at = DateTime.tryParse(raw?.toString() ?? '');
+    if (at == null) return null;
+    return DateFormat('yyyy-MM-dd').format(at) == date ? at.hour : null;
   }
 
   static String? _shortName(String? raw) {

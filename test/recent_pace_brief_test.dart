@@ -99,12 +99,11 @@ void main() {
       );
 
       expect(days.single.done, 2);
-      expect(days.single.doneNames, ['이름 있는 것']);
+      expect(days.single.tasks.map((t) => t.name), ['이름 있는 것']);
     });
 
-    test('끝낸 시각은 전부 모으고 이른 것부터 세운다', () {
-      // 마지막 하나만 보면 하루 종일 조금씩 끝낸 날과 밤에 몰아 끝낸 날이
-      // 똑같이 보인다.
+    test('일정마다 끝낸 시각을 그 줄에 달아둔다', () {
+      // 시각만 따로 모으면 그게 무엇의 시각인지가 지워진다.
       final days = RecentPaceBrief.recent(
         history([
           day('2026-09-15', [
@@ -115,22 +114,24 @@ void main() {
         now: now,
       );
 
-      expect(days.single.doneHours, [11, 20]);
+      final tasks = days.single.tasks;
+      expect(tasks.map((t) => t.name), ['늦게', '일찍']);
+      expect(tasks.map((t) => t.doneHour), [20, 11]);
     });
 
-    test('자정을 넘겨 찍힌 완료는 그날 것으로 세지 않는다', () {
+    test('자정을 넘겨 찍힌 완료는 그날 시각으로 쓰지 않는다', () {
       // 그대로 쓰면 그날이 새벽에 끝난 것처럼 읽힌다.
       final days = RecentPaceBrief.recent(
         history([
           day('2026-09-15', [
-            task('저녁에', done: true, completedAt: '2026-09-15T20:00:00'),
             task('새벽에', done: true, completedAt: '2026-09-16T01:00:00'),
           ]),
         ]),
         now: now,
       );
 
-      expect(days.single.doneHours, [20]);
+      expect(days.single.done, 1);
+      expect(days.single.tasks.single.doneHour, isNull);
     });
 
     test('첫 시작 시각은 그날 가장 이른 것', () {
@@ -158,16 +159,16 @@ void main() {
       expect(days.single.firstStartHour, isNull);
     });
 
-    test('이름은 몇 개까지만 적는다', () {
+    test('줄은 몇 개까지만 적고 총량은 그대로 센다', () {
       final days = RecentPaceBrief.recent(
         history([
-          day('2026-09-15', [for (var i = 0; i < 10; i++) task('남은 일 $i')]),
+          day('2026-09-15', [for (var i = 0; i < 20; i++) task('남은 일 $i')]),
         ]),
         now: now,
       );
 
-      expect(days.single.planned, 10);
-      expect(days.single.leftNames.length, RecentPaceBrief.maxNamesPerDay);
+      expect(days.single.planned, 20);
+      expect(days.single.tasks.length, RecentPaceBrief.maxTasksPerDay);
     });
   });
 
@@ -236,39 +237,34 @@ void main() {
       expect(block, isNot(contains('*')));
     });
 
-    test('끝낸 시각은 이름 옆에 붙인다', () {
+    test('일정마다 어떻게 됐는지 한 줄씩 적는다', () {
       final block = RecentPaceBrief.block(
         historyRaw: history([
           day('2026-09-15', [
             task('운동', done: true, completedAt: '2026-09-15T22:30:00'),
+            task('보고서', startedAt: '2026-09-15T14:00:00'),
+            task('장보기'),
           ]),
         ]),
         todayTasks: const [],
         now: now,
       );
 
-      expect(block, contains('운동(오후 10시)'));
+      expect(block, contains('운동 — 끝냄(오후 10시)'));
+      expect(block, contains('보고서 — 손만 댐(오후 2시 시작)'));
+      expect(block, contains('장보기 — 그대로'));
     });
 
-    test('이름 상한을 넘긴 날은 끝낸 시각을 따로 모아 적는다', () {
+    test('줄이 잘린 날은 몇 개가 빠졌는지 적는다', () {
       final block = RecentPaceBrief.block(
         historyRaw: history([
-          day('2026-09-15', [
-            for (var i = 0; i < 6; i++)
-              task(
-                '일 \$i',
-                done: true,
-                completedAt:
-                    '2026-09-15T${(9 + i).toString().padLeft(2, '0')}:00:00',
-              ),
-          ]),
+          day('2026-09-15', [for (var i = 0; i < 12; i++) task('일 $i')]),
         ]),
         todayTasks: const [],
         now: now,
       );
 
-      expect(block, contains('끝낸 시각:'));
-      expect(block, contains('오후 2시'));
+      expect(block, contains('…외 4개'));
     });
 
     test('시작 표시가 있으면 그 문구는 넣지 않는다', () {
