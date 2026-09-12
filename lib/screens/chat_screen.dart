@@ -4804,6 +4804,21 @@ ${lines.join('\n')}
   /// 프렌즈 코치는 유혹 묶기 다음에 다섯 번째 차례(습관 쌓기, 페르소나별
   /// 예시)가 한 번 더 돈 뒤 첫 문구로 되돌아간다. 냥냥이·마스터는 그 목소리가
   /// 없어 네 개짜리 순환 그대로다.
+  /// 이 자리가 서는 요일.
+  ///
+  /// 아무 날이나 섰다. 주 1회인 것은 맞았지만 언제 올지 알 수 없었고, 페이스
+  /// 코칭(수·금 오전)이 먼저 나간 날에는 그날을 쉬고 다른 날로 밀렸다.
+  ///
+  /// 월요일에 두면 한 주가 갈린다 — 월요일에 이 사람 패턴에 듣는 지식 하나,
+  /// 수·금에 오늘 할 것. 대신 월요일에 앱을 안 여는 사람은 그 주를 건너뛴다.
+  /// 페이스 코칭이 수·금을 고른 것과 같은 맞바꿈이다.
+  ///
+  /// 월요일에 보는 최근 이틀은 주말이 되기 쉽다. 주말에는 플래너를 잘 안 봐서
+  /// 기록이 비는데, 빈 날은 "기록 없음"으로 적히고 아무것도 안 한 것으로 보지
+  /// 말라는 줄이 함께 간다([RecentPaceBrief]). 그리고 이 자리가 묻는 것은 오늘
+  /// 몇 개냐가 아니라 이 사람이 어떤 모양으로 굴러가는지다.
+  static const int _weeklyConcretizeWeekday = DateTime.monday;
+
   Future<bool> _startWeeklyConcretizeTip(
     SharedPreferences prefs,
     DateTime now,
@@ -4816,6 +4831,7 @@ ${lines.join('\n')}
         !isFriendHabitStackCoach) {
       return false;
     }
+    if (now.weekday != _weeklyConcretizeWeekday) return false;
     if (now.hour >= MasterGreetingContext.quietFromHour) return false;
 
     final last = _lastAutoMessage(prefs, _weeklyConcretizeGreetingKind);
