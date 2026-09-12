@@ -182,6 +182,16 @@ class _MainTabScreenState extends State<MainTabScreen>
     with TickerProviderStateMixin, WidgetsBindingObserver {
   static const String _recordsFeedbackSeenSignatureKey =
       'nyang_records_feedback_seen_signature';
+
+  /// 메인을 바꿀 수 있다는 안내를 이미 보여줬는지.
+  ///
+  /// 'nyang_' 접두어를 쓰지 않는다 — 봤다는 것은 이 기기에서 일어난 일이고,
+  /// 클라우드가 덮으면 새 기기에서 영영 못 본다.
+  static const String _mainModeHintShownKey = 'main_mode_hint_shown';
+
+  /// 안내를 언제 띄울지. 앱을 켠 직후는 볼 것이 많아 흘려보낸다.
+  static const Duration _mainModeHintDelay = Duration(seconds: 6);
+
   static const String _catWidgetPromptHiddenKey =
       'cat_widget_prompt_hidden_forever';
   static const String _catWidgetPromptFirstSeenAtKey =
@@ -190,6 +200,30 @@ class _MainTabScreenState extends State<MainTabScreen>
       'cat_widget_prompt_last_shown_at';
   static const Duration _catWidgetPromptFirstDelay = Duration(days: 1);
   static const Duration _catWidgetPromptCooldown = Duration(days: 7);
+
+  /// 어느 화면을 앱의 메인으로 쓸지. 'chat' 또는 'todo'.
+  ///
+  /// 'nyang_' 접두어를 쓴다 — 이건 이 사람의 선택이라 기기를 바꾸거나 다시
+  /// 로그인해도 따라와야 한다.
+  static const String mainModeKey = 'nyang_main_mode';
+  static const String mainModeChat = 'chat';
+  static const String mainModeTodo = 'todo';
+
+  /// 서랍 번호는 뜻을 그대로 둔다(0 채팅 / 1 할일 / 2 기록 / 3 설정). 바뀌는 것은
+  /// **그중 무엇이 본문 자리에 서는가**와 하단 탭에 늘어서는 순서뿐이다.
+  ///
+  /// 번호에 자리를 섞지 않는 이유는 하나다 — 이 번호를 보는 곳이 서른 곳이 넘는다.
+  /// 순서를 번호에 담으면 그 전부가 모드를 알아야 한다.
+  String _mainMode = mainModeChat;
+
+  bool get _todoIsMain => _mainMode == mainModeTodo;
+
+  /// 본문 자리에 서는 화면의 번호. 이 번호가 곧 "서랍이 닫힌 상태"다.
+  int get _mainIndex => _todoIsMain ? 1 : 0;
+
+  /// 하단 탭에 늘어서는 순서. 채팅과 할 일만 자리를 바꾼다.
+  List<int> get _tabOrder =>
+      _todoIsMain ? const [1, 0, 2, 3] : const [0, 1, 2, 3];
 
   late int _openDrawerIndex; // 0: 채팅, 1: 할일, 2: 기록, 3: 설정
   late TabController _tabCtrl;
@@ -586,6 +620,8 @@ class _MainTabScreenState extends State<MainTabScreen>
     _loadPlannerHelpSeen();
     _openDrawerIndex = widget.initialDrawerIndex;
     _widgetIntentDrawerMode = widget.initialDrawerIndex != 0;
+    unawaited(_loadMainMode());
+    unawaited(_maybeShowMainModeHint());
     WidgetsBinding.instance.addObserver(this);
     unawaited(_runStartupDailyReset());
     // 아이폰 캘린더를 되읽던 시절이 남긴 유령 할 일과 미래 쉬기 기록을 한 번
@@ -699,6 +735,46 @@ class _MainTabScreenState extends State<MainTabScreen>
   /// 정리와 화면의 첫 읽기가 나란히 달린다. 정리가 조금 늦게 끝나면 화면은
   /// 정리 이전 목록을 그대로 들고 있는데, 끝났다고 알려주는 자리가 없어서 그
   /// 상태가 앱을 끌 때까지 갔다. 어제 칸이 비어 보이던 나머지 절반이 여기다.
+  /// 어느 화면을 메인으로 쓰는지 읽어온다.
+  ///
+  /// 화면을 세운 뒤에 읽는다. 그래서 할 일이 메인인 사람은 첫 한 박자 동안
+  /// 채팅이 보일 수 있다 — prefs를 읽는 시간이라 눈에 잡히지는 않는다. 켜는
+  /// 길(main.dart / landing_screen)이 열한 군데라 거기서 미리 읽어 넘기는 것은
+  /// 나중에 값이 보이면 할 일이다.
+  Future<void> _loadMainMode() async {
+    final prefs = await SharedPreferences.getInstance();
+    final mode = prefs.getString(mainModeKey);
+    if (!mounted || mode == null || mode == _mainMode) return;
+    if (mode != mainModeChat && mode != mainModeTodo) return;
+    setState(() {
+      _mainMode = mode;
+      // 서랍은 닫힌 채로 시작한다. 위젯이나 알림이 특정 서랍을 열어달라고
+      // 부탁한 경우는 그대로 둔다.
+      if (!_widgetIntentDrawerMode) _openDrawerIndex = _mainIndex;
+    });
+  }
+
+  /// 메인 화면을 바꾼다. 두 화면의 데이터는 건드리지 않는다 — 어느 것이 본문
+  /// 자리에 서고 어느 것이 서랍에 들어가는지만 바뀐다.
+  Future<void> setMainMode(String mode) async {
+    if (mode != mainModeChat && mode != mainModeTodo) return;
+    if (mode == _mainMode) return;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(mainModeKey, mode);
+    TasksSyncService.scheduleSyncToCloud();
+    if (!mounted) return;
+    setState(() {
+      _mainMode = mode;
+      _openDrawerIndex = _mainIndex;
+      _widgetIntentDrawerMode = false;
+    });
+    unawaited(
+      AnalyticsService.logFeatureUsage(
+        mode == mainModeTodo ? 'main_mode_todo' : 'main_mode_chat',
+      ),
+    );
+  }
+
   Future<void> _runStartupDailyReset() async {
     // 클라우드 복원이 끝나기를 기다렸다가 정리한다. 그냥 부르면 복원보다 먼저
     // 달릴 수 있고, 그때는 아직 안 온 데이터를 없는 것으로 치고 하루를 넘긴다.
@@ -806,7 +882,7 @@ class _MainTabScreenState extends State<MainTabScreen>
         _catWidgetPromptShowing ||
         widget.coachId != 'cat' ||
         widget.openTasksOverlayOnStart ||
-        _openDrawerIndex != 0) {
+        _openDrawerIndex != _mainIndex) {
       return;
     }
 
@@ -1161,9 +1237,9 @@ class _MainTabScreenState extends State<MainTabScreen>
     }
     _isPlannerOverlayOpen = true;
 
-    if (_openDrawerIndex != 0 || _widgetIntentDrawerMode) {
+    if (_openDrawerIndex != _mainIndex || _widgetIntentDrawerMode) {
       setState(() {
-        _openDrawerIndex = 0;
+        _openDrawerIndex = _mainIndex;
         _widgetIntentDrawerMode = false;
       });
     }
@@ -1182,7 +1258,7 @@ class _MainTabScreenState extends State<MainTabScreen>
     _isPlannerOverlayOpen = false;
     if (!mounted) return;
     setState(() {
-      _openDrawerIndex = 0;
+      _openDrawerIndex = _mainIndex;
       _widgetIntentDrawerMode = false;
     });
     _chatController.refreshTaskProgress();
@@ -1662,28 +1738,37 @@ class _MainTabScreenState extends State<MainTabScreen>
   }
 
   List<Widget> get _screens => [
-    ChatScreen(
-      coachId: widget.coachId,
-      controller: _chatController,
-      onOpenDrawer: () => setState(() => _openDrawerIndex = 1),
-      onOpenGoalVisionDrawer: _openTasksGoalVisionDrawer,
-      onOpenFeatureLocation: _openFeatureLocationFromChat,
-      onOpenSettingsSection: _openSettingsSectionFromChat,
-      onRegisterHabit: _registerHabitFromChat,
-      onRegisterGoal: _registerGoalFromChat,
-      onDeleteCommand: _handleDeleteCommandFromChat,
-      onEditCommand: _handleEditCommandFromChat,
-      onSwitchCoach: _switchCoachFromChat,
-      onOpenCatWidgetPrompt: _openCatWidgetPromptFromChat,
-      handoffFromCoachId: widget.handoffFromCoachId,
-    ),
-    const TasksPlaceholderScreen(),
+    _buildChatScreen(),
+    _buildTasksScreen(),
     RecordsScreen(coachId: widget.coachId),
-    // 이 목록은 매 build마다 네 화면을 다 만들지만 화면에 나가는 건 첫 번째뿐이다.
-    // 설정 화면은 서랍이 그린다. 그래서 여기서는 부탁받은 시트를 건드리지
-    // 않는다 — 여기서 가져가버리면 정작 서랍에 뜨는 설정 화면이 빈손이 된다.
+    // 이 목록은 매 build마다 네 화면을 다 만들지만 화면에 나가는 건 본문 자리
+    // 하나뿐이다([_mainIndex]). 설정 화면은 서랍이 그린다. 그래서 여기서는
+    // 부탁받은 시트를 건드리지 않는다 — 여기서 가져가버리면 정작 서랍에 뜨는
+    // 설정 화면이 빈손이 된다.
     SettingsScreen(coachId: widget.coachId),
   ];
+
+  /// 채팅 화면. 본문 자리에도 서고 서랍에도 들어간다.
+  ///
+  /// 두 자리가 같은 위젯을 쓰지만 **State는 공유하지 않는다.** 자리를 옮기면
+  /// 위젯 나무의 위치가 달라져서 새로 만들어진다 — 할 일이 메인인 모드에서는
+  /// 서랍을 여닫을 때마다 채팅이 다시 만들어지고, 쓰다 만 메시지가 날아간다.
+  /// 살려두는 일은 따로 잡을 것.
+  Widget _buildChatScreen() => ChatScreen(
+    coachId: widget.coachId,
+    controller: _chatController,
+    onOpenDrawer: () => setState(() => _openDrawerIndex = 1),
+    onOpenGoalVisionDrawer: _openTasksGoalVisionDrawer,
+    onOpenFeatureLocation: _openFeatureLocationFromChat,
+    onOpenSettingsSection: _openSettingsSectionFromChat,
+    onRegisterHabit: _registerHabitFromChat,
+    onRegisterGoal: _registerGoalFromChat,
+    onDeleteCommand: _handleDeleteCommandFromChat,
+    onEditCommand: _handleEditCommandFromChat,
+    onSwitchCoach: _switchCoachFromChat,
+    onOpenCatWidgetPrompt: _openCatWidgetPromptFromChat,
+    handoffFromCoachId: widget.handoffFromCoachId,
+  );
 
   String? _takePendingSettingsSection() {
     final section = _pendingSettingsSection;
@@ -1723,25 +1808,165 @@ class _MainTabScreenState extends State<MainTabScreen>
     false,
   ];
 
+  /// 메인을 바꿀 수 있다는 것을 한 번 알려준다.
+  ///
+  /// 하단 탭을 길게 눌러볼 생각을 하는 사람은 드물다. 기능이 있다는 사실만
+  /// 한 번 전하고, 그 뒤로는 다시 말하지 않는다.
+  Future<void> _maybeShowMainModeHint() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.getBool(_mainModeHintShownKey) ?? false) return;
+    await Future.delayed(_mainModeHintDelay);
+    if (!mounted) return;
+    // 서랍이 열려 있거나 전체창이 떠 있으면 지금이 아니다. 다음에 다시 만난다.
+    if (_openDrawerIndex != _mainIndex || _isPlannerOverlayOpen) return;
+    await prefs.setBool(_mainModeHintShownKey, true);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        duration: const Duration(seconds: 6),
+        backgroundColor: AppDesignTokens.textPrimary,
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 84),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppDesignTokens.radiusMedium),
+        ),
+        content: Text(
+          '채팅과 할 일 중 자주 쓰는 쪽을 메인으로 바꿀 수 있어요.\n'
+          '아래 탭을 길게 눌러보세요.',
+          style: GoogleFonts.notoSansKr(
+            fontSize: AppDesignTokens.textCaption,
+            fontWeight: FontWeight.w600,
+            color: Colors.white,
+            height: 1.5,
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 자리를 바꿀 수 있는 탭의 자리. 채팅과 할 일 둘뿐이다.
+  ///
+  /// 기록과 설정은 움직이지 않는다. 넷 다 끌리게 두면 사용자는 기록도 옮겨보고,
+  /// 안 움직이면 고장으로 느낀다.
+  Set<int> get _swappableSlots => {_tabOrder.indexOf(0), _tabOrder.indexOf(1)};
+
+  /// 메인을 바꿀지 물어본다.
+  ///
+  /// 바꾸는 동작이 길게 누르기라 실수로 하기 어렵고, 되돌리는 동작도 같다.
+  /// 그래서 "정말요?"를 묻지 않고 무엇이 바뀌는지만 보여주고 한 번 받는다.
+  Future<void> _askSwapMain() async {
+    final toTodo = !_todoIsMain;
+    final target = toTodo ? '할 일' : '채팅';
+    final confirmed = await showModalBottomSheet<bool>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) => Container(
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
+        decoration: const BoxDecoration(
+          color: AppDesignTokens.surface,
+          borderRadius: BorderRadius.vertical(
+            top: Radius.circular(AppDesignTokens.radiusSheet),
+          ),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '$target을 메인으로 쓸까요?',
+              style: GoogleFonts.notoSansKr(
+                fontSize: AppDesignTokens.textTitle,
+                fontWeight: FontWeight.w800,
+                color: AppDesignTokens.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '앱을 열면 $target 화면이 먼저 보이고, '
+              '${toTodo ? '채팅' : '할 일'}은 옆에서 열리는 서랍이 됩니다.\n'
+              '대화 기록과 할 일은 그대로 있어요.',
+              style: GoogleFonts.notoSansKr(
+                fontSize: AppDesignTokens.textCaption,
+                color: AppDesignTokens.textSecondary,
+                height: 1.5,
+              ),
+            ),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Expanded(
+                  child: TextButton(
+                    onPressed: () => Navigator.pop(sheetContext, false),
+                    child: Text(
+                      '그대로 둘게요',
+                      style: GoogleFonts.notoSansKr(
+                        fontWeight: FontWeight.w700,
+                        color: AppDesignTokens.textMuted,
+                      ),
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(sheetContext, true),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppDesignTokens.brand,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(
+                          AppDesignTokens.radiusMedium,
+                        ),
+                      ),
+                    ),
+                    child: Text(
+                      '바꾸기',
+                      style: GoogleFonts.notoSansKr(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+    if (confirmed != true) return;
+    await setMainMode(toTodo ? mainModeTodo : mainModeChat);
+  }
+
+  /// 하단 탭에 실제로 늘어놓을 값들. 뜻은 그대로 두고 자리만 [_tabOrder]로 섞는다.
+  List<T> _inTabOrder<T>(List<T> bySemantics) => [
+    for (final index in _tabOrder) bySemantics[index],
+  ];
+
+  /// 지금 눌려 있는 탭의 **자리**. 하단 탭은 자리로 말하고 나머지는 뜻으로 말한다.
+  int get _currentTabSlot {
+    final slot = _tabOrder.indexOf(_openDrawerIndex);
+    return slot < 0 ? 0 : slot;
+  }
+
+  /// 하단 탭이 누른 자리를 뜻으로 옮겨 [_onTabTapped]에 넘긴다.
+  void _onTabSlotTapped(int slot) => _onTabTapped(_tabOrder[slot]);
+
   bool get _isMaster => _isMasterCoach(widget.coachId);
 
   Color get _activeColor =>
       _isMaster ? const Color(0xFFD4A017) : const Color(0xFF8B7CFF);
 
   void _onTabTapped(int index) {
-    if (index == 0) {
-      if (_openDrawerIndex != 0) {
+    // 본문 자리를 누르면 서랍을 닫는다. 예전에는 이 갈래가 0번(채팅)에 박혀
+    // 있었다 — 할 일이 메인인 모드에서는 그 0번이 "서랍에 있는 채팅"이라,
+    // 채팅 탭을 눌러도 닫기만 하고 열리지 않았다.
+    if (index == _mainIndex) {
+      if (_openDrawerIndex != _mainIndex) {
         HapticFeedback.lightImpact();
         setState(() {
-          _openDrawerIndex = 0;
+          _openDrawerIndex = _mainIndex;
           _widgetIntentDrawerMode = false;
         });
-        _chatController.refreshTaskProgress();
-        // 채팅 탭으로 복귀 시 미뤄둔 할일 리마인드 확인 및 취침시간 이동 제안 확인
-        Future.delayed(const Duration(milliseconds: 400), () {
-          _chatController.checkDeferredReminder();
-          _chatController.checkBedtimeMoveOffer();
-        });
+        if (index == 0) _onChatShown();
       }
       return;
     }
@@ -1759,11 +1984,23 @@ class _MainTabScreenState extends State<MainTabScreen>
         _tasksController.resetTodayDateSelection();
       });
     }
+    // 서랍으로 열리는 채팅도 "채팅에 왔다"는 자리다.
+    if (index == 0) _onChatShown();
+  }
+
+  /// 채팅이 눈앞에 왔을 때. 본문으로 돌아온 것이든 서랍으로 열린 것이든 같다.
+  void _onChatShown() {
+    _chatController.refreshTaskProgress();
+    // 미뤄둔 할일 리마인드와 취침시간 이동 제안을 확인한다.
+    Future.delayed(const Duration(milliseconds: 400), () {
+      _chatController.checkDeferredReminder();
+      _chatController.checkBedtimeMoveOffer();
+    });
   }
 
   Future<void> _closeDrawerAndCheck() async {
     setState(() {
-      _openDrawerIndex = 0;
+      _openDrawerIndex = _mainIndex;
       _widgetIntentDrawerMode = false;
     });
     _chatController.refreshTaskProgress();
@@ -1834,15 +2071,20 @@ class _MainTabScreenState extends State<MainTabScreen>
               duration: const Duration(milliseconds: 180),
               transitionBuilder: (child, anim) =>
                   FadeTransition(opacity: anim, child: child),
-              child: KeyedSubtree(key: const ValueKey(0), child: _screens[0]),
+              child: KeyedSubtree(
+                key: ValueKey(_mainIndex),
+                child: _screens[_mainIndex],
+              ),
             ),
             bottomNavigationBar: _NyangBottomTabBar(
-              currentIndex: _openDrawerIndex,
-              onTap: _onTabTapped,
-              labels: _tabLabels,
-              inactiveIcons: _inactiveIcons,
-              activeIcons: _activeIcons,
-              showNewBadges: _tabNewBadges,
+              currentIndex: _currentTabSlot,
+              onTap: _onTabSlotTapped,
+              onLongPressSwappable: (_) => _askSwapMain(),
+              swappableSlots: _swappableSlots,
+              labels: _inTabOrder(_tabLabels),
+              inactiveIcons: _inTabOrder(_inactiveIcons),
+              activeIcons: _inTabOrder(_activeIcons),
+              showNewBadges: _inTabOrder(_tabNewBadges),
               activeColor: _activeColor,
               bgColor: Colors.black.withOpacity(0.35),
               inactiveColor: _tabInactiveColor,
@@ -1850,7 +2092,7 @@ class _MainTabScreenState extends State<MainTabScreen>
             ),
           ),
           // 서랍 오버레이 + 패널
-          if (_openDrawerIndex != 0) _buildSideDrawer(),
+          if (_openDrawerIndex != _mainIndex) _buildSideDrawer(),
         ],
       ),
     );
@@ -1973,15 +2215,20 @@ class _MainTabScreenState extends State<MainTabScreen>
         duration: const Duration(milliseconds: 180),
         transitionBuilder: (child, anim) =>
             FadeTransition(opacity: anim, child: child),
-        child: KeyedSubtree(key: const ValueKey(0), child: _screens[0]),
+        child: KeyedSubtree(
+          key: ValueKey(_mainIndex),
+          child: _screens[_mainIndex],
+        ),
       ),
       bottomNavigationBar: _NyangBottomTabBar(
-        currentIndex: _openDrawerIndex,
-        onTap: _onTabTapped,
-        labels: _tabLabels,
-        inactiveIcons: _inactiveIcons,
-        activeIcons: _activeIcons,
-        showNewBadges: _tabNewBadges,
+        currentIndex: _currentTabSlot,
+        onTap: _onTabSlotTapped,
+        onLongPressSwappable: (_) => _askSwapMain(),
+        swappableSlots: _swappableSlots,
+        labels: _inTabOrder(_tabLabels),
+        inactiveIcons: _inTabOrder(_inactiveIcons),
+        activeIcons: _inTabOrder(_activeIcons),
+        showNewBadges: _inTabOrder(_tabNewBadges),
         activeColor: AppDesignTokens.brand, // 마스터도 활성은 연보라
         bgColor: Colors.white,
         inactiveColor: AppDesignTokens.textDisabled,
@@ -2018,7 +2265,7 @@ class _MainTabScreenState extends State<MainTabScreen>
           ),
         ],
         scaffold,
-        if (_openDrawerIndex != 0) _buildSideDrawer(),
+        if (_openDrawerIndex != _mainIndex) _buildSideDrawer(),
       ],
     );
   }
@@ -2537,48 +2784,63 @@ class _MainTabScreenState extends State<MainTabScreen>
     return spans;
   }
 
+  /// 할 일 화면. 본문 자리에도 서고 서랍에도 들어간다.
+  ///
+  /// 서랍에만 있던 것을 함수로 뺐다. 두 자리가 같은 콜백을 쓰지 않으면, 할 일이
+  /// 메인일 때 핵심 설정이나 계획 문답이 채팅으로 이어지지 않는다.
+  Widget _buildTasksScreen() => TasksScreen(
+    coachId: widget.coachId,
+    controller: _tasksController,
+    initialBottomSheet: widget.initialBottomSheet,
+    onProgressChanged: _chatController.refreshTaskProgress,
+    onCoreTaskSet: (msg) {
+      // 핵심 설정 완료 시 채팅창에 비서 반응 메시지 주입
+      //
+      // 여기 0은 "닫는다"가 아니라 "채팅을 보여준다"다. 할 일이 메인인
+      // 모드에서는 채팅 서랍을 여는 것이 되어 그대로 맞다.
+      setState(() => _openDrawerIndex = 0);
+      _chatController.refreshTaskProgress();
+      Future.delayed(
+        const Duration(milliseconds: 300),
+        () => _chatController.injectAiMessage(msg),
+      );
+    },
+    onOverplanTurns: (turns) {
+      // 등록창에서 방금 주고받은 문답을 채팅으로 데려가 그 자리에서
+      // 이어지듯 재생한다. 한 줄씩 살짝 텀을 둬 한꺼번에 쏟아지지
+      // 않게 한다.
+      setState(() => _openDrawerIndex = 0);
+      var delay = 300;
+      for (final turn in turns) {
+        final text = turn['text']?.toString() ?? '';
+        if (text.isEmpty) continue;
+        final isUser = turn['isUser'] == true;
+        Future.delayed(Duration(milliseconds: delay), () {
+          if (isUser) {
+            _chatController.injectUserChoice(text);
+          } else {
+            _chatController.injectAiMessage(text);
+          }
+        });
+        delay += 600;
+      }
+    },
+  );
+
   // ── 서랍 (모든 탭 공통) ────────────────────────
   Widget _buildSideDrawer() {
     final useCleanDrawer = _widgetIntentDrawerMode && _openDrawerIndex == 1;
     final screenWidth = MediaQuery.of(context).size.width;
+    // 채팅은 320으로는 못 담는다 — 입력창과 말풍선이 있는 화면이다. 그래서
+    // 가로를 꽉 채우고, **하단 탭 자리만 비켜 선다.** 그 탭이 할 일로 돌아가는
+    // 길이라, 덮어버리면 나올 방법이 없다.
+    final isChatDrawer = _openDrawerIndex == 0;
+    final navHeight =
+        _NyangBottomTabBar.barHeight + MediaQuery.of(context).padding.bottom;
     final drawerTopPadding = MediaQuery.of(context).padding.top + 12;
     Widget drawerContent;
     if (_openDrawerIndex == 1) {
-      drawerContent = TasksScreen(
-        coachId: widget.coachId,
-        controller: _tasksController,
-        initialBottomSheet: widget.initialBottomSheet,
-        onProgressChanged: _chatController.refreshTaskProgress,
-        onCoreTaskSet: (msg) {
-          // 핵심 설정 완료 시 채팅창에 비서 반응 메시지 주입
-          setState(() => _openDrawerIndex = 0);
-          _chatController.refreshTaskProgress();
-          Future.delayed(
-            const Duration(milliseconds: 300),
-            () => _chatController.injectAiMessage(msg),
-          );
-        },
-        onOverplanTurns: (turns) {
-          // 등록창에서 방금 주고받은 문답을 채팅으로 데려가 그 자리에서
-          // 이어지듯 재생한다. 한 줄씩 살짝 텀을 둬 한꺼번에 쏟아지지
-          // 않게 한다.
-          setState(() => _openDrawerIndex = 0);
-          var delay = 300;
-          for (final turn in turns) {
-            final text = turn['text']?.toString() ?? '';
-            if (text.isEmpty) continue;
-            final isUser = turn['isUser'] == true;
-            Future.delayed(Duration(milliseconds: delay), () {
-              if (isUser) {
-                _chatController.injectUserChoice(text);
-              } else {
-                _chatController.injectAiMessage(text);
-              }
-            });
-            delay += 600;
-          }
-        },
-      );
+      drawerContent = _buildTasksScreen();
     } else if (_openDrawerIndex == 2) {
       drawerContent = RecordsScreen(coachId: widget.coachId);
     } else if (_openDrawerIndex == 3) {
@@ -2589,14 +2851,19 @@ class _MainTabScreenState extends State<MainTabScreen>
         coachId: widget.coachId,
         autoOpenSection: _takePendingSettingsSection(),
       );
+    } else if (_openDrawerIndex == 0) {
+      // 할 일이 메인인 모드에서만 여기 온다. 채팅이 본문일 때 이 번호는
+      // "서랍이 닫힘"이라 서랍 자체가 그려지지 않는다.
+      drawerContent = _buildChatScreen();
     } else {
       drawerContent = const SizedBox.shrink();
     }
 
     return Stack(
       children: [
-        if (!useCleanDrawer)
-          // 오버레이 (drawer-overlay)
+        // 뒤를 어둡게 덮고 눌러서 닫는 자리. 채팅 서랍은 가로를 꽉 채우니
+        // 뒤가 보이지 않고, 눌러 닫을 바깥도 없다.
+        if (!useCleanDrawer && !isChatDrawer)
           GestureDetector(
             onTap: () async {
               await _closeDrawerAndCheck();
@@ -2606,9 +2873,9 @@ class _MainTabScreenState extends State<MainTabScreen>
         // 서랍 패널 (오른쪽에서 슬라이드)
         Positioned(
           top: 0,
-          bottom: 0,
+          bottom: isChatDrawer ? navHeight : 0,
           right: 0,
-          width: useCleanDrawer ? screenWidth : 320,
+          width: useCleanDrawer || isChatDrawer ? screenWidth : 320,
           child: Container(
             decoration: BoxDecoration(
               color: Colors.white,
@@ -2784,8 +3051,19 @@ class _CatWidgetPromptOption extends StatelessWidget {
 // 하단 탭바
 // ─────────────────────────────────────────────────────────────
 class _NyangBottomTabBar extends StatelessWidget {
+  /// 탭 줄의 높이(안전 영역 제외). 채팅 서랍이 이만큼을 비켜 서야 하단 탭을
+  /// 눌러 돌아올 수 있다.
+  static const double barHeight = 68;
+
   final int currentIndex;
   final ValueChanged<int> onTap;
+
+  /// 자리를 바꿀 수 있는 탭을 길게 눌렀을 때. 그 탭의 자리를 넘긴다.
+  final ValueChanged<int>? onLongPressSwappable;
+
+  /// 자리를 바꿀 수 있는 탭의 자리들.
+  final Set<int> swappableSlots;
+
   final List<String> labels;
   final List<Widget> inactiveIcons;
   final List<Widget> activeIcons;
@@ -2799,6 +3077,8 @@ class _NyangBottomTabBar extends StatelessWidget {
   const _NyangBottomTabBar({
     required this.currentIndex,
     required this.onTap,
+    this.onLongPressSwappable,
+    this.swappableSlots = const {},
     required this.labels,
     required this.inactiveIcons,
     required this.activeIcons,
@@ -2815,7 +3095,7 @@ class _NyangBottomTabBar extends StatelessWidget {
     final tabContent = SafeArea(
       top: false,
       child: SizedBox(
-        height: 68,
+        height: barHeight,
         child: Padding(
           padding: const EdgeInsets.only(top: 8.0),
           child: Row(
@@ -2833,6 +3113,10 @@ class _NyangBottomTabBar extends StatelessWidget {
                   activeColor: activeColor,
                   inactiveColor: inactiveColor,
                   onTap: () => onTap(i),
+                  onLongPress:
+                      onLongPressSwappable != null && swappableSlots.contains(i)
+                      ? () => onLongPressSwappable!(i)
+                      : null,
                 ),
               );
             }),
@@ -2867,6 +3151,9 @@ class _TabItem extends StatefulWidget {
   final Color inactiveColor;
   final VoidCallback onTap;
 
+  /// 길게 눌렀을 때. 자리를 바꿀 수 있는 탭에만 들어온다.
+  final VoidCallback? onLongPress;
+
   const _TabItem({
     required this.label,
     required this.inactiveIcon,
@@ -2876,6 +3163,7 @@ class _TabItem extends StatefulWidget {
     required this.activeColor,
     required this.inactiveColor,
     required this.onTap,
+    this.onLongPress,
   });
 
   @override
@@ -2924,6 +3212,12 @@ class _TabItemState extends State<_TabItem>
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: widget.onTap,
+      onLongPress: widget.onLongPress == null
+          ? null
+          : () {
+              HapticFeedback.mediumImpact();
+              widget.onLongPress!();
+            },
       behavior: HitTestBehavior.opaque,
       child: AnimatedBuilder(
         animation: _ctrl,
