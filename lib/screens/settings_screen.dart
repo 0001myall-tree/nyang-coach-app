@@ -2677,15 +2677,6 @@ class _SettingsScreenState extends State<SettingsScreen>
                         subtitle: '마지막으로 받은 답변을 그대로 보고 신고할 수 있어요.',
                         onTap: _showLastReplyDialog,
                       ),
-                      const SizedBox(height: 10),
-
-                      _buildSettingsNavigationTile(
-                        icon: Icons.search_outlined,
-                        label: '오늘 탭이 이상할 때',
-                        subtitle:
-                            '저장된 값을 그대로 보여줘요. 루틴이 빠졌거나 어제 핵심이 남았을 때 확인할 수 있어요.',
-                        onTap: _showRoutineDiagnosticsDialog,
-                      ),
                       const SizedBox(height: 20),
 
                       _buildLogoutButton(),
@@ -3908,30 +3899,42 @@ class _SettingsScreenState extends State<SettingsScreen>
                       jsonDecode(rawVisions),
                     );
                   if (rawRoutines != null) {
-                    routines = (jsonDecode(rawRoutines) as List).map((item) {
-                      final routine = Map<String, dynamic>.from(item as Map);
-                      TimeOfDay parseTime(String? value, TimeOfDay fallback) {
-                        final parts = (value ?? '').split(':');
-                        if (parts.length < 2) return fallback;
-                        return TimeOfDay(
-                          hour: int.tryParse(parts[0]) ?? fallback.hour,
-                          minute: int.tryParse(parts[1]) ?? fallback.minute,
-                        );
-                      }
+                    // 형을 적어준다. 안 적으면 아래 표에 null이 없어서 Dart가
+                    // Map<String, Object>로 좁혀 잡고, 목록도 그 형으로 만들어진다.
+                    // 그러면 나중에 손으로 줄을 더할 때(Map<String, dynamic>)
+                    // 형이 안 맞아 예외가 난다 — 저장된 값이 빈 목록이어도 그랬다.
+                    // '시간대 추가'가 안 눌리는 것처럼 보였던 진짜 이유가 이것이다.
+                    routines = (jsonDecode(rawRoutines) as List)
+                        .map<Map<String, dynamic>>((item) {
+                          final routine = Map<String, dynamic>.from(
+                            item as Map,
+                          );
+                          TimeOfDay parseTime(
+                            String? value,
+                            TimeOfDay fallback,
+                          ) {
+                            final parts = (value ?? '').split(':');
+                            if (parts.length < 2) return fallback;
+                            return TimeOfDay(
+                              hour: int.tryParse(parts[0]) ?? fallback.hour,
+                              minute: int.tryParse(parts[1]) ?? fallback.minute,
+                            );
+                          }
 
-                      return {
-                        'start': parseTime(
-                          routine['start']?.toString(),
-                          const TimeOfDay(hour: 9, minute: 0),
-                        ),
-                        'end': parseTime(
-                          routine['end']?.toString(),
-                          const TimeOfDay(hour: 18, minute: 0),
-                        ),
-                        'name': routine['name']?.toString() ?? '',
-                        'days': List<String>.from(routine['days'] ?? []),
-                      };
-                    }).toList();
+                          return <String, dynamic>{
+                            'start': parseTime(
+                              routine['start']?.toString(),
+                              const TimeOfDay(hour: 9, minute: 0),
+                            ),
+                            'end': parseTime(
+                              routine['end']?.toString(),
+                              const TimeOfDay(hour: 18, minute: 0),
+                            ),
+                            'name': routine['name']?.toString() ?? '',
+                            'days': List<String>.from(routine['days'] ?? []),
+                          };
+                        })
+                        .toList();
                   }
                   if (title != null) {
                     selectedTitle = title == '주인님' ? '대표님' : title;
@@ -4211,7 +4214,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                       const SizedBox(width: 6),
                       Expanded(
                         child: Text(
-                          '입력할수록 비서가 생활 패턴을 정확히 파악해요.',
+                          '입력할수록 코치가 생활 패턴을 정확히 파악해요.',
                           style: GoogleFonts.notoSansKr(
                             fontSize: 12,
                             fontWeight: FontWeight.w500,
@@ -4735,7 +4738,6 @@ class _SettingsScreenState extends State<SettingsScreen>
     required void Function(VoidCallback) rebuild,
   }) {
     const dayNames = ['월', '화', '수', '목', '금', '토', '일'];
-
     Widget timeButton(TimeOfDay value, ValueChanged<TimeOfDay> onPicked) {
       return GestureDetector(
         behavior: HitTestBehavior.opaque,
@@ -4765,6 +4767,56 @@ class _SettingsScreenState extends State<SettingsScreen>
       );
     }
 
+    const weekdays = ['월', '화', '수', '목', '금'];
+
+    /// 지금 어느 쪽으로 잡혀 있는지. 사용자가 방금 고른 것이 있으면 그것을
+    /// 따르고(`_dayMode`), 없으면 저장된 요일에서 되짚는다.
+    ///
+    /// `_dayMode`는 화면에서만 쓰는 값이다. 저장할 때 이름·시각·요일만 새로
+    /// 담으므로 따라가지 않고, 다시 열면 요일에서 되짚는다.
+    String dayMode(Map<String, dynamic> routine) {
+      final saved = routine['_dayMode']?.toString();
+      if (saved != null) return saved;
+      final days = ((routine['days'] as List?) ?? []).cast<String>();
+      if (days.isEmpty) return '매일';
+      if (days.length == weekdays.length && weekdays.every(days.contains)) {
+        return '평일만';
+      }
+      return '요일별';
+    }
+
+    Widget modeButton(Map<String, dynamic> routine, String mode) {
+      final picked = dayMode(routine) == mode;
+      return Expanded(
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => rebuild(() {
+            routine['_dayMode'] = mode;
+            if (mode == '매일') routine['days'] = <String>[];
+            if (mode == '평일만') routine['days'] = List<String>.from(weekdays);
+          }),
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 7),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: picked ? AppDesignTokens.brand : AppDesignTokens.brandChip,
+              borderRadius: BorderRadius.circular(AppDesignTokens.radiusSmall),
+            ),
+            child: Text(
+              mode,
+              style: GoogleFonts.notoSansKr(
+                fontSize: AppDesignTokens.textCaption,
+                fontWeight: FontWeight.w700,
+                color: picked
+                    ? AppDesignTokens.surface
+                    : AppDesignTokens.textSecondary,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
     Widget dayChip(Map<String, dynamic> routine, String day) {
       final picked = (routine['days'] as List?)?.contains(day) ?? false;
       return GestureDetector(
@@ -4773,6 +4825,9 @@ class _SettingsScreenState extends State<SettingsScreen>
           final days = List<String>.from(routine['days'] ?? []);
           days.contains(day) ? days.remove(day) : days.add(day);
           routine['days'] = days;
+          // 요일을 손으로 건드리면 더는 '매일'도 '평일만'도 아니다. 스위치를
+          // 옮겨주지 않으면 매일에 불이 켜진 채 특정 요일만 골라져 보인다.
+          routine['_dayMode'] = '요일별';
         }),
         child: Container(
           width: 30,
@@ -4826,7 +4881,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                         decoration: InputDecoration(
                           isDense: true,
                           border: InputBorder.none,
-                          hintText: '근무, 등하원처럼',
+                          hintText: '근무, 등하원 등',
                           hintStyle: GoogleFonts.notoSansKr(
                             fontSize: AppDesignTokens.textBody,
                             color: AppDesignTokens.textDisabled,
@@ -4867,11 +4922,26 @@ class _SettingsScreenState extends State<SettingsScreen>
                   ],
                 ),
                 const SizedBox(height: 10),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
-                  children: [for (final day in dayNames) dayChip(routine, day)],
+                Row(
+                  children: [
+                    for (final mode in const ['매일', '평일만', '요일별']) ...[
+                      modeButton(routine, mode),
+                      if (mode != '요일별') const SizedBox(width: 6),
+                    ],
+                  ],
                 ),
+                // 요일 칩은 요일별을 골랐을 때만. 매일·평일만은 이미 어느 날인지
+                // 말이 다 하고 있어서, 칩까지 켜두면 고른 것처럼 보인다.
+                if (dayMode(routine) == '요일별') ...[
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      for (final day in dayNames) dayChip(routine, day),
+                    ],
+                  ),
+                ],
               ],
             ),
           ),
@@ -4880,7 +4950,7 @@ class _SettingsScreenState extends State<SettingsScreen>
           onTap: routines.length >= BusyHoursService.maxEntries
               ? null
               : () => rebuild(
-                  () => routines.add({
+                  () => routines.add(<String, dynamic>{
                     'name': '',
                     'start': const TimeOfDay(hour: 9, minute: 0),
                     'end': const TimeOfDay(hour: 18, minute: 0),
@@ -4901,8 +4971,8 @@ class _SettingsScreenState extends State<SettingsScreen>
             alignment: Alignment.center,
             child: Text(
               routines.length >= BusyHoursService.maxEntries
-                  ? '시간대는 ${BusyHoursService.maxEntries}개까지 넣을 수 있어요'
-                  : '➕ 시간대 추가',
+                  ? '고정 일정은 ${BusyHoursService.maxEntries}개까지 넣을 수 있어요'
+                  : '➕ 고정 일정 추가',
               style: GoogleFonts.notoSansKr(
                 fontSize: AppDesignTokens.textCaption,
                 fontWeight: FontWeight.w800,
@@ -4911,14 +4981,6 @@ class _SettingsScreenState extends State<SettingsScreen>
                     : AppDesignTokens.brand,
               ),
             ),
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          '요일을 안 고르면 매일로 봅니다.',
-          style: GoogleFonts.notoSansKr(
-            fontSize: AppDesignTokens.textMeta,
-            color: AppDesignTokens.textMuted,
           ),
         ),
       ],
