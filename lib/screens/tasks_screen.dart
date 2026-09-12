@@ -6381,7 +6381,7 @@ class _TasksScreenState extends State<TasksScreen>
     ];
     return Container(
       color: Colors.white,
-      padding: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.only(bottom: 2),
       child: TabBar(
         controller: _tabCtrl,
         labelColor: _coach.accentColor,
@@ -6515,10 +6515,16 @@ class _TasksScreenState extends State<TasksScreen>
       '12월',
     ];
     final days = ['일', '월', '화', '수', '목', '금', '토'];
+    // 올해는 당연하니 연도를 안 쓴다. 다른 해를 넘겨볼 때만 붙인다 —
+    // 작년 이맘때가 올해로 읽히면 잘못 보고 있는 줄도 모른다.
+    final yearPart = targetDate.year == DateTime.now().year
+        ? ''
+        : '${targetDate.year}년 ';
     final dateStr =
-        '${targetDate.year}년 ${months[targetDate.month - 1]} ${targetDate.day}일 (${days[targetDate.weekday % 7]})';
+        '$yearPart${months[targetDate.month - 1]} ${targetDate.day}일 (${days[targetDate.weekday % 7]})';
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+      // 위 여백 16에서 10으로. 탭 줄 아래 여백(2)과 합쳐 12쯤 남긴다.
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
       color: Colors.white,
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
