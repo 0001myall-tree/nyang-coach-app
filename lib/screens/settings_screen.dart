@@ -4740,17 +4740,48 @@ class _SettingsScreenState extends State<SettingsScreen>
           if (picked != null) rebuild(() => onPicked(picked));
         },
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 10),
+          padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
           decoration: BoxDecoration(
-            color: const Color(0xFFF3F0FF),
-            borderRadius: BorderRadius.circular(8),
+            color: AppDesignTokens.brandChip,
+            borderRadius: BorderRadius.circular(AppDesignTokens.radiusSmall),
           ),
           child: Text(
             '${value.hour.toString().padLeft(2, '0')}:'
             '${value.minute.toString().padLeft(2, '0')}',
             style: GoogleFonts.notoSansKr(
-              fontSize: 13,
+              fontSize: AppDesignTokens.textBody,
               fontWeight: FontWeight.w700,
+              color: AppDesignTokens.textPrimary,
+            ),
+          ),
+        ),
+      );
+    }
+
+    Widget dayChip(Map<String, dynamic> routine, String day) {
+      final picked = (routine['days'] as List?)?.contains(day) ?? false;
+      return GestureDetector(
+        onTap: () => rebuild(() {
+          final days = List<String>.from(routine['days'] ?? []);
+          days.contains(day) ? days.remove(day) : days.add(day);
+          routine['days'] = days;
+        }),
+        child: Container(
+          width: 30,
+          height: 30,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: picked ? AppDesignTokens.brand : AppDesignTokens.brandChip,
+            borderRadius: BorderRadius.circular(AppDesignTokens.radiusSmall),
+          ),
+          child: Text(
+            day,
+            style: GoogleFonts.notoSansKr(
+              fontSize: AppDesignTokens.textCaption,
+              fontWeight: FontWeight.w700,
+              color: picked
+                  ? AppDesignTokens.surface
+                  : AppDesignTokens.textSecondary,
             ),
           ),
         ),
@@ -4760,125 +4791,124 @@ class _SettingsScreenState extends State<SettingsScreen>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        for (final routine in routines) ...[
-          Row(
-            children: [
-              Expanded(
-                child: TextFormField(
-                  key: ValueKey(identityHashCode(routine)),
-                  initialValue: routine['name']?.toString() ?? '',
-                  onChanged: (value) => routine['name'] = value,
-                  style: GoogleFonts.notoSansKr(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  decoration: InputDecoration(
-                    isDense: true,
-                    hintText: '근무, 등하원처럼',
-                    hintStyle: GoogleFonts.notoSansKr(
-                      fontSize: 13,
-                      color: AppDesignTokens.textMuted,
-                    ),
-                    border: const UnderlineInputBorder(),
-                  ),
-                ),
-              ),
-              IconButton(
-                icon: const Icon(
-                  Icons.close,
-                  size: 18,
-                  color: Color(0xFF9593A5),
-                ),
-                onPressed: () => rebuild(() => routines.remove(routine)),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Row(
-            children: [
-              timeButton(
-                routine['start'] as TimeOfDay,
-                (picked) => routine['start'] = picked,
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 6),
-                child: Text('~', style: GoogleFonts.notoSansKr(fontSize: 13)),
-              ),
-              timeButton(
-                routine['end'] as TimeOfDay,
-                (picked) => routine['end'] = picked,
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Wrap(
-            spacing: 6,
-            children: [
-              for (final day in dayNames)
-                GestureDetector(
-                  onTap: () => rebuild(() {
-                    final days = List<String>.from(routine['days'] ?? []);
-                    days.contains(day) ? days.remove(day) : days.add(day);
-                    routine['days'] = days;
-                  }),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      vertical: 4,
-                      horizontal: 9,
-                    ),
-                    decoration: BoxDecoration(
-                      color: (routine['days'] as List?)?.contains(day) ?? false
-                          ? AppDesignTokens.brand
-                          : const Color(0xFFF3F0FF),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      day,
-                      style: GoogleFonts.notoSansKr(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color:
-                            (routine['days'] as List?)?.contains(day) ?? false
-                            ? Colors.white
-                            : AppDesignTokens.textMuted,
+        for (final routine in routines)
+          Container(
+            margin: const EdgeInsets.only(bottom: 8),
+            padding: const EdgeInsets.fromLTRB(14, 4, 4, 14),
+            decoration: BoxDecoration(
+              color: AppDesignTokens.surface,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppDesignTokens.brandBorder),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextFormField(
+                        key: ValueKey(identityHashCode(routine)),
+                        initialValue: routine['name']?.toString() ?? '',
+                        onChanged: (value) => routine['name'] = value,
+                        style: GoogleFonts.notoSansKr(
+                          fontSize: AppDesignTokens.textBody,
+                          fontWeight: FontWeight.w600,
+                          color: AppDesignTokens.textPrimary,
+                        ),
+                        decoration: InputDecoration(
+                          isDense: true,
+                          border: InputBorder.none,
+                          hintText: '근무, 등하원처럼',
+                          hintStyle: GoogleFonts.notoSansKr(
+                            fontSize: AppDesignTokens.textBody,
+                            color: AppDesignTokens.textDisabled,
+                          ),
+                        ),
                       ),
                     ),
-                  ),
+                    IconButton(
+                      icon: const Icon(
+                        Icons.close,
+                        size: 18,
+                        color: AppDesignTokens.textDisabled,
+                      ),
+                      onPressed: () => rebuild(() => routines.remove(routine)),
+                    ),
+                  ],
                 ),
-            ],
-          ),
-          const SizedBox(height: 14),
-        ],
-        if (routines.length < BusyHoursService.maxEntries)
-          GestureDetector(
-            onTap: () => rebuild(
-              () => routines.add({
-                'name': '',
-                'start': const TimeOfDay(hour: 9, minute: 0),
-                'end': const TimeOfDay(hour: 18, minute: 0),
-                'days': <String>[],
-              }),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.add, size: 16, color: AppDesignTokens.brand),
-                const SizedBox(width: 4),
-                Text(
-                  '시간대 추가',
-                  style: GoogleFonts.notoSansKr(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: AppDesignTokens.brand,
-                  ),
+                Row(
+                  children: [
+                    timeButton(
+                      routine['start'] as TimeOfDay,
+                      (picked) => routine['start'] = picked,
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      child: Text(
+                        '~',
+                        style: GoogleFonts.notoSansKr(
+                          fontSize: AppDesignTokens.textBody,
+                          color: AppDesignTokens.textSecondary,
+                        ),
+                      ),
+                    ),
+                    timeButton(
+                      routine['end'] as TimeOfDay,
+                      (picked) => routine['end'] = picked,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [for (final day in dayNames) dayChip(routine, day)],
                 ),
               ],
             ),
           ),
-        const SizedBox(height: 6),
+        GestureDetector(
+          onTap: routines.length >= BusyHoursService.maxEntries
+              ? null
+              : () => rebuild(
+                  () => routines.add({
+                    'name': '',
+                    'start': const TimeOfDay(hour: 9, minute: 0),
+                    'end': const TimeOfDay(hour: 18, minute: 0),
+                    'days': <String>[],
+                  }),
+                ),
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            // 이 두 색은 토큰에 없다. 같은 시트의 '비전 추가'·'목표 추가'
+            // 버튼과 같은 값을 그대로 쓴다 — 나란히 놓이는 버튼이라 토큰의
+            // 비슷한 색으로 바꾸면 그 자리만 어긋난다.
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFFDF8),
+              border: Border.all(color: const Color(0xFFDDD6FE)),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            alignment: Alignment.center,
+            child: Text(
+              routines.length >= BusyHoursService.maxEntries
+                  ? '시간대는 ${BusyHoursService.maxEntries}개까지 넣을 수 있어요'
+                  : '➕ 시간대 추가',
+              style: GoogleFonts.notoSansKr(
+                fontSize: AppDesignTokens.textCaption,
+                fontWeight: FontWeight.w800,
+                color: routines.length >= BusyHoursService.maxEntries
+                    ? AppDesignTokens.textMuted
+                    : AppDesignTokens.brand,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
         Text(
           '요일을 안 고르면 매일로 봅니다.',
           style: GoogleFonts.notoSansKr(
-            fontSize: 11,
+            fontSize: AppDesignTokens.textMeta,
             color: AppDesignTokens.textMuted,
           ),
         ),
