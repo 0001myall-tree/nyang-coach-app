@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import 'memory_service.dart';
+import 'chat_store.dart';
 import 'coach_id_service.dart';
 import 'routine_schedule.dart';
 import 'tasks_sync_service.dart';
@@ -40,34 +41,18 @@ class DailyResetService {
   /// 2026-09-08과 09-09 목록이 보관함에 없던 이유가 이것이다.
   static const String localListDateKey = 'daily_list_date';
 
-  /// 옛 보관함 키 접두사. 지금은 쓰지 않는다.
+  /// 옛 보관함 키 접두사. 지금은 합쳐 들이기 위해서만 본다.
   ///
   /// 대화는 원래 자정마다 방에서 보관함으로 **옮겨졌다**. 옮기는 일은 어긋날
   /// 자리가 많았다 — 정리가 두 번 돌 때, 늦게 돌 때, 다른 기기가 먼저 돌 때,
   /// 옮기다 멈출 때. 사라진 대화 신고는 대부분 그 네 가지였다.
   ///
-  /// 지금은 방 하나에 그대로 쌓고 오래된 날만 버린다([keepRecentChatDates]).
-  /// 옮기지 않으니 옮기다 잃을 일도 없다. 이 접두어는 옛 기기가 남긴 것과
-  /// 클라우드에 남아 있는 것을 한 번 합쳐 들여오기 위해서만 남는다.
-  static const String chatArchivePrefix = 'nyang_chat_archive_';
+  /// 지금은 방 하나에 그대로 쌓고 오래된 날만 버린다. 담아두는 규칙은 전부
+  /// [ChatStore]에 있다.
+  static const String chatArchivePrefix = ChatStore.archivePrefix;
 
   /// 뒤늦은 하루 요약을 며칠까지 거슬러 볼지.
   static const int chatArchiveDays = 7;
-
-  /// 대화를 몇 **개의 날짜**까지 남길지.
-  ///
-  /// "오늘에서 7일 전"이 아니라 "대화한 날 7개"다. 날짜로 자르면 열흘 만에
-  /// 앱을 여는 사람은 대화가 통째로 없어진다 — 오랜만에 온 사람 앞에 코치가
-  /// 아무것도 기억 못 하는 채로 앉는 셈이다. 날짜 개수로 세면 한 달에 세 번
-  /// 쓰는 사람도 늘 지난 일곱 번의 대화를 들고 있다.
-  static const int chatKeptDates = 7;
-
-  /// 아주 많이 쌓였을 때의 방어적 상한.
-  ///
-  /// 날짜 7개로 이미 묶여 있지만, 하루에 수천 마디를 주고받는 판이 생기면
-  /// 값 하나가 커진다. 클라우드는 값 하나가 1MB를 넘으면 아예 못 올리고,
-  /// 그때는 그날부터 동기화가 조용히 실패한다.
-  static const int chatMaxEntries = 2000;
   static const List<String> coachIds = [
     'cat',
     'boyfriend',
@@ -134,111 +119,32 @@ class DailyResetService {
     return merged;
   }
 
-  /// 메시지가 어느 날 것인지. 시각을 못 읽으면 null.
-  static String? chatMessageDate(dynamic message) {
-    final time = DateTime.tryParse(
-      (message is Map ? message['time'] : null)?.toString() ?? '',
-    );
-    return time == null ? null : DateFormat('yyyy-MM-dd').format(time);
-  }
-
-  /// 대화 두 뭉치를 합친다. 같은 말은 한 번만 남긴다.
-  ///
-  /// 기기 두 대가 같은 날 대화하면 각자 자기 뭉치를 들고 있다. 한쪽으로 덮으면
-  /// 다른 쪽 말이 사라지므로, 대화는 덮지 않고 합치는 것이 맞다. 같은 말인지는
-  /// 시각과 내용으로 본다 — 메시지에 고유 번호가 없고, 같은 사람이 같은 초에
-  /// 같은 말을 두 번 하는 일은 없다.
-  static List<dynamic> mergeChatMessages(
-    List<dynamic> older,
-    List<dynamic> newer,
-  ) {
-    final merged = <dynamic>[];
-    final seen = <String>{};
-    for (final message in [...older, ...newer]) {
-      if (message is! Map) continue;
-      final time = message['time']?.toString() ?? '';
-      final text = (message['text'] ?? message['content'] ?? '').toString();
-      final signature = '$time|${message['isUser'] == true}|$text';
-      if (!seen.add(signature)) continue;
-      merged.add(message);
-    }
-    return sortChatMessages(merged);
-  }
-
-  /// 시간순으로 세운다. 시각을 못 읽는 항목은 뒤로 보낸다.
-  static List<dynamic> sortChatMessages(List<dynamic> messages) {
-    final sorted = List<dynamic>.from(messages);
-    sorted.sort((a, b) {
-      final at = DateTime.tryParse(
-        (a is Map ? a['time'] : null)?.toString() ?? '',
-      );
-      final bt = DateTime.tryParse(
-        (b is Map ? b['time'] : null)?.toString() ?? '',
-      );
-      if (at == null && bt == null) return 0;
-      if (at == null) return 1;
-      if (bt == null) return -1;
-      return at.compareTo(bt);
-    });
-    return sorted;
-  }
-
-  /// 대화한 날 [dates]개만 남기고 그보다 오래된 날은 버린다.
-  ///
-  /// 날짜를 세는 것이지 날수를 재는 것이 아니다 — [chatKeptDates] 설명 참고.
-  /// 시각을 못 읽는 항목은 어느 날 것인지 알 수 없어 그대로 남긴다. 버리는 쪽이
-  /// 되돌릴 수 없으니, 모를 때는 남기는 쪽으로 기운다.
-  static List<dynamic> keepRecentChatDates(
-    List<dynamic> messages, {
-    int dates = chatKeptDates,
-    int maxEntries = chatMaxEntries,
-  }) {
-    final allDates = <String>{};
-    for (final message in messages) {
-      final date = chatMessageDate(message);
-      if (date != null) allDates.add(date);
-    }
-    Iterable<dynamic> kept = messages;
-    if (allDates.length > dates) {
-      final sortedDates = allDates.toList()..sort();
-      final keptDates = sortedDates.sublist(sortedDates.length - dates).toSet();
-      kept = messages.where((message) {
-        final date = chatMessageDate(message);
-        return date == null || keptDates.contains(date);
-      });
-    }
-    var result = sortChatMessages(kept.toList());
-    if (result.length > maxEntries) {
-      result = result.sublist(result.length - maxEntries);
-    }
-    return result;
-  }
-
   /// 코치별 대화에서 오래된 날을 걷어낸다. 옛 보관함이 남아 있으면 합쳐 들인다.
   ///
   /// 자정 정리가 대화에 하는 일은 이것뿐이다. 옮기지도, 비우지도 않는다.
   ///
   /// 보관함 합치기를 한 번만 하는 표시를 두지 않는다. 업데이트를 안 한 다른
   /// 기기가 여전히 보관함에 적고 그것이 클라우드로 올라올 수 있어서, 볼 때마다
-  /// 있으면 합치는 쪽이 스스로 아문다. 같은 말은 [mergeChatMessages]가 한 번만
-  /// 남기므로 여러 번 합쳐도 늘어나지 않는다.
+  /// 있으면 합치는 쪽이 스스로 아문다. 같은 말은 한 번만 남으므로 여러 번
+  /// 합쳐도 늘어나지 않는다.
   static Future<bool> pruneChatHistories(SharedPreferences prefs) async {
     var changed = false;
     for (final coachId in coachIds) {
       final normalizedCoachId = CoachIdService.normalize(coachId);
-      final historyKey = 'nyang_chat_history_$normalizedCoachId';
+      final historyKey = ChatStore.historyKey(normalizedCoachId);
       final archiveKey = '$chatArchivePrefix$normalizedCoachId';
       final rawHistory = prefs.getString(historyKey);
       final rawArchive = prefs.getString(archiveKey);
       if (rawHistory == null && rawArchive == null) continue;
 
-      final history = decodeChatMessages(rawHistory);
-      final archive = decodeChatMessages(rawArchive);
-      final kept = keepRecentChatDates(mergeChatMessages(archive, history));
-
-      final encoded = jsonEncode(kept);
-      if (encoded != rawHistory) {
-        await prefs.setString(historyKey, encoded);
+      // 방에 있는 지금 값을 남긴다. 보관함 쪽이 이기면 눌렀던 확인 카드의
+      // 버튼이 되살아난다.
+      final merged = ChatStore.mergedValue(
+        ChatStore.decode(rawHistory),
+        ChatStore.decode(rawArchive),
+      );
+      if (merged != rawHistory) {
+        await prefs.setString(historyKey, merged);
         changed = true;
       }
       if (rawArchive != null) {
@@ -247,17 +153,6 @@ class DailyResetService {
       }
     }
     return changed;
-  }
-
-  /// 저장된 대화 문자열을 목록으로. 깨져 있으면 빈 목록.
-  static List<dynamic> decodeChatMessages(String? raw) {
-    if (raw == null || raw.isEmpty) return [];
-    try {
-      final decoded = jsonDecode(raw);
-      return decoded is List ? decoded : [];
-    } catch (_) {
-      return [];
-    }
   }
 
   /// 날짜별 계획 보관함. 미래 계획과 함께, 자정에 넘어간 어제 목록도 여기 하루 머문다.

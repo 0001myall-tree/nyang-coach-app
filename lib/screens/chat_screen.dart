@@ -35,6 +35,7 @@ import 'package:nyang_coach/services/routine_spread_offer.dart';
 import 'package:nyang_coach/services/task_completion_service.dart';
 import 'package:nyang_coach/services/tasks_sync_service.dart';
 import 'package:nyang_coach/services/user_title_service.dart';
+import 'package:nyang_coach/services/chat_store.dart';
 import 'package:nyang_coach/services/daily_reset_service.dart';
 import 'package:nyang_coach/services/chat_bubble_format.dart';
 import 'package:nyang_coach/services/coach_context_scope.dart';
@@ -6709,15 +6710,16 @@ Rules:
   Future<List<dynamic>> _readStoredChat(SharedPreferences prefs) async {
     final rawHistory = prefs.getString(_chatHistoryKey);
     final rawArchive = prefs.getString(_chatArchiveKey);
-    final kept = DailyResetService.keepRecentChatDates(
-      DailyResetService.mergeChatMessages(
-        DailyResetService.decodeChatMessages(rawArchive),
-        DailyResetService.decodeChatMessages(rawHistory),
-      ),
+    // 방에 있는 지금 값을 남긴다. 보관함 쪽이 이기면 눌렀던 확인 카드의 버튼이
+    // 되살아난다.
+    final merged = ChatStore.mergedValue(
+      ChatStore.decode(rawHistory),
+      ChatStore.decode(rawArchive),
     );
+    final kept = ChatStore.decode(merged);
     // 합쳐 들였으면 옛 자리를 비운다. 안 지우면 볼 때마다 다시 합치게 된다.
     if (rawArchive != null) {
-      await prefs.setString(_chatHistoryKey, jsonEncode(kept));
+      await prefs.setString(_chatHistoryKey, merged);
       await prefs.remove(_chatArchiveKey);
       TasksSyncService.scheduleSyncToCloud();
     }
@@ -8374,17 +8376,12 @@ Rules:
     // 시각을 못 읽는 항목은 오늘 것이 아니므로 그대로 남긴다. 화면은 그런
     // 항목을 아예 안 들고 있어서, 여기서 빼면 그것만 조용히 사라진다.
     final past = stored
-        .where(
-          (message) => DailyResetService.chatMessageDate(message) != todayKey,
-        )
+        .where((message) => ChatStore.dateOf(message) != todayKey)
         .toList();
-    final kept = DailyResetService.keepRecentChatDates(
-      DailyResetService.mergeChatMessages(
-        past,
-        _messages.map((e) => e.toJson()).toList(),
-      ),
+    await prefs.setString(
+      _chatHistoryKey,
+      ChatStore.mergedValue(_messages.map((e) => e.toJson()).toList(), past),
     );
-    await prefs.setString(_chatHistoryKey, jsonEncode(kept));
     TasksSyncService.scheduleSyncToCloud();
   }
 
@@ -13048,9 +13045,9 @@ Rules:
   String _pastChatSection(SharedPreferences prefs) {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-    final past = DailyResetService.decodeChatMessages(
-      prefs.getString('nyang_chat_history_${_coach.id}'),
-    ).where((m) => DailyResetService.chatMessageDate(m) != _dateKey(now));
+    final past = ChatStore.decode(
+      prefs.getString(ChatStore.historyKey(_coach.id)),
+    ).where((m) => ChatStore.dateOf(m) != _dateKey(now));
     if (past.isEmpty) return '';
 
     final lines = <String>[];

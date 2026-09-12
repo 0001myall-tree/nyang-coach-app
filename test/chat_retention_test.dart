@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:nyang_coach/services/chat_store.dart';
 import 'package:nyang_coach/services/daily_reset_service.dart';
 
 /// 대화를 남기는 방식.
@@ -27,7 +28,7 @@ void main() {
   ];
 
   Set<String> datesOf(List<dynamic> messages) => {
-    for (final message in messages) DailyResetService.chatMessageDate(message)!,
+    for (final message in messages) ChatStore.dateOf(message)!,
   };
 
   group('대화한 날 7개를 남긴다', () {
@@ -42,7 +43,7 @@ void main() {
         '2026-09-07',
       ]);
 
-      expect(DailyResetService.keepRecentChatDates(messages).length, 7);
+      expect(ChatStore.keepRecentDates(messages).length, 7);
     });
 
     test('여덜 번째 날이 생기면 가장 오래된 날만 버린다', () {
@@ -57,7 +58,7 @@ void main() {
         '2026-09-08',
       ]);
 
-      final kept = DailyResetService.keepRecentChatDates(messages);
+      final kept = ChatStore.keepRecentDates(messages);
 
       expect(datesOf(kept), isNot(contains('2026-09-01')));
       expect(datesOf(kept), contains('2026-09-02'));
@@ -78,7 +79,7 @@ void main() {
         ]),
       ];
 
-      final kept = DailyResetService.keepRecentChatDates(messages);
+      final kept = ChatStore.keepRecentDates(messages);
 
       expect(kept.length, messages.length);
     });
@@ -96,7 +97,7 @@ void main() {
         '2026-09-01',
       ]);
 
-      final kept = DailyResetService.keepRecentChatDates(messages);
+      final kept = ChatStore.keepRecentDates(messages);
 
       expect(kept.length, 7);
       expect(datesOf(kept), contains('2026-06-01'));
@@ -117,7 +118,7 @@ void main() {
         ]),
       ];
 
-      final kept = DailyResetService.keepRecentChatDates(messages);
+      final kept = ChatStore.keepRecentDates(messages);
 
       expect(kept.any((m) => (m as Map)['text'] == '시각 없는 말'), isTrue);
     });
@@ -128,10 +129,7 @@ void main() {
           line('2026-09-01T09:${i.toString().padLeft(2, '0')}:00', '$i번째'),
       ];
 
-      final kept = DailyResetService.keepRecentChatDates(
-        messages,
-        maxEntries: 10,
-      );
+      final kept = ChatStore.keepRecentDates(messages, limit: 10);
 
       expect(kept.length, 10);
       expect((kept.first as Map)['text'], '20번째');
@@ -143,7 +141,7 @@ void main() {
     test('같은 말은 한 번만 남는다', () {
       // 기기 두 대가 같은 날 대화하면 겹치는 구간이 생긴다. 덮으면 한쪽이
       // 사라지므로 합친다.
-      final merged = DailyResetService.mergeChatMessages(
+      final merged = ChatStore.merge(
         [line('2026-09-01T09:00:00', '안녕')],
         [line('2026-09-01T09:00:00', '안녕'), line('2026-09-01T10:00:00', '뭐해')],
       );
@@ -152,7 +150,7 @@ void main() {
     });
 
     test('시간순으로 세운다', () {
-      final merged = DailyResetService.mergeChatMessages(
+      final merged = ChatStore.merge(
         [line('2026-09-01T15:00:00', '늦은 말')],
         [line('2026-09-01T09:00:00', '이른 말')],
       );
@@ -160,8 +158,30 @@ void main() {
       expect((merged.first as Map)['text'], '이른 말');
     });
 
+    test('같은 말이 겹치면 앞에 준 쪽이 남는다', () {
+      // 확인 카드를 누르면 앱은 그 말은 남기고 버튼만 걷어낸다. 걷어낸 것과
+      // 걷어내기 전 것은 글자가 같아서 같은 말로 읽힌다. 옛 쪽이 이기면 눌렀던
+      // 버튼이 되살아나 또 누를 수 있게 된다.
+      final withButtons = {
+        'time': '2026-09-01T09:00:00',
+        'text': '등록할까요?',
+        'isUser': false,
+        'choices': ['네', '아니요'],
+      };
+      final consumed = {
+        'time': '2026-09-01T09:00:00',
+        'text': '등록할까요?',
+        'isUser': false,
+      };
+
+      final merged = ChatStore.merge([consumed], [withButtons]);
+
+      expect(merged.length, 1);
+      expect((merged.first as Map).containsKey('choices'), isFalse);
+    });
+
     test('같은 시각에 사용자와 코치가 각각 말한 것은 둘 다 남는다', () {
-      final merged = DailyResetService.mergeChatMessages([], [
+      final merged = ChatStore.merge([], [
         {'time': '2026-09-01T09:00:00', 'text': '같은 말', 'isUser': true},
         {'time': '2026-09-01T09:00:00', 'text': '같은 말', 'isUser': false},
       ]);
@@ -184,9 +204,7 @@ void main() {
 
       await DailyResetService.pruneChatHistories(prefs);
 
-      final kept = DailyResetService.decodeChatMessages(
-        prefs.getString('nyang_chat_history_cat'),
-      );
+      final kept = ChatStore.decode(prefs.getString('nyang_chat_history_cat'));
       expect(kept.length, 2);
     });
 
@@ -203,15 +221,36 @@ void main() {
 
       await DailyResetService.pruneChatHistories(prefs);
 
-      final kept = DailyResetService.decodeChatMessages(
-        prefs.getString('nyang_chat_history_cat'),
-      );
+      final kept = ChatStore.decode(prefs.getString('nyang_chat_history_cat'));
       expect(kept.length, 2);
       expect((kept.first as Map)['text'], '보관함에 있던 말');
       expect(
         prefs.containsKey('${DailyResetService.chatArchivePrefix}cat'),
         isFalse,
       );
+    });
+
+    test('보관함에 옛 버전이 있어도 방에 있는 지금 값이 남는다', () async {
+      SharedPreferences.setMockInitialValues({
+        'nyang_chat_history_cat': jsonEncode([
+          {'time': '2026-09-10T21:00:00', 'text': '등록할까요?', 'isUser': false},
+        ]),
+        '${DailyResetService.chatArchivePrefix}cat': jsonEncode([
+          {
+            'time': '2026-09-10T21:00:00',
+            'text': '등록할까요?',
+            'isUser': false,
+            'choices': ['네'],
+          },
+        ]),
+      });
+      final prefs = await SharedPreferences.getInstance();
+
+      await DailyResetService.pruneChatHistories(prefs);
+
+      final kept = ChatStore.decode(prefs.getString('nyang_chat_history_cat'));
+      expect(kept.length, 1);
+      expect((kept.first as Map).containsKey('choices'), isFalse);
     });
 
     test('두 번 돌아도 대화가 늘거나 줄지 않는다', () async {
@@ -253,9 +292,7 @@ void main() {
 
       await DailyResetService.pruneChatHistories(prefs);
 
-      final kept = DailyResetService.decodeChatMessages(
-        prefs.getString('nyang_chat_history_cat'),
-      );
+      final kept = ChatStore.decode(prefs.getString('nyang_chat_history_cat'));
       expect(kept.length, 7);
       expect(datesOf(kept), isNot(contains('2026-09-01')));
     });

@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/user_data.dart';
 import 'apple_calendar_sync_service.dart';
+import 'chat_store.dart';
 import 'widget_sync_service.dart';
 
 class TasksSyncService {
@@ -47,6 +48,57 @@ class TasksSyncService {
     'nyang_chat_history_',
     'nyang_chat_archive_',
   };
+
+  /// 이 기기에 담긴 대화가 누구 것인지.
+  ///
+  /// 'nyang_' 접두어를 쓰지 않는다 — 그 접두어는 클라우드 복원이 덮어쓰는데,
+  /// 이건 이 기기에 무엇이 들어 있는지를 적는 자리라 덮이면 안 된다.
+  ///
+  /// 로그아웃은 대화를 지우지 않는다. 그래서 한 기기에서 계정을 바꿔 로그인하면
+  /// 앞사람 대화가 남아 있고, 합치기는 그것을 새 계정 대화에 섞어 서버로
+  /// 올려버린다. 주인이 다르면 합치지 않고 서버 것으로 갈아치운다.
+  static const String chatOwnerKey = 'chat_owner_uid';
+
+  /// 이 기기의 대화를 지금 로그인한 사람 것으로 볼 수 있는지.
+  ///
+  /// 주인을 아직 안 적어둔 기기(새로 깐 기기, 이 기능 이전부터 쓰던 기기)는
+  /// 지금 사람 것으로 본다. 그 기기의 대화는 원래 이 계정 것이었다.
+  static bool _chatBelongsToUser(SharedPreferences prefs, String uid) {
+    final owner = prefs.getString(chatOwnerKey);
+    return owner == null || owner == uid;
+  }
+
+  /// 이 계정 서버에 없는 대화를 이 기기에서 지운다. 주인이 바뀐 기기에서만 쓴다.
+  ///
+  /// 로그아웃이 대화를 지우지 않아서, 계정을 바꿔 로그인하면 앞사람이 쓰던
+  /// 코치의 대화가 그대로 남아 보였다. 새 사람의 서버에 있는 것은 받아온
+  /// 값으로 이미 갈렸으니 건드리지 않는다.
+  static Future<void> _dropChatNotIn(
+    SharedPreferences prefs,
+    Set<String> cloudKeys,
+  ) async {
+    final stale = prefs
+        .getKeys()
+        .where((key) => ChatStore.isChatKey(key) && !cloudKeys.contains(key))
+        .toList();
+    for (final key in stale) {
+      await prefs.remove(key);
+    }
+  }
+
+  /// 대화는 덮지 않고 합친다. 겹치면 이 기기 것을 남긴다.
+  ///
+  /// 값에 "언제 적은 것"이라는 표시가 없어서 서버는 새 것과 옛 것을 가릴 수
+  /// 없다. 그래서 나중에 올린 쪽이 무조건 이겼다 — 며칠 안 켠 기기를 켜면 그
+  /// 낡은 뭉치가 그동안의 대화를 지웠다. 대화는 덧붙이기만 하는 목록이라,
+  /// 최신을 가리는 것보다 합치는 것이 답이다.
+  static String _mergedChatValue({
+    required String? localRaw,
+    required Object? cloudValue,
+  }) => ChatStore.mergedValue(
+    ChatStore.decode(localRaw),
+    ChatStore.decode(cloudValue is String ? cloudValue : null),
+  );
 
   /// 오래된 클라우드 값이 덮어써서는 안 되는 키.
   @visibleForTesting
@@ -155,11 +207,16 @@ class TasksSyncService {
           .collection('appData')
           .get();
       final cloudKeys = snapshot.docs.map((doc) => doc.id).toSet();
+      final chatIsOurs = _chatBelongsToUser(prefs, user.uid);
 
       // 1. 로컬에 존재하는 데이터 업로드 및 업데이트
       for (final key in keys) {
         if (key == 'nyang_user_data') continue; // UserDataService에서 별도 관리
         if (_localOnlyKeys.contains(key)) continue;
+
+        // 앞사람 대화가 남아 있는 기기다. 그걸 이 계정에 올리면 두 사람 대화가
+        // 섞인다. 받아오는 쪽에서 서버 것으로 갈아치울 테니 여기서는 건너뛴다.
+        if (!chatIsOurs && ChatStore.isChatKey(key)) continue;
 
         final value = prefs.get(key);
         if (value != null) {
@@ -168,6 +225,21 @@ class TasksSyncService {
               .doc(user.uid)
               .collection('appData')
               .doc(key);
+
+          // 대화는 서버에 있던 것과 합쳐서 올린다. 이 기기가 며칠 뒤처져 있어도
+          // 그동안 다른 기기에서 한 대화를 지우지 않는다.
+          if (ChatStore.isChatKey(key) && value is String) {
+            final cloudDoc = cloudKeys.contains(key)
+                ? snapshot.docs.firstWhere((d) => d.id == key)
+                : null;
+            final merged = _mergedChatValue(
+              localRaw: value,
+              cloudValue: cloudDoc?.data()['value'],
+            );
+            if (merged != value) await prefs.setString(key, merged);
+            batch.set(docRef, {'value': merged}, SetOptions(merge: true));
+            continue;
+          }
 
           // 첫 동기화 완료 전 기존 클라우드 값을 빈 값으로 덮어쓰지 않도록 보호
           if (!hasSyncedFromCloud &&
@@ -277,10 +349,14 @@ class TasksSyncService {
           .collection('appData')
           .get();
 
+      final chatIsOurs = _chatBelongsToUser(prefs, user.uid);
+
       if (snapshot.docs.isEmpty) {
         debugPrint('ℹ️ TasksSyncService: 클라우드에 백업된 데이터가 없습니다.');
         diag['status'] = 'EMPTY';
         diag['message'] = 'EMPTY_CLOUD_DATA';
+        if (!chatIsOurs) await _dropChatNotIn(prefs, const {});
+        await prefs.setString(chatOwnerKey, user.uid);
         await prefs.setBool('nyang_has_synced_from_cloud', true);
         return diag;
       }
@@ -292,6 +368,24 @@ class TasksSyncService {
         final key = doc.id;
         final data = doc.data();
         foundKeys.add(key);
+
+        // 대화는 합친다. 합치면 이 기기 말이 사라지지 않으므로, 업로드 대기
+        // 여부를 볼 필요가 없다. 주인이 다른 기기에서만 갈아치운다.
+        if (ChatStore.isChatKey(key)) {
+          final cloudValue = data['value'];
+          if (!chatIsOurs) {
+            if (cloudValue is String) await prefs.setString(key, cloudValue);
+            continue;
+          }
+          await prefs.setString(
+            key,
+            _mergedChatValue(
+              localRaw: prefs.getString(key),
+              cloudValue: cloudValue,
+            ),
+          );
+          continue;
+        }
 
         // 업로드 대기 중인(로컬이 더 최신인) 키는 클라우드 값으로 덮지 않는다.
         if (_isPendingUpload(key)) continue;
@@ -318,10 +412,13 @@ class TasksSyncService {
       }
 
       diag['keys_found'] = foundKeys;
+      // 앞사람 대화 중 이 계정 서버에 없는 것은 이 기기에서 지운다. 안 지우면
+      // 새로 로그인한 사람에게 남의 대화가 그대로 보인다.
+      if (!chatIsOurs) await _dropChatNotIn(prefs, foundKeys.toSet());
+      // 이제 이 기기의 대화는 이 사람 것이다. 다음부터는 합쳐도 안전하다.
+      await prefs.setString(chatOwnerKey, user.uid);
       await WidgetSyncService.syncFromStoredTasks();
-      unawaited(
-        AppleCalendarSyncService.instance.syncAll(),
-      );
+      unawaited(AppleCalendarSyncService.instance.syncAll());
       debugPrint('✅ TasksSyncService: 클라우드 데이터를 로컬에 성공적으로 복원했습니다.');
       diag['status'] = 'SUCCESS';
       diag['message'] = 'OK';
@@ -335,6 +432,10 @@ class TasksSyncService {
     }
   }
 
+  /// 로그아웃할 때 부른다.
+  ///
+  /// [chatOwnerKey]는 지우지 않는다. 다음에 로그인한 사람이 앞사람과 같은지
+  /// 가리는 유일한 표시라, 지우면 남의 대화를 그 사람 것으로 합쳐버린다.
   static Future<void> clearCache() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('nyang_has_synced_from_cloud');
@@ -358,10 +459,28 @@ class TasksSyncService {
             // 아직 못 올린 게 있으면 여기서 다시 세운다.
             await _restorePendingProtection(prefs);
             bool changed = false;
+            final chatIsOurs = _chatBelongsToUser(prefs, uid);
 
             for (final doc in snapshot.docs) {
               final key = doc.id;
               final data = doc.data();
+
+              // 대화는 덮지 않고 합친다. 그래서 옛 스냅샷이 도착해도 방금 한
+              // 말이 사라지지 않는다. 주인이 다른 기기는 여기서 손대지 않고
+              // 받아오기 쪽이 정리하게 둔다.
+              if (ChatStore.isChatKey(key)) {
+                if (!chatIsOurs) continue;
+                final localRaw = prefs.getString(key);
+                final merged = _mergedChatValue(
+                  localRaw: localRaw,
+                  cloudValue: data['value'],
+                );
+                if (merged != localRaw) {
+                  await prefs.setString(key, merged);
+                  changed = true;
+                }
+                continue;
+              }
 
               // 방금 로컬에서 수정돼 아직 업로드 대기 중인 키는 덮어쓰지 않는다.
               // (오래된 클라우드 스냅샷이 방금 저장한 메모 등을 지우는 것을 방지)
@@ -397,9 +516,7 @@ class TasksSyncService {
                 '🔔 TasksSyncService: Firestore 변경 감지되어 로컬 데이터 동기화 완료!',
               );
               await WidgetSyncService.syncFromStoredTasks();
-              unawaited(
-                AppleCalendarSyncService.instance.syncAll(),
-              );
+              unawaited(AppleCalendarSyncService.instance.syncAll());
               onDataChanged();
             }
           },

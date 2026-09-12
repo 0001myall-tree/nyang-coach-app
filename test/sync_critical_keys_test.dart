@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:nyang_coach/services/chat_store.dart';
 import 'package:nyang_coach/services/coach_id_service.dart';
 import 'package:nyang_coach/services/daily_reset_service.dart';
 import 'package:nyang_coach/services/tasks_sync_service.dart';
@@ -51,6 +52,30 @@ void main() {
         TasksSyncService.isCriticalKey('nyang_has_synced_from_cloud'),
         isFalse,
       );
+    });
+  });
+
+  group('합치기로 다뤄야 하는 키', () {
+    test('코치별 대화와 옛 보관함이 모두 걸린다', () {
+      for (final coachId in DailyResetService.coachIds) {
+        final normalized = CoachIdService.normalize(coachId);
+        expect(ChatStore.isChatKey(ChatStore.historyKey(normalized)), isTrue);
+        expect(
+          ChatStore.isChatKey('${ChatStore.archivePrefix}$normalized'),
+          isTrue,
+        );
+      }
+    });
+
+    test('대화가 아닌 것은 안 걸린다 — 걸리면 합치다 지운 것이 되살아난다', () {
+      expect(ChatStore.isChatKey('nyang_tasks'), isFalse);
+      expect(ChatStore.isChatKey('nyang_habits'), isFalse);
+    });
+
+    test('대화 주인 표시는 클라우드가 건드리지 못한다', () {
+      // 'nyang_'으로 시작하면 클라우드 복원이 이 표시까지 덮어쓴다. 그러면 계정을
+      // 바꿔 로그인한 기기가 앞사람 대화를 자기 것으로 보고 합쳐 올린다.
+      expect(TasksSyncService.chatOwnerKey.startsWith('nyang_'), isFalse);
     });
   });
 }
