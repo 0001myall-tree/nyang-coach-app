@@ -1936,9 +1936,7 @@ class _ChatScreenState extends State<ChatScreen>
       lines.add(current);
     }
     const window = ExecutionStateCheck.maxLines;
-    return lines.length > window
-        ? lines.sublist(lines.length - window)
-        : lines;
+    return lines.length > window ? lines.sublist(lines.length - window) : lines;
   }
 
   /// 최근 대화가 생각 정리 흐름이었는지. 사용자가 "머리가 복잡하다"고 말한
@@ -2419,7 +2417,6 @@ class _ChatScreenState extends State<ChatScreen>
     if (action.kind == PlannerActionKind.done) {
       return _offerDoneCheck(action, doneTargets);
     }
-
 
     // 모닝콜은 플래너가 아니라 설정에 있다. 찾을 일정도 없다.
 
@@ -3594,8 +3591,8 @@ ${lines.join('\n')}
   /// 날짜를 보는 것이 맞고, 이제 두 갈래가 같은 밤을 가리킨다.
   bool _hasLateNightTraceForGreeting(SharedPreferences prefs, DateTime now) {
     final seen = [
+      ..._pastMessages,
       ..._messages,
-      ..._decodeRecentArchive(prefs.getString(_chatArchiveKey)),
     ].where((m) => _isSameDay(m.time, now));
     if (seen.any((m) => m.time.hour >= 2 && m.time.hour < 5)) {
       return true;
@@ -4834,7 +4831,6 @@ ${lines.join('\n')}
         line = await _buildExecutionBottleneckLine(prefs);
         isBottleneck = line != null;
       }
-
     }
     // 방을 옮겨 다녀도 같은 이야기를 두 번 듣지 않게, 지난번이 어느 쪽이었는지는
     // 말투를 가리지 않고 본다(냥냥이판과 마스터판은 같은 이야기다).
@@ -5277,9 +5273,7 @@ $block
       final hour = int.tryParse(parts[0]);
       final minute = int.tryParse(parts[1]);
       if (hour == null || minute == null) return false;
-      return now.isBefore(
-        DateTime(now.year, now.month, now.day, hour, minute),
-      );
+      return now.isBefore(DateTime(now.year, now.month, now.day, hour, minute));
     }
 
     final pendingPlans = [
@@ -5323,13 +5317,14 @@ $block
               )
               .inDays;
 
-    // 어젯밤 흔적은 아카이브까지 봐야 한다 — 하루 지나면 기록이 넘어간다.
+    // 어젯밤 흔적은 지난 날 대화까지 봐야 한다. 화면에는 오늘 것만 그리지만
+    // 판단은 방이 들고 있는 며칠치를 다 보고 한다.
     // 5시부터는 늦게 잔 쪽이 아니라 일찍 일어난 쪽으로 본다(새벽 인사와 같은 경계).
     final lateNight = _hasLateNightTraceForGreeting(prefs, now);
     final yesterday = now.subtract(const Duration(days: 1));
     final seen = [
+      ..._pastMessages,
       ..._messages,
-      ..._decodeRecentArchive(prefs.getString(_chatArchiveKey)),
     ].where((m) => _isSameDay(m.time, now) || _isSameDay(m.time, yesterday));
     final repeatedLateNights = _hasRepeatedLatePlannerEntries(
       prefs.getStringList('nyang_late_planner_entry_dates') ?? const [],
@@ -6701,42 +6696,51 @@ Rules:
   }
 
   // ── 히스토리 & 복귀 인사 (웹앱 startGreeting 이식) ──────
+
+  /// 이 코치와 나눈 대화가 들어 있는 곳. 여러 날이 함께 들어 있다.
+  String get _chatHistoryKey => 'nyang_chat_history_${widget.coachId}';
+
+  /// 옛 보관함. 업데이트 전 기기가 남긴 것을 한 번 합쳐 들이는 데만 쓴다.
   String get _chatArchiveKey =>
       '${DailyResetService.chatArchivePrefix}${widget.coachId}';
 
-  List<ChatMessage> _decodeRecentArchive(String? raw) {
-    if (raw == null) return [];
-    final cutoff = DateTime.now().subtract(
-      const Duration(days: DailyResetService.chatArchiveDays),
+  /// 저장된 대화를 읽고, 옛 보관함이 남아 있으면 합쳐 들인 뒤 오래된 날을
+  /// 걷어낸 목록. 읽는 쪽은 여기 한 곳만 본다.
+  Future<List<dynamic>> _readStoredChat(SharedPreferences prefs) async {
+    final rawHistory = prefs.getString(_chatHistoryKey);
+    final rawArchive = prefs.getString(_chatArchiveKey);
+    final kept = DailyResetService.keepRecentChatDates(
+      DailyResetService.mergeChatMessages(
+        DailyResetService.decodeChatMessages(rawArchive),
+        DailyResetService.decodeChatMessages(rawHistory),
+      ),
     );
-    try {
-      return (jsonDecode(raw) as List)
-          .map((e) => ChatMessage.fromJson(e))
-          .where((m) => m.time.isAfter(cutoff))
-          .toList();
-    } catch (_) {
-      return [];
+    // 합쳐 들였으면 옛 자리를 비운다. 안 지우면 볼 때마다 다시 합치게 된다.
+    if (rawArchive != null) {
+      await prefs.setString(_chatHistoryKey, jsonEncode(kept));
+      await prefs.remove(_chatArchiveKey);
+      TasksSyncService.scheduleSyncToCloud();
     }
+    return kept;
   }
 
-  Future<void> _checkArchivedChat() async {
-    final prefs = await SharedPreferences.getInstance();
-    final has = _decodeRecentArchive(
-      prefs.getString(_chatArchiveKey),
-    ).isNotEmpty;
-    if (mounted && has != _hasArchivedChat) {
-      setState(() => _hasArchivedChat = has);
+  List<ChatMessage> _decodeMessages(List<dynamic> raw) {
+    final messages = <ChatMessage>[];
+    for (final item in raw) {
+      if (item is! Map) continue;
+      try {
+        messages.add(ChatMessage.fromJson(item.cast<String, dynamic>()));
+      } catch (_) {}
     }
+    return messages;
   }
 
-  Future<void> _loadPastMessages() async {
-    final prefs = await SharedPreferences.getInstance();
-    final past = _decodeRecentArchive(prefs.getString(_chatArchiveKey));
-    if (!mounted) return;
-    setState(() {
-      _pastMessages = past;
-      _pastLoaded = true;
-    });
+  /// "지난 대화 보기"를 눌렀을 때. 이미 읽어둔 것을 펼치기만 한다.
+  ///
+  /// 예전에는 지난 대화가 보관함이라는 딴 곳에 있어서 눌렀을 때 따로 읽어야
+  /// 했다. 지금은 방 하나에 들어 있고, 방을 열 때 같이 읽는다.
+  void _loadPastMessages() {
+    setState(() => _pastLoaded = true);
   }
 
   static const _catEveningReturnGreetingDateKey =
@@ -8032,22 +8036,28 @@ Rules:
 
   Future<void> _loadHistoryAndGreet() async {
     final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString('nyang_chat_history_${widget.coachId}');
     final lastVisitStr = prefs.getString('last_visit_${widget.coachId}');
     final now = DateTime.now();
     final lastVisit = lastVisitStr == null
         ? null
         : DateTime.tryParse(lastVisitStr);
-    unawaited(_checkArchivedChat());
 
-    if (raw != null) {
-      final List list = jsonDecode(raw);
-      if (list.isNotEmpty) {
-        setState(() {
-          _messages.addAll(list.map((e) => ChatMessage.fromJson(e)));
-        });
-        _scrollToBottom();
-      }
+    // 방은 며칠치를 함께 들고 있다. 화면에 그리는 것은 오늘 것이고, 지난 날은
+    // 상단의 "지난 대화 보기" 아래에 접어둔다. 아래 인사 판정들이 "이 목록은
+    // 오늘 대화"를 전제하므로 그 전제는 그대로 지킨다.
+    final stored = _decodeMessages(await _readStoredChat(prefs));
+    final today = <ChatMessage>[];
+    final past = <ChatMessage>[];
+    for (final message in stored) {
+      (_isSameDay(message.time, now) ? today : past).add(message);
+    }
+    if (stored.isNotEmpty) {
+      setState(() {
+        _messages.addAll(today);
+        _pastMessages = past;
+        _hasArchivedChat = past.isNotEmpty;
+      });
+      _scrollToBottom();
     }
 
     // 푸시로 이미 말을 건넸으면 그게 오늘의 첫 마디다. 그 위에 새 인사를
@@ -8151,9 +8161,7 @@ Rules:
       // 콘솔에서 줄이거나 닫았는데 인사만 "이틀 무료"라고 하면 그 자리에서
       // 거짓말이 된다.
       final freeDays = await FreeAccessService.instance.remainingFreeDays();
-      final freeLine = freeDays > 0
-          ? '\n$freeDays일 동안은 무료니까 편하게 시켜보라냥!'
-          : '';
+      final freeLine = freeDays > 0 ? '\n$freeDays일 동안은 무료니까 편하게 시켜보라냥!' : '';
       final intro =
           '안녕! 나는 냥냥코치다냥 🐾\n'
           '할 일을 적어두는 것까지는 다들 하는데, 막상 시작이 안 될 때가 있잖아.\n'
@@ -8349,16 +8357,34 @@ Rules:
     if (_canOpenSubscriptionGuide) _showCatUpsellBottomSheet();
   }
 
+  /// 지금 방에 있는 대화를 저장한다.
+  ///
+  /// 이 화면이 들고 있는 것은 오늘 대화뿐이라, 저장된 것 중 **오늘 것만**
+  /// 갈아치우고 지난 날은 저장소에 있는 그대로 둔다. 예전에는 화면에 있는
+  /// 것으로 통째로 덮었는데, 방을 아직 못 읽은 사이에 한 마디가 들어오면
+  /// (푸시로 말을 건 경우) 그 한 마디가 며칠치를 덮어썼다.
+  ///
+  /// 개수 상한(예전의 100개)은 두지 않는다. 말을 많이 하는 사람은 오늘 대화가
+  /// 상한에 밀려 잘렸다. 이제 오래된 **날**을 버린다.
   Future<void> _saveHistory() async {
     final prefs = await SharedPreferences.getInstance();
-    // 웹앱과 동일하게 최근 100개 유지
-    final toSave = _messages.length > 100
-        ? _messages.sublist(_messages.length - 100)
-        : _messages;
-    await prefs.setString(
-      'nyang_chat_history_${widget.coachId}',
-      jsonEncode(toSave.map((e) => e.toJson()).toList()),
+    final now = DateTime.now();
+    final stored = await _readStoredChat(prefs);
+    final todayKey = DateFormat('yyyy-MM-dd').format(now);
+    // 시각을 못 읽는 항목은 오늘 것이 아니므로 그대로 남긴다. 화면은 그런
+    // 항목을 아예 안 들고 있어서, 여기서 빼면 그것만 조용히 사라진다.
+    final past = stored
+        .where(
+          (message) => DailyResetService.chatMessageDate(message) != todayKey,
+        )
+        .toList();
+    final kept = DailyResetService.keepRecentChatDates(
+      DailyResetService.mergeChatMessages(
+        past,
+        _messages.map((e) => e.toJson()).toList(),
+      ),
     );
+    await prefs.setString(_chatHistoryKey, jsonEncode(kept));
     TasksSyncService.scheduleSyncToCloud();
   }
 
@@ -11208,9 +11234,7 @@ Rules:
     }
 
     TasksSyncService.scheduleSyncToCloud();
-    unawaited(
-      AppleCalendarSyncService.instance.syncAll(),
-    );
+    unawaited(AppleCalendarSyncService.instance.syncAll());
   }
 
   /// [reminderOverride]가 있으면 알람 스위치를 그 값으로 켜둔 채 띄운다.
@@ -13012,33 +13036,36 @@ Rules:
   /// 것을 오늘 이어가자고 하면 코치는 그게 무엇인지 모른다 — 하루 요약에는
   /// "달성: 등장인물 정리" 같은 한 줄만 남고, 이름도 설정도 거기 없다.
   ///
-  /// 원문은 "지난 대화 보기"용으로 이레치가 이미 보관돼 있다. 없는 것을 새로
-  /// 쌓는 것이 아니라 있는 것을 꺼내오는 자리다.
+  /// 원문은 "지난 대화 보기"용으로 방에 이미 들어 있다. 없는 것을 새로 쌓는
+  /// 것이 아니라 있는 것을 꺼내오는 자리다.
   ///
-  /// 최근 것부터 [_pastChatCharBudget]자까지만 담는다. 이레치를 통째로 실으면
+  /// 며칠 전 이야기인지 함께 적는다. 남기는 기준이 "대화한 날 7개"라서, 띄엄띄엄
+  /// 쓰는 사람에게는 두 달 전 대화가 남아 있을 수 있다. 날짜만 적어두면 코치가
+  /// 그걸 어제 일처럼 꺼낸다.
+  ///
+  /// 최근 것부터 [_pastChatCharBudget]자까지만 담는다. 며칠치를 통째로 실으면
   /// 이 한 턴이 평소의 몇 배가 되고, 오래된 잡담이 어제 만든 것을 밀어낸다.
   String _pastChatSection(SharedPreferences prefs) {
-    final raw = prefs.getString(
-      '${DailyResetService.chatArchivePrefix}${_coach.id}',
-    );
-    if (raw == null || raw.isEmpty) return '';
-
-    List<dynamic> archive;
-    try {
-      archive = jsonDecode(raw) as List;
-    } catch (_) {
-      return '';
-    }
-    if (archive.isEmpty) return '';
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final past = DailyResetService.decodeChatMessages(
+      prefs.getString('nyang_chat_history_${_coach.id}'),
+    ).where((m) => DailyResetService.chatMessageDate(m) != _dateKey(now));
+    if (past.isEmpty) return '';
 
     final lines = <String>[];
     var used = 0;
-    for (final message in archive.reversed) {
+    for (final message in past.toList().reversed) {
       if (message is! Map) continue;
       final text = (message['text'] ?? '').toString().trim();
       if (text.isEmpty) continue;
       final time = DateTime.tryParse(message['time']?.toString() ?? '');
-      final day = time == null ? '' : '${time.month}/${time.day} ';
+      final daysAgo = time == null
+          ? null
+          : today.difference(DateTime(time.year, time.month, time.day)).inDays;
+      final day = time == null
+          ? ''
+          : '${time.month}/${time.day}(${daysAgo == 1 ? '어제' : '$daysAgo일 전'}) ';
       final who = message['isUser'] == true ? '사용자' : '코치';
       final line = '- $day$who: $text';
       if (used + line.length > _pastChatCharBudget) break;
@@ -13576,9 +13603,7 @@ Rules:
           '요일을 정해 나누는 게 나을지. '
           '(예: "근데 매일 하는 루틴이 벌써 $dailyRoutines개다냥. 요일로 정해서 나누는 게 좋을 것 같은데?")',
         );
-        sb.writeln(
-          '*나누겠다고 하면 그때 요일을 넣어 태그를 붙이고, 매일 하겠다고 하면 |매일로 붙입니다.',
-        );
+        sb.writeln('*나누겠다고 하면 그때 요일을 넣어 태그를 붙이고, 매일 하겠다고 하면 |매일로 붙입니다.');
       }
     }
 

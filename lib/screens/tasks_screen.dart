@@ -2442,10 +2442,12 @@ class _TasksScreenState extends State<TasksScreen>
       await _saveTasks();
       await _saveCoreTasks();
 
-      // 3. Generate daily summary before clearing chat history
+      // 3. 어제 하루 요약. 날짜로 골라 쓴다 — 방은 여러 날을 함께 들고 있다.
       try {
-        final oldChatHistory =
-            DailyResetService.collectChatHistoryForDailySummary(prefs);
+        final oldChatHistory = DailyResetService.collectChatHistoryForDate(
+          prefs,
+          lastDate,
+        );
         if (oldChatHistory.isNotEmpty) {
           await MemoryService().loadMemoryData();
           await MemoryService().generateDailySummary(lastDate, oldChatHistory);
@@ -2454,10 +2456,14 @@ class _TasksScreenState extends State<TasksScreen>
         print('Failed to generate daily summary: $e');
       }
 
-      // 4. Clear all chat histories
-      for (final id in DailyResetService.coachIds) {
-        await prefs.setString('nyang_chat_history_$id', '[]');
-      }
+      // 4. 대화는 그대로 두고 오래된 날만 걷어낸다.
+      //
+      //    여기 있던 "모든 코치의 대화를 비운다"가 대화가 통째로 사라지던 원인이다.
+      //    같은 정리가 서비스 쪽에도 한 벌 있는데, 보관함으로 옮기는 일은 그쪽만
+      //    배웠다. 먼저 도착한 쪽이 "오늘 정리 끝"을 찍으면 나머지는 건너뛰므로,
+      //    이 화면이 이긴 날에는 어제 대화가 남는 곳 없이 지워졌다. 어느 쪽이
+      //    이기는지는 기기 속도가 정해서 사람마다 갈렸다.
+      await DailyResetService.pruneChatHistories(prefs);
 
       await DailyResetService.markResetDone(prefs, today);
     }
