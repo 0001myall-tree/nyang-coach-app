@@ -14,6 +14,17 @@
 /// **분모를 조심해야 한다.** 완료는 **손댄 것 중** 몇을 끝냈는지로 센다.
 /// 적어둔 것 대비로 재면 "적게 시작한 것"과 "시작했는데 못 끝낸 것"이 한
 /// 숫자에 섞여, 앞뒤가 정반대인 두 사람이 같은 값으로 나온다.
+///
+/// 일부러 안 넣은 것 둘.
+///
+/// **더 긴 기준선**(이레 평균)을 곁들인 적이 있다. 맞출 기준이 둘이면 어느 쪽에
+/// 맞추라는 말인지 흐려지고, 평균과 견주는 자리는 "평소보다 못하시네요"로
+/// 흐르기 쉽다. 대신 이틀이 유독 조용했던 사람과 원래 조용한 사람을 못 가른다 —
+/// 코치가 그 이틀을 이 사람의 수준으로 다루기 시작하면 되돌릴 자리다.
+///
+/// **시각을 두고 하지 말라는 줄.** 없는 시각으로는 말할 수도 없어서 "여기 없는
+/// 것은 세지 않았음"이 이미 그 일을 한다. 완료 시각만 있는 사람도 막지 않는다 —
+/// 줄마다 "끝냄"이라 적혀 있어 시작으로 읽을 자리가 아니다.
 library;
 
 import 'dart:convert';
@@ -53,9 +64,28 @@ class PaceDay {
     required this.done,
     required this.firstStartHour,
     required this.tasks,
+    this.hasRecord = true,
   });
 
+  /// 앱에 그날 흔적이 아예 없을 때.
+  const PaceDay.noRecord(this.date)
+    : planned = 0,
+      touched = 0,
+      done = 0,
+      firstStartHour = null,
+      tasks = const [],
+      hasRecord = false;
+
   final String date;
+
+  /// 앱에 그날 기록이 있었는지.
+  ///
+  /// 없는 날도 빼지 않고 적는다. 사흘을 쉰 사람에게 코치가 어제 일처럼 이어
+  /// 말하면 그 사흘이 없던 일이 된다.
+  ///
+  /// "기록 없음"은 "아무것도 안 한 날"이 아니다. 기록은 앱을 열었을 때만
+  /// 쌓인다.
+  final bool hasRecord;
 
   /// 그날 목록에 있던 개수.
   final int planned;
@@ -93,34 +123,57 @@ class RecentPaceBrief {
   /// 이름 하나의 길이 상한. 긴 제목은 잘라 적는다.
   static const int maxNameLength = 24;
 
-  /// [historyRaw]에서 오늘 이전 [days]일을 뽑는다. 기록이 없는 날은 건너뛴다.
+  /// 기록 있는 날을 [days]개 찾을 때까지 거슬러 볼 날수 상한.
   ///
-  /// 날짜를 거꾸로 세지 않고 기록에 있는 날 중 최근 것을 고른다. 주말을 건너뛴
-  /// 사람에게 "이틀 전"을 따지면 빈손으로 돌아오는데, 그 사람에게도 최근에
-  /// 지낸 이틀은 있다.
+  /// 기록이 없는 날도 적어야 하니 날짜를 하루씩 거슬러 센다. 상한이 없으면
+  /// 한 달 만에 돌아온 사람에게 "기록 없음" 서른 줄이 나간다.
+  static const int maxLookbackDays = 7;
+
+  /// 오늘 이전 며칠을 뽑는다. **기록이 없는 날도 그대로 담는다.**
+  ///
+  /// 기록 있는 날만 골라 오던 자리다. 그러면 사흘 쉰 것이 지워져서, 코치가
+  /// 어제 일처럼 이어 말한다. 빈 날을 담으면 "오랜만이네요" 쪽으로 갈 수 있다.
+  ///
+  /// 기록 있는 날 [days]개를 찾으면 멈춘다. 그 앞에 있던 빈 날은 함께 담기고,
+  /// [maxLookbackDays]까지 거슬러도 하나도 못 찾으면 빈 목록을 돌려준다 —
+  /// 이레 내내 흔적이 없으면 오늘 페이스를 말할 근거가 없다.
   static List<PaceDay> recent(
     String? historyRaw, {
     DateTime? now,
     int days = recentDays,
   }) {
-    final today = DateFormat('yyyy-MM-dd').format(now ?? DateTime.now());
-    final records = _records(historyRaw)
-        .where(
-          (record) => (record['date']?.toString() ?? '').compareTo(today) < 0,
-        )
-        .toList();
-    records.sort(
-      (a, b) => b['date'].toString().compareTo(a['date'].toString()),
-    );
+    final base = now ?? DateTime.now();
+    final byDate = <String, Map<String, dynamic>>{};
+    for (final record in _records(historyRaw)) {
+      final date = record['date']?.toString();
+      if (date != null && date.isNotEmpty) byDate[date] = record;
+    }
 
     final out = <PaceDay>[];
-    for (final record in records) {
-      if (out.length >= days) break;
+    var found = 0;
+    for (var back = 1; back <= maxLookbackDays && found < days; back++) {
+      final date = DateFormat(
+        'yyyy-MM-dd',
+      ).format(DateTime(base.year, base.month, base.day - back));
+      final record = byDate[date];
+      if (record == null) {
+        out.add(PaceDay.noRecord(date));
+        continue;
+      }
       final day = _dayOf(record);
-      if (day == null) continue;
+      if (day == null) {
+        out.add(PaceDay.noRecord(date));
+        continue;
+      }
       out.add(day);
+      found++;
     }
-    return out;
+    // 뒤에 붙은 빈 날은 떼어낸다. 찾은 것보다 뒤라 볼 일이 없고, 이레 내내
+    // 빈손인 사람에게 "기록 없음" 일곱 줄만 남는 것도 막는다.
+    while (out.isNotEmpty && !out.last.hasRecord) {
+      out.removeLast();
+    }
+    return found == 0 ? const [] : out;
   }
 
   /// 프롬프트에 실을 블록. 셀 것이 없으면 빈 문자열.
@@ -146,22 +199,11 @@ class RecentPaceBrief {
       final hidden = day.planned - day.tasks.length;
       if (hidden > 0) buffer.writeln('  …외 $hidden개');
     }
-
-    // 더 긴 기준선은 넘기지 않는다.
-    //
-    // 이레 평균을 자막으로 곁들인 적이 있다. 뺀 이유가 둘이다. 맞출 기준이 둘이
-    // 되면 어느 쪽에 맞추라는 말인지가 흐려지고, 평균과 견주는 자리는 "평소보다
-    // 못하시네요"로 흐르기 쉽다. 여기서 보려는 것은 최근의 흐름 자체다.
-    //
-    // 잃는 것도 있다. 이틀이 유독 조용했던 사람과 원래 조용한 사람을 가를 수
-    // 없다. 코치가 그 이틀을 이 사람의 수준으로 다루기 시작하면 되돌릴 자리다.
-
-    // 시각을 두고 하지 말라는 줄은 두지 않는다.
-    //
-    // 없는 시각으로는 말할 수도 없어서 "여기 없는 것은 세지 않았음"이 이미 그
-    // 일을 한다. 시작 시각이 비고 완료 시각만 있는 사람도 따로 막지 않는다 —
-    // 줄마다 "끝냄"이라고 적혀 있어 시작으로 읽을 자리가 아니고, 그걸 보고
-    // "밤에 끝내시네요"라고 하는 건 지어낸 말이 아니라 맞는 말이다.
+    // 빈 날을 "아무것도 안 한 날"로 읽으면 틀린 말이 된다. 기록은 앱을 열었을
+    // 때만 쌓이므로, 앱 밖에서 한 일은 어차피 여기 없다.
+    if (days.any((day) => !day.hasRecord)) {
+      buffer.writeln('*기록 없는 날은 앱을 안 열었을 수 있습니다. 아무것도 안 했다고 보지 마세요.');
+    }
 
     buffer.write(_todayBlock(todayTasks, now, minutesLeft, busyNow));
     buffer.writeln('- 위 숫자는 앱이 기록에서 센 값. 여기 없는 것은 세지 않았음.');
@@ -169,6 +211,7 @@ class RecentPaceBrief {
   }
 
   static String _dayLine(PaceDay day) {
+    if (!day.hasRecord) return '${day.date}  기록 없음';
     final parts = [
       '적은 것 ${day.planned}개',
       '손댄 것 ${day.touched}개',
@@ -215,8 +258,10 @@ class RecentPaceBrief {
       }
       if (_isStarted(task)) touched++;
     }
+    // 오늘 날짜를 같이 적는다. 위 날짜들과 견줘야 "며칠 만에"가 나온다.
     buffer.writeln(
-      '지금 ${_clockMinutes(now)} / 적은 것 $planned개 / 손댄 것 $touched개 / 끝낸 것 $done개',
+      '${DateFormat('yyyy-MM-dd').format(now)} ${_clockMinutes(now)} / '
+      '적은 것 $planned개 / 손댄 것 $touched개 / 끝낸 것 $done개',
     );
     if (minutesLeft != null && minutesLeft > 0) {
       final hours = minutesLeft ~/ 60;

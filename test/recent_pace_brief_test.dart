@@ -46,18 +46,49 @@ void main() {
       expect(days.first.date, '2026-09-15');
     });
 
-    test('기록이 없는 날은 건너뛰고 있는 날 중 최근 둘을 고른다', () {
-      // 주말을 건너뛴 사람에게 "이틀 전"을 따지면 빈손으로 돌아온다. 그 사람에게도
-      // 최근에 지낸 이틀은 있다.
+    test('기록이 없는 날도 빈 날로 담는다', () {
+      // 건너뛰면 사흘 쉰 것이 지워져서, 코치가 어제 일처럼 이어 말한다.
       final days = RecentPaceBrief.recent(
         history([
-          day('2026-09-11', [task('목요일')]),
+          day('2026-09-11', [task('금요일')]),
           day('2026-09-15', [task('화요일')]),
         ]),
         now: now,
       );
 
-      expect(days.map((d) => d.date), ['2026-09-15', '2026-09-11']);
+      expect(days.map((d) => d.date), [
+        '2026-09-15',
+        '2026-09-14',
+        '2026-09-13',
+        '2026-09-12',
+        '2026-09-11',
+      ]);
+      expect(days.map((d) => d.hasRecord), [true, false, false, false, true]);
+    });
+
+    test('찾은 날 뒤에 붙은 빈 날은 떼어낸다', () {
+      final days = RecentPaceBrief.recent(
+        history([
+          day('2026-09-15', [task('화요일')]),
+          day('2026-09-14', [task('월요일')]),
+        ]),
+        now: now,
+      );
+
+      expect(days.length, 2);
+      expect(days.every((d) => d.hasRecord), isTrue);
+    });
+
+    test('이레 내내 기록이 없으면 빈 목록', () {
+      // 오늘 페이스를 말할 근거가 없다. 부르는 쪽이 고정 문구로 되돌아간다.
+      final days = RecentPaceBrief.recent(
+        history([
+          day('2026-08-01', [task('한참 전')]),
+        ]),
+        now: now,
+      );
+
+      expect(days, isEmpty);
     });
 
     test('기록이 없으면 빈 목록', () {
@@ -225,6 +256,33 @@ void main() {
       expect(block, contains('운동 — 끝냄(오후 10시)'));
       expect(block, contains('보고서 — 손만 댐(오후 2시 시작)'));
       expect(block, contains('장보기 — 그대로'));
+    });
+
+    test('빈 날은 기록 없음으로 적고, 아무것도 안 했다고 보지 말라고 덧붙인다', () {
+      final block = RecentPaceBrief.block(
+        historyRaw: history([
+          day('2026-09-15', [task('화요일', done: true)]),
+          day('2026-09-12', [task('금요일', done: true)]),
+        ]),
+        todayTasks: const [],
+        now: now,
+      );
+
+      expect(block, contains('2026-09-14  기록 없음'));
+      expect(block, contains('아무것도 안 했다고 보지 마세요'));
+    });
+
+    test('오늘 날짜를 적는다', () {
+      // 위 날짜와 견줘야 "며칠 만에"를 말할 수 있다.
+      final block = RecentPaceBrief.block(
+        historyRaw: history([
+          day('2026-09-15', [task('어제 것')]),
+        ]),
+        todayTasks: const [],
+        now: now,
+      );
+
+      expect(block, contains('2026-09-16'));
     });
 
     test('줄이 잘린 날은 몇 개가 빠졌는지 적는다', () {
