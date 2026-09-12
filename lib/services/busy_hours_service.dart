@@ -6,16 +6,20 @@ import 'tasks_sync_service.dart';
 
 /// 사용자가 규칙적으로 시간을 못 내는 때. 근무 시간이 대표적이다.
 ///
-/// 저장 자리는 비서 학습 설정의 '고정 루틴'과 같다. 형식이 이미 같고 클라우드
+/// 저장 자리는 개인 코칭 참고의 '고정 일정'과 같다. 형식이 이미 같고 클라우드
 /// 동기화도 걸려 있어서, 설정 화면이 돌아오면 여기서 넣은 것도 그대로 보인다.
 ///
-/// 값을 채우는 길은 대화뿐이다 — 지금 앱에는 고정 루틴을 넣는 화면이 없다.
+/// 채우는 길은 둘이다 — 설정의 그 입력란, 그리고 대화. 한동안 대화뿐이었는데
+/// 저장·불러오기는 있고 입력란만 없던 상태여서, 지금은 둘 다 같은 자리에 쌓인다.
 class BusyHoursService {
   static const String prefsKey = 'nyang_premium_routines';
 
-  /// 대화에서 받아둘 수 있는 개수. 근무 시간과 등하원처럼 몇 개면 충분한데,
-  /// 상한이 없으면 코치가 같은 이야기를 조금씩 다른 이름으로 계속 쌓는다.
-  static const int _maxEntries = 5;
+  /// 받아둘 수 있는 개수. 근무 시간과 등하원처럼 몇 개면 충분한데, 상한이
+  /// 없으면 코치가 같은 이야기를 조금씩 다른 이름으로 계속 쌓는다.
+  ///
+  /// 설정 화면도 같은 상한을 쓴다. 한쪽만 막으면 대화로 넘긴 것이 화면에서
+  /// 잘리거나, 화면으로 넣은 것이 다음 대화에서 잘린다.
+  static const int maxEntries = 5;
 
   static const List<String> _dayNames = ['일', '월', '화', '수', '목', '금', '토'];
 
@@ -113,8 +117,8 @@ class BusyHoursService {
   /// '지금 맞는 것 전부'라, 빠진 항목은 없어졌다는 뜻이다.
   static Future<void> replaceAll(List<BusyHours> hours) async {
     final prefs = await SharedPreferences.getInstance();
-    final kept = hours.length > _maxEntries
-        ? hours.sublist(hours.length - _maxEntries)
+    final kept = hours.length > maxEntries
+        ? hours.sublist(hours.length - maxEntries)
         : hours;
     await prefs.setString(
       prefsKey,

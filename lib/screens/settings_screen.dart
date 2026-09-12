@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'coach_config.dart';
 import 'landing_screen.dart';
+import '../services/busy_hours_service.dart';
 import '../services/account_deletion_service.dart';
 import '../services/content_report_service.dart';
 import '../services/last_reply_log.dart';
@@ -1874,12 +1875,15 @@ class _SettingsScreenState extends State<SettingsScreen>
                                       // 두 자리가 같은 시각이면 하나는 나가지도
                                       // 못하고 사라진다. 저장한 뒤에 조용히
                                       // 없어지는 것보다 여기서 막는 편이 낫다.
-                                      final taken = tempTimes.asMap().entries.any(
-                                        (e) =>
-                                            e.key != i &&
-                                            e.value.hour == picked.hour &&
-                                            e.value.minute == picked.minute,
-                                      );
+                                      final taken = tempTimes
+                                          .asMap()
+                                          .entries
+                                          .any(
+                                            (e) =>
+                                                e.key != i &&
+                                                e.value.hour == picked.hour &&
+                                                e.value.minute == picked.minute,
+                                          );
                                       if (taken) {
                                         if (!mounted) return;
                                         // 스낵바는 이 시트 뒤로 나와서 보이지 않는다.
@@ -1891,7 +1895,9 @@ class _SettingsScreenState extends State<SettingsScreen>
                                         );
                                         return;
                                       }
-                                      setModalState(() => tempTimes[i] = picked);
+                                      setModalState(
+                                        () => tempTimes[i] = picked,
+                                      );
                                     },
                                     onRemove: i == 0
                                         ? null
@@ -2207,9 +2213,10 @@ class _SettingsScreenState extends State<SettingsScreen>
     List<TimeOfDay> times,
   ) async {
     final sorted = <TimeOfDay>[];
-    for (final time in [...times]..sort(
-      (a, b) => (a.hour * 60 + a.minute).compareTo(b.hour * 60 + b.minute),
-    )) {
+    for (final time
+        in [...times]..sort(
+          (a, b) => (a.hour * 60 + a.minute).compareTo(b.hour * 60 + b.minute),
+        )) {
       // 저장하는 쪽도 같은 시각은 하나로 접는다. 화면에 남은 값과 실제로 걸린
       // 예약이 어긋나면, 설정에는 둘인데 하나만 오는 것으로 보인다.
       if (sorted.any((t) => t.hour == time.hour && t.minute == time.minute)) {
@@ -2618,7 +2625,7 @@ class _SettingsScreenState extends State<SettingsScreen>
 
                       _buildSettingsNavigationTile(
                         icon: Icons.psychology_rounded,
-                        label: '비서 학습 설정',
+                        label: '개인 코칭 참고',
                         status: 'MASTER 전용',
                         subtitle: '고정 일정과 취침 시간을 설정해요.',
                         onTap: () {
@@ -2628,7 +2635,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                           }
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
-                              content: Text('비서 학습 설정은 마스터 플랜 구독자 전용입니다.'),
+                              content: Text('개인 코칭 참고는 마스터 플랜 구독자 전용입니다.'),
                             ),
                           );
                         },
@@ -2675,7 +2682,8 @@ class _SettingsScreenState extends State<SettingsScreen>
                       _buildSettingsNavigationTile(
                         icon: Icons.search_outlined,
                         label: '오늘 탭이 이상할 때',
-                        subtitle: '저장된 값을 그대로 보여줘요. 루틴이 빠졌거나 어제 핵심이 남았을 때 확인할 수 있어요.',
+                        subtitle:
+                            '저장된 값을 그대로 보여줘요. 루틴이 빠졌거나 어제 핵심이 남았을 때 확인할 수 있어요.',
                         onTap: _showRoutineDiagnosticsDialog,
                       ),
                       const SizedBox(height: 20),
@@ -4168,7 +4176,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                           ),
                           const SizedBox(width: 8),
                           Text(
-                            '비서 학습 설정',
+                            '개인 코칭 참고',
                             style: GoogleFonts.notoSansKr(
                               fontSize: 18,
                               fontWeight: FontWeight.w900,
@@ -4468,6 +4476,22 @@ class _SettingsScreenState extends State<SettingsScreen>
                           ),
                         ),
 
+                        // 2. 늘 시간을 못 내는 때
+                        _buildLearnField(
+                          icon: const Icon(
+                            Icons.work_outline,
+                            color: Color(0xFF8B7CFF),
+                            size: 20,
+                          ),
+                          title: '고정 일정',
+                          subtitle: '늘 시간을 못 내는 때를 알려주세요.',
+                          child: _buildFixedRoutineEditor(
+                            context: context,
+                            routines: routines,
+                            rebuild: setState,
+                          ),
+                        ),
+
                         Padding(
                           padding: const EdgeInsets.only(
                             bottom: 8.0,
@@ -4627,7 +4651,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                         await NotificationService().disableNightCallReminders();
                         Navigator.pop(context);
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('비서 학습 설정이 저장되었습니다.')),
+                          const SnackBar(content: Text('개인 코칭 참고를 저장했습니다.')),
                         );
                       },
                       style: ElevatedButton.styleFrom(
@@ -4654,7 +4678,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                           ),
                           const SizedBox(width: 8),
                           Text(
-                            '비서 학습시키기',
+                            '코치에게 알려주기',
                             style: GoogleFonts.notoSansKr(
                               fontSize: 16,
                               fontWeight: FontWeight.w800,
@@ -4671,6 +4695,177 @@ class _SettingsScreenState extends State<SettingsScreen>
           },
         );
       },
+    );
+  }
+
+  /// 늘 시간을 못 내는 때를 손으로 넣는 자리.
+  ///
+  /// 저장·불러오기는 원래부터 이 시트에 있었는데 입력란만 없었다. 그래서 값을
+  /// 채우는 길이 대화뿐이었고, 코치는 "설정에서 넣어보세요"라고 데려갈 곳이
+  /// 없어서 안내에서 이 항목을 빼두고 있었다.
+  ///
+  /// 요일을 하나도 안 고르면 매일이다. 대화로 들어온 값도 같은 자리에 쌓이므로
+  /// 여기서 그대로 보이고 고칠 수 있다.
+  Widget _buildFixedRoutineEditor({
+    required BuildContext context,
+    required List<Map<String, dynamic>> routines,
+    required void Function(VoidCallback) rebuild,
+  }) {
+    const dayNames = ['월', '화', '수', '목', '금', '토', '일'];
+
+    Widget timeButton(TimeOfDay value, ValueChanged<TimeOfDay> onPicked) {
+      return GestureDetector(
+        onTap: () async {
+          final picked = await _showFocusedTimePicker(
+            context: context,
+            initialTime: value,
+          );
+          if (picked != null) rebuild(() => onPicked(picked));
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 10),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF3F0FF),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Text(
+            '${value.hour.toString().padLeft(2, '0')}:'
+            '${value.minute.toString().padLeft(2, '0')}',
+            style: GoogleFonts.notoSansKr(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final routine in routines) ...[
+          Row(
+            children: [
+              Expanded(
+                child: TextFormField(
+                  key: ValueKey(identityHashCode(routine)),
+                  initialValue: routine['name']?.toString() ?? '',
+                  onChanged: (value) => routine['name'] = value,
+                  style: GoogleFonts.notoSansKr(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  decoration: InputDecoration(
+                    isDense: true,
+                    hintText: '근무, 등하원처럼',
+                    hintStyle: GoogleFonts.notoSansKr(
+                      fontSize: 13,
+                      color: AppDesignTokens.textMuted,
+                    ),
+                    border: const UnderlineInputBorder(),
+                  ),
+                ),
+              ),
+              IconButton(
+                icon: const Icon(
+                  Icons.close,
+                  size: 18,
+                  color: Color(0xFF9593A5),
+                ),
+                onPressed: () => rebuild(() => routines.remove(routine)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              timeButton(
+                routine['start'] as TimeOfDay,
+                (picked) => routine['start'] = picked,
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+                child: Text('~', style: GoogleFonts.notoSansKr(fontSize: 13)),
+              ),
+              timeButton(
+                routine['end'] as TimeOfDay,
+                (picked) => routine['end'] = picked,
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 6,
+            children: [
+              for (final day in dayNames)
+                GestureDetector(
+                  onTap: () => rebuild(() {
+                    final days = List<String>.from(routine['days'] ?? []);
+                    days.contains(day) ? days.remove(day) : days.add(day);
+                    routine['days'] = days;
+                  }),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 4,
+                      horizontal: 9,
+                    ),
+                    decoration: BoxDecoration(
+                      color: (routine['days'] as List?)?.contains(day) ?? false
+                          ? AppDesignTokens.brand
+                          : const Color(0xFFF3F0FF),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      day,
+                      style: GoogleFonts.notoSansKr(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color:
+                            (routine['days'] as List?)?.contains(day) ?? false
+                            ? Colors.white
+                            : AppDesignTokens.textMuted,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 14),
+        ],
+        if (routines.length < BusyHoursService.maxEntries)
+          GestureDetector(
+            onTap: () => rebuild(
+              () => routines.add({
+                'name': '',
+                'start': const TimeOfDay(hour: 9, minute: 0),
+                'end': const TimeOfDay(hour: 18, minute: 0),
+                'days': <String>[],
+              }),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.add, size: 16, color: AppDesignTokens.brand),
+                const SizedBox(width: 4),
+                Text(
+                  '시간대 추가',
+                  style: GoogleFonts.notoSansKr(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: AppDesignTokens.brand,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        const SizedBox(height: 6),
+        Text(
+          '요일을 안 고르면 매일로 봅니다. 이름을 비워두면 저장할 때 빠집니다.',
+          style: GoogleFonts.notoSansKr(
+            fontSize: 11,
+            color: AppDesignTokens.textMuted,
+          ),
+        ),
+      ],
     );
   }
 
@@ -4960,7 +5155,8 @@ class _SettingsScreenState extends State<SettingsScreen>
       hasSyncedFromCloud: prefs.getBool('nyang_has_synced_from_cloud') ?? false,
       pendingCloudUpload:
           prefs.getBool(TasksSyncService.pendingUploadFlagKey) ?? false,
-      appleCalendarEnabled: AppleCalendarSyncService.instance.isSupportedPlatform
+      appleCalendarEnabled:
+          AppleCalendarSyncService.instance.isSupportedPlatform
           ? (prefs.getBool(AppleCalendarSyncService.enabledKey) ?? false)
           : null,
       rawCalendarEventMap: prefs.getString(
