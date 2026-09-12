@@ -4849,7 +4849,7 @@ ${lines.join('\n')}
 오늘 적을 때 어떻게 쓰면 되는지로.
 $saidBlock$todayBlock
 [출력 형식]
-완성된 한 마디만, 길어도 여섯 문장 안에서. 다른 말은 덧붙이지 말 것.''';
+길어도 여섯 문장 안에서.''';
 
     const model = 'gpt-5-mini';
     final messages = [
