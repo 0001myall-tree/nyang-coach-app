@@ -34,27 +34,49 @@ class MemoryService {
         'task_specific_notes': [],
         'last_updated': '',
       },
-      'mid_change': {
-        'chapter': {'title': '', 'description': ''},
-        'keywords_axis': [],
-        'focus_projects': [],
-        'active_experiments': [],
-        'environment_variables': [],
-      },
+      // mid_change 칸이 여기 있었다. 챕터는 증류가 돌려주는 항목에 아예 없어서
+      // 값이 들어간 적이 없고(코치는 "챕터:  ()"라는 빈 줄을 받았다), 관심 축은
+      // 하루 요약의 '요즘 신경 쓰는 일'과 하는 일이 겹쳤다. focus_projects와
+      // active_experiments, environment_variables는 코치에게 보내는 선조차
+      // 없었다. 요즘 무엇을 붙들고 있는지는 7일치 '신경'과 '같이 정한 것'이
+      // 들고 있다.
       'high_change': {
         'energy_fatigue': '',
         'mood_condition': '',
         'obstacles': '',
         'scenes_insights': [],
       },
-      'meta': {'last_batch_run': '', 'history_log': []},
+      // history_log도 같은 이유로 뺐다. 쓰는 곳도 읽는 곳도 없었다.
+      'meta': {'last_batch_run': ''},
     };
   }
 
   List<dynamic> dailySummaries = [];
   List<dynamic> longTermMemory = [];
 
+  /// 쓰이지 않게 된 칸들. 이미 쓰던 사람의 프로필에는 남아 있어서, 불러올 때
+  /// 같이 걷어낸다. 그냥 두면 증류할 때마다 프로필을 통째로 프롬프트에 붙이므로
+  /// 아무도 안 보는 값에 매주 토큰을 낸다.
+  static const Map<String, List<String>> _retiredFields = {
+    'meta': ['history_log'],
+  };
+
+  /// 통째로 쓰이지 않게 된 칸.
+  static const List<String> _retiredSections = ['mid_change'];
+
   void _ensureMasterProfileShape() {
+    for (final section in _retiredSections) {
+      masterProfile.remove(section);
+    }
+    for (final entry in _retiredFields.entries) {
+      final section = masterProfile[entry.key];
+      if (section is Map) {
+        for (final field in entry.value) {
+          section.remove(field);
+        }
+      }
+    }
+
     final defaults = _defaultMasterProfile();
     for (final entry in defaults.entries) {
       masterProfile.putIfAbsent(entry.key, () => entry.value);
@@ -384,13 +406,8 @@ ${jsonEncode(masterProfile)}
    - 글쓰기처럼 종류가 갈리는 과업에서, 기록에 소설과 에세이가 같이 보이면 task_specific_notes에 "글: 소설과 에세이를 오간다"처럼 오간다는 사실을 저장하고, 한 종류만 꾸준히 보일 때만 그 종류를 저장하세요. 어느 쪽이든 그날 대화와 할 일 이름이 우선이라는 뜻입니다.
    - recent_rejected_interventions는 최근 거부한 개입을 최신순으로 최대 5개 저장하세요. 각 항목은 {"intervention":"...", "task_type":"...", "reason":"...", "last_rejected_at":"$todayStr"} 형식으로 두고, 최신 항목일수록 코칭에서 가장 후순위가 됩니다.
 
-3. 반복 패턴 관찰:
-   - 최근 기록에서 '반복되는 패턴'을 탐지하세요.
-   - 2주(14일) 이상 지속된 최근 관심사/프로젝트 -> mid_change_updates.add_or_update로 제안.
+3. 오래 가는 성향:
    - 30일 이상 지속된 장기 성향 -> low_change_candidates로 제안 (사용자에게 승인 요청할 후보).
-
-4. 망각 및 가지치기 (Pruning & Decay):
-   - 최근 관심사/프로젝트 중 최근 14일간의 기록에서 전혀 언급되지 않거나 유효하지 않은 항목은 'remove'에 넣으세요.
 
 반드시 아래 JSON 형식으로만 응답하세요:
 {
@@ -409,10 +426,6 @@ ${jsonEncode(masterProfile)}
     "preferred_choice_count": 2,
     "task_specific_notes": ["문자열"],
     "last_updated": "$todayStr"
-  },
-  "mid_change_updates": {
-    "add_or_update": [{"type": "keywords_axis|focus_projects", "value": "...", "reason": "..."}],
-    "remove": ["삭제할 항목 이름"]
   },
   "low_change_candidates": [{"field": "identity|decision_pattern|formula", "value": "...", "reason": "..."}]
 }''';
@@ -480,50 +493,6 @@ ${jsonEncode(masterProfile)}
       if (update['execution_resistance_profile'] is Map) {
         masterProfile['execution_resistance_profile'] =
             update['execution_resistance_profile'];
-      }
-
-      final midUpdates = update['mid_change_updates'];
-      if (midUpdates != null) {
-        final addOrUpdate = midUpdates['add_or_update'] as List?;
-        if (addOrUpdate != null) {
-          for (var item in addOrUpdate) {
-            final type = item['type'];
-            final val = item['value'];
-            List list = (type == 'keywords_axis')
-                ? masterProfile['mid_change']['keywords_axis']
-                : masterProfile['mid_change']['focus_projects'];
-
-            final existingIdx = list.indexWhere((e) {
-              if (e is String) return e == val;
-              if (e is Map) return e['value'] == val;
-              return false;
-            });
-
-            if (existingIdx == -1) {
-              list.add({
-                'value': val,
-                'first_seen': todayStr,
-                'last_seen': todayStr,
-              });
-            } else {
-              if (list[existingIdx] is Map) {
-                list[existingIdx]['last_seen'] = todayStr;
-              }
-            }
-          }
-        }
-
-        final removeList = midUpdates['remove'] as List?;
-        if (removeList != null) {
-          for (var val in removeList) {
-            masterProfile['mid_change']['keywords_axis'].removeWhere(
-              (k) => k is String ? k == val : (k as Map)['value'] == val,
-            );
-            masterProfile['mid_change']['focus_projects'].removeWhere(
-              (p) => p is String ? p == val : (p as Map)['value'] == val,
-            );
-          }
-        }
       }
 
       final candidates = update['low_change_candidates'] as List?;

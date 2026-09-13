@@ -13326,16 +13326,9 @@ $block
       try {
         final mp = jsonDecode(mpRaw) as Map<String, dynamic>;
         final hc = (mp['high_change'] as Map<String, dynamic>?) ?? {};
-        final mc = (mp['mid_change'] as Map<String, dynamic>?) ?? {};
         final lc = (mp['low_change'] as Map<String, dynamic>?) ?? {};
         final rp =
             (mp['execution_resistance_profile'] as Map<String, dynamic>?) ?? {};
-        final chapter = (mc['chapter'] as Map<String, dynamic>?) ?? {};
-        final keywords =
-            (mc['keywords_axis'] as List?)
-                ?.map((e) => e is Map ? (e['value'] ?? e) : e)
-                .join(', ') ??
-            '';
         String formatProfileList(dynamic value) {
           if (value is! List || value.isEmpty) return '기록 전';
           final text = value
@@ -13413,11 +13406,8 @@ $block
             '- 상태: ${hc['energy_fatigue'] ?? '관찰 중'} / ${hc['mood_condition'] ?? '기록 전'}',
           );
           sb.writeln('- 장애물: ${hc['obstacles'] ?? '없음'}');
-          sb.writeln('\n[최근 맥락]');
-          sb.writeln(
-            '- 챕터: ${chapter['title'] ?? ''} (${chapter['description'] ?? ''})',
-          );
-          sb.writeln('- 관심 축: $keywords');
+          // [최근 맥락]이 여기 있었다. 챕터는 채우는 코드가 없어 늘 "챕터:  ()"로
+          // 나갔고, 관심 축은 7일치 '신경'과 하는 일이 겹쳤다.
           sb.writeln('\n[장기 성향 참고]');
           sb.writeln('- 정체성: ${lc['identity'] ?? ''}');
           sb.writeln('- 의사결정 패턴: ${lc['decision_pattern'] ?? ''}');
