@@ -6,6 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'analytics_service.dart';
 import 'api_usage_limit_service.dart';
+import 'tasks_sync_service.dart';
 
 class MemoryService {
   static final MemoryService _instance = MemoryService._internal();
@@ -92,29 +93,31 @@ class MemoryService {
     }
   }
 
+  /// 기억은 'nyang_' 키로만 저장한다. 클라우드로 올리는 일은 그 접두어를 보고
+  /// 도는 [TasksSyncService]가 맡는다.
+  ///
+  /// 여태 클라우드에 두 벌 저장했다. 여기서 사용자 문서의 memory 칸에 직접
+  /// 한 번, 그리고 같은 내용이 'nyang_' 키라서 appData로 또 한 번. 하루 요약을
+  /// 만들 때마다 30일치가 두 군데에 쓰였다.
+  ///
+  /// 문제는 낭비만이 아니었다. memory 칸은 appData가 가진 보호를 하나도 못
+  /// 받는다 — 합치기도, 업로드 대기 보호도, 빈 값 덮어쓰기 방지도 없이 그냥
+  /// 덮는다. 기기가 둘이면 태블릿에서 쌓은 요약이 폰 때문에 사라질 수 있었다.
+  /// 게다가 로그인 순서상 memory에서 읽어온 것을 곧바로 appData가 덮어써서,
+  /// 그 저장은 위험만 지고 하는 일이 없었다.
   Future<void> saveMemoryData() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('nyang_master_profile', jsonEncode(masterProfile));
     await prefs.setString('nyang_daily_summaries', jsonEncode(dailySummaries));
     await prefs.setString('nyang_long_term_memory', jsonEncode(longTermMemory));
-
-    // Firestore Sync
-    final user = FirebaseAuth.instance.currentUser;
-    if (user != null) {
-      try {
-        await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
-          'memory': {
-            'masterProfile': masterProfile,
-            'dailySummaries': dailySummaries,
-            'longTermMemory': longTermMemory,
-          },
-        }, SetOptions(merge: true));
-      } catch (e) {
-        debugPrint('Firestore Memory sync error: $e');
-      }
-    }
+    TasksSyncService.scheduleSyncToCloud();
   }
 
+  /// 예전에 memory 칸에만 기억이 있는 사람을 위해 읽기는 남겨둔다.
+  ///
+  /// 로그인할 때 이것이 먼저 돌고 appData 복원이 뒤따른다. appData에 그 키가
+  /// 있으면 그쪽이 이기고, 없을 때만 여기서 읽어온 옛 기억이 남는다. 새로
+  /// 쓰지는 않으므로 이 칸은 그 자리에 멈춰 있다.
   Future<void> syncFromCloud() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
