@@ -853,8 +853,8 @@ class _RecordsScreenState extends State<RecordsScreen> {
             .where(topCondition.trueDates.contains)
             .length;
         conditionFocusNote =
-            "이번 주 주력한 일 '\$focus'에 손댄 \${touchedDates.length}일 중, "
-            "\${topCondition.label}에 해당한 날은 \$overlap일";
+            "이번 주 주력한 일 '$focus'에 손댄 ${touchedDates.length}일 중, "
+            "${topCondition.label}에 해당한 날은 $overlap일";
       }
     }
     final conditionBlock = conditionInsights.promptBlock(
