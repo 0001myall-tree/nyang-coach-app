@@ -34,7 +34,6 @@ import '../services/overplan_nudge_service.dart';
 import '../services/task_completion_service.dart';
 import '../services/apple_calendar_sync_service.dart';
 import '../services/routine_schedule.dart';
-import '../theme/app_design_tokens.dart';
 import '../widgets/banner_answer_dialog.dart';
 import '../widgets/alarm_permission_notice.dart';
 import '../widgets/core_reminder_settings_sheet.dart';
@@ -1204,20 +1203,6 @@ class _TasksScreenState extends State<TasksScreen>
   DateTime _lastStoreLoadAt = DateTime.fromMillisecondsSinceEpoch(0);
 
   // ── 데이터 로드 ──────────────────────────────────────────
-  /// 첫 읽기가 끝났는지. 채팅에서 데려올 때 이걸 기다린다.
-  ///
-  /// 서랍이 열리자마자 부르는데, 그때는 목록이 아직 비어 있다. 그 상태에서
-  /// 찾으면 있는 할 일도 "없다"가 되고, 사용자는 방금 적은 것을 못 찾는다는
-  /// 말을 듣는다.
-  bool _initialLoadDone = false;
-
-  Future<void> _waitForInitialLoad() async {
-    for (var i = 0; i < 20 && !_initialLoadDone; i++) {
-      await Future.delayed(const Duration(milliseconds: 50));
-      if (!mounted) return;
-    }
-  }
-
   Future<void> _loadAll() async {
     final prefs = await SharedPreferences.getInstance();
     // 앱이 열려 있는 동안 밖에서(냥냥이 오버레이 등) 고친 값도 함께 읽는다.
@@ -1367,8 +1352,6 @@ class _TasksScreenState extends State<TasksScreen>
       if (mounted) setState(() {});
       await _saveCoreTasks();
     }
-
-    _initialLoadDone = true;
 
     if (widget.initialBottomSheet != null) {
       _openBottomSheet(widget.initialBottomSheet!);

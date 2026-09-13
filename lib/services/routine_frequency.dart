@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 
 /// 코치가 태그에 적어 보낸 반복 규칙을 읽는다.
 ///

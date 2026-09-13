@@ -16,8 +16,6 @@ import '../services/content_report_service.dart';
 import '../services/last_reply_log.dart';
 import '../services/notification_service.dart';
 import '../services/auth_service.dart';
-import '../services/daily_reset_service.dart';
-import '../services/routine_diagnostics.dart';
 import '../services/tasks_sync_service.dart';
 import '../models/user_data.dart';
 import '../services/widget_sync_service.dart';
@@ -5252,91 +5250,6 @@ class _SettingsScreenState extends State<SettingsScreen>
     );
   }
 
-  /// 오늘 탭이 이상할 때, 저장된 값을 그대로 펼쳐 보여준다.
-  ///
-  /// 화면에는 결과만 나와서, 루틴이 반복 설정 때문에 빠진 것인지 그날 쉬기로
-  /// 찍힌 것인지 목록을 만들다 빠진 것인지 구분할 수가 없었다. 핵심 칸에 남은
-  /// 항목이 어제 것인지도 여기서 바로 보인다. 고치는 자리가 전부 다르다.
-  Future<void> _showRoutineDiagnosticsDialog() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.reload();
-    final text = RoutineDiagnostics.build(
-      rawHabits: prefs.getString('nyang_habits'),
-      rawHabitLogs: prefs.getString('nyang_habit_logs'),
-      rawTasks: prefs.getString('nyang_tasks'),
-      lastDate: prefs.getString(DailyResetService.lastDateKey),
-      resetDoneDate: prefs.getString(DailyResetService.resetDoneDateKey),
-      localListDate: prefs.getString(DailyResetService.localListDateKey),
-      now: DateTime.now(),
-      rawCoreTasks: prefs.getString('nyang_core_tasks'),
-      rawTasksByDate: prefs.getString(DailyResetService.plannedTasksByDateKey),
-      hasSyncedFromCloud: prefs.getBool('nyang_has_synced_from_cloud') ?? false,
-      pendingCloudUpload:
-          prefs.getBool(TasksSyncService.pendingUploadFlagKey) ?? false,
-      appleCalendarEnabled:
-          AppleCalendarSyncService.instance.isSupportedPlatform
-          ? (prefs.getBool(AppleCalendarSyncService.enabledKey) ?? false)
-          : null,
-      rawCalendarEventMap: prefs.getString(
-        AppleCalendarSyncService.eventMapKey,
-      ),
-    );
-    if (!mounted) return;
-    await showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text(
-          '오늘 탭이 이상할 때',
-          style: GoogleFonts.notoSansKr(
-            fontSize: 16,
-            fontWeight: FontWeight.w900,
-            color: const Color(0xFF1E1E2D),
-          ),
-        ),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: SingleChildScrollView(
-            child: SelectableText(
-              text,
-              style: GoogleFonts.notoSansKr(
-                fontSize: 12,
-                height: 1.6,
-                color: const Color(0xFF3D3A4E),
-              ),
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () async {
-              await Clipboard.setData(ClipboardData(text: text));
-              if (!ctx.mounted) return;
-              Navigator.pop(ctx);
-              if (!mounted) return;
-              ScaffoldMessenger.of(
-                context,
-              ).showSnackBar(const SnackBar(content: Text('복사했어요')));
-            },
-            child: Text(
-              '복사',
-              style: GoogleFonts.notoSansKr(fontWeight: FontWeight.w900),
-            ),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text(
-              '닫기',
-              style: GoogleFonts.notoSansKr(fontWeight: FontWeight.w900),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// 신고 사유를 고르고 보낸다. 답변 원문은 고른 사유와 함께 그대로 실려간다.
   Future<void> _showReportReasonDialog(String replyText) async {
     final noteController = TextEditingController();
     String? selectedReason;

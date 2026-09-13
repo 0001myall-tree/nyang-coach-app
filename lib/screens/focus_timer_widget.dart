@@ -353,7 +353,6 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
     },
   };
 
-  bool get _isMale => widget.coachId == 'nyang_halbae';
   bool get _isMasterTimer => widget.isMasterPlan;
 
   /// 반복 설정은 마스터 코치 타이머에만 있다. 생각 정리용 타이머는 한 번
