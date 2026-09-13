@@ -6,6 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/user_data.dart';
 import 'apple_calendar_sync_service.dart';
 import 'chat_store.dart';
+import 'life_pattern_service.dart';
 import 'widget_sync_service.dart';
 
 class TasksSyncService {
@@ -241,6 +242,22 @@ class TasksSyncService {
             continue;
           }
 
+          // 설문 답도 합쳐서 올린다. 이 기기가 뒤처져 있어도 다른 기기에서
+          // 답한 문항을 지우지 않는다.
+          if (key == LifePatternService.storeKey && value is String) {
+            final cloudDoc = cloudKeys.contains(key)
+                ? snapshot.docs.firstWhere((d) => d.id == key)
+                : null;
+            final cloudValue = cloudDoc?.data()['value'];
+            final merged = LifePatternService.mergedValue(
+              value,
+              cloudValue is String ? cloudValue : null,
+            );
+            if (merged != value) await prefs.setString(key, merged);
+            batch.set(docRef, {'value': merged}, SetOptions(merge: true));
+            continue;
+          }
+
           // 첫 동기화 완료 전 기존 클라우드 값을 빈 값으로 덮어쓰지 않도록 보호
           if (!hasSyncedFromCloud &&
               value is String &&
@@ -387,6 +404,19 @@ class TasksSyncService {
           continue;
         }
 
+        // 설문 답도 합친다. 문항 단위로 보므로 양쪽에서 답한 것이 다 남는다.
+        if (key == LifePatternService.storeKey) {
+          final cloudValue = data['value'];
+          await prefs.setString(
+            key,
+            LifePatternService.mergedValue(
+              prefs.getString(key),
+              cloudValue is String ? cloudValue : null,
+            ),
+          );
+          continue;
+        }
+
         // 업로드 대기 중인(로컬이 더 최신인) 키는 클라우드 값으로 덮지 않는다.
         if (_isPendingUpload(key)) continue;
 
@@ -474,6 +504,22 @@ class TasksSyncService {
                 final merged = _mergedChatValue(
                   localRaw: localRaw,
                   cloudValue: data['value'],
+                );
+                if (merged != localRaw) {
+                  await prefs.setString(key, merged);
+                  changed = true;
+                }
+                continue;
+              }
+
+              // 설문 답도 덮지 않고 합친다. 옛 스냅샷이 도착해도 방금 고른
+              // 답이 사라지지 않는다.
+              if (key == LifePatternService.storeKey) {
+                final localRaw = prefs.getString(key);
+                final cloudValue = data['value'];
+                final merged = LifePatternService.mergedValue(
+                  localRaw,
+                  cloudValue is String ? cloudValue : null,
                 );
                 if (merged != localRaw) {
                   await prefs.setString(key, merged);

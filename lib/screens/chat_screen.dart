@@ -53,6 +53,7 @@ import 'package:nyang_coach/services/last_reply_log.dart';
 import 'package:nyang_coach/services/planner_action.dart';
 import 'package:nyang_coach/services/planner_routine_prompt_service.dart';
 import 'package:nyang_coach/widgets/alarm_permission_notice.dart';
+import 'package:nyang_coach/services/life_pattern_typed_answer.dart';
 import 'package:nyang_coach/services/planner_edit_service.dart';
 import 'package:nyang_coach/services/registration_target.dart';
 import 'package:nyang_coach/services/execution_funnel.dart';
@@ -1848,10 +1849,6 @@ class _ChatScreenState extends State<ChatScreen>
         reverseTransitionDuration: const Duration(milliseconds: 200),
       ),
     );
-  }
-
-  String _normalizeRestText(String text) {
-    return text.replaceAll(RegExp(r'\s+'), '').toLowerCase();
   }
 
   bool _containsAnyRestSignal(String text) {
@@ -6109,8 +6106,34 @@ $saidBlock$todayBlock
   ///
   /// [opening]은 이 대화에서 처음 묻는 자리라는 뜻이다. 다짜고짜 물으면
   /// 설문지처럼 읽혀서, 물어볼 게 있다고 한마디 먼저 얹는다.
+  /// 말로 온 답을 받아 적는다. 답이 아니면 아무 일도 하지 않는다.
+  ///
+  /// 못 물어본 경우(한도가 찼거나 통신이 끊겼다)에는 그 문항을 안 물어본 채로
+  /// 둔다. 그래야 다음에 다시 묻는다.
+  Future<void> _captureTypedLifeAnswer(String questionId, String text) async {
+    final coachId = _coach.id;
+    final question = LifePatternService.questionById(coachId, questionId);
+    if (question == null) return;
+
+    final picked = await LifePatternTypedAnswer.read(
+      question: question,
+      text: text,
+    );
+    if (picked == null || picked.isEmpty) return;
+
+    await LifePatternService.saveAnswer(coachId, questionId, picked);
+    unawaited(AnalyticsService.logFeatureUsage('life_pattern_answered_typed'));
+  }
+
+  /// 방금 물어놓고 아직 답을 못 받은 문항.
+  ///
+  /// 버튼을 눌러야만 답이 저장됐다. 말로 답하면 코치는 대답을 하는데 답으로는
+  /// 안 남아서, 며칠 뒤에 같은 것을 또 물었다.
+  String? _pendingLifeQuestionId;
+
   void _askLifeQuestion(LifePatternQuestion question, {bool opening = false}) {
     _pickedLifeOptions.clear();
+    _pendingLifeQuestionId = question.id;
     final ask = opening
         ? '${_lifeAskOpening()}\n${question.ask}'
         : question.ask;
@@ -6171,6 +6194,7 @@ $saidBlock$todayBlock
   /// 답 하나를 받고, 아직 물을 것이 남았으면 이어서 묻는다.
   Future<void> _saveLifeAnswer(String questionId, List<String> picked) async {
     final coachId = _coach.id;
+    if (_pendingLifeQuestionId == questionId) _pendingLifeQuestionId = null;
     await LifePatternService.saveAnswer(coachId, questionId, picked);
     await AnalyticsService.logFeatureUsage('life_pattern_answered');
     if (!mounted) return;
@@ -12408,6 +12432,16 @@ $block
       _awaitingBlockerAnswer = false;
       unawaited(ExecutionBlockerService.saveFreeAnswer(trimmed));
     }
+    // 설문 문항을 물어둔 참이면, 버튼을 안 누르고 말로 답한 것일 수 있다.
+    //
+    // 답으로 판정돼도 코치 말을 따로 끼워넣지 않는다. 사용자는 문장으로
+    // 말했고 코치는 그 문장에 답할 참이라, 거기에 "알겠다냥"까지 붙으면
+    // 한 번 말했는데 두 번 답을 받는다. 조용히 적어두기만 한다.
+    final pendingLifeQuestionId = _pendingLifeQuestionId;
+    if (pendingLifeQuestionId != null) {
+      _pendingLifeQuestionId = null;
+      unawaited(_captureTypedLifeAnswer(pendingLifeQuestionId, trimmed));
+    }
 
     final isFutureTodayFlow =
         trimmed == '미래를 위한 오늘' ||
@@ -13166,61 +13200,6 @@ $block
   /// 어제까지다.
   static const int _yesterdayContextLimit = 8;
 
-  /// 지난 날 나눈 대화 원문. 코치가 [NEED: chat]으로 부른 턴에만 실린다.
-  ///
-  /// 프롬프트에 실리는 대화는 오늘 것뿐이다. 그래서 어제 코치와 함께 만든
-  /// 것을 오늘 이어가자고 하면 코치는 그게 무엇인지 모른다 — 하루 요약에는
-  /// "달성: 등장인물 정리" 같은 한 줄만 남고, 이름도 설정도 거기 없다.
-  ///
-  /// 원문은 "지난 대화 보기"용으로 방에 이미 들어 있다. 없는 것을 새로 쌓는
-  /// 것이 아니라 있는 것을 꺼내오는 자리다.
-  ///
-  /// 며칠 전 이야기인지 함께 적는다. 남기는 기준이 "대화한 날 7개"라서, 띄엄띄엄
-  /// 쓰는 사람에게는 두 달 전 대화가 남아 있을 수 있다. 날짜만 적어두면 코치가
-  /// 그걸 어제 일처럼 꺼낸다.
-  ///
-  /// 최근 것부터 [_pastChatCharBudget]자까지만 담는다. 며칠치를 통째로 실으면
-  /// 이 한 턴이 평소의 몇 배가 되고, 오래된 잡담이 어제 만든 것을 밀어낸다.
-  String _pastChatSection(SharedPreferences prefs) {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final past = ChatStore.decode(
-      prefs.getString(ChatStore.historyKey(_coach.id)),
-    ).where((m) => ChatStore.dateOf(m) != _dateKey(now));
-    if (past.isEmpty) return '';
-
-    final lines = <String>[];
-    var used = 0;
-    for (final message in past.toList().reversed) {
-      if (message is! Map) continue;
-      final text = (message['text'] ?? '').toString().trim();
-      if (text.isEmpty) continue;
-      final time = DateTime.tryParse(message['time']?.toString() ?? '');
-      final daysAgo = time == null
-          ? null
-          : today.difference(DateTime(time.year, time.month, time.day)).inDays;
-      final day = time == null
-          ? ''
-          : '${time.month}/${time.day}(${daysAgo == 1 ? '어제' : '$daysAgo일 전'}) ';
-      final who = message['isUser'] == true ? '사용자' : '코치';
-      final line = '- $day$who: $text';
-      if (used + line.length > _pastChatCharBudget) break;
-      used += line.length;
-      lines.add(line);
-    }
-    if (lines.isEmpty) return '';
-
-    final buffer = StringBuffer('\n[지난 날 나눈 대화 - 오늘 것은 위에 있음]\n');
-    for (final line in lines.reversed) {
-      buffer.writeln(line);
-    }
-    buffer.writeln('*이어가자는 말에 답하는 데만 쓰세요. 여기 있는 일을 오늘 다시 하라고 권하지는 마세요.');
-    return buffer.toString();
-  }
-
-  /// 지난 대화를 이만큼까지만 담는다.
-  static const int _pastChatCharBudget = 2400;
-
   String _yesterdayLeftoverSection(SharedPreferences prefs, DateTime now) {
     final yesterday = DateTime(now.year, now.month, now.day - 1);
     final key = PlannerEditService.dateKey(yesterday);
@@ -13332,12 +13311,18 @@ $block
     final needsTaskContext = resolvedScope.tasks;
     final needsLightGoalContext = resolvedScope.needsLightGoal;
 
-    // 1. 마스터 프로필 (tier별 분기)
+    // 1. 마스터 프로필
+    //
+    // 이 사람에게 무엇이 먹혔고 무엇을 거부했는지는 어느 턴에서든 쓸모가 있다.
+    // 오히려 "오늘 하기 싫다" 같은 평범한 턴이 그게 가장 필요한 자리다. 전에는
+    // 마스터 코치가 목표를 직접 물은 턴에만 이걸 받아서, 무료 프렌즈 코치보다
+    // 이 사람을 덜 아는 채로 답했다.
+    //
+    // 그래서 짧은 쪽은 늘 싣고, 긴 쪽만 목표 턴에 싣는다. 챕터·장기 성향·장면
+    // 같은 스무 줄은 잡담에 따라붙으면 그날 지킬 한 줄을 묻는다.
     final mpRaw = prefs.getString('nyang_master_profile');
     bool fullMasterProfileInjected = false;
-    if (mpRaw != null &&
-        mpRaw != 'null' &&
-        (!_coach.isMaster || needsGoalContext)) {
+    if (mpRaw != null && mpRaw != 'null') {
       try {
         final mp = jsonDecode(mpRaw) as Map<String, dynamic>;
         final hc = (mp['high_change'] as Map<String, dynamic>?) ?? {};
@@ -13378,8 +13363,11 @@ $block
 
         sb.writeln('\n[사용자 마스터 프로필]');
 
-        if (tier == 'friends') {
-          // friends: 현재 상태와 실행 저항 개인화만 가볍게 주입
+        // 프렌즈 코치는 늘 짧은 쪽. 마스터 코치도 평소에는 짧은 쪽을 받고,
+        // 목표·방향을 직접 물은 턴에만 전체를 받는다.
+        final useFullProfile = tier != 'friends' && needsGoalContext;
+        if (!useFullProfile) {
+          // 현재 상태와 실행 저항 개인화만 가볍게 주입
           sb.writeln(
             '- 실시간 상태: ${hc['energy_fatigue'] ?? '관찰 중'} / ${hc['mood_condition'] ?? '기록 전'}',
           );
@@ -13474,8 +13462,13 @@ $block
     }
 
     // 3. 최근 7일 요약
+    //
+    // 지난 날 이야기를 이어가려는 턴([NEED: chat])에도 이 칸이 열린다. 전에는
+    // 그때 대화 원문을 실었는데, 최신부터 2400자까지만 담다 보니 어제 대화가
+    // 길면 그저께가 통째로 빠졌다. 요약은 하루가 한 줄이라 어느 날도 안 밀린다.
     final dsRaw = prefs.getString('nyang_daily_summaries');
-    if (dsRaw != null && (!_coach.isMaster || needsGoalContext)) {
+    if (dsRaw != null &&
+        (!_coach.isMaster || needsGoalContext || resolvedScope.pastChat)) {
       try {
         final ds = jsonDecode(dsRaw) as List;
         if (ds.isNotEmpty) {
@@ -13493,9 +13486,14 @@ $block
           }
           for (final s in recent) {
             final onMind = MemoryService.formatOnMind(s['on_mind']);
+            // '같이 정한 것'은 이 줄에서 유일하게 알맹이가 남는 칸이다. 나머지
+            // 칸은 무엇을 했는지만 적혀서, 어제 함께 정한 것을 오늘 이어가자고
+            // 하면 코치가 그게 뭔지 몰랐다.
+            final settled = MemoryService.settledWith(s);
             sb.writeln(
               '${s['date']}: 달성(${s['achieved']}) / 못함(${s['missed']}) / 컨디션(${s['condition']}) / 고민(${s['concern']})'
-              '${onMind.isEmpty ? '' : ' / 신경($onMind)'}',
+              '${onMind.isEmpty ? '' : ' / 신경($onMind)'}'
+              '${settled.isEmpty ? '' : ' / 같이 정한 것($settled)'}',
             );
           }
         }
@@ -13748,10 +13746,8 @@ $block
       sb.write(_yesterdayLeftoverSection(prefs, now));
     }
 
-    // 5-3. 지난 날 대화 원문 — 코치가 [NEED: chat]으로 부른 턴에만.
-    if (resolvedScope.pastChat) {
-      sb.write(_pastChatSection(prefs));
-    }
+    // 5-3. 지난 날 이야기는 원문이 아니라 요약으로 간다. 아래 [최근 7일 요약]이
+    // 그 자리다 — 코치가 [NEED: chat]으로 부르면 그 칸이 열린다.
 
     // 6. 오늘의 핵심
     //
@@ -14180,14 +14176,10 @@ $block
       }
     }
 
-    // 담당 영역 코치가 물어서 받아둔 답. 그 코치의 대화에만 싣는다.
-    //
-    // 한동안 이 답이 30일에 한 번 나가는 제안에만 실렸다. 그래서 물어놓고
-    // 며칠 뒤에 그 이야기를 꺼내면 코치는 자기가 뭘 물었는지도 몰랐다.
-    // 사용자에게는 답한 것이 사라진 것으로 보인다.
-    if (!resistanceTurn) {
-      sb.write(await LifePatternService.promptBlock(_coach.id));
-    }
+    // 설문으로 받아둔 답은 여기가 아니라 시스템 프롬프트의 역할 서술 뒤에
+    // 붙는다. 두 군데에서 각각 넣는 바람에 한 턴에 같은 블록이 두 벌 실렸다.
+    // 토큰도 두 배지만, 더 걸리는 건 같은 말이 두 번 있으면 모델이 그걸 과하게
+    // 무겁게 읽는다는 것이다.
 
     // 생활 형태만은 프렌즈도 받는다.
     //

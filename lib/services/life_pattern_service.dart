@@ -394,10 +394,30 @@ class LifePatternService {
 
     final current = await answers(coachId);
     current[questionId] = question.multi ? valid : valid.first;
+
+    // 코치에게 넘길 문장을 답과 함께 적어둔다.
+    //
+    // 답은 버튼에 보이던 말 그대로 저장되고, 읽을 때 그 말로 문장을 찾는다.
+    // 그래서 버튼 문구를 한 글자만 손봐도 그 전에 답한 사람들의 답이 전부
+    // 매칭에 실패해서 조용히 없는 답이 됐다. 오류도 로그도 안 남는다.
+    // 여기서 문장을 같이 적어두면 문구를 고쳐도 저장된 답은 자기 문장을 들고
+    // 있어서 살아남는다.
+    final notes = await _notes(coachId);
+    notes[questionId] = valid
+        .map((label) => question.options[label] ?? label)
+        .toList(growable: false);
+
     await update(coachId, {
       'answers': current,
+      'notes': notes,
       'askedAt': DateTime.now().toIso8601String(),
     });
+  }
+
+  /// 저장해둔 코치용 문장. 이 칸이 생기기 전에 답한 사람에게는 없다.
+  static Future<Map<String, dynamic>> _notes(String coachId) async {
+    final saved = (await profile(coachId))['notes'];
+    return saved is Map ? Map<String, dynamic>.from(saved) : {};
   }
 
   /// 아직 안 물어본 문항들. 순서는 설문에 적힌 그대로.
@@ -553,6 +573,8 @@ class LifePatternService {
     final saved = await answers(coachId);
     if (saved.isEmpty) return '';
 
+    final storedNotes = await _notes(coachId);
+
     final buffer = StringBuffer('\n[이 사람의 생활 - 본인이 직접 고른 답]\n');
     for (final question in questionsFor(coachId)) {
       final value = saved[question.id];
@@ -560,10 +582,16 @@ class LifePatternService {
       final picked = value is List
           ? value.map((e) => e.toString()).toList()
           : [value.toString()];
-      final notes = picked
-          .map((label) => question.options[label])
-          .whereType<String>()
-          .toList(growable: false);
+
+      // 저장해둔 문장이 있으면 그걸 쓴다. 이 칸이 생기기 전에 답한 사람은
+      // 예전처럼 문구로 찾고, 그것도 못 찾으면 고른 말을 그대로 넘긴다 —
+      // 찾기에 실패했다고 답을 버리면 사용자에게는 답한 것이 사라져 보인다.
+      final stored = storedNotes[question.id];
+      final notes = stored is List && stored.isNotEmpty
+          ? stored.map((e) => e.toString()).toList(growable: false)
+          : picked
+                .map((label) => question.options[label] ?? label)
+                .toList(growable: false);
       if (notes.isEmpty) continue;
       buffer.writeln('- ${notes.join(' / ')}');
     }
@@ -574,5 +602,101 @@ class LifePatternService {
     // 윗줄에 있으니 이건 찾는 일이 아니라 고르는 일이다.
     buffer.writeln('*무엇을 도울지 정할 때는 이 답 안에서 고르세요.');
     return buffer.toString();
+  }
+
+  // ── 기기가 둘일 때 ────────────────────────────
+
+  /// 설문 답은 덮지 않고 합친다. 코치별로, 문항별로 본다.
+  ///
+  /// 대화와 같은 병이 있었다. 값에 "언제 적은 것"이라는 표시가 문항마다 있는
+  /// 것이 아니라, 나중에 올린 쪽이 통째로 이겼다. 태블릿에서 답하고 폰을 켜면
+  /// 폰의 옛 값이 올라가 덮었고, 사용자에게는 답한 것이 사라져 보인다.
+  ///
+  /// 겹치는 문항은 마지막으로 답한 쪽(askedAt이 늦은 쪽)을 남기고, 한쪽에만
+  /// 있는 문항은 둘 다 남긴다. 시각은 늦은 쪽으로 맞춘다.
+  static String mergedValue(String? localRaw, String? cloudRaw) {
+    final local = _decodeStore(localRaw);
+    final cloud = _decodeStore(cloudRaw);
+    if (local.isEmpty) return cloudRaw ?? jsonEncode(local);
+    if (cloud.isEmpty) return localRaw ?? jsonEncode(cloud);
+
+    final merged = <String, dynamic>{};
+    for (final coachId in {...local.keys, ...cloud.keys}) {
+      final mine = local[coachId];
+      final theirs = cloud[coachId];
+      if (mine is! Map) {
+        if (theirs != null) merged[coachId] = theirs;
+        continue;
+      }
+      if (theirs is! Map) {
+        merged[coachId] = mine;
+        continue;
+      }
+      merged[coachId] = _mergeCoach(
+        Map<String, dynamic>.from(mine),
+        Map<String, dynamic>.from(theirs),
+      );
+    }
+    return jsonEncode(merged);
+  }
+
+  static Map<String, dynamic> _decodeStore(String? raw) {
+    if (raw == null || raw.trim().isEmpty) return {};
+    try {
+      final decoded = jsonDecode(raw);
+      return decoded is Map ? Map<String, dynamic>.from(decoded) : {};
+    } catch (_) {
+      return {};
+    }
+  }
+
+  static Map<String, dynamic> _mergeCoach(
+    Map<String, dynamic> mine,
+    Map<String, dynamic> theirs,
+  ) {
+    final myAsked = DateTime.tryParse(mine['askedAt']?.toString() ?? '');
+    final theirAsked = DateTime.tryParse(theirs['askedAt']?.toString() ?? '');
+    // 마지막으로 답한 쪽. 시각을 모르면 이 기기를 믿는다.
+    final mineIsNewer =
+        theirAsked == null || (myAsked != null && !myAsked.isBefore(theirAsked));
+    final newer = mineIsNewer ? mine : theirs;
+    final older = mineIsNewer ? theirs : mine;
+
+    final result = <String, dynamic>{...older, ...newer};
+
+    // 답과 문장은 문항 단위로 합친다. 통째로 덮으면 다른 기기에서만 답한
+    // 문항이 사라진다.
+    for (final field in const ['answers', 'notes']) {
+      final a = older[field];
+      final b = newer[field];
+      if (a is Map || b is Map) {
+        result[field] = <String, dynamic>{
+          if (a is Map) ...Map<String, dynamic>.from(a),
+          if (b is Map) ...Map<String, dynamic>.from(b),
+        };
+      }
+    }
+
+    // 시각은 늦은 쪽. 다시 확인할 때가 됐는지를 이걸로 재는데, 이른 쪽이
+    // 남으면 방금 확인하고도 또 묻는다.
+    for (final field in const [
+      'askedAt',
+      'reviewedAt',
+      'analyzedAt',
+      'lastOfferedAt',
+    ]) {
+      final a = DateTime.tryParse(older[field]?.toString() ?? '');
+      final b = DateTime.tryParse(newer[field]?.toString() ?? '');
+      if (a == null && b == null) continue;
+      if (a == null) {
+        result[field] = newer[field];
+      } else if (b == null) {
+        result[field] = older[field];
+      } else {
+        result[field] = (a.isAfter(b) ? older : newer)[field];
+      }
+    }
+
+    return result;
   }
 }

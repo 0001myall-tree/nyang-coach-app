@@ -169,13 +169,15 @@ class MemoryService {
     (summary) => summary is Map && summary['date']?.toString() == date,
   );
 
-  /// 하루 요약의 '요즘 신경 쓰는 일'을 한 줄로 편다.
-  /// 이 칸이 생기기 전에 쌓인 요약에는 없으니 빈 값을 견뎌야 한다.
   /// 그날 코치와 함께 만들거나 정한 것. 없으면 빈 문자열.
+  /// 이 칸이 생기기 전에 쌓인 요약에는 없으니 빈 값을 견뎌야 한다.
   ///
   /// 요약의 다른 칸은 무엇을 했는지를 적는데, 이 칸만 무엇이 나왔는지를 적는다.
   /// "등장인물 정리"로는 다음 날 이어갈 수 없고, 이름과 설정이 남아야 이어진다.
-  static String _made(dynamic summary) {
+  ///
+  /// 저장되는 이름은 'made' 그대로 둔다. 이름을 바꾸면 지금까지 쌓인 요약의
+  /// 이 칸을 못 읽는다.
+  static String settledWith(dynamic summary) {
     if (summary is! Map) return '';
     return (summary['made'] ?? '').toString().trim();
   }
@@ -187,158 +189,6 @@ class MemoryService {
         .map((e) => e?.toString().trim() ?? '')
         .where((e) => e.isNotEmpty)
         .join(', ');
-  }
-
-  String buildMemoryContext(String coachTier) {
-    String profileCtx = "\n[사용자 마스터 프로필]";
-
-    String formatMidItem(dynamic item) {
-      if (item == null) return '';
-      if (item is String) return item;
-      if (item is Map && item.containsKey('value')) {
-        return item['value'].toString();
-      }
-      return item.toString();
-    }
-
-    final highChange = masterProfile['high_change'] ?? {};
-    final midChange = masterProfile['mid_change'] ?? {};
-    final lowChange = masterProfile['low_change'] ?? {};
-    final resistanceProfile =
-        masterProfile['execution_resistance_profile'] as Map? ?? {};
-
-    String formatList(dynamic value) {
-      if (value is! List || value.isEmpty) return '기록 전';
-      final text = value
-          .map((e) {
-            if (e is Map && e.containsKey('value')) return e['value'];
-            if (e is Map && e.containsKey('intervention')) {
-              final intervention = e['intervention'] ?? '';
-              final taskType = e['task_type'] ?? '';
-              final reason = e['reason'] ?? '';
-              final rejectedAt = e['last_rejected_at'] ?? '';
-              return [
-                intervention,
-                if (taskType.toString().trim().isNotEmpty) '과업:$taskType',
-                if (reason.toString().trim().isNotEmpty) '이유:$reason',
-                if (rejectedAt.toString().trim().isNotEmpty) '날짜:$rejectedAt',
-              ].join(' / ');
-            }
-            return e;
-          })
-          .where((e) => e != null && e.toString().trim().isNotEmpty)
-          .join(', ');
-      return text.trim().isEmpty ? '기록 전' : text;
-    }
-
-    String resistanceCtx() {
-      final preferredChoiceCount = resistanceProfile['preferred_choice_count']
-          ?.toString()
-          .trim();
-      return '''\n[실행 저항 개인화]
-- 자주 막히는 과업: ${formatList(resistanceProfile['frequent_resisted_task_types'])}
-- 자주 보이는 막힘: ${formatList(resistanceProfile['common_blockers'])}
-- 잘 먹힌 개입: ${formatList(resistanceProfile['effective_interventions'])}
-- 거부/부담이 컸던 개입: ${formatList(resistanceProfile['rejected_interventions'])}
-- 최근 거부한 개입(최신순): ${formatList(resistanceProfile['recent_rejected_interventions'])}
-- 적정 선택지 수: ${preferredChoiceCount == null || preferredChoiceCount.isEmpty ? '기록 전' : preferredChoiceCount}
-- 과업별 메모: ${formatList(resistanceProfile['task_specific_notes'])}''';
-    }
-
-    if (coachTier == 'friends') {
-      profileCtx +=
-          '''\n- 실시간 상태: ${highChange['energy_fatigue'] ?? '관찰 중'} / ${highChange['mood_condition'] ?? '기록 전'}
-- 오늘의 장애물: ${highChange['obstacles'] ?? '없음'}${resistanceCtx()}''';
-    } else if (coachTier == 'pro') {
-      profileCtx +=
-          '''\n[실시간 상태]\n- 에너지/기분: ${highChange['energy_fatigue']} / ${highChange['mood_condition']}
-\n[현재 챕터]\n- 챕터: ${midChange['chapter']?['title']}
-- 상세: ${midChange['chapter']?['description']}
-\n${resistanceCtx()}
-\n[관찰된 패턴]\n- 의사결정 패턴: ${lowChange['decision_pattern']}
-- 성공/실패 공식: ${lowChange['success_failure_formula']}''';
-    } else {
-      final keywords =
-          (midChange['keywords_axis'] as List?)
-              ?.map((e) => formatMidItem(e))
-              .join(', ') ??
-          '';
-      profileCtx +=
-          '''\n${resistanceCtx()}
-\n[현재 상태]\n- 상태: ${highChange['energy_fatigue']} / ${highChange['mood_condition']}\n- 장애물: ${highChange['obstacles']}
-\n[최근 맥락]\n- 챕터: ${midChange['chapter']?['title']} (${midChange['chapter']?['description']})\n- 관심 축: $keywords
-\n[장기 성향 참고]\n- 정체성: ${lowChange['identity']}\n- 의사결정 패턴: ${lowChange['decision_pattern']}\n- 소통 프로토콜: ${lowChange['communication_protocol']}\n- 성공/실패 공식: ${lowChange['success_failure_formula']}
-- 개입 규칙: ${lowChange['intervention_rules']}''';
-
-      final scenes = highChange['scenes_insights'] as List?;
-      if (scenes != null && scenes.isNotEmpty) {
-        profileCtx += '\n\n[코칭 개입 데이터 - 언어적 동기화 용]\n';
-        for (var s in scenes) {
-          if (s is Map) {
-            profileCtx +=
-                '- [인상적인 장면]: ${s['scene']}\n  [사용자 고유 표현]: "${s['expression']}"\n  [인사이트]: ${s['insight']}\n';
-          }
-        }
-      }
-
-      final candidates = masterProfile['low_change_candidates'] as List?;
-      if (candidates != null && candidates.isNotEmpty) {
-        profileCtx += '\n[장기 성향 후보 (30일 지속 패턴 - 승인 요청 필요)]\n';
-        for (var c in candidates) {
-          if (c is Map) {
-            profileCtx +=
-                '- ${c['field']}: ${c['value']} (이유: ${c['reason']})\n';
-          }
-        }
-        profileCtx +=
-            '\n*위 후보에 대해 "요즘 이런 모습이 자주 보이는데, 제가 기억해두고 계속 챙겨드릴까요?" 혹은 "이건 대표님만의 중요한 루틴인 것 같은데, 제가 잊지 않게 적어둘게요!"와 같이 자연스럽게 제안하세요.';
-      }
-    }
-
-    String ctx =
-        '''
-$profileCtx
-
-[코칭 개입 규칙 (매우 중요)]
-1. 언어적 동기화 (Linguistic Sync): 
-   - [사용자 고유 표현]을 문장 속에 자연스럽게 섞어서 사용하세요. (주 1~2회 빈도 제한)
-   - 감정이나 표현은 되받지 말고 오늘 상황에 녹여내세요. (예: "오늘도 '숨 쉬는 느낌'이 드는 평온한 하루면 좋겠네요.")
-   - 사용자가 직접 고른 답과 앱이 세어둔 숫자는 그대로 짚어 코칭의 근거로 쓸 수 있습니다. 사용자를 효과적으로 납득시키기 위해서예요. (예: "아침에 오늘 두세 시간 쓸 수 있다고 했잖아. 근데 8개 적었더라.")
-   - 숫자와 날짜는 위에 적힌 것만 씁니다. 세어둔 값이 없으면 그 이야기는 하지 않습니다.
-2. 맥락 기반 제언 (Contextual Advice): 
-   - [최근 맥락]의 [관심 축]을 활용해 현재 상황의 원인을 짚어주세요. (예: "오늘 피로도가 높은 게, 혹시 요즘 몰입 중인 일본 진출 준비 때문일까요?")
-3. 자연스러운 패턴 브레이킹 (Pattern Breaking): 
-   - [장기 성향 참고]의 [성공/실패 공식] 감지 시, 진단적인 말투 대신 상황 묘사형으로 부드럽게 개입하세요. (예: "지금 보니까 완벽주의 때문에 오히려 행동이 조금 느려진 상황인 것 같아요. 조금만 힘을 빼볼까요?")
-4. 실행 저항 개인화:
-   - 실행 저항 상황에서는 [실행 저항 개인화]의 잘 먹힌 개입과 거부/부담이 컸던 개입을 우선 참고하세요.
-   - 특정 개입이 싫다고 명시되어 있거나 반복 거부된 경우, 그 방식을 반복하지 말고 더 작은 선택지나 다른 감각 채널로 바꾸세요.
-   - [최근 거부한 개입]에 있는 방식은 최신 항목일수록 가장 후순위로 미루고, 다른 방식부터 제안하세요.
-5. 실시간(Lite) 모드: 대화 중에는 위 프로필을 '읽기 전용'으로만 참조하며, 직접 프로필 수정을 언급하지 마세요.''';
-
-    if (longTermMemory.isNotEmpty) {
-      ctx += '\n\n[이 사용자의 장기 패턴]\n';
-      for (int i = 0; i < longTermMemory.length; i++) {
-        ctx += '${i + 1}. ${longTermMemory[i]}\n';
-      }
-    }
-
-    if (dailySummaries.isNotEmpty) {
-      final recent = dailySummaries.length > 7
-          ? dailySummaries.sublist(dailySummaries.length - 7)
-          : dailySummaries;
-      ctx += '\n[최근 7일 요약]\n';
-      for (var s in recent) {
-        if (s is Map) {
-          final onMind = formatOnMind(s['on_mind']);
-          ctx +=
-              '${s['date']}: 달성(${s['achieved']}) / 못함(${s['missed']}) / 컨디션(${s['condition']}) / 고민(${s['concern']})'
-              '${onMind.isEmpty ? '' : ' / 신경($onMind)'}'
-              '${_made(s).isEmpty ? '' : ' / 만든 것(${_made(s)})'}\n';
-        }
-      }
-    }
-
-    return ctx;
   }
 
   Future<void> generateDailySummary(
@@ -376,10 +226,17 @@ $textLogs
   ("공모전 준비해야 되는데" -> 공모전 / "알바 갔다 왔어" -> 알바 / "이사 짐 싸느라 늦었어" -> 이사 준비)
   대부분의 날은 빈 배열이거나 한 개다. 많아도 두 개.
   힘들다/지친다 같은 평가는 붙이지 않는다. 고민이 아니어도 일상이면 적는다.
-- 만든 것: 오늘 코치와 함께 만들거나 정한 것의 알맹이. 이름과 설정을 그대로 적는다.
-  ("주인공: 손해 보기 싫은데 자꾸 손해 보는 성격 / 로맨스 상대 서린: 계산적, 이면 동기")
-  다음 날 이어가려면 이 줄만 보고도 무엇이었는지 알 수 있어야 한다. "등장인물 정리"처럼 무엇을 했는지만 적으면 이어갈 수 없다.
+- 같이 정한 것(made): 오늘 코치와 함께 만들거나 정한 것의 알맹이. 이름과 설정을 그대로 적는다.
+  평소에는 한두 줄이다. 남길 알맹이가 많은 날만 네 줄까지 늘린다. 줄 수를 채우려고
+  대화에 없던 말을 덧붙이지 않는다. 며칠 뒤에 "그때 짰던 거 뭐였지" 하고 물었을 때
+  이 칸만 보고 답할 수 있으면 그 길이가 맞는 길이다. 줄바꿈으로 나눠 적는다.
+  ("이번 달은 소설 말고 에세이로 가기로 함. 주제는 이사 다니며 본 동네들")
+  ("주인공: 손해 보기 싫은데 자꾸 손해 보는 성격. 회사에서 매번 총대를 멤
+    로맨스 상대 서린: 계산적, 이면 동기는 아버지 회사를 지키는 것
+    1화는 둘이 엘리베이터에 갇히는 장면부터 시작하기로 함")
+  "등장인물 정리"처럼 무엇을 했는지만 적으면 이어갈 수 없다. 이름과 설정이 있어야 이어진다.
   일을 끝냈다는 이야기뿐이면 빈 문자열로 둔다. 달성 칸과 겹쳐 적지 말 것 — 거기는 무엇을 했는지, 여기는 무엇이 나왔는지다.
+  고민 칸과도 겹쳐 적지 말 것 — 거기는 무엇이 막혔는지, 여기는 그 끝에 무엇으로 정했는지다.
 - 실행저항: 사용자가 하기 싫어하거나 미룬 과업, 막힌 이유, 수락/거부한 개입이 있으면 행동 기반으로 간결하게 기록. ADHD 등 진단명은 붙이지 말 것.
 
 반드시 아래 JSON 형식으로 응답하세요:
