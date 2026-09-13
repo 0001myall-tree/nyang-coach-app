@@ -13451,14 +13451,17 @@ $block
       } catch (_) {}
     }
 
-    // 3. 최근 7일 요약
+    // 3. 최근 7일 요약 — 부를 때만 간다.
     //
-    // 지난 날 이야기를 이어가려는 턴([NEED: chat])에도 이 칸이 열린다. 전에는
-    // 그때 대화 원문을 실었는데, 최신부터 2400자까지만 담다 보니 어제 대화가
-    // 길면 그저께가 통째로 빠졌다. 요약은 하루가 한 줄이라 어느 날도 안 밀린다.
+    // 지난 날 이야기는 코치가 [NEED: chat]으로 부르면 여기가 열린다. 전에는
+    // 대화 원문을 실었는데, 최신부터 2400자까지만 담다 보니 어제 대화가 길면
+    // 그저께가 통째로 빠졌다. 요약은 하루가 한 줄이라 어느 날도 안 밀린다.
+    //
+    // 프렌즈 코치는 이걸 매 턴 받고 있었다. "안녕"에도 지난 이레치가 딸려
+    // 갔는데, 마스터 코치는 목표를 물은 턴에만 받았으니 정반대였다. 하루 한
+    // 줄씩 일곱 줄이면 400~700자라, 모든 턴에 붙기에는 작지 않다.
     final dsRaw = prefs.getString('nyang_daily_summaries');
-    if (dsRaw != null &&
-        (!_coach.isMaster || needsGoalContext || resolvedScope.pastChat)) {
+    if (dsRaw != null && (needsGoalContext || resolvedScope.pastChat)) {
       try {
         final ds = jsonDecode(dsRaw) as List;
         if (ds.isNotEmpty) {
