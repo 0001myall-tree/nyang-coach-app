@@ -207,6 +207,38 @@ class MemoryService {
     return (summary['made'] ?? '').toString().trim();
   }
 
+  /// 최근 요약들에서 '요즘 신경 쓰는 일' 이름만 모은다. 최근 것이 앞에 온다.
+  ///
+  /// 지난 요약 전체는 코치가 부를 때만 간다. 그런데 모르는 것은 달라고 할 수가
+  /// 없다 — 어제 상견례 이야기를 한 사람이 오늘 "약속 있어"라고만 하면, 코치는
+  /// 그 둘이 이어진다는 걸 몰라서 부를 생각도 못 한다.
+  ///
+  /// 그래서 이름만 늘 보낸다. 목차는 늘 주고 본문은 부를 때 주는 셈이다.
+  /// 요약 한 줄이 백 자쯤인데 이름은 한 줄 전체가 서른 자 안쪽이라, 매 턴
+  /// 붙어도 값이 거의 안 든다.
+  static List<String> recentOnMind(
+    List<dynamic> summaries, {
+    int days = 7,
+    int max = 5,
+  }) {
+    final recent = summaries.length > days
+        ? summaries.sublist(summaries.length - days)
+        : summaries;
+
+    // 최근 것부터 담는다. 개수가 찼을 때 남는 쪽이 최근이어야 한다.
+    final names = <String>[];
+    for (final summary in recent.reversed) {
+      if (summary is! Map) continue;
+      for (final name in formatOnMind(summary['on_mind']).split(',')) {
+        final trimmed = name.trim();
+        if (trimmed.isEmpty || names.contains(trimmed)) continue;
+        names.add(trimmed);
+        if (names.length >= max) return names;
+      }
+    }
+    return names;
+  }
+
   static String formatOnMind(dynamic value) {
     if (value is String) return value.trim();
     if (value is! List) return '';

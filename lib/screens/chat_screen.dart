@@ -13461,6 +13461,24 @@ $block
     // 갔는데, 마스터 코치는 목표를 물은 턴에만 받았으니 정반대였다. 하루 한
     // 줄씩 일곱 줄이면 400~700자라, 모든 턴에 붙기에는 작지 않다.
     final dsRaw = prefs.getString('nyang_daily_summaries');
+
+    // 이름만은 매 턴 간다.
+    //
+    // 모르는 것은 달라고 할 수가 없다. 어제 상견례 이야기를 한 사람이 오늘
+    // "약속 있어"라고만 하면, 코치는 그 둘이 이어진다는 걸 몰라서 [NEED: chat]을
+    // 부를 생각도 못 한다. 목차는 늘 주고 본문은 부를 때 준다.
+    if (dsRaw != null && !needsGoalContext && !resolvedScope.pastChat) {
+      try {
+        final onMind = MemoryService.recentOnMind(jsonDecode(dsRaw) as List);
+        if (onMind.isNotEmpty) {
+          sb.writeln('\n[요즘 신경 쓰는 일] ${onMind.join(', ')}');
+          sb.writeln(
+            '*며칠 사이에 사용자가 꺼낸 일들입니다. 오늘 이야기와 이어지면 짚어주고, 무슨 이야기였는지까지 알아야 하면 지난 날을 불러오세요.',
+          );
+        }
+      } catch (_) {}
+    }
+
     if (dsRaw != null && (needsGoalContext || resolvedScope.pastChat)) {
       try {
         final ds = jsonDecode(dsRaw) as List;
