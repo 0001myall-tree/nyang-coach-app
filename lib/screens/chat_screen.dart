@@ -5192,6 +5192,42 @@ $saidBlock$todayBlock
     return sorted;
   }
 
+  /// 오늘 목록에, 아직 옮겨지지 않은 오늘치 계획을 얹어서 본다.
+  ///
+  /// 전날 밤에 짜둔 계획은 날짜별 보관함에 들어가 있다가, 그날 자정 정리가
+  /// 오늘 목록으로 옮긴다. 그 정리는 앱을 열 때 도는데, 클라우드 복원을
+  /// 기다리느라 인사보다 늦을 수 있다. 그 사이에 인사하면 계획을 다 짜둔
+  /// 사람에게 "오늘은 아직 계획이 없는데"라고 말한다.
+  ///
+  /// 정리가 이미 돌았으면 보관함에서 오늘 칸이 지워져 있어 얹을 것이 없다.
+  /// 정리가 아직이면 여기서 얹는 것과 정리가 옮길 것이 같다 — 둘 다 같은
+  /// 칸을 읽고, 겹치는 id는 얹지 않는다.
+  List<Map<String, dynamic>> _withTodayPlannedAhead(
+    SharedPreferences prefs,
+    DateTime now,
+  ) {
+    final tasks = _decodeMapList(prefs.getString('nyang_tasks'));
+    final raw = prefs.getString(DailyResetService.plannedTasksByDateKey);
+    if (raw == null || raw.isEmpty) return tasks;
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) return tasks;
+      final planned = decoded[_dateKey(now)];
+      if (planned is! List) return tasks;
+
+      final ids = tasks.map((task) => task['id'].toString()).toSet();
+      final merged = [...tasks];
+      for (final item in planned) {
+        if (item is! Map) continue;
+        if (!ids.add(item['id'].toString())) continue;
+        merged.add(Map<String, dynamic>.from(item));
+      }
+      return merged;
+    } catch (_) {
+      return tasks;
+    }
+  }
+
   Future<MasterGreetingContext> _buildMasterGreetingContext({
     required SharedPreferences prefs,
     required DateTime now,
@@ -5199,7 +5235,7 @@ $saidBlock$todayBlock
     // 인사를 낼 때만 넘어온다. 남은 일 개수만 세러 오는 자리에서는 필요 없다.
     String? startPatternLabel,
   }) async {
-    final tasks = _decodeMapList(prefs.getString('nyang_tasks'));
+    final tasks = _withTodayPlannedAhead(prefs, now);
     bool isPlan(Map<String, dynamic> task) {
       final category = task['category']?.toString();
       return category == 'today' || category == 'schedule';
@@ -6381,30 +6417,20 @@ $saidBlock$todayBlock
     return true;
   }
 
-  String? _numericMinimumSuccessCandidate(List<String> pendingPlans) {
-    final numeric = RegExp(r'\d');
-    final candidates = pendingPlans
-        .map((plan) => plan.trim())
-        .where((plan) => plan.isNotEmpty && plan.length <= 40)
-        .where((plan) => numeric.hasMatch(plan))
-        .toList(growable: false);
-    if (candidates.isEmpty) return null;
-    candidates.sort((a, b) => a.length.compareTo(b.length));
-    return candidates.first;
-  }
-
   Future<String?> _buildMinimumSuccessSplitGreeting(
     MasterGreetingContext context,
   ) async {
     if (!context.needsEveningMinimumSuccessReset) return null;
-    final original = _numericMinimumSuccessCandidate(context.pendingPlans);
-    if (original == null) return null;
 
-    final reduced = await _suggestReducedMinimumSuccessTask(original);
-    if (reduced == null) return null;
+    // 어느 일을 줄일 수 있는지는 앱이 고르지 않는다. 숫자가 있다고 다 줄일
+    // 수 있는 게 아니라서다 — '사당역 19시'는 약속이라 5시로 옮기면 줄인
+    // 게 아니라 다른 약속이 된다. 남은 일을 통째로 넘기고 고르는 것까지
+    // 맡긴다.
+    final split = await _suggestMinimumSuccessSplit(context.pendingPlans);
+    if (split == null) return null;
 
-    final safeOriginal = original.replaceAll("'", '');
-    final safeReduced = reduced.replaceAll("'", '');
+    final safeOriginal = split.original.replaceAll("'", '');
+    final safeReduced = split.reduced.replaceAll("'", '');
     final particle = _objectParticle(safeOriginal);
     if (CoachIdService.isNyangHalbae(_coach.id)) {
       return '아직 오늘 시작 표시가 없구나냥. 괜찮다냥. 지금은 원래 계획을 다 붙잡기보다 \'$safeOriginal\'$particle \'$safeReduced\'로 줄여보자냥. 그 정도면 오늘의 최소 성공으로 충분하다냥.';
@@ -6420,23 +6446,37 @@ $saidBlock$todayBlock
     return (code - 0xAC00) % 28 == 0 ? '를' : '을';
   }
 
-  Future<String?> _suggestReducedMinimumSuccessTask(String taskName) async {
-    const model = 'gpt-4.1-mini';
+  /// 남은 일 중에서 줄일 수 있는 것 하나를 골라 작게 고쳐 온다. 고를 게
+  /// 없으면 null. 고르는 일도 줄이는 일도 모델 몫이다.
+  Future<_MinimumSuccessSplit?> _suggestMinimumSuccessSplit(
+    List<String> pendingPlans,
+  ) async {
+    final plans = pendingPlans
+        .map((plan) => plan.trim())
+        .where((plan) => plan.isNotEmpty && plan.length <= 40)
+        .take(10)
+        .toList(growable: false);
+    if (plans.isEmpty) return null;
+
+    const model = 'gpt-5-mini';
     final messages = [
       {
         'role': 'system',
         'content': '''
-You rewrite one Korean task title into a smaller "minimum success" version.
+You are given a Korean to-do list. Pick at most one item that can honestly be
+made smaller for today, and rewrite it as a smaller "minimum success" version.
 Rules:
-- Only reduce numeric quantity/time/progress already present in the title.
-- Aim for about 1/3 or 1/4 of the original amount.
-- Keep the same unit and action.
-- Never add a new task, new unit, schedule, explanation, or encouragement.
-- If the title cannot be safely reduced, return {"reduced":null}.
-- Return only compact JSON like {"reduced":"문제 8개만 풀기"}.
+- Pick an item whose amount of work can shrink: quantity, duration, pages, reps, scope.
+- An appointment, meeting, or anything tied to a fixed clock time or date cannot shrink.
+  Its number is when it happens, not how much work it is.
+- Make the smaller version about 1/3 or 1/4 of the original effort, same action.
+- Copy "original" from the list character for character.
+- Never invent a task, add a schedule, explain, or encourage.
+- If nothing on the list can shrink, return {"original":null,"reduced":null}.
+- Return only compact JSON like {"original":"수학 문제 24개 풀기","reduced":"수학 문제 8개만 풀기"}.
 ''',
       },
-      {'role': 'user', 'content': taskName},
+      {'role': 'user', 'content': plans.map((p) => '- $p').join('\n')},
     ];
 
     try {
@@ -6454,10 +6494,8 @@ Rules:
       });
 
       final content = result.data['content'] as String? ?? '';
-      final reduced = _parseReducedMinimumSuccessTask(content);
-      if (reduced == null || !_looksLikeReducedTask(taskName, reduced)) {
-        return null;
-      }
+      final split = _parseMinimumSuccessSplit(content, plans);
+      if (split == null) return null;
 
       final estimatedTokens = AnalyticsService.estimateChatTokens(
         messages,
@@ -6492,42 +6530,40 @@ Rules:
       unawaited(
         AnalyticsService.logFeatureUsage('master_minimum_success_split_api'),
       );
-      return reduced;
+      return split;
     } catch (error) {
       debugPrint('Minimum success split failed: $error');
       return null;
     }
   }
 
-  String? _parseReducedMinimumSuccessTask(String content) {
+  /// 줄일 만한지는 따지지 않는다. 목록에 없는 일을 지어냈거나 그대로 돌려준
+  /// 것만 막는다. 앞의 것은 없는 일을 인용하게 되고, 뒤의 것은 줄인 말이
+  /// 아니라서다.
+  _MinimumSuccessSplit? _parseMinimumSuccessSplit(
+    String content,
+    List<String> plans,
+  ) {
     final trimmed = content.trim();
     if (trimmed.isEmpty) return null;
     try {
       final decoded = jsonDecode(trimmed);
       if (decoded is! Map) return null;
-      final value = decoded['reduced'];
-      if (value == null) return null;
-      final reduced = value.toString().trim();
-      if (reduced.isEmpty || reduced.length > 40) return null;
-      return reduced.replaceAll(RegExp(r'[\r\n]'), ' ');
+
+      final original = decoded['original']?.toString().trim() ?? '';
+      final reduced = decoded['reduced']?.toString().trim() ?? '';
+      if (original.isEmpty || reduced.isEmpty) return null;
+      if (reduced.length > 40) return null;
+      if (original == reduced) return null;
+      if (!plans.contains(original)) return null;
+
+      return _MinimumSuccessSplit(
+        original: original,
+        reduced: reduced.replaceAll(RegExp(r'[\r\n]'), ' '),
+      );
     } catch (_) {
       return null;
     }
-  }
-
-  bool _looksLikeReducedTask(String original, String reduced) {
-    if (original == reduced) return false;
-    final originalNumbers = RegExp(r'\d+').allMatches(original).toList();
-    final reducedNumbers = RegExp(r'\d+').allMatches(reduced).toList();
-    if (originalNumbers.isEmpty || reducedNumbers.isEmpty) return false;
-
-    final originalMax = originalNumbers
-        .map((m) => int.tryParse(m.group(0) ?? '') ?? 0)
-        .fold<int>(0, max);
-    final reducedMax = reducedNumbers
-        .map((m) => int.tryParse(m.group(0) ?? '') ?? 0)
-        .fold<int>(0, max);
-    return reducedMax > 0 && originalMax > reducedMax;
   }
 
   /// 곧 시작할 일정을 짚는 발화만 냥냥이에게도 낸다.
@@ -6571,7 +6607,7 @@ Rules:
     if (_coach.id != 'cat') return false;
     if (now.hour >= MasterGreetingContext.quietFromHour) return false;
 
-    final tasks = _decodeMapList(prefs.getString('nyang_tasks'));
+    final tasks = _withTodayPlannedAhead(prefs, now);
     if (_startCatLateNightMinimumGreeting(prefs: prefs, now: now)) {
       return true;
     }
@@ -7031,7 +7067,7 @@ Rules:
   Future<String?> _buildExecutionTypeAdvice(SharedPreferences prefs) async {
     // 루틴도 함께 센다. 사용자에게는 오늘 화면에 늘어선 것이 곧 오늘의 몫이고,
     // 그중 어느 것이 매일 돌아오는 루틴인지로 개수를 가르지 않는다.
-    final planCount = _decodeMapList(prefs.getString('nyang_tasks')).length;
+    final planCount = _withTodayPlannedAhead(prefs, DateTime.now()).length;
 
     // 최근 페이스를 보고 코치가 만든 말이 첫 자리다. 아래 고정 문구들은 이것이
     // 안 될 때(기록이 모자라거나 호출이 막혔을 때)로 남는다.
@@ -20561,4 +20597,13 @@ class _PawPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_PawPainter old) => false;
+}
+
+/// 저녁에 "이건 이만큼만 해보자"고 말할 때 쓰는 한 쌍. 원래 적어둔 일과,
+/// 모델이 오늘 크기로 줄여 온 말.
+class _MinimumSuccessSplit {
+  const _MinimumSuccessSplit({required this.original, required this.reduced});
+
+  final String original;
+  final String reduced;
 }
