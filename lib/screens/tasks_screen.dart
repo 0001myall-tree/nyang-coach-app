@@ -37,6 +37,7 @@ import '../services/routine_schedule.dart';
 import '../widgets/banner_answer_dialog.dart';
 import '../widgets/alarm_permission_notice.dart';
 import '../widgets/core_reminder_settings_sheet.dart';
+import '../utils/korean_line_break.dart';
 
 // ─────────────────────────────────────────────────────────────
 // 데이터 모델 (웹앱 그대로)
@@ -5540,7 +5541,59 @@ class _TasksScreenState extends State<TasksScreen>
   }
 
   // ── 핵심 할 일 (Core Tasks) 영역 ───────────────────────────
+
+  /// 핵심 고르는 화면을 여는 버튼.
+  ///
+  /// 아직 아무것도 안 골랐을 때는 이것만 놓이고, 고른 뒤에는 제목 옆에 작게
+  /// 놓인다. 두 자리가 같은 일을 하니 모양도 같게 두고 크기만 줄인다.
+  ///
+  /// 원래 이 자리에는 제목과 '설정하기'만 덩그러니 있었다. 제목은 빈 칸에
+  /// 이름만 붙여둔 셈이었고, 무엇을 하라는 말은 옆에 작게 붙은 글자뿐이었다.
+  Widget _buildCorePickButton({bool small = false}) {
+    return GestureDetector(
+      onTap: _showCoreSelectionModal,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: small
+            ? const EdgeInsets.symmetric(horizontal: 12, vertical: 6)
+            : const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+            color: _coach.accentColor,
+            width: small ? 1.2 : 1.4,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.add, size: small ? 13 : 17, color: _coach.accentColor),
+            SizedBox(width: small ? 4 : 6),
+            Text(
+              small ? '바꾸기' : '핵심 정하기',
+              style: GoogleFonts.notoSansKr(
+                fontSize: small ? 12 : 14,
+                fontWeight: FontWeight.w800,
+                color: _coach.accentColor,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildCoreSection() {
+    if (coreTasks.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: _buildCorePickButton(),
+        ),
+      );
+    }
+
     return Container(
       width: double.infinity,
       // 아래 여백을 14에서 6으로. 목록 위 여백(12)과 타이머 줄의 위 여백(4)이
@@ -5564,30 +5617,11 @@ class _TasksScreenState extends State<TasksScreen>
                   color: const Color(0xFF3D3A4E),
                 ),
               ),
-              GestureDetector(
-                onTap: _showCoreSelectionModal,
-                child: Text(
-                  '설정하기',
-                  style: GoogleFonts.notoSansKr(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: _coach.accentColor,
-                  ),
-                ),
-              ),
+              _buildCorePickButton(small: true),
             ],
           ),
-          const SizedBox(height: 12),
-          if (coreTasks.isEmpty)
-            Text(
-              '선택된 핵심이 없어요.',
-              style: GoogleFonts.notoSansKr(
-                fontSize: 13,
-                color: const Color(0xFFA0A0B0),
-                height: 1.5,
-              ),
-            )
-          else ...[
+          ...[
+            const SizedBox(height: 12),
             if (_coreExpanded)
               ...List.generate(coreTasks.length, (i) => _buildCoreItem(i))
             else
@@ -6740,7 +6774,7 @@ class _TasksScreenState extends State<TasksScreen>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    _corePickCardMessage,
+                    keepWordsWhole(_corePickCardMessage),
                     style: GoogleFonts.notoSansKr(
                       fontSize: 13,
                       height: 1.45,
