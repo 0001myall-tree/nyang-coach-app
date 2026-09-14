@@ -198,27 +198,6 @@ object OngoingNudgeAnswerWriter {
         return false
     }
 
-    /**
-     * 마지막으로 무언가를 끝낸 지 몇 분 지났는지. 끝낸 게 없으면 null.
-     *
-     * 틈새 코칭이 본다. 방금 하나를 끝낸 사람의 여유는 이미 벌어둔 여유라,
-     * 거기에 대고 또 무언가를 권하지 않는다.
-     */
-    fun minutesSinceLastCompletion(context: Context): Long? {
-        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        val tasksRaw = prefs.getString(KEY_TASKS, null) ?: return null
-        val tasks = runCatching { JSONArray(tasksRaw) }.getOrNull() ?: return null
-
-        var latest = 0L
-        for (i in 0 until tasks.length()) {
-            val item = tasks.optJSONObject(i) ?: continue
-            if (!item.optBoolean("done", false)) continue
-            val at = parseIso(item.optString("completedAt", "")) ?: continue
-            if (at > latest) latest = at
-        }
-        if (latest == 0L) return null
-        return (System.currentTimeMillis() - latest) / 60_000L
-    }
 
     /**
      * 시간이 정해진 일정이 지금 앞뒤로 가까이 있는지.
@@ -229,11 +208,7 @@ object OngoingNudgeAnswerWriter {
      * 앞뒤로 넉넉하게 두 시간씩 본다. 좁게 잡았다가 약속을 앞둔 사람에게 한 번
      * 잘못 나가는 쪽이, 여유 있는 날 한 번 걸러지는 쪽보다 훨씬 나쁘다.
      */
-    fun hasTimedTaskNear(
-        context: Context,
-        beforeMinutes: Long = 120L,
-        afterMinutes: Long = 120L,
-    ): Boolean {
+    fun hasTimedTaskNow(context: Context): Boolean {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val tasksRaw = prefs.getString(KEY_TASKS, null) ?: return false
         val tasks = runCatching { JSONArray(tasksRaw) }.getOrNull() ?: return false
@@ -244,15 +219,21 @@ object OngoingNudgeAnswerWriter {
         for (i in 0 until tasks.length()) {
             val item = tasks.optJSONObject(i) ?: continue
             if (item.optBoolean("done", false)) continue
-            val pieces = item.optString("timeStart", "").split(":")
-            if (pieces.size != 2) continue
-            val hour = pieces[0].toIntOrNull() ?: continue
-            val minute = pieces[1].toIntOrNull() ?: continue
-            val diff = nowMinutes - (hour * 60 + minute)
-            if (diff in 0..beforeMinutes.toInt()) return true
-            if (diff < 0 && -diff <= afterMinutes.toInt()) return true
+            val start = minutesOf(item.optString("timeStart", "")) ?: continue
+            // 끝나는 시각을 안 적었으면 한 시간짜리로 본다.
+            val end = minutesOf(item.optString("timeEnd", "")) ?: (start + 60)
+            if (nowMinutes in start until end) return true
         }
         return false
+    }
+
+    /** "19:00" -> 1140. 못 읽으면 null. */
+    private fun minutesOf(hhmm: String): Int? {
+        val pieces = hhmm.split(":")
+        if (pieces.size != 2) return null
+        val hour = pieces[0].toIntOrNull() ?: return null
+        val minute = pieces[1].toIntOrNull() ?: return null
+        return hour * 60 + minute
     }
 
     /**

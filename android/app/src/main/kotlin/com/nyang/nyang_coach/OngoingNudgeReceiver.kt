@@ -111,11 +111,12 @@ class OngoingNudgeReceiver : BroadcastReceiver() {
         // 아니라 잔소리다. 아무것도 적어두지 않은 사람은 여기서 걸리지 않는다 —
         // 그쪽에는 하나 정해두자고 권할 말이 있다.
         if (GapCoachingCopy.isDayFinished(context)) return
-        // 방금 하나를 끝냈다.
-        val sinceDone = OngoingNudgeAnswerWriter.minutesSinceLastCompletion(context)
-        if (sinceDone != null && sinceDone in 0L..29L) return
-        // 지켜야 할 시각이 앞뒤로 가깝다.
-        if (OngoingNudgeAnswerWriter.hasTimedTaskNear(context)) return
+        // 시각을 정해둔 일정이 지금 그 자리에 걸쳐 있다.
+        //
+        // 앞뒤 두 시간을 비우고 '방금 끝낸 지 30분'까지 걸렀던 자리다. 둘 다
+        // 너무 넓어서, 아침저녁에 시각을 적어둔 사람은 정해둔 틈새 시각이
+        // 거의 매번 걸러졌다. Dart 쪽 _gapBlocked와 같은 규칙이다.
+        if (OngoingNudgeAnswerWriter.hasTimedTaskNow(context)) return
 
         OngoingNudgeService.showGap(context)
     }

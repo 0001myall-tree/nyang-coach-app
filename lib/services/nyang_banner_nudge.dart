@@ -101,17 +101,19 @@ class NyangBannerNudge {
   /// 배너 제목. 본문은 그때 남은 일을 보고 [GapCoachingService.bodyFor]가 고른다.
   static const String gapTitle = '🐾 지금 잠깐 여유 있냥?';
 
-  /// 하나를 끝낸 직후의 여유는 건드리지 않는다.
-  static const Duration _gapAfterDone = Duration(minutes: 30);
-
   /// 틈새 코칭이 나간 뒤 이만큼은 "다음 일"·"멈춘 일" 카드가 오지 않는다.
   static const Duration _gapAfterglow = Duration(hours: 3);
 
-  /// 시간이 정해진 일정이 앞뒤로 이만큼 안에 있으면 비켜준다.
+  /// 정해둔 틈새 시각이 이만큼 뒤면, "다음 일"·"멈춘 일" 카드가 자리를 비켜준다.
   ///
-  /// 넉넉하게 잡는다. 좁게 잡았다가 약속을 앞둔 사람에게 한 번 잘못 나가는
-  /// 쪽이, 여유 있는 날 한 번 걸러지는 쪽보다 훨씬 나쁘다.
+  /// 비켜주는 쪽에만 쓴다. 틈새 코칭을 거르는 데는 쓰지 않는다 — 앞뒤 두
+  /// 시간을 다 비우면 시각을 적어둔 사람에게는 하루가 통째로 막힌다.
   static const Duration _gapNearTimed = Duration(hours: 2);
+
+  /// 시각이 정해진 일정이 이만큼 안에 있으면 그 자리는 그 일정의 것이다.
+  ///
+  /// 끝나는 시각을 안 적은 일에 쓰는 길이이기도 하다.
+  static const Duration _gapOnTimed = Duration(hours: 1);
 
   static const Duration _nextTaskRound = Duration(hours: 2);
 
@@ -382,10 +384,19 @@ class NyangBannerNudge {
   /// 쉬고 있을 때 건네는 말이라, 손을 대고 있거나 곧 지켜야 할 시각이 있으면
   /// 얹지 않는다. "다음 일"·"멈춘 일" 배너는 여기 들어오지 않는다 — 그쪽이
   /// 이쪽에 자리를 내주는 관계다.
+  /// 그 시각에 틈새 코칭을 접어야 하는지.
+  ///
+  /// 접는 조건은 둘뿐이다 — 지금 손대고 있는 일이 있거나, 그 시각이 시각을
+  /// 정해둔 일정에 걸려 있거나.
+  ///
+  /// 셋이었다. '방금 하나를 끝냈다'와 '정해둔 시각이 앞뒤 두 시간 안에 있다'가
+  /// 더 있었는데, 둘 다 너무 넓었다. 두 시간씩 앞뒤로 비우면 아침저녁에 시각을
+  /// 적어둔 사람은 정해둔 틈새 시각이 거의 매번 걸러진다. 끝낸 직후 30분도
+  /// 마찬가지다 — 하나 끝내고 쉬는 그 자리가 사실은 여유가 가장 분명한 때다.
   static bool _gapBlocked(List tasks, DateTime at, List<DateTime> blocking) {
-    // 시작할 시각이나 "지금도 하는 중이야?"가 그 시간대에 있다.
+    // 시작할 시각이나 "지금도 하는 중이야?"가 바로 그 자리에 있다.
     for (final other in blocking) {
-      if (other.difference(at).abs() < _gapNearTimed) return true;
+      if (other.difference(at).abs() < _gapOnTimed) return true;
     }
 
     for (final item in tasks) {
@@ -393,30 +404,24 @@ class NyangBannerNudge {
       // 도는 중인 일이 있다.
       if (item['done'] != true && item['inProgress'] == true) return true;
 
-      // 방금 하나를 끝냈다. 끝낸 직후의 여유까지 건드리지 않는다.
-      final completedAt = DateTime.tryParse(
-        item['completedAt']?.toString() ?? '',
-      );
-      if (completedAt != null &&
-          at.difference(completedAt).inMinutes.abs() <
-              _gapAfterDone.inMinutes) {
-        return true;
-      }
-
-      // 시간이 정해진 일정이 앞뒤로 가깝다.
+      // 시각을 정해둔 일정이 그 자리에 걸쳐 있다.
       if (item['done'] == true) continue;
-      final timeStart = item['timeStart']?.toString();
-      if (timeStart == null || timeStart.isEmpty) continue;
-      final parts = timeStart.split(':');
-      if (parts.length != 2) continue;
-      final hour = int.tryParse(parts[0]);
-      final minute = int.tryParse(parts[1]);
-      if (hour == null || minute == null) continue;
-      final scheduled = DateTime(at.year, at.month, at.day, hour, minute);
-      // 앞이든 뒤든 두 시간 안이면 비켜준다.
-      if (at.difference(scheduled).abs() < _gapNearTimed) return true;
+      final start = _timeOn(at, item['timeStart']);
+      if (start == null) continue;
+      final end = _timeOn(at, item['timeEnd']) ?? start.add(_gapOnTimed);
+      if (!at.isBefore(start) && at.isBefore(end)) return true;
     }
     return false;
+  }
+
+  /// "19:00" 같은 값을 [day]의 시각으로. 못 읽으면 null.
+  static DateTime? _timeOn(DateTime day, Object? hhmm) {
+    final parts = (hhmm?.toString() ?? '').split(':');
+    if (parts.length != 2) return null;
+    final hour = int.tryParse(parts[0]);
+    final minute = int.tryParse(parts[1]);
+    if (hour == null || minute == null) return null;
+    return DateTime(day.year, day.month, day.day, hour, minute);
   }
 
   static Future<void> _scheduleGap({

@@ -24,6 +24,7 @@ import '../services/gap_coaching_service.dart';
 import '../services/nyang_banner_nudge.dart';
 import '../services/ongoing_task_nudge_service.dart';
 import '../theme/app_design_tokens.dart';
+import '../utils/korean_line_break.dart';
 import '../widgets/alarm_permission_notice.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -395,10 +396,9 @@ class _SettingsScreenState extends State<SettingsScreen>
 
     if (!mounted) return;
 
-    showModalBottomSheet(
+    showDialog(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withOpacity(0.48),
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setModalState) {
@@ -535,152 +535,128 @@ class _SettingsScreenState extends State<SettingsScreen>
               );
             }
 
-            return Container(
-              height: MediaQuery.of(context).size.height * 0.7,
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Center(
-                    child: Container(
-                      width: 40,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFE5E7EB),
-                        borderRadius: BorderRadius.circular(2),
+            return _settingsDialog(
+              children: [
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.widgets_rounded,
+                      color: Color(0xFF8B7CFF),
+                      size: 24,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      '홈 화면 위젯 설정',
+                      style: GoogleFonts.notoSansKr(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w900,
+                        color: const Color(0xFF1A1A2E),
                       ),
                     ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  '앱을 열지 않아도 오늘 할 일과 진행 상황을 바탕화면에서 바로 확인할 수 있어요.',
+                  style: GoogleFonts.notoSansKr(
+                    fontSize: 14,
+                    color: const Color(0xFF8E8D9B),
                   ),
-                  const SizedBox(height: 24),
-                  Row(
-                    children: [
-                      const Icon(
-                        Icons.widgets_rounded,
-                        color: Color(0xFF8B7CFF),
-                        size: 24,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        '홈 화면 위젯 설정',
-                        style: GoogleFonts.notoSansKr(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w900,
-                          color: const Color(0xFF1A1A2E),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    '앱을 열지 않아도 오늘 할 일과 진행 상황을 바탕화면에서 바로 확인할 수 있어요.',
-                    style: GoogleFonts.notoSansKr(
-                      fontSize: 14,
-                      color: const Color(0xFF8E8D9B),
-                    ),
-                  ),
-                  const SizedBox(height: 32),
-                  _buildWidgetToggle(
-                    title: '냥냥코치 미니 위젯',
-                    subtitle: '남은 할 일을 작게 보기',
-                    value: tempNyang,
-                    isLocked: false,
-                    onChanged: (val) {
-                      setModalState(() {
-                        tempNyang = val;
-                        if (val) {
-                          tempCatCharacter = false;
-                        }
-                      });
-                    },
-                  ),
-                  _buildWidgetToggle(
-                    title: '냥냥코치 가로 위젯',
-                    subtitle: '냥이와 진행 상황을 넓게 보기',
-                    isRecommended: true,
-                    value: tempCatCharacter,
-                    isLocked: false,
-                    onChanged: (val) {
-                      setModalState(() {
-                        tempCatCharacter = val;
-                        if (val) {
-                          tempNyang = false;
-                        }
-                      });
-                    },
-                  ),
-                  const SizedBox(height: 8),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 56,
-                    child: ElevatedButton(
-                      onPressed: () async {
-                        await prefs.setBool('widget_nyang_enabled', tempNyang);
-                        await prefs.setBool(
-                          'widget_cat_character_enabled',
-                          tempCatCharacter,
-                        );
-                        await prefs.setBool(
-                          'widget_nyang_halbae_enabled',
-                          false,
-                        );
-                        await prefs.setBool('widget_sec_female_enabled', false);
-                        await prefs.setBool(
-                          'nyang_home_widget_enabled',
-                          tempNyang || tempCatCharacter,
-                        );
+                ),
+                const SizedBox(height: 32),
+                _buildWidgetToggle(
+                  title: '냥냥코치 미니 위젯',
+                  subtitle: '남은 할 일을 작게 보기',
+                  value: tempNyang,
+                  isLocked: false,
+                  onChanged: (val) {
+                    setModalState(() {
+                      tempNyang = val;
+                      if (val) {
+                        tempCatCharacter = false;
+                      }
+                    });
+                  },
+                ),
+                _buildWidgetToggle(
+                  title: '냥냥코치 가로 위젯',
+                  subtitle: '냥이와 진행 상황을 넓게 보기',
+                  isRecommended: true,
+                  value: tempCatCharacter,
+                  isLocked: false,
+                  onChanged: (val) {
+                    setModalState(() {
+                      tempCatCharacter = val;
+                      if (val) {
+                        tempNyang = false;
+                      }
+                    });
+                  },
+                ),
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  height: 56,
+                  child: ElevatedButton(
+                    onPressed: () async {
+                      await prefs.setBool('widget_nyang_enabled', tempNyang);
+                      await prefs.setBool(
+                        'widget_cat_character_enabled',
+                        tempCatCharacter,
+                      );
+                      await prefs.setBool('widget_nyang_halbae_enabled', false);
+                      await prefs.setBool('widget_sec_female_enabled', false);
+                      await prefs.setBool(
+                        'nyang_home_widget_enabled',
+                        tempNyang || tempCatCharacter,
+                      );
 
-                        if (mounted) {
-                          setState(() {
-                            _homeWidgetStatus = _buildHomeWidgetStatus(
-                              nyang: tempNyang,
-                              catCharacter: tempCatCharacter,
-                            );
-                          });
-                        }
-
-                        final selectedProviderId = tempNyang
-                            ? 'cat'
-                            : tempCatCharacter
-                            ? 'cat_character'
-                            : null;
-
-                        await WidgetSyncService.syncFromStoredTasks();
-
-                        if (context.mounted) Navigator.pop(context);
-                        if (selectedProviderId != null) {
-                          await requestWidgetPin(selectedProviderId);
-                        } else if (mounted) {
-                          ScaffoldMessenger.of(this.context).showSnackBar(
-                            const SnackBar(
-                              content: Text('홈 화면에 남아 있는 위젯은 길게 눌러 삭제해 주세요.'),
-                            ),
+                      if (mounted) {
+                        setState(() {
+                          _homeWidgetStatus = _buildHomeWidgetStatus(
+                            nyang: tempNyang,
+                            catCharacter: tempCatCharacter,
                           );
-                        }
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF1A1A2E),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        elevation: 0,
+                        });
+                      }
+
+                      final selectedProviderId = tempNyang
+                          ? 'cat'
+                          : tempCatCharacter
+                          ? 'cat_character'
+                          : null;
+
+                      await WidgetSyncService.syncFromStoredTasks();
+
+                      if (context.mounted) Navigator.pop(context);
+                      if (selectedProviderId != null) {
+                        await requestWidgetPin(selectedProviderId);
+                      } else if (mounted) {
+                        ScaffoldMessenger.of(this.context).showSnackBar(
+                          const SnackBar(
+                            content: Text('홈 화면에 남아 있는 위젯은 길게 눌러 삭제해 주세요.'),
+                          ),
+                        );
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppDesignTokens.brand,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
                       ),
-                      child: Text(
-                        '저장하기',
-                        style: GoogleFonts.notoSansKr(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w800,
-                          color: Colors.white,
-                        ),
+                      elevation: 0,
+                    ),
+                    child: Text(
+                      '저장하기',
+                      style: GoogleFonts.notoSansKr(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white,
                       ),
                     ),
                   ),
-                  const Spacer(),
-                ],
-              ),
+                ),
+              ],
             );
           },
         );
@@ -751,16 +727,18 @@ class _SettingsScreenState extends State<SettingsScreen>
     TimeOfDay tempTime = _morningCallTime;
     String tempCoachId = _morningCallCoachId;
     Set<int> tempDays = {..._morningCallDays};
+    // 저장해둔 요일이 매일이나 평일과 똑같으면 그 갈래로 열어준다. 아니면
+    // 직접 고른 것이므로 요일을 편 채로 연다.
+    var dayMode = _MorningCallDayMode.of(tempDays);
     bool isPickingTime = false;
     AlarmPermissionIssue modalIssue = _alarmPermissionIssue;
     // 목소리 미리듣기가 끝나는 순간을 비동기로 기다리는데, 그 사이 시트가
     // 닫히면 이 시트의 setState는 이미 죽은 위젯을 건드리는 셈이 된다.
     var sheetOpen = true;
 
-    showModalBottomSheet(
+    showDialog(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withOpacity(0.48),
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setModalState) {
@@ -768,321 +746,319 @@ class _SettingsScreenState extends State<SettingsScreen>
               if (sheetOpen) setModalState(fn);
             }
 
-            return Container(
-              height: MediaQuery.of(context).size.height * 0.94,
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Center(
+            return _settingsDialog(
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.alarm,
+                          color: Color(0xFF8B7CFF),
+                          size: 24,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          '모닝콜 설정',
+                          style: GoogleFonts.notoSansKr(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w900,
+                            color: const Color(0xFF1A1A2E),
+                          ),
+                        ),
+                      ],
+                    ),
+                    CupertinoSwitch(
+                      value: tempEnabled,
+                      activeColor: const Color(0xFF8B7CFF),
+                      onChanged: (val) =>
+                          setModalState(() => tempEnabled = val),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 18),
+
+                if (tempEnabled)
+                  buildAlarmPermissionBanner(
+                    issue: modalIssue,
+                    alarmLabel: '모닝콜',
+                    onTap: () async {
+                      await showAlarmPermissionDialog(
+                        context,
+                        modalIssue,
+                        alarmLabel: '모닝콜',
+                      );
+                      final next = await NotificationService()
+                          .checkAlarmPermission();
+                      if (!mounted) return;
+                      setState(() => _alarmPermissionIssue = next);
+                      setModalState(() => modalIssue = next);
+                    },
+                  ),
+
+                // 시간 선택기
+                Opacity(
+                  opacity: tempEnabled ? 1.0 : 0.5,
+                  child: GestureDetector(
+                    onTap: () async {
+                      if (!tempEnabled) return;
+                      setModalState(() => isPickingTime = true);
+                      try {
+                        final picked = await _showFocusedTimePicker(
+                          context: context,
+                          initialTime: tempTime,
+                        );
+                        if (picked != null) {
+                          setModalState(() => tempTime = picked);
+                        }
+                      } finally {
+                        if (context.mounted) {
+                          setModalState(() => isPickingTime = false);
+                        }
+                      }
+                    },
                     child: Container(
-                      width: 40,
-                      height: 4,
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 16,
+                        horizontal: 20,
+                      ),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFE5E7EB),
-                        borderRadius: BorderRadius.circular(2),
+                        color: const Color(0xFFF3F0FF),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            '시간',
+                            style: GoogleFonts.notoSansKr(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                              color: const Color(0xFF4B5563),
+                            ),
+                          ),
+                          Text(
+                            '${tempTime.hour.toString().padLeft(2, '0')}:${tempTime.minute.toString().padLeft(2, '0')}',
+                            style: GoogleFonts.notoSansKr(
+                              fontSize: 22,
+                              fontWeight: FontWeight.w900,
+                              color: const Color(0xFF8B7CFF),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
-                  const SizedBox(height: 18),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                ),
+                const SizedBox(height: 10),
+                Opacity(
+                  opacity: tempEnabled ? 1.0 : 0.55,
+                  child: Text(
+                    '휴대폰 설정에 따라 무음/진동 모드나 방해금지 상태에서는 모닝콜 소리가 제한될 수 있어요. 소리로 깨고 싶다면 앱 알림 권한과 알람 볼륨을 미리 확인해주세요.',
+                    style: GoogleFonts.notoSansKr(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                      height: 1.45,
+                      color: const Color(0xFF8E8A9E),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+
+                // 요일 선택
+                Text(
+                  '모닝콜 요일',
+                  style: GoogleFonts.notoSansKr(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                    color: const Color(0xFF1A1A2E),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                // 요일 일곱 개를 늘 펼쳐두던 자리다. 매일 받는 사람과 평일만
+                // 받는 사람이 대부분인데, 그 둘도 매번 일곱 칸을 눌러 맞춰야
+                // 했다. 먼저 셋 중에 고르게 하고, 하나씩 고를 사람에게만
+                // 요일을 편다.
+                Opacity(
+                  opacity: tempEnabled ? 1.0 : 0.5,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
                         children: [
-                          const Icon(
-                            Icons.alarm,
-                            color: Color(0xFF8B7CFF),
-                            size: 24,
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            '모닝콜 설정',
-                            style: GoogleFonts.notoSansKr(
-                              fontSize: 20,
-                              fontWeight: FontWeight.w900,
-                              color: const Color(0xFF1A1A2E),
+                          for (final mode in _MorningCallDayMode.values) ...[
+                            _buildMorningCallModeChip(
+                              label: mode.label,
+                              isSelected: dayMode == mode,
+                              onTap: () {
+                                if (!tempEnabled) return;
+                                setModalState(() {
+                                  dayMode = mode;
+                                  final preset = mode.days;
+                                  if (preset != null) tempDays = preset;
+                                });
+                              },
                             ),
-                          ),
+                            if (mode != _MorningCallDayMode.values.last)
+                              const SizedBox(width: 8),
+                          ],
                         ],
                       ),
-                      CupertinoSwitch(
-                        value: tempEnabled,
-                        activeColor: const Color(0xFF8B7CFF),
-                        onChanged: (val) =>
-                            setModalState(() => tempEnabled = val),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 18),
-
-                  if (tempEnabled)
-                    buildAlarmPermissionBanner(
-                      issue: modalIssue,
-                      alarmLabel: '모닝콜',
-                      onTap: () async {
-                        await showAlarmPermissionDialog(
-                          context,
-                          modalIssue,
-                          alarmLabel: '모닝콜',
-                        );
-                        final next = await NotificationService()
-                            .checkAlarmPermission();
-                        if (!mounted) return;
-                        setState(() => _alarmPermissionIssue = next);
-                        setModalState(() => modalIssue = next);
-                      },
-                    ),
-
-                  // 시간 선택기
-                  Opacity(
-                    opacity: tempEnabled ? 1.0 : 0.5,
-                    child: GestureDetector(
-                      onTap: () async {
-                        if (!tempEnabled) return;
-                        setModalState(() => isPickingTime = true);
-                        try {
-                          final picked = await _showFocusedTimePicker(
-                            context: context,
-                            initialTime: tempTime,
-                          );
-                          if (picked != null) {
-                            setModalState(() => tempTime = picked);
-                          }
-                        } finally {
-                          if (context.mounted) {
-                            setModalState(() => isPickingTime = false);
-                          }
-                        }
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          vertical: 16,
-                          horizontal: 20,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF3F0FF),
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      if (dayMode == _MorningCallDayMode.byDay) ...[
+                        const SizedBox(height: 10),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
                           children: [
-                            Text(
-                              '시간',
-                              style: GoogleFonts.notoSansKr(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w700,
-                                color: const Color(0xFF4B5563),
+                            for (var day = 1; day <= 7; day++)
+                              _buildMorningCallDayChip(
+                                label: _weekdayShortLabels[day - 1],
+                                isSelected: tempDays.contains(day),
+                                onTap: () {
+                                  if (!tempEnabled) return;
+                                  setModalState(() {
+                                    // 마지막 하나는 끄지 못하게 막는다. 요일이
+                                    // 하나도 안 남으면 모닝콜이 영영 안 울린다.
+                                    if (tempDays.contains(day)) {
+                                      if (tempDays.length > 1) {
+                                        tempDays = {...tempDays}..remove(day);
+                                      }
+                                    } else {
+                                      tempDays = {...tempDays, day};
+                                    }
+                                  });
+                                },
                               ),
-                            ),
-                            Text(
-                              '${tempTime.hour.toString().padLeft(2, '0')}:${tempTime.minute.toString().padLeft(2, '0')}',
-                              style: GoogleFonts.notoSansKr(
-                                fontSize: 22,
-                                fontWeight: FontWeight.w900,
-                                color: const Color(0xFF8B7CFF),
-                              ),
-                            ),
                           ],
                         ),
-                      ),
-                    ),
+                      ],
+                    ],
                   ),
-                  const SizedBox(height: 10),
-                  Opacity(
-                    opacity: tempEnabled ? 1.0 : 0.55,
-                    child: Text(
-                      '휴대폰 설정에 따라 무음/진동 모드나 방해금지 상태에서는 모닝콜 소리가 제한될 수 있어요. 소리로 깨고 싶다면 앱 알림 권한과 알람 볼륨을 미리 확인해주세요.',
-                      style: GoogleFonts.notoSansKr(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w500,
-                        height: 1.45,
-                        color: const Color(0xFF8E8A9E),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 14),
+                ),
+                const SizedBox(height: 14),
 
-                  // 요일 선택
-                  Text(
-                    '모닝콜 요일',
-                    style: GoogleFonts.notoSansKr(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w800,
-                      color: const Color(0xFF1A1A2E),
-                    ),
+                // 코치 선택 리스트
+                Text(
+                  '모닝콜 코치 선택',
+                  style: GoogleFonts.notoSansKr(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                    color: const Color(0xFF1A1A2E),
                   ),
-                  const SizedBox(height: 12),
-                  Opacity(
+                ),
+                const SizedBox(height: 12),
+
+                Flexible(
+                  child: Opacity(
                     opacity: tempEnabled ? 1.0 : 0.5,
-                    child: Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
+                    child: ListView(
                       children: [
-                        _buildMorningCallDayChip(
-                          label: '매일',
-                          isSelected: tempDays.length == 7,
-                          onTap: () {
-                            if (!tempEnabled) return;
-                            setModalState(
-                              () => tempDays = {1, 2, 3, 4, 5, 6, 7},
-                            );
-                          },
-                        ),
-                        for (var day = 1; day <= 7; day++)
-                          _buildMorningCallDayChip(
-                            label: _weekdayShortLabels[day - 1],
-                            isSelected: tempDays.contains(day),
-                            onTap: () {
-                              if (!tempEnabled) return;
-                              setModalState(() {
-                                // 마지막 하나는 끄지 못하게 막는다. 요일이
-                                // 하나도 안 남으면 모닝콜이 영영 안 울린다.
-                                if (tempDays.contains(day)) {
-                                  if (tempDays.length > 1) {
-                                    tempDays = {...tempDays}..remove(day);
+                        _buildMorningCallCoachSectionHeader('FRIENDS 코치'),
+                        ...CoachConfigs.all.values
+                            .where(
+                              (coach) =>
+                                  coach.tier == 'friends' &&
+                                  coach.voiceCount > 0,
+                            )
+                            .map((coach) {
+                              return _buildMorningCallCoachItem(
+                                id: coach.id,
+                                name: coach.name,
+                                subtitle: '',
+                                isSelected: tempCoachId == coach.id,
+                                imagePath: coach.imagePath,
+                                onTap: () {
+                                  if (tempEnabled) {
+                                    setModalState(() => tempCoachId = coach.id);
                                   }
-                                } else {
-                                  tempDays = {...tempDays, day};
-                                }
-                              });
-                            },
+                                },
+                                onPreview: () => _toggleVoicePreview(
+                                  coach.id,
+                                  safeSetModalState,
+                                ),
+                                isPreviewPlaying:
+                                    _playingVoicePreviewCoachId == coach.id,
+                              );
+                            }),
+                        const Padding(
+                          padding: EdgeInsets.fromLTRB(4, 4, 4, 12),
+                          child: Divider(
+                            height: 1,
+                            thickness: 1,
+                            color: Color(0xFFEDEAF8),
                           ),
+                        ),
+                        _buildMorningCallCoachSectionHeader('MASTER 코치'),
+                        ...CoachConfigs.all.values
+                            .where(
+                              (coach) =>
+                                  coach.tier == 'master' &&
+                                  coach.voiceCount > 0,
+                            )
+                            .map((coach) {
+                              return _buildMorningCallCoachItem(
+                                id: coach.id,
+                                name: coach.name,
+                                subtitle: '',
+                                isSelected: tempCoachId == coach.id,
+                                imagePath: coach.imagePath,
+                                onTap: () {
+                                  if (tempEnabled) {
+                                    setModalState(() => tempCoachId = coach.id);
+                                  }
+                                },
+                                onPreview: () => _toggleVoicePreview(
+                                  coach.id,
+                                  safeSetModalState,
+                                ),
+                                isPreviewPlaying:
+                                    _playingVoicePreviewCoachId == coach.id,
+                              );
+                            }),
                       ],
                     ),
                   ),
-                  const SizedBox(height: 14),
+                ),
 
-                  // 코치 선택 리스트
-                  Text(
-                    '모닝콜 코치 선택',
-                    style: GoogleFonts.notoSansKr(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w800,
-                      color: const Color(0xFF1A1A2E),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-
-                  Expanded(
-                    child: Opacity(
-                      opacity: tempEnabled ? 1.0 : 0.5,
-                      child: ListView(
-                        children: [
-                          _buildMorningCallCoachSectionHeader('FRIENDS 코치'),
-                          ...CoachConfigs.all.values
-                              .where(
-                                (coach) =>
-                                    coach.tier == 'friends' &&
-                                    coach.voiceCount > 0,
-                              )
-                              .map((coach) {
-                                return _buildMorningCallCoachItem(
-                                  id: coach.id,
-                                  name: coach.name,
-                                  subtitle: '',
-                                  isSelected: tempCoachId == coach.id,
-                                  imagePath: coach.imagePath,
-                                  onTap: () {
-                                    if (tempEnabled) {
-                                      setModalState(
-                                        () => tempCoachId = coach.id,
-                                      );
-                                    }
-                                  },
-                                  onPreview: () => _toggleVoicePreview(
-                                    coach.id,
-                                    safeSetModalState,
-                                  ),
-                                  isPreviewPlaying:
-                                      _playingVoicePreviewCoachId == coach.id,
-                                );
-                              }),
-                          const Padding(
-                            padding: EdgeInsets.fromLTRB(4, 4, 4, 12),
-                            child: Divider(
-                              height: 1,
-                              thickness: 1,
-                              color: Color(0xFFEDEAF8),
-                            ),
-                          ),
-                          _buildMorningCallCoachSectionHeader('MASTER 코치'),
-                          ...CoachConfigs.all.values
-                              .where(
-                                (coach) =>
-                                    coach.tier == 'master' &&
-                                    coach.voiceCount > 0,
-                              )
-                              .map((coach) {
-                                return _buildMorningCallCoachItem(
-                                  id: coach.id,
-                                  name: coach.name,
-                                  subtitle: '',
-                                  isSelected: tempCoachId == coach.id,
-                                  imagePath: coach.imagePath,
-                                  onTap: () {
-                                    if (tempEnabled) {
-                                      setModalState(
-                                        () => tempCoachId = coach.id,
-                                      );
-                                    }
-                                  },
-                                  onPreview: () => _toggleVoicePreview(
-                                    coach.id,
-                                    safeSetModalState,
-                                  ),
-                                  isPreviewPlaying:
-                                      _playingVoicePreviewCoachId == coach.id,
-                                );
-                              }),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                  // 저장 버튼
-                  AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 140),
-                    child: isPickingTime
-                        ? const SizedBox(key: ValueKey('time-picker-open'))
-                        : SizedBox(
-                            key: const ValueKey('save-morning-call'),
-                            width: double.infinity,
-                            height: 56,
-                            child: ElevatedButton(
-                              onPressed: () {
-                                Navigator.pop(context);
-                                _saveMorningCallSettings(
-                                  tempEnabled,
-                                  tempTime,
-                                  tempCoachId,
-                                  tempDays,
-                                );
-                              },
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF1A1A2E),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
-                                elevation: 0,
+                // 저장 버튼
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 140),
+                  child: isPickingTime
+                      ? const SizedBox(key: ValueKey('time-picker-open'))
+                      : SizedBox(
+                          key: const ValueKey('save-morning-call'),
+                          width: double.infinity,
+                          height: 56,
+                          child: ElevatedButton(
+                            onPressed: () {
+                              Navigator.pop(context);
+                              _saveMorningCallSettings(
+                                tempEnabled,
+                                tempTime,
+                                tempCoachId,
+                                tempDays,
+                              );
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppDesignTokens.brand,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
                               ),
-                              child: Text(
-                                '저장하기',
-                                style: GoogleFonts.notoSansKr(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w800,
-                                  color: Colors.white,
-                                ),
+                              elevation: 0,
+                            ),
+                            child: Text(
+                              '저장하기',
+                              style: GoogleFonts.notoSansKr(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w800,
+                                color: Colors.white,
                               ),
                             ),
                           ),
-                  ),
-                ],
-              ),
+                        ),
+                ),
+              ],
             );
           },
         );
@@ -1489,250 +1465,265 @@ class _SettingsScreenState extends State<SettingsScreen>
     int tempAdvance = _coreReminderAdvanceMinutes;
     AlarmPermissionIssue modalIssue = _alarmPermissionIssue;
 
-    showModalBottomSheet(
+    showDialog(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withOpacity(0.48),
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setModalState) {
-            return Container(
-              height: MediaQuery.of(context).size.height * 0.56,
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Center(
-                    child: Container(
-                      width: 40,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFE5E7EB),
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Row(
-                        children: [
-                          const Icon(
-                            Icons.notifications_none,
-                            color: Color(0xFF8B7CFF),
-                            size: 24,
+            return _settingsDialog(
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.notifications_none,
+                          color: Color(0xFF8B7CFF),
+                          size: 24,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          '일정 푸쉬 알람',
+                          style: GoogleFonts.notoSansKr(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w900,
+                            color: const Color(0xFF1A1A2E),
                           ),
-                          const SizedBox(width: 8),
-                          Text(
-                            '일정 푸쉬 알람',
-                            style: GoogleFonts.notoSansKr(
-                              fontSize: 20,
-                              fontWeight: FontWeight.w900,
-                              color: const Color(0xFF1A1A2E),
-                            ),
-                          ),
-                        ],
-                      ),
-                      CupertinoSwitch(
-                        value: tempEnabled,
-                        activeColor: const Color(0xFF8B7CFF),
-                        onChanged: (val) =>
-                            setModalState(() => tempEnabled = val),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    '원하는 일정을 알려드려요.',
-                    style: GoogleFonts.notoSansKr(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: const Color(0xFFA78BFA),
-                      height: 1.35,
+                        ),
+                      ],
                     ),
+                    CupertinoSwitch(
+                      value: tempEnabled,
+                      activeColor: const Color(0xFF8B7CFF),
+                      onChanged: (val) =>
+                          setModalState(() => tempEnabled = val),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  keepWordsWhole('원하는 일정을 알려드려요.'),
+                  style: GoogleFonts.notoSansKr(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: const Color(0xFFA78BFA),
+                    height: 1.35,
                   ),
-                  const SizedBox(height: 16),
+                ),
+                const SizedBox(height: 16),
 
-                  Expanded(
-                    child: SingleChildScrollView(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // 소리가 나는지부터 먼저 말한다. "다른 앱 위에 표시" 같은 권한
-                          // 배너에 가려 맨 아래로 밀리면, 정작 가장 흔하게 걸리는
-                          // 원인(무음/방해금지)을 처음 켜는 사람이 못 보고 지나친다.
-                          Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 12,
+                Flexible(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // 소리가 나는지부터 먼저 말한다. "다른 앱 위에 표시" 같은 권한
+                        // 배너에 가려 맨 아래로 밀리면, 정작 가장 흔하게 걸리는
+                        // 원인(무음/방해금지)을 처음 켜는 사람이 못 보고 지나친다.
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 12,
+                          ),
+                          margin: const EdgeInsets.only(bottom: 16),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFDF4E4),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: const Color(
+                                0xFFCE8A2E,
+                              ).withValues(alpha: 0.3),
                             ),
-                            margin: const EdgeInsets.only(bottom: 16),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFFDF4E4),
-                              borderRadius: BorderRadius.circular(14),
-                              border: Border.all(
-                                color: const Color(
-                                  0xFFCE8A2E,
-                                ).withValues(alpha: 0.3),
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Icon(
+                                Icons.volume_up_outlined,
+                                size: 18,
+                                color: Color(0xFFCE8A2E),
                               ),
-                            ),
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Icon(
-                                  Icons.volume_up_outlined,
-                                  size: 18,
-                                  color: Color(0xFFCE8A2E),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  '휴대폰이 무음/진동 모드거나 방해금지(수면 모드) 중이면 소리 없이 조용히 와요. '
+                                  '소리로 받고 싶다면 방해금지 예외 설정을 확인해주세요.',
+                                  style: GoogleFonts.notoSansKr(
+                                    fontSize: 12.5,
+                                    fontWeight: FontWeight.w700,
+                                    height: 1.45,
+                                    color: const Color(0xFF8A6416),
+                                  ),
                                 ),
-                                const SizedBox(width: 10),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        if (tempEnabled)
+                          buildAlarmPermissionBanner(
+                            issue: modalIssue,
+                            alarmLabel: '일정 알람',
+                            onTap: () async {
+                              await showAlarmPermissionDialog(
+                                context,
+                                modalIssue,
+                                alarmLabel: '일정 알람',
+                                emoji: '🔔',
+                              );
+                              final next = await NotificationService()
+                                  .checkCoreReminderPermission();
+                              if (!mounted) return;
+                              setState(() => _alarmPermissionIssue = next);
+                              setModalState(() => modalIssue = next);
+                            },
+                          ),
+
+                        // 알람 시간 선택
+                        Opacity(
+                          opacity: tempEnabled ? 1.0 : 0.5,
+                          child: Padding(
+                            padding: const EdgeInsets.only(bottom: 20),
+                            child: Row(
+                              children: [
                                 Expanded(
                                   child: Text(
-                                    '휴대폰이 무음/진동 모드거나 방해금지(수면 모드) 중이면 소리 없이 조용히 와요. '
-                                    '소리로 받고 싶다면 방해금지 예외 설정을 확인해주세요.',
+                                    '알람 시간 선택',
                                     style: GoogleFonts.notoSansKr(
-                                      fontSize: 12.5,
-                                      fontWeight: FontWeight.w700,
-                                      height: 1.45,
-                                      color: const Color(0xFF8A6416),
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w800,
+                                      color: const Color(0xFF1A1A2E),
                                     ),
+                                  ),
+                                ),
+                                Container(
+                                  width: 168,
+                                  height: 40,
+                                  padding: const EdgeInsets.all(3),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFF3F0FF),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Row(
+                                    children: [10, 30].map((minutes) {
+                                      final isActive = tempAdvance == minutes;
+                                      return Expanded(
+                                        child: GestureDetector(
+                                          onTap: () {
+                                            if (tempEnabled) {
+                                              setModalState(
+                                                () => tempAdvance = minutes,
+                                              );
+                                            }
+                                          },
+                                          child: AnimatedContainer(
+                                            duration: const Duration(
+                                              milliseconds: 160,
+                                            ),
+                                            curve: Curves.easeOutCubic,
+                                            alignment: Alignment.center,
+                                            decoration: BoxDecoration(
+                                              color: isActive
+                                                  ? const Color(0xFF8B7CFF)
+                                                  : Colors.transparent,
+                                              borderRadius:
+                                                  BorderRadius.circular(9),
+                                            ),
+                                            child: Text(
+                                              '$minutes분 전',
+                                              style: GoogleFonts.notoSansKr(
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.w800,
+                                                color: isActive
+                                                    ? Colors.white
+                                                    : const Color(0xFF6B7280),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      );
+                                    }).toList(),
                                   ),
                                 ),
                               ],
                             ),
                           ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
 
-                          if (tempEnabled)
-                            buildAlarmPermissionBanner(
-                              issue: modalIssue,
-                              alarmLabel: '일정 알람',
-                              onTap: () async {
-                                await showAlarmPermissionDialog(
-                                  context,
-                                  modalIssue,
-                                  alarmLabel: '일정 알람',
-                                  emoji: '🔔',
-                                );
-                                final next = await NotificationService()
-                                    .checkCoreReminderPermission();
-                                if (!mounted) return;
-                                setState(() => _alarmPermissionIssue = next);
-                                setModalState(() => modalIssue = next);
-                              },
-                            ),
-
-                          // 알람 시간 선택
-                          Opacity(
-                            opacity: tempEnabled ? 1.0 : 0.5,
-                            child: Padding(
-                              padding: const EdgeInsets.only(bottom: 20),
-                              child: Row(
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      '알람 시간 선택',
-                                      style: GoogleFonts.notoSansKr(
-                                        fontSize: 15,
-                                        fontWeight: FontWeight.w800,
-                                        color: const Color(0xFF1A1A2E),
-                                      ),
-                                    ),
-                                  ),
-                                  Container(
-                                    width: 168,
-                                    height: 40,
-                                    padding: const EdgeInsets.all(3),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFFF3F0FF),
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: Row(
-                                      children: [10, 30].map((minutes) {
-                                        final isActive = tempAdvance == minutes;
-                                        return Expanded(
-                                          child: GestureDetector(
-                                            onTap: () {
-                                              if (tempEnabled) {
-                                                setModalState(
-                                                  () => tempAdvance = minutes,
-                                                );
-                                              }
-                                            },
-                                            child: AnimatedContainer(
-                                              duration: const Duration(
-                                                milliseconds: 160,
-                                              ),
-                                              curve: Curves.easeOutCubic,
-                                              alignment: Alignment.center,
-                                              decoration: BoxDecoration(
-                                                color: isActive
-                                                    ? const Color(0xFF8B7CFF)
-                                                    : Colors.transparent,
-                                                borderRadius:
-                                                    BorderRadius.circular(9),
-                                              ),
-                                              child: Text(
-                                                '$minutes분 전',
-                                                style: GoogleFonts.notoSansKr(
-                                                  fontSize: 13,
-                                                  fontWeight: FontWeight.w800,
-                                                  color: isActive
-                                                      ? Colors.white
-                                                      : const Color(0xFF6B7280),
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                        );
-                                      }).toList(),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ],
+                // 저장 버튼
+                SizedBox(
+                  width: double.infinity,
+                  height: 56,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      _saveCoreReminderSettings(tempEnabled, tempAdvance);
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppDesignTokens.brand,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      elevation: 0,
+                    ),
+                    child: Text(
+                      '저장하기',
+                      style: GoogleFonts.notoSansKr(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white,
                       ),
                     ),
                   ),
-
-                  // 저장 버튼
-                  SizedBox(
-                    width: double.infinity,
-                    height: 56,
-                    child: ElevatedButton(
-                      onPressed: () {
-                        Navigator.pop(context);
-                        _saveCoreReminderSettings(tempEnabled, tempAdvance);
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF1A1A2E),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        elevation: 0,
-                      ),
-                      child: Text(
-                        '저장하기',
-                        style: GoogleFonts.notoSansKr(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w800,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
             );
           },
         );
       },
+    );
+  }
+
+  /// 설정 창들이 함께 쓰는 틀.
+  ///
+  /// 아래에서 올라오는 시트였다. 화면 끝에 붙어 있어서 '저장하기'가 시스템
+  /// 내비게이션 막대에 가렸고, 창마다 높이를 화면의 몇 %로 못 박아 두느라
+  /// 내용이 짧은 날에는 빈 자리가 남았다. 가운데 뜨는 창은 끝에 닿지 않고
+  /// 내용만큼만 차지한다.
+  ///
+  /// 길어지면 안에서 굴러가야 하므로, 가운데 목록은 [Expanded]가 아니라
+  /// [Flexible]로 감싼다 — 높이가 정해져 있지 않아서 다 늘릴 수가 없다.
+  static Widget _settingsDialog({required List<Widget> children}) {
+    return Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 48),
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(20, 22, 20, 20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(26),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.12),
+              blurRadius: 18,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: children,
+        ),
+      ),
     );
   }
 
@@ -1758,259 +1749,239 @@ class _SettingsScreenState extends State<SettingsScreen>
         ..._gapCoachingTimes,
     ];
 
-    showModalBottomSheet(
+    showDialog(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withOpacity(0.48),
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setModalState) {
-            return Container(
-              height: MediaQuery.of(context).size.height * 0.66,
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Center(
-                    child: Container(
-                      width: 40,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFE5E7EB),
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Row(
-                        children: [
-                          SvgPicture.asset(
-                            'assets/icons/seedling.svg',
-                            width: 21,
-                            height: 21,
-                            colorFilter: const ColorFilter.mode(
-                              Color(0xFF8B7CFF),
-                              BlendMode.srcIn,
-                            ),
+            return _settingsDialog(
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        SvgPicture.asset(
+                          'assets/icons/seedling.svg',
+                          width: 21,
+                          height: 21,
+                          colorFilter: const ColorFilter.mode(
+                            Color(0xFF8B7CFF),
+                            BlendMode.srcIn,
                           ),
-                          const SizedBox(width: 8),
-                          Text(
-                            '틈새 코칭',
-                            style: GoogleFonts.notoSansKr(
-                              fontSize: 20,
-                              fontWeight: FontWeight.w900,
-                              color: const Color(0xFF1A1A2E),
-                            ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          '틈새 코칭',
+                          style: GoogleFonts.notoSansKr(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w900,
+                            color: const Color(0xFF1A1A2E),
                           ),
-                        ],
-                      ),
-                      CupertinoSwitch(
-                        value: tempEnabled,
-                        activeColor: const Color(0xFF8B7CFF),
-                        onChanged: (val) =>
-                            setModalState(() => tempEnabled = val),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    '흘러가는 여유 시간에, 이따 할 일을 10분만 미리 해둘 수 있게 도와줘요.',
-                    style: GoogleFonts.notoSansKr(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: const Color(0xFFA78BFA),
-                      height: 1.35,
+                        ),
+                      ],
                     ),
+                    CupertinoSwitch(
+                      value: tempEnabled,
+                      activeColor: const Color(0xFF8B7CFF),
+                      onChanged: (val) =>
+                          setModalState(() => tempEnabled = val),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  keepWordsWhole('여유 시간 10분 동안 할 일을 완료할 수 있게 도와줘요.'),
+                  // 이 시트 아래쪽 설명과 같은 모양이다. 같은 자리에서 같은
+                  // 일을 하는 글이라 굵기도 색도 갈릴 이유가 없다.
+                  style: GoogleFonts.notoSansKr(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                    height: 1.5,
+                    color: const Color(0xFF9A96A8),
                   ),
-                  const SizedBox(height: 16),
+                ),
+                const SizedBox(height: 16),
 
-                  Expanded(
-                    child: SingleChildScrollView(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (tempEnabled && blocker != null)
-                            _buildGapBlockerBanner(
-                              blocker!,
-                              onTap: () async {
-                                await _showAlarmNoticeDialog(
-                                  title: '🐾 지금은 나올 수 없어요',
-                                  message: blocker!.detail,
-                                  actionLabel: '설정 열기',
-                                  closeLabel: '나중에',
-                                  onAction: blocker!.open,
-                                );
-                                final next = await _findGapBlocker();
-                                if (!mounted) return;
-                                setModalState(() => blocker = next);
-                              },
-                            ),
+                Flexible(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (tempEnabled && blocker != null)
+                          _buildGapBlockerBanner(
+                            blocker!,
+                            onTap: () async {
+                              await _showAlarmNoticeDialog(
+                                title: '🐾 지금은 나올 수 없어요',
+                                message: blocker!.detail,
+                                actionLabel: '설정 열기',
+                                closeLabel: '나중에',
+                                onAction: blocker!.open,
+                              );
+                              final next = await _findGapBlocker();
+                              if (!mounted) return;
+                              setModalState(() => blocker = next);
+                            },
+                          ),
 
-                          Opacity(
-                            opacity: tempEnabled ? 1.0 : 0.5,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                for (var i = 0; i < tempTimes.length; i++)
-                                  _buildGapTimeRow(
-                                    label: i == 0 ? '① 첫 번째' : '② 두 번째',
-                                    time: tempTimes[i],
-                                    onTap: () async {
-                                      if (!tempEnabled) return;
-                                      final picked =
-                                          await _showFocusedTimePicker(
-                                            context: context,
-                                            initialTime: tempTimes[i],
-                                          );
-                                      if (picked == null) return;
-                                      // 두 자리가 같은 시각이면 하나는 나가지도
-                                      // 못하고 사라진다. 저장한 뒤에 조용히
-                                      // 없어지는 것보다 여기서 막는 편이 낫다.
-                                      final taken = tempTimes
-                                          .asMap()
-                                          .entries
-                                          .any(
-                                            (e) =>
-                                                e.key != i &&
-                                                e.value.hour == picked.hour &&
-                                                e.value.minute == picked.minute,
-                                          );
-                                      if (taken) {
-                                        if (!mounted) return;
-                                        // 스낵바는 이 시트 뒤로 나와서 보이지 않는다.
-                                        await _showAlarmNoticeDialog(
-                                          title: '🌱 이미 정해둔 시각이에요',
-                                          message:
-                                              '두 자리를 같은 시각으로 두면 하나는 '
-                                              '나가지 못해요. 다른 시각으로 골라주세요.',
-                                        );
-                                        return;
-                                      }
-                                      setModalState(
-                                        () => tempTimes[i] = picked,
+                        Opacity(
+                          opacity: tempEnabled ? 1.0 : 0.5,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              for (var i = 0; i < tempTimes.length; i++)
+                                _buildGapTimeRow(
+                                  label: i == 0 ? '① 첫 번째' : '② 두 번째',
+                                  time: tempTimes[i],
+                                  onTap: () async {
+                                    if (!tempEnabled) return;
+                                    final picked = await _showFocusedTimePicker(
+                                      context: context,
+                                      initialTime: tempTimes[i],
+                                    );
+                                    if (picked == null) return;
+                                    // 두 자리가 같은 시각이면 하나는 나가지도
+                                    // 못하고 사라진다. 저장한 뒤에 조용히
+                                    // 없어지는 것보다 여기서 막는 편이 낫다.
+                                    final taken = tempTimes.asMap().entries.any(
+                                      (e) =>
+                                          e.key != i &&
+                                          e.value.hour == picked.hour &&
+                                          e.value.minute == picked.minute,
+                                    );
+                                    if (taken) {
+                                      if (!mounted) return;
+                                      // 스낵바는 이 시트 뒤로 나와서 보이지 않는다.
+                                      await _showAlarmNoticeDialog(
+                                        title: '🌱 이미 정해둔 시각이에요',
+                                        message:
+                                            '두 자리를 같은 시각으로 두면 하나는 '
+                                            '나가지 못해요. 다른 시각으로 골라주세요.',
                                       );
-                                    },
-                                    onRemove: i == 0
-                                        ? null
-                                        : () => setModalState(
-                                            () => tempTimes.removeAt(i),
-                                          ),
-                                  ),
-                                if (tempTimes.length <
-                                    GapCoachingService.maxTimes)
-                                  GestureDetector(
-                                    onTap: () {
-                                      if (!tempEnabled) return;
-                                      // 첫 번째와 같은 시각으로 더해지면 그 자리는
-                                      // 만들자마자 못 쓰는 자리가 된다.
-                                      const morning = TimeOfDay(
-                                        hour: 10,
-                                        minute: 30,
-                                      );
-                                      final clash = tempTimes.any(
-                                        (t) =>
-                                            t.hour == morning.hour &&
-                                            t.minute == morning.minute,
-                                      );
-                                      setModalState(
-                                        () => tempTimes.add(
-                                          clash
-                                              ? const TimeOfDay(
-                                                  hour: 15,
-                                                  minute: 30,
-                                                )
-                                              : morning,
+                                      return;
+                                    }
+                                    setModalState(() => tempTimes[i] = picked);
+                                  },
+                                  onRemove: i == 0
+                                      ? null
+                                      : () => setModalState(
+                                          () => tempTimes.removeAt(i),
                                         ),
-                                      );
-                                    },
-                                    child: Container(
-                                      width: double.infinity,
-                                      padding: const EdgeInsets.symmetric(
-                                        vertical: 14,
+                                ),
+                              if (tempTimes.length <
+                                  GapCoachingService.maxTimes)
+                                GestureDetector(
+                                  onTap: () {
+                                    if (!tempEnabled) return;
+                                    // 첫 번째와 같은 시각으로 더해지면 그 자리는
+                                    // 만들자마자 못 쓰는 자리가 된다.
+                                    const morning = TimeOfDay(
+                                      hour: 10,
+                                      minute: 30,
+                                    );
+                                    final clash = tempTimes.any(
+                                      (t) =>
+                                          t.hour == morning.hour &&
+                                          t.minute == morning.minute,
+                                    );
+                                    setModalState(
+                                      () => tempTimes.add(
+                                        clash
+                                            ? const TimeOfDay(
+                                                hour: 15,
+                                                minute: 30,
+                                              )
+                                            : morning,
                                       ),
-                                      decoration: BoxDecoration(
-                                        borderRadius: BorderRadius.circular(14),
-                                        border: Border.all(
-                                          color: const Color(0xFFE8E3F8),
-                                        ),
-                                      ),
-                                      child: Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.center,
-                                        children: [
-                                          const Icon(
-                                            Icons.add_rounded,
-                                            size: 18,
-                                            color: Color(0xFF8B7CFF),
-                                          ),
-                                          const SizedBox(width: 6),
-                                          Text(
-                                            '시간 추가',
-                                            style: GoogleFonts.notoSansKr(
-                                              fontSize: 14,
-                                              fontWeight: FontWeight.w800,
-                                              color: const Color(0xFF8B7CFF),
-                                            ),
-                                          ),
-                                        ],
+                                    );
+                                  },
+                                  child: Container(
+                                    width: double.infinity,
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 14,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(14),
+                                      border: Border.all(
+                                        color: const Color(0xFFE8E3F8),
                                       ),
                                     ),
+                                    child: Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        const Icon(
+                                          Icons.add_rounded,
+                                          size: 18,
+                                          color: Color(0xFF8B7CFF),
+                                        ),
+                                        const SizedBox(width: 6),
+                                        Text(
+                                          '시간 추가',
+                                          style: GoogleFonts.notoSansKr(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w800,
+                                            color: const Color(0xFF8B7CFF),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
                                   ),
-                              ],
-                            ),
+                                ),
+                            ],
                           ),
+                        ),
 
-                          const SizedBox(height: 20),
-                          Text(
-                            '일정을 하는 중이거나, 방금 하나를 끝냈거나, 시간이 정해진 일정이 '
-                            '앞뒤 두 시간 안에 있으면 그날 그 시각은 조용히 지나가요. '
-                            '놓쳐도 다시 부르지 않아요.',
-                            style: GoogleFonts.notoSansKr(
-                              fontSize: 12.5,
-                              fontWeight: FontWeight.w600,
-                              height: 1.5,
-                              color: const Color(0xFF9A96A8),
-                            ),
+                        const SizedBox(height: 20),
+                        Text(
+                          keepWordsWhole(
+                            '일정을 하는 중이거나 그 시각에 일정이 있으면 그날 그 시각은 '
+                            '조용히 지나가요.',
                           ),
-                        ],
+                          style: GoogleFonts.notoSansKr(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w600,
+                            height: 1.5,
+                            color: const Color(0xFF9A96A8),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                // 높이를 못 박아뒀을 때는 남는 자리가 여백 노릇을 했다.
+                // 내용만큼만 차지하게 바꾸면서 그 자리가 없어져, 설명과
+                // 버튼이 붙어버렸다.
+                const SizedBox(height: 24),
+                SizedBox(
+                  width: double.infinity,
+                  height: 56,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      _saveGapCoachingSettings(tempEnabled, tempTimes);
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppDesignTokens.brand,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      elevation: 0,
+                    ),
+                    child: Text(
+                      '저장하기',
+                      style: GoogleFonts.notoSansKr(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white,
                       ),
                     ),
                   ),
-
-                  SizedBox(
-                    width: double.infinity,
-                    height: 56,
-                    child: ElevatedButton(
-                      onPressed: () {
-                        Navigator.pop(context);
-                        _saveGapCoachingSettings(tempEnabled, tempTimes);
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF1A1A2E),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        elevation: 0,
-                      ),
-                      child: Text(
-                        '저장하기',
-                        style: GoogleFonts.notoSansKr(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w800,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
             );
           },
         );
@@ -2275,6 +2246,41 @@ class _SettingsScreenState extends State<SettingsScreen>
       actionLabel: '설정 열기',
       closeLabel: '나중에',
       onAction: blocker.open,
+    );
+  }
+
+  /// 매일·평일만·요일별 중에 고르는 칩. 요일 칩보다 넓고 글자가 들어간다.
+  Widget _buildMorningCallModeChip({
+    required String label,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        height: 40,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFF8B7CFF) : Colors.white,
+          border: Border.all(
+            color: isSelected
+                ? const Color(0xFF8B7CFF)
+                : const Color(0xFFE5E7EB),
+            width: 1.5,
+          ),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Text(
+          label,
+          style: GoogleFonts.notoSansKr(
+            fontSize: 13,
+            fontWeight: FontWeight.w800,
+            color: isSelected ? Colors.white : const Color(0xFF4B5563),
+          ),
+        ),
+      ),
     );
   }
 
@@ -3861,10 +3867,9 @@ class _SettingsScreenState extends State<SettingsScreen>
     // '시간대 추가'를 눌러도 아무 일이 없는 것처럼 보였다.
     bool loadStarted = false;
 
-    showModalBottomSheet(
+    showDialog(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withOpacity(0.48),
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setState) {
@@ -4144,270 +4149,196 @@ class _SettingsScreenState extends State<SettingsScreen>
               );
             }
 
-            return Container(
-              height: MediaQuery.of(context).size.height * 0.9,
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Handle
-                  Center(
-                    child: Container(
-                      width: 40,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFE5E7EB),
-                        borderRadius: BorderRadius.circular(2),
+            return _settingsDialog(
+              children: [
+                // Header
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        SvgPicture.asset(
+                          'assets/icons/user-gear.svg',
+                          width: 22,
+                          height: 22,
+                          colorFilter: const ColorFilter.mode(
+                            Color(0xFF8B7CFF),
+                            BlendMode.srcIn,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          '개인 코칭 참고',
+                          style: GoogleFonts.notoSansKr(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w900,
+                            color: const Color(0xFF3D3A4E),
+                          ),
+                        ),
+                      ],
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close, color: Color(0xFFA0A0B0)),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
+                ),
+                Row(
+                  children: [
+                    SvgPicture.asset(
+                      'assets/icons/wand-magic-sparkles.svg',
+                      width: 13,
+                      height: 13,
+                      colorFilter: const ColorFilter.mode(
+                        AppDesignTokens.brandMuted,
+                        BlendMode.srcIn,
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 24),
-                  // Header
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Row(
-                        children: [
-                          SvgPicture.asset(
-                            'assets/icons/user-gear.svg',
-                            width: 22,
-                            height: 22,
-                            colorFilter: const ColorFilter.mode(
-                              Color(0xFF8B7CFF),
-                              BlendMode.srcIn,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            '개인 코칭 참고',
-                            style: GoogleFonts.notoSansKr(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w900,
-                              color: const Color(0xFF3D3A4E),
-                            ),
-                          ),
-                        ],
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.close, color: Color(0xFFA0A0B0)),
-                        onPressed: () => Navigator.pop(context),
-                      ),
-                    ],
-                  ),
-                  Row(
-                    children: [
-                      SvgPicture.asset(
-                        'assets/icons/wand-magic-sparkles.svg',
-                        width: 13,
-                        height: 13,
-                        colorFilter: const ColorFilter.mode(
-                          AppDesignTokens.brandMuted,
-                          BlendMode.srcIn,
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        '입력할수록 코치가 생활 패턴을 정확히 파악해요.',
+                        style: GoogleFonts.notoSansKr(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                          color: const Color(0xFF9593A5),
                         ),
                       ),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Text(
-                          '입력할수록 코치가 생활 패턴을 정확히 파악해요.',
-                          style: GoogleFonts.notoSansKr(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                            color: const Color(0xFF9593A5),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
 
-                  // Content
-                  Expanded(
-                    child: ListView(
-                      children: [
-                        // 0. 호칭 설정
-                        _buildLearnField(
-                          icon: const Icon(
-                            Icons.person,
-                            color: Color(0xFF8B7CFF),
-                            size: 18,
-                          ),
-                          title: '호칭 설정',
-                          subtitle: '비서가 불러줬으면 하는 호칭을 선택하세요.',
-                          child: Row(
-                            children: [
-                              GestureDetector(
-                                onTap: () => setState(() {
-                                  selectedTitle = '대표님';
-                                  titleController.clear();
-                                }),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
+                // Content
+                Flexible(
+                  child: ListView(
+                    children: [
+                      // 0. 호칭 설정
+                      _buildLearnField(
+                        icon: const Icon(
+                          Icons.person,
+                          color: Color(0xFF8B7CFF),
+                          size: 18,
+                        ),
+                        title: '호칭 설정',
+                        subtitle: '비서가 불러줬으면 하는 호칭을 선택하세요.',
+                        child: Row(
+                          children: [
+                            GestureDetector(
+                              onTap: () => setState(() {
+                                selectedTitle = '대표님';
+                                titleController.clear();
+                              }),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 8,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: selectedTitle == '대표님'
+                                      ? const Color(0xFFEBE5FF)
+                                      : Colors.white,
+                                  border: Border.all(
+                                    color: selectedTitle == '대표님'
+                                        ? const Color(0xFF8B7CFF)
+                                        : const Color(0xFFE5E7EB),
+                                  ),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Text(
+                                  '대표님 (기본)',
+                                  style: GoogleFonts.notoSansKr(
+                                    fontSize: 13,
+                                    fontWeight: selectedTitle == '대표님'
+                                        ? FontWeight.w700
+                                        : FontWeight.w500,
+                                    color: selectedTitle == '대표님'
+                                        ? const Color(0xFF8B7CFF)
+                                        : const Color(0xFF6B7280),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: TextField(
+                                controller: titleController,
+                                onChanged: (val) {
+                                  setState(() {
+                                    selectedTitle = val.trim().isEmpty
+                                        ? '대표님'
+                                        : val.trim();
+                                  });
+                                },
+                                decoration: InputDecoration(
+                                  hintText: '자유 기입',
+                                  hintStyle: TextStyle(
+                                    color: Colors.grey[400],
+                                    fontSize: 13,
+                                  ),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: BorderSide.none,
+                                  ),
+                                  filled: true,
+                                  fillColor: const Color(0xFFF9FAFB),
+                                  contentPadding: const EdgeInsets.symmetric(
                                     horizontal: 12,
                                     vertical: 8,
                                   ),
-                                  decoration: BoxDecoration(
-                                    color: selectedTitle == '대표님'
-                                        ? const Color(0xFFEBE5FF)
-                                        : Colors.white,
-                                    border: Border.all(
-                                      color: selectedTitle == '대표님'
-                                          ? const Color(0xFF8B7CFF)
-                                          : const Color(0xFFE5E7EB),
-                                    ),
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: Text(
-                                    '대표님 (기본)',
-                                    style: GoogleFonts.notoSansKr(
-                                      fontSize: 13,
-                                      fontWeight: selectedTitle == '대표님'
-                                          ? FontWeight.w700
-                                          : FontWeight.w500,
-                                      color: selectedTitle == '대표님'
-                                          ? const Color(0xFF8B7CFF)
-                                          : const Color(0xFF6B7280),
-                                    ),
-                                  ),
+                                  isDense: true,
                                 ),
                               ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: TextField(
-                                  controller: titleController,
-                                  onChanged: (val) {
-                                    setState(() {
-                                      selectedTitle = val.trim().isEmpty
-                                          ? '대표님'
-                                          : val.trim();
-                                    });
-                                  },
-                                  decoration: InputDecoration(
-                                    hintText: '자유 기입',
-                                    hintStyle: TextStyle(
-                                      color: Colors.grey[400],
-                                      fontSize: 13,
-                                    ),
-                                    border: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                      borderSide: BorderSide.none,
-                                    ),
-                                    filled: true,
-                                    fillColor: const Color(0xFFF9FAFB),
-                                    contentPadding: const EdgeInsets.symmetric(
-                                      horizontal: 12,
-                                      vertical: 8,
-                                    ),
-                                    isDense: true,
-                                  ),
-                                ),
-                              ),
-                            ],
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      // 1. 수면
+                      _buildLearnField(
+                        icon: SvgPicture.asset(
+                          'assets/icons/fa-moon-solid.svg',
+                          width: 17,
+                          height: 17,
+                          colorFilter: const ColorFilter.mode(
+                            AppDesignTokens.brand,
+                            BlendMode.srcIn,
                           ),
                         ),
-
-                        // 1. 수면
-                        _buildLearnField(
-                          icon: SvgPicture.asset(
-                            'assets/icons/fa-moon-solid.svg',
-                            width: 17,
-                            height: 17,
-                            colorFilter: const ColorFilter.mode(
-                              AppDesignTokens.brand,
-                              BlendMode.srcIn,
-                            ),
-                          ),
-                          title: '컨디션 수면 기준',
-                          subtitle: '다음 날 무리없는 수면 기준을 알려주세요.',
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          '최소 취침 시간',
-                                          style: GoogleFonts.notoSansKr(
-                                            fontSize: 11,
-                                            color: const Color(0xFF9593A5),
-                                          ),
+                        title: '컨디션 수면 기준',
+                        subtitle: '다음 날 무리없는 수면 기준을 알려주세요.',
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        '최소 취침 시간',
+                                        style: GoogleFonts.notoSansKr(
+                                          fontSize: 11,
+                                          color: const Color(0xFF9593A5),
                                         ),
-                                        const SizedBox(height: 8),
-                                        GestureDetector(
-                                          onTap: () async {
-                                            final time =
-                                                await _showFocusedTimePicker(
-                                                  context: context,
-                                                  initialTime: minSleepTime,
-                                                );
-                                            if (time != null) {
-                                              setState(
-                                                () => minSleepTime = time,
+                                      ),
+                                      const SizedBox(height: 8),
+                                      GestureDetector(
+                                        onTap: () async {
+                                          final time =
+                                              await _showFocusedTimePicker(
+                                                context: context,
+                                                initialTime: minSleepTime,
                                               );
-                                            }
-                                          },
-                                          child: Container(
-                                            padding: const EdgeInsets.symmetric(
-                                              vertical: 6,
-                                              horizontal: 10,
-                                            ),
-                                            decoration: BoxDecoration(
-                                              color: const Color(0xFFF3F0FF),
-                                              borderRadius:
-                                                  BorderRadius.circular(8),
-                                            ),
-                                            child: Row(
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                const Icon(
-                                                  Icons.nightlight_round,
-                                                  size: 14,
-                                                  color: Color(0xFF8B7CFF),
-                                                ),
-                                                const SizedBox(width: 8),
-                                                Text(
-                                                  '${minSleepTime.hour.toString().padLeft(2, '0')}:${minSleepTime.minute.toString().padLeft(2, '0')}',
-                                                  style: GoogleFonts.notoSansKr(
-                                                    fontSize: 14,
-                                                    fontWeight: FontWeight.w700,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  Container(
-                                    width: 1,
-                                    height: 30,
-                                    color: const Color(0xFFE5E7EB),
-                                  ),
-                                  const SizedBox(width: 16),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          '최소 수면 시간',
-                                          style: GoogleFonts.notoSansKr(
-                                            fontSize: 11,
-                                            color: const Color(0xFF9593A5),
-                                          ),
-                                        ),
-                                        const SizedBox(height: 8),
-                                        Container(
+                                          if (time != null) {
+                                            setState(() => minSleepTime = time);
+                                          }
+                                        },
+                                        child: Container(
                                           padding: const EdgeInsets.symmetric(
-                                            vertical: 2,
+                                            vertical: 6,
                                             horizontal: 10,
                                           ),
                                           decoration: BoxDecoration(
@@ -4416,305 +4347,348 @@ class _SettingsScreenState extends State<SettingsScreen>
                                               8,
                                             ),
                                           ),
-                                          child: DropdownButtonHideUnderline(
-                                            child: DropdownButton<int>(
-                                              value: sleepDuration,
-                                              icon: const Icon(
-                                                Icons.arrow_drop_down,
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              const Icon(
+                                                Icons.nightlight_round,
+                                                size: 14,
                                                 color: Color(0xFF8B7CFF),
                                               ),
-                                              isDense: true,
-                                              menuMaxHeight: 250,
-                                              items:
-                                                  List.generate(
-                                                    10,
-                                                    (index) => index + 3,
-                                                  ).map((hour) {
-                                                    return DropdownMenuItem<
-                                                      int
-                                                    >(
-                                                      value: hour,
-                                                      child: Row(
-                                                        mainAxisSize:
-                                                            MainAxisSize.min,
-                                                        children: [
-                                                          const Icon(
-                                                            Icons
-                                                                .hourglass_bottom_rounded,
-                                                            size: 14,
-                                                            color: Color(
-                                                              0xFF8B7CFF,
-                                                            ),
-                                                          ),
-                                                          const SizedBox(
-                                                            width: 8,
-                                                          ),
-                                                          Text(
-                                                            '$hour시간',
-                                                            style:
-                                                                GoogleFonts.notoSansKr(
-                                                                  fontSize: 14,
-                                                                  fontWeight:
-                                                                      FontWeight
-                                                                          .w700,
-                                                                ),
-                                                          ),
-                                                        ],
-                                                      ),
-                                                    );
-                                                  }).toList(),
-                                              onChanged: (value) {
-                                                if (value != null) {
-                                                  setState(
-                                                    () => sleepDuration = value,
-                                                  );
-                                                }
-                                              },
-                                            ),
+                                              const SizedBox(width: 8),
+                                              Text(
+                                                '${minSleepTime.hour.toString().padLeft(2, '0')}:${minSleepTime.minute.toString().padLeft(2, '0')}',
+                                                style: GoogleFonts.notoSansKr(
+                                                  fontSize: 14,
+                                                  fontWeight: FontWeight.w700,
+                                                ),
+                                              ),
+                                            ],
                                           ),
                                         ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 18),
-                            ],
-                          ),
-                        ),
-
-                        // 2. 늘 시간을 못 내는 때
-                        _buildLearnField(
-                          icon: const Icon(
-                            Icons.work_outline,
-                            color: Color(0xFF8B7CFF),
-                            size: 20,
-                          ),
-                          title: '고정 일정',
-                          subtitle: '늘 시간을 못 내는 때를 알려주세요.',
-                          child: _buildFixedRoutineEditor(
-                            context: context,
-                            routines: routines,
-                            rebuild: setState,
-                          ),
-                        ),
-
-                        Padding(
-                          padding: const EdgeInsets.only(
-                            bottom: 8.0,
-                            left: 4.0,
-                          ),
-                          child: Text(
-                            '- 아래는 목표 탭과 연동됩니다 -',
-                            style: GoogleFonts.notoSansKr(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: const Color(0xFF8B7CFF),
-                            ),
-                          ),
-                        ),
-                        // 3. 장기 비전
-                        _buildLearnField(
-                          icon: const Icon(
-                            Icons.star_border,
-                            color: Color(0xFF8B7CFF),
-                            size: 20,
-                          ),
-                          title: '장기 비전',
-                          subtitle: '앞으로 이루고 싶은 큰 목표를 알려주세요.',
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              buildSyncGoalList(visions, 'vision'),
-                              const SizedBox(height: 8),
-                              Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  SvgPicture.asset(
-                                    'assets/icons/fa-lightbulb-solid.svg',
-                                    width: 12,
-                                    height: 12,
-                                    colorFilter: const ColorFilter.mode(
-                                      AppDesignTokens.brand,
-                                      BlendMode.srcIn,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 5),
-                                  Expanded(
-                                    child: Text(
-                                      '세부적인 마일스톤은 목표 탭에서 작성해 주세요!',
-                                      style: GoogleFonts.notoSansKr(
-                                        fontSize: 11,
-                                        color: const Color(0xFF8B7CFF),
-                                        fontWeight: FontWeight.w500,
                                       ),
+                                    ],
+                                  ),
+                                ),
+                                Container(
+                                  width: 1,
+                                  height: 30,
+                                  color: const Color(0xFFE5E7EB),
+                                ),
+                                const SizedBox(width: 16),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        '최소 수면 시간',
+                                        style: GoogleFonts.notoSansKr(
+                                          fontSize: 11,
+                                          color: const Color(0xFF9593A5),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          vertical: 2,
+                                          horizontal: 10,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFF3F0FF),
+                                          borderRadius: BorderRadius.circular(
+                                            8,
+                                          ),
+                                        ),
+                                        child: DropdownButtonHideUnderline(
+                                          child: DropdownButton<int>(
+                                            value: sleepDuration,
+                                            icon: const Icon(
+                                              Icons.arrow_drop_down,
+                                              color: Color(0xFF8B7CFF),
+                                            ),
+                                            isDense: true,
+                                            menuMaxHeight: 250,
+                                            items:
+                                                List.generate(
+                                                  10,
+                                                  (index) => index + 3,
+                                                ).map((hour) {
+                                                  return DropdownMenuItem<int>(
+                                                    value: hour,
+                                                    child: Row(
+                                                      mainAxisSize:
+                                                          MainAxisSize.min,
+                                                      children: [
+                                                        const Icon(
+                                                          Icons
+                                                              .hourglass_bottom_rounded,
+                                                          size: 14,
+                                                          color: Color(
+                                                            0xFF8B7CFF,
+                                                          ),
+                                                        ),
+                                                        const SizedBox(
+                                                          width: 8,
+                                                        ),
+                                                        Text(
+                                                          '$hour시간',
+                                                          style:
+                                                              GoogleFonts.notoSansKr(
+                                                                fontSize: 14,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .w700,
+                                                              ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  );
+                                                }).toList(),
+                                            onChanged: (value) {
+                                              if (value != null) {
+                                                setState(
+                                                  () => sleepDuration = value,
+                                                );
+                                              }
+                                            },
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 18),
+                          ],
+                        ),
+                      ),
+
+                      // 2. 늘 시간을 못 내는 때
+                      _buildLearnField(
+                        icon: const Icon(
+                          Icons.work_outline,
+                          color: Color(0xFF8B7CFF),
+                          size: 20,
+                        ),
+                        title: '고정 일정',
+                        subtitle: '늘 시간을 못 내는 때를 알려주세요.',
+                        child: _buildFixedRoutineEditor(
+                          context: context,
+                          routines: routines,
+                          rebuild: setState,
+                        ),
+                      ),
+
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8.0, left: 4.0),
+                        child: Text(
+                          '- 아래는 목표 탭과 연동됩니다 -',
+                          style: GoogleFonts.notoSansKr(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: const Color(0xFF8B7CFF),
+                          ),
+                        ),
+                      ),
+                      // 3. 장기 비전
+                      _buildLearnField(
+                        icon: const Icon(
+                          Icons.star_border,
+                          color: Color(0xFF8B7CFF),
+                          size: 20,
+                        ),
+                        title: '장기 비전',
+                        subtitle: '앞으로 이루고 싶은 큰 목표를 알려주세요.',
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            buildSyncGoalList(visions, 'vision'),
+                            const SizedBox(height: 8),
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                SvgPicture.asset(
+                                  'assets/icons/fa-lightbulb-solid.svg',
+                                  width: 12,
+                                  height: 12,
+                                  colorFilter: const ColorFilter.mode(
+                                    AppDesignTokens.brand,
+                                    BlendMode.srcIn,
+                                  ),
+                                ),
+                                const SizedBox(width: 5),
+                                Expanded(
+                                  child: Text(
+                                    '세부적인 마일스톤은 목표 탭에서 작성해 주세요!',
+                                    style: GoogleFonts.notoSansKr(
+                                      fontSize: 11,
+                                      color: const Color(0xFF8B7CFF),
+                                      fontWeight: FontWeight.w500,
                                     ),
                                   ),
-                                ],
-                              ),
-                            ],
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      // 4. 이번 달 목표
+                      _buildLearnField(
+                        icon: SvgPicture.asset(
+                          'assets/icons/bullseye.svg',
+                          width: 18,
+                          height: 18,
+                          colorFilter: const ColorFilter.mode(
+                            AppDesignTokens.brand,
+                            BlendMode.srcIn,
                           ),
                         ),
+                        title: '이번 달 목표',
+                        subtitle: '이번 달에 집중할 목표를 설정하세요.',
+                        child: buildSyncGoalList(monthGoals, 'month'),
+                      ),
 
-                        // 4. 이번 달 목표
-                        _buildLearnField(
-                          icon: SvgPicture.asset(
-                            'assets/icons/bullseye.svg',
-                            width: 18,
-                            height: 18,
-                            colorFilter: const ColorFilter.mode(
-                              AppDesignTokens.brand,
-                              BlendMode.srcIn,
-                            ),
+                      // 5. 이번 주 목표
+                      _buildLearnField(
+                        icon: SvgPicture.asset(
+                          'assets/icons/fa-fire-solid.svg',
+                          width: 17,
+                          height: 17,
+                          colorFilter: const ColorFilter.mode(
+                            AppDesignTokens.brand,
+                            BlendMode.srcIn,
                           ),
-                          title: '이번 달 목표',
-                          subtitle: '이번 달에 집중할 목표를 설정하세요.',
-                          child: buildSyncGoalList(monthGoals, 'month'),
                         ),
+                        title: '이번 주 목표',
+                        subtitle: '이번 주에 달성할 작은 목표들을 적어보세요.',
+                        child: buildSyncGoalList(weekGoals, 'week'),
+                      ),
+                    ],
+                  ),
+                ),
 
-                        // 5. 이번 주 목표
-                        _buildLearnField(
-                          icon: SvgPicture.asset(
-                            'assets/icons/fa-fire-solid.svg',
-                            width: 17,
-                            height: 17,
-                            colorFilter: const ColorFilter.mode(
-                              AppDesignTokens.brand,
-                              BlendMode.srcIn,
-                            ),
+                const SizedBox(height: 16),
+                // Button
+                SizedBox(
+                  width: double.infinity,
+                  height: 56,
+                  child: ElevatedButton(
+                    onPressed: () async {
+                      // 이름 없는 고정 일정은 저장할 때 걸러진다. 조용히
+                      // 빠지면 요일과 시각까지 정해둔 사람이 저장했다고
+                      // 믿은 채 나가므로, 여기서 되돌려보낸다.
+                      final unnamed = routines.any(
+                        (routine) =>
+                            (routine['name'] as String? ?? '').trim().isEmpty,
+                      );
+                      if (unnamed) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('고정 일정에 이름을 적어주세요. 안 쓸 줄은 X로 지워주세요.'),
                           ),
-                          title: '이번 주 목표',
-                          subtitle: '이번 주에 달성할 작은 목표들을 적어보세요.',
-                          child: buildSyncGoalList(weekGoals, 'week'),
+                        );
+                        return;
+                      }
+                      final prefs = await SharedPreferences.getInstance();
+                      await prefs.setString(
+                        'nyang_master_title',
+                        selectedTitle,
+                      );
+                      await prefs.remove('nyang_coach_name_nyang_halbae');
+                      await prefs.remove('nyang_coach_name_sec_female');
+                      this.setState(() {
+                        _homeWidgetStatus = _buildHomeWidgetStatus(
+                          nyang: prefs.getBool('widget_nyang_enabled') ?? false,
+                          catCharacter:
+                              prefs.getBool('widget_cat_character_enabled') ??
+                              false,
+                        );
+                      });
+                      await prefs.setBool('nyang_night_call_enabled', false);
+                      await prefs.setBool(
+                        'nyang_night_call_daily_enabled',
+                        false,
+                      );
+                      await prefs.setString(
+                        'nyang_premium_min_sleep_time',
+                        '${minSleepTime.hour.toString().padLeft(2, '0')}:${minSleepTime.minute.toString().padLeft(2, '0')}',
+                      );
+                      await prefs.setInt(
+                        'nyang_premium_sleep_duration',
+                        sleepDuration,
+                      );
+                      await prefs.setString(
+                        'nyang_premium_routines',
+                        jsonEncode(
+                          routines
+                              .where(
+                                (routine) => (routine['name'] as String? ?? '')
+                                    .trim()
+                                    .isNotEmpty,
+                              )
+                              .map((routine) {
+                                final start = routine['start'] as TimeOfDay;
+                                final end = routine['end'] as TimeOfDay;
+                                return {
+                                  'start':
+                                      '${start.hour.toString().padLeft(2, '0')}:${start.minute.toString().padLeft(2, '0')}',
+                                  'end':
+                                      '${end.hour.toString().padLeft(2, '0')}:${end.minute.toString().padLeft(2, '0')}',
+                                  'name': (routine['name'] as String).trim(),
+                                  'days': List<String>.from(
+                                    routine['days'] ?? [],
+                                  ),
+                                };
+                              })
+                              .toList(),
+                        ),
+                      );
+                      TasksSyncService.scheduleSyncToCloud();
+                      await NotificationService().disableNightCallReminders();
+                      Navigator.pop(context);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('개인 코칭 참고를 저장했습니다.')),
+                      );
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppDesignTokens.brand,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(
+                          AppDesignTokens.radiusMedium,
+                        ),
+                      ),
+                      elevation: 0,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        SvgPicture.asset(
+                          'assets/icons/bolt.svg',
+                          width: 16,
+                          height: 16,
+                          colorFilter: const ColorFilter.mode(
+                            Colors.white,
+                            BlendMode.srcIn,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          '코치에게 알려주기',
+                          style: GoogleFonts.notoSansKr(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white,
+                          ),
                         ),
                       ],
                     ),
                   ),
-
-                  const SizedBox(height: 16),
-                  // Button
-                  SizedBox(
-                    width: double.infinity,
-                    height: 56,
-                    child: ElevatedButton(
-                      onPressed: () async {
-                        // 이름 없는 고정 일정은 저장할 때 걸러진다. 조용히
-                        // 빠지면 요일과 시각까지 정해둔 사람이 저장했다고
-                        // 믿은 채 나가므로, 여기서 되돌려보낸다.
-                        final unnamed = routines.any(
-                          (routine) =>
-                              (routine['name'] as String? ?? '').trim().isEmpty,
-                        );
-                        if (unnamed) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                '고정 일정에 이름을 적어주세요. 안 쓸 줄은 X로 지워주세요.',
-                              ),
-                            ),
-                          );
-                          return;
-                        }
-                        final prefs = await SharedPreferences.getInstance();
-                        await prefs.setString(
-                          'nyang_master_title',
-                          selectedTitle,
-                        );
-                        await prefs.remove('nyang_coach_name_nyang_halbae');
-                        await prefs.remove('nyang_coach_name_sec_female');
-                        this.setState(() {
-                          _homeWidgetStatus = _buildHomeWidgetStatus(
-                            nyang:
-                                prefs.getBool('widget_nyang_enabled') ?? false,
-                            catCharacter:
-                                prefs.getBool('widget_cat_character_enabled') ??
-                                false,
-                          );
-                        });
-                        await prefs.setBool('nyang_night_call_enabled', false);
-                        await prefs.setBool(
-                          'nyang_night_call_daily_enabled',
-                          false,
-                        );
-                        await prefs.setString(
-                          'nyang_premium_min_sleep_time',
-                          '${minSleepTime.hour.toString().padLeft(2, '0')}:${minSleepTime.minute.toString().padLeft(2, '0')}',
-                        );
-                        await prefs.setInt(
-                          'nyang_premium_sleep_duration',
-                          sleepDuration,
-                        );
-                        await prefs.setString(
-                          'nyang_premium_routines',
-                          jsonEncode(
-                            routines
-                                .where(
-                                  (routine) =>
-                                      (routine['name'] as String? ?? '')
-                                          .trim()
-                                          .isNotEmpty,
-                                )
-                                .map((routine) {
-                                  final start = routine['start'] as TimeOfDay;
-                                  final end = routine['end'] as TimeOfDay;
-                                  return {
-                                    'start':
-                                        '${start.hour.toString().padLeft(2, '0')}:${start.minute.toString().padLeft(2, '0')}',
-                                    'end':
-                                        '${end.hour.toString().padLeft(2, '0')}:${end.minute.toString().padLeft(2, '0')}',
-                                    'name': (routine['name'] as String).trim(),
-                                    'days': List<String>.from(
-                                      routine['days'] ?? [],
-                                    ),
-                                  };
-                                })
-                                .toList(),
-                          ),
-                        );
-                        TasksSyncService.scheduleSyncToCloud();
-                        await NotificationService().disableNightCallReminders();
-                        Navigator.pop(context);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('개인 코칭 참고를 저장했습니다.')),
-                        );
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppDesignTokens.brand,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(
-                            AppDesignTokens.radiusMedium,
-                          ),
-                        ),
-                        elevation: 0,
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          SvgPicture.asset(
-                            'assets/icons/bolt.svg',
-                            width: 16,
-                            height: 16,
-                            colorFilter: const ColorFilter.mode(
-                              Colors.white,
-                              BlendMode.srcIn,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            '코치에게 알려주기',
-                            style: GoogleFonts.notoSansKr(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w800,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
             );
           },
         );
@@ -5547,4 +5521,32 @@ class _SettingsScreenState extends State<SettingsScreen>
       ),
     );
   }
+}
+
+/// 모닝콜 요일을 고르는 세 갈래.
+///
+/// 요일 일곱 개를 늘 펼쳐두던 자리를 대신한다. 매일 받는 사람과 평일만 받는
+/// 사람이 대부분인데, 그 둘도 매번 일곱 칸을 눌러 맞춰야 했다.
+enum _MorningCallDayMode {
+  everyday('매일', {1, 2, 3, 4, 5, 6, 7}),
+  weekdays('평일만', {1, 2, 3, 4, 5}),
+  byDay('요일별', null);
+
+  const _MorningCallDayMode(this.label, this.days);
+
+  final String label;
+
+  /// 고르는 순간 그대로 들어가는 요일. 요일별은 사용자가 고르므로 null.
+  final Set<int>? days;
+
+  /// 저장해둔 요일이 어느 갈래인지. 매일도 평일도 아니면 직접 고른 것이다.
+  static _MorningCallDayMode of(Set<int> days) {
+    for (final mode in values) {
+      if (mode.days != null && _sameDays(mode.days!, days)) return mode;
+    }
+    return byDay;
+  }
+
+  static bool _sameDays(Set<int> a, Set<int> b) =>
+      a.length == b.length && a.every(b.contains);
 }
