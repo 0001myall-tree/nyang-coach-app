@@ -5725,23 +5725,23 @@ class _TasksScreenState extends State<TasksScreen>
       child: Container(
         padding: small
             ? const EdgeInsets.symmetric(horizontal: 12, vertical: 6)
-            : const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+            : const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(999),
           border: Border.all(
             color: _coach.accentColor,
-            width: small ? 1.2 : 1.4,
+            width: small ? 1.2 : 1.3,
           ),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.add, size: small ? 13 : 17, color: _coach.accentColor),
-            SizedBox(width: small ? 4 : 6),
+            Icon(Icons.add, size: small ? 13 : 15, color: _coach.accentColor),
+            SizedBox(width: small ? 4 : 5),
             Text(
               small ? '바꾸기' : '핵심 정하기',
               style: GoogleFonts.notoSansKr(
-                fontSize: small ? 12 : 14,
+                fontSize: small ? 12 : 13,
                 fontWeight: FontWeight.w800,
                 color: _coach.accentColor,
               ),
