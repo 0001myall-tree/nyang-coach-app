@@ -4162,7 +4162,7 @@ class _TasksScreenState extends State<TasksScreen>
         backgroundColor: Colors.transparent,
         elevation: 0,
         child: Container(
-          padding: const EdgeInsets.fromLTRB(24, 26, 24, 22),
+          padding: const EdgeInsets.fromLTRB(22, 22, 22, 18),
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(26),
@@ -4178,15 +4178,17 @@ class _TasksScreenState extends State<TasksScreen>
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // 묻는 말 한 줄뿐이라 제목처럼 굵게 두면 혼자 튄다. 삭제 창은
+              // 아래에 고를 것이 딸려 있어서 그 무게가 맞았다.
               Text(
                 '${_formatTime(time)}인가요?',
                 style: GoogleFonts.notoSansKr(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w900,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
                   color: const Color(0xFF3D3A4E),
                 ),
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 16),
               Row(
                 children: [
                   Expanded(
@@ -6205,7 +6207,14 @@ class _TasksScreenState extends State<TasksScreen>
 
             return Container(
               height: MediaQuery.of(context).size.height * 0.6,
-              padding: const EdgeInsets.all(20),
+              // 아래 여백에 시스템 내비게이션 바 높이를 더한다. 안 더하면
+              // '핵심으로 설정'이 그 막대에 가려서 안 보인다.
+              padding: EdgeInsets.fromLTRB(
+                20,
+                20,
+                20,
+                20 + MediaQuery.of(context).viewPadding.bottom,
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -6230,7 +6239,7 @@ class _TasksScreenState extends State<TasksScreen>
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    '오늘의 핵심 목표를 설정해보세요. (최대 3개)',
+                    '끌어서 우선순위를 바꿀 수 있어요. (최대 3개)',
                     style: GoogleFonts.notoSansKr(
                       fontSize: 13,
                       color: const Color(0xFFA0A0B0),
@@ -6241,24 +6250,6 @@ class _TasksScreenState extends State<TasksScreen>
                     child: ListView(
                       children: [
                         if (pendingCore.isNotEmpty) ...[
-                          Text(
-                            '선택한 핵심 순서',
-                            style: GoogleFonts.notoSansKr(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w800,
-                              color: const Color(0xFF3D3A4E),
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            '끌어서 우선순위를 바꿀 수 있어요.',
-                            style: GoogleFonts.notoSansKr(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                              color: const Color(0xFFA0A0B0),
-                            ),
-                          ),
-                          const SizedBox(height: 10),
                           ReorderableListView.builder(
                             shrinkWrap: true,
                             physics: const NeverScrollableScrollPhysics(),
