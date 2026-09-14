@@ -14,6 +14,8 @@ import 'package:table_calendar/table_calendar.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'coach_config.dart';
+import '../services/busy_hours_service.dart';
+import '../services/daypart_hint.dart';
 import '../services/memory_service.dart';
 import '../services/task_resistance_service.dart';
 import '../models/user_data.dart';
@@ -1238,6 +1240,14 @@ class _TasksScreenState extends State<TasksScreen>
         hasActivePlan &&
         (prefs.getBool('nyang_core_reminder_enabled') ?? false);
 
+    // 때만 적은 일에 시각을 붙일 때 쓴다. 등록하는 순간에 저장소를 다시 읽을
+    // 수는 없어서(그 자리는 기다릴 수 없다) 읽어둔다.
+    _cachedBedtime = prefs.getString('nyang_premium_min_sleep_time');
+    _cachedBusyEndHour = BusyHoursService.latestBusyEndHourToday(
+      prefs,
+      DateTime.now(),
+    );
+
     setState(() {
       _isCoreReminderEnabledGlobally = coreEnabled;
       _taskCheckboxHintSeen = taskCheckboxHintSeen;
@@ -2030,8 +2040,7 @@ class _TasksScreenState extends State<TasksScreen>
     _showEditItemModal(
       schedule,
       () {
-        setState(() {});
-        _saveSchedules();
+        _saveScheduleTabScheduleEdit(dateKey, schedule);
       },
       onDelete: () {
         setState(() {
@@ -2064,8 +2073,7 @@ class _TasksScreenState extends State<TasksScreen>
       schedule,
       expandTimeOptions: expandTimeOptions,
       () {
-        setState(() {});
-        _saveSchedules();
+        _saveScheduleTabScheduleEdit(dateKey, schedule);
       },
       onDelete: () {
         setState(() {
@@ -4079,9 +4087,13 @@ class _TasksScreenState extends State<TasksScreen>
   }
 
   // ── 자연어 시간 표현 추출 ─────────────────────────────────
-  ({String cleanText, TimeOfDay? time})? _parseNaturalLanguageTime(
-    String input,
-  ) {
+  /// 글에 적힌 시각. 없으면 null.
+  ///
+  /// [meridiemGuessed]는 오전·오후를 앱이 찍었다는 표시다. "7시 약속"처럼
+  /// 숫자만 적으면 지금 시각을 보고 고르는데, 그건 틀릴 수 있어서 넣기 전에
+  /// 한 번 묻는다. "오후 7시"나 "19시"처럼 적혀 있으면 찍을 것이 없다.
+  ({String cleanText, TimeOfDay? time, bool meridiemGuessed})?
+  _parseNaturalLanguageTime(String input) {
     // 오전/오후/아침/저녁/밤 + H시 (+ M분 또는 반)
     final timeRegex = RegExp(
       r'((?:오전|아침|오후|저녁|밤)\s*)?(\d{1,2})시(?:\s*(?:(\d{1,2})분|반))?(?:\s*(?:에|쯤|경|까지))?',
@@ -4102,6 +4114,7 @@ class _TasksScreenState extends State<TasksScreen>
     if (rawHour < 1 || rawHour > 24) return null;
 
     int hour24 = rawHour;
+    var meridiemGuessed = false;
     if (prefix == '오전' || prefix == '아침') {
       hour24 = rawHour == 12 ? 0 : rawHour;
     } else if (prefix == '오후' || prefix == '저녁' || prefix == '밤') {
@@ -4109,6 +4122,8 @@ class _TasksScreenState extends State<TasksScreen>
     } else {
       // 오전/오후 접두사가 없을 때 현재 시간 기준
       if (rawHour < 12) {
+        // 13시부터는 찍을 것이 없다. 12시 이하만 오전·오후가 갈린다.
+        meridiemGuessed = true;
         final now = DateTime.now();
         if (now.hour > rawHour ||
             (now.hour == rawHour && now.minute >= minute)) {
@@ -4126,7 +4141,145 @@ class _TasksScreenState extends State<TasksScreen>
     return (
       cleanText: cleanText.isEmpty ? input.trim() : cleanText,
       time: time,
+      meridiemGuessed: meridiemGuessed,
     );
+  }
+
+  /// 앱이 찍은 오전·오후가 맞는지 한 번 묻는다. 아니라고 하면 시각 없이 넣는다.
+  ///
+  /// 묻지 않고 넣던 자리다. 아침 6시에 "7시 약속"을 적으면 오전 7시가 되고,
+  /// 오후에 적으면 저녁 7시가 됐다. 틀리면 알림이 엉뚱한 때 울리는데, 그때는
+  /// 이미 사용자가 정한 시각처럼 보여서 손댈 곳도 안 보인다.
+  ///
+  /// 생김새는 [_showDeleteOptionsDialog]와 같다. 같은 자리에서 같은 무게로
+  /// 묻는 창이라 모양이 갈릴 이유가 없다.
+  Future<bool> _confirmGuessedTime(TimeOfDay time) async {
+    final answer = await showDialog<bool>(
+      context: context,
+      barrierColor: Colors.black.withOpacity(0.48),
+      builder: (ctx) => Dialog(
+        insetPadding: const EdgeInsets.symmetric(horizontal: 56),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(24, 26, 24, 22),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(26),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.12),
+                blurRadius: 18,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '${_formatTime(time)}인가요?',
+                style: GoogleFonts.notoSansKr(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                  color: const Color(0xFF3D3A4E),
+                ),
+              ),
+              const SizedBox(height: 18),
+              Row(
+                children: [
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () => Navigator.pop(ctx, false),
+                      child: Container(
+                        height: 48,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF4F4F7),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: Text(
+                          '아니요',
+                          style: GoogleFonts.notoSansKr(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w800,
+                            color: const Color(0xFF3D3A4E),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () => Navigator.pop(ctx, true),
+                      child: Container(
+                        height: 48,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: _coach.accentColor,
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: Text(
+                          '맞아요',
+                          style: GoogleFonts.notoSansKr(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w900,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    return answer ?? false;
+  }
+
+  /// 글에 적힌 때로 시각을 정한다. 때가 없으면 null.
+  ///
+  /// 이름은 그대로 둔다. 시각을 읽는 쪽은 '7시'를 이름에서 떼어내지만, 여기는
+  /// 뗄 것이 없다 — '저녁 글쓰기'에서 '저녁'을 떼면 '글쓰기'만 남고, 그건
+  /// 사용자가 적은 말보다 흐릿하다. 붙은 시각보다 그 말이 더 정확하다.
+  ///
+  /// 잠드는 시각과 근무 시간대를 함께 본다. 9시부터 8시까지 일하는 사람에게
+  /// 저녁 7시 30분은 아직 회사다.
+  TimeOfDay? _timeFromDaypart(String text) {
+    final hint = DaypartHint.read(
+      text,
+      bedtime: _storedTimeOfDay(_prefsBedtime),
+      workEnd: _busyEndToday(),
+    );
+    return hint?.time;
+  }
+
+  /// 저장해둔 취침 시각. 설정이 없으면 null.
+  String? get _prefsBedtime => _cachedBedtime;
+  String? _cachedBedtime;
+
+  /// 오늘 걸리는 근무 시간대가 끝나는 시각. 없으면 null.
+  TimeOfDay? _busyEndToday() {
+    final hour = _cachedBusyEndHour;
+    if (hour == null || hour < 0 || hour > 23) return null;
+    return TimeOfDay(hour: hour, minute: 0);
+  }
+
+  int? _cachedBusyEndHour;
+
+  static TimeOfDay? _storedTimeOfDay(String? hhmm) {
+    final parts = (hhmm ?? '').split(':');
+    if (parts.length != 2) return null;
+    final hour = int.tryParse(parts[0]);
+    final minute = int.tryParse(parts[1]);
+    if (hour == null || minute == null) return null;
+    if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return null;
+    return TimeOfDay(hour: hour, minute: minute);
   }
 
   // ── addTask (웹앱 그대로) ─────────────────────────────────
@@ -4144,13 +4297,27 @@ class _TasksScreenState extends State<TasksScreen>
 
     if (_todayTimeType == 'none') {
       final parsed = _parseNaturalLanguageTime(trimmed);
-      if (parsed != null) {
+      // 오전·오후를 앱이 찍은 경우에만 묻는다. "오후 7시"나 "19시"처럼
+      // 적혀 있으면 찍을 것이 없어서 그냥 넣는다.
+      final confirmed =
+          parsed == null ||
+          !parsed.meridiemGuessed ||
+          await _confirmGuessedTime(parsed.time!);
+      if (parsed != null && confirmed) {
         finalTitle = parsed.cleanText;
         timeStr = _formatTime(parsed.time!);
         timeStartStr =
             '${parsed.time!.hour.toString().padLeft(2, '0')}:${parsed.time!.minute.toString().padLeft(2, '0')}';
         // 자연어로 등록하는 일정이므로 글로벌 설정 상태에 따라 알람 자동 활성화
         reminderEnabled = _isCoreReminderEnabledGlobally;
+      } else if (parsed == null) {
+        // 시각은 안 적고 때만 적은 일. '저녁 글쓰기'처럼 쓰는 사람이 많다.
+        final hinted = _timeFromDaypart(trimmed);
+        if (hinted != null) {
+          timeStr = _formatTime(hinted);
+          timeStartStr = _storedTime(hinted);
+          reminderEnabled = _isCoreReminderEnabledGlobally;
+        }
       }
     } else {
       final effectiveTimeType = _effectiveClockTimeType(
@@ -7110,10 +7277,53 @@ class _TasksScreenState extends State<TasksScreen>
     target.memo = source.memo;
   }
 
+  /// 고친 값을 지금 화면이 들고 있는 일정에 옮겨 적고, 그 일정을 돌려준다.
+  ///
+  /// 편집 창이 열려 있는 동안 클라우드 스냅샷이 도착하면 목록을 통째로 다시
+  /// 읽는다. 그때 창이 쥐고 있던 항목은 목록에서 떨어져 나간 옛 객체가 되고,
+  /// 거기에 적은 값은 저장할 때 아무 데도 남지 않는다 — 저장은 목록을 보고
+  /// 쓰기 때문이다. 그래서 저장 직전에 id로 지금 목록의 그 일정을 다시 찾는다.
+  ///
+  /// 오늘 탭이 멀쩡했던 것은 그쪽이 이미 id로 다시 찾아 옮겨 적고 있어서다.
+  ScheduleItem _liveSchedule(String dateKey, ScheduleItem edited) {
+    for (final item in schedules[dateKey] ?? const <ScheduleItem>[]) {
+      if (item.id != edited.id) continue;
+      if (identical(item, edited)) return edited;
+      item.text = edited.text;
+      item.time = edited.time;
+      item.timeStart = edited.timeStart;
+      item.timeEnd = edited.timeEnd;
+      item.duration = edited.duration;
+      item.isReminderEnabled = edited.isReminderEnabled;
+      item.isRecurring = edited.isRecurring;
+      item.recurrenceGroupId = edited.recurrenceGroupId;
+      item.recurrenceRule = edited.recurrenceRule;
+      item.memo = edited.memo;
+      return item;
+    }
+    return edited;
+  }
+
+  /// 그 날짜에서 이 일정을 지운다.
+  ///
+  /// 자리(index)가 아니라 id로 찾는다. 창이 열려 있는 사이에 목록을 다시
+  /// 읽으면 화면이 쥐고 있던 목록은 떨어져 나가고, 거기서 지운 것은 실제
+  /// 목록에 남는다 — [_liveSchedule]과 같은 이유다.
+  void _removeSchedule(String dateKey, ScheduleItem target) {
+    setState(() {
+      final items = schedules[dateKey];
+      if (items == null) return;
+      items.removeWhere((item) => item.id == target.id);
+      if (items.isEmpty) schedules.remove(dateKey);
+    });
+    _saveSchedules();
+  }
+
   Future<void> _saveScheduleTabScheduleEdit(
     String dateKey,
-    ScheduleItem schedule,
+    ScheduleItem edited,
   ) async {
+    final schedule = _liveSchedule(dateKey, edited);
     setState(() {
       final scheduleId = 'schedule_${schedule.id}';
       for (final task in tasks) {
@@ -11179,6 +11389,8 @@ class _TasksScreenState extends State<TasksScreen>
         reminderEnabled,
       ),
       deferredCount: task.deferredCount + 1,
+      // 날짜만 옮기는 것이라 적어둔 메모는 그대로 따라가야 한다.
+      memo: task.memo,
     );
 
     final effectiveTimeType = _effectiveClockTimeType(timeType, endTime);
@@ -11494,6 +11706,9 @@ class _TasksScreenState extends State<TasksScreen>
           isRecurring: true,
           recurrenceGroupId: recurrenceGroupId,
           recurrenceRule: repeatRule,
+          // 방금 적은 메모가 여기로 안 넘어오면, 저장을 누른 순간 사라진다.
+          // 이 자리는 고친 일정을 통째로 다시 만들기 때문이다.
+          memo: source.memo,
         ),
       );
     }
@@ -11568,10 +11783,30 @@ class _TasksScreenState extends State<TasksScreen>
       _schTimeType,
       _schEndTime,
     );
+
+    // 시각 칸을 안 건드리고 글로만 적은 경우. "7시 약속"의 7시를 읽고, 숫자가
+    // 없으면 "저녁 글쓰기"의 '저녁'을 읽는다. 오늘 탭이 하던 일인데 여기만
+    // 빠져 있어서, 같은 말을 어디에 적었느냐로 결과가 갈렸다.
+    var title = text;
+    TimeOfDay? readTime;
+    if (_schTimeType == 'none') {
+      final parsed = _parseNaturalLanguageTime(text);
+      if (parsed == null) {
+        readTime = _timeFromDaypart(text);
+      } else if (!parsed.meridiemGuessed ||
+          await _confirmGuessedTime(parsed.time!)) {
+        // 오전·오후를 앱이 찍은 경우에만 묻는다. 아니라고 하면 적은 그대로
+        // 시각 없이 넣는다 — 이름에서 '7시'도 떼지 않는다.
+        title = parsed.cleanText;
+        readTime = parsed.time;
+      }
+    }
+
     final hasClockTime =
-        (effectiveScheduleTimeType == 'single' ||
-            effectiveScheduleTimeType == 'range') &&
-        _schStartTime != null;
+        ((effectiveScheduleTimeType == 'single' ||
+                effectiveScheduleTimeType == 'range') &&
+            _schStartTime != null) ||
+        readTime != null;
     final autoEnabledTimedReminder = hasClockTime
         ? await _prepareTimedScheduleStartReminder()
         : false;
@@ -11580,7 +11815,7 @@ class _TasksScreenState extends State<TasksScreen>
     final shouldEnableReminder =
         reminderGloballyEnabled &&
         hasClockTime &&
-        (_schReminderEnabled || autoEnabledTimedReminder);
+        (_schReminderEnabled || autoEnabledTimedReminder || readTime != null);
 
     final nowMs = DateTime.now().millisecondsSinceEpoch;
     final createdAt = DateTime.now().toIso8601String();
@@ -11593,7 +11828,7 @@ class _TasksScreenState extends State<TasksScreen>
     ScheduleItem buildEntry(DateTime date, int index) {
       final entry = ScheduleItem(
         id: repeatRule == null ? nowMs.toString() : '${nowMs}_$index',
-        text: text,
+        text: title,
         createdAt: createdAt,
         isReminderEnabled: shouldEnableReminder,
         isRecurring: repeatRule != null,
@@ -11603,7 +11838,11 @@ class _TasksScreenState extends State<TasksScreen>
             : {...repeatRule, 'startDate': _dateKey(_calSelectedDay)},
       );
 
-      if (effectiveScheduleTimeType == 'single' && _schStartTime != null) {
+      if (readTime != null) {
+        entry.timeStart = _storedTime(readTime);
+        entry.time = _formatTime(readTime);
+      } else if (effectiveScheduleTimeType == 'single' &&
+          _schStartTime != null) {
         entry.timeStart = _storedTime(_schStartTime!);
         entry.time = _formatTime(_schStartTime!);
       } else if (effectiveScheduleTimeType == 'range' &&
@@ -13035,21 +13274,9 @@ class _TasksScreenState extends State<TasksScreen>
                                   (fn) => setState(fn),
                                 );
                               } else {
-                                _showEditItemModal(
-                                  s,
-                                  () {
-                                    _saveScheduleTabScheduleEdit(dateStr, s);
-                                  },
-                                  onDelete: () {
-                                    setState(() {
-                                      daySch.removeAt(i);
-                                      if (daySch.isEmpty) {
-                                        schedules.remove(dateStr);
-                                      }
-                                    });
-                                    _saveSchedules();
-                                  },
-                                );
+                                _showEditItemModal(s, () {
+                                  _saveScheduleTabScheduleEdit(dateStr, s);
+                                }, onDelete: () => _removeSchedule(dateStr, s));
                               }
                             },
                             child: Container(
@@ -13084,21 +13311,9 @@ class _TasksScreenState extends State<TasksScreen>
                             (fn) => setState(fn),
                           );
                         } else {
-                          _showEditItemModal(
-                            s,
-                            () {
-                              _saveScheduleTabScheduleEdit(dateStr, s);
-                            },
-                            onDelete: () {
-                              setState(() {
-                                daySch.removeAt(i);
-                                if (daySch.isEmpty) {
-                                  schedules.remove(dateStr);
-                                }
-                              });
-                              _saveSchedules();
-                            },
-                          );
+                          _showEditItemModal(s, () {
+                            _saveScheduleTabScheduleEdit(dateStr, s);
+                          }, onDelete: () => _removeSchedule(dateStr, s));
                         }
                       },
                       child: _scheduleMetaInfoRow(
