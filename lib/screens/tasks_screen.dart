@@ -6209,11 +6209,15 @@ class _TasksScreenState extends State<TasksScreen>
               height: MediaQuery.of(context).size.height * 0.6,
               // 아래 여백에 시스템 내비게이션 바 높이를 더한다. 안 더하면
               // '핵심으로 설정'이 그 막대에 가려서 안 보인다.
+              //
+              // 화면(View)에서 직접 읽는다. MediaQuery로 물으면 0이 나온다 —
+              // 위쪽 Scaffold가 그 여백을 이미 써버려서, 여기까지 내려온
+              // 값에는 막대가 없는 것으로 적혀 있다.
               padding: EdgeInsets.fromLTRB(
                 20,
                 20,
                 20,
-                20 + MediaQuery.of(context).viewPadding.bottom,
+                20 + MediaQueryData.fromView(View.of(ctx)).viewPadding.bottom,
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
