@@ -360,14 +360,19 @@ class NyangBannerNudge {
       await _scheduleGap(
         id: gapNotificationIds[i],
         at: at,
-        // 지금 남아 있는 일을 보고 문장을 고른다. 내일 자리는 오늘 목록으로
-        // 고르게 되지만, 앱을 한 번이라도 열면 그날 것으로 다시 깔린다.
+        // 이름을 부르는 것은 오늘 자리까지다. 내일 자리는 오늘 목록으로 고르게
+        // 되는데, 앱을 하루 종일 안 열면 그 문장이 그대로 나간다 — 어제 목록을
+        // 보고 "이따 할 '분기 리포트'"라고 부르는 셈이다. 앱을 한 번이라도
+        // 열면 그날 것으로 다시 깔리니, 안 열었을 때만 쓰이는 이 자리에는
+        // 이름 없는 말을 건다.
         //
         // 여기서는 모델에게 묻지 않는다(mayAsk 기본값 false). 자리가 넷인데
         // 자리마다 물어보면 하루 한 번이 네 번이 된다. 물어보는 것은
         // GapCoachingService.sync가 한 번 하고, 여기서는 그 답이 이 자리가
         // 고른 일과 맞을 때만 가져다 쓴다. 안 맞으면 사전으로 떨어진다.
-        body: await GapCoachingService.bodyForSlot(prefs, tasks, at),
+        body: isToday
+            ? await GapCoachingService.bodyForSlot(prefs, tasks, at)
+            : GapCoachingService.namelessBody(prefs, tasks, at),
       );
     }
   }

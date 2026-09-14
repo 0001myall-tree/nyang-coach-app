@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/material.dart' show TimeOfDay;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:nyang_coach/services/gap_coaching_service.dart';
@@ -57,6 +58,46 @@ void main() {
     expect(card.containsKey('taskId'), isFalse);
   });
 
+  test('전날 밤에 짜둔 계획이 있으면 안 정했다고 하지 않는다', () async {
+    // 그 계획은 아직 오늘 목록에 없다. 앱을 그날 처음 열 때 옮겨지는데, 그
+    // 전에 카드가 뜨면 다 짜둔 사람에게 "아직 안 정했다"고 말하게 된다.
+    SharedPreferences.setMockInitialValues({
+      'nyang_tasks': '[]',
+      'nyang_today_tasks_by_date': jsonEncode({
+        '2026-09-09': [
+          {'id': 't1', 'text': '분기 리포트'},
+        ],
+      }),
+    });
+    final prefs = await SharedPreferences.getInstance();
+    await GapCoachingService.prepareCard(prefs, at: morning);
+    final card =
+        jsonDecode(prefs.getString(GapCoachingService.preparedCardKey)!)
+            as Map<String, dynamic>;
+
+    expect(card['body'], GapCoachingService.fallbackBody);
+    expect(card['button'], GapCoachingService.buttonDefault);
+  });
+
+  test('다른 날 계획은 오늘 것으로 치지 않는다', () async {
+    SharedPreferences.setMockInitialValues({
+      'nyang_tasks': '[]',
+      'nyang_today_tasks_by_date': jsonEncode({
+        '2026-09-10': [
+          {'id': 't1', 'text': '분기 리포트'},
+        ],
+      }),
+    });
+    final prefs = await SharedPreferences.getInstance();
+    await GapCoachingService.prepareCard(prefs, at: morning);
+    final card =
+        jsonDecode(prefs.getString(GapCoachingService.preparedCardKey)!)
+            as Map<String, dynamic>;
+
+    expect(card['body'], GapCoachingService.emptyBody);
+    expect(card['button'], GapCoachingService.buttonPlan);
+  });
+
   test('남은 일은 있는데 부를 이름이 없으면 이름 없이 말한다', () async {
     // 약속은 시각에 가서 하는 것이라 앞당길 자리가 없어 후보에서 빠진다.
     final card = await cardFor([
@@ -69,18 +110,33 @@ void main() {
   });
 
   test('손댄 일은 부르지 않는다', () async {
-    // 이미 시작한 일에 "미리 해두라"고 할 수는 없다.
+    // 이미 시작한 일에 "미리 해두라"고 할 수는 없다. 눌렀다가 곧바로 멈춘 일은
+    // 도는 중도 아니고 쌓인 시간도 0이라, 시작 표시까지 봐야 걸러진다.
     final card = await cardFor([
       {'id': 't1', 'text': '분기 리포트', 'inProgress': true},
       {'id': 't2', 'text': '방 정리', 'elapsedSeconds': 300},
+      {'id': 't3', 'text': '레퍼런스 정리', 'inProgressAt': '2026-09-09T09:00:00'},
+      {'id': 't4', 'text': '세금계산서', 'runStartedAt': '2026-09-09T09:10:00'},
     ]);
 
-    expect(card['body'], GapCoachingService.fallbackBody);
+    // 사전 문구는 전부 "이따 할 ~ 미리 해두면"이라 손댄 일에 못 쓴다. 코치를
+    // 못 불렀을 때는 이름 없이 건넨다.
+    expect(card['body'], GapCoachingService.finishFallbackBody);
     expect(card.containsKey('taskId'), isFalse);
   });
 
+  test('안 건드린 일이 있으면 그쪽을 부른다', () async {
+    final card = await cardFor([
+      {'id': 't1', 'text': '분기 리포트', 'inProgress': true},
+      {'id': 't2', 'text': '레퍼런스 정리'},
+    ]);
+
+    expect(card['taskId'], 't2');
+    expect(card['body'], contains('레퍼런스 정리'));
+  });
+
   test('머리로 하는 일을 먼저 부른다', () async {
-    // 15분을 앞당겨 가장 크게 달라지는 쪽이다.
+    // 10분을 앞당겨 가장 크게 달라지는 쪽이다.
     final card = await cardFor([
       {'id': 't1', 'text': '방 청소'},
       {'id': 't2', 'text': '기획안'},
@@ -195,6 +251,40 @@ void main() {
 
       expect(card['body'], contains('분기 리포트'));
       expect(card['taskId'], 't2');
+    });
+  });
+
+  group('카드가 뜰 시각', () {
+    // 문장은 '지금'이 아니라 '그 카드가 뜰 때'를 보고 지어야 한다. 아침에 앱을
+    // 열어 만든 문장이 오후에 뜨는데, 그 시각에 회사에 있는지는 그 시각을 봐야
+    // 안다.
+    const slots = [
+      TimeOfDay(hour: 10, minute: 30),
+      TimeOfDay(hour: 15, minute: 30),
+    ];
+
+    test('오늘 남은 자리 중 가장 가까운 것', () {
+      expect(
+        GapCoachingService.nextSlot(slots, now: DateTime(2026, 9, 9, 12)),
+        DateTime(2026, 9, 9, 15, 30),
+      );
+    });
+
+    test('오늘 자리가 다 지났으면 내일 첫 자리', () {
+      expect(
+        GapCoachingService.nextSlot(slots, now: DateTime(2026, 9, 9, 20)),
+        DateTime(2026, 9, 10, 10, 30),
+      );
+    });
+
+    test('적힌 순서가 아니라 시각 순으로 본다', () {
+      expect(
+        GapCoachingService.nextSlot(const [
+          TimeOfDay(hour: 15, minute: 30),
+          TimeOfDay(hour: 10, minute: 30),
+        ], now: DateTime(2026, 9, 9, 9)),
+        DateTime(2026, 9, 9, 10, 30),
+      );
     });
   });
 

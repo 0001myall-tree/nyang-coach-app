@@ -128,7 +128,24 @@ class BusyHoursService {
   }
 
   /// 지금이 그 시간대 안이면 이름을, 아니면 null.
-  static String? busyNow(SharedPreferences prefs, DateTime now) {
+  static String? busyNow(SharedPreferences prefs, DateTime now) =>
+      _entryAt(prefs, now)?['name']?.toString();
+
+  /// 그 시각에 무엇에 매여 있는지 한 줄로. 매인 것이 없으면 null.
+  ///
+  /// "회사 근무 (오후 7:00에 끝남)" 꼴이다. 끝나는 시각까지 주는 이유는,
+  /// 지금 할 수 있는 일과 퇴근 뒤에나 할 수 있는 일이 다르기 때문이다.
+  static String? situationAt(SharedPreferences prefs, DateTime at) {
+    final entry = _entryAt(prefs, at);
+    if (entry == null) return null;
+    final name = entry['name']?.toString().trim() ?? '';
+    if (name.isEmpty) return null;
+    final end = _label(entry['end']?.toString());
+    return end == null ? name : '$name ($end에 끝남)';
+  }
+
+  /// 그 시각에 걸려 있는 시간대. 없으면 null.
+  static Map<String, dynamic>? _entryAt(SharedPreferences prefs, DateTime now) {
     final today = _dayNames[now.weekday % 7];
     final minutes = now.hour * 60 + now.minute;
     for (final entry in _decode(prefs.getString(prefsKey))) {
@@ -141,7 +158,7 @@ class BusyHoursService {
       final inside = end > start
           ? minutes >= start && minutes < end
           : minutes >= start || minutes < end;
-      if (inside) return entry['name']?.toString();
+      if (inside) return entry;
     }
     return null;
   }

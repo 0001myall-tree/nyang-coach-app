@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/user_data.dart';
+import 'busy_hours_service.dart';
 import 'gap_fragment_check.dart';
 import 'gap_late_menu.dart';
 import 'nyang_banner_nudge.dart';
@@ -105,6 +106,15 @@ class GapCoachingService {
   /// 카드·배너 한 줄에 들어가는 이름 길이.
   static const int _nameLimit = 14;
 
+  /// 카드 한 줄 전체가 넘지 않는 길이.
+  ///
+  /// 고정 문구 중 가장 긴 [emptyBody]와 같은 자리에 둔다. 그 문구가 카드에서
+  /// 멀쩡하게 보이니, 거기까지는 늘어나도 된다는 뜻이다.
+  ///
+  /// 이름과 조각이 둘 다 길면 넘긴다 — 조각은 코치가 지은 말이라 자를 수
+  /// 없으니, 넘치는 만큼 이름 쪽을 더 줄인다.
+  static const int bodyLimit = 48;
+
   /// 만들기 전에 무엇을 만들지부터 정해야 하는 일.
   static const List<String> _conceptWords = [
     '기획',
@@ -193,28 +203,42 @@ class GapCoachingService {
   /// 10분 앞당길지가 눈앞에 선다. 말투도 그 일에 맞춘다 — 기획하는 일에 "미리
   /// 해두라"고 하면 무엇을 하라는 건지 알 수 없고, 반대로 설거지에 "개요를
   /// 생각해두라"고 하면 웃긴다.
-  static String bodyFor(List tasks, DateTime at) {
+  static String bodyFor(List tasks, DateTime at, {bool plannedAhead = false}) {
     final name = _pickTaskName(tasks, at);
     if (name == null) {
       // 이름 부를 것이 없어도 남아 있는 일이 있으면 "이따 할 일"이다.
       // 아예 비어 있을 때만 정하자고 권한다.
-      return hasAnyRemaining(tasks) ? fallbackBody : emptyBody;
+      return hasAnyRemaining(tasks) || plannedAhead ? fallbackBody : emptyBody;
     }
-    final shown = _shorten(name);
     if (_conceptWords.any(name.contains)) {
-      return "이따 할 '$shown' 10분간 콘셉트만 생각해둬도 훨씬 가벼워질 거라냥.";
+      return _fit(name, (n) => "이따 할 '$n' 10분간 콘셉트만 생각해둬도 훨씬 가벼워질 거라냥.");
     }
     if (_outlineWords.any(name.contains)) {
-      return "이따 할 '$shown' 10분간 개요만 대충 잡아둬도 훨씬 가벼워질 거라냥.";
+      return _fit(name, (n) => "이따 할 '$n' 10분간 개요만 대충 잡아둬도 훨씬 가벼워질 거라냥.");
     }
     if (_firstLineWords.any(name.contains)) {
-      return "이따 할 '$shown' 10분간 첫문장만 준비해둬도 훨씬 가벼워질 거라냥.";
+      return _fit(name, (n) => "이따 할 '$n' 10분간 첫문장만 준비해둬도 훨씬 가벼워질 거라냥.");
     }
     if (_bodyWords.any(name.contains)) {
-      return "이따 할 '$shown' 10분간 뭐부터 준비할지만 정해둬도 훨씬 움직이기 좋을 거라냥.";
+      return _fit(name, (n) => "이따 할 '$n' 10분간 뭐부터 준비할지만 정해둬도 훨씬 움직이기 좋을 거라냥.");
     }
-    return "이따 할 '$shown' 10분만 미리 해두면 훨씬 가벼워질 거라냥.";
+    return _fit(name, (n) => "이따 할 '$n' 10분만 미리 해두면 훨씬 가벼워질 거라냥.");
   }
+
+  /// [bodyLimit] 안에 들어가는 한 줄. 넘치면 이름을 더 줄여서 다시 짓는다.
+  ///
+  /// 틀마다 뒤에 붙는 말의 길이가 달라서, 이름 길이 하나로 맞출 수는 없다.
+  /// 짧은 이름은 그대로 두고, 넘칠 때만 한 글자씩 물러난다.
+  static String _fit(String name, String Function(String shown) build) {
+    for (var limit = _nameLimit; limit > _nameFloor; limit--) {
+      final line = build(_shorten(name, limit: limit));
+      if (line.length <= bodyLimit) return line;
+    }
+    return build(_shorten(name, limit: _nameFloor));
+  }
+
+  /// 아무리 줄여도 여기까지만. 이보다 짧으면 무슨 일인지 알 수 없다.
+  static const int _nameFloor = 6;
 
   /// 머리로 하는 일인지. 10분을 앞당겨 얻는 것이 가장 큰 쪽이다.
   static bool _isMindWork(String name) =>
@@ -222,8 +246,8 @@ class GapCoachingService {
       _outlineWords.any(name.contains) ||
       _firstLineWords.any(name.contains);
 
-  static String _shorten(String text) =>
-      text.length <= _nameLimit ? text : '${text.substring(0, _nameLimit)}…';
+  static String _shorten(String text, {int limit = _nameLimit}) =>
+      text.length <= limit ? text : '${text.substring(0, limit)}…';
 
   /// 아직 안 끝낸 일이 하나라도 있는지. 약속도 센다.
   static bool hasAnyRemaining(List tasks) =>
@@ -252,7 +276,11 @@ class GapCoachingService {
   /// 이름을 불러줄 일 하나. 항목째로 돌려준다 — 안드로이드에 넘길 때 그 일이
   /// 아직 그대로인지 확인할 id가 필요하다.
   static Map? _pickTask(List tasks, DateTime at) {
-    final items = _candidates(tasks, at);
+    // 사전 문구는 전부 "이따 할 ~ 미리 해두면"이라, 이미 손댄 일에는 못 쓴다.
+    final items = _candidates(
+      tasks,
+      at,
+    ).where((item) => !_touched(item)).toList(growable: false);
     if (items.isEmpty) return null;
     return items.firstWhere(
       (item) => _isMindWork(item['text']?.toString() ?? ''),
@@ -262,7 +290,10 @@ class GapCoachingService {
 
   /// 이름을 부를 수 있는 일들. 부르고 싶은 순서대로.
   ///
-  /// 아직 시작하지 않은 일만 본다 — 손을 댄 일에 "미리 해두라"고 할 수는 없다.
+  /// 손댄 일도 넣는다. 아직 안 건드린 일에는 시작이 쉬워지는 준비가, 하는
+  /// 중인 일에는 이어갈 다음 조각이 맞는데 — 그 판단은 코치가 한다. 앱이
+  /// 갈라두면 갈래가 안 맞는 사람에게 엉뚱한 말이 나간다.
+  ///
   /// 약속(schedule)은 시각에 가서 하는 것이라 10분을 앞당길 자리가 없어 뺀다.
   static List<Map> _candidates(List tasks, DateTime at) {
     final atMinutes = at.hour * 60 + at.minute;
@@ -272,8 +303,6 @@ class GapCoachingService {
     for (final item in tasks) {
       if (item is! Map) continue;
       if (item['done'] == true) continue;
-      if (item['inProgress'] == true) continue;
-      if (((item['elapsedSeconds'] as num?)?.toInt() ?? 0) > 0) continue;
       if (item['category'] == 'schedule') continue;
       final text = item['text']?.toString().trim() ?? '';
       if (text.isEmpty) continue;
@@ -286,13 +315,27 @@ class GapCoachingService {
         continue;
       }
       final minutes = hour * 60 + minute;
-      // 이미 지난 시각은 "이따"가 아니다.
-      if (minutes <= atMinutes) continue;
+      // 시각이 지났는데 손도 안 댄 일은 "이따"가 아니다. 손댄 일은 시각이
+      // 지났어도 지금 붙잡고 있는 일이라 그대로 둔다.
+      if (minutes <= atMinutes && !_touched(item)) continue;
       timed.add(MapEntry(minutes, item));
     }
 
     timed.sort((a, b) => a.key.compareTo(b.key));
     return [...timed.map((e) => e.value), ...untimed];
+  }
+
+  /// 한 번이라도 손댄 일인지.
+  ///
+  /// 도는 중인 것과 쌓인 시간만 보던 자리다. 눌렀다가 곧바로 멈춘 일은 둘 다
+  /// 0으로 남아서 "아예 안 건드린 일"로 통과했다. 시작 표시가 남아 있으면
+  /// 그것도 손댄 것이다 — 채팅 쪽 인사가 보는 표시와 같은 것을 본다.
+  static bool _touched(Map item) {
+    if (item['inProgress'] == true) return true;
+    if (((item['elapsedSeconds'] as num?)?.toInt() ?? 0) > 0) return true;
+    final inProgressAt = item['inProgressAt']?.toString().trim() ?? '';
+    final runStartedAt = item['runStartedAt']?.toString().trim() ?? '';
+    return inProgressAt.isNotEmpty || runStartedAt.isNotEmpty;
   }
 
   /// 안드로이드 카드가 읽어갈 자리.
@@ -316,6 +359,9 @@ class GapCoachingService {
   /// 그 일을 끝낸 오후에 띄우면 엉뚱하다. 그래서 고른 일의 id를 함께 적어두고,
   /// 네이티브는 띄우기 전에 그 일이 아직 남아 있는지만 확인한다. 확인이
   /// 목록 하나만 보면 되므로 판단이 두 벌로 늘지 않는다.
+  ///
+  /// 만든 날짜도 같이 적는다. id만 보면 어제 일이 오늘까지 넘어온 경우를
+  /// 못 거른다 — 앱을 하루 종일 안 연 사람에게 어제 만든 말이 그대로 나간다.
   static Future<void> prepareCard(
     SharedPreferences prefs, {
     DateTime? at,
@@ -323,12 +369,23 @@ class GapCoachingService {
     final tasks = _decodeTasks(prefs.getString('nyang_tasks'));
     final now = at ?? DateTime.now();
     final late = lateSuggestionFor(prefs, tasks, now);
-    final picked = late == null ? _pickTask(tasks, now) : null;
+    final prep = late == null ? await _prepFor(prefs, tasks, now) : null;
 
-    final body = await bodyForSlot(prefs, tasks, now, mayAsk: true);
+    // 코치가 고른 일이 있으면 그 일의 id를 적어둔다. 문장이 부르는 일과
+    // 네이티브가 확인하는 일이 다르면, 끝낸 일 이름을 그대로 띄우게 된다.
+    final picked = late == null
+        ? (_taskNamed(tasks, prep?.task) ?? _pickTask(tasks, now))
+        : null;
+
+    // 전날 밤에 짜둔 계획은 아직 오늘 목록에 없다. 그걸 안 보면 계획을 다
+    // 짜둔 사람에게 "아직 안 정했다"고 말하고, 버튼도 정하자는 쪽을 가리킨다.
+    final ahead = plannedAhead(prefs, now);
+
+    final body =
+        late?.body ?? bodyWithPrep(prep, tasks, now, plannedAhead: ahead);
     final name = picked?['text']?.toString().trim();
     final button = late == null && (name == null || name.isEmpty)
-        ? (hasAnyRemaining(tasks) ? buttonDefault : buttonPlan)
+        ? (hasAnyRemaining(tasks) || ahead ? buttonDefault : buttonPlan)
         : buttonDefault;
 
     // 늦은 쪽 문장이 부른 일도 함께 적어둔다. 그 일을 그새 끝냈으면 다른 말이
@@ -338,6 +395,7 @@ class GapCoachingService {
     await prefs.setString(
       preparedCardKey,
       jsonEncode({
+        'date': _dateKey(now),
         'body': body,
         'button': button,
         if (taskId != null) 'taskId': taskId,
@@ -364,15 +422,73 @@ class GapCoachingService {
     final late = lateSuggestionFor(prefs, tasks, at);
     if (late != null) return late.body;
 
-    final name = _pickTaskName(tasks, at);
-    if (name == null || name.isEmpty) {
-      return hasAnyRemaining(tasks) ? fallbackBody : emptyBody;
+    final prep = mayAsk
+        ? await _prepFor(prefs, tasks, at)
+        : _cachedPrep(prefs, tasks, at);
+    return bodyWithPrep(prep, tasks, at, plannedAhead: plannedAhead(prefs, at));
+  }
+
+  /// 이름을 부르지 않는 한 줄. 목록이 낡았을 수 있는 자리에서 쓴다.
+  ///
+  /// 안드로이드 네이티브가 낡은 카드를 버리고 떨어지는 자리와 같은 문장이다.
+  static String namelessBody(
+    SharedPreferences prefs,
+    List tasks,
+    DateTime at,
+  ) => hasAnyRemaining(tasks) || plannedAhead(prefs, at)
+      ? fallbackBody
+      : emptyBody;
+
+  /// 그날 하기로 미리 적어둔 것이 있는지.
+  ///
+  /// 오늘 목록만 보면 안 된다. 전날 밤에 짜둔 계획은 날짜별 보관함에 들어가
+  /// 있다가, 그날 앱을 처음 열 때 오늘 목록으로 옮겨진다. 그 전에 카드가
+  /// 뜨면 계획을 다 짜둔 사람에게 "아직 안 정했다"고 말하게 된다.
+  ///
+  /// 안드로이드 GapCoachingCopy도 같은 자리를 본다.
+  static bool plannedAhead(SharedPreferences prefs, DateTime at) {
+    final raw = prefs.getString(_plannedByDateKey);
+    if (raw == null || raw.isEmpty) return false;
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) return false;
+      final planned = decoded[_dateKey(at)];
+      if (planned is! List) return false;
+      return planned.any((item) => item is Map && item['done'] != true);
+    } catch (_) {
+      return false;
     }
-    final fragment = mayAsk
-        ? await _fragmentFor(prefs, name, at)
-        : _cachedFragment(prefs, name, at);
-    if (fragment == null) return bodyFor(tasks, at);
-    return fragmentBody(name: name, fragment: fragment);
+  }
+
+  /// 날짜별 계획 보관함. `DailyResetService.plannedTasksByDateKey`와 같은 이름이다.
+  static const String _plannedByDateKey = 'nyang_today_tasks_by_date';
+
+  /// 코치가 고른 조각이 있으면 그걸로, 없으면 사전으로.
+  static String bodyWithPrep(
+    GapPrep? prep,
+    List tasks,
+    DateTime at, {
+    bool plannedAhead = false,
+  }) {
+    if (prep != null) {
+      return fragmentBody(name: prep.task, fragment: prep.prep);
+    }
+    // 사전 문구는 아직 시작 안 한 일에만 쓰는 말들이라, 남은 게 전부 손댄
+    // 일이면 거기로 갈 수 없다.
+    if (_pickTask(tasks, at) == null && _candidates(tasks, at).isNotEmpty) {
+      return finishFallbackBody;
+    }
+    return bodyFor(tasks, at, plannedAhead: plannedAhead);
+  }
+
+  /// 이름이 같은 일. 없으면 null.
+  static Map? _taskNamed(List tasks, String? name) {
+    if (name == null || name.isEmpty) return null;
+    for (final item in tasks) {
+      if (item is! Map) continue;
+      if (item['text']?.toString().trim() == name) return item;
+    }
+    return null;
   }
 
   /// 카드 아래 버튼에 적을 말. 코틀린 쪽과 같은 값이라 여기서 넘긴다.
@@ -385,11 +501,21 @@ class GapCoachingService {
   /// "개요만 잡아둬도"류는 조각 모양이 정해져 있을 때만 되는 틀이라, 모델이
   /// 만들어 오는 말에는 안 맞는다.
   ///
-  /// 15분이다. 30분은 조각이 아니라 또 하나의 일이 된다.
+  /// "이따 할"을 빼둔다. 하는 중인 일도 코치가 고르는데, 그 일에 '이따 할'을
+  /// 붙이면 이미 붙잡고 있는 일을 나중 일로 만든다.
+  ///
+  /// 10분이다. 그보다 길면 조각이 아니라 또 하나의 일이 된다.
   static String fragmentBody({
     required String name,
     required String fragment,
-  }) => "이따 할 '${_shorten(name)}' 15분만 $fragment에 써볼까냥?";
+  }) => _fit(name, (n) => "'$n' 지금 10분만 $fragment에 써볼까냥?");
+
+  /// 남은 일에 다 손은 댔을 때. 조각을 못 받아왔을 때 쓴다.
+  ///
+  /// "먼저 해두면 가벼워진다"는 아직 시작 안 한 사람에게 하는 말이라, 시작을
+  /// 다 해둔 사람에게는 이미 한 일을 또 하라는 말이 된다.
+  static const String finishFallbackBody =
+      '시작해둔 게 있다냥. 지금 10분만 더 붙이면 훨씬 수월해질 거라냥.';
 
   /// 늦은 시각이면 그때 건넬 한 수. 이른 시각이거나 건넬 것이 없으면 null.
   static GapLateSuggestion? lateSuggestionFor(
@@ -425,19 +551,33 @@ class GapCoachingService {
   /// 문구를 만든 것이라 그냥 버려진다. 한 번쯤 여유를 두고 셋에서 끊는다.
   static const int maxFragmentAsksPerDay = 3;
 
-  /// 조각 하나. 오늘 같은 일로 이미 물어봤으면 그걸 다시 쓴다.
+  /// 준비 하나. 오늘 같은 목록으로 이미 물어봤으면 그걸 다시 쓴다.
   ///
   /// [GapCoachingService.sync]는 앱을 열 때마다 돈다. 여기서 그냥 물어보면
   /// 하루에 앱 연 횟수만큼 결제된다 — 하루 30번 열면 서른 번이다. 그래서
-  /// 하루 한 번, 그것도 고른 일이 바뀌었을 때만 묻는다.
-  static Future<String?> _fragmentFor(
+  /// 하루 한 번, 그것도 목록이 바뀌었을 때만 묻는다.
+  static Future<GapPrep?> _prepFor(
     SharedPreferences prefs,
-    String name,
+    List tasks,
     DateTime now,
   ) async {
+    final candidates = _candidates(tasks, now);
+    if (candidates.isEmpty) return null;
+    final names = _namesOf(candidates);
+    final cores = _coreNames(prefs, names);
+
+    // 그 시각에 무엇에 매여 있는지. 회사에 있는 사람과 집에 있는 사람은 지금
+    // 해둘 수 있는 것이 다르다.
+    final situation = BusyHoursService.situationAt(prefs, now);
+    final signature = _signature(
+      names: names,
+      cores: cores,
+      situation: situation,
+    );
+
     final today = _dateKey(now);
-    if (_hasFragmentAnswer(prefs, name, now)) {
-      return _cachedFragment(prefs, name, now);
+    if (_hasFragmentAnswer(prefs, signature, now)) {
+      return _cachedPrep(prefs, tasks, now);
     }
 
     final cached = _readFragmentCache(prefs.getString(fragmentCacheKey));
@@ -446,20 +586,70 @@ class GapCoachingService {
         : 0;
     if (askedToday >= maxFragmentAsksPerDay) return null;
 
-    final fragment = await GapFragmentCheck.fragmentFor(name);
+    final prep = await GapFragmentCheck.suggest(
+      candidates: candidates
+          .map(
+            (item) => GapCandidate(
+              name: item['text']?.toString().trim() ?? '',
+              timeLabel: _timeLabel(item['timeStart']?.toString()),
+              started: _touched(item),
+            ),
+          )
+          .toList(growable: false),
+      at: now,
+      cores: cores,
+      situation: situation,
+    );
     // 못 받아온 것도 적어둔다. 안 적으면 통신이 끊긴 날 앱을 열 때마다 다시
     // 물어보게 된다.
     await prefs.setString(
       fragmentCacheKey,
       jsonEncode({
         'date': today,
-        'taskId': name,
+        'taskId': signature,
         'asked': askedToday + 1,
-        if (fragment != null) 'fragment': fragment,
+        if (prep != null) 'task': prep.task,
+        if (prep != null) 'fragment': prep.prep,
       }),
     );
-    return fragment;
+    return prep;
   }
+
+  static List<String> _namesOf(List<Map> items) => items
+      .map((item) => item['text']?.toString().trim() ?? '')
+      .where((name) => name.isNotEmpty)
+      .toList(growable: false);
+
+  /// "07:30" -> "오전 7:30". 시각이 없으면 null.
+  static String? _timeLabel(String? hhmm) {
+    final parts = (hhmm ?? '').split(':');
+    if (parts.length != 2) return null;
+    final hour = int.tryParse(parts[0]);
+    final minute = int.tryParse(parts[1]);
+    if (hour == null || minute == null) return null;
+    final meridiem = hour >= 12 ? '오후' : '오전';
+    final shown = hour > 12 ? hour - 12 : (hour == 0 ? 12 : hour);
+    return '$meridiem $shown:${minute.toString().padLeft(2, '0')}';
+  }
+
+  /// 오늘의 핵심 중 위 목록에 남아 있는 것들.
+  ///
+  /// 이미 끝냈거나 손댄 핵심은 빠진다. 끝낸 일을 "먼저 보라"고 넘기면 코치가
+  /// 그 일을 고르고, 카드는 다 한 일을 불러준다.
+  static List<String> _coreNames(
+    SharedPreferences prefs,
+    List<String> candidates,
+  ) => _decodeTasks(prefs.getString('nyang_core_tasks'))
+      .map((item) => item is Map ? item['text']?.toString().trim() ?? '' : '')
+      .where(candidates.contains)
+      .toList(growable: false);
+
+  /// 같은 목록으로 또 묻지 않으려고 적어두는 값.
+  static String _signature({
+    required List<String> names,
+    required List<String> cores,
+    String? situation,
+  }) => '${situation ?? ''}>${cores.join('|')}>${names.join('|')}';
 
   /// 오늘 몇 번 물어봤는지. 테스트와 진단용.
   @visibleForTesting
@@ -469,28 +659,43 @@ class GapCoachingService {
     return int.tryParse(cached['asked'] ?? '') ?? 0;
   }
 
-  /// 오늘 이 일로 이미 물어봤는지. 못 받아온 것도 물어본 것으로 센다.
+  /// 오늘 이 목록으로 이미 물어봤는지. 못 받아온 것도 물어본 것으로 센다.
   static bool _hasFragmentAnswer(
     SharedPreferences prefs,
-    String name,
+    String signature,
     DateTime now,
   ) {
     final cached = _readFragmentCache(prefs.getString(fragmentCacheKey));
     return cached != null &&
         cached['date'] == _dateKey(now) &&
-        cached['taskId'] == name;
+        cached['taskId'] == signature;
   }
 
-  /// 오늘 받아둔 조각. 없으면 null. 물어보지 않는다.
-  static String? _cachedFragment(
+  /// 오늘 받아둔 준비. 없으면 null. 물어보지 않는다.
+  ///
+  /// 고른 일이 목록에서 사라졌으면(끝냈거나 지웠으면) 없는 셈 친다. 아이폰은
+  /// 자리를 여러 개 한꺼번에 거는데, 그새 끝낸 일을 오후 카드가 다시 부르면
+  /// 안 된다.
+  static GapPrep? _cachedPrep(
     SharedPreferences prefs,
-    String name,
+    List tasks,
     DateTime at,
   ) {
-    if (!_hasFragmentAnswer(prefs, name, at)) return null;
+    final names = _namesOf(_candidates(tasks, at));
+    if (names.isEmpty) return null;
+    final signature = _signature(
+      names: names,
+      cores: _coreNames(prefs, names),
+      situation: BusyHoursService.situationAt(prefs, at),
+    );
+    if (!_hasFragmentAnswer(prefs, signature, at)) return null;
+
     final cached = _readFragmentCache(prefs.getString(fragmentCacheKey));
-    final fragment = cached?['fragment'];
-    return (fragment == null || fragment.isEmpty) ? null : fragment;
+    final task = cached?['task'] ?? '';
+    final prep = cached?['fragment'] ?? '';
+    if (task.isEmpty || prep.isEmpty) return null;
+    if (!names.contains(task)) return null;
+    return GapPrep(task: task, prep: prep);
   }
 
   static Map<String, String>? _readFragmentCache(String? raw) {
@@ -542,6 +747,31 @@ class GapCoachingService {
     await sync();
   }
 
+  /// 카드가 다음에 뜰 시각. 오늘 남은 자리가 없으면 내일 첫 자리다.
+  ///
+  /// 문장은 '지금'이 아니라 '그 카드가 뜰 때'를 보고 지어야 한다. 아침에 앱을
+  /// 열어 만든 문장이 오후 3시에 뜨는데, 그 사람이 3시에 회사에 있는지 집에
+  /// 있는지는 3시를 봐야 안다.
+  @visibleForTesting
+  static DateTime nextSlot(List<TimeOfDay> slots, {DateTime? now}) {
+    final at = now ?? DateTime.now();
+    final sorted = slots.map((t) => t.hour * 60 + t.minute).toList()..sort();
+    for (final minutes in sorted) {
+      final slot = DateTime(
+        at.year,
+        at.month,
+        at.day,
+      ).add(Duration(minutes: minutes));
+      if (slot.isAfter(at)) return slot;
+    }
+    final tomorrow = DateTime(
+      at.year,
+      at.month,
+      at.day,
+    ).add(const Duration(days: 1));
+    return tomorrow.add(Duration(minutes: sorted.first));
+  }
+
   /// 저장된 설정을 지금 상태에 맞춰 네이티브·알림에 다시 건다.
   ///
   /// 등급이 내려갔으면 여기서 조용히 접힌다. 앱이 꺼진 사이에는 등급을 알 수
@@ -561,7 +791,7 @@ class GapCoachingService {
           // 문장을 먼저 만들어 두고 시각을 건다. 카드가 뜨는 순간에는 앱이
           // 꺼져 있을 수 있어서, 그때 만들 수는 없다.
           final prefs = await SharedPreferences.getInstance();
-          await prepareCard(prefs);
+          await prepareCard(prefs, at: nextSlot(slots));
           await _channel.invokeMethod('syncGapCoaching', {
             'times': slots.map(formatTime).toList(),
           });
@@ -578,7 +808,7 @@ class GapCoachingService {
     // 여기서 물어봐 두면 아래 예약이 그 답을 가져다 쓴다.
     if (slots.isNotEmpty) {
       final prefs = await SharedPreferences.getInstance();
-      await prepareCard(prefs);
+      await prepareCard(prefs, at: nextSlot(slots));
     }
     // 다른 배너와 시간이 겹치는지 함께 봐야 해서 예약은 그쪽 한 곳에서 한다.
     await NyangBannerNudge.sync();

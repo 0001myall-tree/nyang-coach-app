@@ -1,6 +1,9 @@
 package com.coscene.nyangcoach
 
 import android.content.Context
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -17,9 +20,12 @@ import org.json.JSONObject
  * 만드는 쪽으로 맞췄다.
  *
  * 미리 만든 문장은 낡을 수 있다. 아침에 만든 "'분기 리포트' 개요 잡을까"를 그
- * 일을 끝낸 오후에 띄우면 엉뚱하다. 그래서 Dart가 고른 일의 id를 함께 적어두고,
- * 여기서는 그 일이 아직 남아 있는지만 확인한다. 목록 하나만 보면 되므로 판단이
+ * 일을 끝낸 오후에 띄우면 엉뚱하다. 그래서 Dart가 고른 일의 id와 만든 날짜를
+ * 함께 적어두고, 여기서는 그 둘만 확인한다. 목록 하나만 보면 되므로 판단이
  * 두 벌로 늘지 않는다.
+ *
+ * 날짜를 따로 보는 이유는, 어제 일이 오늘까지 넘어오면 id가 그대로 살아 있기
+ * 때문이다. 앱을 하루 종일 안 연 사람에게 어제 만든 말이 나가게 된다.
  */
 object GapCoachingCopy {
     private const val PREFS = "FlutterSharedPreferences"
@@ -27,6 +33,9 @@ object GapCoachingCopy {
 
     /** Dart가 만들어 둔 카드. `GapCoachingService.preparedCardKey`와 같은 이름이다. */
     private const val KEY_CARD = "flutter.gap_coaching_card"
+
+    /** 날짜별 계획 보관함. `DailyResetService.plannedTasksByDateKey`와 같은 이름이다. */
+    private const val KEY_PLANNED_BY_DATE = "flutter.nyang_today_tasks_by_date"
 
     /**
      * Dart가 아직 아무것도 안 만들어 뒀거나, 만들어 둔 것이 낡았을 때.
@@ -47,11 +56,30 @@ object GapCoachingCopy {
 
     fun cardFor(context: Context): Card {
         prepared(context)?.let { return it }
-        return if (hasAnyRemaining(context)) {
+        return if (hasAnyRemaining(context) || plannedAhead(context)) {
             Card(FALLBACK, BUTTON_DEFAULT)
         } else {
             Card(EMPTY_BODY, BUTTON_PLAN)
         }
+    }
+
+    /**
+     * 오늘 하기로 미리 적어둔 것이 있는지.
+     *
+     * 오늘 목록만 보면 안 된다. 전날 밤에 짜둔 계획은 날짜별 보관함에 들어가
+     * 있다가, 그날 앱을 처음 열 때 오늘 목록으로 옮겨진다. 앱을 안 연 채로
+     * 카드가 뜨면 계획을 다 짜둔 사람에게 "아직 안 정했다"고 말하게 된다.
+     */
+    private fun plannedAhead(context: Context): Boolean {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val raw = prefs.getString(KEY_PLANNED_BY_DATE, null) ?: return false
+        val json = runCatching { JSONObject(raw) }.getOrNull() ?: return false
+        val planned = json.optJSONArray(today()) ?: return false
+        for (i in 0 until planned.length()) {
+            val item = planned.optJSONObject(i) ?: continue
+            if (!item.optBoolean("done", false)) return true
+        }
+        return false
     }
 
     /** Dart가 만들어 둔 카드. 없거나 가리키는 일이 이미 끝났으면 null. */
@@ -62,12 +90,20 @@ object GapCoachingCopy {
         val body = json.optString("body", "").trim()
         if (body.isBlank()) return null
 
+        // 오늘 만든 것만 쓴다. 날짜가 없는 건 이 확인이 생기기 전에 만든
+        // 카드라, 낡은 것으로 본다.
+        if (json.optString("date", "") != today()) return null
+
         val taskId = json.optString("taskId", "")
         if (taskId.isNotBlank() && !isStillPending(context, taskId)) return null
 
         val button = json.optString("button", "").ifBlank { BUTTON_DEFAULT }
         return Card(body, button)
     }
+
+    /** 오늘 날짜. Dart의 `_dateKey`와 같은 모양이다. */
+    private fun today(): String =
+        SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
 
     /** 그 일이 아직 남아 있는지. 목록에서 사라졌으면 남은 것으로 보지 않는다. */
     private fun isStillPending(context: Context, taskId: String): Boolean {
