@@ -14383,9 +14383,9 @@ class _TasksScreenState extends State<TasksScreen>
                     ),
                   )
                 : ListView.builder(
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.symmetric(vertical: 8),
                     itemCount: habits.length,
-                    itemBuilder: (ctx, i) => _buildHabitItem(habits[i]),
+                    itemBuilder: (ctx, i) => _buildHabitItem(habits[i], i),
                   ),
           ),
           // 습관 추가 버튼
@@ -14424,7 +14424,7 @@ class _TasksScreenState extends State<TasksScreen>
     );
   }
 
-  Widget _buildHabitItem(HabitItem h) {
+  Widget _buildHabitItem(HabitItem h, int index) {
     const dayNames = ['월', '화', '수', '목', '금', '토', '일'];
     final freqLabel = h.freq == 'daily'
         ? '매일'
@@ -14441,93 +14441,89 @@ class _TasksScreenState extends State<TasksScreen>
           '${h.countGoal ?? 0}${h.unit ?? '번'} + ${h.durationGoal ?? 0}분';
     }
 
+    // 리스트형 한 줄: 왼쪽 번호 동그라미 - 이름/태그 - 오른쪽 아이콘
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: const BoxDecoration(
         color: Colors.white,
-        border: Border.all(color: const Color(0xFFE8E4F0)),
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.02),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        border: Border(bottom: BorderSide(color: Color(0xFFF0EDF7))),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                h.name,
-                style: GoogleFonts.notoSansKr(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w900,
-                  color: const Color(0xFF3D3A4E),
-                ),
+          // 순서 번호
+          Container(
+            width: 26,
+            height: 26,
+            decoration: BoxDecoration(
+              color: _coach.accentColor.withOpacity(0.12),
+              shape: BoxShape.circle,
+            ),
+            alignment: Alignment.center,
+            child: Text(
+              '${index + 1}',
+              style: GoogleFonts.notoSansKr(
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+                color: _coach.accentColor,
               ),
-              Row(
-                children: [
-                  GestureDetector(
-                    onTap: () => _showHabitModal(context, editHabit: h),
-                    child: const Icon(
-                      Icons.edit_outlined,
-                      size: 18,
-                      color: Color(0xFFA0A0B0),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  GestureDetector(
-                    onTap: () => _deleteHabit(h.id),
-                    child: const Icon(
-                      Icons.delete_outline,
-                      size: 18,
-                      color: Color(0xFFA0A0B0),
-                    ),
-                  ),
-                ],
-              ),
-            ],
+            ),
           ),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 6,
-            children: [
-              _habitTag(
-                freqLabel,
-                _coach.accentColor,
-                _coach.accentColor.withOpacity(0.1),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  h.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.notoSansKr(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFF3D3A4E),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '$freqLabel · $checkLabel',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.notoSansKr(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                    color: const Color(0xFF9A96AA),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          GestureDetector(
+            onTap: () => _showHabitModal(context, editHabit: h),
+            child: const Padding(
+              padding: EdgeInsets.all(4),
+              child: Icon(
+                Icons.edit_outlined,
+                size: 18,
+                color: Color(0xFFBDB9CC),
               ),
-              _habitTag(
-                checkLabel,
-                const Color(0xFF6B7280),
-                const Color(0xFFF3F4F6),
+            ),
+          ),
+          const SizedBox(width: 4),
+          GestureDetector(
+            onTap: () => _deleteHabit(h.id),
+            child: const Padding(
+              padding: EdgeInsets.all(4),
+              child: Icon(
+                Icons.delete_outline,
+                size: 18,
+                color: Color(0xFFBDB9CC),
               ),
-            ],
+            ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _habitTag(String label, Color textColor, Color bgColor) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Text(
-        label,
-        style: GoogleFonts.notoSansKr(
-          fontSize: 10,
-          fontWeight: FontWeight.w800,
-          color: textColor,
-        ),
       ),
     );
   }
