@@ -14375,9 +14375,8 @@ class _TasksScreenState extends State<TasksScreen>
                     const SizedBox(width: 10),
                     Text(
                       '루틴 하나 더 만들기',
-                      // 이 버튼만 둥근 고딕으로. 나머지 화면은 그대로 둔다.
                       style: appFont(
-                        fontSize: 16,
+                        fontSize: 15,
                         letterSpacing: 0.2,
                         color: _deepen(_coach.accentColor),
                       ),
