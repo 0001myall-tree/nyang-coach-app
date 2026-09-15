@@ -5723,25 +5723,26 @@ class _TasksScreenState extends State<TasksScreen>
       onTap: _showCoreSelectionModal,
       behavior: HitTestBehavior.opaque,
       child: Container(
+        // 글씨는 원래 크기로 돌리고, 대신 안쪽 여백을 줄여 테두리 크기는 그대로 둔다
         padding: small
             ? const EdgeInsets.symmetric(horizontal: 12, vertical: 6)
-            : const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            : const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(999),
           border: Border.all(
             color: _coach.accentColor,
-            width: small ? 1.2 : 1.3,
+            width: small ? 1.2 : 1.4,
           ),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.add, size: small ? 13 : 15, color: _coach.accentColor),
-            SizedBox(width: small ? 4 : 5),
+            Icon(Icons.add, size: small ? 13 : 17, color: _coach.accentColor),
+            SizedBox(width: small ? 4 : 6),
             Text(
               small ? '바꾸기' : '핵심 정하기',
               style: GoogleFonts.notoSansKr(
-                fontSize: small ? 12 : 13,
+                fontSize: small ? 12 : 14,
                 fontWeight: FontWeight.w800,
                 color: _coach.accentColor,
               ),
@@ -14500,30 +14501,107 @@ class _TasksScreenState extends State<TasksScreen>
             ),
           ),
           const SizedBox(width: 8),
+          // 연필·휴지통 두 개를 점 세 개 하나로 모았다
           GestureDetector(
-            onTap: () => _showHabitModal(context, editHabit: h),
+            onTap: () => _showHabitActionSheet(h),
+            behavior: HitTestBehavior.opaque,
             child: const Padding(
-              padding: EdgeInsets.all(4),
-              child: Icon(
-                Icons.edit_outlined,
-                size: 18,
-                color: Color(0xFFBDB9CC),
-              ),
-            ),
-          ),
-          const SizedBox(width: 4),
-          GestureDetector(
-            onTap: () => _deleteHabit(h.id),
-            child: const Padding(
-              padding: EdgeInsets.all(4),
-              child: Icon(
-                Icons.delete_outline,
-                size: 18,
-                color: Color(0xFFBDB9CC),
-              ),
+              padding: EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+              child: Icon(Icons.more_horiz, size: 20, color: Color(0xFFBDB9CC)),
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  /// 점 세 개를 누르면 뜨는 창. 수정과 삭제, 두 갈래뿐이다.
+  Future<void> _showHabitActionSheet(HabitItem h) async {
+    final action = await showDialog<String>(
+      context: context,
+      barrierColor: Colors.black.withOpacity(0.48),
+      builder: (ctx) => Dialog(
+        insetPadding: const EdgeInsets.symmetric(horizontal: 40, vertical: 48),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(26),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.12),
+                blurRadius: 18,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                h.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.notoSansKr(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w900,
+                  color: const Color(0xFF3D3A4E),
+                ),
+              ),
+              const SizedBox(height: 10),
+              _habitActionRow(
+                icon: Icons.edit_outlined,
+                label: '수정하기',
+                color: const Color(0xFF3D3A4E),
+                onTap: () => Navigator.pop(ctx, 'edit'),
+              ),
+              _habitActionRow(
+                icon: Icons.delete_outline,
+                label: '삭제하기',
+                color: const Color(0xFFE5606A),
+                onTap: () => Navigator.pop(ctx, 'delete'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (!mounted || action == null) return;
+    if (action == 'edit') {
+      _showHabitModal(context, editHabit: h);
+    } else if (action == 'delete') {
+      _deleteHabit(h.id);
+    }
+  }
+
+  Widget _habitActionRow({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 13),
+        child: Row(
+          children: [
+            Icon(icon, size: 19, color: color),
+            const SizedBox(width: 12),
+            Text(
+              label,
+              style: GoogleFonts.notoSansKr(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: color,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -14599,151 +14677,200 @@ class _TasksScreenState extends State<TasksScreen>
 
     const dayNames = ['월', '화', '수', '목', '금', '토', '일'];
 
-    showModalBottomSheet(
+    // 아래에서 올라오던 시트였다. 화면 끝에 붙어 있어서 '저장'이 시스템
+    // 내비게이션 막대 위에 얹혔고, 높이도 화면의 0.85로 못 박혀 있었다.
+    // 가운데 뜨는 창은 끝에 닿지 않고 필요한 만큼만 차지한다.
+    showDialog(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withOpacity(0.48),
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setModalState) => Container(
-          height: MediaQuery.of(context).size.height * 0.85,
-          padding: EdgeInsets.only(
-            bottom:
-                MediaQuery.of(context).viewInsets.bottom +
-                MediaQuery.of(context).viewPadding.bottom,
+        builder: (ctx, setModalState) => Dialog(
+          insetPadding: const EdgeInsets.symmetric(
+            horizontal: 20,
+            vertical: 48,
           ),
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-          ),
-          child: Column(
-            children: [
-              // 핸들
-              Container(
-                margin: const EdgeInsets.only(top: 12),
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE5E7EB),
-                  borderRadius: BorderRadius.circular(2),
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(26),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.12),
+                  blurRadius: 18,
+                  offset: const Offset(0, 8),
                 ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      editHabit != null ? '루틴 수정' : '새 루틴 추가',
-                      style: GoogleFonts.notoSansKr(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    GestureDetector(
-                      onTap: () => Navigator.pop(ctx),
-                      child: const Icon(Icons.close, color: Color(0xFFA0A0B0)),
-                    ),
-                  ],
-                ),
-              ),
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 22, 20, 0),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      if (guideText != null) ...[
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 12,
-                          ),
-                          decoration: BoxDecoration(
-                            color: _coach.accentColor.withOpacity(0.08),
-                            border: Border.all(
-                              color: _coach.accentColor.withOpacity(0.18),
-                            ),
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                          child: Text(
-                            guideText,
-                            style: GoogleFonts.notoSansKr(
-                              fontSize: 13,
-                              height: 1.45,
-                              fontWeight: FontWeight.w700,
-                              color: const Color(0xFF3D3A4E),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 18),
-                      ],
-                      // 습관 이름
-                      _modalLabel('루틴 이름'),
-                      Material(
-                        type: MaterialType.transparency,
-                        child: TextField(
-                          controller: nameCtrl,
-                          decoration: _modalInputDeco('예: 운동하기, 독서 30분'),
+                      Text(
+                        editHabit != null ? '루틴 수정' : '새 루틴 추가',
+                        style: GoogleFonts.notoSansKr(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w900,
                         ),
                       ),
-                      const SizedBox(height: 20),
-                      // 빈도
-                      _modalLabel('빈도'),
-                      Row(
-                        children: [
-                          _freqBtn(
-                            'daily',
-                            '매일',
-                            freq,
-                            (v) => setModalState(() => freq = v),
+                      GestureDetector(
+                        onTap: () => Navigator.pop(ctx),
+                        child: const Icon(
+                          Icons.close,
+                          color: Color(0xFFA0A0B0),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                // 내용이 짧으면 창도 짧아지고, 길면 이 안에서만 굴러간다
+                Flexible(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (guideText != null) ...[
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 12,
+                            ),
+                            decoration: BoxDecoration(
+                              color: _coach.accentColor.withOpacity(0.08),
+                              border: Border.all(
+                                color: _coach.accentColor.withOpacity(0.18),
+                              ),
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            child: Text(
+                              guideText,
+                              style: GoogleFonts.notoSansKr(
+                                fontSize: 13,
+                                height: 1.45,
+                                fontWeight: FontWeight.w700,
+                                color: const Color(0xFF3D3A4E),
+                              ),
+                            ),
                           ),
-                          const SizedBox(width: 8),
-                          _freqBtn(
-                            'weekly',
-                            '요일 선택',
-                            freq,
-                            (v) => setModalState(() => freq = v),
-                          ),
-                          const SizedBox(width: 8),
-                          _freqBtn(
-                            'weekly_count',
-                            '주 n일',
-                            freq,
-                            (v) => setModalState(() => freq = v),
-                          ),
+                          const SizedBox(height: 18),
                         ],
-                      ),
-                      if (freq == 'weekly') ...[
-                        const SizedBox(height: 12),
-                        Wrap(
-                          spacing: 8,
-                          children: List.generate(7, (i) {
-                            final isSelected = days.contains(i);
-                            return GestureDetector(
-                              onTap: () => setModalState(() {
-                                if (isSelected)
-                                  days.remove(i);
-                                else
-                                  days.add(i);
-                              }),
-                              child: Container(
-                                width: 36,
-                                height: 36,
-                                decoration: BoxDecoration(
-                                  color: isSelected
-                                      ? _coach.accentColor
-                                      : Colors.white,
-                                  border: Border.all(
+                        // 습관 이름
+                        _modalLabel('루틴 이름'),
+                        Material(
+                          type: MaterialType.transparency,
+                          child: TextField(
+                            controller: nameCtrl,
+                            decoration: _modalInputDeco('예: 운동하기, 독서 30분'),
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        // 빈도
+                        _modalLabel('빈도'),
+                        Row(
+                          children: [
+                            _freqBtn(
+                              'daily',
+                              '매일',
+                              freq,
+                              (v) => setModalState(() => freq = v),
+                            ),
+                            const SizedBox(width: 8),
+                            _freqBtn(
+                              'weekly',
+                              '요일 선택',
+                              freq,
+                              (v) => setModalState(() => freq = v),
+                            ),
+                            const SizedBox(width: 8),
+                            _freqBtn(
+                              'weekly_count',
+                              '주 n일',
+                              freq,
+                              (v) => setModalState(() => freq = v),
+                            ),
+                          ],
+                        ),
+                        if (freq == 'weekly') ...[
+                          const SizedBox(height: 12),
+                          Wrap(
+                            spacing: 8,
+                            children: List.generate(7, (i) {
+                              final isSelected = days.contains(i);
+                              return GestureDetector(
+                                onTap: () => setModalState(() {
+                                  if (isSelected)
+                                    days.remove(i);
+                                  else
+                                    days.add(i);
+                                }),
+                                child: Container(
+                                  width: 36,
+                                  height: 36,
+                                  decoration: BoxDecoration(
                                     color: isSelected
                                         ? _coach.accentColor
-                                        : const Color(0xFFE5E7EB),
+                                        : Colors.white,
+                                    border: Border.all(
+                                      color: isSelected
+                                          ? _coach.accentColor
+                                          : const Color(0xFFE5E7EB),
+                                    ),
+                                    borderRadius: BorderRadius.circular(10),
                                   ),
-                                  borderRadius: BorderRadius.circular(10),
+                                  child: Center(
+                                    child: Text(
+                                      dayNames[i],
+                                      style: GoogleFonts.notoSansKr(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w700,
+                                        color: isSelected
+                                            ? Colors.white
+                                            : const Color(0xFF6B7280),
+                                      ),
+                                    ),
+                                  ),
                                 ),
-                                child: Center(
+                              );
+                            }),
+                          ),
+                        ],
+                        if (freq == 'weekly_count') ...[
+                          const SizedBox(height: 12),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: List.generate(6, (i) {
+                              final value = i + 1;
+                              final isSelected = weeklyTargetCount == value;
+                              return GestureDetector(
+                                onTap: () => setModalState(
+                                  () => weeklyTargetCount = value,
+                                ),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 8,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: isSelected
+                                        ? _coach.accentColor
+                                        : Colors.white,
+                                    border: Border.all(
+                                      color: isSelected
+                                          ? _coach.accentColor
+                                          : const Color(0xFFE5E7EB),
+                                    ),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
                                   child: Text(
-                                    dayNames[i],
+                                    '주 $value일',
                                     style: GoogleFonts.notoSansKr(
                                       fontSize: 12,
                                       fontWeight: FontWeight.w700,
@@ -14753,433 +14880,398 @@ class _TasksScreenState extends State<TasksScreen>
                                     ),
                                   ),
                                 ),
-                              ),
-                            );
-                          }),
-                        ),
-                      ],
-                      if (freq == 'weekly_count') ...[
-                        const SizedBox(height: 12),
+                              );
+                            }),
+                          ),
+                        ],
+                        const SizedBox(height: 20),
+                        // 시간 설정
+                        _modalLabel('시간 설정'),
                         Wrap(
                           spacing: 8,
-                          runSpacing: 8,
-                          children: List.generate(6, (i) {
-                            final value = i + 1;
-                            final isSelected = weeklyTargetCount == value;
-                            return GestureDetector(
-                              onTap: () => setModalState(
-                                () => weeklyTargetCount = value,
-                              ),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 8,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: isSelected
-                                      ? _coach.accentColor
-                                      : Colors.white,
-                                  border: Border.all(
-                                    color: isSelected
-                                        ? _coach.accentColor
-                                        : const Color(0xFFE5E7EB),
-                                  ),
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: Text(
-                                  '주 $value일',
-                                  style: GoogleFonts.notoSansKr(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w700,
-                                    color: isSelected
-                                        ? Colors.white
-                                        : const Color(0xFF6B7280),
-                                  ),
-                                ),
-                              ),
-                            );
-                          }),
-                        ),
-                      ],
-                      const SizedBox(height: 20),
-                      // 시간 설정
-                      _modalLabel('시간 설정'),
-                      Wrap(
-                        spacing: 8,
-                        children: [
-                          _checkBtn(
-                            'single',
-                            '특정 시간',
-                            timeType == 'range' ? 'single' : timeType,
-                            (v) => setModalState(() {
-                              final isClockType =
-                                  timeType == 'single' || timeType == 'range';
-                              timeType = isClockType ? 'none' : v;
-                              mDuration = null;
-                              if (isClockType) {
+                          children: [
+                            _checkBtn(
+                              'single',
+                              '특정 시간',
+                              timeType == 'range' ? 'single' : timeType,
+                              (v) => setModalState(() {
+                                final isClockType =
+                                    timeType == 'single' || timeType == 'range';
+                                timeType = isClockType ? 'none' : v;
+                                mDuration = null;
+                                if (isClockType) {
+                                  mStartTime = null;
+                                  mEndTime = null;
+                                }
+                              }),
+                            ),
+                            _checkBtn(
+                              'duration',
+                              '소요 시간',
+                              timeType,
+                              (v) => setModalState(() {
+                                timeType = timeType == v ? 'none' : v;
                                 mStartTime = null;
                                 mEndTime = null;
-                              }
-                            }),
-                          ),
-                          _checkBtn(
-                            'duration',
-                            '소요 시간',
-                            timeType,
-                            (v) => setModalState(() {
-                              timeType = timeType == v ? 'none' : v;
-                              mStartTime = null;
-                              mEndTime = null;
-                            }),
-                          ),
-                        ],
-                      ),
-                      if (timeType == 'single' || timeType == 'range')
-                        Padding(
-                          padding: const EdgeInsets.only(top: 12),
-                          child: Row(
-                            children: [
-                              GestureDetector(
-                                onTap: () async {
-                                  final t = await showTimePicker(
-                                    context: context,
-                                    initialTime: mStartTime ?? TimeOfDay.now(),
-                                  );
-                                  if (t != null)
-                                    setModalState(() => mStartTime = t);
-                                },
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 10,
-                                    vertical: 8,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    border: Border.all(
-                                      color: const Color(0xFFE5E7EB),
-                                    ),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Text(
-                                    mStartTime != null
-                                        ? _formatTime(mStartTime!)
-                                        : '시작 시간',
-                                    style: GoogleFonts.notoSansKr(
-                                      fontSize: 13,
-                                      color: mStartTime != null
-                                          ? _coach.accentColor
-                                          : const Color(0xFFA0A0B0),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                '~',
-                                style: GoogleFonts.notoSansKr(
-                                  fontSize: 13,
-                                  color: const Color(0xFF6B7280),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              GestureDetector(
-                                onTap: () async {
-                                  final t = await showTimePicker(
-                                    context: context,
-                                    initialTime: mEndTime ?? TimeOfDay.now(),
-                                  );
-                                  if (t != null)
-                                    setModalState(() => mEndTime = t);
-                                },
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 10,
-                                    vertical: 8,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    border: Border.all(
-                                      color: const Color(0xFFE5E7EB),
-                                    ),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Text(
-                                    mEndTime != null
-                                        ? _formatTime(mEndTime!)
-                                        : '종료 시간',
-                                    style: GoogleFonts.notoSansKr(
-                                      fontSize: 13,
-                                      color: mEndTime != null
-                                          ? _coach.accentColor
-                                          : const Color(0xFFA0A0B0),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              _timeReminderButton(
-                                active:
-                                    _isCoreReminderEnabledGlobally &&
-                                    mReminderEnabled,
-                                onTap: () async {
-                                  final enabled =
-                                      await _ensureCoreReminderEnabledFromHere();
-                                  if (!enabled) return;
-                                  setModalState(
-                                    () => mReminderEnabled = !mReminderEnabled,
-                                  );
-                                },
-                              ),
-                            ],
-                          ),
+                              }),
+                            ),
+                          ],
                         ),
-                      if (timeType == 'duration')
-                        Padding(
-                          padding: const EdgeInsets.only(top: 12),
-                          child: Wrap(
-                            spacing: 6,
-                            runSpacing: 6,
-                            children:
-                                [
-                                  '10분',
-                                  '15분',
-                                  '30분',
-                                  '1시간',
-                                  '2시간',
-                                  '3시간',
-                                  '4시간+',
-                                ].map((d) {
-                                  final isActive = mDuration == d;
-                                  return GestureDetector(
-                                    onTap: () =>
-                                        setModalState(() => mDuration = d),
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 10,
-                                        vertical: 6,
+                        if (timeType == 'single' || timeType == 'range')
+                          Padding(
+                            padding: const EdgeInsets.only(top: 12),
+                            child: Row(
+                              children: [
+                                GestureDetector(
+                                  onTap: () async {
+                                    final t = await showTimePicker(
+                                      context: context,
+                                      initialTime:
+                                          mStartTime ?? TimeOfDay.now(),
+                                    );
+                                    if (t != null)
+                                      setModalState(() => mStartTime = t);
+                                  },
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 8,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      border: Border.all(
+                                        color: const Color(0xFFE5E7EB),
                                       ),
-                                      decoration: BoxDecoration(
-                                        color: isActive
-                                            ? const Color(0xFFFDF2F8)
-                                            : Colors.white,
-                                        border: Border.all(
-                                          color: isActive
-                                              ? const Color(0xFFDB2777)
-                                              : const Color(0xFFE5E7EB),
-                                        ),
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      child: Text(
-                                        d,
-                                        style: GoogleFonts.notoSansKr(
-                                          fontSize: 13,
-                                          color: isActive
-                                              ? const Color(0xFFDB2777)
-                                              : const Color(0xFF6B7280),
-                                        ),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Text(
+                                      mStartTime != null
+                                          ? _formatTime(mStartTime!)
+                                          : '시작 시간',
+                                      style: GoogleFonts.notoSansKr(
+                                        fontSize: 13,
+                                        color: mStartTime != null
+                                            ? _coach.accentColor
+                                            : const Color(0xFFA0A0B0),
                                       ),
                                     ),
-                                  );
-                                }).toList(),
-                          ),
-                        ),
-                      const SizedBox(height: 20),
-                      _modalLabel('수량 설정'),
-                      Wrap(
-                        spacing: 8,
-                        children: [
-                          _checkBtn(
-                            'none',
-                            '없음',
-                            countSettingEnabled ? 'enabled' : 'none',
-                            (_) => setModalState(
-                              () => countSettingEnabled = false,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  '~',
+                                  style: GoogleFonts.notoSansKr(
+                                    fontSize: 13,
+                                    color: const Color(0xFF6B7280),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                GestureDetector(
+                                  onTap: () async {
+                                    final t = await showTimePicker(
+                                      context: context,
+                                      initialTime: mEndTime ?? TimeOfDay.now(),
+                                    );
+                                    if (t != null)
+                                      setModalState(() => mEndTime = t);
+                                  },
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 8,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      border: Border.all(
+                                        color: const Color(0xFFE5E7EB),
+                                      ),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Text(
+                                      mEndTime != null
+                                          ? _formatTime(mEndTime!)
+                                          : '종료 시간',
+                                      style: GoogleFonts.notoSansKr(
+                                        fontSize: 13,
+                                        color: mEndTime != null
+                                            ? _coach.accentColor
+                                            : const Color(0xFFA0A0B0),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                _timeReminderButton(
+                                  active:
+                                      _isCoreReminderEnabledGlobally &&
+                                      mReminderEnabled,
+                                  onTap: () async {
+                                    final enabled =
+                                        await _ensureCoreReminderEnabledFromHere();
+                                    if (!enabled) return;
+                                    setModalState(
+                                      () =>
+                                          mReminderEnabled = !mReminderEnabled,
+                                    );
+                                  },
+                                ),
+                              ],
                             ),
                           ),
-                          _checkBtn(
-                            'enabled',
-                            '있음',
-                            countSettingEnabled ? 'enabled' : 'none',
-                            (_) =>
-                                setModalState(() => countSettingEnabled = true),
+                        if (timeType == 'duration')
+                          Padding(
+                            padding: const EdgeInsets.only(top: 12),
+                            child: Wrap(
+                              spacing: 6,
+                              runSpacing: 6,
+                              children:
+                                  [
+                                    '10분',
+                                    '15분',
+                                    '30분',
+                                    '1시간',
+                                    '2시간',
+                                    '3시간',
+                                    '4시간+',
+                                  ].map((d) {
+                                    final isActive = mDuration == d;
+                                    return GestureDetector(
+                                      onTap: () =>
+                                          setModalState(() => mDuration = d),
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 10,
+                                          vertical: 6,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: isActive
+                                              ? const Color(0xFFFDF2F8)
+                                              : Colors.white,
+                                          border: Border.all(
+                                            color: isActive
+                                                ? const Color(0xFFDB2777)
+                                                : const Color(0xFFE5E7EB),
+                                          ),
+                                          borderRadius: BorderRadius.circular(
+                                            8,
+                                          ),
+                                        ),
+                                        child: Text(
+                                          d,
+                                          style: GoogleFonts.notoSansKr(
+                                            fontSize: 13,
+                                            color: isActive
+                                                ? const Color(0xFFDB2777)
+                                                : const Color(0xFF6B7280),
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  }).toList(),
+                            ),
                           ),
-                        ],
-                      ),
-                      if (countSettingEnabled) ...[
-                        const SizedBox(height: 12),
-                        Row(
+                        const SizedBox(height: 20),
+                        _modalLabel('수량 설정'),
+                        Wrap(
+                          spacing: 8,
                           children: [
-                            Expanded(
-                              child: Material(
-                                type: MaterialType.transparency,
-                                child: TextField(
-                                  controller: countCtrl,
-                                  keyboardType: TextInputType.number,
-                                  decoration: _modalInputDeco(
-                                    '목표 수량 (예: 5000)',
-                                  ),
-                                ),
+                            _checkBtn(
+                              'none',
+                              '없음',
+                              countSettingEnabled ? 'enabled' : 'none',
+                              (_) => setModalState(
+                                () => countSettingEnabled = false,
                               ),
                             ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Material(
-                                type: MaterialType.transparency,
-                                child: TextField(
-                                  controller: unitCtrl,
-                                  decoration: _modalInputDeco('단위 (예: 보)'),
-                                ),
+                            _checkBtn(
+                              'enabled',
+                              '있음',
+                              countSettingEnabled ? 'enabled' : 'none',
+                              (_) => setModalState(
+                                () => countSettingEnabled = true,
                               ),
                             ),
                           ],
                         ),
-                      ],
-                      const SizedBox(height: 20),
-                      // 습관 트래킹
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                        if (countSettingEnabled) ...[
+                          const SizedBox(height: 12),
+                          Row(
                             children: [
-                              Text(
-                                '루틴 트래킹',
-                                style: GoogleFonts.notoSansKr(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w700,
-                                  color: const Color(0xFF3D3A4E),
+                              Expanded(
+                                child: Material(
+                                  type: MaterialType.transparency,
+                                  child: TextField(
+                                    controller: countCtrl,
+                                    keyboardType: TextInputType.number,
+                                    decoration: _modalInputDeco(
+                                      '목표 수량 (예: 5000)',
+                                    ),
+                                  ),
                                 ),
                               ),
-                              Text(
-                                '매일 루틴 달성률을 추적할까요?',
-                                style: GoogleFonts.notoSansKr(
-                                  fontSize: 12,
-                                  color: const Color(0xFFA0A0B0),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Material(
+                                  type: MaterialType.transparency,
+                                  child: TextField(
+                                    controller: unitCtrl,
+                                    decoration: _modalInputDeco('단위 (예: 보)'),
+                                  ),
                                 ),
                               ),
                             ],
                           ),
-                          Switch(
-                            value: tracking,
-                            onChanged: (v) => setModalState(() => tracking = v),
-                            activeColor: _coach.accentColor,
-                          ),
                         ],
-                      ),
-                    ],
+                        const SizedBox(height: 20),
+                        // 습관 트래킹
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '루틴 트래킹',
+                                  style: GoogleFonts.notoSansKr(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w700,
+                                    color: const Color(0xFF3D3A4E),
+                                  ),
+                                ),
+                                Text(
+                                  '매일 루틴 달성률을 추적할까요?',
+                                  style: GoogleFonts.notoSansKr(
+                                    fontSize: 12,
+                                    color: const Color(0xFFA0A0B0),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            Switch(
+                              value: tracking,
+                              onChanged: (v) =>
+                                  setModalState(() => tracking = v),
+                              activeColor: _coach.accentColor,
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-              // 저장 버튼
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-                child: GestureDetector(
-                  onTap: () async {
-                    // 적어 넣을 수 있는 기간인지
-                    final canInput = await _canInputTasks();
-                    if (!mounted || !ctx.mounted) return;
-                    if (!canInput) {
-                      Navigator.pop(ctx); // 모달 닫기
-                      _showSubscriptionNotice(context);
-                      return;
-                    }
-
-                    final name = nameCtrl.text.trim();
-                    if (name.isEmpty) return;
-                    if (freq == 'weekly' && days.isEmpty) return;
-                    final effectiveHabitTimeType = _effectiveClockTimeType(
-                      timeType,
-                      mEndTime,
-                    );
-
-                    final habit = HabitItem(
-                      id:
-                          editHabit?.id ??
-                          DateTime.now().millisecondsSinceEpoch,
-                      name: name,
-                      freq: freq,
-                      days: freq == 'weekly' ? List.from(days) : const [],
-                      weeklyTargetCount: freq == 'weekly_count'
-                          ? weeklyTargetCount
-                          : null,
-                      checkType: countSettingEnabled ? 'count' : 'check',
-                      timeType: effectiveHabitTimeType,
-                      tracking: tracking,
-                      countGoal: countSettingEnabled
-                          ? int.tryParse(countCtrl.text)
-                          : null,
-                      unit:
-                          countSettingEnabled && unitCtrl.text.trim().isNotEmpty
-                          ? unitCtrl.text.trim()
-                          : null,
-                      durationGoal: null,
-                      timeStart:
-                          (effectiveHabitTimeType == 'single' ||
-                                  effectiveHabitTimeType == 'range') &&
-                              mStartTime != null
-                          ? _storedTime(mStartTime!)
-                          : null,
-                      timeEnd:
-                          effectiveHabitTimeType == 'range' && mEndTime != null
-                          ? _storedTime(mEndTime!)
-                          : null,
-                      habitDuration: effectiveHabitTimeType == 'duration'
-                          ? mDuration
-                          : null,
-                      createdAt:
-                          editHabit?.createdAt ??
-                          DateTime.now().toIso8601String(),
-                      isReminderEnabled: mReminderEnabled,
-                    );
-                    final showCreationWeekNotice =
-                        editHabit == null &&
-                        habit.freq == 'weekly_count' &&
-                        _weeklyVisibleTargetForDate(habit, DateTime.now()) <
-                            _weeklyTargetForHabit(habit);
-
-                    setState(() {
-                      if (editHabit != null) {
-                        final idx = habits.indexWhere(
-                          (h) => h.id.toString() == editHabit.id.toString(),
-                        );
-                        if (idx >= 0) habits[idx] = habit;
-                      } else {
-                        habits.add(habit);
+                // 저장 버튼 — 창 아래에 붙어 있고, 화면 끝과는 떨어져 있다
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 18),
+                  child: GestureDetector(
+                    onTap: () async {
+                      // 적어 넣을 수 있는 기간인지
+                      final canInput = await _canInputTasks();
+                      if (!mounted || !ctx.mounted) return;
+                      if (!canInput) {
+                        Navigator.pop(ctx); // 모달 닫기
+                        _showSubscriptionNotice(context);
+                        return;
                       }
-                    });
-                    _saveHabits();
-                    _injectTodayHabits();
-                    Navigator.pop(ctx);
-                    if (showCreationWeekNotice && mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            '이번 주는 남은 날짜에 맞춰 보여주고, 다음 주부터 주 ${_weeklyTargetForHabit(habit)}일로 진행돼요.',
-                          ),
-                          duration: const Duration(seconds: 3),
-                        ),
+
+                      final name = nameCtrl.text.trim();
+                      if (name.isEmpty) return;
+                      if (freq == 'weekly' && days.isEmpty) return;
+                      final effectiveHabitTimeType = _effectiveClockTimeType(
+                        timeType,
+                        mEndTime,
                       );
-                    }
-                  },
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    decoration: BoxDecoration(
-                      color: _coach.accentColor,
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Center(
-                      child: Text(
-                        '저장',
-                        style: GoogleFonts.notoSansKr(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w800,
-                          color: Colors.white,
+
+                      final habit = HabitItem(
+                        id:
+                            editHabit?.id ??
+                            DateTime.now().millisecondsSinceEpoch,
+                        name: name,
+                        freq: freq,
+                        days: freq == 'weekly' ? List.from(days) : const [],
+                        weeklyTargetCount: freq == 'weekly_count'
+                            ? weeklyTargetCount
+                            : null,
+                        checkType: countSettingEnabled ? 'count' : 'check',
+                        timeType: effectiveHabitTimeType,
+                        tracking: tracking,
+                        countGoal: countSettingEnabled
+                            ? int.tryParse(countCtrl.text)
+                            : null,
+                        unit:
+                            countSettingEnabled &&
+                                unitCtrl.text.trim().isNotEmpty
+                            ? unitCtrl.text.trim()
+                            : null,
+                        durationGoal: null,
+                        timeStart:
+                            (effectiveHabitTimeType == 'single' ||
+                                    effectiveHabitTimeType == 'range') &&
+                                mStartTime != null
+                            ? _storedTime(mStartTime!)
+                            : null,
+                        timeEnd:
+                            effectiveHabitTimeType == 'range' &&
+                                mEndTime != null
+                            ? _storedTime(mEndTime!)
+                            : null,
+                        habitDuration: effectiveHabitTimeType == 'duration'
+                            ? mDuration
+                            : null,
+                        createdAt:
+                            editHabit?.createdAt ??
+                            DateTime.now().toIso8601String(),
+                        isReminderEnabled: mReminderEnabled,
+                      );
+                      final showCreationWeekNotice =
+                          editHabit == null &&
+                          habit.freq == 'weekly_count' &&
+                          _weeklyVisibleTargetForDate(habit, DateTime.now()) <
+                              _weeklyTargetForHabit(habit);
+
+                      setState(() {
+                        if (editHabit != null) {
+                          final idx = habits.indexWhere(
+                            (h) => h.id.toString() == editHabit.id.toString(),
+                          );
+                          if (idx >= 0) habits[idx] = habit;
+                        } else {
+                          habits.add(habit);
+                        }
+                      });
+                      _saveHabits();
+                      _injectTodayHabits();
+                      Navigator.pop(ctx);
+                      if (showCreationWeekNotice && mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              '이번 주는 남은 날짜에 맞춰 보여주고, 다음 주부터 주 ${_weeklyTargetForHabit(habit)}일로 진행돼요.',
+                            ),
+                            duration: const Duration(seconds: 3),
+                          ),
+                        );
+                      }
+                    },
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      decoration: BoxDecoration(
+                        color: _coach.accentColor,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Center(
+                        child: Text(
+                          '저장',
+                          style: GoogleFonts.notoSansKr(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white,
+                          ),
                         ),
                       ),
                     ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
