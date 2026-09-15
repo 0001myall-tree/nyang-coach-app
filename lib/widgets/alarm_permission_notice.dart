@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import '../theme/app_font.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../services/notification_service.dart';
@@ -29,7 +29,7 @@ Future<void> showAlarmNoticeDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text(
           title,
-          style: GoogleFonts.notoSansKr(
+          style: appFont(
             fontSize: 17,
             fontWeight: FontWeight.w900,
             color: const Color(0xFF3D3A4E),
@@ -37,7 +37,7 @@ Future<void> showAlarmNoticeDialog(
         ),
         content: Text(
           message,
-          style: GoogleFonts.notoSansKr(
+          style: appFont(
             fontSize: 13.5,
             height: 1.5,
             fontWeight: FontWeight.w500,
@@ -49,7 +49,7 @@ Future<void> showAlarmNoticeDialog(
             onPressed: () => Navigator.pop(ctx),
             child: Text(
               closeLabel,
-              style: GoogleFonts.notoSansKr(
+              style: appFont(
                 fontWeight: FontWeight.w900,
                 color: actionLabel == null
                     ? const Color(0xFF8B7CFF)
@@ -72,7 +72,7 @@ Future<void> showAlarmNoticeDialog(
               ),
               child: Text(
                 actionLabel,
-                style: GoogleFonts.notoSansKr(
+                style: appFont(
                   fontWeight: FontWeight.w900,
                   color: Colors.white,
                 ),
@@ -186,7 +186,7 @@ Widget buildAlarmPermissionBanner({
                   isBlocking
                       ? '지금은 $alarmLabel이 울리지 않아요'
                       : '$alarmLabel 화면이 안 뜰 수 있어요',
-                  style: GoogleFonts.notoSansKr(
+                  style: appFont(
                     fontSize: 13.5,
                     fontWeight: FontWeight.w900,
                     color: accent,
@@ -197,7 +197,7 @@ Widget buildAlarmPermissionBanner({
                   isBlocking
                       ? '냥냥코치 알림이 꺼져 있어요. 눌러서 켜주세요.'
                       : '알람 권한이 일부 꺼져 있어요. 눌러서 확인해주세요.',
-                  style: GoogleFonts.notoSansKr(
+                  style: appFont(
                     fontSize: 12,
                     height: 1.4,
                     fontWeight: FontWeight.w600,

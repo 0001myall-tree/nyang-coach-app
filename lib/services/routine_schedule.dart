@@ -117,7 +117,9 @@ class RoutineSchedule {
     var count = 0.0;
     for (
       var cursor = countStart;
-      includeDate ? !cursor.isAfter(normalizedDate) : cursor.isBefore(normalizedDate);
+      includeDate
+          ? !cursor.isAfter(normalizedDate)
+          : cursor.isBefore(normalizedDate);
       cursor = cursor.add(const Duration(days: 1))
     ) {
       count += logCompletionRatio(logs[dateKey(cursor)]);

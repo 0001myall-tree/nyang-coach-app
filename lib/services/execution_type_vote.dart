@@ -42,7 +42,9 @@ class ExecutionTypeVote {
     buffer.writeln(ExecutionTypeLabels.listForPrompt);
     buffer.writeln();
     buffer.writeln('- 축은 서로 견주어 보세요. 같은 완료율이라도 앞뒤가 다르면 다른 사람입니다.');
-    buffer.writeln('- 지난주에는 `${lastLabel ?? '없음'}`이라고 불렀습니다. 숫자가 뚜렷하게 달라졌을 때만 바꾸세요.');
+    buffer.writeln(
+      '- 지난주에는 `${lastLabel ?? '없음'}`이라고 불렀습니다. 숫자가 뚜렷하게 달라졌을 때만 바꾸세요.',
+    );
     buffer.writeln('- 어디에도 맞지 않으면 `유형: 없음`이라고 적으세요.');
     buffer.writeln();
     buffer.writeln('`유형: 이름` 한 줄만 적으세요. 다른 말은 덧붙이지 마세요.');

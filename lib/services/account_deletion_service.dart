@@ -62,7 +62,9 @@ class AccountDeletionService {
       await _deleteCloudData(user.uid);
     } catch (e) {
       debugPrint('Account cloud data delete failed: $e');
-      return AccountDeletionResult.failed('데이터를 지우는 중 문제가 생겼어요. 잠시 후 다시 시도해주세요.');
+      return AccountDeletionResult.failed(
+        '데이터를 지우는 중 문제가 생겼어요. 잠시 후 다시 시도해주세요.',
+      );
     }
 
     try {
@@ -93,7 +95,9 @@ class AccountDeletionService {
   }
 
   /// 한 번에 다 지우면 요청이 너무 커진다. 500개씩 끊어서 비울 때까지 돈다.
-  Future<void> _deleteAllDocuments(CollectionReference<Object?> collection) async {
+  Future<void> _deleteAllDocuments(
+    CollectionReference<Object?> collection,
+  ) async {
     while (true) {
       final snapshot = await collection.limit(500).get();
       if (snapshot.docs.isEmpty) return;

@@ -4,7 +4,7 @@ import 'dart:math' as math;
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:google_fonts/google_fonts.dart';
+import '../theme/app_font.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/analytics_service.dart';
 import '../services/focus_cycle.dart';
@@ -684,7 +684,7 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
                   child: Text(
                     label,
                     overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.notoSansKr(
+                    style: appFont(
                       fontSize: 11.5,
                       fontWeight: FontWeight.w800,
                       color: ink,
@@ -707,7 +707,7 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
             ),
             child: Text(
               '설정 변경',
-              style: GoogleFonts.notoSansKr(
+              style: appFont(
                 fontSize: 11.5,
                 fontWeight: FontWeight.w800,
                 color: _manager.running ? border : accent,
@@ -824,7 +824,7 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
             children: [
               Text(
                 '집중 시간',
-                style: GoogleFonts.notoSansKr(
+                style: appFont(
                   fontSize: 12,
                   fontWeight: FontWeight.w800,
                   color: const Color(0xFF7E73C8),
@@ -833,7 +833,7 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
               const SizedBox(height: 6),
               Text(
                 _timeDisplay,
-                style: GoogleFonts.notoSansKr(
+                style: appFont(
                   fontSize: 42,
                   fontWeight: FontWeight.w900,
                   height: 1.0,
@@ -847,7 +847,7 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
                     : _manager.running
                     ? stageLabels[_manager.stage] ?? '집중 중'
                     : '${_manager.stage}분 집중 준비',
-                style: GoogleFonts.notoSansKr(
+                style: appFont(
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
                   color: const Color(0xFF8B7DE0),
@@ -876,7 +876,7 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
                           child: Center(
                             child: Text(
                               '$m분',
-                              style: GoogleFonts.notoSansKr(
+                              style: appFont(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w800,
                                 color: isActive ? Colors.white : mainPurple,
@@ -919,7 +919,7 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
                           const SizedBox(width: 6),
                           Text(
                             _manager.running ? '일시정지' : '시작',
-                            style: GoogleFonts.notoSansKr(
+                            style: appFont(
                               fontSize: 13,
                               fontWeight: FontWeight.w800,
                               color: const Color(0xFF5F52C6),
@@ -1001,7 +1001,7 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
               const SizedBox(height: 14),
               Text(
                 '집중 완료',
-                style: GoogleFonts.notoSansKr(
+                style: appFont(
                   fontSize: 20,
                   fontWeight: FontWeight.w900,
                   color: const Color(0xFF4E438F),
@@ -1010,7 +1010,7 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
               const SizedBox(height: 6),
               Text(
                 '$stageMin분 집중을 마쳤어요.',
-                style: GoogleFonts.notoSansKr(
+                style: appFont(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
                   color: const Color(0xFF8B7DE0),
@@ -1044,7 +1044,7 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
                       const SizedBox(width: 6),
                       Text(
                         '새 타이머 시작',
-                        style: GoogleFonts.notoSansKr(
+                        style: appFont(
                           fontSize: 14,
                           fontWeight: FontWeight.w900,
                           color: Colors.white,
@@ -1124,7 +1124,7 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
                           const SizedBox(width: 3),
                           Text(
                             '전체 보기',
-                            style: GoogleFonts.notoSansKr(
+                            style: appFont(
                               fontSize: 10.5,
                               fontWeight: FontWeight.w700,
                               color: timerAccent,
@@ -1139,7 +1139,7 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
                 Text(
                   _timeDisplay,
                   maxLines: 1,
-                  style: GoogleFonts.notoSansKr(
+                  style: appFont(
                     fontSize: 42,
                     fontWeight: FontWeight.w900,
                     color: timerInk,
@@ -1154,7 +1154,7 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
                         ? '${_manager.stage}분 집중 중'
                         : stageLabels[_manager.stage] ??
                               '${_manager.stage}분 집중',
-                    style: GoogleFonts.notoSansKr(
+                    style: appFont(
                       fontSize: 13,
                       fontWeight: FontWeight.w700,
                       color: timerAccent,
@@ -1202,7 +1202,7 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
                                 child: Text(
                                   '$m분',
                                   textAlign: TextAlign.center,
-                                  style: GoogleFonts.notoSansKr(
+                                  style: appFont(
                                     fontSize: 12,
                                     fontWeight: FontWeight.w800,
                                     color: isActive ? timerInk : timerAccent,
@@ -1234,7 +1234,7 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
                                 child: Text(
                                   '직접 설정',
                                   textAlign: TextAlign.center,
-                                  style: GoogleFonts.notoSansKr(
+                                  style: appFont(
                                     fontSize: 12,
                                     fontWeight: FontWeight.w800,
                                     color: timerMain,
@@ -1293,7 +1293,7 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
                               : widget.isMindTimer
                               ? '생각 시작'
                               : '집중 시작',
-                          style: GoogleFonts.notoSansKr(
+                          style: appFont(
                             fontSize: 14,
                             fontWeight: FontWeight.w900,
                             color: Colors.white,
@@ -1325,7 +1325,7 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
                             const SizedBox(width: 4),
                             Text(
                               '되돌리기',
-                              style: GoogleFonts.notoSansKr(
+                              style: appFont(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w800,
                                 color: timerAccent,
@@ -1365,7 +1365,7 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
                               // 라벨은 늘 같게 둔다. "켜기/끄기"로 쓰면 지금
                               // 상태인지 누르면 될 일인지 읽는 사람마다 갈린다.
                               '백색소음',
-                              style: GoogleFonts.notoSansKr(
+                              style: appFont(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w900,
                                 color: _soundOn
@@ -1452,7 +1452,6 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
 
                   // 별 반짝임
                   ..._buildSparkles(),
-
                 ],
               ),
             ),
@@ -1465,7 +1464,7 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
                 children: [
                   Text(
                     '수고하셨습니다! ✨',
-                    style: GoogleFonts.notoSansKr(
+                    style: appFont(
                       fontSize: 22,
                       fontWeight: FontWeight.w900,
                       color: Colors.white,
@@ -1474,7 +1473,7 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
                   const SizedBox(height: 6),
                   Text(
                     '$stageMin분 집중이 완료되었습니다.',
-                    style: GoogleFonts.notoSansKr(
+                    style: appFont(
                       fontSize: 13,
                       fontWeight: FontWeight.w500,
                       color: Colors.white.withValues(alpha: 0.6),
@@ -1525,7 +1524,7 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
                             children: [
                               Text(
                                 '새 타이머 시작',
-                                style: GoogleFonts.notoSansKr(
+                                style: appFont(
                                   fontSize: 15,
                                   fontWeight: FontWeight.w900,
                                   color: Colors.white,
@@ -1533,7 +1532,7 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
                               ),
                               Text(
                                 '다시 집중을 시작할게요',
-                                style: GoogleFonts.notoSansKr(
+                                style: appFont(
                                   fontSize: 10,
                                   fontWeight: FontWeight.w500,
                                   color: Colors.white.withValues(alpha: 0.75),
@@ -1583,7 +1582,7 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
                             children: [
                               Text(
                                 '집중 소리만 계속 듣기',
-                                style: GoogleFonts.notoSansKr(
+                                style: appFont(
                                   fontSize: 15,
                                   fontWeight: FontWeight.w900,
                                   color: Colors.white,
@@ -1591,7 +1590,7 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
                               ),
                               Text(
                                 '타이머 없이 집중 소리를 계속 들을게요',
-                                style: GoogleFonts.notoSansKr(
+                                style: appFont(
                                   fontSize: 10,
                                   fontWeight: FontWeight.w500,
                                   color: Colors.white.withValues(alpha: 0.5),
@@ -1717,7 +1716,7 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
 
               Text(
                 '집중 소리 재생 중',
-                style: GoogleFonts.notoSansKr(
+                style: appFont(
                   fontSize: 20,
                   fontWeight: FontWeight.w900,
                   color: Colors.white,
@@ -1727,7 +1726,7 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
               Text(
                 '타이머 없이 집중 소리를 계속 들을 수 있어요.\n원하실 때 중단해 주세요.',
                 textAlign: TextAlign.center,
-                style: GoogleFonts.notoSansKr(
+                style: appFont(
                   fontSize: 12,
                   color: Colors.white.withValues(alpha: 0.55),
                   height: 1.6,
@@ -1777,7 +1776,7 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
                       const SizedBox(width: 10),
                       Text(
                         '집중 소리 중단하기',
-                        style: GoogleFonts.notoSansKr(
+                        style: appFont(
                           fontSize: 15,
                           fontWeight: FontWeight.w900,
                           color: Colors.white,
@@ -1814,7 +1813,7 @@ class _FocusTimerWidgetState extends State<FocusTimerWidget>
                     Expanded(
                       child: Text(
                         '집중 소리는 계속 재생 중이에요',
-                        style: GoogleFonts.notoSansKr(
+                        style: appFont(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
                           color: Colors.white.withValues(alpha: 0.7),
@@ -1932,7 +1931,7 @@ class _CycleSettingSheetState extends State<_CycleSettingSheet> {
                   child: Text(
                     '시간 설정 변경',
                     textAlign: TextAlign.center,
-                    style: GoogleFonts.notoSansKr(
+                    style: appFont(
                       fontSize: 15,
                       fontWeight: FontWeight.w900,
                       color: _ink,
@@ -1989,7 +1988,7 @@ class _CycleSettingSheetState extends State<_CycleSettingSheet> {
                       const SizedBox(width: 5),
                       Text(
                         '총 예상 시간',
-                        style: GoogleFonts.notoSansKr(
+                        style: appFont(
                           fontSize: 11.5,
                           fontWeight: FontWeight.w800,
                           color: _accent,
@@ -2000,7 +1999,7 @@ class _CycleSettingSheetState extends State<_CycleSettingSheet> {
                   const SizedBox(height: 5),
                   Text(
                     _setting.totalLabel,
-                    style: GoogleFonts.notoSansKr(
+                    style: appFont(
                       fontSize: 19,
                       fontWeight: FontWeight.w900,
                       color: _ink,
@@ -2011,7 +2010,7 @@ class _CycleSettingSheetState extends State<_CycleSettingSheet> {
                     _setting.hasRest
                         ? '(작업 $_work분 + 휴식 $_rest분) × $_rounds회'
                         : '작업 $_work분 한 번',
-                    style: GoogleFonts.notoSansKr(
+                    style: appFont(
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
                       color: _accent,
@@ -2037,7 +2036,7 @@ class _CycleSettingSheetState extends State<_CycleSettingSheet> {
                 ),
                 child: Text(
                   '이 설정으로 저장',
-                  style: GoogleFonts.notoSansKr(
+                  style: appFont(
                     fontSize: 14,
                     fontWeight: FontWeight.w900,
                     color: Colors.white,
@@ -2056,7 +2055,7 @@ class _CycleSettingSheetState extends State<_CycleSettingSheet> {
                   padding: const EdgeInsets.symmetric(vertical: 8),
                   child: Text(
                     '반복 끄고 5 · 15 · 25분으로 돌아가기',
-                    style: GoogleFonts.notoSansKr(
+                    style: appFont(
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
                       color: _accent,
@@ -2094,7 +2093,7 @@ class _CycleSettingSheetState extends State<_CycleSettingSheet> {
               children: [
                 Text(
                   label,
-                  style: GoogleFonts.notoSansKr(
+                  style: appFont(
                     fontSize: 13.5,
                     fontWeight: FontWeight.w800,
                     color: _ink,
@@ -2103,7 +2102,7 @@ class _CycleSettingSheetState extends State<_CycleSettingSheet> {
                 const SizedBox(height: 2),
                 Text(
                   hint,
-                  style: GoogleFonts.notoSansKr(
+                  style: appFont(
                     fontSize: 11,
                     fontWeight: FontWeight.w500,
                     color: _accent,
@@ -2127,7 +2126,7 @@ class _CycleSettingSheetState extends State<_CycleSettingSheet> {
                   Icons.keyboard_arrow_down_rounded,
                   color: _accent,
                 ),
-                style: GoogleFonts.notoSansKr(
+                style: appFont(
                   fontSize: 13.5,
                   fontWeight: FontWeight.w800,
                   color: _ink,
@@ -2398,7 +2397,7 @@ class _MasterTimerFocusScreenState extends State<MasterTimerFocusScreen>
                       const SizedBox(width: 5),
                       Text(
                         _phaseLabel,
-                        style: GoogleFonts.notoSansKr(
+                        style: appFont(
                           fontSize: 13,
                           fontWeight: FontWeight.w800,
                           color: _accent,
@@ -2412,7 +2411,7 @@ class _MasterTimerFocusScreenState extends State<MasterTimerFocusScreen>
                     child: Text(
                       _timeDisplay,
                       maxLines: 1,
-                      style: GoogleFonts.notoSansKr(
+                      style: appFont(
                         fontSize: 52,
                         fontWeight: FontWeight.w900,
                         height: 1.05,
@@ -2424,7 +2423,7 @@ class _MasterTimerFocusScreenState extends State<MasterTimerFocusScreen>
                     const SizedBox(height: 8),
                     Text(
                       round,
-                      style: GoogleFonts.notoSansKr(
+                      style: appFont(
                         fontSize: 13,
                         fontWeight: FontWeight.w800,
                         color: _main,
@@ -2435,7 +2434,7 @@ class _MasterTimerFocusScreenState extends State<MasterTimerFocusScreen>
                     const SizedBox(height: 2),
                     Text(
                       next,
-                      style: GoogleFonts.notoSansKr(
+                      style: appFont(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
                         color: _accent,
@@ -2518,7 +2517,7 @@ class _MasterTimerFocusScreenState extends State<MasterTimerFocusScreen>
             const SizedBox(width: 6),
             Text(
               label,
-              style: GoogleFonts.notoSansKr(
+              style: appFont(
                 fontSize: 13.5,
                 fontWeight: FontWeight.w800,
                 color: _ink,
@@ -2554,7 +2553,7 @@ class _MasterTimerFocusScreenState extends State<MasterTimerFocusScreen>
           const SizedBox(height: 4),
           Text(
             label,
-            style: GoogleFonts.notoSansKr(
+            style: appFont(
               fontSize: 10.5,
               fontWeight: FontWeight.w700,
               color: _accent,

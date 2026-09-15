@@ -40,5 +40,4 @@ class TaskNameSimilarity {
       .replaceAll(RegExp(r'[.。!！?？~〜]'), '')
       .trim()
       .toLowerCase();
-
 }

@@ -1,4 +1,3 @@
-
 /// 코치가 태그에 적어 보낸 반복 규칙을 읽는다.
 ///
 /// 형식은 `[HABIT: 이름|반복]`이다. 앞은 루틴 이름, 뒤는 얼마나 자주 할지다.
@@ -88,9 +87,7 @@ class RoutineFrequency {
     for (final match in RegExp(r'[월화수목금토일]').allMatches(squeezed)) {
       // '요일'의 '일'은 요일 이름이 아니다.
       final index = match.start;
-      if (match.group(0) == '일' &&
-          index > 0 &&
-          squeezed[index - 1] == '요') {
+      if (match.group(0) == '일' && index > 0 && squeezed[index - 1] == '요') {
         continue;
       }
       final day = _dayIndexByName[match.group(0)];

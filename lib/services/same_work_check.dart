@@ -127,10 +127,7 @@ class SameWorkCheck {
     buffer.writeln(
       '- 앞말이 같아도 하는 행동이 다르면 다른 일입니다. 예: "보고서 초안 쓰기"와 "보고서 초안 검토".',
     );
-    buffer.writeln(
-      '- 같은 대상을 다루더라도 단계가 다르면 다른 일입니다. 예: "장보기"와 "저녁 만들기".',
-    );
+    buffer.writeln('- 같은 대상을 다루더라도 단계가 다르면 다른 일입니다. 예: "장보기"와 "저녁 만들기".');
     return buffer.toString();
   }
-
 }

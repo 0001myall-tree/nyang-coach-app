@@ -207,15 +207,13 @@ class ExecutionFunnel {
   bool get canSplitStartAndFinish => startedMarked >= minStartSamples;
 
   /// 목록을 만든 날의 비율.
-  double get planPass =>
-      evaluatedDays == 0 ? 0 : daysWithPlan / evaluatedDays;
+  double get planPass => evaluatedDays == 0 ? 0 : daysWithPlan / evaluatedDays;
 
   /// 적어둔 것 중 손댄 비율.
   double get startPass => planned == 0 ? 0 : touched / planned;
 
   /// 목록이 있던 날 중 손댄 날의 비율.
-  double get dayStartPass =>
-      daysWithPlan == 0 ? 0 : daysTouched / daysWithPlan;
+  double get dayStartPass => daysWithPlan == 0 ? 0 : daysTouched / daysWithPlan;
 
   /// 손댄 것 중 끝낸 비율.
   double get finishPass => touched == 0 ? 0 : done / touched;
@@ -225,8 +223,7 @@ class ExecutionFunnel {
       daysWithPlan == 0 ? 0 : planned / daysWithPlan;
 
   /// 하루 평균으로 고쳐 센 값. 앞뒤 날수가 다를 수 있어 개수를 그냥 못 견준다.
-  double get recentDonePerDay =>
-      recentDays == 0 ? 0 : recentDone / recentDays;
+  double get recentDonePerDay => recentDays == 0 ? 0 : recentDone / recentDays;
   double get earlierDonePerDay =>
       earlierDays == 0 ? 0 : earlierDone / earlierDays;
   double get recentPlanPerDay =>
@@ -273,9 +270,7 @@ class ExecutionFunnel {
       if (canSplitStartAndFinish) FunnelLeak.finishing: finishPass,
     };
 
-    final lowest = stages.entries.reduce(
-      (a, b) => a.value <= b.value ? a : b,
-    );
+    final lowest = stages.entries.reduce((a, b) => a.value <= b.value ? a : b);
     if (lowest.value >= flowsWellRate) return FunnelLeak.none;
 
     if (lowest.key == FunnelLeak.starting &&
@@ -419,7 +414,11 @@ class ExecutionFunnel {
 
   /// [historyRaw]에서 최근 [windowDays]일을 센다. 오늘은 빼고, 첫 기록보다
   /// 이전 날도 뺀다 — 그건 거른 날이 아니라 아직 앱을 안 쓰던 날이다.
-  static ExecutionFunnel from(String? historyRaw, {DateTime? now, int windowDays = 7}) {
+  static ExecutionFunnel from(
+    String? historyRaw, {
+    DateTime? now,
+    int windowDays = 7,
+  }) {
     final at = now ?? DateTime.now();
     final byDate = <String, Map<String, dynamic>>{};
     DateTime? firstDay;

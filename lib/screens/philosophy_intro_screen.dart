@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import '../theme/app_font.dart';
 import '../theme/app_design_tokens.dart';
 import 'coach_selection_screen.dart';
 
@@ -58,7 +58,7 @@ class _PhilosophyIntroScreenState extends State<PhilosophyIntroScreen> {
                     Text(
                       '좋은 계획보다\n중요한 것은',
                       textAlign: TextAlign.center,
-                      style: GoogleFonts.notoSansKr(
+                      style: appFont(
                         fontSize: 24,
                         fontWeight: FontWeight.w500,
                         color: AppDesignTokens.textPrimary,
@@ -70,7 +70,7 @@ class _PhilosophyIntroScreenState extends State<PhilosophyIntroScreen> {
                     Text(
                       '실행입니다.',
                       textAlign: TextAlign.center,
-                      style: GoogleFonts.notoSansKr(
+                      style: appFont(
                         fontSize: 36,
                         fontWeight: FontWeight.w900,
                         color: AppDesignTokens.textPrimary,
@@ -94,7 +94,7 @@ class _PhilosophyIntroScreenState extends State<PhilosophyIntroScreen> {
                     RichText(
                       textAlign: TextAlign.center,
                       text: TextSpan(
-                        style: GoogleFonts.notoSansKr(
+                        style: appFont(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
                           color: AppDesignTokens.textSecondary,
@@ -105,7 +105,7 @@ class _PhilosophyIntroScreenState extends State<PhilosophyIntroScreen> {
                           const TextSpan(text: '사람마다 실행하는 방식은 다릅니다.\n당신에게 맞는 '),
                           TextSpan(
                             text: '실행 코치',
-                            style: GoogleFonts.notoSansKr(
+                            style: appFont(
                               fontWeight: FontWeight.w900,
                               color: AppDesignTokens.brand,
                             ),
@@ -129,7 +129,7 @@ class _PhilosophyIntroScreenState extends State<PhilosophyIntroScreen> {
                         children: [
                           RichText(
                             text: TextSpan(
-                              style: GoogleFonts.notoSansKr(
+                              style: appFont(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w900,
                                 color: AppDesignTokens.brand,
@@ -141,7 +141,7 @@ class _PhilosophyIntroScreenState extends State<PhilosophyIntroScreen> {
                           const SizedBox(height: 4),
                           Text(
                             'AI 실행 플래너',
-                            style: GoogleFonts.notoSansKr(
+                            style: appFont(
                               fontSize: 10,
                               fontWeight: FontWeight.w800,
                               color: AppDesignTokens.textMuted,

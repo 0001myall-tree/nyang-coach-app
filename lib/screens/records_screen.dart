@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:nyang_coach/theme/app_design_tokens.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:google_fonts/google_fonts.dart';
+import '../theme/app_font.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:nyang_coach/services/condition_insight.dart';
 import 'package:nyang_coach/services/execution_blocker_service.dart';
@@ -1328,7 +1328,7 @@ ${ExecutionTypeLabels.listForPrompt}
                         // 시작부터 쌓인 값으로 읽혀서, 연속이 7에서 안 올라가는
                         // 것이 고장처럼 보인다.
                         '이번 주 기록',
-                        style: GoogleFonts.notoSansKr(
+                        style: appFont(
                           fontSize: 18,
                           fontWeight: FontWeight.w900,
                           color: const Color(0xFF3D3A4E),
@@ -1338,7 +1338,7 @@ ${ExecutionTypeLabels.listForPrompt}
                   ),
                   Text(
                     _isMaster ? '최근 30일 ▾' : '최근 7일 ▾',
-                    style: GoogleFonts.notoSansKr(
+                    style: appFont(
                       fontSize: 13,
                       fontWeight: FontWeight.w700,
                       color: const Color(0xFFA0A0B0),
@@ -1459,7 +1459,7 @@ ${ExecutionTypeLabels.listForPrompt}
             children: [
               Text(
                 value,
-                style: GoogleFonts.notoSansKr(
+                style: appFont(
                   fontSize: 20,
                   fontWeight: FontWeight.w900,
                   color: isAccent ? Colors.white : const Color(0xFF3D3A4E),
@@ -1468,7 +1468,7 @@ ${ExecutionTypeLabels.listForPrompt}
               const SizedBox(height: 2),
               Text(
                 title,
-                style: GoogleFonts.notoSansKr(
+                style: appFont(
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
                   color: isAccent
@@ -1586,7 +1586,7 @@ ${ExecutionTypeLabels.listForPrompt}
           children: [
             Text(
               plan,
-              style: GoogleFonts.notoSansKr(
+              style: appFont(
                 fontSize: 12,
                 fontWeight: FontWeight.w900,
                 color: accent,
@@ -1595,7 +1595,7 @@ ${ExecutionTypeLabels.listForPrompt}
             const SizedBox(height: 3),
             Text(
               '실행 유형 : 시작 꾸준형',
-              style: GoogleFonts.notoSansKr(
+              style: appFont(
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
                 color: accent.withValues(alpha: 0.85),
@@ -1604,7 +1604,7 @@ ${ExecutionTypeLabels.listForPrompt}
             const SizedBox(height: 6),
             Text(
               body,
-              style: GoogleFonts.notoSansKr(
+              style: appFont(
                 fontSize: 13,
                 fontWeight: FontWeight.w500,
                 height: 1.55,
@@ -1628,7 +1628,7 @@ ${ExecutionTypeLabels.listForPrompt}
         children: [
           Text(
             '구독하면 이 자리에서 이렇게 받아요 (예시)',
-            style: GoogleFonts.notoSansKr(
+            style: appFont(
               fontSize: 13,
               fontWeight: FontWeight.w800,
               color: AppDesignTokens.brandVivid,
@@ -1637,7 +1637,7 @@ ${ExecutionTypeLabels.listForPrompt}
           const SizedBox(height: 4),
           Text(
             '아래는 다른 분의 기록으로 만든 예시예요.',
-            style: GoogleFonts.notoSansKr(
+            style: appFont(
               fontSize: 11,
               fontWeight: FontWeight.w500,
               color: AppDesignTokens.textMuted,
@@ -1692,7 +1692,7 @@ ${ExecutionTypeLabels.listForPrompt}
               children: [
                 Text(
                   '코치의 한마디',
-                  style: GoogleFonts.notoSansKr(
+                  style: appFont(
                     fontSize: 13,
                     fontWeight: FontWeight.w800,
                     color: _recordCoach.accentColor,
@@ -1709,7 +1709,7 @@ ${ExecutionTypeLabels.listForPrompt}
                               _weeklyExecutionTypeLabel,
                             ) ??
                             _getPatternFeedback(records)),
-                  style: GoogleFonts.notoSansKr(
+                  style: appFont(
                     fontSize: 14,
                     fontWeight: FontWeight.w500,
                     color: const Color(0xFF3D3A4E),
@@ -1720,7 +1720,7 @@ ${ExecutionTypeLabels.listForPrompt}
                   const SizedBox(height: 8),
                   Text(
                     '실행 유형 : $executionTypeLabel',
-                    style: GoogleFonts.notoSansKr(
+                    style: appFont(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
                       color: _recordCoach.accentColor,
@@ -1762,7 +1762,7 @@ ${ExecutionTypeLabels.listForPrompt}
                 // 바깥 화면 제목이 이미 '이번 주 기록'이다. 같은 이름을 안에서
                 // 또 쓰면 어디를 보고 있는지 흐려진다.
                 '종합 기록',
-                style: GoogleFonts.notoSansKr(
+                style: appFont(
                   fontSize: 15,
                   fontWeight: FontWeight.w800,
                   color: const Color(0xFF3D3A4E),
@@ -1792,7 +1792,7 @@ ${ExecutionTypeLabels.listForPrompt}
                 children: [
                   Text(
                     pct > 0 ? '$pct%' : '-',
-                    style: GoogleFonts.notoSansKr(
+                    style: appFont(
                       fontSize: 10,
                       fontWeight: FontWeight.w700,
                       color: const Color(0xFFA0A0B0),
@@ -1837,7 +1837,7 @@ ${ExecutionTypeLabels.listForPrompt}
                   const SizedBox(height: 8),
                   Text(
                     _getDayLabel(r['date']),
-                    style: GoogleFonts.notoSansKr(
+                    style: appFont(
                       fontSize: 12,
                       fontWeight: isToday ? FontWeight.w800 : FontWeight.w600,
                       color: isToday
@@ -1879,7 +1879,7 @@ ${ExecutionTypeLabels.listForPrompt}
       ),
     );
 
-    final labelStyle = GoogleFonts.notoSansKr(
+    final labelStyle = appFont(
       fontSize: 11,
       fontWeight: FontWeight.w600,
       color: const Color(0xFF8B8698),
@@ -1933,7 +1933,7 @@ ${ExecutionTypeLabels.listForPrompt}
               padding: const EdgeInsets.only(bottom: 2),
               child: Text(
                 answer,
-                style: GoogleFonts.notoSansKr(
+                style: appFont(
                   fontSize: 15,
                   fontWeight: FontWeight.w800,
                   color: _recordCoach.accentColor,
@@ -1943,7 +1943,7 @@ ${ExecutionTypeLabels.listForPrompt}
           const SizedBox(height: 4),
           Text(
             '코치에게 직접 알려주신 조건이에요. 오늘도 이 조건이 되는지 살펴보세요.',
-            style: GoogleFonts.notoSansKr(
+            style: appFont(
               fontSize: 11,
               fontWeight: FontWeight.w500,
               color: const Color(0xFF8A8A9E),
@@ -1982,7 +1982,7 @@ ${ExecutionTypeLabels.listForPrompt}
               padding: const EdgeInsets.only(bottom: 2),
               child: Text(
                 answer,
-                style: GoogleFonts.notoSansKr(
+                style: appFont(
                   fontSize: 15,
                   fontWeight: FontWeight.w800,
                   color: _recordCoach.accentColor,
@@ -1992,7 +1992,7 @@ ${ExecutionTypeLabels.listForPrompt}
           const SizedBox(height: 4),
           Text(
             '막혔을 때 직접 골라주신 자리예요. 다음에 같은 데서 걸리면 여기부터 보면 돼요.',
-            style: GoogleFonts.notoSansKr(
+            style: appFont(
               fontSize: 11,
               fontWeight: FontWeight.w500,
               color: const Color(0xFF8A8A9E),
@@ -2034,7 +2034,7 @@ ${ExecutionTypeLabels.listForPrompt}
           if (!pattern.hasResult)
             Text(
               '조금 더 기록하면 하루가 잘 풀리는 시작 시간대를 알려드릴게요.',
-              style: GoogleFonts.notoSansKr(
+              style: appFont(
                 fontSize: 11,
                 fontWeight: FontWeight.w500,
                 color: const Color(0xFF8A8A9E),
@@ -2044,7 +2044,7 @@ ${ExecutionTypeLabels.listForPrompt}
           else ...[
             Text(
               pattern.window!.label,
-              style: GoogleFonts.notoSansKr(
+              style: appFont(
                 fontSize: 15,
                 fontWeight: FontWeight.w800,
                 color: _recordCoach.accentColor,
@@ -2055,7 +2055,7 @@ ${ExecutionTypeLabels.listForPrompt}
               isEstablished
                   ? "이 시간에 첫 할 일을 '시작'한 날 완료율이 가장 높네요."
                   : "지금까지는 이 시간에 첫 할 일을 '시작'한 날 완료율이 높았어요.",
-              style: GoogleFonts.notoSansKr(
+              style: appFont(
                 fontSize: 11,
                 fontWeight: FontWeight.w500,
                 color: const Color(0xFF8A8A9E),
@@ -2119,7 +2119,7 @@ ${ExecutionTypeLabels.listForPrompt}
         Expanded(
           child: Text(
             label,
-            style: GoogleFonts.notoSansKr(
+            style: appFont(
               fontSize: 12,
               fontWeight: FontWeight.w700,
               color: const Color(0xFF7A748E),
@@ -2131,7 +2131,7 @@ ${ExecutionTypeLabels.listForPrompt}
           Text(
             value,
             textAlign: TextAlign.right,
-            style: GoogleFonts.notoSansKr(
+            style: appFont(
               fontSize: 13,
               fontWeight: FontWeight.w900,
               color: _recordCoach.accentColor,
@@ -2151,7 +2151,7 @@ ${ExecutionTypeLabels.listForPrompt}
       // 바로 위 제목보다 커져서 위계가 뒤집힌다. 이 경우만 본문 크기로 쓴다.
       return Text(
         '아직 정보가 부족합니다',
-        style: GoogleFonts.notoSansKr(
+        style: appFont(
           fontSize: 12,
           fontWeight: FontWeight.w500,
           color: const Color(0xFF9A94AA),
@@ -2176,7 +2176,7 @@ ${ExecutionTypeLabels.listForPrompt}
       ),
       child: Text(
         '${coachRank.rank}위 ${coachRank.coachName}',
-        style: GoogleFonts.notoSansKr(
+        style: appFont(
           fontSize: 12,
           fontWeight: FontWeight.w800,
           color: const Color(0xFF5E5576),
@@ -2216,7 +2216,7 @@ ${ExecutionTypeLabels.listForPrompt}
                   const SizedBox(width: 8),
                   Text(
                     '루틴 트래킹',
-                    style: GoogleFonts.notoSansKr(
+                    style: appFont(
                       fontSize: 15,
                       fontWeight: FontWeight.w800,
                       color: const Color(0xFF3D3A4E),
@@ -2226,7 +2226,7 @@ ${ExecutionTypeLabels.listForPrompt}
               ),
               Text(
                 _isMaster ? '최근 30일' : '최근 7일',
-                style: GoogleFonts.notoSansKr(
+                style: appFont(
                   fontSize: 11,
                   fontWeight: FontWeight.w700,
                   color: const Color(0xFFA0A0B0),
@@ -2376,7 +2376,7 @@ ${ExecutionTypeLabels.listForPrompt}
                             Flexible(
                               child: Text(
                                 h.name,
-                                style: GoogleFonts.notoSansKr(
+                                style: appFont(
                                   fontSize: 13,
                                   fontWeight: FontWeight.w700,
                                   color: const Color(0xFF3D3A4E),
@@ -2396,7 +2396,7 @@ ${ExecutionTypeLabels.listForPrompt}
                               ),
                               child: Text(
                                 freqLabel,
-                                style: GoogleFonts.notoSansKr(
+                                style: appFont(
                                   fontSize: 10,
                                   fontWeight: FontWeight.w600,
                                   color: const Color(0xFF6B7280),
@@ -2408,7 +2408,7 @@ ${ExecutionTypeLabels.listForPrompt}
                       ),
                       Text(
                         '$hPct%',
-                        style: GoogleFonts.notoSansKr(
+                        style: appFont(
                           fontSize: 12,
                           fontWeight: FontWeight.w800,
                           color: _recordCoach.accentColor,
@@ -2434,7 +2434,7 @@ ${ExecutionTypeLabels.listForPrompt}
                     children: [
                       Text(
                         '(트래킹 기간 : $periodText)',
-                        style: GoogleFonts.notoSansKr(
+                        style: appFont(
                           fontSize: 10,
                           fontWeight: FontWeight.w600,
                           color: const Color(0xFFA0A0B0),
@@ -2471,7 +2471,7 @@ ${ExecutionTypeLabels.listForPrompt}
                 Expanded(
                   child: Text(
                     '마스터 코치 기록탭에서는 30일치 루틴 달성률과 루틴 달성 패턴까지 확인할 수 있습니다.',
-                    style: GoogleFonts.notoSansKr(
+                    style: appFont(
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
                       color: const Color(0xFFA0A0B0),
@@ -2528,7 +2528,7 @@ ${ExecutionTypeLabels.listForPrompt}
         ),
         child: Text(
           '아직은 분석할 기록이 조금 부족해요.\n조금만 더 이어가면 루틴 패턴을 찾아드릴게요.',
-          style: GoogleFonts.notoSansKr(
+          style: appFont(
             fontSize: 12,
             fontWeight: FontWeight.w500,
             color: const Color(0xFF6B7280),
@@ -2678,7 +2678,7 @@ ${ExecutionTypeLabels.listForPrompt}
               const SizedBox(width: 6),
               Text(
                 '루틴 패턴',
-                style: GoogleFonts.notoSansKr(
+                style: appFont(
                   fontSize: 13,
                   fontWeight: FontWeight.w800,
                   color: const Color(0xFF3D3A4E),
@@ -2732,7 +2732,7 @@ ${ExecutionTypeLabels.listForPrompt}
                 Expanded(
                   child: Text(
                     '최근에는 $bestDayStr $bestTimeStr에 시작했을 때 완료로 가장 잘 이어졌어요.\n비슷한 시간에 시작해보세요.',
-                    style: GoogleFonts.notoSansKr(
+                    style: appFont(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
                       color: const Color(0xFF4B5563),
@@ -2773,7 +2773,7 @@ ${ExecutionTypeLabels.listForPrompt}
         const SizedBox(width: 6),
         Text(
           label,
-          style: GoogleFonts.notoSansKr(
+          style: appFont(
             fontSize: 12,
             fontWeight: FontWeight.w600,
             color: const Color(0xFF6B7280),
@@ -2783,7 +2783,7 @@ ${ExecutionTypeLabels.listForPrompt}
         Expanded(
           child: Text(
             value,
-            style: GoogleFonts.notoSansKr(
+            style: appFont(
               fontSize: 12,
               fontWeight: FontWeight.w800,
               color: const Color(0xFF3D3A4E),

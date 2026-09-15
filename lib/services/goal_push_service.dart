@@ -18,8 +18,7 @@ class GoalPushService {
 
   /// 주어와 서술어 사이에 끼어드는 부사들. 고정 문자열로만 찾으면
   /// "일정이 너무 촉박해" 같은 실제 문장을 통째로 놓친다.
-  static const String _adverbGap =
-      r'(?:너무|정말|진짜|많이|좀|꽤|되게|엄청|아주|워낙|이미|벌써)*';
+  static const String _adverbGap = r'(?:너무|정말|진짜|많이|좀|꽤|되게|엄청|아주|워낙|이미|벌써)*';
 
   /// 마감이 걸려 있다는 신호.
   static final List<RegExp> _deadlinePatterns = [

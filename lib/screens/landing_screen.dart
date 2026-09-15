@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../theme/app_font.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../services/auth_service.dart';
@@ -209,7 +210,7 @@ class _LandingScreenState extends State<LandingScreen>
         SnackBar(
           content: Text(
             '로그인은 됐지만 클라우드 동기화에 실패했어요: $message',
-            style: GoogleFonts.notoSansKr(fontWeight: FontWeight.w700),
+            style: appFont(fontWeight: FontWeight.w700),
           ),
           behavior: SnackBarBehavior.floating,
           backgroundColor: Colors.redAccent,
@@ -226,7 +227,7 @@ class _LandingScreenState extends State<LandingScreen>
         SnackBar(
           content: Text(
             '등록된 이메일 계정만 이용할 수 있어요.',
-            style: GoogleFonts.notoSansKr(fontWeight: FontWeight.w700),
+            style: appFont(fontWeight: FontWeight.w700),
           ),
           behavior: SnackBarBehavior.floating,
           backgroundColor: Colors.redAccent,
@@ -367,7 +368,7 @@ class _LandingScreenState extends State<LandingScreen>
                 Text(
                   '계정 연결하고\n더 편하게 사용해요',
                   textAlign: TextAlign.center,
-                  style: GoogleFonts.notoSansKr(
+                  style: appFont(
                     fontSize: 20,
                     fontWeight: FontWeight.w900,
                     color: AppDesignTokens.textPrimary,
@@ -419,7 +420,7 @@ class _LandingScreenState extends State<LandingScreen>
                       ),
                       child: Text(
                         'N',
-                        style: GoogleFonts.notoSansKr(
+                        style: appFont(
                           fontSize: 15,
                           fontWeight: FontWeight.w900,
                           color: Colors.white,
@@ -465,7 +466,7 @@ class _LandingScreenState extends State<LandingScreen>
                   ),
                   child: Text(
                     'N',
-                    style: GoogleFonts.notoSansKr(
+                    style: appFont(
                       fontSize: 26,
                       fontWeight: FontWeight.w900,
                       color: Colors.white,
@@ -475,7 +476,7 @@ class _LandingScreenState extends State<LandingScreen>
                 const SizedBox(height: 16),
                 Text(
                   '네이버 테스트 로그인',
-                  style: GoogleFonts.notoSansKr(
+                  style: appFont(
                     fontSize: 18,
                     fontWeight: FontWeight.w900,
                     color: AppDesignTokens.textPrimary,
@@ -485,7 +486,7 @@ class _LandingScreenState extends State<LandingScreen>
                 Text(
                   '실제 네이버 계정 연동 없이\n테스트 계정으로 앱을 시작합니다.',
                   textAlign: TextAlign.center,
-                  style: GoogleFonts.notoSansKr(
+                  style: appFont(
                     fontSize: 13,
                     height: 1.5,
                     color: AppDesignTokens.textMuted,
@@ -656,7 +657,7 @@ class _LandingScreenState extends State<LandingScreen>
               child: Center(
                 child: Text(
                   text,
-                  style: GoogleFonts.notoSansKr(
+                  style: appFont(
                     fontSize: AppDesignTokens.textAction,
                     fontWeight: FontWeight.w700,
                     color: AppDesignTokens.textPrimary,

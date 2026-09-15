@@ -30,7 +30,8 @@ class PlannerEditService {
 
     // 어제보다 앞선 날은 받지 않는다. 목록은 며칠 들고 있지만, 채팅으로
     // 채워 넣는 것은 어제까지다.
-    if (action.kind == PlannerActionKind.done && _isBeforeYesterday(action.date)) {
+    if (action.kind == PlannerActionKind.done &&
+        _isBeforeYesterday(action.date)) {
       return PlannerActionResult(
         PlannerActionStatus.tooOld,
         label: action.target,
@@ -109,11 +110,7 @@ class PlannerEditService {
     final habitHits = <String, _Hit>{};
     for (final habit in _list(prefs.getString(_habitsKey))) {
       if (_titleMatches(habit['name']?.toString() ?? '', action.target)) {
-        habitHits[habit['id'].toString()] = _Hit(
-          _Store.habit,
-          habit,
-          todayKey,
-        );
+        habitHits[habit['id'].toString()] = _Hit(_Store.habit, habit, todayKey);
       }
     }
 
@@ -137,7 +134,9 @@ class PlannerEditService {
       }
     }
 
-    final planned = _map(prefs.getString(DailyResetService.plannedTasksByDateKey));
+    final planned = _map(
+      prefs.getString(DailyResetService.plannedTasksByDateKey),
+    );
     planned.forEach((key, value) {
       if (key == todayKey) return;
       if (todayOnly) return;
@@ -265,7 +264,8 @@ class PlannerEditService {
   static String iGaJosa(String word) => _hasFinalConsonant(word) ? '이' : '가';
 
   /// 앞말에 맞는 '을/를'을 고른다.
-  static String eulReulJosa(String word) => _hasFinalConsonant(word) ? '을' : '를';
+  static String eulReulJosa(String word) =>
+      _hasFinalConsonant(word) ? '을' : '를';
 
   static bool _hasFinalConsonant(String word) {
     final trimmed = word.replaceAll(RegExp(r'[)\]\s\u0027"]+\$'), '');

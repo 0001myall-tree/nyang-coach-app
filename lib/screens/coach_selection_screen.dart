@@ -3,7 +3,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:google_fonts/google_fonts.dart';
+import '../theme/app_font.dart';
 import 'main_tab_screen.dart';
 import 'landing_screen.dart';
 import 'coach_config.dart';
@@ -134,7 +134,7 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen>
                       const SizedBox(width: 8),
                       Text(
                         '실행코치 소개',
-                        style: GoogleFonts.notoSansKr(
+                        style: appFont(
                           fontSize: 18,
                           fontWeight: FontWeight.w900,
                           color: const Color(0xFF1A1A2E),
@@ -172,7 +172,7 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen>
                                 Text(
                                   '계획을 세우는 것보다, 실제로\n움직이는 것이 중요하지 않을까요?',
                                   textAlign: TextAlign.center,
-                                  style: GoogleFonts.notoSansKr(
+                                  style: appFont(
                                     fontSize: 16,
                                     fontWeight: FontWeight.w800,
                                     color: const Color(0xFFA78BFA),
@@ -259,7 +259,7 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen>
                       icon: const Icon(Icons.pets, size: 20),
                       label: Text(
                         '함께 시작하기',
-                        style: GoogleFonts.notoSansKr(
+                        style: appFont(
                           fontSize: 17,
                           fontWeight: FontWeight.w900,
                         ),
@@ -309,7 +309,7 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen>
               children: [
                 Text(
                   name,
-                  style: GoogleFonts.notoSansKr(
+                  style: appFont(
                     fontSize: 13,
                     fontWeight: FontWeight.w900,
                     color: const Color(0xFFA78BFA),
@@ -326,7 +326,7 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen>
                   ),
                   child: Text(
                     text,
-                    style: GoogleFonts.notoSansKr(
+                    style: appFont(
                       fontSize: 14,
                       fontWeight: FontWeight.w500,
                       color: const Color(0xFF3D3A4E),
@@ -349,7 +349,7 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen>
         return AlertDialog(
           title: Text(
             '개발자용 플랜 시뮬레이터',
-            style: GoogleFonts.notoSansKr(fontWeight: FontWeight.w900),
+            style: appFont(fontWeight: FontWeight.w900),
           ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
@@ -358,7 +358,7 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen>
                 leading: const Icon(Icons.star_border, color: Colors.grey),
                 title: Text(
                   '비구독자 상태 (none)',
-                  style: GoogleFonts.notoSansKr(fontWeight: FontWeight.w600),
+                  style: appFont(fontWeight: FontWeight.w600),
                 ),
                 onTap: () async {
                   await UserDataService.setPlan('none');
@@ -373,7 +373,7 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen>
                 leading: const Icon(Icons.pets, color: _coachMintText),
                 title: Text(
                   '프렌즈 플랜 (friends)',
-                  style: GoogleFonts.notoSansKr(fontWeight: FontWeight.w600),
+                  style: appFont(fontWeight: FontWeight.w600),
                 ),
                 onTap: () async {
                   await UserDataService.setPlan('friends');
@@ -391,7 +391,7 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen>
                 ),
                 title: Text(
                   '마스터 플랜 (master)',
-                  style: GoogleFonts.notoSansKr(fontWeight: FontWeight.w600),
+                  style: appFont(fontWeight: FontWeight.w600),
                 ),
                 onTap: () async {
                   await UserDataService.setPlan('master');
@@ -407,7 +407,7 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen>
                 leading: const Icon(Icons.refresh, color: Colors.blue),
                 title: Text(
                   '개별 코치 구매 초기화',
-                  style: GoogleFonts.notoSansKr(fontWeight: FontWeight.w600),
+                  style: appFont(fontWeight: FontWeight.w600),
                 ),
                 onTap: () async {
                   final data = await UserDataService.load();
@@ -426,10 +426,7 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen>
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: Text(
-                '닫기',
-                style: GoogleFonts.notoSansKr(fontWeight: FontWeight.w700),
-              ),
+              child: Text('닫기', style: appFont(fontWeight: FontWeight.w700)),
             ),
           ],
         );
@@ -670,7 +667,7 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen>
         SnackBar(
           content: Text(
             '${coach['name']}이(가) 추가됐어요 🎉',
-            style: GoogleFonts.notoSansKr(fontWeight: FontWeight.w700),
+            style: appFont(fontWeight: FontWeight.w700),
           ),
           backgroundColor: const Color(0xFF1A1A2E),
           behavior: SnackBarBehavior.floating,
@@ -901,7 +898,7 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen>
                                                         ),
                                                         Text(
                                                           '보유',
-                                                          style: GoogleFonts.notoSansKr(
+                                                          style: appFont(
                                                             fontSize: 12,
                                                             fontWeight:
                                                                 FontWeight.w800,
@@ -928,7 +925,7 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen>
                                               children: [
                                                 Text(
                                                   coach['name'],
-                                                  style: GoogleFonts.notoSansKr(
+                                                  style: appFont(
                                                     fontSize: 24,
                                                     fontWeight: FontWeight.w900,
                                                     color: AppDesignTokens
@@ -938,7 +935,7 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen>
                                                 const SizedBox(height: 4),
                                                 Text(
                                                   coach['subtitle'],
-                                                  style: GoogleFonts.notoSansKr(
+                                                  style: appFont(
                                                     fontSize: 14,
                                                     fontWeight: FontWeight.w600,
                                                     color: const Color(
@@ -1023,7 +1020,7 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen>
                                                                     Text(
                                                                       tag['text']
                                                                           as String,
-                                                                      style: GoogleFonts.notoSansKr(
+                                                                      style: appFont(
                                                                         fontSize:
                                                                             12,
                                                                         fontWeight:
@@ -1043,15 +1040,14 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen>
                                                   Text(
                                                     description,
                                                     textAlign: TextAlign.center,
-                                                    style:
-                                                        GoogleFonts.notoSansKr(
-                                                          fontSize: 14,
-                                                          fontWeight:
-                                                              FontWeight.w500,
-                                                          color: AppDesignTokens
-                                                              .textSecondary,
-                                                          height: 1.5,
-                                                        ),
+                                                    style: appFont(
+                                                      fontSize: 14,
+                                                      fontWeight:
+                                                          FontWeight.w500,
+                                                      color: AppDesignTokens
+                                                          .textSecondary,
+                                                      height: 1.5,
+                                                    ),
                                                   )
                                                 else if (isLocked &&
                                                     isFriendsCoach &&
@@ -1059,15 +1055,14 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen>
                                                   Text(
                                                     '따뜻하게 다가오는 코치에요.\n지친 하루 끝에, 당신을 다정하게 챙겨줍니다.',
                                                     textAlign: TextAlign.center,
-                                                    style:
-                                                        GoogleFonts.notoSansKr(
-                                                          fontSize: 14,
-                                                          fontWeight:
-                                                              FontWeight.w500,
-                                                          color: AppDesignTokens
-                                                              .textSecondary,
-                                                          height: 1.5,
-                                                        ),
+                                                    style: appFont(
+                                                      fontSize: 14,
+                                                      fontWeight:
+                                                          FontWeight.w500,
+                                                      color: AppDesignTokens
+                                                          .textSecondary,
+                                                      height: 1.5,
+                                                    ),
                                                   ),
 
                                                 const Spacer(),
@@ -1104,14 +1099,13 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen>
                                                   Text(
                                                     '지금은 만날 수 없는 코치예요.',
                                                     textAlign: TextAlign.center,
-                                                    style:
-                                                        GoogleFonts.notoSansKr(
-                                                          fontSize: 13,
-                                                          fontWeight:
-                                                              FontWeight.w700,
-                                                          color: AppDesignTokens
-                                                              .textSecondary,
-                                                        ),
+                                                    style: appFont(
+                                                      fontSize: 13,
+                                                      fontWeight:
+                                                          FontWeight.w700,
+                                                      color: AppDesignTokens
+                                                          .textSecondary,
+                                                    ),
                                                   )
                                                 else
                                                   AppButton(
@@ -1301,7 +1295,7 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen>
                             ),
                             child: Text(
                               '구독 안내 >',
-                              style: GoogleFonts.notoSansKr(
+                              style: appFont(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w800,
                               ),
@@ -1319,7 +1313,7 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen>
                         child: RichText(
                           textAlign: TextAlign.center,
                           text: TextSpan(
-                            style: GoogleFonts.notoSansKr(
+                            style: appFont(
                               fontSize: 22,
                               fontWeight: FontWeight.w600,
                               color: AppDesignTokens.textPrimary,
@@ -1502,7 +1496,7 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen>
                                                 const SizedBox(width: 2),
                                                 Text(
                                                   '보유',
-                                                  style: GoogleFonts.notoSansKr(
+                                                  style: appFont(
                                                     fontSize: 10,
                                                     fontWeight: FontWeight.w800,
                                                     color: _coachMintText,
@@ -1533,7 +1527,7 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen>
                                       children: [
                                         Text(
                                           coach['name'],
-                                          style: GoogleFonts.notoSansKr(
+                                          style: appFont(
                                             fontSize: 16,
                                             fontWeight: FontWeight.w900,
                                             color: AppDesignTokens.textPrimary,
@@ -1545,7 +1539,7 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen>
                                           textAlign: TextAlign.center,
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
-                                          style: GoogleFonts.notoSansKr(
+                                          style: appFont(
                                             fontSize: 12,
                                             fontWeight: FontWeight.w500,
                                             color:
@@ -1602,7 +1596,7 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen>
         child: Text(
           title,
           textAlign: TextAlign.center,
-          style: GoogleFonts.notoSansKr(
+          style: appFont(
             fontSize: 14,
             fontWeight: FontWeight.w800,
             color: isSelected

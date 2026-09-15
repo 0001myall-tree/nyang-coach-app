@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import '../theme/app_font.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'coach_config.dart';
 
@@ -143,7 +143,7 @@ class _CoreReminderScreenState extends State<CoreReminderScreen> {
                     const SizedBox(height: 24),
                     Text(
                       coach.name,
-                      style: GoogleFonts.notoSansKr(
+                      style: appFont(
                         fontSize: 22,
                         fontWeight: FontWeight.w900,
                         color: const Color(0xFF1A1A2E),
@@ -153,7 +153,7 @@ class _CoreReminderScreenState extends State<CoreReminderScreen> {
                     Text(
                       '핵심 일정을 시작할 시간이에요!\n지금 바로 집중해볼까요?',
                       textAlign: TextAlign.center,
-                      style: GoogleFonts.notoSansKr(
+                      style: appFont(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
                         color: const Color(0xFF6B7280),
@@ -180,7 +180,7 @@ class _CoreReminderScreenState extends State<CoreReminderScreen> {
                       child: Text(
                         widget.taskText,
                         textAlign: TextAlign.center,
-                        style: GoogleFonts.notoSansKr(
+                        style: appFont(
                           fontSize: 18,
                           fontWeight: FontWeight.w800,
                           color: const Color(0xFF8B7CFF),
@@ -206,7 +206,7 @@ class _CoreReminderScreenState extends State<CoreReminderScreen> {
                         ),
                         child: Text(
                           '시작하기',
-                          style: GoogleFonts.notoSansKr(
+                          style: appFont(
                             fontSize: 18,
                             fontWeight: FontWeight.w900,
                             color: Colors.white,

@@ -70,7 +70,8 @@ class ConditionFinding {
   double get gap => whenTrueRate - whenFalseRate;
 
   /// 다음 날이 깎이는지. 잴 수 없으면 null.
-  double? get nextDayGap => (nextDayTrueRate == null || nextDayFalseRate == null)
+  double? get nextDayGap =>
+      (nextDayTrueRate == null || nextDayFalseRate == null)
       ? null
       : nextDayTrueRate! - nextDayFalseRate!;
 
@@ -253,7 +254,9 @@ class ConditionInsights {
         '- 다음 날 완료율: ${pct(finding.nextDayTrueRate!)} vs ${pct(finding.nextDayFalseRate!)}',
       );
     }
-    buffer.writeln('- 기간을 앞뒤로 갈랐을 때 방향이 같았는지: ${finding.consistent ? '예' : '아니오'}');
+    buffer.writeln(
+      '- 기간을 앞뒤로 갈랐을 때 방향이 같았는지: ${finding.consistent ? '예' : '아니오'}',
+    );
     if (focusNote.isNotEmpty) {
       buffer.writeln('- $focusNote');
       buffer.writeln(
@@ -276,9 +279,7 @@ class ConditionInsights {
         '매일 그러라고 하지 말고, 며칠만 해보는 크기로 말하세요.',
       );
     } else {
-      buffer.writeln(
-        '*관찰로만 전하고 제안까지 가지 마세요. 방향이 반복되지 않았거나 권할 수 있는 조건이 아닙니다.',
-      );
+      buffer.writeln('*관찰로만 전하고 제안까지 가지 마세요. 방향이 반복되지 않았거나 권할 수 있는 조건이 아닙니다.');
     }
     buffer.writeln(
       '*"~했기 때문에 좋아졌다"로 쓰지 마세요. 조건을 골라서 시켜본 것이 아니라 '
@@ -543,12 +544,16 @@ class ConditionInsights {
           if (at != null) hours.add(at.hour);
         }
       }
-      final starts = tasks
-          .map((task) => DateTime.tryParse(task['startedAt']?.toString() ?? ''))
-          .whereType<DateTime>()
-          .map((at) => at.hour)
-          .toList()
-        ..sort();
+      final starts =
+          tasks
+              .map(
+                (task) =>
+                    DateTime.tryParse(task['startedAt']?.toString() ?? ''),
+              )
+              .whereType<DateTime>()
+              .map((at) => at.hour)
+              .toList()
+            ..sort();
 
       final nonRoutine = tasks.where((task) => !isRoutine(task)).toList();
       final rest = tasks.skip(1).toList();

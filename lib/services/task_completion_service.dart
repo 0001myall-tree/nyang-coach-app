@@ -153,7 +153,12 @@ class TaskCompletionService {
     if (done && task['done'] == true) {
       // 네이티브가 앱 밖에서 먼저 표시해둔 경우다. 바꿀 것은 없지만 그날 기록은
       // 여기서 정확히 다시 센다 — 네이티브는 주 n회 습관 같은 걸 가릴 수 없다.
-      await _rewriteRecord(prefs, dateKey: dateKeyForDone, tasks: tasks, at: at);
+      await _rewriteRecord(
+        prefs,
+        dateKey: dateKeyForDone,
+        tasks: tasks,
+        at: at,
+      );
       return false;
     }
 
@@ -199,12 +204,7 @@ class TaskCompletionService {
         jsonEncode(byDate),
       );
       await _stampHabit(prefs, task: task, dateKey: entry.key, at: at);
-      await _rewriteRecord(
-        prefs,
-        dateKey: entry.key,
-        tasks: dayTasks,
-        at: at,
-      );
+      await _rewriteRecord(prefs, dateKey: entry.key, tasks: dayTasks, at: at);
       return true;
     }
     return false;

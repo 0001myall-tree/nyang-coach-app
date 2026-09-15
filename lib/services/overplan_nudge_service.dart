@@ -340,9 +340,7 @@ class OverplanNudgeService {
 
   /// 다이얼로그에서 오간 문답을 남긴다. [turns]는 `{'isUser': bool, 'text': String}`
   /// 목록이고, 순서가 곧 대화 순서다.
-  static Future<void> recordChatTurns(
-    List<Map<String, dynamic>> turns,
-  ) async {
+  static Future<void> recordChatTurns(List<Map<String, dynamic>> turns) async {
     if (turns.isEmpty) return;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(pendingChatKey, jsonEncode(turns));

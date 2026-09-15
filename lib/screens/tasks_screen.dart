@@ -7,7 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:google_fonts/google_fonts.dart';
+import '../theme/app_font.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:table_calendar/table_calendar.dart';
@@ -2251,7 +2251,7 @@ class _TasksScreenState extends State<TasksScreen>
               ],
               Text(
                 title,
-                style: GoogleFonts.notoSansKr(
+                style: appFont(
                   fontSize: 18,
                   fontWeight: FontWeight.w800,
                   color: const Color(0xFF3D3A4E),
@@ -2264,7 +2264,7 @@ class _TasksScreenState extends State<TasksScreen>
                   child: Center(
                     child: Text(
                       '해당하는 할 일이 없습니다.',
-                      style: GoogleFonts.notoSansKr(
+                      style: appFont(
                         fontSize: 14,
                         color: const Color(0xFFA0A0B0),
                       ),
@@ -2308,7 +2308,7 @@ class _TasksScreenState extends State<TasksScreen>
                               Expanded(
                                 child: Text(
                                   t.text,
-                                  style: GoogleFonts.notoSansKr(
+                                  style: appFont(
                                     fontSize: 15,
                                     fontWeight: FontWeight.w500,
                                     color: const Color(0xFF3D3A4E),
@@ -2512,7 +2512,7 @@ class _TasksScreenState extends State<TasksScreen>
         return AlertDialog(
           title: Text(
             title,
-            style: GoogleFonts.notoSansKr(
+            style: appFont(
               fontWeight: FontWeight.bold,
               fontSize: 16,
               color: const Color(0xFF3D3A4E),
@@ -2523,17 +2523,14 @@ class _TasksScreenState extends State<TasksScreen>
               ? null
               : Text(
                   message,
-                  style: GoogleFonts.notoSansKr(
-                    fontSize: 14,
-                    color: const Color(0xFF6B7280),
-                  ),
+                  style: appFont(fontSize: 14, color: const Color(0xFF6B7280)),
                 ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
               child: Text(
                 '취소',
-                style: GoogleFonts.notoSansKr(
+                style: appFont(
                   color: const Color(0xFF9593A5),
                   fontWeight: FontWeight.w600,
                 ),
@@ -2543,7 +2540,7 @@ class _TasksScreenState extends State<TasksScreen>
               onPressed: () => Navigator.pop(context, true),
               child: Text(
                 confirmLabel,
-                style: GoogleFonts.notoSansKr(
+                style: appFont(
                   color: confirmColor,
                   fontWeight: FontWeight.bold,
                 ),
@@ -2727,7 +2724,7 @@ class _TasksScreenState extends State<TasksScreen>
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         content: Text(
           DistractionCoachQuota.quotaSpentMessage,
-          style: GoogleFonts.notoSansKr(
+          style: appFont(
             fontSize: 13,
             height: 1.5,
             fontWeight: FontWeight.w600,
@@ -2936,7 +2933,7 @@ class _TasksScreenState extends State<TasksScreen>
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text(
           '🐾 딴짓 방지 코치',
-          style: GoogleFonts.notoSansKr(
+          style: appFont(
             fontSize: 17,
             fontWeight: FontWeight.w900,
             color: const Color(0xFF3D3A4E),
@@ -2944,7 +2941,7 @@ class _TasksScreenState extends State<TasksScreen>
         ),
         content: Text(
           _ongoingNudgeOfferText,
-          style: GoogleFonts.notoSansKr(
+          style: appFont(
             fontSize: 13.5,
             height: 1.55,
             fontWeight: FontWeight.w500,
@@ -2956,7 +2953,7 @@ class _TasksScreenState extends State<TasksScreen>
             onPressed: () => Navigator.pop(ctx, false),
             child: Text(
               '괜찮아',
-              style: GoogleFonts.notoSansKr(
+              style: appFont(
                 fontWeight: FontWeight.w900,
                 color: const Color(0xFF9B96A8),
               ),
@@ -2973,10 +2970,7 @@ class _TasksScreenState extends State<TasksScreen>
             ),
             child: Text(
               '좋아, 챙겨줘',
-              style: GoogleFonts.notoSansKr(
-                fontWeight: FontWeight.w900,
-                color: Colors.white,
-              ),
+              style: appFont(fontWeight: FontWeight.w900, color: Colors.white),
             ),
           ),
         ],
@@ -3002,7 +2996,7 @@ class _TasksScreenState extends State<TasksScreen>
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text(
           title,
-          style: GoogleFonts.notoSansKr(
+          style: appFont(
             fontSize: 17,
             fontWeight: FontWeight.w900,
             color: const Color(0xFF3D3A4E),
@@ -3010,7 +3004,7 @@ class _TasksScreenState extends State<TasksScreen>
         ),
         content: Text(
           message,
-          style: GoogleFonts.notoSansKr(
+          style: appFont(
             fontSize: 13.5,
             height: 1.55,
             fontWeight: FontWeight.w500,
@@ -3029,10 +3023,7 @@ class _TasksScreenState extends State<TasksScreen>
             ),
             child: Text(
               actionLabel,
-              style: GoogleFonts.notoSansKr(
-                fontWeight: FontWeight.w900,
-                color: Colors.white,
-              ),
+              style: appFont(fontWeight: FontWeight.w900, color: Colors.white),
             ),
           ),
         ],
@@ -3922,7 +3913,7 @@ class _TasksScreenState extends State<TasksScreen>
             children: [
               Text(
                 '오늘 얼마나 했나요?',
-                style: GoogleFonts.notoSansKr(
+                style: appFont(
                   fontSize: 15,
                   fontWeight: FontWeight.w900,
                   color: const Color(0xFF3D3A4E),
@@ -3931,7 +3922,7 @@ class _TasksScreenState extends State<TasksScreen>
               const SizedBox(height: 6),
               Text(
                 '정확하지 않아도 돼요. 준비, 정리, 수정처럼 이어지는 작업도 포함해도 돼요.',
-                style: GoogleFonts.notoSansKr(
+                style: appFont(
                   fontSize: 12,
                   height: 1.45,
                   fontWeight: FontWeight.w600,
@@ -3958,7 +3949,7 @@ class _TasksScreenState extends State<TasksScreen>
                     ),
                     child: Text(
                       option.label,
-                      style: GoogleFonts.notoSansKr(
+                      style: appFont(
                         fontSize: 14,
                         fontWeight: FontWeight.w800,
                         color: _coach.accentColor,
@@ -4182,7 +4173,7 @@ class _TasksScreenState extends State<TasksScreen>
               // 아래에 고를 것이 딸려 있어서 그 무게가 맞았다.
               Text(
                 '${_formatTime(time)}인가요?',
-                style: GoogleFonts.notoSansKr(
+                style: appFont(
                   fontSize: 16,
                   fontWeight: FontWeight.w700,
                   color: const Color(0xFF3D3A4E),
@@ -4203,7 +4194,7 @@ class _TasksScreenState extends State<TasksScreen>
                         ),
                         child: Text(
                           '아니요',
-                          style: GoogleFonts.notoSansKr(
+                          style: appFont(
                             fontSize: 15,
                             fontWeight: FontWeight.w800,
                             color: const Color(0xFF3D3A4E),
@@ -4225,7 +4216,7 @@ class _TasksScreenState extends State<TasksScreen>
                         ),
                         child: Text(
                           '맞아요',
-                          style: GoogleFonts.notoSansKr(
+                          style: appFont(
                             fontSize: 15,
                             fontWeight: FontWeight.w900,
                             color: Colors.white,
@@ -4461,7 +4452,7 @@ class _TasksScreenState extends State<TasksScreen>
       builder: (context) => AlertDialog(
         title: Text(
           _coach.name,
-          style: GoogleFonts.notoSansKr(
+          style: appFont(
             fontWeight: FontWeight.bold,
             fontSize: 16,
             color: const Color(0xFF3D3A4E),
@@ -4469,17 +4460,14 @@ class _TasksScreenState extends State<TasksScreen>
         ),
         content: Text(
           message,
-          style: GoogleFonts.notoSansKr(
-            fontSize: 14,
-            color: const Color(0xFF6B7280),
-          ),
+          style: appFont(fontSize: 14, color: const Color(0xFF6B7280)),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, _overplanLeaveIt),
             child: Text(
               _overplanLeaveIt,
-              style: GoogleFonts.notoSansKr(
+              style: appFont(
                 color: const Color(0xFF9593A5),
                 fontWeight: FontWeight.w600,
               ),
@@ -4489,7 +4477,7 @@ class _TasksScreenState extends State<TasksScreen>
             onPressed: () => Navigator.pop(context, _overplanGoAhead),
             child: Text(
               _overplanGoAhead,
-              style: GoogleFonts.notoSansKr(
+              style: appFont(
                 color: const Color(0xFF6C5CE7),
                 fontWeight: FontWeight.w600,
               ),
@@ -4853,7 +4841,7 @@ class _TasksScreenState extends State<TasksScreen>
                 Expanded(
                   child: Text(
                     randomMsg,
-                    style: GoogleFonts.notoSansKr(
+                    style: appFont(
                       fontSize: 14,
                       fontWeight: FontWeight.w500,
                       color: const Color(0xFF1F1F1F),
@@ -5025,7 +5013,7 @@ class _TasksScreenState extends State<TasksScreen>
                   children: [
                     Text(
                       title,
-                      style: GoogleFonts.notoSansKr(
+                      style: appFont(
                         fontSize: 18,
                         fontWeight: FontWeight.w900,
                         color: const Color(0xFF3D3A4E),
@@ -5067,7 +5055,7 @@ class _TasksScreenState extends State<TasksScreen>
                               ),
                               child: Text(
                                 '취소',
-                                style: GoogleFonts.notoSansKr(
+                                style: appFont(
                                   fontSize: 15,
                                   fontWeight: FontWeight.w800,
                                   color: const Color(0xFF3D3A4E),
@@ -5089,7 +5077,7 @@ class _TasksScreenState extends State<TasksScreen>
                               ),
                               child: Text(
                                 '확인',
-                                style: GoogleFonts.notoSansKr(
+                                style: appFont(
                                   fontSize: 15,
                                   fontWeight: FontWeight.w900,
                                   color: Colors.white,
@@ -5132,7 +5120,7 @@ class _TasksScreenState extends State<TasksScreen>
             const SizedBox(width: 12),
             Text(
               label,
-              style: GoogleFonts.notoSansKr(
+              style: appFont(
                 fontSize: 15,
                 fontWeight: FontWeight.w700,
                 color: const Color(0xFF3D3A4E),
@@ -5163,7 +5151,7 @@ class _TasksScreenState extends State<TasksScreen>
             const SizedBox(width: 12),
             Text(
               label,
-              style: GoogleFonts.notoSansKr(
+              style: appFont(
                 fontSize: 15,
                 fontWeight: FontWeight.w700,
                 color: const Color(0xFF3D3A4E),
@@ -5324,7 +5312,7 @@ class _TasksScreenState extends State<TasksScreen>
                   children: [
                     Text(
                       title,
-                      style: GoogleFonts.notoSansKr(
+                      style: appFont(
                         fontSize: 18,
                         fontWeight: FontWeight.w800,
                         color: const Color(0xFF3D3A4E),
@@ -5333,7 +5321,7 @@ class _TasksScreenState extends State<TasksScreen>
                     const SizedBox(height: 6),
                     Text(
                       task.text,
-                      style: GoogleFonts.notoSansKr(
+                      style: appFont(
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
                         color: const Color(0xFF6B7280),
@@ -5379,34 +5367,32 @@ class _TasksScreenState extends State<TasksScreen>
                             color: _coach.accentColor.withOpacity(0.3),
                             shape: BoxShape.circle,
                           ),
-                          defaultTextStyle: GoogleFonts.notoSansKr(
-                            fontSize: 12,
-                          ),
-                          weekendTextStyle: GoogleFonts.notoSansKr(
+                          defaultTextStyle: appFont(fontSize: 12),
+                          weekendTextStyle: appFont(
                             fontSize: 12,
                             color: const Color(0xFFE05C5C),
                           ),
-                          outsideTextStyle: GoogleFonts.notoSansKr(
+                          outsideTextStyle: appFont(
                             fontSize: 12,
                             color: const Color(0xFFCCCCCC),
                           ),
-                          selectedTextStyle: GoogleFonts.notoSansKr(
+                          selectedTextStyle: appFont(
                             fontSize: 12,
                             color: Colors.white,
                             fontWeight: FontWeight.w700,
                           ),
-                          todayTextStyle: GoogleFonts.notoSansKr(
+                          todayTextStyle: appFont(
                             fontSize: 12,
                             color: const Color(0xFF3D3A4E),
                             fontWeight: FontWeight.w700,
                           ),
                         ),
                         daysOfWeekStyle: DaysOfWeekStyle(
-                          weekdayStyle: GoogleFonts.notoSansKr(
+                          weekdayStyle: appFont(
                             fontSize: 11,
                             color: const Color(0xFF9CA3AF),
                           ),
-                          weekendStyle: GoogleFonts.notoSansKr(
+                          weekendStyle: appFont(
                             fontSize: 11,
                             color: const Color(0xFFE05C5C),
                           ),
@@ -5414,7 +5400,7 @@ class _TasksScreenState extends State<TasksScreen>
                         headerStyle: HeaderStyle(
                           formatButtonVisible: false,
                           titleCentered: true,
-                          titleTextStyle: GoogleFonts.notoSansKr(
+                          titleTextStyle: appFont(
                             fontSize: 14,
                             fontWeight: FontWeight.w700,
                             color: const Color(0xFF3D3A4E),
@@ -5505,7 +5491,7 @@ class _TasksScreenState extends State<TasksScreen>
                         ),
                         child: Text(
                           '옮기기',
-                          style: GoogleFonts.notoSansKr(
+                          style: appFont(
                             fontSize: 16,
                             fontWeight: FontWeight.w800,
                             color: Colors.white,
@@ -5741,7 +5727,7 @@ class _TasksScreenState extends State<TasksScreen>
             SizedBox(width: small ? 4 : 6),
             Text(
               small ? '바꾸기' : '핵심 정하기',
-              style: GoogleFonts.notoSansKr(
+              style: appFont(
                 fontSize: small ? 12 : 14,
                 fontWeight: FontWeight.w800,
                 color: _coach.accentColor,
@@ -5781,7 +5767,7 @@ class _TasksScreenState extends State<TasksScreen>
             children: [
               Text(
                 '오늘의 핵심',
-                style: GoogleFonts.notoSansKr(
+                style: appFont(
                   fontSize: 15,
                   fontWeight: FontWeight.w800,
                   color: const Color(0xFF3D3A4E),
@@ -5808,7 +5794,7 @@ class _TasksScreenState extends State<TasksScreen>
                         _nextPendingCoreIndex() == -1
                             ? '완료한 핵심 보기'
                             : '+ 핵심 ${coreTasks.length - 1}개 더',
-                        style: GoogleFonts.notoSansKr(
+                        style: appFont(
                           fontSize: 12,
                           fontWeight: FontWeight.w700,
                           color: _coach.accentColor.withOpacity(0.7),
@@ -5828,7 +5814,7 @@ class _TasksScreenState extends State<TasksScreen>
                       const SizedBox(width: 28),
                       Text(
                         '접기',
-                        style: GoogleFonts.notoSansKr(
+                        style: appFont(
                           fontSize: 12,
                           fontWeight: FontWeight.w700,
                           color: _coach.accentColor.withOpacity(0.5),
@@ -5877,7 +5863,7 @@ class _TasksScreenState extends State<TasksScreen>
               Expanded(
                 child: Text(
                   '상태 안내',
-                  style: GoogleFonts.notoSansKr(
+                  style: appFont(
                     fontSize: 13,
                     height: 1.3,
                     fontWeight: FontWeight.w600,
@@ -5921,7 +5907,7 @@ class _TasksScreenState extends State<TasksScreen>
           // 한다. 그림만으로는 마지막 칸으로 어떻게 넘어가는지 알 수 없다.
           Text(
             '완료는 카드를 오른쪽으로 미세요',
-            style: GoogleFonts.notoSansKr(
+            style: appFont(
               fontSize: 11.5,
               height: 1.3,
               fontWeight: FontWeight.w700,
@@ -5963,7 +5949,7 @@ class _TasksScreenState extends State<TasksScreen>
                 const SizedBox(width: 8),
                 Text(
                   '다시 보지 않기',
-                  style: GoogleFonts.notoSansKr(
+                  style: appFont(
                     fontSize: 11,
                     height: 1.3,
                     fontWeight: FontWeight.w600,
@@ -6021,7 +6007,7 @@ class _TasksScreenState extends State<TasksScreen>
         const SizedBox(height: 5),
         Text(
           label,
-          style: GoogleFonts.notoSansKr(
+          style: appFont(
             fontSize: 11,
             height: 1.2,
             fontWeight: FontWeight.w600,
@@ -6093,7 +6079,7 @@ class _TasksScreenState extends State<TasksScreen>
           Expanded(
             child: Text(
               '모두 완료',
-              style: GoogleFonts.notoSansKr(
+              style: appFont(
                 fontSize: 13,
                 fontWeight: FontWeight.w800,
                 color: _coach.accentColor,
@@ -6124,7 +6110,7 @@ class _TasksScreenState extends State<TasksScreen>
                 ? const Icon(Icons.check, size: 12, color: Colors.white)
                 : Text(
                     '${idx + 1}',
-                    style: GoogleFonts.notoSansKr(
+                    style: appFont(
                       fontSize: 10,
                       fontWeight: FontWeight.w900,
                       color: Colors.white,
@@ -6135,7 +6121,7 @@ class _TasksScreenState extends State<TasksScreen>
           Expanded(
             child: Text(
               c.text,
-              style: GoogleFonts.notoSansKr(
+              style: appFont(
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
                 color: isDone
@@ -6234,7 +6220,7 @@ class _TasksScreenState extends State<TasksScreen>
                       children: [
                         Text(
                           '핵심 설정하기',
-                          style: GoogleFonts.notoSansKr(
+                          style: appFont(
                             fontSize: 18,
                             fontWeight: FontWeight.w900,
                           ),
@@ -6251,7 +6237,7 @@ class _TasksScreenState extends State<TasksScreen>
                     const SizedBox(height: 4),
                     Text(
                       '끌어서 우선순위를 바꿀 수 있어요. (최대 3개)',
-                      style: GoogleFonts.notoSansKr(
+                      style: appFont(
                         fontSize: 13,
                         color: const Color(0xFFA0A0B0),
                       ),
@@ -6321,7 +6307,7 @@ class _TasksScreenState extends State<TasksScreen>
                                         ),
                                         child: Text(
                                           '${i + 1}',
-                                          style: GoogleFonts.notoSansKr(
+                                          style: appFont(
                                             fontSize: 11,
                                             fontWeight: FontWeight.w900,
                                             color: Colors.white,
@@ -6332,7 +6318,7 @@ class _TasksScreenState extends State<TasksScreen>
                                       Expanded(
                                         child: Text(
                                           task?.text ?? taskId,
-                                          style: GoogleFonts.notoSansKr(
+                                          style: appFont(
                                             fontSize: 14,
                                             fontWeight: FontWeight.w800,
                                             color: const Color(0xFF3D3A4E),
@@ -6425,7 +6411,7 @@ class _TasksScreenState extends State<TasksScreen>
                                       child: isSelected
                                           ? Text(
                                               '${coreIdx + 1}',
-                                              style: GoogleFonts.notoSansKr(
+                                              style: appFont(
                                                 fontSize: 12,
                                                 fontWeight: FontWeight.bold,
                                                 color: Colors.white,
@@ -6437,7 +6423,7 @@ class _TasksScreenState extends State<TasksScreen>
                                     Expanded(
                                       child: Text(
                                         t.text,
-                                        style: GoogleFonts.notoSansKr(
+                                        style: appFont(
                                           fontSize: 14,
                                           fontWeight: isSelected
                                               ? FontWeight.w700
@@ -6550,7 +6536,7 @@ class _TasksScreenState extends State<TasksScreen>
                         ),
                         child: Text(
                           '핵심으로 설정',
-                          style: GoogleFonts.notoSansKr(
+                          style: appFont(
                             fontSize: 16,
                             fontWeight: FontWeight.w800,
                             color: Colors.white,
@@ -6589,11 +6575,8 @@ class _TasksScreenState extends State<TasksScreen>
         indicatorColor: Colors.transparent,
         dividerHeight: 0,
         overlayColor: const WidgetStatePropertyAll(Colors.transparent),
-        labelStyle: GoogleFonts.notoSansKr(
-          fontSize: 12,
-          fontWeight: FontWeight.w800,
-        ),
-        unselectedLabelStyle: GoogleFonts.notoSansKr(
+        labelStyle: appFont(fontSize: 12, fontWeight: FontWeight.w800),
+        unselectedLabelStyle: appFont(
           fontSize: 12,
           fontWeight: FontWeight.w500,
         ),
@@ -6648,7 +6631,7 @@ class _TasksScreenState extends State<TasksScreen>
                       child: Text(
                         '오늘 탭은 오늘의 실행과\n미래 계획을 위한 공간입니다.',
                         textAlign: TextAlign.center,
-                        style: GoogleFonts.notoSansKr(
+                        style: appFont(
                           fontSize: 14,
                           color: const Color(0xFFA0A0B0),
                           height: 1.6,
@@ -6736,7 +6719,7 @@ class _TasksScreenState extends State<TasksScreen>
                 children: [
                   Text(
                     dateStr,
-                    style: GoogleFonts.notoSansKr(
+                    style: appFont(
                       fontSize: 13,
                       fontWeight: FontWeight.w800,
                       color: const Color(0xFF3D3A4E),
@@ -6799,7 +6782,7 @@ class _TasksScreenState extends State<TasksScreen>
                         ? '어제 남은 할 일이 없어요.'
                         : '이 날짜에 계획된 할 일이 없어요.'),
               textAlign: TextAlign.center,
-              style: GoogleFonts.notoSansKr(
+              style: appFont(
                 fontSize: 14,
                 color: const Color(0xFFA0A0B0),
                 height: 1.6,
@@ -6955,7 +6938,7 @@ class _TasksScreenState extends State<TasksScreen>
                 children: [
                   Text(
                     keepWordsWhole(_corePickCardMessage),
-                    style: GoogleFonts.notoSansKr(
+                    style: appFont(
                       fontSize: 13,
                       height: 1.45,
                       fontWeight: FontWeight.w800,
@@ -6980,7 +6963,7 @@ class _TasksScreenState extends State<TasksScreen>
                       ),
                       child: Text(
                         '오늘의 핵심 고르기',
-                        style: GoogleFonts.notoSansKr(
+                        style: appFont(
                           fontSize: 12,
                           fontWeight: FontWeight.w900,
                           color: Colors.white,
@@ -7062,7 +7045,7 @@ class _TasksScreenState extends State<TasksScreen>
               children: [
                 Text(
                   _lightenPlanCardMessage,
-                  style: GoogleFonts.notoSansKr(
+                  style: appFont(
                     fontSize: 13,
                     height: 1.45,
                     fontWeight: FontWeight.w800,
@@ -7087,7 +7070,7 @@ class _TasksScreenState extends State<TasksScreen>
                     ),
                     child: Text(
                       '오늘의 핵심 고르기',
-                      style: GoogleFonts.notoSansKr(
+                      style: appFont(
                         fontSize: 12,
                         fontWeight: FontWeight.w900,
                         color: Colors.white,
@@ -7187,7 +7170,7 @@ class _TasksScreenState extends State<TasksScreen>
                       const SizedBox(width: 5),
                       Text(
                         _showTaskTimer ? '타이머 ON' : '타이머 OFF',
-                        style: GoogleFonts.notoSansKr(
+                        style: appFont(
                           fontSize: 12,
                           fontWeight: FontWeight.w800,
                           color: _showTaskTimer
@@ -7537,7 +7520,7 @@ class _TasksScreenState extends State<TasksScreen>
                                   Expanded(
                                     child: RichText(
                                       text: TextSpan(
-                                        style: GoogleFonts.notoSansKr(
+                                        style: appFont(
                                           fontSize: 12,
                                           color: _coach.accentColor,
                                         ),
@@ -7583,7 +7566,7 @@ class _TasksScreenState extends State<TasksScreen>
                     ),
                     child: TextField(
                       controller: textCtrl,
-                      style: GoogleFonts.notoSansKr(
+                      style: appFont(
                         fontSize: 14,
                         color: const Color(0xFF3D3A4E),
                       ),
@@ -7655,7 +7638,7 @@ class _TasksScreenState extends State<TasksScreen>
                               Expanded(
                                 child: Text(
                                   summary ?? '시간 미정',
-                                  style: GoogleFonts.notoSansKr(
+                                  style: appFont(
                                     fontSize: 14,
                                     fontWeight: FontWeight.w700,
                                     color: summary == null
@@ -7782,7 +7765,7 @@ class _TasksScreenState extends State<TasksScreen>
                                           textAlign: TextAlign.center,
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
-                                          style: GoogleFonts.notoSansKr(
+                                          style: appFont(
                                             fontSize: 12,
                                             fontWeight: FontWeight.w700,
                                             color: isActive
@@ -7830,7 +7813,7 @@ class _TasksScreenState extends State<TasksScreen>
                             const SizedBox(width: 8),
                             Text(
                               '~',
-                              style: GoogleFonts.notoSansKr(
+                              style: appFont(
                                 fontSize: 13,
                                 color: const Color(0xFF6B7280),
                               ),
@@ -7914,7 +7897,7 @@ class _TasksScreenState extends State<TasksScreen>
                                     ),
                                     child: Text(
                                       d,
-                                      style: GoogleFonts.notoSansKr(
+                                      style: appFont(
                                         fontSize: 13,
                                         color: isActive
                                             ? const Color(0xFFDB2777)
@@ -7968,7 +7951,7 @@ class _TasksScreenState extends State<TasksScreen>
                             Expanded(
                               child: Text(
                                 hadSavedMemo ? '메모 보기' : '메모 추가',
-                                style: GoogleFonts.notoSansKr(
+                                style: appFont(
                                   fontSize: 14,
                                   fontWeight: FontWeight.w700,
                                   color: hadSavedMemo
@@ -8003,7 +7986,7 @@ class _TasksScreenState extends State<TasksScreen>
                           minLines: 2,
                           maxLines: 4,
                           onChanged: (_) => setModalState(() {}),
-                          style: GoogleFonts.notoSansKr(
+                          style: appFont(
                             fontSize: 14,
                             color: const Color(0xFF3D3A4E),
                           ),
@@ -8012,7 +7995,7 @@ class _TasksScreenState extends State<TasksScreen>
                             contentPadding: const EdgeInsets.symmetric(
                               vertical: 12,
                             ),
-                            counterStyle: GoogleFonts.notoSansKr(
+                            counterStyle: appFont(
                               fontSize: 11,
                               color: const Color(0xFFA7A2BE),
                             ),
@@ -8038,7 +8021,7 @@ class _TasksScreenState extends State<TasksScreen>
                               const SizedBox(width: 4),
                               Text(
                                 '메모 삭제',
-                                style: GoogleFonts.notoSansKr(
+                                style: appFont(
                                   fontSize: 12,
                                   fontWeight: FontWeight.w600,
                                   color: const Color(0xFF9CA3AF),
@@ -8143,7 +8126,7 @@ class _TasksScreenState extends State<TasksScreen>
                             ),
                             child: Text(
                               '수정완료',
-                              style: GoogleFonts.notoSansKr(
+                              style: appFont(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w800,
                                 color: Colors.white,
@@ -8210,7 +8193,7 @@ class _TasksScreenState extends State<TasksScreen>
                                             _isRecurringScheduleTask(item))
                                     ? '삭제하기'
                                     : '삭제 / 날짜 ↻',
-                                style: GoogleFonts.notoSansKr(
+                                style: appFont(
                                   fontSize: 15,
                                   fontWeight: FontWeight.w800,
                                   color: _coach.accentColor.withOpacity(0.82),
@@ -8270,7 +8253,7 @@ class _TasksScreenState extends State<TasksScreen>
             return AlertDialog(
               title: Text(
                 '반복 일정 삭제',
-                style: GoogleFonts.notoSansKr(
+                style: appFont(
                   fontWeight: FontWeight.bold,
                   fontSize: 16,
                   color: const Color(0xFF3D3A4E),
@@ -8278,17 +8261,14 @@ class _TasksScreenState extends State<TasksScreen>
               ),
               content: Text(
                 '정말 삭제하시겠습니까?\n반복으로 등록된 같은 일정이 모두 삭제됩니다.',
-                style: GoogleFonts.notoSansKr(
-                  fontSize: 14,
-                  color: const Color(0xFF6B7280),
-                ),
+                style: appFont(fontSize: 14, color: const Color(0xFF6B7280)),
               ),
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(dialogContext, false),
                   child: Text(
                     '아니오',
-                    style: GoogleFonts.notoSansKr(
+                    style: appFont(
                       color: const Color(0xFF9593A5),
                       fontWeight: FontWeight.w600,
                     ),
@@ -8298,7 +8278,7 @@ class _TasksScreenState extends State<TasksScreen>
                   onPressed: () => Navigator.pop(dialogContext, true),
                   child: Text(
                     '예',
-                    style: GoogleFonts.notoSansKr(
+                    style: appFont(
                       color: Colors.red,
                       fontWeight: FontWeight.bold,
                     ),
@@ -8638,7 +8618,7 @@ class _TasksScreenState extends State<TasksScreen>
                                 children: [
                                   Text(
                                     displayTitle,
-                                    style: GoogleFonts.notoSansKr(
+                                    style: appFont(
                                       fontSize: 14,
                                       fontWeight: FontWeight.w600,
                                       color: t.done
@@ -8670,7 +8650,7 @@ class _TasksScreenState extends State<TasksScreen>
                                         if (elapsedLabel != null && t.done) ...[
                                           Text(
                                             '실행 ${_formatElapsed(t.actualSeconds ?? 0, spelled: true)}',
-                                            style: GoogleFonts.notoSansKr(
+                                            style: appFont(
                                               fontSize: 12,
                                               fontWeight: FontWeight.w700,
                                               color: const Color(0xFFA0A0B0),
@@ -8680,7 +8660,7 @@ class _TasksScreenState extends State<TasksScreen>
                                           if (elapsedLabel != null)
                                             Text(
                                               elapsedLabel,
-                                              style: GoogleFonts.notoSansKr(
+                                              style: appFont(
                                                 fontSize: 12,
                                                 fontWeight: FontWeight.w800,
                                                 color: _coach.accentColor,
@@ -8693,7 +8673,7 @@ class _TasksScreenState extends State<TasksScreen>
                                               timeInfo != null)
                                             Text(
                                               ' / ',
-                                              style: GoogleFonts.notoSansKr(
+                                              style: appFont(
                                                 fontSize: 12,
                                                 fontWeight: FontWeight.w700,
                                                 color: const Color(0xFFC4C4CE),
@@ -8702,7 +8682,7 @@ class _TasksScreenState extends State<TasksScreen>
                                           if (timeInfo != null)
                                             Text(
                                               timeInfo,
-                                              style: GoogleFonts.notoSansKr(
+                                              style: appFont(
                                                 fontSize: 12,
                                                 fontWeight: FontWeight.w700,
                                                 color: const Color(0xFFA0A0B0),
@@ -8740,7 +8720,7 @@ class _TasksScreenState extends State<TasksScreen>
                                           ),
                                           child: Text(
                                             _habitTaskBadgeLabel(t),
-                                            style: GoogleFonts.notoSansKr(
+                                            style: appFont(
                                               fontSize: 11,
                                               fontWeight: FontWeight.w800,
                                               color: _coach.accentColor,
@@ -8768,7 +8748,7 @@ class _TasksScreenState extends State<TasksScreen>
                                           ),
                                           child: Text(
                                             'insight',
-                                            style: GoogleFonts.notoSansKr(
+                                            style: appFont(
                                               fontSize: 11,
                                               fontWeight: FontWeight.w800,
                                               color: _coach.accentColor,
@@ -8790,7 +8770,7 @@ class _TasksScreenState extends State<TasksScreen>
                                           ),
                                           child: Text(
                                             '메모장',
-                                            style: GoogleFonts.notoSansKr(
+                                            style: appFont(
                                               fontSize: 11,
                                               fontWeight: FontWeight.w800,
                                               color: const Color(0xFF8B8A96),
@@ -8857,7 +8837,7 @@ class _TasksScreenState extends State<TasksScreen>
           const SizedBox(width: 6),
           Text(
             '완료',
-            style: GoogleFonts.notoSansKr(
+            style: appFont(
               fontSize: 13,
               fontWeight: FontWeight.w900,
               color: Colors.white,
@@ -8990,7 +8970,7 @@ class _TasksScreenState extends State<TasksScreen>
                                     child: Text(
                                       labels[t]!,
                                       textAlign: TextAlign.center,
-                                      style: GoogleFonts.notoSansKr(
+                                      style: appFont(
                                         fontSize: 12,
                                         fontWeight: FontWeight.w700,
                                         color: isActive
@@ -9034,7 +9014,7 @@ class _TasksScreenState extends State<TasksScreen>
                                   const SizedBox(width: 8),
                                   Text(
                                     '~',
-                                    style: GoogleFonts.notoSansKr(
+                                    style: appFont(
                                       fontSize: 13,
                                       color: const Color(0xFF6B7280),
                                     ),
@@ -9121,7 +9101,7 @@ class _TasksScreenState extends State<TasksScreen>
                                           ),
                                           child: Text(
                                             d,
-                                            style: GoogleFonts.notoSansKr(
+                                            style: appFont(
                                               fontSize: 13,
                                               color: isActive
                                                   ? const Color(0xFFDB2777)
@@ -9156,13 +9136,13 @@ class _TasksScreenState extends State<TasksScreen>
                             child: TextField(
                               controller: _todayInputCtrl,
                               focusNode: _todayInputFocusNode,
-                              style: GoogleFonts.notoSansKr(
+                              style: appFont(
                                 fontSize: 14,
                                 color: const Color(0xFF3D3A4E),
                               ),
                               decoration: InputDecoration(
                                 hintText: '오늘 할 일 직접 추가...',
-                                hintStyle: GoogleFonts.notoSansKr(
+                                hintStyle: appFont(
                                   fontSize: 14,
                                   color: const Color(0xFFA0A0B0),
                                 ),
@@ -9328,7 +9308,7 @@ class _TasksScreenState extends State<TasksScreen>
                 const SizedBox(width: 6),
                 Text(
                   label,
-                  style: GoogleFonts.notoSansKr(
+                  style: appFont(
                     fontSize: 14,
                     fontWeight: isActive ? FontWeight.w800 : FontWeight.w600,
                     color: isActive
@@ -9399,7 +9379,7 @@ class _TasksScreenState extends State<TasksScreen>
                   Text(
                     type == 'week' ? '이번 주 목표를\n추가해봐요!' : '이번 달 목표를\n추가해봐요!',
                     textAlign: TextAlign.center,
-                    style: GoogleFonts.notoSansKr(
+                    style: appFont(
                       fontSize: 14,
                       color: const Color(0xFFA0A0B0),
                       height: 1.6,
@@ -9462,7 +9442,7 @@ class _TasksScreenState extends State<TasksScreen>
                       ? const Icon(Icons.check, color: Colors.white, size: 14)
                       : Text(
                           '$num',
-                          style: GoogleFonts.notoSansKr(
+                          style: appFont(
                             fontSize: 12,
                             fontWeight: FontWeight.w800,
                             color: _coach.accentColor,
@@ -9474,7 +9454,7 @@ class _TasksScreenState extends State<TasksScreen>
             Expanded(
               child: Text(
                 g.text,
-                style: GoogleFonts.notoSansKr(
+                style: appFont(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
                   color: g.done
@@ -9522,13 +9502,10 @@ class _TasksScreenState extends State<TasksScreen>
                 type: MaterialType.transparency,
                 child: TextField(
                   controller: ctrl,
-                  style: GoogleFonts.notoSansKr(
-                    fontSize: 14,
-                    color: const Color(0xFF3D3A4E),
-                  ),
+                  style: appFont(fontSize: 14, color: const Color(0xFF3D3A4E)),
                   decoration: InputDecoration(
                     hintText: type == 'week' ? '주간 목표 추가...' : '월간 목표 추가...',
-                    hintStyle: GoogleFonts.notoSansKr(
+                    hintStyle: appFont(
                       fontSize: 14,
                       color: const Color(0xFFA0A0B0),
                     ),
@@ -9577,7 +9554,7 @@ class _TasksScreenState extends State<TasksScreen>
                   const SizedBox(width: 8),
                   Text(
                     '장기 비전',
-                    style: GoogleFonts.notoSansKr(
+                    style: appFont(
                       fontSize: 14,
                       fontWeight: FontWeight.w800,
                       color: visionColor,
@@ -9621,7 +9598,7 @@ class _TasksScreenState extends State<TasksScreen>
                   ),
                   child: Text(
                     '+ 장기 비전 추가',
-                    style: GoogleFonts.notoSansKr(
+                    style: appFont(
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
                       color: const Color(0xFFA0A0B0),
@@ -9650,7 +9627,7 @@ class _TasksScreenState extends State<TasksScreen>
               child: Text(
                 '아직 설정된 비전이 없어요.\n나만의 장기 목표를 추가해보세요!',
                 textAlign: TextAlign.center,
-                style: GoogleFonts.notoSansKr(
+                style: appFont(
                   fontSize: 13,
                   color: const Color(0xFFA0A0B0),
                   height: 1.6,
@@ -9713,7 +9690,7 @@ class _TasksScreenState extends State<TasksScreen>
                           children: [
                             Text(
                               v.name,
-                              style: GoogleFonts.notoSansKr(
+                              style: appFont(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w600,
                                 color: const Color(0xFF3D3A4E),
@@ -9739,7 +9716,7 @@ class _TasksScreenState extends State<TasksScreen>
                                   ),
                                   child: Text(
                                     '${v.deadline.year}년 ${v.deadline.month}월 ${v.deadline.period}까지',
-                                    style: GoogleFonts.notoSansKr(
+                                    style: appFont(
                                       fontSize: 12,
                                       fontWeight: FontWeight.w700,
                                       color: visionColor,
@@ -9801,7 +9778,7 @@ class _TasksScreenState extends State<TasksScreen>
               Text(
                 '장기 비전은 최대 3개까지\n생성 가능합니다.',
                 textAlign: TextAlign.center,
-                style: GoogleFonts.notoSansKr(
+                style: appFont(
                   fontSize: 17,
                   fontWeight: FontWeight.w900,
                   color: const Color(0xFF3D3A4E),
@@ -9812,7 +9789,7 @@ class _TasksScreenState extends State<TasksScreen>
               Text(
                 '정말 중요한 목표에 집중할 수 있도록\n개수를 제한하고 있습니다.\n\n새로운 비전을 추가하려면\n기존 비전 중 하나를 삭제해주세요.',
                 textAlign: TextAlign.center,
-                style: GoogleFonts.notoSansKr(
+                style: appFont(
                   fontSize: 14,
                   color: const Color(0xFF8E8A9E),
                   height: 1.7,
@@ -9833,7 +9810,7 @@ class _TasksScreenState extends State<TasksScreen>
                   ),
                   child: Text(
                     '확인',
-                    style: GoogleFonts.notoSansKr(
+                    style: appFont(
                       fontSize: 15,
                       fontWeight: FontWeight.w800,
                       color: Colors.white,
@@ -9855,7 +9832,7 @@ class _TasksScreenState extends State<TasksScreen>
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text(
           '마일스톤이 10개에 도달했습니다.',
-          style: GoogleFonts.notoSansKr(
+          style: appFont(
             fontSize: 17,
             fontWeight: FontWeight.w900,
             color: const Color(0xFF3D3A4E),
@@ -9863,7 +9840,7 @@ class _TasksScreenState extends State<TasksScreen>
         ),
         content: Text(
           '새로운 마일스톤을 추가하려면 사용하지 않는 마일스톤을 정리해 주세요.',
-          style: GoogleFonts.notoSansKr(
+          style: appFont(
             fontSize: 14,
             height: 1.55,
             color: const Color(0xFF6B7280),
@@ -9874,7 +9851,7 @@ class _TasksScreenState extends State<TasksScreen>
             onPressed: () => Navigator.pop(ctx),
             child: Text(
               '확인',
-              style: GoogleFonts.notoSansKr(
+              style: appFont(
                 fontWeight: FontWeight.w800,
                 color: const Color(0xFF8B7CFF),
               ),
@@ -10066,7 +10043,7 @@ class _TasksScreenState extends State<TasksScreen>
                             children: [
                               Text(
                                 isNew ? '새 장기 비전' : '장기 비전 수정',
-                                style: GoogleFonts.notoSansKr(
+                                style: appFont(
                                   fontSize: 22,
                                   fontWeight: FontWeight.w900,
                                   color: Colors.white,
@@ -10077,7 +10054,7 @@ class _TasksScreenState extends State<TasksScreen>
                                 isNew
                                     ? '새로운 미래를 설계해보세요.'
                                     : '미래의 나를 이끌 비전을 관리해요.',
-                                style: GoogleFonts.notoSansKr(
+                                style: appFont(
                                   fontSize: 13,
                                   color: Colors.white.withOpacity(0.8),
                                 ),
@@ -10125,7 +10102,7 @@ class _TasksScreenState extends State<TasksScreen>
                                 const SizedBox(width: 8),
                                 Text(
                                   '비전 목표',
-                                  style: GoogleFonts.notoSansKr(
+                                  style: appFont(
                                     fontSize: 16,
                                     fontWeight: FontWeight.w900,
                                     color: const Color(0xFF3D3A4E),
@@ -10148,14 +10125,14 @@ class _TasksScreenState extends State<TasksScreen>
                               ),
                               child: TextField(
                                 controller: nameCtrl,
-                                style: GoogleFonts.notoSansKr(
+                                style: appFont(
                                   fontSize: 16,
                                   fontWeight: FontWeight.w800,
                                   color: const Color(0xFF3D3A4E),
                                 ),
                                 decoration: InputDecoration(
                                   hintText: '예: 소설 완결 및 출판',
-                                  hintStyle: GoogleFonts.notoSansKr(
+                                  hintStyle: appFont(
                                     color: const Color(0xFFA0A0B0),
                                   ),
                                   border: InputBorder.none,
@@ -10174,7 +10151,7 @@ class _TasksScreenState extends State<TasksScreen>
                                 const SizedBox(width: 8),
                                 Text(
                                   '목표 기한',
-                                  style: GoogleFonts.notoSansKr(
+                                  style: appFont(
                                     fontSize: 16,
                                     fontWeight: FontWeight.w900,
                                     color: const Color(0xFF3D3A4E),
@@ -10311,7 +10288,7 @@ class _TasksScreenState extends State<TasksScreen>
                                     const SizedBox(width: 8),
                                     Text(
                                       '마일스톤 관리',
-                                      style: GoogleFonts.notoSansKr(
+                                      style: appFont(
                                         fontSize: 16,
                                         fontWeight: FontWeight.w900,
                                         color: const Color(0xFF3D3A4E),
@@ -10332,7 +10309,7 @@ class _TasksScreenState extends State<TasksScreen>
                                   },
                                   child: Text(
                                     '+ 추가',
-                                    style: GoogleFonts.notoSansKr(
+                                    style: appFont(
                                       fontSize: 14,
                                       fontWeight: FontWeight.w800,
                                       color: const Color(0xFF3D3A4E),
@@ -10400,7 +10377,7 @@ class _TasksScreenState extends State<TasksScreen>
                                                 )
                                               : Text(
                                                   '${i + 1}',
-                                                  style: GoogleFonts.notoSansKr(
+                                                  style: appFont(
                                                     fontSize: 12,
                                                     fontWeight: FontWeight.bold,
                                                     color: const Color(
@@ -10434,26 +10411,23 @@ class _TasksScreenState extends State<TasksScreen>
                                                               ),
                                                     onChanged: (val) =>
                                                         m.text = val,
-                                                    style:
-                                                        GoogleFonts.notoSansKr(
-                                                          fontSize: 14,
-                                                          fontWeight:
-                                                              FontWeight.w600,
-                                                          color: const Color(
-                                                            0xFF3D3A4E,
-                                                          ),
-                                                          decoration:
-                                                              TextDecoration
-                                                                  .none,
-                                                        ),
+                                                    style: appFont(
+                                                      fontSize: 14,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                      color: const Color(
+                                                        0xFF3D3A4E,
+                                                      ),
+                                                      decoration:
+                                                          TextDecoration.none,
+                                                    ),
                                                     decoration: InputDecoration(
                                                       hintText: '단계 목표 입력...',
-                                                      hintStyle:
-                                                          GoogleFonts.notoSansKr(
-                                                            color: const Color(
-                                                              0xFFA0A0B0,
-                                                            ),
-                                                          ),
+                                                      hintStyle: appFont(
+                                                        color: const Color(
+                                                          0xFFA0A0B0,
+                                                        ),
+                                                      ),
                                                       border: InputBorder.none,
                                                       isDense: true,
                                                       contentPadding:
@@ -10494,17 +10468,14 @@ class _TasksScreenState extends State<TasksScreen>
                                                         ),
                                                         Text(
                                                           '완료',
-                                                          style:
-                                                              GoogleFonts.notoSansKr(
-                                                                fontSize: 11,
-                                                                fontWeight:
-                                                                    FontWeight
-                                                                        .bold,
-                                                                color:
-                                                                    const Color(
-                                                                      0xFF33A883,
-                                                                    ),
-                                                              ),
+                                                          style: appFont(
+                                                            fontSize: 11,
+                                                            fontWeight:
+                                                                FontWeight.bold,
+                                                            color: const Color(
+                                                              0xFF33A883,
+                                                            ),
+                                                          ),
                                                         ),
                                                       ],
                                                     ),
@@ -10648,7 +10619,7 @@ class _TasksScreenState extends State<TasksScreen>
                                                                     .isNotEmpty
                                                             ? m.date!
                                                             : '기한 선택',
-                                                        style: GoogleFonts.notoSansKr(
+                                                        style: appFont(
                                                           fontSize: 12,
                                                           fontWeight:
                                                               FontWeight.w700,
@@ -10680,13 +10651,12 @@ class _TasksScreenState extends State<TasksScreen>
                                                   const SizedBox(width: 4),
                                                   Text(
                                                     '${m.achievedDate} 달성 완료',
-                                                    style:
-                                                        GoogleFonts.notoSansKr(
-                                                          fontSize: 12,
-                                                          color: const Color(
-                                                            0xFF6B7280,
-                                                          ),
-                                                        ),
+                                                    style: appFont(
+                                                      fontSize: 12,
+                                                      color: const Color(
+                                                        0xFF6B7280,
+                                                      ),
+                                                    ),
                                                   ),
                                                   const SizedBox(width: 4),
                                                   const Icon(
@@ -10733,10 +10703,10 @@ class _TasksScreenState extends State<TasksScreen>
                                                           8,
                                                         ),
                                                   ),
-                                                  child: MilestoneMemoDisplayWidget(
-                                                    milestone: m,
-                                                    style:
-                                                        GoogleFonts.notoSansKr(
+                                                  child:
+                                                      MilestoneMemoDisplayWidget(
+                                                        milestone: m,
+                                                        style: appFont(
                                                           fontSize: 13,
                                                           fontWeight:
                                                               FontWeight.w500,
@@ -10745,8 +10715,8 @@ class _TasksScreenState extends State<TasksScreen>
                                                           ),
                                                           height: 1.5,
                                                         ),
-                                                    maxLines: 1,
-                                                  ),
+                                                        maxLines: 1,
+                                                      ),
                                                 ),
                                               ),
                                             ],
@@ -10777,17 +10747,14 @@ class _TasksScreenState extends State<TasksScreen>
                                                       children: [
                                                         Text(
                                                           '목표 달성을 축하해요!',
-                                                          style:
-                                                              GoogleFonts.notoSansKr(
-                                                                fontSize: 13,
-                                                                fontWeight:
-                                                                    FontWeight
-                                                                        .bold,
-                                                                color:
-                                                                    const Color(
-                                                                      0xFF3D3A4E,
-                                                                    ),
-                                                              ),
+                                                          style: appFont(
+                                                            fontSize: 13,
+                                                            fontWeight:
+                                                                FontWeight.bold,
+                                                            color: const Color(
+                                                              0xFF3D3A4E,
+                                                            ),
+                                                          ),
                                                         ),
                                                       ],
                                                     ),
@@ -10858,21 +10825,20 @@ class _TasksScreenState extends State<TasksScreen>
                                                       m.done
                                                           ? '완료 취소 (시작 전으로)'
                                                           : '완료 표시',
-                                                      style:
-                                                          GoogleFonts.notoSansKr(
-                                                            fontSize: m.done
-                                                                ? 12
-                                                                : 13,
-                                                            fontWeight:
-                                                                FontWeight.w700,
-                                                            color: m.done
-                                                                ? const Color(
-                                                                    0xFF33A883,
-                                                                  )
-                                                                : const Color(
-                                                                    0xFF9CA3AF,
-                                                                  ),
-                                                          ),
+                                                      style: appFont(
+                                                        fontSize: m.done
+                                                            ? 12
+                                                            : 13,
+                                                        fontWeight:
+                                                            FontWeight.w700,
+                                                        color: m.done
+                                                            ? const Color(
+                                                                0xFF33A883,
+                                                              )
+                                                            : const Color(
+                                                                0xFF9CA3AF,
+                                                              ),
+                                                      ),
                                                     ),
                                                   ],
                                                 ),
@@ -10937,7 +10903,7 @@ class _TasksScreenState extends State<TasksScreen>
                                   alignment: Alignment.center,
                                   child: Text(
                                     '삭제',
-                                    style: GoogleFonts.notoSansKr(
+                                    style: appFont(
                                       fontSize: 16,
                                       fontWeight: FontWeight.w800,
                                       color: const Color(0xFFE53E3E),
@@ -11024,7 +10990,7 @@ class _TasksScreenState extends State<TasksScreen>
                                 alignment: Alignment.center,
                                 child: Text(
                                   '저장',
-                                  style: GoogleFonts.notoSansKr(
+                                  style: appFont(
                                     fontSize: 16,
                                     fontWeight: FontWeight.w800,
                                     color: Colors.white,
@@ -11097,7 +11063,7 @@ class _TasksScreenState extends State<TasksScreen>
             children: [
               Text(
                 nextDay ? '다음 날로 옮길 일을 선택해주세요' : '옮길 할 일을 선택해주세요',
-                style: GoogleFonts.notoSansKr(
+                style: appFont(
                   fontSize: 18,
                   fontWeight: FontWeight.w800,
                   color: const Color(0xFF3D3A4E),
@@ -11124,7 +11090,7 @@ class _TasksScreenState extends State<TasksScreen>
                         Expanded(
                           child: Text(
                             task.text,
-                            style: GoogleFonts.notoSansKr(
+                            style: appFont(
                               fontSize: 15,
                               fontWeight: FontWeight.w700,
                               color: const Color(0xFF3D3A4E),
@@ -11173,7 +11139,7 @@ class _TasksScreenState extends State<TasksScreen>
             children: [
               Text(
                 '남은 일정도 옮길까요?',
-                style: GoogleFonts.notoSansKr(
+                style: appFont(
                   fontSize: 18,
                   fontWeight: FontWeight.w800,
                   color: const Color(0xFF3D3A4E),
@@ -11287,7 +11253,7 @@ class _TasksScreenState extends State<TasksScreen>
         label,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
-        style: GoogleFonts.notoSansKr(
+        style: appFont(
           fontSize: 13,
           fontWeight: FontWeight.w700,
           color: active ? _coach.accentColor : const Color(0xFFA0A0B0),
@@ -11325,7 +11291,7 @@ class _TasksScreenState extends State<TasksScreen>
             const SizedBox(width: 4),
             Text(
               active ? '알림 켜짐' : '알림 켜기',
-              style: GoogleFonts.notoSansKr(
+              style: appFont(
                 fontSize: 12,
                 fontWeight: FontWeight.w800,
                 color: active ? _coach.accentColor : const Color(0xFF9CA3AF),
@@ -11479,7 +11445,7 @@ class _TasksScreenState extends State<TasksScreen>
                   child: Text(
                     labels[t]!,
                     textAlign: TextAlign.center,
-                    style: GoogleFonts.notoSansKr(
+                    style: appFont(
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
                       color: isActive
@@ -11513,10 +11479,7 @@ class _TasksScreenState extends State<TasksScreen>
                 const SizedBox(width: 8),
                 Text(
                   '~',
-                  style: GoogleFonts.notoSansKr(
-                    fontSize: 13,
-                    color: const Color(0xFF6B7280),
-                  ),
+                  style: appFont(fontSize: 13, color: const Color(0xFF6B7280)),
                 ),
                 const SizedBox(width: 8),
                 GestureDetector(
@@ -11563,7 +11526,7 @@ class _TasksScreenState extends State<TasksScreen>
                     ),
                     child: Text(
                       d,
-                      style: GoogleFonts.notoSansKr(
+                      style: appFont(
                         fontSize: 13,
                         color: isActive
                             ? const Color(0xFFDB2777)
@@ -12233,7 +12196,7 @@ class _TasksScreenState extends State<TasksScreen>
                             const SizedBox(width: 6),
                             Text(
                               '캘린더 일정 등록 제안',
-                              style: GoogleFonts.notoSansKr(
+                              style: appFont(
                                 fontSize: 15,
                                 fontWeight: FontWeight.w800,
                                 color: const Color(0xFF1E1E2D),
@@ -12255,7 +12218,7 @@ class _TasksScreenState extends State<TasksScreen>
                     // Editable Title
                     TextField(
                       controller: titleCtrl,
-                      style: GoogleFonts.notoSansKr(
+                      style: appFont(
                         fontSize: 24,
                         fontWeight: FontWeight.w900,
                         color: const Color(0xFF1E1E2D),
@@ -12313,7 +12276,7 @@ class _TasksScreenState extends State<TasksScreen>
                                 const SizedBox(width: 6),
                                 Text(
                                   _getVoiceDateLabel(confirmedDate),
-                                  style: GoogleFonts.notoSansKr(
+                                  style: appFont(
                                     fontSize: 13,
                                     fontWeight: FontWeight.bold,
                                     color: _coach.accentColor,
@@ -12371,7 +12334,7 @@ class _TasksScreenState extends State<TasksScreen>
                                   confirmedTime != null
                                       ? _getVoiceTimeLabel(confirmedTime!)
                                       : "시간 설정 안 함",
-                                  style: GoogleFonts.notoSansKr(
+                                  style: appFont(
                                     fontSize: 13,
                                     fontWeight: FontWeight.bold,
                                     color: _coach.accentColor,
@@ -12413,7 +12376,7 @@ class _TasksScreenState extends State<TasksScreen>
                                 const SizedBox(width: 6),
                                 Text(
                                   _repeatRuleLabel(confirmedRepeatRule),
-                                  style: GoogleFonts.notoSansKr(
+                                  style: appFont(
                                     fontSize: 13,
                                     fontWeight: FontWeight.bold,
                                     color: _coach.accentColor,
@@ -12482,7 +12445,7 @@ class _TasksScreenState extends State<TasksScreen>
                             const SizedBox(width: 6),
                             Text(
                               isReminderEnabled ? '알람 ON' : '알람 OFF',
-                              style: GoogleFonts.notoSansKr(
+                              style: appFont(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w800,
                                 color: _coach.accentColor,
@@ -12592,7 +12555,7 @@ class _TasksScreenState extends State<TasksScreen>
                             },
                             child: Text(
                               '추가하기 ✓',
-                              style: GoogleFonts.notoSansKr(
+                              style: appFont(
                                 fontSize: 15,
                                 fontWeight: FontWeight.w900,
                               ),
@@ -12614,7 +12577,7 @@ class _TasksScreenState extends State<TasksScreen>
                             onPressed: () => Navigator.pop(ctx),
                             child: Text(
                               '괜찮아',
-                              style: GoogleFonts.notoSansKr(
+                              style: appFont(
                                 fontSize: 15,
                                 fontWeight: FontWeight.w700,
                               ),
@@ -12743,33 +12706,24 @@ class _TasksScreenState extends State<TasksScreen>
     // Style text
     TextStyle textStyle;
     if (isSelected) {
-      textStyle = GoogleFonts.notoSansKr(
+      textStyle = appFont(
         fontSize: 12,
         color: Colors.white,
         fontWeight: FontWeight.w700,
       );
     } else if (isToday) {
-      textStyle = GoogleFonts.notoSansKr(
+      textStyle = appFont(
         fontSize: 12,
         color: const Color(0xFF3D3A4E),
         fontWeight: FontWeight.w700,
       );
     } else if (isOutside) {
-      textStyle = GoogleFonts.notoSansKr(
-        fontSize: 12,
-        color: const Color(0xFFCCCCCC),
-      );
+      textStyle = appFont(fontSize: 12, color: const Color(0xFFCCCCCC));
     } else if (day.weekday == DateTime.saturday ||
         day.weekday == DateTime.sunday) {
-      textStyle = GoogleFonts.notoSansKr(
-        fontSize: 12,
-        color: const Color(0xFFE05C5C),
-      );
+      textStyle = appFont(fontSize: 12, color: const Color(0xFFE05C5C));
     } else {
-      textStyle = GoogleFonts.notoSansKr(
-        fontSize: 12,
-        color: const Color(0xFF3D3A4E),
-      );
+      textStyle = appFont(fontSize: 12, color: const Color(0xFF3D3A4E));
     }
 
     // Decoration
@@ -12901,32 +12855,32 @@ class _TasksScreenState extends State<TasksScreen>
                   color: _coach.accentColor.withOpacity(0.3),
                   shape: BoxShape.circle,
                 ),
-                defaultTextStyle: GoogleFonts.notoSansKr(fontSize: 12),
-                weekendTextStyle: GoogleFonts.notoSansKr(
+                defaultTextStyle: appFont(fontSize: 12),
+                weekendTextStyle: appFont(
                   fontSize: 12,
                   color: const Color(0xFFE05C5C),
                 ),
-                outsideTextStyle: GoogleFonts.notoSansKr(
+                outsideTextStyle: appFont(
                   fontSize: 12,
                   color: const Color(0xFFCCCCCC),
                 ),
-                selectedTextStyle: GoogleFonts.notoSansKr(
+                selectedTextStyle: appFont(
                   fontSize: 12,
                   color: Colors.white,
                   fontWeight: FontWeight.w700,
                 ),
-                todayTextStyle: GoogleFonts.notoSansKr(
+                todayTextStyle: appFont(
                   fontSize: 12,
                   color: const Color(0xFF3D3A4E),
                   fontWeight: FontWeight.w700,
                 ),
               ),
               daysOfWeekStyle: DaysOfWeekStyle(
-                weekdayStyle: GoogleFonts.notoSansKr(
+                weekdayStyle: appFont(
                   fontSize: 11,
                   color: const Color(0xFF9CA3AF),
                 ),
-                weekendStyle: GoogleFonts.notoSansKr(
+                weekendStyle: appFont(
                   fontSize: 11,
                   color: const Color(0xFFE05C5C),
                 ),
@@ -12935,7 +12889,7 @@ class _TasksScreenState extends State<TasksScreen>
                 formatButtonVisible: false,
                 titleCentered: true,
                 headerPadding: const EdgeInsets.symmetric(vertical: 6),
-                titleTextStyle: GoogleFonts.notoSansKr(
+                titleTextStyle: appFont(
                   fontSize: 14,
                   fontWeight: FontWeight.w700,
                   color: const Color(0xFF3D3A4E),
@@ -13014,7 +12968,7 @@ class _TasksScreenState extends State<TasksScreen>
             const SizedBox(width: 4),
             Text(
               displayTime,
-              style: GoogleFonts.notoSansKr(
+              style: appFont(
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
                 color: const Color(0xFF9CA3AF),
@@ -13031,7 +12985,7 @@ class _TasksScreenState extends State<TasksScreen>
             const SizedBox(width: 4),
             Text(
               duration,
-              style: GoogleFonts.notoSansKr(
+              style: appFont(
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
                 color: const Color(0xFF9CA3AF),
@@ -13151,7 +13105,7 @@ class _TasksScreenState extends State<TasksScreen>
                                     m.milestone.text.isNotEmpty
                                         ? m.milestone.text
                                         : '단계 목표 없음',
-                                    style: GoogleFonts.notoSansKr(
+                                    style: appFont(
                                       fontSize: 14,
                                       fontWeight: FontWeight.w600,
                                       color: const Color(0xFF3D3A4E),
@@ -13185,7 +13139,7 @@ class _TasksScreenState extends State<TasksScreen>
                                 const SizedBox(width: 4),
                                 Text(
                                   '완료',
-                                  style: GoogleFonts.notoSansKr(
+                                  style: appFont(
                                     fontSize: 11,
                                     fontWeight: FontWeight.bold,
                                     color: const Color(0xFF33A883),
@@ -13217,10 +13171,7 @@ class _TasksScreenState extends State<TasksScreen>
               padding: const EdgeInsets.all(20),
               child: Text(
                 '등록된 캘린더 일정이 없습니다.',
-                style: GoogleFonts.notoSansKr(
-                  fontSize: 13,
-                  color: const Color(0xFFA0A0B0),
-                ),
+                style: appFont(fontSize: 13, color: const Color(0xFFA0A0B0)),
               ),
             ),
           )
@@ -13264,7 +13215,7 @@ class _TasksScreenState extends State<TasksScreen>
                               milestoneInfo.isMilestoneSelf
                                   ? '마일스톤'
                                   : '메모장의 실행 목록',
-                              style: GoogleFonts.notoSansKr(
+                              style: appFont(
                                 fontSize: 9,
                                 fontWeight: FontWeight.bold,
                                 color: _coach.accentColor,
@@ -13299,7 +13250,7 @@ class _TasksScreenState extends State<TasksScreen>
                                 s.text,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: GoogleFonts.notoSansKr(
+                                style: appFont(
                                   fontSize: 14,
                                   fontWeight: FontWeight.w600,
                                   color: const Color(0xFF3D3A4E),
@@ -13386,7 +13337,7 @@ class _TasksScreenState extends State<TasksScreen>
                               task.text,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: GoogleFonts.notoSansKr(
+                              style: appFont(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w600,
                                 color: const Color(0xFF3D3A4E),
@@ -13478,7 +13429,7 @@ class _TasksScreenState extends State<TasksScreen>
                   ),
                   child: Text(
                     _weekdayLabel(weekday),
-                    style: GoogleFonts.notoSansKr(
+                    style: appFont(
                       fontSize: 13,
                       fontWeight: FontWeight.w800,
                       color: active ? Colors.white : const Color(0xFF6B7280),
@@ -13528,7 +13479,7 @@ class _TasksScreenState extends State<TasksScreen>
                       width: 72,
                       child: Text(
                         label,
-                        style: GoogleFonts.notoSansKr(
+                        style: appFont(
                           fontSize: 13,
                           fontWeight: FontWeight.w700,
                           color: const Color(0xFF3D3A4E),
@@ -13559,7 +13510,7 @@ class _TasksScreenState extends State<TasksScreen>
                             child: Text(
                               '사용자 지정',
                               textAlign: TextAlign.center,
-                              style: GoogleFonts.notoSansKr(
+                              style: appFont(
                                 fontSize: 18,
                                 fontWeight: FontWeight.w900,
                                 color: const Color(0xFF1A1A2E),
@@ -13582,7 +13533,7 @@ class _TasksScreenState extends State<TasksScreen>
                             width: 92,
                             child: Text(
                               '반복 주기',
-                              style: GoogleFonts.notoSansKr(
+                              style: appFont(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w800,
                                 color: const Color(0xFF3D3A4E),
@@ -13619,7 +13570,7 @@ class _TasksScreenState extends State<TasksScreen>
                         const SizedBox(height: 18),
                         Text(
                           '반복 요일',
-                          style: GoogleFonts.notoSansKr(
+                          style: appFont(
                             fontSize: 13,
                             fontWeight: FontWeight.w800,
                             color: const Color(0xFF3D3A4E),
@@ -13643,7 +13594,7 @@ class _TasksScreenState extends State<TasksScreen>
                         const SizedBox(height: 18),
                         Text(
                           '매월 반복 방식',
-                          style: GoogleFonts.notoSansKr(
+                          style: appFont(
                             fontSize: 13,
                             fontWeight: FontWeight.w800,
                             color: const Color(0xFF3D3A4E),
@@ -13736,7 +13687,7 @@ class _TasksScreenState extends State<TasksScreen>
                       const SizedBox(height: 18),
                       Text(
                         '종료',
-                        style: GoogleFonts.notoSansKr(
+                        style: appFont(
                           fontSize: 13,
                           fontWeight: FontWeight.w800,
                           color: const Color(0xFF3D3A4E),
@@ -13786,7 +13737,7 @@ class _TasksScreenState extends State<TasksScreen>
                                   endDate == null
                                       ? '날짜 선택'
                                       : '${endDate!.year}. ${endDate!.month.toString().padLeft(2, '0')}. ${endDate!.day.toString().padLeft(2, '0')}',
-                                  style: GoogleFonts.notoSansKr(
+                                  style: appFont(
                                     fontSize: 13,
                                     color: const Color(0xFF6B7280),
                                   ),
@@ -13857,7 +13808,7 @@ class _TasksScreenState extends State<TasksScreen>
                           ),
                           child: Text(
                             '적용',
-                            style: GoogleFonts.notoSansKr(
+                            style: appFont(
                               fontSize: 16,
                               fontWeight: FontWeight.w900,
                               color: Colors.white,
@@ -13972,7 +13923,7 @@ class _TasksScreenState extends State<TasksScreen>
                             labels[type]!,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: GoogleFonts.notoSansKr(
+                            style: appFont(
                               fontSize: 12,
                               fontWeight: FontWeight.w800,
                               color: isActive
@@ -14013,7 +13964,7 @@ class _TasksScreenState extends State<TasksScreen>
                       children: [
                         Text(
                           '캘린더 일정 옵션',
-                          style: GoogleFonts.notoSansKr(
+                          style: appFont(
                             fontSize: 18,
                             fontWeight: FontWeight.w900,
                             color: const Color(0xFF3D3A4E),
@@ -14067,7 +14018,7 @@ class _TasksScreenState extends State<TasksScreen>
                             ),
                             Text(
                               ' ~ ',
-                              style: GoogleFonts.notoSansKr(
+                              style: appFont(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w700,
                                 color: const Color(0xFF6B7280),
@@ -14153,7 +14104,7 @@ class _TasksScreenState extends State<TasksScreen>
                                     ),
                                     child: Text(
                                       duration,
-                                      style: GoogleFonts.notoSansKr(
+                                      style: appFont(
                                         fontSize: 13,
                                         fontWeight: FontWeight.w700,
                                         color: active
@@ -14179,7 +14130,7 @@ class _TasksScreenState extends State<TasksScreen>
                           Expanded(
                             child: Text(
                               _repeatRuleLabel(_schRepeatRule),
-                              style: GoogleFonts.notoSansKr(
+                              style: appFont(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w800,
                                 color: _coach.accentColor,
@@ -14193,7 +14144,7 @@ class _TasksScreenState extends State<TasksScreen>
                             }),
                             child: Text(
                               '해제',
-                              style: GoogleFonts.notoSansKr(
+                              style: appFont(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w800,
                                 color: const Color(0xFFA0A0B0),
@@ -14216,7 +14167,7 @@ class _TasksScreenState extends State<TasksScreen>
                         ),
                         child: Text(
                           '완료',
-                          style: GoogleFonts.notoSansKr(
+                          style: appFont(
                             fontSize: 15,
                             fontWeight: FontWeight.w900,
                             color: Colors.white,
@@ -14248,7 +14199,7 @@ class _TasksScreenState extends State<TasksScreen>
       ),
       child: Text(
         label,
-        style: GoogleFonts.notoSansKr(
+        style: appFont(
           fontSize: 13,
           fontWeight: FontWeight.w700,
           color: active ? _coach.accentColor : const Color(0xFFA0A0B0),
@@ -14293,13 +14244,13 @@ class _TasksScreenState extends State<TasksScreen>
                   Expanded(
                     child: TextField(
                       controller: _schInputCtrl,
-                      style: GoogleFonts.notoSansKr(
+                      style: appFont(
                         fontSize: 14,
                         color: const Color(0xFF3D3A4E),
                       ),
                       decoration: InputDecoration(
                         hintText: '캘린더 일정 입력...',
-                        hintStyle: GoogleFonts.notoSansKr(
+                        hintStyle: appFont(
                           fontSize: 14,
                           color: const Color(0xFFA0A0B0),
                         ),
@@ -14375,7 +14326,7 @@ class _TasksScreenState extends State<TasksScreen>
                         const SizedBox(height: 12),
                         Text(
                           '루틴을 추가해봐요!',
-                          style: GoogleFonts.notoSansKr(
+                          style: appFont(
                             fontSize: 14,
                             color: const Color(0xFFA0A0B0),
                           ),
@@ -14425,7 +14376,7 @@ class _TasksScreenState extends State<TasksScreen>
                     Text(
                       '루틴 하나 더 만들기',
                       // 이 버튼만 둥근 고딕으로. 나머지 화면은 그대로 둔다.
-                      style: GoogleFonts.jua(
+                      style: appFont(
                         fontSize: 16,
                         letterSpacing: 0.2,
                         color: _deepen(_coach.accentColor),
@@ -14488,7 +14439,7 @@ class _TasksScreenState extends State<TasksScreen>
             alignment: Alignment.center,
             child: Text(
               '${index + 1}',
-              style: GoogleFonts.notoSansKr(
+              style: appFont(
                 fontSize: 12,
                 fontWeight: FontWeight.w800,
                 color: _coach.accentColor,
@@ -14505,7 +14456,7 @@ class _TasksScreenState extends State<TasksScreen>
                   h.name,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.notoSansKr(
+                  style: appFont(
                     fontSize: 14,
                     fontWeight: FontWeight.w700,
                     color: const Color(0xFF3D3A4E),
@@ -14516,7 +14467,7 @@ class _TasksScreenState extends State<TasksScreen>
                   '$freqLabel · $checkLabel',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.notoSansKr(
+                  style: appFont(
                     fontSize: 11,
                     fontWeight: FontWeight.w500,
                     color: const Color(0xFF9A96AA),
@@ -14570,7 +14521,7 @@ class _TasksScreenState extends State<TasksScreen>
                 h.name,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: GoogleFonts.notoSansKr(
+                style: appFont(
                   fontSize: 15,
                   fontWeight: FontWeight.w900,
                   color: const Color(0xFF3D3A4E),
@@ -14619,7 +14570,7 @@ class _TasksScreenState extends State<TasksScreen>
             const SizedBox(width: 12),
             Text(
               label,
-              style: GoogleFonts.notoSansKr(
+              style: appFont(
                 fontSize: 14,
                 fontWeight: FontWeight.w700,
                 color: color,
@@ -14738,7 +14689,7 @@ class _TasksScreenState extends State<TasksScreen>
                     children: [
                       Text(
                         editHabit != null ? '루틴 수정' : '새 루틴 추가',
-                        style: GoogleFonts.notoSansKr(
+                        style: appFont(
                           fontSize: 18,
                           fontWeight: FontWeight.w900,
                         ),
@@ -14776,7 +14727,7 @@ class _TasksScreenState extends State<TasksScreen>
                             ),
                             child: Text(
                               guideText,
-                              style: GoogleFonts.notoSansKr(
+                              style: appFont(
                                 fontSize: 13,
                                 height: 1.45,
                                 fontWeight: FontWeight.w700,
@@ -14852,7 +14803,7 @@ class _TasksScreenState extends State<TasksScreen>
                                   child: Center(
                                     child: Text(
                                       dayNames[i],
-                                      style: GoogleFonts.notoSansKr(
+                                      style: appFont(
                                         fontSize: 12,
                                         fontWeight: FontWeight.w700,
                                         color: isSelected
@@ -14896,7 +14847,7 @@ class _TasksScreenState extends State<TasksScreen>
                                   ),
                                   child: Text(
                                     '주 $value일',
-                                    style: GoogleFonts.notoSansKr(
+                                    style: appFont(
                                       fontSize: 12,
                                       fontWeight: FontWeight.w700,
                                       color: isSelected
@@ -14972,7 +14923,7 @@ class _TasksScreenState extends State<TasksScreen>
                                       mStartTime != null
                                           ? _formatTime(mStartTime!)
                                           : '시작 시간',
-                                      style: GoogleFonts.notoSansKr(
+                                      style: appFont(
                                         fontSize: 13,
                                         color: mStartTime != null
                                             ? _coach.accentColor
@@ -14984,7 +14935,7 @@ class _TasksScreenState extends State<TasksScreen>
                                 const SizedBox(width: 8),
                                 Text(
                                   '~',
-                                  style: GoogleFonts.notoSansKr(
+                                  style: appFont(
                                     fontSize: 13,
                                     color: const Color(0xFF6B7280),
                                   ),
@@ -15014,7 +14965,7 @@ class _TasksScreenState extends State<TasksScreen>
                                       mEndTime != null
                                           ? _formatTime(mEndTime!)
                                           : '종료 시간',
-                                      style: GoogleFonts.notoSansKr(
+                                      style: appFont(
                                         fontSize: 13,
                                         color: mEndTime != null
                                             ? _coach.accentColor
@@ -15081,7 +15032,7 @@ class _TasksScreenState extends State<TasksScreen>
                                         ),
                                         child: Text(
                                           d,
-                                          style: GoogleFonts.notoSansKr(
+                                          style: appFont(
                                             fontSize: 13,
                                             color: isActive
                                                 ? const Color(0xFFDB2777)
@@ -15155,7 +15106,7 @@ class _TasksScreenState extends State<TasksScreen>
                               children: [
                                 Text(
                                   '루틴 트래킹',
-                                  style: GoogleFonts.notoSansKr(
+                                  style: appFont(
                                     fontSize: 14,
                                     fontWeight: FontWeight.w700,
                                     color: const Color(0xFF3D3A4E),
@@ -15163,7 +15114,7 @@ class _TasksScreenState extends State<TasksScreen>
                                 ),
                                 Text(
                                   '매일 루틴 달성률을 추적할까요?',
-                                  style: GoogleFonts.notoSansKr(
+                                  style: appFont(
                                     fontSize: 12,
                                     color: const Color(0xFFA0A0B0),
                                   ),
@@ -15285,7 +15236,7 @@ class _TasksScreenState extends State<TasksScreen>
                       child: Center(
                         child: Text(
                           '저장',
-                          style: GoogleFonts.notoSansKr(
+                          style: appFont(
                             fontSize: 15,
                             fontWeight: FontWeight.w800,
                             color: Colors.white,
@@ -15315,7 +15266,7 @@ class _TasksScreenState extends State<TasksScreen>
             PurchaseService.storeCheckoutEnabled
                 ? '⚠️ 구독 플랜 필요'
                 : '⚠️ 체험 기간 종료',
-            style: GoogleFonts.notoSansKr(
+            style: appFont(
               fontWeight: FontWeight.w900,
               color: const Color(0xFF1A1A2E),
             ),
@@ -15326,7 +15277,7 @@ class _TasksScreenState extends State<TasksScreen>
             PurchaseService.storeCheckoutEnabled
                 ? '할 일, 일정, 루틴 등록은 Friends 또는 Master 플랜 구독자만 이용할 수 있다냥!'
                 : '무료로 써볼 수 있는 기간이 끝났다냥.\n지금까지 적어둔 것은 그대로 볼 수 있어!',
-            style: GoogleFonts.notoSansKr(
+            style: appFont(
               fontSize: 14,
               fontWeight: FontWeight.w500,
               color: const Color(0xFF4B5563),
@@ -15337,7 +15288,7 @@ class _TasksScreenState extends State<TasksScreen>
               onPressed: () => Navigator.pop(context),
               child: Text(
                 '확인',
-                style: GoogleFonts.notoSansKr(
+                style: appFont(
                   fontWeight: FontWeight.w700,
                   color: _coach.accentColor,
                 ),
@@ -15353,7 +15304,7 @@ class _TasksScreenState extends State<TasksScreen>
     padding: const EdgeInsets.only(bottom: 8),
     child: Text(
       text,
-      style: GoogleFonts.notoSansKr(
+      style: appFont(
         fontSize: 13,
         fontWeight: FontWeight.w700,
         color: const Color(0xFF6B7280),
@@ -15363,10 +15314,7 @@ class _TasksScreenState extends State<TasksScreen>
 
   InputDecoration _modalInputDeco(String hint) => InputDecoration(
     hintText: hint,
-    hintStyle: GoogleFonts.notoSansKr(
-      fontSize: 14,
-      color: const Color(0xFFA0A0B0),
-    ),
+    hintStyle: appFont(fontSize: 14, color: const Color(0xFFA0A0B0)),
     filled: true,
     fillColor: const Color(0xFFF5F3FF),
     border: OutlineInputBorder(
@@ -15404,7 +15352,7 @@ class _TasksScreenState extends State<TasksScreen>
         ),
         child: Text(
           label,
-          style: GoogleFonts.notoSansKr(
+          style: appFont(
             fontSize: 13,
             fontWeight: FontWeight.w700,
             color: isActive ? _coach.accentColor : const Color(0xFFA0A0B0),
@@ -15435,7 +15383,7 @@ class _TasksScreenState extends State<TasksScreen>
         ),
         child: Text(
           label,
-          style: GoogleFonts.notoSansKr(
+          style: appFont(
             fontSize: 12,
             fontWeight: FontWeight.w700,
             color: isActive ? _coach.accentColor : const Color(0xFFA0A0B0),
@@ -15678,7 +15626,7 @@ class _MilestoneMemoDialogState extends State<MilestoneMemoDialog> {
         actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
         title: Text(
           '알림',
-          style: GoogleFonts.notoSansKr(
+          style: appFont(
             fontSize: 18,
             fontWeight: FontWeight.w800,
             color: const Color(0xFF2E2A3D),
@@ -15686,7 +15634,7 @@ class _MilestoneMemoDialogState extends State<MilestoneMemoDialog> {
         ),
         content: Text(
           message,
-          style: GoogleFonts.notoSansKr(
+          style: appFont(
             fontSize: 14,
             fontWeight: FontWeight.w500,
             color: const Color(0xFF4F4A60),
@@ -15698,10 +15646,7 @@ class _MilestoneMemoDialogState extends State<MilestoneMemoDialog> {
             onPressed: () => Navigator.of(dialogContext).pop(),
             style: TextButton.styleFrom(
               foregroundColor: const Color(0xFF8B6CFF),
-              textStyle: GoogleFonts.notoSansKr(
-                fontSize: 14,
-                fontWeight: FontWeight.w800,
-              ),
+              textStyle: appFont(fontSize: 14, fontWeight: FontWeight.w800),
             ),
             child: const Text('확인'),
           ),
@@ -15895,7 +15840,7 @@ $content
                   children: [
                     Text(
                       '핵심 정리 미리보기',
-                      style: GoogleFonts.notoSansKr(
+                      style: appFont(
                         fontSize: 18,
                         fontWeight: FontWeight.w800,
                         color: const Color(0xFF3D3A4E),
@@ -15927,7 +15872,7 @@ $content
                   child: SingleChildScrollView(
                     child: SelectableText(
                       summary,
-                      style: GoogleFonts.notoSansKr(
+                      style: appFont(
                         fontSize: 14,
                         height: 1.55,
                         color: const Color(0xFF3D3A4E),
@@ -15962,9 +15907,7 @@ $content
                         ),
                         child: Text(
                           '요약 추가',
-                          style: GoogleFonts.notoSansKr(
-                            fontWeight: FontWeight.w800,
-                          ),
+                          style: appFont(fontWeight: FontWeight.w800),
                         ),
                       ),
                     ),
@@ -15988,9 +15931,7 @@ $content
                         ),
                         child: Text(
                           '본문 대체',
-                          style: GoogleFonts.notoSansKr(
-                            fontWeight: FontWeight.w800,
-                          ),
+                          style: appFont(fontWeight: FontWeight.w800),
                         ),
                       ),
                     ),
@@ -16175,7 +16116,7 @@ $content
                         widget.milestone.text.isNotEmpty
                             ? widget.milestone.text
                             : '마일스톤 메모',
-                        style: GoogleFonts.notoSansKr(
+                        style: appFont(
                           fontSize: 18,
                           fontWeight: FontWeight.w800,
                           color: const Color(0xFF3D3A4E),
@@ -16194,7 +16135,7 @@ $content
                           const SizedBox(width: 4),
                           Text(
                             widget.milestone.date ?? '기한 없음',
-                            style: GoogleFonts.notoSansKr(
+                            style: appFont(
                               fontSize: 12,
                               fontWeight: FontWeight.w700,
                               color: const Color(0xFF8B7CFF),
@@ -16263,7 +16204,7 @@ $content
                           const SizedBox(width: 4),
                           Text(
                             '메모 묶음 추가',
-                            style: GoogleFonts.notoSansKr(
+                            style: appFont(
                               fontSize: 13,
                               fontWeight: FontWeight.w700,
                               color: const Color(0xFF8B7CFF),
@@ -16281,7 +16222,7 @@ $content
                         children: [
                           Text(
                             '✨ 섹션 순서를 변경하려면 길게 눌러 이동하세요',
-                            style: GoogleFonts.notoSansKr(
+                            style: appFont(
                               fontSize: 11,
                               fontWeight: FontWeight.w500,
                               color: const Color(0xFFA0A0B0),
@@ -16306,7 +16247,7 @@ $content
                       const SizedBox(width: 6),
                       Text(
                         '실행 아이템 (행동 후보)',
-                        style: GoogleFonts.notoSansKr(
+                        style: appFont(
                           fontSize: 15,
                           fontWeight: FontWeight.w800,
                           color: const Color(0xFF3D3A4E),
@@ -16346,7 +16287,7 @@ $content
                           const SizedBox(width: 6),
                           Text(
                             '실행 아이템 추가',
-                            style: GoogleFonts.notoSansKr(
+                            style: appFont(
                               fontSize: 13,
                               fontWeight: FontWeight.w600,
                               color: const Color(0xFF6B7280),
@@ -16410,7 +16351,7 @@ $content
                 Expanded(
                   child: Text(
                     _isListening ? '말씀하세요. 듣고 있습니다...' : '음성으로 내용을 입력해보세요!',
-                    style: GoogleFonts.notoSansKr(
+                    style: appFont(
                       fontSize: 13,
                       color: _isListening
                           ? Colors.red
@@ -16464,14 +16405,14 @@ $content
                 child: TextField(
                   controller: _titleCtrls[index],
                   focusNode: _titleFocusNodes[index],
-                  style: GoogleFonts.notoSansKr(
+                  style: appFont(
                     fontSize: 14,
                     fontWeight: FontWeight.w700,
                     color: const Color(0xFF3D3A4E),
                   ),
                   decoration: InputDecoration(
                     hintText: '섹션 제목 (예: 성장 고민)',
-                    hintStyle: GoogleFonts.notoSansKr(
+                    hintStyle: appFont(
                       color: const Color(0xFFA0A0B0),
                       fontWeight: FontWeight.w500,
                     ),
@@ -16516,7 +16457,7 @@ $content
                         )
                       : Text(
                           '✨ 정리',
-                          style: GoogleFonts.notoSansKr(
+                          style: appFont(
                             fontSize: 12,
                             fontWeight: FontWeight.w800,
                             color: widget.coach.accentColor,
@@ -16544,16 +16485,14 @@ $content
               maxLength: _sectionContentMaxLength,
               maxLengthEnforcement: MaxLengthEnforcement.enforced,
               keyboardType: TextInputType.multiline,
-              style: GoogleFonts.notoSansKr(
+              style: appFont(
                 fontSize: 14,
                 color: const Color(0xFF3D3A4E),
                 height: 1.5,
               ),
               decoration: InputDecoration(
                 hintText: '실행에 필요한 핵심 위주로 글이나 링크를 적어두세요(최대 500자)',
-                hintStyle: GoogleFonts.notoSansKr(
-                  color: const Color(0xFFA0A0B0),
-                ),
+                hintStyle: appFont(color: const Color(0xFFA0A0B0)),
                 border: InputBorder.none,
                 isDense: true,
                 contentPadding: EdgeInsets.zero,
@@ -16570,7 +16509,7 @@ $content
                 padding: const EdgeInsets.symmetric(vertical: 2),
                 child: MemoDisplayWidget(
                   text: _contentCtrls[index].text,
-                  style: GoogleFonts.notoSansKr(
+                  style: appFont(
                     fontSize: 14,
                     color: const Color(0xFF3D3A4E),
                     height: 1.5,
@@ -16606,7 +16545,7 @@ $content
               children: [
                 Text(
                   '어떤 일정으로 전환할까요?',
-                  style: GoogleFonts.notoSansKr(
+                  style: appFont(
                     fontSize: 18,
                     fontWeight: FontWeight.w800,
                     color: const Color(0xFF3D3A4E),
@@ -16615,7 +16554,7 @@ $content
                 const SizedBox(height: 8),
                 Text(
                   '"${action.title}"',
-                  style: GoogleFonts.notoSansKr(
+                  style: appFont(
                     fontSize: 14,
                     color: const Color(0xFF8B7CFF),
                     fontWeight: FontWeight.w600,
@@ -16696,7 +16635,7 @@ $content
                 children: [
                   Text(
                     title,
-                    style: GoogleFonts.notoSansKr(
+                    style: appFont(
                       fontSize: 15,
                       fontWeight: FontWeight.w700,
                       color: const Color(0xFF3D3A4E),
@@ -16705,7 +16644,7 @@ $content
                   const SizedBox(height: 2),
                   Text(
                     subtitle,
-                    style: GoogleFonts.notoSansKr(
+                    style: appFont(
                       fontSize: 12,
                       color: const Color(0xFFA0A0B0),
                     ),
@@ -16744,7 +16683,7 @@ $content
             const SizedBox(height: 16),
             Text(
               '이 실행 아이템을 삭제할까요?',
-              style: GoogleFonts.notoSansKr(
+              style: appFont(
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
                 color: const Color(0xFF111827),
@@ -16753,10 +16692,7 @@ $content
             const SizedBox(height: 8),
             Text(
               '삭제된 내용은 되돌릴 수 없어요.',
-              style: GoogleFonts.notoSansKr(
-                fontSize: 13,
-                color: const Color(0xFF6B7280),
-              ),
+              style: appFont(fontSize: 13, color: const Color(0xFF6B7280)),
             ),
             const SizedBox(height: 24),
             Row(
@@ -16773,7 +16709,7 @@ $content
                     ),
                     child: Text(
                       '취소',
-                      style: GoogleFonts.notoSansKr(
+                      style: appFont(
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
                         color: const Color(0xFF4B5563),
@@ -16795,7 +16731,7 @@ $content
                     ),
                     child: Text(
                       '삭제',
-                      style: GoogleFonts.notoSansKr(
+                      style: appFont(
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
                         color: Colors.white,
@@ -16832,7 +16768,7 @@ $content
           ),
           child: Text(
             '루틴으로 전환됨',
-            style: GoogleFonts.notoSansKr(
+            style: appFont(
               fontSize: 10,
               fontWeight: FontWeight.w600,
               color: const Color(0xFF3B82F6),
@@ -16850,7 +16786,7 @@ $content
           ),
           child: Text(
             action.convertedType == 'task_today' ? '할 일로 전환됨' : '일정으로 전환됨',
-            style: GoogleFonts.notoSansKr(
+            style: appFont(
               fontSize: 10,
               fontWeight: FontWeight.w600,
               color: const Color(0xFF6366F1),
@@ -16869,7 +16805,7 @@ $content
         ),
         child: Text(
           '대기 중',
-          style: GoogleFonts.notoSansKr(
+          style: appFont(
             fontSize: 10,
             fontWeight: FontWeight.w500,
             color: const Color(0xFF6B7280),
@@ -16927,13 +16863,13 @@ $content
                   TextField(
                     controller: _actionCtrls[index],
                     focusNode: _actionFocusNodes[index],
-                    style: GoogleFonts.notoSansKr(
+                    style: appFont(
                       fontSize: 14,
                       color: const Color(0xFF3D3A4E),
                     ),
                     decoration: InputDecoration(
                       hintText: '구체적인 행동 입력 (예: 개발 컨퍼런스 등록하기)',
-                      hintStyle: GoogleFonts.notoSansKr(
+                      hintStyle: appFont(
                         color: const Color(0xFFA0A0B0),
                         fontSize: 13,
                       ),
@@ -16953,7 +16889,7 @@ $content
                         const SizedBox(width: 8),
                         Text(
                           action.convertedDate!,
-                          style: GoogleFonts.notoSansKr(
+                          style: appFont(
                             fontSize: 10,
                             color: const Color(0xFF9CA3AF),
                           ),
@@ -16988,7 +16924,7 @@ $content
                   ),
                   child: Text(
                     '전환',
-                    style: GoogleFonts.notoSansKr(
+                    style: appFont(
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
                       color: const Color(0xFFD97706),

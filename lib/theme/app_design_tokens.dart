@@ -67,8 +67,7 @@ abstract final class AppDesignTokens {
     Color(0xFFF9D3E6),
   ];
 
-  static int chatAccentSlot(int index) =>
-      index.abs() % chatAccentInks.length;
+  static int chatAccentSlot(int index) => index.abs() % chatAccentInks.length;
 
   // ── 마스터 채팅 바탕 ────────────────────────────────────
   //

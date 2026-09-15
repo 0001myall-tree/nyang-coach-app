@@ -136,9 +136,7 @@ class LifeRoutinePlan {
         final when = openWindows.isEmpty
             ? ''
             : ' 이 사람이 실제로 손대는 시간대: ${openWindows.take(2).map((w) => w.label).join(', ')}.';
-        buffer.writeln(
-          '*할 일: 오늘 하루 안에서 할 것 하나만, 언제 얼마나 할지까지 정해서 권하세요.$when',
-        );
+        buffer.writeln('*할 일: 오늘 하루 안에서 할 것 하나만, 언제 얼마나 할지까지 정해서 권하세요.$when');
         buffer.writeln(
           '*루틴으로 만들자고 하지 마세요. 앞으로 계속 하겠다는 약속은 이 사람이 원한다고 하지 않았습니다. 오늘 한 번이면 됩니다.',
         );
@@ -326,7 +324,8 @@ class LifeRoutineAnalysis {
     if (runningish) {
       return const LifeRoutinePlan(
         verdict: LifeVerdict.hold,
-        reason: '담당 영역 루틴이 완벽하진 않아도 굴러가는 중이거나 아직 자리를 잡는 중. 루틴은 한 번 정하면 두는 것이라 이 정도로는 건드리지 않음.',
+        reason:
+            '담당 영역 루틴이 완벽하진 않아도 굴러가는 중이거나 아직 자리를 잡는 중. 루틴은 한 번 정하면 두는 것이라 이 정도로는 건드리지 않음.',
       );
     }
 
@@ -360,7 +359,8 @@ class LifeRoutineAnalysis {
     if (prefersRoutine == true && routineCount < maxRoutinesForNew) {
       return LifeRoutinePlan(
         verdict: LifeVerdict.add,
-        reason: '담당 영역에 굴러가는 루틴이 없고, 비어 있으면서 실제로 뭔가 하는 시간대가 있음. 반복을 원한다고 답한 사람임.',
+        reason:
+            '담당 영역에 굴러가는 루틴이 없고, 비어 있으면서 실제로 뭔가 하는 시간대가 있음. 반복을 원한다고 답한 사람임.',
         openWindows: windows,
       );
     }
@@ -568,11 +568,13 @@ class LifeRoutineAnalysis {
 
   static List<Map<String, dynamic>> _recordsWithin(String? raw, DateTime at) {
     final floor = DateTime(at.year, at.month, at.day - windowDays);
-    return _decodeList(raw).where((record) {
-      final date = DateTime.tryParse(record['date']?.toString() ?? '');
-      if (date == null) return false;
-      return !date.isBefore(floor) && !date.isAfter(at);
-    }).toList(growable: false);
+    return _decodeList(raw)
+        .where((record) {
+          final date = DateTime.tryParse(record['date']?.toString() ?? '');
+          if (date == null) return false;
+          return !date.isBefore(floor) && !date.isAfter(at);
+        })
+        .toList(growable: false);
   }
 
   static List<Map<String, dynamic>> _decodeList(String? raw) {

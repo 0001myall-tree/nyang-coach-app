@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.0.0+118
+version: 1.0.0+119
 
 environment:
   sdk: ^3.12.0
@@ -95,6 +95,20 @@ flutter:
     - assets/icons/
     - assets/voice/
     - assets/sounds/
+
+  # 나눔스퀘어라운드 (네이버, SIL OFL 1.1) — 앱 기본 글꼴
+  # 인터넷에서 받아오지 않도록 파일째 넣어둔다
+  fonts:
+    - family: NanumSquareRound
+      fonts:
+        - asset: assets/fonts/NanumSquareRoundL.otf
+          weight: 300
+        - asset: assets/fonts/NanumSquareRoundR.otf
+          weight: 400
+        - asset: assets/fonts/NanumSquareRoundB.otf
+          weight: 700
+        - asset: assets/fonts/NanumSquareRoundEB.otf
+          weight: 800
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

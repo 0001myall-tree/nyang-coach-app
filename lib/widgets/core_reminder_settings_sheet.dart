@@ -1,6 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import '../theme/app_font.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/user_data.dart';
@@ -73,7 +73,7 @@ Future<bool> showCoreReminderSettingsSheet(BuildContext context) async {
                         const SizedBox(width: 8),
                         Text(
                           '일정 푸쉬 알람',
-                          style: GoogleFonts.notoSansKr(
+                          style: appFont(
                             fontSize: 20,
                             fontWeight: FontWeight.w900,
                             color: const Color(0xFF1A1A2E),
@@ -92,7 +92,7 @@ Future<bool> showCoreReminderSettingsSheet(BuildContext context) async {
                 const SizedBox(height: 12),
                 Text(
                   '원하는 일정을 알려드려요.',
-                  style: GoogleFonts.notoSansKr(
+                  style: appFont(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
                     color: const Color(0xFFA78BFA),
@@ -125,7 +125,7 @@ Future<bool> showCoreReminderSettingsSheet(BuildContext context) async {
                         Expanded(
                           child: Text(
                             '알람 시간 선택',
-                            style: GoogleFonts.notoSansKr(
+                            style: appFont(
                               fontSize: 15,
                               fontWeight: FontWeight.w800,
                               color: const Color(0xFF1A1A2E),
@@ -162,7 +162,7 @@ Future<bool> showCoreReminderSettingsSheet(BuildContext context) async {
                                     ),
                                     child: Text(
                                       '$minutes분 전',
-                                      style: GoogleFonts.notoSansKr(
+                                      style: appFont(
                                         fontSize: 13,
                                         fontWeight: FontWeight.w800,
                                         color: isActive
@@ -213,7 +213,7 @@ Future<bool> showCoreReminderSettingsSheet(BuildContext context) async {
                     ),
                     child: Text(
                       '저장하기',
-                      style: GoogleFonts.notoSansKr(
+                      style: appFont(
                         fontSize: 16,
                         fontWeight: FontWeight.w800,
                         color: Colors.white,

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import '../theme/app_font.dart';
 
 import '../theme/app_design_tokens.dart';
 
@@ -87,7 +87,7 @@ class AppButton extends StatelessWidget {
                     label,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.notoSansKr(
+                    style: appFont(
                       fontSize: AppDesignTokens.textAction,
                       fontWeight: FontWeight.w900,
                     ),

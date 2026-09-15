@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../theme/app_font.dart';
 
 import '../theme/app_design_tokens.dart';
 
@@ -69,7 +70,7 @@ class BannerAnswerDialog extends StatelessWidget {
             children: [
               Text(
                 message,
-                style: GoogleFonts.notoSansKr(
+                style: appFont(
                   fontSize: 15,
                   height: 1.5,
                   fontWeight: FontWeight.w600,

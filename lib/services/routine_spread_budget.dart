@@ -35,9 +35,7 @@ class RoutineSpreadBudget {
 
   /// 지금 물어도 되는지.
   static Future<bool> canAsk(SharedPreferences prefs, DateTime now) async {
-    final declined = DateTime.tryParse(
-      prefs.getString(lastDeclinedKey) ?? '',
-    );
+    final declined = DateTime.tryParse(prefs.getString(lastDeclinedKey) ?? '');
     if (declined != null && now.difference(declined) < declineCooldown) {
       return false;
     }
@@ -46,10 +44,8 @@ class RoutineSpreadBudget {
     return true;
   }
 
-  static Future<void> markAsked(
-    SharedPreferences prefs,
-    DateTime now,
-  ) async => prefs.setString(lastAskedKey, now.toIso8601String());
+  static Future<void> markAsked(SharedPreferences prefs, DateTime now) async =>
+      prefs.setString(lastAskedKey, now.toIso8601String());
 
   static Future<void> markDeclined(
     SharedPreferences prefs,

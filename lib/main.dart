@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'theme/app_font.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -168,11 +168,12 @@ class _NyangCoachAppState extends State<NyangCoachApp>
         scaffoldBackgroundColor: AppDesignTokens.surface,
         dividerColor: AppDesignTokens.divider,
         useMaterial3: true,
-        textTheme: GoogleFonts.notoSansKrTextTheme(Theme.of(context).textTheme)
-            .apply(
-              bodyColor: AppDesignTokens.textPrimary,
-              displayColor: AppDesignTokens.textPrimary,
-            ),
+        fontFamily: kAppFontFamily,
+        textTheme: Theme.of(context).textTheme.apply(
+          fontFamily: kAppFontFamily,
+          bodyColor: AppDesignTokens.textPrimary,
+          displayColor: AppDesignTokens.textPrimary,
+        ),
       ),
       navigatorKey: navigatorKey,
       // 화면 이동을 자동으로 기록해 콘솔에서 화면별 체류·이탈을 볼 수 있게 한다.

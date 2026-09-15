@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../theme/app_font.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
@@ -288,7 +289,7 @@ class _CountdownFocusModeScreenState extends State<CountdownFocusModeScreen>
               ),
               title: Text(
                 '집중을 끝내고 채팅으로 돌아갈까요?',
-                style: GoogleFonts.notoSansKr(
+                style: appFont(
                   fontSize: 17,
                   fontWeight: FontWeight.w800,
                   color: Colors.white,
@@ -300,7 +301,7 @@ class _CountdownFocusModeScreenState extends State<CountdownFocusModeScreen>
                   onPressed: () => Navigator.pop(dialogContext, false),
                   child: Text(
                     '계속 집중',
-                    style: GoogleFonts.notoSansKr(
+                    style: appFont(
                       fontWeight: FontWeight.w800,
                       color: const Color(0xFFC9B7FF),
                     ),
@@ -310,7 +311,7 @@ class _CountdownFocusModeScreenState extends State<CountdownFocusModeScreen>
                   onPressed: () => Navigator.pop(dialogContext, true),
                   child: Text(
                     '돌아가기',
-                    style: GoogleFonts.notoSansKr(
+                    style: appFont(
                       fontWeight: FontWeight.w800,
                       color: Colors.white,
                     ),
@@ -425,7 +426,7 @@ class _CountdownFocusModeScreenState extends State<CountdownFocusModeScreen>
         Text(
           '잠시 생각을 내려놓고\n숨을 천천히 쉬어요.',
           textAlign: TextAlign.center,
-          style: GoogleFonts.notoSansKr(
+          style: appFont(
             fontSize: 22,
             height: 1.45,
             fontWeight: FontWeight.w800,
@@ -436,7 +437,7 @@ class _CountdownFocusModeScreenState extends State<CountdownFocusModeScreen>
         Text(
           '천천히 들이마시고 내쉬세요.',
           textAlign: TextAlign.center,
-          style: GoogleFonts.notoSansKr(
+          style: appFont(
             fontSize: 13,
             fontWeight: FontWeight.w600,
             color: Colors.white.withValues(alpha: 0.72),
@@ -499,7 +500,7 @@ class _CountdownFocusModeScreenState extends State<CountdownFocusModeScreen>
         Text(
           '이제 시작해볼까요?',
           textAlign: TextAlign.center,
-          style: GoogleFonts.notoSansKr(
+          style: appFont(
             fontSize: 22,
             fontWeight: FontWeight.w800,
             color: Colors.white,
@@ -607,10 +608,7 @@ class _CountdownFocusModeScreenState extends State<CountdownFocusModeScreen>
         ),
         child: Text(
           label,
-          style: GoogleFonts.notoSansKr(
-            fontSize: 16,
-            fontWeight: FontWeight.w800,
-          ),
+          style: appFont(fontSize: 16, fontWeight: FontWeight.w800),
         ),
       ),
     );
@@ -627,10 +625,7 @@ class _CountdownFocusModeScreenState extends State<CountdownFocusModeScreen>
       ),
       child: Text(
         label,
-        style: GoogleFonts.notoSansKr(
-          fontSize: 14,
-          fontWeight: FontWeight.w800,
-        ),
+        style: appFont(fontSize: 14, fontWeight: FontWeight.w800),
       ),
     );
   }
@@ -797,7 +792,7 @@ class _SleepAssistModeScreenState extends State<SleepAssistModeScreen>
               child: Text(
                 '충분히 편안해지셨다면 이제 휴대폰을 내려놓으세요.\n눈을 감고, 방금처럼 편안하게 숨을 이어가시면 됩니다.',
                 textAlign: TextAlign.center,
-                style: GoogleFonts.notoSansKr(
+                style: appFont(
                   fontSize: 16,
                   height: 1.7,
                   fontWeight: FontWeight.w600,
@@ -820,7 +815,7 @@ class _SleepAssistModeScreenState extends State<SleepAssistModeScreen>
             Text(
               '딱 1분만, 몸의 힘을 빼고 천천히 호흡해 보세요.\n배가 부풀고 가라앉는 감각에만 집중해 주세요.',
               textAlign: TextAlign.center,
-              style: GoogleFonts.notoSansKr(
+              style: appFont(
                 fontSize: 18,
                 height: 1.55,
                 fontWeight: FontWeight.w800,
@@ -831,7 +826,7 @@ class _SleepAssistModeScreenState extends State<SleepAssistModeScreen>
             Text(
               '어지럽거나 불편하면 평소 호흡으로 돌아가도 괜찮아요.',
               textAlign: TextAlign.center,
-              style: GoogleFonts.notoSansKr(
+              style: appFont(
                 fontSize: 12,
                 fontWeight: FontWeight.w500,
                 color: Colors.white.withValues(alpha: 0.5),
@@ -856,7 +851,7 @@ class _SleepAssistModeScreenState extends State<SleepAssistModeScreen>
             cue,
             key: ValueKey(cue),
             textAlign: TextAlign.center,
-            style: GoogleFonts.notoSansKr(
+            style: appFont(
               fontSize: 20,
               fontWeight: FontWeight.w800,
               color: Colors.white.withValues(alpha: 0.92),
@@ -876,7 +871,7 @@ class _SleepAssistModeScreenState extends State<SleepAssistModeScreen>
             onPressed: _restart,
             child: Text(
               '다시 시작',
-              style: GoogleFonts.notoSansKr(
+              style: appFont(
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
                 color: Colors.white.withValues(alpha: 0.72),
@@ -888,7 +883,7 @@ class _SleepAssistModeScreenState extends State<SleepAssistModeScreen>
             onPressed: () => Navigator.pop(context),
             child: Text(
               '종료',
-              style: GoogleFonts.notoSansKr(
+              style: appFont(
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
                 color: Colors.white.withValues(alpha: 0.5),
@@ -11498,7 +11493,7 @@ $block
                             const SizedBox(width: 6),
                             Text(
                               '캘린더 일정 등록 제안',
-                              style: GoogleFonts.notoSansKr(
+                              style: appFont(
                                 fontSize: 15,
                                 fontWeight: FontWeight.w800,
                                 color: const Color(0xFF1E1E2D),
@@ -11540,7 +11535,7 @@ $block
                                 const SizedBox(width: 6),
                                 Text(
                                   _repeatRuleLabel(confirmedRepeatRule),
-                                  style: GoogleFonts.notoSansKr(
+                                  style: appFont(
                                     fontSize: 13,
                                     fontWeight: FontWeight.bold,
                                     color: _coach.accentColor,
@@ -11565,7 +11560,7 @@ $block
                     const SizedBox(height: 18),
                     TextField(
                       controller: titleCtrl,
-                      style: GoogleFonts.notoSansKr(
+                      style: appFont(
                         fontSize: 24,
                         fontWeight: FontWeight.w900,
                         color: const Color(0xFF1E1E2D),
@@ -11621,7 +11616,7 @@ $block
                                 const SizedBox(width: 6),
                                 Text(
                                   _scheduleDateLabel(confirmedDate),
-                                  style: GoogleFonts.notoSansKr(
+                                  style: appFont(
                                     fontSize: 13,
                                     fontWeight: FontWeight.bold,
                                     color: _coach.accentColor,
@@ -11687,7 +11682,7 @@ $block
                                   confirmedTime != null
                                       ? _formatTimeOfDay(confirmedTime!)
                                       : '시간 설정 안 함',
-                                  style: GoogleFonts.notoSansKr(
+                                  style: appFont(
                                     fontSize: 13,
                                     fontWeight: FontWeight.bold,
                                     color: _coach.accentColor,
@@ -11731,7 +11726,7 @@ $block
                                 children: [
                                   Text(
                                     '~ ${_formatTimeOfDay(confirmedEndTime!)}',
-                                    style: GoogleFonts.notoSansKr(
+                                    style: appFont(
                                       fontSize: 13,
                                       fontWeight: FontWeight.bold,
                                       color: _coach.accentColor,
@@ -11812,7 +11807,7 @@ $block
                             const SizedBox(width: 6),
                             Text(
                               reminderEnabled ? '알람 ON' : '알람 OFF',
-                              style: GoogleFonts.notoSansKr(
+                              style: appFont(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w800,
                                 color: _coach.accentColor,
@@ -11889,7 +11884,7 @@ $block
                             },
                             child: Text(
                               '추가하기 ✓',
-                              style: GoogleFonts.notoSansKr(
+                              style: appFont(
                                 fontSize: 15,
                                 fontWeight: FontWeight.w900,
                               ),
@@ -11911,7 +11906,7 @@ $block
                             onPressed: () => Navigator.pop(ctx),
                             child: Text(
                               '괜찮아',
-                              style: GoogleFonts.notoSansKr(
+                              style: appFont(
                                 fontSize: 15,
                                 fontWeight: FontWeight.w700,
                               ),
@@ -15710,7 +15705,7 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
                               : (msg.contains('로그인')
                                     ? '로그인이 필요해요'
                                     : '오늘 대화는 여기까지 해요')),
-                      style: GoogleFonts.notoSansKr(
+                      style: appFont(
                         fontSize: 18,
                         fontWeight: FontWeight.w900,
                         color: const Color(0xFF1A1A2E),
@@ -15722,7 +15717,7 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
               const SizedBox(height: 14),
               Text(
                 msg,
-                style: GoogleFonts.notoSansKr(
+                style: appFont(
                   fontSize: 14,
                   height: 1.5,
                   fontWeight: FontWeight.w700,
@@ -15749,10 +15744,7 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
                     ),
                     child: Text(
                       '마스터 플랜 보기',
-                      style: GoogleFonts.notoSansKr(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w900,
-                      ),
+                      style: appFont(fontSize: 15, fontWeight: FontWeight.w900),
                     ),
                   ),
                 ),
@@ -15772,10 +15764,7 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
                   ),
                   child: Text(
                     '알겠어요',
-                    style: GoogleFonts.notoSansKr(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w900,
-                    ),
+                    style: appFont(fontSize: 14, fontWeight: FontWeight.w900),
                   ),
                 ),
               ),
@@ -16029,7 +16018,7 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
                   targets.length == 1
                       ? '완료로 표시할까요?'
                       : '${targets.length}개를 완료로 표시할까요?',
-                  style: GoogleFonts.notoSansKr(
+                  style: appFont(
                     fontSize: 10,
                     fontWeight: FontWeight.w800,
                     color: accent,
@@ -16046,7 +16035,7 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
                 padding: const EdgeInsets.only(bottom: 2),
                 child: Text(
                   target.label,
-                  style: GoogleFonts.notoSansKr(
+                  style: appFont(
                     fontSize: 14,
                     fontWeight: FontWeight.w700,
                     color: const Color(0xFF1A1A2E),
@@ -16056,7 +16045,7 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
             if (targets.length > _doneConfirmNameLimit)
               Text(
                 '외 ${targets.length - _doneConfirmNameLimit}개',
-                style: GoogleFonts.notoSansKr(
+                style: appFont(
                   fontSize: 12.5,
                   fontWeight: FontWeight.w700,
                   color: const Color(0xFF8A8698),
@@ -16077,7 +16066,7 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
                       ),
                       child: Text(
                         '아니야',
-                        style: GoogleFonts.notoSansKr(
+                        style: appFont(
                           fontSize: 13,
                           fontWeight: FontWeight.w800,
                           color: const Color(0xFF8A8698),
@@ -16099,7 +16088,7 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
                       ),
                       child: Text(
                         '완료로 표시',
-                        style: GoogleFonts.notoSansKr(
+                        style: appFont(
                           fontSize: 13,
                           fontWeight: FontWeight.w800,
                           color: Colors.white,
@@ -16156,7 +16145,7 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
                 const SizedBox(width: 4),
                 Text(
                   '할 일로 추가할까요?',
-                  style: GoogleFonts.notoSansKr(
+                  style: appFont(
                     fontSize: 10,
                     fontWeight: FontWeight.w800,
                     color: accent,
@@ -16168,7 +16157,7 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
             // 할 일 이름
             Text(
               task.text,
-              style: GoogleFonts.notoSansKr(
+              style: appFont(
                 fontSize: 14,
                 fontWeight: FontWeight.w700,
                 color: const Color(0xFF1A1A2E),
@@ -16227,7 +16216,7 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
                         task.time != null
                             ? _formatTime12(task.time!)
                             : '시간 정하기',
-                        style: GoogleFonts.notoSansKr(
+                        style: appFont(
                           fontSize: 11,
                           fontWeight: FontWeight.w700,
                           color: const Color(0xFF7C6BC4),
@@ -16260,7 +16249,7 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
                       child: Center(
                         child: Text(
                           '추가하기 ✓',
-                          style: GoogleFonts.notoSansKr(
+                          style: appFont(
                             fontSize: 12,
                             fontWeight: FontWeight.w800,
                             color: _accentButtonTextColor,
@@ -16285,7 +16274,7 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
                       child: Center(
                         child: Text(
                           '괜찮아',
-                          style: GoogleFonts.notoSansKr(
+                          style: appFont(
                             fontSize: 12,
                             fontWeight: FontWeight.w700,
                             color: const Color(0xFF6B7280),
@@ -16347,7 +16336,7 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
                   leadMessage,
                   // 코치가 하는 말이라 일반 말풍선과 같은 굵기로 둔다. 굵게
                   // 쓰면 안내문처럼 읽혀서 사람이 하는 말 같지 않다.
-                  style: GoogleFonts.notoSansKr(
+                  style: appFont(
                     fontSize: AppDesignTokens.textBody,
                     fontWeight: FontWeight.w500,
                     color: AppDesignTokens.textPrimary,
@@ -16394,7 +16383,7 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
                     (_timerConfirmTaskName ?? '').isEmpty
                         ? '▶ 좋아, 띄워줘'
                         : '▶ 지금 잠깐이라도 해볼게',
-                    style: GoogleFonts.notoSansKr(
+                    style: appFont(
                       fontSize: 14,
                       fontWeight: FontWeight.w800,
                       color: Colors.white,
@@ -16463,7 +16452,7 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
                     (_timerConfirmTaskName ?? '').isEmpty
                         ? '지금은 괜찮아'
                         : '일 끝나고 할게',
-                    style: GoogleFonts.notoSansKr(
+                    style: appFont(
                       fontSize: 13,
                       fontWeight: FontWeight.w700,
                       color: const Color(0xFF6B7280),
@@ -16510,7 +16499,7 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
                 child: Center(
                   child: Text(
                     '내 타이밍에 할게',
-                    style: GoogleFonts.notoSansKr(
+                    style: appFont(
                       fontSize: 13,
                       fontWeight: FontWeight.w700,
                       color: const Color(0xFF6B7280),
@@ -16611,7 +16600,7 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
                   const SizedBox(width: 8),
                   Text(
                     item['label']!,
-                    style: GoogleFonts.notoSansKr(
+                    style: appFont(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
                       color: const Color(0xFF6B5EA8),
@@ -16669,7 +16658,7 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
                   // 진행률, 연속 일수가 늘어선 데이터 줄이라 거기 손글씨가 하나
                   // 끼면 규칙이 아니라 실수로 보인다. 개구는 획도 가늘어서 진한
                   // 보라 위 흰 글씨로는 지금보다 약해진다.
-                  style: GoogleFonts.notoSansKr(
+                  style: appFont(
                     fontSize: 13,
                     fontWeight: FontWeight.w900,
                     color: Colors.white,
@@ -16854,7 +16843,7 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
             child: Text(
               '메모 검색',
               textAlign: TextAlign.center,
-              style: GoogleFonts.notoSansKr(
+              style: appFont(
                 fontSize: 16,
                 fontWeight: FontWeight.w800,
                 color: const Color(0xFF3D3560),
@@ -16884,16 +16873,10 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
           controller: _memoSearchController,
           autofocus: true,
           onChanged: (value) => setState(() => _memoSearchQuery = value),
-          style: GoogleFonts.notoSansKr(
-            fontSize: 14,
-            color: const Color(0xFF3D3560),
-          ),
+          style: appFont(fontSize: 14, color: const Color(0xFF3D3560)),
           decoration: InputDecoration(
             hintText: '찾고 싶은 메모의 단어를 입력하세요',
-            hintStyle: GoogleFonts.notoSansKr(
-              fontSize: 14,
-              color: const Color(0xFFB4AAD6),
-            ),
+            hintStyle: appFont(fontSize: 14, color: const Color(0xFFB4AAD6)),
             border: InputBorder.none,
             isDense: true,
             contentPadding: const EdgeInsets.symmetric(vertical: 12),
@@ -16915,10 +16898,7 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
         child: Text(
           text,
           textAlign: TextAlign.center,
-          style: GoogleFonts.notoSansKr(
-            fontSize: 13,
-            color: const Color(0xFFB4AAD6),
-          ),
+          style: appFont(fontSize: 13, color: const Color(0xFFB4AAD6)),
         ),
       ),
     );
@@ -16944,7 +16924,7 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
 
   Widget _buildMemoResultCard(Map<String, String> entry, String query) {
     final snippet = _memoSnippet(entry['memoContent']!, query);
-    final baseStyle = GoogleFonts.notoSansKr(
+    final baseStyle = appFont(
       fontSize: 13,
       color: const Color(0xFF6B5EA8),
       height: 1.4,
@@ -16972,7 +16952,7 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
               entry['milestoneText']!,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: GoogleFonts.notoSansKr(
+              style: appFont(
                 fontSize: 13,
                 fontWeight: FontWeight.w700,
                 color: const Color(0xFF3D3560),
@@ -17005,7 +16985,7 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
         children: [
           Text(
             entry['milestoneText']!,
-            style: GoogleFonts.notoSansKr(
+            style: appFont(
               fontSize: 15,
               fontWeight: FontWeight.w700,
               color: const Color(0xFF3D3560),
@@ -17015,7 +16995,7 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
             const SizedBox(height: 10),
             Text(
               entry['memoTitle']!,
-              style: GoogleFonts.notoSansKr(
+              style: appFont(
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
                 color: const Color(0xFF6B5EA8),
@@ -17025,7 +17005,7 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
           const SizedBox(height: 12),
           Text(
             entry['memoContent']!,
-            style: GoogleFonts.notoSansKr(
+            style: appFont(
               fontSize: 14,
               color: const Color(0xFF3D3560),
               height: 1.6,
@@ -17072,7 +17052,7 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
             child: Text(
               _flirtMsg,
               textAlign: TextAlign.center,
-              style: GoogleFonts.notoSansKr(
+              style: appFont(
                 fontSize: 14,
                 fontWeight: FontWeight.w700,
                 color: const Color(0xFF3D3A4E),
@@ -17119,7 +17099,7 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
                     Text(
                       '오늘 목표',
                       overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.notoSansKr(
+                      style: appFont(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
                         color: AppDesignTokens.textMuted,
@@ -17127,7 +17107,7 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
                     ),
                     Text(
                       '$_completedTasks / $_totalTasks',
-                      style: GoogleFonts.notoSansKr(
+                      style: appFont(
                         fontSize: 13,
                         fontWeight: FontWeight.w800,
                         color: AppDesignTokens.brandPressed,
@@ -17229,7 +17209,7 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
                     children: [
                       Text(
                         '이번 주 움직인 날',
-                        style: GoogleFonts.notoSansKr(
+                        style: appFont(
                           fontSize: 10,
                           fontWeight: FontWeight.w700,
                           color: AppDesignTokens.brand,
@@ -17243,7 +17223,7 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
                         // 없으면 발화할 때마다 "이번 주에 뭐라도 해낸 날이"처럼
                         // 풀어 써야 하고, 짧게 줄이면 뭘 센 건지 안 통한다.
                         '$_movedDays일',
-                        style: GoogleFonts.notoSansKr(
+                        style: appFont(
                           fontSize: 12,
                           fontWeight: FontWeight.w900,
                           color: AppDesignTokens.textPrimary,
@@ -17266,7 +17246,7 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
                   children: [
                     Text(
                       '오늘 목표',
-                      style: GoogleFonts.notoSansKr(
+                      style: appFont(
                         fontSize: 11,
                         fontWeight: FontWeight.w700,
                         color: AppDesignTokens.textMuted,
@@ -17274,7 +17254,7 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
                     ),
                     Text(
                       '$_completedTasks / $_totalTasks',
-                      style: GoogleFonts.notoSansKr(
+                      style: appFont(
                         fontSize: 12,
                         fontWeight: FontWeight.w800,
                         color: AppDesignTokens.brandPressed,
@@ -17316,7 +17296,7 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
                   const SizedBox(height: 4),
                   Text(
                     _friendStatusMessage(),
-                    style: GoogleFonts.notoSansKr(
+                    style: appFont(
                       fontSize: 11,
                       fontWeight: FontWeight.w500,
                       color: AppDesignTokens.brandTextMuted,
@@ -17345,7 +17325,7 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
           // 프렌즈: 배경에 이미 코치 이미지 있으므로 텍스트만
           Text(
             '${_coach.name}가 기다리고 있어요',
-            style: GoogleFonts.notoSansKr(
+            style: appFont(
               fontSize: 16,
               fontWeight: FontWeight.w800,
               color: Colors.white.withOpacity(0.9),
@@ -17355,7 +17335,7 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
           Text(
             '아래 버튼을 누르거나\n메시지를 입력해보세요!',
             textAlign: TextAlign.center,
-            style: GoogleFonts.notoSansKr(
+            style: appFont(
               fontSize: 13,
               color: Colors.white.withOpacity(0.7),
               height: 1.5,
@@ -17460,7 +17440,7 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             child: Text(
               '지난 대화 보기',
-              style: GoogleFonts.notoSansKr(
+              style: appFont(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
                 color: const Color(0xFFB2AEC6),
@@ -17484,7 +17464,7 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
             padding: const EdgeInsets.symmetric(horizontal: 10),
             child: Text(
               '오늘',
-              style: GoogleFonts.notoSansKr(
+              style: appFont(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
                 color: const Color(0xFFA7A2BE),
@@ -17625,7 +17605,7 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
               padding: const EdgeInsets.only(right: 6, bottom: 2),
               child: Text(
                 time,
-                style: GoogleFonts.notoSansKr(
+                style: appFont(
                   fontSize: AppDesignTokens.textMeta,
                   color: AppDesignTokens.textDisabled,
                 ),
@@ -17654,7 +17634,7 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
               ),
               child: _buildMessageText(
                 msg,
-                GoogleFonts.notoSansKr(
+                appFont(
                   fontSize: AppDesignTokens.textBody,
                   height: 1.6,
                   fontWeight: FontWeight.w500,
@@ -17668,7 +17648,7 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
               padding: const EdgeInsets.only(left: 6, bottom: 2),
               child: Text(
                 time,
-                style: GoogleFonts.notoSansKr(
+                style: appFont(
                   fontSize: AppDesignTokens.textMeta,
                   color: AppDesignTokens.textDisabled,
                 ),
@@ -17713,7 +17693,7 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
               label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: GoogleFonts.notoSansKr(
+              style: appFont(
                 fontSize: 13,
                 fontWeight: FontWeight.w800,
                 color: const Color(0xFF6F5FD6),
@@ -17773,7 +17753,7 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
                 children: [
                   Text(
                     msg.text,
-                    style: GoogleFonts.notoSansKr(
+                    style: appFont(
                       fontSize: AppDesignTokens.textBody,
                       fontWeight: FontWeight.w500,
                       height: 1.6,
@@ -17801,7 +17781,7 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
             padding: const EdgeInsets.only(left: 6, bottom: 2),
             child: Text(
               time,
-              style: GoogleFonts.notoSansKr(
+              style: appFont(
                 fontSize: AppDesignTokens.textMeta,
                 color: AppDesignTokens.textDisabled,
               ),
@@ -17842,7 +17822,7 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
           child: Text(
             label,
             textAlign: TextAlign.center,
-            style: GoogleFonts.notoSansKr(
+            style: appFont(
               fontSize: 13,
               fontWeight: FontWeight.w800,
               color: isPrimary ? accent : AppDesignTokens.textMuted,
@@ -17853,7 +17833,7 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
     }
 
     Widget highlightedText() {
-      final baseStyle = GoogleFonts.notoSansKr(
+      final baseStyle = appFont(
         fontSize: AppDesignTokens.textBody,
         fontWeight: FontWeight.w500,
         height: 1.6,
@@ -17967,7 +17947,7 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
             padding: const EdgeInsets.only(left: 6, bottom: 2),
             child: Text(
               time,
-              style: GoogleFonts.notoSansKr(
+              style: appFont(
                 fontSize: AppDesignTokens.textMeta,
                 color: AppDesignTokens.textDisabled,
               ),
@@ -18002,7 +17982,7 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
           child: Text(
             label,
             textAlign: TextAlign.center,
-            style: GoogleFonts.notoSansKr(
+            style: appFont(
               fontSize: 13,
               fontWeight: FontWeight.w800,
               color: accent,
@@ -18061,7 +18041,7 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
                 children: [
                   Text(
                     msg.text,
-                    style: GoogleFonts.notoSansKr(
+                    style: appFont(
                       fontSize: AppDesignTokens.textBody,
                       fontWeight: FontWeight.w500,
                       height: 1.6,
@@ -18080,7 +18060,7 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
             padding: const EdgeInsets.only(left: 6, bottom: 2),
             child: Text(
               time,
-              style: GoogleFonts.notoSansKr(
+              style: appFont(
                 fontSize: AppDesignTokens.textMeta,
                 color: AppDesignTokens.textDisabled,
               ),
@@ -18224,7 +18204,7 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
                 children: [
                   Text(
                     msg.text,
-                    style: GoogleFonts.notoSansKr(
+                    style: appFont(
                       fontSize: AppDesignTokens.textBody,
                       fontWeight: FontWeight.w500,
                       height: 1.6,
@@ -18251,7 +18231,7 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
             padding: const EdgeInsets.only(left: 6, bottom: 2),
             child: Text(
               time,
-              style: GoogleFonts.notoSansKr(
+              style: appFont(
                 fontSize: AppDesignTokens.textMeta,
                 color: AppDesignTokens.textDisabled,
               ),
@@ -18322,7 +18302,7 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
                 children: [
                   Text(
                     msg.text,
-                    style: GoogleFonts.notoSansKr(
+                    style: appFont(
                       fontSize: AppDesignTokens.textBody,
                       fontWeight: FontWeight.w500,
                       height: 1.6,
@@ -18345,7 +18325,7 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
             padding: const EdgeInsets.only(left: 6, bottom: 2),
             child: Text(
               time,
-              style: GoogleFonts.notoSansKr(
+              style: appFont(
                 fontSize: AppDesignTokens.textMeta,
                 color: AppDesignTokens.textDisabled,
               ),
@@ -18483,7 +18463,7 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
               ),
               child: Text(
                 msg.text,
-                style: GoogleFonts.notoSansKr(
+                style: appFont(
                   fontSize: AppDesignTokens.textBody,
                   fontWeight: FontWeight.w500,
                   height: 1.6,
@@ -18508,7 +18488,7 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
                 ),
                 child: Text(
                   _lifeMultiHint(),
-                  style: GoogleFonts.notoSansKr(
+                  style: appFont(
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
                     color: AppDesignTokens.textSecondary,
@@ -18558,7 +18538,7 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
                       Expanded(
                         child: Text(
                           label,
-                          style: GoogleFonts.notoSansKr(
+                          style: appFont(
                             fontSize: 13,
                             fontWeight: FontWeight.w800,
                             color: accent,
@@ -18583,7 +18563,7 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
                 ),
                 child: Text(
                   '이걸로 할게',
-                  style: GoogleFonts.notoSansKr(
+                  style: appFont(
                     fontSize: 13,
                     fontWeight: FontWeight.w900,
                     color: Colors.white,
@@ -18627,7 +18607,7 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
               ),
               child: Text(
                 msg.text,
-                style: GoogleFonts.notoSansKr(
+                style: appFont(
                   fontSize: AppDesignTokens.textBody,
                   fontWeight: FontWeight.w500,
                   height: 1.6,
@@ -18651,7 +18631,7 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
                 picked.length >= _conditionPickLimit
                     ? '$_conditionPickLimit개까지 고를 수 있어요. 바꾸려면 고른 걸 눌러서 빼주세요.'
                     : '해당하는 걸로 최대 $_conditionPickLimit개까지 고를 수 있어요.',
-                style: GoogleFonts.notoSansKr(
+                style: appFont(
                   fontSize: 11,
                   fontWeight: FontWeight.w600,
                   color: AppDesignTokens.textSecondary,
@@ -18706,7 +18686,7 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
                         Expanded(
                           child: Text(
                             label,
-                            style: GoogleFonts.notoSansKr(
+                            style: appFont(
                               fontSize: 13,
                               fontWeight: FontWeight.w800,
                               color: accent,
@@ -18732,7 +18712,7 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
                 ),
                 child: Text(
                   '이걸로 할게',
-                  style: GoogleFonts.notoSansKr(
+                  style: appFont(
                     fontSize: 13,
                     fontWeight: FontWeight.w900,
                     color: Colors.white,
@@ -19299,7 +19279,7 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
                   if (msg.text.trim().isNotEmpty) ...[
                     Text(
                       msg.text,
-                      style: GoogleFonts.notoSansKr(
+                      style: appFont(
                         fontSize: AppDesignTokens.textBody,
                         fontWeight: FontWeight.w500,
                         height: 1.6,
@@ -19320,7 +19300,7 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
             padding: const EdgeInsets.only(left: 6, bottom: 2),
             child: Text(
               time,
-              style: GoogleFonts.notoSansKr(
+              style: appFont(
                 fontSize: AppDesignTokens.textMeta,
                 color: AppDesignTokens.textDisabled,
               ),
@@ -20265,7 +20245,7 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
                           maxLines: null,
                           textInputAction: TextInputAction.send,
                           onSubmitted: _send,
-                          style: GoogleFonts.notoSansKr(
+                          style: appFont(
                             fontSize: AppDesignTokens.textBody,
                             color: isNyang
                                 ? AppDesignTokens.textPrimary
@@ -20275,7 +20255,7 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
                           ),
                           decoration: InputDecoration(
                             hintText: '메시지를 입력하세요...',
-                            hintStyle: GoogleFonts.notoSansKr(
+                            hintStyle: appFont(
                               fontSize: AppDesignTokens.textBody,
                               color: isNyang
                                   ? AppDesignTokens.textPrimary.withValues(
@@ -20384,7 +20364,7 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
           Expanded(
             child: Text(
               _usageLimitBanner!,
-              style: GoogleFonts.notoSansKr(
+              style: appFont(
                 fontSize: 12,
                 height: 1.35,
                 fontWeight: FontWeight.w800,

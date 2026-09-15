@@ -22,8 +22,7 @@ class RoutineSpreadPlan {
   static const List<int> defaultDays = [1, 3];
 
   /// 사람에게 보여줄 요일. `화·목`.
-  static String label(List<int> days) =>
-      days.map((d) => dayNames[d]).join('·');
+  static String label(List<int> days) => days.map((d) => dayNames[d]).join('·');
 }
 
 @immutable

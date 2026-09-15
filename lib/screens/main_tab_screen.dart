@@ -6,7 +6,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:google_fonts/google_fonts.dart';
+import '../theme/app_font.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:audioplayers/audioplayers.dart';
 import '../models/user_data.dart';
@@ -266,7 +266,7 @@ class _MainTabScreenState extends State<MainTabScreen>
         return AlertDialog(
           title: Text(
             '개발자용 플랜 시뮬레이터',
-            style: GoogleFonts.notoSansKr(fontWeight: FontWeight.w900),
+            style: appFont(fontWeight: FontWeight.w900),
           ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
@@ -275,7 +275,7 @@ class _MainTabScreenState extends State<MainTabScreen>
                 leading: const Icon(Icons.star_border, color: Colors.grey),
                 title: Text(
                   '비구독자 상태 (none)',
-                  style: GoogleFonts.notoSansKr(fontWeight: FontWeight.w600),
+                  style: appFont(fontWeight: FontWeight.w600),
                 ),
                 onTap: () async {
                   await UserDataService.setPlan('none');
@@ -286,7 +286,7 @@ class _MainTabScreenState extends State<MainTabScreen>
                 leading: const Icon(Icons.pets, color: Color(0xFF03C75A)),
                 title: Text(
                   '프렌즈 플랜 (friends)',
-                  style: GoogleFonts.notoSansKr(fontWeight: FontWeight.w600),
+                  style: appFont(fontWeight: FontWeight.w600),
                 ),
                 onTap: () async {
                   await UserDataService.setPlan('friends');
@@ -300,7 +300,7 @@ class _MainTabScreenState extends State<MainTabScreen>
                 ),
                 title: Text(
                   '마스터 플랜 (master)',
-                  style: GoogleFonts.notoSansKr(fontWeight: FontWeight.w600),
+                  style: appFont(fontWeight: FontWeight.w600),
                 ),
                 onTap: () async {
                   await UserDataService.setPlan('master');
@@ -312,10 +312,7 @@ class _MainTabScreenState extends State<MainTabScreen>
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: Text(
-                '닫기',
-                style: GoogleFonts.notoSansKr(fontWeight: FontWeight.w700),
-              ),
+              child: Text('닫기', style: appFont(fontWeight: FontWeight.w700)),
             ),
           ],
         );
@@ -428,7 +425,7 @@ class _MainTabScreenState extends State<MainTabScreen>
             ),
             title: Text(
               c.name,
-              style: GoogleFonts.notoSansKr(
+              style: appFont(
                 fontSize: 14,
                 fontWeight: isSelected ? FontWeight.w900 : FontWeight.w600,
                 color: isOwned
@@ -484,10 +481,7 @@ class _MainTabScreenState extends State<MainTabScreen>
                 const SizedBox(height: 12),
                 Text(
                   '내 코치 이동',
-                  style: GoogleFonts.notoSansKr(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: appFont(fontSize: 16, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 12),
                 Expanded(
@@ -507,7 +501,7 @@ class _MainTabScreenState extends State<MainTabScreen>
                             ),
                             child: Text(
                               section.$1,
-                              style: GoogleFonts.notoSansKr(
+                              style: appFont(
                                 fontSize: 12,
                                 fontWeight: FontWeight.bold,
                                 color: Colors.grey,
@@ -1036,7 +1030,7 @@ class _MainTabScreenState extends State<MainTabScreen>
                       children: [
                         Text(
                           '냥이가 홈 화면에서도 기다릴까?',
-                          style: GoogleFonts.notoSansKr(
+                          style: appFont(
                             fontSize: 20,
                             fontWeight: FontWeight.w900,
                             color: AppDesignTokens.textPrimary,
@@ -1045,7 +1039,7 @@ class _MainTabScreenState extends State<MainTabScreen>
                         const SizedBox(height: 4),
                         Text(
                           '앱을 열지 않아도 오늘 할 일을 살짝 볼 수 있다냥.',
-                          style: GoogleFonts.notoSansKr(
+                          style: appFont(
                             fontSize: 13,
                             height: 1.4,
                             fontWeight: FontWeight.w600,
@@ -1549,7 +1543,7 @@ class _MainTabScreenState extends State<MainTabScreen>
               const SizedBox(height: 32),
               Text(
                 '⏰ 모닝콜 시간입니다!',
-                style: GoogleFonts.notoSansKr(
+                style: appFont(
                   fontSize: 24,
                   fontWeight: FontWeight.w900,
                   color: Colors.white,
@@ -1558,7 +1552,7 @@ class _MainTabScreenState extends State<MainTabScreen>
               const SizedBox(height: 8),
               Text(
                 '${coach.name} 코치가 깨우러 왔어요',
-                style: GoogleFonts.notoSansKr(
+                style: appFont(
                   fontSize: 16,
                   fontWeight: FontWeight.w500,
                   color: Colors.white70,
@@ -1582,7 +1576,7 @@ class _MainTabScreenState extends State<MainTabScreen>
                 ),
                 child: Text(
                   '모닝콜 끄기',
-                  style: GoogleFonts.notoSansKr(
+                  style: appFont(
                     fontSize: 20,
                     fontWeight: FontWeight.w800,
                     color: Colors.white,
@@ -1701,7 +1695,7 @@ class _MainTabScreenState extends State<MainTabScreen>
                 padding: const EdgeInsets.symmetric(horizontal: 24.0),
                 child: Text(
                   taskText.isNotEmpty ? '🔔 $taskText' : '🔔 오늘의 핵심 일정',
-                  style: GoogleFonts.notoSansKr(
+                  style: appFont(
                     fontSize: 24,
                     fontWeight: FontWeight.w900,
                     color: Colors.white,
@@ -1712,7 +1706,7 @@ class _MainTabScreenState extends State<MainTabScreen>
               const SizedBox(height: 8),
               Text(
                 '${coach.name}가 잊지 않게 알려드려요!',
-                style: GoogleFonts.notoSansKr(
+                style: appFont(
                   fontSize: 16,
                   fontWeight: FontWeight.w500,
                   color: Colors.white70,
@@ -1737,7 +1731,7 @@ class _MainTabScreenState extends State<MainTabScreen>
                 ),
                 child: Text(
                   '확인',
-                  style: GoogleFonts.notoSansKr(
+                  style: appFont(
                     fontSize: 20,
                     fontWeight: FontWeight.w800,
                     color: Colors.white,
@@ -1872,7 +1866,7 @@ class _MainTabScreenState extends State<MainTabScreen>
         content: Text(
           '채팅과 할 일 중 자주 쓰는 쪽을 메인으로 바꿀 수 있어요.\n'
           '아래 탭을 길게 눌러보세요.',
-          style: GoogleFonts.notoSansKr(
+          style: appFont(
             fontSize: AppDesignTokens.textCaption,
             fontWeight: FontWeight.w600,
             color: Colors.white,
@@ -1912,59 +1906,57 @@ class _MainTabScreenState extends State<MainTabScreen>
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-            Text(
-              '$target을 메인으로 쓸까요?',
-              style: GoogleFonts.notoSansKr(
-                fontSize: AppDesignTokens.textTitle,
-                fontWeight: FontWeight.w800,
-                color: AppDesignTokens.textPrimary,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              '앱을 열면 $target 화면이 먼저 보이고, '
-              '${toTodo ? '채팅' : '할 일'}은 옆에서 열리는 서랍이 됩니다.\n'
-              '대화 기록과 할 일은 그대로 있어요.',
-              style: GoogleFonts.notoSansKr(
-                fontSize: AppDesignTokens.textCaption,
-                color: AppDesignTokens.textSecondary,
-                height: 1.5,
-              ),
-            ),
-            const SizedBox(height: 20),
-            Row(
-              children: [
-                Expanded(
-                  child: TextButton(
-                    onPressed: () => Navigator.pop(sheetContext, false),
-                    child: Text(
-                      '그대로 둘게요',
-                      style: GoogleFonts.notoSansKr(
-                        fontWeight: FontWeight.w700,
-                        color: AppDesignTokens.textMuted,
-                      ),
-                    ),
-                  ),
+              Text(
+                '$target을 메인으로 쓸까요?',
+                style: appFont(
+                  fontSize: AppDesignTokens.textTitle,
+                  fontWeight: FontWeight.w800,
+                  color: AppDesignTokens.textPrimary,
                 ),
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: () => Navigator.pop(sheetContext, true),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppDesignTokens.brand,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(
-                          AppDesignTokens.radiusMedium,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '앱을 열면 $target 화면이 먼저 보이고, '
+                '${toTodo ? '채팅' : '할 일'}은 옆에서 열리는 서랍이 됩니다.\n'
+                '대화 기록과 할 일은 그대로 있어요.',
+                style: appFont(
+                  fontSize: AppDesignTokens.textCaption,
+                  color: AppDesignTokens.textSecondary,
+                  height: 1.5,
+                ),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextButton(
+                      onPressed: () => Navigator.pop(sheetContext, false),
+                      child: Text(
+                        '그대로 둘게요',
+                        style: appFont(
+                          fontWeight: FontWeight.w700,
+                          color: AppDesignTokens.textMuted,
                         ),
                       ),
                     ),
-                    child: Text(
-                      '바꾸기',
-                      style: GoogleFonts.notoSansKr(
-                        fontWeight: FontWeight.w800,
+                  ),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.pop(sheetContext, true),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppDesignTokens.brand,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(
+                            AppDesignTokens.radiusMedium,
+                          ),
+                        ),
+                      ),
+                      child: Text(
+                        '바꾸기',
+                        style: appFont(fontWeight: FontWeight.w800),
                       ),
                     ),
-                  ),
                   ),
                 ],
               ),
@@ -2217,7 +2209,7 @@ class _MainTabScreenState extends State<MainTabScreen>
                               behavior: HitTestBehavior.opaque,
                               child: Text(
                                 CoachConfigs.get(widget.coachId).name,
-                                style: GoogleFonts.notoSansKr(
+                                style: appFont(
                                   fontSize: 16,
                                   fontWeight: FontWeight.w900,
                                   color: const Color(0xFF1A1A2E),
@@ -2390,7 +2382,7 @@ class _MainTabScreenState extends State<MainTabScreen>
           behavior: HitTestBehavior.opaque,
           child: Text(
             CoachConfigs.get(widget.coachId).name,
-            style: GoogleFonts.notoSansKr(
+            style: appFont(
               fontSize: 18,
               fontWeight: FontWeight.w900,
               color: nameColor,
@@ -2526,7 +2518,7 @@ class _MainTabScreenState extends State<MainTabScreen>
                       ),
                       child: Text(
                         'NEW',
-                        style: GoogleFonts.notoSansKr(
+                        style: appFont(
                           fontSize: 9,
                           height: 1.0,
                           letterSpacing: 0.2,
@@ -2591,7 +2583,7 @@ class _MainTabScreenState extends State<MainTabScreen>
                     Expanded(
                       child: Text(
                         '플래너 활용법',
-                        style: GoogleFonts.notoSansKr(
+                        style: appFont(
                           fontSize: 18,
                           fontWeight: FontWeight.w900,
                           color: AppDesignTokens.textPrimary,
@@ -2694,7 +2686,7 @@ class _MainTabScreenState extends State<MainTabScreen>
                           alignment: Alignment.centerLeft,
                           child: Text(
                             'P.S. 설정에 생각보다 많은 기능이 숨겨져 있으니 살펴보세요.',
-                            style: GoogleFonts.notoSansKr(
+                            style: appFont(
                               fontSize: 13,
                               height: 1.5,
                               fontWeight: FontWeight.w700,
@@ -2721,10 +2713,7 @@ class _MainTabScreenState extends State<MainTabScreen>
                     ),
                     child: Text(
                       '확인',
-                      style: GoogleFonts.notoSansKr(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w900,
-                      ),
+                      style: appFont(fontSize: 15, fontWeight: FontWeight.w900),
                     ),
                   ),
                 ),
@@ -2771,7 +2760,7 @@ class _MainTabScreenState extends State<MainTabScreen>
             children: [
               Text(
                 title,
-                style: GoogleFonts.notoSansKr(
+                style: appFont(
                   fontSize: 15,
                   height: 1.35,
                   fontWeight: FontWeight.w900,
@@ -2781,7 +2770,7 @@ class _MainTabScreenState extends State<MainTabScreen>
               const SizedBox(height: 7),
               Text.rich(
                 TextSpan(children: _plannerBodySpans(body, highlightTerms)),
-                style: GoogleFonts.notoSansKr(
+                style: appFont(
                   fontSize: 13,
                   height: 1.55,
                   fontWeight: FontWeight.w600,
@@ -3026,7 +3015,7 @@ class _CatWidgetPromptOption extends StatelessWidget {
                             title,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: GoogleFonts.notoSansKr(
+                            style: appFont(
                               fontSize: 15,
                               fontWeight: FontWeight.w900,
                               color: AppDesignTokens.textPrimary,
@@ -3046,7 +3035,7 @@ class _CatWidgetPromptOption extends StatelessWidget {
                             ),
                             child: Text(
                               '추천',
-                              style: GoogleFonts.notoSansKr(
+                              style: appFont(
                                 fontSize: 11,
                                 fontWeight: FontWeight.w800,
                                 color: AppDesignTokens.brand,
@@ -3061,7 +3050,7 @@ class _CatWidgetPromptOption extends StatelessWidget {
                       subtitle,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.notoSansKr(
+                      style: appFont(
                         fontSize: 12,
                         height: 1.35,
                         fontWeight: FontWeight.w600,
@@ -3307,7 +3296,7 @@ class _TabItemState extends State<_TabItem>
                           alignment: Alignment.center,
                           child: Text(
                             '1',
-                            style: GoogleFonts.notoSansKr(
+                            style: appFont(
                               fontSize: 12,
                               height: 1,
                               fontWeight: FontWeight.w900,
@@ -3322,7 +3311,7 @@ class _TabItemState extends State<_TabItem>
                 // 레이블
                 Text(
                   widget.label,
-                  style: GoogleFonts.notoSansKr(
+                  style: appFont(
                     fontSize: AppDesignTokens.textMeta,
                     fontWeight: widget.isActive
                         ? FontWeight.w800
@@ -3465,7 +3454,7 @@ class _PlannerOverlayScreen extends StatelessWidget {
                   ),
                   child: Text(
                     '✕ 닫기',
-                    style: GoogleFonts.notoSansKr(
+                    style: appFont(
                       fontSize: 14,
                       fontWeight: FontWeight.w700,
                       color: const Color(0xFFA0A0B0),

@@ -452,8 +452,7 @@ class Prompts {
   ///
   /// 프렌즈는 사용자가 자기 입으로 말한 일에만 붙인다. 먼저 꺼내는 쪽은
   /// 마스터의 역할이고, 프렌즈는 목표도 비전도 받지 않아 근거가 없다.
-  static const String taskTagFromCoachOffer =
-      '''
+  static const String taskTagFromCoachOffer = '''
 - 코치가 방금 권한 일에도 [TASK]를 붙이세요. 예: "원고부터 잡아보자"고 권했으면 → [TASK: 원고 쓰기].''';
 
   static const String nyangHalbaeStyle = '''
@@ -483,8 +482,7 @@ class Prompts {
   ///
   /// 방식은 적지 않는다. 무엇을 노리는지만 알면 계획을 줄이라고 할지, 시각을
   /// 잡아주라고 할지, 루틴으로 굳히라고 할지는 그 턴의 사정을 보고 고른다.
-  static const String executionSupportRule =
-      '''
+  static const String executionSupportRule = '''
 - 실행 패턴이 실려 있으면 그것을 보고, 오늘의 계획을 시작부터 완료까지 해낼 수 있도록 도울 것. 실리지 않은 턴에는 없는 패턴을 지어내지 말 것.''';
 
   /// 마스터 코치가 끝을 선명하게 만들어주는 자리.
@@ -496,8 +494,7 @@ class Prompts {
   ///
   /// 그래서 끝을 미리 정해둔다. 정해져 있으면 완료를 누르는 일이 판정이
   /// 아니라 확인이 된다.
-  static const String completionSupportMaster =
-      '''
+  static const String completionSupportMaster = '''
 - 계획을 정할 때와 시작 후 마무리할 때 사용자가 끝을 선명하게 만들도록 도울 것. 그래야 끝도 없이 하는 것에서 벗어나 완료를 찍고, 내일 몫을 내일로 둘 수 있음. (예: "오늘은 주인공 하나, 성격·목표·갈등 한 문장씩이면 끝")''';
 
   /// 이루고 싶은 것을 말했는데 기한이 없을 때.
@@ -521,8 +518,7 @@ class Prompts {
   /// 나눈 끝에 행동이 놓여야 한다는 줄도 뺐다. 이 앱은 할 일과 루틴으로만
   /// 굴러가서, 무엇을 등록할 수 있는지부터 태그 규칙까지 프롬프트 곳곳이
   /// 이미 행동을 가리킨다. 같은 말을 한 번 더 적을 이유가 없다.
-  static const String goalBackcastRule =
-      '''
+  static const String goalBackcastRule = '''
 - 이루고 싶은 것과 기한을 말하면 거기서 거꾸로 세어 주 단위로, 그다음 오늘·내일 할 것까지 나눕니다.
 - 나눈 행동이 이 사람의 하루 어디에 들어갈지까지 잡아 주세요. 실려 있는 기록과 답을 쓰고, 없으면 하나만 물으세요.''';
 
@@ -691,8 +687,7 @@ class Prompts {
   ///
   /// 출력 규칙 바로 뒤에 붙는다. 태그 이야기는 다른 태그 규칙과 같은 자리,
   /// 프롬프트 끝에 있어야 한다 — 가운데 두면 뒤따르는 지시에 묻힌다.
-  static String plannerActionRules(String today) =>
-      '''
+  static String plannerActionRules(String today) => '''
 
 [이미 있는 것을 건드려달라고 할 때 - 위의 출력 규칙보다 우선]
 - 태그를 붙이면 앱이 그 일을 할 수 있는 화면을 열거나 확인 카드를 띄운다. 조작에 대한 답은 알겠다고 짧게 하면 되지만, 사용자가 함께 한 말에는 먼저 반응하세요.

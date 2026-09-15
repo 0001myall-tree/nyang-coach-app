@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import '../theme/app_font.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import '../services/morning_call_alarm_session.dart';
 import 'coach_config.dart';
@@ -108,7 +108,7 @@ class _MorningCallScreenState extends State<MorningCallScreen> {
                     // 코치 이름
                     Text(
                       coach.name,
-                      style: GoogleFonts.notoSansKr(
+                      style: appFont(
                         fontSize: 22,
                         fontWeight: FontWeight.w900,
                         color: const Color(0xFF1A1A2E),
@@ -120,7 +120,7 @@ class _MorningCallScreenState extends State<MorningCallScreen> {
                     Text(
                       '약속한 시간이 되었어요!\n얼른 일어나서 오늘을 시작해볼까요?',
                       textAlign: TextAlign.center,
-                      style: GoogleFonts.notoSansKr(
+                      style: appFont(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
                         color: const Color(0xFF6B7280),
@@ -149,7 +149,7 @@ class _MorningCallScreenState extends State<MorningCallScreen> {
                         ),
                         child: Text(
                           '모닝콜 끄고 시작하기',
-                          style: GoogleFonts.notoSansKr(
+                          style: appFont(
                             fontSize: 18,
                             fontWeight: FontWeight.w900,
                             color: Colors.white,

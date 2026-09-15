@@ -25,7 +25,10 @@ import 'routine_spread_plan.dart';
 
 @immutable
 class RoutineSpreadProposal {
-  const RoutineSpreadProposal({required this.message, required this.assignments});
+  const RoutineSpreadProposal({
+    required this.message,
+    required this.assignments,
+  });
 
   /// 코치가 건넬 말. 태그는 이미 떼어낸 상태다.
   final String message;

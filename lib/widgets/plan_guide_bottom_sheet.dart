@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:google_fonts/google_fonts.dart';
+import '../theme/app_font.dart';
 
 import '../theme/app_design_tokens.dart';
 import '../services/plan_catalog.dart';
@@ -105,10 +105,7 @@ class _PlanGuideBottomSheetState extends State<_PlanGuideBottomSheet> {
   void _showSnackBar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(
-          message,
-          style: GoogleFonts.notoSansKr(fontWeight: FontWeight.w700),
-        ),
+        content: Text(message, style: appFont(fontWeight: FontWeight.w700)),
         behavior: SnackBarBehavior.floating,
         backgroundColor: const Color(0xFF1A1A2E),
         shape: RoundedRectangleBorder(
@@ -207,7 +204,7 @@ class _PlanGuideBottomSheetState extends State<_PlanGuideBottomSheet> {
                     Center(
                       child: Text(
                         '모든 구독 플랜은 냥냥 코치를 포함합니다.',
-                        style: GoogleFonts.notoSansKr(
+                        style: appFont(
                           fontSize: AppDesignTokens.textCaption,
                           fontWeight: FontWeight.w700,
                           color: AppDesignTokens.brand,
@@ -281,7 +278,7 @@ class _PlanGuideHeader extends StatelessWidget {
               ),
               child: Text(
                 '닫기',
-                style: GoogleFonts.notoSansKr(
+                style: appFont(
                   fontSize: AppDesignTokens.textCaption + 1,
                   fontWeight: FontWeight.w900,
                 ),
@@ -295,7 +292,7 @@ class _PlanGuideHeader extends StatelessWidget {
             child: RichText(
               textAlign: TextAlign.left,
               text: TextSpan(
-                style: GoogleFonts.notoSansKr(
+                style: appFont(
                   fontSize: 22,
                   fontWeight: FontWeight.w700,
                   color: AppDesignTokens.textPrimary,
@@ -404,7 +401,7 @@ class _PlanPeriodTab extends StatelessWidget {
           children: [
             Text(
               title,
-              style: GoogleFonts.notoSansKr(
+              style: appFont(
                 fontSize: AppDesignTokens.textBody,
                 fontWeight: FontWeight.w900,
                 color: isSelected ? Colors.white : AppDesignTokens.brandPressed,
@@ -415,7 +412,7 @@ class _PlanPeriodTab extends StatelessWidget {
               subtitle,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: GoogleFonts.notoSansKr(
+              style: appFont(
                 fontSize: 10,
                 fontWeight: FontWeight.w700,
                 color: isSelected
@@ -493,7 +490,7 @@ class _PlanGroup extends StatelessWidget {
                 child: Text(
                   title,
                   textAlign: TextAlign.center,
-                  style: GoogleFonts.notoSansKr(
+                  style: appFont(
                     fontSize: 20,
                     fontWeight: FontWeight.w900,
                     color: AppDesignTokens.brandStrong,
@@ -506,7 +503,7 @@ class _PlanGroup extends StatelessWidget {
           Text(
             subtitle,
             textAlign: TextAlign.center,
-            style: GoogleFonts.notoSansKr(
+            style: appFont(
               fontSize: AppDesignTokens.textCaption,
               fontWeight: FontWeight.w600,
               color: AppDesignTokens.brandTextMuted,
@@ -605,7 +602,7 @@ class _PlanPriceBox extends StatelessWidget {
           if (originalPrice != null) ...[
             Text(
               '정가 $originalPrice',
-              style: GoogleFonts.notoSansKr(
+              style: appFont(
                 fontSize: AppDesignTokens.textCaption + 1,
                 fontWeight: FontWeight.w800,
                 color: AppDesignTokens.brandPriceMuted,
@@ -633,7 +630,7 @@ class _PlanPriceBox extends StatelessWidget {
                     subPrice!,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.notoSansKr(
+                    style: appFont(
                       fontSize: AppDesignTokens.textCaption,
                       fontWeight: FontWeight.w800,
                       color: AppDesignTokens.brandTextMuted,
@@ -648,8 +645,7 @@ class _PlanPriceBox extends StatelessWidget {
           const SizedBox(height: 12),
           ...features.map((feature) {
             final isSignatureFeature =
-                feature.$2 == '미루는 항목, 마무리될 때까지 관리' ||
-                feature.$2 == '장기 목표 조력';
+                feature.$2 == '미루는 항목, 마무리될 때까지 관리' || feature.$2 == '장기 목표 조력';
             return Padding(
               padding: const EdgeInsets.only(bottom: 8),
               child: Row(
@@ -668,7 +664,7 @@ class _PlanPriceBox extends StatelessWidget {
                   Expanded(
                     child: Text(
                       feature.$2,
-                      style: GoogleFonts.notoSansKr(
+                      style: appFont(
                         fontSize: AppDesignTokens.textCaption + 1,
                         fontWeight: isSignatureFeature
                             ? FontWeight.w900
@@ -702,7 +698,7 @@ class _PlanPriceText extends StatelessWidget {
       return Text(
         price,
         maxLines: 1,
-        style: GoogleFonts.notoSansKr(
+        style: appFont(
           fontSize: 30,
           fontWeight: FontWeight.w900,
           color: AppDesignTokens.brandStrong,
@@ -713,7 +709,7 @@ class _PlanPriceText extends StatelessWidget {
     return RichText(
       maxLines: 1,
       text: TextSpan(
-        style: GoogleFonts.notoSansKr(
+        style: appFont(
           color: AppDesignTokens.brandStrong,
           fontWeight: FontWeight.w900,
         ),
@@ -763,7 +759,7 @@ class _IndividualCoachGuide extends StatelessWidget {
               children: [
                 Text(
                   '개별 코치 추가 이용',
-                  style: GoogleFonts.notoSansKr(
+                  style: appFont(
                     fontSize: 15,
                     fontWeight: FontWeight.w900,
                     color: AppDesignTokens.brandStrong,
@@ -772,7 +768,7 @@ class _IndividualCoachGuide extends StatelessWidget {
                 const SizedBox(height: 4),
                 Text(
                   '햇살, 할매, 갓생 형 코치를 1년 이용권으로 추가할 수 있어요.',
-                  style: GoogleFonts.notoSansKr(
+                  style: appFont(
                     fontSize: AppDesignTokens.textCaption,
                     fontWeight: FontWeight.w600,
                     color: AppDesignTokens.brandTextMuted,
@@ -787,7 +783,7 @@ class _IndividualCoachGuide extends StatelessWidget {
             fit: BoxFit.scaleDown,
             child: Text(
               '2,900원',
-              style: GoogleFonts.notoSansKr(
+              style: appFont(
                 fontSize: AppDesignTokens.textAction,
                 fontWeight: FontWeight.w900,
                 color: AppDesignTokens.brandStrong,
@@ -864,7 +860,7 @@ class _PlanCheckoutBar extends StatelessWidget {
           ),
           child: Text(
             isRestoring ? '복원 확인 중...' : '이미 구매했다면 복원하기',
-            style: GoogleFonts.notoSansKr(
+            style: appFont(
               fontSize: AppDesignTokens.textCaption + 1,
               fontWeight: FontWeight.w900,
             ),

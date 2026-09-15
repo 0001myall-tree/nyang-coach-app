@@ -435,9 +435,7 @@ class LifePatternService {
     final saved = await answers(coachId);
     if (saved.length >= firstAskLimit) return const [];
     final remaining = await unanswered(coachId);
-    return remaining
-        .take(firstAskLimit - saved.length)
-        .toList(growable: false);
+    return remaining.take(firstAskLimit - saved.length).toList(growable: false);
   }
 
   /// 첫 진입 몫을 다 물었는지. 이걸 넘겨야 제안을 시작한다.
@@ -514,9 +512,7 @@ class LifePatternService {
   static Future<bool> dueForReview(String coachId, {DateTime? now}) async {
     if (!await readyToCoach(coachId)) return false;
     final saved = await profile(coachId);
-    final reviewed = DateTime.tryParse(
-      saved['reviewedAt']?.toString() ?? '',
-    );
+    final reviewed = DateTime.tryParse(saved['reviewedAt']?.toString() ?? '');
     final asked = DateTime.tryParse(saved['askedAt']?.toString() ?? '');
     final at = now ?? DateTime.now();
 
@@ -528,10 +524,10 @@ class LifePatternService {
   }
 
   /// 확인했다는 표시. 답이 그대로였든 바뀌었든 확인은 확인이다.
-  static Future<void> markReviewed(String coachId, {DateTime? now}) =>
-      update(coachId, {
-        'reviewedAt': (now ?? DateTime.now()).toIso8601String(),
-      });
+  static Future<void> markReviewed(String coachId, {DateTime? now}) => update(
+    coachId,
+    {'reviewedAt': (now ?? DateTime.now()).toIso8601String()},
+  );
 
   /// 다시 확인할 때 보여줄 말.
   ///
@@ -658,7 +654,8 @@ class LifePatternService {
     final theirAsked = DateTime.tryParse(theirs['askedAt']?.toString() ?? '');
     // 마지막으로 답한 쪽. 시각을 모르면 이 기기를 믿는다.
     final mineIsNewer =
-        theirAsked == null || (myAsked != null && !myAsked.isBefore(theirAsked));
+        theirAsked == null ||
+        (myAsked != null && !myAsked.isBefore(theirAsked));
     final newer = mineIsNewer ? mine : theirs;
     final older = mineIsNewer ? theirs : mine;
 

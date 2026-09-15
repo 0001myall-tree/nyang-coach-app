@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:google_fonts/google_fonts.dart';
+import '../theme/app_font.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'coach_config.dart';
@@ -330,13 +330,10 @@ class _SettingsScreenState extends State<SettingsScreen>
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          title: Text(
-            '로그아웃할까요?',
-            style: GoogleFonts.notoSansKr(fontWeight: FontWeight.w900),
-          ),
+          title: Text('로그아웃할까요?', style: appFont(fontWeight: FontWeight.w900)),
           content: Text(
             '다시 로그인하면 저장된 데이터를 이어서 사용할 수 있어요.',
-            style: GoogleFonts.notoSansKr(
+            style: appFont(
               fontSize: 14,
               fontWeight: FontWeight.w500,
               color: const Color(0xFF6B687A),
@@ -346,16 +343,13 @@ class _SettingsScreenState extends State<SettingsScreen>
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(dialogContext, false),
-              child: Text(
-                '취소',
-                style: GoogleFonts.notoSansKr(fontWeight: FontWeight.w700),
-              ),
+              child: Text('취소', style: appFont(fontWeight: FontWeight.w700)),
             ),
             TextButton(
               onPressed: () => Navigator.pop(dialogContext, true),
               child: Text(
                 '로그아웃',
-                style: GoogleFonts.notoSansKr(
+                style: appFont(
                   fontWeight: FontWeight.w800,
                   color: const Color(0xFFE15B64),
                 ),
@@ -460,7 +454,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                                   title,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: GoogleFonts.notoSansKr(
+                                  style: appFont(
                                     fontSize: 16,
                                     fontWeight: FontWeight.w700,
                                     color: isLocked
@@ -482,7 +476,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                                   ),
                                   child: Text(
                                     '추천',
-                                    style: GoogleFonts.notoSansKr(
+                                    style: appFont(
                                       fontSize: 11,
                                       fontWeight: FontWeight.w800,
                                       color: const Color(0xFF6E5AE8),
@@ -505,7 +499,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                             subtitle,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: GoogleFonts.notoSansKr(
+                            style: appFont(
                               fontSize: 12,
                               fontWeight: FontWeight.w600,
                               color: isLocked
@@ -547,7 +541,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                     const SizedBox(width: 8),
                     Text(
                       '홈 화면 위젯 설정',
-                      style: GoogleFonts.notoSansKr(
+                      style: appFont(
                         fontSize: 20,
                         fontWeight: FontWeight.w900,
                         color: const Color(0xFF1A1A2E),
@@ -558,10 +552,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                 const SizedBox(height: 8),
                 Text(
                   '앱을 열지 않아도 오늘 할 일과 진행 상황을 바탕화면에서 바로 확인할 수 있어요.',
-                  style: GoogleFonts.notoSansKr(
-                    fontSize: 14,
-                    color: const Color(0xFF8E8D9B),
-                  ),
+                  style: appFont(fontSize: 14, color: const Color(0xFF8E8D9B)),
                 ),
                 const SizedBox(height: 32),
                 _buildWidgetToggle(
@@ -648,7 +639,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                     ),
                     child: Text(
                       '저장하기',
-                      style: GoogleFonts.notoSansKr(
+                      style: appFont(
                         fontSize: 16,
                         fontWeight: FontWeight.w800,
                         color: Colors.white,
@@ -761,7 +752,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                         const SizedBox(width: 8),
                         Text(
                           '모닝콜 설정',
-                          style: GoogleFonts.notoSansKr(
+                          style: appFont(
                             fontSize: 20,
                             fontWeight: FontWeight.w900,
                             color: const Color(0xFF1A1A2E),
@@ -832,7 +823,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                         children: [
                           Text(
                             '시간',
-                            style: GoogleFonts.notoSansKr(
+                            style: appFont(
                               fontSize: 15,
                               fontWeight: FontWeight.w700,
                               color: const Color(0xFF4B5563),
@@ -840,7 +831,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                           ),
                           Text(
                             '${tempTime.hour.toString().padLeft(2, '0')}:${tempTime.minute.toString().padLeft(2, '0')}',
-                            style: GoogleFonts.notoSansKr(
+                            style: appFont(
                               fontSize: 22,
                               fontWeight: FontWeight.w900,
                               color: const Color(0xFF8B7CFF),
@@ -856,7 +847,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                   opacity: tempEnabled ? 1.0 : 0.55,
                   child: Text(
                     '휴대폰 설정에 따라 무음/진동 모드나 방해금지 상태에서는 모닝콜 소리가 제한될 수 있어요. 소리로 깨고 싶다면 앱 알림 권한과 알람 볼륨을 미리 확인해주세요.',
-                    style: GoogleFonts.notoSansKr(
+                    style: appFont(
                       fontSize: 11,
                       fontWeight: FontWeight.w500,
                       height: 1.45,
@@ -869,7 +860,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                 // 요일 선택
                 Text(
                   '모닝콜 요일',
-                  style: GoogleFonts.notoSansKr(
+                  style: appFont(
                     fontSize: 15,
                     fontWeight: FontWeight.w800,
                     color: const Color(0xFF1A1A2E),
@@ -941,7 +932,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                 // 코치 선택 리스트
                 Text(
                   '모닝콜 코치 선택',
-                  style: GoogleFonts.notoSansKr(
+                  style: appFont(
                     fontSize: 15,
                     fontWeight: FontWeight.w800,
                     color: const Color(0xFF1A1A2E),
@@ -1049,7 +1040,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                             ),
                             child: Text(
                               '저장하기',
-                              style: GoogleFonts.notoSansKr(
+                              style: appFont(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w800,
                                 color: Colors.white,
@@ -1390,7 +1381,7 @@ class _SettingsScreenState extends State<SettingsScreen>
           ),
           title: Text(
             '🐾 딴짓 방지 코치',
-            style: GoogleFonts.notoSansKr(
+            style: appFont(
               fontSize: 17,
               fontWeight: FontWeight.w900,
               color: const Color(0xFF3D3A4E),
@@ -1406,7 +1397,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                 ? '지금 켜져 있어요.\n\n$description'
                 : '앱에서는 켜져 있는데, 아이폰 설정의 "실시간 활동"이 꺼져 있어요.\n\n'
                       '그래서 일정을 시작해도 화면 위에 아무것도 뜨지 않습니다.',
-            style: GoogleFonts.notoSansKr(
+            style: appFont(
               fontSize: 13.5,
               height: 1.5,
               fontWeight: FontWeight.w500,
@@ -1418,7 +1409,7 @@ class _SettingsScreenState extends State<SettingsScreen>
               onPressed: () => Navigator.pop(ctx, _OngoingNudgeAction.turnOff),
               child: Text(
                 '끄기',
-                style: GoogleFonts.notoSansKr(
+                style: appFont(
                   fontWeight: FontWeight.w900,
                   color: const Color(0xFF9B96A8),
                 ),
@@ -1444,7 +1435,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                     : available
                     ? '아이폰 설정 열기'
                     : '실시간 활동 켜러 가기',
-                style: GoogleFonts.notoSansKr(
+                style: appFont(
                   fontWeight: FontWeight.w900,
                   color: Colors.white,
                 ),
@@ -1486,7 +1477,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                         const SizedBox(width: 8),
                         Text(
                           '일정 푸쉬 알람',
-                          style: GoogleFonts.notoSansKr(
+                          style: appFont(
                             fontSize: 20,
                             fontWeight: FontWeight.w900,
                             color: const Color(0xFF1A1A2E),
@@ -1505,7 +1496,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                 const SizedBox(height: 12),
                 Text(
                   keepWordsWhole('원하는 일정을 알려드려요.'),
-                  style: GoogleFonts.notoSansKr(
+                  style: appFont(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
                     color: const Color(0xFFA78BFA),
@@ -1551,7 +1542,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                                 child: Text(
                                   '휴대폰이 무음/진동 모드거나 방해금지(수면 모드) 중이면 소리 없이 조용히 와요. '
                                   '소리로 받고 싶다면 방해금지 예외 설정을 확인해주세요.',
-                                  style: GoogleFonts.notoSansKr(
+                                  style: appFont(
                                     fontSize: 12.5,
                                     fontWeight: FontWeight.w700,
                                     height: 1.45,
@@ -1592,7 +1583,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                                 Expanded(
                                   child: Text(
                                     '알람 시간 선택',
-                                    style: GoogleFonts.notoSansKr(
+                                    style: appFont(
                                       fontSize: 15,
                                       fontWeight: FontWeight.w800,
                                       color: const Color(0xFF1A1A2E),
@@ -1634,7 +1625,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                                             ),
                                             child: Text(
                                               '$minutes분 전',
-                                              style: GoogleFonts.notoSansKr(
+                                              style: appFont(
                                                 fontSize: 13,
                                                 fontWeight: FontWeight.w800,
                                                 color: isActive
@@ -1675,7 +1666,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                     ),
                     child: Text(
                       '저장하기',
-                      style: GoogleFonts.notoSansKr(
+                      style: appFont(
                         fontSize: 16,
                         fontWeight: FontWeight.w800,
                         color: Colors.white,
@@ -1774,7 +1765,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                         const SizedBox(width: 8),
                         Text(
                           '틈새 코칭',
-                          style: GoogleFonts.notoSansKr(
+                          style: appFont(
                             fontSize: 20,
                             fontWeight: FontWeight.w900,
                             color: const Color(0xFF1A1A2E),
@@ -1795,7 +1786,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                   keepWordsWhole('여유 시간 10분 동안 할 일을 완료할 수 있게 도와줘요.'),
                   // 이 시트 아래쪽 설명과 같은 모양이다. 같은 자리에서 같은
                   // 일을 하는 글이라 굵기도 색도 갈릴 이유가 없다.
-                  style: GoogleFonts.notoSansKr(
+                  style: appFont(
                     fontSize: 12.5,
                     fontWeight: FontWeight.w600,
                     height: 1.5,
@@ -1920,7 +1911,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                                         const SizedBox(width: 6),
                                         Text(
                                           '시간 추가',
-                                          style: GoogleFonts.notoSansKr(
+                                          style: appFont(
                                             fontSize: 14,
                                             fontWeight: FontWeight.w800,
                                             color: const Color(0xFF8B7CFF),
@@ -1940,7 +1931,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                             '일정을 하는 중이거나 그 시각에 일정이 있으면 그날 그 시각은 '
                             '조용히 지나가요.',
                           ),
-                          style: GoogleFonts.notoSansKr(
+                          style: appFont(
                             fontSize: 12.5,
                             fontWeight: FontWeight.w600,
                             height: 1.5,
@@ -1973,7 +1964,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                     ),
                     child: Text(
                       '저장하기',
-                      style: GoogleFonts.notoSansKr(
+                      style: appFont(
                         fontSize: 16,
                         fontWeight: FontWeight.w800,
                         color: Colors.white,
@@ -2011,7 +2002,7 @@ class _SettingsScreenState extends State<SettingsScreen>
             children: [
               Text(
                 label,
-                style: GoogleFonts.notoSansKr(
+                style: appFont(
                   fontSize: 14,
                   fontWeight: FontWeight.w800,
                   color: const Color(0xFF3D3A4E),
@@ -2020,7 +2011,7 @@ class _SettingsScreenState extends State<SettingsScreen>
               const Spacer(),
               Text(
                 GapCoachingService.label(time),
-                style: GoogleFonts.notoSansKr(
+                style: appFont(
                   fontSize: 15,
                   fontWeight: FontWeight.w900,
                   color: const Color(0xFF8B7CFF),
@@ -2072,7 +2063,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                 children: [
                   Text(
                     blocker.headline,
-                    style: GoogleFonts.notoSansKr(
+                    style: appFont(
                       fontSize: 13.5,
                       fontWeight: FontWeight.w900,
                       color: accent,
@@ -2081,7 +2072,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                   const SizedBox(height: 3),
                   Text(
                     '눌러서 확인해주세요.',
-                    style: GoogleFonts.notoSansKr(
+                    style: appFont(
                       fontSize: 12,
                       height: 1.4,
                       fontWeight: FontWeight.w600,
@@ -2274,7 +2265,7 @@ class _SettingsScreenState extends State<SettingsScreen>
         ),
         child: Text(
           label,
-          style: GoogleFonts.notoSansKr(
+          style: appFont(
             fontSize: 13,
             fontWeight: FontWeight.w800,
             color: isSelected ? Colors.white : const Color(0xFF4B5563),
@@ -2308,7 +2299,7 @@ class _SettingsScreenState extends State<SettingsScreen>
         ),
         child: Text(
           label,
-          style: GoogleFonts.notoSansKr(
+          style: appFont(
             fontSize: 13,
             fontWeight: FontWeight.w800,
             color: isSelected ? Colors.white : const Color(0xFF4B5563),
@@ -2351,7 +2342,7 @@ class _SettingsScreenState extends State<SettingsScreen>
       padding: const EdgeInsets.fromLTRB(4, 12, 4, 8),
       child: Text(
         label,
-        style: GoogleFonts.notoSansKr(
+        style: appFont(
           fontSize: 12,
           fontWeight: FontWeight.w800,
           color: const Color(0xFF9CA3AF),
@@ -2430,7 +2421,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                   children: [
                     Text(
                       name,
-                      style: GoogleFonts.notoSansKr(
+                      style: appFont(
                         fontSize: 15,
                         fontWeight: FontWeight.w800,
                         color: isSelected
@@ -2442,7 +2433,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                       const SizedBox(height: 2),
                       Text(
                         subtitle,
-                        style: GoogleFonts.notoSansKr(
+                        style: appFont(
                           fontSize: 12,
                           fontWeight: FontWeight.w500,
                           color: const Color(0xFF6B7280),
@@ -2534,7 +2525,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                     const SizedBox(width: 8),
                     Text(
                       '설정',
-                      style: GoogleFonts.notoSansKr(
+                      style: appFont(
                         fontSize: 18,
                         fontWeight: FontWeight.w900,
                         color: const Color(0xFF3D3A4E),
@@ -2757,7 +2748,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                 children: [
                   Text(
                     label,
-                    style: GoogleFonts.notoSansKr(
+                    style: appFont(
                       fontSize: 14,
                       fontWeight: FontWeight.w800,
                       color: const Color(0xFF3D3A4E),
@@ -2769,7 +2760,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                       subtitle,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.notoSansKr(
+                      style: appFont(
                         fontSize: 11,
                         fontWeight: FontWeight.w500,
                         color: const Color(0xFF9A96A8),
@@ -2865,7 +2856,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                   Expanded(
                     child: Text(
                       label,
-                      style: GoogleFonts.notoSansKr(
+                      style: appFont(
                         fontSize: 14,
                         fontWeight: FontWeight.w800,
                         color: const Color(0xFF3D3A4E),
@@ -2934,7 +2925,7 @@ class _SettingsScreenState extends State<SettingsScreen>
             Expanded(
               child: Text(
                 label,
-                style: GoogleFonts.notoSansKr(
+                style: appFont(
                   fontSize: 13,
                   fontWeight: FontWeight.w700,
                   color: const Color(0xFF4B465C),
@@ -3025,7 +3016,7 @@ class _SettingsScreenState extends State<SettingsScreen>
           ),
           title: Text(
             '연동을 해제할까요?',
-            style: GoogleFonts.notoSansKr(
+            style: appFont(
               fontSize: 17,
               fontWeight: FontWeight.w900,
               color: const Color(0xFF3D3A4E),
@@ -3033,7 +3024,7 @@ class _SettingsScreenState extends State<SettingsScreen>
           ),
           content: Text(
             '아이폰 캘린더의 "냥냥코치" 달력과 그 안의 일정이 모두 삭제돼요. (냥냥코치 앱의 일정은 그대로예요.)',
-            style: GoogleFonts.notoSansKr(
+            style: appFont(
               fontSize: 13.5,
               height: 1.5,
               fontWeight: FontWeight.w500,
@@ -3045,7 +3036,7 @@ class _SettingsScreenState extends State<SettingsScreen>
               onPressed: () => Navigator.pop(ctx, false),
               child: Text(
                 '취소',
-                style: GoogleFonts.notoSansKr(
+                style: appFont(
                   fontWeight: FontWeight.w700,
                   color: const Color(0xFF9A96A8),
                 ),
@@ -3055,7 +3046,7 @@ class _SettingsScreenState extends State<SettingsScreen>
               onPressed: () => Navigator.pop(ctx, true),
               child: Text(
                 '해제',
-                style: GoogleFonts.notoSansKr(
+                style: appFont(
                   fontWeight: FontWeight.w900,
                   color: const Color(0xFF8B7CFF),
                 ),
@@ -3080,7 +3071,7 @@ class _SettingsScreenState extends State<SettingsScreen>
           text,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: GoogleFonts.notoSansKr(
+          style: appFont(
             fontSize: 12,
             fontWeight: FontWeight.w900,
             color: const Color(0xFF7D68DE),
@@ -3237,7 +3228,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                 SnackBar(
                   content: Text(
                     appliedMessage,
-                    style: GoogleFonts.notoSansKr(fontWeight: FontWeight.w700),
+                    style: appFont(fontWeight: FontWeight.w700),
                   ),
                   behavior: SnackBarBehavior.floating,
                   backgroundColor: const Color(0xFF1A1A2E),
@@ -3255,14 +3246,14 @@ class _SettingsScreenState extends State<SettingsScreen>
                   return AlertDialog(
                     title: Text(
                       '클라우드 데이터 복원',
-                      style: GoogleFonts.notoSansKr(
+                      style: appFont(
                         fontWeight: FontWeight.w900,
                         color: const Color(0xFF1A1A2E),
                       ),
                     ),
                     content: Text(
                       '계정에 저장된 할 일, 일정, 목표, 기록을 이 기기로 다시 불러옵니다.\n\n현재 기기의 데이터는 클라우드 백업 내용으로 덮어써질 수 있어요.',
-                      style: GoogleFonts.notoSansKr(
+                      style: appFont(
                         fontSize: 14,
                         height: 1.5,
                         color: const Color(0xFF3D3A4E),
@@ -3273,16 +3264,14 @@ class _SettingsScreenState extends State<SettingsScreen>
                         onPressed: () => Navigator.pop(dialogContext, false),
                         child: Text(
                           '취소',
-                          style: GoogleFonts.notoSansKr(
-                            fontWeight: FontWeight.w700,
-                          ),
+                          style: appFont(fontWeight: FontWeight.w700),
                         ),
                       ),
                       TextButton(
                         onPressed: () => Navigator.pop(dialogContext, true),
                         child: Text(
                           '복원하기',
-                          style: GoogleFonts.notoSansKr(
+                          style: appFont(
                             color: const Color(0xFF8B7CFF),
                             fontWeight: FontWeight.w900,
                           ),
@@ -3300,7 +3289,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                 SnackBar(
                   content: Text(
                     '클라우드 데이터를 불러오는 중입니다...',
-                    style: GoogleFonts.notoSansKr(fontWeight: FontWeight.w700),
+                    style: appFont(fontWeight: FontWeight.w700),
                   ),
                   behavior: SnackBarBehavior.floating,
                   backgroundColor: const Color(0xFF1A1A2E),
@@ -3319,9 +3308,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                   SnackBar(
                     content: Text(
                       '복원 실패: ${diag['message']}',
-                      style: GoogleFonts.notoSansKr(
-                        fontWeight: FontWeight.w700,
-                      ),
+                      style: appFont(fontWeight: FontWeight.w700),
                     ),
                     backgroundColor: Colors.redAccent,
                   ),
@@ -3402,7 +3389,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                                           children: [
                                             Text(
                                               '내 프로필',
-                                              style: GoogleFonts.notoSansKr(
+                                              style: appFont(
                                                 fontSize: 22,
                                                 fontWeight: FontWeight.w900,
                                                 color: const Color(0xFF1A1A2E),
@@ -3411,7 +3398,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                                             const SizedBox(height: 2),
                                             Text(
                                               '구독, 포인트, 쿠폰을 확인해요.',
-                                              style: GoogleFonts.notoSansKr(
+                                              style: appFont(
                                                 fontSize: 13,
                                                 fontWeight: FontWeight.w600,
                                                 color: const Color(0xFF8A8798),
@@ -3458,7 +3445,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                                   if (_couponEntryEnabled) ...[
                                     Text(
                                       '쿠폰 입력',
-                                      style: GoogleFonts.notoSansKr(
+                                      style: appFont(
                                         fontSize: 14,
                                         fontWeight: FontWeight.w900,
                                         color: const Color(0xFF1A1A2E),
@@ -3472,7 +3459,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                                       decoration: InputDecoration(
                                         hintText: '쿠폰 또는 구독권 코드',
                                         errorText: errorText,
-                                        hintStyle: GoogleFonts.notoSansKr(
+                                        hintStyle: appFont(
                                           color: const Color(0xFFB8B5C6),
                                           fontWeight: FontWeight.w600,
                                         ),
@@ -3504,7 +3491,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                                           ),
                                         ),
                                       ),
-                                      style: GoogleFonts.notoSansKr(
+                                      style: appFont(
                                         fontSize: 15,
                                         fontWeight: FontWeight.w800,
                                         color: const Color(0xFF1A1A2E),
@@ -3534,7 +3521,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                                         ),
                                         child: Text(
                                           isApplying ? '확인 중...' : '쿠폰 적용하기',
-                                          style: GoogleFonts.notoSansKr(
+                                          style: appFont(
                                             fontSize: 15,
                                             fontWeight: FontWeight.w900,
                                             color: Colors.white,
@@ -3565,7 +3552,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                                             ),
                                       label: Text(
                                         isRestoring ? '복원 중...' : '클라우드 데이터 복원',
-                                        style: GoogleFonts.notoSansKr(
+                                        style: appFont(
                                           fontSize: 14,
                                           fontWeight: FontWeight.w900,
                                         ),
@@ -3608,7 +3595,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                                       ),
                                       child: Text(
                                         '다른 계정으로 로그인하기',
-                                        style: GoogleFonts.notoSansKr(
+                                        style: appFont(
                                           fontSize: 13,
                                           fontWeight: FontWeight.w800,
                                         ),
@@ -3712,7 +3699,7 @@ class _SettingsScreenState extends State<SettingsScreen>
               children: [
                 Text(
                   label,
-                  style: GoogleFonts.notoSansKr(
+                  style: appFont(
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
                     color: const Color(0xFF9A96A8),
@@ -3723,7 +3710,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                   value,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.notoSansKr(
+                  style: appFont(
                     fontSize: 14,
                     fontWeight: FontWeight.w900,
                     color: const Color(0xFF1A1A2E),
@@ -3752,7 +3739,7 @@ class _SettingsScreenState extends State<SettingsScreen>
       children: [
         Text(
           '구매한 코치',
-          style: GoogleFonts.notoSansKr(
+          style: appFont(
             fontSize: 14,
             fontWeight: FontWeight.w900,
             color: const Color(0xFF1A1A2E),
@@ -3770,7 +3757,7 @@ class _SettingsScreenState extends State<SettingsScreen>
             ),
             child: Text(
               '구매한 코치가 아직 없어요.',
-              style: GoogleFonts.notoSansKr(
+              style: appFont(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
                 color: const Color(0xFF8A8798),
@@ -3828,7 +3815,7 @@ class _SettingsScreenState extends State<SettingsScreen>
               '$name · 1년 이용권',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: GoogleFonts.notoSansKr(
+              style: appFont(
                 fontSize: 12,
                 fontWeight: FontWeight.w800,
                 color: const Color(0xFF3D3A4E),
@@ -3838,7 +3825,7 @@ class _SettingsScreenState extends State<SettingsScreen>
           const SizedBox(width: 8),
           Text(
             remaining,
-            style: GoogleFonts.notoSansKr(
+            style: appFont(
               fontSize: 12,
               fontWeight: FontWeight.w900,
               color: isExpired
@@ -4033,7 +4020,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                                             )
                                           : Text(
                                               '${idx + 1}',
-                                              style: GoogleFonts.notoSansKr(
+                                              style: appFont(
                                                 fontSize: 12,
                                                 fontWeight: FontWeight.w800,
                                                 color: const Color(0xFF8B7CFF),
@@ -4066,7 +4053,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                                   border: InputBorder.none,
                                   isDense: true,
                                 ),
-                                style: GoogleFonts.notoSansKr(
+                                style: appFont(
                                   fontSize: 14,
                                   fontWeight: FontWeight.w600,
                                   color: done
@@ -4137,7 +4124,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                       alignment: Alignment.center,
                       child: Text(
                         type == 'vision' ? '➕ 비전 추가' : '➕ 목표 추가',
-                        style: GoogleFonts.notoSansKr(
+                        style: appFont(
                           fontSize: 12,
                           fontWeight: FontWeight.w800,
                           color: const Color(0xFF8B7CFF),
@@ -4169,7 +4156,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                         const SizedBox(width: 8),
                         Text(
                           '개인 코칭 참고',
-                          style: GoogleFonts.notoSansKr(
+                          style: appFont(
                             fontSize: 18,
                             fontWeight: FontWeight.w900,
                             color: const Color(0xFF3D3A4E),
@@ -4198,7 +4185,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                     Expanded(
                       child: Text(
                         '입력할수록 코치가 생활 패턴을 정확히 파악해요.',
-                        style: GoogleFonts.notoSansKr(
+                        style: appFont(
                           fontSize: 12,
                           fontWeight: FontWeight.w500,
                           color: const Color(0xFF9593A5),
@@ -4247,7 +4234,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                                 ),
                                 child: Text(
                                   '대표님 (기본)',
-                                  style: GoogleFonts.notoSansKr(
+                                  style: appFont(
                                     fontSize: 13,
                                     fontWeight: selectedTitle == '대표님'
                                         ? FontWeight.w700
@@ -4319,7 +4306,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                                     children: [
                                       Text(
                                         '최소 취침 시간',
-                                        style: GoogleFonts.notoSansKr(
+                                        style: appFont(
                                           fontSize: 11,
                                           color: const Color(0xFF9593A5),
                                         ),
@@ -4358,7 +4345,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                                               const SizedBox(width: 8),
                                               Text(
                                                 '${minSleepTime.hour.toString().padLeft(2, '0')}:${minSleepTime.minute.toString().padLeft(2, '0')}',
-                                                style: GoogleFonts.notoSansKr(
+                                                style: appFont(
                                                   fontSize: 14,
                                                   fontWeight: FontWeight.w700,
                                                 ),
@@ -4383,7 +4370,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                                     children: [
                                       Text(
                                         '최소 수면 시간',
-                                        style: GoogleFonts.notoSansKr(
+                                        style: appFont(
                                           fontSize: 11,
                                           color: const Color(0xFF9593A5),
                                         ),
@@ -4433,13 +4420,11 @@ class _SettingsScreenState extends State<SettingsScreen>
                                                         ),
                                                         Text(
                                                           '$hour시간',
-                                                          style:
-                                                              GoogleFonts.notoSansKr(
-                                                                fontSize: 14,
-                                                                fontWeight:
-                                                                    FontWeight
-                                                                        .w700,
-                                                              ),
+                                                          style: appFont(
+                                                            fontSize: 14,
+                                                            fontWeight:
+                                                                FontWeight.w700,
+                                                          ),
                                                         ),
                                                       ],
                                                     ),
@@ -4485,7 +4470,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                         padding: const EdgeInsets.only(bottom: 8.0, left: 4.0),
                         child: Text(
                           '- 아래는 목표 탭과 연동됩니다 -',
-                          style: GoogleFonts.notoSansKr(
+                          style: appFont(
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
                             color: const Color(0xFF8B7CFF),
@@ -4522,7 +4507,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                                 Expanded(
                                   child: Text(
                                     '세부적인 마일스톤은 목표 탭에서 작성해 주세요!',
-                                    style: GoogleFonts.notoSansKr(
+                                    style: appFont(
                                       fontSize: 11,
                                       color: const Color(0xFF8B7CFF),
                                       fontWeight: FontWeight.w500,
@@ -4678,7 +4663,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                         const SizedBox(width: 8),
                         Text(
                           '코치에게 알려주기',
-                          style: GoogleFonts.notoSansKr(
+                          style: appFont(
                             fontSize: 16,
                             fontWeight: FontWeight.w800,
                             color: Colors.white,
@@ -4729,7 +4714,7 @@ class _SettingsScreenState extends State<SettingsScreen>
           child: Text(
             '${value.hour.toString().padLeft(2, '0')}:'
             '${value.minute.toString().padLeft(2, '0')}',
-            style: GoogleFonts.notoSansKr(
+            style: appFont(
               fontSize: AppDesignTokens.textBody,
               fontWeight: FontWeight.w700,
               color: AppDesignTokens.textPrimary,
@@ -4776,7 +4761,7 @@ class _SettingsScreenState extends State<SettingsScreen>
             ),
             child: Text(
               mode,
-              style: GoogleFonts.notoSansKr(
+              style: appFont(
                 fontSize: AppDesignTokens.textCaption,
                 fontWeight: FontWeight.w700,
                 color: picked
@@ -4811,7 +4796,7 @@ class _SettingsScreenState extends State<SettingsScreen>
           ),
           child: Text(
             day,
-            style: GoogleFonts.notoSansKr(
+            style: appFont(
               fontSize: AppDesignTokens.textCaption,
               fontWeight: FontWeight.w700,
               color: picked
@@ -4845,7 +4830,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                         key: ValueKey(identityHashCode(routine)),
                         initialValue: routine['name']?.toString() ?? '',
                         onChanged: (value) => routine['name'] = value,
-                        style: GoogleFonts.notoSansKr(
+                        style: appFont(
                           fontSize: AppDesignTokens.textBody,
                           fontWeight: FontWeight.w600,
                           color: AppDesignTokens.textPrimary,
@@ -4854,7 +4839,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                           isDense: true,
                           border: InputBorder.none,
                           hintText: '근무, 등하원 등',
-                          hintStyle: GoogleFonts.notoSansKr(
+                          hintStyle: appFont(
                             fontSize: AppDesignTokens.textBody,
                             color: AppDesignTokens.textDisabled,
                           ),
@@ -4881,7 +4866,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                       padding: const EdgeInsets.symmetric(horizontal: 8),
                       child: Text(
                         '~',
-                        style: GoogleFonts.notoSansKr(
+                        style: appFont(
                           fontSize: AppDesignTokens.textBody,
                           color: AppDesignTokens.textSecondary,
                         ),
@@ -4945,7 +4930,7 @@ class _SettingsScreenState extends State<SettingsScreen>
               routines.length >= BusyHoursService.maxEntries
                   ? '고정 일정은 ${BusyHoursService.maxEntries}개까지 넣을 수 있어요'
                   : '➕ 고정 일정 추가',
-              style: GoogleFonts.notoSansKr(
+              style: appFont(
                 fontSize: AppDesignTokens.textCaption,
                 fontWeight: FontWeight.w800,
                 color: routines.length >= BusyHoursService.maxEntries
@@ -5003,7 +4988,7 @@ class _SettingsScreenState extends State<SettingsScreen>
               const SizedBox(width: 10),
               Text(
                 title,
-                style: GoogleFonts.notoSansKr(
+                style: appFont(
                   fontSize: 15,
                   fontWeight: FontWeight.w800,
                   color: AppDesignTokens.textPrimary,
@@ -5016,7 +5001,7 @@ class _SettingsScreenState extends State<SettingsScreen>
             padding: const EdgeInsets.only(left: 46),
             child: Text(
               subtitle,
-              style: GoogleFonts.notoSansKr(
+              style: appFont(
                 fontSize: 11,
                 fontWeight: FontWeight.w500,
                 color: AppDesignTokens.textMuted,
@@ -5110,7 +5095,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                 children: [
                   Text(
                     title,
-                    style: GoogleFonts.notoSansKr(
+                    style: appFont(
                       fontSize: 14,
                       fontWeight: FontWeight.w800,
                       color: const Color(0xFF3D3A4E),
@@ -5119,7 +5104,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                   const SizedBox(height: 3),
                   Text(
                     subtitle,
-                    style: GoogleFonts.notoSansKr(
+                    style: appFont(
                       fontSize: 11,
                       fontWeight: FontWeight.w500,
                       color: const Color(0xFF8A8798),
@@ -5162,7 +5147,7 @@ class _SettingsScreenState extends State<SettingsScreen>
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text(
           '마지막 코치 답변',
-          style: GoogleFonts.notoSansKr(
+          style: appFont(
             fontSize: 16,
             fontWeight: FontWeight.w900,
             color: const Color(0xFF1E1E2D),
@@ -5173,7 +5158,7 @@ class _SettingsScreenState extends State<SettingsScreen>
           child: SingleChildScrollView(
             child: SelectableText(
               text ?? '아직 받은 답변이 없어요.',
-              style: GoogleFonts.notoSansKr(
+              style: appFont(
                 fontSize: 13,
                 height: 1.6,
                 color: const Color(0xFF3D3A4E),
@@ -5193,10 +5178,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                   context,
                 ).showSnackBar(const SnackBar(content: Text('복사했어요')));
               },
-              child: Text(
-                '복사',
-                style: GoogleFonts.notoSansKr(fontWeight: FontWeight.w900),
-              ),
+              child: Text('복사', style: appFont(fontWeight: FontWeight.w900)),
             ),
           if (text != null)
             TextButton(
@@ -5207,17 +5189,11 @@ class _SettingsScreenState extends State<SettingsScreen>
               style: TextButton.styleFrom(
                 foregroundColor: const Color(0xFFD9455F),
               ),
-              child: Text(
-                '신고',
-                style: GoogleFonts.notoSansKr(fontWeight: FontWeight.w900),
-              ),
+              child: Text('신고', style: appFont(fontWeight: FontWeight.w900)),
             ),
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text(
-              '닫기',
-              style: GoogleFonts.notoSansKr(fontWeight: FontWeight.w900),
-            ),
+            child: Text('닫기', style: appFont(fontWeight: FontWeight.w900)),
           ),
         ],
       ),
@@ -5242,7 +5218,7 @@ class _SettingsScreenState extends State<SettingsScreen>
               ),
               title: Text(
                 '이 답변을 신고할까요?',
-                style: GoogleFonts.notoSansKr(
+                style: appFont(
                   fontSize: 16,
                   fontWeight: FontWeight.w900,
                   color: const Color(0xFF1E1E2D),
@@ -5279,7 +5255,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                                 Expanded(
                                   child: Text(
                                     reason,
-                                    style: GoogleFonts.notoSansKr(
+                                    style: appFont(
                                       fontSize: 14,
                                       fontWeight: FontWeight.w600,
                                       color: const Color(0xFF3D3A4E),
@@ -5296,10 +5272,10 @@ class _SettingsScreenState extends State<SettingsScreen>
                         enabled: !isSending,
                         maxLines: 3,
                         maxLength: 300,
-                        style: GoogleFonts.notoSansKr(fontSize: 13),
+                        style: appFont(fontSize: 13),
                         decoration: InputDecoration(
                           hintText: '더 알려주실 내용이 있으면 적어주세요 (선택)',
-                          hintStyle: GoogleFonts.notoSansKr(
+                          hintStyle: appFont(
                             fontSize: 13,
                             color: const Color(0xFF9A96A8),
                           ),
@@ -5317,7 +5293,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                       : () => Navigator.pop(dialogContext, false),
                   child: Text(
                     '취소',
-                    style: GoogleFonts.notoSansKr(fontWeight: FontWeight.w700),
+                    style: appFont(fontWeight: FontWeight.w700),
                   ),
                 ),
                 TextButton(
@@ -5341,7 +5317,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                   ),
                   child: Text(
                     isSending ? '보내는 중...' : '신고하기',
-                    style: GoogleFonts.notoSansKr(fontWeight: FontWeight.w900),
+                    style: appFont(fontWeight: FontWeight.w900),
                   ),
                 ),
               ],
@@ -5358,7 +5334,7 @@ class _SettingsScreenState extends State<SettingsScreen>
       SnackBar(
         content: Text(
           sent ? '신고를 접수했어요. 확인 후 반영할게요.' : '신고를 보내지 못했어요. 잠시 후 다시 시도해주세요.',
-          style: GoogleFonts.notoSansKr(fontWeight: FontWeight.w700),
+          style: appFont(fontWeight: FontWeight.w700),
         ),
       ),
     );
@@ -5373,10 +5349,7 @@ class _SettingsScreenState extends State<SettingsScreen>
       ),
       child: Text(
         '계정 삭제',
-        style: GoogleFonts.notoSansKr(
-          fontSize: 12,
-          fontWeight: FontWeight.w700,
-        ),
+        style: appFont(fontSize: 12, fontWeight: FontWeight.w700),
       ),
     );
   }
@@ -5401,7 +5374,7 @@ class _SettingsScreenState extends State<SettingsScreen>
           ),
           title: Text(
             '계정을 삭제할까요?',
-            style: GoogleFonts.notoSansKr(fontWeight: FontWeight.w900),
+            style: appFont(fontWeight: FontWeight.w900),
           ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
@@ -5410,7 +5383,7 @@ class _SettingsScreenState extends State<SettingsScreen>
               Text(
                 '지금까지의 대화, 일정, 루틴, 기록이 모두 지워지고 되돌릴 수 없어요.\n'
                 '다시 로그인해도 복구되지 않습니다.',
-                style: GoogleFonts.notoSansKr(
+                style: appFont(
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
                   color: const Color(0xFF6B687A),
@@ -5438,7 +5411,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                     '이용 중인 $planLabel도 계정과 함께 사라져요.\n'
                     '남은 기간은 환불되지 않고, 정기 결제는 계정을 지워도 자동으로 멈추지 않습니다. '
                     '${Platform.isIOS ? 'App Store' : 'Play 스토어'}의 구독 설정에서 따로 해지해주세요.',
-                    style: GoogleFonts.notoSansKr(
+                    style: appFont(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
                       color: const Color(0xFFB4545D),
@@ -5452,16 +5425,13 @@ class _SettingsScreenState extends State<SettingsScreen>
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(dialogContext, false),
-              child: Text(
-                '취소',
-                style: GoogleFonts.notoSansKr(fontWeight: FontWeight.w700),
-              ),
+              child: Text('취소', style: appFont(fontWeight: FontWeight.w700)),
             ),
             TextButton(
               onPressed: () => Navigator.pop(dialogContext, true),
               child: Text(
                 '삭제하기',
-                style: GoogleFonts.notoSansKr(
+                style: appFont(
                   fontWeight: FontWeight.w900,
                   color: const Color(0xFFE15B64),
                 ),
@@ -5489,7 +5459,7 @@ class _SettingsScreenState extends State<SettingsScreen>
         SnackBar(
           content: Text(
             result.message,
-            style: GoogleFonts.notoSansKr(fontWeight: FontWeight.w700),
+            style: appFont(fontWeight: FontWeight.w700),
           ),
         ),
       );
@@ -5514,10 +5484,7 @@ class _SettingsScreenState extends State<SettingsScreen>
       ),
       child: Text(
         '로그아웃',
-        style: GoogleFonts.notoSansKr(
-          fontSize: 13,
-          fontWeight: FontWeight.w700,
-        ),
+        style: appFont(fontSize: 13, fontWeight: FontWeight.w700),
       ),
     );
   }
