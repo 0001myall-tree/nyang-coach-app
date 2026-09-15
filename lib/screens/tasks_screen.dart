@@ -14389,7 +14389,9 @@ class _TasksScreenState extends State<TasksScreen>
                     itemBuilder: (ctx, i) => _buildHabitItem(habits[i], i),
                   ),
           ),
-          // 습관 추가 버튼
+          // 루틴 추가 버튼
+          // 진한 보라 덩어리라 화면에서 제일 큰 소리를 내고 있었다. 권하는
+          // 말투에 맞게 연한 바탕에 진보라 글씨로 낮춘다.
           Container(
             padding: const EdgeInsets.fromLTRB(16, 10, 16, 64),
             color: Colors.white,
@@ -14397,22 +14399,36 @@ class _TasksScreenState extends State<TasksScreen>
               onTap: () => _showHabitModal(context),
               child: Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 14),
+                padding: const EdgeInsets.symmetric(vertical: 12),
                 decoration: BoxDecoration(
-                  color: _coach.accentColor,
-                  borderRadius: BorderRadius.circular(14),
+                  color: _coach.accentColor.withOpacity(0.16),
+                  borderRadius: BorderRadius.circular(999),
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(Icons.add, color: Colors.white, size: 18),
-                    const SizedBox(width: 6),
-                    Text(
-                      '새 루틴 추가',
-                      style: GoogleFonts.notoSansKr(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w800,
+                    // + 는 글자에 붙이지 않고 흰 동그라미 안에 둔다
+                    Container(
+                      width: 26,
+                      height: 26,
+                      decoration: const BoxDecoration(
                         color: Colors.white,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        Icons.add,
+                        size: 17,
+                        color: _coach.accentColor,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Text(
+                      '루틴 하나 더 만들기',
+                      // 이 버튼만 둥근 고딕으로. 나머지 화면은 그대로 둔다.
+                      style: GoogleFonts.jua(
+                        fontSize: 16,
+                        letterSpacing: 0.2,
+                        color: _deepen(_coach.accentColor),
                       ),
                     ),
                   ],
@@ -14423,6 +14439,15 @@ class _TasksScreenState extends State<TasksScreen>
         ],
       ),
     );
+  }
+
+  /// 연한 바탕 위에 올릴 글자색. 코치마다 색이 달라 고정값을 쓸 수 없다.
+  Color _deepen(Color c) {
+    final hsl = HSLColor.fromColor(c);
+    return hsl
+        .withLightness((hsl.lightness - 0.16).clamp(0.0, 1.0))
+        .withSaturation((hsl.saturation + 0.05).clamp(0.0, 1.0))
+        .toColor();
   }
 
   Widget _buildHabitItem(HabitItem h, int index) {
