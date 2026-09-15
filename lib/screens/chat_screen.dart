@@ -17632,9 +17632,12 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
                 border: Border.all(color: bubbleBorderColor),
                 boxShadow: AppDesignTokens.bubbleShadow,
               ),
+              // 말풍선 본문만 둥근 글꼴에서 빼둔다. 긴 답이 들어오면 둥근
+              // 획끼리 붙어 읽는 눈이 미끄러진다. 나머지 화면과 칩, 스위치는
+              // 그대로 나눔스퀘어라운드.
               child: _buildMessageText(
                 msg,
-                appFont(
+                GoogleFonts.notoSansKr(
                   fontSize: AppDesignTokens.textBody,
                   height: 1.6,
                   fontWeight: FontWeight.w500,
