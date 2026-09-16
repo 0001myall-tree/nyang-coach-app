@@ -891,6 +891,51 @@ class NotificationService {
     82,
   ];
 
+  /// 안드로이드에 이미 서 있는 모닝콜 알람이 지금 걸려는 것과 같은 자리를
+  /// 가리키는지.
+  ///
+  /// 알람을 지우고 다시 거는 동안에는 알람이 없는 순간이 생긴다. 이 함수는
+  /// 클라우드가 움직일 때마다 불리는데, 울릴 시각을 막 지난 그 한 바퀴가
+  /// "이미 지났으니 내일"이라고 다시 계산해 알람을 통째로 하루 뒤로 보냈다.
+  /// 몇 시로 맞추든 그 시각을 지나는 순간 내일로 밀렸으니 영영 울리지 않는다.
+  ///
+  /// 그래서 시각이 그대로면 손대지 않는다. 다시 거는 것은 설정을 바꿨을 때,
+  /// 알람이 울린 뒤, 폰을 껐다 켰을 때뿐이면 된다.
+  ///
+  /// 서 있는 알람의 시각은 네이티브(MorningAlarmScheduler.schedule)가 실제로
+  /// 등록하는 순간에 적는다. 앱이 건 것이든 재부팅 뒤 스스로 다시 건 것이든
+  /// 같은 자리를 지나므로, 이 값이 지금 기기에 박혀 있는 알람의 시각이다.
+  Future<bool> _androidMorningAlarmAlreadyStands({
+    required SharedPreferences prefs,
+    required int hour,
+    required int minute,
+    required Set<int> days,
+    required String coachId,
+  }) async {
+    if (defaultTargetPlatform != TargetPlatform.android) return false;
+    final int? millis;
+    try {
+      // 이 값은 네이티브가 적는다. 앱이 들고 있는 사본에는 안 들어오므로
+      // 저장소에서 새로 읽어야 지금 기기에 박힌 알람의 시각이 보인다.
+      await prefs.reload();
+      millis = prefs.getInt('native_morning_trigger_millis');
+    } catch (_) {
+      // 값을 못 읽으면 예전처럼 다시 건다. 모르는 채로 건너뛰는 것보다 낫다.
+      return false;
+    }
+    if (millis == null) return false;
+    final standing = DateTime.fromMillisecondsSinceEpoch(millis);
+    // 이미 지난 알람은 울렸거나 놓친 것이다. 그건 다시 걸어야 한다.
+    if (!standing.isAfter(DateTime.now())) return false;
+    if (standing.hour != hour || standing.minute != minute) return false;
+    final isDaily = days.isEmpty || days.length == 7;
+    if (!isDaily && !days.contains(standing.weekday)) return false;
+    // 코치를 바꿨으면 목소리도 바뀌어야 하니 다시 건다.
+    final parts = (prefs.getString('native_morning_scheduled_payload') ?? '')
+        .split(':');
+    return parts.length > 1 && parts[1] == coachId;
+  }
+
   Future<void> scheduleDailyMorningCall({
     required int hour,
     required int minute,
@@ -898,19 +943,32 @@ class NotificationService {
     required Set<int> days,
   }) async {
     if (kIsWeb) return;
+    final isDaily = days.isEmpty || days.length == 7;
+    String targetCoachId = CoachIdService.normalize(coachId);
+    if (!CoachConfigs.all.containsKey(targetCoachId)) {
+      targetCoachId = 'cat';
+    }
+    final prefs = await SharedPreferences.getInstance();
+
+    // 같은 시각에 이미 알람이 서 있으면 아무것도 하지 않는다. 손대는 것 자체가
+    // 알람을 잃는 길이다.
+    if (await _androidMorningAlarmAlreadyStands(
+      prefs: prefs,
+      hour: hour,
+      minute: minute,
+      days: days,
+      coachId: targetCoachId,
+    )) {
+      return;
+    }
+
     for (int i = 0; i < _morningCallRepeatCount; i++) {
       await _plugin.cancel(id: i);
     }
     for (final id in _morningCallWeekdayIds) {
       await _plugin.cancel(id: id);
     }
-    final isDaily = days.isEmpty || days.length == 7;
-    String targetCoachId = CoachIdService.normalize(coachId);
-    if (!CoachConfigs.all.containsKey(targetCoachId)) {
-      targetCoachId = 'cat';
-    }
     // Save the resolved coach ID to SharedPreferences so the in-app engine can align with it
-    final prefs = await SharedPreferences.getInstance();
     await prefs.setString('nyang_morning_call_resolved_coach', targetCoachId);
 
     // CoachConfig에서 목소리 개수 읽기 → 나중에 목소리 추가 시 coach_config.dart만 수정하면 됨

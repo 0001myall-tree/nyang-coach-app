@@ -537,7 +537,7 @@ class TasksSyncService {
                 final value = data['value'];
                 final localValue = prefs.get(key);
 
-                if (localValue != value) {
+                if (!sameStoredValue(localValue, value)) {
                   changed = true;
                   if (value is String) {
                     await prefs.setString(key, value);
@@ -575,6 +575,28 @@ class TasksSyncService {
   static void stopRealTimeSync() {
     _realTimeSubscription?.cancel();
     _realTimeSubscription = null;
+  }
+
+  /// 저장된 값과 클라우드 값이 같은 것인지.
+  ///
+  /// 목록은 `==`로 견주면 안 된다. Dart에서 리스트 비교는 내용이 아니라 같은
+  /// 물건이냐를 보는데, 클라우드에서 내려온 목록은 매번 새로 만들어진 것이라
+  /// 내용이 똑같아도 영원히 "달라졌다"가 된다. 그 판정 하나 때문에 앱은 스냅샷이
+  /// 올 때마다 바뀐 게 있다고 믿고 다시 올렸고, 올린 것이 다시 스냅샷으로
+  /// 돌아와 4초마다 왕복이 끝나지 않았다. 그 왕복이 한 바퀴마다 모닝콜 알람을
+  /// 다시 걸어, 울릴 시각을 지나는 바퀴가 알람을 통째로 내일로 밀어버렸다.
+  ///
+  /// 목록은 올릴 때 [Object.toString]으로 펴서 보내므로, 견줄 때도 같은 모양으로 본다.
+  @visibleForTesting
+  static bool sameStoredValue(Object? local, Object? cloud) {
+    if (local is List && cloud is List) {
+      if (local.length != cloud.length) return false;
+      for (var i = 0; i < local.length; i++) {
+        if (local[i].toString() != cloud[i].toString()) return false;
+      }
+      return true;
+    }
+    return local == cloud;
   }
 
   static bool _isEmptyEncodedValue(String value) {
