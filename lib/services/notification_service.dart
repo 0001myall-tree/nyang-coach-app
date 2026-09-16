@@ -29,6 +29,49 @@ import '../models/user_data.dart';
 ///  밀린 알람이 그제서야 울린다.) 나머지 둘은 소리는 나지만 화면 표시가 제한된다.
 enum AlarmPermissionIssue { none, notifications, exactAlarm, fullScreen }
 
+/// 폰의 알람 볼륨 상태.
+///
+/// 이 값이 바닥이면 모닝콜은 제 시각에 울려도 안 들린다. 그런데 기종에 따라
+/// 알람 볼륨 슬라이더가 설정 어디에도 없다 — 갤럭시는 음량 화면에 벨소리·미디어·
+/// 알림·시스템만 두고 알람은 빼놨다. 시계 앱들이 저마다 볼륨 슬라이더를 들고
+/// 있는 이유가 그것이다. 모닝콜도 같은 것을 들고 있어야 한다.
+class AlarmVolume {
+  const AlarmVolume({
+    required this.level,
+    required this.max,
+    required this.min,
+    required this.blockedByDnd,
+  });
+
+  final int level;
+  final int max;
+  final int min;
+
+  /// 방해금지가 켜져 있고 알림 정책 접근 권한이 없어서 볼륨을 못 바꾸는 상태.
+  final bool blockedByDnd;
+
+  static AlarmVolume? fromMap(Map<String, dynamic>? raw) {
+    if (raw == null) return null;
+    final max = raw['max'];
+    final level = raw['level'];
+    if (max is! int || level is! int || max <= 0) return null;
+    final min = raw['min'];
+    return AlarmVolume(
+      level: level,
+      max: max,
+      min: min is int ? min : 0,
+      blockedByDnd: raw['blockedByDnd'] == true,
+    );
+  }
+
+  /// 0.0~1.0. 최소값이 1인 기종이 있어서 그 폭을 빼고 센다.
+  double get ratio =>
+      max <= min ? 1.0 : (level - min) / (max - min).toDouble();
+
+  /// 이 크기로는 깨우기 어렵다고 봐야 하는 선.
+  bool get tooQuietToWake => ratio < 0.35;
+}
+
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
   factory NotificationService() => _instance;
@@ -541,6 +584,41 @@ class NotificationService {
             >()
             ?.areNotificationsEnabled() ??
         true;
+  }
+
+  /// 폰의 알람 볼륨. 슬라이더가 이 값을 그대로 보여주고 그대로 바꾼다.
+  ///
+  /// 앱 전용 값을 따로 두지 않는다. 모닝콜이 울릴 때만 볼륨을 올렸다 되돌리는
+  /// 길도 있었지만, 앱이 도중에 죽거나 알람을 끄자마자 앱을 닫으면 되돌릴
+  /// 기회를 놓쳐 폰 볼륨이 최대인 채로 남는다. 슬라이더가 폰 값을 직접 다루면
+  /// 되돌릴 것 자체가 없다.
+  Future<AlarmVolume?> readAlarmVolume() async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return null;
+    try {
+      final raw = await _androidAlarmChannel.invokeMapMethod<String, dynamic>(
+        'readAlarmVolume',
+      );
+      return AlarmVolume.fromMap(raw);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// 알람 볼륨을 바꾸고, 바뀐 뒤의 실제 값을 돌려준다.
+  ///
+  /// 방해금지가 켜져 있으면 안드로이드가 막는다. 그때는 바꾸기 전 값이 그대로
+  /// 돌아오므로, 부르는 쪽이 그것을 보고 왜 안 움직이는지 말해줄 수 있다.
+  Future<AlarmVolume?> setAlarmVolume(int level) async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return null;
+    try {
+      final raw = await _androidAlarmChannel.invokeMapMethod<String, dynamic>(
+        'setAlarmVolume',
+        {'level': level},
+      );
+      return AlarmVolume.fromMap(raw);
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<bool> _invokeAndroidAlarmPermissionCheck(String method) async {

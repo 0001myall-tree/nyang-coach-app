@@ -723,6 +723,10 @@ class _SettingsScreenState extends State<SettingsScreen>
     var dayMode = _MorningCallDayMode.of(tempDays);
     bool isPickingTime = false;
     AlarmPermissionIssue modalIssue = _alarmPermissionIssue;
+    // 폰에서 읽어오기 전까지는 슬라이더를 그리지 않는다. 0에서 시작했다가
+    // 값이 도착하며 튀면, 사용자는 앱이 방금 볼륨을 내린 것으로 본다.
+    AlarmVolume? alarmVolume;
+    void Function(VoidCallback)? refreshSheet;
     // 목소리 미리듣기가 끝나는 순간을 비동기로 기다리는데, 그 사이 시트가
     // 닫히면 이 시트의 setState는 이미 죽은 위젯을 건드리는 셈이 된다.
     var sheetOpen = true;
@@ -736,6 +740,8 @@ class _SettingsScreenState extends State<SettingsScreen>
             void safeSetModalState(VoidCallback fn) {
               if (sheetOpen) setModalState(fn);
             }
+
+            refreshSheet = safeSetModalState;
 
             return _settingsDialog(
               children: [
@@ -929,6 +935,35 @@ class _SettingsScreenState extends State<SettingsScreen>
                 ),
                 const SizedBox(height: 14),
 
+                // 볼륨은 코치 선택 위에 둔다. 코치 목록은 줄마다 미리듣기가
+                // 붙어 있어서, 그 아래에 놓으면 "이 코치의 볼륨"처럼 보인다.
+                // 시간·요일·볼륨이 모닝콜 전체에 걸리는 값 셋으로 묶이고,
+                // 볼륨을 먼저 맞춘 뒤 내려가 목소리를 들으면 그게 아침에
+                // 실제로 들릴 소리가 된다.
+                if (alarmVolume != null) ...[
+                  _buildAlarmVolumeSection(
+                    volume: alarmVolume!,
+                    enabled: tempEnabled,
+                    onChanged: (level) {
+                      // 손이 움직이는 대로 따라가야 슬라이더가 끊기지 않는다.
+                      // 폰에 넣은 뒤 돌아오는 실제 값으로 다시 맞춘다.
+                      safeSetModalState(() {
+                        alarmVolume = AlarmVolume(
+                          level: level,
+                          max: alarmVolume!.max,
+                          min: alarmVolume!.min,
+                          blockedByDnd: alarmVolume!.blockedByDnd,
+                        );
+                      });
+                      NotificationService().setAlarmVolume(level).then((next) {
+                        if (next == null) return;
+                        safeSetModalState(() => alarmVolume = next);
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 14),
+                ],
+
                 // 코치 선택 리스트
                 Text(
                   '모닝콜 코치 선택',
@@ -1056,8 +1091,90 @@ class _SettingsScreenState extends State<SettingsScreen>
       },
     ).whenComplete(() {
       sheetOpen = false;
+      refreshSheet = null;
       _voicePreviewPlayer.stop();
     });
+
+    // 알람 볼륨은 폰에서 읽어온다. 도착하면 슬라이더가 그 자리에 나타난다.
+    NotificationService().readAlarmVolume().then((value) {
+      if (value == null) return;
+      refreshSheet?.call(() => alarmVolume = value);
+    });
+  }
+
+  /// 폰의 알람 볼륨 슬라이더.
+  ///
+  /// 앱 전용 값이 아니라 폰의 알람 볼륨 그 자체를 다룬다. 기종에 따라 이
+  /// 슬라이더가 설정 어디에도 없어서(갤럭시의 음량 화면에는 벨소리·미디어·
+  /// 알림·시스템만 있다) 사용자가 올릴 길이 없었다. 시계 앱들이 저마다 볼륨
+  /// 슬라이더를 들고 있는 것도 같은 이유다.
+  Widget _buildAlarmVolumeSection({
+    required AlarmVolume volume,
+    required bool enabled,
+    required ValueChanged<int> onChanged,
+  }) {
+    final steps = volume.max - volume.min;
+    final warning = volume.blockedByDnd
+        ? '방해금지가 켜져 있어 볼륨을 바꿀 수 없어요. 끄고 다시 해주세요.'
+        : volume.tooQuietToWake
+        ? '이 크기로는 깨우기 어려워요.'
+        : null;
+    return Opacity(
+      opacity: enabled ? 1.0 : 0.5,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '알람 볼륨',
+            style: appFont(
+              fontSize: 15,
+              fontWeight: FontWeight.w800,
+              color: const Color(0xFF1A1A2E),
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            '폰 전체의 알람 볼륨이에요.',
+            style: appFont(fontSize: 12, color: const Color(0xFF8A8AA3)),
+          ),
+          Row(
+            children: [
+              const Icon(
+                Icons.volume_down_rounded,
+                size: 20,
+                color: Color(0xFF8B7CFF),
+              ),
+              Expanded(
+                child: Slider(
+                  value: volume.level.toDouble().clamp(
+                    volume.min.toDouble(),
+                    volume.max.toDouble(),
+                  ),
+                  min: volume.min.toDouble(),
+                  max: volume.max.toDouble(),
+                  divisions: steps > 0 ? steps : null,
+                  activeColor: const Color(0xFF8B7CFF),
+                  inactiveColor: const Color(0xFFE4DEFF),
+                  onChanged: enabled
+                      ? (value) => onChanged(value.round())
+                      : null,
+                ),
+              ),
+              const Icon(
+                Icons.volume_up_rounded,
+                size: 20,
+                color: Color(0xFF8B7CFF),
+              ),
+            ],
+          ),
+          if (warning != null)
+            Text(
+              warning,
+              style: appFont(fontSize: 12, color: const Color(0xFFE0645A)),
+            ),
+        ],
+      ),
+    );
   }
 
   Future<void> _saveCoreReminderSettings(
