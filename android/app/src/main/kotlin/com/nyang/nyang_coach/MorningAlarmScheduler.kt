@@ -11,7 +11,19 @@ object MorningAlarmScheduler {
     private const val SHOW_REQUEST_CODE = 7302
     const val ACTION_FIRE = "com.coscene.nyangcoach.MORNING_ALARM_FIRE"
     const val ACTION_SHOW = "com.coscene.nyangcoach.MORNING_ALARM_SHOW"
+    const val ACTION_FOLLOW_UP = "com.coscene.nyangcoach.MORNING_ALARM_FOLLOW_UP"
     const val EXTRA_PAYLOAD = "payload"
+
+    /**
+     * 첫 알람 뒤에 한 번씩 더 부르는 시각. 분 단위다.
+     *
+     * 폰이 잠겨 있으면 첫 알람이 화면을 띄우고 목소리가 끌 때까지 반복되므로
+     * 이것들은 할 일이 없다. 문제는 폰을 쓰는 중일 때다. 그때 안드로이드는
+     * 전체화면을 안 띄우고 배너로 내리는데, 배너를 안 누르면 소리 한 번으로
+     * 끝나버린다. 아이폰은 그 경우에도 1분 간격으로 세 번 울린다.
+     */
+    private val FOLLOW_UP_MINUTES = intArrayOf(1, 2)
+    private val FOLLOW_UP_REQUEST_CODES = intArrayOf(7311, 7312)
 
     fun schedule(context: Context, triggerMillis: Long, payload: String) {
         val prefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
@@ -50,6 +62,54 @@ object MorningAlarmScheduler {
             AlarmManager.AlarmClockInfo(triggerMillis, showPendingIntent),
             firePendingIntent,
         )
+    }
+
+    /**
+     * 첫 알람이 울린 그 자리에서 뒤따르는 것들을 건다.
+     *
+     * 예약할 때 미리 걸지 않는 이유가 있다. 첫 알람은 울리자마자 내일 것을
+     * 다시 거는데, 그 길이 뒤따르는 것들까지 내일로 옮겨버린다. 아직 울리지도
+     * 않은 것을 데려가는 셈이다. 그래서 울린 뒤 지금 시각을 기준으로 건다.
+     */
+    fun scheduleFollowUps(context: Context, payload: String) {
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        val now = System.currentTimeMillis()
+        for (i in FOLLOW_UP_MINUTES.indices) {
+            val intent = Intent(context, MorningAlarmReceiver::class.java).apply {
+                action = ACTION_FOLLOW_UP
+                putExtra(EXTRA_PAYLOAD, payload)
+            }
+            val pendingIntent = PendingIntent.getBroadcast(
+                context,
+                FOLLOW_UP_REQUEST_CODES[i],
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+            alarmManager.setExactAndAllowWhileIdle(
+                AlarmManager.RTC_WAKEUP,
+                now + FOLLOW_UP_MINUTES[i] * 60_000L,
+                pendingIntent,
+            )
+        }
+    }
+
+    private fun cancelFollowUps(context: Context) {
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        for (requestCode in FOLLOW_UP_REQUEST_CODES) {
+            val intent = Intent(context, MorningAlarmReceiver::class.java).apply {
+                action = ACTION_FOLLOW_UP
+            }
+            val pendingIntent = PendingIntent.getBroadcast(
+                context,
+                requestCode,
+                intent,
+                PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE,
+            )
+            if (pendingIntent != null) {
+                alarmManager.cancel(pendingIntent)
+                pendingIntent.cancel()
+            }
+        }
     }
 
     /**
@@ -106,6 +166,7 @@ object MorningAlarmScheduler {
     }
 
     fun cancel(context: Context) {
+        cancelFollowUps(context)
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         val fireIntent = Intent(context, MorningAlarmReceiver::class.java).apply {
             action = ACTION_FIRE

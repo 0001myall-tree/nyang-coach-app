@@ -22,6 +22,12 @@ class MorningAlarmReceiver : BroadcastReceiver() {
             return
         }
 
+        if (intent.action == MorningAlarmScheduler.ACTION_FOLLOW_UP) {
+            val payload = intent.getStringExtra(MorningAlarmScheduler.EXTRA_PAYLOAD) ?: return
+            fireMorningAlarm(context, payload, isFollowUp = true)
+            return
+        }
+
         if (intent.action == Intent.ACTION_BOOT_COMPLETED ||
             intent.action == Intent.ACTION_MY_PACKAGE_REPLACED ||
             intent.action == "android.intent.action.QUICKBOOT_POWERON" ||
@@ -32,8 +38,18 @@ class MorningAlarmReceiver : BroadcastReceiver() {
         }
     }
 
-    private fun fireMorningAlarm(context: Context, payload: String) {
+    private fun fireMorningAlarm(context: Context, payload: String, isFollowUp: Boolean = false) {
         val prefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+
+        // 뒤따르는 알람은 아무도 첫 알람을 못 봤을 때만 부른다.
+        //
+        // 앱이 모닝콜 화면을 열면 "울릴 차례" 쪽지를 가져가면서 지운다. 쪽지가
+        // 없다는 것은 이미 화면이 떴고 목소리가 돌고 있다는 뜻이라, 그 위에
+        // 알림 소리를 더 얹을 이유가 없다.
+        if (isFollowUp && prefs.getString("flutter.native_morning_payload", null) == null) {
+            return
+        }
+
         prefs.edit()
             .putString("flutter.native_morning_payload", payload)
             .putLong("flutter.native_morning_alarm_at", System.currentTimeMillis())
@@ -44,7 +60,7 @@ class MorningAlarmReceiver : BroadcastReceiver() {
         ) {
             // 알림을 못 띄우더라도 내일 알람은 반드시 다시 걸어둔다.
             // 여기서 그냥 돌아가면 알람 체인이 끊겨, 앱을 열기 전까지 영영 울리지 않는다.
-            MorningAlarmScheduler.rescheduleFromPrefs(context)
+            if (!isFollowUp) MorningAlarmScheduler.rescheduleFromPrefs(context)
             return
         }
 
@@ -114,6 +130,11 @@ class MorningAlarmReceiver : BroadcastReceiver() {
             .build()
 
         manager.notify(7304, notification)
-        MorningAlarmScheduler.rescheduleFromPrefs(context)
+        if (!isFollowUp) {
+            // 뒤따르는 것들은 여기서 건다. 예약 때 미리 걸어두면 바로 아래
+            // 내일 예약이 그것들까지 데려가 버린다.
+            MorningAlarmScheduler.scheduleFollowUps(context, payload)
+            MorningAlarmScheduler.rescheduleFromPrefs(context)
+        }
     }
 }
