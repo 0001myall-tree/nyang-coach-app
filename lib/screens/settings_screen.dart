@@ -1096,9 +1096,15 @@ class _SettingsScreenState extends State<SettingsScreen>
     });
 
     // 알람 볼륨은 폰에서 읽어온다. 도착하면 슬라이더가 그 자리에 나타난다.
+    //
+    // 값을 먼저 담고 그 다음에 다시 그리라고 한다. 시트의 첫 그리기는 다음
+    // 프레임에 오는데 폰에 묻고 답을 받는 것은 그보다 빠를 때가 많아서,
+    // 다시 그리는 일에만 값을 실어 보내면 아직 아무도 안 듣고 있는 사이에
+    // 사라진다. 실제로 그렇게 슬라이더가 안 보였다.
     NotificationService().readAlarmVolume().then((value) {
       if (value == null) return;
-      refreshSheet?.call(() => alarmVolume = value);
+      alarmVolume = value;
+      refreshSheet?.call(() {});
     });
   }
 
