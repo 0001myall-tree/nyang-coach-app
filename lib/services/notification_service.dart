@@ -928,14 +928,30 @@ class NotificationService {
     await prefs.setString(pendingNudgeKey, jsonEncode(scheduledEntries));
   }
 
+  /// 울릴 시각을 이만큼 지나면 그 모닝콜은 없던 것으로 한다.
+  ///
+  /// 알림을 눌러서 들어오면 그 순간의 시각이 새로 적히므로 이 창에 걸리지
+  /// 않는다. 걸리는 것은 아침에 알림을 그냥 넘긴 뒤 한참 있다 앱을 여는
+  /// 경우뿐이고, 그때는 조용히 버리는 것이 맞다.
+  static const Duration _staleMorningAlarmAfter = Duration(minutes: 5);
+
   Future<void> handleNativeMorningAlarm() async {
     if (kIsWeb) return;
     final prefs = await SharedPreferences.getInstance();
     await prefs.reload();
     final payload = prefs.getString('native_morning_payload');
     if (payload == null || !payload.startsWith('morning:')) return;
+    final alarmAt = prefs.getInt('native_morning_alarm_at');
     await prefs.remove('native_morning_payload');
     await prefs.remove('native_morning_alarm_at');
+
+    // 지난 모닝콜은 버린다. 이걸 안 보고 울리던 동안에는, 아침에 놓친 알람이
+    // 오후에 앱을 열 때 그제서야 터졌다. 사용자에게는 모닝콜이 이상한 시각에
+    // 울리는 것으로 보인다.
+    if (alarmAt != null) {
+      final firedAt = DateTime.fromMillisecondsSinceEpoch(alarmAt);
+      if (DateTime.now().difference(firedAt) > _staleMorningAlarmAfter) return;
+    }
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _openMorningCall(payload);

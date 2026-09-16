@@ -393,8 +393,14 @@ class MainActivity : FlutterFragmentActivity() {
     }
 
     private fun handleIntent(intent: Intent) {
+        // 최근 앱 목록에서 다시 연 것이면 안드로이드가 처음 열렸을 때의 신호를
+        // 그대로 한 번 더 건넨다. 그것까지 모닝콜로 받으면, 아침에 알람으로 앱을
+        // 한 번 연 날은 그날 앱을 열 때마다 모닝콜이 다시 울린다.
+        val relaunchedFromRecents =
+            intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY != 0
+
         val morningPayload = intent.getStringExtra(MorningAlarmScheduler.EXTRA_PAYLOAD)
-        if (morningPayload != null && morningPayload.startsWith("morning:")) {
+        if (!relaunchedFromRecents && morningPayload != null && morningPayload.startsWith("morning:")) {
             val prefs = getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
             prefs.edit()
                 .putString("flutter.native_morning_payload", morningPayload)
