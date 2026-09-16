@@ -852,7 +852,10 @@ class _SettingsScreenState extends State<SettingsScreen>
                 Opacity(
                   opacity: tempEnabled ? 1.0 : 0.55,
                   child: Text(
-                    '휴대폰 설정에 따라 무음/진동 모드나 방해금지 상태에서는 모닝콜 소리가 제한될 수 있어요. 소리로 깨고 싶다면 앱 알림 권한과 알람 볼륨을 미리 확인해주세요.',
+                    // 볼륨을 확인해달라고 부탁하던 뒷문장은 뺐다. 알람 볼륨은
+                    // 이제 이 화면의 슬라이더가 다루고, 권한은 위쪽 배너가
+                    // 막혔을 때만 말한다. 남길 것은 앱이 손댈 수 없는 사실뿐이다.
+                    '휴대폰 설정에 따라 무음/진동 모드나 방해금지 상태에서는 모닝콜 소리가 나오지 않을 수 있어요.',
                     style: appFont(
                       fontSize: 11,
                       fontWeight: FontWeight.w500,
