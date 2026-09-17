@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -128,53 +127,17 @@ class OverplanNudgeService {
   /// 기다리라는 말로 끝나는 것은 이 줄이 바로 뜨고 코치의 말은 몇 초 뒤에
   /// 오기 때문이다. 그 사이를 그냥 두면 말이 끊긴 것처럼 보인다.
   static String opening(String coachId) {
-    final id = CoachIdService.normalize(coachId);
-    final state = switch (id) {
-      'sec_female' => '대표님, 지금 평소 해내시던 것보다 계획이 좀 많으시네요. 정신없으실 수 있겠어요.',
-      'nyang_halbae' => '지금 평소 해내던 것보다 계획이 많구나, 얘야. 정신없을 만하다.',
-      _ => '지금 평소 해내던 것보다 계획이 좀 많다냥. 정신없을 수 있겠다냥.',
-    };
-    return '$state\n${_pickWaitLine(id)}';
-  }
-
-  /// 기다리라는 말. 매번 같으면 녹음을 틀어둔 것처럼 들린다.
-  ///
-  /// 목록을 들여다보는 중이라는 말이 섞여 있다 - 실제로 하는 일이 그거라,
-  /// "기다려"보다 사람이 하는 말에 가깝다.
-  @visibleForTesting
-  static List<String> waitLines(String coachId) =>
-      switch (CoachIdService.normalize(coachId)) {
-        'sec_female' => const [
-          '잠시만 기다려주세요.',
-          '목록 좀 보고 말씀드릴게요.',
-          '잠깐 살펴보겠습니다.',
-          '어느 쪽이 나을지 보고 오겠습니다.',
-        ],
-        'nyang_halbae' => const [
-          '잠깐 기다려보렴.',
-          '어디 한번 보자.',
-          '목록 좀 보고 오마.',
-          '잠깐만 들여다보자꾸나.',
-        ],
-        _ => const [
-          '잠깐 기다려보라냥.',
-          '냥이가 목록 좀 보고 올게냥.',
-          '어디 보자냥.',
-          '잠깐만 들여다볼게냥.',
-        ],
-      };
-
-  /// 방금 쓴 줄은 피해 고른다. 같은 말이 잇달아 나오면 고른 티가 안 난다.
-  static String? _lastWaitLine;
-
-  static String _pickWaitLine(String coachId) {
-    final pool = waitLines(coachId);
-    final fresh = pool.where((line) => line != _lastWaitLine).toList();
-    final picked = (fresh.isEmpty ? pool : fresh)[Random().nextInt(
-      fresh.isEmpty ? pool.length : fresh.length,
-    )];
-    _lastWaitLine = picked;
-    return picked;
+    switch (CoachIdService.normalize(coachId)) {
+      case 'sec_female':
+        return '대표님, 지금 평소 해내시던 것보다 계획이 좀 많으시네요. '
+            '정신없으실 수 있겠어요.\n잠시만 기다려주세요.';
+      case 'nyang_halbae':
+        return '지금 평소 해내던 것보다 계획이 많구나, 얘야. 정신없을 만하다.\n'
+            '잠깐 기다려보렴.';
+      default:
+        return '지금 평소 해내던 것보다 계획이 좀 많다냥. 정신없을 수 있겠다냥.\n'
+            '잠깐 기다려보라냥.';
+    }
   }
 
   /// 코치가 말을 못 지었을 때 대신 나갈 줄.
