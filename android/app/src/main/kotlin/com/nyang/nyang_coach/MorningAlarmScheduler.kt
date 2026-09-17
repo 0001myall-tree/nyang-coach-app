@@ -12,7 +12,19 @@ object MorningAlarmScheduler {
     const val ACTION_FIRE = "com.coscene.nyangcoach.MORNING_ALARM_FIRE"
     const val ACTION_SHOW = "com.coscene.nyangcoach.MORNING_ALARM_SHOW"
     const val ACTION_FOLLOW_UP = "com.coscene.nyangcoach.MORNING_ALARM_FOLLOW_UP"
+    const val ACTION_RESTORE_VOLUME = "com.coscene.nyangcoach.MORNING_VOLUME_RESTORE"
     const val EXTRA_PAYLOAD = "payload"
+
+    private const val RESTORE_VOLUME_REQUEST_CODE = 7313
+
+    /**
+     * 올려둔 알람 볼륨을 이만큼 지나면 무조건 돌려놓는다.
+     *
+     * 알림만 밀어내고 앱을 안 여는 사람이 있다. 그러면 앱에게는 알람이 끝난
+     * 순간이 오지 않아서, 폰이 큰 볼륨에 그대로 남는다. 그 뒤로 울리는 남의
+     * 알람이 전부 커지는 셈이라, 아무도 안 끄면 시간이 대신 끈다.
+     */
+    private const val RESTORE_VOLUME_AFTER_MINUTES = 10L
 
     /**
      * 첫 알람 뒤에 한 번씩 더 부르는 시각. 분 단위다.
@@ -91,6 +103,35 @@ object MorningAlarmScheduler {
                 pendingIntent,
             )
         }
+    }
+
+    /** 볼륨을 올린 자리에서 부른다. 이미 걸려 있으면 시각만 뒤로 밀린다. */
+    fun scheduleVolumeRestore(context: Context) {
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        alarmManager.setExactAndAllowWhileIdle(
+            AlarmManager.RTC_WAKEUP,
+            System.currentTimeMillis() + RESTORE_VOLUME_AFTER_MINUTES * 60_000L,
+            restoreVolumeIntent(context, create = true)!!,
+        )
+    }
+
+    fun cancelVolumeRestore(context: Context) {
+        val pendingIntent = restoreVolumeIntent(context, create = false) ?: return
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        alarmManager.cancel(pendingIntent)
+        pendingIntent.cancel()
+    }
+
+    private fun restoreVolumeIntent(context: Context, create: Boolean): PendingIntent? {
+        val intent = Intent(context, MorningAlarmReceiver::class.java).apply {
+            action = ACTION_RESTORE_VOLUME
+        }
+        val flags = if (create) {
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        } else {
+            PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE
+        }
+        return PendingIntent.getBroadcast(context, RESTORE_VOLUME_REQUEST_CODE, intent, flags)
     }
 
     private fun cancelFollowUps(context: Context) {

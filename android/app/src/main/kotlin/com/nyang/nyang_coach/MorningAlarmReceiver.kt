@@ -15,6 +15,17 @@ import android.net.Uri
 import android.os.Build
 
 class MorningAlarmReceiver : BroadcastReceiver() {
+    companion object {
+        /**
+         * 이 알림에는 목소리가 붙어 있어서, 뜨는 순간 시스템이 소리를 낸다.
+         *
+         * 앱이 전체화면을 열고 같은 목소리를 반복 재생하기 시작하면 둘이 겹쳐
+         * 이중으로 들린다. 그래서 앱이 이어받는 자리에서 이 알림을 지운다
+         * ([MainActivity]의 startMorningAlarmSound).
+         */
+        const val NOTIFICATION_ID = 7304
+    }
+
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action == MorningAlarmScheduler.ACTION_FIRE) {
             val payload = intent.getStringExtra(MorningAlarmScheduler.EXTRA_PAYLOAD) ?: return
@@ -28,11 +39,18 @@ class MorningAlarmReceiver : BroadcastReceiver() {
             return
         }
 
+        if (intent.action == MorningAlarmScheduler.ACTION_RESTORE_VOLUME) {
+            MorningAlarmVolume.restore(context)
+            return
+        }
+
         if (intent.action == Intent.ACTION_BOOT_COMPLETED ||
             intent.action == Intent.ACTION_MY_PACKAGE_REPLACED ||
             intent.action == "android.intent.action.QUICKBOOT_POWERON" ||
             intent.action == "com.htc.intent.action.QUICKBOOT_POWERON"
         ) {
+            // 껐다 켠 사이에 되돌리지 못한 볼륨이 남아 있을 수 있다.
+            MorningAlarmVolume.restore(context)
             MorningAlarmScheduler.rescheduleFromPrefs(context)
             return
         }
@@ -63,6 +81,9 @@ class MorningAlarmReceiver : BroadcastReceiver() {
             if (!isFollowUp) MorningAlarmScheduler.rescheduleFromPrefs(context)
             return
         }
+
+        // 소리가 나기 직전에 올린다. 알림을 띄운 뒤에 올리면 첫 소절이 작게 샌다.
+        MorningAlarmVolume.raise(context)
 
         val openIntent = Intent(context, MainActivity::class.java).apply {
             action = MorningAlarmScheduler.ACTION_FIRE
@@ -129,7 +150,7 @@ class MorningAlarmReceiver : BroadcastReceiver() {
             .setFullScreenIntent(openPendingIntent, true)
             .build()
 
-        manager.notify(7304, notification)
+        manager.notify(NOTIFICATION_ID, notification)
         if (!isFollowUp) {
             // 뒤따르는 것들은 여기서 건다. 예약 때 미리 걸어두면 바로 아래
             // 내일 예약이 그것들까지 데려가 버린다.
