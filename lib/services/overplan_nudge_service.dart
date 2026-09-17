@@ -61,6 +61,12 @@ class OverplanNudgeService {
   static const int fromHour = 7;
   static const int untilHour = 19;
 
+  /// 시험용 스위치. true면 시간대와 쿨다운을 무시한다.
+  ///
+  /// 확인이 끝나면 **반드시 false로 되돌릴 것.** 이 상태로 나가면 새벽에도
+  /// 말을 걸고, 조건에 걸리는 사람에게는 앱을 열 때마다 말한다.
+  static const bool debugIgnoreTimeAndCooldown = false;
+
   /// 이 자리를 쓰는 코치.
   ///
   /// 첫 줄 뒤에 코치가 지은 말이 이어지는 자리라, 그 말을 못 짓는 코치에게는
@@ -80,15 +86,25 @@ class OverplanNudgeService {
     DateTime? now,
   }) async {
     final at = now ?? DateTime.now();
-    if (at.hour < fromHour || at.hour >= untilHour) return null;
+    if (!debugIgnoreTimeAndCooldown &&
+        (at.hour < fromHour || at.hour >= untilHour)) {
+      return null;
+    }
 
     final prefs = await SharedPreferences.getInstance();
-    if (_withinCooldown(prefs.getString(_lastGreetedDateKey), at)) return null;
+    if (!debugIgnoreTimeAndCooldown &&
+        _withinCooldown(prefs.getString(_lastGreetedDateKey), at)) {
+      return null;
+    }
 
     // 이제 막 쓰기 시작한 사람에게는 "평소보다 많다"고 할 평소가 없다.
     if (!_hasRecentRecord(historyRaw, at)) return null;
 
     final recentMax = _recentMaxCompleted(historyRaw, at);
+    debugPrint(
+      '[overplan] 오늘 $plannedCount개 / 최근 최대 완료 $recentMax개 / '
+      '문턱 ${recentMax + overBy}개',
+    );
     if (plannedCount < recentMax + overBy) return null;
 
     debugPrint(
@@ -172,7 +188,9 @@ class OverplanNudgeService {
   }
 
   /// 최근 이레(오늘 제외) 중 하루에 완료한 개수의 최댓값.
-  @visibleForTesting
+  ///
+  /// 쏟아내기도 이 값을 쓴다 - 오늘 할 것을 이 사람이 해내던 양에 맞춰야
+  /// 하는데, 그 기준이 여기와 같아야 두 자리가 따로 놀지 않는다.
   static int recentMaxCompleted(String? historyRaw, [DateTime? now]) =>
       _recentMaxCompleted(historyRaw, now ?? DateTime.now());
 

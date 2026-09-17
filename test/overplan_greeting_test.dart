@@ -15,13 +15,17 @@ import 'package:shared_preferences/shared_preferences.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  // 기록을 만드는 기준과 판정에 넘기는 기준을 같은 날로 둔다. 예전에는
+  // 기록만 진짜 오늘을 썼는데, 자정을 넘기면 하루가 어긋나 테스트가 깨졌다.
+  final base = DateTime(2026, 9, 17, 9);
+
   String key(DateTime date) =>
       '${date.year}-${date.month.toString().padLeft(2, '0')}'
       '-${date.day.toString().padLeft(2, '0')}';
 
   /// 며칠 전 하루 기록. [done]개를 해낸 날.
   Map<String, dynamic> day(int daysAgo, int done) {
-    final date = DateTime.now().subtract(Duration(days: daysAgo));
+    final date = base.subtract(Duration(days: daysAgo));
     return {
       'date': key(date),
       'totalCount': done + 2,
@@ -61,7 +65,7 @@ void main() {
         await OverplanNudgeService.shouldGreet(
           plannedCount: 7,
           historyRaw: raw,
-          now: DateTime(2026, 9, 17, 9),
+          now: base,
         ),
         2,
       );
@@ -74,7 +78,7 @@ void main() {
         await OverplanNudgeService.shouldGreet(
           plannedCount: 6,
           historyRaw: raw,
-          now: DateTime(2026, 9, 17, 9),
+          now: base,
         ),
         isNull,
       );
@@ -86,7 +90,7 @@ void main() {
         await OverplanNudgeService.shouldGreet(
           plannedCount: 20,
           historyRaw: null,
-          now: DateTime(2026, 9, 17, 9),
+          now: base,
         ),
         isNull,
       );
@@ -100,7 +104,7 @@ void main() {
         await OverplanNudgeService.shouldGreet(
           plannedCount: 9,
           historyRaw: raw,
-          now: DateTime(2026, 9, 17, 6, 59),
+          now: base.subtract(const Duration(hours: 3)),
         ),
         isNull,
       );
@@ -113,7 +117,7 @@ void main() {
         await OverplanNudgeService.shouldGreet(
           plannedCount: 9,
           historyRaw: raw,
-          now: DateTime(2026, 9, 17, 19),
+          now: base.add(const Duration(hours: 10)),
         ),
         isNull,
       );
@@ -125,7 +129,7 @@ void main() {
         await OverplanNudgeService.shouldGreet(
           plannedCount: 9,
           historyRaw: raw,
-          now: DateTime(2026, 9, 17, 14),
+          now: base.add(const Duration(hours: 5)),
         ),
         isNotNull,
       );
@@ -135,7 +139,7 @@ void main() {
   group('쿨다운', () {
     test('하루에 두 번은 하지 않는다', () async {
       final raw = history([day(1, 2)]);
-      final now = DateTime(2026, 9, 17, 9);
+      final now = base;
       expect(
         await OverplanNudgeService.shouldGreet(
           plannedCount: 9,
@@ -160,7 +164,7 @@ void main() {
       // 계획 여덟아홉에 완료 하나둘인 사람은 열흘 내내 조건에 걸린다.
       // 매일 말을 걸면 도움이 아니라 소음이 된다.
       final raw = history([day(1, 2)]);
-      final now = DateTime(2026, 9, 17, 9);
+      final now = base;
       await OverplanNudgeService.recordGreeted(now: now);
 
       expect(
@@ -184,7 +188,7 @@ void main() {
     test('읽을 수 없는 날짜가 적혀 있으면 막지 않는다', () {
       // 한 번 더 나가는 편이, 영영 안 나가는 것보다 낫다.
       expect(
-        OverplanNudgeService.withinCooldown('예전 형식', DateTime(2026, 9, 17)),
+        OverplanNudgeService.withinCooldown('예전 형식', base),
         isFalse,
       );
     });

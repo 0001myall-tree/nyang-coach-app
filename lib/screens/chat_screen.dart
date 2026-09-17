@@ -19,6 +19,7 @@ import 'package:nyang_coach/screens/coach_selection_screen.dart';
 import 'package:nyang_coach/services/day_capacity_service.dart';
 import 'package:nyang_coach/services/execution_blocker_service.dart';
 import 'package:nyang_coach/services/life_context_service.dart';
+import 'package:nyang_coach/services/brain_dump_plan.dart';
 import 'package:nyang_coach/services/overplan_coaching_line.dart';
 import 'package:nyang_coach/services/overplan_nudge_service.dart';
 import 'package:nyang_coach/services/analytics_service.dart';
@@ -1286,6 +1287,17 @@ class _ChatScreenState extends State<ChatScreen>
   // 앱이나 개입이 그 턴에 직접 세운 칩이고, 대화 중에만 쓸모가 있다.
   bool _conversationStarted = false;
   bool _isLoading = false;
+
+  /// 쏟아내기 버튼을 누른 참인지. 다음 한 마디를 평소 답변 대신 계획 짜기로
+  /// 보낸다. 한 번 쓰면 꺼진다 - 계속 켜두면 그 뒤 대화까지 전부 계획으로
+  /// 읽힌다.
+  bool _awaitingBrainDump = false;
+
+  /// 코치가 짜둔 계획. 사용자가 A·B 중 하나를 고르면 비운다.
+  BrainDumpPlan? _brainDumpPlan;
+
+  /// 등록을 마치고 "이것부터 시작할까" 물어둔 일. 누르면 시작 표시가 켜진다.
+  String? _brainDumpStartTask;
   late CoachConfig _coach;
 
   // flirt 토스트
@@ -4734,8 +4746,14 @@ ${lines.join('\n')}
     final tasks = _decodeMapList(prefs.getString('nyang_tasks'));
     if (tasks.isEmpty) return false;
 
+    // 끝낸 것은 빼고 센다. 열한 개 중 여덟 개를 해낸 사람에게 "계획이 많구나"는
+    // 틀린 말이다 - 지금 남은 것은 세 개고, 그 사람은 정신없는 게 아니라 잘
+    // 가고 있는 중이다.
+    final remaining = tasks.where((task) => task['done'] != true).length;
+    if (remaining == 0) return false;
+
     final recentMax = await OverplanNudgeService.shouldGreet(
-      plannedCount: tasks.length,
+      plannedCount: remaining,
       historyRaw: prefs.getString('nyang_history'),
       now: now,
     );
@@ -4749,6 +4767,10 @@ ${lines.join('\n')}
       OverplanNudgeService.opening(widget.coachId),
       kind: 'auto:overplan',
     );
+
+    // 기다리라고 해놓고 아무 표시가 없으면 말이 끝난 줄 알고 나간다.
+    // 평소 답변을 기다릴 때와 같은 표시를 띄워둔다.
+    setState(() => _isLoading = true);
 
     final line = await OverplanCoachingLine.compose(
       coachId: widget.coachId,
@@ -4768,6 +4790,7 @@ ${lines.join('\n')}
       }).where((task) => task.name.isNotEmpty).toList(growable: false),
     );
     if (!mounted) return true;
+    setState(() => _isLoading = false);
 
     // 기다리라고 해놓고 아무것도 안 오는 것이 제일 나쁘다. 못 지었으면
     // 뻔한 말이라도 내보낸다.
@@ -4779,7 +4802,6 @@ ${lines.join('\n')}
     // 평소 답변과 같은 길로 태운다. 코치가 붙인 [OPEN: 오늘]을 떼어내고
     // 그 화면을 실제로 열어주는 자리가 거기에 있다.
     final parsed = _parseReply(line);
-    if (!mounted) return true;
     _injectAiMessage(parsed.text);
     return true;
   }
@@ -12486,6 +12508,12 @@ $block
     if (trimmed.isEmpty || _isLoading) return;
     if (!await _ensureMasterCoachAccess()) return;
     _conversationStarted = true;
+    // 쏟아내기로 받은 한 마디는 평소 답변 대신 계획 짜기로 보낸다.
+    if (_awaitingBrainDump) {
+      _awaitingBrainDump = false;
+      await _runBrainDump(trimmed);
+      return;
+    }
     // 사용자가 한 말에서만 줍는다. 코치가 "퇴근하고 하자"고 한 것을 세면
     // 자기가 한 말을 근거로 삼는 셈이 된다.
     unawaited(LifeContextService.noteFromUserText(trimmed));
@@ -15918,7 +15946,9 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
         // 순서는 안 떴을 때 잃는 것이 큰 쪽부터다 — 타이머는 사용자가 직접
         // 부탁한 것이라 안 뜨면 부탁이 증발하고, 완료 체크는 안 떠도 할 일
         // 탭에서 밀면 되고, 할 일 제안은 코치가 먼저 꺼낸 것이라 제일 가볍다.
-        if (_coach.isMaster && _timerConfirmMinutes != null)
+        if (_brainDumpPlan != null)
+          _buildBrainDumpPlanCard()
+        else if (_coach.isMaster && _timerConfirmMinutes != null)
           _buildTimerConfirmCard()
         else if (_doneConfirm != null)
           _buildDoneConfirmCard()
@@ -16009,6 +16039,53 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
     } catch (e) {
       debugPrint('할 일 추가 후 기록 갱신 실패: $e');
     }
+
+    _maybeAskBrainDumpStart();
+  }
+
+  /// 쏟아내기로 넣은 카드를 다 눌렀으면 시작을 묻는다.
+  ///
+  /// 여기서 안 물으면 이 기능은 계획만 하고 끝난다. 다 적어놓으면 뭔가 한
+  /// 것 같아서 실행이 미뤄지는데, 그게 이 앱이 막으려는 바로 그 자리다.
+  void _maybeAskBrainDumpStart() {
+    final target = _brainDumpStartTask;
+    if (target == null || _suggestedTasks.isNotEmpty) return;
+    _brainDumpStartTask = null;
+    if (!mounted) return;
+    _injectAiMessage(
+      widget.coachId == 'sec_female'
+          ? "그럼 '$target'부터 시작하실까요?"
+          : "그럼 '$target'부터 시작해볼까?",
+      kind: _brainDumpStartKind,
+      choices: [_brainDumpStartYes, _brainDumpStartLater],
+      payload: target,
+    );
+  }
+
+  static const String _brainDumpStartKind = 'brain_dump_start';
+  static const String _brainDumpStartYes = '시작할게';
+  static const String _brainDumpStartLater = '이따 할래';
+
+  /// 시작 버튼을 눌렀을 때. 할 일 화면의 시작 버튼과 같은 표시를 남긴다.
+  Future<void> _handleBrainDumpStart(String label, String? taskText) async {
+    if (_isLoading) return;
+    HapticFeedback.lightImpact();
+    _injectUserChoice(label);
+    if (label != _brainDumpStartYes || taskText == null) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    final started = await _markCoreTaskStarted(prefs, taskText: taskText);
+    if (!mounted) return;
+    unawaited(_loadTaskProgress());
+    _injectAiMessage(
+      started != null
+          ? (widget.coachId == 'sec_female'
+                ? '시작으로 표시해뒀습니다. 다녀오세요.'
+                : '시작으로 찍어뒀다. 다녀오렴.')
+          : (widget.coachId == 'sec_female'
+                ? '이미 시작하신 걸로 되어 있네요.'
+                : '이미 시작한 걸로 돼 있구나.'),
+    );
   }
 
   /// 완료 확인 카드.
@@ -16133,6 +16210,234 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
                 ),
               ],
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 안을 골랐다. 오늘 것은 목록에 넣고, 나머지는 다른 날로 미뤄둔다.
+  ///
+  /// 마지막에 시작까지 잇는다. 여기서 "정리 잘 됐다" 하고 앱을 닫으면 이
+  /// 기능은 계획을 더 하게 만든 것으로 끝난다. 계획이 실행을 대체하는 그
+  /// 자리를 막는 것이 이 마지막 한 줄이다.
+  Future<void> _confirmBrainDumpOption(
+    BrainDumpPlan plan,
+    BrainDumpPlanOption option,
+  ) async {
+    if (_isLoading) return;
+    HapticFeedback.lightImpact();
+    setState(() => _brainDumpPlan = null);
+    if (option.label.isNotEmpty) _injectUserChoice(option.label);
+
+    final prefs = await SharedPreferences.getInstance();
+    // 오늘 안 할 것은 조용히 넘긴다. 물어볼 이유가 없다.
+    await _saveBrainDumpLater(prefs, plan.later);
+    if (!mounted) return;
+    if (plan.later.isNotEmpty) {
+      _injectAiMessage('오늘 안 해도 되는 건 내일로 넘겨뒀어.');
+    }
+
+    // 오늘 할 것은 하나씩 확인받는다. 한 번에 넣으면 빠르긴 한데, 내가 정한
+    // 목록이라는 느낌이 안 남는다. 게다가 개수가 두셋이라 누를 만하다.
+    final existing = _decodeMapList(prefs.getString('nyang_tasks'))
+        .map((task) => task['text']?.toString().trim())
+        .whereType<String>()
+        .toSet();
+    final pending = <_SuggestedTask>[];
+    for (final name in plan.todayNamesOf(option)) {
+      final text = name.trim();
+      if (text.isEmpty || existing.contains(text)) continue;
+      existing.add(text);
+      pending.add(_SuggestedTask(text: text));
+    }
+    if (pending.isEmpty || !mounted) return;
+
+    // 마지막 카드까지 누르면 시작을 묻는다. 순서를 짜놓고 시작을 안 물으면
+    // 계획만 하고 끝난다.
+    _brainDumpStartTask = pending.first.text;
+    setState(() => _suggestedTasks = pending);
+  }
+
+  /// 오늘 안 할 것은 내일 칸에 넣어둔다.
+  ///
+  /// 날짜를 사용자에게 고르게 하지 않는다. 언제 할지 답할 수 있으면 애초에
+  /// 미루지 않았을 것이고, 그 물음이 또 하나의 결정이 된다.
+  Future<void> _saveBrainDumpLater(
+    SharedPreferences prefs,
+    List<String> names,
+  ) async {
+    if (names.isEmpty) return;
+    final tomorrow = DateTime.now().add(const Duration(days: 1));
+    final key = _dateKey(tomorrow);
+    Map<String, dynamic> byDate;
+    try {
+      byDate = Map<String, dynamic>.from(
+        jsonDecode(
+              prefs.getString(DailyResetService.plannedTasksByDateKey) ?? '{}',
+            )
+            as Map,
+      );
+    } catch (_) {
+      byDate = {};
+    }
+    final day = (byDate[key] as List?)?.toList() ?? <dynamic>[];
+    final existing = day
+        .whereType<Map>()
+        .map((task) => task['text']?.toString().trim())
+        .whereType<String>()
+        .toSet();
+    for (final name in names) {
+      final text = name.trim();
+      if (text.isEmpty || existing.contains(text)) continue;
+      day.add({
+        'id': 'braindump_${DateTime.now().microsecondsSinceEpoch}_$text',
+        'text': text,
+        'category': 'today',
+        'done': false,
+        'createdAt': DateTime.now().toIso8601String(),
+      });
+      existing.add(text);
+    }
+    byDate[key] = day;
+    await prefs.setString(
+      DailyResetService.plannedTasksByDateKey,
+      jsonEncode(byDate),
+    );
+    TasksSyncService.scheduleSyncToCloud();
+  }
+
+  /// 코치가 짠 두 가지 안을 내놓는 카드.
+  ///
+  /// 항목마다 묻지 않는다. 열 개를 하나씩 판단하는 것이 지금 못 하고 있는
+  /// 바로 그 일이라, 그걸 다시 시키면 이 기능을 열 이유가 없다. 남이 내놓은
+  /// 안을 고르는 것은 훨씬 가볍다.
+  Widget _buildBrainDumpPlanCard() {
+    final plan = _brainDumpPlan;
+    if (plan == null) return const SizedBox.shrink();
+    final accent = _coach.accentColor;
+
+    return Positioned(
+      bottom: 80,
+      left: 16,
+      right: 16,
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFE8E4F0)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.08),
+              blurRadius: 16,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '어느 쪽으로 갈까?',
+              style: appFont(
+                fontSize: 14,
+                fontWeight: FontWeight.w800,
+                color: const Color(0xFF1A1A2E),
+              ),
+            ),
+            const SizedBox(height: 10),
+            for (final option in plan.options) ...[
+              _buildBrainDumpOption(plan, option, accent),
+              const SizedBox(height: 8),
+            ],
+            if (plan.batch.isNotEmpty || plan.later.isNotEmpty) ...[
+              const SizedBox(height: 2),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF9F8FD),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (plan.batch.isNotEmpty)
+                      Text(
+                        '몰아서 ${plan.batchMinutes}분 · ${plan.batch.join(', ')}',
+                        style: appFont(
+                          fontSize: 12,
+                          color: const Color(0xFF6B7280),
+                        ),
+                      ),
+                    if (plan.later.isNotEmpty)
+                      Padding(
+                        padding: EdgeInsets.only(
+                          top: plan.batch.isEmpty ? 0 : 5,
+                        ),
+                        child: Text(
+                          '다른 날로 · ${plan.later.join(', ')}',
+                          style: appFont(
+                            fontSize: 12,
+                            color: const Color(0xFF6B7280),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBrainDumpOption(
+    BrainDumpPlan plan,
+    BrainDumpPlanOption option,
+    Color accent,
+  ) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: () => _confirmBrainDumpOption(plan, option),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(11),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFE8E4F0)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (option.label.isNotEmpty)
+              Text(
+                option.label,
+                style: appFont(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                  color: accent,
+                ),
+              ),
+            const SizedBox(height: 4),
+            Text(
+              option.today.join(' → '),
+              style: appFont(
+                fontSize: 13,
+                color: const Color(0xFF3D3A4E),
+                height: 1.5,
+              ),
+            ),
+            if (option.why.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(
+                option.why,
+                style: appFont(fontSize: 12, color: const Color(0xFF9593A5)),
+              ),
+            ],
           ],
         ),
       ),
@@ -17514,6 +17819,12 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
   Widget _buildBubble(ChatMessage msg) {
     if (msg.kind == 'vision_choice') {
       return _buildVisionChoiceCard(msg);
+    }
+    if (msg.kind == _brainDumpStartKind && msg.choices.isNotEmpty) {
+      return _buildChoiceBubbleCard(
+        msg,
+        (label) => _handleBrainDumpStart(label, msg.payload),
+      );
     }
     if (msg.kind == 'start_difficulty_choice') {
       return _buildStartDifficultyChoiceCard(msg);
@@ -20032,11 +20343,156 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
       items.add(_buildMasterQuickChip(chips[i], i));
       items.add(const SizedBox(width: 7));
     }
+    // 쏟아내기 버튼은 맨 앞에 둔다. 시선이 먼저 닿는 자리이고, 칩과 함께
+    // 옆으로 밀 수 있어야 자리를 차지하지 않는다.
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       padding: const EdgeInsets.fromLTRB(16, 7, 16, 7),
-      child: Row(mainAxisSize: MainAxisSize.min, children: items),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _buildBrainDumpButton(),
+          const SizedBox(width: 7),
+          ...items,
+        ],
+      ),
     );
+  }
+
+  /// 머리가 복잡할 때 할 거를 다 꺼내놓는 자리로 들어가는 칩.
+  ///
+  /// 아이콘만 두지 않는다. 바구니 그림만으로는 무슨 기능인지 알 수 없어서,
+  /// 글자를 붙여야 처음 보는 사람도 눌러본다.
+  Widget _buildBrainDumpButton() {
+    return AppChip(
+      label: '할 거 다 꺼내기',
+      // 채운 그림을 쓴다. 진한 바탕 위에서는 선으로만 된 그림이 얇아 보인다.
+      icon: const Icon(Icons.shopping_basket, size: 16, color: Colors.white),
+      backgroundColor: AppDesignTokens.brandVivid,
+      foregroundColor: Colors.white,
+      borderColor: AppDesignTokens.brandVivid,
+      labelStyle: appFont(
+        fontSize: AppDesignTokens.textBody,
+        fontWeight: FontWeight.w800,
+      ),
+      onTap: _startBrainDump,
+    );
+  }
+
+  /// 쏟아낸 말을 계획으로 바꿔 내놓는다.
+  ///
+  /// 값어치가 나는 곳은 쪼개기가 아니라 두 가지다 - 이미 있는 것을 짚어주는
+  /// 것과, 열 개를 하나씩 판단하는 대신 두 안 중 하나를 고르게 하는 것.
+  Future<void> _runBrainDump(String dumped) async {
+    _injectUserChoice(dumped);
+    _ctrl.clear();
+    setState(() => _isLoading = true);
+
+    final prefs = await SharedPreferences.getInstance();
+    final plan = await BrainDumpPlanner.compose(
+      coachId: widget.coachId,
+      dumped: dumped,
+      alreadyBlock: _brainDumpAlreadyBlock(prefs),
+      recentMax: OverplanNudgeService.recentMaxCompleted(
+        prefs.getString('nyang_history'),
+      ),
+    );
+    if (!mounted) return;
+    setState(() => _isLoading = false);
+
+    // 못 짜면 평소 길로 보낸다. 다 말해놓고 아무 답도 못 받는 것이 제일 나쁘다.
+    if (plan == null || !plan.isUsable) {
+      await _send(dumped);
+      return;
+    }
+
+    _brainDumpPlan = plan;
+    final known = _brainDumpKnownLine(plan);
+    if (known.isNotEmpty) _injectAiMessage(known);
+    if (!mounted) return;
+    setState(() {});
+  }
+
+  /// 쏟아낸 것과 견줄 재료. 코치가 겹침을 지어내지 않게 앱이 찾은 것만 넘긴다.
+  String _brainDumpAlreadyBlock(SharedPreferences prefs) {
+    final lines = <String>[];
+    for (final task in _decodeMapList(prefs.getString('nyang_tasks'))) {
+      final name = task['text']?.toString().trim() ?? '';
+      if (name.isEmpty) continue;
+      final isRoutine = task['category'] == 'habit' || task['isHabit'] == true;
+      if (task['done'] == true) {
+        final at = task['completedAt']?.toString();
+        lines.add('- $name: 오늘 이미 끝냄${_brainDumpClock(at)}');
+      } else if (task['inProgress'] == true || task['startedAt'] != null) {
+        lines.add('- $name: 오늘 손댔지만 아직 안 끝냄');
+      } else {
+        lines.add('- $name: 오늘 목록에 이미 있음${isRoutine ? ' (루틴)' : ''}');
+      }
+    }
+    // 오늘 요일이 아니라 목록에 안 뜬 루틴도 본다. 이걸 빼면 토요일에 평일
+    // 루틴을 또 만들게 된다.
+    final listed = _decodeMapList(prefs.getString('nyang_tasks'))
+        .map((task) => task['habitId']?.toString())
+        .where((id) => id != null && id.isNotEmpty)
+        .toSet();
+    for (final habit in _decodeMapList(prefs.getString('nyang_habits'))) {
+      final id = habit['id']?.toString();
+      if (id == null || listed.contains(id)) continue;
+      final name = habit['name']?.toString().trim() ?? '';
+      if (name.isEmpty) continue;
+      lines.add('- $name: 루틴으로 등록돼 있음 (오늘은 안 뜨는 날)');
+    }
+    return lines.isEmpty ? '- 겹치는 것 없음\n' : '${lines.join('\n')}\n';
+  }
+
+  String _brainDumpClock(String? iso) {
+    final at = iso == null ? null : DateTime.tryParse(iso);
+    if (at == null) return '';
+    return ' (${at.hour}시 ${at.minute.toString().padLeft(2, '0')}분)';
+  }
+
+  /// 이미 있던 것들을 먼저 짚어주는 말.
+  ///
+  /// 쏟아낸 직후에 제일 먼저 듣는 말이 "이건 이미 했어"면 시작이 가볍다.
+  /// 할 일이 줄어드는 게 아니라 이미 줄어 있었다는 걸 알게 되는 것이다.
+  String _brainDumpKnownLine(BrainDumpPlan plan) {
+    if (plan.known.isEmpty) return '';
+    final lines = <String>[];
+    for (final item in plan.known) {
+      final note = item.note.isEmpty ? '' : ' ${item.note}';
+      switch (item.kind) {
+        case 'done':
+          lines.add("'${item.name}'는 오늘 이미 끝냈더라.$note");
+        case 'started':
+          lines.add("'${item.name}'는 오늘 손댔고.$note");
+        case 'routine':
+          lines.add("'${item.name}'는 루틴으로 돌고 있어.$note");
+        case 'planned':
+          lines.add("'${item.name}'는 다른 날로 잡아뒀고.$note");
+        default:
+          lines.add("'${item.name}'는 오늘 목록에 이미 있어.$note");
+      }
+    }
+    return lines.join('\n');
+  }
+
+  /// 쏟아내기를 시작한다. 코치가 받아주는 한마디부터 낸다.
+  ///
+  /// 왜 하는지를 같이 말한다. 이 기능은 처음 보면 목록 부르는 기능처럼
+  /// 보여서, 꺼내놓는 것만으로 가벼워진다는 것을 알아야 두 번째도 누른다.
+  void _startBrainDump() {
+    if (_isLoading) return;
+    HapticFeedback.lightImpact();
+    _awaitingBrainDump = true;
+    _injectAiMessage(
+      widget.coachId == 'sec_female'
+          ? '오늘 하실 거 생각나는 대로 다 말씀해주세요.\n'
+                '머릿속에서 꺼내놓는 것만으로도 가벼워지고 효율도 올라갑니다.'
+          : '오늘 할 거 생각나는 대로 다 말해보렴.\n'
+                '머릿속에서 꺼내놓는 것만으로도 가벼워지고 효율도 올라간다냥.',
+      kind: 'brain_dump_open',
+    );
+    _inputFocus.requestFocus();
   }
 
   /// 이번 프레임에 그릴 칩의 원본. 껍데기 상태이고, 일정·할 일을 채우는 건

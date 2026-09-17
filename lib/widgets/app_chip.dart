@@ -17,6 +17,7 @@ class AppChip extends StatelessWidget {
     this.borderColor,
     this.boxShadow,
     this.fontSize,
+    this.labelStyle,
     this.onTap,
   });
 
@@ -31,6 +32,11 @@ class AppChip extends StatelessWidget {
   final Color? borderColor;
   final List<BoxShadow>? boxShadow;
   final double? fontSize;
+
+  /// 글씨를 따로 줄 때. 기본은 손글씨체다 - 칩에 적히는 건 사용자가 할 말이라
+  /// 그렇게 맞춰뒀는데, 기능을 여는 버튼은 사용자의 말이 아니라 앱의 말이다.
+  final TextStyle? labelStyle;
+
   final VoidCallback? onTap;
 
   @override
@@ -89,13 +95,19 @@ class AppChip extends StatelessWidget {
                 //
                 // 개구는 글자가 작게 앉아서 같은 숫자를 주면 옆의 정자체보다
                 // 작아 보인다. 그래서 2를 더한다.
-                style: GoogleFonts.gaegu(
-                  fontSize: (fontSize ?? AppDesignTokens.textMeta) + 2,
-                  fontWeight: FontWeight.w700,
-                  color: enabled
-                      ? effectiveForeground
-                      : AppDesignTokens.textDisabled,
-                ),
+                style:
+                    labelStyle?.copyWith(
+                      color: enabled
+                          ? effectiveForeground
+                          : AppDesignTokens.textDisabled,
+                    ) ??
+                    GoogleFonts.gaegu(
+                      fontSize: (fontSize ?? AppDesignTokens.textMeta) + 2,
+                      fontWeight: FontWeight.w700,
+                      color: enabled
+                          ? effectiveForeground
+                          : AppDesignTokens.textDisabled,
+                    ),
               ),
             ),
           ],
