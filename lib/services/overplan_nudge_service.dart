@@ -217,6 +217,9 @@ class OverplanNudgeService {
       case 'bro':
         return '오늘 계획이 평소 해내던 것보다 좀 많은데? 진짜 다 할 수 '
             '있겠어?';
+      case 'nyang_halbae':
+        return '오늘 계획이 평소 해내던 것보다 좀 많아 보이는구나. 진짜 다 '
+            '할 수 있겠냥?';
       default:
         return '오늘 계획이 평소 완료하던 것보다 좀 많아 보인다냥. 진짜 다 '
             '할 수 있겠냥?';
@@ -256,6 +259,10 @@ class OverplanNudgeService {
             '많다? 계획만 쌓는다고 갓생 되는 거 아니다 - 오히려 진짜 중요한 거 '
             '놓칠 수도 있어. 새로 추가하지 말고 있는 거 하나부터 제대로 구체화해봐. '
             '그게 훨씬 잘 될 확률 높다.';
+      case 'nyang_halbae':
+        return '최근 잘 해낸 날도 하루 $recentMax개 정도였는데 오늘은 그보다 훨씬 '
+            '많구나. 많이 적어두면 오히려 진짜 중요한 걸 뒤로 미루게 되기도 '
+            '한다냥. 이미 적어둔 계획을 구체화하는 건 어떻게 생각하냥?';
       default:
         return '최근 잘 해낸 날이 하루 $recentMax개 정도였는데, 오늘 계획은 '
             '그보다 훨씬 많구나. 할 일을 많이 잡으면 오히려 진짜 중요한 할 일을 '
@@ -286,6 +293,9 @@ class OverplanNudgeService {
       case 'bro':
         return '오늘 할 일 평소보다 많은데? 다 하려고 하지 말고 꼭 끝내고 싶은 거 '
             '하나만 먼저 골라보자.';
+      case 'nyang_halbae':
+        return '오늘 적어둔 게 평소보다 많구나. 다 하려고 애쓰기보다, 꼭 끝내고 '
+            '싶은 것 하나만 먼저 골라볼까냥?';
       default:
         return '오늘 할 일이 평소보다 많네. 다 하려고 하기보다, 꼭 끝내고 싶은 것 '
             '하나만 먼저 골라볼까?';
@@ -314,11 +324,20 @@ class OverplanNudgeService {
       case 'bro':
         return '오 다시 시동 거는 거냐? 좋다ㅋㅋ 근데 첨부터 풀로 땡기면 삼일 못 간다. '
             '오늘은 두 개만 잡고 가자.';
+      case 'nyang_halbae':
+        return '다시 마음을 잡았구나. 반갑다냥. 그래도 처음부터 많이 잡으면 금방 '
+            '지치더라. 오늘은 두 개 정도만 정해도 충분하다냥.';
       default:
         return '다시 해보려는 거구나. 응원할게. 그래도 갑자기 많이 잡으면 지치기 '
             '쉬워. 오늘은 두 개 정도만 정해도 충분해.';
     }
   }
+
+  /// [followupMessage]가 물음이 아니라 마무리하는 말인 코치인지.
+  ///
+  /// 뒷말이 "구체화해볼까?"처럼 물음인 코치는 한 번 더 고르게 한다. 냥할배는
+  /// 응원으로 끝내서, 고를 것이 없다.
+  static bool followupClosesTalk(String coachId) => coachId == 'nyang_halbae';
 
   /// 첫 물음에 "그렇게 할게"를 골랐을 때 한 번 더 건네는 말.
   static String followupMessage(String coachId) {
@@ -333,6 +352,8 @@ class OverplanNudgeService {
         return '그라믄 있는 거부터 야무지게 정해볼까?';
       case 'bro':
         return '그럼 있는 거부터 제대로 파볼까?';
+      case 'nyang_halbae':
+        return '좋다냥. 응원한다냥.';
       default:
         return '그럼 기존 계획을 구체화해볼까냥?';
     }
