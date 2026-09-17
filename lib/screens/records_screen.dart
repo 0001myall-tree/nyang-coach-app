@@ -36,7 +36,7 @@ class RecordsScreen extends StatefulWidget {
   /// 9로 올린 이유: 실행 회고형이 숫자 하나(손댄 것 중 완료 비율)만 보고
   /// 계획을 줄이자는 말을 못 하게 막고 있었다. 캐시에 남은 한마디는 그 지시로
   /// 쓰인 것이라, 계획 과다인 사람에게 정반대 처방이 그대로 걸려 있다.
-  static const int weeklyFeedbackVersion = 9;
+  static const int weeklyFeedbackVersion = 10;
 
   @override
   State<RecordsScreen> createState() => _RecordsScreenState();
@@ -676,6 +676,52 @@ class _RecordsScreenState extends State<RecordsScreen> {
   static bool _taskWasStarted(Map map) =>
       map['startedAt'] != null || map['inProgress'] == true;
 
+  /// 이번 주 완료율이 지난주보다 오른 주인지.
+  ///
+  /// 완료율은 코치가 첫 문장에 박기 좋은 숫자다. 그런데 낮은 주에 그 숫자로
+  /// 열면, 시작한 것이 있어도 사람이 먼저 듣는 말은 0%가 된다. 올랐을 때만
+  /// 앞세우게 하려면 코치가 오른지 내린지를 알아야 한다.
+  ///
+  /// 지난주 값은 저장해둔 것을 읽는다. 기록은 이레치만 남아서 지난주를 다시
+  /// 셀 수가 없다.
+  static const String _weeklyPctKey = 'nyang_weekly_completion_pct';
+
+  Future<String> _completionTrendLine(int weeklyPct) async {
+    final prefs = await SharedPreferences.getInstance();
+    final thisMonday = _getWeekMondayStr();
+    int? prevPct;
+    try {
+      final raw = prefs.getString(_weeklyPctKey);
+      if (raw != null) {
+        final stored = jsonDecode(raw) as Map<String, dynamic>;
+        // 같은 주에 두 번 만들면 방금 적은 이번 주 값이 읽힌다. 그때는 그
+        // 옆에 밀어둔 지난주 값을 쓴다.
+        prevPct = stored['weekMonday'] == thisMonday
+            ? (stored['prevPct'] as num?)?.toInt()
+            : (stored['pct'] as num?)?.toInt();
+        await prefs.setString(
+          _weeklyPctKey,
+          jsonEncode({
+            'weekMonday': thisMonday,
+            'pct': weeklyPct,
+            'prevPct': prevPct,
+          }),
+        );
+      } else {
+        await prefs.setString(
+          _weeklyPctKey,
+          jsonEncode({'weekMonday': thisMonday, 'pct': weeklyPct}),
+        );
+      }
+    } catch (_) {}
+
+    if (prevPct == null) return '지난주 값이 없어 견줄 수 없음';
+    final diff = weeklyPct - prevPct;
+    if (diff >= 5) return '지난주 $prevPct%에서 올랐음 (+$diff%p)';
+    if (diff <= -5) return '지난주 $prevPct%에서 내렸음 ($diff%p)';
+    return '지난주 $prevPct%와 비슷함';
+  }
+
   Future<String> _buildWeeklyFeedbackPrompt(int feedbackType) async {
     final prefs = await SharedPreferences.getInstance();
     final records = _getLast7Records(includeCurrentAppDate: false);
@@ -944,6 +990,9 @@ class _RecordsScreenState extends State<RecordsScreen> {
     completionSummaryBuffer.writeln(
       '- 플래너 기록일이 적은 주인가: ${lowPlannerAttendance ? '예' : '아니오'}',
     );
+    completionSummaryBuffer.writeln(
+      '- 지난주와 견주면: ${await _completionTrendLine(weeklyPct)}',
+    );
 
     final isMale = !_isMaster && widget.coachId == 'nyang_halbae';
     final title = _userTitle;
@@ -1161,6 +1210,8 @@ $staminaSection$chatSummarySection
 2. 공통 원칙:
    - "시작했지만 끝내지 못한 일"과 "손대지 못한 일"을 한데 묶어 미완료로 말하지 마세요. 시작한 일은 아무것도 하지 않은 일이 아닙니다.
    - [현재 설정된 루틴 트래킹 빈도]를 반드시 참고하세요. 특정 요일에만 하기로 한 루틴이라면 그 빈도에 맞게 평가해 주세요.
+   - 여는 문장은 이 사람이 이번 주에 실제로 한 것에서 시작하세요. 자료에 남아 있는 것 중 하나를 골라 그대로 짚으면 됩니다 — 여러 날 손댄 일, 끝낸 일, 미뤘다가 다시 시작한 일, 지킨 루틴, 새로 적은 메모. 없는 것을 칭찬거리로 지어내지는 마세요.
+   - 완료율은 [주간 완료율 요약]의 "지난주와 견주면"이 늘었을 때만 첫 문장에서 언급하고, 비슷하거나 하락했을 때는 뒤에서 언급하면서 원인을 추정하고 코칭해 주세요.
    - 인상이 아니라 [주간 완료율 요약]의 수치를 보고 말하세요. 100% 완료한 날이 대부분이고 완료가 아쉬웠던 날이 하루뿐이면 "계획대로 진행되지 않은 날이 많았다", "저조한 날이 많았다", "대부분 미완료였다" 같은 복수/다수 표현을 절대 쓰지 마세요.
    - 플래너 기록일이 적은 주(플래너 기록일이 적은 주인가: 예)에는 완료율을 강하게 평가하지 말고, 먼저 플래너로 돌아오는 리듬을 부드럽게 제안하세요.
    - 완료가 아쉬웠던 날이 많은 주(완료가 아쉬웠던 날이 많은 주인가: 예)에는 원인을 추측으로 단정하지 말고, [체력 신호]와 [지난 주 대화 기록 요약]에 나타난 것을 근거로 원인을 해석해 주세요. 그 자료에 없는 사정을 지어내지 마세요.
