@@ -1512,6 +1512,15 @@ class _TasksScreenState extends State<TasksScreen>
     final trimmedName = name.trim();
     if (trimmedName.isEmpty) return false;
 
+    // 시각은 안 적고 때만 적은 루틴에 시각을 붙인다. '저녁 식사 후 산책',
+    // '아침 스트레칭'처럼 적는 사람이 많은데, 그동안 할 일에만 이 길이
+    // 있었다. 루틴으로 들어오면 시각 없는 30분짜리가 돼서, 하루 종일 목록에
+    // 떠 있기만 하고 언제 시작하라는 신호가 없었다.
+    //
+    // 시각이 붙으면 알림도 따라 켜진다(아래 isReminderEnabled). 때를 적은
+    // 사람은 그때 하겠다고 말한 것이니, 그 시각에 부르는 편이 맞다.
+    final resolvedTime = time ?? _timeFromDaypart(trimmedName);
+
     final habit = HabitItem(
       id: DateTime.now().millisecondsSinceEpoch,
       name: trimmedName,
@@ -1521,17 +1530,18 @@ class _TasksScreenState extends State<TasksScreen>
           ? (weeklyTargetCount ?? 5)
           : null,
       checkType: countGoal != null ? 'count' : 'check',
-      timeType: time == null
+      timeType: resolvedTime == null
           ? 'duration'
           : (endTime == null ? 'single' : 'range'),
       tracking: true,
       countGoal: countGoal,
       unit: countGoal != null ? (unit ?? '번') : null,
-      timeStart: time == null ? null : _storedTime(time),
+      timeStart: resolvedTime == null ? null : _storedTime(resolvedTime),
       timeEnd: endTime == null ? null : _storedTime(endTime),
-      habitDuration: time == null ? (habitDuration ?? '30분') : null,
+      habitDuration: resolvedTime == null ? (habitDuration ?? '30분') : null,
       createdAt: DateTime.now().toIso8601String(),
-      isReminderEnabled: time != null && _isCoreReminderEnabledGlobally,
+      isReminderEnabled:
+          resolvedTime != null && _isCoreReminderEnabledGlobally,
     );
 
     setState(() {
@@ -4881,14 +4891,26 @@ class _TasksScreenState extends State<TasksScreen>
 
   Future<void> _showTaskDeleteOptions(TaskItem task) async {
     final isHabitTask = task.isHabit || task.habitId != null;
-    final actions = <({String label, String value})>[
-      (label: '삭제하기', value: 'delete'),
-      (
-        label: isHabitTask ? '오늘은 쉬기' : '다른 날짜로 옮기기',
-        value: isHabitTask ? 'skip' : 'move',
-      ),
-      (label: '취소', value: 'cancel'),
-    ];
+    // 루틴 줄에는 "삭제하기"를 두지 않는다.
+    //
+    // 그 버튼은 목록에서 줄만 뺐고 아무 기록도 남기지 않았다. 그래서 왜
+    // 사라졌는지를 앱이 모르고, 오늘 루틴을 다시 채우는 자리에서 방금 지운
+    // 것이 그대로 되돌아온다. 하는 일은 "오늘은 쉬기"와 같은데 기억만 안
+    // 하는 셈이라, 같은 자리에 버튼이 둘일 이유가 없다.
+    //
+    // 루틴 줄을 지우려는 사람이 원하는 것은 둘 중 하나다 - 오늘만 건너뛰거나,
+    // 이 루틴을 그만두거나. 그 둘을 그대로 내놓는다.
+    final actions = isHabitTask
+        ? <({String label, String value})>[
+            (label: '오늘은 쉬기', value: 'skip'),
+            (label: '루틴 삭제', value: 'deleteHabit'),
+            (label: '취소', value: 'cancel'),
+          ]
+        : <({String label, String value})>[
+            (label: '삭제하기', value: 'delete'),
+            (label: '다른 날짜로 옮기기', value: 'move'),
+            (label: '취소', value: 'cancel'),
+          ];
     final action = await _showDeleteOptionsDialog(
       title: isHabitTask ? '이 루틴 할 일을 어떻게 할까요?' : '이 일정을 삭제할까요?',
       actions: actions,
@@ -4898,6 +4920,9 @@ class _TasksScreenState extends State<TasksScreen>
       _deleteTaskPermanently(task);
     } else if (action == 'skip') {
       _skipHabitToday(task);
+    } else if (action == 'deleteHabit') {
+      // 루틴 자체를 지운다. 한 번 더 묻는 것은 그쪽이 들고 있다.
+      await _deleteHabit(task.habitId);
     } else if (action == 'move') {
       _showMoveTaskModal(task);
     }

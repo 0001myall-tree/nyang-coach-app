@@ -639,29 +639,26 @@ class DailyResetService {
   /// 그중 오늘 적은 것만 그대로 들고 간다 — 자정 정리라면 어제 것뿐이라 아무
   /// 일도 일어나지 않고, 정리가 엉뚱한 때에 한 번 더 돌더라도 오늘 적은 것이
   /// 사라지지 않는다.
-  static Future<void> _injectTodayHabitsAndSchedulesDirectly(
+  /// 오늘 떠야 할 루틴을 오늘 목록 항목으로 만든다.
+  ///
+  /// 요일이 안 맞는 것과 오늘 쉬기로 찍힌 것은 빼고, 이미 끝낸 것은 끝낸
+  /// 채로 만든다.
+  @visibleForTesting
+  static List<Map<String, dynamic>> todayHabitTasks(
     SharedPreferences prefs,
-    String today, {
-    List<dynamic> previousTasks = const [],
-  }) async {
-    final parts = today.split('-');
-    int todayDow = DateTime.now().weekday;
-    if (parts.length >= 3) {
-      final y = int.tryParse(parts[0]) ?? DateTime.now().year;
-      final m = int.tryParse(parts[1]) ?? DateTime.now().month;
-      final d = int.tryParse(parts[2]) ?? DateTime.now().day;
-      todayDow = DateTime(y, m, d).weekday;
-    }
-    final dbDow = todayDow - 1; // 0=Mon ~ 6=Sun
+    String today,
+  ) {
+    final date = DateTime.tryParse(today) ?? DateTime.now();
+    final dbDow = date.weekday - 1; // 0=월 ~ 6=일
 
-    // 1. habits load
-    final rawHabits = prefs.getString('nyang_habits') ?? '[]';
-    final List<dynamic> habitsList = jsonDecode(rawHabits);
-    final rawLogs = prefs.getString('nyang_habit_logs') ?? '{}';
-    final Map<String, dynamic> habitLogs = jsonDecode(rawLogs);
+    final List<dynamic> habitsList = jsonDecode(
+      prefs.getString('nyang_habits') ?? '[]',
+    );
+    final Map<String, dynamic> habitLogs = jsonDecode(
+      prefs.getString('nyang_habit_logs') ?? '{}',
+    );
 
-    List<Map<String, dynamic>> injectedTasks = [];
-
+    final made = <Map<String, dynamic>>[];
     for (final h in habitsList) {
       if (h is! Map) continue;
       final freq = h['freq'] ?? 'daily';
@@ -669,50 +666,109 @@ class DailyResetService {
       bool matches = false;
       if (freq == 'daily') matches = true;
       if (freq == 'weekly_count') {
-        matches = _shouldShowWeeklyCountHabitOnDate(
-          h,
-          habitLogs,
-          DateTime.tryParse(today) ?? DateTime.now(),
-        );
+        matches = _shouldShowWeeklyCountHabitOnDate(h, habitLogs, date);
       }
       if (freq == 'weekly') matches = days.contains(dbDow);
+      if (!matches) continue;
 
-      if (matches) {
-        final habitId = h['id'].toString();
-        final log = (habitLogs[habitId] ?? {})[today];
-        final isSkipped = log != null && log['status'] == 'skipped';
-        if (isSkipped) continue;
+      final habitId = h['id'].toString();
+      final log = (habitLogs[habitId] ?? {})[today];
+      final isSkipped = log != null && log['status'] == 'skipped';
+      if (isSkipped) continue;
 
-        final isDone = log != null && log['done'] == true;
-        final taskId = 'habit_${habitId.replaceAll('.', '_')}_$today';
-        String? tTime;
-        if (h['timeType'] == 'single' && h['timeStart'] != null) {
-          tTime = _displayTimeFromStored(timeStart: h['timeStart']);
-        }
-        if (h['timeType'] == 'range' && h['timeStart'] != null) {
-          tTime = _displayTimeFromStored(
-            timeStart: h['timeStart'],
-            timeEnd: h['timeEnd'],
-          );
-        }
-
-        injectedTasks.add({
-          'id': taskId,
-          'habitId': habitId,
-          'text': h['name'],
-          'category': 'habit',
-          'done': isDone,
-          'isHabit': true,
-          'time': tTime,
-          'duration': h['habitDuration'],
-          'timeStart': h['timeStart'],
-          'timeEnd': h['timeEnd'],
-          'createdAt': DateTime.now().toIso8601String(),
-          'completedAt': isDone ? log['completedAt'] : null,
-          'isReminderEnabled': h['isReminderEnabled'] ?? false,
-        });
+      final isDone = log != null && log['done'] == true;
+      String? tTime;
+      if (h['timeType'] == 'single' && h['timeStart'] != null) {
+        tTime = _displayTimeFromStored(timeStart: h['timeStart']);
       }
+      if (h['timeType'] == 'range' && h['timeStart'] != null) {
+        tTime = _displayTimeFromStored(
+          timeStart: h['timeStart'],
+          timeEnd: h['timeEnd'],
+        );
+      }
+
+      made.add({
+        'id': 'habit_${habitId.replaceAll('.', '_')}_$today',
+        'habitId': habitId,
+        'text': h['name'],
+        'category': 'habit',
+        'done': isDone,
+        'isHabit': true,
+        'time': tTime,
+        'duration': h['habitDuration'],
+        'timeStart': h['timeStart'],
+        'timeEnd': h['timeEnd'],
+        'createdAt': DateTime.now().toIso8601String(),
+        'completedAt': isDone ? log['completedAt'] : null,
+        'isReminderEnabled': h['isReminderEnabled'] ?? false,
+      });
     }
+    return made;
+  }
+
+  /// 오늘 목록에 오늘 루틴이 빠져 있으면 더한다. 더한 개수를 돌려준다.
+  ///
+  /// 루틴은 사용자가 매일 적는 것이 아니라 루틴 목록에서 파생되는 것이라,
+  /// 언제 한 번 만들고 끝낼 일이 아니라 언제든 맞춰주면 되는 일이다. 그런데
+  /// 지금까지는 날짜가 실제로 넘어갈 때 한 번, 그리고 오늘 탭이 열릴 때만
+  /// 채웠다. 그 둘을 다 놓친 날 - 앱이 알림이나 자동 발화로 잠깐 깨어나기만
+  /// 하고 사용자는 채팅만 한 날 - 은 하루 종일 루틴이 없는 채로 지나갔다.
+  /// 코치도 그 빈 목록을 보고 "오늘은 계획이 없구나"로 말했다.
+  ///
+  /// **더하기만 하고 아무것도 지우지 않는다.** 예전에 정리를 하루에도 여러 번
+  /// 돌리던 시절에는 목록을 통째로 다시 그렸고, 그래서 손으로 적은 할 일이
+  /// 재료가 없어 사라졌다. 여기서는 빠진 것만 더하므로 그 일이 생기지 않는다.
+  ///
+  /// 쉬기로 찍힌 것과 지워진 루틴은 [todayHabitTasks]가 이미 빼준다. 그래서
+  /// 방금 지운 줄이 되살아나지 않는다.
+  static Future<int> ensureTodayHabitTasks() async {
+    final prefs = await SharedPreferences.getInstance();
+    // 복원이 아직이면 루틴 목록이 비어 보일 수 있다. 그 상태로 맞추면
+    // 아무것도 안 더하고 지나갈 뿐이지만, 굳이 헛돌 이유도 없다.
+    //
+    // 로그인 상태를 묻다 실패하면 맞추는 쪽으로 간다. 이 함수는 더하기만
+    // 하므로, 못 물어봤다고 손 놓는 것보다 채워보는 쪽이 안전하다.
+    try {
+      if (await isCloudRestorePending(prefs)) return 0;
+    } catch (_) {}
+
+    final today = _getTodayStr(0.0);
+    List<dynamic> tasks;
+    try {
+      tasks = jsonDecode(prefs.getString('nyang_tasks') ?? '[]') as List;
+    } catch (_) {
+      return 0;
+    }
+
+    final existingIds = tasks
+        .whereType<Map>()
+        .map((t) => t['id'].toString())
+        .toSet();
+    final missing = todayHabitTasks(
+      prefs,
+      today,
+    ).where((t) => !existingIds.contains(t['id'].toString())).toList();
+    if (missing.isEmpty) return 0;
+
+    final merged = [...tasks, ...missing];
+    await prefs.setString('nyang_tasks', jsonEncode(merged));
+    await _saveTodayRecordDirectly(
+      prefs,
+      today,
+      merged.whereType<Map>().map((t) => Map<String, dynamic>.from(t)).toList(),
+    );
+    TasksSyncService.scheduleSyncToCloud();
+    debugPrint('[routine] 오늘 목록에 빠져 있던 루틴 ${missing.length}개를 채웠다');
+    return missing.length;
+  }
+
+  static Future<void> _injectTodayHabitsAndSchedulesDirectly(
+    SharedPreferences prefs,
+    String today, {
+    List<dynamic> previousTasks = const [],
+  }) async {
+    List<Map<String, dynamic>> injectedTasks = todayHabitTasks(prefs, today);
 
     // 2. schedules load
     final rawSchedules = prefs.getString('nyang_schedules') ?? '{}';
