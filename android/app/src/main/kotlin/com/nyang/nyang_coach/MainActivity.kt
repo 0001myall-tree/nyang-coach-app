@@ -9,6 +9,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.AudioAttributes
+import android.media.AudioManager
 import android.media.MediaPlayer
 import android.media.RingtoneManager
 import android.net.Uri
@@ -60,17 +61,11 @@ class MainActivity : FlutterFragmentActivity() {
                     }
                     "startMorningAlarmSound" -> {
                         val soundName = call.argument<String>("soundName")
-                        MorningAlarmVolume.raise(applicationContext)
                         startMorningAlarmSound(soundName)
                         result.success(null)
                     }
                     "stopMorningAlarmSound" -> {
                         stopMorningAlarmSound()
-                        MorningAlarmVolume.restore(applicationContext)
-                        result.success(null)
-                    }
-                    "restoreMorningVolume" -> {
-                        MorningAlarmVolume.restore(applicationContext)
                         result.success(null)
                     }
                     "readAlarmVolume" -> {
@@ -498,20 +493,39 @@ class MainActivity : FlutterFragmentActivity() {
     }
 
     /**
-     * 모닝콜이 울릴 때 쓸 볼륨을 읽는다.
+     * 폰의 알람 볼륨을 읽는다.
      *
-     * 폰의 알람 볼륨이 바닥이면 모닝콜은 제 시각에 울려도 안 들린다. 그런데
-     * 기종에 따라 알람 볼륨 슬라이더가 설정 어디에도 없어서, 사용자가 직접
-     * 올릴 길이 없다. 그래서 앱이 슬라이더를 들고 있다.
-     *
-     * 다만 폰 값을 바꿔두지는 않는다 - 그러면 남의 알람까지 같이 커진다.
-     * 자세한 것은 [MorningAlarmVolume].
+     * 이 값이 바닥이면 모닝콜은 제 시각에 울려도 안 들린다. 그런데 기종에 따라
+     * 알람 볼륨 슬라이더가 설정 어디에도 없어서, 사용자가 직접 올릴 길이 없다.
+     * 그래서 앱이 읽고 앱이 바꾼다.
      */
-    private fun readAlarmVolume(): Map<String, Any> =
-        MorningAlarmVolume.read(applicationContext, isBlockedByDoNotDisturb())
+    private fun readAlarmVolume(): Map<String, Any> {
+        val audio = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        return mapOf(
+            "level" to audio.getStreamVolume(AudioManager.STREAM_ALARM),
+            "max" to audio.getStreamMaxVolume(AudioManager.STREAM_ALARM),
+            "min" to if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                audio.getStreamMinVolume(AudioManager.STREAM_ALARM)
+            } else {
+                0
+            },
+            // 방해금지가 켜져 있으면 볼륨을 바꾸려는 순간 막힌다. 미리 알려줘야
+            // 슬라이더가 왜 안 움직이는지 설명할 수 있다.
+            "blockedByDnd" to isBlockedByDoNotDisturb(),
+        )
+    }
 
-    private fun setAlarmVolume(level: Int): Map<String, Any> =
-        MorningAlarmVolume.write(applicationContext, level, isBlockedByDoNotDisturb())
+    /** 바꾼 뒤의 실제 값을 돌려준다. 막혔으면 바꾸기 전 값이 그대로 온다. */
+    private fun setAlarmVolume(level: Int): Map<String, Any> {
+        val audio = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        try {
+            audio.setStreamVolume(AudioManager.STREAM_ALARM, level, 0)
+        } catch (_: SecurityException) {
+            // 방해금지 중에는 "알림 정책 접근" 권한 없이 못 바꾼다.
+            // 읽기 쪽이 그 사실을 함께 돌려주므로 여기서는 조용히 넘어간다.
+        }
+        return readAlarmVolume()
+    }
 
     private fun isBlockedByDoNotDisturb(): Boolean {
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager

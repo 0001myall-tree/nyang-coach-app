@@ -39,18 +39,11 @@ class MorningAlarmReceiver : BroadcastReceiver() {
             return
         }
 
-        if (intent.action == MorningAlarmScheduler.ACTION_RESTORE_VOLUME) {
-            MorningAlarmVolume.restore(context)
-            return
-        }
-
         if (intent.action == Intent.ACTION_BOOT_COMPLETED ||
             intent.action == Intent.ACTION_MY_PACKAGE_REPLACED ||
             intent.action == "android.intent.action.QUICKBOOT_POWERON" ||
             intent.action == "com.htc.intent.action.QUICKBOOT_POWERON"
         ) {
-            // 껐다 켠 사이에 되돌리지 못한 볼륨이 남아 있을 수 있다.
-            MorningAlarmVolume.restore(context)
             MorningAlarmScheduler.rescheduleFromPrefs(context)
             return
         }
@@ -81,9 +74,6 @@ class MorningAlarmReceiver : BroadcastReceiver() {
             if (!isFollowUp) MorningAlarmScheduler.rescheduleFromPrefs(context)
             return
         }
-
-        // 소리가 나기 직전에 올린다. 알림을 띄운 뒤에 올리면 첫 소절이 작게 샌다.
-        MorningAlarmVolume.raise(context)
 
         val openIntent = Intent(context, MainActivity::class.java).apply {
             action = MorningAlarmScheduler.ACTION_FIRE

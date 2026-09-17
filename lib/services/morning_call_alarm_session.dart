@@ -125,9 +125,6 @@ class MorningCallAlarmSession {
       await _stopNativeAlarmSound();
       await _stopVibration();
       _usesNativeAlarmSound = false;
-      // 네이티브 소리를 안 쓴 경우에도 부른다. 알람이 울린 자리와 끄는 자리가
-      // 늘 같은 것은 아니라서, 올려둔 볼륨만 남을 수 있다.
-      await _restoreAlarmVolume();
     } catch (e) {
       debugPrint('모닝콜 알람 세션 중지 실패: $e');
     }
@@ -169,18 +166,6 @@ class MorningCallAlarmSession {
       await _alarmChannel.invokeMethod('stopMorningAlarmSound');
     } catch (e) {
       debugPrint('모닝콜 기본 알람음 중지 실패: $e');
-    }
-  }
-
-  /// 모닝콜이 울리는 동안만 올려뒀던 폰 알람 볼륨을 되돌린다.
-  ///
-  /// 안 올렸으면 네이티브 쪽에서 그냥 돌아가므로 매번 불러도 된다.
-  Future<void> _restoreAlarmVolume() async {
-    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
-    try {
-      await _alarmChannel.invokeMethod('restoreMorningVolume');
-    } catch (e) {
-      debugPrint('모닝콜 볼륨 되돌리기 실패: $e');
     }
   }
 
