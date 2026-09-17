@@ -217,7 +217,31 @@ void main() {
       // 고정 문구는 바로 뜨고 코치의 말은 몇 초 뒤에 온다. 그 사이를 그냥 두면
       // 끊긴 것처럼 보인다.
       for (final id in ['cat', 'nyang_halbae', 'sec_female']) {
-        expect(OverplanNudgeService.opening(id), contains('기다'));
+        final lines = OverplanNudgeService.opening(id).split('\n');
+        expect(lines.length, 2, reason: '$id의 첫 줄이 두 줄이 아니다');
+        expect(
+          OverplanNudgeService.waitLines(id),
+          contains(lines.last),
+          reason: '$id의 끝줄이 기다리는 말 목록에 없다',
+        );
+      }
+    });
+
+    test('기다리는 말이 매번 같지는 않다', () {
+      // 같은 말만 나오면 녹음을 틀어둔 것처럼 들린다.
+      final seen = <String>{};
+      for (var i = 0; i < 30; i++) {
+        seen.add(OverplanNudgeService.opening('nyang_halbae').split('\n').last);
+      }
+      expect(seen.length, greaterThan(1));
+    });
+
+    test('방금 쓴 말이 잇달아 나오지는 않는다', () {
+      var previous = OverplanNudgeService.opening('cat').split('\n').last;
+      for (var i = 0; i < 20; i++) {
+        final next = OverplanNudgeService.opening('cat').split('\n').last;
+        expect(next, isNot(previous));
+        previous = next;
       }
     });
   });
