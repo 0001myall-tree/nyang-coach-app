@@ -38,6 +38,14 @@ object OngoingNudgeAnswerWriter {
     /** 지금 담겨 있는 할 일이 어느 날의 것인지. 자정을 넘겨도 앱을 열기 전까지는 그 전날이다. */
     private const val KEY_LAST_DATE = "flutter.nyang_last_date"
 
+    /**
+     * 이 기기가 오늘 정리를 끝냈다고 적어둔 날.
+     *
+     * 'nyang_' 접두어가 없어서 클라우드가 덮지 못한다. [KEY_LAST_DATE]는 덮이므로,
+     * 둘이 어긋나면 이쪽을 믿는다.
+     */
+    private const val KEY_RESET_DONE_DATE = "flutter.daily_reset_done_date"
+
     private fun markStoreChanged(prefs: android.content.SharedPreferences) {
         prefs.edit().putString(KEY_CHANGED_AT, isoOf(Date())).commit()
     }
@@ -74,7 +82,7 @@ object OngoingNudgeAnswerWriter {
 
         if (!done) return
 
-        val dateKey = prefs.getString(KEY_LAST_DATE, null) ?: dateOf(now)
+        val dateKey = completionDateKey(prefs, now)
         markCoreTaskDone(prefs, taskId, isoOf(now))
         task.opt("habitId")?.toString()?.takeIf { it.isNotBlank() && it != "null" }?.let {
             markHabitDone(prefs, it, dateKey, isoOf(now))
@@ -278,6 +286,31 @@ object OngoingNudgeAnswerWriter {
             changed = true
         }
         if (changed) prefs.edit().putString(KEY_CORE_TASKS, list.toString()).commit()
+    }
+
+    /**
+     * 지금 누른 완료를 어느 날 칸에 적을지.
+     *
+     * 오늘 목록은 자정을 넘겨도 앱을 열기 전까지는 어제 것이라, 목록이 어느
+     * 날의 것인지 적어둔 값([KEY_LAST_DATE])을 따라가는 것이 맞다. 그런데 그
+     * 값은 클라우드로 오가서 옛 날짜로 되돌려질 수 있다.
+     *
+     * 되돌려진 채로 완료를 누르면 오늘 한 일이 어제 칸에 찍힌다. 그리고 어제
+     * 칸에 이미 도장이 있으면 [markHabitDone]이 그냥 돌아가므로, 그날의 완료는
+     * 어디에도 남지 않는다. 할 일 목록에는 완료로 남고 루틴 기록에만 빠지는
+     * 상태가 되는 것이다.
+     *
+     * Dart 쪽(TaskCompletionService)은 이걸 2026-09-05에 고쳤는데 이쪽은 옛
+     * 규칙 그대로였다. 같은 규칙으로 맞춘다 - 이 기기가 오늘 정리를 끝냈다면
+     * 목록은 오늘 것이 맞으므로, 되돌려진 값보다 그쪽을 믿는다.
+     */
+    private fun completionDateKey(
+        prefs: android.content.SharedPreferences,
+        now: Date,
+    ): String {
+        val today = dateOf(now)
+        if (prefs.getString(KEY_RESET_DONE_DATE, null) == today) return today
+        return prefs.getString(KEY_LAST_DATE, null) ?: today
     }
 
     private fun markHabitDone(

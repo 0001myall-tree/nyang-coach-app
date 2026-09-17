@@ -419,4 +419,75 @@ void main() {
       expect(past['totalCount'], 3);
     });
   });
+
+  group('앱 밖에서 먼저 완료로 찍힌 루틴', () {
+    // 네이티브는 되돌려진 날짜로 도장을 찍으려다, 그 날짜에 이미 도장이 있으면
+    // 그냥 돌아간다. 그러면 할 일 목록에는 완료로 남고 루틴 기록에만 그 하루가
+    // 빠진다. 앱이 열릴 때 그 빈자리를 메운다.
+    test('도장이 없으면 앱이 채워 넣는다', () async {
+      SharedPreferences.setMockInitialValues({
+        TaskCompletionService.tasksKey: jsonEncode([
+          task('habit_7_2026-08-19', '출퇴근 책읽기', done: true, habitId: '7'),
+        ]),
+        'nyang_last_date': '2026-08-19',
+        TaskCompletionService.habitLogsKey: jsonEncode({
+          '7': {
+            '2026-08-18': {'done': true, 'status': 'done'},
+          },
+        }),
+        TaskCompletionService.historyKey: jsonEncode([
+          record('2026-08-19', total: 1),
+        ]),
+      });
+      final prefs = await SharedPreferences.getInstance();
+
+      await TaskCompletionService.completeStoredTask(
+        taskId: 'habit_7_2026-08-19',
+        at: DateTime(2026, 8, 19, 13),
+      );
+
+      final logs = readMap(prefs, TaskCompletionService.habitLogsKey);
+      expect(
+        (logs['7'] as Map)['2026-08-19'],
+        isNotNull,
+        reason: '히스토리에는 완료로 남는데 루틴 기록에만 빠지는 하루가 없어야 한다.',
+      );
+      // 어제 도장은 그대로 둔다.
+      expect((logs['7'] as Map)['2026-08-18'], isNotNull);
+    });
+
+    test('이미 찍힌 도장은 덮지 않는다', () async {
+      SharedPreferences.setMockInitialValues({
+        TaskCompletionService.tasksKey: jsonEncode([
+          task('habit_7_2026-08-19', '출퇴근 책읽기', done: true, habitId: '7'),
+        ]),
+        'nyang_last_date': '2026-08-19',
+        TaskCompletionService.habitLogsKey: jsonEncode({
+          '7': {
+            '2026-08-19': {
+              'done': true,
+              'status': 'done',
+              'achievedCount': 3,
+            },
+          },
+        }),
+        TaskCompletionService.historyKey: jsonEncode([
+          record('2026-08-19', total: 1),
+        ]),
+      });
+      final prefs = await SharedPreferences.getInstance();
+
+      await TaskCompletionService.completeStoredTask(
+        taskId: 'habit_7_2026-08-19',
+        at: DateTime(2026, 8, 19, 13),
+      );
+
+      final logs = readMap(prefs, TaskCompletionService.habitLogsKey);
+      expect(
+        ((logs['7'] as Map)['2026-08-19'] as Map)['achievedCount'],
+        3,
+        reason: '개수까지 적어둔 기록을 맨몸 기록으로 지우면 안 된다.',
+      );
+    });
+  });
 }

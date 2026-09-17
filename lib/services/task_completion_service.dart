@@ -153,6 +153,13 @@ class TaskCompletionService {
     if (done && task['done'] == true) {
       // 네이티브가 앱 밖에서 먼저 표시해둔 경우다. 바꿀 것은 없지만 그날 기록은
       // 여기서 정확히 다시 센다 — 네이티브는 주 n회 습관 같은 걸 가릴 수 없다.
+      //
+      // 루틴 도장도 여기서 한 번 더 확인한다. 네이티브가 이미 찍었으면
+      // [_stampHabit]이 덮지 않고 그냥 돌아가고, 못 찍었으면 여기서 채워진다.
+      // 못 찍는 경우가 실제로 있었다 - 되돌려진 날짜로 찍으려다 그 날짜에 이미
+      // 도장이 있어 그냥 나가버리면, 할 일 목록에는 완료로 남고 루틴 기록에만
+      // 빠진 하루가 생긴다.
+      await _stampHabit(prefs, task: task, dateKey: dateKeyForDone, at: at);
       await _rewriteRecord(
         prefs,
         dateKey: dateKeyForDone,
