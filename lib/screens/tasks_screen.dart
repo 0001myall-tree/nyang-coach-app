@@ -30,7 +30,6 @@ import '../services/purchase_service.dart';
 import '../services/nyang_banner_nudge.dart';
 import '../services/distraction_coach_quota.dart';
 import '../services/ongoing_task_nudge_service.dart';
-import '../services/overplan_nudge_service.dart';
 import '../services/task_completion_service.dart';
 import '../services/apple_calendar_sync_service.dart';
 import '../services/routine_schedule.dart';
@@ -669,10 +668,6 @@ class TasksScreen extends StatefulWidget {
   final void Function(String message)? onCoreTaskSet;
   final VoidCallback? onProgressChanged;
 
-  /// 오버플랜 다이얼로그에서 오간 문답. 있으면 채팅으로 바로 재생하고,
-  /// 없으면(예: 컨트롤러 없이 이 화면만 단독으로 띄운 자리) 다음에 채팅을
-  /// 열 때 재생하도록 [OverplanNudgeService]에 남겨둔다.
-  final void Function(List<Map<String, dynamic>> turns)? onOverplanTurns;
   final TasksScreenController? controller;
   final String? initialBottomSheet;
   final int initialTabIndex;
@@ -683,7 +678,6 @@ class TasksScreen extends StatefulWidget {
     required this.coachId,
     this.onCoreTaskSet,
     this.onProgressChanged,
-    this.onOverplanTurns,
     this.controller,
     this.initialBottomSheet,
     this.initialTabIndex = 0,
@@ -4313,116 +4307,10 @@ class _TasksScreenState extends State<TasksScreen>
     _saveTasks();
     _todayInputCtrl.clear();
 
-    // 저장할 때마다 코치가 참견하던 자리는 없앴다. 계획을 구체화하면 좋다는
-    // 이야기는 이제 주 1회, 인사 자리에서 한 번만 건넨다
-    // (chat_screen.dart의 _startWeeklyConcretizeTip).
-    //
-    // 다만 오늘 계획 자체가 최근 실제로 해낸 최대치보다 훨씬 많아지면
-    // 예외다 - 그건 참견이 아니라 그 순간에만 뜻이 있는 경고라 저장할
-    // 때마다 다시 봐야 한다. 하루 한 번만 나가도록 서비스 안에서 막는다.
-    unawaited(_checkOverplan());
-  }
-
-  Future<void> _checkOverplan() async {
-    debugPrint('[overplan] _checkOverplan called');
-    final prefs = await SharedPreferences.getInstance();
-    final fire = await OverplanNudgeService.shouldFire(
-      plannedCount: _activeTodayTasks.length,
-      historyRaw: prefs.getString('nyang_history'),
-    );
-    debugPrint('[overplan] shouldFire returned $fire, mounted=$mounted');
-    if (fire == null || !mounted) return;
-
-    final turns = <Map<String, dynamic>>[];
-
-    // 한때는 이 말을 코치가 직접 짓게 했다. 본인 기록을 근거로 대면 빠져나갈
-    // 구멍이 없을 거라고 봤는데, 실제로는 "성격이 아니라 방식" 같은 지시문이
-    // 그대로 새어 나오고 근거 없는 숫자를 지어냈다. 두 개 많은 것을 성격
-    // 이야기까지 끌고 가기도 했다. 이 자리는 계획을 적는 중에 끼어드는
-    // 자리라 한 번 이상하면 바로 티가 난다. 고정 문구로 되돌렸다.
-    final primary = OverplanNudgeService.primaryMessage(
-      _coach.id,
-      fire.recentMax,
-      tone: fire.tone,
-    );
-    if (!mounted) return;
-    turns.add({'isUser': false, 'text': primary});
-    final firstChoice = await _showOverplanChoiceDialog(primary);
-    turns.add({'isUser': true, 'text': firstChoice});
-
-    // 지금은 듣고 싶지 않다는 답이다. 사흘 뒤에 또 꺼내면 답을 못 들은 것처럼
-    // 군다. 이 자리를 일주일 쉰다.
-    if (firstChoice == _overplanLeaveIt) {
-      await OverplanNudgeService.recordDismissed();
-    }
-
-    if (firstChoice == _overplanGoAhead && mounted) {
-      final followup = OverplanNudgeService.followupMessage(_coach.id);
-      turns.add({'isUser': false, 'text': followup});
-      // 뒷말이 마무리하는 말인 코치는 여기서 끝낸다. 응원해놓고 다시 고르라고
-      // 버튼을 내밀면 무엇을 고르라는 건지 알 수 없다.
-      if (!OverplanNudgeService.followupClosesTalk(_coach.id)) {
-        final secondChoice = await _showOverplanChoiceDialog(followup);
-        turns.add({'isUser': true, 'text': secondChoice});
-      }
-    }
-
-    if (widget.onOverplanTurns != null) {
-      // 즉시 채팅으로 넘길 길이 있으면 바로 재생한다. 저장만 해두면 채팅
-      // 화면이 다음에 새로 열릴 때(앱 재시작, 백그라운드 복귀)까지 미뤄져서,
-      // 방금 답한 문답이 한참 뒤 다른 대화 다음에 뒤늦게 나타나 보인다.
-      widget.onOverplanTurns!(turns);
-    } else {
-      await OverplanNudgeService.recordChatTurns(turns);
-    }
-  }
-
-  static const String _overplanGoAhead = '그렇게 할게';
-  static const String _overplanLeaveIt = '알아서 할게';
-
-  /// [_overplanGoAhead] 또는 [_overplanLeaveIt] 중 사용자가 고른 것.
-  Future<String> _showOverplanChoiceDialog(String message) async {
-    final result = await showDialog<String>(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: Text(
-          _coach.name,
-          style: appFont(
-            fontWeight: FontWeight.bold,
-            fontSize: 16,
-            color: const Color(0xFF3D3A4E),
-          ),
-        ),
-        content: Text(
-          message,
-          style: appFont(fontSize: 14, color: const Color(0xFF6B7280)),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, _overplanLeaveIt),
-            child: Text(
-              _overplanLeaveIt,
-              style: appFont(
-                color: const Color(0xFF9593A5),
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, _overplanGoAhead),
-            child: Text(
-              _overplanGoAhead,
-              style: appFont(
-                color: const Color(0xFF6C5CE7),
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-    return result ?? _overplanLeaveIt;
+    // 저장할 때마다 코치가 참견하던 자리는 없앴다. 계획이 많아졌다는 이야기도
+    // 여기서 하지 않는다 - 적는 순간은 의욕이 올라와 있어서 안 들리고,
+    // 머릿속을 다 쏟아내는 일은 오히려 부하를 더는 쪽이라 말릴 것이 아니다.
+    // 그 말은 이제 인사 자리로 옮겼다 (chat_screen.dart의 _tryOverplanGreeting).
   }
 
   // ── toggleTask (웹앱 그대로) ──────────────────────────────

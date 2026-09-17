@@ -2836,26 +2836,6 @@ class _MainTabScreenState extends State<MainTabScreen>
         () => _chatController.injectAiMessage(msg),
       );
     },
-    onOverplanTurns: (turns) {
-      // 등록창에서 방금 주고받은 문답을 채팅으로 데려가 그 자리에서
-      // 이어지듯 재생한다. 한 줄씩 살짝 텀을 둬 한꺼번에 쏟아지지
-      // 않게 한다.
-      setState(() => _openDrawerIndex = 0);
-      var delay = 300;
-      for (final turn in turns) {
-        final text = turn['text']?.toString() ?? '';
-        if (text.isEmpty) continue;
-        final isUser = turn['isUser'] == true;
-        Future.delayed(Duration(milliseconds: delay), () {
-          if (isUser) {
-            _chatController.injectUserChoice(text);
-          } else {
-            _chatController.injectAiMessage(text);
-          }
-        });
-        delay += 600;
-      }
-    },
   );
 
   // ── 서랍 (모든 탭 공통) ────────────────────────

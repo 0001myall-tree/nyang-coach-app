@@ -19,6 +19,7 @@ import 'package:nyang_coach/screens/coach_selection_screen.dart';
 import 'package:nyang_coach/services/day_capacity_service.dart';
 import 'package:nyang_coach/services/execution_blocker_service.dart';
 import 'package:nyang_coach/services/life_context_service.dart';
+import 'package:nyang_coach/services/overplan_coaching_line.dart';
 import 'package:nyang_coach/services/overplan_nudge_service.dart';
 import 'package:nyang_coach/services/analytics_service.dart';
 import 'package:nyang_coach/services/master_unlock_notice.dart';
@@ -1635,67 +1636,9 @@ class _ChatScreenState extends State<ChatScreen>
     await _loadHistoryAndGreet();
     await _restoreActiveFocusTimer();
     await _checkBedtimeMoveOffer();
-    await _checkOverplanPending();
     _initSpeech();
   }
 
-  /// 등록창(할 일 탭)에서 오늘 계획이 최근 최대 완료량보다 훨씬 많아
-  /// 다이얼로그로 주고받은 문답이 있으면, 채팅에도 그대로 이어 붙인다 -
-  /// 마치 그 자리에서 대화한 것처럼.
-  Future<void> _checkOverplanPending() async {
-    final turns = await OverplanNudgeService.takePendingChatTurns();
-    if (turns == null || turns.isEmpty) return;
-    for (final turn in turns) {
-      final text = turn['text']?.toString() ?? '';
-      if (text.isEmpty) continue;
-      if (turn['isUser'] == true) {
-        _injectUserChoice(text);
-      } else {
-        _injectAiMessage(text, kind: 'overplan_nudge');
-      }
-    }
-  }
-
-  static const String _overplanChatAskKind = 'overplan_chat_ask';
-  static const String _overplanChatGoAhead = '그렇게 할게';
-  static const String _overplanChatLeaveIt = '알아서 할게';
-
-  /// 채팅 중에 코치가 오늘 일정을 방금 넣어준 직후, 그 계획이 최근 최대
-  /// 완료량보다 훨씬 많아졌으면 짚는다. 등록창(할 일 탭)에서 직접 적을 때와
-  /// 같은 조건([OverplanNudgeService.shouldFire])을 쓰지만, 다이얼로그
-  /// 대신 채팅 말풍선으로 물어본다 - 이미 대화 중이라 팝업이 끊고 들어오면
-  /// 어색하다.
-  ///
-  /// [scheduleDate]가 오늘이 아니면 애초에 오늘 계획이 느는 게 아니라 묻지
-  /// 않는다.
-  Future<void> _checkOverplanFromChat(DateTime scheduleDate) async {
-    if (_dateKey(scheduleDate) != _dateKey(DateTime.now())) return;
-    final prefs = await SharedPreferences.getInstance();
-    // 방금 넣은 일정은 아직 nyang_tasks에 반영되지 않았을 수 있다(할 일
-    // 탭이 다음에 열릴 때 동기화된다). 그래서 저장된 개수에 1을 더해 센다.
-    final existingCount = _decodeMapList(prefs.getString('nyang_tasks')).length;
-    final fire = await OverplanNudgeService.shouldFire(
-      plannedCount: existingCount + 1,
-      historyRaw: prefs.getString('nyang_history'),
-    );
-    if (fire == null || !mounted) return;
-    _injectAiMessage(
-      OverplanNudgeService.chatAddMessage(_coach.id),
-      kind: _overplanChatAskKind,
-      choices: const [_overplanChatGoAhead, _overplanChatLeaveIt],
-    );
-  }
-
-  Future<void> _handleOverplanChatChoice(String label) async {
-    if (_isLoading) return;
-    HapticFeedback.lightImpact();
-    _injectUserChoice(label);
-    if (label == _overplanChatLeaveIt) {
-      await OverplanNudgeService.recordDismissed();
-      return;
-    }
-    _injectAiMessage(OverplanNudgeService.followupMessage(_coach.id));
-  }
 
   Future<void> _recordCatChatEntry(
     SharedPreferences prefs,
@@ -2218,7 +2161,6 @@ class _ChatScreenState extends State<ChatScreen>
         sec: "$when '$name' 넣었어요 ✓",
       ),
     );
-    unawaited(_checkOverplanFromChat(plan.date));
     if (!alarmOn) return;
 
     // 일정 알람 자체가 꺼져 있어서 함께 켠 경우다. 채팅에 한 줄 적어두면
@@ -3948,7 +3890,6 @@ ${lines.join('\n')}
       _loadTaskProgress();
       _checkDeferredReminder();
       _checkBedtimeMoveOffer();
-      _checkOverplanPending();
     }
   }
 
@@ -4773,6 +4714,75 @@ ${lines.join('\n')}
   /// 쓴다. 화요일에 앱을 안 여는 사람은 그 주를 건너뛴다. 페이스 코칭이 수·금을
   /// 고른 것과 같은 맞바꿈이다.
   static const int _weeklyConcretizeWeekday = DateTime.tuesday;
+
+  /// 오늘 계획이 평소 해내던 것보다 훨씬 많은 날, 말을 건다.
+  ///
+  /// 예전에는 할 일을 적는 중에 다이얼로그로 끼어들어 "많다"고 했다. 적는
+  /// 순간은 의욕이 올라와 있어서 안 들리고, 그 목록을 실제로 마주하는 것은
+  /// 다음 날 아침이다. 게다가 다 쏟아내는 일은 부하를 더는 쪽이라 말릴 것이
+  /// 아니었다. 그래서 적는 것은 놔두고 마주하는 자리로 옮겼다.
+  ///
+  /// 두 마디로 나간다. 먼저 상태를 짚는 고정 문구가 바로 뜨고, 코치가 오늘
+  /// 목록을 읽고 지은 말이 몇 초 뒤에 붙는다. 첫 줄이 기다리라는 말로 끝나는
+  /// 것이 그래서다.
+  Future<bool> _tryOverplanGreeting(
+    SharedPreferences prefs,
+    DateTime now,
+  ) async {
+    if (!OverplanNudgeService.speaks(widget.coachId)) return false;
+
+    final tasks = _decodeMapList(prefs.getString('nyang_tasks'));
+    if (tasks.isEmpty) return false;
+
+    final recentMax = await OverplanNudgeService.shouldGreet(
+      plannedCount: tasks.length,
+      historyRaw: prefs.getString('nyang_history'),
+      now: now,
+    );
+    if (recentMax == null || !mounted) return false;
+
+    // 먼저 적어둔다. 아래 코치 호출이 몇 초 걸리는데, 그 사이에 사용자가
+    // 나갔다 들어오면 같은 말이 한 번 더 나간다.
+    await OverplanNudgeService.recordGreeted(now: now);
+    if (!mounted) return false;
+    _injectAiMessage(
+      OverplanNudgeService.opening(widget.coachId),
+      kind: 'auto:overplan',
+    );
+
+    final line = await OverplanCoachingLine.compose(
+      coachId: widget.coachId,
+      recentMax: recentMax,
+      tasks: tasks.map((task) {
+        final time = task['time']?.toString();
+        final duration = task['duration']?.toString();
+        return OverplanTask(
+          name: task['text']?.toString() ?? '',
+          isRoutine: task['category'] == 'habit' || task['isHabit'] == true,
+          done: task['done'] == true,
+          started:
+              task['inProgress'] == true || task['startedAt'] != null,
+          duration: duration == null || duration.isEmpty ? null : duration,
+          time: time == null || time.isEmpty ? null : time,
+        );
+      }).where((task) => task.name.isNotEmpty).toList(growable: false),
+    );
+    if (!mounted) return true;
+
+    // 기다리라고 해놓고 아무것도 안 오는 것이 제일 나쁘다. 못 지었으면
+    // 뻔한 말이라도 내보낸다.
+    if (line == null) {
+      _injectAiMessage(OverplanNudgeService.fallback(widget.coachId));
+      return true;
+    }
+
+    // 평소 답변과 같은 길로 태운다. 코치가 붙인 [OPEN: 오늘]을 떼어내고
+    // 그 화면을 실제로 열어주는 자리가 거기에 있다.
+    final parsed = _parseReply(line);
+    if (!mounted) return true;
+    _injectAiMessage(parsed.text);
+    return true;
+  }
 
   Future<bool> _startWeeklyConcretizeTip(
     SharedPreferences prefs,
@@ -8435,6 +8445,10 @@ $block
         now: now,
         lastVisit: lastVisit,
       );
+      // 오늘 계획이 평소 해내던 것보다 훨씬 많은 날. 핵심 질문 다음 자리다 -
+      // 그쪽은 버튼으로 시작 표시까지 켜주는 자리라 먼저 간다.
+      _greetedOnThisEntry =
+          _greetedOnThisEntry || await _tryOverplanGreeting(prefs, now);
       // 할 말이 없던 자리에서만 권한다. 한 번 들어올 때 두 마디 하지 않는다.
       _greetedOnThisEntry =
           _greetedOnThisEntry || await _tryOfferOngoingNudge(prefs, now);
@@ -8453,6 +8467,15 @@ $block
     // 냥냥이도 앱만 아는 사실 두 가지는 짚어준다. 슬롯 인사는 없지만
     // 곧 시작할 일정과 밤에 남은 계획은 대화가 대신할 수 없다.
     if (await _startCatAutoGreeting(prefs: prefs, now: now)) {
+      _greetedOnThisEntry = true;
+      await prefs.setString(
+        'last_visit_${widget.coachId}',
+        now.toIso8601String(),
+      );
+      return;
+    }
+
+    if (await _tryOverplanGreeting(prefs, now)) {
       _greetedOnThisEntry = true;
       await prefs.setString(
         'last_visit_${widget.coachId}',
@@ -11872,7 +11895,6 @@ $block
                                     confirmedTime != null,
                                 confirmedRepeatRule,
                               );
-                              unawaited(_checkOverplanFromChat(confirmedDate));
                               if ((reminderEnabled ||
                                       autoEnabledTimedReminder) &&
                                   confirmedTime != null) {
@@ -17540,9 +17562,6 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
         msg,
         (label) => _handleRoutineSpreadChoice(msg, label),
       );
-    }
-    if (msg.kind == _overplanChatAskKind && msg.choices.isNotEmpty) {
-      return _buildChoiceBubbleCard(msg, _handleOverplanChatChoice);
     }
     if (msg.kind == 'ultra_low_resistance_check') {
       return _buildUltraLowResistanceCheckCard(msg);
