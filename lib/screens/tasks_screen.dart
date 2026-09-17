@@ -1348,7 +1348,7 @@ class _TasksScreenState extends State<TasksScreen>
     await _checkReset(prefs);
     await _checkWeekMonthReset(prefs);
     await _promoteAndPrunePlannedTasks();
-    _injectTodayHabits();
+    await _syncTodayHabitRows();
     _injectTodaySchedules();
     final coreMilestonesChanged = _syncTodayMilestonesIntoCoreTasks();
     // 첫 클라우드 복원 전에는 걷어내지 않는다. 그때는 오늘 목록이 아직 비어
@@ -1549,7 +1549,6 @@ class _TasksScreenState extends State<TasksScreen>
     });
     _openTab(3);
     await _saveHabits();
-    _injectTodayHabits();
     if (!mounted) return true;
     Future.delayed(const Duration(milliseconds: 360), () {
       if (!mounted) return;
@@ -3401,6 +3400,12 @@ class _TasksScreenState extends State<TasksScreen>
     TasksSyncService.scheduleSyncToCloud();
   }
 
+  /// 루틴 목록을 저장하고, 오늘 목록의 루틴 줄까지 맞춘다.
+  ///
+  /// 둘은 늘 같이 일어나야 한다. 루틴을 하나 지웠는데 오늘 목록에 그 줄이
+  /// 남아 있거나, 이름을 고쳤는데 오늘 줄은 옛 이름인 상태가 있으면 안 된다.
+  /// 예전에는 부르는 쪽이 저장과 맞추기를 따로 불렀고, 그래서 둘 중 하나만
+  /// 부르는 자리가 생겼다.
   Future<void> _saveHabits() async {
     if (!await _canInputTasks()) return;
     final prefs = await SharedPreferences.getInstance();
@@ -3409,6 +3414,7 @@ class _TasksScreenState extends State<TasksScreen>
       jsonEncode(habits.map((h) => h.toJson()).toList()),
     );
     TasksSyncService.scheduleSyncToCloud();
+    await _syncTodayHabitRows();
   }
 
   Future<void> _saveVisions() async {
@@ -3737,91 +3743,33 @@ class _TasksScreenState extends State<TasksScreen>
   }
 
   // ── injectTodayHabits (웹앱 그대로) ──────────────────────
-  void _injectTodayHabits() {
-    final today = _getTodayStr();
-    final parts = today.split('-');
-    int todayDow = DateTime.now().weekday;
-    if (parts.length >= 3) {
-      final y = int.tryParse(parts[0]) ?? DateTime.now().year;
-      final m = int.tryParse(parts[1]) ?? DateTime.now().month;
-      final d = int.tryParse(parts[2]) ?? DateTime.now().day;
-      todayDow = DateTime(y, m, d).weekday;
+  /// 오늘 목록의 루틴 줄을 저장된 루틴 목록에 맞추고, 그 결과를 읽어온다.
+  ///
+  /// 맞추는 일 자체는 [DailyResetService.syncTodayHabitTasks]가 한다. 예전에는
+  /// 같은 규칙이 여기 한 벌, 서비스에 한 벌 있었다. 화면은 메모리를 고치고
+  /// 서비스는 저장소를 고쳤는데, 규칙이 두 군데 있으니 한쪽만 손보는 날이 왔고
+  /// 실제로 루틴이 하루 종일 안 뜨는 날이 그렇게 생겼다.
+  ///
+  /// 이제 화면은 판단하지 않는다. 저장소를 맞추라고 시키고 결과를 다시 읽는다.
+  Future<void> _syncTodayHabitRows() async {
+    final changed = await DailyResetService.syncTodayHabitTasks();
+    if (!changed || !mounted) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString('nyang_tasks');
+    if (raw == null) return;
+    try {
+      final reloaded = (jsonDecode(raw) as List)
+          .map((e) => TaskItem.fromJson(e))
+          .toList();
+      _closeOvernightRuns(reloaded);
+      if (!mounted) return;
+      setState(() {
+        tasks = reloaded;
+      });
+    } catch (_) {
+      // 읽을 수 없으면 화면에 든 것을 그대로 둔다.
     }
-    // 웹앱 dbDow: 0=월~6=일
-    final dbDow = todayDow - 1;
-
-    final todayHabits = habits.where((h) {
-      if (h.freq == 'daily') return true;
-      if (h.freq == 'weekly_count') {
-        return _shouldShowWeeklyCountHabitOnDate(h, DateTime.now());
-      }
-      if (h.freq == 'weekly') return h.days.contains(dbDow);
-      return false;
-    }).toList();
-
-    final todayHabitIds = todayHabits.map((h) => h.id.toString()).toList();
-
-    // 오늘 해당 없는 habit 태스크 제거
-    tasks.removeWhere((t) {
-      if (t.habitId == null) return false;
-      return !todayHabitIds.contains(t.habitId.toString());
-    });
-
-    // 오늘 습관 주입
-    for (final h in todayHabits) {
-      String? tTime;
-      if (h.timeType == 'single' && h.timeStart != null) {
-        tTime = _displayTimeFromStored(timeStart: h.timeStart);
-      }
-      if (h.timeType == 'range' && h.timeStart != null) {
-        tTime = _displayTimeFromStored(
-          timeStart: h.timeStart,
-          timeEnd: h.timeEnd,
-        );
-      }
-
-      final existingIndex = tasks.indexWhere(
-        (t) => t.habitId?.toString() == h.id.toString(),
-      );
-      if (existingIndex != -1) {
-        // 습관 이름/시간이 수정됐을 수 있으니 오늘 이미 주입된 항목에도 반영한다.
-        tasks[existingIndex].text = h.name;
-        tasks[existingIndex].time = tTime;
-        tasks[existingIndex].duration = h.habitDuration;
-        tasks[existingIndex].timeStart = h.timeStart;
-        tasks[existingIndex].timeEnd = h.timeEnd;
-        continue;
-      }
-
-      final log = (habitLogs[h.id.toString()] ?? {})[today];
-      final isSkipped = log != null && log['status'] == 'skipped';
-      if (isSkipped) continue;
-
-      final isDone = log != null && log['done'] == true;
-
-      final taskId = 'habit_${h.id.toString().replaceAll('.', '_')}_$today';
-
-      tasks.add(
-        TaskItem(
-          id: taskId,
-          habitId: h.id.toString(),
-          text: h.name,
-          category: 'habit',
-          done: isDone,
-          isHabit: true,
-          time: tTime,
-          duration: h.habitDuration,
-          timeStart: h.timeStart,
-          timeEnd: h.timeEnd,
-          createdAt: DateTime.now().toIso8601String(),
-          completedAt: isDone ? log!['completedAt'] : null,
-          inProgressAt: isDone ? log!['startedAt'] as String? : null,
-        ),
-      );
-    }
-
-    setState(() {});
-    _saveTasks();
   }
 
   DateTime? _createdDateOfHabit(HabitItem habit) =>
@@ -3877,15 +3825,6 @@ class _TasksScreenState extends State<TasksScreen>
     if (habitIndex < 0) return true;
     final habit = habits[habitIndex];
     return habit.freq != 'weekly_count' || task.done;
-  }
-
-  bool _shouldShowWeeklyCountHabitOnDate(HabitItem habit, DateTime date) {
-    return RoutineSchedule.shouldShowWeeklyCountOnDate(
-      rawWeeklyTargetCount: habit.weeklyTargetCount,
-      rawCreatedAt: habit.createdAt,
-      logs: habitLogs[habit.id.toString()] ?? const {},
-      date: date,
-    );
   }
 
   Future<({String label, double ratio})?> _pickHabitCompletionRatio(
@@ -8587,7 +8526,7 @@ class _TasksScreenState extends State<TasksScreen>
                         }
 
                         // 오늘 탭에 주입된 습관 카드를 수정한 경우도 마찬가지로 원본
-                        // HabitItem에 반영해야 _injectTodayHabits()가 다시 실행될 때
+                        // HabitItem에 반영해야 오늘 목록을 다시 맞출 때
                         // 수정 내용이 덮어써지지 않는다.
                         if (t.category == 'habit' && t.habitId != null) {
                           final hIdx = habits.indexWhere(
@@ -8604,10 +8543,15 @@ class _TasksScreenState extends State<TasksScreen>
                           }
                         }
                       });
-                      _saveTasks();
-                      _saveCoreTasks();
-                      if (t.category == 'schedule') _saveSchedules();
-                      if (t.category == 'habit') _saveHabits();
+                      // 순서대로 저장한다. 루틴 저장은 오늘 목록을 저장소에서
+                      // 다시 읽어오므로, 방금 고친 줄이 아직 안 적혀 있으면
+                      // 그 수정이 그대로 날아간다.
+                      unawaited(() async {
+                        await _saveTasks();
+                        await _saveCoreTasks();
+                        if (t.category == 'schedule') await _saveSchedules();
+                        if (t.category == 'habit') await _saveHabits();
+                      }());
                     });
                   },
                   child: Container(
@@ -9959,8 +9903,7 @@ class _TasksScreenState extends State<TasksScreen>
               setState(() {
                 habits.add(newHabit);
               });
-              _saveHabits();
-              _injectTodayHabits();
+              unawaited(_saveHabits());
               action.convertedHabitId = newHabit.id;
               action.convertedType = 'habit';
               action.convertedDate = DateFormat(
@@ -14600,8 +14543,7 @@ class _TasksScreenState extends State<TasksScreen>
     );
     if (!confirm) return;
     setState(() => habits.removeWhere((h) => h.id.toString() == id.toString()));
-    _saveHabits();
-    _injectTodayHabits();
+    await _saveHabits();
   }
 
   String _habitRegistrationGuideText() {
@@ -15223,8 +15165,7 @@ class _TasksScreenState extends State<TasksScreen>
                           habits.add(habit);
                         }
                       });
-                      _saveHabits();
-                      _injectTodayHabits();
+                      unawaited(_saveHabits());
                       Navigator.pop(ctx);
                       if (showCreationWeekNotice && mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(

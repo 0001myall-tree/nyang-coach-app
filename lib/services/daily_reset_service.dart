@@ -707,60 +707,104 @@ class DailyResetService {
     return made;
   }
 
-  /// 오늘 목록에 오늘 루틴이 빠져 있으면 더한다. 더한 개수를 돌려준다.
+  /// 오늘 목록의 루틴 줄을 루틴 목록에 맞춘다. 바뀐 것이 있으면 true.
   ///
-  /// 루틴은 사용자가 매일 적는 것이 아니라 루틴 목록에서 파생되는 것이라,
-  /// 언제 한 번 만들고 끝낼 일이 아니라 언제든 맞춰주면 되는 일이다. 그런데
-  /// 지금까지는 날짜가 실제로 넘어갈 때 한 번, 그리고 오늘 탭이 열릴 때만
-  /// 채웠다. 그 둘을 다 놓친 날 - 앱이 알림이나 자동 발화로 잠깐 깨어나기만
-  /// 하고 사용자는 채팅만 한 날 - 은 하루 종일 루틴이 없는 채로 지나갔다.
-  /// 코치도 그 빈 목록을 보고 "오늘은 계획이 없구나"로 말했다.
+  /// 루틴은 사용자가 매일 적는 것이 아니라 루틴 목록에서 파생되는 것이다.
+  /// 그러니 언제 한 번 만들고 끝낼 일이 아니라 언제든 맞춰주면 되는 일이고,
+  /// 여기가 그 일을 하는 **한 자리**다. 예전에는 화면이 제 메모리를 고치는
+  /// 길과 서비스가 저장소를 고치는 길이 따로 있었는데, 같은 규칙을 두 군데
+  /// 적어두니 한쪽만 고쳐지는 날이 왔다.
   ///
-  /// **더하기만 하고 아무것도 지우지 않는다.** 예전에 정리를 하루에도 여러 번
-  /// 돌리던 시절에는 목록을 통째로 다시 그렸고, 그래서 손으로 적은 할 일이
-  /// 재료가 없어 사라졌다. 여기서는 빠진 것만 더하므로 그 일이 생기지 않는다.
+  /// 셋을 한다.
+  /// - **더하기** - 오늘 떠야 하는데 목록에 없는 루틴
+  /// - **빼기** - 지워졌거나 오늘 요일이 아닌 루틴의 줄
+  /// - **고치기** - 이름·시각·소요 시간이 바뀐 줄
   ///
-  /// 쉬기로 찍힌 것과 지워진 루틴은 [todayHabitTasks]가 이미 빼준다. 그래서
-  /// 방금 지운 줄이 되살아나지 않는다.
-  static Future<int> ensureTodayHabitTasks() async {
+  /// 손으로 적은 할 일과 일정은 건드리지 않는다. 완료 표시와 실행 기록도
+  /// 그대로 둔다 - 고치는 것은 루틴에서 따라오는 값뿐이다.
+  ///
+  /// **루틴 목록을 못 읽었으면 아무것도 하지 않는다.** 그 상태로 빼기가 돌면
+  /// 멀쩡한 줄이 통째로 사라진다. 빈 목록은 못 읽은 것이 아니라 "루틴이
+  /// 없다"는 답이므로, 그때는 줄을 뺀다.
+  static Future<bool> syncTodayHabitTasks() async {
     final prefs = await SharedPreferences.getInstance();
-    // 복원이 아직이면 루틴 목록이 비어 보일 수 있다. 그 상태로 맞추면
-    // 아무것도 안 더하고 지나갈 뿐이지만, 굳이 헛돌 이유도 없다.
+    // 복원이 아직이면 루틴 목록이 없는 것처럼 보인다. 그 값으로 맞추면
+    // 곧 도착할 루틴의 줄을 미리 지우는 셈이다.
     //
-    // 로그인 상태를 묻다 실패하면 맞추는 쪽으로 간다. 이 함수는 더하기만
-    // 하므로, 못 물어봤다고 손 놓는 것보다 채워보는 쪽이 안전하다.
+    // 로그인 상태를 묻다 실패하면 맞추는 쪽으로 간다. 아래에서 루틴 목록을
+    // 못 읽으면 어차피 손대지 않으므로, 이 물음이 마지막 방어선은 아니다.
     try {
-      if (await isCloudRestorePending(prefs)) return 0;
+      if (await isCloudRestorePending(prefs)) return false;
     } catch (_) {}
+
+    // 여기서 걸러야 빼기가 안전해진다. 키가 없거나 값이 깨졌으면 "루틴이
+    // 없다"가 아니라 "모른다"이다.
+    final rawHabits = prefs.getString('nyang_habits');
+    if (rawHabits == null) return false;
+    try {
+      jsonDecode(rawHabits);
+    } catch (_) {
+      return false;
+    }
 
     final today = _getTodayStr(0.0);
     List<dynamic> tasks;
     try {
       tasks = jsonDecode(prefs.getString('nyang_tasks') ?? '[]') as List;
     } catch (_) {
-      return 0;
+      return false;
     }
 
-    final existingIds = tasks
-        .whereType<Map>()
-        .map((t) => t['id'].toString())
-        .toSet();
-    final missing = todayHabitTasks(
-      prefs,
-      today,
-    ).where((t) => !existingIds.contains(t['id'].toString())).toList();
-    if (missing.isEmpty) return 0;
+    final wanted = {
+      for (final t in todayHabitTasks(prefs, today)) t['habitId'].toString(): t,
+    };
+    final seen = <String>{};
+    final kept = <Map<String, dynamic>>[];
+    var changed = false;
 
-    final merged = [...tasks, ...missing];
-    await prefs.setString('nyang_tasks', jsonEncode(merged));
-    await _saveTodayRecordDirectly(
-      prefs,
-      today,
-      merged.whereType<Map>().map((t) => Map<String, dynamic>.from(t)).toList(),
-    );
+    for (final raw in tasks) {
+      if (raw is! Map) continue;
+      final task = Map<String, dynamic>.from(raw);
+      final habitId = task['habitId']?.toString();
+      if (habitId == null || habitId.isEmpty || habitId == 'null') {
+        kept.add(task);
+        continue;
+      }
+      final want = wanted[habitId];
+      if (want == null) {
+        // 지워졌거나 오늘 요일이 아니거나 쉬기로 찍힌 루틴이다.
+        changed = true;
+        continue;
+      }
+      seen.add(habitId);
+      for (final field in const [
+        'text',
+        'time',
+        'duration',
+        'timeStart',
+        'timeEnd',
+      ]) {
+        if (task[field] != want[field]) {
+          task[field] = want[field];
+          changed = true;
+        }
+      }
+      kept.add(task);
+    }
+
+    for (final entry in wanted.entries) {
+      if (seen.contains(entry.key)) continue;
+      kept.add(entry.value);
+      changed = true;
+    }
+
+    if (!changed) return false;
+
+    await prefs.setString('nyang_tasks', jsonEncode(kept));
+    await _saveTodayRecordDirectly(prefs, today, kept);
     TasksSyncService.scheduleSyncToCloud();
-    debugPrint('[routine] 오늘 목록에 빠져 있던 루틴 ${missing.length}개를 채웠다');
-    return missing.length;
+    debugPrint('[routine] 오늘 목록의 루틴 줄을 맞췄다 (${kept.length}줄)');
+    return true;
   }
 
   static Future<void> _injectTodayHabitsAndSchedulesDirectly(

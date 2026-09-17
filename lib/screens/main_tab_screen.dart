@@ -791,8 +791,8 @@ class _MainTabScreenState extends State<MainTabScreen>
     // 한다 - 정리가 방금 만든 것을 보고 그냥 지나가야 한다.
     unawaited(DailyResetService.catchUpMissedDailySummary());
     // 정리가 "오늘 것은 이미 끝났다"로 지나간 날에도 루틴은 맞춰준다.
-    final filled = await DailyResetService.ensureTodayHabitTasks();
-    if ((!rebuilt && filled == 0) || !mounted) return;
+    final synced = await DailyResetService.syncTodayHabitTasks();
+    if ((!rebuilt && !synced) || !mounted) return;
     _tasksController.refresh();
     _chatController.refreshTaskProgress();
   }
@@ -810,9 +810,9 @@ class _MainTabScreenState extends State<MainTabScreen>
     final before = prefs.getString(DailyResetService.lastDateKey);
     await DailyResetService.checkAndExecuteReset();
     unawaited(DailyResetService.catchUpMissedDailySummary());
-    final filled = await DailyResetService.ensureTodayHabitTasks();
+    final synced = await DailyResetService.syncTodayHabitTasks();
     final after = prefs.getString(DailyResetService.lastDateKey);
-    if (before == after && filled == 0) return;
+    if (before == after && !synced) return;
     if (!mounted) return;
     _tasksController.refresh();
     _chatController.refreshTaskProgress();
@@ -825,7 +825,7 @@ class _MainTabScreenState extends State<MainTabScreen>
     // 여기서 다시 건다.
     unawaited(NotificationService().reapplyAlarmsIfPermissionRecovered());
     await DailyResetService.checkAndExecuteReset();
-    await DailyResetService.ensureTodayHabitTasks();
+    await DailyResetService.syncTodayHabitTasks();
     try {
       final appleCalendarChanged = await AppleCalendarSyncService.instance
           .syncAll();

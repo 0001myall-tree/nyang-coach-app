@@ -8265,7 +8265,7 @@ $block
     //
     // 채울 것이 없으면 곧바로 돌아오므로, 보통은 여기서 멈추지 않는다.
     // 지난 대화는 위에서 이미 그렸으니 화면이 비어 보이지도 않는다.
-    await DailyResetService.ensureTodayHabitTasks();
+    await DailyResetService.syncTodayHabitTasks();
     if (!mounted) return;
 
     // 푸시로 이미 말을 건넸으면 그게 오늘의 첫 마디다. 그 위에 새 인사를
