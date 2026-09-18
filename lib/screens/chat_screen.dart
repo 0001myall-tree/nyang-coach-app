@@ -16230,6 +16230,17 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
     setState(() => _brainDumpPlan = null);
     if (option.label.isNotEmpty) _injectUserChoice(option.label);
 
+    // 고른 순서를 대화에 남긴다. 카드는 고르는 자리라 고르고 나면 사라지는데,
+    // 그러면 방금 정한 순서를 다시 볼 데가 없어진다. 할 일 목록에는 항목이
+    // 들어가지만 순서까지는 남지 않고, 무엇보다 이 순서는 **내가 고른 것**이라
+    // 목록보다 대화 쪽에 있는 편이 맞다.
+    //
+    // 말투를 섞지 않는다. 이름을 화살표로 이은 줄이라 반말 코치와 존댓말 코치
+    // 어느 쪽에 붙어도 어색하지 않다.
+    if (option.today.isNotEmpty) {
+      _injectAiMessage(option.today.join(' → '));
+    }
+
     final prefs = await SharedPreferences.getInstance();
     // 오늘 안 할 것은 조용히 넘긴다. 물어볼 이유가 없다.
     await _saveBrainDumpLater(prefs, plan.later);
