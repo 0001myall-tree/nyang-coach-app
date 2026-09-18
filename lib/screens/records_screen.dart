@@ -4,7 +4,6 @@ import 'package:nyang_coach/theme/app_design_tokens.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import '../theme/app_font.dart';
 import 'package:cloud_functions/cloud_functions.dart';
-import 'package:nyang_coach/services/condition_insight.dart';
 import 'package:nyang_coach/services/execution_blocker_service.dart';
 import 'package:nyang_coach/services/execution_funnel.dart';
 import 'package:nyang_coach/services/execution_type_labels.dart';
@@ -236,6 +235,53 @@ class _RecordsScreenState extends State<RecordsScreen> {
       }
     }
     return last7;
+  }
+
+  /// 다 끝낸 날 바로 다음 날이 크게 비었는지. 있으면 사실 한 줄로 돌려준다.
+  ///
+  /// 조건 발견형에서 유일하게 건져온 값이다. 나머지 축들은 "어떤 조건이 실행을
+  /// 끌어올리는가"를 재려 한 것이라 원인을 말하는 셈이었지만, 이것은 원인을
+  /// 말하지 않는다 — 두 날의 완료율을 나란히 놓을 뿐이다. 그런데도 값진 이유는
+  /// 사용자가 스스로 못 보는 자리라서다. 하루만 떼어 보면 100%짜리 성공이라,
+  /// 다음 날을 미리 써버렸다는 것은 이틀을 묶어야만 보인다.
+  ///
+  /// 기록이 없는 날은 짝에서 뺀다. 안 적은 날은 못 한 날이 아니다.
+  String _borrowedFromTomorrowLine(List<Map<String, dynamic>> records) {
+    const dayNames = ['월', '화', '수', '목', '금', '토', '일'];
+
+    int? pctOf(Map<String, dynamic> record) {
+      final total = _recordTotalCount(record);
+      if (total == 0) return null;
+      return (_recordDoneCount(record) * 100 / total).round();
+    }
+
+    String? label(Map<String, dynamic> record) {
+      final date = DateTime.tryParse(record['date']?.toString() ?? '');
+      if (date == null) return null;
+      return '${dayNames[date.weekday - 1]}요일';
+    }
+
+    // 여러 쌍이 걸리면 제일 크게 떨어진 하나만 쓴다. 나열하면 "당신은 늘
+    // 벼락치기를 한다"는 말이 되는데, 이레치로 그렇게까지 말할 수 없다.
+    String best = '';
+    var bestDrop = 0;
+    for (var i = 0; i + 1 < records.length; i++) {
+      final high = pctOf(records[i]);
+      final low = pctOf(records[i + 1]);
+      if (high == null || low == null) continue;
+      if (high < 90 || low > 50) continue;
+      final drop = high - low;
+      if (drop <= bestDrop) continue;
+      final from = label(records[i]);
+      final to = label(records[i + 1]);
+      if (from == null || to == null) continue;
+      bestDrop = drop;
+      best =
+          '다음 날이 깎인 자리: $from($high%) 다음 $to($low%). '
+          '두 날을 묶어서만 보이는 사실이니, 원인을 단정하지 말고 '
+          '"$from은 잘 끝내셨는데 $to이 조금 비었네요" 정도로 한 번만 짚으세요.';
+    }
+    return best;
   }
 
   String _getWeekMondayStr() {
@@ -489,17 +535,17 @@ class _RecordsScreenState extends State<RecordsScreen> {
     final hasVisibleVisions =
         _formatVisionText(prefs.getString('nyang_visions')) != '없음';
 
-    // 조건 발견형(4)은 견줄 것이 실제로 걸렸을 때만 후보가 된다. 이레치로는
-    // 한쪽에 사흘밖에 안 모여서, 하루가 들고 날 때마다 결론이 뒤집힌다.
-    final hasConditionInsight = ConditionInsights.from(
-      prefs.getString('nyang_history'),
-    ).hasEnough;
-
+    // 조건 발견형(4)은 없앴다. 다섯 축을 견주어 제일 크게 갈린 하나를 고르는
+    // 구조였는데, 손잡이가 없는 축일수록 진짜 신호가 없어 순수 우연이고,
+    // 우연이 크게 벌어질 확률은 진짜 축보다 낮지 않다. 즉 의미 없는 축이
+    // 오히려 뽑히기 유리했다(실제로 '목록 첫 칸'이 뽑혔다). 축을 줄여도
+    // 병은 남는다 — 기록이 30일까지라 양쪽 5일씩으로 조건을 견주는 것
+    // 자체가 무리였다. 다만 '다음 날이 깎였다'는 사실 하나는 인과 주장이
+    // 아니라서 실행 회고형(0)으로 옮겨 살렸다.
     final candidates = [
       0,
       if (hasVisibleVisions) 1,
       if (hasExecutionPattern) 3,
-      if (hasConditionInsight) 4,
     ];
     final available = candidates.where((t) => !usedTypes.contains(t)).toList()
       ..shuffle();
@@ -744,12 +790,6 @@ class _RecordsScreenState extends State<RecordsScreen> {
     // 안 된다 — 목록이 커진 사람은 더 해내고도 "완료율이 떨어졌네요"를 듣는다.
     final executionTrendBlock = executionFunnel.trendBlock();
 
-    // 조건 발견형이 쓸 값. 견준 것은 하나뿐이다 — 다섯 축을 재면 그중 하나쯤은
-    // 우연히 크게 벌어지므로, 나열하는 순간 가짜가 섞인다.
-    final conditionInsights = ConditionInsights.from(
-      prefs.getString('nyang_history'),
-    );
-
     // 지난주에 뭐라고 불렀는지. 같은 사람이 한 주 만에 다른 사람이 되지는
     // 않는데, 배지 이름이 주마다 바뀌면 사용자는 앱이 자기를 모른다고 느낀다.
     final lastLabel = _weeklyExecutionTypeLabel;
@@ -875,38 +915,6 @@ class _RecordsScreenState extends State<RecordsScreen> {
         .map((e) => '${e.key}(${e.value}일)')
         .join(', ');
 
-    // 조건 이야기를 이번 주 주력한 일에 비추어 본다. 조건만 말하면 사람이 빠진
-    // 분석표가 되고, 반대로 그 일의 원인이라고 말하면 견준 적 없는 것을
-    // 말하는 셈이 된다. 그래서 겹친 날 수라는 사실만 넘긴다.
-    final topCondition = conditionInsights.top;
-    var conditionFocusNote = '';
-    if (topCondition != null && heldOverRanked.isNotEmpty) {
-      final focus = heldOverRanked.first.key;
-      final touchedDates = <String>{};
-      for (final record in activeRecords) {
-        final date = record['date']?.toString() ?? '';
-        if (date.isEmpty) continue;
-        final tasks = (record['tasks'] as List?) ?? [];
-        final touched = tasks.any((task) {
-          final map = task as Map?;
-          if (map == null || map['text'] != focus) return false;
-          return map['done'] == true || _taskWasStarted(map);
-        });
-        if (touched) touchedDates.add(date);
-      }
-      if (touchedDates.isNotEmpty) {
-        final overlap = touchedDates
-            .where(topCondition.trueDates.contains)
-            .length;
-        conditionFocusNote =
-            "이번 주 주력한 일 '$focus'에 손댄 ${touchedDates.length}일 중, "
-            "${topCondition.label}에 해당한 날은 $overlap일";
-      }
-    }
-    final conditionBlock = conditionInsights.promptBlock(
-      focusNote: conditionFocusNote,
-    );
-
     final recordBuffer = StringBuffer();
     final completionSummaryBuffer = StringBuffer();
     final lowCompletionDays = <String>[];
@@ -993,6 +1001,10 @@ class _RecordsScreenState extends State<RecordsScreen> {
     completionSummaryBuffer.writeln(
       '- 지난주와 견주면: ${await _completionTrendLine(weeklyPct)}',
     );
+    final borrowedLine = _borrowedFromTomorrowLine(records);
+    if (borrowedLine.isNotEmpty) {
+      completionSummaryBuffer.writeln('- $borrowedLine');
+    }
 
     final isMale = !_isMaster && widget.coachId == 'nyang_halbae';
     final title = _userTitle;
@@ -1180,7 +1192,7 @@ ${completionSummaryBuffer.toString().trim()}
 ${feedbackType == 0 ? '- 실행 비율: $startToFinishText\n  (두 비율을 함께 보세요. 손댄 것은 잘 끝내는데 손댄 비율이 낮다면, 못 해내는 사람이 아니라 한 번에 잡는 양이 많은 사람입니다. 두 비율 중 낮은 쪽이 그 주의 병목입니다.)\n' : ''}
 - 미루다 다시 완료한 일 (3일 이상 미루다 최근 다시 완료): ${resumedTasks.join(', ').isEmpty ? '없음' : resumedTasks.join(', ')}
 - 미루다 다시 시작한 일 (3일 이상 손대지 못하다 최근 다시 시작, 완료는 아직): ${resumedStartTasks.join(', ').isEmpty ? '없음' : resumedStartTasks.join(', ')}
-${feedbackType == 3 ? '$executionPatternBlock\n' : ''}${feedbackType == 4 ? '$conditionBlock\n' : ''}${feedbackType == 0 && executionTrendBlock.isNotEmpty ? '\n[실행 - 앱이 최근 이레 기록에서 센 값]\n$executionTrendBlock' : ''}
+${feedbackType == 3 ? '$executionPatternBlock\n' : ''}${feedbackType == 0 && executionTrendBlock.isNotEmpty ? '\n[실행 - 앱이 최근 이레 기록에서 센 값]\n$executionTrendBlock' : ''}
 
 [사용자의 현재 목표 및 장기 비전]
 - 주간 목표: $weekGoalText
@@ -1197,13 +1209,11 @@ ${feedbackType == 3 ? '$executionPatternBlock\n' : ''}${feedbackType == 4 ? '$co
 ${habitFreqBuffer.toString().trim()}
 $staminaSection$chatSummarySection
 
-[회고 유형: ${feedbackType == 0
-        ? '실행 회고형'
-        : feedbackType == 1
+[회고 유형: ${feedbackType == 1
         ? '장기 비전형'
         : feedbackType == 3
         ? '실행 유형형'
-        : '조건 발견형'}]
+        : '실행 회고형'}]
 
 [작성 지침]
 1. 어투: ${isMale ? '냥할배로서 부드럽고 느긋한 반말 기반 말투. 존댓말과 냥 말투를 섞지 말고, "$title" 호칭도 남발하지 마세요.' : '여비서로서 지적이고 부드러운 "$title" 호칭의 격식체 (~했어요, ~어떨까요).'}
@@ -1216,18 +1226,7 @@ $staminaSection$chatSummarySection
    - 플래너 기록일이 적은 주(플래너 기록일이 적은 주인가: 예)에는 완료율을 강하게 평가하지 말고, 먼저 플래너로 돌아오는 리듬을 부드럽게 제안하세요.
    - 완료가 아쉬웠던 날이 많은 주(완료가 아쉬웠던 날이 많은 주인가: 예)에는 원인을 추측으로 단정하지 말고, [체력 신호]와 [지난 주 대화 기록 요약]에 나타난 것을 근거로 원인을 해석해 주세요. 그 자료에 없는 사정을 지어내지 마세요.
 3. 유형별 작성 방식:
-${feedbackType == 0
-        ? '''   [실행 회고형]
-   - 사용자가 실제로 무엇을 했고, 무엇을 미뤘으며, 무엇이 개선되었는지를 중심으로 회고합니다.
-   - 목표/비전과 연결되는 중요한 활동 1~2개를 콕 집어 구체적으로 칭찬하세요. (추상적 칭찬 금지) 후보는 [이번 주 주력한 일]과 완료한 일 양쪽에서 고르세요.
-   - 여러 날 붙잡은 일은 끝내지 못했어도 그 주의 주력으로 인정하고, 끝낸 일은 끝낸 것으로 칭찬하세요. (예: "이번 주는 보고서에 나흘을 쓰셨네요." / "수요일에 보고서를 끝내셨네요.")
-   - 미루다 다시 완료한 일이나 다시 시작한 일이 있다면 특별히 언급해 주세요. 완료까지 가지 못했어도 다시 손을 댄 것 자체를 인정해 주세요.
-   - 다시 시작은 했는데 완료 기록이 적다면, 의지나 성실함의 문제로 읽지 말고 하루에 실행 가능한 크기로 계획을 나누자고 제안해 주세요.
-   - 반복적으로 밀린 중요한 일이 있다면 부드럽게 지적하고 다음 주 우선순위로 권유하세요. 단, 시작 기록이 있는 일은 밀린 일로 지적하지 마세요. 손을 댄 일은 진행 중인 일입니다.
-   - 단, [주간 완료율 요약]에서 "완료가 아쉬웠던 날이 많은 주인가: 예"인 경우에만 밀린 항목을 나열하거나 지적하지 말고 이 구조로 쓰세요: 수고 인정 → 원인 해석([지난 주 대화 기록 요약]이 있으면 그 근거로, 없으면 계획이 컨디션보다 컸을 가능성으로) → 다음 주에는 확실히 해낼 수 있는 만큼만 계획하자는 제안.
-   - 플래너 기록일이 적은 주라면 아래 구조를 따르세요: "이번 주는 완료율보다 플래너에 다시 돌아오는 리듬을 먼저 잡는 것이 좋아 보입니다. 기록이 적었던 만큼 성과를 크게 판단하기는 어렵겠습니다. 해야 할 일이 있는데 하기 싫을 때는 냥냥코치를 기억해 주세요. 하기 싫은 마음까지 달래드리겠습니다." 성과 판단 보류 문장과 냥냥코치 안내 문장은 반드시 서로 다른 문장으로 분리하세요. "판단하기보다는, 냥냥코치를..."처럼 하나의 비교 문장으로 연결하지 마세요.
-   - 완료가 아쉬웠던 날이 하루뿐이면 전체 주간은 긍정적으로 평가하고, 해당 날짜만 "토요일 하루만 조금 아쉬웠어요"처럼 단수로 정확히 언급하세요.'''
-        : feedbackType == 1
+${feedbackType == 1
         ? '''   [장기 비전형]
    - 현재 장기 비전과 마일스톤을 중심으로 회고합니다. [장기 비전 상세 데이터]를 반드시 참고하세요.
    - 이번 주 완료된 마일스톤이 있다면 구체적으로 언급하며 칭찬하세요.
@@ -1250,16 +1249,17 @@ ${feedbackType == 0
 ${ExecutionTypeLabels.listForPrompt}
      - 어디에도 맞지 않으면 `유형: 없음`이라고 적으세요. 새 이름을 지어내면 앱이 알아보지 못합니다.
      - 지난주에는 `${lastLabel ?? '없음'}`이라고 불렀습니다. 숫자가 뚜렷하게 달라졌을 때만 바꾸세요. 같은 사람이 한 주 만에 다른 사람이 되지는 않습니다.'''
-        : '''   [조건 발견형]
-   - 이 회고가 답하는 질문은 하나입니다 — **"나는 어떤 조건에서 더 자연스럽게 움직이는 사람인가."**
-   - 세 걸음으로 쓰세요. 조건만 말하면 사람이 빠진 분석표가 되고, 한 일부터 말하면 여느 회고와 다를 게 없어집니다.
-     1) **조건이 먼저.** [조건 - 앱이 견준 값]에서 어떤 날에 실행이 함께 높았는지를 짚으세요.
-     2) **그 조건을 이번 주 주력한 일에 비추기.** 겹친 날 수가 함께 실려 있으면 그 일 이름을 넣어 그림이 그려지게 쓰세요. 실려 있지 않으면 [이번 주 주력한 일]에서 하나만 골라 가볍게 곁들이고, 조건이 그 일을 되게 했다고는 하지 마세요.
-     3) **마지막에 다음 주.** 아래 별표 줄이 허락하는 만큼만.
-   - [조건 - 앱이 견준 값]에 있는 것만 쓰세요. 거기 견줘둔 것은 하나뿐입니다. 다른 관계를 떠올려 덧붙이지 마세요.
-   - 그 블록 안의 별표(*) 줄이 어디까지 말해도 되는지를 정합니다. 제안하라고 되어 있으면 다음 주에 해볼 것을 하나만, 며칠만 해보는 크기로 내세요. 주고받기로 전하라고 되어 있으면 권하지 말고, 그 대신 이틀을 묶어 보자고만 하세요.
-   - 숫자를 그대로 읽지 말고 사람 말로 옮기세요. 퍼센트는 한 번만 쓰거나 아예 쓰지 마세요.
-   - 이건 발견이지 성적표가 아닙니다. 잘했다 못했다로 시작하지 말고, 알아낸 것 하나를 건네는 투로 쓰세요.'''}
+        : '''   [실행 회고형]
+   - 사용자가 실제로 무엇을 했고, 무엇을 미뤘으며, 무엇이 개선되었는지를 중심으로 회고합니다.
+   - 목표/비전과 연결되는 중요한 활동 1~2개를 콕 집어 구체적으로 칭찬하세요. (추상적 칭찬 금지) 후보는 [이번 주 주력한 일]과 완료한 일 양쪽에서 고르세요.
+   - 여러 날 붙잡은 일은 끝내지 못했어도 그 주의 주력으로 인정하고, 끝낸 일은 끝낸 것으로 칭찬하세요. (예: "이번 주는 보고서에 나흘을 쓰셨네요." / "수요일에 보고서를 끝내셨네요.")
+   - 미루다 다시 완료한 일이나 다시 시작한 일이 있다면 특별히 언급해 주세요. 완료까지 가지 못했어도 다시 손을 댄 것 자체를 인정해 주세요.
+   - 다시 시작은 했는데 완료 기록이 적다면, 의지나 성실함의 문제로 읽지 말고 하루에 실행 가능한 크기로 계획을 나누자고 제안해 주세요.
+   - 반복적으로 밀린 중요한 일이 있다면 부드럽게 지적하고 다음 주 우선순위로 권유하세요. 단, 시작 기록이 있는 일은 밀린 일로 지적하지 마세요. 손을 댄 일은 진행 중인 일입니다.
+   - [주간 완료율 요약]에 "다음 날이 깎인 자리"가 실려 있으면 한 번만 짚으세요. 사용자가 스스로는 못 보는 자리입니다 — 하루만 떼어 보면 잘 끝낸 날이라, 다음 날을 미리 써버렸다는 것은 이틀을 묶어야 보입니다. 다만 원인을 단정하거나 나무라지는 마세요.
+   - 단, [주간 완료율 요약]에서 "완료가 아쉬웠던 날이 많은 주인가: 예"인 경우에만 밀린 항목을 나열하거나 지적하지 말고 이 구조로 쓰세요: 수고 인정 → 원인 해석([지난 주 대화 기록 요약]이 있으면 그 근거로, 없으면 계획이 컨디션보다 컸을 가능성으로) → 다음 주에는 확실히 해낼 수 있는 만큼만 계획하자는 제안.
+   - 플래너 기록일이 적은 주라면 아래 구조를 따르세요: "이번 주는 완료율보다 플래너에 다시 돌아오는 리듬을 먼저 잡는 것이 좋아 보입니다. 기록이 적었던 만큼 성과를 크게 판단하기는 어렵겠습니다. 해야 할 일이 있는데 하기 싫을 때는 냥냥코치를 기억해 주세요. 하기 싫은 마음까지 달래드리겠습니다." 성과 판단 보류 문장과 냥냥코치 안내 문장은 반드시 서로 다른 문장으로 분리하세요. "판단하기보다는, 냥냥코치를..."처럼 하나의 비교 문장으로 연결하지 마세요.
+   - 완료가 아쉬웠던 날이 하루뿐이면 전체 주간은 긍정적으로 평가하고, 해당 날짜만 "토요일 하루만 조금 아쉬웠어요"처럼 단수로 정확히 언급하세요.'''}
 4. 분량: ${feedbackType == 3 ? '6문장 이내. 다른 회고보다 짚을 것이 많아 조금 길어도 됩니다 — 채우라는 칸이 아니라 넘지 말라는 선입니다.' : '3~4문장으로 간결하게.'} JSON이나 마크다운 없이 순수 텍스트로만 답변해 주세요.
 5. 가독성: 문장 앞에 접속어가 올 때는 그 접속어 앞에서 한 줄을 비우고, 들여쓰기 없이 문단을 시작해 주세요. 예: "또한,", "특히,", "다만,", "하지만,", "그리고,", "앞으로,".''';
   }
