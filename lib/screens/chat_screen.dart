@@ -16002,6 +16002,53 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
     }
   }
 
+  /// 할 일이 들어갔다는 알림. 잇따라 넣으면 앞줄에 합친다.
+  ///
+  /// 쏟아내기로 여섯 개를 넣으면 같은 모양의 줄이 여섯 개 쌓여서, 정작 남기려던
+  /// 순서 카드가 그만큼 위로 밀려난다. 몇 개가 들어갔는지만 알면 되는 알림이라
+  /// 한 줄로 충분하다.
+  ///
+  /// 이름 뒤에 조사를 붙이지 않는다. 받침에 따라 문장이 깨진다.
+  ///
+  /// setState 안에서 부른다.
+  void _appendTaskAddedNotice(String text, String timeLabel) {
+    final last = _messages.isNotEmpty ? _messages.last : null;
+    if (last != null && last.kind == _taskAddedKind) {
+      var first = text;
+      var count = 1;
+      try {
+        final raw = jsonDecode(last.payload ?? '{}');
+        if (raw is Map) {
+          first = raw['first']?.toString() ?? first;
+          count = (raw['count'] as num?)?.toInt() ?? 1;
+        }
+      } catch (_) {}
+      count += 1;
+      // 시간은 항목마다 달라서 합친 줄에는 싣지 않는다.
+      _messages[_messages.length - 1] = ChatMessage(
+        text: '\'$first\' 외 ${count - 1}가지 오늘 할 일에 추가했어요 ✓',
+        isUser: false,
+        time: last.time,
+        kind: _taskAddedKind,
+        payload: jsonEncode({'first': first, 'count': count}),
+      );
+      return;
+    }
+
+    _messages.add(
+      ChatMessage(
+        text: '\'$text\'$timeLabel 오늘 할 일에 추가했어요 ✓',
+        isUser: false,
+        time: DateTime.now(),
+        kind: _taskAddedKind,
+        payload: jsonEncode({'first': text, 'count': 1}),
+      ),
+    );
+  }
+
+  /// 할 일을 넣었다는 알림임을 나타낸다. 잇따른 알림을 합치는 데만 쓴다.
+  static const String _taskAddedKind = 'task_added';
+
   Future<void> _confirmSuggestTaskInner(int idx) async {
     final task = _suggestedTasks[idx];
     final prefs = await SharedPreferences.getInstance();
@@ -16031,12 +16078,9 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
     final timeLabel = task.time != null
         ? ' (${_formatTime12(task.time!)})'
         : '';
-    final confirmMsg = '\'${task.text}\'$timeLabel 오늘 할 일에 추가했어요 ✓';
     setState(() {
       _suggestedTasks.removeAt(idx);
-      _messages.add(
-        ChatMessage(text: confirmMsg, isUser: false, time: DateTime.now()),
-      );
+      _appendTaskAddedNotice(task.text, timeLabel);
     });
     _scrollToBottom();
     await _saveHistory();
