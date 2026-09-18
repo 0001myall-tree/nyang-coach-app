@@ -924,6 +924,43 @@ class _SleepAssistModeScreenState extends State<SleepAssistModeScreen>
   }
 }
 
+/// 권하는 버튼이 뜰 때 한 번 부풀었다 돌아온다.
+///
+/// 깜빡이게 두지 않는다. 계속 움직이면 글을 읽는 데 방해가 되고, 몇 초만
+/// 지나면 오히려 없는 것처럼 보게 된다. 한 번만 움직이면 눈은 그리로 가고
+/// 읽는 것은 가만한 화면에서 하게 된다.
+class _RecommendedPulse extends StatelessWidget {
+  const _RecommendedPulse({
+    required this.child,
+    required this.enabled,
+    required this.animationKey,
+  });
+
+  final Widget child;
+  final bool enabled;
+
+  /// 이 값이 바뀌면 다시 한 번 움직인다.
+  final String animationKey;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!enabled) return child;
+    return TweenAnimationBuilder<double>(
+      key: ValueKey(animationKey),
+      tween: Tween(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 620),
+      curve: Curves.easeOutBack,
+      builder: (context, value, inner) {
+        // 0 → 1 사이에서 한 번 부풀었다 제자리로. 커지는 폭은 6%면 눈에는
+        // 띄고 자리는 흐트러지지 않는다.
+        final swell = sin(value * pi) * 0.06;
+        return Transform.scale(scale: 1 + swell, child: inner);
+      },
+      child: child,
+    );
+  }
+}
+
 class _SuggestedTask {
   final String text;
   String? time; // HH:mm 24h (mutable for time-picker edit)
@@ -16825,7 +16862,9 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
                 ),
                 const SizedBox(width: 4),
                 Text(
-                  '할 일로 추가할까요?',
+                  // 물음이 달라진다. 미루자던 일은 넣을지 말지가 아니라
+                  // 오늘 할지 나중에 할지를 고르는 자리다.
+                  task.laterSuggested ? '오늘 할까요, 나중에 할까요?' : '할 일로 추가할까요?',
                   style: appFont(
                     fontSize: 10,
                     fontWeight: FontWeight.w800,
@@ -16960,25 +16999,55 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
                       }
                       setState(() => _suggestedTasks.removeAt(0));
                     },
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 10),
-                      decoration: BoxDecoration(
-                        color: task.laterSuggested
-                            ? accent
-                            : const Color(0xFFF3F4F6),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Center(
-                        child: Text(
-                          task.laterSuggested ? '나중에 하기 · 추천' : '괜찮아',
-                          style: appFont(
-                            fontSize: 12,
-                            fontWeight: task.laterSuggested
-                                ? FontWeight.w800
-                                : FontWeight.w700,
-                            color: task.laterSuggested
-                                ? _accentButtonTextColor
-                                : const Color(0xFF6B7280),
+                    child: _RecommendedPulse(
+                      // 권하는 쪽일 때만 움직인다.
+                      enabled: task.laterSuggested,
+                      // 이름을 열쇠로 준다. 카드가 다음 일로 넘어가면 다시
+                      // 한 번 움직여, 매번 어느 쪽이 권해진 것인지 보인다.
+                      animationKey: task.text,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        decoration: BoxDecoration(
+                          color: task.laterSuggested
+                              ? accent
+                              : const Color(0xFFF3F4F6),
+                          borderRadius: BorderRadius.circular(10),
+                          // 권하는 쪽만 떠 보이게 한다.
+                          boxShadow: task.laterSuggested
+                              ? [
+                                  BoxShadow(
+                                    color: accent.withValues(alpha: 0.38),
+                                    blurRadius: 12,
+                                    offset: const Offset(0, 4),
+                                  ),
+                                ]
+                              : null,
+                        ),
+                        child: Center(
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (task.laterSuggested) ...[
+                                Icon(
+                                  Icons.recommend,
+                                  size: 14,
+                                  color: _accentButtonTextColor,
+                                ),
+                                const SizedBox(width: 4),
+                              ],
+                              Text(
+                                task.laterSuggested ? '나중에 하기' : '괜찮아',
+                                style: appFont(
+                                  fontSize: 12,
+                                  fontWeight: task.laterSuggested
+                                      ? FontWeight.w800
+                                      : FontWeight.w700,
+                                  color: task.laterSuggested
+                                      ? _accentButtonTextColor
+                                      : const Color(0xFF6B7280),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ),
