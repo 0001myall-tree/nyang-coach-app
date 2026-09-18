@@ -16170,6 +16170,7 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
     var label = '';
     var why = '';
     var today = <String>[];
+    var batchLine = '';
     try {
       final raw = jsonDecode(msg.payload ?? '{}');
       if (raw is Map) {
@@ -16179,6 +16180,7 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
             .map((e) => e.toString())
             .where((e) => e.isNotEmpty)
             .toList();
+        batchLine = _batchLineOf(raw);
       }
     } catch (_) {}
     // 옛 기록이라 실린 것이 없으면 적어둔 글이라도 보여준다.
@@ -16245,6 +16247,28 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
                       height: 1.6,
                     ),
                   ),
+                  if (batchLine.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF9F8FD),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        batchLine,
+                        style: appFont(
+                          fontSize: 12,
+                          height: 1.5,
+                          color: const Color(0xFF6B7280),
+                        ),
+                      ),
+                    ),
+                  ],
                   if (why.isNotEmpty) ...[
                     const SizedBox(height: 6),
                     Text(
@@ -16262,6 +16286,18 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
         ],
       ),
     );
+  }
+
+  /// "몰아서 10분 · 세수, 스트레칭" 한 줄. 묶을 것이 없으면 빈 글자.
+  String _batchLineOf(Map raw) {
+    final batch = (raw['batch'] as List? ?? const [])
+        .map((e) => e.toString())
+        .where((e) => e.isNotEmpty)
+        .toList();
+    if (batch.isEmpty) return '';
+    final minutes = (raw['batchMinutes'] as num?)?.toInt();
+    final head = minutes == null ? '몰아서' : '몰아서 $minutes분';
+    return '$head · ${batch.join(', ')}';
   }
 
   /// 시작 버튼을 눌렀을 때. 할 일 화면의 시작 버튼과 같은 표시를 남긴다.
@@ -16434,10 +16470,16 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
     //
     // 줄글로 풀지 않고 카드 모양 그대로 둔다. 화살표로 이어진 순서는 한눈에
     // 보라고 만든 모양이라, 문장으로 바꾸면 다시 읽어야 한다.
+    // 묶어서 해치울 것도 함께 싣는다. 고르는 카드에서는 두 안 바깥에 놓여
+    // 있었지만, 그건 어느 안을 고르든 같기 때문이지 덜 중요해서가 아니다.
+    // 남겨두는 카드에서는 오늘 지나갈 길의 한 부분이라 같이 있어야 한다.
     final route = {
       'label': option.label,
       'why': option.why,
       'today': option.today,
+      if (plan.batch.isNotEmpty) 'batch': plan.batch,
+      if (plan.batch.isNotEmpty && plan.batchMinutes != null)
+        'batchMinutes': plan.batchMinutes,
     };
     _injectAiMessage(
       option.today.join(' → '),
@@ -17724,6 +17766,7 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
         .toList();
     if (today.isEmpty) return null;
     final label = route['label']?.toString() ?? '';
+    final batchLine = _batchLineOf(route);
 
     return GestureDetector(
       onTap: () => setState(() => _todayRouteOpen = !_todayRouteOpen),
@@ -17767,6 +17810,19 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
                       color: AppDesignTokens.textPrimary,
                     ),
                   ),
+                  // 묶어서 할 것은 펼쳤을 때만. 접힌 줄은 다음에 뭘 할지
+                  // 한눈에 보는 자리라, 거기까지 실으면 정작 순서가 밀린다.
+                  if (_todayRouteOpen && batchLine.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      batchLine,
+                      style: appFont(
+                        fontSize: 11,
+                        height: 1.5,
+                        color: AppDesignTokens.textMuted,
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
