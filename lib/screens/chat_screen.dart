@@ -17735,10 +17735,40 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
                 color: AppDesignTokens.textMuted,
               ),
             ),
+            // 내리는 자리. 다 끝냈거나 마음이 바뀌면 치울 수 있어야 한다.
+            // 확인은 묻지 않는다 — 고른 안은 대화에도 카드로 남아 있어서,
+            // 잘못 눌러도 되찾을 데가 있다.
+            GestureDetector(
+              onTap: _dismissTodayRoute,
+              behavior: HitTestBehavior.opaque,
+              child: const Padding(
+                padding: EdgeInsets.only(left: 8, top: 2, right: 2),
+                child: Icon(
+                  Icons.close,
+                  size: 16,
+                  color: AppDesignTokens.textMuted,
+                ),
+              ),
+            ),
           ],
         ),
       ),
     );
+  }
+
+  /// 위에 걸어둔 순서를 내린다.
+  Future<void> _dismissTodayRoute() async {
+    HapticFeedback.lightImpact();
+    setState(() {
+      _todayRoute = null;
+      _todayRouteOpen = false;
+    });
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_todayRouteKey);
+    } catch (e) {
+      debugPrint('Today route dismiss failed: $e');
+    }
   }
 
   Widget _buildSummaryCard() {
