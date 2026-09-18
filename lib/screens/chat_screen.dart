@@ -927,7 +927,18 @@ class _SleepAssistModeScreenState extends State<SleepAssistModeScreen>
 class _SuggestedTask {
   final String text;
   String? time; // HH:mm 24h (mutable for time-picker edit)
-  _SuggestedTask({required this.text, this.time});
+
+  /// 코치가 오늘 말고 나중을 권한 일인지.
+  ///
+  /// 권하는 것과 정하는 것을 가르려고 둔다. 이 표가 붙은 일도 똑같이 카드로
+  /// 물어보되, 어느 버튼이 코치 생각인지만 알려주고 고르는 것은 사용자가 한다.
+  final bool laterSuggested;
+
+  _SuggestedTask({
+    required this.text,
+    this.time,
+    this.laterSuggested = false,
+  });
 }
 
 class _ParsedScheduleRegistration {
@@ -16002,6 +16013,67 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
     }
   }
 
+  /// 나중에 하기를 눌렀을 때. 내일 칸에 넣고 카드를 걷는다.
+  Future<void> _deferSuggestTask(int idx) async {
+    if (idx >= _suggestedTasks.length) return;
+    final task = _suggestedTasks[idx];
+    setState(() => _suggestedTasks.removeAt(idx));
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await _saveBrainDumpLater(prefs, [task.text]);
+    } catch (e) {
+      debugPrint('나중에 하기 저장 실패: $e');
+    }
+    if (!mounted) return;
+    setState(() => _appendTaskDeferredNotice(task.text));
+    _scrollToBottom();
+    await _saveHistory();
+
+    // 미루자는 카드가 맨 뒤에 오므로, 마지막으로 눌리는 것이 이쪽일 때가 많다.
+    // 여기서 안 물으면 시작을 묻는 자리가 통째로 건너뛰어진다.
+    _maybeAskBrainDumpStart();
+  }
+
+  /// 내일로 옮겼다는 알림. 잇따라 옮기면 앞줄에 합친다.
+  ///
+  /// setState 안에서 부른다.
+  void _appendTaskDeferredNotice(String text) {
+    final last = _messages.isNotEmpty ? _messages.last : null;
+    if (last != null && last.kind == _taskDeferredKind) {
+      var first = text;
+      var count = 1;
+      try {
+        final raw = jsonDecode(last.payload ?? '{}');
+        if (raw is Map) {
+          first = raw['first']?.toString() ?? first;
+          count = (raw['count'] as num?)?.toInt() ?? 1;
+        }
+      } catch (_) {}
+      count += 1;
+      _messages[_messages.length - 1] = ChatMessage(
+        text: '\'$first\' 외 ${count - 1}가지 내일로 옮겼어요',
+        isUser: false,
+        time: last.time,
+        kind: _taskDeferredKind,
+        payload: jsonEncode({'first': first, 'count': count}),
+      );
+      return;
+    }
+
+    _messages.add(
+      ChatMessage(
+        text: '\'$text\' 내일로 옮겼어요',
+        isUser: false,
+        time: DateTime.now(),
+        kind: _taskDeferredKind,
+        payload: jsonEncode({'first': text, 'count': 1}),
+      ),
+    );
+  }
+
+  static const String _taskDeferredKind = 'task_deferred';
+
   /// 할 일이 들어갔다는 알림. 잇따라 넣으면 앞줄에 합친다.
   ///
   /// 쏟아내기로 여섯 개를 넣으면 같은 모양의 줄이 여섯 개 쌓여서, 정작 남기려던
@@ -16489,21 +16561,7 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
 
     final prefs = await SharedPreferences.getInstance();
     await _saveTodayRoute(prefs, route);
-    await _saveBrainDumpLater(prefs, plan.later);
     if (!mounted) return;
-    if (plan.later.isNotEmpty) {
-      // 무엇을 옮겼는지 이름을 대고, 되돌릴 길을 함께 준다. 고른 것은 순서이지
-      // "이건 내일로"가 아니어서, 이름 없이 옮겼다고만 하면 앱이 마음대로 정한
-      // 것이 된다. 카드에 작게 적혀 있었다 해도 그것을 동의로 칠 수는 없다.
-      //
-      // 조사는 이름 뒤에 붙이지 않는다. 받침에 따라 문장이 깨진다.
-      final names = plan.later.join(', ');
-      _injectAiMessage(
-        _coach.id == 'nyang_halbae'
-            ? '$names — 내일로 옮겨뒀어. 오늘 할 거면 말해주렴.'
-            : '$names — 내일로 옮겨뒀어요. 오늘 하실 거면 말씀해주세요.',
-      );
-    }
 
     // 오늘 할 것은 하나씩 확인받는다. 한 번에 넣으면 빠르긴 한데, 내가 정한
     // 목록이라는 느낌이 안 남는다. 게다가 개수가 두셋이라 누를 만하다.
@@ -16518,11 +16576,28 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
       existing.add(text);
       pending.add(_SuggestedTask(text: text));
     }
+
+    // 미루자는 것도 똑같이 물어본다.
+    //
+    // 전에는 조용히 내일로 옮기고 옮겼다고만 알렸다. 사용자가 고른 것은
+    // **순서**이지 "이건 내일로"가 아닌데, 순서에 동의한 것을 미루기 동의로
+    // 친 셈이었다. 카드에 작게 적혀 있었다 해도 그것을 동의라고 할 수 없다.
+    //
+    // 코치 생각은 버튼에 적어 남긴다. 권하는 것과 정하는 것은 다른 일이라,
+    // 어느 쪽이 추천인지는 보여주되 누르는 것은 사용자가 한다.
+    for (final name in plan.later) {
+      final text = name.trim();
+      if (text.isEmpty || existing.contains(text)) continue;
+      existing.add(text);
+      pending.add(_SuggestedTask(text: text, laterSuggested: true));
+    }
     if (pending.isEmpty || !mounted) return;
 
     // 마지막 카드까지 누르면 시작을 묻는다. 순서를 짜놓고 시작을 안 물으면
-    // 계획만 하고 끝난다.
-    _brainDumpStartTask = pending.first.text;
+    // 계획만 하고 끝난다. 미루자던 것은 시작을 묻지 않는다 — 오늘 첫 손을 댈
+    // 자리를 고르는 것이라, 나중을 권한 일이 그 자리에 오면 앞뒤가 안 맞는다.
+    final firstToday = pending.where((task) => !task.laterSuggested);
+    _brainDumpStartTask = firstToday.isEmpty ? null : firstToday.first.text;
     setState(() => _suggestedTasks = pending);
   }
 
@@ -16841,6 +16916,9 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
             ],
             const SizedBox(height: 10),
             // 버튼 행
+            //
+            // 나중을 권한 일은 같은 카드에 버튼만 달리 단다. 오늘 할지 미룰지를
+            // 사용자가 고르고, 코치 생각은 '추천' 표로만 남긴다.
             Row(
               children: [
                 Expanded(
@@ -16849,16 +16927,23 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
                     child: Container(
                       padding: const EdgeInsets.symmetric(vertical: 10),
                       decoration: BoxDecoration(
-                        color: accent,
+                        // 추천이 아닌 쪽은 채우지 않는다. 둘 다 진하면 어느
+                        // 쪽이 권해진 것인지 안 보인다.
+                        color: task.laterSuggested ? Colors.white : accent,
                         borderRadius: BorderRadius.circular(10),
+                        border: task.laterSuggested
+                            ? Border.all(color: const Color(0xFFE8E4F0))
+                            : null,
                       ),
                       child: Center(
                         child: Text(
-                          '추가하기 ✓',
+                          task.laterSuggested ? '오늘 하기' : '추가하기 ✓',
                           style: appFont(
                             fontSize: 12,
                             fontWeight: FontWeight.w800,
-                            color: _accentButtonTextColor,
+                            color: task.laterSuggested
+                                ? const Color(0xFF6B7280)
+                                : _accentButtonTextColor,
                           ),
                         ),
                       ),
@@ -16869,21 +16954,31 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
                 Expanded(
                   child: GestureDetector(
                     onTap: () {
+                      if (task.laterSuggested) {
+                        _deferSuggestTask(0);
+                        return;
+                      }
                       setState(() => _suggestedTasks.removeAt(0));
                     },
                     child: Container(
                       padding: const EdgeInsets.symmetric(vertical: 10),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFF3F4F6),
+                        color: task.laterSuggested
+                            ? accent
+                            : const Color(0xFFF3F4F6),
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: Center(
                         child: Text(
-                          '괜찮아',
+                          task.laterSuggested ? '나중에 하기 · 추천' : '괜찮아',
                           style: appFont(
                             fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: const Color(0xFF6B7280),
+                            fontWeight: task.laterSuggested
+                                ? FontWeight.w800
+                                : FontWeight.w700,
+                            color: task.laterSuggested
+                                ? _accentButtonTextColor
+                                : const Color(0xFF6B7280),
                           ),
                         ),
                       ),
