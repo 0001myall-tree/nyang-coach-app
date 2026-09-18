@@ -129,6 +129,17 @@ class FreeAccessService {
 
   /// 아직 안 썼으면 오늘부터 시작한 것으로 친다. 시작한 날로부터 며칠째인지
   /// 돌려준다 (첫날이 0).
+  ///
+  /// 음수는 돌려주지 않는다. 시작일이 오늘보다 뒤면 며칠째인지가 음수가 되고,
+  /// 그러면 [_isOpen]이 무슨 한도를 걸어도 참이라 무료 구간이 영영 안 끝난다.
+  /// 기기 시계를 앞으로 돌려놓고 앱을 처음 켜면 미래 날짜가 시작일로 박히는데,
+  /// 규칙이 시작일을 한 번 적히면 못 바꾸게 지키고 있어서(firestore.rules의
+  /// freeAccessStartUnchanged) 그 값은 스스로 풀리지도 않는다. 여기서 바닥을
+  /// 0으로 막으면 이미 그렇게 박힌 계정도 오늘부터 정상으로 센다.
+  ///
+  /// 기기 시각 자체를 믿을 수 있는지는 여기서 알 수 없다. 기기 안의 모든
+  /// 시계가 같은 값을 말하니 견줄 것이 없어서다. 서버 시각을 받아오는 것이
+  /// 제대로 된 답이고, 이 바닥은 그때까지 피해를 막는 자리다.
   Future<int> _dayIndex() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return 0;
@@ -138,7 +149,8 @@ class FreeAccessService {
     if (start == null) return 0;
 
     final today = _dateOnly(DateTime.now());
-    return today.difference(_dateOnly(start)).inDays;
+    final elapsed = today.difference(_dateOnly(start)).inDays;
+    return elapsed < 0 ? 0 : elapsed;
   }
 
   Future<String?> _startedOn(String uid) async {
