@@ -1345,7 +1345,12 @@ class _ChatScreenState extends State<ChatScreen>
   BrainDumpPlan? _brainDumpPlan;
 
   /// 등록을 마치고 "이것부터 시작할까" 물어둔 일. 누르면 시작 표시가 켜진다.
-  String? _brainDumpStartTask;
+  /// 이번 쏟아내기에서 **실제로 오늘 목록에 들어간** 일들. 흐름 밖에서는 null.
+  ///
+  /// 시작할 일을 미리 찍어두었더니, 그 카드를 '괜찮아'로 버려도 마지막에
+  /// 그 이름으로 시작을 물었다. 목록에 없는 일을 시작하라고 한 셈이다.
+  /// 들어간 것만 담아두고 그중 첫째를 묻는다.
+  List<String>? _brainDumpAdded;
 
   /// 오늘 고른 안. 채팅 위에 접어두었다가 펼쳐 본다.
   ///
@@ -16191,6 +16196,8 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
       _suggestedTasks.removeAt(idx);
       _appendTaskAddedNotice(task.text, timeLabel);
     });
+    // 쏟아내기 흐름이면 시작을 물을 후보로 담아둔다.
+    _brainDumpAdded?.add(task.text);
     _scrollToBottom();
     await _saveHistory();
 
@@ -16213,10 +16220,12 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
   /// 여기서 안 물으면 이 기능은 계획만 하고 끝난다. 다 적어놓으면 뭔가 한
   /// 것 같아서 실행이 미뤄지는데, 그게 이 앱이 막으려는 바로 그 자리다.
   void _maybeAskBrainDumpStart() {
-    final target = _brainDumpStartTask;
-    if (target == null || _suggestedTasks.isNotEmpty) return;
-    _brainDumpStartTask = null;
-    if (!mounted) return;
+    final added = _brainDumpAdded;
+    if (added == null || _suggestedTasks.isNotEmpty) return;
+    _brainDumpAdded = null;
+    // 다 버렸거나 다 미뤘으면 물을 것이 없다.
+    if (added.isEmpty || !mounted) return;
+    final target = added.first;
     _injectAiMessage(
       widget.coachId == 'sec_female'
           ? "그럼 '$target'부터 시작하실까요?"
@@ -16631,10 +16640,9 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
     if (pending.isEmpty || !mounted) return;
 
     // 마지막 카드까지 누르면 시작을 묻는다. 순서를 짜놓고 시작을 안 물으면
-    // 계획만 하고 끝난다. 미루자던 것은 시작을 묻지 않는다 — 오늘 첫 손을 댈
-    // 자리를 고르는 것이라, 나중을 권한 일이 그 자리에 오면 앞뒤가 안 맞는다.
-    final firstToday = pending.where((task) => !task.laterSuggested);
-    _brainDumpStartTask = firstToday.isEmpty ? null : firstToday.first.text;
+    // 계획만 하고 끝난다. 무엇부터 시작할지는 지금 정하지 않는다 — 카드를
+    // 눌러봐야 무엇이 실제로 들어갔는지 알 수 있다.
+    _brainDumpAdded = [];
     setState(() => _suggestedTasks = pending);
   }
 
@@ -16998,6 +17006,9 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
                         return;
                       }
                       setState(() => _suggestedTasks.removeAt(0));
+                      // 버린 것이 마지막 카드였으면 여기서 흐름이 끝난다.
+                      // 안 부르면 시작을 묻지도, 흐름을 닫지도 못한다.
+                      _maybeAskBrainDumpStart();
                     },
                     child: _RecommendedPulse(
                       // 권하는 쪽일 때만 움직인다.
