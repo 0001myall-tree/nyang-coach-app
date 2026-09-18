@@ -20740,7 +20740,10 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
   /// 쏟아내기를 시작한다. 코치가 받아주는 한마디부터 낸다.
   ///
   /// 왜 하는지를 같이 말한다. 이 기능은 처음 보면 목록 부르는 기능처럼
-  /// 보여서, 꺼내놓는 것만으로 가벼워진다는 것을 알아야 두 번째도 누른다.
+  /// 보여서, 꺼내놓으면 뭐가 나아지는지를 알아야 두 번째도 누른다.
+  ///
+  /// 기분이 어떻게 될지는 말하지 않는다. 가벼워지는지 아닌지는 해본 사람이
+  /// 정할 일이고, 미리 말해두면 안 가벼워졌을 때 틀린 말이 된다.
   void _startBrainDump() {
     if (_isLoading) return;
     HapticFeedback.lightImpact();
@@ -20748,9 +20751,9 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
     _injectAiMessage(
       widget.coachId == 'sec_female'
           ? '오늘 하실 거 생각나는 대로 다 말씀해주세요.\n'
-                '머릿속에서 꺼내놓는 것만으로도 가벼워지고 효율도 올라갑니다.'
+                '머릿속에서 꺼내놓는 것만으로도 효율이 올라갑니다.'
           : '오늘 할 거 생각나는 대로 다 말해보렴.\n'
-                '머릿속에서 꺼내놓는 것만으로도 가벼워지고 효율도 올라간다냥.',
+                '머릿속에서 꺼내놓는 것만으로도 효율이 올라간다냥.',
       kind: 'brain_dump_open',
     );
     _inputFocus.requestFocus();
