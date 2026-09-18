@@ -3,6 +3,7 @@ import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import '../models/user_data.dart';
+import 'server_clock.dart';
 
 class AnalyticsService {
   static final _firestore = FirebaseFirestore.instance;
@@ -186,7 +187,12 @@ class AnalyticsService {
 
     await _syncAnalyticsUserProperties(user.uid);
 
-    final now = DateTime.now();
+    // 앱을 켠 김에 서버 시각을 맞춰둔다. 여기서 맞춰두면 나중에 구독이나 체험을
+    // 따질 때 다시 물어볼 일이 없다. 기기 시계로 날짜 문서를 만들면 시계가
+    // 어긋난 기기가 오지 않은 날짜의 문서를 만들어 집계를 흐린다.
+    await ServerClock.ensureSynced();
+
+    final now = ServerClock.now();
     final dateKey = _dateKey(now);
     final summaryRef = _userAnalyticsSummaryRef(user.uid);
 
@@ -242,7 +248,7 @@ class AnalyticsService {
       'used_api': usedApi.toString(),
     });
 
-    final dateKey = _dateKey(DateTime.now());
+    final dateKey = _dateKey(ServerClock.now());
     final conversationPayload = {
       'uid': user.uid,
       'email': user.email,
@@ -336,7 +342,7 @@ class AnalyticsService {
     final user = _auth.currentUser;
     if (user == null) return;
 
-    final dateKey = _dateKey(DateTime.now());
+    final dateKey = _dateKey(ServerClock.now());
     final tokenCount = actualTokens ?? estimatedTokens;
     // 서버에서 실제 비용을 내려주지 않으면 최근 OpenAI 대시보드 비용에 맞춘 혼합 단가로 추정합니다.
     // 모델마다 단가가 달라서 어느 모델이 받았는지를 함께 넘겨야 맞게 적힙니다.
@@ -426,7 +432,7 @@ class AnalyticsService {
 
     await _safeAnalyticsEvent('feature_use', {'feature_name': featureName});
 
-    final dateKey = _dateKey(DateTime.now());
+    final dateKey = _dateKey(ServerClock.now());
     final featurePayload = {
       'uid': user.uid,
       'email': user.email,

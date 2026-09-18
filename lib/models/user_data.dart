@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 
 import '../services/coach_id_service.dart';
 import '../services/distraction_coach_quota.dart';
+import '../services/server_clock.dart';
 
 // ─────────────────────────────────────────────────────────────
 // UserData 모델
@@ -90,10 +91,13 @@ class UserData {
   // ── 권한 헬퍼 ─────────────────────────────────────────────
 
   /// 플랜이 현재 유효한지 (plan_type != 'none' && 만료 전)
+  ///
+  /// 만료를 기기 시계로 재면 날짜를 뒤로 돌리는 것만으로 끝난 구독이 되살아난다.
+  /// 그래서 [ServerClock]에게 지금을 묻는다.
   bool get isPlanActive {
     if (planType == 'none') return false;
     if (planExpiresAt == null) return true; // 만료일 미설정 = 영구
-    return planExpiresAt!.isAfter(DateTime.now());
+    return planExpiresAt!.isAfter(ServerClock.now());
   }
 
   /// 특정 코치에 접근 가능한지
@@ -116,7 +120,7 @@ class UserData {
     if (!ownedCoaches.contains(normalizedCoachId)) return false;
     final expiresAt = ownedCoachExpiresAt[normalizedCoachId];
     if (expiresAt == null) return true;
-    return expiresAt.isAfter(DateTime.now());
+    return expiresAt.isAfter(ServerClock.now());
   }
 
   DateTime? ownedCoachExpiry(String coachId) =>
@@ -127,7 +131,7 @@ class UserData {
     if (!ownedCoaches.contains(normalizedCoachId)) return '미구매';
     final expiresAt = ownedCoachExpiresAt[normalizedCoachId];
     if (expiresAt == null) return '이용 중';
-    final remaining = expiresAt.difference(DateTime.now()).inDays + 1;
+    final remaining = expiresAt.difference(ServerClock.now()).inDays + 1;
     if (remaining <= 0) return '만료됨';
     return '$remaining일 남음';
   }

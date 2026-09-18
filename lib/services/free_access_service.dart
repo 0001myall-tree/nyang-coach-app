@@ -5,6 +5,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'server_clock.dart';
+
 /// 플랜 없이 써볼 수 있는 기간. 계정당 한 번이고, 처음 쓴 날이 첫날이다.
 ///
 /// 대화가 먼저 닫히고 입력이 하루 더 열려 있다. 코치를 부르는 데 돈이 들고,
@@ -65,6 +67,10 @@ class FreeAccessService {
   /// 많아서지, 세는 값이 다르기 때문이 아니다.
   Future<bool> _isOpen() async {
     await _loadConfig();
+    // 앱을 켤 때 이미 맞춰두므로 여기서는 대개 그냥 통과한다. 그때 인터넷이
+    // 없었거나 오래 켜둔 경우를 위해 한 번 더 확인한다. 돈이 나가는 판정이라
+    // 기기 시계로 대신하지 않는다.
+    await ServerClock.ensureSynced();
     return await _dayIndex() < (_freeDays ?? defaultFreeDays);
   }
 
@@ -148,7 +154,7 @@ class FreeAccessService {
     final start = DateTime.tryParse(startedOn);
     if (start == null) return 0;
 
-    final today = _dateOnly(DateTime.now());
+    final today = _dateOnly(ServerClock.now());
     final elapsed = today.difference(_dateOnly(start)).inDays;
     return elapsed < 0 ? 0 : elapsed;
   }
@@ -186,8 +192,10 @@ class FreeAccessService {
     return value;
   }
 
+  /// 처음 쓰는 날을 적는다. 한 번 적히면 규칙이 못 바꾸게 지키므로, 여기서
+  /// 기기 시계를 믿으면 그 거짓말이 그대로 굳는다.
   Future<String> _start(String uid) async {
-    final today = _dateOnly(DateTime.now()).toIso8601String();
+    final today = _dateOnly(ServerClock.now()).toIso8601String();
     await _writeCloud(uid, today);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('${_localStartedOnKey}_$uid', today);
