@@ -230,4 +230,45 @@ void main() {
       );
     });
   });
+
+  // 어느 날의 마지막 하나를 지웠을 때 지워지지 않던 자리.
+  //
+  // 지우는 쪽이 빈 칸을 통째로 걷어내고 있었는데, 그러면 저장할 때 그 날짜가
+  // '화면이 모르는 날짜'가 되어 저장소 쪽이 되살아났다. 여럿 중 하나를 지울
+  // 때는 칸이 남아서 멀쩡했고, 마지막 하나일 때만 돌아왔다.
+  group('날짜 칸을 비울 때', () {
+    final stored = {
+      '2026-09-19': [
+        {'id': 'braindump_1', 'text': '웨딩박람회조회'},
+      ],
+    };
+
+    test('빈 칸으로 남겨두면 지워진다', () {
+      final merged = DailyResetService.mergePlannedTasksForSave(
+        stored: stored,
+        // 빈 목록은 저장할 것이 없어 encoded에 실리지 않는다.
+        encoded: const {},
+        // 칸은 남아 있으므로 키는 안다.
+        knownKeys: {'2026-09-19'},
+      );
+
+      expect(merged.keys, isNot(contains('2026-09-19')));
+    });
+
+    test('칸째 걷어내면 저장소 쪽이 되살아난다', () {
+      final merged = DailyResetService.mergePlannedTasksForSave(
+        stored: stored,
+        encoded: const {},
+        // 칸을 지워 키까지 없어진 상태.
+        knownKeys: const {},
+      );
+
+      expect(
+        merged.keys,
+        contains('2026-09-19'),
+        reason: '모르는 날짜를 지키는 것은 다른 기기와 자정 정리를 위한 것이라 이 자체는 맞다. '
+            '지우는 쪽이 칸을 남겨야 한다.',
+      );
+    });
+  });
 }

@@ -1,8 +1,10 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'theme/app_font.dart';
+import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -30,9 +32,41 @@ import 'theme/app_design_tokens.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
+/// 이 앱에서 온 요청인지 서버가 알아볼 수 있게 표를 붙인다.
+///
+/// 지금까지 서버가 보는 것은 로그인 토큰뿐이었다. 그것만으로는 진짜 앱에서
+/// 왔는지, 흉내 낸 기기나 스크립트에서 왔는지 가릴 수가 없다. 계정은 돈으로
+/// 대량으로 만들 수 있어도 진짜 기기는 한 대씩 사야 하므로, 계정을 세는 것보다
+/// 기기를 보는 쪽이 막는 힘이 세다.
+///
+/// **켠다고 바로 막히지는 않는다.** 앱은 표를 붙이기만 하고, 그 표가 없는
+/// 요청을 물리칠지는 Firebase 콘솔에서 따로 켠다. 그래서 먼저 이대로 며칠
+/// 두고 무엇이 얼마나 걸리는지 본 다음에 적용해야 한다 — 바로 적용하면 심사
+/// 중인 쪽이나 멀쩡한 사용자가 같이 막힐 수 있다.
+///
+/// 실패해도 앱은 그대로 뜬다. 표가 없으면 나중에 거절당할 뿐이고, 여기서
+/// 멈추면 앱이 아예 안 열린다.
+Future<void> _activateAppCheck() async {
+  try {
+    await FirebaseAppCheck.instance.activate(
+      // 개발 중에는 디버그 표를 쓴다. 정식 표는 스토어에서 받은 설치본에만
+      // 나오므로, 이게 없으면 손에서 돌리는 빌드가 전부 막힌다.
+      androidProvider: kDebugMode
+          ? AndroidProvider.debug
+          : AndroidProvider.playIntegrity,
+      appleProvider: kDebugMode
+          ? AppleProvider.debug
+          : AppleProvider.appAttest,
+    );
+  } catch (e) {
+    debugPrint('App Check activate failed: $e');
+  }
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  await _activateAppCheck();
   await initializeDateFormatting('ko', null);
   await CoachIdMigrationService.migrateLegacyNyangHalbaeIds();
   await TaskResistanceService.purgeRemovedPreemptiveKeys();

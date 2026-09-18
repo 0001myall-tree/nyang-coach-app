@@ -3657,9 +3657,13 @@ class _TasksScreenState extends State<TasksScreen>
     setState(() {
       final store = _todayTaskStoreForDateKey(dateKey);
       store.removeWhere((item) => item.id.toString() == task.id.toString());
-      if (dateKey != _getTodayStr() && store.isEmpty) {
-        plannedTodayTasksByDate.remove(dateKey);
-      }
+      // 비어도 그 날짜 칸은 남긴다.
+      //
+      // 칸을 통째로 지우면 저장할 때 그 날짜가 '화면이 모르는 날짜'가 되고,
+      // 저장 로직은 모르는 날짜를 저장소 쪽으로 되살린다(다른 기기나 자정
+      // 정리가 넣어둔 것을 지키려고 그렇게 돼 있다). 그래서 **그 날의 마지막
+      // 하나를 지울 때만** 지운 것이 그대로 돌아왔다. 빈 칸으로 남겨두면
+      // 화면이 아는 날짜가 되어 화면 쪽이 이긴다.
       coreTasks.removeWhere(
         (coreTask) => coreTask.id.toString() == task.id.toString(),
       );
