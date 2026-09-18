@@ -1298,6 +1298,17 @@ class _ChatScreenState extends State<ChatScreen>
 
   /// 등록을 마치고 "이것부터 시작할까" 물어둔 일. 누르면 시작 표시가 켜진다.
   String? _brainDumpStartTask;
+
+  /// 오늘 고른 안. 채팅 위에 접어두었다가 펼쳐 본다.
+  ///
+  /// 대화에도 카드로 남지만 그것만으로는 모자란다. 이 순서가 필요해지는 때는
+  /// 정한 직후가 아니라 몇 시간 뒤 "뭐부터 하지"로 돌아왔을 때인데, 그때쯤이면
+  /// 카드가 오간 말들에 밀려 한참 위에 있다.
+  Map<String, dynamic>? _todayRoute;
+  bool _todayRouteOpen = false;
+
+  static const String _todayRouteKey = 'nyang_brain_dump_route';
+
   late CoachConfig _coach;
 
   // flirt 토스트
@@ -1452,6 +1463,7 @@ class _ChatScreenState extends State<ChatScreen>
       duration: const Duration(milliseconds: 350),
     );
     widget.controller?._attach(this);
+    _loadTodayRoute();
     _initAndLoad();
   }
 
@@ -16069,6 +16081,42 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
   /// 고른 안이 대화에 남은 자리. 고르는 카드와 달리 누를 데가 없다.
   static const String _brainDumpRouteKind = 'brain_dump_route';
 
+  /// 오늘 고른 안을 적어둔다. 날짜를 같이 적어 어제 것이 오늘 뜨지 않게 한다.
+  Future<void> _saveTodayRoute(
+    SharedPreferences prefs,
+    Map<String, dynamic> route,
+  ) async {
+    final stored = {...route, 'date': _dateKey(DateTime.now())};
+    await prefs.setString(_todayRouteKey, jsonEncode(stored));
+    if (!mounted) return;
+    setState(() {
+      _todayRoute = stored;
+      // 방금 골랐으니 접어둔다. 대화에 카드가 막 올라와 있어 같은 것이 둘이
+      // 보이면 어수선하다.
+      _todayRouteOpen = false;
+    });
+  }
+
+  /// 적어둔 안을 불러온다. 오늘 것이 아니면 버린다.
+  Future<void> _loadTodayRoute() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_todayRouteKey);
+      if (raw == null) return;
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) return;
+      final stored = Map<String, dynamic>.from(decoded);
+      if (stored['date'] != _dateKey(DateTime.now())) {
+        await prefs.remove(_todayRouteKey);
+        return;
+      }
+      if (!mounted) return;
+      setState(() => _todayRoute = stored);
+    } catch (e) {
+      debugPrint('Today route load failed: $e');
+    }
+  }
+
   /// 대화에 남은 안을 그린다.
   ///
   /// 떠 있던 카드와 같은 모양이되 테두리에 코치 색을 넣어, 고를 수 있는 것이
@@ -16342,17 +16390,19 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
     //
     // 줄글로 풀지 않고 카드 모양 그대로 둔다. 화살표로 이어진 순서는 한눈에
     // 보라고 만든 모양이라, 문장으로 바꾸면 다시 읽어야 한다.
+    final route = {
+      'label': option.label,
+      'why': option.why,
+      'today': option.today,
+    };
     _injectAiMessage(
       option.today.join(' → '),
       kind: _brainDumpRouteKind,
-      payload: jsonEncode({
-        'label': option.label,
-        'why': option.why,
-        'today': option.today,
-      }),
+      payload: jsonEncode(route),
     );
 
     final prefs = await SharedPreferences.getInstance();
+    await _saveTodayRoute(prefs, route);
     // 오늘 안 할 것은 조용히 넘긴다. 물어볼 이유가 없다.
     await _saveBrainDumpLater(prefs, plan.later);
     if (!mounted) return;
@@ -17602,7 +17652,84 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
       ),
     );
 
-    return card;
+    final route = _buildTodayRouteBar();
+    if (route == null) return card;
+    return Column(mainAxisSize: MainAxisSize.min, children: [card, route]);
+  }
+
+  /// 오늘 고른 순서를 접어둔 줄. 없으면 자리를 차지하지 않는다.
+  ///
+  /// 접힌 채로 두는 것이 기본이다. 펼쳐두면 화면 위가 늘 좁아지는데, 이 줄이
+  /// 필요한 때는 하루에 몇 번뿐이다. 대신 접혀 있어도 첫 항목은 보이게 해서,
+  /// 펼치지 않고도 "다음은 저것"이 읽히게 한다.
+  Widget? _buildTodayRouteBar() {
+    final route = _todayRoute;
+    if (route == null) return null;
+    final today = (route['today'] as List? ?? const [])
+        .map((e) => e.toString())
+        .where((e) => e.isNotEmpty)
+        .toList();
+    if (today.isEmpty) return null;
+    final label = route['label']?.toString() ?? '';
+
+    return GestureDetector(
+      onTap: () => setState(() => _todayRouteOpen = !_todayRouteOpen),
+      child: Container(
+        width: double.infinity,
+        margin: const EdgeInsets.fromLTRB(14, 0, 14, 4),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+        decoration: BoxDecoration(
+          color: AppDesignTokens.surface.withValues(alpha: 0.96),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: AppDesignTokens.brandCardBorder),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (label.isNotEmpty)
+                    Text(
+                      label,
+                      style: appFont(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: AppDesignTokens.textMuted,
+                      ),
+                    ),
+                  const SizedBox(height: 3),
+                  Text(
+                    today.join(' → '),
+                    maxLines: _todayRouteOpen ? null : 1,
+                    overflow: _todayRouteOpen
+                        ? TextOverflow.visible
+                        : TextOverflow.ellipsis,
+                    style: appFont(
+                      fontSize: 12,
+                      height: 1.5,
+                      fontWeight: FontWeight.w600,
+                      color: AppDesignTokens.textPrimary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 6),
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Icon(
+                _todayRouteOpen ? Icons.expand_less : Icons.expand_more,
+                size: 18,
+                color: AppDesignTokens.textMuted,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _buildSummaryCard() {
