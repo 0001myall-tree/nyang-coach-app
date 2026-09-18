@@ -16403,11 +16403,20 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
 
     final prefs = await SharedPreferences.getInstance();
     await _saveTodayRoute(prefs, route);
-    // 오늘 안 할 것은 조용히 넘긴다. 물어볼 이유가 없다.
     await _saveBrainDumpLater(prefs, plan.later);
     if (!mounted) return;
     if (plan.later.isNotEmpty) {
-      _injectAiMessage('오늘 안 해도 되는 건 내일로 넘겨뒀어.');
+      // 무엇을 옮겼는지 이름을 대고, 되돌릴 길을 함께 준다. 고른 것은 순서이지
+      // "이건 내일로"가 아니어서, 이름 없이 옮겼다고만 하면 앱이 마음대로 정한
+      // 것이 된다. 카드에 작게 적혀 있었다 해도 그것을 동의로 칠 수는 없다.
+      //
+      // 조사는 이름 뒤에 붙이지 않는다. 받침에 따라 문장이 깨진다.
+      final names = plan.later.join(', ');
+      _injectAiMessage(
+        _coach.id == 'nyang_halbae'
+            ? '$names — 내일로 옮겨뒀어. 오늘 할 거면 말해주렴.'
+            : '$names — 내일로 옮겨뒀어요. 오늘 하실 거면 말씀해주세요.',
+      );
     }
 
     // 오늘 할 것은 하나씩 확인받는다. 한 번에 넣으면 빠르긴 한데, 내가 정한
