@@ -16066,6 +16066,112 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
   static const String _brainDumpStartYes = '시작할게';
   static const String _brainDumpStartLater = '이따 할래';
 
+  /// 고른 안이 대화에 남은 자리. 고르는 카드와 달리 누를 데가 없다.
+  static const String _brainDumpRouteKind = 'brain_dump_route';
+
+  /// 대화에 남은 안을 그린다.
+  ///
+  /// 떠 있던 카드와 같은 모양이되 테두리에 코치 색을 넣어, 고를 수 있는 것이
+  /// 아니라 **고른 것**임이 보이게 한다. 누르는 자리가 아니므로 탭도 없다.
+  Widget _buildBrainDumpRouteCard(ChatMessage msg) {
+    final accent = _coach.accentColor;
+    var label = '';
+    var why = '';
+    var today = <String>[];
+    try {
+      final raw = jsonDecode(msg.payload ?? '{}');
+      if (raw is Map) {
+        label = raw['label']?.toString() ?? '';
+        why = raw['why']?.toString() ?? '';
+        today = (raw['today'] as List? ?? const [])
+            .map((e) => e.toString())
+            .where((e) => e.isNotEmpty)
+            .toList();
+      }
+    } catch (_) {}
+    // 옛 기록이라 실린 것이 없으면 적어둔 글이라도 보여준다.
+    if (today.isEmpty) today = [msg.text];
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(18),
+            child: Image.asset(
+              _coach.imagePath,
+              width: 36,
+              height: 36,
+              fit: BoxFit.cover,
+              alignment: Alignment.topCenter,
+              errorBuilder: (_, __, ___) => Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: _coach.accentLight,
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: Icon(Icons.person, color: accent, size: 20),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Container(
+              constraints: BoxConstraints(
+                maxWidth: MediaQuery.of(context).size.width * 0.72,
+              ),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(18),
+                // 테두리에 코치 색을 옅게 넣는다. 고를 수 있는 카드가 아니라
+                // 이미 고른 것임이 지나가다 눈에 걸려야 다시 찾을 수 있다.
+                border: Border.all(color: accent.withValues(alpha: 0.35)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (label.isNotEmpty) ...[
+                    Text(
+                      label,
+                      style: appFont(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                        color: accent,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                  ],
+                  Text(
+                    today.join(' → '),
+                    style: appFont(
+                      fontSize: 13,
+                      color: const Color(0xFF3D3A4E),
+                      height: 1.6,
+                    ),
+                  ),
+                  if (why.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      why,
+                      style: appFont(
+                        fontSize: 12,
+                        color: const Color(0xFF9593A5),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   /// 시작 버튼을 눌렀을 때. 할 일 화면의 시작 버튼과 같은 표시를 남긴다.
   Future<void> _handleBrainDumpStart(String label, String? taskText) async {
     if (_isLoading) return;
@@ -16230,16 +16336,21 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
     setState(() => _brainDumpPlan = null);
     if (option.label.isNotEmpty) _injectUserChoice(option.label);
 
-    // 고른 순서를 대화에 남긴다. 카드는 고르는 자리라 고르고 나면 사라지는데,
-    // 그러면 방금 정한 순서를 다시 볼 데가 없어진다. 할 일 목록에는 항목이
-    // 들어가지만 순서까지는 남지 않고, 무엇보다 이 순서는 **내가 고른 것**이라
-    // 목록보다 대화 쪽에 있는 편이 맞다.
+    // 고른 안을 대화에 그대로 남긴다. 떠 있는 카드는 고르는 자리라 고르고 나면
+    // 사라지는 게 맞지만, 그러면 방금 정한 순서를 다시 볼 데가 없어진다. 할 일
+    // 목록에는 항목만 들어가고 순서는 안 남는다.
     //
-    // 말투를 섞지 않는다. 이름을 화살표로 이은 줄이라 반말 코치와 존댓말 코치
-    // 어느 쪽에 붙어도 어색하지 않다.
-    if (option.today.isNotEmpty) {
-      _injectAiMessage(option.today.join(' → '));
-    }
+    // 줄글로 풀지 않고 카드 모양 그대로 둔다. 화살표로 이어진 순서는 한눈에
+    // 보라고 만든 모양이라, 문장으로 바꾸면 다시 읽어야 한다.
+    _injectAiMessage(
+      option.today.join(' → '),
+      kind: _brainDumpRouteKind,
+      payload: jsonEncode({
+        'label': option.label,
+        'why': option.why,
+        'today': option.today,
+      }),
+    );
 
     final prefs = await SharedPreferences.getInstance();
     // 오늘 안 할 것은 조용히 넘긴다. 물어볼 이유가 없다.
@@ -17836,6 +17947,9 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
         msg,
         (label) => _handleBrainDumpStart(label, msg.payload),
       );
+    }
+    if (msg.kind == _brainDumpRouteKind) {
+      return _buildBrainDumpRouteCard(msg);
     }
     if (msg.kind == 'start_difficulty_choice') {
       return _buildStartDifficultyChoiceCard(msg);
