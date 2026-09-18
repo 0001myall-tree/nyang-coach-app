@@ -67,15 +67,22 @@ class FreeAccessService {
   /// 많아서지, 세는 값이 다르기 때문이 아니다.
   Future<bool> _isOpen() async {
     await _loadConfig();
-    // 앱을 켤 때 이미 맞춰두므로 여기서는 대개 그냥 통과한다. 그때 인터넷이
-    // 없었거나 오래 켜둔 경우를 위해 한 번 더 확인한다. 돈이 나가는 판정이라
-    // 기기 시계로 대신하지 않는다.
-    await ServerClock.ensureSynced();
     return await _dayIndex() < (_freeDays ?? defaultFreeDays);
   }
 
-  Future<bool> canChat() => _isOpen();
+  /// 대화는 돈이 나가므로 서버 시각을 받아야만 연다.
+  ///
+  /// 못 받았으면 닫는다. 기기 시계로 대신하면 날짜를 돌려놓는 것만으로 무료
+  /// 구간이 다시 열려서, 서버 시각을 받아온 뜻이 없어진다. 닫아도 손해 보는
+  /// 사람이 없는 것은 **대화 자체가 인터넷을 타기 때문**이다 — 서버에 못 닿는
+  /// 상태면 어차피 코치를 부르지 못한다.
+  Future<bool> canChat() async {
+    if (!await ServerClock.ensureSynced()) return false;
+    return _isOpen();
+  }
 
+  /// 할 일을 적는 것은 인터넷 없이도 된다. 여기에 서버를 물으면 지하철에서
+  /// 적을 때마다 기다리게 되고, 돈이 나가지도 않는 자리라 물을 까닭이 없다.
   Future<bool> canInput() => _isOpen();
 
   /// 남은 날수. 안내 문구에 쓴다. 이미 끝났으면 0.

@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/user_data.dart';
 import 'free_access_service.dart';
+import 'server_clock.dart';
 
 class ApiUsageLimitResult {
   final bool allowed;
@@ -137,6 +138,20 @@ class ApiUsageLimitService {
       );
     }
 
+    // 대화로 들어가는 문은 여기 하나다. 그래서 서버 시각도 여기서 받아둔다.
+    // 아래 판정이 전부 날짜에 걸려 있기 때문이다 — 구독이 아직 살아 있는지,
+    // 무료 구간이 남았는지, 오늘 얼마나 썼는지. 기기 시계로 재면 날짜를 돌리는
+    // 것만으로 셋을 한꺼번에 넘을 수 있다. 특히 마지막이 그런데, 어제로
+    // 돌려놓으면 오늘 쓴 양이 0인 다른 칸을 보게 된다.
+    //
+    // 못 받으면 막는다. 대화는 인터넷을 타므로 서버에 못 닿으면 어차피 안 된다.
+    if (!await ServerClock.ensureSynced()) {
+      return const ApiUsageLimitResult(
+        allowed: false,
+        message: '네트워크 연결을 확인해 주세요.',
+      );
+    }
+
     final userData = await UserDataService.load();
     final limits = await _tokenLimitsFor(userData, user.uid);
     if (limits == null) {
@@ -146,7 +161,7 @@ class ApiUsageLimitService {
       );
     }
 
-    final today = DateTime.now();
+    final today = ServerClock.now();
 
     if (!userData.isPlanActive && !await FreeAccessService.instance.canChat()) {
       return const ApiUsageLimitResult(
@@ -203,7 +218,7 @@ class ApiUsageLimitService {
 
     final used = await _dailyFeatureUsage(
       user.uid,
-      DateTime.now(),
+      ServerClock.now(),
       'milestone_memo_organize',
     );
     if (used >= masterDailyOrganizeLimit) {
@@ -238,7 +253,7 @@ class ApiUsageLimitService {
     final limits = await _tokenLimitsFor(userData, user.uid);
     if (limits == null) return null;
 
-    final today = DateTime.now();
+    final today = ServerClock.now();
     final dailyUsed = await _dailyTokenUsage(user.uid, today);
     final dailyStage = _usageNoticeStage(dailyUsed, limits.daily);
     final dailyPercent = _usagePercent(dailyUsed, limits.daily);
@@ -279,7 +294,7 @@ class ApiUsageLimitService {
 
     final yesterdayUsed = await _dailyTokenUsage(
       uid,
-      DateTime.now().subtract(const Duration(days: 1)),
+      ServerClock.now().subtract(const Duration(days: 1)),
     );
     return _TokenLimits(
       daily: adjustedDailyLimit(base: base, yesterdayUsed: yesterdayUsed),
