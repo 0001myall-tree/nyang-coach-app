@@ -15,6 +15,7 @@ import 'package:speech_to_text/speech_to_text.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'coach_config.dart';
 import '../services/busy_hours_service.dart';
+import '../services/day_record_builder.dart';
 import '../services/daypart_hint.dart';
 import '../services/memory_service.dart';
 import '../services/task_resistance_service.dart';
@@ -3148,59 +3149,17 @@ class _TasksScreenState extends State<TasksScreen>
     }
 
     final todayStr = _getTodayStr();
-    final countableTasks = tasks.where(_countsTowardDailyCompletion).toList();
-    final doneTasks = countableTasks.where((t) => t.done).toList();
-    final todayMilestones = _todayMilestoneItems;
-    final doneMilestones = todayMilestones.where((m) => m.done).toList();
 
-    // 밤 9시 이후 이월된 일정 로드
-    final rawDeferred = prefs.getString('nyang_deferred_tasks_today');
-    List<dynamic> deferredList = [];
-    if (rawDeferred != null) {
-      try {
-        deferredList = jsonDecode(rawDeferred);
-      } catch (_) {}
-    }
-
-    final mergedTasks = [
-      ...tasks.map(
-        (t) => {
-          'text': t.text,
-          'done': t.done,
-          'inProgress': t.inProgress,
-          if (t.inProgressAt != null) 'startedAt': t.inProgressAt,
-          if (t.completedAt != null) 'completedAt': t.completedAt,
-          'category': t.category,
-          'hasTime': t.timeStart != null || t.time != null,
-          'deferred': false,
-        },
+    final record = DayRecordBuilder.buildDayRecord(
+      date: todayStr,
+      tasks: tasks.map((t) => t.toJson()).toList(),
+      milestones: _todayMilestoneItems.map((m) => m.toJson()).toList(),
+      // 밤 9시 이후 이월된 일정
+      deferred: _decodeTaskMapList(
+        prefs.getString('nyang_deferred_tasks_today'),
       ),
-      ...todayMilestones.map(
-        (m) => {
-          'text': m.text,
-          'done': m.done,
-          'category': 'milestone',
-          'deferred': false,
-        },
-      ),
-      ...deferredList.map(
-        (t) => {
-          'text': t['text'],
-          'done': t['done'] ?? false,
-          'category': t['category'] ?? 'today',
-          'deferred': true,
-        },
-      ),
-    ];
-
-    final record = {
-      'date': todayStr,
-      'totalCount': countableTasks.length + todayMilestones.length,
-      'doneCount': doneTasks.length + doneMilestones.length,
-      'success': doneTasks.isNotEmpty || doneMilestones.isNotEmpty,
-      'updatedAt': DateTime.now().toIso8601String(),
-      'tasks': mergedTasks,
-    };
+      habitFreqById: _habitFrequencyById,
+    );
 
     final idx = history.indexWhere((h) => h['date'] == todayStr);
     if (idx >= 0) {
@@ -3235,35 +3194,13 @@ class _TasksScreenState extends State<TasksScreen>
     final previous = idx >= 0 ? history[idx] : <String, dynamic>{};
 
     final dayTasks = plannedTodayTasksByDate[dateKey] ?? <TaskItem>[];
-    final countableTasks = dayTasks
-        .where(_countsTowardDailyCompletion)
-        .toList();
-    final doneTasks = countableTasks.where((t) => t.done).toList();
-    final dayMilestones = _todayMilestoneItems;
-    final doneMilestones = dayMilestones.where((m) => m.done).toList();
-
-    final listEntries = <Map<String, dynamic>>[
-      ...dayTasks.map(
-        (t) => {
-          'text': t.text,
-          'done': t.done,
-          'inProgress': t.inProgress,
-          if (t.inProgressAt != null) 'startedAt': t.inProgressAt,
-          if (t.completedAt != null) 'completedAt': t.completedAt,
-          'category': t.category,
-          'hasTime': t.timeStart != null || t.time != null,
-          'deferred': false,
-        },
-      ),
-      ...dayMilestones.map(
-        (m) => {
-          'text': m.text,
-          'done': m.done,
-          'category': 'milestone',
-          'deferred': false,
-        },
-      ),
-    ];
+    final base = DayRecordBuilder.buildDayRecord(
+      date: dateKey,
+      tasks: dayTasks.map((t) => t.toJson()).toList(),
+      milestones: _todayMilestoneItems.map((m) => m.toJson()).toList(),
+      habitFreqById: _habitFrequencyById,
+    );
+    final listEntries = (base['tasks'] as List).cast<Map<String, dynamic>>();
 
     // 지난 날 기록은 줄어들 수 없다.
     //
@@ -3284,13 +3221,10 @@ class _TasksScreenState extends State<TasksScreen>
     final keptDone = countedKept.where((entry) => entry['done'] == true).length;
 
     final record = {
-      'date': dateKey,
-      'totalCount':
-          countableTasks.length + dayMilestones.length + countedKept.length,
-      'doneCount': doneTasks.length + doneMilestones.length + keptDone,
-      'success':
-          doneTasks.isNotEmpty || doneMilestones.isNotEmpty || keptDone > 0,
-      'updatedAt': DateTime.now().toIso8601String(),
+      ...base,
+      'totalCount': (base['totalCount'] as int) + countedKept.length,
+      'doneCount': (base['doneCount'] as int) + keptDone,
+      'success': (base['success'] as bool) || keptDone > 0,
       'tasks': [...listEntries, ...kept],
     };
 
@@ -3815,14 +3749,30 @@ class _TasksScreenState extends State<TasksScreen>
     return '루틴 $safeDisplayCount/$target';
   }
 
-  bool _countsTowardDailyCompletion(TaskItem task) {
-    if (task.habitId == null) return true;
-    final habitIndex = habits.indexWhere(
-      (h) => h.id.toString() == task.habitId.toString(),
-    );
-    if (habitIndex < 0) return true;
-    final habit = habits[habitIndex];
-    return habit.freq != 'weekly_count' || task.done;
+  /// 루틴 id로 그 루틴의 주기를 찾는 표. 분모에 넣을지 가리는 데 쓴다.
+  Map<String, String> get _habitFrequencyById => {
+    for (final habit in habits) habit.id.toString(): habit.freq,
+  };
+
+  bool _countsTowardDailyCompletion(TaskItem task) =>
+      DayRecordBuilder.countsTowardDailyCompletion(
+        task.toJson(),
+        _habitFrequencyById,
+      );
+
+  /// 저장해둔 할 일 목록 문자열을 읽는다. 깨져 있으면 빈 목록이다.
+  List<Map<String, dynamic>> _decodeTaskMapList(String? raw) {
+    if (raw == null || raw.isEmpty) return [];
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! List) return [];
+      return decoded
+          .whereType<Map>()
+          .map((e) => e.map((k, v) => MapEntry(k.toString(), v)))
+          .toList();
+    } catch (_) {
+      return [];
+    }
   }
 
   Future<({String label, double ratio})?> _pickHabitCompletionRatio(

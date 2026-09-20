@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'daily_reset_service.dart';
+import 'day_record_builder.dart';
 
 /// 할 일 하나를 완료로 만드는 일을 화면 밖에서 처리한다.
 ///
@@ -333,18 +334,7 @@ class TaskCompletionService {
     final previous = idx >= 0 ? history[idx] : <String, dynamic>{};
 
     final listEntries = tasks
-        .map(
-          (task) => {
-            'text': task['text'],
-            'done': task['done'] == true,
-            'inProgress': task['inProgress'] == true,
-            if (task['inProgressAt'] != null) 'startedAt': task['inProgressAt'],
-            if (task['completedAt'] != null) 'completedAt': task['completedAt'],
-            'category': task['category'],
-            'hasTime': task['timeStart'] != null || task['time'] != null,
-            'deferred': false,
-          },
-        )
+        .map(DayRecordBuilder.taskEntry)
         .toList(growable: false);
 
     // 지난 날이면 목록에 없는 옛 항목을 지우지 않는다. 오늘은 목록이 곧 진실이라
@@ -398,15 +388,10 @@ class TaskCompletionService {
   static bool _countsTowardDailyCompletion(
     SharedPreferences prefs,
     Map<String, dynamic> task,
-  ) {
-    final habitId = task['habitId']?.toString();
-    if (habitId == null || habitId.isEmpty || habitId == 'null') return true;
-    final habits = _decodeList(prefs.getString(habitsKey));
-    final habit = _findById(habits, habitId);
-    if (habit == null) return true;
-    if (habit['freq']?.toString() != 'weekly_count') return true;
-    return task['done'] == true;
-  }
+  ) => DayRecordBuilder.countsTowardDailyCompletion(
+    task,
+    DayRecordBuilder.habitFrequencyById(prefs.getString(habitsKey)),
+  );
 
   static Future<void> _markChanged(SharedPreferences prefs, DateTime at) =>
       prefs.setString(changedAtKey, at.toIso8601String());

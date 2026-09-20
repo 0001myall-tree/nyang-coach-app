@@ -17,6 +17,7 @@ import 'package:speech_to_text/speech_recognition_result.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:nyang_coach/screens/coach_selection_screen.dart';
 import 'package:nyang_coach/services/day_capacity_service.dart';
+import 'package:nyang_coach/services/day_record_builder.dart';
 import 'package:nyang_coach/services/execution_blocker_service.dart';
 import 'package:nyang_coach/services/life_context_service.dart';
 import 'package:nyang_coach/services/brain_dump_plan.dart';
@@ -1663,41 +1664,15 @@ class _ChatScreenState extends State<ChatScreen>
   bool _countsTowardDailyCompletion(
     Map<String, dynamic> task,
     Map<String, String> habitFreqById,
-  ) {
-    final habitId = task['habitId']?.toString();
-    if (habitId == null) return true;
-    return habitFreqById[habitId] != 'weekly_count' || task['done'] == true;
-  }
+  ) => DayRecordBuilder.countsTowardDailyCompletion(task, habitFreqById);
 
   List<Map<String, dynamic>> _todayMilestoneProgressItems(
     SharedPreferences prefs,
     String todayStr,
-  ) {
-    final rawVisions = prefs.getString('nyang_visions');
-    if (rawVisions == null) return const <Map<String, dynamic>>[];
-
-    try {
-      final decoded = jsonDecode(rawVisions);
-      if (decoded is! List) return const <Map<String, dynamic>>[];
-
-      final result = <Map<String, dynamic>>[];
-      for (final vision in decoded) {
-        if (vision is! Map) continue;
-        final milestones = vision['milestones'];
-        if (milestones is! List) continue;
-
-        for (final milestone in milestones) {
-          if (milestone is! Map) continue;
-          if (milestone['date'] == todayStr) {
-            result.add(Map<String, dynamic>.from(milestone));
-          }
-        }
-      }
-      return result;
-    } catch (_) {
-      return const <Map<String, dynamic>>[];
-    }
-  }
+  ) => DayRecordBuilder.milestonesForDate(
+    prefs.getString('nyang_visions'),
+    todayStr,
+  );
 
   Future<void> _initAndLoad() async {
     _userData = await UserDataService.load();
@@ -21465,60 +21440,16 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
 
     final todayStr = _getTodayStrWithReset(prefs);
 
-    final rawTasks = prefs.getString('nyang_tasks');
-    List<dynamic> tasksList = [];
-    if (rawTasks != null) {
-      try {
-        tasksList = jsonDecode(rawTasks);
-      } catch (_) {}
-    }
-
-    final habitFreqById = _habitFrequencyById(prefs);
-    final countableTasks = tasksList.where((t) {
-      if (t is! Map) return false;
-      return _countsTowardDailyCompletion(
-        Map<String, dynamic>.from(t),
-        habitFreqById,
-      );
-    }).toList();
-    final doneTasks = countableTasks.where((t) => t['done'] == true).toList();
-
-    // 밤 9시 이후 이월된 일정 로드
-    final rawDeferred = prefs.getString('nyang_deferred_tasks_today');
-    List<dynamic> deferredList = [];
-    if (rawDeferred != null) {
-      try {
-        deferredList = jsonDecode(rawDeferred);
-      } catch (_) {}
-    }
-
-    final mergedTasks = [
-      ...tasksList.map(
-        (t) => {
-          'text': t['text'],
-          'done': t['done'] ?? false,
-          'category': t['category'] ?? 'today',
-          'deferred': false,
-        },
-      ),
-      ...deferredList.map(
-        (t) => {
-          'text': t['text'],
-          'done': t['done'] ?? false,
-          'category': t['category'] ?? 'today',
-          'deferred': true,
-        },
-      ),
-    ];
-
-    final record = {
-      'date': todayStr,
-      'totalCount': countableTasks.length,
-      'doneCount': doneTasks.length,
-      'success': doneTasks.isNotEmpty,
-      'updatedAt': DateTime.now().toIso8601String(),
-      'tasks': mergedTasks,
-    };
+    final record = DayRecordBuilder.buildDayRecord(
+      date: todayStr,
+      tasks: _decodeMapList(prefs.getString('nyang_tasks')),
+      // 이정표는 할 일 목록에 없는 자리다. 여기서 안 넘기면 끝낸 이정표가
+      // 기록에서 사라진다 — 채팅을 한마디 했다는 이유만으로.
+      milestones: _todayMilestoneProgressItems(prefs, todayStr),
+      // 밤 9시 이후 이월된 일정
+      deferred: _decodeMapList(prefs.getString('nyang_deferred_tasks_today')),
+      habitFreqById: _habitFrequencyById(prefs),
+    );
 
     final idx = history.indexWhere((h) => h['date'] == todayStr);
     if (idx >= 0) {

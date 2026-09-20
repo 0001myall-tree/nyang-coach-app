@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
+import 'day_record_builder.dart';
 import 'memory_service.dart';
 import 'chat_store.dart';
 import 'coach_id_service.dart';
@@ -1027,13 +1028,6 @@ class DailyResetService {
       } catch (_) {}
     }
 
-    final rawHabits = prefs.getString('nyang_habits') ?? '[]';
-    final List<dynamic> habitsList = jsonDecode(rawHabits);
-    final countableTasks = tasksList
-        .where((t) => _countsTowardDailyCompletion(t, habitsList))
-        .toList();
-    final doneTasks = countableTasks.where((t) => t['done'] == true).toList();
-
     // 밤 9시 이후 이월된 일정 로드
     final rawDeferred = prefs.getString('nyang_deferred_tasks_today');
     List<dynamic> deferredList = [];
@@ -1043,39 +1037,23 @@ class DailyResetService {
       } catch (_) {}
     }
 
-    final mergedTasks = [
-      ...tasksList.map(
-        (t) => {
-          'text': t['text'],
-          'done': t['done'] ?? false,
-          'inProgress': t['inProgress'] ?? false,
-          if (t['inProgressAt'] != null) 'startedAt': t['inProgressAt'],
-          if (t['completedAt'] != null) 'completedAt': t['completedAt'],
-          'category': t['category'] ?? 'today',
-          // 시각을 지정해둔 일이 더 많이 끝나는지 보려면, 지정 여부가 그날
-          // 기록에 남아 있어야 한다. 기록에 없는 것은 나중에 못 센다.
-          'hasTime': t['timeStart'] != null || t['time'] != null,
-          'deferred': false,
-        },
+    final record = DayRecordBuilder.buildDayRecord(
+      date: todayStr,
+      tasks: tasksList,
+      // 이정표는 할 일 목록에 없는 자리다. 여기서 안 넘기면 자정에 굳히는
+      // 어제 기록에서 끝낸 이정표가 사라진다.
+      milestones: DayRecordBuilder.milestonesForDate(
+        prefs.getString('nyang_visions'),
+        todayStr,
       ),
-      ...deferredList.map(
-        (t) => {
-          'text': t['text'],
-          'done': t['done'] ?? false,
-          'category': t['category'] ?? 'today',
-          'deferred': true,
-        },
+      deferred: deferredList
+          .whereType<Map>()
+          .map((e) => e.map((k, v) => MapEntry(k.toString(), v)))
+          .toList(),
+      habitFreqById: DayRecordBuilder.habitFrequencyById(
+        prefs.getString('nyang_habits'),
       ),
-    ];
-
-    final record = {
-      'date': todayStr,
-      'totalCount': countableTasks.length,
-      'doneCount': doneTasks.length,
-      'success': doneTasks.isNotEmpty,
-      'updatedAt': DateTime.now().toIso8601String(),
-      'tasks': mergedTasks,
-    };
+    );
 
     final idx = history.indexWhere((h) => h['date'] == todayStr);
     if (idx >= 0) {
@@ -1090,20 +1068,4 @@ class DailyResetService {
     await prefs.setString('nyang_history', jsonEncode(history));
   }
 
-  static bool _countsTowardDailyCompletion(
-    Map<String, dynamic> task,
-    List<dynamic> habits,
-  ) {
-    final habitId = task['habitId']?.toString();
-    if (habitId == null) return true;
-    Map<dynamic, dynamic>? habit;
-    for (final item in habits) {
-      if (item is Map && item['id']?.toString() == habitId) {
-        habit = item;
-        break;
-      }
-    }
-    if (habit == null) return true;
-    return habit['freq'] != 'weekly_count' || task['done'] == true;
-  }
 }
