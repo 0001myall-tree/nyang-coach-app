@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'active_coaching_later.dart';
 import 'active_coaching_promise.dart';
+import 'active_coaching_state.dart';
 import 'distraction_coach_quota.dart';
 import 'gap_coaching_service.dart';
 import 'task_completion_service.dart';
@@ -583,6 +584,16 @@ class OngoingTaskNudgeService {
     final promisedAt = answer.promisedAt(DateTime.now());
     if (promisedAt != null) {
       return ActiveCoachingPromise.keep(taskId: answer.taskId, at: promisedAt);
+    }
+    // 밤 카드에서 "오늘은 여기까지"를 골랐다. 사용자가 내린 결정이라, 그날
+    // 그 일에는 더 말 걸지 않는다.
+    if (answer.action == 'notToday') {
+      await ActiveCoachingPromise.decide(
+        taskId: answer.taskId,
+        decision: ActiveCoachingDecision.notToday,
+        at: DateTime.now(),
+      );
+      return true;
     }
     return TaskCompletionService.pauseStoredTask(taskId: answer.taskId);
   }

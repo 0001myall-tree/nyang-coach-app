@@ -26,11 +26,7 @@ void main() {
     test('뜻에 무엇을 하라는 말은 넣지 않는다', () {
       // 처방이 이름에 붙으면 이름이 틀릴 때 처방까지 같이 틀린다.
       for (final entry in ExecutionTypeLabels.meanings.entries) {
-        expect(
-          entry.value,
-          isNot(contains('하세요')),
-          reason: entry.key,
-        );
+        expect(entry.value, isNot(contains('하세요')), reason: entry.key);
         expect(entry.value, isNot(contains('해보')), reason: entry.key);
       }
     });
@@ -39,11 +35,7 @@ void main() {
   group('이름마다 문구가 있다', () {
     test('빠진 이름이 없다', () {
       for (final label in ExecutionTypeLabels.all) {
-        expect(
-          ExecutionTypeLabels.commentFor(label),
-          isNotNull,
-          reason: label,
-        );
+        expect(ExecutionTypeLabels.commentFor(label), isNotNull, reason: label);
       }
     });
 
@@ -63,10 +55,7 @@ void main() {
 
   group('코치가 고른 이름 읽기', () {
     test('마지막 줄에서 읽는다', () {
-      expect(
-        ExecutionTypeLabels.readFrom('이번 주는 잘하셨어요.\n유형: 안정형'),
-        '안정형',
-      );
+      expect(ExecutionTypeLabels.readFrom('이번 주는 잘하셨어요.\n유형: 안정형'), '안정형');
     });
 
     test('전각 콜론도 읽는다', () {
@@ -100,10 +89,7 @@ void main() {
     });
 
     test('가운데 있어도 뗀다', () {
-      expect(
-        ExecutionTypeLabels.strip('앞\n유형: 안정형\n뒤'),
-        '앞\n\n뒤',
-      );
+      expect(ExecutionTypeLabels.strip('앞\n유형: 안정형\n뒤'), '앞\n\n뒤');
     });
 
     test('없으면 그대로', () {

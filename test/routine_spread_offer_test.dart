@@ -23,9 +23,7 @@ void main() {
     });
 
     test('태그는 말에서 떼어낸다', () {
-      final proposal = RoutineSpreadOffer.parse(
-        '운동은 나눠보자냥. [SPREAD: 운동|화목]',
-      );
+      final proposal = RoutineSpreadOffer.parse('운동은 나눠보자냥. [SPREAD: 운동|화목]');
 
       expect(proposal!.message, '운동은 나눠보자냥.');
     });
@@ -37,9 +35,7 @@ void main() {
     });
 
     test('요일이 없으면 그 루틴은 버린다', () {
-      final proposal = RoutineSpreadOffer.parse(
-        '나누자. [SPREAD: 운동|; 독서|화목]',
-      );
+      final proposal = RoutineSpreadOffer.parse('나누자. [SPREAD: 운동|; 독서|화목]');
 
       expect(proposal!.assignments.length, 1);
       expect(proposal.assignments.first.name, '독서');
@@ -71,9 +67,7 @@ void main() {
     });
 
     test('같은 루틴이 두 번 나오면 한 번만 센다', () {
-      final proposal = RoutineSpreadOffer.parse(
-        '나누자. [SPREAD: 운동|월수금; 운동|화목]',
-      );
+      final proposal = RoutineSpreadOffer.parse('나누자. [SPREAD: 운동|월수금; 운동|화목]');
 
       expect(proposal!.assignments.length, 1);
       expect(proposal.assignments.first.days, [0, 2, 4]);

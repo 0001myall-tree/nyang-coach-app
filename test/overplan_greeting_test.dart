@@ -187,10 +187,7 @@ void main() {
 
     test('읽을 수 없는 날짜가 적혀 있으면 막지 않는다', () {
       // 한 번 더 나가는 편이, 영영 안 나가는 것보다 낫다.
-      expect(
-        OverplanNudgeService.withinCooldown('예전 형식', base),
-        isFalse,
-      );
+      expect(OverplanNudgeService.withinCooldown('예전 형식', base), isFalse);
     });
   });
 

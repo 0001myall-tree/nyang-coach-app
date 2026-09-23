@@ -54,19 +54,13 @@ void main() {
     });
 
     test('이틀치로는 판정하지 않는다', () {
-      final funnel = ExecutionFunnel.from(
-        history([task()], days: 2),
-        now: now,
-      );
+      final funnel = ExecutionFunnel.from(history([task()], days: 2), now: now);
       expect(funnel.hasEnough, isFalse);
     });
 
     test('첫 기록 이전은 거른 날로 세지 않는다', () {
       // 사흘 전에 깔았으면 그 앞은 이 사람이 거른 날이 아니다.
-      final funnel = ExecutionFunnel.from(
-        history([task()], days: 3),
-        now: now,
-      );
+      final funnel = ExecutionFunnel.from(history([task()], days: 3), now: now);
       expect(funnel.evaluatedDays, 3);
       expect(funnel.planPass, 1.0);
     });
@@ -78,12 +72,7 @@ void main() {
     test('손대면 끝내는 사람 — 새는 곳은 잡는 양', () {
       // 하루 4개 중 1개만 손대고, 손댄 것은 끝낸다. 손은 매일 댄다.
       final funnel = ExecutionFunnel.from(
-        history([
-          task(done: true, started: true),
-          task(),
-          task(),
-          task(),
-        ]),
+        history([task(done: true, started: true), task(), task(), task()]),
         now: now,
       );
       expect(funnel.startPass, closeTo(0.25, 0.01));
@@ -152,7 +141,10 @@ void main() {
 
     test('다 잘 지나가면 새는 곳이 없다', () {
       final funnel = ExecutionFunnel.from(
-        history([task(done: true, started: true), task(done: true, started: true)]),
+        history([
+          task(done: true, started: true),
+          task(done: true, started: true),
+        ]),
         now: now,
       );
       expect(funnel.leak, FunnelLeak.none);
@@ -184,7 +176,9 @@ void main() {
   group('계획 축', () {
     test('루틴만 있어도 목록이 있던 날로 센다', () {
       final funnel = ExecutionFunnel.from(
-        history([task(category: 'habit', habitId: 'h1', done: true, started: true)]),
+        history([
+          task(category: 'habit', habitId: 'h1', done: true, started: true),
+        ]),
         now: now,
       );
       expect(funnel.planPass, 1.0);
@@ -320,21 +314,21 @@ void main() {
       for (final name in ExecutionFunnel.leakNames.values) {
         expect(name, isNot(contains('첫 발')));
       }
-      expect(
-        ExecutionFunnel.leakNames[FunnelLeak.starting],
-        startsWith('시작'),
-      );
-      expect(
-        ExecutionFunnel.leakNames[FunnelLeak.finishing],
-        startsWith('완료'),
-      );
+      expect(ExecutionFunnel.leakNames[FunnelLeak.starting], startsWith('시작'));
+      expect(ExecutionFunnel.leakNames[FunnelLeak.finishing], startsWith('완료'));
     });
 
     test('헷갈리는 짝에는 설명을 붙인다', () {
       // '계획한 양'과 '시작'은 둘 다 적어둔 것의 일부만 손댄 모습이라,
       // 이름만으로는 갈리지 않는다.
-      expect(ExecutionFunnel.leakNames[FunnelLeak.amount], contains('매일 손은 대는데'));
-      expect(ExecutionFunnel.leakNames[FunnelLeak.starting], contains('손도 안 댄 날'));
+      expect(
+        ExecutionFunnel.leakNames[FunnelLeak.amount],
+        contains('매일 손은 대는데'),
+      );
+      expect(
+        ExecutionFunnel.leakNames[FunnelLeak.starting],
+        contains('손도 안 댄 날'),
+      );
     });
 
     test('앱이 센 값이라는 것을 밝힌다', () {
@@ -399,9 +393,7 @@ void main() {
             task(started: true),
             task(started: true),
           ],
-          recent: [
-            for (var i = 0; i < 3; i++) task(done: true, started: true),
-          ],
+          recent: [for (var i = 0; i < 3; i++) task(done: true, started: true)],
         ),
         now: now,
       );

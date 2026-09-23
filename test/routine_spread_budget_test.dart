@@ -79,9 +79,9 @@ void main() {
         ]),
       });
 
-      final applied = await RoutineSpreadApply.apply(
-        const [RoutineDayAssignment(name: '운동', days: [0, 2, 4])],
-      );
+      final applied = await RoutineSpreadApply.apply(const [
+        RoutineDayAssignment(name: '운동', days: [0, 2, 4]),
+      ]);
 
       expect(applied, ['운동']);
       final habits = await savedHabits();
@@ -98,9 +98,9 @@ void main() {
         ]),
       });
 
-      final applied = await RoutineSpreadApply.apply(
-        const [RoutineDayAssignment(name: '있지도 않은 루틴', days: [0, 2])],
-      );
+      final applied = await RoutineSpreadApply.apply(const [
+        RoutineDayAssignment(name: '있지도 않은 루틴', days: [0, 2]),
+      ]);
 
       expect(applied, isEmpty);
       final habits = await savedHabits();
@@ -114,9 +114,9 @@ void main() {
         ]),
       });
 
-      final applied = await RoutineSpreadApply.apply(
-        const [RoutineDayAssignment(name: 'SNS글쓰기', days: [1, 3])],
-      );
+      final applied = await RoutineSpreadApply.apply(const [
+        RoutineDayAssignment(name: 'SNS글쓰기', days: [1, 3]),
+      ]);
 
       expect(applied, ['SNS글쓰기']);
       final habits = await savedHabits();
@@ -152,9 +152,9 @@ void main() {
       });
 
       // 이대로 저장되면 그 루틴은 오늘 탭에서 영영 사라진다.
-      final applied = await RoutineSpreadApply.apply(
-        const [RoutineDayAssignment(name: '운동', days: [])],
-      );
+      final applied = await RoutineSpreadApply.apply(const [
+        RoutineDayAssignment(name: '운동', days: []),
+      ]);
 
       expect(applied, isEmpty);
       final habits = await savedHabits();
@@ -163,9 +163,9 @@ void main() {
 
     test('읽을 수 없는 루틴 목록이면 아무것도 안 한다', () async {
       SharedPreferences.setMockInitialValues({'nyang_habits': '{망가진'});
-      final applied = await RoutineSpreadApply.apply(
-        const [RoutineDayAssignment(name: '운동', days: [0, 2])],
-      );
+      final applied = await RoutineSpreadApply.apply(const [
+        RoutineDayAssignment(name: '운동', days: [0, 2]),
+      ]);
       expect(applied, isEmpty);
     });
   });

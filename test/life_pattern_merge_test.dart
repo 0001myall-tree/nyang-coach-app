@@ -182,7 +182,10 @@ void main() {
     );
 
     expect(
-      answersOf(LifePatternService.mergedValue(null, cloud), 'nyang_cat')['live'],
+      answersOf(
+        LifePatternService.mergedValue(null, cloud),
+        'nyang_cat',
+      )['live'],
       '혼자 살아',
     );
     expect(
@@ -190,7 +193,10 @@ void main() {
       '혼자 살아',
     );
     expect(
-      answersOf(LifePatternService.mergedValue(cloud, null), 'nyang_cat')['live'],
+      answersOf(
+        LifePatternService.mergedValue(cloud, null),
+        'nyang_cat',
+      )['live'],
       '혼자 살아',
     );
   });

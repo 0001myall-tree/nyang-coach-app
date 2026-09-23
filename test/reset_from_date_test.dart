@@ -20,7 +20,9 @@ void main() {
   group('목록이 어느 날 것인지', () {
     test('루틴 항목의 id에 박힌 날짜로 안다', () {
       expect(
-        DailyResetService.listDateOf([habitTask('1788307997240', '2026-09-09')]),
+        DailyResetService.listDateOf([
+          habitTask('1788307997240', '2026-09-09'),
+        ]),
         '2026-09-09',
       );
     });

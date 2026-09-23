@@ -119,17 +119,12 @@ void main() {
     });
 
     test('오늘 몫을 다 썼으면 오늘은 더 안 건다', () {
-      var budget = freshBudget();
-      var at = DateTime(2026, 9, 23, 6);
-      for (var i = 0; i < ActiveCoachingBudget.dailyCap; i++) {
-        budget = budget.spoke(at);
-        at = at.add(const Duration(minutes: 30));
-      }
+      // 하루를 닫는 말은 예산 밖이라 따로 본다. 여기서는 이미 건넨 것으로 둔다.
       final plan = ActiveCoachingPlanner.next(
         tasks: [task('a', elapsedSeconds: 600)],
         now: now,
         day: emptyDay(),
-        budget: budget,
+        budget: _spentBudget(today).wrappedUp(DateTime(2026, 9, 23, 21)),
       );
       expect(plan, isNull);
     });
@@ -139,7 +134,9 @@ void main() {
         tasks: [task('a', elapsedSeconds: 600)],
         now: DateTime(2026, 9, 23, 21),
         day: emptyDay(),
-        budget: freshBudget().spoke(DateTime(2026, 9, 23, 20, 30)),
+        budget: freshBudget()
+            .spoke(DateTime(2026, 9, 23, 20, 30))
+            .wrappedUp(DateTime(2026, 9, 23, 21)),
       );
       // 22시 반으로 밀리는데 그 시각은 조용한 시간이다.
       expect(plan, isNull);
@@ -196,6 +193,84 @@ void main() {
     });
   });
 
+  group('하루를 닫는 말', () {
+    test('취침 두 시간 전에 선다', () {
+      final plan = ActiveCoachingPlanner.next(
+        tasks: [task('a', elapsedSeconds: 600)],
+        now: DateTime(2026, 9, 23, 19),
+        day: emptyDay(),
+        // 오늘 몫을 다 써서 다른 자리는 잡히지 않는 상태.
+        budget: _spentBudget(today),
+        bedtime: '23:00',
+      );
+      expect(plan?.signal, ActiveCoachingSignal.nightWrap);
+      expect(plan?.at, DateTime(2026, 9, 23, 21));
+    });
+
+    test('취침을 안 정해뒀으면 9시', () {
+      final plan = ActiveCoachingPlanner.next(
+        tasks: [task('a', elapsedSeconds: 600)],
+        now: DateTime(2026, 9, 23, 19),
+        day: emptyDay(),
+        budget: _spentBudget(today),
+      );
+      expect(plan?.at, DateTime(2026, 9, 23, 21));
+    });
+
+    test('늦게 자는 사람도 9시 반을 넘기지 않는다', () {
+      // 그 뒤로 미루면 "10분만 손대볼까"가 자라고 할 시간에 일을 시키는 말이 된다.
+      final plan = ActiveCoachingPlanner.next(
+        tasks: [task('a', elapsedSeconds: 600)],
+        now: DateTime(2026, 9, 23, 19),
+        day: emptyDay(),
+        budget: _spentBudget(today),
+        bedtime: '01:00',
+      );
+      expect(plan?.at, DateTime(2026, 9, 23, 21, 30));
+    });
+
+    test('오늘 몫을 다 썼어도 나간다', () {
+      // 하루 종일 조용했던 사람에게 오히려 더 필요하다.
+      final plan = ActiveCoachingPlanner.next(
+        tasks: [task('a', elapsedSeconds: 600)],
+        now: DateTime(2026, 9, 23, 20, 30),
+        day: emptyDay(),
+        budget: _spentBudget(today),
+      );
+      expect(plan?.signal, ActiveCoachingSignal.nightWrap);
+    });
+
+    test('이미 건넸으면 다시 걸지 않는다', () {
+      final plan = ActiveCoachingPlanner.next(
+        tasks: [task('a', elapsedSeconds: 600)],
+        now: DateTime(2026, 9, 23, 20, 30),
+        day: emptyDay(),
+        budget: _spentBudget(today).wrappedUp(DateTime(2026, 9, 23, 21)),
+      );
+      expect(plan, isNull);
+    });
+
+    test('한 시간 넘게 지났으면 오늘은 넘긴다', () {
+      final plan = ActiveCoachingPlanner.next(
+        tasks: [task('a', elapsedSeconds: 600)],
+        now: DateTime(2026, 9, 23, 22, 30),
+        day: emptyDay(),
+        budget: _spentBudget(today),
+      );
+      expect(plan, isNull);
+    });
+
+    test('남은 일이 없으면 부르지 않는다', () {
+      final plan = ActiveCoachingPlanner.next(
+        tasks: [task('a', done: true)],
+        now: DateTime(2026, 9, 23, 20, 30),
+        day: emptyDay(),
+        budget: _spentBudget(today),
+      );
+      expect(plan, isNull);
+    });
+  });
+
   test('바로 앞에서 다룬 일은 건너뛴다', () {
     final plan = ActiveCoachingPlanner.next(
       tasks: [
@@ -208,4 +283,15 @@ void main() {
     );
     expect(plan?.taskId, 'b');
   });
+}
+
+/// 오늘 몫을 다 쓴 예산. 밤 카드가 예산 밖이라는 것을 보려고 쓴다.
+ActiveCoachingBudget _spentBudget(String today) {
+  var budget = ActiveCoachingBudget(date: today);
+  var at = DateTime(2026, 9, 23, 6);
+  for (var i = 0; i < ActiveCoachingBudget.dailyCap; i++) {
+    budget = budget.spoke(at);
+    at = at.add(const Duration(minutes: 30));
+  }
+  return budget;
 }

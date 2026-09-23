@@ -272,10 +272,7 @@ void main() {
       );
       expect(applied, isTrue);
 
-      final byDate = readMap(
-        prefs,
-        DailyResetService.plannedTasksByDateKey,
-      );
+      final byDate = readMap(prefs, DailyResetService.plannedTasksByDateKey);
       expect((byDate['2026-08-17'] as List).first['done'], isTrue);
 
       final past = readList(
@@ -464,11 +461,7 @@ void main() {
         'nyang_last_date': '2026-08-19',
         TaskCompletionService.habitLogsKey: jsonEncode({
           '7': {
-            '2026-08-19': {
-              'done': true,
-              'status': 'done',
-              'achievedCount': 3,
-            },
+            '2026-08-19': {'done': true, 'status': 'done', 'achievedCount': 3},
           },
         }),
         TaskCompletionService.historyKey: jsonEncode([

@@ -522,7 +522,6 @@ void main() {
       });
     });
 
-
     test('해낸 적이 있으면 평소 문구에도 그때 느낌이 섞인다', () {
       // 이 말은 자리를 안 가린다. 오래 쉰 사람에게도, 오늘 아직 시작을 못 한
       // 사람에게도 그대로 통한다.
@@ -654,10 +653,7 @@ void main() {
         long: true,
         hasEverDone: true,
       );
-      expect(
-        PreemptiveNudgeService.doneMemoryMessages,
-        contains(message),
-      );
+      expect(PreemptiveNudgeService.doneMemoryMessages, contains(message));
     });
 
     test('해낸 적이 아예 없으면 아무것도 전제하지 않는다', () {

@@ -170,7 +170,10 @@ void main() {
     test('시각을 적어둔 핵심은 그 시각 전에 안 짚는다', () {
       // 저녁 8시에 하기로 한 일을 오후 3시에 "아직 그대로네"라고 하면 틀린 말이다.
       final pick = ActiveCoachingTarget.pick(
-        tasks: [task('core', timeStart: '20:00'), task('etc')],
+        tasks: [
+          task('core', timeStart: '20:00'),
+          task('etc'),
+        ],
         now: now,
         coreTasks: [task('core', timeStart: '20:00')],
       );
@@ -198,10 +201,7 @@ void main() {
       );
       expect(pick.needsUserPick, isTrue);
       expect(pick.task, isNull);
-      expect(
-        pick.candidates.map((item) => item['id']),
-        ['a', 'b'],
-      );
+      expect(pick.candidates.map((item) => item['id']), ['a', 'b']);
     });
 
     test('핵심을 안 찍어둔 사람에게 잡무를 골라 짚지 않는다', () {

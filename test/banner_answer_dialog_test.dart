@@ -44,10 +44,9 @@ void main() {
     final boxes = [
       for (final label in ['다 했어', '계속하는 중', '다시 시작할게'])
         tester.getRect(
-          find.ancestor(
-            of: find.text(label),
-            matching: find.byType(Container),
-          ).first,
+          find
+              .ancestor(of: find.text(label), matching: find.byType(Container))
+              .first,
         ),
     ];
 
@@ -71,10 +70,9 @@ void main() {
 
     final question = tester.getRect(find.textContaining('아까 시작한'));
     final firstAction = tester.getRect(
-      find.ancestor(
-        of: find.text('다 했어'),
-        matching: find.byType(Container),
-      ).first,
+      find
+          .ancestor(of: find.text('다 했어'), matching: find.byType(Container))
+          .first,
     );
     expect(question.left, firstAction.left);
   });
@@ -88,10 +86,9 @@ void main() {
 
     Color colorOf(String label) {
       final container = tester.widget<Container>(
-        find.ancestor(
-          of: find.text(label),
-          matching: find.byType(Container),
-        ).first,
+        find
+            .ancestor(of: find.text(label), matching: find.byType(Container))
+            .first,
       );
       return ((container.decoration as BoxDecoration).color)!;
     }

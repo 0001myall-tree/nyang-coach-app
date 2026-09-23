@@ -78,7 +78,8 @@ void main() {
     test('80% 문턱을 피해 다녀도 실수령 아래다', () {
       // 매일 문턱 바로 아래까지만 쓰면 한도가 안 낮아진다. 그 자리가 새는
       // 구멍이 되지 않아야 한다.
-      final justUnder = (master * ApiUsageLimitService.heavyDayRatio).ceil() - 1;
+      final justUnder =
+          (master * ApiUsageLimitService.heavyDayRatio).ceil() - 1;
       expect(limitAfter(master, justUnder), master);
       expect(monthlyWon(justUnder), lessThan(6715));
     });

@@ -134,8 +134,10 @@ void main() {
       await _prefsWith(
         // 일정은 오늘 목록에 'schedule_<원본id>'로 복사되어 들어온다.
         today: [
-          {..._task('schedule_s1', '글쓰기', timeStart: '10:00'),
-            'category': 'schedule'},
+          {
+            ..._task('schedule_s1', '글쓰기', timeStart: '10:00'),
+            'category': 'schedule',
+          },
         ],
         schedules: {
           _key(today): [

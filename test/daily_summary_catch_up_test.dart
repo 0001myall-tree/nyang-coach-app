@@ -121,10 +121,7 @@ void main() {
         '2026-09-10',
       );
 
-      expect(messages.map((m) => (m as Map)['text']).toList(), [
-        '먼저',
-        '나중',
-      ]);
+      expect(messages.map((m) => (m as Map)['text']).toList(), ['먼저', '나중']);
       expect((messages.first as Map)['coachId'], 'bro');
     });
   });

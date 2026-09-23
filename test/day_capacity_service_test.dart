@@ -4,7 +4,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:nyang_coach/services/day_capacity_service.dart';
 
 /// [daysAgo]일 전 기록 하나.
-Map<String, dynamic> day(int daysAgo, {required int planned, required int done}) {
+Map<String, dynamic> day(
+  int daysAgo, {
+  required int planned,
+  required int done,
+}) {
   final date = DateTime.now().subtract(Duration(days: daysAgo));
   return {
     'date':

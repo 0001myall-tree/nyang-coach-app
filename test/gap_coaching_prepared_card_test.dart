@@ -312,7 +312,10 @@ void main() {
   group('참견하는 요일', () {
     test('적어둔 값이 없으면 매일로 본다', () {
       // 이 설정이 생기기 전부터 켜둔 사람이 갑자기 조용해지면 안 된다.
-      expect(GapCoachingService.parseDays(null), GapCoachingService.defaultDays);
+      expect(
+        GapCoachingService.parseDays(null),
+        GapCoachingService.defaultDays,
+      );
       expect(GapCoachingService.parseDays(''), GapCoachingService.defaultDays);
     });
 

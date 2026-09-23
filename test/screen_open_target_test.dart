@@ -50,10 +50,7 @@ void main() {
     });
 
     test('지운 자리에 빈 줄이 쌓이지 않는다', () {
-      expect(
-        ScreenOpenTarget.strip('열어줄게.\n\n[OPEN: 목표]\n\n'),
-        '열어줄게.',
-      );
+      expect(ScreenOpenTarget.strip('열어줄게.\n\n[OPEN: 목표]\n\n'), '열어줄게.');
     });
   });
 }

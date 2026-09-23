@@ -161,7 +161,11 @@ void main() {
         seen.add(next.id);
         cursor = next.id;
       }
-      expect(seen.toSet().length, rotating.length, reason: '한 바퀴 안에 중복이 없어야 한다');
+      expect(
+        seen.toSet().length,
+        rotating.length,
+        reason: '한 바퀴 안에 중복이 없어야 한다',
+      );
       expect(seen.last, rotating.first.id, reason: '끝에 닿으면 위로 돌아온다');
     });
 
@@ -205,7 +209,11 @@ void main() {
     // 로테이션은 아무거나 첫 마디로 꺼낸다. "앞의 방식들이 안 먹혔습니다"가
     // 들어 있으면 아무것도 제안하지 않은 대화의 첫 줄에서 거짓말이 된다.
     for (final intervention in ResistanceInterventionService.interventions) {
-      expect(intervention.rule, isNot(contains('연달아')), reason: intervention.id);
+      expect(
+        intervention.rule,
+        isNot(contains('연달아')),
+        reason: intervention.id,
+      );
       expect(
         intervention.rule,
         isNot(contains('앞의 방식')),

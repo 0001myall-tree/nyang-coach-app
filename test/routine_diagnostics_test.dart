@@ -101,7 +101,12 @@ void main() {
     final text = report(
       habits: [
         {'id': 1, 'name': '매일 것', 'freq': 'daily'},
-        {'id': 2, 'name': '주 것', 'freq': 'weekly_count', 'weeklyTargetCount': 3},
+        {
+          'id': 2,
+          'name': '주 것',
+          'freq': 'weekly_count',
+          'weeklyTargetCount': 3,
+        },
         {
           'id': 3,
           'name': '요일 것',

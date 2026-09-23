@@ -84,6 +84,7 @@ class ActiveCoachingSync {
       onDays: await GapCoachingService.days(),
       busyAt: (at) => BusyHoursService.busyNow(prefs, at) != null,
       busyEndAfter: (at) => BusyHoursService.busyEndAt(prefs, at),
+      bedtime: prefs.getString('nyang_premium_min_sleep_time'),
     );
     if (plan == null) {
       await _clear();
@@ -96,6 +97,8 @@ class ActiveCoachingSync {
         'date': ActiveCoachingStore.dateKey(now),
         'at': plan.at.millisecondsSinceEpoch,
         'title': titleFor(plan),
+        // 밤 카드는 답이 다르다. 그 갈래를 네이티브가 알아야 버튼이 달라진다.
+        if (plan.signal == ActiveCoachingSignal.nightWrap) 'kind': 'night',
         if (plan.taskId != null) 'taskId': plan.taskId,
       }),
     );
@@ -139,7 +142,11 @@ class ActiveCoachingSync {
         return;
       }
       final taskId = decoded['taskId']?.toString();
-      final budget = ActiveCoachingStore.readBudget(prefs, now);
+      final night = decoded['night'] == true;
+      var budget = ActiveCoachingStore.readBudget(prefs, now);
+      // 하루를 닫는 말은 하루 한 번이다. 나간 것을 안 적으면 앱을 열 때마다
+      // 다시 걸린다.
+      if (night) budget = budget.wrappedUp(at);
       await ActiveCoachingStore.writeBudget(
         prefs,
         budget
@@ -177,17 +184,27 @@ class ActiveCoachingSync {
   @visibleForTesting
   static String titleFor(ActiveCoachingPlan plan) {
     final name = _shorten(plan.taskText ?? '');
-    if (name.isEmpty) return askTitle;
+    if (name.isEmpty) {
+      return plan.signal == ActiveCoachingSignal.nightWrap
+          ? nightAskTitle
+          : askTitle;
+    }
     return switch (plan.signal) {
       // 사용자가 정한 시각이다. 재촉이 아니라 약속을 확인하는 말이라야 한다.
       ActiveCoachingSignal.promised => "'$name' 할 시간이라고 했지.\n지금 할까?",
       ActiveCoachingSignal.paused => "'$name' 하다 멈췄네.\n조금만 더 붙을까?",
+      // 하루를 닫는 말. "오늘 결국 못 했네"는 판결문이라, 못 한 것을 짚지 않고
+      // 남은 시간에 할 수 있는 크기만 내민다.
+      ActiveCoachingSignal.nightWrap => "'$name'\n오늘 10분만 손대볼까?",
       _ => "'$name' 아직이네.\n지금 조금이라도 해볼까?",
     };
   }
 
   /// 부를 일이 정해지지 않은 자리. 고르는 것은 사용자다.
   static const String askTitle = '지금 조금이라도 할 수 있는 거,\n하나 정해볼까?';
+
+  /// 밤에 부를 일이 정해지지 않았을 때.
+  static const String nightAskTitle = '오늘 10분만 손대볼 거,\n하나 정해볼까?';
 
   /// 카드 한 줄에 들어가는 이름 길이.
   static const int _nameLimit = 14;

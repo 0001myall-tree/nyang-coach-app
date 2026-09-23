@@ -139,8 +139,14 @@ void main() {
     test('코치끼리 섞이지 않는다', () async {
       await LifePatternService.saveAnswer('halmae', 'share', ['대부분 내가 해']);
       await LifePatternService.saveAnswer('bro', 'posture', ['앉아 있는 시간이 많아']);
-      expect((await LifePatternService.answers('halmae')).containsKey('posture'), isFalse);
-      expect((await LifePatternService.answers('bro')).containsKey('share'), isFalse);
+      expect(
+        (await LifePatternService.answers('halmae')).containsKey('posture'),
+        isFalse,
+      );
+      expect(
+        (await LifePatternService.answers('bro')).containsKey('share'),
+        isFalse,
+      );
     });
   });
 
@@ -210,7 +216,11 @@ void main() {
   group('역할 한 줄', () {
     test('맡은 영역이 있는 코치에만 붙는다', () {
       for (final coachId in LifePatternService.domains.keys) {
-        expect(LifePatternService.roleLine(coachId), isNotEmpty, reason: coachId);
+        expect(
+          LifePatternService.roleLine(coachId),
+          isNotEmpty,
+          reason: coachId,
+        );
       }
       expect(LifePatternService.roleLine('cat'), isEmpty);
       expect(LifePatternService.roleLine('sec_female'), isEmpty);

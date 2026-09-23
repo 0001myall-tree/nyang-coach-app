@@ -63,6 +63,7 @@ class OngoingNudgeService : Service() {
 
         private const val EXTRA_TITLE = "title"
         private const val EXTRA_TASK_ID = "taskId"
+        private const val EXTRA_NIGHT = "night"
 
         /**
          * "다시 시작할게"를 누른 뒤 냥냥이가 적어도 이만큼은 남아 있는다.
@@ -86,6 +87,7 @@ class OngoingNudgeService : Service() {
                 putExtra(EXTRA_TRACK, TRACK_ACTIVE)
                 putExtra(EXTRA_TITLE, plan.title)
                 putExtra(EXTRA_TASK_ID, plan.taskId)
+                putExtra(EXTRA_NIGHT, plan.night)
             }
             // 막히면 이번 차례는 그냥 지나간다. 앱이 열릴 때 Dart가 지금
             // 상태로 다시 계산해 건다.
@@ -185,6 +187,9 @@ class OngoingNudgeService : Service() {
     /** 그 말이 부르는 일. "지금 뭐 할 수 있어?"를 묻는 자리에는 없다. */
     private var activeTaskId: String? = null
 
+    /** 하루를 닫는 말인지. 그 자리만 답이 다르다. */
+    private var activeNight: Boolean = false
+
     private fun currentTaskText(): String = when {
         isGapTrack() || isActiveTrack() -> ""
         isStartTrack() -> OngoingNudgeState.startTaskText(this)
@@ -214,6 +219,7 @@ class OngoingNudgeService : Service() {
         if (requestedTrack == TRACK_ACTIVE) {
             activeTitle = intent?.getStringExtra(EXTRA_TITLE).orEmpty()
             activeTaskId = intent?.getStringExtra(EXTRA_TASK_ID)
+            activeNight = intent?.getBooleanExtra(EXTRA_NIGHT, false) ?: false
         }
         val currentlyShowing = bubbleView != null || cardView != null
 
@@ -303,7 +309,7 @@ class OngoingNudgeService : Service() {
             // 나가지도 않은 틈새 코칭 때문에 다음 코칭이 막히지 않는다.
             if (isGapTrack()) OngoingNudgeState.markGapShown(this)
             if (isActiveTrack()) {
-                OngoingNudgeState.markActiveShown(this, activeTaskId)
+                OngoingNudgeState.markActiveShown(this, activeTaskId, activeNight)
             }
         }
         return START_NOT_STICKY
@@ -630,6 +636,22 @@ class OngoingNudgeService : Service() {
                 answered = true
                 OngoingNudgeAnswerWriter.markActiveCoaching(this, "", "")
                 openPlanner()
+            }
+        } else if (activeNight) {
+            // 하루를 닫는 자리다. 못 한 것을 짚지 않고, 남은 시간에 할 수 있는
+            // 크기를 먼저 내민다. 미루는 쪽보다 지금 손대는 쪽이 앞이다.
+            goButton.text = "10분만 해볼게"
+            laterButton.text = "오늘은 여기까지"
+            goButton.setOnClickListener {
+                answered = true
+                OngoingNudgeAnswerWriter.markActiveCoaching(this, taskId, "")
+                openPlanner()
+            }
+            laterButton.setOnClickListener {
+                answered = true
+                OngoingNudgeState.writeResult(this, taskId, "notToday")
+                Toast.makeText(this, "알겠어. 오늘은 여기까지!", Toast.LENGTH_SHORT).show()
+                lingerAsDoorway()
             }
         } else {
             goButton.text = "지금 할게"

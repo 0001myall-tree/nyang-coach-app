@@ -142,10 +142,7 @@ void main() {
 
     test('넣을 시간대를 못 찾으면', () {
       // 시작 기록이 아예 없는 사람. 비어 있는 시간은 많지만 자리는 아니다.
-      final plan = LifeRoutineAnalysis.analyze(
-        historyRaw: history(),
-        now: now,
-      );
+      final plan = LifeRoutineAnalysis.analyze(historyRaw: history(), now: now);
       expect(plan.verdict, LifeVerdict.hold);
       expect(plan.reason, contains('시간대'));
     });

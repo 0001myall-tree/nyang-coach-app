@@ -61,6 +61,7 @@ class ActiveCoachingPlanner {
     Set<int> onDays = const {1, 2, 3, 4, 5, 6, 7},
     bool Function(DateTime at)? busyAt,
     DateTime? Function(DateTime at)? busyEndAfter,
+    String? bedtime,
   }) {
     // 참견하지 않기로 한 요일이다. 약속 시각도 여기서는 걸지 않는다 — 그 요일에
     // 안 부르기로 한 사람에게 약속이라고 뚫고 들어가면 설정이 거짓말이 된다.
@@ -100,7 +101,12 @@ class ActiveCoachingPlanner {
       // 사이에 목록도 약속도 바뀐다.
       if (when.day != now.day || when.month != now.month) return;
       if (!onDays.contains(when.weekday)) return;
-      if (when.hour >= ActiveCoachingBudget.quietFromHour) return;
+      // 하루를 닫는 말은 조용한 시간 앞에 서 있으라고 자리를 잡아둔 것이라
+      // 여기서 다시 거르지 않는다.
+      if (signal != ActiveCoachingSignal.nightWrap &&
+          when.hour >= ActiveCoachingBudget.quietFromHour) {
+        return;
+      }
       if (best != null && !when.isBefore(best!.at)) return;
       best = ActiveCoachingPlan(
         at: when,
@@ -108,6 +114,16 @@ class ActiveCoachingPlanner {
         taskId: task?['id']?.toString(),
         taskText: task?['text']?.toString().trim(),
       );
+    }
+
+    // 하루를 닫는 말. 예산 밖이라 오늘 몫을 다 썼어도 나간다 — 하루 종일
+    // 조용했던 사람에게 오히려 더 필요하다.
+    final night = _nightWrapAt(now, bedtime);
+    if (night != null &&
+        !budget.wrappedUpToday &&
+        !standing.isNone &&
+        _worthSaying(standing, now)) {
+      consider(night, ActiveCoachingSignal.nightWrap, standing.task);
     }
 
     if (late != null) {
@@ -120,6 +136,47 @@ class ActiveCoachingPlanner {
       consider(allowedFrom, standing.signal, standing.task);
     }
     return best;
+  }
+
+  /// 하루를 닫는 말을 건넬 시각. 이미 너무 늦었으면 null.
+  ///
+  /// 취침 두 시간 전에 선다. 안 정해둔 사람은 밤 9시다. 늦게 자는 사람에게도
+  /// 9시 반을 넘기지 않는다 — 그 뒤로 미루면 "10분만 손대볼까"가 자라고 할
+  /// 시간에 일을 시키는 말이 된다.
+  static DateTime? _nightWrapAt(DateTime now, String? bedtime) {
+    final parsed = _parseHhMm(bedtime);
+    var at = DateTime(now.year, now.month, now.day, 21);
+    if (parsed != null) {
+      var sleepAt = DateTime(
+        now.year,
+        now.month,
+        now.day,
+        parsed.$1,
+        parsed.$2,
+      );
+      // 자정을 넘겨 자는 사람의 취침은 다음 날 것이다. 새벽 1시에 자는 사람의
+      // "두 시간 전"은 어제 밤 11시가 아니라 오늘 밤 11시다.
+      if (parsed.$1 < 6) sleepAt = sleepAt.add(const Duration(days: 1));
+      at = sleepAt.subtract(const Duration(hours: 2));
+    }
+    final latest = DateTime(now.year, now.month, now.day, 21, 30);
+    if (at.isAfter(latest)) at = latest;
+    // 그 시각을 이미 지났으면 지금 건넨다. 한 시간 넘게 지났으면 오늘은 넘긴다.
+    if (at.isBefore(now)) {
+      if (now.difference(at) > const Duration(hours: 1)) return null;
+      return now;
+    }
+    return at;
+  }
+
+  static (int, int)? _parseHhMm(String? raw) {
+    final parts = (raw ?? '').split(':');
+    if (parts.length != 2) return null;
+    final hour = int.tryParse(parts[0]);
+    final minute = int.tryParse(parts[1]);
+    if (hour == null || minute == null) return null;
+    if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return null;
+    return (hour, minute);
   }
 
   /// 지금 말을 걸 이유가 되는지.

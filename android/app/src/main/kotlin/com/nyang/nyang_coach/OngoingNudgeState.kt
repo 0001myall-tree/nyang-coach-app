@@ -429,8 +429,17 @@ object OngoingNudgeState {
         return result
     }
 
-    /** 적극 코칭 카드에 적을 한 줄과, 그 말이 부르는 일. */
-    data class ActivePlan(val title: String, val taskId: String?)
+    /**
+     * 적극 코칭 카드에 적을 한 줄과, 그 말이 부르는 일.
+     *
+     * [night]는 하루를 닫는 말인지. 그 자리만 답이 다르다 — 지금 10분만
+     * 해보거나, 오늘은 여기까지 하거나.
+     */
+    data class ActivePlan(
+        val title: String,
+        val taskId: String?,
+        val night: Boolean,
+    )
 
     /**
      * 지금 띄울 적극 코칭 계획. 없거나 낡았으면 null.
@@ -454,7 +463,7 @@ object OngoingNudgeState {
         if (taskId != null && !OngoingNudgeAnswerWriter.isPending(context, taskId)) {
             return null
         }
-        return ActivePlan(title, taskId)
+        return ActivePlan(title, taskId, json.optString("kind", "") == "night")
     }
 
     /** 적극 코칭 계획을 지운다. 한 번 띄우면 그 계획은 쓴 것이다. */
@@ -471,9 +480,9 @@ object OngoingNudgeState {
      * 걸러져 지나간 차례와 구분해야 한다. 나가지도 않은 개입 때문에 오늘 몫이
      * 줄면, 정작 말을 걸어야 할 때 코치가 입을 다문다.
      */
-    fun markActiveShown(context: Context, taskId: String?) {
+    fun markActiveShown(context: Context, taskId: String?, night: Boolean) {
         val json = """{"at":${System.currentTimeMillis()},""" +
-            """"taskId":"${escape(taskId.orEmpty())}"}"""
+            """"taskId":"${escape(taskId.orEmpty())}","night":$night}"""
         prefs(context).edit().putString(KEY_ACTIVE_SHOWN, json).commit()
     }
 

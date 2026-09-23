@@ -262,20 +262,14 @@ void main() {
 ''';
 
     test('그날 걸린 것만 목표를 넘나들며 모은다', () {
-      final entries = _entriesFor(
-        visions,
-        '2026-09-20',
-      );
+      final entries = _entriesFor(visions, '2026-09-20');
 
       expect(entries.map((e) => e['text']), ['1장 마감', '5km 뛰기']);
       expect(entries.every((e) => e['category'] == 'milestone'), isTrue);
     });
 
     test('끝낸 이정표는 달성 시각을 들고 온다', () {
-      final entries = _entriesFor(
-        visions,
-        '2026-09-20',
-      );
+      final entries = _entriesFor(visions, '2026-09-20');
 
       expect(entries.first['done'], isTrue);
       expect(entries.first['completedAt'], '2026-09-20T18:00:00.000');
@@ -283,26 +277,14 @@ void main() {
     });
 
     test('걸린 게 없는 날은 빈손', () {
-      expect(
-        _entriesFor(visions, '2026-09-22'),
-        isEmpty,
-      );
+      expect(_entriesFor(visions, '2026-09-22'), isEmpty);
     });
 
     test('목표가 없거나 깨져 있어도 기록 쓰기를 막지 않는다', () {
-      expect(
-        _entriesFor(null, '2026-09-20'),
-        isEmpty,
-      );
+      expect(_entriesFor(null, '2026-09-20'), isEmpty);
       expect(_entriesFor('', '2026-09-20'), isEmpty);
-      expect(
-        _entriesFor('{깨진', '2026-09-20'),
-        isEmpty,
-      );
-      expect(
-        _entriesFor('{"a":1}', '2026-09-20'),
-        isEmpty,
-      );
+      expect(_entriesFor('{깨진', '2026-09-20'), isEmpty);
+      expect(_entriesFor('{"a":1}', '2026-09-20'), isEmpty);
     });
 
     test('이정표가 없는 목표는 건너뛴다', () {

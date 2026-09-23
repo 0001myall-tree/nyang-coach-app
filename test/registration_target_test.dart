@@ -53,12 +53,7 @@ void main() {
     });
 
     test('자리와 이름을 함께 말한다', () {
-      for (final input in [
-        '할일에 스트레칭',
-        '오늘 할일에 집필',
-        '내일 3시 회의',
-        '루틴으로 물 마시기',
-      ]) {
+      for (final input in ['할일에 스트레칭', '오늘 할일에 집필', '내일 3시 회의', '루틴으로 물 마시기']) {
         expect(
           RegistrationTarget.nameIsElsewhere(input),
           isFalse,

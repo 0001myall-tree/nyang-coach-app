@@ -200,6 +200,7 @@ class ActiveCoachingBudget {
     this.noReplyStreak = 0,
     this.lastTaskId,
     this.heldOffTaskId,
+    this.wrappedUpAt,
   });
 
   /// 개입과 개입 사이.
@@ -237,6 +238,11 @@ class ActiveCoachingBudget {
   /// 하나만 들고 간다. 퇴근하자마자 밀린 것이 세 번 연달아 오면 그게 제일 나쁘다.
   final String? heldOffTaskId;
 
+  /// 오늘 하루를 닫는 말을 건넨 시각. 하루 한 번뿐이다.
+  final DateTime? wrappedUpAt;
+
+  bool get wrappedUpToday => wrappedUpAt != null;
+
   Duration get currentInterval =>
       noReplyStreak >= noReplyThreshold ? quietInterval : interval;
 
@@ -265,6 +271,19 @@ class ActiveCoachingBudget {
     noReplyStreak: noReplyStreak,
     lastTaskId: taskId ?? lastTaskId,
     heldOffTaskId: heldOffTaskId,
+    wrappedUpAt: wrappedUpAt,
+  );
+
+  /// 하루를 닫는 말을 건넸다고 적는다. 하루 한 번뿐이라 이게 없으면 앱을 열
+  /// 때마다 다시 걸린다.
+  ActiveCoachingBudget wrappedUp(DateTime now) => ActiveCoachingBudget(
+    date: date,
+    lastSpokeAt: lastSpokeAt,
+    spokenToday: spokenToday,
+    noReplyStreak: noReplyStreak,
+    lastTaskId: lastTaskId,
+    heldOffTaskId: heldOffTaskId,
+    wrappedUpAt: now,
   );
 
   /// 답이 없었다고 적는다.
@@ -283,6 +302,7 @@ class ActiveCoachingBudget {
     spokenToday: spokenToday,
     noReplyStreak: noReplyStreak,
     lastTaskId: lastTaskId,
+    wrappedUpAt: wrappedUpAt,
   );
 
   ActiveCoachingBudget _copyWith({
@@ -298,6 +318,7 @@ class ActiveCoachingBudget {
     noReplyStreak: noReplyStreak ?? this.noReplyStreak,
     lastTaskId: lastTaskId ?? this.lastTaskId,
     heldOffTaskId: heldOffTaskId ?? this.heldOffTaskId,
+    wrappedUpAt: wrappedUpAt,
   );
 
   Map<String, dynamic> toJson() => {
@@ -307,6 +328,7 @@ class ActiveCoachingBudget {
     if (noReplyStreak > 0) 'noReplyStreak': noReplyStreak,
     if (lastTaskId != null) 'lastTaskId': lastTaskId,
     if (heldOffTaskId != null) 'heldOffTaskId': heldOffTaskId,
+    if (wrappedUpAt != null) 'wrappedUpAt': wrappedUpAt!.toIso8601String(),
   };
 
   factory ActiveCoachingBudget.fromJson(Map json, {required String today}) {
@@ -320,6 +342,7 @@ class ActiveCoachingBudget {
       noReplyStreak: (json['noReplyStreak'] as num?)?.toInt() ?? 0,
       lastTaskId: json['lastTaskId']?.toString(),
       heldOffTaskId: json['heldOffTaskId']?.toString(),
+      wrappedUpAt: _parseTime(json['wrappedUpAt']),
     );
   }
 }

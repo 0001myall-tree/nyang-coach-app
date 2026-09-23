@@ -48,7 +48,10 @@ void main() {
     });
 
     test('목록은 올릴 때 글자로 펴서 보내므로 견줄 때도 글자로 본다', () {
-      expect(TasksSyncService.sameStoredValue(<String>['1'], <dynamic>[1]), isTrue);
+      expect(
+        TasksSyncService.sameStoredValue(<String>['1'], <dynamic>[1]),
+        isTrue,
+      );
     });
 
     test('목록이 아닌 값은 그대로 견준다', () {

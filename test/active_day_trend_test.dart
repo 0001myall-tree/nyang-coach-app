@@ -30,9 +30,7 @@ void main() {
   Future<({int thisWeek, int lastWeek})> trendOf(
     List<Map<String, dynamic>> days,
   ) async {
-    SharedPreferences.setMockInitialValues({
-      'nyang_history': jsonEncode(days),
-    });
+    SharedPreferences.setMockInitialValues({'nyang_history': jsonEncode(days)});
     return ExecutionPatternService.activeDayTrend();
   }
 

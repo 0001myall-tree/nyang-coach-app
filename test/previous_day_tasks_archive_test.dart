@@ -11,7 +11,8 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   Future<Map<String, dynamic>> archived(SharedPreferences prefs) async {
-    final raw = prefs.getString(DailyResetService.plannedTasksByDateKey) ?? '{}';
+    final raw =
+        prefs.getString(DailyResetService.plannedTasksByDateKey) ?? '{}';
     return Map<String, dynamic>.from(jsonDecode(raw) as Map);
   }
 

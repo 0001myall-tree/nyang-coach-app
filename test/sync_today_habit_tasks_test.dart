@@ -123,7 +123,9 @@ void main() {
     test('오늘 요일이 아니면 더하지 않는다', () async {
       final otherDow = (DateTime.now().weekday - 1 + 1) % 7;
       seed(
-        habits: [habit(1, '출퇴근 책읽기', freq: 'weekly', days: [otherDow])],
+        habits: [
+          habit(1, '출퇴근 책읽기', freq: 'weekly', days: [otherDow]),
+        ],
       );
       expect(await DailyResetService.syncTodayHabitTasks(), isFalse);
       expect(await storedTasks(), isEmpty);
@@ -142,7 +144,9 @@ void main() {
     test('오늘 요일이 아닌 줄을 뺀다', () async {
       final otherDow = (DateTime.now().weekday - 1 + 1) % 7;
       seed(
-        habits: [habit(1, '출퇴근 책읽기', freq: 'weekly', days: [otherDow])],
+        habits: [
+          habit(1, '출퇴근 책읽기', freq: 'weekly', days: [otherDow]),
+        ],
         tasks: [habitRow(1, '출퇴근 책읽기')],
       );
       expect(await DailyResetService.syncTodayHabitTasks(), isTrue);
@@ -150,10 +154,7 @@ void main() {
     });
 
     test('손으로 적은 할 일은 건드리지 않는다', () async {
-      seed(
-        habits: [],
-        tasks: [plainRow('manual_1', '머리 비우기 메모')],
-      );
+      seed(habits: [], tasks: [plainRow('manual_1', '머리 비우기 메모')]);
       expect(await DailyResetService.syncTodayHabitTasks(), isFalse);
       expect((await storedTasks()).single['text'], '머리 비우기 메모');
     });

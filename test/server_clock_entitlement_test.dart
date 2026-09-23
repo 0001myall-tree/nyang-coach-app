@@ -10,10 +10,8 @@ import 'package:nyang_coach/services/server_clock.dart';
 void main() {
   tearDown(() => ServerClock.setOffsetForTest(null));
 
-  UserData planUntil(DateTime expiresAt) => UserData(
-    planType: 'master',
-    planExpiresAt: expiresAt,
-  );
+  UserData planUntil(DateTime expiresAt) =>
+      UserData(planType: 'master', planExpiresAt: expiresAt);
 
   group('구독 만료', () {
     test('서버가 아직 만료 전이라고 하면 쓸 수 있다', () {

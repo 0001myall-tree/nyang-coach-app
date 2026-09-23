@@ -21,7 +21,10 @@ void main() {
     });
 
     test('시각이 붙어 있어도 날짜만 본다', () {
-      expect(RoutineSchedule.startOfWeek(DateTime(2026, 8, 19, 23, 40)), monday);
+      expect(
+        RoutineSchedule.startOfWeek(DateTime(2026, 8, 19, 23, 40)),
+        monday,
+      );
     });
   });
 
@@ -175,7 +178,10 @@ void main() {
     }
 
     test('아직 못 채웠으면 올린다', () {
-      expect(shows({RoutineSchedule.dateKey(monday): doneLog()}, wednesday), isTrue);
+      expect(
+        shows({RoutineSchedule.dateKey(monday): doneLog()}, wednesday),
+        isTrue,
+      );
     });
 
     test('이번 주 목표를 채웠으면 그만 올린다', () {

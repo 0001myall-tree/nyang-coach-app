@@ -9,10 +9,7 @@ import 'package:nyang_coach/services/life_routine_offer.dart';
 void main() {
   group('받아온 말 다듬기', () {
     test('그냥 말이면 그대로', () {
-      expect(
-        LifeRoutineOffer.clean('토요일 오전에 20분만 해볼까?'),
-        '토요일 오전에 20분만 해볼까?',
-      );
+      expect(LifeRoutineOffer.clean('토요일 오전에 20분만 해볼까?'), '토요일 오전에 20분만 해볼까?');
     });
 
     test('읽히지 않고 남은 태그는 떼어낸다', () {
