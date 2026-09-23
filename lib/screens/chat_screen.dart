@@ -972,11 +972,7 @@ class _SuggestedTask {
   /// 물어보되, 어느 버튼이 코치 생각인지만 알려주고 고르는 것은 사용자가 한다.
   final bool laterSuggested;
 
-  _SuggestedTask({
-    required this.text,
-    this.time,
-    this.laterSuggested = false,
-  });
+  _SuggestedTask({required this.text, this.time, this.laterSuggested = false});
 }
 
 class _ParsedScheduleRegistration {
@@ -1690,7 +1686,6 @@ class _ChatScreenState extends State<ChatScreen>
     await _checkBedtimeMoveOffer();
     _initSpeech();
   }
-
 
   Future<void> _recordCatChatEntry(
     SharedPreferences prefs,
@@ -4815,19 +4810,21 @@ ${lines.join('\n')}
     final line = await OverplanCoachingLine.compose(
       coachId: widget.coachId,
       recentMax: recentMax,
-      tasks: tasks.map((task) {
-        final time = task['time']?.toString();
-        final duration = task['duration']?.toString();
-        return OverplanTask(
-          name: task['text']?.toString() ?? '',
-          isRoutine: task['category'] == 'habit' || task['isHabit'] == true,
-          done: task['done'] == true,
-          started:
-              task['inProgress'] == true || task['startedAt'] != null,
-          duration: duration == null || duration.isEmpty ? null : duration,
-          time: time == null || time.isEmpty ? null : time,
-        );
-      }).where((task) => task.name.isNotEmpty).toList(growable: false),
+      tasks: tasks
+          .map((task) {
+            final time = task['time']?.toString();
+            final duration = task['duration']?.toString();
+            return OverplanTask(
+              name: task['text']?.toString() ?? '',
+              isRoutine: task['category'] == 'habit' || task['isHabit'] == true,
+              done: task['done'] == true,
+              started: task['inProgress'] == true || task['startedAt'] != null,
+              duration: duration == null || duration.isEmpty ? null : duration,
+              time: time == null || time.isEmpty ? null : time,
+            );
+          })
+          .where((task) => task.name.isNotEmpty)
+          .toList(growable: false),
     );
     if (!mounted) return true;
     setState(() => _isLoading = false);
@@ -20891,11 +20888,7 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
       padding: const EdgeInsets.fromLTRB(16, 7, 16, 7),
       child: Row(
         mainAxisSize: MainAxisSize.min,
-        children: [
-          _buildBrainDumpButton(),
-          const SizedBox(width: 7),
-          ...items,
-        ],
+        children: [_buildBrainDumpButton(), const SizedBox(width: 7), ...items],
       ),
     );
   }

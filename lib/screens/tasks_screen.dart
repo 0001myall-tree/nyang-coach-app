@@ -35,7 +35,9 @@ import '../services/task_completion_service.dart';
 import '../services/apple_calendar_sync_service.dart';
 import '../services/routine_schedule.dart';
 import '../services/gap_coaching_service.dart';
+import '../services/active_coaching_move.dart';
 import '../services/active_coaching_promise.dart';
+import '../services/active_coaching_sync.dart';
 import '../services/active_coaching_time.dart';
 import '../widgets/active_coaching_dialog.dart';
 import '../widgets/banner_answer_dialog.dart';
@@ -930,9 +932,11 @@ class _TasksScreenState extends State<TasksScreen>
     final prefs = await SharedPreferences.getInstance();
     await prefs.reload();
     final taskId = prefs.getString(NyangBannerNudge.focusTaskKey);
-    if (taskId == null || taskId.isEmpty) return;
-    await prefs.remove(NyangBannerNudge.focusTaskKey);
     final kind = prefs.getString(NyangBannerNudge.answerKindKey);
+    // 적극 코칭에서 "지금 뭐 할 수 있어?"를 물을 때는 가리킬 일이 없다. 그
+    // 자리만 예외로, 이름 없이도 팝업이 열려야 한다.
+    if (taskId == null || (taskId.isEmpty && kind != 'activeCoaching')) return;
+    await prefs.remove(NyangBannerNudge.focusTaskKey);
     final taskText = prefs.getString(NyangBannerNudge.answerTaskTextKey) ?? '';
     await prefs.remove(NyangBannerNudge.answerKindKey);
     await prefs.remove(NyangBannerNudge.answerTaskTextKey);
@@ -941,7 +945,7 @@ class _TasksScreenState extends State<TasksScreen>
     // 알 수 없어서 스크롤이 엉뚱한 데로 간다.
     await Future.delayed(const Duration(milliseconds: 350));
     if (!mounted) return;
-    await _pulseBannerFocus(taskId);
+    if (taskId.isNotEmpty) await _pulseBannerFocus(taskId);
     if (kind != null && kind.isNotEmpty && mounted) {
       await _showBannerAnswerDialog(
         kind: kind,
@@ -964,6 +968,10 @@ class _TasksScreenState extends State<TasksScreen>
     // 정해져 있으니 다른 질문을 한 번 더 얹지 않는다.
     if (kind == 'laterPick') {
       await _askWhenLater(taskId: taskId, taskText: taskText);
+      return;
+    }
+    if (kind == 'activeCoaching') {
+      await _showActiveCoachingDialog(taskId: taskId, taskText: taskText);
       return;
     }
     final String message;
@@ -1050,6 +1058,134 @@ class _TasksScreenState extends State<TasksScreen>
     );
   }
 
+  /// 적극 코칭 카드에서 [못 했어]를 눌러 들어왔을 때의 긴 대화.
+  ///
+  /// 이유 → 한 수 → 갈아타기 → 시각 순이다. 다른 앱 위에 뜬 창에서는 할 수
+  /// 없는 일이라 여기로 데려온다. 뒤에 그 일이 계속 보이고, 고르면 그 칸이
+  /// 바로 돌아간다.
+  Future<void> _showActiveCoachingDialog({
+    required String taskId,
+    required String taskText,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.reload();
+    final now = DateTime.now();
+
+    // 답을 하러 온 사람이다. 벌어졌던 간격을 되돌린다.
+    await ActiveCoachingSync.noteReplied(now);
+
+    final named = _activeTodayTasks.where(
+      (task) => task.id.toString() == taskId,
+    );
+    final target = named.isEmpty ? null : named.first;
+    final name = (target?.text ?? taskText).trim();
+
+    // 갈아탈 수 있는 남은 일들. 약속은 그 시각에 가서 하는 것이라 뺀다.
+    final others = <ActiveCoachingChoice>[
+      for (final task in _activeTodayTasks)
+        if (!task.done &&
+            !task.inProgress &&
+            task.category != 'schedule' &&
+            task.id.toString() != taskId &&
+            task.text.trim().isNotEmpty)
+          ActiveCoachingChoice(
+            name: task.text.trim(),
+            timeLabel: _activeCoachingTimeLabel(task.timeStart),
+          ),
+    ];
+
+    final situation = BusyHoursService.situationAt(prefs, now);
+    final choices = ActiveCoachingTime.choices(
+      now,
+      bedtime: prefs.getString('nyang_premium_min_sleep_time'),
+      busyAt: (at) => BusyHoursService.busyNow(prefs, at) != null,
+    );
+    if (!mounted) return;
+
+    final outcome = await showDialog<ActiveCoachingOutcome>(
+      context: context,
+      builder: (_) => ActiveCoachingDialog(
+        // 부를 일이 없으면 곧장 목록에서 고르는 자리로 간다.
+        taskName: name,
+        askTimeOnly: false,
+        otherTasks: others,
+        timeChoices: choices,
+        askMoves: (names, reason) => ActiveCoachingMove.suggest(
+          candidates: [
+            for (final item in names) ActiveCoachingCandidate(name: item),
+          ],
+          at: DateTime.now(),
+          situation: situation,
+          reason: reason,
+        ),
+      ),
+    );
+    if (outcome == null || !mounted) return;
+    await _applyActiveCoachingOutcome(outcome, now: now);
+  }
+
+  /// 팝업에서 고른 것을 실제로 반영한다.
+  Future<void> _applyActiveCoachingOutcome(
+    ActiveCoachingOutcome outcome, {
+    required DateTime now,
+  }) async {
+    final picked = _activeTodayTasks.where(
+      (task) => task.text.trim() == (outcome.taskName ?? '').trim(),
+    );
+    final task = picked.isEmpty ? null : picked.first;
+    if (task == null) return;
+    final taskId = task.id.toString();
+
+    // 목록에서 직접 고른 일이면 표시를 남긴다. 본인이 "이건 할 수 있다"고 말한
+    // 일이라, 다음에 개입할 때 먼저 본다.
+    if (outcome.reason != null) {
+      await ActiveCoachingPromise.notePickedByUser(taskId: taskId, at: now);
+    }
+
+    switch (outcome.kind) {
+      case ActiveCoachingOutcomeKind.start:
+        if (!task.done && !task.inProgress) _toggleTask(taskId);
+        return;
+      case ActiveCoachingOutcomeKind.promise:
+        final at = outcome.promisedAt;
+        if (at == null) return;
+        await _keepActiveCoachingPromise(taskId: taskId, at: at);
+        return;
+      case ActiveCoachingOutcomeKind.chooseTime:
+        await _askWhenLater(taskId: taskId, taskText: task.text);
+        return;
+      case ActiveCoachingOutcomeKind.dismissed:
+        return;
+    }
+  }
+
+  /// "오후 8:00". 아직 시각이 안 된 일도 목록에 넣되 언제인지는 적어준다.
+  static String? _activeCoachingTimeLabel(String? hhmm) {
+    final parts = (hhmm ?? '').split(':');
+    if (parts.length != 2) return null;
+    final hour = int.tryParse(parts[0]);
+    final minute = int.tryParse(parts[1]);
+    if (hour == null || minute == null) return null;
+    final meridiem = hour >= 12 ? '오후' : '오전';
+    final shown = hour % 12 == 0 ? 12 : hour % 12;
+    return '$meridiem $shown:${minute.toString().padLeft(2, '0')}';
+  }
+
+  /// 고른 시각을 약속으로 적고 알린다.
+  ///
+  /// 값을 몰래 바꾸지 않는다. 이 앱은 바꿀 때 알리는 쪽이다.
+  Future<void> _keepActiveCoachingPromise({
+    required String taskId,
+    required DateTime at,
+  }) async {
+    if (!await ActiveCoachingPromise.keep(taskId: taskId, at: at)) return;
+    await _loadAll();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('${_clockLabel(at)}로 시작 설정했어. 그때 알려줄게.')),
+    );
+  }
+
   /// "좀 더 있다가 언제?"를 묻고, 고른 시각을 약속으로 적는다.
   ///
   /// 적극 코칭을 켠 사람에게만 나온다. 끈 사람은 지금 그대로 — 누르면 그냥
@@ -1096,14 +1232,7 @@ class _TasksScreenState extends State<TasksScreen>
       if (!at.isAfter(now)) return;
     }
     if (at == null) return;
-
-    if (!await ActiveCoachingPromise.keep(taskId: taskId, at: at)) return;
-    await _loadAll();
-    if (!mounted) return;
-    // 값을 몰래 바꾸지 않는다. 이 앱은 바꿀 때 알리는 쪽이다.
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('${_clockLabel(at)}로 시작 설정했어. 그때 알려줄게.')),
-    );
+    await _keepActiveCoachingPromise(taskId: taskId, at: at);
   }
 
   /// "4시 30분". 스낵바 한 줄에 들어가는 모양이다.
@@ -2685,6 +2814,9 @@ class _TasksScreenState extends State<TasksScreen>
     unawaited(_syncOngoingNudge());
     // 다이내믹 아일랜드가 없는 아이폰은 냥냥이 대신 배너가 찾아간다.
     unawaited(NyangBannerNudge.sync());
+    // 목록이 바뀌면 다음에 말 걸 자리도 달라진다. 끝낸 일을 그 시각에 부르거나,
+    // 방금 적은 일을 아무도 안 챙기는 일이 없게 여기서 다시 잡는다.
+    unawaited(ActiveCoachingSync.sync());
     widget.onProgressChanged?.call();
     TasksSyncService.scheduleSyncToCloud();
   }

@@ -356,6 +356,14 @@ object OngoingNudgeState {
      */
     private const val KEY_LATER = "flutter.active_coaching_later"
 
+    /**
+     * 다음 개입 하나. Dart가 계산해 적어둔다.
+     *
+     * `ActiveCoachingSync.plannedKey`와 같은 이름이다. 여기서 무엇을 부를지
+     * 정하지 않는다 — 판단이 두 벌이면 한쪽만 고쳤을 때 두 폰이 다르게 군다.
+     */
+    private const val KEY_ACTIVE_PLAN = "flutter.active_coaching_plan"
+
     /** 그 슬롯이 오늘 이미 지나갔는지. 이 기기에서만 뜻이 있어 접두어가 없다. */
     private const val KEY_GAP_FIRED_PREFIX = "gap_coaching_fired_"
 
@@ -419,6 +427,54 @@ object OngoingNudgeState {
             result.add(hour to minute)
         }
         return result
+    }
+
+    /** 적극 코칭 카드에 적을 한 줄과, 그 말이 부르는 일. */
+    data class ActivePlan(val title: String, val taskId: String?)
+
+    /**
+     * 지금 띄울 적극 코칭 계획. 없거나 낡았으면 null.
+     *
+     * 오늘 만든 것만 쓴다. 앱을 하루 종일 안 연 사람에게 어제 만든 계획이
+     * 그대로 나가면 안 된다.
+     */
+    fun activePlan(context: Context): ActivePlan? {
+        if (!isGapEnabled(context)) return null
+        if (!runsToday(context)) return null
+        val raw = prefs(context).getString(KEY_ACTIVE_PLAN, null).orEmpty()
+        if (raw.isBlank()) return null
+        val json = runCatching { org.json.JSONObject(raw) }.getOrNull()
+            ?: return null
+        if (json.optString("date", "") != todayKey()) return null
+        val title = json.optString("title", "").trim()
+        if (title.isBlank()) return null
+        val taskId = json.optString("taskId", "").trim().ifBlank { null }
+        // 부를 일이 그새 끝났거나 사라졌으면 다른 말이 나가야 한다. 그 판단은
+        // 목록 하나만 보면 되므로 여기서 해도 판단이 두 벌로 늘지 않는다.
+        if (taskId != null && !OngoingNudgeAnswerWriter.isPending(context, taskId)) {
+            return null
+        }
+        return ActivePlan(title, taskId)
+    }
+
+    /** 적극 코칭 계획을 지운다. 한 번 띄우면 그 계획은 쓴 것이다. */
+    fun clearActivePlan(context: Context) {
+        prefs(context).edit().remove(KEY_ACTIVE_PLAN).commit()
+    }
+
+    /** 적극 코칭이 실제로 나간 자리. Dart가 읽어 예산에서 한 번을 뺀다. */
+    private const val KEY_ACTIVE_SHOWN = "flutter.active_coaching_shown"
+
+    /**
+     * 적극 코칭이 화면에 붙었다고 적는다.
+     *
+     * 걸러져 지나간 차례와 구분해야 한다. 나가지도 않은 개입 때문에 오늘 몫이
+     * 줄면, 정작 말을 걸어야 할 때 코치가 입을 다문다.
+     */
+    fun markActiveShown(context: Context, taskId: String?) {
+        val json = """{"at":${System.currentTimeMillis()},""" +
+            """"taskId":"${escape(taskId.orEmpty())}"}"""
+        prefs(context).edit().putString(KEY_ACTIVE_SHOWN, json).commit()
     }
 
     /**

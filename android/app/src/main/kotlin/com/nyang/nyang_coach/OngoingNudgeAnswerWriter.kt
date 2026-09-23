@@ -127,6 +127,28 @@ object OngoingNudgeAnswerWriter {
         markStoreChanged(prefs)
     }
 
+    /** 그 일이 아직 남아 있는지. 끝냈거나 목록에서 사라졌으면 거짓. */
+    fun isPending(context: Context, taskId: String): Boolean {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val tasksRaw = prefs.getString(KEY_TASKS, null) ?: return false
+        val tasks = runCatching { JSONArray(tasksRaw) }.getOrNull() ?: return false
+        for (i in 0 until tasks.length()) {
+            val item = tasks.optJSONObject(i) ?: continue
+            if (item.opt("id")?.toString() != taskId) continue
+            return !item.optBoolean("done", false)
+        }
+        return false
+    }
+
+    /** 적극 코칭 카드에서 [못 했어]를 눌러 앱으로 간다고 적어둔다. */
+    fun markActiveCoaching(context: Context, taskId: String, taskText: String) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putString("flutter.banner_focus_task_id", taskId)
+            .putString("flutter.banner_answer_kind", "activeCoaching")
+            .putString("flutter.banner_answer_task_text", taskText)
+            .commit()
+    }
+
     /**
      * [직접 고르기]로 앱에 들어간다고 적어둔다.
      *

@@ -196,11 +196,7 @@ ${urgentNote.isEmpty ? '' : '- 사용자가 급하다고 말한 것: $urgentNote
       // 시간 제한을 둔다. 답이 안 오면 로딩 표시가 영영 안 풀려서, 사용자는
       // 다 말해놓고 멈춘 화면만 보게 된다.
       final response = await callable
-          .call({
-            'messages': messages,
-            'model': model,
-            'temperature': 0.5,
-          })
+          .call({'messages': messages, 'model': model, 'temperature': 0.5})
           .timeout(const Duration(seconds: 45));
 
       final data = response.data;
@@ -239,7 +235,9 @@ ${urgentNote.isEmpty ? '' : '- 사용자가 급하다고 말한 것: $urgentNote
           '${content.length > 300 ? content.substring(0, 300) : content}',
         );
       } else {
-        debugPrint('[braindump] 안 ${plan.options.length}개, 겹침 ${plan.known.length}개');
+        debugPrint(
+          '[braindump] 안 ${plan.options.length}개, 겹침 ${plan.known.length}개',
+        );
       }
       return plan;
     } catch (e) {

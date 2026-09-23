@@ -56,10 +56,7 @@ class OverplanTask {
       if (isRoutine) '루틴',
       if (time != null && time!.isNotEmpty) time!,
       if (duration != null && duration!.isNotEmpty) duration!,
-      if (done)
-        '오늘 끝냄'
-      else if (started)
-        '오늘 손댔지만 아직 안 끝남',
+      if (done) '오늘 끝냄' else if (started) '오늘 손댔지만 아직 안 끝남',
     ];
     return marks.isEmpty ? '- $name' : '- $name (${marks.join(', ')})';
   }

@@ -1067,5 +1067,4 @@ class DailyResetService {
 
     await prefs.setString('nyang_history', jsonEncode(history));
   }
-
 }

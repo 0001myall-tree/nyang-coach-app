@@ -54,6 +54,17 @@ class OngoingNudgeService : Service() {
         private const val TRACK_GAP = "gap"
 
         /**
+         * 적극 코칭 개입 자리.
+         *
+         * 무엇을 부를지는 Dart가 미리 정해 적어뒀다. 여기서는 그 한 줄을 받아
+         * 띄우고, 답만 남긴다.
+         */
+        private const val TRACK_ACTIVE = "active"
+
+        private const val EXTRA_TITLE = "title"
+        private const val EXTRA_TASK_ID = "taskId"
+
+        /**
          * "다시 시작할게"를 누른 뒤 냥냥이가 적어도 이만큼은 남아 있는다.
          *
          * 원래 있기로 한 시간이 거의 끝나갈 때 눌렀다면 몇 초 만에 사라진다.
@@ -68,6 +79,24 @@ class OngoingNudgeService : Service() {
 
         /** 틈새 코칭 자리 전용. 막히면 다시 걸지 않고 오늘은 지나간다. */
         fun showGap(context: Context) = start(context, TRACK_GAP)
+
+        /** 적극 코칭 개입 자리 전용. 부를 말과 일은 받아서 들어온다. */
+        fun showActive(context: Context, plan: OngoingNudgeState.ActivePlan) {
+            val intent = Intent(context, OngoingNudgeService::class.java).apply {
+                putExtra(EXTRA_TRACK, TRACK_ACTIVE)
+                putExtra(EXTRA_TITLE, plan.title)
+                putExtra(EXTRA_TASK_ID, plan.taskId)
+            }
+            // 막히면 이번 차례는 그냥 지나간다. 앱이 열릴 때 Dart가 지금
+            // 상태로 다시 계산해 건다.
+            runCatching {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    context.startForegroundService(intent)
+                } else {
+                    context.startService(intent)
+                }
+            }
+        }
 
         private fun start(context: Context, track: String) {
             val intent = Intent(context, OngoingNudgeService::class.java).apply {
@@ -148,8 +177,16 @@ class OngoingNudgeService : Service() {
 
     private fun isGapTrack(): Boolean = track == TRACK_GAP
 
+    private fun isActiveTrack(): Boolean = track == TRACK_ACTIVE
+
+    /** 적극 코칭 카드에 적을 한 줄. 들어올 때 받아둔다. */
+    private var activeTitle: String = ""
+
+    /** 그 말이 부르는 일. "지금 뭐 할 수 있어?"를 묻는 자리에는 없다. */
+    private var activeTaskId: String? = null
+
     private fun currentTaskText(): String = when {
-        isGapTrack() -> ""
+        isGapTrack() || isActiveTrack() -> ""
         isStartTrack() -> OngoingNudgeState.startTaskText(this)
         else -> OngoingNudgeState.taskText(this)
     }
@@ -160,7 +197,7 @@ class OngoingNudgeService : Service() {
      * 틈새 코칭은 늘 아니다. 붙들고 있는 일정도 없고, 다음 차례도 없다.
      */
     private fun isActiveForCurrentTrack(): Boolean = when {
-        isGapTrack() -> false
+        isGapTrack() || isActiveTrack() -> false
         isStartTrack() -> OngoingNudgeState.isStartActive(this)
         else -> OngoingNudgeState.isActive(this)
     }
@@ -174,6 +211,10 @@ class OngoingNudgeService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val requestedTrack = intent?.getStringExtra(EXTRA_TRACK) ?: TRACK_PRIMARY
+        if (requestedTrack == TRACK_ACTIVE) {
+            activeTitle = intent?.getStringExtra(EXTRA_TITLE).orEmpty()
+            activeTaskId = intent?.getStringExtra(EXTRA_TASK_ID)
+        }
         val currentlyShowing = bubbleView != null || cardView != null
 
         if (currentlyShowing && requestedTrack == TRACK_GAP) {
@@ -238,7 +279,8 @@ class OngoingNudgeService : Service() {
         // 안 나온다.
         val requireEnabled = !isStartTrack() && !OngoingNudgeState.isIdleNudge(this)
         val shouldAppear = when {
-            isGapTrack() -> OngoingNudgeState.shouldAppearNowForGap(this)
+            isGapTrack() || isActiveTrack() ->
+                OngoingNudgeState.shouldAppearNowForGap(this)
             isStartTrack() -> OngoingNudgeState.shouldAppearNowForStart(this)
             else -> OngoingNudgeState.shouldAppearNow(this, requireEnabled = requireEnabled)
         }
@@ -249,7 +291,7 @@ class OngoingNudgeService : Service() {
         }
 
         if (bubbleView == null && cardView == null) {
-            val visibleMillis = if (isGapTrack()) {
+            val visibleMillis = if (isGapTrack() || isActiveTrack()) {
                 OngoingNudgeScheduler.GAP_VISIBLE_MILLIS
             } else {
                 OngoingNudgeScheduler.VISIBLE_MILLIS
@@ -260,6 +302,9 @@ class OngoingNudgeService : Service() {
             // 실제로 화면에 붙은 자리다. 걸러져 지나간 경우와 구분해서 적어야,
             // 나가지도 않은 틈새 코칭 때문에 다음 코칭이 막히지 않는다.
             if (isGapTrack()) OngoingNudgeState.markGapShown(this)
+            if (isActiveTrack()) {
+                OngoingNudgeState.markActiveShown(this, activeTaskId)
+            }
         }
         return START_NOT_STICKY
     }
@@ -287,6 +332,7 @@ class OngoingNudgeService : Service() {
             OngoingNudgeState.isResumeReminder(this)
         val title = when {
             isGapTrack() -> "지금 잠깐 여유 있냥?"
+            isActiveTrack() -> "냥냥코치가 왔어요"
             taskText.isBlank() && waitingToStart -> "시작할 일정이 있어요"
             taskText.isBlank() && waitingForNext -> "아직 안 한 일이 있어요"
             taskText.isBlank() && waitingToResume -> "멈춰 있는 일이 있어요"
@@ -430,6 +476,10 @@ class OngoingNudgeService : Service() {
     // ── 눌렀을 때 펼쳐지는 카드 ───────────────────────────────
 
     private fun expandToCard() {
+        if (isActiveTrack()) {
+            expandToActiveCard()
+            return
+        }
         if (isGapTrack()) {
             expandToGapCard()
             return
@@ -548,6 +598,80 @@ class OngoingNudgeService : Service() {
         )
         windowManager.addView(view, params)
         cardView = view
+    }
+
+    /**
+     * 적극 코칭 개입 카드.
+     *
+     * 문구는 Dart가 정해 보낸 것을 그대로 쓴다. 답은 둘뿐이다 — 지금 하거나,
+     * 못 했거나. 못 했다고 하면 이유를 묻고 한 수를 내미는 긴 대화가 이어지는데,
+     * 그건 다른 앱 위에 뜬 창에서 할 수 있는 일이 아니라 앱으로 데려간다.
+     */
+    private fun expandToActiveCard() {
+        handler.removeCallbacks(autoHide)
+        removeBubble()
+
+        val view = LayoutInflater.from(this).inflate(R.layout.nudge_start_card, null)
+        val cardImage = view.findViewById<ImageView>(R.id.nudge_start_image)
+        cardImage.setImageBitmap(loadCatBitmap(dp(120)))
+        cardImage.setOnClickListener { openPlanner() }
+
+        view.findViewById<TextView>(R.id.nudge_start_title).text = activeTitle
+
+        val goButton = view.findViewById<TextView>(R.id.nudge_start_go)
+        val laterButton = view.findViewById<TextView>(R.id.nudge_start_later)
+        val taskId = activeTaskId
+        if (taskId == null) {
+            // 부를 일이 정해지지 않은 자리다. 무엇을 할지는 사용자가 고르므로
+            // 여기서 시작시킬 것이 없고, 두 버튼이 같은 곳으로 간다.
+            goButton.text = "하나 골라볼게"
+            laterButton.visibility = View.GONE
+            goButton.setOnClickListener {
+                answered = true
+                OngoingNudgeAnswerWriter.markActiveCoaching(this, "", "")
+                openPlanner()
+            }
+        } else {
+            goButton.text = "지금 할게"
+            laterButton.text = "못 했어"
+            goButton.setOnClickListener { activeStartNow(taskId) }
+            laterButton.setOnClickListener {
+                answered = true
+                OngoingNudgeAnswerWriter.markActiveCoaching(this, taskId, "")
+                openPlanner()
+            }
+        }
+
+        view.findViewById<View>(R.id.nudge_start_scrim).setOnClickListener {
+            cardView?.let { runCatching { windowManager.removeView(it) } }
+            cardView = null
+            showBubble()
+            handler.postDelayed(autoHide, remainingVisibleMillis())
+        }
+
+        val params = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.MATCH_PARENT,
+            overlayType(),
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+            PixelFormat.TRANSLUCENT,
+        )
+        windowManager.addView(view, params)
+        cardView = view
+    }
+
+    /**
+     * 적극 코칭 카드에서 "지금 할게".
+     *
+     * 앱에 들어가 ▶를 다시 누르게 하면, 하겠다고 말한 사람에게 한 칸을 더
+     * 시키는 셈이다. 그 한 칸이 그냥 안 하게 되는 이유가 된다.
+     */
+    private fun activeStartNow(taskId: String) {
+        answered = true
+        OngoingNudgeAnswerWriter.markStarted(this, taskId)
+        OngoingNudgeState.writeResult(this, taskId, "started")
+        Toast.makeText(this, "좋아! 지금부터 시작이야", Toast.LENGTH_SHORT).show()
+        lingerAsDoorway()
     }
 
     /**

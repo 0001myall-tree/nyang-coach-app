@@ -107,9 +107,7 @@ class OverplanNudgeService {
     );
     if (plannedCount < recentMax + overBy) return null;
 
-    debugPrint(
-      '[overplan] 오늘 $plannedCount개, 최근 최대 완료 $recentMax개 - 말을 건다',
-    );
+    debugPrint('[overplan] 오늘 $plannedCount개, 최근 최대 완료 $recentMax개 - 말을 건다');
     return recentMax;
   }
 

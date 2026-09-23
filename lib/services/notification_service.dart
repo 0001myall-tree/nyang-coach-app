@@ -65,8 +65,7 @@ class AlarmVolume {
   }
 
   /// 0.0~1.0. 최소값이 1인 기종이 있어서 그 폭을 빼고 센다.
-  double get ratio =>
-      max <= min ? 1.0 : (level - min) / (max - min).toDouble();
+  double get ratio => max <= min ? 1.0 : (level - min) / (max - min).toDouble();
 
   /// 이 크기로는 깨우기 어렵다고 봐야 하는 선.
   bool get tooQuietToWake => ratio < 0.35;

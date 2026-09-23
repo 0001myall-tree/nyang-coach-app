@@ -113,8 +113,7 @@ class GapCoachingService {
     return result.isEmpty ? defaultDays : result;
   }
 
-  static String formatDays(Set<int> days) =>
-      (days.toList()..sort()).join(',');
+  static String formatDays(Set<int> days) => (days.toList()..sort()).join(',');
 
   /// 그날 참견하는 요일인지. 네이티브도 같은 규칙을 본다.
   static bool runsOn(DateTime date, Set<int> days) =>
@@ -820,8 +819,11 @@ class GapCoachingService {
     final sorted = slots.map((t) => t.hour * 60 + t.minute).toList()..sort();
     // 오늘부터 이레를 본다. 요일을 하나라도 골라뒀으면 그 안에 반드시 걸린다.
     for (var ahead = 0; ahead <= 7; ahead++) {
-      final date = DateTime(at.year, at.month, at.day)
-          .add(Duration(days: ahead));
+      final date = DateTime(
+        at.year,
+        at.month,
+        at.day,
+      ).add(Duration(days: ahead));
       if (!runsOn(date, days)) continue;
       for (final minutes in sorted) {
         final slot = date.add(Duration(minutes: minutes));

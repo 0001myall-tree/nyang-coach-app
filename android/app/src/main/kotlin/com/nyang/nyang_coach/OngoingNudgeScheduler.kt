@@ -27,6 +27,16 @@ object OngoingNudgeScheduler {
      * 두 번째 시각을 걸 때 첫 번째가 지워진다.
      */
     const val ACTION_CHECK_GAP = "com.coscene.nyangcoach.ONGOING_NUDGE_CHECK_GAP"
+
+    /**
+     * 적극 코칭 개입 알람.
+     *
+     * 자리는 하나다. Dart가 다음 한 번만 계산해 걸어두고, 그 차례가 지나면
+     * 다시 계산해 새로 건다 — 여러 개를 미리 걸면 그 사이에 목록이 바뀌었을 때
+     * 이미 끝낸 일을 부르게 된다.
+     */
+    const val ACTION_CHECK_ACTIVE =
+        "com.coscene.nyangcoach.ONGOING_NUDGE_CHECK_ACTIVE"
     const val EXTRA_STAGE = "stage"
     const val EXTRA_SLOT = "slot"
 
@@ -42,6 +52,7 @@ object OngoingNudgeScheduler {
     private const val REQUEST_CODE = 7401
     private const val REQUEST_CODE_START = 7406
     private const val REQUEST_CODE_GAP = 7407
+    private const val REQUEST_CODE_ACTIVE = 7410
 
     /** 틈새 코칭 시각은 하루 셋까지. Dart의 GapCoachingService.maxTimes와 같다. */
     const val GAP_SLOT_COUNT = 3
@@ -135,6 +146,28 @@ object OngoingNudgeScheduler {
     fun cancelGap(context: Context, slot: Int) {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         alarmManager.cancel(gapPendingIntent(context, slot))
+    }
+
+    /** 적극 코칭 개입 자리. 늘 하나뿐이라 걸 때마다 앞엣것을 덮어쓴다. */
+    fun scheduleActiveAt(context: Context, triggerAt: Long) {
+        schedule(context, triggerAt, activePendingIntent(context))
+    }
+
+    fun cancelActive(context: Context) {
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        alarmManager.cancel(activePendingIntent(context))
+    }
+
+    private fun activePendingIntent(context: Context): PendingIntent {
+        val intent = Intent(context, OngoingNudgeReceiver::class.java).apply {
+            action = ACTION_CHECK_ACTIVE
+        }
+        return PendingIntent.getBroadcast(
+            context,
+            REQUEST_CODE_ACTIVE,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
     }
 
     private fun schedule(context: Context, triggerAt: Long, intent: PendingIntent) {

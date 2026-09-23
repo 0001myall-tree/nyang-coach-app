@@ -24,6 +24,7 @@ import 'services/notification_service.dart';
 import 'services/purchase_service.dart';
 import 'services/ongoing_task_nudge_service.dart';
 import 'services/tasks_sync_service.dart';
+import 'services/active_coaching_sync.dart';
 import 'services/gap_coaching_service.dart';
 import 'services/nyang_banner_nudge.dart';
 import 'services/widget_sync_service.dart';
@@ -54,9 +55,7 @@ Future<void> _activateAppCheck() async {
       androidProvider: kDebugMode
           ? AndroidProvider.debug
           : AndroidProvider.playIntegrity,
-      appleProvider: kDebugMode
-          ? AppleProvider.debug
-          : AppleProvider.appAttest,
+      appleProvider: kDebugMode ? AppleProvider.debug : AppleProvider.appAttest,
     );
   } catch (e) {
     debugPrint('App Check activate failed: $e');
@@ -154,6 +153,7 @@ class _NyangCoachAppState extends State<NyangCoachApp>
     // 등급이 내려갔거나 폰을 새로 켰을 수 있다. 틈새 코칭 예약도 지금 상태로
     // 다시 맞춘다.
     unawaited(GapCoachingService.sync());
+    unawaited(ActiveCoachingSync.sync());
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(NotificationService().requestNotificationPermissions());
     });
@@ -181,6 +181,7 @@ class _NyangCoachAppState extends State<NyangCoachApp>
       // 다시 잡아둬야 그 일정에 계속 걸려 있지 않는다.
       unawaited(NyangBannerNudge.sync());
       unawaited(GapCoachingService.sync());
+      unawaited(ActiveCoachingSync.sync());
     }
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached) {

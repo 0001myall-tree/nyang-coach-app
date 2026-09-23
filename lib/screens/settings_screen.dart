@@ -2136,7 +2136,6 @@ class _SettingsScreenState extends State<SettingsScreen>
                             ],
                           ),
                         ],
-
                       ],
                     ),
                   ),
@@ -2184,11 +2183,7 @@ class _SettingsScreenState extends State<SettingsScreen>
   }
 
   /// 시각 칸에 붙는 이름. [GapCoachingService.maxTimes]만큼 있어야 한다.
-  static const List<String> _gapTimeRowLabels = [
-    '① 첫 번째',
-    '② 두 번째',
-    '③ 세 번째',
-  ];
+  static const List<String> _gapTimeRowLabels = ['① 첫 번째', '② 두 번째', '③ 세 번째'];
 
   /// '시간 추가'를 눌렀을 때 채워 넣는 시각. 이미 있는 것은 건너뛴다.
   static const List<TimeOfDay> _gapTimeSuggestions = [
@@ -2493,11 +2488,7 @@ class _SettingsScreenState extends State<SettingsScreen>
       }
     }
 
-    await GapCoachingService.save(
-      enabled: enabled,
-      times: sorted,
-      days: days,
-    );
+    await GapCoachingService.save(enabled: enabled, times: sorted, days: days);
     if (!mounted) return;
     setState(() {
       _gapCoachingEnabled = enabled && sorted.isNotEmpty;

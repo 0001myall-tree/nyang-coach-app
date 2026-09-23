@@ -22,10 +22,7 @@ class DayRecordBuilder {
   ///
   /// [task]는 `TaskItem.toJson()`이 뱉은 모양이거나 그것을 그대로 읽은
   /// 것이어야 한다. 시작 시각은 기록 쪽에서 `startedAt`으로 부른다.
-  static Map<String, dynamic> taskEntry(
-    Map task, {
-    bool deferred = false,
-  }) {
+  static Map<String, dynamic> taskEntry(Map task, {bool deferred = false}) {
     final startedAt = task['inProgressAt'] ?? task['startedAt'];
     final completedAt = task['completedAt'];
     return {

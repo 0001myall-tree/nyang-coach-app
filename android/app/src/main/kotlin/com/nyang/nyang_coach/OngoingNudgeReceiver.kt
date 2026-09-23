@@ -35,6 +35,9 @@ class OngoingNudgeReceiver : BroadcastReceiver() {
                     )
                 }
                 GapCoachingPlanner.reschedule(context)
+                // 적극 코칭 계획은 여기서 다시 걸지 않는다. 앱이 열릴 때 Dart가
+                // 지금 상태로 다시 계산해 거는데, 그 사이 목록이 바뀌었으면
+                // 옛 계획을 그대로 거는 것이 더 나쁘다.
             }
 
             OngoingNudgeScheduler.ACTION_CHECK_START ->
@@ -42,6 +45,8 @@ class OngoingNudgeReceiver : BroadcastReceiver() {
 
             OngoingNudgeScheduler.ACTION_CHECK_GAP ->
                 handleGapCheck(context, intent.getIntExtra(OngoingNudgeScheduler.EXTRA_SLOT, 0))
+
+            OngoingNudgeScheduler.ACTION_CHECK_ACTIVE -> handleActiveCheck(context)
 
             else -> handleCheck(context, intent.getStringExtra(OngoingNudgeScheduler.EXTRA_STAGE))
         }
@@ -88,6 +93,30 @@ class OngoingNudgeReceiver : BroadcastReceiver() {
                 OngoingNudgeScheduler.STAGE_FIRST,
             )
         }
+    }
+
+    /**
+     * 적극 코칭 개입 자리.
+     *
+     * 계획은 Dart가 미리 세워뒀다. 여기서는 아직 쓸 만한지만 보고 띄운다 —
+     * 무엇을 부를지까지 여기서 정하면 같은 판단이 두 벌이 된다.
+     *
+     * 못 띄운 차례는 다시 걸지 않는다. 앱이 열릴 때 Dart가 지금 상태로 다시
+     * 계산하는데, 그때 잡을 것이 없으면 부를 이유도 없어진 것이다.
+     */
+    private fun handleActiveCheck(context: Context) {
+        val plan = OngoingNudgeState.activePlan(context) ?: return
+        // 한 번 쓴 계획은 지운다. 남겨두면 재부팅 점검이 같은 계획을 또 띄운다.
+        OngoingNudgeState.clearActivePlan(context)
+
+        if (!OngoingNudgeState.canDrawOverlays(context)) return
+        if (!OngoingNudgeState.isScreenOn(context)) return
+        // 냥냥코치를 보고 있으면 할 일이 이미 눈앞에 있다.
+        if (OngoingNudgeState.isAppForeground(context)) return
+        // 지금 붙잡고 있는 일이 있는 사람에게 다른 말을 얹는 것은 방해다.
+        if (OngoingNudgeAnswerWriter.isAnyTaskInProgress(context)) return
+
+        OngoingNudgeService.showActive(context, plan)
     }
 
     /**

@@ -163,6 +163,25 @@ class BusyHoursService {
     return null;
   }
 
+  /// 그 시각에 걸려 있는 시간대가 끝나는 시각. 안 걸려 있으면 null.
+  ///
+  /// 매인 시간을 건너뛰지 않고 그 뒤로 미루는 데 쓴다. 그냥 건너뛰면 9시부터
+  /// 6시까지 일하는 사람은 하루의 절반이 통째로 빈다.
+  static DateTime? busyEndAt(SharedPreferences prefs, DateTime at) {
+    final entry = _entryAt(prefs, at);
+    if (entry == null) return null;
+    final start = _minutes(entry['start']?.toString());
+    final end = _minutes(entry['end']?.toString());
+    if (end == null) return null;
+    final base = DateTime(at.year, at.month, at.day);
+    final endAt = base.add(Duration(minutes: end));
+    // 자정을 넘기는 시간대(야간 근무)는 끝이 다음 날이다.
+    if (start != null && end <= start) {
+      return endAt.add(const Duration(days: 1));
+    }
+    return endAt;
+  }
+
   /// 오늘 걸리는 시간대 중 가장 늦게 끝나는 시각(시). 오늘 걸리는 게 없으면 null.
   ///
   /// 묻는 창을 퇴근 뒤까지 밀어주는 데 쓴다. 근무가 그 창을 통째로 먹는 사람이

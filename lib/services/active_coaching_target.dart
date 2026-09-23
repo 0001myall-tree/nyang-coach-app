@@ -156,10 +156,7 @@ class ActiveCoachingTarget {
 
     // 사용자가 남긴 신호가 하나도 없다. 여기서 앱이 하나 골라 짚으면 그게 곧
     // 추측이다. 남은 일을 보여주고 고르게 한다.
-    return ActiveCoachingPick(
-      ActiveCoachingSignal.askUser,
-      candidates: usable,
-    );
+    return ActiveCoachingPick(ActiveCoachingSignal.askUser, candidates: usable);
   }
 
   /// 지금 돌고 있는 일인지.

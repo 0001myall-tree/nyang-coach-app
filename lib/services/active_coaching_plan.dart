@@ -60,7 +60,7 @@ class ActiveCoachingPlanner {
     List coreTasks = const [],
     Set<int> onDays = const {1, 2, 3, 4, 5, 6, 7},
     bool Function(DateTime at)? busyAt,
-    DateTime Function(DateTime at)? busyEndAfter,
+    DateTime? Function(DateTime at)? busyEndAfter,
   }) {
     // 참견하지 않기로 한 요일이다. 약속 시각도 여기서는 걸지 않는다 — 그 요일에
     // 안 부르기로 한 사람에게 약속이라고 뚫고 들어가면 설정이 거짓말이 된다.
@@ -204,7 +204,7 @@ class ActiveCoachingPlanner {
   static DateTime? _usable(
     DateTime at, {
     bool Function(DateTime at)? busyAt,
-    DateTime Function(DateTime at)? busyEndAfter,
+    DateTime? Function(DateTime at)? busyEndAfter,
   }) {
     if (busyAt == null || !busyAt(at)) return at;
     final after = busyEndAfter?.call(at);

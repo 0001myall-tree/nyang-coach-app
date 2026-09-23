@@ -271,6 +271,22 @@ class MainActivity : FlutterFragmentActivity() {
                         GapCoachingPlanner.reschedule(this)
                         result.success(null)
                     }
+                    "syncActiveCoaching" -> {
+                        // 계획은 Flutter가 이미 저장해뒀다. 여기서는 그 시각에
+                        // 깨어나도록 알람만 건다. 자리는 늘 하나라, 새로 걸면
+                        // 앞엣것은 덮인다.
+                        val atMillis = call.argument<Number>("atMillis")?.toLong()
+                        if (atMillis == null) {
+                            OngoingNudgeScheduler.cancelActive(this)
+                        } else {
+                            OngoingNudgeScheduler.scheduleActiveAt(this, atMillis)
+                        }
+                        result.success(null)
+                    }
+                    "clearActiveCoaching" -> {
+                        OngoingNudgeScheduler.cancelActive(this)
+                        result.success(null)
+                    }
                     "clearGapCoaching" -> {
                         GapCoachingPlanner.cancelAll(this)
                         result.success(null)
