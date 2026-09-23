@@ -41,6 +41,108 @@ class BannerAnswerDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    return AnswerDialogShell(
+      children: [
+        AnswerDialogQuestion(message),
+        const SizedBox(height: 16),
+        for (var i = 0; i < actions.length; i++) ...[
+          if (i > 0) const SizedBox(height: 8),
+          _buildAction(context, actions[i]),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildAction(BuildContext context, BannerAnswerAction action) =>
+      AnswerChoiceButton(
+        label: action.label,
+        icon: action.icon,
+        isPrimary: action.isPrimary,
+        onTap: () {
+          Navigator.pop(context);
+          action.onTap?.call();
+        },
+      );
+}
+
+/// 팝업 안의 보기 버튼 하나.
+///
+/// 배너 답변 팝업과 적극 코칭 팝업이 같이 쓴다. 두 벌로 두면 한쪽만 손봤을 때
+/// 같은 일을 하는 버튼이 화면마다 다르게 생긴다.
+class AnswerChoiceButton extends StatelessWidget {
+  const AnswerChoiceButton({
+    super.key,
+    required this.label,
+    required this.icon,
+    required this.onTap,
+    this.isPrimary = false,
+  });
+
+  final String label;
+
+  /// assets/icons 아래 파일 이름(확장자 없이).
+  final String icon;
+
+  final VoidCallback onTap;
+
+  /// 지금 상태에서 가장 그럴듯한 답. 한 팝업에 하나만 둔다.
+  final bool isPrimary;
+
+  @override
+  Widget build(BuildContext context) {
+    final ink = isPrimary ? Colors.white : AppDesignTokens.brandPressed;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: isPrimary ? AppDesignTokens.brand : AppDesignTokens.brandSoft,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isPrimary
+                ? AppDesignTokens.brand
+                : AppDesignTokens.brandBorder,
+          ),
+        ),
+        child: Row(
+          children: [
+            SvgPicture.asset(
+              'assets/icons/$icon.svg',
+              width: 14,
+              height: 14,
+              colorFilter: ColorFilter.mode(ink, BlendMode.srcIn),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                label,
+                // 채팅방 선택지·빠른 답장 칩과 같은 손글씨체. 셋 다 아직 안 한
+                // 말이고, 누르면 내 말이 된다.
+                style: GoogleFonts.gaegu(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  color: ink,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 답변 팝업의 껍데기.
+///
+/// 배너 답변 팝업과 적극 코칭 팝업이 같이 쓴다. 모양이 두 벌이면 한쪽만
+/// 손봤을 때 같은 자리에서 같은 일을 하는 팝업이 다르게 생긴다.
+class AnswerDialogShell extends StatelessWidget {
+  const AnswerDialogShell({super.key, required this.children});
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
     return Dialog(
       backgroundColor: AppDesignTokens.surface,
       surfaceTintColor: AppDesignTokens.surface,
@@ -67,72 +169,28 @@ class BannerAnswerDialog extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                message,
-                style: appFont(
-                  fontSize: 15,
-                  height: 1.5,
-                  fontWeight: FontWeight.w600,
-                  color: AppDesignTokens.textPrimary,
-                ),
-              ),
-              const SizedBox(height: 16),
-              for (var i = 0; i < actions.length; i++) ...[
-                if (i > 0) const SizedBox(height: 8),
-                _buildAction(context, actions[i]),
-              ],
-            ],
+            children: children,
           ),
         ),
       ),
     );
   }
+}
 
-  Widget _buildAction(BuildContext context, BannerAnswerAction action) {
-    final ink = action.isPrimary ? Colors.white : AppDesignTokens.brandPressed;
-    return GestureDetector(
-      onTap: () {
-        Navigator.pop(context);
-        action.onTap?.call();
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        decoration: BoxDecoration(
-          color: action.isPrimary
-              ? AppDesignTokens.brand
-              : AppDesignTokens.brandSoft,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: action.isPrimary
-                ? AppDesignTokens.brand
-                : AppDesignTokens.brandBorder,
-          ),
-        ),
-        child: Row(
-          children: [
-            SvgPicture.asset(
-              'assets/icons/${action.icon}.svg',
-              width: 14,
-              height: 14,
-              colorFilter: ColorFilter.mode(ink, BlendMode.srcIn),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                action.label,
-                // 채팅방 선택지·빠른 답장 칩과 같은 손글씨체. 셋 다 아직 안 한
-                // 말이고, 누르면 내 말이 된다.
-                style: GoogleFonts.gaegu(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                  color: ink,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+/// 팝업 맨 위의 질문 한 줄.
+class AnswerDialogQuestion extends StatelessWidget {
+  const AnswerDialogQuestion(this.message, {super.key});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) => Text(
+    message,
+    style: appFont(
+      fontSize: 15,
+      height: 1.5,
+      fontWeight: FontWeight.w600,
+      color: AppDesignTokens.textPrimary,
+    ),
+  );
 }

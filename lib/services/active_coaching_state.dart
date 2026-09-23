@@ -115,7 +115,6 @@ class TaskTracking {
     ),
     pickedByUser: json['pickedByUser'] == true,
   );
-
 }
 
 DateTime? _parseTime(Object? raw) {
@@ -278,14 +277,13 @@ class ActiveCoachingBudget {
   ActiveCoachingBudget holdOff(String taskId) =>
       _copyWith(heldOffTaskId: taskId);
 
-  ActiveCoachingBudget clearHeldOff() =>
-      ActiveCoachingBudget(
-        date: date,
-        lastSpokeAt: lastSpokeAt,
-        spokenToday: spokenToday,
-        noReplyStreak: noReplyStreak,
-        lastTaskId: lastTaskId,
-      );
+  ActiveCoachingBudget clearHeldOff() => ActiveCoachingBudget(
+    date: date,
+    lastSpokeAt: lastSpokeAt,
+    spokenToday: spokenToday,
+    noReplyStreak: noReplyStreak,
+    lastTaskId: lastTaskId,
+  );
 
   ActiveCoachingBudget _copyWith({
     DateTime? lastSpokeAt,

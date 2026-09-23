@@ -58,9 +58,7 @@ void main() {
     });
 
     test('아무것도 안 쌓인 일은 저장하지 않는다', () {
-      final day = ActiveCoachingDay(
-        date: today,
-      ).put('a', const TaskTracking());
+      final day = ActiveCoachingDay(date: today).put('a', const TaskTracking());
       expect((day.toJson()['tasks'] as Map), isEmpty);
     });
   });
