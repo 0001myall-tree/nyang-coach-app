@@ -51,7 +51,7 @@ class SettingsScreen extends StatefulWidget {
 /// 딴짓 방지 코치가 켜져 있을 때 이 줄을 누르면 고를 수 있는 것.
 enum _OngoingNudgeAction { test, turnOff, openSettings }
 
-/// 틈새 코칭을 막고 있는 것 하나.
+/// 적극 코칭을 막고 있는 것 하나.
 ///
 /// 여러 개가 함께 빠져 있어도 한 번에 하나만 말한다. 한 화면에 권한 셋을 늘어놓으면
 /// 어디부터 손대야 하는지 알 수 없어서, 가장 앞을 막은 것부터 고치고 다시 본다.
@@ -116,7 +116,7 @@ class _SettingsScreenState extends State<SettingsScreen>
       _userData?.isPlanActive == true && _userData?.planType == 'master';
   bool get _isFreeUser => _userData?.isPlanActive != true;
 
-  /// 틈새 코칭 줄에 붙는 상태. 마스터가 아니면 켜둔 값이 있어도 나가지 않으므로
+  /// 적극 코칭 줄에 붙는 상태. 마스터가 아니면 켜둔 값이 있어도 나가지 않으므로
   /// 켜졌다고 적지 않는다.
   String get _gapCoachingStatus {
     if (!_hasMasterPlan) return 'MASTER 전용';
@@ -1844,7 +1844,7 @@ class _SettingsScreenState extends State<SettingsScreen>
     );
   }
 
-  /// 틈새 코칭 설정 시트.
+  /// 적극 코칭 설정 시트.
   ///
   /// 켜고 끄기와 시각 하나(또는 둘)가 전부다. 무엇을 할지는 고르게 하지 않는다 —
   /// 그걸 정해주는 순간 쉬는 시간이 새 일정이 된다.
@@ -1890,7 +1890,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                         ),
                         const SizedBox(width: 8),
                         Text(
-                          '틈새 코칭',
+                          '적극 코칭',
                           style: appFont(
                             fontSize: 20,
                             fontWeight: FontWeight.w900,
@@ -1948,6 +1948,21 @@ class _SettingsScreenState extends State<SettingsScreen>
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
+                              // 이름이 '적극 코칭'으로 바뀌면서 이 칸이 무엇을
+                              // 받는 자리인지 알 길이 없어졌다. 시각 두 개만
+                              // 덩그러니 있으면 무엇을 적으라는 건지 모른다.
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 10),
+                                child: Text(
+                                  keepWordsWhole('하루 중 여유로운 시간을 적어주세요.'),
+                                  style: appFont(
+                                    fontSize: 12.5,
+                                    fontWeight: FontWeight.w600,
+                                    height: 1.5,
+                                    color: const Color(0xFF9A96A8),
+                                  ),
+                                ),
+                              ),
                               for (var i = 0; i < tempTimes.length; i++)
                                 _buildGapTimeRow(
                                   label: i == 0 ? '① 첫 번째' : '② 두 번째',
@@ -2215,7 +2230,7 @@ class _SettingsScreenState extends State<SettingsScreen>
     );
   }
 
-  /// 지금 이 폰에서 틈새 코칭을 막고 있는 것. 없으면 null.
+  /// 지금 이 폰에서 적극 코칭을 막고 있는 것. 없으면 null.
   ///
   /// 딴짓 방지 코치와 같은 층을 쓰지만 막히는 자리가 하나 더 있다. 저쪽은 일정을
   /// 시작하는 순간부터 앱이 깨어 있지만, 이쪽은 정해둔 시각에 스스로 깨어나야 해서
@@ -2241,7 +2256,7 @@ class _SettingsScreenState extends State<SettingsScreen>
           headline: '정해둔 시각에 깨어날 수 없어요',
           detail:
               '"알람 및 리마인더" 권한이 꺼져 있어요.\n\n'
-              '틈새 코칭은 정해둔 시각에 냥냥코치가 스스로 깨어나야 하는데, '
+              '적극 코칭은 정해둔 시각에 냥냥코치가 스스로 깨어나야 하는데, '
               '이 권한이 없으면 그 시각이 한참 밀리거나 그냥 지나갑니다.',
           open: () => NotificationService().openAlarmPermissionSettings(
             AlarmPermissionIssue.exactAlarm,
@@ -2289,7 +2304,7 @@ class _SettingsScreenState extends State<SettingsScreen>
   /// 뒤로 나왔다 사라진다 — 왜 안 되는지 말해준 적이 없는 것과 같았다.
   Future<void> _showGapMasterOnlyNotice() {
     return _showAlarmNoticeDialog(
-      title: '🌱 틈새 코칭',
+      title: '🌱 적극 코칭',
       message: '마스터 플랜에서만 쓸 수 있어요.',
     );
   }
@@ -2342,7 +2357,7 @@ class _SettingsScreenState extends State<SettingsScreen>
     // 스낵바로 알리던 자리다. 이 화면은 서랍이 아래를 덮고 있어서, 켜졌다는 말이
     // 그 뒤로 나왔다 사라졌다 — 켠 사람이 켜진 것을 본 적이 없었다.
     await _showAlarmNoticeDialog(
-      title: enabled ? '🌱 틈새 코칭을 켰어요' : '🌱 틈새 코칭을 껐어요',
+      title: enabled ? '🌱 적극 코칭을 켰어요' : '🌱 적극 코칭을 껐어요',
       message: enabled
           ? '${sorted.map(GapCoachingService.label).join(' · ')}에 여유가 있어 '
                 '보이면 냥냥이가 한 마디만 건넬게요.\n\n'
@@ -2695,8 +2710,8 @@ class _SettingsScreenState extends State<SettingsScreen>
                       if (GapCoachingService.isSupported) ...[
                         _buildSettingsNavigationTile(
                           svgAsset: 'assets/icons/seedling.svg',
-                          label: '틈새 코칭',
-                          subtitle: '여유 있는 시간에 냥냥이가 살짝 말 걸어요.',
+                          label: '적극 코칭',
+                          subtitle: '세운 계획을 방치하지 않고 적극 참견해요.',
                           status: _gapCoachingStatus,
                           onTap: () {
                             if (_hasMasterPlan) {
