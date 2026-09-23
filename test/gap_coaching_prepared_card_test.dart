@@ -286,6 +286,65 @@ void main() {
         DateTime(2026, 9, 9, 10, 30),
       );
     });
+
+    test('참견하지 않는 요일은 건너뛴다', () {
+      // 2026-09-09는 수요일. 평일만 켜둔 사람의 다음 자리는 목요일 아침이다.
+      expect(
+        GapCoachingService.nextSlot(
+          slots,
+          now: DateTime(2026, 9, 9, 20),
+          days: const {1, 2, 3, 4, 5},
+        ),
+        DateTime(2026, 9, 10, 10, 30),
+      );
+      // 금요일 밤이면 주말을 통째로 건너뛰고 월요일로 간다.
+      expect(
+        GapCoachingService.nextSlot(
+          slots,
+          now: DateTime(2026, 9, 11, 20),
+          days: const {1, 2, 3, 4, 5},
+        ),
+        DateTime(2026, 9, 14, 10, 30),
+      );
+    });
+  });
+
+  group('참견하는 요일', () {
+    test('적어둔 값이 없으면 매일로 본다', () {
+      // 이 설정이 생기기 전부터 켜둔 사람이 갑자기 조용해지면 안 된다.
+      expect(GapCoachingService.parseDays(null), GapCoachingService.defaultDays);
+      expect(GapCoachingService.parseDays(''), GapCoachingService.defaultDays);
+    });
+
+    test('읽을 수 있는 요일이 하나도 없어도 매일로 떨어진다', () {
+      // 빈 값을 그대로 믿으면 켜져 있는데 영영 안 나가는 상태가 된다.
+      expect(
+        GapCoachingService.parseDays('8,0,월'),
+        GapCoachingService.defaultDays,
+      );
+    });
+
+    test('적어둔 요일만 읽는다', () {
+      expect(GapCoachingService.parseDays('1,3,5'), {1, 3, 5});
+      expect(GapCoachingService.parseDays(' 6 , 7 '), {6, 7});
+    });
+
+    test('그날 참견하는지', () {
+      // 2026-09-09는 수요일, 2026-09-12는 토요일.
+      const weekdays = {1, 2, 3, 4, 5};
+      expect(GapCoachingService.runsOn(DateTime(2026, 9, 9), weekdays), isTrue);
+      expect(
+        GapCoachingService.runsOn(DateTime(2026, 9, 12), weekdays),
+        isFalse,
+      );
+    });
+
+    test('설정 줄에 적을 이름', () {
+      expect(GapCoachingService.daysLabel({1, 2, 3, 4, 5, 6, 7}), '매일');
+      expect(GapCoachingService.daysLabel({1, 2, 3, 4, 5}), '평일만');
+      expect(GapCoachingService.daysLabel({6, 7}), '주말만');
+      expect(GapCoachingService.daysLabel({5, 1, 3}), '월·수·금');
+    });
   });
 
   test('클라우드가 덮지 못하는 자리에 적는다', () {

@@ -283,6 +283,7 @@ class NyangBannerNudge {
     if (!await GapCoachingService.isEnabled()) return const [];
     final slots = await GapCoachingService.times();
     if (slots.isEmpty) return const [];
+    final days = await GapCoachingService.days();
 
     final result = <DateTime>[];
     for (var day = 0; day < 2; day++) {
@@ -291,6 +292,9 @@ class NyangBannerNudge {
         now.month,
         now.day,
       ).add(Duration(days: day));
+      // 참견하지 않기로 한 요일은 자리를 걸지 않는다. 걸어두면 아이폰은
+      // 조건이 바뀌어도 스스로 취소하지 않아서 그날 그대로 나간다.
+      if (!GapCoachingService.runsOn(date, days)) continue;
       for (final slot in slots) {
         if (result.length >= gapNotificationIds.length) break;
         final at = DateTime(

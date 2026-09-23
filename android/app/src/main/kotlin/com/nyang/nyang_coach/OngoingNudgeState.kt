@@ -344,6 +344,9 @@ object OngoingNudgeState {
     private const val KEY_GAP_ENABLED = "flutter.nyang_gap_coaching_enabled"
     private const val KEY_GAP_TIMES = "flutter.nyang_gap_coaching_times"
 
+    /** 참견할 요일. "1,2,3,4,5" 꼴로 월=1 ... 일=7. Dart의 요일 번호와 같다. */
+    private const val KEY_GAP_DAYS = "flutter.nyang_gap_coaching_days"
+
     /** 그 슬롯이 오늘 이미 지나갔는지. 이 기기에서만 뜻이 있어 접두어가 없다. */
     private const val KEY_GAP_FIRED_PREFIX = "gap_coaching_fired_"
 
@@ -374,6 +377,35 @@ object OngoingNudgeState {
             if (hour !in 0..23 || minute !in 0..59) return@mapNotNull null
             hour to minute
         }.take(OngoingNudgeScheduler.GAP_SLOT_COUNT)
+    }
+
+    /**
+     * 오늘이 참견하기로 한 요일인가.
+     *
+     * 적어둔 값이 없거나 읽을 수 없으면 매일로 본다. 요일 설정이 생기기 전부터
+     * 켜둔 사람이 갑자기 조용해지면 안 되고, 빈 값을 그대로 믿으면 켜져 있는데
+     * 영영 안 나가는 상태가 된다 — 사용자 눈에는 고장과 구별되지 않는다.
+     *
+     * Dart는 월요일을 1로 세고 자바 달력은 일요일을 1로 센다. 저장된 값은
+     * Dart 쪽 번호라 여기서 맞춰 읽는다.
+     */
+    fun runsToday(context: Context): Boolean {
+        val raw = prefs(context).getString(KEY_GAP_DAYS, null).orEmpty()
+        if (raw.isBlank()) return true
+        val days = raw.split(",").mapNotNull { it.trim().toIntOrNull() }
+            .filter { it in 1..7 }
+        if (days.isEmpty()) return true
+        val calendar = java.util.Calendar.getInstance()
+        val today = when (calendar.get(java.util.Calendar.DAY_OF_WEEK)) {
+            java.util.Calendar.MONDAY -> 1
+            java.util.Calendar.TUESDAY -> 2
+            java.util.Calendar.WEDNESDAY -> 3
+            java.util.Calendar.THURSDAY -> 4
+            java.util.Calendar.FRIDAY -> 5
+            java.util.Calendar.SATURDAY -> 6
+            else -> 7
+        }
+        return days.contains(today)
     }
 
     /**

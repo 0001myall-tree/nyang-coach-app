@@ -101,6 +101,10 @@ class _SettingsScreenState extends State<SettingsScreen>
   // 여유 있어 보이는 시각에 한 마디만 건네는 자리. 마스터 전용.
   bool _gapCoachingEnabled = false;
   List<TimeOfDay> _gapCoachingTimes = const [];
+
+  /// 참견하는 요일. 월=1 ... 일=7. 저장된 값이 없으면 매일로 본다 — 요일 설정이
+  /// 생기기 전부터 켜둔 사람이 갑자기 조용해지면 안 된다.
+  Set<int> _gapCoachingDays = GapCoachingService.defaultDays;
   String? _homeWidgetStatus;
   UserData? _userData;
   String? _expandedSettingsSection;
@@ -121,7 +125,11 @@ class _SettingsScreenState extends State<SettingsScreen>
   String get _gapCoachingStatus {
     if (!_hasMasterPlan) return 'MASTER 전용';
     if (!_gapCoachingEnabled || _gapCoachingTimes.isEmpty) return '꺼짐';
-    return _gapCoachingTimes.map(GapCoachingService.label).join(' · ');
+    final times = _gapCoachingTimes.map(GapCoachingService.label).join(' · ');
+    // 매일이면 굳이 적지 않는다. 적어두면 줄이 길어지기만 하고, 쉬는 요일을
+    // 정해둔 사람에게만 새로운 소식이다.
+    if (_gapCoachingDays.length == 7) return times;
+    return '${GapCoachingService.daysLabel(_gapCoachingDays)} · $times';
   }
 
   /// 채팅에서 데려온 자리를 펼친다.
@@ -253,6 +261,9 @@ class _SettingsScreenState extends State<SettingsScreen>
           prefs.getBool(GapCoachingService.enabledKey) ?? false;
       _gapCoachingTimes = GapCoachingService.parseTimes(
         prefs.getString(GapCoachingService.timesKey),
+      );
+      _gapCoachingDays = GapCoachingService.parseDays(
+        prefs.getString(GapCoachingService.daysKey),
       );
       _homeWidgetStatus = _buildHomeWidgetStatus(
         nyang: prefs.getBool('widget_nyang_enabled') ?? false,
@@ -1865,6 +1876,10 @@ class _SettingsScreenState extends State<SettingsScreen>
       else
         ..._gapCoachingTimes,
     ];
+    Set<int> tempDays = {..._gapCoachingDays};
+    // 저장해둔 요일이 매일이나 평일과 똑같으면 그 갈래에 불이 켜진 채 열린다.
+    // 아니면 직접 고른 것이므로 요일을 편 채로 연다.
+    _GapDayMode tempDayMode = _GapDayMode.of(tempDays);
 
     showDialog(
       context: context,
@@ -2068,6 +2083,73 @@ class _SettingsScreenState extends State<SettingsScreen>
 
                         const SizedBox(height: 20),
                         Text(
+                          '참견하는 요일',
+                          style: appFont(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w800,
+                            color: const Color(0xFF1A1A2E),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          keepWordsWhole('매일 받으면 지치니까, 참견받을 요일만 골라도 돼요.'),
+                          style: appFont(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w600,
+                            height: 1.5,
+                            color: const Color(0xFF9A96A8),
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        Row(
+                          children: [
+                            for (final mode in _GapDayMode.values) ...[
+                              _buildGapModeChip(
+                                label: mode.label,
+                                isSelected: tempDayMode == mode,
+                                onTap: () {
+                                  if (!tempEnabled) return;
+                                  setModalState(() {
+                                    tempDayMode = mode;
+                                    final preset = mode.days;
+                                    if (preset != null) tempDays = {...preset};
+                                  });
+                                },
+                              ),
+                              if (mode != _GapDayMode.values.last)
+                                const SizedBox(width: 8),
+                            ],
+                          ],
+                        ),
+                        if (tempDayMode == _GapDayMode.byDay) ...[
+                          const SizedBox(height: 10),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [
+                              for (var day = 1; day <= 7; day++)
+                                _buildGapDayChip(
+                                  label: _weekdayShortLabels[day - 1],
+                                  isSelected: tempDays.contains(day),
+                                  onTap: () {
+                                    if (!tempEnabled) return;
+                                    setModalState(() {
+                                      // 마지막 하나는 끄지 못하게 막는다. 요일이
+                                      // 하나도 안 남으면 켜져 있는데 영영 안 온다.
+                                      if (!tempDays.contains(day)) {
+                                        tempDays = {...tempDays, day};
+                                      } else if (tempDays.length > 1) {
+                                        tempDays = {...tempDays}..remove(day);
+                                      }
+                                    });
+                                  },
+                                ),
+                            ],
+                          ),
+                        ],
+
+                        const SizedBox(height: 20),
+                        Text(
                           keepWordsWhole(
                             '일정을 하는 중이거나 그 시각에 일정이 있으면 그날 그 시각은 '
                             '조용히 지나가요.',
@@ -2094,7 +2176,11 @@ class _SettingsScreenState extends State<SettingsScreen>
                   child: ElevatedButton(
                     onPressed: () {
                       Navigator.pop(context);
-                      _saveGapCoachingSettings(tempEnabled, tempTimes);
+                      _saveGapCoachingSettings(
+                        tempEnabled,
+                        tempTimes,
+                        tempDays,
+                      );
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppDesignTokens.brand,
@@ -2118,6 +2204,67 @@ class _SettingsScreenState extends State<SettingsScreen>
           },
         );
       },
+    );
+  }
+
+  /// 매일·평일만·요일별 중에 고르는 칩.
+  Widget _buildGapModeChip({
+    required String label,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) => _buildGapChip(
+    label: label,
+    isSelected: isSelected,
+    onTap: onTap,
+    padding: const EdgeInsets.symmetric(horizontal: 16),
+  );
+
+  /// 요일 하나를 켜고 끄는 칩. 글자가 한 자라 너비를 고정한다.
+  Widget _buildGapDayChip({
+    required String label,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) => _buildGapChip(
+    label: label,
+    isSelected: isSelected,
+    onTap: onTap,
+    width: 44,
+  );
+
+  Widget _buildGapChip({
+    required String label,
+    required bool isSelected,
+    required VoidCallback onTap,
+    EdgeInsets? padding,
+    double? width,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: padding,
+        width: width,
+        height: 40,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFF8B7CFF) : Colors.white,
+          border: Border.all(
+            color: isSelected
+                ? const Color(0xFF8B7CFF)
+                : const Color(0xFFE5E7EB),
+            width: 1.5,
+          ),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Text(
+          label,
+          style: appFont(
+            fontSize: 13,
+            fontWeight: FontWeight.w800,
+            color: isSelected ? Colors.white : const Color(0xFF4B5563),
+          ),
+        ),
+      ),
     );
   }
 
@@ -2312,6 +2459,7 @@ class _SettingsScreenState extends State<SettingsScreen>
   Future<void> _saveGapCoachingSettings(
     bool enabled,
     List<TimeOfDay> times,
+    Set<int> days,
   ) async {
     final sorted = <TimeOfDay>[];
     for (final time
@@ -2335,23 +2483,33 @@ class _SettingsScreenState extends State<SettingsScreen>
       if (!master) {
         // 고른 시각은 적어둔다. 켜지지만 않을 뿐이라, 마스터로 올린 날 다시
         // 입력하게 하면 지금 한 일이 통째로 없던 일이 된다.
-        await GapCoachingService.save(enabled: false, times: sorted);
+        await GapCoachingService.save(
+          enabled: false,
+          times: sorted,
+          days: days,
+        );
         if (!mounted) return;
         setState(() {
           _userData = data;
           _gapCoachingEnabled = false;
           _gapCoachingTimes = sorted;
+          _gapCoachingDays = days;
         });
         await _showGapMasterOnlyNotice();
         return;
       }
     }
 
-    await GapCoachingService.save(enabled: enabled, times: sorted);
+    await GapCoachingService.save(
+      enabled: enabled,
+      times: sorted,
+      days: days,
+    );
     if (!mounted) return;
     setState(() {
       _gapCoachingEnabled = enabled && sorted.isNotEmpty;
       _gapCoachingTimes = sorted;
+      _gapCoachingDays = days;
     });
 
     // 스낵바로 알리던 자리다. 이 화면은 서랍이 아래를 덮고 있어서, 켜졌다는 말이
@@ -2359,7 +2517,8 @@ class _SettingsScreenState extends State<SettingsScreen>
     await _showAlarmNoticeDialog(
       title: enabled ? '🌱 적극 코칭을 켰어요' : '🌱 적극 코칭을 껐어요',
       message: enabled
-          ? '${sorted.map(GapCoachingService.label).join(' · ')}에 여유가 있어 '
+          ? '${GapCoachingService.daysLabel(days)} '
+                '${sorted.map(GapCoachingService.label).join(' · ')}에 여유가 있어 '
                 '보이면 냥냥이가 한 마디만 건넬게요.\n\n'
                 '무언가 하는 중이거나 지켜야 할 시각이 가까우면 그날 그 시각은 '
                 '조용히 지나가요.'
@@ -5628,6 +5787,39 @@ class _SettingsScreenState extends State<SettingsScreen>
         style: appFont(fontSize: 13, fontWeight: FontWeight.w700),
       ),
     );
+  }
+}
+
+/// 적극 코칭이 참견하는 요일을 고르는 세 갈래.
+///
+/// 매일 참견받으면 지친다는 말에서 나온 자리다. 요일 일곱 개를 늘 펼쳐두면
+/// 매일 받을 사람도 일곱 칸을 눌러 맞춰야 하므로, 먼저 갈래를 고르게 하고
+/// 하나씩 고를 사람에게만 요일을 편다.
+///
+/// 주말만 받는 갈래는 두지 않는다. 요일별에서 토·일 두 번이면 되고, 모닝콜
+/// 쪽과 칸 수가 달라지면 같은 설정 화면에서 같은 일을 하는 자리가 다르게 생긴다.
+enum _GapDayMode {
+  everyday('매일', {1, 2, 3, 4, 5, 6, 7}),
+  weekdays('평일만', {1, 2, 3, 4, 5}),
+  byDay('요일별', null);
+
+  const _GapDayMode(this.label, this.days);
+
+  final String label;
+
+  /// 고르는 순간 그대로 들어가는 요일. 요일별은 사용자가 고르므로 null.
+  final Set<int>? days;
+
+  /// 저장해둔 요일이 어느 갈래인지. 매일도 평일도 아니면 직접 고른 것이다.
+  static _GapDayMode of(Set<int> days) {
+    for (final mode in values) {
+      final preset = mode.days;
+      if (preset == null) continue;
+      if (preset.length == days.length && preset.every(days.contains)) {
+        return mode;
+      }
+    }
+    return byDay;
   }
 }
 

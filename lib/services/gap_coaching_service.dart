@@ -28,7 +28,7 @@ class GapCoachingService {
     'nyang_coach/ongoing_nudge',
   );
 
-  /// 이 두 값은 'nyang_'으로 시작한다.
+  /// 이 세 값은 'nyang_'으로 시작한다.
   ///
   /// 모닝콜 시각과 같은 성격의 사용자 설정이라 기기를 바꿔도 따라와야 한다.
   /// 반대로 "오늘 이미 나갔는지" 같은 이 기기에서만 뜻이 있는 값은 네이티브가
@@ -36,11 +36,23 @@ class GapCoachingService {
   static const String enabledKey = 'nyang_gap_coaching_enabled';
   static const String timesKey = 'nyang_gap_coaching_times';
 
+  /// 참견할 요일. "1,2,3,4,5" 꼴로 월=1 ... 일=7.
+  ///
+  /// 매일 참견받으면 지친다는 말에서 나온 자리다. 주말엔 놔뒀으면 하는 사람이
+  /// 스위치를 통째로 끄는 것 말고는 방법이 없었다.
+  static const String daysKey = 'nyang_gap_coaching_days';
+
   /// 하루에 둘까지.
   static const int maxTimes = 2;
 
   /// 처음 켤 때 하나만 준다. 두 번째는 필요한 사람이 직접 더한다.
   static const TimeOfDay defaultTime = TimeOfDay(hour: 15, minute: 30);
+
+  /// 아무것도 안 정해뒀을 때의 요일. 월~일 전부다.
+  ///
+  /// 이 설정이 생기기 전부터 켜둔 사람이 갑자기 조용해지면 안 된다. 켜둔 적도
+  /// 없는 요일 설정 때문에 기능이 멈춘 것은 사용자 눈에 고장과 구별되지 않는다.
+  static const Set<int> defaultDays = {1, 2, 3, 4, 5, 6, 7};
 
   static bool get isSupported =>
       !kIsWeb &&
@@ -80,6 +92,43 @@ class GapCoachingService {
     if (hour == null || minute == null) return null;
     if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return null;
     return TimeOfDay(hour: hour, minute: minute);
+  }
+
+  static Future<Set<int>> days() async {
+    final prefs = await SharedPreferences.getInstance();
+    return parseDays(prefs.getString(daysKey));
+  }
+
+  /// "1,3,5"를 요일 집합으로. 비어 있거나 못 읽으면 매일로 본다.
+  static Set<int> parseDays(String? raw) {
+    if (raw == null || raw.trim().isEmpty) return defaultDays;
+    final result = <int>{};
+    for (final part in raw.split(',')) {
+      final day = int.tryParse(part.trim());
+      if (day == null || day < 1 || day > 7) continue;
+      result.add(day);
+    }
+    // 하나도 못 읽었으면 저장이 깨진 것이다. 그대로 비워두면 켜져 있는데
+    // 영영 안 나가는 상태가 된다.
+    return result.isEmpty ? defaultDays : result;
+  }
+
+  static String formatDays(Set<int> days) =>
+      (days.toList()..sort()).join(',');
+
+  /// 그날 참견하는 요일인지. 네이티브도 같은 규칙을 본다.
+  static bool runsOn(DateTime date, Set<int> days) =>
+      days.contains(date.weekday);
+
+  /// 설정 줄에 쓸 요일 표기. "매일" / "평일만" / "월·수·금".
+  static String daysLabel(Set<int> days) {
+    if (days.length == 7) return '매일';
+    if (days.length == 5 && const {1, 2, 3, 4, 5}.every(days.contains)) {
+      return '평일만';
+    }
+    if (days.length == 2 && const {6, 7}.every(days.contains)) return '주말만';
+    const names = ['월', '화', '수', '목', '금', '토', '일'];
+    return (days.toList()..sort()).map((day) => names[day - 1]).join('·');
   }
 
   static String formatTime(TimeOfDay time) =>
@@ -730,8 +779,15 @@ class GapCoachingService {
   static Future<void> save({
     required bool enabled,
     required List<TimeOfDay> times,
+    Set<int>? days,
   }) async {
     final prefs = await SharedPreferences.getInstance();
+    // 요일을 하나도 안 남기고 저장하면 켜져 있는데 영영 안 나간다. 화면에서도
+    // 마지막 하나는 못 끄게 막지만, 저장하는 쪽에서도 받아주지 않는다.
+    await prefs.setString(
+      daysKey,
+      formatDays(days == null || days.isEmpty ? defaultDays : days),
+    );
     // 같은 시각을 두 번 저장하지 않는다. 그대로 두면 두 자리가 같은 시각에
     // 예약되고, 먼저 온 하나만 나간 뒤 나머지는 조용히 버려진다 — 사용자에게는
     // 두 번째 시각을 정해둔 적이 없는 것처럼 보인다.
@@ -752,18 +808,28 @@ class GapCoachingService {
   /// 문장은 '지금'이 아니라 '그 카드가 뜰 때'를 보고 지어야 한다. 아침에 앱을
   /// 열어 만든 문장이 오후 3시에 뜨는데, 그 사람이 3시에 회사에 있는지 집에
   /// 있는지는 3시를 봐야 안다.
+  /// 고른 요일도 함께 본다. 화요일만 켜둔 사람의 문장을 월요일 저녁 상황으로
+  /// 지어두면, 정작 화요일에 뜨는 카드가 어제 이야기를 한다.
   @visibleForTesting
-  static DateTime nextSlot(List<TimeOfDay> slots, {DateTime? now}) {
+  static DateTime nextSlot(
+    List<TimeOfDay> slots, {
+    DateTime? now,
+    Set<int> days = defaultDays,
+  }) {
     final at = now ?? DateTime.now();
     final sorted = slots.map((t) => t.hour * 60 + t.minute).toList()..sort();
-    for (final minutes in sorted) {
-      final slot = DateTime(
-        at.year,
-        at.month,
-        at.day,
-      ).add(Duration(minutes: minutes));
-      if (slot.isAfter(at)) return slot;
+    // 오늘부터 이레를 본다. 요일을 하나라도 골라뒀으면 그 안에 반드시 걸린다.
+    for (var ahead = 0; ahead <= 7; ahead++) {
+      final date = DateTime(at.year, at.month, at.day)
+          .add(Duration(days: ahead));
+      if (!runsOn(date, days)) continue;
+      for (final minutes in sorted) {
+        final slot = date.add(Duration(minutes: minutes));
+        if (slot.isAfter(at)) return slot;
+      }
     }
+    // 여기까지 오는 것은 요일이 통째로 비었을 때뿐이다. [parseDays]가 막고
+    // 있지만, 막지 못한 값이 들어와도 시각 자체는 돌려준다.
     final tomorrow = DateTime(
       at.year,
       at.month,
@@ -782,6 +848,7 @@ class GapCoachingService {
     final master = userData.isPlanActive && userData.planType == 'master';
     final enabled = master && await isEnabled();
     final slots = enabled ? await times() : const <TimeOfDay>[];
+    final onDays = enabled ? await days() : defaultDays;
 
     if (_isAndroid) {
       try {
@@ -791,7 +858,7 @@ class GapCoachingService {
           // 문장을 먼저 만들어 두고 시각을 건다. 카드가 뜨는 순간에는 앱이
           // 꺼져 있을 수 있어서, 그때 만들 수는 없다.
           final prefs = await SharedPreferences.getInstance();
-          await prepareCard(prefs, at: nextSlot(slots));
+          await prepareCard(prefs, at: nextSlot(slots, days: onDays));
           await _channel.invokeMethod('syncGapCoaching', {
             'times': slots.map(formatTime).toList(),
           });
@@ -808,7 +875,7 @@ class GapCoachingService {
     // 여기서 물어봐 두면 아래 예약이 그 답을 가져다 쓴다.
     if (slots.isNotEmpty) {
       final prefs = await SharedPreferences.getInstance();
-      await prepareCard(prefs, at: nextSlot(slots));
+      await prepareCard(prefs, at: nextSlot(slots, days: onDays));
     }
     // 다른 배너와 시간이 겹치는지 함께 봐야 해서 예약은 그쪽 한 곳에서 한다.
     await NyangBannerNudge.sync();

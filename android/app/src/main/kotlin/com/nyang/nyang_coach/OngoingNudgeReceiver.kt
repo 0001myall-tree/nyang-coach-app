@@ -102,6 +102,10 @@ class OngoingNudgeReceiver : BroadcastReceiver() {
         OngoingNudgeState.markGapFired(context, slot)
         GapCoachingPlanner.scheduleTomorrow(context, slot)
 
+        // 참견하지 않기로 한 요일이다. 알람은 매일 걸려 있고 여기서 거른다 —
+        // 예약을 요일마다 다르게 걸면, 요일을 바꿀 때마다 걸린 것과 걸어야 할
+        // 것이 어긋나 조용히 빠지는 자리가 생긴다.
+        if (!OngoingNudgeState.runsToday(context)) return
         if (!OngoingNudgeState.shouldAppearNowForGap(context)) return
         // 도는 일정이 이 자리를 쓰고 있다. "다음 일"·"멈춘 일" 카드는 반대로
         // 이쪽에 자리를 내주므로 여기서 걸리지 않는다.
