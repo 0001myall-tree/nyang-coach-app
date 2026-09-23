@@ -259,8 +259,11 @@ class NyangBannerNudge {
       scheduledDate: tz.TZDateTime.from(at, tz.local),
       notificationDetails: const NotificationDetails(
         iOS: DarwinNotificationDetails(
-          presentAlert: true,
-          presentBanner: true,
+          // 앱을 보고 있는 동안에는 띄우지 않는다. 할 일이 이미 눈앞에 있는
+          // 사람에게 그 위로 배너를 내리면 그건 참견이 아니라 방해다.
+          // 안드로이드 카드도 같은 자리에서 접힌다.
+          presentAlert: false,
+          presentBanner: false,
           presentList: true,
           presentSound: false,
           // 방해금지를 뚫지 않는다. 조용히 해둔 사람에게 굳이 비집고 들어갈

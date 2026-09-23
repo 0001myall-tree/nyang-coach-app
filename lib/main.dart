@@ -188,6 +188,10 @@ class _NyangCoachAppState extends State<NyangCoachApp>
       TasksSyncService.syncToCloud();
       NotificationService().syncDailyPlannerNudge();
       OngoingTaskNudgeService.setAppForeground(false);
+      // 앱을 보고 있는 동안에는 개입이 뜨지 않는다. 그 차례는 그냥 지나가므로,
+      // 나가는 지금 다음 자리를 다시 잡아둔다. 안 그러면 앱을 다시 열기
+      // 전까지 걸린 것이 하나도 없다.
+      unawaited(ActiveCoachingSync.sync());
     }
   }
 
