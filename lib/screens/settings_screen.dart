@@ -125,11 +125,9 @@ class _SettingsScreenState extends State<SettingsScreen>
   String get _gapCoachingStatus {
     if (!_hasMasterPlan) return 'MASTER 전용';
     if (!_gapCoachingEnabled || _gapCoachingTimes.isEmpty) return '꺼짐';
-    final times = _gapCoachingTimes.map(GapCoachingService.label).join(' · ');
-    // 매일이면 굳이 적지 않는다. 적어두면 줄이 길어지기만 하고, 쉬는 요일을
-    // 정해둔 사람에게만 새로운 소식이다.
-    if (_gapCoachingDays.length == 7) return times;
-    return '${GapCoachingService.daysLabel(_gapCoachingDays)} · $times';
+    // 요일만 적는다. 시각까지 붙이면 이 칸에서 잘려 "월·수·금 · 오전 10:…"이
+    // 되는데, 잘린 시각은 안 적느니만 못하다. 시각은 시트를 열면 바로 보인다.
+    return GapCoachingService.daysLabel(_gapCoachingDays);
   }
 
   /// 채팅에서 데려온 자리를 펼친다.
@@ -1922,11 +1920,11 @@ class _SettingsScreenState extends State<SettingsScreen>
                     ),
                   ],
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 10),
+                // 설정 목록 줄과 같은 문장이다. 시트를 열면 목록 줄이 가려지므로,
+                // 무엇을 켜고 끄는 건지 여기서 다시 한 번 말해준다.
                 Text(
-                  keepWordsWhole('여유 시간 10분 동안 할 일을 완료할 수 있게 도와줘요.'),
-                  // 이 시트 아래쪽 설명과 같은 모양이다. 같은 자리에서 같은
-                  // 일을 하는 글이라 굵기도 색도 갈릴 이유가 없다.
+                  keepWordsWhole('세운 계획을 방치하지 않고 적극 참견해요.'),
                   style: appFont(
                     fontSize: 12.5,
                     fontWeight: FontWeight.w600,
@@ -1980,7 +1978,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                               ),
                               for (var i = 0; i < tempTimes.length; i++)
                                 _buildGapTimeRow(
-                                  label: i == 0 ? '① 첫 번째' : '② 두 번째',
+                                  label: _gapTimeRowLabels[i],
                                   time: tempTimes[i],
                                   onTap: () async {
                                     if (!tempEnabled) return;
@@ -2022,27 +2020,18 @@ class _SettingsScreenState extends State<SettingsScreen>
                                 GestureDetector(
                                   onTap: () {
                                     if (!tempEnabled) return;
-                                    // 첫 번째와 같은 시각으로 더해지면 그 자리는
-                                    // 만들자마자 못 쓰는 자리가 된다.
-                                    const morning = TimeOfDay(
-                                      hour: 10,
-                                      minute: 30,
-                                    );
-                                    final clash = tempTimes.any(
-                                      (t) =>
-                                          t.hour == morning.hour &&
-                                          t.minute == morning.minute,
-                                    );
-                                    setModalState(
-                                      () => tempTimes.add(
-                                        clash
-                                            ? const TimeOfDay(
-                                                hour: 15,
-                                                minute: 30,
-                                              )
-                                            : morning,
+                                    // 이미 있는 시각으로 더해지면 그 자리는
+                                    // 만들자마자 못 쓰는 자리가 된다. 비어 있는
+                                    // 후보 중 첫 번째를 준다.
+                                    final free = _gapTimeSuggestions.firstWhere(
+                                      (candidate) => !tempTimes.any(
+                                        (t) =>
+                                            t.hour == candidate.hour &&
+                                            t.minute == candidate.minute,
                                       ),
+                                      orElse: () => _gapTimeSuggestions.last,
                                     );
+                                    setModalState(() => tempTimes.add(free));
                                   },
                                   child: Container(
                                     width: double.infinity,
@@ -2148,19 +2137,6 @@ class _SettingsScreenState extends State<SettingsScreen>
                           ),
                         ],
 
-                        const SizedBox(height: 20),
-                        Text(
-                          keepWordsWhole(
-                            '일정을 하는 중이거나 그 시각에 일정이 있으면 그날 그 시각은 '
-                            '조용히 지나가요.',
-                          ),
-                          style: appFont(
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.w600,
-                            height: 1.5,
-                            color: const Color(0xFF9A96A8),
-                          ),
-                        ),
                       ],
                     ),
                   ),
@@ -2206,6 +2182,20 @@ class _SettingsScreenState extends State<SettingsScreen>
       },
     );
   }
+
+  /// 시각 칸에 붙는 이름. [GapCoachingService.maxTimes]만큼 있어야 한다.
+  static const List<String> _gapTimeRowLabels = [
+    '① 첫 번째',
+    '② 두 번째',
+    '③ 세 번째',
+  ];
+
+  /// '시간 추가'를 눌렀을 때 채워 넣는 시각. 이미 있는 것은 건너뛴다.
+  static const List<TimeOfDay> _gapTimeSuggestions = [
+    TimeOfDay(hour: 10, minute: 30),
+    TimeOfDay(hour: 15, minute: 30),
+    TimeOfDay(hour: 20, minute: 30),
+  ];
 
   /// 매일·평일만·요일별 중에 고르는 칩.
   Widget _buildGapModeChip({
@@ -2350,10 +2340,12 @@ class _SettingsScreenState extends State<SettingsScreen>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    blocker.headline,
+                    // 낱말 가운데서 줄이 갈리면 "...재워둘 수 있어 / 요"가 된다.
+                    keepWordsWhole(blocker.headline),
                     style: appFont(
                       fontSize: 13.5,
                       fontWeight: FontWeight.w900,
+                      height: 1.4,
                       color: accent,
                     ),
                   ),
@@ -2421,7 +2413,8 @@ class _SettingsScreenState extends State<SettingsScreen>
       }
       if (state['batteryRestricted'] == true) {
         return _GapBlocker(
-          headline: '휴대폰이 냥냥코치를 재워둘 수 있어요',
+          // 한 줄에 들어가야 배너에서 낱말이 갈리지 않는다.
+          headline: '폰이 냥냥코치를 재우고 있어요',
           detail:
               '지금 설정으로는 휴대폰이 냥냥코치를 재워둘 수 있어요. '
               '그러면 정해둔 시각에 냥냥이가 늦게 나오거나 아예 나오지 않아요.\n\n'

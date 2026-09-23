@@ -91,12 +91,22 @@ class NyangBannerNudge {
     1317,
   ];
 
-  /// 틈새 코칭 자리들. 시간 슬롯 2개 × 오늘/내일.
+  /// 틈새 코칭 자리들. 시간 슬롯 3개 × 오늘/내일.
   ///
   /// 내일 것까지 미리 거는 이유는, 앱을 하루 안 열어도 그날 한 번은 찾아가야
   /// 하기 때문이다. 앱을 열거나 할 일을 저장하면 전부 지워지고 지금 상태로
   /// 다시 깔린다.
-  static const List<int> gapNotificationIds = [1318, 1319, 1320, 1321];
+  ///
+  /// [GapCoachingService.maxTimes]만큼 × 2일이 들어갈 자리가 있어야 한다.
+  /// 모자라면 뒤쪽 자리가 조용히 안 걸린다.
+  static const List<int> gapNotificationIds = [
+    1318,
+    1319,
+    1320,
+    1321,
+    1322,
+    1323,
+  ];
 
   /// 배너 제목. 본문은 그때 남은 일을 보고 [GapCoachingService.bodyFor]가 고른다.
   static const String gapTitle = '🐾 지금 잠깐 여유 있냥?';

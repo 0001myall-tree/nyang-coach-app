@@ -42,8 +42,8 @@ class GapCoachingService {
   /// 스위치를 통째로 끄는 것 말고는 방법이 없었다.
   static const String daysKey = 'nyang_gap_coaching_days';
 
-  /// 하루에 둘까지.
-  static const int maxTimes = 2;
+  /// 하루에 셋까지.
+  static const int maxTimes = 3;
 
   /// 처음 켤 때 하나만 준다. 두 번째는 필요한 사람이 직접 더한다.
   static const TimeOfDay defaultTime = TimeOfDay(hour: 15, minute: 30);

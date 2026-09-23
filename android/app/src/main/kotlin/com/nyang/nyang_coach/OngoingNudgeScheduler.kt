@@ -43,8 +43,8 @@ object OngoingNudgeScheduler {
     private const val REQUEST_CODE_START = 7406
     private const val REQUEST_CODE_GAP = 7407
 
-    /** 틈새 코칭 시각은 하루 둘까지. */
-    const val GAP_SLOT_COUNT = 2
+    /** 틈새 코칭 시각은 하루 셋까지. Dart의 GapCoachingService.maxTimes와 같다. */
+    const val GAP_SLOT_COUNT = 3
 
     /** 시작하고 30분은 아무것도 하지 않는다. */
     const val FIRST_DELAY_MILLIS = 30L * 60_000L
