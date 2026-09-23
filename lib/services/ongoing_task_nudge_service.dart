@@ -4,7 +4,10 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'active_coaching_later.dart';
+import 'active_coaching_promise.dart';
 import 'distraction_coach_quota.dart';
+import 'gap_coaching_service.dart';
 import 'task_completion_service.dart';
 
 /// 냥냥이가 물어본 것에 사용자가 고른 답.
@@ -13,13 +16,29 @@ class OngoingNudgeAnswer {
 
   final String taskId;
 
-  /// 'done' = 다 했어, 'started' = (시작 전 일정에) 시작할게.
-  /// '계속하는 중', '다시 시작할게', '좀 더 있다가'는 일정을 바꾸지 않으므로
-  /// 답이 남지 않는다.
+  /// 'done' = 다 했어, 'started' = (시작 전 일정에) 시작할게,
+  /// 'later:HH:mm' = 그 시각에 하겠다.
+  /// '계속하는 중'과 '다시 시작할게'는 일정을 바꾸지 않으므로 답이 남지 않는다.
   final String action;
 
   bool get isDone => action == 'done';
   bool get isStarted => action == 'started';
+
+  /// 카드에서 고른 "몇 시에 할게". 그런 답이 아니면 null.
+  ///
+  /// 네이티브는 그 시각으로 카드를 다시 걸어두기만 하고, 할 일의 시작 시각과
+  /// 추적에 적는 일은 앱이 켜질 때 여기를 지나며 한다. 같은 규칙을 코틀린에
+  /// 한 벌 더 두지 않으려는 것이다.
+  DateTime? promisedAt(DateTime now) {
+    if (!action.startsWith('later:')) return null;
+    final parts = action.substring('later:'.length).split(':');
+    if (parts.length != 2) return null;
+    final hour = int.tryParse(parts[0]);
+    final minute = int.tryParse(parts[1]);
+    if (hour == null || minute == null) return null;
+    if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return null;
+    return DateTime(now.year, now.month, now.day, hour, minute);
+  }
 }
 
 /// 시작해둔 일정을 앱 밖에서도 떠올릴 수 있게 하는 기능.
@@ -328,6 +347,16 @@ class OngoingTaskNudgeService {
   }) async {
     if (!_isAndroid) return;
     if (!await isAvailable()) return;
+    // 그 카드에서 [좀 더 있다가]를 누르면 내밀 시각들을 미리 만들어 둔다.
+    // 카드가 뜨는 순간에는 앱이 꺼져 있을 수 있어서 그때 계산할 수 없고,
+    // 네이티브가 직접 계산하면 같은 규칙이 두 벌이 된다.
+    final prefs = await SharedPreferences.getInstance();
+    await ActiveCoachingLater.prepare(
+      prefs,
+      taskId: taskId,
+      startAt: startAt,
+      enabled: await GapCoachingService.isEnabled(),
+    );
     try {
       await _channel.invokeMethod('remindStart', {
         'taskId': taskId,
@@ -344,6 +373,7 @@ class OngoingTaskNudgeService {
   /// 시작 시각을 기다리던 자리를 접는다. 더 기다릴 시간 있는 일정이 없을 때 쓴다.
   static Future<void> clearStart() async {
     if (!_isAndroid) return;
+    await ActiveCoachingLater.clear(await SharedPreferences.getInstance());
     try {
       await _channel.invokeMethod('clearStart');
     } on PlatformException {
@@ -550,6 +580,10 @@ class OngoingTaskNudgeService {
     // "시작할게"는 네이티브가 이미 저장소에 적었다. 여기서는 화면이 다시 읽도록
     // 바뀌었다고만 알린다.
     if (answer.isStarted) return true;
+    final promisedAt = answer.promisedAt(DateTime.now());
+    if (promisedAt != null) {
+      return ActiveCoachingPromise.keep(taskId: answer.taskId, at: promisedAt);
+    }
     return TaskCompletionService.pauseStoredTask(taskId: answer.taskId);
   }
 

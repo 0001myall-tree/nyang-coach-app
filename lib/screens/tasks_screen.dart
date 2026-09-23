@@ -960,6 +960,12 @@ class _TasksScreenState extends State<TasksScreen>
     required String taskText,
   }) async {
     final name = taskText.isEmpty ? null : taskText;
+    // 안드로이드 카드에서 [직접 고르기]를 눌러 들어온 경우다. 물을 것이 이미
+    // 정해져 있으니 다른 질문을 한 번 더 얹지 않는다.
+    if (kind == 'laterPick') {
+      await _askWhenLater(taskId: taskId, taskText: taskText);
+      return;
+    }
     final String message;
     final List<BannerAnswerAction> actions;
     switch (kind) {

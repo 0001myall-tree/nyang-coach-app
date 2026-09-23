@@ -627,12 +627,133 @@ class OngoingNudgeService : Service() {
         lingerAsDoorway()
     }
 
-    /** "좀 더 있다가". 30분 뒤에 한 번 더 묻고, 그 뒤로는 묻지 않는다. */
+    /**
+     * "좀 더 있다가".
+     *
+     * 적극 코칭을 켠 사람에게는 언제 할지를 묻는다. 여기서 끝내면 앱이 아는
+     * 것은 "미뤘다"뿐이라, 30분 뒤에 같은 카드를 한 번 더 내미는 것 말고 할 수
+     * 있는 것이 없다. 시각을 받아두면 그 시각이 약속이 된다.
+     *
+     * 끈 사람과, 내밀 시각이 남지 않은 경우는 예전 그대로다.
+     */
     private fun startLater() {
+        val taskId = OngoingNudgeState.startTaskId(this)
+        val times = if (taskId == null) {
+            emptyList()
+        } else {
+            OngoingNudgeState.laterTimes(this, taskId)
+        }
+        if (times.isNotEmpty()) {
+            expandToLaterCard(times)
+            return
+        }
         answered = true
         scheduleNextStartRound(OngoingNudgeScheduler.START_SNOOZE_MILLIS)
         Toast.makeText(this, "알겠어. 이따 다시 부를게!", Toast.LENGTH_SHORT).show()
         lingerAsDoorway()
+    }
+
+    /**
+     * "좀 더 있다가 언제?" 카드.
+     *
+     * 시각은 Dart가 미리 만들어 둔 것을 그대로 붙인다. 버튼 문구는 절대 시각만
+     * 적는다 — 3시 12분에 "30분 뒤 · 3:30"은 18분 뒤라 거짓말이 된다.
+     */
+    private fun expandToLaterCard(times: List<Pair<Int, Int>>) {
+        handler.removeCallbacks(autoHide)
+        removeBubble()
+        cardView?.let { runCatching { windowManager.removeView(it) } }
+        cardView = null
+
+        val view = LayoutInflater.from(this).inflate(R.layout.nudge_later_card, null)
+        val first = view.findViewById<TextView>(R.id.nudge_later_first)
+        val second = view.findViewById<TextView>(R.id.nudge_later_second)
+
+        first.text = clockLabel(times[0])
+        first.setOnClickListener { promiseAt(times[0]) }
+        if (times.size > 1) {
+            second.text = clockLabel(times[1])
+            second.setOnClickListener { promiseAt(times[1]) }
+        } else {
+            second.visibility = View.GONE
+        }
+
+        // 버튼에 없는 시각을 고르려면 앱으로 간다. 다른 앱 위에 뜬 창에서는
+        // 시각 선택기를 올릴 수 없다.
+        view.findViewById<TextView>(R.id.nudge_later_pick).setOnClickListener {
+            answered = true
+            OngoingNudgeState.startTaskId(this)?.let { taskId ->
+                OngoingNudgeAnswerWriter.markPickingLater(
+                    this,
+                    taskId,
+                    OngoingNudgeState.startTaskText(this),
+                )
+            }
+            openPlanner()
+        }
+
+        view.findViewById<View>(R.id.nudge_later_scrim).setOnClickListener {
+            cardView?.let { runCatching { windowManager.removeView(it) } }
+            cardView = null
+            showBubble()
+            handler.postDelayed(autoHide, remainingVisibleMillis())
+        }
+
+        val params = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.MATCH_PARENT,
+            overlayType(),
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+            PixelFormat.TRANSLUCENT,
+        )
+        windowManager.addView(view, params)
+        cardView = view
+    }
+
+    /**
+     * 고른 시각을 약속으로 남긴다.
+     *
+     * 할 일의 시작 시각과 추적에 적는 일은 앱이 켜질 때 Dart가 한다. 여기서는
+     * 답만 남기고, 그 시각에 카드가 다시 오도록 예약을 옮긴다 — 앱을 끝내 안
+     * 열어도 약속한 시각에는 부를 수 있어야 한다.
+     */
+    private fun promiseAt(time: Pair<Int, Int>) {
+        answered = true
+        val taskId = OngoingNudgeState.startTaskId(this)
+        if (taskId != null) {
+            val label = "%02d:%02d".format(time.first, time.second)
+            OngoingNudgeState.writeResult(this, taskId, "later:$label")
+        }
+        val at = java.util.Calendar.getInstance().apply {
+            set(java.util.Calendar.HOUR_OF_DAY, time.first)
+            set(java.util.Calendar.MINUTE, time.second)
+            set(java.util.Calendar.SECOND, 0)
+            set(java.util.Calendar.MILLISECOND, 0)
+        }.timeInMillis
+        OngoingNudgeState.setStartAt(this, at)
+        OngoingNudgeState.setStartUntil(
+            this,
+            at + OngoingNudgeScheduler.START_WINDOW_MILLIS,
+        )
+        OngoingNudgeScheduler.cancelStart(this)
+        OngoingNudgeScheduler.scheduleStartAt(
+            this,
+            at,
+            OngoingNudgeScheduler.STAGE_FIRST,
+        )
+        nextScheduled = true
+        Toast.makeText(
+            this,
+            "${clockLabel(time)}로 시작 설정했어. 그때 알려줄게.",
+            Toast.LENGTH_SHORT,
+        ).show()
+        lingerAsDoorway()
+    }
+
+    /** "4:30". 상대 표현은 쓰지 않는다. */
+    private fun clockLabel(time: Pair<Int, Int>): String {
+        val hour = if (time.first % 12 == 0) 12 else time.first % 12
+        return "%d:%02d".format(hour, time.second)
     }
 
     /**

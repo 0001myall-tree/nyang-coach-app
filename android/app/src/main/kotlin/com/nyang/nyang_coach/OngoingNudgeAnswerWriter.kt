@@ -128,6 +128,21 @@ object OngoingNudgeAnswerWriter {
     }
 
     /**
+     * [직접 고르기]로 앱에 들어간다고 적어둔다.
+     *
+     * 할 일 창이 열릴 때 이 자리를 보고 그 칸을 번쩍인 뒤, 시각을 고르는 팝업을
+     * 띄운다. 아이폰 배너가 쓰던 자리를 그대로 쓴다 — 하는 일이 같은데 자리를
+     * 따로 만들면 한쪽만 고쳐지게 된다.
+     */
+    fun markPickingLater(context: Context, taskId: String, taskText: String) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putString("flutter.banner_focus_task_id", taskId)
+            .putString("flutter.banner_answer_kind", "laterPick")
+            .putString("flutter.banner_answer_task_text", taskText)
+            .commit()
+    }
+
+    /**
      * 시간이 정해지지 않은, 아직 손대지 않은 다음 일.
      *
      * "냥이랑 남은 일정도 시작할까냥?" 카드가 매번 다시 검사하는 조건이다. 목록

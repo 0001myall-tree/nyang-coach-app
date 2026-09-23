@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- [좀 더 있다가]를 누른 다음에 펼쳐지는 카드. 언제 할지를 받는다.
+
+     지금까지는 [좀 더 있다가]가 곧 끝이었다. 그러면 앱이 아는 것은 "미뤘다"뿐이라
+     30분 뒤에 같은 카드를 한 번 더 내미는 것 말고 할 수 있는 것이 없었다.
+
+     시각은 여기서 계산하지 않는다. Dart가 미리 만들어 둔 것을 읽어 붙인다 —
+     같은 규칙이 두 벌이면 한쪽만 고쳤을 때 두 폰이 다른 시각을 내민다. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/nudge_later_scrim"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#66000000"
+    android:clickable="true"
+    android:focusable="false">
+
+    <ScrollView
+        android:layout_width="300dp"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:clipToPadding="false"
+        android:fillViewport="false"
+        android:scrollbars="none">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@drawable/nudge_card_bg"
+        android:clickable="true"
+        android:orientation="vertical"
+        android:paddingStart="20dp"
+        android:paddingTop="24dp"
+        android:paddingEnd="20dp"
+        android:paddingBottom="16dp">
+
+        <TextView
+            android:id="@+id/nudge_later_title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:lineSpacingExtra="4dp"
+            android:maxLines="4"
+            android:text="좀 더 있다가 언제?"
+            android:textColor="#3D3A4E"
+            android:textSize="16sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/nudge_later_first"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:layout_marginTop="20dp"
+            android:background="@drawable/nudge_button_primary"
+            android:gravity="center"
+            android:textColor="#FFFFFF"
+            android:textSize="15sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/nudge_later_second"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:layout_marginTop="8dp"
+            android:background="@drawable/nudge_button_secondary"
+            android:gravity="center"
+            android:textColor="#3D3A4E"
+            android:textSize="15sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/nudge_later_pick"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:layout_marginTop="8dp"
+            android:background="@drawable/nudge_button_secondary"
+            android:gravity="center"
+            android:text="직접 고르기"
+            android:textColor="#6B6676"
+            android:textSize="15sp" />
+    </LinearLayout>
+    </ScrollView>
+</FrameLayout>

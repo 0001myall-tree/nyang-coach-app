@@ -347,6 +347,15 @@ object OngoingNudgeState {
     /** 참견할 요일. "1,2,3,4,5" 꼴로 월=1 ... 일=7. Dart의 요일 번호와 같다. */
     private const val KEY_GAP_DAYS = "flutter.nyang_gap_coaching_days"
 
+    /**
+     * [좀 더 있다가]에 내밀 시각들. Dart가 미리 만들어 둔다.
+     *
+     * 여기서 계산하지 않는다. 같은 규칙이 Dart와 코틀린에 두 벌 있으면 한쪽만
+     * 고쳤을 때 두 폰이 다른 시각을 내민다. `ActiveCoachingLater.preparedKey`와
+     * 같은 이름이다.
+     */
+    private const val KEY_LATER = "flutter.active_coaching_later"
+
     /** 그 슬롯이 오늘 이미 지나갔는지. 이 기기에서만 뜻이 있어 접두어가 없다. */
     private const val KEY_GAP_FIRED_PREFIX = "gap_coaching_fired_"
 
@@ -377,6 +386,39 @@ object OngoingNudgeState {
             if (hour !in 0..23 || minute !in 0..59) return@mapNotNull null
             hour to minute
         }.take(OngoingNudgeScheduler.GAP_SLOT_COUNT)
+    }
+
+    /**
+     * [좀 더 있다가]에 내밀 시각들. 아직 오지 않은 것만.
+     *
+     * 적어둔 것이 다른 일의 것이거나 전부 지났으면 빈 목록이다 — 시작 시각에
+     * 안 누르고 40분 뒤에 누르면 그럴 수 있다. 그때는 예전처럼 30분 뒤에
+     * 다시 부른다.
+     */
+    fun laterTimes(context: Context, taskId: String): List<Pair<Int, Int>> {
+        if (!isGapEnabled(context)) return emptyList()
+        val raw = prefs(context).getString(KEY_LATER, null).orEmpty()
+        if (raw.isBlank()) return emptyList()
+        val json = runCatching { org.json.JSONObject(raw) }.getOrNull()
+            ?: return emptyList()
+        if (json.optString("taskId", "") != taskId) return emptyList()
+        val times = json.optJSONArray("times") ?: return emptyList()
+
+        val calendar = java.util.Calendar.getInstance()
+        val nowMinutes = calendar.get(java.util.Calendar.HOUR_OF_DAY) * 60 +
+            calendar.get(java.util.Calendar.MINUTE)
+        val result = mutableListOf<Pair<Int, Int>>()
+        for (i in 0 until times.length()) {
+            val pieces = times.optString(i, "").split(":")
+            if (pieces.size != 2) continue
+            val hour = pieces[0].toIntOrNull() ?: continue
+            val minute = pieces[1].toIntOrNull() ?: continue
+            if (hour !in 0..23 || minute !in 0..59) continue
+            // 이미 지난 시각을 내밀면 누르는 순간 지나간 약속이 된다.
+            if (hour * 60 + minute <= nowMinutes) continue
+            result.add(hour to minute)
+        }
+        return result
     }
 
     /**
