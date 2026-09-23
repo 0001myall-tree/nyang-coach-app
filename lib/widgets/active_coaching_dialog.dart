@@ -99,10 +99,18 @@ class ActiveCoachingDialog extends StatefulWidget {
     required this.askMoves,
     required this.timeChoices,
     this.otherTasks = const [],
+    this.askTimeOnly = false,
   });
 
   /// 처음 말을 건 일.
   final String taskName;
+
+  /// 시각만 묻고 끝낼지.
+  ///
+  /// 시작 카드에서 [좀 더 있다가]를 누른 사람이 여기로 온다. 그 사람에게는
+  /// 이유를 묻지 않는다 — 스스로 미루겠다고 말한 참이고, 이유는 **약속한
+  /// 시각에 또 안 했을 때** 물을 것이다.
+  final bool askTimeOnly;
 
   /// 한 수를 받아오는 길. [names]가 하나면 그 일로 고정이고, 여럿이면 고르는
   /// 것까지 맡긴다.
@@ -125,7 +133,7 @@ class ActiveCoachingDialog extends StatefulWidget {
 enum _Step { reason, moves, pickAnother, time }
 
 class _ActiveCoachingDialogState extends State<ActiveCoachingDialog> {
-  _Step _step = _Step.reason;
+  late _Step _step = widget.askTimeOnly ? _Step.time : _Step.reason;
   String? _reason;
   late String _task = widget.taskName;
   List<String> _moves = const [];

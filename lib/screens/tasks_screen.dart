@@ -34,6 +34,10 @@ import '../services/ongoing_task_nudge_service.dart';
 import '../services/task_completion_service.dart';
 import '../services/apple_calendar_sync_service.dart';
 import '../services/routine_schedule.dart';
+import '../services/gap_coaching_service.dart';
+import '../services/active_coaching_promise.dart';
+import '../services/active_coaching_time.dart';
+import '../widgets/active_coaching_dialog.dart';
 import '../widgets/banner_answer_dialog.dart';
 import '../widgets/alarm_permission_notice.dart';
 import '../widgets/core_reminder_settings_sheet.dart';
@@ -970,7 +974,14 @@ class _TasksScreenState extends State<TasksScreen>
             isPrimary: true,
             onTap: () => _startTaskFromBanner(taskId),
           ),
-          const BannerAnswerAction(label: '나중에', icon: 'fa-clock-regular'),
+          BannerAnswerAction(
+            label: '좀 더 있다가',
+            icon: 'fa-clock-regular',
+            // 지금까지는 여기서 끝났다. 그러면 앱이 아는 것은 "미뤘다"뿐이라,
+            // 30분 뒤에 같은 카드를 한 번 더 내미는 것 말고 할 수 있는 것이
+            // 없다. 언제 할지 받아두면 그 시각이 약속이 된다.
+            onTap: () => _askWhenLater(taskId: taskId, taskText: taskText),
+          ),
         ];
         break;
       case 'resume':
@@ -1031,6 +1042,71 @@ class _TasksScreenState extends State<TasksScreen>
       builder: (context) =>
           BannerAnswerDialog(message: message, actions: actions),
     );
+  }
+
+  /// "좀 더 있다가 언제?"를 묻고, 고른 시각을 약속으로 적는다.
+  ///
+  /// 적극 코칭을 켠 사람에게만 나온다. 끈 사람은 지금 그대로 — 누르면 그냥
+  /// 닫히고 30분 뒤에 같은 카드가 한 번 더 온다.
+  Future<void> _askWhenLater({
+    required String taskId,
+    required String taskText,
+  }) async {
+    if (!await GapCoachingService.isEnabled()) return;
+    final prefs = await SharedPreferences.getInstance();
+    final now = DateTime.now();
+    final choices = ActiveCoachingTime.choices(
+      now,
+      bedtime: prefs.getString('nyang_premium_min_sleep_time'),
+      // 근무 중으로 미뤄봐야 그 시각에 할 수 없다.
+      busyAt: (at) => BusyHoursService.busyNow(prefs, at) != null,
+    );
+    if (!mounted) return;
+
+    final outcome = await showDialog<ActiveCoachingOutcome>(
+      context: context,
+      builder: (_) => ActiveCoachingDialog(
+        taskName: taskText,
+        askTimeOnly: true,
+        timeChoices: choices,
+        // 시각만 묻는 자리라 한 수를 부를 일이 없다.
+        askMoves: (names, reason) async => null,
+      ),
+    );
+    if (outcome == null || !mounted) return;
+
+    var at = outcome.promisedAt;
+    if (outcome.kind == ActiveCoachingOutcomeKind.chooseTime) {
+      final picked = await showTimePicker(
+        context: context,
+        initialTime: TimeOfDay.fromDateTime(
+          choices.isEmpty ? now.add(const Duration(hours: 1)) : choices.first,
+        ),
+      );
+      if (picked == null || !mounted) return;
+      at = DateTime(now.year, now.month, now.day, picked.hour, picked.minute);
+      // 이미 지난 시각을 고르면 오늘은 부를 자리가 없다. 내일로 넘기지 않는다 —
+      // 추적은 그날 안에서만 하고, 하루를 닫는 말은 밤 정리 개입이 한다.
+      if (!at.isAfter(now)) return;
+    }
+    if (at == null) return;
+
+    if (!await ActiveCoachingPromise.keep(taskId: taskId, at: at)) return;
+    await _loadAll();
+    if (!mounted) return;
+    // 값을 몰래 바꾸지 않는다. 이 앱은 바꿀 때 알리는 쪽이다.
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('${_clockLabel(at)}로 시작 설정했어. 그때 알려줄게.')),
+    );
+  }
+
+  /// "4시 30분". 스낵바 한 줄에 들어가는 모양이다.
+  static String _clockLabel(DateTime at) {
+    final meridiem = at.hour >= 12 ? '오후' : '오전';
+    final hour = at.hour % 12 == 0 ? 12 : at.hour % 12;
+    return at.minute == 0
+        ? '$meridiem $hour시'
+        : '$meridiem $hour시 ${at.minute}분';
   }
 
   /// 아직 시작 전일 때만 시작 상태로 넘긴다. 이미 진행 중이거나 끝낸 일이면
@@ -1535,8 +1611,7 @@ class _TasksScreenState extends State<TasksScreen>
       timeEnd: endTime == null ? null : _storedTime(endTime),
       habitDuration: resolvedTime == null ? (habitDuration ?? '30분') : null,
       createdAt: DateTime.now().toIso8601String(),
-      isReminderEnabled:
-          resolvedTime != null && _isCoreReminderEnabledGlobally,
+      isReminderEnabled: resolvedTime != null && _isCoreReminderEnabledGlobally,
     );
 
     setState(() {

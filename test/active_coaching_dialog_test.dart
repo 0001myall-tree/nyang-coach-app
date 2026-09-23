@@ -278,6 +278,34 @@ void main() {
     expect(outcome?.reason, '지금은 시간이 안 나');
   });
 
+  testWidgets('시작 카드에서 미룬 사람에게는 이유를 묻지 않는다', (tester) async {
+    // 스스로 미루겠다고 말한 참이다. 이유는 약속한 시각에 또 안 했을 때 묻는다.
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => ElevatedButton(
+            onPressed: () => showDialog<ActiveCoachingOutcome>(
+              context: context,
+              builder: (_) => ActiveCoachingDialog(
+                taskName: '분기 리포트',
+                askMoves: noMoves,
+                askTimeOnly: true,
+                timeChoices: [DateTime(2026, 9, 23, 16, 30)],
+              ),
+            ),
+            child: const Text('열기'),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('열기'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('왜 못 했어'), findsNothing);
+    expect(find.textContaining('몇 시부터'), findsOneWidget);
+    expect(find.text('4:30'), findsOneWidget);
+  });
+
   testWidgets('밤이라 고를 시각이 없으면 하루를 닫는 말로 간다', (tester) async {
     await show(tester, askMoves: noMoves);
     await tester.tap(find.text('지금은 시간이 안 나'));
