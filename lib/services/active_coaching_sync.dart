@@ -21,6 +21,7 @@ import 'active_coaching_state.dart';
 import 'active_coaching_target.dart';
 import 'busy_hours_service.dart';
 import 'gap_coaching_service.dart';
+import 'nyang_banner_nudge.dart';
 
 class ActiveCoachingSync {
   const ActiveCoachingSync._();
@@ -98,7 +99,12 @@ class ActiveCoachingSync {
         if (plan.taskId != null) 'taskId': plan.taskId,
       }),
     );
-    if (!_isAndroid) return;
+    if (!_isAndroid) {
+      // 아이폰은 미리 예약하는 것 말고는 길이 없다. 다른 배너와 자리가 겹치는지
+      // 함께 봐야 해서 예약은 그쪽 한 곳에서 한다.
+      await NyangBannerNudge.sync();
+      return;
+    }
     try {
       await _channel.invokeMethod('syncActiveCoaching', {
         'atMillis': plan.at.millisecondsSinceEpoch,
@@ -195,7 +201,10 @@ class ActiveCoachingSync {
   static Future<void> _clear() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(plannedKey);
-    if (!_isAndroid) return;
+    if (!_isAndroid) {
+      await NyangBannerNudge.sync();
+      return;
+    }
     try {
       await _channel.invokeMethod('clearActiveCoaching');
     } on PlatformException {

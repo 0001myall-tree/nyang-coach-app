@@ -9,6 +9,7 @@ import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 
 import '../models/user_data.dart';
+import 'active_coaching_sync.dart';
 import 'distraction_coach_quota.dart';
 import 'gap_coaching_service.dart';
 import 'ongoing_task_nudge_service.dart';
@@ -108,6 +109,16 @@ class NyangBannerNudge {
     1323,
   ];
 
+  /// 적극 코칭 개입 자리. 하나뿐이다.
+  ///
+  /// 다음 한 번만 걸어둔다. 여러 개를 미리 걸면 그 사이에 목록이 바뀌었을 때
+  /// 이미 끝낸 일을 부르게 되고, 아이폰의 예약 알림은 조건이 바뀌어도 스스로
+  /// 취소되지 않는다.
+  static const int activeNotificationId = 1324;
+
+  /// 적극 코칭 배너 제목. 본문은 Dart가 미리 정해둔 한 줄이다.
+  static const String activeTitle = '🐾 냥냥코치';
+
   /// 배너 제목. 본문은 그때 남은 일을 보고 [GapCoachingService.bodyFor]가 고른다.
   static const String gapTitle = '🐾 지금 잠깐 여유 있냥?';
 
@@ -175,6 +186,7 @@ class NyangBannerNudge {
     for (final id in gapNotificationIds) {
       await _plugin.cancel(id: id);
     }
+    await _plugin.cancel(id: activeNotificationId);
 
     final needed = await isNeededHere();
     // "다음 일" 카드는 딴짓 방지 스위치나 일정 알림과 무관하게, 마스터 플랜이면
@@ -211,6 +223,55 @@ class NyangBannerNudge {
     if (gapSlots.isNotEmpty) {
       await _scheduleGapSlots(tasks, now, gapSlots, blocking);
     }
+    if (masterEligible) await _scheduleActivePlan(prefs, now);
+  }
+
+  /// 적극 코칭이 미리 세워둔 계획 하나를 건다.
+  ///
+  /// 계산은 Dart가 이미 해뒀다. 여기서는 그 시각과 문장을 읽어 걸기만 한다 —
+  /// 안드로이드 카드가 읽는 것과 같은 자리다.
+  static Future<void> _scheduleActivePlan(
+    SharedPreferences prefs,
+    DateTime now,
+  ) async {
+    final raw = prefs.getString(ActiveCoachingSync.plannedKey);
+    if (raw == null || raw.isEmpty) return;
+    final Map decoded;
+    try {
+      final parsed = jsonDecode(raw);
+      if (parsed is! Map) return;
+      decoded = parsed;
+    } catch (_) {
+      return;
+    }
+    final millis = (decoded['at'] as num?)?.toInt();
+    if (millis == null) return;
+    final at = DateTime.fromMillisecondsSinceEpoch(millis);
+    if (!at.isAfter(now)) return;
+    final body = decoded['title']?.toString().replaceAll('\n', ' ').trim();
+    if (body == null || body.isEmpty) return;
+
+    _ensureTimeZone();
+    await _plugin.zonedSchedule(
+      id: activeNotificationId,
+      title: activeTitle,
+      body: body,
+      scheduledDate: tz.TZDateTime.from(at, tz.local),
+      notificationDetails: const NotificationDetails(
+        iOS: DarwinNotificationDetails(
+          presentAlert: true,
+          presentBanner: true,
+          presentList: true,
+          presentSound: false,
+          // 방해금지를 뚫지 않는다. 조용히 해둔 사람에게 굳이 비집고 들어갈
+          // 말이 아니다 — 알림 센터에는 남으므로 볼 기회는 그대로 있다.
+          interruptionLevel: InterruptionLevel.active,
+        ),
+      ),
+      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      payload:
+          '$payloadPrefix:${jsonEncode({'kind': 'activeCoaching', 'taskId': decoded['taskId']?.toString() ?? '', 'taskText': ''})}',
+    );
   }
 
   /// 일정에 붙는 배너를 건다. 틈새 코칭이 비켜야 하는 시각만 돌려준다.
@@ -854,8 +915,11 @@ class NyangBannerNudge {
       return;
     }
 
+    final kind = data['kind']?.toString() ?? '';
     final taskId = data['taskId']?.toString() ?? '';
-    if (taskId.isEmpty) return;
+    // 적극 코칭이 "지금 뭐 할 수 있어?"를 물을 때는 가리킬 일이 없다. 그
+    // 자리만 예외로, 이름 없이도 앱을 열어 팝업까지 간다.
+    if (taskId.isEmpty && kind != 'activeCoaching') return;
 
     // 앱이 열리면 할 일이 쭉 늘어서 있어서, 부른 쪽이 어느 것인지 알 수 없다.
     // 어느 칸을 볼지 적어두면 할 일 화면이 그 칸을 번쩍여준다.
@@ -864,7 +928,6 @@ class NyangBannerNudge {
 
     // 어느 배너였는지도 같이 남긴다 - 안드로이드 딴짓 방지 카드와 같은
     // 질문을 팝업으로 띄우는 데 쓴다([answerKindKey] 참고).
-    final kind = data['kind']?.toString() ?? '';
     if (kind.isEmpty) {
       await prefs.remove(answerKindKey);
       await prefs.remove(answerTaskTextKey);
