@@ -2496,17 +2496,36 @@ class _SettingsScreenState extends State<SettingsScreen>
       _gapCoachingDays = days;
     });
 
+    // 아이폰은 배너가 얼마나 머무를지를 앱이 못 정한다. "임시"로 둔 사람에게는
+    // 몇 초 만에 올라가버려서, 딴짓 방지를 켤 때처럼 여기서도 길을 함께 낸다.
+    // 이미 "지속"으로 해둔 사람에게는 부탁할 것이 없다.
+    final needsBanner =
+        enabled &&
+        !Platform.isAndroid &&
+        !await OngoingTaskNudgeService.isBannerPersistent();
+    if (!mounted) return;
+
     // 스낵바로 알리던 자리다. 이 화면은 서랍이 아래를 덮고 있어서, 켜졌다는 말이
     // 그 뒤로 나왔다 사라졌다 — 켠 사람이 켜진 것을 본 적이 없었다.
     await _showAlarmNoticeDialog(
       title: enabled ? '🌱 적극 코칭을 켰어요' : '🌱 적극 코칭을 껐어요',
+      // 예전에는 "여유가 있어 보이면 한 마디만 건넬게요"였다. 이제는 정해둔
+      // 시각만 보는 기능이 아니라, 적어둔 시각이 지나도록 손을 못 댄 일을
+      // 찾아가는 쪽이 본체다.
       message: enabled
           ? '${GapCoachingService.daysLabel(days)} '
-                '${sorted.map(GapCoachingService.label).join(' · ')}에 여유가 있어 '
-                '보이면 냥냥이가 한 마디만 건넬게요.\n\n'
-                '무언가 하는 중이거나 지켜야 할 시각이 가까우면 그날 그 시각은 '
-                '조용히 지나가요.'
-          : '이제 냥냥이가 여유 시간에 말을 걸지 않아요.',
+                '${sorted.map(GapCoachingService.label).join(' · ')}에 들러요.\n'
+                '그 시간이 아니어도 손 놓고 있는 일이 있으면 찾아가요.\n\n'
+                '뭔가 하는 중일 땐 방해 안 해요.'
+                '${needsBanner ? '\n\n배너가 금방 사라지면 "지속"으로 바꿔주세요.' : ''}'
+          : '이제 냥냥이가 먼저 말을 걸지 않아요.',
+      actionLabel: needsBanner ? '배너 설정 열기' : null,
+      closeLabel: needsBanner ? '나중에' : '확인',
+      onAction: needsBanner
+          ? () async {
+              await OngoingTaskNudgeService.openNotificationSettings();
+            }
+          : null,
     );
     if (!mounted) return;
 
