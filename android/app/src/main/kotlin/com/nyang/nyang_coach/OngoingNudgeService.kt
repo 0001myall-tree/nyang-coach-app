@@ -486,7 +486,13 @@ class OngoingNudgeService : Service() {
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                     if (moved) {
                         OngoingNudgeState.savePositionY(this@OngoingNudgeService, params.y)
-                    } else if (!answered && (isGapTrack() || isActiveForCurrentTrack())) {
+                    } else if (
+                        !answered &&
+                        // 적극 코칭도 틈새 코칭처럼 붙들고 있는 일정이 없어서
+                        // isActiveForCurrentTrack()은 늘 거짓이다. 따로 넣지 않으면
+                        // 카드를 건너뛰고 앱으로 바로 가 버린다.
+                        (isGapTrack() || isActiveTrack() || isActiveForCurrentTrack())
+                    ) {
                         expandToCard()
                     } else {
                         // 이미 답을 마친 뒤다. 물을 것이 없으니 할 일 창으로 보낸다.
