@@ -2965,7 +2965,7 @@ class _TasksScreenState extends State<TasksScreen>
     );
   }
 
-  /// 딴짓 방지 코치를 켤지 딱 한 번 물어본다.
+  /// 딴짓 방지 코칭을 켤지 딱 한 번 물어본다.
   ///
   /// 설정 안의 스위치는 아무도 찾지 못한다. 대신 방금 ▶를 누른 자리에서 묻는다 —
   /// 이 기능이 무엇을 해주는지 설명할 필요가 없는 유일한 순간이라, 여기서 물으면
@@ -3162,7 +3162,7 @@ class _TasksScreenState extends State<TasksScreen>
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text(
-          '🐾 딴짓 방지 코치',
+          '🐾 딴짓 방지 코칭',
           style: appFont(
             fontSize: 17,
             fontWeight: FontWeight.w900,

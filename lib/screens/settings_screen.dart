@@ -48,7 +48,7 @@ class SettingsScreen extends StatefulWidget {
   State<SettingsScreen> createState() => _SettingsScreenState();
 }
 
-/// 딴짓 방지 코치가 켜져 있을 때 이 줄을 누르면 고를 수 있는 것.
+/// 딴짓 방지 코칭이 켜져 있을 때 이 줄을 누르면 고를 수 있는 것.
 enum _OngoingNudgeAction { test, turnOff, openSettings }
 
 /// 적극 코칭을 막고 있는 것 하나.
@@ -1254,7 +1254,7 @@ class _SettingsScreenState extends State<SettingsScreen>
     );
   }
 
-  /// 딴짓 방지 코치 켜고 끄기.
+  /// 딴짓 방지 코칭 켜고 끄기.
   ///
   /// 안드로이드는 "다른 앱 위에 표시" 권한이, 아이폰은 라이브 액티비티 허용이
   /// 있어야 한다. 둘 다 팝업으로 물을 수 없어서, 켜는 순간 설명을 먼저 읽히고
@@ -1348,7 +1348,7 @@ class _SettingsScreenState extends State<SettingsScreen>
 
     if (!turningOn) {
       await _showAlarmNoticeDialog(
-        title: '🐾 딴짓 방지 코치를 껐어요',
+        title: '🐾 딴짓 방지 코칭을 껐어요',
         message: isAndroid
             ? '이제 다른 앱을 볼 때 냥냥이가 나타나지 않아요.'
             : '이제 잠금화면에 진행 중인 일정이 표시되지 않아요.',
@@ -1411,7 +1411,7 @@ class _SettingsScreenState extends State<SettingsScreen>
     if (!mounted) return;
 
     await _showAlarmNoticeDialog(
-      title: '🐾 딴짓 방지 코치를 켰어요',
+      title: '🐾 딴짓 방지 코칭을 켰어요',
       message: isAndroid
           ? '일정을 시작하고 30분이 지난 뒤, 폰으로 다른 걸 보고 있으면 '
                 '냥냥이가 화면 가장자리에 잠깐 나타나요.\n\n'
@@ -1515,7 +1515,7 @@ class _SettingsScreenState extends State<SettingsScreen>
             borderRadius: BorderRadius.circular(20),
           ),
           title: Text(
-            '🐾 딴짓 방지 코치',
+            '🐾 딴짓 방지 코칭',
             style: appFont(
               fontSize: 17,
               fontWeight: FontWeight.w900,
@@ -2366,7 +2366,7 @@ class _SettingsScreenState extends State<SettingsScreen>
 
   /// 지금 이 폰에서 적극 코칭을 막고 있는 것. 없으면 null.
   ///
-  /// 딴짓 방지 코치와 같은 층을 쓰지만 막히는 자리가 하나 더 있다. 저쪽은 일정을
+  /// 딴짓 방지 코칭과 같은 층을 쓰지만 막히는 자리가 하나 더 있다. 저쪽은 일정을
   /// 시작하는 순간부터 앱이 깨어 있지만, 이쪽은 정해둔 시각에 스스로 깨어나야 해서
   /// "알람 및 리마인더" 권한이 없으면 시각이 밀리거나 그냥 지나간다.
   Future<_GapBlocker?> _findGapBlocker() async {
@@ -2858,7 +2858,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                       if (OngoingTaskNudgeService.isSupported) ...[
                         _buildSettingsNavigationTile(
                           svgAsset: 'assets/icons/shield-cat.svg',
-                          label: '딴짓 방지 코치',
+                          label: '딴짓 방지 코칭',
                           subtitle: '앱 밖으로 새면 냥냥이가 살짝 챙겨줘요.',
                           status: _ongoingNudgeEnabled ? '켜짐' : '꺼짐',
                           onTap: _paidSettingsTap(_toggleOngoingNudge),
@@ -2866,7 +2866,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                         const SizedBox(height: 10),
                       ],
 
-                      // 딴짓 방지 코치 바로 아래. 하는 일이 반대라서 나란히
+                      // 딴짓 방지 코칭 바로 아래. 하는 일이 반대라서 나란히
                       // 두는 편이 무엇을 고르는 자리인지 알아보기 쉽다 — 저쪽은
                       // 하던 일에서 새어 나갔을 때, 이쪽은 아무것도 안 할 때다.
                       if (GapCoachingService.isSupported) ...[
