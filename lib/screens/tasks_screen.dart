@@ -35,11 +35,13 @@ import '../services/task_completion_service.dart';
 import '../services/apple_calendar_sync_service.dart';
 import '../services/routine_schedule.dart';
 import '../services/gap_coaching_service.dart';
+import '../services/active_coaching_chat.dart';
 import '../services/active_coaching_move.dart';
 import '../services/active_coaching_promise.dart';
 import '../services/active_coaching_sync.dart';
 import '../services/active_coaching_time.dart';
 import '../widgets/active_coaching_dialog.dart';
+import '../widgets/active_coaching_chat_sheet.dart';
 import '../widgets/banner_answer_dialog.dart';
 import '../widgets/alarm_permission_notice.dart';
 import '../widgets/core_reminder_settings_sheet.dart';
@@ -970,6 +972,10 @@ class _TasksScreenState extends State<TasksScreen>
       await _askWhenLater(taskId: taskId, taskText: taskText);
       return;
     }
+    if (kind == 'activeCoachingReluctant') {
+      await _showActiveCoachingChat(taskId: taskId, taskText: taskText);
+      return;
+    }
     if (kind == 'activeCoaching' || kind == 'activeCoachingNight') {
       await _showActiveCoachingDialog(
         taskId: taskId,
@@ -1130,6 +1136,50 @@ class _TasksScreenState extends State<TasksScreen>
     );
     if (outcome == null || !mounted) return;
     await _applyActiveCoachingOutcome(outcome, now: now);
+  }
+
+  /// 적극 코칭 카드에서 [하기 싫어]를 눌러 들어왔을 때의 작은 대화창.
+  ///
+  /// 버튼 팝업으로는 부족한 자리다. 그 일이 무엇인지 보고 코치가 말을 건네야
+  /// 한다. 대화는 채팅 탭 기록에도 남고, 창 아래 버튼으로 그 일을 바로 시작한다.
+  Future<void> _showActiveCoachingChat({
+    required String taskId,
+    required String taskText,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.reload();
+    final now = DateTime.now();
+
+    // 답을 하러 온 사람이다. 벌어졌던 간격을 되돌린다.
+    await ActiveCoachingSync.noteReplied(now);
+
+    final named = _activeTodayTasks.where(
+      (task) => task.id.toString() == taskId,
+    );
+    final target = named.isEmpty ? null : named.first;
+    final name = (target?.text ?? taskText).trim();
+    if (name.isEmpty || !mounted) return;
+
+    final chat = ActiveCoachingChat(
+      coachId: widget.coachId,
+      taskName: name,
+      otherTasks: [
+        for (final task in _activeTodayTasks)
+          if (!task.done &&
+              task.category != 'schedule' &&
+              task.id.toString() != taskId &&
+              task.text.trim().isNotEmpty)
+            task.text.trim(),
+      ],
+      situation: BusyHoursService.situationAt(prefs, now),
+    );
+    final outcome = await ActiveCoachingChatSheet.show(context, chat);
+    if (!mounted || outcome != ActiveCoachingChatOutcome.start) return;
+    final current = _activeTodayTasks.where(
+      (task) => task.id.toString() == taskId,
+    );
+    if (current.isEmpty) return;
+    if (!current.first.done && !current.first.inProgress) _toggleTask(taskId);
   }
 
   /// 팝업에서 고른 것을 실제로 반영한다.

@@ -18,8 +18,9 @@ void main() {
       expect(picked?.moves, ['개요 세 줄 적기', '참고자료 모으기']);
     });
 
-    test('한 수가 하나뿐이어도 된다', () {
-      // 되는 자리가 갈리지 않는 일이면 억지로 둘을 만들지 않는다.
+    test('한 수가 하나만 와도 버리지 않는다', () {
+      // 둘을 달라고 하지만, 하나만 쓸 만하게 왔을 때 그것까지 버리면 팝업이
+      // 아무것도 못 보여준다.
       final picked = ActiveCoachingMove.read('방 정리\n눈앞 다섯 개만 치우기', candidates);
       expect(picked?.moves, ['눈앞 다섯 개만 치우기']);
     });

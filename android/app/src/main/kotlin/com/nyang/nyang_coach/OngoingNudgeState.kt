@@ -417,16 +417,30 @@ object OngoingNudgeState {
             calendar.get(java.util.Calendar.MINUTE)
         val result = mutableListOf<Pair<Int, Int>>()
         for (i in 0 until times.length()) {
-            val pieces = times.optString(i, "").split(":")
-            if (pieces.size != 2) continue
-            val hour = pieces[0].toIntOrNull() ?: continue
-            val minute = pieces[1].toIntOrNull() ?: continue
-            if (hour !in 0..23 || minute !in 0..59) continue
+            val time = parseClock(times.optString(i, "")) ?: continue
             // 이미 지난 시각을 내밀면 누르는 순간 지나간 약속이 된다.
-            if (hour * 60 + minute <= nowMinutes) continue
-            result.add(hour to minute)
+            if (time.first * 60 + time.second <= nowMinutes) continue
+            result.add(time)
         }
         return result
+    }
+
+    /** "16:30"을 시·분 쌍으로. 읽을 수 없으면 null. */
+    fun parseClock(raw: String): Pair<Int, Int>? {
+        val pieces = raw.trim().split(":")
+        if (pieces.size != 2) return null
+        val hour = pieces[0].toIntOrNull() ?: return null
+        val minute = pieces[1].toIntOrNull() ?: return null
+        if (hour !in 0..23 || minute !in 0..59) return null
+        return hour to minute
+    }
+
+    /** 아직 오지 않은 시각만 남긴다. 카드를 펼치는 순간에 다시 거른다. */
+    fun upcoming(times: List<Pair<Int, Int>>): List<Pair<Int, Int>> {
+        val calendar = java.util.Calendar.getInstance()
+        val nowMinutes = calendar.get(java.util.Calendar.HOUR_OF_DAY) * 60 +
+            calendar.get(java.util.Calendar.MINUTE)
+        return times.filter { it.first * 60 + it.second > nowMinutes }
     }
 
     /**
@@ -439,6 +453,10 @@ object OngoingNudgeState {
         val title: String,
         val taskId: String?,
         val night: Boolean,
+        /** 부르는 일의 이름. 약속을 걸 때 시작 카드가 이 이름으로 부른다. */
+        val taskText: String = "",
+        /** "시간이 안 나"에 내밀 시각들. 계획을 세운 시각 기준으로 Dart가 만든다. */
+        val times: List<Pair<Int, Int>> = emptyList(),
     )
 
     /**
@@ -463,7 +481,18 @@ object OngoingNudgeState {
         if (taskId != null && !OngoingNudgeAnswerWriter.isPending(context, taskId)) {
             return null
         }
-        return ActivePlan(title, taskId, json.optString("kind", "") == "night")
+        val times = json.optJSONArray("times")
+        return ActivePlan(
+            title = title,
+            taskId = taskId,
+            night = json.optString("kind", "") == "night",
+            taskText = json.optString("taskText", "").trim(),
+            times = if (times == null) {
+                emptyList()
+            } else {
+                (0 until times.length()).mapNotNull { parseClock(times.optString(it, "")) }
+            },
+        )
     }
 
     /** 적극 코칭 계획을 지운다. 한 번 띄우면 그 계획은 쓴 것이다. */

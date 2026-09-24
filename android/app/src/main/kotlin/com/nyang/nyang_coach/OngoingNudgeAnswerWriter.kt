@@ -145,18 +145,26 @@ object OngoingNudgeAnswerWriter {
      *
      * [night]면 이유를 묻지 않고 바로 한 수로 간다. 하루를 닫는 자리에서
      * "10분만 해볼게"를 누른 사람에게 왜 못 했냐고 묻는 것은 앞뒤가 안 맞는다.
+     *
+     * [reluctant]면 카드에서 "하기 싫어"를 고른 것이다. 버튼 팝업 대신 코치가
+     * 말을 거는 작은 대화창이 열린다.
      */
     fun markActiveCoaching(
         context: Context,
         taskId: String,
         taskText: String,
         night: Boolean = false,
+        reluctant: Boolean = false,
     ) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
             .putString("flutter.banner_focus_task_id", taskId)
             .putString(
                 "flutter.banner_answer_kind",
-                if (night) "activeCoachingNight" else "activeCoaching",
+                when {
+                    night -> "activeCoachingNight"
+                    reluctant -> "activeCoachingReluctant"
+                    else -> "activeCoaching"
+                },
             )
             .putString("flutter.banner_answer_task_text", taskText)
             .commit()

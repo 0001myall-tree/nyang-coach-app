@@ -220,7 +220,7 @@ class _ActiveCoachingDialogState extends State<ActiveCoachingDialog> {
   // ── 지금 뭘 해볼까? ────────────────────────────────────
 
   List<Widget> _movesStep() => [
-    AnswerDialogQuestion("'${_shorten(_task)}'\n지금 뭘 해볼까?"),
+    AnswerDialogQuestion(_aboutTask('지금 뭘 해볼까?')),
     const SizedBox(height: 16),
     if (_asking)
       const Padding(
@@ -344,8 +344,8 @@ class _ActiveCoachingDialogState extends State<ActiveCoachingDialog> {
   List<Widget> _timeStep() => [
     AnswerDialogQuestion(
       widget.timeChoices.isEmpty
-          ? "'${_shorten(_task)}'\n오늘은 여기까지 할까?"
-          : "'${_shorten(_task)}'\n몇 시부터 할까?",
+          ? _aboutTask('오늘은 여기까지 할까?')
+          : _aboutTask('몇 시부터 할까?'),
     ),
     const SizedBox(height: 16),
     for (var i = 0; i < widget.timeChoices.length; i++) ...[
@@ -385,6 +385,15 @@ class _ActiveCoachingDialogState extends State<ActiveCoachingDialog> {
 
   void _close(ActiveCoachingOutcome outcome) {
     Navigator.of(context).pop(outcome);
+  }
+
+  /// 일 이름을 윗줄에 얹은 질문.
+  ///
+  /// 목록에서 코치에게 골라달라고 하면, 답이 올 때까지는 무슨 일인지 아직
+  /// 모른다. 그때 이름 자리를 그대로 두면 빈 따옴표만 한 줄로 남는다.
+  String _aboutTask(String question) {
+    final name = _shorten(_task.trim());
+    return name.isEmpty ? question : "'$name'\n$question";
   }
 
   /// 팝업 한 줄에 들어가는 길이. 넘치면 질문이 세 줄이 된다.

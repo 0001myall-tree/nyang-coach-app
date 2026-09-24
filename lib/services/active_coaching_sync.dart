@@ -19,6 +19,7 @@ import 'active_coaching_plan.dart';
 import 'active_coaching_promise.dart';
 import 'active_coaching_state.dart';
 import 'active_coaching_target.dart';
+import 'active_coaching_time.dart';
 import 'busy_hours_service.dart';
 import 'gap_coaching_service.dart';
 import 'nyang_banner_nudge.dart';
@@ -94,7 +95,7 @@ class ActiveCoachingSync {
     final day = ActiveCoachingStore.readDay(prefs, now).pruneMissing(liveIds);
     await ActiveCoachingStore.writeDay(prefs, day);
 
-    final plan = ActiveCoachingPlanner.next(
+    final planned = ActiveCoachingPlanner.next(
       tasks: tasks,
       now: now,
       day: day,
@@ -113,20 +114,20 @@ class ActiveCoachingSync {
           DateTime(now.year, now.month, now.day, time.hour, time.minute),
       ],
     );
-    if (plan == null) {
+    if (planned == null) {
       await _clear();
       return;
     }
+    // 약속 시각으로 잡힌 계획은 추적에서 나와 이름이 없다. 이름 없이 나가면
+    // 부를 일이 있는데도 카드가 "하나 정해볼까?"로 뜬다.
+    final plan = _withName(planned, tasks);
 
     await prefs.setString(
       plannedKey,
       jsonEncode({
-        'date': ActiveCoachingStore.dateKey(now),
-        'at': plan.at.millisecondsSinceEpoch,
-        'title': titleFor(plan),
+        ..._payload(prefs, plan),
         // 밤 카드는 답이 다르다. 그 갈래를 네이티브가 알아야 버튼이 달라진다.
         if (plan.signal == ActiveCoachingSignal.nightWrap) 'kind': 'night',
-        if (plan.taskId != null) 'taskId': plan.taskId,
       }),
     );
     if (!_isAndroid) {
@@ -228,15 +229,7 @@ class ActiveCoachingSync {
       taskId: pick.taskId,
       taskText: pick.taskText,
     );
-    await prefs.setString(
-      plannedKey,
-      jsonEncode({
-        'date': ActiveCoachingStore.dateKey(now),
-        'at': at.millisecondsSinceEpoch,
-        'title': titleFor(plan),
-        if (plan.taskId != null) 'taskId': plan.taskId,
-      }),
-    );
+    await prefs.setString(plannedKey, jsonEncode(_payload(prefs, plan)));
     try {
       await _channel.invokeMethod('testActiveCoaching', {
         'atMillis': at.millisecondsSinceEpoch,
@@ -247,6 +240,50 @@ class ActiveCoachingSync {
       return false;
     }
     return true;
+  }
+
+  static ActiveCoachingPlan _withName(ActiveCoachingPlan plan, List tasks) {
+    if ((plan.taskText ?? '').trim().isNotEmpty || plan.taskId == null) {
+      return plan;
+    }
+    for (final item in tasks) {
+      if (item is! Map || item['id']?.toString() != plan.taskId) continue;
+      return ActiveCoachingPlan(
+        at: plan.at,
+        signal: plan.signal,
+        taskId: plan.taskId,
+        taskText: item['text']?.toString().trim(),
+      );
+    }
+    return plan;
+  }
+
+  /// 네이티브가 읽어갈 계획 한 벌.
+  ///
+  /// 카드에서 "시간이 안 나"를 누르면 그 자리에서 시각을 내밀어야 한다. 시각을
+  /// 고르는 규칙은 Dart에 한 벌만 두고, 카드가 뜰 시각을 기준으로 미리 만들어
+  /// 싣는다. 이름도 함께 싣는다 — 약속을 걸면 그 시각의 시작 카드가 이 이름으로
+  /// 부른다.
+  static Map<String, dynamic> _payload(
+    SharedPreferences prefs,
+    ActiveCoachingPlan plan,
+  ) {
+    final times = plan.taskId == null
+        ? const <DateTime>[]
+        : ActiveCoachingTime.choices(
+            plan.at,
+            bedtime: prefs.getString('nyang_premium_min_sleep_time'),
+            busyAt: (at) => BusyHoursService.busyNow(prefs, at) != null,
+          );
+    return {
+      'date': ActiveCoachingStore.dateKey(plan.at),
+      'at': plan.at.millisecondsSinceEpoch,
+      'title': titleFor(plan),
+      if (plan.taskId != null) 'taskId': plan.taskId,
+      if ((plan.taskText ?? '').trim().isNotEmpty)
+        'taskText': plan.taskText!.trim(),
+      if (times.isNotEmpty) 'times': times.map(ActiveCoachingTime.format).toList(),
+    };
   }
 
   /// 사용자가 답했다고 적는다. 벌어졌던 간격이 되돌아온다.

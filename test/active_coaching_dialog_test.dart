@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nyang_coach/services/active_coaching_move.dart';
@@ -15,6 +17,7 @@ void main() {
     askMoves,
     List<ActiveCoachingChoice> otherTasks = const [],
     List<DateTime> timeChoices = const [],
+    String taskName = '분기 리포트',
   }) async {
     ActiveCoachingOutcome? outcome;
     await tester.pumpWidget(
@@ -25,7 +28,7 @@ void main() {
               outcome = await showDialog<ActiveCoachingOutcome>(
                 context: context,
                 builder: (_) => ActiveCoachingDialog(
-                  taskName: '분기 리포트',
+                  taskName: taskName,
                   askMoves: askMoves,
                   otherTasks: otherTasks,
                   timeChoices: timeChoices,
@@ -381,5 +384,21 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.textContaining('오늘은 여기까지'), findsOneWidget);
     expect(find.text('직접 고르기'), findsOneWidget);
+  });
+
+  testWidgets('코치가 일을 골라주는 동안 빈 따옴표를 띄우지 않는다', (tester) async {
+    final pending = Completer<ActiveCoachingMoves?>();
+    await show(
+      tester,
+      taskName: '',
+      askMoves: (names, reason) => pending.future,
+      otherTasks: const [ActiveCoachingChoice(name: '책 읽기')],
+    );
+    await tester.tap(find.text('모르겠어, 골라줘'));
+    await tester.pump();
+    expect(find.text('지금 뭘 해볼까?'), findsOneWidget);
+    expect(find.textContaining("''"), findsNothing);
+    pending.complete(null);
+    await tester.pumpAndSettle();
   });
 }

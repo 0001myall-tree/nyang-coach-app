@@ -64,6 +64,8 @@ class OngoingNudgeService : Service() {
         private const val EXTRA_TITLE = "title"
         private const val EXTRA_TASK_ID = "taskId"
         private const val EXTRA_NIGHT = "night"
+        private const val EXTRA_TASK_TEXT = "taskText"
+        private const val EXTRA_TIMES = "times"
 
         /**
          * "다시 시작할게"를 누른 뒤 냥냥이가 적어도 이만큼은 남아 있는다.
@@ -88,6 +90,11 @@ class OngoingNudgeService : Service() {
                 putExtra(EXTRA_TITLE, plan.title)
                 putExtra(EXTRA_TASK_ID, plan.taskId)
                 putExtra(EXTRA_NIGHT, plan.night)
+                putExtra(EXTRA_TASK_TEXT, plan.taskText)
+                putExtra(
+                    EXTRA_TIMES,
+                    plan.times.map { "%02d:%02d".format(it.first, it.second) }.toTypedArray(),
+                )
             }
             // 막히면 이번 차례는 그냥 지나간다. 앱이 열릴 때 Dart가 지금
             // 상태로 다시 계산해 건다.
@@ -190,6 +197,12 @@ class OngoingNudgeService : Service() {
     /** 하루를 닫는 말인지. 그 자리만 답이 다르다. */
     private var activeNight: Boolean = false
 
+    /** 부르는 일의 이름. 약속을 걸 때 시작 카드에 넘긴다. */
+    private var activeTaskText: String = ""
+
+    /** "시간이 안 나"에 내밀 시각들. Dart가 계획을 세울 때 함께 만들어 둔다. */
+    private var activeTimes: List<Pair<Int, Int>> = emptyList()
+
     private fun currentTaskText(): String = when {
         isGapTrack() || isActiveTrack() -> ""
         isStartTrack() -> OngoingNudgeState.startTaskText(this)
@@ -220,6 +233,10 @@ class OngoingNudgeService : Service() {
             activeTitle = intent?.getStringExtra(EXTRA_TITLE).orEmpty()
             activeTaskId = intent?.getStringExtra(EXTRA_TASK_ID)
             activeNight = intent?.getBooleanExtra(EXTRA_NIGHT, false) ?: false
+            activeTaskText = intent?.getStringExtra(EXTRA_TASK_TEXT).orEmpty()
+            activeTimes = intent?.getStringArrayExtra(EXTRA_TIMES)
+                ?.mapNotNull(OngoingNudgeState::parseClock)
+                .orEmpty()
         }
         val currentlyShowing = bubbleView != null || cardView != null
 
@@ -644,50 +661,78 @@ class OngoingNudgeService : Service() {
             expandToNightCard(activeTaskId!!)
             return
         }
+        val taskId = activeTaskId
+        if (taskId == null) {
+            expandToActivePickCard()
+            return
+        }
+        handler.removeCallbacks(autoHide)
+        removeBubble()
+
+        val view = LayoutInflater.from(this).inflate(R.layout.nudge_active_card, null)
+        val cardImage = view.findViewById<ImageView>(R.id.nudge_active_image)
+        cardImage.setImageBitmap(loadCatBitmap(dp(104)))
+        // 그림을 눌러도 물음은 이어져야 한다. 그냥 앱만 열면, 눌렀는데 아무
+        // 일도 안 일어난 것처럼 보인다.
+        cardImage.setOnClickListener {
+            answered = true
+            OngoingNudgeAnswerWriter.markActiveCoaching(this, taskId, activeTaskText)
+            openPlanner()
+        }
+
+        view.findViewById<TextView>(R.id.nudge_active_title).text = activeTitle
+        view.findViewById<TextView>(R.id.nudge_active_go)
+            .setOnClickListener { activeStartNow(taskId) }
+        view.findViewById<TextView>(R.id.nudge_active_no_time)
+            .setOnClickListener { activeNoTime(taskId) }
+        view.findViewById<TextView>(R.id.nudge_active_not_here)
+            .setOnClickListener { expandToNotHereCard(taskId) }
+        // 하기 싫은 마음은 버튼 몇 개로 풀리지 않는다. 그 일이 무엇이고 왜 무거운지를
+        // 보고 코치가 말을 건네야 해서, 할 일 창 위의 작은 대화창으로 데려간다.
+        view.findViewById<TextView>(R.id.nudge_active_reluctant).setOnClickListener {
+            answered = true
+            OngoingNudgeAnswerWriter.markActiveCoaching(
+                this,
+                taskId,
+                activeTaskText,
+                reluctant = true,
+            )
+            openPlanner()
+        }
+
+        view.findViewById<View>(R.id.nudge_active_scrim).setOnClickListener {
+            cardView?.let { runCatching { windowManager.removeView(it) } }
+            cardView = null
+            showBubble()
+            handler.postDelayed(autoHide, remainingVisibleMillis())
+        }
+
+        attachCard(view)
+    }
+
+    /**
+     * 부를 일이 정해지지 않은 자리. 무엇을 할지는 사용자가 고르므로 여기서
+     * 시작시킬 것도, 못 하는 이유를 물을 것도 없다. 버튼은 목록으로 가는 하나다.
+     */
+    private fun expandToActivePickCard() {
         handler.removeCallbacks(autoHide)
         removeBubble()
 
         val view = LayoutInflater.from(this).inflate(R.layout.nudge_start_card, null)
         val cardImage = view.findViewById<ImageView>(R.id.nudge_start_image)
         cardImage.setImageBitmap(loadCatBitmap(dp(120)))
-        // 그림을 눌러도 물음은 이어져야 한다. 그냥 앱만 열면, 눌렀는데 아무
-        // 일도 안 일어난 것처럼 보인다.
-        cardImage.setOnClickListener {
+        val goToList = View.OnClickListener {
             answered = true
-            OngoingNudgeAnswerWriter.markActiveCoaching(
-                this,
-                activeTaskId.orEmpty(),
-                "",
-                night = activeNight,
-            )
+            OngoingNudgeAnswerWriter.markActiveCoaching(this, "", "")
             openPlanner()
         }
+        cardImage.setOnClickListener(goToList)
 
         view.findViewById<TextView>(R.id.nudge_start_title).text = activeTitle
-
         val goButton = view.findViewById<TextView>(R.id.nudge_start_go)
-        val laterButton = view.findViewById<TextView>(R.id.nudge_start_later)
-        val taskId = activeTaskId
-        if (taskId == null) {
-            // 부를 일이 정해지지 않은 자리다. 무엇을 할지는 사용자가 고르므로
-            // 여기서 시작시킬 것이 없고, 두 버튼이 같은 곳으로 간다.
-            goButton.text = "하나 골라볼게"
-            laterButton.visibility = View.GONE
-            goButton.setOnClickListener {
-                answered = true
-                OngoingNudgeAnswerWriter.markActiveCoaching(this, "", "")
-                openPlanner()
-            }
-        } else {
-            goButton.text = "지금 할게"
-            laterButton.text = "못 했어"
-            goButton.setOnClickListener { activeStartNow(taskId) }
-            laterButton.setOnClickListener {
-                answered = true
-                OngoingNudgeAnswerWriter.markActiveCoaching(this, taskId, "")
-                openPlanner()
-            }
-        }
+        goButton.text = "하나 골라볼게"
+        goButton.setOnClickListener(goToList)
+        view.findViewById<TextView>(R.id.nudge_start_later).visibility = View.GONE
 
         view.findViewById<View>(R.id.nudge_start_scrim).setOnClickListener {
             cardView?.let { runCatching { windowManager.removeView(it) } }
@@ -696,6 +741,78 @@ class OngoingNudgeService : Service() {
             handler.postDelayed(autoHide, remainingVisibleMillis())
         }
 
+        attachCard(view)
+    }
+
+    /**
+     * "시간이 안 나". 언제 할지를 받는다.
+     *
+     * 내밀 시각이 남아 있으면 이 창에서 끝낸다. 없으면(밤이 가깝거나 전부 근무
+     * 시간이면) 시각 선택기가 있는 앱으로 간다 — 다른 앱 위에 뜬 창에서는
+     * 선택기를 올릴 수 없다.
+     */
+    private fun activeNoTime(taskId: String) {
+        val times = OngoingNudgeState.upcoming(activeTimes)
+        if (times.isEmpty()) {
+            answered = true
+            OngoingNudgeAnswerWriter.markPickingLater(this, taskId, activeTaskText)
+            openPlanner()
+            return
+        }
+        expandToLaterCard(times, taskId, activeTaskText)
+    }
+
+    /**
+     * "여기선 못 해". 밖에 있어서 집에 있는 영양제를 못 먹는 것처럼, 시간이
+     * 아니라 자리가 막힌 경우다.
+     *
+     * 몇 시에 할지 정할 수 있으면 약속으로 받는다. 그게 안 되는 날도 있어서
+     * 오늘은 접거나 내일로 옮기는 문을 함께 둔다 — 그 문이 없으면 그 일을 할
+     * 때까지 같은 일로 계속 불려 온다.
+     */
+    private fun expandToNotHereCard(taskId: String) {
+        handler.removeCallbacks(autoHide)
+        removeBubble()
+        cardView?.let { runCatching { windowManager.removeView(it) } }
+        cardView = null
+
+        val view = LayoutInflater.from(this).inflate(R.layout.nudge_later_card, null)
+        view.findViewById<TextView>(R.id.nudge_later_title).text = "그럼 언제 할 수 있어?"
+
+        val first = view.findViewById<TextView>(R.id.nudge_later_first)
+        first.text = "이따 할게"
+        first.setOnClickListener { activeNoTime(taskId) }
+
+        val second = view.findViewById<TextView>(R.id.nudge_later_second)
+        second.text = "내일로 옮길래"
+        second.setOnClickListener {
+            answered = true
+            OngoingNudgeState.writeResult(this, taskId, "moveTomorrow")
+            Toast.makeText(this, "내일 일정으로 옮겨둘게!", Toast.LENGTH_SHORT).show()
+            lingerAsDoorway()
+        }
+
+        val third = view.findViewById<TextView>(R.id.nudge_later_pick)
+        third.text = "오늘은 안 할래"
+        third.setOnClickListener {
+            answered = true
+            OngoingNudgeState.writeResult(this, taskId, "notToday")
+            Toast.makeText(this, "알겠어. 오늘은 이 일로 안 부를게!", Toast.LENGTH_SHORT).show()
+            lingerAsDoorway()
+        }
+
+        view.findViewById<View>(R.id.nudge_later_scrim).setOnClickListener {
+            cardView?.let { runCatching { windowManager.removeView(it) } }
+            cardView = null
+            showBubble()
+            handler.postDelayed(autoHide, remainingVisibleMillis())
+        }
+
+        attachCard(view)
+    }
+
+    /** 화면을 다 덮는 카드를 붙인다. */
+    private fun attachCard(view: View) {
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.MATCH_PARENT,
@@ -880,8 +997,8 @@ class OngoingNudgeService : Service() {
         } else {
             OngoingNudgeState.laterTimes(this, taskId)
         }
-        if (times.isNotEmpty()) {
-            expandToLaterCard(times)
+        if (taskId != null && times.isNotEmpty()) {
+            expandToLaterCard(times, taskId, OngoingNudgeState.startTaskText(this))
             return
         }
         answered = true
@@ -896,7 +1013,11 @@ class OngoingNudgeService : Service() {
      * 시각은 Dart가 미리 만들어 둔 것을 그대로 붙인다. 버튼 문구는 절대 시각만
      * 적는다 — 3시 12분에 "30분 뒤 · 3:30"은 18분 뒤라 거짓말이 된다.
      */
-    private fun expandToLaterCard(times: List<Pair<Int, Int>>) {
+    private fun expandToLaterCard(
+        times: List<Pair<Int, Int>>,
+        taskId: String,
+        taskText: String,
+    ) {
         handler.removeCallbacks(autoHide)
         removeBubble()
         cardView?.let { runCatching { windowManager.removeView(it) } }
@@ -907,10 +1028,10 @@ class OngoingNudgeService : Service() {
         val second = view.findViewById<TextView>(R.id.nudge_later_second)
 
         first.text = clockLabel(times[0])
-        first.setOnClickListener { promiseAt(times[0]) }
+        first.setOnClickListener { promiseAt(times[0], taskId, taskText) }
         if (times.size > 1) {
             second.text = clockLabel(times[1])
-            second.setOnClickListener { promiseAt(times[1]) }
+            second.setOnClickListener { promiseAt(times[1], taskId, taskText) }
         } else {
             second.visibility = View.GONE
         }
@@ -919,13 +1040,7 @@ class OngoingNudgeService : Service() {
         // 시각 선택기를 올릴 수 없다.
         view.findViewById<TextView>(R.id.nudge_later_pick).setOnClickListener {
             answered = true
-            OngoingNudgeState.startTaskId(this)?.let { taskId ->
-                OngoingNudgeAnswerWriter.markPickingLater(
-                    this,
-                    taskId,
-                    OngoingNudgeState.startTaskText(this),
-                )
-            }
+            OngoingNudgeAnswerWriter.markPickingLater(this, taskId, taskText)
             openPlanner()
         }
 
@@ -954,13 +1069,14 @@ class OngoingNudgeService : Service() {
      * 답만 남기고, 그 시각에 카드가 다시 오도록 예약을 옮긴다 — 앱을 끝내 안
      * 열어도 약속한 시각에는 부를 수 있어야 한다.
      */
-    private fun promiseAt(time: Pair<Int, Int>) {
+    private fun promiseAt(time: Pair<Int, Int>, taskId: String, taskText: String) {
         answered = true
-        val taskId = OngoingNudgeState.startTaskId(this)
-        if (taskId != null) {
-            val label = "%02d:%02d".format(time.first, time.second)
-            OngoingNudgeState.writeResult(this, taskId, "later:$label")
-        }
+        val label = "%02d:%02d".format(time.first, time.second)
+        OngoingNudgeState.writeResult(this, taskId, "later:$label")
+        // 적극 코칭 카드에서 온 약속이면 시작 자리가 다른 일을 들고 있을 수 있다.
+        // 그 시각에 부를 것은 이 일이라 자리를 넘겨받는다. 밀려난 일은 앱이 열릴
+        // 때 Dart가 목록을 다시 보고 제자리에 건다.
+        OngoingNudgeState.setStartTask(this, taskId, taskText)
         val at = java.util.Calendar.getInstance().apply {
             set(java.util.Calendar.HOUR_OF_DAY, time.first)
             set(java.util.Calendar.MINUTE, time.second)
