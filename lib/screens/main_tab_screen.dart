@@ -27,6 +27,7 @@ import 'tasks_screen.dart';
 import 'records_screen.dart';
 import 'settings_screen.dart';
 import '../theme/app_design_tokens.dart';
+import '../utils/korean_line_break.dart';
 import '../widgets/app_bottom_sheet.dart';
 import '../widgets/app_button.dart';
 
@@ -2609,7 +2610,7 @@ class _MainTabScreenState extends State<MainTabScreen>
                               '마이크를 누르고\n'
                               '"내일 오후 3시 회의 추가해줘"\n'
                               '"저녁 7시에 운동 등록해줘"\n'
-                              '처럼 \'추가해줘\' 또는 \'등록해줘\'를 붙여 말하면 바로 캘린더 일정을 등록할 수 있어요.\n'
+                              '처럼 \'추가해줘\' 또는 \'등록해줘\'를 붙여 말하면 일정을 등록할 수 있어요.\n'
                               '등록 여부는 할 일 탭 > 오늘 탭에서 꼭 확인하세요.',
                           highlightTerms: const [
                             '추가해줘',
@@ -2689,7 +2690,12 @@ class _MainTabScreenState extends State<MainTabScreen>
                         Align(
                           alignment: Alignment.centerLeft,
                           child: Text(
-                            'P.S. 설정에 생각보다 많은 기능이 숨겨져 있으니 살펴보세요.',
+                            // 낱말 가운데서 줄이 갈리면 "숨겨져 있으니 /
+                            // 살펴보세요"처럼 읽힌다.
+                            keepWordsWhole(
+                              "P.S. '설정'에 '적극 코칭'과 '모닝콜' 등 "
+                              '다양한 기능이 있으니 살펴보세요.',
+                            ),
                             style: appFont(
                               fontSize: 13,
                               height: 1.5,

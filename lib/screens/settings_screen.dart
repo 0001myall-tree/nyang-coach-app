@@ -2859,7 +2859,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                         _buildSettingsNavigationTile(
                           svgAsset: 'assets/icons/shield-cat.svg',
                           label: '딴짓 방지 코칭',
-                          subtitle: '앱 밖으로 새면 냥냥이가 살짝 챙겨줘요.',
+                          subtitle: '진행 중인 일정에서 딴짓하면 냥냥이가 챙겨줘요.',
                           status: _ongoingNudgeEnabled ? '켜짐' : '꺼짐',
                           onTap: _paidSettingsTap(_toggleOngoingNudge),
                         ),
