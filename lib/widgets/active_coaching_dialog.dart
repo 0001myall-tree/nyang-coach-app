@@ -46,6 +46,7 @@ class ActiveCoachingOutcome {
     this.move,
     this.reason,
     this.promisedAt,
+    this.pickedFromList = false,
   });
 
   final ActiveCoachingOutcomeKind kind;
@@ -60,6 +61,11 @@ class ActiveCoachingOutcome {
   final String? reason;
 
   final DateTime? promisedAt;
+
+  /// 처음 부른 일이 아니라, 사용자가 목록에서 직접 고른 일인지.
+  ///
+  /// 본인이 "이건 할 수 있다"고 말한 일이라, 다음에 개입할 때 먼저 본다.
+  final bool pickedFromList;
 }
 
 /// 목록에 보여줄 남은 일 하나.
@@ -100,6 +106,7 @@ class ActiveCoachingDialog extends StatefulWidget {
     required this.timeChoices,
     this.otherTasks = const [],
     this.askTimeOnly = false,
+    this.skipReason = false,
   });
 
   /// 처음 말을 건 일.
@@ -111,6 +118,12 @@ class ActiveCoachingDialog extends StatefulWidget {
   /// 이유를 묻지 않는다 — 스스로 미루겠다고 말한 참이고, 이유는 **약속한
   /// 시각에 또 안 했을 때** 물을 것이다.
   final bool askTimeOnly;
+
+  /// 이유를 건너뛰고 바로 한 수를 물을지.
+  ///
+  /// 하루를 닫는 카드에서 "10분만 해볼게"를 누른 사람이 여기로 온다. 하겠다고
+  /// 말한 참인데 왜 못 했냐고 물으면 앞뒤가 안 맞는다.
+  final bool skipReason;
 
   /// 한 수를 받아오는 길. [names]가 하나면 그 일로 고정이고, 여럿이면 고르는
   /// 것까지 맡긴다.
@@ -133,7 +146,19 @@ class ActiveCoachingDialog extends StatefulWidget {
 enum _Step { reason, moves, pickAnother, time }
 
 class _ActiveCoachingDialogState extends State<ActiveCoachingDialog> {
-  late _Step _step = widget.askTimeOnly ? _Step.time : _Step.reason;
+  late _Step _step = widget.askTimeOnly
+      ? _Step.time
+      : (widget.skipReason ? _Step.moves : _Step.reason);
+
+  @override
+  void initState() {
+    super.initState();
+    if (!widget.askTimeOnly && widget.skipReason) {
+      // 첫 화면부터 한 수를 보여줘야 하므로 여기서 바로 물어본다.
+      WidgetsBinding.instance.addPostFrameCallback((_) => _askMoves([_task]));
+    }
+  }
+
   String? _reason;
   late String _task = widget.taskName;
   List<String> _moves = const [];
@@ -214,6 +239,7 @@ class _ActiveCoachingDialogState extends State<ActiveCoachingDialog> {
               taskName: _task,
               move: _moves[i],
               reason: _reason,
+              pickedFromList: _switched,
             ),
           ),
         ),
@@ -327,6 +353,7 @@ class _ActiveCoachingDialogState extends State<ActiveCoachingDialog> {
             taskName: _task,
             reason: _reason,
             promisedAt: widget.timeChoices[i],
+            pickedFromList: _switched,
           ),
         ),
       ),
@@ -341,6 +368,7 @@ class _ActiveCoachingDialogState extends State<ActiveCoachingDialog> {
           ActiveCoachingOutcomeKind.chooseTime,
           taskName: _task,
           reason: _reason,
+          pickedFromList: _switched,
         ),
       ),
     ),

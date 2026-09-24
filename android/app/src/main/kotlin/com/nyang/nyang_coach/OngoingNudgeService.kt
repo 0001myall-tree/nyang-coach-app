@@ -614,6 +614,10 @@ class OngoingNudgeService : Service() {
      * 그건 다른 앱 위에 뜬 창에서 할 수 있는 일이 아니라 앱으로 데려간다.
      */
     private fun expandToActiveCard() {
+        if (activeNight && activeTaskId != null) {
+            expandToNightCard(activeTaskId!!)
+            return
+        }
         handler.removeCallbacks(autoHide)
         removeBubble()
 
@@ -637,22 +641,6 @@ class OngoingNudgeService : Service() {
                 OngoingNudgeAnswerWriter.markActiveCoaching(this, "", "")
                 openPlanner()
             }
-        } else if (activeNight) {
-            // 하루를 닫는 자리다. 못 한 것을 짚지 않고, 남은 시간에 할 수 있는
-            // 크기를 먼저 내민다. 미루는 쪽보다 지금 손대는 쪽이 앞이다.
-            goButton.text = "10분만 해볼게"
-            laterButton.text = "오늘은 여기까지"
-            goButton.setOnClickListener {
-                answered = true
-                OngoingNudgeAnswerWriter.markActiveCoaching(this, taskId, "")
-                openPlanner()
-            }
-            laterButton.setOnClickListener {
-                answered = true
-                OngoingNudgeState.writeResult(this, taskId, "notToday")
-                Toast.makeText(this, "알겠어. 오늘은 여기까지!", Toast.LENGTH_SHORT).show()
-                lingerAsDoorway()
-            }
         } else {
             goButton.text = "지금 할게"
             laterButton.text = "못 했어"
@@ -665,6 +653,72 @@ class OngoingNudgeService : Service() {
         }
 
         view.findViewById<View>(R.id.nudge_start_scrim).setOnClickListener {
+            cardView?.let { runCatching { windowManager.removeView(it) } }
+            cardView = null
+            showBubble()
+            handler.postDelayed(autoHide, remainingVisibleMillis())
+        }
+
+        val params = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.MATCH_PARENT,
+            overlayType(),
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+            PixelFormat.TRANSLUCENT,
+        )
+        windowManager.addView(view, params)
+        cardView = view
+    }
+
+    /**
+     * 하루를 닫는 카드.
+     *
+     * 못 한 것을 짚지 않는다. "오늘 결국 못 했네"는 아홉 시에 내리는 판결문이고,
+     * 못했다고 이름 붙인다고 시작되는 것도 아니다. 남은 시간에 들어가는 크기를
+     * 먼저 내밀고, 나머지 둘은 하루를 닫는 문으로 둔다.
+     *
+     * 자정이 목록을 비우기 전에 결정을 받아두는 것이 이 카드의 원래 일이다.
+     * 강요는 아니라, 아무것도 안 눌러도 그만이다.
+     */
+    private fun expandToNightCard(taskId: String) {
+        handler.removeCallbacks(autoHide)
+        removeBubble()
+
+        val view = LayoutInflater.from(this).inflate(R.layout.nudge_later_card, null)
+        view.findViewById<TextView>(R.id.nudge_later_title).text = activeTitle
+
+        val first = view.findViewById<TextView>(R.id.nudge_later_first)
+        first.text = "10분만 해볼게"
+        first.setOnClickListener {
+            answered = true
+            OngoingNudgeAnswerWriter.markActiveCoaching(
+                this,
+                taskId,
+                "",
+                night = true,
+            )
+            openPlanner()
+        }
+
+        val second = view.findViewById<TextView>(R.id.nudge_later_second)
+        second.text = "내일로 옮길래"
+        second.setOnClickListener {
+            answered = true
+            OngoingNudgeState.writeResult(this, taskId, "moveTomorrow")
+            Toast.makeText(this, "내일 일정으로 옮겨둘게!", Toast.LENGTH_SHORT).show()
+            lingerAsDoorway()
+        }
+
+        val third = view.findViewById<TextView>(R.id.nudge_later_pick)
+        third.text = "오늘은 여기까지"
+        third.setOnClickListener {
+            answered = true
+            OngoingNudgeState.writeResult(this, taskId, "notToday")
+            Toast.makeText(this, "알겠어. 오늘은 여기까지!", Toast.LENGTH_SHORT).show()
+            lingerAsDoorway()
+        }
+
+        view.findViewById<View>(R.id.nudge_later_scrim).setOnClickListener {
             cardView?.let { runCatching { windowManager.removeView(it) } }
             cardView = null
             showBubble()

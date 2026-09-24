@@ -140,11 +140,24 @@ object OngoingNudgeAnswerWriter {
         return false
     }
 
-    /** 적극 코칭 카드에서 [못 했어]를 눌러 앱으로 간다고 적어둔다. */
-    fun markActiveCoaching(context: Context, taskId: String, taskText: String) {
+    /**
+     * 적극 코칭 카드에서 앱으로 간다고 적어둔다.
+     *
+     * [night]면 이유를 묻지 않고 바로 한 수로 간다. 하루를 닫는 자리에서
+     * "10분만 해볼게"를 누른 사람에게 왜 못 했냐고 묻는 것은 앞뒤가 안 맞는다.
+     */
+    fun markActiveCoaching(
+        context: Context,
+        taskId: String,
+        taskText: String,
+        night: Boolean = false,
+    ) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
             .putString("flutter.banner_focus_task_id", taskId)
-            .putString("flutter.banner_answer_kind", "activeCoaching")
+            .putString(
+                "flutter.banner_answer_kind",
+                if (night) "activeCoachingNight" else "activeCoaching",
+            )
             .putString("flutter.banner_answer_task_text", taskText)
             .commit()
     }

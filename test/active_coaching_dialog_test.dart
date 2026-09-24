@@ -306,6 +306,75 @@ void main() {
     expect(find.text('4:30'), findsOneWidget);
   });
 
+  testWidgets('하루를 닫는 카드에서 온 사람에게는 이유를 묻지 않는다', (tester) async {
+    // "10분만 해볼게"를 누르고 온 참이다. 왜 못 했냐고 물으면 앞뒤가 안 맞는다.
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => ElevatedButton(
+            onPressed: () => showDialog<ActiveCoachingOutcome>(
+              context: context,
+              builder: (_) => ActiveCoachingDialog(
+                taskName: '분기 리포트',
+                askMoves: twoMoves,
+                skipReason: true,
+                timeChoices: const [],
+              ),
+            ),
+            child: const Text('열기'),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('열기'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('왜 못 했어'), findsNothing);
+    expect(find.text('개요 세 줄 적기'), findsOneWidget);
+  });
+
+  testWidgets('목록에서 갈아탄 일에는 표시가 남는다', (tester) async {
+    ActiveCoachingOutcome? outcome;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => ElevatedButton(
+            onPressed: () async {
+              outcome = await showDialog<ActiveCoachingOutcome>(
+                context: context,
+                builder: (_) => ActiveCoachingDialog(
+                  taskName: '분기 리포트',
+                  askMoves: (names, reason) async => ActiveCoachingMoves(
+                    task: names.first,
+                    moves: const ['치우기'],
+                  ),
+                  otherTasks: const [ActiveCoachingChoice(name: '방 정리')],
+                  timeChoices: const [],
+                ),
+              );
+            },
+            child: const Text('열기'),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('열기'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('머리가 안 돌아가'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('지금은 안 되겠어'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('방 정리'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('이걸로'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('치우기'));
+    await tester.pumpAndSettle();
+
+    expect(outcome?.taskName, '방 정리');
+    expect(outcome?.pickedFromList, isTrue);
+  });
+
   testWidgets('밤이라 고를 시각이 없으면 하루를 닫는 말로 간다', (tester) async {
     await show(tester, askMoves: noMoves);
     await tester.tap(find.text('지금은 시간이 안 나'));

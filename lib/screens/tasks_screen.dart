@@ -970,8 +970,14 @@ class _TasksScreenState extends State<TasksScreen>
       await _askWhenLater(taskId: taskId, taskText: taskText);
       return;
     }
-    if (kind == 'activeCoaching') {
-      await _showActiveCoachingDialog(taskId: taskId, taskText: taskText);
+    if (kind == 'activeCoaching' || kind == 'activeCoachingNight') {
+      await _showActiveCoachingDialog(
+        taskId: taskId,
+        taskText: taskText,
+        // 하루를 닫는 카드에서 "10분만 해볼게"를 누르고 온 사람이다. 하겠다고
+        // 말한 참이라 이유를 묻지 않고 바로 한 수로 간다.
+        skipReason: kind == 'activeCoachingNight',
+      );
       return;
     }
     final String message;
@@ -1066,6 +1072,7 @@ class _TasksScreenState extends State<TasksScreen>
   Future<void> _showActiveCoachingDialog({
     required String taskId,
     required String taskText,
+    bool skipReason = false,
   }) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.reload();
@@ -1108,6 +1115,7 @@ class _TasksScreenState extends State<TasksScreen>
         // 부를 일이 없으면 곧장 목록에서 고르는 자리로 간다.
         taskName: name,
         askTimeOnly: false,
+        skipReason: skipReason,
         otherTasks: others,
         timeChoices: choices,
         askMoves: (names, reason) => ActiveCoachingMove.suggest(
@@ -1138,7 +1146,7 @@ class _TasksScreenState extends State<TasksScreen>
 
     // 목록에서 직접 고른 일이면 표시를 남긴다. 본인이 "이건 할 수 있다"고 말한
     // 일이라, 다음에 개입할 때 먼저 본다.
-    if (outcome.reason != null) {
+    if (outcome.pickedFromList) {
       await ActiveCoachingPromise.notePickedByUser(taskId: taskId, at: now);
     }
 
@@ -2872,6 +2880,9 @@ class _TasksScreenState extends State<TasksScreen>
   Future<void> _maybeScheduleResumeNudge(TaskItem t) async {
     if (!OngoingTaskNudgeService.isSupported) return;
     if (!t.isPaused) return;
+    // 적극 코칭이 멈춘 일을 이미 본다(사다리 3번). 둘 다 두면 같은 일로 두 번
+    // 부르게 되고, 한쪽은 "다시 시작할까", 한쪽은 "왜 멈췄어"라 말까지 엇갈린다.
+    if (await GapCoachingService.isEnabled()) return;
     final userData = await UserDataService.load();
     if (!userData.isPlanActive || userData.planType != 'master') return;
 
@@ -2890,6 +2901,10 @@ class _TasksScreenState extends State<TasksScreen>
   /// 아이폰은 [NyangBannerNudge.sync]가 저장이 일어날 때마다 스스로 잇는다.
   Future<void> _maybeScheduleNextTaskNudge() async {
     if (!OngoingTaskNudgeService.isSupported) return;
+    // 적극 코칭이 같은 자리를 본다. 시간이 안 정해진 남은 일을 권하는 것은
+    // 사다리 5번("지금 뭐 할 수 있어?")이 하는 일이고, 그쪽은 고르는 것까지
+    // 사용자에게 넘긴다.
+    if (await GapCoachingService.isEnabled()) return;
     final userData = await UserDataService.load();
     if (!userData.isPlanActive || userData.planType != 'master') return;
 

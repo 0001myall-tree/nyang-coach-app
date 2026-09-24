@@ -273,7 +273,7 @@ class NyangBannerNudge {
       ),
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
       payload:
-          '$payloadPrefix:${jsonEncode({'kind': 'activeCoaching', 'taskId': decoded['taskId']?.toString() ?? '', 'taskText': ''})}',
+          '$payloadPrefix:${jsonEncode({'kind': decoded['kind']?.toString() == 'night' ? 'activeCoachingNight' : 'activeCoaching', 'taskId': decoded['taskId']?.toString() ?? '', 'taskText': ''})}',
     );
   }
 
@@ -338,7 +338,9 @@ class NyangBannerNudge {
       return const [];
     }
 
-    if (masterEligible) {
+    // 적극 코칭이 이 둘을 이미 본다 — 멈춘 일은 사다리 3번, 시간이 안 정해진
+    // 남은 일은 5번이다. 둘 다 두면 같은 일로 두 번 부르게 된다.
+    if (masterEligible && !await GapCoachingService.isEnabled()) {
       // 이미 손댄 일을 다시 붙잡을지가, 아직 안 건드린 일을 새로 시작할지보다
       // 앞선다. 둘 다 틈새 코칭을 막지 않으므로 건 시각은 돌려주지 않는다.
       if (await _syncResumeNudge(tasks, now, gapSlots)) return const [];
@@ -922,7 +924,7 @@ class NyangBannerNudge {
     final taskId = data['taskId']?.toString() ?? '';
     // 적극 코칭이 "지금 뭐 할 수 있어?"를 물을 때는 가리킬 일이 없다. 그
     // 자리만 예외로, 이름 없이도 앱을 열어 팝업까지 간다.
-    if (taskId.isEmpty && kind != 'activeCoaching') return;
+    if (taskId.isEmpty && !kind.startsWith('activeCoaching')) return;
 
     // 앱이 열리면 할 일이 쭉 늘어서 있어서, 부른 쪽이 어느 것인지 알 수 없다.
     // 어느 칸을 볼지 적어두면 할 일 화면이 그 칸을 번쩍여준다.

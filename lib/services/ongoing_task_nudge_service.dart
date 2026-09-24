@@ -10,6 +10,7 @@ import 'active_coaching_state.dart';
 import 'distraction_coach_quota.dart';
 import 'gap_coaching_service.dart';
 import 'task_completion_service.dart';
+import 'task_move_service.dart';
 
 /// 냥냥이가 물어본 것에 사용자가 고른 답.
 class OngoingNudgeAnswer {
@@ -18,7 +19,8 @@ class OngoingNudgeAnswer {
   final String taskId;
 
   /// 'done' = 다 했어, 'started' = (시작 전 일정에) 시작할게,
-  /// 'later:HH:mm' = 그 시각에 하겠다.
+  /// 'later:HH:mm' = 그 시각에 하겠다, 'moveTomorrow' = 내일로 옮기겠다,
+  /// 'notToday' = 오늘은 여기까지.
   /// '계속하는 중'과 '다시 시작할게'는 일정을 바꾸지 않으므로 답이 남지 않는다.
   final String action;
 
@@ -584,6 +586,22 @@ class OngoingTaskNudgeService {
     final promisedAt = answer.promisedAt(DateTime.now());
     if (promisedAt != null) {
       return ActiveCoachingPromise.keep(taskId: answer.taskId, at: promisedAt);
+    }
+    // 밤 카드에서 "내일로 옮길래"를 골랐다. 실제로 옮긴다 — 안 되는 것을
+    // 버튼으로 약속하면 거짓말이 된다.
+    if (answer.action == 'moveTomorrow') {
+      final moved = await TaskMoveService.moveStoredTask(
+        taskId: answer.taskId,
+        to: DateTime.now().add(const Duration(days: 1)),
+      );
+      if (moved) {
+        await ActiveCoachingPromise.decide(
+          taskId: answer.taskId,
+          decision: ActiveCoachingDecision.moved,
+          at: DateTime.now(),
+        );
+      }
+      return moved;
     }
     // 밤 카드에서 "오늘은 여기까지"를 골랐다. 사용자가 내린 결정이라, 그날
     // 그 일에는 더 말 걸지 않는다.
