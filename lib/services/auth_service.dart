@@ -7,7 +7,7 @@ import '../models/user_data.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/account_retention_service.dart';
 import '../services/coach_id_service.dart';
-import '../services/distraction_coach_quota.dart';
+import '../services/coach_tier_flags.dart';
 import '../services/free_access_service.dart';
 import '../services/memory_service.dart';
 import '../services/notification_service.dart';
@@ -177,7 +177,8 @@ class AuthService {
       for (final key in keys) {
         await prefs.remove(key);
       }
-      await prefs.remove(DistractionCoachQuota.unlimitedKey);
+      await prefs.remove(CoachTierFlags.paidKey);
+      await prefs.remove(CoachTierFlags.masterKey);
       // 앞사람 데이터를 지웠으니 올릴 것도 없다. 표시를 남겨두면 새 계정
       // 클라우드에 앞사람의 빈 자리를 올리려 든다.
       await prefs.remove(TasksSyncService.pendingUploadFlagKey);

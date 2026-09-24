@@ -7,7 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'active_coaching_later.dart';
 import 'active_coaching_promise.dart';
 import 'active_coaching_state.dart';
-import 'distraction_coach_quota.dart';
+import 'coach_tier_flags.dart';
 import 'gap_coaching_service.dart';
 import 'task_completion_service.dart';
 import 'task_move_service.dart';
@@ -310,14 +310,13 @@ class OngoingTaskNudgeService {
     final available = await isAvailable();
     _log('start guard isAvailable=$available');
     if (!available) return;
-    // 다이내믹 아일랜드에 붙는 알약은 시작하자마자 나온다. 딴짓 중인지 알 수
-    // 없어서 30분을 기다릴 근거가 없고, 그래서 이 갈래에서는 발동 시점이 곧
-    // 시작 시점이다 — 프렌즈의 하루치는 그날 처음 시작한 일정이 가져간다.
+    // 플랜이 끝난 사람에게는 나가지 않는다. 스위치는 플랜이 있을 때 켜둔
+    // 채로 남아 있을 수 있다.
     //
     // 안드로이드는 여기서 보지 않는다. 30분 뒤 딴짓 중인지 확인하고 나가는
-    // 판단이 네이티브에 있고, 그 판단이 곧 발동이라 하루치도 거기서 센다.
-    if (!_isAndroid && !await DistractionCoachQuota.claimNow(taskId)) {
-      _log('start skipped: friends plan daily quota already spent');
+    // 판단이 네이티브에 있어서, 등급도 거기서 본다.
+    if (!_isAndroid && !await CoachTierFlags.isPaid()) {
+      _log('start skipped: no active plan');
       await stop();
       return;
     }

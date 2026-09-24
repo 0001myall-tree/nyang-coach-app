@@ -29,7 +29,6 @@ import '../services/daily_reset_service.dart';
 import '../services/free_access_service.dart';
 import '../services/purchase_service.dart';
 import '../services/nyang_banner_nudge.dart';
-import '../services/distraction_coach_quota.dart';
 import '../services/ongoing_task_nudge_service.dart';
 import '../services/task_completion_service.dart';
 import '../services/apple_calendar_sync_service.dart';
@@ -2910,7 +2909,6 @@ class _TasksScreenState extends State<TasksScreen>
         taskText: running.text,
         elapsedSeconds: running.elapsedSecondsAt(DateTime.now()),
       );
-      await _tellQuotaSpentIfNeeded(running.id.toString());
     }
 
     // 시작 시각 알림은 도는 일정이 있는지와 무관한 별도 자리다. 시작한 일을
@@ -2995,33 +2993,6 @@ class _TasksScreenState extends State<TasksScreen>
       taskId: candidate.id.toString(),
       taskText: candidate.text,
       fireAt: DateTime.now().add(const Duration(hours: 3)),
-    );
-  }
-
-  /// 오늘치 딴짓 방지 코칭이 이미 다른 일정에 쓰였다고 알려준다.
-  ///
-  /// 아무 말 없이 안 나오면 고장과 구별되지 않는다. 그렇다고 ▶를 누를 때마다
-  /// 말하면 잔소리라, 하루 한 번만 말한다. 그 판단은 저장소가 들고 있으므로
-  /// 여기서는 물어보기만 한다.
-  Future<void> _tellQuotaSpentIfNeeded(String taskId) async {
-    if (!await DistractionCoachQuota.shouldTellQuotaSpent(taskId)) return;
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        duration: const Duration(seconds: 6),
-        backgroundColor: const Color(0xFF3D3A4E),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        content: Text(
-          DistractionCoachQuota.quotaSpentMessage,
-          style: appFont(
-            fontSize: 13,
-            height: 1.5,
-            fontWeight: FontWeight.w600,
-            color: Colors.white,
-          ),
-        ),
-      ),
     );
   }
 

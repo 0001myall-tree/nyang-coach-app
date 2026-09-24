@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -5,7 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 
 import '../services/coach_id_service.dart';
-import '../services/distraction_coach_quota.dart';
+import '../services/coach_tier_flags.dart';
 import '../services/server_clock.dart';
 
 // ─────────────────────────────────────────────────────────────
@@ -150,6 +151,10 @@ class UserDataService {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(_key);
     _cache = raw != null ? UserData.fromJson(jsonDecode(raw)) : UserData();
+    // 네이티브가 보는 등급 결론을 처음 읽을 때 한 번 맞춰둔다. 결론을 담는
+    // 자리가 새로 생겼을 때(업데이트 직후) 클라우드가 닿지 않으면, 저장이
+    // 한 번 일어나기 전까지 그 자리가 비어 있다.
+    unawaited(_publishDistractionCoachTier(_cache!));
     return _cache!;
   }
 
@@ -198,14 +203,16 @@ class UserDataService {
     }
   }
 
-  /// 딴짓 방지 코칭이 일정마다 붙는 등급인지를 적어둔다.
+  /// 딴짓 방지 코칭이 일정마다 붙는지, 적극 코칭을 쓸 수 있는 등급인지를
+  /// 적어둔다.
   ///
   /// 안드로이드는 앱이 꺼진 사이에 냥냥이를 내보낼지 판단하는데, 그때는
   /// 사용자 정보를 읽을 수 없다. 등급이 바뀔 수 있는 자리는 전부 [save]와
   /// [syncFromCloud]를 지나므로 여기 한 곳에서 알려준다.
   static Future<void> _publishDistractionCoachTier(UserData data) =>
-      DistractionCoachQuota.setUnlimited(
-        data.isPlanActive && data.planType == 'master',
+      CoachTierFlags.publish(
+        paid: data.isPlanActive,
+        master: data.isPlanActive && data.planType == 'master',
       );
 
   /// 캐시 무효화 (테스트 등)

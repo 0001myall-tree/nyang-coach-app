@@ -10,7 +10,7 @@ import 'package:timezone/timezone.dart' as tz;
 
 import '../models/user_data.dart';
 import 'active_coaching_sync.dart';
-import 'distraction_coach_quota.dart';
+import 'coach_tier_flags.dart';
 import 'gap_coaching_service.dart';
 import 'ongoing_task_nudge_service.dart';
 
@@ -276,9 +276,6 @@ class NyangBannerNudge {
     if (needed) {
       final next = OngoingTaskNudgeService.nextUnstartedTask(tasks, now);
       if (next != null) {
-        // 시작을 권하는 배너에는 하루치 제한이 없다. 여기서 하는 중이냐는 물음이
-        // 걸리지 않으므로, 나오지 못하게 된 자리는 풀어준다.
-        await DistractionCoachQuota.releaseUnconfirmedUnless();
         final at = next['_startAt'] as DateTime;
         await _schedule(
           taskId: next['id'].toString(),
@@ -324,10 +321,6 @@ class NyangBannerNudge {
       await _syncNextTaskNudge(tasks, now);
       return;
     }
-
-    // 도는 일정도, 다음 일 후보도 없다. 걸어둔 배너는 위에서 지워졌으니
-    // 맡아둔 자리도 푼다.
-    await DistractionCoachQuota.releaseUnconfirmedUnless();
   }
 
   /// 시작해뒀다 멈춘 지 3시간 넘은 일을 다시 부르는 알림 사슬을 다시 깐다.
@@ -513,15 +506,9 @@ class NyangBannerNudge {
     // 배너가 튀어나오면, 방금 앱을 연 사람에게 앱 밖에서 부르는 셈이 된다.
     if (!at.isAfter(now)) at = now.add(nextRound);
 
-    // 프렌즈는 하루 한 일정까지다. 걸기 전에 오늘치가 이 일정 몫인지 본다.
-    // 배너는 미리 걸어두는 것이라 나오는 순간에 판단할 수가 없어서, 자리를
-    // 맡아두고 그 시각이 지난 뒤에 확정한다.
-    await DistractionCoachQuota.releaseUnconfirmedUnless(keepTaskId: taskId);
-    final mayFire = await DistractionCoachQuota.reserve(
-      taskId: taskId,
-      firesAt: at,
-    );
-    if (!mayFire) return const [];
+    // 플랜이 끝난 사람에게는 걸지 않는다. 스위치는 플랜이 있을 때 켜둔 채로
+    // 남아 있을 수 있다.
+    if (!await CoachTierFlags.isPaid()) return const [];
 
     // 앞으로 몇 차례를 한꺼번에 걸어둔다. 앱을 다시 열면 [sync]가 전부 지우고
     // 다시 깔기 때문에, 일정이 끝나거나 바뀌면 남은 차례도 함께 없어진다.
