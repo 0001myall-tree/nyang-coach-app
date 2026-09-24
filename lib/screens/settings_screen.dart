@@ -1435,9 +1435,9 @@ class _SettingsScreenState extends State<SettingsScreen>
       await _showAlarmNoticeDialog(
         title: '🔋 한 가지만 더 확인해주세요',
         message:
-            '지금 설정으로는 휴대폰이 냥냥코치를 재워둘 수 있어요. '
-            '그러면 냥냥이가 늦게 나타나거나 아예 나타나지 않아요.\n\n'
-            '배터리 설정에서 냥냥코치를 찾아 "제한 없음"으로 바꿔주세요.',
+            '지금 설정으로는 휴대폰이 냥냥코치를 재워둘 수 있어요.\n\n'
+            '아래 "설정 열기"를 누르고, 냥냥코치 앱 정보에서 '
+            '배터리 → "제한 없음"을 골라주세요.',
         actionLabel: '설정 열기',
         closeLabel: '나중에',
         onAction: () async {
@@ -2411,9 +2411,9 @@ class _SettingsScreenState extends State<SettingsScreen>
           // 한 줄에 들어가야 배너에서 낱말이 갈리지 않는다.
           headline: '폰이 냥냥코치를 재우고 있어요',
           detail:
-              '지금 설정으로는 휴대폰이 냥냥코치를 재워둘 수 있어요. '
-              '그러면 정해둔 시각에 냥냥이가 늦게 나오거나 아예 나오지 않아요.\n\n'
-              '배터리 설정에서 냥냥코치를 찾아 "제한 없음"으로 바꿔주세요.',
+              '지금 설정으로는 휴대폰이 냥냥코치를 재워둘 수 있어요.\n\n'
+              '아래 "설정 열기"를 누르고, 냥냥코치 앱 정보에서 '
+              '배터리 → "제한 없음"을 골라주세요.',
           open: OngoingTaskNudgeService.openBatterySettings,
         );
       }

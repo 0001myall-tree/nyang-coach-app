@@ -365,23 +365,30 @@ class MainActivity : FlutterFragmentActivity() {
     }
 
     /**
-     * 배터리 최적화 목록을 연다.
+     * 배터리 설정을 연다. **냥냥코치 앱 화면으로 바로 간다.**
      *
-     * 한 번에 끄는 시스템 팝업도 있지만 그건 별도 권한이 필요하고 심사에서
-     * 까다롭게 본다. 목록을 열어주고 사용자가 직접 고르게 한다.
+     * 예전에는 배터리 최적화 목록을 통째로 열었다. 거기는 폰에 깔린 앱이 전부
+     * 가나다순으로 늘어서 있어서, 스크롤해 내려가며 냥냥코치를 찾아야 했다.
+     * 고치라고 보내놓고 어디를 고칠지는 알아서 찾게 하는 셈이었다.
+     *
+     * 앱 정보 화면은 우리 앱 것 하나뿐이라 찾을 것이 없다. 거기서 배터리를
+     * 눌러 "제한 없음"으로 바꾸면 된다.
+     *
+     * 한 번에 끄는 시스템 팝업(ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)도
+     * 있다. 그쪽이 더 짧지만 별도 권한을 하나 더 선언해야 하고, 심사에서
+     * 까다롭게 보는 권한이다.
      */
     private fun openBatterySettings() {
-        val intent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
         try {
-            startActivity(intent)
-        } catch (e: Exception) {
-            // 이 화면이 없는 기기라면 앱 정보 화면으로 보낸다.
             startActivity(
                 Intent(
                     Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
                     Uri.parse("package:$packageName"),
                 ),
             )
+        } catch (e: Exception) {
+            // 앱 정보 화면이 없는 기기라면 목록이라도 연다.
+            startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
         }
     }
 
