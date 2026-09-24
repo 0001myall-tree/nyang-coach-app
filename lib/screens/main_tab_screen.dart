@@ -2687,20 +2687,28 @@ class _MainTabScreenState extends State<MainTabScreen>
                         const SizedBox(height: 20),
                         // 아이콘 없이 한 줄. 사용법이 아니라 덧붙이는 말이라
                         // 앞의 칸들과 같은 모양으로 세우면 항목처럼 읽힌다.
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: Text(
-                            // 낱말 가운데서 줄이 갈리면 "숨겨져 있으니 /
-                            // 살펴보세요"처럼 읽힌다.
-                            keepWordsWhole(
-                              "P.S. '설정'에 '적극 코칭'과 '모닝콜' 등 "
-                              '다양한 기능이 있으니 살펴보세요.',
+                        // 위 칸들의 본문과 같은 세로선에서 시작한다. 아이콘
+                        // 너비(34)와 그 뒤 간격(12)만큼 들여쓴 자리다.
+                        Padding(
+                          padding: const EdgeInsets.only(left: 46),
+                          child: Text.rich(
+                            TextSpan(
+                              // 낱말 가운데서 줄이 갈리면 "숨겨져 있으니 /
+                              // 살펴보세요"처럼 읽힌다. 굵게 칠할 말도 같이
+                              // 이어붙여야 본문에서 찾을 수 있다.
+                              children: _plannerBodySpans(
+                                keepWordsWhole(
+                                  "P.S. '설정'에 '적극 코칭'과 '모닝콜' 등 "
+                                  '다양한 기능이 있으니 살펴보세요.',
+                                ),
+                                ['적극 코칭', '모닝콜'].map(keepWordsWhole).toList(),
+                              ),
                             ),
                             style: appFont(
                               fontSize: 13,
-                              height: 1.5,
-                              fontWeight: FontWeight.w700,
-                              color: AppDesignTokens.brand,
+                              height: 1.55,
+                              fontWeight: FontWeight.w600,
+                              color: AppDesignTokens.textPrimary,
                             ),
                           ),
                         ),
