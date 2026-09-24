@@ -34,6 +34,12 @@ enum ActiveCoachingSignal {
   /// 핵심으로 찍어둔 일.
   core,
 
+  /// 남은 일이 하나뿐이다.
+  ///
+  /// 고르지 않는다는 원칙은 여럿 중 하나를 앱이 짚지 않으려는 것이다. 하나뿐이면
+  /// 고를 것이 없는데 "하나 정해볼까?"를 물으면 우습다.
+  onlyLeft,
+
   /// 고를 신호가 없다. 남은 일을 보여주고 사용자가 고르게 한다.
   askUser,
 
@@ -161,9 +167,34 @@ class ActiveCoachingTarget {
       return ActiveCoachingPick(ActiveCoachingSignal.core, task: core);
     }
 
+    if (pending.length == 1) {
+      final only = _onlyLeft(pending, promises, now);
+      // 하나뿐인데 아직 부를 때가 아니면 조용히 있는다. 고를 것이 없는 사람에게
+      // "하나 정해볼까?"를 묻는 것은 말이 안 된다.
+      if (only == null) return const ActiveCoachingPick.none();
+      return ActiveCoachingPick(ActiveCoachingSignal.onlyLeft, task: only);
+    }
+
     // 사용자가 남긴 신호가 하나도 없다. 여기서 앱이 하나 골라 짚으면 그게 곧
     // 추측이다. 남은 일을 보여주고 고르게 한다.
     return ActiveCoachingPick(ActiveCoachingSignal.askUser, candidates: usable);
+  }
+
+  /// 오늘 남은 일이 하나뿐이면 그 일. 아니면 null.
+  ///
+  /// 시각을 적어둔 일은 여기서 잡지 않는다. 그 일은 시작 시각에서 30분이 지나면
+  /// 자기 자리에서 걸리고, 그 전에 부르면 정해둔 시각보다 먼저 재촉하게 된다.
+  /// 뒤로 약속해둔 일도 같은 이유로 둔다.
+  static Map? _onlyLeft(
+    List<Map> pending,
+    Map<String, DateTime> promises,
+    DateTime now,
+  ) {
+    final item = pending.single;
+    if (_startAt(item, now) != null) return null;
+    final promised = promises[item['id']?.toString() ?? ''];
+    if (promised != null && promised.isAfter(now)) return null;
+    return item;
   }
 
   /// 지금 돌고 있는 일인지.

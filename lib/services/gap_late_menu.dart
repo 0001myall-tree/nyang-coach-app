@@ -68,8 +68,8 @@ class GapLateMenu {
       final minutes = ((paused['elapsedSeconds'] as num?)?.toInt() ?? 0) ~/ 60;
       return GapLateSuggestion(
         body: minutes > 0
-            ? "집사, '${_shorten(name)}' $minutes분 하다 멈췄다냥. 조금만 더 붙을까냥?"
-            : "집사, '${_shorten(name)}' 하다 멈췄다냥. 조금만 더 붙을까냥?",
+            ? "집사, '${_shorten(name)}' $minutes분 하다 멈췄다냥. 조금만 더 해볼까냥?"
+            : "집사, '${_shorten(name)}' 하다 멈췄다냥. 조금만 더 해볼까냥?",
         taskId: paused['id']?.toString(),
       );
     }

@@ -24,6 +24,10 @@ import 'task_completion_service.dart';
 class ActiveCoachingPromise {
   const ActiveCoachingPromise._();
 
+  /// 오늘 약속한 시각이 적힌 할 일 칸. 루틴 줄 맞추기가 이 칸을 보고 시각을
+  /// 되돌리지 않는다. 루틴 줄은 날짜마다 새로 만들어지므로 내일로 넘어가지 않는다.
+  static const String promisedStartKey = 'promisedStart';
+
   /// 그 일을 [at]에 하기로 적어둔다. 그런 일이 없으면 false.
   ///
   /// 값을 몰래 바꾸지 않는다. 부르는 쪽이 "4시로 시작 설정했어. 그때 알려줄게"를
@@ -56,6 +60,15 @@ class ActiveCoachingPromise {
     if (end != null && end <= at.hour * 60 + at.minute) {
       task.remove('timeEnd');
     }
+    // 화면은 보여줄 시각('time')을 시작 시각보다 먼저 읽는다. 시작 시각만
+    // 바꾸면 원래 시각이 있던 일은 약속을 해도 옛 시각이 그대로 보인다.
+    task['time'] = _displayTime(
+      at,
+      _minutes(task['timeEnd']?.toString()),
+    );
+    // 루틴 줄은 루틴 목록에 맞춰 시각이 다시 칠해진다. 오늘 약속한 시각이
+    // 있다는 표시를 남겨야 그 칠하기가 약속을 지우지 않는다.
+    task[promisedStartKey] = ActiveCoachingTime.format(at);
 
     await prefs.setString(TaskCompletionService.tasksKey, jsonEncode(tasks));
     await ActiveCoachingStore.writeDay(
@@ -140,6 +153,19 @@ class ActiveCoachingPromise {
       if (item['id']?.toString() == taskId) return item;
     }
     return null;
+  }
+
+  /// 목록에 보이는 시각. 화면이 쓰는 "오후 4:30" 꼴에 맞춘다.
+  static String _displayTime(DateTime start, int? endMinutes) {
+    final from = _clock(start.hour, start.minute);
+    if (endMinutes == null) return from;
+    return '$from ~ ${_clock(endMinutes ~/ 60, endMinutes % 60)}';
+  }
+
+  static String _clock(int hour, int minute) {
+    final meridiem = hour >= 12 ? '오후' : '오전';
+    final shown = hour == 0 ? 12 : (hour > 12 ? hour - 12 : hour);
+    return '$meridiem $shown:${minute.toString().padLeft(2, '0')}';
   }
 
   static int? _minutes(String? hhmm) {

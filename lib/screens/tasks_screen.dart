@@ -92,6 +92,12 @@ class TaskItem {
   /// 이미 지난 일로 착각하지 않는다.
   String? pausedAt;
 
+  /// 적극 코칭에서 "몇 시에 할게"라고 정한 시각("16:30").
+  ///
+  /// 화면이 들고 있다가 다시 저장해야 한다. 모르는 칸은 저장할 때 빠지는데,
+  /// 이게 빠지면 루틴 줄 맞추기가 약속한 시각을 루틴 시각으로 되돌린다.
+  String? promisedStart;
+
   TaskItem({
     required this.id,
     required this.text,
@@ -115,6 +121,7 @@ class TaskItem {
     this.runStartedAt,
     this.actualSeconds,
     this.pausedAt,
+    this.promisedStart,
   });
 
   /// 이 할 일이 시작·일시정지·밀어서 완료 흐름을 타는지.
@@ -166,6 +173,8 @@ class TaskItem {
     if (runStartedAt != null) 'runStartedAt': runStartedAt,
     if (actualSeconds != null) 'actualSeconds': actualSeconds,
     if (pausedAt != null) 'pausedAt': pausedAt,
+    if (promisedStart != null)
+      ActiveCoachingPromise.promisedStartKey: promisedStart,
   };
 
   factory TaskItem.fromJson(Map<String, dynamic> j) => TaskItem(
@@ -191,6 +200,7 @@ class TaskItem {
     runStartedAt: j['runStartedAt']?.toString(),
     actualSeconds: (j['actualSeconds'] as num?)?.toInt(),
     pausedAt: j['pausedAt']?.toString(),
+    promisedStart: j[ActiveCoachingPromise.promisedStartKey]?.toString(),
   );
 }
 

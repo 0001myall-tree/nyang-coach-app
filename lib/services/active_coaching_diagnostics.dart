@@ -162,6 +162,7 @@ class ActiveCoachingDiagnostics {
     ActiveCoachingSignal.lateStart => '시작 시각 +30분',
     ActiveCoachingSignal.paused => '하다 멈춘 일',
     ActiveCoachingSignal.core => '핵심',
+    ActiveCoachingSignal.onlyLeft => '남은 하나',
     ActiveCoachingSignal.askUser => '물어보기',
     ActiveCoachingSignal.nightWrap => '하루 닫는 말',
     ActiveCoachingSignal.none => '없음',

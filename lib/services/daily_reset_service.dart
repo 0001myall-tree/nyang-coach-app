@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
+import 'active_coaching_promise.dart';
 import 'day_record_builder.dart';
 import 'memory_service.dart';
 import 'chat_store.dart';
@@ -778,12 +779,15 @@ class DailyResetService {
         continue;
       }
       seen.add(habitId);
-      for (final field in const [
+      // 오늘 이 루틴을 몇 시에 하겠다고 약속했으면 시각은 그 약속을 따른다.
+      // 루틴 목록의 시각으로 되돌리면 약속을 하자마자 사라진다.
+      final promised =
+          (task[ActiveCoachingPromise.promisedStartKey]?.toString() ?? '')
+              .isNotEmpty;
+      for (final field in [
         'text',
-        'time',
         'duration',
-        'timeStart',
-        'timeEnd',
+        if (!promised) ...['time', 'timeStart', 'timeEnd'],
       ]) {
         if (task[field] != want[field]) {
           task[field] = want[field];

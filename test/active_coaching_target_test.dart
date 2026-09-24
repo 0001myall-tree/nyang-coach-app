@@ -98,17 +98,14 @@ void main() {
         now: now,
         promises: {'promised': DateTime(2026, 9, 23, 16, 0)},
       );
-      // 다른 신호가 없으니 사용자에게 묻는 자리로 내려간다.
-      expect(pick.signal, ActiveCoachingSignal.askUser);
+      // 남은 일이 그것 하나라 물어볼 것도 없다. 약속한 시각까지 기다린다.
+      expect(pick.isNone, isTrue);
     });
 
     test('시작 시각 30분이 지나야 잡는다', () {
       final tasks = [task('a', timeStart: '14:31')];
       // 29분 지난 시점에는 아직 아니다.
-      expect(
-        ActiveCoachingTarget.pick(tasks: tasks, now: now).signal,
-        ActiveCoachingSignal.askUser,
-      );
+      expect(ActiveCoachingTarget.pick(tasks: tasks, now: now).isNone, isTrue);
       // 딱 30분이 되면 잡는다.
       final pick = ActiveCoachingTarget.pick(
         tasks: [task('a', timeStart: '14:30')],
@@ -202,6 +199,23 @@ void main() {
       expect(pick.needsUserPick, isTrue);
       expect(pick.task, isNull);
       expect(pick.candidates.map((item) => item['id']), ['a', 'b']);
+    });
+
+    test('남은 일이 하나뿐이면 고르라고 묻지 않고 그 일을 부른다', () {
+      final pick = ActiveCoachingTarget.pick(
+        tasks: [task('a'), task('b', done: true)],
+        now: now,
+      );
+      expect(pick.signal, ActiveCoachingSignal.onlyLeft);
+      expect(pick.taskId, 'a');
+    });
+
+    test('하나뿐이어도 시각을 적어둔 일은 그 시각 전에 당겨 부르지 않는다', () {
+      final pick = ActiveCoachingTarget.pick(
+        tasks: [task('a', timeStart: '20:00')],
+        now: now,
+      );
+      expect(pick.isNone, isTrue);
     });
 
     test('핵심을 안 찍어둔 사람에게 잡무를 골라 짚지 않는다', () {

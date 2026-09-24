@@ -214,4 +214,31 @@ void main() {
       expect(row['text'], '영어 회화 공부 30분');
     });
   });
+
+  group('약속한 시각', () {
+    test('오늘 몇 시에 하기로 한 루틴은 시각을 루틴 것으로 되돌리지 않는다', () async {
+      final row = habitRow(1, '영양제 먹기', timeStart: '09:00')
+        ..['timeStart'] = '21:00'
+        ..['time'] = '오후 9:00'
+        ..['promisedStart'] = '21:00';
+      seed(habits: [habit(1, '영양제 먹기', timeStart: '09:00')], tasks: [row]);
+
+      await DailyResetService.syncTodayHabitTasks();
+
+      final stored = (await storedTasks()).single;
+      expect(stored['timeStart'], '21:00');
+      expect(stored['time'], '오후 9:00');
+    });
+
+    test('약속이 없으면 전처럼 루틴 시각을 따른다', () async {
+      seed(
+        habits: [habit(1, '영양제 먹기', timeStart: '09:00')],
+        tasks: [habitRow(1, '영양제 먹기', timeStart: '21:00')],
+      );
+
+      await DailyResetService.syncTodayHabitTasks();
+
+      expect((await storedTasks()).single['timeStart'], '09:00');
+    });
+  });
 }

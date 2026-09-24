@@ -33,6 +33,21 @@ void main() {
     expect(ActiveCoachingStore.readDay(prefs, at).of('a').promisedAt, at);
   });
 
+  test('목록에 보이는 시각도 함께 바꾸고, 약속 표시를 남긴다', () async {
+    // 화면은 보여줄 시각을 시작 시각보다 먼저 읽는다. 그 칸이 옛 값이면
+    // 약속을 해도 옛 시각이 보인다.
+    seed([
+      {'id': 'a', 'text': '영양제 먹기', 'timeStart': '09:00', 'time': '오전 9:00'},
+    ]);
+    final prefs = await SharedPreferences.getInstance();
+
+    await ActiveCoachingPromise.keep(taskId: 'a', at: at);
+
+    final task = (await storedTasks(prefs)).first as Map;
+    expect(task['time'], '오후 4:30');
+    expect(task[ActiveCoachingPromise.promisedStartKey], '16:30');
+  });
+
   test('원래 시각은 첫 약속에서만 챙긴다', () async {
     seed([
       {'id': 'a', 'text': '분기 리포트', 'timeStart': '15:00'},

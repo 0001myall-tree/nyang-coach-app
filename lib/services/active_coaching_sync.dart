@@ -311,7 +311,7 @@ class ActiveCoachingSync {
     return switch (plan.signal) {
       // 사용자가 정한 시각이다. 재촉이 아니라 약속을 확인하는 말이라야 한다.
       ActiveCoachingSignal.promised => "'$name' 할 시간이라고 했지.\n지금 할까?",
-      ActiveCoachingSignal.paused => "'$name' 하다 멈췄네.\n조금만 더 붙을까?",
+      ActiveCoachingSignal.paused => "'$name' 하다 멈췄네.\n조금만 더 해볼까?",
       // 하루를 닫는 말. "오늘 결국 못 했네"는 판결문이라, 못 한 것을 짚지 않고
       // 남은 시간에 할 수 있는 크기만 내민다.
       ActiveCoachingSignal.nightWrap => "'$name'\n오늘 10분만 손대볼까?",
