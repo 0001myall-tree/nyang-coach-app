@@ -5,7 +5,6 @@ import 'package:flutter/material.dart' show TimeOfDay;
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../models/user_data.dart';
 import 'busy_hours_service.dart';
 import 'gap_fragment_check.dart';
 import 'gap_late_menu.dart';
@@ -840,31 +839,20 @@ class GapCoachingService {
     return tomorrow.add(Duration(minutes: sorted.first));
   }
 
-  /// 저장된 설정을 지금 상태에 맞춰 네이티브·알림에 다시 건다.
+  /// 걸어뒀던 옛 틈새 자리를 걷어낸다.
   ///
-  /// 등급이 내려갔으면 여기서 조용히 접힌다. 앱이 꺼진 사이에는 등급을 알 수
-  /// 없어서, 앱이 켜져 있는 동안 확인한 결론만 넘긴다.
+  /// 이 기능이 정해둔 시각마다 따로 카드를 띄우던 때의 자리다. 지금은 적극
+  /// 코칭이 그 시각을 후보로 받아 하나로 묶어 부른다 — 둘 다 두면 말투도
+  /// 내용도 다른 카드가 1분 사이에 두 번 뜬다.
+  ///
+  /// 여유 시간 설정 자체는 그대로 쓴다. "이때 들러줘"라는 말은 여전히 유효하고,
+  /// 그 값을 읽어가는 쪽이 적극 코칭으로 바뀌었을 뿐이다.
   static Future<void> sync() async {
     if (!isSupported) return;
-    final userData = await UserDataService.load();
-    final master = userData.isPlanActive && userData.planType == 'master';
-    final enabled = master && await isEnabled();
-    final slots = enabled ? await times() : const <TimeOfDay>[];
-    final onDays = enabled ? await days() : defaultDays;
 
     if (_isAndroid) {
       try {
-        if (slots.isEmpty) {
-          await _channel.invokeMethod('clearGapCoaching');
-        } else {
-          // 문장을 먼저 만들어 두고 시각을 건다. 카드가 뜨는 순간에는 앱이
-          // 꺼져 있을 수 있어서, 그때 만들 수는 없다.
-          final prefs = await SharedPreferences.getInstance();
-          await prepareCard(prefs, at: nextSlot(slots, days: onDays));
-          await _channel.invokeMethod('syncGapCoaching', {
-            'times': slots.map(formatTime).toList(),
-          });
-        }
+        await _channel.invokeMethod('clearGapCoaching');
       } on PlatformException {
         //
       } on MissingPluginException {
@@ -873,12 +861,6 @@ class GapCoachingService {
       return;
     }
 
-    // 아이폰도 문장을 미리 만든다. 알림을 예약할 때 문구가 굳기 때문이다.
-    // 여기서 물어봐 두면 아래 예약이 그 답을 가져다 쓴다.
-    if (slots.isNotEmpty) {
-      final prefs = await SharedPreferences.getInstance();
-      await prepareCard(prefs, at: nextSlot(slots, days: onDays));
-    }
     // 다른 배너와 시간이 겹치는지 함께 봐야 해서 예약은 그쪽 한 곳에서 한다.
     await NyangBannerNudge.sync();
   }

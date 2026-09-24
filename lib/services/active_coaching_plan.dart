@@ -62,6 +62,7 @@ class ActiveCoachingPlanner {
     bool Function(DateTime at)? busyAt,
     DateTime? Function(DateTime at)? busyEndAfter,
     String? bedtime,
+    List<DateTime> gapTimes = const [],
   }) {
     // 참견하지 않기로 한 요일이다. 약속 시각도 여기서는 걸지 않는다 — 그 요일에
     // 안 부르기로 한 사람에게 약속이라고 뚫고 들어가면 설정이 거짓말이 된다.
@@ -124,6 +125,19 @@ class ActiveCoachingPlanner {
         !standing.isNone &&
         _worthSaying(standing, now)) {
       consider(night, ActiveCoachingSignal.nightWrap, standing.task);
+    }
+
+    // 사용자가 적어둔 여유 시간. "이때 들러줘"라고 말해둔 자리다.
+    //
+    // 예산의 간격은 그대로 지킨다. 10시 15분과 10시 30분을 함께 적어둔 사람에게
+    // 15분 간격으로 두 번 가면 그건 들르는 것이 아니라 쫓아다니는 것이다.
+    // 진행 중인 일이 있으면 아래 [standing]이 비어서 애초에 걸리지 않는다.
+    if (!standing.isNone && _worthSaying(standing, now)) {
+      for (final at in gapTimes) {
+        if (!at.isAfter(now)) continue;
+        if (at.isBefore(allowedFrom)) continue;
+        consider(at, standing.signal, standing.task);
+      }
     }
 
     if (late != null) {

@@ -20,6 +20,10 @@ import '../services/tasks_sync_service.dart';
 import '../models/user_data.dart';
 import '../services/widget_sync_service.dart';
 import '../services/apple_calendar_sync_service.dart';
+import '../services/active_coaching_diagnostics.dart';
+import '../services/active_coaching_plan.dart';
+import '../services/active_coaching_state.dart';
+import '../services/active_coaching_sync.dart';
 import '../services/gap_coaching_service.dart';
 import '../services/nyang_banner_nudge.dart';
 import '../services/ongoing_task_nudge_service.dart';
@@ -2141,6 +2145,42 @@ class _SettingsScreenState extends State<SettingsScreen>
                   ),
                 ),
 
+                const SizedBox(height: 16),
+                // 안 뜨는 길이 여럿이라 화면에는 "아무 일도 안 일어남"만 남는다.
+                // 고치는 자리는 전부 다르므로, 지금 상태를 그대로 보여준다.
+                Row(
+                  children: [
+                    // 예산이 두 시간을 잠그고 있으면 확인할 방법이 없다.
+                    GestureDetector(
+                      onTap: _showGapTestNudge,
+                      child: Text(
+                        '지금 한번 보기',
+                        style: appFont(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w700,
+                          color: const Color(0xFF8B7CFF),
+                          decoration: TextDecoration.underline,
+                          decorationColor: const Color(0xFF8B7CFF),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    GestureDetector(
+                      onTap: _showGapDiagnostics,
+                      child: Text(
+                        '냥냥이가 안 나올 때',
+                        style: appFont(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w700,
+                          color: const Color(0xFF9A96A8),
+                          decoration: TextDecoration.underline,
+                          decorationColor: const Color(0xFF9A96A8),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+
                 // 높이를 못 박아뒀을 때는 남는 자리가 여백 노릇을 했다.
                 // 내용만큼만 차지하게 바꾸면서 그 자리가 없어져, 설명과
                 // 버튼이 붙어버렸다.
@@ -2362,6 +2402,144 @@ class _SettingsScreenState extends State<SettingsScreen>
         ),
       ),
     );
+  }
+
+  /// 예산을 기다리지 않고 지금 한 번 불러본다.
+  ///
+  /// 두 시간을 기다려야만 확인할 수 있으면 아무도 확인하지 못한다. 이 차례는
+  /// 예산에서 빼지도 않는다.
+  Future<void> _showGapTestNudge() async {
+    final shown = await ActiveCoachingSync.showTestNow();
+    if (!mounted) return;
+    await _showAlarmNoticeDialog(
+      title: shown ? '🌱 곧 나올게요' : '🌱 지금은 부를 일이 없어요',
+      message: shown
+          ? '앱을 나가면 몇 초 뒤에 냥냥이가 나타나요.\n'
+                '화면은 켜둔 채로 다른 앱을 보고 계세요.'
+          : '남은 할 일이 없거나, 지금 무언가 하는 중이에요.\n'
+                '할 일을 하나 적어두고 다시 눌러보세요.',
+    );
+  }
+
+  /// 적극 코칭이 안 뜰 때, 지금 상태를 그대로 보여준다.
+  ///
+  /// 안 뜨는 길이 여럿인데 화면에는 결과만 남는다 — 꺼졌는지, 오늘이 그 요일이
+  /// 아닌지, 방금 나가서 쉬는 중인지, 권한이 막는지, 부를 일이 없는지. 고치는
+  /// 자리가 전부 달라서 짐작으로는 못 맞힌다.
+  Future<void> _showGapDiagnostics() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.reload();
+    final now = DateTime.now();
+
+    final tasks = _decodeListForDiagnostics(prefs.getString('nyang_tasks'));
+    final day = ActiveCoachingStore.readDay(prefs, now);
+    final budget = ActiveCoachingStore.readBudget(prefs, now);
+    final onDays = GapCoachingService.parseDays(
+      prefs.getString(GapCoachingService.daysKey),
+    );
+
+    final plan = ActiveCoachingPlanner.next(
+      tasks: tasks,
+      now: now,
+      day: day,
+      budget: budget,
+      coreTasks: _decodeListForDiagnostics(prefs.getString('nyang_core_tasks')),
+      onDays: onDays,
+      busyAt: (at) => BusyHoursService.busyNow(prefs, at) != null,
+      busyEndAfter: (at) => BusyHoursService.busyEndAt(prefs, at),
+      bedtime: prefs.getString('nyang_premium_min_sleep_time'),
+    );
+
+    // 실제로 걸어둔 자리. 다시 계산한 것과 다르면 건 뒤에 상황이 바뀐 것이다.
+    DateTime? plannedAt;
+    String? plannedTitle;
+    final rawPlan = prefs.getString(ActiveCoachingSync.plannedKey);
+    if (rawPlan != null && rawPlan.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(rawPlan);
+        if (decoded is Map) {
+          final millis = (decoded['at'] as num?)?.toInt();
+          if (millis != null) {
+            plannedAt = DateTime.fromMillisecondsSinceEpoch(millis);
+          }
+          plannedTitle = decoded['title']?.toString().replaceAll('\n', ' ');
+        }
+      } catch (_) {
+        //
+      }
+    }
+
+    final blockers = Platform.isAndroid
+        ? await OngoingTaskNudgeService.diagnose()
+        : const <String, bool>{};
+    if (!mounted) return;
+
+    final report = ActiveCoachingDiagnostics.build(
+      now: now,
+      enabled: prefs.getBool(GapCoachingService.enabledKey) ?? false,
+      master: _hasMasterPlan,
+      onDays: onDays,
+      times: GapCoachingService.parseTimes(
+        prefs.getString(GapCoachingService.timesKey),
+      ).map(GapCoachingService.label).toList(),
+      budget: budget,
+      day: day,
+      plan: plan,
+      plannedAt: plannedAt,
+      plannedTitle: plannedTitle,
+      blockers: blockers,
+      // id만 적으면 'habit_1788307997240_2026-09-24'가 나온다. 무엇을 두고
+      // 한 말인지 알 수가 없다.
+      taskNames: {
+        for (final item in tasks)
+          if (item is Map &&
+              (item['id']?.toString() ?? '').isNotEmpty &&
+              (item['text']?.toString().trim() ?? '').isNotEmpty)
+            item['id'].toString(): item['text'].toString().trim(),
+      },
+    );
+    if (!mounted) return;
+
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.white,
+        title: Text(
+          '냥냥이가 안 나올 때',
+          style: appFont(fontSize: 17, fontWeight: FontWeight.w900),
+        ),
+        content: SingleChildScrollView(
+          child: SelectableText(
+            report,
+            style: appFont(
+              fontSize: 12.5,
+              height: 1.5,
+              fontWeight: FontWeight.w600,
+              color: const Color(0xFF3D3A4E),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(
+              '닫기',
+              style: appFont(fontSize: 14, fontWeight: FontWeight.w800),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  List _decodeListForDiagnostics(String? raw) {
+    if (raw == null || raw.isEmpty) return const [];
+    try {
+      final decoded = jsonDecode(raw);
+      return decoded is List ? decoded : const [];
+    } catch (_) {
+      return const [];
+    }
   }
 
   /// 지금 이 폰에서 적극 코칭을 막고 있는 것. 없으면 null.

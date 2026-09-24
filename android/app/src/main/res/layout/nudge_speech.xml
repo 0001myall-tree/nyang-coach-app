@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 말풍선을 단 냥냥이.
+
+     적극 코칭 자리에서만 쓴다. 저쪽은 "왔다"는 것만 보여도 되지만, 이쪽은
+     건넬 말이 있어서 온 것이라 캐릭터만 뜨면 아무 말도 안 한 것이 된다.
+     카드를 바로 펼치지는 않는다 — 다른 앱을 쓰는 중에 화면을 통째로 덮는다. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:gravity="center_vertical"
+    android:orientation="horizontal">
+
+    <!-- 냥냥이가 화면 오른쪽 가장자리에 붙으므로 말은 왼쪽에 둔다. -->
+    <TextView
+        android:id="@+id/nudge_speech_text"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:background="@drawable/nudge_card_bg"
+        android:ellipsize="end"
+        android:lineSpacingExtra="2dp"
+        android:maxLines="3"
+        android:maxWidth="190dp"
+        android:paddingStart="12dp"
+        android:paddingTop="9dp"
+        android:paddingEnd="12dp"
+        android:paddingBottom="9dp"
+        android:textColor="#3D3A4E"
+        android:textSize="13sp"
+        android:textStyle="bold" />
+
+    <ImageView
+        android:id="@+id/nudge_bubble_image"
+        android:layout_width="64dp"
+        android:layout_height="64dp"
+        android:layout_marginStart="4dp"
+        android:contentDescription="냥냥코치"
+        android:scaleType="fitCenter" />
+</LinearLayout>

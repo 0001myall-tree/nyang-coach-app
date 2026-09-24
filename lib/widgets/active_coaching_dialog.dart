@@ -146,14 +146,21 @@ class ActiveCoachingDialog extends StatefulWidget {
 enum _Step { reason, moves, pickAnother, time }
 
 class _ActiveCoachingDialogState extends State<ActiveCoachingDialog> {
-  late _Step _step = widget.askTimeOnly
-      ? _Step.time
-      : (widget.skipReason ? _Step.moves : _Step.reason);
+  late _Step _step = switch (widget) {
+    _ when widget.askTimeOnly => _Step.time,
+    // 부를 일이 없는 자리다. 카드가 "하나 정해볼까?"라고 물었으니 곧장
+    // 목록으로 간다 — 여기서 앱이 하나 골라주면 그게 추측이다.
+    _ when widget.taskName.trim().isEmpty => _Step.pickAnother,
+    _ when widget.skipReason => _Step.moves,
+    _ => _Step.reason,
+  };
 
   @override
   void initState() {
     super.initState();
-    if (!widget.askTimeOnly && widget.skipReason) {
+    if (!widget.askTimeOnly &&
+        widget.skipReason &&
+        widget.taskName.trim().isNotEmpty) {
       // 첫 화면부터 한 수를 보여줘야 하므로 여기서 바로 물어본다.
       WidgetsBinding.instance.addPostFrameCallback((_) => _askMoves([_task]));
     }

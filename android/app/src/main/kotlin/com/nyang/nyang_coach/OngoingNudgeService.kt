@@ -309,7 +309,13 @@ class OngoingNudgeService : Service() {
             // 나가지도 않은 틈새 코칭 때문에 다음 코칭이 막히지 않는다.
             if (isGapTrack()) OngoingNudgeState.markGapShown(this)
             if (isActiveTrack()) {
-                OngoingNudgeState.markActiveShown(this, activeTaskId, activeNight)
+                // 확인하려고 부른 차례는 예산에서 빼지 않는다. 한 번 보려다
+                // 오늘 몫이 줄면 정작 말을 걸어야 할 때 조용해진다.
+                if (OngoingNudgeState.isActiveTest(this)) {
+                    OngoingNudgeState.clearActiveTest(this)
+                } else {
+                    OngoingNudgeState.markActiveShown(this, activeTaskId, activeNight)
+                }
             }
         }
         return START_NOT_STICKY
@@ -369,7 +375,20 @@ class OngoingNudgeService : Service() {
     // ── 가장자리에 걸친 냥냥이 ────────────────────────────────
 
     private fun showBubble() {
-        val view = LayoutInflater.from(this).inflate(R.layout.nudge_bubble, null)
+        // 적극 코칭은 건넬 말이 있어서 온 자리다. 캐릭터만 띄우면 아무 말도 안
+        // 한 것이 되고, 그래놓고 "말 걸었다"로 세면 기록이 거짓말이 된다.
+        // 카드를 바로 펼치지는 않는다 — 다른 앱을 쓰는 중에 화면을 다 덮는다.
+        val withSpeech = isActiveTrack() && activeTitle.isNotBlank()
+        val view = LayoutInflater.from(this).inflate(
+            if (withSpeech) R.layout.nudge_speech else R.layout.nudge_bubble,
+            null,
+        )
+        if (withSpeech) {
+            // 말풍선 한 줄로 보이게 줄바꿈을 띄어쓰기로 바꾼다. 카드에서는
+            // 두 줄로 쓰는 문장이라 그대로 두면 좁은 폭에서 더 길어진다.
+            view.findViewById<TextView>(R.id.nudge_speech_text).text =
+                activeTitle.replace("\n", " ")
+        }
         view.findViewById<ImageView>(R.id.nudge_bubble_image)
             .setImageBitmap(loadCatBitmap(dp(BUBBLE_DP)))
 
@@ -382,8 +401,9 @@ class OngoingNudgeService : Service() {
             PixelFormat.TRANSLUCENT,
         ).apply {
             gravity = Gravity.TOP or Gravity.END
-            // 가장자리에 살짝 걸치게 둔다. 차지하는 자리는 줄고 캐릭터는 그대로 보인다.
-            x = EDGE_PEEK_DP.let { dp(-it) }
+            // 가장자리에 살짝 걸치게 둔다. 차지하는 자리는 줄고 캐릭터는 그대로
+            // 보인다. 말풍선을 단 자리는 밀지 않는다 — 밀면 말이 잘린다.
+            x = if (withSpeech) 0 else dp(-EDGE_PEEK_DP)
             // 지난번에 옮겨둔 자리를 쓰되, 지금 화면 밖이면 무시한다.
             // 가로로 눕히거나 기기를 바꾸면 그때 저장한 값이 화면 밖일 수 있다.
             y = clampY(
@@ -624,7 +644,18 @@ class OngoingNudgeService : Service() {
         val view = LayoutInflater.from(this).inflate(R.layout.nudge_start_card, null)
         val cardImage = view.findViewById<ImageView>(R.id.nudge_start_image)
         cardImage.setImageBitmap(loadCatBitmap(dp(120)))
-        cardImage.setOnClickListener { openPlanner() }
+        // 그림을 눌러도 물음은 이어져야 한다. 그냥 앱만 열면, 눌렀는데 아무
+        // 일도 안 일어난 것처럼 보인다.
+        cardImage.setOnClickListener {
+            answered = true
+            OngoingNudgeAnswerWriter.markActiveCoaching(
+                this,
+                activeTaskId.orEmpty(),
+                "",
+                night = activeNight,
+            )
+            openPlanner()
+        }
 
         view.findViewById<TextView>(R.id.nudge_start_title).text = activeTitle
 

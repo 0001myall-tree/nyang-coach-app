@@ -122,20 +122,6 @@ class NyangBannerNudge {
   /// 배너 제목. 본문은 그때 남은 일을 보고 [GapCoachingService.bodyFor]가 고른다.
   static const String gapTitle = '🐾 지금 잠깐 여유 있냥?';
 
-  /// 틈새 코칭이 나간 뒤 이만큼은 "다음 일"·"멈춘 일" 카드가 오지 않는다.
-  static const Duration _gapAfterglow = Duration(hours: 3);
-
-  /// 정해둔 틈새 시각이 이만큼 뒤면, "다음 일"·"멈춘 일" 카드가 자리를 비켜준다.
-  ///
-  /// 비켜주는 쪽에만 쓴다. 틈새 코칭을 거르는 데는 쓰지 않는다 — 앞뒤 두
-  /// 시간을 다 비우면 시각을 적어둔 사람에게는 하루가 통째로 막힌다.
-  static const Duration _gapNearTimed = Duration(hours: 2);
-
-  /// 시각이 정해진 일정이 이만큼 안에 있으면 그 자리는 그 일정의 것이다.
-  ///
-  /// 끝나는 시각을 안 적은 일에 쓰는 길이이기도 하다.
-  static const Duration _gapOnTimed = Duration(hours: 1);
-
   static const Duration _nextTaskRound = Duration(hours: 2);
 
   /// "지금 한번 보기"는 자기 자리를 쓴다.
@@ -210,19 +196,15 @@ class NyangBannerNudge {
     }
 
     final now = DateTime.now();
-    // 틈새 코칭 시각을 먼저 구한다. 정해둔 시각이라 다른 배너보다 앞서 정해져
-    // 있고, "다음 일"·"멈춘 일" 배너가 이걸 보고 비켜야 하기 때문이다.
-    final gapSlots = masterEligible ? await _gapSlots(now) : const <DateTime>[];
-    final blocking = await _syncTaskBanners(
+    // 정해둔 시각마다 따로 배너를 걸던 자리가 여기 있었다. 지금은 적극 코칭이
+    // 그 시각을 후보로 받아 하나로 묶어 부른다 — 둘 다 두면 말투도 내용도
+    // 다른 배너가 1분 사이에 두 번 온다.
+    await _syncTaskBanners(
       tasks,
       now,
       needed: needed,
       masterEligible: masterEligible,
-      gapSlots: gapSlots,
     );
-    if (gapSlots.isNotEmpty) {
-      await _scheduleGapSlots(tasks, now, gapSlots, blocking);
-    }
     if (masterEligible) await _scheduleActivePlan(prefs, now);
   }
 
@@ -277,19 +259,14 @@ class NyangBannerNudge {
     );
   }
 
-  /// 일정에 붙는 배너를 건다. 틈새 코칭이 비켜야 하는 시각만 돌려준다.
-  ///
-  /// 시작할 시각과 "지금도 하는 중이야?"는 틈새 코칭보다 앞선다 — 지나가면
-  /// 그날치가 사라지거나, 이미 손을 대고 있는 일이다. 반대로 "다음 일"·"멈춘
-  /// 일"은 틈새 코칭에 자리를 내주므로 돌려주지 않는다.
-  static Future<List<DateTime>> _syncTaskBanners(
+  /// 일정에 붙는 배너를 건다.
+  static Future<void> _syncTaskBanners(
     List tasks,
     DateTime now, {
     required bool needed,
     required bool masterEligible,
-    required List<DateTime> gapSlots,
   }) async {
-    if (tasks.isEmpty) return const [];
+    if (tasks.isEmpty) return;
 
     // 시작할 시각이 먼저다.
     //
@@ -309,7 +286,7 @@ class NyangBannerNudge {
           at: at,
           deadline: at.add(window),
         );
-        return [at];
+        return;
       }
     }
 
@@ -327,7 +304,7 @@ class NyangBannerNudge {
       // 꺼져 있어도 무언가 도는 중이면, 다음 일 카드는 얹지 않는다 — 이미 손을
       // 대고 있는 사람에게 다른 걸 또 권하면 안 된다.
       if (needed) {
-        return _scheduleRunningCheck(
+        await _scheduleRunningCheck(
           taskId: running['id'].toString(),
           taskText: running['text']?.toString() ?? '',
           runStartedAt: DateTime.tryParse(
@@ -335,211 +312,27 @@ class NyangBannerNudge {
           ),
         );
       }
-      return const [];
+      return;
     }
 
     // 적극 코칭이 이 둘을 이미 본다 — 멈춘 일은 사다리 3번, 시간이 안 정해진
     // 남은 일은 5번이다. 둘 다 두면 같은 일로 두 번 부르게 된다.
     if (masterEligible && !await GapCoachingService.isEnabled()) {
       // 이미 손댄 일을 다시 붙잡을지가, 아직 안 건드린 일을 새로 시작할지보다
-      // 앞선다. 둘 다 틈새 코칭을 막지 않으므로 건 시각은 돌려주지 않는다.
-      if (await _syncResumeNudge(tasks, now, gapSlots)) return const [];
-      await _syncNextTaskNudge(tasks, now, gapSlots);
-      return const [];
+      // 앞선다.
+      if (await _syncResumeNudge(tasks, now)) return;
+      await _syncNextTaskNudge(tasks, now);
+      return;
     }
 
     // 도는 일정도, 다음 일 후보도 없다. 걸어둔 배너는 위에서 지워졌으니
     // 맡아둔 자리도 푼다.
     await DistractionCoachQuota.releaseUnconfirmedUnless();
-    return const [];
-  }
-
-  /// 오늘·내일의 틈새 코칭 시각. 아직 지나지 않은 것만.
-  static Future<List<DateTime>> _gapSlots(DateTime now) async {
-    if (!await GapCoachingService.isEnabled()) return const [];
-    final slots = await GapCoachingService.times();
-    if (slots.isEmpty) return const [];
-    final days = await GapCoachingService.days();
-
-    final result = <DateTime>[];
-    for (var day = 0; day < 2; day++) {
-      final date = DateTime(
-        now.year,
-        now.month,
-        now.day,
-      ).add(Duration(days: day));
-      // 참견하지 않기로 한 요일은 자리를 걸지 않는다. 걸어두면 아이폰은
-      // 조건이 바뀌어도 스스로 취소하지 않아서 그날 그대로 나간다.
-      if (!GapCoachingService.runsOn(date, days)) continue;
-      for (final slot in slots) {
-        if (result.length >= gapNotificationIds.length) break;
-        final at = DateTime(
-          date.year,
-          date.month,
-          date.day,
-          slot.hour,
-          slot.minute,
-        );
-        if (at.isAfter(now)) result.add(at);
-      }
-    }
-    return result;
-  }
-
-  /// 그 시각이 틈새 코칭에 가려지는 자리인지.
-  ///
-  /// 앞으로는 두 시간, 뒤로는 세 시간을 본다. 뒤가 더 긴 것은 방금 "여유
-  /// 있으면 조금 건드려볼래?" 하고 물어놓고 곧바로 "남은 일정도 시작할까?"를
-  /// 얹으면 한 번의 제안이 두 번의 재촉이 되기 때문이다.
-  ///
-  /// 안드로이드는 냥냥이가 실제로 나갔을 때부터 세 시간을 세지만, 아이폰은
-  /// 배너가 떴는지 알 길이 없어 예약해둔 시각을 기준으로 삼는다. 걸러져
-  /// 지나간 자리도 여기서는 나간 것으로 친다.
-  static bool _nearGapSlot(DateTime at, List<DateTime> gapSlots) {
-    for (final slot in gapSlots) {
-      final gap = at.difference(slot);
-      if (gap.isNegative) {
-        // 틈새 코칭이 아직 오지 않았다.
-        if (-gap < _gapNearTimed) return true;
-      } else {
-        if (gap < _gapAfterglow) return true;
-      }
-    }
-    return false;
-  }
-
-  /// 여유 있어 보이는 시각에 한 마디만 건네는 배너를 건다.
-  ///
-  /// 안드로이드는 그 시각에 깨어나 조건을 다시 보고 정하지만, 아이폰의 예약
-  /// 알림은 걸어두면 조건이 바뀌어도 스스로 취소되지 않는다. 그래서 여기서
-  /// 미리 보고 거른다 — [sync]가 저장이 일어날 때마다 통째로 다시 깔기 때문에
-  /// 사실상 매번 다시 검사하는 것과 같다.
-  ///
-  /// 내일 자리도 같은 잣대로 거른다. 그때 읽는 할 일 목록은 오늘 것이라 내일을
-  /// 정확히 아는 것은 아니지만, 틀리는 방향이 한쪽으로만 기운다 — 오늘 지켜야
-  /// 할 시각이 있으면 내일 자리도 함께 접힌다. 앱을 하루 안에 한 번이라도 열면
-  /// 그 자리는 그날의 진짜 목록으로 다시 깔리고, 끝까지 안 열면 조용히 지나간다.
-  /// 여유 있는 날 한 번 걸러지는 쪽이, 약속을 앞둔 사람에게 한 번 잘못 나가는
-  /// 쪽보다 낫다.
-  static Future<void> _scheduleGapSlots(
-    List tasks,
-    DateTime now,
-    List<DateTime> slots,
-    List<DateTime> blocking,
-  ) async {
-    final prefs = await SharedPreferences.getInstance();
-    final today = DateTime(now.year, now.month, now.day);
-    // 오늘 할 일을 다 끝냈으면 오늘 남은 자리는 접는다. 내일 자리는 그대로 둔다 —
-    // 저녁에 다 끝내고 앱을 닫는 사람이 대부분이라, 이걸 내일까지 끌고 가면
-    // 부지런한 사람일수록 다음 날 아침이 조용해진다.
-    final dayFinished = GapCoachingService.isDayFinished(tasks);
-
-    for (var i = 0; i < slots.length && i < gapNotificationIds.length; i++) {
-      final at = slots[i];
-      final isToday = DateTime(at.year, at.month, at.day) == today;
-      if (isToday && dayFinished) continue;
-      if (_gapBlocked(tasks, at, blocking)) continue;
-      await _scheduleGap(
-        id: gapNotificationIds[i],
-        at: at,
-        // 이름을 부르는 것은 오늘 자리까지다. 내일 자리는 오늘 목록으로 고르게
-        // 되는데, 앱을 하루 종일 안 열면 그 문장이 그대로 나간다 — 어제 목록을
-        // 보고 "이따 할 '분기 리포트'"라고 부르는 셈이다. 앱을 한 번이라도
-        // 열면 그날 것으로 다시 깔리니, 안 열었을 때만 쓰이는 이 자리에는
-        // 이름 없는 말을 건다.
-        //
-        // 여기서는 모델에게 묻지 않는다(mayAsk 기본값 false). 자리가 넷인데
-        // 자리마다 물어보면 하루 한 번이 네 번이 된다. 물어보는 것은
-        // GapCoachingService.sync가 한 번 하고, 여기서는 그 답이 이 자리가
-        // 고른 일과 맞을 때만 가져다 쓴다. 안 맞으면 사전으로 떨어진다.
-        body: isToday
-            ? await GapCoachingService.bodyForSlot(prefs, tasks, at)
-            : GapCoachingService.namelessBody(prefs, tasks, at),
-      );
-    }
-  }
-
-  /// 그 시각에 틈새 코칭을 접어야 하는지.
-  ///
-  /// 쉬고 있을 때 건네는 말이라, 손을 대고 있거나 곧 지켜야 할 시각이 있으면
-  /// 얹지 않는다. "다음 일"·"멈춘 일" 배너는 여기 들어오지 않는다 — 그쪽이
-  /// 이쪽에 자리를 내주는 관계다.
-  /// 그 시각에 틈새 코칭을 접어야 하는지.
-  ///
-  /// 접는 조건은 둘뿐이다 — 지금 손대고 있는 일이 있거나, 그 시각이 시각을
-  /// 정해둔 일정에 걸려 있거나.
-  ///
-  /// 셋이었다. '방금 하나를 끝냈다'와 '정해둔 시각이 앞뒤 두 시간 안에 있다'가
-  /// 더 있었는데, 둘 다 너무 넓었다. 두 시간씩 앞뒤로 비우면 아침저녁에 시각을
-  /// 적어둔 사람은 정해둔 틈새 시각이 거의 매번 걸러진다. 끝낸 직후 30분도
-  /// 마찬가지다 — 하나 끝내고 쉬는 그 자리가 사실은 여유가 가장 분명한 때다.
-  static bool _gapBlocked(List tasks, DateTime at, List<DateTime> blocking) {
-    // 시작할 시각이나 "지금도 하는 중이야?"가 바로 그 자리에 있다.
-    for (final other in blocking) {
-      if (other.difference(at).abs() < _gapOnTimed) return true;
-    }
-
-    for (final item in tasks) {
-      if (item is! Map) continue;
-      // 도는 중인 일이 있다.
-      if (item['done'] != true && item['inProgress'] == true) return true;
-
-      // 시각을 정해둔 일정이 그 자리에 걸쳐 있다.
-      if (item['done'] == true) continue;
-      final start = _timeOn(at, item['timeStart']);
-      if (start == null) continue;
-      final end = _timeOn(at, item['timeEnd']) ?? start.add(_gapOnTimed);
-      if (!at.isBefore(start) && at.isBefore(end)) return true;
-    }
-    return false;
-  }
-
-  /// "19:00" 같은 값을 [day]의 시각으로. 못 읽으면 null.
-  static DateTime? _timeOn(DateTime day, Object? hhmm) {
-    final parts = (hhmm?.toString() ?? '').split(':');
-    if (parts.length != 2) return null;
-    final hour = int.tryParse(parts[0]);
-    final minute = int.tryParse(parts[1]);
-    if (hour == null || minute == null) return null;
-    return DateTime(day.year, day.month, day.day, hour, minute);
-  }
-
-  static Future<void> _scheduleGap({
-    required int id,
-    required DateTime at,
-    required String body,
-  }) async {
-    _ensureTimeZone();
-
-    final details = NotificationDetails(
-      iOS: DarwinNotificationDetails(
-        presentAlert: true,
-        presentBanner: true,
-        presentList: true,
-        presentSound: false,
-        // 여유 있냐고 묻는 말이라 방해금지를 뚫지 않는다. 조용히 해둔 사람에게
-        // 굳이 비집고 들어갈 말이 아니다.
-        interruptionLevel: InterruptionLevel.active,
-      ),
-    );
-
-    await _plugin.zonedSchedule(
-      id: id,
-      title: gapTitle,
-      body: body,
-      scheduledDate: tz.TZDateTime.from(at, tz.local),
-      notificationDetails: details,
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-    );
   }
 
   /// 시작해뒀다 멈춘 지 3시간 넘은 일을 다시 부르는 알림 사슬을 다시 깐다.
   /// 하나라도 걸었으면 true.
-  static Future<bool> _syncResumeNudge(
-    List tasks,
-    DateTime now,
-    List<DateTime> gapSlots,
-  ) async {
+  static Future<bool> _syncResumeNudge(List tasks, DateTime now) async {
     Map<String, dynamic>? candidate;
     DateTime? pausedAt;
     for (final item in tasks) {
@@ -566,9 +359,6 @@ class NyangBannerNudge {
     for (var i = 0; i < resumeNotificationIds.length; i++) {
       final fireAt = at.add(_nextTaskRound * i);
       if (fireAt.hour >= 22) break;
-      // 틈새 코칭 시각이 가까운 차례는 비켜준다. 이쪽은 두 시간 뒤에 다시
-      // 물어도 그만이다.
-      if (_nearGapSlot(fireAt, gapSlots)) continue;
       await _scheduleResume(
         id: resumeNotificationIds[i],
         taskId: taskId,
@@ -618,11 +408,7 @@ class NyangBannerNudge {
   /// 걸면 조건이 바뀌어도 스스로 취소되지 않는다. 그래서 여기서 매번 통째로
   /// 지우고 지금 상태로 새로 깐다 — 저장이 일어날 때마다(완료·시작·수정) [sync]가
   /// 불리므로, 사실상 매번 조건을 다시 검사하는 것과 같다.
-  static Future<void> _syncNextTaskNudge(
-    List tasks,
-    DateTime now,
-    List<DateTime> gapSlots,
-  ) async {
+  static Future<void> _syncNextTaskNudge(List tasks, DateTime now) async {
     DateTime? anchor;
     for (final item in tasks) {
       if (item is! Map || item['done'] != true) continue;
@@ -672,7 +458,6 @@ class NyangBannerNudge {
     for (var i = 0; i < nextTaskNotificationIds.length; i++) {
       final fireAt = at.add(_nextTaskRound * i);
       if (fireAt.hour >= 22) break;
-      if (_nearGapSlot(fireAt, gapSlots)) continue;
       await _scheduleNextTask(
         id: nextTaskNotificationIds[i],
         taskId: taskId,

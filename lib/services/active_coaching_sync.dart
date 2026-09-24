@@ -47,9 +47,28 @@ class ActiveCoachingSync {
   static bool get _isAndroid =>
       !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
 
+  /// "지금 한번 보기"가 기다리는 중인지. 네이티브도 같은 자리를 본다.
+  ///
+  /// 'nyang_' 접두어를 쓰지 않는다. 이 기기에서 방금 누른 사실이라 클라우드가
+  /// 덮으면 안 된다.
+  static const String testUntilKey = 'active_coaching_test_until';
+
+  /// 앱을 나갈 때까지 기다려주는 길이.
+  static const Duration testWindow = Duration(minutes: 2);
+
   /// 지금 상태로 다음 개입을 다시 잡는다.
   static Future<void> sync() async {
     if (!GapCoachingService.isSupported) return;
+
+    final held = await SharedPreferences.getInstance();
+    await held.reload();
+    final testUntil = held.getInt(testUntilKey);
+    if (testUntil != null &&
+        DateTime.now().millisecondsSinceEpoch < testUntil) {
+      // 확인용으로 걸어둔 자리가 기다리는 중이다. 여기서 다시 계산하면 그
+      // 계획이 지워져, 눌러도 아무 일이 안 일어난다.
+      return;
+    }
 
     final userData = await UserDataService.load();
     final master = userData.isPlanActive && userData.planType == 'master';
@@ -85,6 +104,14 @@ class ActiveCoachingSync {
       busyAt: (at) => BusyHoursService.busyNow(prefs, at) != null,
       busyEndAfter: (at) => BusyHoursService.busyEndAt(prefs, at),
       bedtime: prefs.getString('nyang_premium_min_sleep_time'),
+      // 적어둔 여유 시간. 예전에는 이 시각마다 옛 틈새 카드가 따로 나갔는데,
+      // 그러면 말투도 내용도 다른 두 카드가 1분 사이에 뜬다.
+      gapTimes: [
+        for (final time in GapCoachingService.parseTimes(
+          prefs.getString(GapCoachingService.timesKey),
+        ))
+          DateTime(now.year, now.month, now.day, time.hour, time.minute),
+      ],
     );
     if (plan == null) {
       await _clear();
@@ -165,6 +192,61 @@ class ActiveCoachingSync {
     } catch (_) {
       //
     }
+  }
+
+  /// 설정에서 "지금 한번 보기"를 눌렀을 때.
+  ///
+  /// 예산을 건너뛴다. 두 시간을 기다려야만 확인할 수 있으면 아무도 확인하지
+  /// 못한다. 대신 이 차례는 예산에서 빼지도 않는다 — 확인하느라 오늘 몫이
+  /// 줄면 정작 말을 걸어야 할 때 조용해진다.
+  ///
+  /// 부를 일이 없으면 false. 그때는 띄울 말도 없다.
+  static Future<bool> showTestNow() async {
+    if (!_isAndroid) return false;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.reload();
+    final now = DateTime.now();
+    // 앱을 나가는 순간 [sync]가 돌면서 이 계획을 지워버린다 — 예산이 잠겨
+    // 있으면 "부를 자리 없음"이 되기 때문이다. 확인이 끝날 때까지 비켜준다.
+    await prefs.setInt(
+      testUntilKey,
+      now.add(testWindow).millisecondsSinceEpoch,
+    );
+
+    final pick = ActiveCoachingTarget.pick(
+      tasks: _decode(prefs.getString('nyang_tasks')),
+      now: now,
+      coreTasks: _decode(prefs.getString('nyang_core_tasks')),
+      settled: ActiveCoachingStore.readDay(prefs, now).settled,
+    );
+    if (pick.isNone) return false;
+
+    final at = now.add(const Duration(seconds: 5));
+    final plan = ActiveCoachingPlan(
+      at: at,
+      signal: pick.signal,
+      taskId: pick.taskId,
+      taskText: pick.taskText,
+    );
+    await prefs.setString(
+      plannedKey,
+      jsonEncode({
+        'date': ActiveCoachingStore.dateKey(now),
+        'at': at.millisecondsSinceEpoch,
+        'title': titleFor(plan),
+        if (plan.taskId != null) 'taskId': plan.taskId,
+      }),
+    );
+    try {
+      await _channel.invokeMethod('testActiveCoaching', {
+        'atMillis': at.millisecondsSinceEpoch,
+      });
+    } on PlatformException {
+      return false;
+    } on MissingPluginException {
+      return false;
+    }
+    return true;
   }
 
   /// 사용자가 답했다고 적는다. 벌어졌던 간격이 되돌아온다.

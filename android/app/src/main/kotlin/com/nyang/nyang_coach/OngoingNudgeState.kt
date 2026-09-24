@@ -475,6 +475,23 @@ object OngoingNudgeState {
     private const val KEY_ACTIVE_SHOWN = "flutter.active_coaching_shown"
 
     /**
+     * "지금 한번 보기"로 부른 차례를 언제까지 기다려줄지.
+     *
+     * 설정에서 눌렀으니 그 순간에는 앱이 화면 앞이다. 평소 같으면 그 차례는
+     * 그냥 지나가는데, 확인하려고 부른 것이라 앱을 나갈 때까지 기다린다.
+     * 그리고 이 차례는 예산에서 빼지 않는다 — 확인하느라 오늘 몫이 줄면
+     * 정작 말을 걸어야 할 때 조용해진다.
+     */
+    private const val KEY_ACTIVE_TEST_UNTIL = "flutter.active_coaching_test_until"
+
+    fun isActiveTest(context: Context): Boolean =
+        System.currentTimeMillis() < prefs(context).getLong(KEY_ACTIVE_TEST_UNTIL, 0L)
+
+    fun clearActiveTest(context: Context) {
+        prefs(context).edit().remove(KEY_ACTIVE_TEST_UNTIL).commit()
+    }
+
+    /**
      * 적극 코칭이 화면에 붙었다고 적는다.
      *
      * 걸러져 지나간 차례와 구분해야 한다. 나가지도 않은 개입 때문에 오늘 몫이

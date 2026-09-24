@@ -283,6 +283,13 @@ class MainActivity : FlutterFragmentActivity() {
                         }
                         result.success(null)
                     }
+                    "testActiveCoaching" -> {
+                        // 기다려주는 창은 Flutter가 적어뒀다. 여기서는 걸기만 한다.
+                        val atMillis = call.argument<Number>("atMillis")?.toLong()
+                            ?: (System.currentTimeMillis() + 5_000L)
+                        OngoingNudgeScheduler.scheduleActiveAt(this, atMillis)
+                        result.success(null)
+                    }
                     "clearActiveCoaching" -> {
                         OngoingNudgeScheduler.cancelActive(this)
                         result.success(null)

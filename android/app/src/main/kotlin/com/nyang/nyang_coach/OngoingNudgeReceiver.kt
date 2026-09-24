@@ -12,6 +12,11 @@ import android.content.Intent
  * 영상에 빠진 사람을 이 두 번으로 가른다.
  */
 class OngoingNudgeReceiver : BroadcastReceiver() {
+    companion object {
+        /** 확인용으로 부른 차례를 다시 보기까지. */
+        private const val ACTIVE_TEST_RETRY_MILLIS = 4_000L
+    }
+
     override fun onReceive(context: Context, intent: Intent) {
         when (intent.action) {
             Intent.ACTION_BOOT_COMPLETED,
@@ -106,16 +111,30 @@ class OngoingNudgeReceiver : BroadcastReceiver() {
      */
     private fun handleActiveCheck(context: Context) {
         val plan = OngoingNudgeState.activePlan(context) ?: return
+
+        val blocked = !OngoingNudgeState.canDrawOverlays(context) ||
+            !OngoingNudgeState.isScreenOn(context) ||
+            // 냥냥코치를 보고 있으면 할 일이 이미 눈앞에 있다.
+            OngoingNudgeState.isAppForeground(context) ||
+            // 붙잡고 있는 일이 있는 사람에게 다른 말을 얹는 것은 방해다.
+            OngoingNudgeAnswerWriter.isAnyTaskInProgress(context)
+
+        if (blocked) {
+            // "지금 한번 보기"로 부른 차례는 앱을 나갈 때까지 기다린다. 설정에서
+            // 누른 참이라 그 순간에는 앱이 화면 앞일 수밖에 없다.
+            if (OngoingNudgeState.isActiveTest(context)) {
+                OngoingNudgeScheduler.scheduleActiveAt(
+                    context,
+                    System.currentTimeMillis() + ACTIVE_TEST_RETRY_MILLIS,
+                )
+                return
+            }
+            OngoingNudgeState.clearActivePlan(context)
+            return
+        }
+
         // 한 번 쓴 계획은 지운다. 남겨두면 재부팅 점검이 같은 계획을 또 띄운다.
         OngoingNudgeState.clearActivePlan(context)
-
-        if (!OngoingNudgeState.canDrawOverlays(context)) return
-        if (!OngoingNudgeState.isScreenOn(context)) return
-        // 냥냥코치를 보고 있으면 할 일이 이미 눈앞에 있다.
-        if (OngoingNudgeState.isAppForeground(context)) return
-        // 지금 붙잡고 있는 일이 있는 사람에게 다른 말을 얹는 것은 방해다.
-        if (OngoingNudgeAnswerWriter.isAnyTaskInProgress(context)) return
-
         OngoingNudgeService.showActive(context, plan)
     }
 
