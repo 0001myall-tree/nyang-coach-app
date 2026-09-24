@@ -430,46 +430,109 @@ object OngoingNudgeState {
         val times: List<Pair<Int, Int>> = emptyList(),
     )
 
+    /** 오늘 남은 차례 하나. [atMillis]에 깨어나 [plan]을 띄운다. */
+    data class ActiveEntry(val atMillis: Long, val plan: ActivePlan)
+
     /**
-     * 지금 띄울 적극 코칭 계획. 없거나 낡았으면 null.
+     * 오늘 남은 적극 코칭 차례들. 이른 것부터. 없거나 낡았으면 빈 목록.
      *
-     * 오늘 만든 것만 쓴다. 앱을 하루 종일 안 연 사람에게 어제 만든 계획이
-     * 그대로 나가면 안 된다.
+     * Dart가 하루치를 한꺼번에 세워 둔다. 한 번 지나가면 다음 것을 이어 걸어,
+     * 앱을 열지 않아도 하루 동안 여러 번 찾아간다. 오늘 만든 것만 쓴다 — 앱을
+     * 하루 종일 안 연 사람에게 어제 계획이 그대로 나가면 안 된다.
+     *
+     * 그 일이 아직 남아 있는지는 여기서 거르지 않는다. 띄우는 순간에 본다.
      */
-    fun activePlan(context: Context): ActivePlan? {
-        if (!isGapEnabled(context)) return null
-        if (!runsToday(context)) return null
+    fun activeQueue(context: Context): List<ActiveEntry> {
+        if (!isGapEnabled(context)) return emptyList()
+        if (!runsToday(context)) return emptyList()
         val raw = prefs(context).getString(KEY_ACTIVE_PLAN, null).orEmpty()
-        if (raw.isBlank()) return null
+        if (raw.isBlank()) return emptyList()
         val json = runCatching { org.json.JSONObject(raw) }.getOrNull()
-            ?: return null
-        if (json.optString("date", "") != todayKey()) return null
+            ?: return emptyList()
+        if (json.optString("date", "") != todayKey()) return emptyList()
+        // 목록이 없으면 예전 빌드가 적은 한 벌이다. 그 한 벌을 한 차례로 읽는다.
+        val queue = json.optJSONArray("queue")
+        val objects = if (queue == null) {
+            listOf(json)
+        } else {
+            (0 until queue.length()).mapNotNull { queue.optJSONObject(it) }
+        }
+        return objects.mapNotNull(::readEntry).sortedBy { it.atMillis }
+    }
+
+    private fun readEntry(json: org.json.JSONObject): ActiveEntry? {
+        val at = json.optLong("at", 0L)
+        if (at <= 0L) return null
         val title = json.optString("title", "").trim()
         if (title.isBlank()) return null
-        val taskId = json.optString("taskId", "").trim().ifBlank { null }
-        // 부를 일이 그새 끝났거나 사라졌으면 다른 말이 나가야 한다. 그 판단은
-        // 목록 하나만 보면 되므로 여기서 해도 판단이 두 벌로 늘지 않는다.
-        if (taskId != null && !OngoingNudgeAnswerWriter.isPending(context, taskId)) {
-            return null
-        }
         val times = json.optJSONArray("times")
-        return ActivePlan(
-            title = title,
-            taskId = taskId,
-            night = json.optString("kind", "") == "night",
-            taskText = json.optString("taskText", "").trim(),
-            times = if (times == null) {
-                emptyList()
-            } else {
-                (0 until times.length()).mapNotNull { parseClock(times.optString(it, "")) }
-            },
+        return ActiveEntry(
+            atMillis = at,
+            plan = ActivePlan(
+                title = title,
+                taskId = json.optString("taskId", "").trim().ifBlank { null },
+                night = json.optString("kind", "") == "night",
+                taskText = json.optString("taskText", "").trim(),
+                times = if (times == null) {
+                    emptyList()
+                } else {
+                    (0 until times.length()).mapNotNull { parseClock(times.optString(it, "")) }
+                },
+            ),
         )
     }
 
-    /** 적극 코칭 계획을 지운다. 한 번 띄우면 그 계획은 쓴 것이다. */
-    fun clearActivePlan(context: Context) {
-        prefs(context).edit().remove(KEY_ACTIVE_PLAN).commit()
+    /** 이 차례가 지금도 부를 만한지. 부를 일이 그새 끝났거나 사라졌으면 아니다. */
+    fun isStillWanted(context: Context, plan: ActivePlan): Boolean {
+        val taskId = plan.taskId ?: return true
+        return OngoingNudgeAnswerWriter.isPending(context, taskId)
     }
+
+    /**
+     * 남길 차례만 다시 적는다.
+     *
+     * Dart가 적은 원래 모양(맨 위의 첫 차례 + 목록)을 지킨다. 진단 화면이 맨
+     * 위를 읽고, 다음에 앱이 열리면 어차피 새로 세운다.
+     */
+    fun keepActiveQueue(context: Context, keep: (org.json.JSONObject) -> Boolean) {
+        val prefs = prefs(context)
+        val raw = prefs.getString(KEY_ACTIVE_PLAN, null).orEmpty()
+        if (raw.isBlank()) return
+        val json = runCatching { org.json.JSONObject(raw) }.getOrNull() ?: return
+        val queue = json.optJSONArray("queue")
+        val kept = org.json.JSONArray()
+        if (queue == null) {
+            if (keep(json)) kept.put(json)
+        } else {
+            for (i in 0 until queue.length()) {
+                val item = queue.optJSONObject(i) ?: continue
+                if (keep(item)) kept.put(item)
+            }
+        }
+        if (kept.length() == 0) {
+            prefs.edit().remove(KEY_ACTIVE_PLAN).commit()
+            return
+        }
+        val first = kept.getJSONObject(0)
+        val out = org.json.JSONObject(first.toString())
+        out.put("date", json.optString("date", todayKey()))
+        out.put("queue", kept)
+        prefs.edit().putString(KEY_ACTIVE_PLAN, out.toString()).commit()
+    }
+
+    /** 이 시각 이후의 차례만 남긴다. */
+    fun dropActiveUntil(context: Context, atMillis: Long) =
+        keepActiveQueue(context) { it.optLong("at", 0L) > atMillis }
+
+    /**
+     * 그 일로 잡혀 있던 오늘 차례를 뺀다.
+     *
+     * 카드에서 답을 했다는 뜻이다 — 오늘은 안 하기로, 내일로, 몇 시에 하기로.
+     * 답을 해놓고도 두 시간 뒤에 같은 일로 또 불리면, 한 말을 못 들은 것이 된다.
+     * 몇 시에 하기로 했으면 그 시각의 시작 카드가 따로 부른다.
+     */
+    fun dropActiveFor(context: Context, taskId: String) =
+        keepActiveQueue(context) { it.optString("taskId", "") != taskId }
 
     /** 적극 코칭이 실제로 나간 자리. Dart가 읽어 예산에서 한 번을 뺀다. */
     private const val KEY_ACTIVE_SHOWN = "flutter.active_coaching_shown"
@@ -498,9 +561,22 @@ object OngoingNudgeState {
      * 줄면, 정작 말을 걸어야 할 때 코치가 입을 다문다.
      */
     fun markActiveShown(context: Context, taskId: String?, night: Boolean) {
-        val json = """{"at":${System.currentTimeMillis()},""" +
-            """"taskId":"${escape(taskId.orEmpty())}","night":$night}"""
-        prefs(context).edit().putString(KEY_ACTIVE_SHOWN, json).commit()
+        val prefs = prefs(context)
+        // 앱을 안 연 사이에 여러 번 나갈 수 있어 목록으로 쌓는다. 하나만 덮어쓰면
+        // 앞서 나간 차례가 예산에서 빠져, 앱이 열렸을 때 코치가 더 자주 부른다.
+        val raw = prefs.getString(KEY_ACTIVE_SHOWN, null).orEmpty()
+        val list = runCatching { org.json.JSONArray(raw) }.getOrNull()
+            ?: org.json.JSONArray().also { array ->
+                // 예전 빌드가 남긴 한 벌이면 그것도 살린다.
+                runCatching { org.json.JSONObject(raw) }.getOrNull()?.let(array::put)
+            }
+        list.put(
+            org.json.JSONObject()
+                .put("at", System.currentTimeMillis())
+                .put("taskId", taskId.orEmpty())
+                .put("night", night),
+        )
+        prefs.edit().putString(KEY_ACTIVE_SHOWN, list.toString()).commit()
     }
 
     /**

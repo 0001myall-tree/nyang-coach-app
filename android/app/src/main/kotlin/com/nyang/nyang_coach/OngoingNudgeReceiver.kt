@@ -15,6 +15,9 @@ class OngoingNudgeReceiver : BroadcastReceiver() {
     companion object {
         /** 확인용으로 부른 차례를 다시 보기까지. */
         private const val ACTIVE_TEST_RETRY_MILLIS = 4_000L
+
+        /** 알람이 늦게 울린 만큼은 때가 된 것으로 본다. */
+        private const val ACTIVE_DUE_SLACK_MILLIS = 60_000L
     }
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -40,9 +43,10 @@ class OngoingNudgeReceiver : BroadcastReceiver() {
                     )
                 }
                 GapCoachingPlanner.reschedule(context)
-                // 적극 코칭 계획은 여기서 다시 걸지 않는다. 앱이 열릴 때 Dart가
-                // 지금 상태로 다시 계산해 거는데, 그 사이 목록이 바뀌었으면
-                // 옛 계획을 그대로 거는 것이 더 나쁘다.
+                // 적극 코칭은 오늘 남은 차례를 다시 건다. 앱을 안 여는 사람이
+                // 폰을 한 번 껐다 켰다고 그날 참견이 끝나면 안 된다. 그 사이
+                // 끝낸 일은 띄우기 직전에 거른다.
+                OngoingNudgeScheduler.rearmActive(context)
             }
 
             OngoingNudgeScheduler.ACTION_CHECK_START ->
@@ -103,39 +107,54 @@ class OngoingNudgeReceiver : BroadcastReceiver() {
     /**
      * 적극 코칭 개입 자리.
      *
-     * 계획은 Dart가 미리 세워뒀다. 여기서는 아직 쓸 만한지만 보고 띄운다 —
-     * 무엇을 부를지까지 여기서 정하면 같은 판단이 두 벌이 된다.
+     * 오늘 차례는 Dart가 미리 세워뒀다. 여기서는 때가 된 차례가 아직 쓸
+     * 만한지만 보고 띄운 뒤, 다음 차례에 알람을 건다 — 무엇을 부를지까지 여기서
+     * 정하면 같은 판단이 두 벌이 된다.
      *
-     * 못 띄운 차례는 다시 걸지 않는다. 앱이 열릴 때 Dart가 지금 상태로 다시
-     * 계산하는데, 그때 잡을 것이 없으면 부를 이유도 없어진 것이다.
+     * 못 띄운 차례(화면이 꺼져 있었거나 앱을 보고 있었거나)는 그냥 지나가고
+     * 다음 차례를 기다린다. 한꺼번에 밀린 것을 몰아서 띄우지 않는다.
      */
     private fun handleActiveCheck(context: Context) {
-        val plan = OngoingNudgeState.activePlan(context) ?: return
+        val now = System.currentTimeMillis()
+        val queue = OngoingNudgeState.activeQueue(context)
+        if (queue.isEmpty()) {
+            OngoingNudgeScheduler.cancelActive(context)
+            return
+        }
+        // 알람은 조금 늦게 울리기도 한다. 그 몫만큼은 때가 된 것으로 본다.
+        val due = queue.filter { it.atMillis <= now + ACTIVE_DUE_SLACK_MILLIS }
+        if (due.isEmpty()) {
+            OngoingNudgeScheduler.rearmActive(context)
+            return
+        }
+        // 밀린 차례가 여럿이면 가장 늦은 것 하나만 본다. 그 사이 끝낸 일이면
+        // 그 앞의 것으로 내려간다.
+        val entry = due.lastOrNull { OngoingNudgeState.isStillWanted(context, it.plan) }
 
-        val blocked = !OngoingNudgeState.canDrawOverlays(context) ||
+        val blocked = entry == null ||
+            !OngoingNudgeState.canDrawOverlays(context) ||
             !OngoingNudgeState.isScreenOn(context) ||
             // 냥냥코치를 보고 있으면 할 일이 이미 눈앞에 있다.
             OngoingNudgeState.isAppForeground(context) ||
             // 붙잡고 있는 일이 있는 사람에게 다른 말을 얹는 것은 방해다.
             OngoingNudgeAnswerWriter.isAnyTaskInProgress(context)
 
-        if (blocked) {
-            // "지금 한번 보기"로 부른 차례는 앱을 나갈 때까지 기다린다. 설정에서
-            // 누른 참이라 그 순간에는 앱이 화면 앞일 수밖에 없다.
-            if (OngoingNudgeState.isActiveTest(context)) {
-                OngoingNudgeScheduler.scheduleActiveAt(
-                    context,
-                    System.currentTimeMillis() + ACTIVE_TEST_RETRY_MILLIS,
-                )
-                return
-            }
-            OngoingNudgeState.clearActivePlan(context)
+        // "지금 한번 보기"로 부른 차례는 앱을 나갈 때까지 기다린다. 설정에서
+        // 누른 참이라 그 순간에는 앱이 화면 앞일 수밖에 없다.
+        if (blocked && entry != null && OngoingNudgeState.isActiveTest(context)) {
+            OngoingNudgeScheduler.scheduleActiveAt(
+                context,
+                System.currentTimeMillis() + ACTIVE_TEST_RETRY_MILLIS,
+            )
             return
         }
 
-        // 한 번 쓴 계획은 지운다. 남겨두면 재부팅 점검이 같은 계획을 또 띄운다.
-        OngoingNudgeState.clearActivePlan(context)
-        OngoingNudgeService.showActive(context, plan)
+        // 때가 된 차례는 띄우든 못 띄우든 쓴 것으로 치고 다음 차례를 건다.
+        // 남겨두면 재부팅 점검이 같은 차례를 또 띄운다.
+        OngoingNudgeState.dropActiveUntil(context, due.last().atMillis)
+        OngoingNudgeScheduler.rearmActive(context)
+        if (blocked || entry == null) return
+        OngoingNudgeService.showActive(context, entry.plan)
     }
 
     /**

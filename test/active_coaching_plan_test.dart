@@ -283,6 +283,123 @@ void main() {
     );
     expect(plan?.taskId, 'b');
   });
+
+  group('여유 시간', () {
+    final spokeAt10 = ActiveCoachingBudget(
+      date: today,
+      lastSpokeAt: DateTime(2026, 9, 23, 10),
+      spokenToday: 1,
+    );
+
+    ActiveCoachingPlan? nextWithGap(DateTime gap) => ActiveCoachingPlanner.next(
+      tasks: [task('a'), task('b')],
+      now: DateTime(2026, 9, 23, 10, 5),
+      day: emptyDay(),
+      budget: spokeAt10,
+      gapTimes: [gap],
+    );
+
+    test('직전에서 1시간만 지났으면 여유 시간에 들른다', () {
+      expect(
+        nextWithGap(DateTime(2026, 9, 23, 11, 30))?.at,
+        DateTime(2026, 9, 23, 11, 30),
+      );
+    });
+
+    test('1시간도 안 지난 여유 시간은 건너뛴다', () {
+      expect(
+        nextWithGap(DateTime(2026, 9, 23, 10, 30))?.at,
+        DateTime(2026, 9, 23, 12),
+      );
+    });
+
+    test('2시간이 된 뒤 곧 여유 시간이 오면 그때까지 기다린다', () {
+      expect(
+        nextWithGap(DateTime(2026, 9, 23, 12, 30))?.at,
+        DateTime(2026, 9, 23, 12, 30),
+      );
+    });
+
+    test('여유 시간이 멀면 기다리지 않는다', () {
+      expect(
+        nextWithGap(DateTime(2026, 9, 23, 15))?.at,
+        DateTime(2026, 9, 23, 12),
+      );
+    });
+  });
+
+  group('하루치 차례', () {
+    List<ActiveCoachingPlan> queueFor(
+      List tasks, {
+      ActiveCoachingDay? day,
+      DateTime? at,
+    }) => ActiveCoachingPlanner.queue(
+      tasks: tasks,
+      now: at ?? DateTime(2026, 9, 23, 10),
+      day: day ?? emptyDay(),
+      budget: freshBudget(),
+    );
+
+    test('앱을 안 열어도 하루 동안 여러 번 찾아간다', () {
+      final plans = queueFor([task('a'), task('b')]);
+      expect(plans.length, greaterThanOrEqualTo(4));
+      for (var i = 1; i < plans.length; i++) {
+        expect(plans[i].at.isAfter(plans[i - 1].at), isTrue);
+      }
+    });
+
+    test('차례 사이는 예산의 간격을 지킨다', () {
+      final plans = queueFor(
+        [task('a'), task('b')],
+      ).where((plan) => plan.signal != ActiveCoachingSignal.nightWrap).toList();
+      for (var i = 1; i < plans.length; i++) {
+        expect(
+          plans[i].at.difference(plans[i - 1].at) >=
+              ActiveCoachingBudget.interval,
+          isTrue,
+        );
+      }
+    });
+
+    test('밤 10시 이후에는 하루를 닫는 말 말고는 없다', () {
+      for (final plan in queueFor([task('a'), task('b')])) {
+        if (plan.signal == ActiveCoachingSignal.nightWrap) continue;
+        expect(plan.at.hour, lessThan(ActiveCoachingBudget.quietFromHour));
+      }
+    });
+
+    test('남은 일이 하나뿐이어도 한 번으로 끝나지 않는다', () {
+      // 바로 앞에서 다룬 일을 건너뛰는 규칙이, 다른 일이 없을 때도 돌면 그
+      // 하나를 다시 부를 수가 없다.
+      final plans = queueFor([task('영양제')]);
+      expect(
+        plans.where((plan) => plan.taskId == '영양제').length,
+        greaterThanOrEqualTo(2),
+      );
+    });
+
+    test('약속은 제 시각에 끼우고, 그 전 차례도 빠뜨리지 않는다', () {
+      final day = emptyDay().put(
+        'p',
+        TaskTracking(promisedAt: DateTime(2026, 9, 23, 16)),
+      );
+      final plans = queueFor([task('p'), task('a')], day: day);
+      expect(
+        plans.any(
+          (plan) =>
+              plan.signal == ActiveCoachingSignal.promised &&
+              plan.at == DateTime(2026, 9, 23, 16),
+        ),
+        isTrue,
+      );
+      // 10시에 "4시에 할게"가 있어도 그 사이가 통째로 비지 않는다.
+      expect(plans.first.at.isBefore(DateTime(2026, 9, 23, 16)), isTrue);
+    });
+
+    test('할 일이 없으면 차례도 없다', () {
+      expect(queueFor([task('a', done: true)]), isEmpty);
+    });
+  });
 }
 
 /// 오늘 몫을 다 쓴 예산. 밤 카드가 예산 밖이라는 것을 보려고 쓴다.

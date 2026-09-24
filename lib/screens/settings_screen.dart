@@ -2453,6 +2453,7 @@ class _SettingsScreenState extends State<SettingsScreen>
     // 실제로 걸어둔 자리. 다시 계산한 것과 다르면 건 뒤에 상황이 바뀐 것이다.
     DateTime? plannedAt;
     String? plannedTitle;
+    final plannedQueue = <DateTime>[];
     final rawPlan = prefs.getString(ActiveCoachingSync.plannedKey);
     if (rawPlan != null && rawPlan.isNotEmpty) {
       try {
@@ -2463,6 +2464,15 @@ class _SettingsScreenState extends State<SettingsScreen>
             plannedAt = DateTime.fromMillisecondsSinceEpoch(millis);
           }
           plannedTitle = decoded['title']?.toString().replaceAll('\n', ' ');
+          final queue = decoded[ActiveCoachingSync.queueKey];
+          if (queue is List) {
+            for (final item in queue) {
+              final at = item is Map ? (item['at'] as num?)?.toInt() : null;
+              if (at != null) {
+                plannedQueue.add(DateTime.fromMillisecondsSinceEpoch(at));
+              }
+            }
+          }
         }
       } catch (_) {
         //
@@ -2487,6 +2497,7 @@ class _SettingsScreenState extends State<SettingsScreen>
       plan: plan,
       plannedAt: plannedAt,
       plannedTitle: plannedTitle,
+      plannedQueue: plannedQueue,
       blockers: blockers,
       // id만 적으면 'habit_1788307997240_2026-09-24'가 나온다. 무엇을 두고
       // 한 말인지 알 수가 없다.

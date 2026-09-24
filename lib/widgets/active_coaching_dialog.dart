@@ -5,11 +5,19 @@
 /// 거기서 마음먹은 사람은 할 일 창으로 다시 건너와야 하는데, 이 앱은 그 한 칸이
 /// 안 하게 되는 이유가 된다고 보고 여러 군데서 없애왔다.
 ///
-/// 단계는 넷이고, 앞 단계의 답이 다음 단계를 정한다.
+/// 첫 화면은 안드로이드 카드와 같다. 아이폰은 다른 앱 위에 카드를 띄울 수
+/// 없어서 배너를 누르고 들어오는데, 들어와서 다른 질문을 받으면 같은 기능이
+/// 기기마다 다르게 군다.
 ///
 /// ```
-/// 왜 못 했어?  →  지금 뭘 해볼까?  →  그럼 지금 할 수 있는 건?  →  몇 시부터?
+/// 지금 할게            → 바로 시작
+/// 시간이 안 나          → 몇 시부터?
+/// 여기선 못 해          → 이따 / 내일로 / 오늘은 안 할래
+/// 하기 싫어            → 코치와 작은 대화창
 /// ```
+///
+/// 한 수(지금 할 수 있는 조각)를 묻는 단계는 하루를 닫는 카드와, 부를 일이
+/// 정해지지 않은 카드에서 들어온 길에 남아 있다.
 ///
 /// **시간부터 묻지 않는다.** 그러면 앱이 스누즈 기계가 된다 — 4시로 미루고,
 /// 4시에 또 못 하고, 또 미루고. 왜 못 하는지 모르니 매번 같은 말만 하게 되고,
@@ -37,6 +45,15 @@ enum ActiveCoachingOutcomeKind {
 
   /// 버튼에 없는 시각을 직접 고르겠다고 했다.
   chooseTime,
+
+  /// 내일로 옮기기로 했다.
+  moveTomorrow,
+
+  /// 오늘은 이 일로 더 부르지 않기로 했다.
+  notToday,
+
+  /// 하기 싫다고 했다. 코치와의 대화창으로 넘긴다.
+  reluctant,
 }
 
 class ActiveCoachingOutcome {
@@ -76,26 +93,6 @@ class ActiveCoachingChoice {
 
   /// "오후 8:00". 아직 시각이 안 된 일도 보여주되 언제인지는 적어준다.
   final String? timeLabel;
-}
-
-/// 사용자가 고르는 "왜 못 했는지".
-///
-/// 이유가 다음 한 수를 가른다. 머리가 안 돌아가는 사람에게는 손댈 자리를
-/// 만들어주면 되고, 자리가 아닌 사람에게는 무엇을 해줘도 소용없다.
-class ActiveCoachingReason {
-  const ActiveCoachingReason(this.label, this.icon, {this.blocksNow = false});
-
-  final String label;
-  final String icon;
-
-  /// 지금 그 자리가 아니라는 뜻인지. 그러면 한 수를 물을 자리도 아니다.
-  final bool blocksNow;
-
-  static const List<ActiveCoachingReason> all = [
-    ActiveCoachingReason('머리가 안 돌아가', 'fa-lightbulb-solid'),
-    ActiveCoachingReason('부담돼서', 'heart-pulse'),
-    ActiveCoachingReason('지금은 시간이 안 나', 'fa-clock-regular', blocksNow: true),
-  ];
 }
 
 class ActiveCoachingDialog extends StatefulWidget {
@@ -143,7 +140,7 @@ class ActiveCoachingDialog extends StatefulWidget {
   State<ActiveCoachingDialog> createState() => _ActiveCoachingDialogState();
 }
 
-enum _Step { reason, moves, pickAnother, time }
+enum _Step { choose, notHere, moves, pickAnother, time }
 
 class _ActiveCoachingDialogState extends State<ActiveCoachingDialog> {
   late _Step _step = switch (widget) {
@@ -152,7 +149,7 @@ class _ActiveCoachingDialogState extends State<ActiveCoachingDialog> {
     // 목록으로 간다 — 여기서 앱이 하나 골라주면 그게 추측이다.
     _ when widget.taskName.trim().isEmpty => _Step.pickAnother,
     _ when widget.skipReason => _Step.moves,
-    _ => _Step.reason,
+    _ => _Step.choose,
   };
 
   @override
@@ -185,37 +182,121 @@ class _ActiveCoachingDialogState extends State<ActiveCoachingDialog> {
   }
 
   List<Widget> _children() => switch (_step) {
-    _Step.reason => _reasonStep(),
+    _Step.choose => _chooseStep(),
+    _Step.notHere => _notHereStep(),
     _Step.moves => _movesStep(),
     _Step.pickAnother => _pickAnotherStep(),
     _Step.time => _timeStep(),
   };
 
-  // ── 왜 못 했어? ────────────────────────────────────────
+  // ── 어떻게 할래? ────────────────────────────────────────
 
-  List<Widget> _reasonStep() => [
-    AnswerDialogQuestion("'${_shorten(_task)}' 아직이네.\n왜 못 했어?"),
+  /// 안드로이드 카드와 같은 넷. 하겠다는 쪽만 크게, 못 하는 이유 셋은 작게
+  /// 한 줄로 둔다 — 같은 크기로 세우면 빠져나가는 문으로 눈이 먼저 간다.
+  List<Widget> _chooseStep() => [
+    // 카드와 같은 말. 이 단계는 부를 일이 있을 때만 온다.
+    AnswerDialogQuestion("'${_shorten(_task)}' 아직이네.\n지금 조금이라도 해볼까?"),
     const SizedBox(height: 16),
-    for (var i = 0; i < ActiveCoachingReason.all.length; i++) ...[
-      if (i > 0) const SizedBox(height: 8),
-      AnswerChoiceButton(
-        label: ActiveCoachingReason.all[i].label,
-        icon: ActiveCoachingReason.all[i].icon,
-        onTap: () => _answerReason(ActiveCoachingReason.all[i]),
+    AnswerChoiceButton(
+      label: '지금 할게',
+      icon: 'fa-circle-play-solid',
+      isPrimary: true,
+      onTap: () => _close(
+        ActiveCoachingOutcome(ActiveCoachingOutcomeKind.start, taskName: _task),
       ),
-    ],
+    ),
+    const SizedBox(height: 8),
+    Row(
+      children: [
+        _smallChoice('시간이 안 나', () {
+          _reason = '시간이 안 나';
+          _goToTime();
+        }),
+        const SizedBox(width: 6),
+        _smallChoice('여기선 못 해', () {
+          setState(() {
+            _reason = '여기선 못 해';
+            _step = _Step.notHere;
+          });
+        }),
+        const SizedBox(width: 6),
+        _smallChoice(
+          '하기 싫어',
+          () => _close(
+            ActiveCoachingOutcome(
+              ActiveCoachingOutcomeKind.reluctant,
+              taskName: _task,
+              reason: '하기 싫어',
+            ),
+          ),
+        ),
+      ],
+    ),
   ];
 
-  void _answerReason(ActiveCoachingReason reason) {
-    setState(() => _reason = reason.label);
-    // 자리가 아니라는 사람에게 "지금 이거 해볼까"는 통하지 않는다. 그 사람에게
-    // 필요한 것은 언제 할지 정하는 쪽이다.
-    if (reason.blocksNow) {
-      _goToTime();
-      return;
-    }
-    _askMoves([_task]);
-  }
+  Widget _smallChoice(String label, VoidCallback onTap) => Expanded(
+    child: GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 40,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: AppDesignTokens.brandSoft,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppDesignTokens.brandBorder),
+        ),
+        child: Text(
+          label,
+          maxLines: 1,
+          style: appFont(
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            color: AppDesignTokens.brandPressed,
+          ),
+        ),
+      ),
+    ),
+  );
+
+  // ── 여기선 못 해 ───────────────────────────────────────
+
+  /// 밖에 있어서 집에 있는 영양제를 못 먹는 것처럼, 시간이 아니라 자리가
+  /// 막힌 경우. 오늘 접거나 내일로 옮기는 문이 없으면 그 일을 할 때까지 같은
+  /// 일로 계속 불려 온다.
+  List<Widget> _notHereStep() => [
+    const AnswerDialogQuestion('그럼 언제 할 수 있어?'),
+    const SizedBox(height: 16),
+    AnswerChoiceButton(
+      label: '이따 할게',
+      icon: 'fa-clock-regular',
+      isPrimary: true,
+      onTap: _goToTime,
+    ),
+    const SizedBox(height: 8),
+    AnswerChoiceButton(
+      label: '내일로 옮길래',
+      icon: 'clock-rotate-left',
+      onTap: () => _close(
+        ActiveCoachingOutcome(
+          ActiveCoachingOutcomeKind.moveTomorrow,
+          taskName: _task,
+          reason: _reason,
+        ),
+      ),
+    ),
+    const SizedBox(height: 8),
+    AnswerChoiceButton(
+      label: '오늘은 안 할래',
+      icon: 'circle-check',
+      onTap: () => _close(
+        ActiveCoachingOutcome(
+          ActiveCoachingOutcomeKind.notToday,
+          taskName: _task,
+          reason: _reason,
+        ),
+      ),
+    ),
+  ];
 
   // ── 지금 뭘 해볼까? ────────────────────────────────────
 

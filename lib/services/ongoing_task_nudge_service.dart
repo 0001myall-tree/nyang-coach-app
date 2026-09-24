@@ -588,6 +588,17 @@ class OngoingTaskNudgeService {
     }
     // 밤 카드에서 "내일로 옮길래"를 골랐다. 실제로 옮긴다 — 안 되는 것을
     // 버튼으로 약속하면 거짓말이 된다.
+    // 루틴은 내일 어차피 다시 뜬다. 옮기면 내일 목록에 같은 일이 둘이 되므로
+    // 오늘은 안 부르는 것으로 받는다.
+    if (answer.action == 'moveTomorrow' &&
+        await TaskCompletionService.isStoredHabit(answer.taskId)) {
+      await ActiveCoachingPromise.decide(
+        taskId: answer.taskId,
+        decision: ActiveCoachingDecision.notToday,
+        at: DateTime.now(),
+      );
+      return true;
+    }
     if (answer.action == 'moveTomorrow') {
       final moved = await TaskMoveService.moveStoredTask(
         taskId: answer.taskId,

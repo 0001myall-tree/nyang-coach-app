@@ -37,6 +37,8 @@ import '../services/gap_coaching_service.dart';
 import '../services/active_coaching_chat.dart';
 import '../services/active_coaching_move.dart';
 import '../services/active_coaching_promise.dart';
+import '../services/active_coaching_state.dart';
+import '../services/task_move_service.dart';
 import '../services/active_coaching_sync.dart';
 import '../services/active_coaching_time.dart';
 import '../widgets/active_coaching_dialog.dart';
@@ -1221,9 +1223,51 @@ class _TasksScreenState extends State<TasksScreen>
       case ActiveCoachingOutcomeKind.chooseTime:
         await _askWhenLater(taskId: taskId, taskText: task.text);
         return;
+      case ActiveCoachingOutcomeKind.moveTomorrow:
+        // 루틴은 내일 어차피 다시 뜬다. 옮기면 내일 목록에 같은 일이 둘이 된다.
+        if (task.isHabit) {
+          await _settleActiveCoachingToday(taskId, '루틴은 내일 또 떠요. 오늘은 안 부를게!');
+          return;
+        }
+        if (!await TaskMoveService.moveStoredTask(
+          taskId: taskId,
+          to: now.add(const Duration(days: 1)),
+        )) {
+          return;
+        }
+        await ActiveCoachingPromise.decide(
+          taskId: taskId,
+          decision: ActiveCoachingDecision.moved,
+          at: now,
+        );
+        await _loadAll();
+        if (!mounted) return;
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('내일 일정으로 옮겨뒀어!')));
+        return;
+      case ActiveCoachingOutcomeKind.notToday:
+        await _settleActiveCoachingToday(taskId, '알겠어. 오늘은 이 일로 안 부를게!');
+        return;
+      case ActiveCoachingOutcomeKind.reluctant:
+        await _showActiveCoachingChat(taskId: taskId, taskText: task.text);
+        return;
       case ActiveCoachingOutcomeKind.dismissed:
         return;
     }
+  }
+
+  /// 오늘은 이 일로 더 부르지 않는다고 적고 알린다.
+  Future<void> _settleActiveCoachingToday(String taskId, String message) async {
+    await ActiveCoachingPromise.decide(
+      taskId: taskId,
+      decision: ActiveCoachingDecision.notToday,
+      at: DateTime.now(),
+    );
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   /// "오후 8:00". 아직 시각이 안 된 일도 목록에 넣되 언제인지는 적어준다.

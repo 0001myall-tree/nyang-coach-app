@@ -5,10 +5,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:nyang_coach/services/active_coaching_move.dart';
 import 'package:nyang_coach/widgets/active_coaching_dialog.dart';
 
-/// "못 했어" 다음에 이어지는 팝업.
+/// 적극 코칭 팝업.
 ///
-/// 이유 → 한 수 → 갈아타기 → 시각 순서다. 시간부터 물으면 앱이 스누즈 기계가
-/// 되고, 왜 못 하는지 모르니 매번 같은 말만 하게 된다.
+/// 첫 화면은 안드로이드 카드와 같은 넷이다. 한 수(지금 할 수 있는 조각)를
+/// 묻는 단계는 하루를 닫는 카드와 부를 일이 없는 카드에서 온 길에 남아 있다.
 void main() {
   /// 팝업을 띄우고 닫힐 때의 답을 받아온다.
   Future<ActiveCoachingOutcome?> show(
@@ -18,6 +18,7 @@ void main() {
     List<ActiveCoachingChoice> otherTasks = const [],
     List<DateTime> timeChoices = const [],
     String taskName = '분기 리포트',
+    bool skipReason = false,
   }) async {
     ActiveCoachingOutcome? outcome;
     await tester.pumpWidget(
@@ -29,6 +30,7 @@ void main() {
                 context: context,
                 builder: (_) => ActiveCoachingDialog(
                   taskName: taskName,
+                  skipReason: skipReason,
                   askMoves: askMoves,
                   otherTasks: otherTasks,
                   timeChoices: timeChoices,
@@ -58,37 +60,69 @@ void main() {
     String? reason,
   ) async => null;
 
-  testWidgets('이유부터 묻는다', (tester) async {
+  testWidgets('카드와 같은 넷을 먼저 보여준다', (tester) async {
     await show(tester, askMoves: twoMoves);
-    expect(find.textContaining('왜 못 했어'), findsOneWidget);
-    expect(find.text('머리가 안 돌아가'), findsOneWidget);
+    expect(find.textContaining('아직이네'), findsOneWidget);
+    for (final label in ['지금 할게', '시간이 안 나', '여기선 못 해', '하기 싫어']) {
+      expect(find.text(label), findsOneWidget);
+    }
   });
 
-  testWidgets('이유를 고르면 한 수 둘을 보여준다', (tester) async {
-    await show(tester, askMoves: twoMoves);
-    await tester.tap(find.text('머리가 안 돌아가'));
-    await tester.pumpAndSettle();
-    expect(find.text('개요 세 줄 적기'), findsOneWidget);
-    expect(find.text('자료 링크 모으기'), findsOneWidget);
-    expect(find.text('지금은 둘 다 안 돼'), findsOneWidget);
-  });
-
-  testWidgets('받아둔 이유를 그대로 넘긴다', (tester) async {
-    String? seen;
-    await show(
-      tester,
-      askMoves: (names, reason) async {
-        seen = reason;
-        return ActiveCoachingMoves(task: names.first, moves: const ['개요 적기']);
-      },
+  Future<ActiveCoachingOutcome?> tapFirst(
+    WidgetTester tester,
+    List<String> labels,
+  ) async {
+    ActiveCoachingOutcome? outcome;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => ElevatedButton(
+            onPressed: () async {
+              outcome = await showDialog<ActiveCoachingOutcome>(
+                context: context,
+                builder: (_) => ActiveCoachingDialog(
+                  taskName: '영양제 먹기',
+                  askMoves: noMoves,
+                  timeChoices: const [],
+                ),
+              );
+            },
+            child: const Text('열기'),
+          ),
+        ),
+      ),
     );
-    await tester.tap(find.text('부담돼서'));
+    await tester.tap(find.text('열기'));
     await tester.pumpAndSettle();
-    // 물어놓고 안 넘기면 물어본 의미가 없다.
-    expect(seen, '부담돼서');
+    for (final label in labels) {
+      await tester.tap(find.text(label));
+      await tester.pumpAndSettle();
+    }
+    return outcome;
+  }
+
+  testWidgets('지금 할게는 그 일을 시작한다', (tester) async {
+    final outcome = await tapFirst(tester, ['지금 할게']);
+    expect(outcome?.kind, ActiveCoachingOutcomeKind.start);
+    expect(outcome?.taskName, '영양제 먹기');
   });
 
-  testWidgets('자리가 아닌 이유면 한 수를 건너뛰고 시각으로 간다', (tester) async {
+  testWidgets('하기 싫어는 대화창으로 넘긴다', (tester) async {
+    final outcome = await tapFirst(tester, ['하기 싫어']);
+    expect(outcome?.kind, ActiveCoachingOutcomeKind.reluctant);
+  });
+
+  testWidgets('여기선 못 해 → 내일로 옮길래', (tester) async {
+    final outcome = await tapFirst(tester, ['여기선 못 해', '내일로 옮길래']);
+    expect(outcome?.kind, ActiveCoachingOutcomeKind.moveTomorrow);
+  });
+
+  testWidgets('여기선 못 해 → 오늘은 안 할래', (tester) async {
+    final outcome = await tapFirst(tester, ['여기선 못 해', '오늘은 안 할래']);
+    expect(outcome?.kind, ActiveCoachingOutcomeKind.notToday);
+  });
+
+  testWidgets('시간이 안 나면 한 수 없이 시각으로 간다', (tester) async {
     var asked = false;
     await show(
       tester,
@@ -98,11 +132,34 @@ void main() {
       },
       timeChoices: [DateTime(2026, 9, 23, 16, 30)],
     );
-    await tester.tap(find.text('지금은 시간이 안 나'));
+    await tester.tap(find.text('시간이 안 나'));
     await tester.pumpAndSettle();
-    // 회의 중인 사람에게 쪼개주는 것은 소용이 없다.
     expect(asked, isFalse);
     expect(find.textContaining('몇 시부터'), findsOneWidget);
+  });
+
+  testWidgets('여기선 못 해면 이따·내일·오늘은 안 함을 고른다', (tester) async {
+    await show(
+      tester,
+      askMoves: twoMoves,
+      timeChoices: [DateTime(2026, 9, 23, 16, 30)],
+    );
+    await tester.tap(find.text('여기선 못 해'));
+    await tester.pumpAndSettle();
+    expect(find.text('이따 할게'), findsOneWidget);
+    expect(find.text('내일로 옮길래'), findsOneWidget);
+    expect(find.text('오늘은 안 할래'), findsOneWidget);
+
+    await tester.tap(find.text('이따 할게'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('몇 시부터'), findsOneWidget);
+  });
+
+  testWidgets('한 수를 받아오면 둘을 보여준다', (tester) async {
+    await show(tester, askMoves: twoMoves, skipReason: true);
+    expect(find.text('개요 세 줄 적기'), findsOneWidget);
+    expect(find.text('자료 링크 모으기'), findsOneWidget);
+    expect(find.text('지금은 둘 다 안 돼'), findsOneWidget);
   });
 
   testWidgets('한 수를 고르면 그 일을 시작한다', (tester) async {
@@ -117,6 +174,7 @@ void main() {
                 builder: (_) => ActiveCoachingDialog(
                   taskName: '분기 리포트',
                   askMoves: twoMoves,
+                  skipReason: true,
                   timeChoices: const [],
                 ),
               );
@@ -128,20 +186,19 @@ void main() {
     );
     await tester.tap(find.text('열기'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('머리가 안 돌아가'));
-    await tester.pumpAndSettle();
     await tester.tap(find.text('개요 세 줄 적기'));
     await tester.pumpAndSettle();
 
     expect(outcome?.kind, ActiveCoachingOutcomeKind.start);
     expect(outcome?.taskName, '분기 리포트');
     expect(outcome?.move, '개요 세 줄 적기');
-    expect(outcome?.reason, '머리가 안 돌아가');
+    expect(outcome?.reason, isNull);
   });
 
   testWidgets('한 수를 물렀는데 남은 일이 있으면 고르게 한다', (tester) async {
     await show(
       tester,
+      skipReason: true,
       askMoves: twoMoves,
       otherTasks: const [
         ActiveCoachingChoice(name: '방 정리'),
@@ -149,8 +206,6 @@ void main() {
       ],
       timeChoices: [DateTime(2026, 9, 23, 16, 30)],
     );
-    await tester.tap(find.text('머리가 안 돌아가'));
-    await tester.pumpAndSettle();
     await tester.tap(find.text('지금은 둘 다 안 돼'));
     await tester.pumpAndSettle();
 
@@ -165,6 +220,7 @@ void main() {
     List<String>? asked;
     await show(
       tester,
+      skipReason: true,
       askMoves: (names, reason) async {
         asked = names;
         return ActiveCoachingMoves(
@@ -177,8 +233,6 @@ void main() {
         ActiveCoachingChoice(name: '메일 답장'),
       ],
     );
-    await tester.tap(find.text('머리가 안 돌아가'));
-    await tester.pumpAndSettle();
     await tester.tap(find.text('지금은 안 되겠어'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('방 정리'));
@@ -194,6 +248,7 @@ void main() {
     List<String>? asked;
     await show(
       tester,
+      skipReason: true,
       askMoves: (names, reason) async {
         asked = names;
         return ActiveCoachingMoves(task: names.first, moves: const ['치우기']);
@@ -203,8 +258,6 @@ void main() {
         ActiveCoachingChoice(name: '메일 답장'),
       ],
     );
-    await tester.tap(find.text('머리가 안 돌아가'));
-    await tester.pumpAndSettle();
     await tester.tap(find.text('지금은 안 되겠어'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('모르겠어, 골라줘'));
@@ -217,13 +270,12 @@ void main() {
     // 한 개입 안에서 갈아타기는 한 번까지. 두 번 넘어가면 심문이 된다.
     await show(
       tester,
+      skipReason: true,
       askMoves: (names, reason) async =>
           ActiveCoachingMoves(task: names.first, moves: const ['치우기']),
       otherTasks: const [ActiveCoachingChoice(name: '방 정리')],
       timeChoices: [DateTime(2026, 9, 23, 16, 30)],
     );
-    await tester.tap(find.text('머리가 안 돌아가'));
-    await tester.pumpAndSettle();
     await tester.tap(find.text('지금은 안 되겠어'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('모르겠어, 골라줘'));
@@ -238,11 +290,10 @@ void main() {
     // 한도가 찼거나 통신이 끊긴 경우다. 사용자는 아무것도 못 고른 채 끝나면 안 된다.
     await show(
       tester,
+      skipReason: true,
       askMoves: noMoves,
       otherTasks: const [ActiveCoachingChoice(name: '방 정리')],
     );
-    await tester.tap(find.text('머리가 안 돌아가'));
-    await tester.pumpAndSettle();
     expect(find.textContaining('지금 조금이라도 할 수 있는 건'), findsOneWidget);
   });
 
@@ -270,7 +321,7 @@ void main() {
     );
     await tester.tap(find.text('열기'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('지금은 시간이 안 나'));
+    await tester.tap(find.text('시간이 안 나'));
     await tester.pumpAndSettle();
     // 상대 표현을 쓰지 않는다. "30분 뒤"는 반올림하면 거짓말이 된다.
     await tester.tap(find.text('4:30'));
@@ -278,7 +329,7 @@ void main() {
 
     expect(outcome?.kind, ActiveCoachingOutcomeKind.promise);
     expect(outcome?.promisedAt, at);
-    expect(outcome?.reason, '지금은 시간이 안 나');
+    expect(outcome?.reason, '시간이 안 나');
   });
 
   testWidgets('시작 카드에서 미룬 사람에게는 이유를 묻지 않는다', (tester) async {
@@ -352,6 +403,7 @@ void main() {
                     moves: const ['치우기'],
                   ),
                   otherTasks: const [ActiveCoachingChoice(name: '방 정리')],
+                  skipReason: true,
                   timeChoices: const [],
                 ),
               );
@@ -362,8 +414,6 @@ void main() {
       ),
     );
     await tester.tap(find.text('열기'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('머리가 안 돌아가'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('지금은 안 되겠어'));
     await tester.pumpAndSettle();
@@ -380,7 +430,7 @@ void main() {
 
   testWidgets('밤이라 고를 시각이 없으면 하루를 닫는 말로 간다', (tester) async {
     await show(tester, askMoves: noMoves);
-    await tester.tap(find.text('지금은 시간이 안 나'));
+    await tester.tap(find.text('시간이 안 나'));
     await tester.pumpAndSettle();
     expect(find.textContaining('오늘은 여기까지'), findsOneWidget);
     expect(find.text('직접 고르기'), findsOneWidget);

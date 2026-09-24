@@ -95,7 +95,7 @@ class ActiveCoachingSync {
     final day = ActiveCoachingStore.readDay(prefs, now).pruneMissing(liveIds);
     await ActiveCoachingStore.writeDay(prefs, day);
 
-    final planned = ActiveCoachingPlanner.next(
+    final planned = ActiveCoachingPlanner.queue(
       tasks: tasks,
       now: now,
       day: day,
@@ -114,22 +114,16 @@ class ActiveCoachingSync {
           DateTime(now.year, now.month, now.day, time.hour, time.minute),
       ],
     );
-    if (planned == null) {
+    if (planned.isEmpty) {
       await _clear();
       return;
     }
     // 약속 시각으로 잡힌 계획은 추적에서 나와 이름이 없다. 이름 없이 나가면
     // 부를 일이 있는데도 카드가 "하나 정해볼까?"로 뜬다.
-    final plan = _withName(planned, tasks);
+    final plans = [for (final plan in planned) _withName(plan, tasks)];
+    final plan = plans.first;
 
-    await prefs.setString(
-      plannedKey,
-      jsonEncode({
-        ..._payload(prefs, plan),
-        // 밤 카드는 답이 다르다. 그 갈래를 네이티브가 알아야 버튼이 달라진다.
-        if (plan.signal == ActiveCoachingSignal.nightWrap) 'kind': 'night',
-      }),
-    );
+    await prefs.setString(plannedKey, jsonEncode(_queuePayload(prefs, plans)));
     if (!_isAndroid) {
       // 아이폰은 미리 예약하는 것 말고는 길이 없다. 다른 배너와 자리가 겹치는지
       // 함께 봐야 해서 예약은 그쪽 한 곳에서 한다.
@@ -159,39 +153,46 @@ class ActiveCoachingSync {
     final raw = prefs.getString(shownKey);
     if (raw == null || raw.isEmpty) return;
     await prefs.remove(shownKey);
+    final List items;
     try {
       final decoded = jsonDecode(raw);
-      if (decoded is! Map) return;
+      // 앱을 안 연 사이에 여러 번 나갔을 수 있어 목록으로 쌓인다. 예전 빌드는
+      // 하나만 적었다.
+      items = decoded is List ? decoded : [decoded];
+    } catch (_) {
+      return;
+    }
+    var budget = ActiveCoachingStore.readBudget(prefs, now);
+    final nudged = <MapEntry<String, DateTime>>[];
+    for (final item in items) {
+      if (item is! Map) continue;
       final at = DateTime.fromMillisecondsSinceEpoch(
-        (decoded['at'] as num?)?.toInt() ?? now.millisecondsSinceEpoch,
+        (item['at'] as num?)?.toInt() ?? now.millisecondsSinceEpoch,
       );
       // 어제 나간 것이면 어제 예산에서 뺄 일이다. 오늘 몫을 대신 깎으면 안 된다.
       if (ActiveCoachingStore.dateKey(at) != ActiveCoachingStore.dateKey(now)) {
-        return;
+        continue;
       }
-      final taskId = decoded['taskId']?.toString();
-      final night = decoded['night'] == true;
-      var budget = ActiveCoachingStore.readBudget(prefs, now);
+      final taskId = item['taskId']?.toString();
       // 하루를 닫는 말은 하루 한 번이다. 나간 것을 안 적으면 앱을 열 때마다
       // 다시 걸린다.
-      if (night) budget = budget.wrappedUp(at);
-      await ActiveCoachingStore.writeBudget(
-        prefs,
-        budget
-            .spoke(
-              at,
-              taskId: taskId == null || taskId.isEmpty ? null : taskId,
-              // 사용자가 정한 시각을 확인한 것은 총량에서 뺀다. 그 구분은
-              // 계획에 담겨 있지 않으므로, 여기서는 전부 총량에 넣는다 —
-              // 덜 부르는 쪽으로 틀리는 편이 낫다.
-            )
-            .noReply(),
-      );
+      if (item['night'] == true) budget = budget.wrappedUp(at);
+      // 사용자가 정한 시각을 확인한 것도 총량에 넣는다. 그 구분은 계획에 담겨
+      // 있지 않고, 덜 부르는 쪽으로 틀리는 편이 낫다. 미리 세우는 차례도 같은
+      // 셈으로 세워둔다.
+      budget = budget
+          .spoke(at, taskId: taskId == null || taskId.isEmpty ? null : taskId)
+          .noReply();
       if (taskId != null && taskId.isNotEmpty) {
-        await ActiveCoachingPromise.noteNudged(taskId: taskId, at: at);
+        nudged.add(MapEntry(taskId, at));
       }
-    } catch (_) {
-      //
+    }
+    await ActiveCoachingStore.writeBudget(prefs, budget);
+    for (final entry in nudged) {
+      await ActiveCoachingPromise.noteNudged(
+        taskId: entry.key,
+        at: entry.value,
+      );
     }
   }
 
@@ -229,7 +230,7 @@ class ActiveCoachingSync {
       taskId: pick.taskId,
       taskText: pick.taskText,
     );
-    await prefs.setString(plannedKey, jsonEncode(_payload(prefs, plan)));
+    await prefs.setString(plannedKey, jsonEncode(_queuePayload(prefs, [plan])));
     try {
       await _channel.invokeMethod('testActiveCoaching', {
         'atMillis': at.millisecondsSinceEpoch,
@@ -258,6 +259,30 @@ class ActiveCoachingSync {
     return plan;
   }
 
+  /// 오늘 남은 차례 전부를 담은 한 벌.
+  ///
+  /// 맨 위에는 첫 차례를 그대로 펼쳐 둔다. 진단 화면이 그 자리를 읽는다.
+  /// 네이티브와 아이폰 배너는 [queueKey] 목록을 차례로 쓴다 — 하나가 지나가면
+  /// 앱을 열지 않아도 다음 것이 걸린다.
+  static Map<String, dynamic> _queuePayload(
+    SharedPreferences prefs,
+    List<ActiveCoachingPlan> plans,
+  ) {
+    final entries = [for (final plan in plans) _entry(prefs, plan)];
+    return {...entries.first, queueKey: entries};
+  }
+
+  static const String queueKey = 'queue';
+
+  static Map<String, dynamic> _entry(
+    SharedPreferences prefs,
+    ActiveCoachingPlan plan,
+  ) => {
+    ..._payload(prefs, plan),
+    // 밤 카드는 답이 다르다. 그 갈래를 네이티브가 알아야 버튼이 달라진다.
+    if (plan.signal == ActiveCoachingSignal.nightWrap) 'kind': 'night',
+  };
+
   /// 네이티브가 읽어갈 계획 한 벌.
   ///
   /// 카드에서 "시간이 안 나"를 누르면 그 자리에서 시각을 내밀어야 한다. 시각을
@@ -282,7 +307,8 @@ class ActiveCoachingSync {
       if (plan.taskId != null) 'taskId': plan.taskId,
       if ((plan.taskText ?? '').trim().isNotEmpty)
         'taskText': plan.taskText!.trim(),
-      if (times.isNotEmpty) 'times': times.map(ActiveCoachingTime.format).toList(),
+      if (times.isNotEmpty)
+        'times': times.map(ActiveCoachingTime.format).toList(),
     };
   }
 

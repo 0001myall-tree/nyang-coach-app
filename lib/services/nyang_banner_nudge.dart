@@ -109,12 +109,26 @@ class NyangBannerNudge {
     1323,
   ];
 
-  /// 적극 코칭 개입 자리. 하나뿐이다.
+  /// 적극 코칭 개입 자리들. 오늘 남은 차례만큼.
   ///
-  /// 다음 한 번만 걸어둔다. 여러 개를 미리 걸면 그 사이에 목록이 바뀌었을 때
-  /// 이미 끝낸 일을 부르게 되고, 아이폰의 예약 알림은 조건이 바뀌어도 스스로
-  /// 취소되지 않는다.
-  static const int activeNotificationId = 1324;
+  /// 한때는 다음 한 번만 걸었다. 여러 개를 미리 걸면 그 사이에 끝낸 일을 부를
+  /// 수 있어서였는데, 그러면 한 번 지나간 뒤로는 앱을 열 때까지 아무도 안
+  /// 찾아간다. 앱을 안 여는 사람에게 하루 한 번이었다. 일을 끝내는 것은 대개
+  /// 앱 안에서라 그때 [sync]가 전부 지우고 다시 건다.
+  ///
+  /// [ActiveCoachingPlanner.maxQueue]만큼 자리가 있어야 한다.
+  static const List<int> activeNotificationIds = [
+    1324,
+    1325,
+    1326,
+    1327,
+    1328,
+    1329,
+    1330,
+    1331,
+    1332,
+    1333,
+  ];
 
   /// 적극 코칭 배너 제목. 본문은 Dart가 미리 정해둔 한 줄이다.
   static const String activeTitle = '🐾 냥냥코치';
@@ -172,7 +186,9 @@ class NyangBannerNudge {
     for (final id in gapNotificationIds) {
       await _plugin.cancel(id: id);
     }
-    await _plugin.cancel(id: activeNotificationId);
+    for (final id in activeNotificationIds) {
+      await _plugin.cancel(id: id);
+    }
 
     final needed = await isNeededHere();
     // "다음 일" 카드는 딴짓 방지 스위치나 일정 알림과 무관하게, 마스터 플랜이면
@@ -208,7 +224,7 @@ class NyangBannerNudge {
     if (masterEligible) await _scheduleActivePlan(prefs, now);
   }
 
-  /// 적극 코칭이 미리 세워둔 계획 하나를 건다.
+  /// 적극 코칭이 미리 세워둔 오늘 차례들을 건다.
   ///
   /// 계산은 Dart가 이미 해뒀다. 여기서는 그 시각과 문장을 읽어 걸기만 한다 —
   /// 안드로이드 카드가 읽는 것과 같은 자리다.
@@ -226,37 +242,46 @@ class NyangBannerNudge {
     } catch (_) {
       return;
     }
-    final millis = (decoded['at'] as num?)?.toInt();
-    if (millis == null) return;
-    final at = DateTime.fromMillisecondsSinceEpoch(millis);
-    if (!at.isAfter(now)) return;
-    final body = decoded['title']?.toString().replaceAll('\n', ' ').trim();
-    if (body == null || body.isEmpty) return;
+    final queued = decoded[ActiveCoachingSync.queueKey];
+    final entries = queued is List
+        ? queued.whereType<Map>().toList()
+        : [decoded];
 
     _ensureTimeZone();
-    await _plugin.zonedSchedule(
-      id: activeNotificationId,
-      title: activeTitle,
-      body: body,
-      scheduledDate: tz.TZDateTime.from(at, tz.local),
-      notificationDetails: const NotificationDetails(
-        iOS: DarwinNotificationDetails(
-          // 앱을 보고 있는 동안에는 띄우지 않는다. 할 일이 이미 눈앞에 있는
-          // 사람에게 그 위로 배너를 내리면 그건 참견이 아니라 방해다.
-          // 안드로이드 카드도 같은 자리에서 접힌다.
-          presentAlert: false,
-          presentBanner: false,
-          presentList: true,
-          presentSound: false,
-          // 방해금지를 뚫지 않는다. 조용히 해둔 사람에게 굳이 비집고 들어갈
-          // 말이 아니다 — 알림 센터에는 남으므로 볼 기회는 그대로 있다.
-          interruptionLevel: InterruptionLevel.active,
+    var slot = 0;
+    for (final entry in entries) {
+      if (slot >= activeNotificationIds.length) break;
+      final millis = (entry['at'] as num?)?.toInt();
+      if (millis == null) continue;
+      final at = DateTime.fromMillisecondsSinceEpoch(millis);
+      if (!at.isAfter(now)) continue;
+      final body = entry['title']?.toString().replaceAll('\n', ' ').trim();
+      if (body == null || body.isEmpty) continue;
+
+      await _plugin.zonedSchedule(
+        id: activeNotificationIds[slot++],
+        title: activeTitle,
+        body: body,
+        scheduledDate: tz.TZDateTime.from(at, tz.local),
+        notificationDetails: const NotificationDetails(
+          iOS: DarwinNotificationDetails(
+            // 앱을 보고 있는 동안에는 띄우지 않는다. 할 일이 이미 눈앞에 있는
+            // 사람에게 그 위로 배너를 내리면 그건 참견이 아니라 방해다.
+            // 안드로이드 카드도 같은 자리에서 접힌다.
+            presentAlert: false,
+            presentBanner: false,
+            presentList: true,
+            presentSound: false,
+            // 방해금지를 뚫지 않는다. 조용히 해둔 사람에게 굳이 비집고 들어갈
+            // 말이 아니다 — 알림 센터에는 남으므로 볼 기회는 그대로 있다.
+            interruptionLevel: InterruptionLevel.active,
+          ),
         ),
-      ),
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-      payload:
-          '$payloadPrefix:${jsonEncode({'kind': decoded['kind']?.toString() == 'night' ? 'activeCoachingNight' : 'activeCoaching', 'taskId': decoded['taskId']?.toString() ?? '', 'taskText': ''})}',
-    );
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        payload:
+            '$payloadPrefix:${jsonEncode({'kind': entry['kind']?.toString() == 'night' ? 'activeCoachingNight' : 'activeCoaching', 'taskId': entry['taskId']?.toString() ?? '', 'taskText': entry['taskText']?.toString() ?? ''})}',
+      );
+    }
   }
 
   /// 일정에 붙는 배너를 건다.

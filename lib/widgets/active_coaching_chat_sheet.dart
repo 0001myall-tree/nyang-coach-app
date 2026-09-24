@@ -65,7 +65,9 @@ class _ActiveCoachingChatSheetState extends State<ActiveCoachingChatSheet> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _send(_chat.openingLine));
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _send(_chat.openingLine),
+    );
   }
 
   @override
@@ -177,7 +179,10 @@ class _ActiveCoachingChatSheetState extends State<ActiveCoachingChatSheet> {
         IconButton(
           onPressed: () =>
               Navigator.of(context).pop(ActiveCoachingChatOutcome.closed),
-          icon: const Icon(Icons.close_rounded, color: AppDesignTokens.textMuted),
+          icon: const Icon(
+            Icons.close_rounded,
+            color: AppDesignTokens.textMuted,
+          ),
         ),
       ],
     ),
@@ -285,7 +290,10 @@ class _ActiveCoachingChatSheetState extends State<ActiveCoachingChatSheet> {
             style: appFont(fontSize: 14, color: AppDesignTokens.textPrimary),
             decoration: InputDecoration(
               hintText: '하고 싶은 말',
-              hintStyle: appFont(fontSize: 14, color: AppDesignTokens.textMuted),
+              hintStyle: appFont(
+                fontSize: 14,
+                color: AppDesignTokens.textMuted,
+              ),
               isDense: true,
               filled: true,
               fillColor: AppDesignTokens.surfaceSubtle,

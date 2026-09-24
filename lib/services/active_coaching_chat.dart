@@ -144,7 +144,9 @@ class ActiveCoachingChat {
       for (final line in [...earlier, ...lines.take(lines.length - 1)])
         {
           'role': line.isUser ? 'user' : 'assistant',
-          'content': line.isUser ? '${_clock(line.time)} ${line.text}' : line.text,
+          'content': line.isUser
+              ? '${_clock(line.time)} ${line.text}'
+              : line.text,
         },
       {'role': 'user', 'content': '${_clock(now)} $userText'},
     ];
@@ -163,23 +165,22 @@ class ActiveCoachingChat {
       await AnalyticsService.logApiUsage(
         coachId: coachId,
         estimatedTokens: AnalyticsService.estimateChatTokens(messages, raw),
-        actualTokens: AnalyticsService.readIntValue(data is Map ? data : const {}, [
-          'totalTokens',
-          'total_tokens',
-          'tokens',
-          'usage.totalTokens',
-          'usage.total_tokens',
-        ]),
-        actualCostWon: AnalyticsService.readIntValue(
-          data is Map ? data : const {},
-          [
-            'costWon',
-            'cost_won',
-            'estimatedCostWon',
-            'estimated_cost_won',
-            'usage.costWon',
-          ],
-        ),
+        actualTokens:
+            AnalyticsService.readIntValue(data is Map ? data : const {}, [
+              'totalTokens',
+              'total_tokens',
+              'tokens',
+              'usage.totalTokens',
+              'usage.total_tokens',
+            ]),
+        actualCostWon:
+            AnalyticsService.readIntValue(data is Map ? data : const {}, [
+              'costWon',
+              'cost_won',
+              'estimatedCostWon',
+              'estimated_cost_won',
+              'usage.costWon',
+            ]),
         model: model,
       );
     } catch (_) {
@@ -280,7 +281,8 @@ $interventionSection
   }) async {
     final firstTurn = _lastOffered == null && lines.length <= 1;
     final refused =
-        _lastOffered != null && ResistanceInterventionService.isRefusal(userText);
+        _lastOffered != null &&
+        ResistanceInterventionService.isRefusal(userText);
     if (!firstTurn && !refused) {
       final current = _lastOffered == null
           ? null
@@ -355,7 +357,9 @@ $interventionSection
     final key = ChatStore.historyKey(coachId);
     await prefs.setString(
       key,
-      ChatStore.mergedValue([line.toJson()], ChatStore.decode(prefs.getString(key))),
+      ChatStore.mergedValue([
+        line.toJson(),
+      ], ChatStore.decode(prefs.getString(key))),
     );
     TasksSyncService.scheduleSyncToCloud();
   }

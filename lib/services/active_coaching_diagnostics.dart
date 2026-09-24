@@ -31,6 +31,7 @@ class ActiveCoachingDiagnostics {
     ActiveCoachingPlan? plan,
     DateTime? plannedAt,
     String? plannedTitle,
+    List<DateTime> plannedQueue = const [],
     Map<String, bool> blockers = const {},
     Map<String, String> taskNames = const {},
   }) {
@@ -101,6 +102,10 @@ class ActiveCoachingDiagnostics {
     } else {
       lines.add('${_clock(plannedAt)}  ${plannedTitle ?? ''}'.trim());
       if (!plannedAt.isAfter(now)) lines.add('※ 이미 지난 시각 — 나갔거나 걸러짐');
+    }
+    // 앱을 안 열어도 이어서 걸릴 오늘 차례들. 하나가 지나가면 다음 것이 걸린다.
+    if (plannedQueue.length > 1) {
+      lines.add('오늘 남은 차례 ${plannedQueue.map(_clock).join(' · ')}');
     }
     lines.add('');
 

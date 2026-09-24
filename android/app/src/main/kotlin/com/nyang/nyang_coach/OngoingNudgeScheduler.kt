@@ -148,9 +148,25 @@ object OngoingNudgeScheduler {
         alarmManager.cancel(gapPendingIntent(context, slot))
     }
 
-    /** 적극 코칭 개입 자리. 늘 하나뿐이라 걸 때마다 앞엣것을 덮어쓴다. */
+    /** 적극 코칭 개입 자리. 알람은 늘 다음 차례 하나에만 걸려 있다. */
     fun scheduleActiveAt(context: Context, triggerAt: Long) {
         schedule(context, triggerAt, activePendingIntent(context))
+    }
+
+    /**
+     * 오늘 남은 적극 코칭 차례 중 다음 것에 알람을 건다. 없으면 지운다.
+     *
+     * 차례가 하나 지나갈 때마다, 그리고 카드에서 답해 목록이 줄 때마다 부른다.
+     * 앱을 열지 않아도 다음 차례가 걸려 있게 하는 자리다.
+     */
+    fun rearmActive(context: Context) {
+        val now = System.currentTimeMillis()
+        val next = OngoingNudgeState.activeQueue(context).firstOrNull { it.atMillis > now }
+        if (next == null) {
+            cancelActive(context)
+        } else {
+            scheduleActiveAt(context, next.atMillis)
+        }
     }
 
     fun cancelActive(context: Context) {

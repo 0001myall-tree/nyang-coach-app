@@ -48,6 +48,16 @@ class TaskCompletionService {
   static Future<bool> pauseStoredTask({required String taskId}) =>
       _apply(taskId: taskId, done: false, at: DateTime.now());
 
+  /// 오늘 목록의 그 줄이 루틴에서 온 것인지.
+  static Future<bool> isStoredHabit(String taskId) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.reload();
+    final task = _findById(_decodeList(prefs.getString(tasksKey)), taskId);
+    if (task == null) return false;
+    final habitId = task['habitId']?.toString() ?? '';
+    return task['isHabit'] == true || (habitId.isNotEmpty && habitId != 'null');
+  }
+
   /// 앱 밖에서 "시작할게"를 골랐을 때. ▶를 누른 것과 같은 일을 한다.
   ///
   /// 쌓인 시간은 건드리지 않고 지금부터 도는 구간만 연다. 멈췄다 다시 시작하는

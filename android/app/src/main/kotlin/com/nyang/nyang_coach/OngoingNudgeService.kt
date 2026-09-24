@@ -788,6 +788,7 @@ class OngoingNudgeService : Service() {
         second.setOnClickListener {
             answered = true
             OngoingNudgeState.writeResult(this, taskId, "moveTomorrow")
+            forgetActiveFor(taskId)
             Toast.makeText(this, "내일 일정으로 옮겨둘게!", Toast.LENGTH_SHORT).show()
             lingerAsDoorway()
         }
@@ -797,6 +798,7 @@ class OngoingNudgeService : Service() {
         third.setOnClickListener {
             answered = true
             OngoingNudgeState.writeResult(this, taskId, "notToday")
+            forgetActiveFor(taskId)
             Toast.makeText(this, "알겠어. 오늘은 이 일로 안 부를게!", Toast.LENGTH_SHORT).show()
             lingerAsDoorway()
         }
@@ -809,6 +811,17 @@ class OngoingNudgeService : Service() {
         }
 
         attachCard(view)
+    }
+
+    /**
+     * 그 일로 잡혀 있던 오늘 적극 코칭 차례를 빼고 다음 차례를 다시 건다.
+     *
+     * 카드에서 답을 했다는 뜻이다. 답해놓고 두 시간 뒤에 같은 일로 또 불리면
+     * 한 말을 못 들은 것이 된다.
+     */
+    private fun forgetActiveFor(taskId: String) {
+        OngoingNudgeState.dropActiveFor(this, taskId)
+        OngoingNudgeScheduler.rearmActive(this)
     }
 
     /** 화면을 다 덮는 카드를 붙인다. */
@@ -859,6 +872,7 @@ class OngoingNudgeService : Service() {
         second.setOnClickListener {
             answered = true
             OngoingNudgeState.writeResult(this, taskId, "moveTomorrow")
+            forgetActiveFor(taskId)
             Toast.makeText(this, "내일 일정으로 옮겨둘게!", Toast.LENGTH_SHORT).show()
             lingerAsDoorway()
         }
@@ -868,6 +882,7 @@ class OngoingNudgeService : Service() {
         third.setOnClickListener {
             answered = true
             OngoingNudgeState.writeResult(this, taskId, "notToday")
+            forgetActiveFor(taskId)
             Toast.makeText(this, "알겠어. 오늘은 여기까지!", Toast.LENGTH_SHORT).show()
             lingerAsDoorway()
         }
@@ -1073,6 +1088,7 @@ class OngoingNudgeService : Service() {
         answered = true
         val label = "%02d:%02d".format(time.first, time.second)
         OngoingNudgeState.writeResult(this, taskId, "later:$label")
+        forgetActiveFor(taskId)
         // 적극 코칭 카드에서 온 약속이면 시작 자리가 다른 일을 들고 있을 수 있다.
         // 그 시각에 부를 것은 이 일이라 자리를 넘겨받는다. 밀려난 일은 앱이 열릴
         // 때 Dart가 목록을 다시 보고 제자리에 건다.
