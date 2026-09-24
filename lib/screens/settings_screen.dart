@@ -2618,7 +2618,7 @@ class _SettingsScreenState extends State<SettingsScreen>
   Future<void> _showGapMasterOnlyNotice() {
     return _showAlarmNoticeDialog(
       title: '🌱 적극 코칭',
-      message: '마스터 플랜에서만 쓸 수 있어요.',
+      message: 'MASTER 등급에서만 이용 가능해요.',
     );
   }
 
@@ -3101,8 +3101,7 @@ class _SettingsScreenState extends State<SettingsScreen>
 
                       _buildSettingsNavigationTile(
                         icon: Icons.psychology_rounded,
-                        label: '개인 코칭 참고',
-                        status: 'MASTER 전용',
+                        label: '마스터 코치 참고',
                         subtitle: '고정 일정과 취침 시간을 설정해요.',
                         onTap: () {
                           if (_hasMasterPlan) {
@@ -3111,7 +3110,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                           }
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
-                              content: Text('개인 코칭 참고는 마스터 플랜 구독자 전용입니다.'),
+                              content: Text('마스터 코치 참고는 MASTER 등급에서만 이용 가능해요.'),
                             ),
                           );
                         },
@@ -4636,7 +4635,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                         ),
                         const SizedBox(width: 8),
                         Text(
-                          '개인 코칭 참고',
+                          '마스터 코치 참고',
                           style: appFont(
                             fontSize: 18,
                             fontWeight: FontWeight.w900,
@@ -5116,7 +5115,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                       await NotificationService().disableNightCallReminders();
                       Navigator.pop(context);
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('개인 코칭 참고를 저장했습니다.')),
+                        const SnackBar(content: Text('마스터 코치 참고를 저장했습니다.')),
                       );
                     },
                     style: ElevatedButton.styleFrom(
