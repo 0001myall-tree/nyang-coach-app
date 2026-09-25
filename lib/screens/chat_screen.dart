@@ -21123,7 +21123,6 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
   Widget _buildInputArea({bool showChips = false}) {
     final isFriends = !_coach.isMaster;
     final isImmersiveInput = isFriends;
-    final isNyang = widget.coachId == 'cat';
     // 프렌즈는 배경 그림을 살려야 해서 투명을 유지한다.
     final hasSolidPanel = !isImmersiveInput;
     const masterLavenderBorder = AppDesignTokens.brandCardBorder;
@@ -21192,22 +21191,18 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
                               ? Colors.redAccent.withOpacity(0.15)
                               // 입력창과 한 줄로 붙어 있어서 따로 놀면 눈에 띈다.
                               // 옆이 흰색에 가까워졌으니 같이 올린다.
-                              : (isNyang
+                              : (isFriends
                                     ? Colors.white.withValues(alpha: 0.88)
-                                    : (isImmersiveInput
-                                          ? Colors.white.withOpacity(0.2)
-                                          : Colors.white)),
+                                    : Colors.white),
                           borderRadius: BorderRadius.circular(
                             AppDesignTokens.radiusPill,
                           ),
                           border: Border.all(
                             color: _isListening
                                 ? Colors.redAccent
-                                : (isNyang
+                                : (isFriends
                                       ? _coach.accentColor.withOpacity(0.6)
-                                      : (isImmersiveInput
-                                            ? Colors.white.withOpacity(0.3)
-                                            : masterLavenderBorder)),
+                                      : masterLavenderBorder),
                             width: _isListening ? 2.0 : 1.2,
                           ),
                           boxShadow: isImmersiveInput
@@ -21228,11 +21223,9 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
                               : Icons.mic_none_rounded,
                           color: _isListening
                               ? Colors.redAccent
-                              : (isNyang
+                              : (isFriends
                                     ? _coach.accentColor
-                                    : (isFriends
-                                          ? Colors.white
-                                          : masterLavenderIcon)),
+                                    : masterLavenderIcon),
                           size: 20,
                         ),
                       ),
@@ -21248,21 +21241,19 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
                           // 떠서 읽는 자리가 일정하지 않았다. 같은 화면의 말풍선이
                           // 거의 불투명한 흰색이라 그쪽에 맞춘다.
                           //
-                          // 글자가 흰색인 다른 프렌즈 코치는 올리면 안 된다.
-                          color: isNyang
+                          // 다른 프렌즈 코치도 흰 글씨에 흐린 유리판이었는데, 할매
+                          // 방처럼 밝은 배경에선 글씨가 안 보였다. 냥냥이와 같게
+                          // 맞춘다. 옆의 마이크 버튼도 같이 맞췄다.
+                          color: isFriends
                               ? Colors.white.withValues(alpha: 0.88)
-                              : (isFriends
-                                    ? Colors.white.withValues(alpha: 0.25)
-                                    : Colors.white),
+                              : Colors.white,
                           borderRadius: BorderRadius.circular(
                             AppDesignTokens.radiusPill,
                           ),
                           border: Border.all(
-                            color: isNyang
+                            color: isFriends
                                 ? _coach.accentColor.withOpacity(0.5)
-                                : (isFriends
-                                      ? Colors.white.withOpacity(0.3)
-                                      : masterLavenderBorder),
+                                : masterLavenderBorder,
                             width: 1.2,
                           ),
                         ),
@@ -21274,23 +21265,17 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
                           onSubmitted: _send,
                           style: appFont(
                             fontSize: AppDesignTokens.textBody,
-                            color: isNyang
-                                ? AppDesignTokens.textPrimary
-                                : (isFriends
-                                      ? Colors.white
-                                      : AppDesignTokens.textPrimary),
+                            color: AppDesignTokens.textPrimary,
                           ),
                           decoration: InputDecoration(
                             hintText: '메시지를 입력하세요...',
                             hintStyle: appFont(
                               fontSize: AppDesignTokens.textBody,
-                              color: isNyang
+                              color: isFriends
                                   ? AppDesignTokens.textPrimary.withValues(
                                       alpha: 0.62,
                                     )
-                                  : (isFriends
-                                        ? Colors.white.withOpacity(0.6)
-                                        : AppDesignTokens.textDisabled),
+                                  : AppDesignTokens.textDisabled,
                             ),
                             border: InputBorder.none,
                             contentPadding: const EdgeInsets.symmetric(
