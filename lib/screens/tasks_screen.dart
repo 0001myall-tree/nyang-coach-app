@@ -17,6 +17,7 @@ import 'coach_config.dart';
 import '../services/busy_hours_service.dart';
 import '../services/day_record_builder.dart';
 import '../services/daypart_hint.dart';
+import '../services/time_expression.dart';
 import '../services/memory_service.dart';
 import '../services/task_resistance_service.dart';
 import '../models/user_data.dart';
@@ -4281,24 +4282,27 @@ class _TasksScreenState extends State<TasksScreen>
   /// [meridiemGuessed]는 오전·오후를 앱이 찍었다는 표시다. "7시 약속"처럼
   /// 숫자만 적으면 지금 시각을 보고 고르는데, 그건 틀릴 수 있어서 넣기 전에
   /// 한 번 묻는다. "오후 7시"나 "19시"처럼 적혀 있으면 찍을 것이 없다.
-  ({String cleanText, TimeOfDay? time, bool meridiemGuessed})?
-  _parseNaturalLanguageTime(String input) {
-    // 오전/오후/아침/저녁/밤 + H시 (+ M분 또는 반)
-    final timeRegex = RegExp(
-      r'((?:오전|아침|오후|저녁|밤)\s*)?(\d{1,2})시(?:\s*(?:(\d{1,2})분|반))?(?:\s*(?:에|쯤|경|까지))?',
-    );
-    final match = timeRegex.firstMatch(input);
+  ///
+  /// "2시부터 4시까지 회의"처럼 범위로 적으면 [endTime]에 끝 시각이 온다.
+  /// 이 자리만 옛 정규식을 따로 들고 있어서 '부터'를 몰랐고, 2시만 떼어낸 채
+  /// 제목이 '부터 4시까지 회의'가 됐다. 어디까지가 시각이냐는 채팅 등록과
+  /// 같은 [kTimeRangeRegex]/[kSingleTimeRegex]가 정한다.
+  ({
+    String cleanText,
+    TimeOfDay? time,
+    TimeOfDay? endTime,
+    bool meridiemGuessed,
+  })?
+  _parseNaturalLanguageTime(String input, {bool? forcePm}) {
+    final match =
+        kTimeRangeRegex.firstMatch(input) ?? kSingleTimeRegex.firstMatch(input);
     if (match == null) return null;
+    final isRange = match.groupCount >= 6 && match.group(5) != null;
+    final segments = splitTimeRange(match.group(0)!);
 
     final prefix = (match.group(1) ?? '').replaceAll(RegExp(r'\s'), '');
     final rawHour = int.tryParse(match.group(2)!) ?? 0;
-
-    int minute = 0;
-    if (match.group(3) != null) {
-      minute = int.tryParse(match.group(3)!) ?? 0;
-    } else if (match.group(0)!.contains('반')) {
-      minute = 30;
-    }
+    final minute = minuteFrom(match.group(3), segments.start);
 
     if (rawHour < 1 || rawHour > 24) return null;
 
@@ -4308,6 +4312,9 @@ class _TasksScreenState extends State<TasksScreen>
       hour24 = rawHour == 12 ? 0 : rawHour;
     } else if (prefix == '오후' || prefix == '저녁' || prefix == '밤') {
       hour24 = rawHour == 12 ? 12 : rawHour + 12;
+    } else if (forcePm != null) {
+      // 사용자가 오전·오후를 골라준 경우. 13시부터는 고를 것이 없다.
+      if (rawHour < 12 && forcePm) hour24 = rawHour + 12;
     } else {
       // 오전/오후 접두사가 없을 때 현재 시간 기준
       if (rawHour < 12) {
@@ -4322,6 +4329,14 @@ class _TasksScreenState extends State<TasksScreen>
     }
 
     final time = TimeOfDay(hour: hour24, minute: minute);
+    final endTime = isRange
+        ? _rangeEndTime(
+            start: time,
+            prefix: (match.group(4) ?? '').replaceAll(RegExp(r'\s'), ''),
+            rawHour: int.tryParse(match.group(5)!) ?? 0,
+            minute: minuteFrom(match.group(6), segments.end),
+          )
+        : null;
     final cleanText = input
         .replaceFirst(match.group(0)!, '')
         .replaceAll(RegExp(r'\s+'), ' ')
@@ -4330,8 +4345,36 @@ class _TasksScreenState extends State<TasksScreen>
     return (
       cleanText: cleanText.isEmpty ? input.trim() : cleanText,
       time: time,
+      endTime: endTime,
       meridiemGuessed: meridiemGuessed,
     );
+  }
+
+  /// 범위의 끝 시각. 시작보다 앞이 되면 null — 끝 없이 시작만 넣는다.
+  ///
+  /// 끝에 오전·오후가 없으면 시작 뒤의 가장 가까운 시각으로 본다. "오후 2시~4시"의
+  /// 4시는 16시고, "11시~1시"의 1시는 13시다.
+  TimeOfDay? _rangeEndTime({
+    required TimeOfDay start,
+    required String prefix,
+    required int rawHour,
+    required int minute,
+  }) {
+    if (rawHour < 1 || rawHour > 24 || minute > 59) return null;
+    int hour24;
+    if (prefix == '오전' || prefix == '아침') {
+      hour24 = rawHour == 12 ? 0 : rawHour;
+    } else if (prefix == '오후' || prefix == '저녁' || prefix == '밤') {
+      hour24 = rawHour == 12 ? 12 : rawHour + 12;
+    } else {
+      hour24 = rawHour % 24;
+      final startTotal = start.hour * 60 + start.minute;
+      while (hour24 * 60 + minute <= startTotal && hour24 + 12 < 24) {
+        hour24 += 12;
+      }
+    }
+    if (hour24 * 60 + minute <= start.hour * 60 + start.minute) return null;
+    return TimeOfDay(hour: hour24, minute: minute);
   }
 
   /// 앱이 찍은 오전·오후가 맞는지 한 번 묻는다. 아니라고 하면 시각 없이 넣는다.
@@ -4433,6 +4476,86 @@ class _TasksScreenState extends State<TasksScreen>
     return answer ?? false;
   }
 
+  /// 루틴 이름의 시각이 오전인지 오후인지 고르게 한다. 오후면 true.
+  /// 창 밖을 눌러 닫으면 null이고, 시각 없이 넣는다.
+  ///
+  /// 일정은 지금 시각을 보고 한쪽을 찍은 뒤 맞는지만 묻는다. 오늘 한 번 있는
+  /// 일이라 지나간 쪽은 뜻이 없어서다. 루틴은 매일 돌아오니 지금 시각이
+  /// 아무것도 알려주지 않는다 — 밤에 "7시 기상"을 적으면 오후 7시가 찍혔다.
+  Future<bool?> _askRoutineMeridiem(
+    ({TimeOfDay start, TimeOfDay? end}) am,
+    ({TimeOfDay start, TimeOfDay? end}) pm,
+  ) {
+    String label(({TimeOfDay start, TimeOfDay? end}) t) => t.end == null
+        ? _formatTime(t.start)
+        : '${_formatTime(t.start)} ~ ${_formatTime(t.end!)}';
+
+    Widget choice(BuildContext ctx, String text, bool value) => GestureDetector(
+      onTap: () => Navigator.pop(ctx, value),
+      child: Container(
+        height: 48,
+        width: double.infinity,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: _coach.accentColor.withOpacity(0.1),
+          border: Border.all(color: _coach.accentColor.withOpacity(0.35)),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Text(
+          text,
+          style: appFont(
+            fontSize: 15,
+            fontWeight: FontWeight.w800,
+            color: const Color(0xFF3D3A4E),
+          ),
+        ),
+      ),
+    );
+
+    return showDialog<bool>(
+      context: context,
+      barrierColor: Colors.black.withOpacity(0.48),
+      builder: (ctx) => Dialog(
+        insetPadding: const EdgeInsets.symmetric(horizontal: 56),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(22, 22, 22, 18),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(26),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.12),
+                blurRadius: 18,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '오전인가요, 오후인가요?',
+                style: appFont(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: const Color(0xFF3D3A4E),
+                ),
+              ),
+              const SizedBox(height: 16),
+              // 범위면 글자가 길어서 옆으로 나란히 두면 잘린다.
+              choice(ctx, label(am), false),
+              const SizedBox(height: 8),
+              choice(ctx, label(pm), true),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   /// 글에 적힌 때로 시각을 정한다. 때가 없으면 null.
   ///
   /// 이름은 그대로 둔다. 시각을 읽는 쪽은 '7시'를 이름에서 떼어내지만, 여기는
@@ -4499,6 +4622,11 @@ class _TasksScreenState extends State<TasksScreen>
         timeStr = _formatTime(parsed.time!);
         timeStartStr =
             '${parsed.time!.hour.toString().padLeft(2, '0')}:${parsed.time!.minute.toString().padLeft(2, '0')}';
+        final end = parsed.endTime;
+        if (end != null) {
+          timeStr += ' ~ ${_formatTime(end)}';
+          timeEndStr = _storedTime(end);
+        }
         // 자연어로 등록하는 일정이므로 글로벌 설정 상태에 따라 알람 자동 활성화
         reminderEnabled = _isCoreReminderEnabledGlobally;
       } else if (parsed == null) {
@@ -11865,6 +11993,7 @@ class _TasksScreenState extends State<TasksScreen>
     // 빠져 있어서, 같은 말을 어디에 적었느냐로 결과가 갈렸다.
     var title = text;
     TimeOfDay? readTime;
+    TimeOfDay? readEndTime;
     if (_schTimeType == 'none') {
       final parsed = _parseNaturalLanguageTime(text);
       if (parsed == null) {
@@ -11875,6 +12004,7 @@ class _TasksScreenState extends State<TasksScreen>
         // 시각 없이 넣는다 — 이름에서 '7시'도 떼지 않는다.
         title = parsed.cleanText;
         readTime = parsed.time;
+        readEndTime = parsed.endTime;
       }
     }
 
@@ -11917,6 +12047,11 @@ class _TasksScreenState extends State<TasksScreen>
       if (readTime != null) {
         entry.timeStart = _storedTime(readTime);
         entry.time = _formatTime(readTime);
+        if (readEndTime != null) {
+          entry.timeEnd = _storedTime(readEndTime);
+          entry.time =
+              '${_formatTime(readTime)} ~ ${_formatTime(readEndTime)}';
+        }
       } else if (effectiveScheduleTimeType == 'single' &&
           _schStartTime != null) {
         entry.timeStart = _storedTime(_schStartTime!);
@@ -15255,20 +15390,44 @@ class _TasksScreenState extends State<TasksScreen>
                       // 숫자가 없으면 "저녁 글쓰기"의 '저녁'을 읽는다. 시각이
                       // 붙어야 시작할 때 챙겨줄 수 있다.
                       if (timeType == 'none') {
-                        final parsed = _parseNaturalLanguageTime(name);
+                        var parsed = _parseNaturalLanguageTime(name);
                         TimeOfDay? readTime;
-                        if (parsed == null) {
+                        TimeOfDay? readEndTime;
+                        if (parsed != null && parsed.meridiemGuessed) {
+                          final am = _parseNaturalLanguageTime(
+                            name,
+                            forcePm: false,
+                          )!;
+                          final pm = _parseNaturalLanguageTime(
+                            name,
+                            forcePm: true,
+                          )!;
+                          final isPm = await _askRoutineMeridiem(
+                            (start: am.time!, end: am.endTime),
+                            (start: pm.time!, end: pm.endTime),
+                          );
+                          if (!mounted || !ctx.mounted) return;
+                          if (isPm == null) {
+                            // 창을 닫았다. 적은 그대로 시각 없이 넣는다.
+                            parsed = null;
+                          } else {
+                            parsed = isPm ? pm : am;
+                            name = parsed.cleanText;
+                            readTime = parsed.time;
+                            readEndTime = parsed.endTime;
+                          }
+                        } else if (parsed == null) {
                           readTime = _timeFromDaypart(name);
-                        } else if (!parsed.meridiemGuessed ||
-                            await _confirmGuessedTime(parsed.time!)) {
+                        } else {
                           name = parsed.cleanText;
                           readTime = parsed.time;
+                          readEndTime = parsed.endTime;
                         }
                         if (!mounted || !ctx.mounted) return;
                         if (readTime != null) {
                           timeType = 'single';
                           mStartTime = readTime;
-                          mEndTime = null;
+                          mEndTime = readEndTime;
                         }
                       }
 
