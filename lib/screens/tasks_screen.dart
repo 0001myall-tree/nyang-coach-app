@@ -15245,9 +15245,33 @@ class _TasksScreenState extends State<TasksScreen>
                         return;
                       }
 
-                      final name = nameCtrl.text.trim();
+                      var name = nameCtrl.text.trim();
                       if (name.isEmpty) return;
                       if (freq == 'weekly' && days.isEmpty) return;
+
+                      // 시간 칸을 안 건드리고 이름에만 "7시 반 운동"처럼 적은 경우.
+                      // 일정 칸이 하던 일을 여기도 한다. 오전·오후를 앱이 찍었으면
+                      // 한 번 묻고, 아니라고 하면 적은 그대로 시간 없이 넣는다.
+                      // 숫자가 없으면 "저녁 글쓰기"의 '저녁'을 읽는다. 시각이
+                      // 붙어야 시작할 때 챙겨줄 수 있다.
+                      if (timeType == 'none') {
+                        final parsed = _parseNaturalLanguageTime(name);
+                        TimeOfDay? readTime;
+                        if (parsed == null) {
+                          readTime = _timeFromDaypart(name);
+                        } else if (!parsed.meridiemGuessed ||
+                            await _confirmGuessedTime(parsed.time!)) {
+                          name = parsed.cleanText;
+                          readTime = parsed.time;
+                        }
+                        if (!mounted || !ctx.mounted) return;
+                        if (readTime != null) {
+                          timeType = 'single';
+                          mStartTime = readTime;
+                          mEndTime = null;
+                        }
+                      }
+
                       final effectiveHabitTimeType = _effectiveClockTimeType(
                         timeType,
                         mEndTime,
