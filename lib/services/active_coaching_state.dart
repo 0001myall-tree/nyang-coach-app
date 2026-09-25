@@ -225,6 +225,17 @@ class ActiveCoachingBudget {
   /// 이 시각부터는 말 걸지 않는다. 밤 정리 개입은 이 예산 밖이라 걸리지 않는다.
   static const int quietFromHour = 22;
 
+  /// 이 시각 전에도 말 걸지 않는다.
+  ///
+  /// 22시만 막던 때는 자정이 넘으면 다시 열렸다. 새 날로 다시 계산하면서
+  /// 새벽 0시 반 같은 자리가 잡혔다. 네이티브도 같은 선을 쓴다
+  /// (OngoingNudgeState.isActiveQuietNow).
+  static const int quietUntilHour = 6;
+
+  /// 말 걸지 않는 밤 시간인지.
+  static bool isQuietAt(DateTime at) =>
+      at.hour >= quietFromHour || at.hour < quietUntilHour;
+
   final String date;
   final DateTime? lastSpokeAt;
   final int spokenToday;
@@ -248,7 +259,7 @@ class ActiveCoachingBudget {
 
   /// 지금 말을 걸어도 되는지. 밤 정리 개입과 약속 시각 확인은 이걸 묻지 않는다.
   bool allows(DateTime now) {
-    if (now.hour >= quietFromHour) return false;
+    if (isQuietAt(now)) return false;
     if (spokenToday >= dailyCap) return false;
     final last = lastSpokeAt;
     if (last == null) return true;

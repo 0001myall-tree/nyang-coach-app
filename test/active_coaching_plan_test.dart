@@ -142,6 +142,19 @@ void main() {
       expect(plan, isNull);
     });
 
+    test('자정 넘어 계산하면 첫 차례는 아침 6시로 밀린다', () {
+      final lateNight = DateTime(2026, 9, 23, 0, 30);
+      final plan = ActiveCoachingPlanner.next(
+        tasks: [task('a'), task('b')],
+        now: lateNight,
+        day: ActiveCoachingDay(date: ActiveCoachingStore.dateKey(lateNight)),
+        budget: ActiveCoachingBudget(
+          date: ActiveCoachingStore.dateKey(lateNight),
+        ),
+      );
+      expect(plan?.at, DateTime(2026, 9, 23, 6));
+    });
+
     test('붙잡고 있는 일이 있으면 걸지 않는다', () {
       final plan = ActiveCoachingPlanner.next(
         tasks: [task('a', inProgress: true), task('b')],

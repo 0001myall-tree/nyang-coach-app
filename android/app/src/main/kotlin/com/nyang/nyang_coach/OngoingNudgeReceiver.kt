@@ -18,6 +18,9 @@ class OngoingNudgeReceiver : BroadcastReceiver() {
 
         /** 알람이 늦게 울린 만큼은 때가 된 것으로 본다. */
         private const val ACTIVE_DUE_SLACK_MILLIS = 60_000L
+
+        /** 화면이 꺼져 있어 못 띄운 차례를 다시 들여다보는 간격. */
+        private const val ACTIVE_SCREEN_RETRY_MILLIS = 20 * 60_000L
     }
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -131,9 +134,10 @@ class OngoingNudgeReceiver : BroadcastReceiver() {
         // 그 앞의 것으로 내려간다.
         val entry = due.lastOrNull { OngoingNudgeState.isStillWanted(context, it.plan) }
 
+        val screenOff = !OngoingNudgeState.isScreenOn(context)
         val blocked = entry == null ||
             !OngoingNudgeState.canDrawOverlays(context) ||
-            !OngoingNudgeState.isScreenOn(context) ||
+            screenOff ||
             // 냥냥코치를 보고 있으면 할 일이 이미 눈앞에 있다.
             OngoingNudgeState.isAppForeground(context) ||
             // 붙잡고 있는 일이 있는 사람에게 다른 말을 얹는 것은 방해다.
@@ -145,6 +149,24 @@ class OngoingNudgeReceiver : BroadcastReceiver() {
             OngoingNudgeScheduler.scheduleActiveAt(
                 context,
                 System.currentTimeMillis() + ACTIVE_TEST_RETRY_MILLIS,
+            )
+            return
+        }
+
+        // 화면이 꺼져 있던 것뿐이면 버리지 않고 켜질 때까지 기다린다. 버리던
+        // 때는 그 시각에 마침 폰을 보고 있어야만 떠서, 하루에 몇 번 안 걸렸다.
+        // 켜졌다는 신호는 앱이 꺼져 있으면 못 받으므로 20분마다 들여다본다.
+        // 다음 차례가 오면 그쪽으로 넘어가고, 밤 시간에는 기다리지 않는다.
+        if (screenOff && entry != null &&
+            OngoingNudgeState.canDrawOverlays(context) &&
+            !OngoingNudgeState.isActiveQuietNow()
+        ) {
+            val lastDue = due.last().atMillis
+            val nextAt = queue.firstOrNull { it.atMillis > lastDue }?.atMillis
+            val retryAt = System.currentTimeMillis() + ACTIVE_SCREEN_RETRY_MILLIS
+            OngoingNudgeScheduler.scheduleActiveAt(
+                context,
+                if (nextAt != null && nextAt < retryAt) nextAt else retryAt,
             )
             return
         }

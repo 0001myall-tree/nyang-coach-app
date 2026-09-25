@@ -104,8 +104,18 @@ class ActiveCoachingPlanner {
 
     ActiveCoachingPlan? best;
     void consider(DateTime at, ActiveCoachingSignal signal, Map? task) {
-      final when = _usable(at, busyAt: busyAt, busyEndAfter: busyEndAfter);
+      var when = _usable(at, busyAt: busyAt, busyEndAfter: busyEndAfter);
       if (when == null) return;
+      // 새벽이면 아침으로 민다. 버리면 자정 넘어 앱을 한 번 연 날은 차례가
+      // 하나도 안 잡혀, 다시 열 때까지 조용하다.
+      if (when.hour < ActiveCoachingBudget.quietUntilHour) {
+        when = DateTime(
+          when.year,
+          when.month,
+          when.day,
+          ActiveCoachingBudget.quietUntilHour,
+        );
+      }
       // 오늘 자리만 건다. 내일 것은 내일 다시 계산하는 편이 맞다 — 오늘 밤
       // 사이에 목록도 약속도 바뀐다.
       if (when.day != now.day || when.month != now.month) return;

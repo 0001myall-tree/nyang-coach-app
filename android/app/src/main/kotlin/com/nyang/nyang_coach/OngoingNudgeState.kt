@@ -127,6 +127,15 @@ object OngoingNudgeState {
         return hour >= 22
     }
 
+    /**
+     * 적극 코칭이 말 걸지 않는 밤 시간(22시~6시)인지.
+     * Dart의 ActiveCoachingBudget.isQuietAt과 같은 선이다.
+     */
+    fun isActiveQuietNow(): Boolean {
+        val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+        return hour >= 22 || hour < 6
+    }
+
     fun start(
         context: Context,
         taskId: String,
