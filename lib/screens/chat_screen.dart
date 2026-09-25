@@ -21263,7 +21263,7 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
                         child: Icon(
                           Icons.send_rounded,
                           color: isFriends
-                              ? _coach.onFillColor
+                              ? _coach.sendIconColor
                               : Colors.white,
                           size: 20,
                         ),

@@ -66,8 +66,12 @@ class CoachConfig {
   /// 코치 색은 진한 겨자색으로 두고, 채팅에서 크게 칠하는 두 곳만 따로 받는다.
   final Color? fillColor;
 
-  /// [fillColor] 위에 얹는 글씨와 아이콘 색.
+  /// [fillColor] 위에 얹는 글씨 색.
   final Color onFillColor;
+
+  /// 전송 버튼 화살표 색. 할매는 개나리 위에 흰색은 흐리고 검정은 딱딱해서
+  /// 고동색을 쓴다.
+  final Color sendIconColor;
 
   const CoachConfig({
     required this.id,
@@ -88,6 +92,7 @@ class CoachConfig {
     this.voiceCount = 0,
     this.fillColor,
     this.onFillColor = Colors.white,
+    this.sendIconColor = Colors.white,
     // ignore: prefer_initializing_formals
   }) : _name = name;
 
@@ -390,6 +395,7 @@ class CoachConfigs {
       accentLight: Color(0xFFFFF8E1),
       fillColor: Color(0xFFFFD43B),
       onFillColor: Color(0xFF2B2416),
+      sendIconColor: Color(0xFF6B4423),
       chips: ['방 치우기 싫어', '설거지 귀찮아', '화장실 청소 뭐부터 할까?'],
       voiceCount: 5, // 목소리 파일 5개
       flirtOne: [
