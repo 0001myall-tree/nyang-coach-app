@@ -59,6 +59,16 @@ class CoachConfig {
   /// 나중에 목소리 추가 시 이 숫자만 올리면 자동 반영됨
   final int voiceCount;
 
+  /// 내 말풍선과 전송 버튼을 칠하는 색. 없으면 [accentColor].
+  ///
+  /// 할매는 개나리색으로 칠하고 싶은데, 코치 색은 흰 바탕 위 아이콘·글씨와 흰
+  /// 글씨가 얹히는 버튼에도 두루 쓰여서 밝은 노랑이면 둘 다 안 읽힌다. 그래서
+  /// 코치 색은 진한 겨자색으로 두고, 채팅에서 크게 칠하는 두 곳만 따로 받는다.
+  final Color? fillColor;
+
+  /// [fillColor] 위에 얹는 글씨와 아이콘 색.
+  final Color onFillColor;
+
   const CoachConfig({
     required this.id,
     required String name,
@@ -76,12 +86,15 @@ class CoachConfig {
     this.workoutPlaybook,
     this.groomingPlaybook,
     this.voiceCount = 0,
+    this.fillColor,
+    this.onFillColor = Colors.white,
     // ignore: prefer_initializing_formals
   }) : _name = name;
 
   String get name => _name;
 
   bool get isMaster => tier == 'master';
+  Color get bubbleFill => fillColor ?? accentColor;
   String get imagePath => 'assets/images/$id.png';
   String get bgImagePath => 'assets/images/bg_$id.png';
 }
@@ -372,8 +385,11 @@ class CoachConfigs {
       id: 'halmae',
       name: '할매 코치',
       tier: 'friends',
-      accentColor: Color(0xFF5EC39A),
-      accentLight: Color(0xFFECFDF5),
+      // 개나리색. 방 배경이 나무색과 따뜻한 조명이라 초록보다 어울린다.
+      accentColor: Color(0xFFB8860B),
+      accentLight: Color(0xFFFFF8E1),
+      fillColor: Color(0xFFFFD43B),
+      onFillColor: Color(0xFF2B2416),
       chips: ['방 치우기 싫어', '설거지 귀찮아', '화장실 청소 뭐부터 할까?'],
       voiceCount: 5, // 목소리 파일 5개
       flirtOne: [

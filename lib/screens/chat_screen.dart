@@ -15903,9 +15903,11 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
         TextSpan(
           text: visibleUrl,
           style: style.copyWith(
-            color: msg.isUser ? Colors.white : _coach.accentColor,
+            color: msg.isUser ? _coach.onFillColor : _coach.accentColor,
             decoration: TextDecoration.underline,
-            decorationColor: msg.isUser ? Colors.white : _coach.accentColor,
+            decorationColor: msg.isUser
+                ? _coach.onFillColor
+                : _coach.accentColor,
             fontWeight: FontWeight.w800,
           ),
           recognizer: TapGestureRecognizer()
@@ -18434,10 +18436,10 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
     final time = DateFormat('a h:mm', 'ko').format(msg.time);
     final isMasterUserBubble = isUser && _coach.isMaster;
     final bubbleColor = isUser
-        ? (isMasterUserBubble ? const Color(0xFFF4F0FF) : _coach.accentColor)
+        ? (isMasterUserBubble ? const Color(0xFFF4F0FF) : _coach.bubbleFill)
         : Colors.white;
     final bubbleTextColor = isUser
-        ? (isMasterUserBubble ? const Color(0xFF111827) : Colors.white)
+        ? (isMasterUserBubble ? const Color(0xFF111827) : _coach.onFillColor)
         : AppDesignTokens.textPrimary;
     final bubbleBorderColor = isMasterUserBubble
         ? const Color(0xFFE6DCFF)
@@ -21123,7 +21125,6 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
     // 프렌즈는 배경 그림을 살려야 해서 투명을 유지한다.
     final hasSolidPanel = !isImmersiveInput;
     const masterLavenderBorder = AppDesignTokens.brandCardBorder;
-    const masterLavenderIcon = AppDesignTokens.brandMuted;
     const masterLavenderShadow = AppDesignTokens.brand;
     return Container(
       decoration: BoxDecoration(
@@ -21162,76 +21163,11 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
                 ),
                 Row(
                   children: [
-                    // 마이크 버튼
-                    GestureDetector(
-                      onTap: () {
-                        if (!_speechEnabled) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('기기에서 음성 인식을 지원하지 않거나 권한이 없습니다.'),
-                            ),
-                          );
-                          return;
-                        }
-                        if (_isListening) {
-                          _stopListening();
-                        } else {
-                          _startListening();
-                        }
-                      },
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 200),
-                        width: 44,
-                        height: 44,
-                        decoration: BoxDecoration(
-                          color: _isListening
-                              ? Colors.redAccent.withOpacity(0.15)
-                              // 입력창과 한 줄로 붙어 있어서 따로 놀면 눈에 띈다.
-                              // 옆이 흰색에 가까워졌으니 같이 올린다.
-                              : (isFriends
-                                    ? Colors.white.withValues(alpha: 0.88)
-                                    : Colors.white),
-                          borderRadius: BorderRadius.circular(
-                            AppDesignTokens.radiusPill,
-                          ),
-                          border: Border.all(
-                            color: _isListening
-                                ? Colors.redAccent
-                                : (isFriends
-                                      ? _coach.accentColor.withOpacity(0.6)
-                                      : masterLavenderBorder),
-                            width: _isListening ? 2.0 : 1.2,
-                          ),
-                          boxShadow: isImmersiveInput
-                              ? null
-                              : [
-                                  BoxShadow(
-                                    color: masterLavenderShadow.withOpacity(
-                                      0.08,
-                                    ),
-                                    blurRadius: 10,
-                                    offset: const Offset(0, 2),
-                                  ),
-                                ],
-                        ),
-                        child: Icon(
-                          _isListening
-                              ? Icons.stop_rounded
-                              : Icons.mic_none_rounded,
-                          color: _isListening
-                              ? Colors.redAccent
-                              : (isFriends
-                                    ? _coach.accentColor
-                                    : masterLavenderIcon),
-                          size: 20,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
                     // 텍스트 필드
                     Expanded(
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        // 오른쪽은 마이크 아이콘이 차지해서 덜 띄운다.
+                        padding: const EdgeInsets.only(left: 16, right: 4),
                         decoration: BoxDecoration(
                           // 냥냥이는 글자가 진한 색이라 유리판이 흐리면 사진 위에
                           // 바로 얹힌 꼴이 된다. 밝은 배경에선 묻히고 어두운 데선
@@ -21240,7 +21176,7 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
                           //
                           // 다른 프렌즈 코치도 흰 글씨에 흐린 유리판이었는데, 할매
                           // 방처럼 밝은 배경에선 글씨가 안 보였다. 냥냥이와 같게
-                          // 맞춘다. 옆의 마이크 버튼도 같이 맞췄다.
+                          // 맞춘다.
                           color: isFriends
                               ? Colors.white.withValues(alpha: 0.88)
                               : Colors.white,
@@ -21254,31 +21190,42 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
                             width: 1.2,
                           ),
                         ),
-                        child: TextField(
-                          controller: _ctrl,
-                          focusNode: _inputFocus,
-                          maxLines: null,
-                          textInputAction: TextInputAction.send,
-                          onSubmitted: _send,
-                          style: appFont(
-                            fontSize: AppDesignTokens.textBody,
-                            color: AppDesignTokens.textPrimary,
-                          ),
-                          decoration: InputDecoration(
-                            hintText: '메시지를 입력하세요...',
-                            hintStyle: appFont(
-                              fontSize: AppDesignTokens.textBody,
-                              color: isFriends
-                                  ? AppDesignTokens.textPrimary.withValues(
-                                      alpha: 0.62,
-                                    )
-                                  : AppDesignTokens.textDisabled,
+                        // 마이크는 입력창 안 오른쪽 끝에 둔다. 전송 버튼 옆에
+                        // 동그라미로 따로 두면 보내려다 마이크를 누른다. 왼쪽
+                        // 자리는 비워서 입력창이 넓어지고, 할매 방에서는 사진
+                        // 버튼이 그 자리를 쓴다.
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Expanded(
+                              child: TextField(
+                                controller: _ctrl,
+                                focusNode: _inputFocus,
+                                maxLines: null,
+                                textInputAction: TextInputAction.send,
+                                onSubmitted: _send,
+                                style: appFont(
+                                  fontSize: AppDesignTokens.textBody,
+                                  color: AppDesignTokens.textPrimary,
+                                ),
+                                decoration: InputDecoration(
+                                  hintText: '메시지를 입력하세요...',
+                                  hintStyle: appFont(
+                                    fontSize: AppDesignTokens.textBody,
+                                    color: isFriends
+                                        ? AppDesignTokens.textPrimary
+                                              .withValues(alpha: 0.62)
+                                        : AppDesignTokens.textDisabled,
+                                  ),
+                                  border: InputBorder.none,
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    vertical: 12,
+                                  ),
+                                ),
+                              ),
                             ),
-                            border: InputBorder.none,
-                            contentPadding: const EdgeInsets.symmetric(
-                              vertical: 12,
-                            ),
-                          ),
+                            _buildMicButton(isFriends),
+                          ],
                         ),
                       ),
                     ),
@@ -21294,7 +21241,7 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
                           gradient: isFriends
                               ? null
                               : AppDesignTokens.brandVividGradient,
-                          color: isFriends ? _coach.accentColor : null,
+                          color: isFriends ? _coach.bubbleFill : null,
                           borderRadius: BorderRadius.circular(
                             AppDesignTokens.radiusPill,
                           ),
@@ -21304,7 +21251,7 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
                           boxShadow: [
                             BoxShadow(
                               color: isFriends
-                                  ? _coach.accentColor.withOpacity(0.35)
+                                  ? _coach.bubbleFill.withOpacity(0.35)
                                   : AppDesignTokens.brandVivid.withValues(
                                       alpha: 0.34,
                                     ),
@@ -21315,7 +21262,9 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
                         ),
                         child: Icon(
                           Icons.send_rounded,
-                          color: Colors.white,
+                          color: isFriends
+                              ? _coach.onFillColor
+                              : Colors.white,
                           size: 20,
                         ),
                       ),
@@ -21326,6 +21275,47 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  /// 입력창 안에 들어가는 마이크. 녹음 중에는 빨갛게 바뀌고 누르면 멈춘다.
+  Widget _buildMicButton(bool isFriends) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () {
+        if (!_speechEnabled) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('기기에서 음성 인식을 지원하지 않거나 권한이 없습니다.')),
+          );
+          return;
+        }
+        if (_isListening) {
+          _stopListening();
+        } else {
+          _startListening();
+        }
+      },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          width: 38,
+          height: 38,
+          decoration: BoxDecoration(
+            color: _isListening
+                ? Colors.redAccent.withValues(alpha: 0.15)
+                : Colors.transparent,
+            shape: BoxShape.circle,
+          ),
+          child: Icon(
+            _isListening ? Icons.stop_rounded : Icons.mic_none_rounded,
+            color: _isListening
+                ? Colors.redAccent
+                : (isFriends ? _coach.accentColor : AppDesignTokens.brandMuted),
+            size: 22,
+          ),
+        ),
       ),
     );
   }
