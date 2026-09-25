@@ -4308,10 +4308,9 @@ class _TasksScreenState extends State<TasksScreen>
 
     int hour24 = rawHour;
     var meridiemGuessed = false;
-    if (prefix == '오전' || prefix == '아침') {
-      hour24 = rawHour == 12 ? 0 : rawHour;
-    } else if (prefix == '오후' || prefix == '저녁' || prefix == '밤') {
-      hour24 = rawHour == 12 ? 12 : rawHour + 12;
+    final fromDaypart = hourWithDaypart(prefix, rawHour);
+    if (fromDaypart != null) {
+      hour24 = fromDaypart;
     } else if (forcePm != null) {
       // 사용자가 오전·오후를 골라준 경우. 13시부터는 고를 것이 없다.
       if (rawHour < 12 && forcePm) hour24 = rawHour + 12;
@@ -4362,10 +4361,9 @@ class _TasksScreenState extends State<TasksScreen>
   }) {
     if (rawHour < 1 || rawHour > 24 || minute > 59) return null;
     int hour24;
-    if (prefix == '오전' || prefix == '아침') {
-      hour24 = rawHour == 12 ? 0 : rawHour;
-    } else if (prefix == '오후' || prefix == '저녁' || prefix == '밤') {
-      hour24 = rawHour == 12 ? 12 : rawHour + 12;
+    final fromDaypart = hourWithDaypart(prefix, rawHour);
+    if (fromDaypart != null) {
+      hour24 = fromDaypart;
     } else {
       hour24 = rawHour % 24;
       final startTotal = start.hour * 60 + start.minute;
@@ -12332,10 +12330,7 @@ class _TasksScreenState extends State<TasksScreen>
     // Parse Time: e.g. "3시", "오후 3시 반", "오전 11시 10분"
     TimeOfDay? parsedTime;
     bool hasTime = false;
-    final timeRegex = RegExp(
-      r'((?:오전|아침|오후|저녁|밤)\s*)?(\d{1,2})시(?:\s*(\d{1,2})분|\s*반)?(?:\s*(?:에|쯤|경|까지))?',
-    );
-    final timeMatch = timeRegex.firstMatch(cleaned);
+    final timeMatch = kSingleTimeRegex.firstMatch(cleaned);
     if (timeMatch != null) {
       final prefix = (timeMatch.group(1) ?? '').replaceAll(RegExp(r'\s'), '');
       final rawHour = int.tryParse(timeMatch.group(2)!) ?? 0;
@@ -12348,10 +12343,9 @@ class _TasksScreenState extends State<TasksScreen>
 
       if (rawHour >= 1 && rawHour <= 24) {
         int hour24 = rawHour;
-        if (prefix == '오전' || prefix == '아침') {
-          hour24 = rawHour == 12 ? 0 : rawHour;
-        } else if (prefix == '오후' || prefix == '저녁' || prefix == '밤') {
-          hour24 = rawHour == 12 ? 12 : rawHour + 12;
+        final fromDaypart = hourWithDaypart(prefix, rawHour);
+        if (fromDaypart != null) {
+          hour24 = fromDaypart;
         } else {
           if (rawHour < 12) {
             final now = DateTime.now();

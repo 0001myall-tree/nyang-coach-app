@@ -8726,10 +8726,9 @@ $block
       return (cleanText: _taskTitle(rawText), time: null);
 
     int hour24;
-    if (prefix == '오전' || prefix == '아침') {
-      hour24 = rawHour == 12 ? 0 : rawHour;
-    } else if (prefix == '오후' || prefix == '저녁' || prefix == '밤') {
-      hour24 = rawHour == 12 ? 12 : rawHour + 12;
+    final fromDaypart = hourWithDaypart(prefix, rawHour);
+    if (fromDaypart != null) {
+      hour24 = fromDaypart;
     } else {
       // 오전/오후 없으면 현재 시간 기준 "바로 다음 n시" 판별
       final now = DateTime.now();
@@ -10360,10 +10359,9 @@ $block
         return null;
       }
       var hour24 = rawHour;
-      if (prefix == '오전' || prefix == '아침') {
-        hour24 = rawHour == 12 ? 0 : rawHour;
-      } else if (prefix == '오후' || prefix == '저녁' || prefix == '밤') {
-        hour24 = rawHour == 12 ? 12 : rawHour + 12;
+      final fromDaypart = hourWithDaypart(prefix, rawHour);
+      if (fromDaypart != null) {
+        hour24 = fromDaypart;
       }
       if (hour24 < 0 || hour24 > 23) return null;
       return TimeOfDay(hour: hour24, minute: minute);
@@ -10769,10 +10767,9 @@ $block
       if (rawHour < 1 || rawHour > 24 || minute > 59) return null;
 
       var hour24 = rawHour;
-      if (prefix == '오전' || prefix == '아침') {
-        hour24 = rawHour == 12 ? 0 : rawHour;
-      } else if (prefix == '오후' || prefix == '저녁' || prefix == '밤') {
-        hour24 = rawHour == 12 ? 12 : rawHour + 12;
+      final fromDaypart = hourWithDaypart(prefix, rawHour);
+      if (fromDaypart != null) {
+        hour24 = fromDaypart;
       } else if (rawHour < 12) {
         if (notBefore != null) {
           // "9시부터 5시까지"의 5시는 오후다. 끝이 시작보다 앞설 수는 없다.

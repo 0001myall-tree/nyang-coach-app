@@ -80,4 +80,39 @@ void main() {
       expect(minuteFrom(null, segments.start), 30);
     });
   });
+
+  group('앞말로 오전·오후 정하기', () {
+    test('새벽·낮·점심도 시각에 붙는다', () {
+      expect(kSingleTimeRegex.firstMatch('새벽 5시 기상')!.group(1)!.trim(), '새벽');
+      expect(kSingleTimeRegex.firstMatch('점심 1시 약속')!.group(1)!.trim(), '점심');
+      expect(kSingleTimeRegex.firstMatch('낮 2시 산책')!.group(1)!.trim(), '낮');
+    });
+
+    test('밤 12시는 자정, 밤 1시는 새벽', () {
+      expect(hourWithDaypart('밤', 12), 0);
+      expect(hourWithDaypart('밤', 1), 1);
+      expect(hourWithDaypart('밤', 10), 22);
+    });
+
+    test('새벽은 오전', () {
+      expect(hourWithDaypart('새벽', 5), 5);
+      expect(hourWithDaypart('새벽', 12), 0);
+    });
+
+    test('낮·점심은 12시 그대로, 1~6시는 오후', () {
+      expect(hourWithDaypart('점심', 12), 12);
+      expect(hourWithDaypart('점심', 1), 13);
+      expect(hourWithDaypart('낮', 11), 11);
+    });
+
+    test('아침·저녁은 전과 같다', () {
+      expect(hourWithDaypart('아침', 7), 7);
+      expect(hourWithDaypart('저녁', 7), 19);
+      expect(hourWithDaypart('오후', 12), 12);
+    });
+
+    test('앞말이 없으면 정하지 않는다', () {
+      expect(hourWithDaypart('', 7), isNull);
+    });
+  });
 }
