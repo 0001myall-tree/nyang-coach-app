@@ -790,7 +790,8 @@ class OngoingNudgeService : Service() {
             OngoingNudgeState.writeResult(this, taskId, "moveTomorrow")
             forgetActiveFor(taskId)
             Toast.makeText(this, "내일 일정으로 옮겨둘게!", Toast.LENGTH_SHORT).show()
-            lingerAsDoorway()
+            // 그 일은 정리됐다. 캐릭터가 남으면 아직 답을 기다리는 것처럼 보인다.
+            stopEverything()
         }
 
         val third = view.findViewById<TextView>(R.id.nudge_later_pick)
@@ -800,7 +801,8 @@ class OngoingNudgeService : Service() {
             OngoingNudgeState.writeResult(this, taskId, "notToday")
             forgetActiveFor(taskId)
             Toast.makeText(this, "알겠어. 오늘은 이 일로 안 부를게!", Toast.LENGTH_SHORT).show()
-            lingerAsDoorway()
+            // 그 일은 정리됐다. 캐릭터가 남으면 아직 답을 기다리는 것처럼 보인다.
+            stopEverything()
         }
 
         view.findViewById<View>(R.id.nudge_later_scrim).setOnClickListener {
@@ -874,7 +876,8 @@ class OngoingNudgeService : Service() {
             OngoingNudgeState.writeResult(this, taskId, "moveTomorrow")
             forgetActiveFor(taskId)
             Toast.makeText(this, "내일 일정으로 옮겨둘게!", Toast.LENGTH_SHORT).show()
-            lingerAsDoorway()
+            // 그 일은 정리됐다. 캐릭터가 남으면 아직 답을 기다리는 것처럼 보인다.
+            stopEverything()
         }
 
         val third = view.findViewById<TextView>(R.id.nudge_later_pick)
@@ -884,7 +887,8 @@ class OngoingNudgeService : Service() {
             OngoingNudgeState.writeResult(this, taskId, "notToday")
             forgetActiveFor(taskId)
             Toast.makeText(this, "알겠어. 오늘은 여기까지!", Toast.LENGTH_SHORT).show()
-            lingerAsDoorway()
+            // 그 일은 정리됐다. 캐릭터가 남으면 아직 답을 기다리는 것처럼 보인다.
+            stopEverything()
         }
 
         view.findViewById<View>(R.id.nudge_later_scrim).setOnClickListener {
@@ -1116,7 +1120,10 @@ class OngoingNudgeService : Service() {
             "${clockLabel(time)}로 시작 설정했어. 그때 알려줄게.",
             Toast.LENGTH_SHORT,
         ).show()
-        lingerAsDoorway()
+        // 문으로 남지 않는다. 언제 할지 정했으면 그 일은 지금 할 것이 없다 —
+        // 캐릭터가 계속 떠 있으면 아직 답을 기다리는 것처럼 보인다. 그 시각에
+        // 다시 온다.
+        stopEverything()
     }
 
     /** "4:30". 상대 표현은 쓰지 않는다. */
