@@ -137,6 +137,10 @@ class NyangBannerNudge {
     1333,
   ];
 
+  /// 전날 밤에 미리 거는 내일 오전 적극 코칭 자리.
+  /// [ActiveCoachingSync.tomorrowLimit]만큼 있어야 한다.
+  static const List<int> activeTomorrowNotificationIds = [1334, 1335];
+
   /// 적극 코칭 배너 제목. 본문은 Dart가 미리 정해둔 한 줄이다.
   static const String activeTitle = '🐾 냥냥코치';
 
@@ -193,7 +197,10 @@ class NyangBannerNudge {
     for (final id in gapNotificationIds) {
       await _plugin.cancel(id: id);
     }
-    for (final id in activeNotificationIds) {
+    for (final id in [
+      ...activeNotificationIds,
+      ...activeTomorrowNotificationIds,
+    ]) {
       await _plugin.cancel(id: id);
     }
 
@@ -253,11 +260,28 @@ class NyangBannerNudge {
     final entries = queued is List
         ? queued.whereType<Map>().toList()
         : [decoded];
+    final tomorrow = decoded[ActiveCoachingSync.tomorrowKey];
 
     _ensureTimeZone();
+    await _scheduleActiveEntries(entries, activeNotificationIds, now);
+    // 내일 오전 몫. 다음 날 앱을 열면 [sync]가 지우고 그날 목록으로 다시 건다.
+    if (tomorrow is List) {
+      await _scheduleActiveEntries(
+        tomorrow.whereType<Map>().toList(),
+        activeTomorrowNotificationIds,
+        now,
+      );
+    }
+  }
+
+  static Future<void> _scheduleActiveEntries(
+    List<Map> entries,
+    List<int> ids,
+    DateTime now,
+  ) async {
     var slot = 0;
     for (final entry in entries) {
-      if (slot >= activeNotificationIds.length) break;
+      if (slot >= ids.length) break;
       final millis = (entry['at'] as num?)?.toInt();
       if (millis == null) continue;
       final at = DateTime.fromMillisecondsSinceEpoch(millis);
@@ -266,7 +290,7 @@ class NyangBannerNudge {
       if (body == null || body.isEmpty) continue;
 
       await _plugin.zonedSchedule(
-        id: activeNotificationIds[slot++],
+        id: ids[slot++],
         title: activeTitle,
         body: body,
         scheduledDate: tz.TZDateTime.from(at, tz.local),

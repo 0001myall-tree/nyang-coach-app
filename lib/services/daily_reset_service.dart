@@ -812,6 +812,48 @@ class DailyResetService {
     return true;
   }
 
+  /// [day] 정리가 만들 목록을 미리 짐작한다. 아무것도 저장하지 않는다.
+  ///
+  /// 아이폰은 자정에 앱을 깨울 수 없어서, 전날 밤에 다음 날 오전 적극 코칭을
+  /// 미리 걸어둔다. 그때 쓸 목록이다. 재료는 정리와 같다 — 그날 요일의
+  /// 루틴, 그날 캘린더 일정, 그날로 미리 옮겨둔 할 일. 오늘 적은 일을 들고
+  /// 가는 것은 빠진다. 그건 정리가 도는 순간에만 정해진다.
+  static List<Map<String, dynamic>> predictedTasksFor(
+    SharedPreferences prefs,
+    String day,
+  ) {
+    final tasks = todayHabitTasks(prefs, day);
+    final ids = tasks.map((t) => t['id'].toString()).toSet();
+    try {
+      final schedules =
+          jsonDecode(prefs.getString('nyang_schedules') ?? '{}') as Map;
+      for (final s in (schedules[day] as List?) ?? const []) {
+        if (s is! Map || !ids.add('schedule_${s['id']}')) continue;
+        tasks.add({
+          'id': 'schedule_${s['id']}',
+          'text': s['text'],
+          'category': 'schedule',
+          'done': s['done'] ?? false,
+          'time': s['time'],
+          'duration': s['duration'],
+          'timeStart': s['timeStart'],
+          'timeEnd': s['timeEnd'],
+        });
+      }
+    } catch (_) {}
+    try {
+      final planned =
+          jsonDecode(prefs.getString('nyang_today_tasks_by_date') ?? '{}')
+              as Map;
+      for (final t in (planned[day] as List?) ?? const []) {
+        if (t is Map && ids.add(t['id'].toString())) {
+          tasks.add(Map<String, dynamic>.from(t));
+        }
+      }
+    } catch (_) {}
+    return tasks;
+  }
+
   static Future<void> _injectTodayHabitsAndSchedulesDirectly(
     SharedPreferences prefs,
     String today, {

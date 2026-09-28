@@ -21,6 +21,7 @@ import 'active_coaching_state.dart';
 import 'active_coaching_target.dart';
 import 'active_coaching_time.dart';
 import 'busy_hours_service.dart';
+import 'daily_reset_service.dart';
 import 'gap_coaching_service.dart';
 import 'nyang_banner_nudge.dart';
 
@@ -118,16 +119,27 @@ class ActiveCoachingSync {
           DateTime(now.year, now.month, now.day, time.hour, time.minute),
       ],
     );
-    if (planned.isEmpty) {
+    // 아이폰은 자정에 앱을 깨울 수 없어서, 다음 날 앱을 안 열면 부를 차례가
+    // 하나도 없다. 내일 오전 몫을 미리 세워둔다. 앱을 여는 순간 여기가 다시
+    // 돌면서 지워지고 그날 목록으로 새로 잡힌다.
+    final tomorrow = _isAndroid
+        ? const <ActiveCoachingPlan>[]
+        : _tomorrowMorning(prefs, now, await GapCoachingService.days());
+    if (planned.isEmpty && tomorrow.isEmpty) {
       await _clear();
       return;
     }
     // 약속 시각으로 잡힌 계획은 추적에서 나와 이름이 없다. 이름 없이 나가면
     // 부를 일이 있는데도 카드가 "하나 정해볼까?"로 뜬다.
     final plans = [for (final plan in planned) _withName(plan, tasks)];
-    final plan = plans.first;
 
-    await prefs.setString(plannedKey, jsonEncode(_queuePayload(prefs, plans)));
+    final payload = plans.isEmpty
+        ? <String, dynamic>{queueKey: const []}
+        : _queuePayload(prefs, plans);
+    if (tomorrow.isNotEmpty) {
+      payload[tomorrowKey] = [for (final plan in tomorrow) _entry(prefs, plan)];
+    }
+    await prefs.setString(plannedKey, jsonEncode(payload));
     if (!_isAndroid) {
       // 아이폰은 미리 예약하는 것 말고는 길이 없다. 다른 배너와 자리가 겹치는지
       // 함께 봐야 해서 예약은 그쪽 한 곳에서 한다.
@@ -136,7 +148,8 @@ class ActiveCoachingSync {
     }
     try {
       await _channel.invokeMethod('syncActiveCoaching', {
-        'atMillis': plan.at.millisecondsSinceEpoch,
+        // 안드로이드는 내일 몫을 세우지 않으니 여기선 오늘 것이 꼭 있다.
+        'atMillis': plans.first.at.millisecondsSinceEpoch,
       });
     } on PlatformException {
       //
@@ -362,6 +375,52 @@ class ActiveCoachingSync {
     final trimmed = name.trim();
     if (trimmed.length <= _nameLimit) return trimmed;
     return '${trimmed.substring(0, _nameLimit)}…';
+  }
+
+  /// 계획 안에서 내일 오전 몫이 들어가는 자리. 아이폰만 쓴다.
+  static const String tomorrowKey = 'tomorrow';
+
+  /// 내일 몫은 오전까지, 두 번까지만. 앱을 안 연 채로 시간이 갈수록 전날
+  /// 짐작한 목록이 틀릴 가능성이 커진다 — 다른 기기에서 고친 것이나 끝낸
+  /// 것은 알 길이 없다.
+  static const int tomorrowLimit = 2;
+  static const int tomorrowUntilHour = 12;
+
+  /// 내일 오전에 부를 차례를 전날 목록 짐작으로 세운다.
+  ///
+  /// 내일은 아직 아무 말도 안 한 날이라 추적과 예산은 빈 채로 시작한다.
+  /// 6시 전에 부르지 않는 규칙은 계획 쪽이 지킨다.
+  static List<ActiveCoachingPlan> _tomorrowMorning(
+    SharedPreferences prefs,
+    DateTime now,
+    Set<int> onDays,
+  ) {
+    final start = DateTime(now.year, now.month, now.day + 1);
+    final key = ActiveCoachingStore.dateKey(start);
+    final tasks = DailyResetService.predictedTasksFor(prefs, key);
+    if (tasks.isEmpty) return const [];
+    final noon = start.add(const Duration(hours: tomorrowUntilHour));
+    final planned = ActiveCoachingPlanner.queue(
+      tasks: tasks,
+      now: start,
+      day: ActiveCoachingDay(date: key),
+      budget: ActiveCoachingBudget(date: key),
+      onDays: onDays,
+      busyAt: (at) => BusyHoursService.busyNow(prefs, at) != null,
+      busyEndAfter: (at) => BusyHoursService.busyEndAt(prefs, at),
+      bedtime: prefs.getString('nyang_premium_min_sleep_time'),
+      gapTimes: [
+        for (final time in GapCoachingService.parseTimes(
+          prefs.getString(GapCoachingService.timesKey),
+        ))
+          DateTime(start.year, start.month, start.day, time.hour, time.minute),
+      ],
+      limit: tomorrowLimit,
+    );
+    return [
+      for (final plan in planned)
+        if (plan.at.isBefore(noon)) _withName(plan, tasks),
+    ];
   }
 
   /// 자정 뒤 목록 정리 알람을 걸거나 지운다. 안드로이드만 된다 — 아이폰은
