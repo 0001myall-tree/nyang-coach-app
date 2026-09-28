@@ -49,6 +49,13 @@ class NyangBannerNudge {
   /// 실려온 것을 그대로 남겨둔다.
   static const String answerTaskTextKey = 'banner_answer_task_text';
 
+  /// 답을 남긴 시각(밀리초). 할 일 창이 제때 못 읽은 답이 몇 시간 뒤에 열린
+  /// 창에서 뒤늦게 튀어나오지 않게, 오래된 답은 버린다.
+  static const String answerAtKey = 'banner_answer_at';
+
+  /// 이보다 오래된 답은 버린다. 누르고 앱이 뜨기까지는 길어야 몇십 초다.
+  static const Duration answerFreshFor = Duration(minutes: 10);
+
   /// 시작하고 처음 확인하기까지. 안드로이드 냥냥이와 같은 간격이다.
   static const Duration firstCheck = Duration(minutes: 30);
 
@@ -727,6 +734,7 @@ class NyangBannerNudge {
     // 어느 칸을 볼지 적어두면 할 일 화면이 그 칸을 번쩍여준다.
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(focusTaskKey, taskId);
+    await prefs.setInt(answerAtKey, DateTime.now().millisecondsSinceEpoch);
 
     // 어느 배너였는지도 같이 남긴다 - 안드로이드 딴짓 방지 카드와 같은
     // 질문을 팝업으로 띄우는 데 쓴다([answerKindKey] 참고).

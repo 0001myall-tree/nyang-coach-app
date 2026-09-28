@@ -92,7 +92,7 @@
                 android:background="@drawable/nudge_button_secondary"
                 android:gravity="center"
                 android:maxLines="1"
-                android:text="여기선 못 해"
+                android:text="지금은 못 해"
                 android:textColor="#6B6676"
                 android:textSize="13sp" />
 

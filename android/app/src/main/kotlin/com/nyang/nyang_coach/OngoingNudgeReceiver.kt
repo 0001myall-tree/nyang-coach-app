@@ -50,6 +50,8 @@ class OngoingNudgeReceiver : BroadcastReceiver() {
                 // 폰을 한 번 껐다 켰다고 그날 참견이 끝나면 안 된다. 그 사이
                 // 끝낸 일은 띄우기 직전에 거른다.
                 OngoingNudgeScheduler.rearmActive(context)
+                // 자정 뒤 목록 정리도 폰을 껐다 켜면 사라진다.
+                DailyResetScheduler.rearmIfWanted(context)
             }
 
             OngoingNudgeScheduler.ACTION_CHECK_START ->

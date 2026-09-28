@@ -694,6 +694,13 @@ class TasksScreen extends StatefulWidget {
   final int initialTabIndex;
   final String? initialPlannerDateKey;
   final String? initialPlannerItemId;
+
+  /// 위에 겹쳐 띄운 할 일 창인지.
+  ///
+  /// 카드·배너에서 넘어온 답(번쩍임과 뒤따르는 팝업·간이 채팅창)은 이 창만
+  /// 받는다. 그 답은 늘 할 일 창을 열라는 말과 함께 오는데, 밑에 깔린 화면이
+  /// 먼저 받아 팝업을 띄우면 곧이어 열린 창에 덮여 안 보였다.
+  final bool isPlannerOverlay;
   const TasksScreen({
     super.key,
     required this.coachId,
@@ -704,6 +711,7 @@ class TasksScreen extends StatefulWidget {
     this.initialTabIndex = 0,
     this.initialPlannerDateKey,
     this.initialPlannerItemId,
+    this.isPlannerOverlay = false,
   });
 
   @override
@@ -713,7 +721,15 @@ class TasksScreen extends StatefulWidget {
 class TasksScreenController {
   _TasksScreenState? _state;
   void _attach(_TasksScreenState state) => _state = state;
-  void _detach() => _state = null;
+
+  /// 자기가 붙어 있을 때만 뗀다.
+  ///
+  /// 채팅↔할 일을 오가면 새 화면이 먼저 붙고, 옛 화면은 그 프레임 끝에 치워진다.
+  /// 옛 화면이 무조건 떼면 방금 붙은 새 화면까지 끊겨서, 그 뒤로 자정 정리나
+  /// 클라우드가 목록을 바꿔도 화면이 모른 채 빈칸을 들고 있었다.
+  void _detach(_TasksScreenState state) {
+    if (identical(_state, state)) _state = null;
+  }
 
   void openBedtimeMoveFlow({bool nextDay = false}) {
     _state?._openBedtimeMoveFlow(nextDay: nextDay);
@@ -777,6 +793,11 @@ class TasksScreenController {
 
   void refresh() {
     _state?._loadAll();
+  }
+
+  /// 카드·배너가 남긴 답이 있으면 받는다. 이미 열려 있는 할 일 창에 쓴다.
+  void consumeBannerFocus() {
+    _state?._consumeBannerFocus();
   }
 }
 
@@ -943,6 +964,20 @@ class _TasksScreenState extends State<TasksScreen>
   ///
   /// 한 번 쓰면 지운다. 남겨두면 다음에 앱을 열 때마다 엉뚱한 칸이 번쩍인다.
   Future<void> _consumeBannerFocus() async {
+    if (!widget.isPlannerOverlay || _consumingBannerFocus) return;
+    _consumingBannerFocus = true;
+    try {
+      await _consumeBannerFocusOnce();
+    } finally {
+      _consumingBannerFocus = false;
+    }
+  }
+
+  /// 앱이 돌아온 순간과 창을 다시 열라는 부름이 겹치면 같은 답을 두 번 읽어
+  /// 팝업이 둘 뜬다.
+  bool _consumingBannerFocus = false;
+
+  Future<void> _consumeBannerFocusOnce() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.reload();
     final taskId = prefs.getString(NyangBannerNudge.focusTaskKey);
@@ -954,7 +989,16 @@ class _TasksScreenState extends State<TasksScreen>
     final taskText = prefs.getString(NyangBannerNudge.answerTaskTextKey) ?? '';
     await prefs.remove(NyangBannerNudge.answerKindKey);
     await prefs.remove(NyangBannerNudge.answerTaskTextKey);
-    if (!mounted) return;
+    final answeredAt = prefs.getInt(NyangBannerNudge.answerAtKey);
+    await prefs.remove(NyangBannerNudge.answerAtKey);
+    // 제때 못 읽힌 답이다. 몇 시간 전에 누른 [하기 싫어]가 지금 열린 창에서
+    // 채팅창으로 튀어나오면, 누르지도 않은 버튼에 답하는 셈이 된다. 시각이
+    // 안 적힌 답은 이 표시가 생기기 전 빌드가 남긴 것이라 같이 버린다.
+    final fresh =
+        answeredAt != null &&
+        DateTime.now().millisecondsSinceEpoch - answeredAt <
+            NyangBannerNudge.answerFreshFor.inMilliseconds;
+    if (!fresh || !mounted) return;
     // 화면이 자리를 잡은 뒤에 움직인다. 그리기가 끝나기 전에는 칸의 자리를
     // 알 수 없어서 스크롤이 엉뚱한 데로 간다.
     await Future.delayed(const Duration(milliseconds: 350));
@@ -980,8 +1024,10 @@ class _TasksScreenState extends State<TasksScreen>
     final name = taskText.isEmpty ? null : taskText;
     // 안드로이드 카드에서 [직접 고르기]를 눌러 들어온 경우다. 물을 것이 이미
     // 정해져 있으니 다른 질문을 한 번 더 얹지 않는다.
+    // 카드에서 시각 보기들을 이미 보고 온 사람이라, 같은 보기를 다시 내밀지
+    // 않고 시계로 바로 간다.
     if (kind == 'laterPick') {
-      await _askWhenLater(taskId: taskId, taskText: taskText);
+      await _pickOwnPromiseTime(taskId: taskId);
       return;
     }
     if (kind == 'activeCoachingReluctant') {
@@ -1115,6 +1161,7 @@ class _TasksScreenState extends State<TasksScreen>
             task.text.trim().isNotEmpty)
           ActiveCoachingChoice(
             name: task.text.trim(),
+            id: task.id.toString(),
             timeLabel: _activeCoachingTimeLabel(task.timeStart),
           ),
     ];
@@ -1147,7 +1194,7 @@ class _TasksScreenState extends State<TasksScreen>
       ),
     );
     if (outcome == null || !mounted) return;
-    await _applyActiveCoachingOutcome(outcome, now: now);
+    await _applyActiveCoachingOutcome(outcome, now: now, originalId: taskId);
   }
 
   /// 적극 코칭 카드에서 [하기 싫어]를 눌러 들어왔을 때의 작은 대화창.
@@ -1194,16 +1241,55 @@ class _TasksScreenState extends State<TasksScreen>
     if (!current.first.done && !current.first.inProgress) _toggleTask(taskId);
   }
 
+  /// 팝업이 돌려준 일을 목록에서 찾는다.
+  ///
+  /// 처음 부른 일이면 이름이 아니라 번호로 찾는다. 목록에서 갈아탄 일은 이름만
+  /// 오므로 이름으로 찾되, 같은 이름이 여럿이면 아직 안 끝낸 쪽을 집는다 —
+  /// 끝낸 사본을 집으면 [지금 할게]를 눌러도 시작 표시가 안 붙는다.
+  TaskItem? _findActiveCoachingTask(String? name, String? originalId) {
+    final wanted = (name ?? '').trim();
+    if (originalId != null && originalId.isNotEmpty) {
+      for (final task in _activeTodayTasks) {
+        if (task.id.toString() == originalId && task.text.trim() == wanted) {
+          return task;
+        }
+      }
+    }
+    final same = _activeTodayTasks
+        .where((task) => task.text.trim() == wanted)
+        .toList(growable: false);
+    if (same.isEmpty) return null;
+    for (final task in same) {
+      if (!task.done && task.category != 'schedule') return task;
+    }
+    return same.first;
+  }
+
   /// 팝업에서 고른 것을 실제로 반영한다.
   Future<void> _applyActiveCoachingOutcome(
     ActiveCoachingOutcome outcome, {
     required DateTime now,
+    String? originalId,
   }) async {
-    final picked = _activeTodayTasks.where(
-      (task) => task.text.trim() == (outcome.taskName ?? '').trim(),
-    );
-    final task = picked.isEmpty ? null : picked.first;
-    if (task == null) return;
+    // 목록에서 갈아탄 일이면 팝업이 그 번호를 들고 온다. 없으면 처음 부른 일이다.
+    final id = outcome.taskId ?? originalId;
+    var task = _findActiveCoachingTask(outcome.taskName, id);
+    if (task == null && outcome.kind != ActiveCoachingOutcomeKind.dismissed) {
+      // 팝업이 코치 답을 기다리는 사이 목록이 다른 곳에서 바뀌었을 수 있다.
+      // 한 번 다시 읽고 찾는다.
+      await _loadAll();
+      if (!mounted) return;
+      task = _findActiveCoachingTask(outcome.taskName, id);
+    }
+    if (task == null) {
+      // 말없이 끝나면 버튼을 눌렀는데 아무 일도 안 일어난 고장으로 보인다.
+      if (outcome.kind != ActiveCoachingOutcomeKind.dismissed && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('앗, 그 일이 목록에서 안 보여서 못 적었어.')),
+        );
+      }
+      return;
+    }
     final taskId = task.id.toString();
 
     // 목록에서 직접 고른 일이면 표시를 남긴다. 본인이 "이건 할 수 있다"고 말한
@@ -1222,7 +1308,9 @@ class _TasksScreenState extends State<TasksScreen>
         await _keepActiveCoachingPromise(taskId: taskId, at: at);
         return;
       case ActiveCoachingOutcomeKind.chooseTime:
-        await _askWhenLater(taskId: taskId, taskText: task.text);
+        // 방금 팝업에서 시각 보기들을 보고 [직접 고르기]를 누른 참이다. 같은
+        // 질문을 한 번 더 띄우지 않고 시계로 바로 간다.
+        await _pickOwnPromiseTime(taskId: taskId);
         return;
       case ActiveCoachingOutcomeKind.moveTomorrow:
         // 루틴은 내일 어차피 다시 뜬다. 옮기면 내일 목록에 같은 일이 둘이 된다.
@@ -1329,21 +1417,44 @@ class _TasksScreenState extends State<TasksScreen>
     );
     if (outcome == null || !mounted) return;
 
-    var at = outcome.promisedAt;
     if (outcome.kind == ActiveCoachingOutcomeKind.chooseTime) {
-      final picked = await showTimePicker(
-        context: context,
-        initialTime: TimeOfDay.fromDateTime(
-          choices.isEmpty ? now.add(const Duration(hours: 1)) : choices.first,
-        ),
-      );
-      if (picked == null || !mounted) return;
-      at = DateTime(now.year, now.month, now.day, picked.hour, picked.minute);
-      // 이미 지난 시각을 고르면 오늘은 부를 자리가 없다. 내일로 넘기지 않는다 —
-      // 추적은 그날 안에서만 하고, 하루를 닫는 말은 밤 정리 개입이 한다.
-      if (!at.isAfter(now)) return;
+      await _pickOwnPromiseTime(taskId: taskId, suggested: choices);
+      return;
     }
+    final at = outcome.promisedAt;
     if (at == null) return;
+    await _keepActiveCoachingPromise(taskId: taskId, at: at);
+  }
+
+  /// [직접 고르기]. 시계를 바로 띄우고, 고른 시각을 약속으로 적는다.
+  Future<void> _pickOwnPromiseTime({
+    required String taskId,
+    List<DateTime> suggested = const [],
+  }) async {
+    final now = DateTime.now();
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(
+        suggested.isEmpty ? now.add(const Duration(hours: 1)) : suggested.first,
+      ),
+    );
+    if (picked == null || !mounted) return;
+    final at = DateTime(
+      now.year,
+      now.month,
+      now.day,
+      picked.hour,
+      picked.minute,
+    );
+    // 이미 지난 시각을 고르면 오늘은 부를 자리가 없다. 내일로 넘기지 않는다 —
+    // 추적은 그날 안에서만 하고, 하루를 닫는 말은 밤 정리 개입이 한다. 다만
+    // 말없이 끝내면 고른 시각이 반영 안 된 고장으로 보인다.
+    if (!at.isAfter(DateTime.now())) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('이미 지난 시각이야. 지금보다 뒤로 골라줘!')));
+      return;
+    }
     await _keepActiveCoachingPromise(taskId: taskId, at: at);
   }
 
@@ -1501,7 +1612,7 @@ class _TasksScreenState extends State<TasksScreen>
 
   @override
   void dispose() {
-    widget.controller?._detach();
+    widget.controller?._detach(this);
     WidgetsBinding.instance.removeObserver(this);
     _taskTicker?.cancel();
     _bannerFocusTimer?.cancel();
@@ -12047,8 +12158,7 @@ class _TasksScreenState extends State<TasksScreen>
         entry.time = _formatTime(readTime);
         if (readEndTime != null) {
           entry.timeEnd = _storedTime(readEndTime);
-          entry.time =
-              '${_formatTime(readTime)} ~ ${_formatTime(readEndTime)}';
+          entry.time = '${_formatTime(readTime)} ~ ${_formatTime(readEndTime)}';
         }
       } else if (effectiveScheduleTimeType == 'single' &&
           _schStartTime != null) {

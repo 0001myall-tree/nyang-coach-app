@@ -12,7 +12,7 @@
 /// ```
 /// 지금 할게            → 바로 시작
 /// 시간이 안 나          → 몇 시부터?
-/// 여기선 못 해          → 이따 / 내일로 / 오늘은 안 할래
+/// 지금은 못 해          → 이따 / 내일로 / 오늘은 안 할래
 /// 하기 싫어            → 코치와 작은 대화창
 /// ```
 ///
@@ -60,6 +60,7 @@ class ActiveCoachingOutcome {
   const ActiveCoachingOutcome(
     this.kind, {
     this.taskName,
+    this.taskId,
     this.move,
     this.reason,
     this.promisedAt,
@@ -70,6 +71,10 @@ class ActiveCoachingOutcome {
 
   /// 실제로 다루게 된 일. 목록에서 다른 것을 골랐으면 그쪽 이름이다.
   final String? taskName;
+
+  /// 목록에서 갈아탄 일의 번호. 이름으로 다시 찾으면 같은 이름의 끝낸 사본을
+  /// 집을 수 있어서, 목록을 만들 때 받은 번호를 그대로 돌려준다.
+  final String? taskId;
 
   /// 고른 한 수.
   final String? move;
@@ -87,9 +92,12 @@ class ActiveCoachingOutcome {
 
 /// 목록에 보여줄 남은 일 하나.
 class ActiveCoachingChoice {
-  const ActiveCoachingChoice({required this.name, this.timeLabel});
+  const ActiveCoachingChoice({required this.name, this.id, this.timeLabel});
 
   final String name;
+
+  /// 할 일 번호. 고른 일을 이름이 아니라 이걸로 되찾는다.
+  final String? id;
 
   /// "오후 8:00". 아직 시각이 안 된 일도 보여주되 언제인지는 적어준다.
   final String? timeLabel;
@@ -165,6 +173,16 @@ class _ActiveCoachingDialogState extends State<ActiveCoachingDialog> {
 
   String? _reason;
   late String _task = widget.taskName;
+
+  /// 갈아탄 일의 번호. 처음 부른 일이면 null — 부르는 쪽이 이미 안다.
+  String? get _switchedId {
+    if (!_switched) return null;
+    for (final choice in widget.otherTasks) {
+      if (choice.name == _task) return choice.id;
+    }
+    return null;
+  }
+
   List<String> _moves = const [];
   bool _asking = false;
 
@@ -213,9 +231,9 @@ class _ActiveCoachingDialogState extends State<ActiveCoachingDialog> {
           _goToTime();
         }),
         const SizedBox(width: 6),
-        _smallChoice('여기선 못 해', () {
+        _smallChoice('지금은 못 해', () {
           setState(() {
-            _reason = '여기선 못 해';
+            _reason = '지금은 못 해';
             _step = _Step.notHere;
           });
         }),
@@ -226,6 +244,7 @@ class _ActiveCoachingDialogState extends State<ActiveCoachingDialog> {
             ActiveCoachingOutcome(
               ActiveCoachingOutcomeKind.reluctant,
               taskName: _task,
+              taskId: _switchedId,
               reason: '하기 싫어',
             ),
           ),
@@ -258,7 +277,7 @@ class _ActiveCoachingDialogState extends State<ActiveCoachingDialog> {
     ),
   );
 
-  // ── 여기선 못 해 ───────────────────────────────────────
+  // ── 지금은 못 해 ───────────────────────────────────────
 
   /// 밖에 있어서 집에 있는 영양제를 못 먹는 것처럼, 시간이 아니라 자리가
   /// 막힌 경우. 오늘 접거나 내일로 옮기는 문이 없으면 그 일을 할 때까지 같은
@@ -280,6 +299,7 @@ class _ActiveCoachingDialogState extends State<ActiveCoachingDialog> {
         ActiveCoachingOutcome(
           ActiveCoachingOutcomeKind.moveTomorrow,
           taskName: _task,
+          taskId: _switchedId,
           reason: _reason,
         ),
       ),
@@ -292,6 +312,7 @@ class _ActiveCoachingDialogState extends State<ActiveCoachingDialog> {
         ActiveCoachingOutcome(
           ActiveCoachingOutcomeKind.notToday,
           taskName: _task,
+          taskId: _switchedId,
           reason: _reason,
         ),
       ),
@@ -325,6 +346,7 @@ class _ActiveCoachingDialogState extends State<ActiveCoachingDialog> {
             ActiveCoachingOutcome(
               ActiveCoachingOutcomeKind.start,
               taskName: _task,
+              taskId: _switchedId,
               move: _moves[i],
               reason: _reason,
               pickedFromList: _switched,
@@ -439,6 +461,7 @@ class _ActiveCoachingDialogState extends State<ActiveCoachingDialog> {
           ActiveCoachingOutcome(
             ActiveCoachingOutcomeKind.promise,
             taskName: _task,
+            taskId: _switchedId,
             reason: _reason,
             promisedAt: widget.timeChoices[i],
             pickedFromList: _switched,
@@ -455,6 +478,7 @@ class _ActiveCoachingDialogState extends State<ActiveCoachingDialog> {
         ActiveCoachingOutcome(
           ActiveCoachingOutcomeKind.chooseTime,
           taskName: _task,
+          taskId: _switchedId,
           reason: _reason,
           pickedFromList: _switched,
         ),

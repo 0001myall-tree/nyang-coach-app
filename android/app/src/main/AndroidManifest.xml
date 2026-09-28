@@ -118,6 +118,11 @@
             </intent-filter>
         </receiver>
 
+        <!-- 적극 코칭을 켠 사람의 하루 목록을 자정 뒤에 앱 없이 정리한다 -->
+        <receiver
+            android:name=".DailyResetReceiver"
+            android:exported="false" />
+
         <receiver android:name="es.antonborri.home_widget.HomeWidgetBackgroundReceiver" android:exported="true">
             <intent-filter>
                 <action android:name="es.antonborri.home_widget.action.BACKGROUND" />

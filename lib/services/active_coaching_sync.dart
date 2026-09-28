@@ -74,9 +74,13 @@ class ActiveCoachingSync {
     final userData = await UserDataService.load();
     final master = userData.isPlanActive && userData.planType == 'master';
     if (!master || !await GapCoachingService.isEnabled()) {
+      await _armDailyReset(false);
       await _clear();
       return;
     }
+    // 켜둔 사람은 앱을 안 열어도 자정 뒤에 목록이 정리되고, 그 목록으로 이
+    // 자리가 다시 불린다. 안 그러면 다음 날은 부를 일이 없어 하루 종일 조용하다.
+    await _armDailyReset(true);
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.reload();
@@ -358,6 +362,19 @@ class ActiveCoachingSync {
     final trimmed = name.trim();
     if (trimmed.length <= _nameLimit) return trimmed;
     return '${trimmed.substring(0, _nameLimit)}…';
+  }
+
+  /// 자정 뒤 목록 정리 알람을 걸거나 지운다. 안드로이드만 된다 — 아이폰은
+  /// 정해진 시각에 앱을 깨울 길이 없다.
+  static Future<void> _armDailyReset(bool on) async {
+    if (!_isAndroid) return;
+    try {
+      await _channel.invokeMethod(on ? 'armDailyReset' : 'cancelDailyReset');
+    } on PlatformException {
+      //
+    } on MissingPluginException {
+      //
+    }
   }
 
   static Future<void> _clear() async {

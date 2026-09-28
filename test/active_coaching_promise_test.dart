@@ -66,9 +66,24 @@ void main() {
     expect(tracking.promisedAt, DateTime(2026, 9, 23, 18));
   });
 
-  test('끝 시각이 새 시작보다 앞이면 버린다', () async {
+  test('끝 시각이 있던 일은 길이를 지킨 채 통째로 옮긴다', () async {
+    // 끝이 사라지거나 옛 자리에 묶여 있으면 사용자가 손으로 다시 고쳐야 한다.
     seed([
       {'id': 'a', 'text': '분기 리포트', 'timeStart': '14:00', 'timeEnd': '15:00'},
+    ]);
+    final prefs = await SharedPreferences.getInstance();
+
+    await ActiveCoachingPromise.keep(taskId: 'a', at: at);
+
+    final task = (await storedTasks(prefs)).first as Map;
+    expect(task['timeStart'], '16:30');
+    expect(task['timeEnd'], '17:30');
+    expect(task['time'], '오후 4:30 ~ 오후 5:30');
+  });
+
+  test('옮긴 끝이 자정을 넘으면 끝은 버린다', () async {
+    seed([
+      {'id': 'a', 'text': '분기 리포트', 'timeStart': '14:00', 'timeEnd': '22:00'},
     ]);
     final prefs = await SharedPreferences.getInstance();
 
@@ -78,16 +93,26 @@ void main() {
     expect((tasks.first as Map).containsKey('timeEnd'), isFalse);
   });
 
-  test('뒤에 남는 끝 시각은 그대로 둔다', () async {
-    seed([
-      {'id': 'a', 'text': '분기 리포트', 'timeStart': '14:00', 'timeEnd': '18:00'},
-    ]);
+  test('핵심으로 찍힌 일은 핵심 사본의 시각도 옮긴다', () async {
+    // 핵심 칸과 핵심 알림은 사본을 읽는다. 목록만 고치면 옛 시각이 남는다.
+    final task = {
+      'id': 'a',
+      'text': '방정리',
+      'timeStart': '14:00',
+      'time': '오후 2:00',
+    };
+    SharedPreferences.setMockInitialValues({
+      'nyang_tasks': jsonEncode([task]),
+      'nyang_core_tasks': jsonEncode([task]),
+    });
     final prefs = await SharedPreferences.getInstance();
 
     await ActiveCoachingPromise.keep(taskId: 'a', at: at);
 
-    final tasks = await storedTasks(prefs);
-    expect((tasks.first as Map)['timeEnd'], '18:00');
+    final core =
+        (jsonDecode(prefs.getString('nyang_core_tasks')!) as List).first as Map;
+    expect(core['timeStart'], '16:30');
+    expect(core['time'], '오후 4:30');
   });
 
   test('없는 일에는 아무것도 안 적는다', () async {

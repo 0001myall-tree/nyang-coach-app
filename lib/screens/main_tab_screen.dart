@@ -244,6 +244,16 @@ class _MainTabScreenState extends State<MainTabScreen>
   late TabController _tabCtrl;
   final ChatScreenController _chatController = ChatScreenController();
   final TasksScreenController _tasksController = TasksScreenController();
+
+  /// 위에 겹쳐 띄우는 할 일 창 몫. 이게 없으면 그 창은 자정 정리나 클라우드가
+  /// 목록을 바꿔도 모른 채 옛 목록을 들고 있었다.
+  final TasksScreenController _overlayTasksController = TasksScreenController();
+
+  void _refreshTaskScreens() {
+    _tasksController.refresh();
+    _overlayTasksController.refresh();
+  }
+
   bool _coachAccessChecked = false;
   bool _widgetIntentDrawerMode = false;
   // 앱 전체에서 플래너 전체창이 딱 하나만 뜨도록 모든 화면 인스턴스가
@@ -682,7 +692,7 @@ class _MainTabScreenState extends State<MainTabScreen>
         TasksSyncService.startRealTimeSync(user.uid, () {
           unawaited(NotificationService().syncDailyMorningCall());
           if (mounted) {
-            _tasksController.refresh();
+            _refreshTaskScreens();
             _chatController.refreshTaskProgress();
             setState(() {});
           }
@@ -794,14 +804,14 @@ class _MainTabScreenState extends State<MainTabScreen>
     // 정리가 "오늘 것은 이미 끝났다"로 지나간 날에도 루틴은 맞춰준다.
     final synced = await DailyResetService.syncTodayHabitTasks();
     if ((!rebuilt && !synced) || !mounted) return;
-    _tasksController.refresh();
+    _refreshTaskScreens();
     _chatController.refreshTaskProgress();
   }
 
   Future<void> _cleanUpCalendarPullbackLeftovers() async {
     final cleaned = await CalendarPullbackCleanup.runOnce();
     if (!cleaned || !mounted) return;
-    _tasksController.refresh();
+    _refreshTaskScreens();
     _chatController.refreshTaskProgress();
     setState(() {});
   }
@@ -815,7 +825,7 @@ class _MainTabScreenState extends State<MainTabScreen>
     final after = prefs.getString(DailyResetService.lastDateKey);
     if (before == after && !synced) return;
     if (!mounted) return;
-    _tasksController.refresh();
+    _refreshTaskScreens();
     _chatController.refreshTaskProgress();
     setState(() {});
   }
@@ -839,10 +849,15 @@ class _MainTabScreenState extends State<MainTabScreen>
       debugPrintStack(stackTrace: stackTrace);
     }
     if (mounted) {
-      _tasksController.refresh();
+      _refreshTaskScreens();
       _chatController.refreshTaskProgress();
       setState(() {});
     }
+    // 카드·위젯에서 할 일 창을 열라고 했으면 지금 연다. 아래 클라우드 확인은
+    // 몇 초씩 걸려서, 거기까지 기다리면 그동안 채팅 화면이 떠 있다가 바뀐다.
+    // 창이 닫힐 때까지 끝나지 않는 부름이라 기다리지 않는다. 아이폰 배너는
+    // 표시가 조금 늦게 들어올 수 있어서, 아래에서 한 번 더 본다.
+    unawaited(_checkWidgetIntent());
     final canContinue = await _ensureCurrentCoachAccess(syncCloud: _isMaster);
     if (canContinue) {
       await _refreshRecordsNewBadge();
@@ -1240,6 +1255,18 @@ class _MainTabScreenState extends State<MainTabScreen>
     String? initialDateKey,
     String? initialItemId,
   }) async {
+    final plainOpen =
+        initialBottomSheet == null &&
+        initialTabIndex == 0 &&
+        initialDateKey == null &&
+        initialItemId == null;
+    if (_isPlannerOverlayOpen && plainOpen) {
+      // 이미 열려 있다. 닫고 다시 열면 맨 위에 있던 것을 닫게 되는데, 그게
+      // 카드에서 넘어와 막 뜬 간이 채팅창이나 팝업일 수 있다 — 떴다가 바로
+      // 사라지던 자리가 여기였다. 창은 그대로 두고 표시만 확인하게 한다.
+      _overlayTasksController.consumeBannerFocus();
+      return;
+    }
     if (_isPlannerOverlayOpen) {
       final navigator = Navigator.of(context, rootNavigator: true);
       if (navigator.canPop()) {
@@ -1260,6 +1287,7 @@ class _MainTabScreenState extends State<MainTabScreen>
     await Navigator.of(context, rootNavigator: true).push(
       MaterialPageRoute(
         builder: (_) => _PlannerOverlayScreen(
+          controller: _overlayTasksController,
           initialBottomSheet: initialBottomSheet,
           initialTabIndex: initialTabIndex,
           initialDateKey: initialDateKey,
@@ -3421,11 +3449,13 @@ class _BarChartPainter extends CustomPainter {
 // 위젯(홈 화면)에서 '할 일'을 눌렀을 때, 그 전 화면 위에 얹어서 보여주는
 // 독립된 할 일 창. 닫으면 원래 있던 화면이 그대로 다시 보인다.
 class _PlannerOverlayScreen extends StatelessWidget {
+  final TasksScreenController controller;
   final String? initialBottomSheet;
   final int initialTabIndex;
   final String? initialDateKey;
   final String? initialItemId;
   const _PlannerOverlayScreen({
+    required this.controller,
     this.initialBottomSheet,
     this.initialTabIndex = 0,
     this.initialDateKey,
@@ -3464,6 +3494,10 @@ class _PlannerOverlayScreen extends StatelessWidget {
             Expanded(
               child: TasksScreen(
                 coachId: 'cat',
+                controller: controller,
+                // 카드·배너에서 넘어온 답은 이 창만 받는다. 밑에 깔린 화면이
+                // 먼저 받으면 그 팝업이 이 창에 덮여 안 보인다.
+                isPlannerOverlay: true,
                 initialBottomSheet: initialBottomSheet,
                 initialTabIndex: initialTabIndex,
                 initialPlannerDateKey: initialDateKey,

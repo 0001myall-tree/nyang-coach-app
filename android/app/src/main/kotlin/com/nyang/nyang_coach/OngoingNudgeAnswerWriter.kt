@@ -158,6 +158,8 @@ object OngoingNudgeAnswerWriter {
     ) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
             .putString("flutter.banner_focus_task_id", taskId)
+            // 누른 시각. 제때 못 읽힌 답이 나중에 엉뚱한 때 튀어나오지 않게 한다.
+            .putLong("flutter.banner_answer_at", System.currentTimeMillis())
             .putString(
                 "flutter.banner_answer_kind",
                 when {
@@ -180,6 +182,8 @@ object OngoingNudgeAnswerWriter {
     fun markPickingLater(context: Context, taskId: String, taskText: String) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
             .putString("flutter.banner_focus_task_id", taskId)
+            // 누른 시각. 제때 못 읽힌 답이 나중에 엉뚱한 때 튀어나오지 않게 한다.
+            .putLong("flutter.banner_answer_at", System.currentTimeMillis())
             .putString("flutter.banner_answer_kind", "laterPick")
             .putString("flutter.banner_answer_task_text", taskText)
             .commit()

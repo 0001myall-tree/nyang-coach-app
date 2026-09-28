@@ -63,7 +63,7 @@ void main() {
   testWidgets('카드와 같은 넷을 먼저 보여준다', (tester) async {
     await show(tester, askMoves: twoMoves);
     expect(find.textContaining('아직이네'), findsOneWidget);
-    for (final label in ['지금 할게', '시간이 안 나', '여기선 못 해', '하기 싫어']) {
+    for (final label in ['지금 할게', '시간이 안 나', '지금은 못 해', '하기 싫어']) {
       expect(find.text(label), findsOneWidget);
     }
   });
@@ -112,13 +112,13 @@ void main() {
     expect(outcome?.kind, ActiveCoachingOutcomeKind.reluctant);
   });
 
-  testWidgets('여기선 못 해 → 내일로 옮길래', (tester) async {
-    final outcome = await tapFirst(tester, ['여기선 못 해', '내일로 옮길래']);
+  testWidgets('지금은 못 해 → 내일로 옮길래', (tester) async {
+    final outcome = await tapFirst(tester, ['지금은 못 해', '내일로 옮길래']);
     expect(outcome?.kind, ActiveCoachingOutcomeKind.moveTomorrow);
   });
 
-  testWidgets('여기선 못 해 → 오늘은 안 할래', (tester) async {
-    final outcome = await tapFirst(tester, ['여기선 못 해', '오늘은 안 할래']);
+  testWidgets('지금은 못 해 → 오늘은 안 할래', (tester) async {
+    final outcome = await tapFirst(tester, ['지금은 못 해', '오늘은 안 할래']);
     expect(outcome?.kind, ActiveCoachingOutcomeKind.notToday);
   });
 
@@ -138,13 +138,13 @@ void main() {
     expect(find.textContaining('몇 시부터'), findsOneWidget);
   });
 
-  testWidgets('여기선 못 해면 이따·내일·오늘은 안 함을 고른다', (tester) async {
+  testWidgets('지금은 못 해면 이따·내일·오늘은 안 함을 고른다', (tester) async {
     await show(
       tester,
       askMoves: twoMoves,
       timeChoices: [DateTime(2026, 9, 23, 16, 30)],
     );
-    await tester.tap(find.text('여기선 못 해'));
+    await tester.tap(find.text('지금은 못 해'));
     await tester.pumpAndSettle();
     expect(find.text('이따 할게'), findsOneWidget);
     expect(find.text('내일로 옮길래'), findsOneWidget);
@@ -402,7 +402,9 @@ void main() {
                     task: names.first,
                     moves: const ['치우기'],
                   ),
-                  otherTasks: const [ActiveCoachingChoice(name: '방 정리')],
+                  otherTasks: const [
+                    ActiveCoachingChoice(name: '방 정리', id: 't42'),
+                  ],
                   skipReason: true,
                   timeChoices: const [],
                 ),
@@ -425,6 +427,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(outcome?.taskName, '방 정리');
+    // 이름으로 다시 찾지 않도록 번호를 들고 나온다.
+    expect(outcome?.taskId, 't42');
     expect(outcome?.pickedFromList, isTrue);
   });
 

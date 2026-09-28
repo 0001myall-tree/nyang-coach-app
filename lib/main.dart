@@ -18,6 +18,7 @@ import 'package:firebase_analytics/firebase_analytics.dart';
 import 'services/analytics_service.dart';
 import 'services/apple_calendar_sync_service.dart';
 import 'services/auth_service.dart';
+import 'services/background_daily_reset.dart';
 import 'services/coach_id_migration_service.dart';
 import 'services/task_resistance_service.dart';
 import 'services/notification_service.dart';
@@ -75,7 +76,31 @@ void main() async {
   await PurchaseService.instance.start();
 
   runApp(const ProviderScope(child: NyangCoachApp()));
+  // 자정 뒤 목록 정리 알람이 울렸을 때 앱이 떠 있으면 여기서 받는다.
+  BackgroundDailyReset.listen();
   unawaited(_runStartupBackgroundJobs());
+}
+
+/// 자정 뒤 목록 정리를 화면 없이 돌리는 입구.
+///
+/// 앱이 꺼져 있을 때 네이티브가 화면 없는 앱을 띄워 여기로 들어온다. 화면에
+/// 필요한 준비(알림 초기화, 결제 듣기)는 하지 않는다 — 정리만 하고 닫힌다.
+@pragma('vm:entry-point')
+Future<void> backgroundDailyResetMain() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+    await _activateAppCheck();
+    await initializeDateFormatting('ko', null);
+    await BackgroundDailyReset.run();
+  } catch (e, stackTrace) {
+    debugPrint('Background daily reset failed: $e');
+    debugPrintStack(stackTrace: stackTrace);
+  } finally {
+    await BackgroundDailyReset.reportDone();
+  }
 }
 
 Future<void> _runStartupBackgroundJobs() async {

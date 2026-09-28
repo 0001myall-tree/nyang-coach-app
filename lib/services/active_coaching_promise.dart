@@ -53,24 +53,20 @@ class ActiveCoachingPromise {
         ? task['timeStart']?.toString()
         : before.originalStart;
 
-    task['timeStart'] = ActiveCoachingTime.format(at);
-    // 시작을 뒤로 미뤄 끝보다 늦어졌으면 끝은 버린다. 끝이 시작보다 앞에 있는
-    // 일정은 화면에서 읽을 수가 없다.
-    final end = _minutes(task['timeEnd']?.toString());
-    if (end != null && end <= at.hour * 60 + at.minute) {
-      task.remove('timeEnd');
-    }
-    // 화면은 보여줄 시각('time')을 시작 시각보다 먼저 읽는다. 시작 시각만
-    // 바꾸면 원래 시각이 있던 일은 약속을 해도 옛 시각이 그대로 보인다.
-    task['time'] = _displayTime(
-      at,
-      _minutes(task['timeEnd']?.toString()),
-    );
-    // 루틴 줄은 루틴 목록에 맞춰 시각이 다시 칠해진다. 오늘 약속한 시각이
-    // 있다는 표시를 남겨야 그 칠하기가 약속을 지우지 않는다.
-    task[promisedStartKey] = ActiveCoachingTime.format(at);
-
+    _moveTo(task, at);
     await prefs.setString(TaskCompletionService.tasksKey, jsonEncode(tasks));
+
+    // 핵심으로도 찍혀 있으면 그쪽 사본도 같이 옮긴다. 핵심 칸과 핵심 알림은
+    // 그 사본의 시각을 읽어서, 목록만 고치면 옛 시각이 그대로 남는다.
+    final cores = _decode(prefs.getString(TaskCompletionService.coreTasksKey));
+    final core = _find(cores, taskId);
+    if (core != null) {
+      _moveTo(core, at);
+      await prefs.setString(
+        TaskCompletionService.coreTasksKey,
+        jsonEncode(cores),
+      );
+    }
     await ActiveCoachingStore.writeDay(
       prefs,
       day.put(
@@ -153,6 +149,38 @@ class ActiveCoachingPromise {
       if (item['id']?.toString() == taskId) return item;
     }
     return null;
+  }
+
+  /// 할 일 칸 하나의 시각을 [at]으로 옮긴다.
+  ///
+  /// 끝 시각이 있던 일은 길이를 그대로 둔 채 통째로 옮긴다. 3시~4시 일을
+  /// 5시로 미뤘는데 끝이 사라지거나 4시에 묶여 있으면, 사용자가 다시 손으로
+  /// 고쳐야 한다. 옮긴 끝이 자정을 넘으면 끝은 버린다.
+  static void _moveTo(Map task, DateTime at) {
+    final start = _minutes(task['timeStart']?.toString());
+    final end = _minutes(task['timeEnd']?.toString());
+    final newStart = at.hour * 60 + at.minute;
+
+    task['timeStart'] = ActiveCoachingTime.format(at);
+    if (start != null && end != null && end > start) {
+      final newEnd = newStart + (end - start);
+      if (newEnd < 24 * 60) {
+        task['timeEnd'] = ActiveCoachingTime.format(
+          DateTime(at.year, at.month, at.day).add(Duration(minutes: newEnd)),
+        );
+      } else {
+        task.remove('timeEnd');
+      }
+    } else if (end != null && end <= newStart) {
+      // 끝이 시작보다 앞에 있는 일정은 화면에서 읽을 수가 없다.
+      task.remove('timeEnd');
+    }
+    // 화면은 보여줄 시각('time')을 시작 시각보다 먼저 읽는다. 시작 시각만
+    // 바꾸면 원래 시각이 있던 일은 약속을 해도 옛 시각이 그대로 보인다.
+    task['time'] = _displayTime(at, _minutes(task['timeEnd']?.toString()));
+    // 루틴 줄은 루틴 목록에 맞춰 시각이 다시 칠해진다. 오늘 약속한 시각이
+    // 있다는 표시를 남겨야 그 칠하기가 약속을 지우지 않는다.
+    task[promisedStartKey] = ActiveCoachingTime.format(at);
   }
 
   /// 목록에 보이는 시각. 화면이 쓰는 "오후 4:30" 꼴에 맞춘다.

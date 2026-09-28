@@ -186,7 +186,7 @@ object OngoingNudgeScheduler {
         )
     }
 
-    private fun schedule(context: Context, triggerAt: Long, intent: PendingIntent) {
+    internal fun schedule(context: Context, triggerAt: Long, intent: PendingIntent) {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
 
         // 느슨한 예약은 절전 중인 기기에서 한참 뒤에야 울리거나 아예 묻힌다.

@@ -31,8 +31,18 @@ class MainActivity : FlutterFragmentActivity() {
     private val ongoingNudgeChannel = "nyang_coach/ongoing_nudge"
     private var morningAlarmPlayer: MediaPlayer? = null
 
+    override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        DailyResetReceiver.appChannel = null
+        super.cleanUpFlutterEngine(flutterEngine)
+    }
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        // 자정 뒤 목록 정리 알람이 울렸을 때 앱이 떠 있으면 이 통로로 맡긴다.
+        DailyResetReceiver.appChannel = MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            DailyResetReceiver.CHANNEL,
+        )
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, morningAlarmChannel)
             .setMethodCallHandler { call, result ->
                 when (call.method) {
@@ -271,27 +281,16 @@ class MainActivity : FlutterFragmentActivity() {
                         GapCoachingPlanner.reschedule(this)
                         result.success(null)
                     }
-                    "syncActiveCoaching" -> {
-                        // 계획은 Flutter가 이미 저장해뒀다. 여기서는 그 시각에
-                        // 깨어나도록 알람만 건다. 자리는 늘 하나라, 새로 걸면
-                        // 앞엣것은 덮인다.
-                        val atMillis = call.argument<Number>("atMillis")?.toLong()
-                        if (atMillis == null) {
-                            OngoingNudgeScheduler.cancelActive(this)
-                        } else {
-                            OngoingNudgeScheduler.scheduleActiveAt(this, atMillis)
-                        }
-                        result.success(null)
-                    }
+                    "syncActiveCoaching",
+                    "clearActiveCoaching",
+                    "armDailyReset",
+                    "cancelDailyReset",
+                    -> ActiveCoachingChannel.handle(this, call, result)
                     "testActiveCoaching" -> {
                         // 기다려주는 창은 Flutter가 적어뒀다. 여기서는 걸기만 한다.
                         val atMillis = call.argument<Number>("atMillis")?.toLong()
                             ?: (System.currentTimeMillis() + 5_000L)
                         OngoingNudgeScheduler.scheduleActiveAt(this, atMillis)
-                        result.success(null)
-                    }
-                    "clearActiveCoaching" -> {
-                        OngoingNudgeScheduler.cancelActive(this)
                         result.success(null)
                     }
                     "clearGapCoaching" -> {

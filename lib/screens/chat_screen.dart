@@ -1276,7 +1276,11 @@ class ChatScreen extends StatefulWidget {
 class ChatScreenController {
   _ChatScreenState? _state;
   void _attach(_ChatScreenState s) => _state = s;
-  void _detach() => _state = null;
+  /// 자기가 붙어 있을 때만 뗀다. 화면을 오가면 새 화면이 먼저 붙고 옛 화면이
+  /// 나중에 치워지는데, 옛 화면이 무조건 떼면 새 화면까지 끊긴다.
+  void _detach(_ChatScreenState s) {
+    if (identical(_state, s)) _state = null;
+  }
 
   /// 채팅창에 AI 메시지를 직접 추가합니다.
   void injectAiMessage(String text) {
@@ -3920,7 +3924,7 @@ ${lines.join('\n')}
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    widget.controller?._detach();
+    widget.controller?._detach(this);
     _inputFocus.dispose();
     _ctrl.dispose();
     _scrollCtrl.dispose();
