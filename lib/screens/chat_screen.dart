@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../theme/app_font.dart';
@@ -1336,6 +1337,15 @@ class _ChatScreenState extends State<ChatScreen>
   // 앱이나 개입이 그 턴에 직접 세운 칩이고, 대화 중에만 쓸모가 있다.
   bool _conversationStarted = false;
   bool _isLoading = false;
+
+  /// 할매 방에서 보내려고 붙여둔 사진 한 장.
+  Uint8List? _pendingPhoto;
+
+  /// 이번에 보낸 사진. 말풍선에 다시 그리려고 메시지 시각으로 들고 있는다.
+  ///
+  /// 저장하지 않는다. 방 사진이라 폰에도 클라우드에도 남기지 않고, 앱을
+  /// 다시 열면 말풍선에는 '사진'이라는 표시만 남는다.
+  final Map<String, Uint8List> _photoBytes = {};
 
   /// 쏟아내기 버튼을 누른 참인지. 다음 한 마디를 평소 답변 대신 계획 짜기로
   /// 보낸다. 한 번 쓰면 꺼진다 - 계속 켜두면 그 뒤 대화까지 전부 계획으로
@@ -12542,12 +12552,24 @@ $block
     String? apiInputOverride,
     _MasterModelPolicy masterModelPolicy = _MasterModelPolicy.generalLimited,
   }) async {
-    final trimmed = text.trim();
+    // 할매 방에서 붙여둔 사진. 글 없이 사진만 보내도 한마디를 채워 보낸다.
+    final photo = _photoEnabled ? _pendingPhoto : null;
+    final trimmed = text.trim().isEmpty && photo != null
+        ? '이 사진 좀 봐줘'
+        : text.trim();
     if (trimmed.isEmpty || _isLoading) return;
+    if (photo != null && await _photoSentToday() >= _photoDailyLimit) {
+      _showUsageNotice('사진은 하루 $_photoDailyLimit장까지 보여줄 수 있어요.');
+      return;
+    }
     if (!await _ensureMasterCoachAccess()) return;
+    if (photo != null) setState(() => _pendingPhoto = null);
     _conversationStarted = true;
+    // 사진이 붙은 말은 아래의 빠른 길(화면 열기·삭제·타이머·로컬 답변)을
+    // 모두 건너뛰고 코치에게 간다. 그 길들은 글만 보고 판단해서 사진이
+    // 버려진다.
     // 쏟아내기로 받은 한 마디는 평소 답변 대신 계획 짜기로 보낸다.
-    if (_awaitingBrainDump) {
+    if (_awaitingBrainDump && photo == null) {
       _awaitingBrainDump = false;
       await _runBrainDump(trimmed);
       return;
@@ -12617,10 +12639,13 @@ $block
       return;
     }
 
-    if (await _tryAnswerTodayTaskTimeQuestion(trimmed)) return;
+    if (photo == null && await _tryAnswerTodayTaskTimeQuestion(trimmed)) {
+      return;
+    }
 
-    final dateQuestionReply =
-        _weekdayQuestionReply(trimmed) ?? _calendarDateQuestionReply(trimmed);
+    final dateQuestionReply = photo != null
+        ? null
+        : _weekdayQuestionReply(trimmed) ?? _calendarDateQuestionReply(trimmed);
     if (dateQuestionReply != null) {
       setState(() {
         _messages.add(
@@ -12646,9 +12671,9 @@ $block
       return;
     }
 
-    if (await _tryOpenTodayTaskOverview(trimmed)) return;
+    if (photo == null && await _tryOpenTodayTaskOverview(trimmed)) return;
 
-    if (await _tryOpenScheduleOverview(trimmed)) return;
+    if (photo == null && await _tryOpenScheduleOverview(trimmed)) return;
 
     // 말로 적어 넣는 길들. 플랜이 있으면 언제든 열려 있고, 없으면 무료로
     // 열린 며칠 동안만 통한다. 이 길들은 코치를 부르지 않아서, 대화가 닫힌
@@ -12684,7 +12709,7 @@ $block
     //
     // 이제 코치가 [OPEN: 화면]으로 정한다. 앱에는 화면 지도가 실려 있고,
     // 여는 일은 답변을 받은 자리에서 한다.
-    if (canInputTasks && _isDeletionCommand(trimmed)) {
+    if (photo == null && canInputTasks && _isDeletionCommand(trimmed)) {
       final parsed = _parseDeletionCommand(trimmed);
       setState(() {
         _messages.add(
@@ -12723,7 +12748,7 @@ $block
       return;
     }
 
-    if (canInputTasks && _isEditCommand(trimmed)) {
+    if (photo == null && canInputTasks && _isEditCommand(trimmed)) {
       final parsed = _parseEditCommand(trimmed);
       setState(() {
         _messages.add(
@@ -12776,7 +12801,7 @@ $block
       TaskResistanceService.detectAndRecordFromMessage(trimmed);
     }
 
-    if (_isDirectCountdownRequest(trimmed)) {
+    if (photo == null && _isDirectCountdownRequest(trimmed)) {
       final reply = _directCountdownStartMessage();
       setState(() {
         _messages.add(
@@ -12805,7 +12830,9 @@ $block
       return;
     }
 
-    final directTimerMinutes = _directTimerRequestMinutes(trimmed);
+    final directTimerMinutes = photo != null
+        ? null
+        : _directTimerRequestMinutes(trimmed);
     if (directTimerMinutes != null) {
       final reply = _directTimerStartMessage(directTimerMinutes);
       // 저장이 먼저다. setState가 앞서면 새 카드가 초기화될 때 저장소에는 아직
@@ -12841,9 +12868,9 @@ $block
     if (widget.coachId == 'cat' && trimmed == '남은 것 중 뭐하지?') {
       apiInput = '지금 뭐하지?';
     }
-    final yesterdayIncompleteReply = await _tryBuildYesterdayIncompleteReply(
-      trimmed,
-    );
+    final yesterdayIncompleteReply = photo != null
+        ? null
+        : await _tryBuildYesterdayIncompleteReply(trimmed);
     if (yesterdayIncompleteReply != null) {
       setState(() {
         _messages.add(
@@ -12867,7 +12894,9 @@ $block
       return;
     }
 
-    final catLocalReply = await _tryBuildCatLocalReply(trimmed);
+    final catLocalReply = photo != null
+        ? null
+        : await _tryBuildCatLocalReply(trimmed);
     if (catLocalReply != null) {
       setState(() {
         _messages.add(
@@ -12889,7 +12918,9 @@ $block
       return;
     }
 
-    final masterLocalReply = await _tryBuildMasterLocalReply(trimmed);
+    final masterLocalReply = photo != null
+        ? null
+        : await _tryBuildMasterLocalReply(trimmed);
     if (masterLocalReply != null) {
       setState(() {
         _messages.add(
@@ -12948,7 +12979,9 @@ $block
       text: trimmed,
       isUser: true,
       time: DateTime.now(),
+      kind: photo != null ? 'photo' : null,
     );
+    if (photo != null) _photoBytes[userMsg.time.toIso8601String()] = photo;
     setState(() {
       _messages.add(userMsg);
       _dynamicChips = [];
@@ -12958,7 +12991,9 @@ $block
     _scrollToBottom();
 
     // 로컬 응답 시도 (웹앱 getLocalResponse 이식)
-    final localReply = _LocalResponses.get(widget.coachId, trimmed);
+    final localReply = photo != null
+        ? null
+        : _LocalResponses.get(widget.coachId, trimmed);
     if (localReply != null) {
       final titledReply = await UserTitleService.applyForCoach(
         localReply,
@@ -12992,7 +13027,9 @@ $block
       final raw = await _callOpenAI(
         apiInput,
         masterModelPolicy: masterModelPolicy,
+        photo: photo,
       );
+      if (photo != null) unawaited(_notePhotoSent());
       if (isVisionNewActionFlow) {
         await _recordFeatureUsage(
           key: 'nyang_vision_new_action_usage_history',
@@ -14848,6 +14885,7 @@ $block
   Future<String> _callOpenAI(
     String userText, {
     required _MasterModelPolicy masterModelPolicy,
+    Uint8List? photo,
   }) async {
     // 코치가 참고하는 최근 대화 수. 6이면 세 번만 주고받아도 앞말이 밀려나서,
     // 사용자가 방금 한 이야기를 코치가 다시 묻는 일이 생긴다.
@@ -15472,12 +15510,38 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
           (m) => {
             'role': m.isUser ? 'user' : 'assistant',
             'content': m.isUser
-                ? '[${m.time.hour}:${m.time.minute.toString().padLeft(2, '0')}] ${m.text}'
+                ? '[${m.time.hour}:${m.time.minute.toString().padLeft(2, '0')}] '
+                      // 지난 사진은 다시 싣지 않는다. 턴마다 사진 값을 또
+                      // 치르게 된다. 그때 본 것은 코치의 답에 남아 있다.
+                      '${m.kind == 'photo' ? '(사진을 보냄) ' : ''}${m.text}'
                 : m.text,
           },
         ),
         {'role': 'user', 'content': '$timePrefix$effectiveUserText'},
       ];
+      // 사진은 이번 말에만 붙인다. 폰에서 줄여 온 한 장을 저해상도로 본다.
+      final callMessages = photo == null
+          ? messages
+          : [
+              {
+                'role': 'system',
+                'content': '${messages.first['content']}$_photoTurnRule',
+              },
+              ...messages.sublist(1, messages.length - 1),
+              {
+                'role': 'user',
+                'content': [
+                  {'type': 'text', 'text': '$timePrefix$effectiveUserText'},
+                  {
+                    'type': 'image_url',
+                    'image_url': {
+                      'url': 'data:image/jpeg;base64,${base64Encode(photo)}',
+                      'detail': 'low',
+                    },
+                  },
+                ],
+              },
+            ];
 
       final estimatedPromptTokens = AnalyticsService.estimateChatTokens(
         messages,
@@ -15509,7 +15573,7 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
       // 뜬다. 앞의 "0.7에서 카드가 죽었다"는 기록만 보고 되돌리지 말 것 —
       // 그 원인은 온도가 아니라 태그 지시가 긴 프롬프트에 묻힌 쪽이었다.
       final result = await _chatProxy.call({
-        'messages': messages,
+        'messages': callMessages,
         'model': model,
         'temperature': 0.7,
       });
@@ -18518,14 +18582,18 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
               // 말풍선 본문만 둥근 글꼴에서 빼둔다. 긴 답이 들어오면 둥근
               // 획끼리 붙어 읽는 눈이 미끄러진다. 나머지 화면과 칩, 스위치는
               // 그대로 나눔스퀘어라운드.
-              child: _buildMessageText(
+              child: _withPhoto(
                 msg,
-                GoogleFonts.notoSansKr(
-                  fontSize: AppDesignTokens.textBody,
-                  height: 1.6,
-                  fontWeight: FontWeight.w500,
-                  color: bubbleTextColor,
+                _buildMessageText(
+                  msg,
+                  GoogleFonts.notoSansKr(
+                    fontSize: AppDesignTokens.textBody,
+                    height: 1.6,
+                    fontWeight: FontWeight.w500,
+                    color: bubbleTextColor,
+                  ),
                 ),
+                bubbleTextColor,
               ),
             ),
           ),
@@ -21165,8 +21233,14 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
                       ? const SizedBox.shrink()
                       : _buildUsageLimitBanner(),
                 ),
+                if (_photoEnabled && _pendingPhoto != null)
+                  _buildPendingPhotoPreview(),
                 Row(
                   children: [
+                    if (_photoEnabled) ...[
+                      _buildPhotoButton(),
+                      const SizedBox(width: 10),
+                    ],
                     // 텍스트 필드
                     Expanded(
                       child: Container(
@@ -21280,6 +21354,232 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
           ),
         ],
       ),
+    );
+  }
+
+  // ── 할매 방 사진 ─────────────────────────────────────────
+  /// 사진을 보낼 수 있는 코치. 청소는 눈으로 봐야 하는 일이라 할매만 연다.
+  bool get _photoEnabled => widget.coachId == 'halmae';
+
+  /// 하루에 보낼 수 있는 사진 수. 이 기기에서만 센다.
+  static const int _photoDailyLimit = 7;
+
+  /// 사진이 붙은 턴에만 지시문 끝에 붙는 말.
+  static const String _photoTurnRule = '''
+
+[사진]
+이번 말에는 사용자가 찍은 사진이 붙어 있다. 사진에 실제로 보이는 물건과 자리를 짚어서 말한다. 사진이 흐리거나 무엇인지 알아보기 어려우면 그렇다고 말하고 다시 찍어달라고 한다.''';
+
+  // 'nyang_' 접두어를 쓰지 않는다. 이 기기에서 보낸 수라 클라우드가 덮으면 안 된다.
+  static String _photoCountKey(DateTime now) =>
+      'halmae_photo_count_${now.year}-${now.month}-${now.day}';
+
+  Future<int> _photoSentToday() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt(_photoCountKey(DateTime.now())) ?? 0;
+  }
+
+  Future<void> _notePhotoSent() async {
+    final prefs = await SharedPreferences.getInstance();
+    final key = _photoCountKey(DateTime.now());
+    await prefs.setInt(key, (prefs.getInt(key) ?? 0) + 1);
+  }
+
+  /// 앨범이나 카메라에서 한 장을 받아 입력창 위에 붙여둔다.
+  ///
+  /// 폰에서 512px로 줄여 온다. 모델도 저해상도로만 보게 해서 값이 가장 싼
+  /// 쪽이다. 어디가 어질러졌는지는 이 크기로 충분하고, 놓치는 건 작은 글씨나
+  /// 멀리 있는 작은 물건 정도다.
+  Future<void> _pickPhoto(ImageSource source) async {
+    try {
+      final file = await ImagePicker().pickImage(
+        source: source,
+        maxWidth: 512,
+        maxHeight: 512,
+        imageQuality: 70,
+      );
+      if (file == null || !mounted) return;
+      final bytes = await file.readAsBytes();
+      if (!mounted) return;
+      setState(() => _pendingPhoto = bytes);
+      _inputFocus.requestFocus();
+    } catch (e) {
+      debugPrint('Photo pick failed: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('사진을 불러오지 못했어요. 다시 시도해 주세요.')),
+      );
+    }
+  }
+
+  /// 사진을 어디서 가져올지 고르는 창. 버튼 두 개만 담아 화면 아래 한 줄만
+  /// 차지한다. 아이콘과 글자를 세로로 쌓았더니 버튼이 남은 높이를 다 먹어서
+  /// 창이 화면 절반까지 올라왔다.
+  void _showPhotoSourceSheet() {
+    Widget option(
+      BuildContext ctx,
+      IconData icon,
+      String label,
+      ImageSource source,
+    ) {
+      return Expanded(
+        child: GestureDetector(
+          onTap: () {
+            Navigator.pop(ctx);
+            _pickPhoto(source);
+          },
+          child: Container(
+            height: 64,
+            decoration: BoxDecoration(
+              color: _coach.accentLight,
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, color: _coach.accentColor, size: 24),
+                const SizedBox(width: 8),
+                Text(
+                  label,
+                  style: appFont(
+                    fontSize: AppDesignTokens.textBody,
+                    fontWeight: FontWeight.w800,
+                    color: AppDesignTokens.textPrimary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              option(
+                ctx,
+                Icons.photo_library_outlined,
+                '사진 선택',
+                ImageSource.gallery,
+              ),
+              const SizedBox(width: 12),
+              option(
+                ctx,
+                Icons.photo_camera_outlined,
+                '사진 찍기',
+                ImageSource.camera,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 입력창 왼쪽 카메라 버튼. 다른 코치는 이 자리가 비어 있다.
+  Widget _buildPhotoButton() {
+    return GestureDetector(
+      onTap: _isLoading ? null : _showPhotoSourceSheet,
+      child: Container(
+        width: 44,
+        height: 44,
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.88),
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: _coach.accentColor.withValues(alpha: 0.6),
+            width: 1.2,
+          ),
+        ),
+        child: Icon(
+          Icons.photo_camera_outlined,
+          color: _coach.accentColor,
+          size: 21,
+        ),
+      ),
+    );
+  }
+
+  /// 보내기 전에 붙여둔 사진. X로 뗄 수 있다.
+  Widget _buildPendingPhotoPreview() {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 10, top: 8),
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(14),
+              child: Image.memory(
+                _pendingPhoto!,
+                width: 84,
+                height: 84,
+                fit: BoxFit.cover,
+              ),
+            ),
+            Positioned(
+              top: -8,
+              right: -8,
+              child: GestureDetector(
+                onTap: () => setState(() => _pendingPhoto = null),
+                child: Container(
+                  width: 26,
+                  height: 26,
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.7),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.close, color: Colors.white, size: 16),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 사진이 붙은 말풍선이면 글 위에 사진을 얹는다.
+  ///
+  /// 사진은 저장하지 않아서, 앱을 다시 열면 사진 대신 표시만 남는다.
+  Widget _withPhoto(ChatMessage msg, Widget text, Color textColor) {
+    if (msg.kind != 'photo') return text;
+    final bytes = _photoBytes[msg.time.toIso8601String()];
+    final photo = bytes != null
+        ? ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: Image.memory(bytes, width: 200, fit: BoxFit.cover),
+          )
+        : Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.photo_outlined, size: 16, color: textColor),
+              const SizedBox(width: 4),
+              Text(
+                '사진',
+                style: appFont(
+                  fontSize: AppDesignTokens.textMeta,
+                  fontWeight: FontWeight.w700,
+                  color: textColor,
+                ),
+              ),
+            ],
+          );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [photo, const SizedBox(height: 8), text],
     );
   }
 

@@ -31,6 +31,8 @@ import 'services/nyang_banner_nudge.dart';
 import 'services/widget_sync_service.dart';
 import 'models/user_data.dart';
 import 'theme/app_design_tokens.dart';
+import 'package:image_picker_android/image_picker_android.dart';
+import 'package:image_picker_platform_interface/image_picker_platform_interface.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
@@ -65,6 +67,10 @@ Future<void> _activateAppCheck() async {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // 할매 방 사진 보내기. 안드로이드 기본 사진 선택기를 쓰면 사진 권한 없이
+  // 고른 한 장만 받는다. 플레이는 사진 전체 권한을 엄격하게 본다.
+  final picker = ImagePickerPlatform.instance;
+  if (picker is ImagePickerAndroid) picker.useAndroidPhotoPicker = true;
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   await _activateAppCheck();
   await initializeDateFormatting('ko', null);
