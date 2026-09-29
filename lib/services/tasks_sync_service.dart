@@ -7,6 +7,8 @@ import '../models/user_data.dart';
 import 'apple_calendar_sync_service.dart';
 import 'chat_store.dart';
 import 'life_pattern_service.dart';
+import 'sync_base.dart';
+import 'task_completion_service.dart';
 import 'widget_sync_service.dart';
 
 class TasksSyncService {
@@ -108,6 +110,58 @@ class TasksSyncService {
     ChatStore.decode(cloudValue is String ? cloudValue : null),
   );
 
+  /// 이 기기가 마지막으로 클라우드와 맞춘 값의 지문([SyncBase]).
+  ///
+  /// 메모리에 한 벌만 두고 모두가 같은 것을 고친다. 올리기와 실시간 받기가
+  /// 각자 읽어 고쳐 쓰면, 한쪽이 적은 것을 다른 쪽이 옛 값으로 덮는다.
+  static Map<String, String>? _bases;
+  static String? _basesUid;
+
+  static Map<String, String> _basesFor(SharedPreferences prefs, String uid) {
+    if (_bases == null || _basesUid != uid) {
+      _bases = SyncBase.read(prefs, uid);
+      _basesUid = uid;
+    }
+    return _bases!;
+  }
+
+  static Future<void> _saveBases(SharedPreferences prefs, String uid) async {
+    final bases = _bases;
+    if (bases == null || _basesUid != uid) return;
+    await SyncBase.write(prefs, uid, bases);
+  }
+
+  /// 대화와 설문 답은 합치는 쪽이라 세 값 견주기를 거치지 않는다.
+  static bool _mergedKey(String key) =>
+      ChatStore.isChatKey(key) || key == LifePatternService.storeKey;
+
+  /// 클라우드 값을 이 기기에 적는다.
+  static Future<void> _writeLocal(
+    SharedPreferences prefs,
+    String key,
+    Object? value,
+  ) async {
+    if (value is String) {
+      await prefs.setString(key, value);
+    } else if (value is bool) {
+      await prefs.setBool(key, value);
+    } else if (value is int) {
+      await prefs.setInt(key, value);
+    } else if (value is double) {
+      await prefs.setDouble(key, value);
+    } else if (value is List) {
+      await prefs.setStringList(
+        key,
+        value.map((item) => item.toString()).toList(),
+      );
+    }
+  }
+
+  /// 실시간 받기가 화면에 알리는 길. 올리기 도중 클라우드 값을 받았을 때도
+  /// 같은 길로 알린다 — 화면이 옛 목록을 쥔 채로 저장하면 받은 값이 다시
+  /// 옛 것으로 올라간다.
+  static VoidCallback? _onDataChanged;
+
   /// 오래된 클라우드 값이 덮어써서는 안 되는 키.
   @visibleForTesting
   static bool isCriticalKey(String key) =>
@@ -128,20 +182,6 @@ class TasksSyncService {
     'nyang_apple_calendar_event_map',
   };
 
-  /// 로컬에서 막 수정됐지만 아직 클라우드로 업로드되지 않은 키.
-  /// 이 키들은 클라우드 스냅샷/다운로드가 로컬을 덮어쓰지 못하게 막아,
-  /// 방금 저장한 값(예: 메모)이 오래된 클라우드 데이터로 사라지는 것을 방지한다.
-  static final Set<String> _pendingUploadKeys = {};
-
-  /// 접두어로 걸리는 핵심 데이터도 업로드 대기 중인지.
-  /// [_pendingUploadKeys]와 생애주기가 같다.
-  static bool _criticalPrefixesPending = false;
-
-  /// 클라우드 값이 이 키의 로컬 값을 덮어써도 되는지.
-  static bool _isPendingUpload(String key) =>
-      _pendingUploadKeys.contains(key) ||
-      (_criticalPrefixesPending && _criticalKeyPrefixes.any(key.startsWith));
-
   /// 아직 클라우드로 못 올린 로컬 변경이 남아 있는지. 앱을 껐다 켜도 살아남아야
   /// 하므로 prefs에 적는다.
   ///
@@ -149,23 +189,15 @@ class TasksSyncService {
   /// 이건 이 기기에서 방금 일어난 사실이라 덮이면 안 된다.
   static const String pendingUploadFlagKey = 'pending_cloud_upload';
 
-  /// 올리지 못한 변경이 남아 있으면 덮어쓰기 보호를 다시 세운다.
-  ///
-  /// 보호 표시는 메모리에만 있어서 앱을 다시 켜면 사라진다. 그 사이에 클라우드
-  /// 복원이 돌면, 아직 못 올린 로컬 값이 옛 클라우드 값으로 덮인다.
-  static Future<void> _restorePendingProtection(SharedPreferences prefs) async {
-    if (!(prefs.getBool(pendingUploadFlagKey) ?? false)) return;
-    _pendingUploadKeys.addAll(_criticalDataKeys);
-    _criticalPrefixesPending = true;
-  }
-
   /// 로그인 전에 밀린 업로드가 있으면 지금 올린다.
   ///
   /// 클라우드에서 받아오기 전에 불러야 한다. 안 그러면 옛 클라우드 값이 아직
   /// 안 올라간 로컬 값을 덮어쓰고, 그 대화는 양쪽에서 사라진다.
+  ///
+  /// 무엇을 올릴지는 [syncToCloud]가 [SyncBase]로 가린다. 이 표시를 단 채
+  /// 며칠 꺼져 있던 폰이라도, 그동안 클라우드가 바뀐 것은 올리지 않고 받는다.
   static Future<void> flushPendingUpload() async {
     final prefs = await SharedPreferences.getInstance();
-    await _restorePendingProtection(prefs);
     if (!(prefs.getBool(pendingUploadFlagKey) ?? false)) return;
     if (FirebaseAuth.instance.currentUser == null) return;
     await syncToCloud();
@@ -180,9 +212,6 @@ class TasksSyncService {
   static void scheduleSyncToCloud({
     Duration delay = const Duration(seconds: 4),
   }) {
-    // 업로드가 확정되기 전까지 핵심 데이터를 "로컬이 최신" 상태로 표시한다.
-    _pendingUploadKeys.addAll(_criticalDataKeys);
-    _criticalPrefixesPending = true;
     unawaited(
       SharedPreferences.getInstance().then(
         (prefs) => prefs.setBool(pendingUploadFlagKey, true),
@@ -216,6 +245,10 @@ class TasksSyncService {
           .get();
       final cloudKeys = snapshot.docs.map((doc) => doc.id).toSet();
       final chatIsOurs = _chatBelongsToUser(prefs, user.uid);
+      final bases = _basesFor(prefs, user.uid);
+      final settled = <String, String>{};
+      final gone = <String>{};
+      var tookCloud = false;
 
       // 1. 로컬에 존재하는 데이터 업로드 및 업데이트
       for (final key in keys) {
@@ -290,8 +323,34 @@ class TasksSyncService {
             }
           }
 
-          // String, bool, int, double, StringList 등 기본 타입 지원
-          batch.set(docRef, {'value': value}, SetOptions(merge: true));
+          // 무조건 올리지 않는다. 며칠 꺼져 있던 기기의 값은 이 기기에선 멀쩡해
+          // 보여도 클라우드에선 한참 옛 것이다([SyncBase]).
+          final cloudDoc = cloudKeys.contains(key)
+              ? snapshot.docs.firstWhere((d) => d.id == key)
+              : null;
+          final cloudValue = cloudDoc?.data()['value'];
+          final localPrint = SyncBase.fingerprint(value);
+          final cloudPrint = cloudDoc == null
+              ? null
+              : SyncBase.fingerprint(cloudValue);
+          switch (SyncBase.decide(
+            local: localPrint,
+            cloud: cloudPrint,
+            base: bases[key],
+          )) {
+            case SyncMove.same:
+              settled[key] = localPrint!;
+            case SyncMove.push:
+              batch.set(docRef, {'value': value}, SetOptions(merge: true));
+              settled[key] = localPrint!;
+            case SyncMove.takeCloud:
+              debugPrint('↩️ TasksSyncService: $key 은 클라우드가 더 새것이라 받아옵니다.');
+              await _writeLocal(prefs, key, cloudValue);
+              settled[key] = cloudPrint!;
+              tookCloud = true;
+            case SyncMove.deleteCloud:
+              break;
+          }
         }
       }
 
@@ -306,6 +365,28 @@ class TasksSyncService {
                 .doc(user.uid)
                 .collection('appData')
                 .doc(key);
+            // 이 기기에 없다고 지운 것인지, 다른 기기에서 새로 생긴 것인지
+            // 가린다. 예전에는 다 지웠는데, 옛 기기가 켜지면 그동안 새로 생긴
+            // 것까지 없앴다. 대화는 오래된 날을 걷어내는 쪽이라 예전대로 둔다.
+            final cloudValue = snapshot.docs
+                .firstWhere((d) => d.id == key)
+                .data()['value'];
+            if (!_localOnlyKeys.contains(key) &&
+                !_mergedKey(key) &&
+                cloudValue != null) {
+              final move = SyncBase.decide(
+                local: null,
+                cloud: SyncBase.fingerprint(cloudValue),
+                base: bases[key],
+              );
+              if (move != SyncMove.deleteCloud) {
+                await _writeLocal(prefs, key, cloudValue);
+                settled[key] = SyncBase.fingerprint(cloudValue)!;
+                tookCloud = true;
+                continue;
+              }
+              gone.add(key);
+            }
             batch.delete(docRef);
             debugPrint('🗑️ TasksSyncService: 로컬에서 삭제된 $key 키를 클라우드에서도 삭제합니다.');
           }
@@ -313,11 +394,15 @@ class TasksSyncService {
       }
 
       await batch.commit();
-      // 업로드가 확정됐으므로 "로컬 최신" 표시를 해제한다.
-      // (removeAll(keys)를 쓰면 로컬에 아직 없는 키가 pending에 영원히 남아
-      // 클라우드 복원을 계속 막는 누수가 생긴다.)
-      _pendingUploadKeys.clear();
-      _criticalPrefixesPending = false;
+      // 올라간 것이 확정된 뒤에 적는다. 실패했는데 적어두면 다음에 이 기기
+      // 값을 "이미 맞춘 것"으로 보고 클라우드 것을 받아버린다.
+      bases.addAll(settled);
+      gone.forEach(bases.remove);
+      await _saveBases(prefs, user.uid);
+      if (tookCloud) {
+        await TaskCompletionService.markChangedNow();
+        _onDataChanged?.call();
+      }
       await prefs.remove(pendingUploadFlagKey);
       debugPrint('✅ TasksSyncService: 로컬 데이터를 클라우드에 성공적으로 백업했습니다.');
     } catch (e) {
@@ -374,6 +459,7 @@ class TasksSyncService {
           .get();
 
       final chatIsOurs = _chatBelongsToUser(prefs, user.uid);
+      final bases = _basesFor(prefs, user.uid);
 
       if (snapshot.docs.isEmpty) {
         debugPrint('ℹ️ TasksSyncService: 클라우드에 백업된 데이터가 없습니다.');
@@ -424,29 +510,25 @@ class TasksSyncService {
           continue;
         }
 
-        // 업로드 대기 중인(로컬이 더 최신인) 키는 클라우드 값으로 덮지 않는다.
-        if (_isPendingUpload(key)) continue;
-
         if (_localOnlyKeys.contains(key)) continue;
+        if (!data.containsKey('value')) continue;
 
-        if (data.containsKey('value')) {
-          final value = data['value'];
-          if (value is String) {
-            await prefs.setString(key, value);
-          } else if (value is bool) {
-            await prefs.setBool(key, value);
-          } else if (value is int) {
-            await prefs.setInt(key, value);
-          } else if (value is double) {
-            await prefs.setDouble(key, value);
-          } else if (value is List) {
-            await prefs.setStringList(
-              key,
-              value.map((item) => item.toString()).toList(),
-            );
-          }
-        }
+        // 이 기기가 고쳐서 아직 못 올린 것만 남기고 나머지는 받는다. 예전에는
+        // "못 올린 게 있음" 표시 하나로 모든 핵심 데이터를 지켰는데, 그 표시를
+        // 달고 며칠 꺼져 있던 폰은 옛 데이터 전부를 지키다 올려버렸다.
+        final value = data['value'];
+        if (value == null) continue;
+        final cloudPrint = SyncBase.fingerprint(value)!;
+        final move = SyncBase.decide(
+          local: SyncBase.fingerprint(prefs.get(key)),
+          cloud: cloudPrint,
+          base: bases[key],
+        );
+        if (move == SyncMove.push) continue;
+        if (move == SyncMove.takeCloud) await _writeLocal(prefs, key, value);
+        bases[key] = cloudPrint;
       }
+      await _saveBases(prefs, user.uid);
 
       diag['keys_found'] = foundKeys;
       // 앞사람 대화 중 이 계정 서버에 없는 것은 이 기기에서 지운다. 안 지우면
@@ -476,6 +558,10 @@ class TasksSyncService {
   static Future<void> clearCache() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('nyang_has_synced_from_cloud');
+    // 다음 사람은 이 기기에서 맞춘 적이 없다.
+    await SyncBase.clear(prefs);
+    _bases = null;
+    _basesUid = null;
     await prefs.remove('nyang_tasks');
     await prefs.remove('nyang_core_tasks');
   }
@@ -483,6 +569,7 @@ class TasksSyncService {
   static StreamSubscription<QuerySnapshot>? _realTimeSubscription;
 
   static void startRealTimeSync(String uid, VoidCallback onDataChanged) {
+    _onDataChanged = onDataChanged;
     _realTimeSubscription?.cancel();
     _realTimeSubscription = FirebaseFirestore.instance
         .collection('users')
@@ -492,11 +579,9 @@ class TasksSyncService {
         .listen(
           (snapshot) async {
             final prefs = await SharedPreferences.getInstance();
-            // 앱을 다시 켠 직후라면 보호 표시가 메모리에서 사라졌을 수 있다.
-            // 아직 못 올린 게 있으면 여기서 다시 세운다.
-            await _restorePendingProtection(prefs);
             bool changed = false;
             final chatIsOurs = _chatBelongsToUser(prefs, uid);
+            final bases = _basesFor(prefs, uid);
 
             for (final doc in snapshot.docs) {
               final key = doc.id;
@@ -535,34 +620,28 @@ class TasksSyncService {
                 continue;
               }
 
-              // 방금 로컬에서 수정돼 아직 업로드 대기 중인 키는 덮어쓰지 않는다.
-              // (오래된 클라우드 스냅샷이 방금 저장한 메모 등을 지우는 것을 방지)
-              if (_isPendingUpload(key)) continue;
               if (_localOnlyKeys.contains(key)) continue;
+              if (!data.containsKey('value')) continue;
 
-              if (data.containsKey('value')) {
-                final value = data['value'];
-                final localValue = prefs.get(key);
-
-                if (!sameStoredValue(localValue, value)) {
-                  changed = true;
-                  if (value is String) {
-                    await prefs.setString(key, value);
-                  } else if (value is bool) {
-                    await prefs.setBool(key, value);
-                  } else if (value is int) {
-                    await prefs.setInt(key, value);
-                  } else if (value is double) {
-                    await prefs.setDouble(key, value);
-                  } else if (value is List) {
-                    await prefs.setStringList(
-                      key,
-                      value.map((item) => item.toString()).toList(),
-                    );
-                  }
-                }
+              // 방금 이 기기에서 고쳐 아직 못 올린 것은 두고, 나머지는 받는다.
+              // 옛 스냅샷이 늦게 도착해도 그건 이 기기가 마지막으로 맞춘 값과
+              // 같아서 "이 기기가 고친 것"으로 남는다.
+              final value = data['value'];
+              if (value == null) continue;
+              final cloudPrint = SyncBase.fingerprint(value)!;
+              final move = SyncBase.decide(
+                local: SyncBase.fingerprint(prefs.get(key)),
+                cloud: cloudPrint,
+                base: bases[key],
+              );
+              if (move == SyncMove.push) continue;
+              if (move == SyncMove.takeCloud) {
+                await _writeLocal(prefs, key, value);
+                changed = true;
               }
+              bases[key] = cloudPrint;
             }
+            await _saveBases(prefs, uid);
 
             if (changed) {
               debugPrint(
@@ -580,6 +659,7 @@ class TasksSyncService {
   }
 
   static void stopRealTimeSync() {
+    _onDataChanged = null;
     _realTimeSubscription?.cancel();
     _realTimeSubscription = null;
   }
