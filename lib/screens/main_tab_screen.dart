@@ -836,6 +836,9 @@ class _MainTabScreenState extends State<MainTabScreen>
     // 여기서 다시 건다.
     unawaited(NotificationService().reapplyAlarmsIfPermissionRecovered());
     await DailyResetService.checkAndExecuteReset();
+    // 자정에 화면 없이 돈 정리는 어제 요약을 건너뛴다. 앱이 뒤에 살아 있다가
+    // 돌아온 경우에도 여기서 채운다. 하루 한 번만 시도한다.
+    unawaited(DailyResetService.catchUpMissedDailySummary());
     await DailyResetService.syncTodayHabitTasks();
     try {
       final appleCalendarChanged = await AppleCalendarSyncService.instance

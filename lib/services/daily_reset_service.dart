@@ -321,6 +321,7 @@ class DailyResetService {
   /// 아직 안 온 데이터를 없는 것으로 치고 하루를 넘기면 되돌릴 길이 없다.
   static Future<bool> checkAndExecuteResetAfterRestore({
     Duration timeout = const Duration(seconds: 15),
+    bool summarize = true,
   }) async {
     final deadline = DateTime.now().add(timeout);
     var prefs = await SharedPreferences.getInstance();
@@ -329,7 +330,7 @@ class DailyResetService {
       await Future.delayed(const Duration(milliseconds: 500));
       prefs = await SharedPreferences.getInstance();
     }
-    return checkAndExecuteReset();
+    return checkAndExecuteReset(summarize: summarize);
   }
 
   /// 오늘 정리를 이미 끝냈는지. 끝냈으면 되돌아온 날짜만 바로잡고 목록은
@@ -488,7 +489,25 @@ class DailyResetService {
   /// 화면의 첫 읽기가 나란히 달리는데, 정리가 조금 늦게 끝나면 화면은 정리
   /// 이전 목록을 그대로 들고 있었다. 그 상태에서 어제 칸을 열면 방금 보관된
   /// 목록이 화면에는 없어서 빈칸으로 보인다.
-  static Future<bool> checkAndExecuteReset() async {
+  ///
+  /// [summarize]가 false면 어제 대화 요약을 건너뛴다. 자정에 화면 없이 도는
+  /// 정리가 쓴다 — 요약은 인터넷 호출이라 길어질 수 있고, 빠진 요약은
+  /// [catchUpMissedDailySummary]가 앱을 열 때 채운다.
+  ///
+  /// 이미 돌고 있으면 새로 돌지 않고 그 결과를 기다린다. 자정에는 앱의 날짜
+  /// 감시와 자정 정리 알람이 거의 동시에 부를 수 있는데, 둘이 나란히 돌면
+  /// 뒤엣것이 앞엣것이 막 비운 목록을 "어제 목록"으로 읽는다.
+  static Future<bool> checkAndExecuteReset({bool summarize = true}) {
+    final running = _resetInFlight;
+    if (running != null) return running.then((_) => false);
+    final job = _checkAndExecuteReset(summarize: summarize);
+    _resetInFlight = job;
+    return job.whenComplete(() => _resetInFlight = null);
+  }
+
+  static Future<bool>? _resetInFlight;
+
+  static Future<bool> _checkAndExecuteReset({required bool summarize}) async {
     final prefs = await SharedPreferences.getInstance();
     if (await isCloudRestorePending(prefs)) return false;
     const resetHour = 0.0;
@@ -587,20 +606,11 @@ class DailyResetService {
       await prefs.remove('nyang_core_reminder_advance');
       await prefs.remove('nyang_deferred_tasks_today');
 
-      // 3. 어제 하루 요약. 날짜로 골라 쓴다 — 방은 여러 날을 함께 들고 있다.
-      final oldChatHistory = collectChatHistoryForDate(prefs, lastDate);
-      if (oldChatHistory.isNotEmpty) {
-        await MemoryService().loadMemoryData();
-        await MemoryService().generateDailySummary(lastDate, oldChatHistory);
-      }
-
-      // 4. 대화는 그대로 두고 오래된 날만 걷어낸다. 비우지 않는다 — 비우는 줄이
-      //    있던 동안에는 정리가 어긋날 때마다 그날 대화가 되돌릴 수 없이 사라졌다.
-      await pruneChatHistories(prefs);
-
       await markResetDone(prefs, today);
 
-      // 5. Inject habits & schedules to prefs for the new day
+      // 3. 새 날 목록부터 채운다. 요약 뒤에 두었을 때는 목록이 빈 채로 요약을
+      //    기다렸다 — 그 사이 할 일 탭을 연 사람은 캘린더 일정만 봤고, 자정에
+      //    화면 없이 돌던 정리는 요약하다 시간이 다 돼 루틴을 못 채우고 닫혔다.
       await _injectTodayHabitsAndSchedulesDirectly(
         prefs,
         today,
@@ -608,6 +618,19 @@ class DailyResetService {
       );
       TasksSyncService.scheduleSyncToCloud();
       rebuiltList = true;
+
+      // 4. 어제 하루 요약. 날짜로 골라 쓴다 — 방은 여러 날을 함께 들고 있다.
+      if (summarize) {
+        final oldChatHistory = collectChatHistoryForDate(prefs, lastDate);
+        if (oldChatHistory.isNotEmpty) {
+          await MemoryService().loadMemoryData();
+          await MemoryService().generateDailySummary(lastDate, oldChatHistory);
+        }
+      }
+
+      // 5. 대화는 그대로 두고 오래된 날만 걷어낸다. 비우지 않는다 — 비우는 줄이
+      //    있던 동안에는 정리가 어긋날 때마다 그날 대화가 되돌릴 수 없이 사라졌다.
+      await pruneChatHistories(prefs);
     }
 
     // Weekly/Monthly Reset Check

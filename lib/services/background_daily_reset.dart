@@ -73,7 +73,14 @@ class BackgroundDailyReset {
       // 앱을 켤 때와 같은 순서다. 한 단계가 실패해도 뒤는 돈다 — 클라우드가
       // 안 닿는 밤이어도 이 기기 목록은 정리돼야 한다.
       await _step('클라우드 받기', TasksSyncService.syncFromCloudWithRetry);
-      await _step('하루 정리', DailyResetService.checkAndExecuteResetAfterRestore);
+      // 어제 대화 요약은 뺀다. 인터넷 호출이라 길어지면 화면 없는 앱이 시간
+      // 제한에 걸려 닫힌다. 빠진 요약은 앱을 열 때 채워진다.
+      await _step(
+        '하루 정리',
+        () => DailyResetService.checkAndExecuteResetAfterRestore(
+          summarize: false,
+        ),
+      );
       await _step('루틴 맞추기', DailyResetService.syncTodayHabitTasks);
       // 떠 있던 앱의 화면이 옛 목록을 들고 있다가 저장하면 방금 정리가
       // 되돌아간다. 바뀌었다고 적어두면 돌아왔을 때 다시 읽는다.
