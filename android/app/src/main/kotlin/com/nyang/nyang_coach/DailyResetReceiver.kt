@@ -89,7 +89,9 @@ class DailyResetReceiver : BroadcastReceiver() {
                 // 나머지는 이 앱에선 부를 일이 없다.
                 MethodChannel(engine.dartExecutor.binaryMessenger, "nyang_coach/ongoing_nudge")
                     .setMethodCallHandler { call, result ->
-                        if (!ActiveCoachingChannel.handle(context, call, result)) {
+                        if (!ActiveCoachingChannel.handle(context, call, result) &&
+                            !OngoingStopChannel.handle(context, call, result)
+                        ) {
                             result.notImplemented()
                         }
                     }
@@ -113,6 +115,35 @@ class DailyResetReceiver : BroadcastReceiver() {
         headless?.destroy()
         headless = null
         onDone()
+    }
+}
+
+/**
+ * 진행 중 냥냥이를 내리는 통로. 자정 정리가 어제 켜둔 일을 멈추면, 그 일을
+ * 붙잡고 있던 냥냥이도 같이 내려야 한다. 화면 없는 앱에서도 받는다.
+ * 다루는 부름이면 true.
+ */
+object OngoingStopChannel {
+    fun handle(context: Context, call: MethodCall, result: MethodChannel.Result): Boolean {
+        when (call.method) {
+            "stop" -> stopRunning(context)
+            // "다음 일"·"멈춘 일 다시 시작할까" 카드가 기다리는 중이면 남긴다.
+            "stopUnlessNextTask" ->
+                if (!OngoingNudgeState.isIdleNudge(context)) stopRunning(context)
+            "clearStart" -> {
+                OngoingNudgeState.clearStart(context)
+                OngoingNudgeScheduler.cancelStart(context)
+            }
+            else -> return false
+        }
+        result.success(null)
+        return true
+    }
+
+    private fun stopRunning(context: Context) {
+        OngoingNudgeState.clear(context)
+        OngoingNudgeScheduler.cancel(context)
+        context.stopService(Intent(context, OngoingNudgeService::class.java))
     }
 }
 

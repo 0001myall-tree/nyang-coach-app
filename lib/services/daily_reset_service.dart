@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import 'active_coaching_promise.dart';
 import 'day_record_builder.dart';
 import 'memory_service.dart';
+import 'ongoing_task_nudge_service.dart';
 import 'chat_store.dart';
 import 'coach_id_service.dart';
 import 'routine_schedule.dart';
@@ -540,6 +541,10 @@ class DailyResetService {
     }
 
     if (lastDate != today) {
+      // 켜둔 채 날을 넘긴 일은 자정에 멈춘 것으로 친다. 그대로 보관하면 어제
+      // 기록에 "진행 중"이 남고, 그 일로 냥냥이가 다음 날에도 "하는 중이야?"를
+      // 묻는다.
+      closeOvernightRuns(previousTasks, DateTime.now());
       final previousDayHadTasks = previousTasks.isNotEmpty;
       final previousDayAllDone =
           previousDayHadTasks &&
@@ -619,6 +624,13 @@ class DailyResetService {
       TasksSyncService.scheduleSyncToCloud();
       rebuiltList = true;
 
+      // 어제 일을 붙잡고 있던 진행 중 알림(냥냥이, 아이폰 잠금화면 타이머)을
+      // 새 목록에 맞춰 내린다. 앱을 켤 때는 이 맞추기가 정리보다 먼저 돌아서,
+      // 어제 목록을 보고 "아직 진행 중"으로 다시 켜놓는다.
+      try {
+        await OngoingTaskNudgeService.reconcile();
+      } catch (_) {}
+
       // 4. 어제 하루 요약. 날짜로 골라 쓴다 — 방은 여러 날을 함께 들고 있다.
       if (summarize) {
         final oldChatHistory = collectChatHistoryForDate(prefs, lastDate);
@@ -655,6 +667,29 @@ class DailyResetService {
     }
 
     return rebuiltList;
+  }
+
+  /// 켜둔 채 [now]가 속한 날 전에 시작된 일을 그날 자정에 멈춘다.
+  ///
+  /// 밤 11시에 켜고 자면 아침에 열 시간이 아니라 한 시간을 한 것으로 남는다.
+  /// 완료는 아니므로 "하다 멈춘 일"이 된다. 시작 시각과 쌓인 시간은 지킨다.
+  /// 시계 없이 진행 중으로만 찍힌 옛 기록은 시간 없이 멈추기만 한다.
+  static void closeOvernightRuns(List<dynamic> tasks, DateTime now) {
+    final todayStart = DateTime(now.year, now.month, now.day);
+    for (final task in tasks) {
+      if (task is! Map || task['inProgress'] != true) continue;
+      final started = DateTime.tryParse(task['runStartedAt']?.toString() ?? '');
+      if (started != null && !started.isBefore(todayStart)) continue;
+      if (started != null) {
+        final dayEnd = DateTime(started.year, started.month, started.day + 1);
+        final ran = dayEnd.difference(started).inSeconds;
+        final before = (task['elapsedSeconds'] as num?)?.toInt() ?? 0;
+        task['elapsedSeconds'] = before + (ran > 0 ? ran : 0);
+        task['pausedAt'] = dayEnd.toIso8601String();
+      }
+      task['inProgress'] = false;
+      task['runStartedAt'] = null;
+    }
   }
 
   /// 오늘 목록을 루틴·일정·미리 세운 계획으로 다시 만든다.
