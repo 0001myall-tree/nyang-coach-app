@@ -1277,6 +1277,7 @@ class ChatScreen extends StatefulWidget {
 class ChatScreenController {
   _ChatScreenState? _state;
   void _attach(_ChatScreenState s) => _state = s;
+
   /// 자기가 붙어 있을 때만 뗀다. 화면을 오가면 새 화면이 먼저 붙고 옛 화면이
   /// 나중에 치워지는데, 옛 화면이 무조건 떼면 새 화면까지 끊긴다.
   void _detach(_ChatScreenState s) {
@@ -1338,12 +1339,12 @@ class _ChatScreenState extends State<ChatScreen>
   bool _conversationStarted = false;
   bool _isLoading = false;
 
-  /// 할매 방에서 보내려고 붙여둔 사진 한 장.
+  /// 코치에게 보내려고 붙여둔 사진 한 장.
   Uint8List? _pendingPhoto;
 
   /// 이번에 보낸 사진. 말풍선에 다시 그리려고 메시지 시각으로 들고 있는다.
   ///
-  /// 저장하지 않는다. 방 사진이라 폰에도 클라우드에도 남기지 않고, 앱을
+  /// 저장하지 않는다. 방이나 몸을 찍은 사진이라 폰에도 클라우드에도 남기지 않고, 앱을
   /// 다시 열면 말풍선에는 '사진'이라는 표시만 남는다.
   final Map<String, Uint8List> _photoBytes = {};
 
@@ -21357,22 +21358,31 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
     );
   }
 
-  // ── 할매 방 사진 ─────────────────────────────────────────
-  /// 사진을 보낼 수 있는 코치. 청소는 눈으로 봐야 하는 일이라 할매만 연다.
-  bool get _photoEnabled => widget.coachId == 'halmae';
+  // ── 코치에게 사진 보내기 ─────────────────────────────────
+  /// 사진을 보낼 수 있는 코치. 눈으로 봐야 하는 일을 맡은 코치만 연다 —
+  /// 할매는 방 상태, 갓생 형은 운동 자세와 식단.
+  bool get _photoEnabled =>
+      widget.coachId == 'halmae' || widget.coachId == 'bro';
 
   /// 하루에 보낼 수 있는 사진 수. 이 기기에서만 센다.
   static const int _photoDailyLimit = 7;
 
-  /// 사진이 붙은 턴에만 지시문 끝에 붙는 말.
-  static const String _photoTurnRule = '''
+  /// 사진이 붙은 턴에만 지시문 끝에 붙는 말. 코치가 맡은 일에 따라 볼 것이
+  /// 다르다 — 할매는 방의 물건과 자리, 갓생 형은 운동 자세.
+  String get _photoTurnRule {
+    final focus = widget.coachId == 'bro'
+        ? '운동 자세가 찍혀 있으면, 그 운동이 노리는 부위에 힘이 제대로 실리는 자세인지 사진에 보이는 근거(무릎·허리·어깨·팔꿈치의 위치와 각도 등)로 짚는다. 고칠 곳이 있으면 효과가 가장 크게 달라지는 하나부터 말한다. 식단이나 기구 사진이면 그것에 맞춰 본다.'
+        : '사진에 실제로 보이는 물건과 자리를 짚어서 말한다.';
+    return '''
 
 [사진]
-이번 말에는 사용자가 찍은 사진이 붙어 있다. 사진에 실제로 보이는 물건과 자리를 짚어서 말한다. 사진이 흐리거나 무엇인지 알아보기 어려우면 그렇다고 말하고 다시 찍어달라고 한다.''';
+이번 말에는 사용자가 찍은 사진이 붙어 있다. $focus 사진이 흐리거나 무엇인지 알아보기 어려우면 그렇다고 말하고 다시 찍어달라고 한다.''';
+  }
 
   // 'nyang_' 접두어를 쓰지 않는다. 이 기기에서 보낸 수라 클라우드가 덮으면 안 된다.
+  // 코치를 가리지 않고 하루 몫을 같이 센다.
   static String _photoCountKey(DateTime now) =>
-      'halmae_photo_count_${now.year}-${now.month}-${now.day}';
+      'coach_photo_count_${now.year}-${now.month}-${now.day}';
 
   Future<int> _photoSentToday() async {
     final prefs = await SharedPreferences.getInstance();
