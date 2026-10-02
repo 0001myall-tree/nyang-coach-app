@@ -147,25 +147,35 @@ class _PlanGuideBottomSheetState extends State<_PlanGuideBottomSheet> {
       backgroundColor: AppDesignTokens.brandSurface,
       showHandle: false,
       contentPadding: EdgeInsets.zero,
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.only(bottom: 20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _PlanGuideHeader(
-              isLongTerm: _isLongTerm,
-              longTermLabel: _catalog.longTermLabel,
-              onChanged: (value) {
-                setState(() => _isLongTerm = value);
-              },
-              onClose: () => Navigator.pop(context),
-            ),
-            Transform.translate(
-              offset: const Offset(0, -54),
+      // 닫기·제목·기간 탭은 고정하고 플랜 목록만 스크롤한다. 같이 스크롤되면
+      // 플랜을 보느라 내려간 사이 지금 월간을 보는지 6개월을 보는지가 사라지고,
+      // 닫으려면 다시 끝까지 올려야 했다.
+      body: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _PlanGuideHeader(
+            onLearnMore: widget.onLearnMore == null
+                ? null
+                : () => widget.onLearnMore!(
+                    _selectedPlanId == null
+                        ? null
+                        : (planId: _selectedPlanId!, isLongTerm: _isLongTerm),
+                  ),
+            isLongTerm: _isLongTerm,
+            longTermLabel: _catalog.longTermLabel,
+            onChanged: (value) {
+              setState(() => _isLongTerm = value);
+            },
+            onClose: () => Navigator.pop(context),
+          ),
+          Flexible(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.only(bottom: 20),
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(
                   AppDesignTokens.sheetHorizontalPadding,
-                  18,
+                  4,
                   AppDesignTokens.sheetHorizontalPadding,
                   0,
                 ),
@@ -246,18 +256,18 @@ class _PlanGuideBottomSheetState extends State<_PlanGuideBottomSheet> {
                 ),
               ),
             ),
-            const SizedBox(height: 16),
-          ],
-        ),
+          ),
+        ],
+      ),
+      // 틀의 기본 아래 여백은 내비게이션 바 높이를 한 번 더 비워둬서, 버튼
+      // 아래가 크게 떠 있었다. 이 창은 버튼이 셋이라 아래로 붙인다.
+      footerPadding: const EdgeInsets.fromLTRB(
+        AppDesignTokens.sheetFooterHorizontalPadding,
+        AppDesignTokens.sheetFooterTopPadding,
+        AppDesignTokens.sheetFooterHorizontalPadding,
+        8,
       ),
       footer: _PlanCheckoutBar(
-        onLearnMore: widget.onLearnMore == null
-            ? null
-            : () => widget.onLearnMore!(
-                _selectedPlanId == null
-                    ? null
-                    : (planId: _selectedPlanId!, isLongTerm: _isLongTerm),
-              ),
         selectedPlanId: _selectedPlanId,
         checkoutLabel: widget.checkoutLabel,
         isProcessing: _isPurchasing,
@@ -271,12 +281,16 @@ class _PlanGuideBottomSheetState extends State<_PlanGuideBottomSheet> {
 
 class _PlanGuideHeader extends StatelessWidget {
   const _PlanGuideHeader({
+    this.onLearnMore,
     required this.isLongTerm,
     required this.longTermLabel,
     required this.onChanged,
     required this.onClose,
   });
 
+  /// "냥냥코치란?". 큰 버튼으로 결제 버튼 위에 두었더니 결제 앞을 가로막고
+  /// 플랜 목록 자리까지 먹어서, 궁금한 사람만 누르는 작은 버튼으로 내렸다.
+  final VoidCallback? onLearnMore;
   final bool isLongTerm;
   final String longTermLabel;
   final ValueChanged<bool> onChanged;
@@ -285,7 +299,7 @@ class _PlanGuideHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 340,
+      height: 226,
       child: Stack(
         clipBehavior: Clip.none,
         children: [
@@ -299,6 +313,38 @@ class _PlanGuideHeader extends StatelessWidget {
               ),
             ),
           ),
+          if (onLearnMore != null)
+            Positioned(
+              top: 38,
+              left: AppDesignTokens.sheetHorizontalPadding,
+              child: Material(
+                color: Colors.white,
+                shape: const StadiumBorder(
+                  side: BorderSide(color: AppDesignTokens.brandBorder),
+                ),
+                child: InkWell(
+                  customBorder: const StadiumBorder(),
+                  onTap: () {
+                    Navigator.pop(context);
+                    onLearnMore!();
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
+                    child: Text(
+                      '냥냥코치란?',
+                      style: appFont(
+                        fontSize: AppDesignTokens.textCaption + 1,
+                        fontWeight: FontWeight.w900,
+                        color: AppDesignTokens.brandTextMuted,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
           Positioned(
             top: 44,
             right: 22,
@@ -333,7 +379,6 @@ class _PlanGuideHeader extends StatelessWidget {
                   height: 1.35,
                 ),
                 children: const [
-                  TextSpan(text: '나에게 맞는\n'),
                   TextSpan(
                     text: '구독 플랜',
                     style: TextStyle(
@@ -350,7 +395,7 @@ class _PlanGuideHeader extends StatelessWidget {
           Positioned(
             left: 20,
             right: 20,
-            bottom: 54,
+            top: 160,
             child: _PlanPeriodTabs(
               isLongTerm: isLongTerm,
               longTermLabel: longTermLabel,
@@ -388,7 +433,6 @@ class _PlanPeriodTabs extends StatelessWidget {
           Expanded(
             child: _PlanPeriodTab(
               title: '월간 구독',
-              subtitle: '매월 자동 결제',
               isSelected: !isLongTerm,
               onTap: () => onChanged(false),
             ),
@@ -396,7 +440,6 @@ class _PlanPeriodTabs extends StatelessWidget {
           Expanded(
             child: _PlanPeriodTab(
               title: '$longTermLabel 구독',
-              subtitle: '한 번 결제로 더 큰 혜택',
               isSelected: isLongTerm,
               onTap: () => onChanged(true),
             ),
@@ -410,13 +453,11 @@ class _PlanPeriodTabs extends StatelessWidget {
 class _PlanPeriodTab extends StatelessWidget {
   const _PlanPeriodTab({
     required this.title,
-    required this.subtitle,
     required this.isSelected,
     required this.onTap,
   });
 
   final String title;
-  final String subtitle;
   final bool isSelected;
   final VoidCallback onTap;
 
@@ -431,30 +472,14 @@ class _PlanPeriodTab extends StatelessWidget {
           color: isSelected ? AppDesignTokens.brand : Colors.transparent,
           borderRadius: BorderRadius.circular(14),
         ),
-        child: Column(
-          children: [
-            Text(
-              title,
-              style: appFont(
-                fontSize: AppDesignTokens.textBody,
-                fontWeight: FontWeight.w900,
-                color: isSelected ? Colors.white : AppDesignTokens.brandPressed,
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              subtitle,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: appFont(
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                color: isSelected
-                    ? Colors.white.withValues(alpha: 0.85)
-                    : AppDesignTokens.brandMuted,
-              ),
-            ),
-          ],
+        child: Text(
+          title,
+          textAlign: TextAlign.center,
+          style: appFont(
+            fontSize: AppDesignTokens.textBody,
+            fontWeight: FontWeight.w900,
+            color: isSelected ? Colors.white : AppDesignTokens.brandPressed,
+          ),
         ),
       ),
     );
@@ -735,7 +760,7 @@ class _PlanPriceText extends StatelessWidget {
         price,
         maxLines: 1,
         style: appFont(
-          fontSize: 30,
+          fontSize: 22,
           fontWeight: FontWeight.w900,
           color: AppDesignTokens.brandStrong,
         ),
@@ -752,11 +777,12 @@ class _PlanPriceText extends StatelessWidget {
         children: [
           TextSpan(
             text: price.substring(0, unitStart),
-            style: const TextStyle(fontSize: 30),
+            // 제목(24)보다 한 단계 아래. 같거나 크면 제목과 겨룬다.
+            style: const TextStyle(fontSize: 22),
           ),
           TextSpan(
             text: price.substring(unitStart),
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
           ),
         ],
       ),
@@ -832,27 +858,8 @@ class _IndividualCoachGuide extends StatelessWidget {
   }
 }
 
-class _NyangCoachLearnMoreButton extends StatelessWidget {
-  const _NyangCoachLearnMoreButton({required this.onTap});
-
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return AppButton(
-      label: '냥냥코치 더 알아보기',
-      variant: AppButtonVariant.secondary,
-      onPressed: () {
-        Navigator.pop(context);
-        onTap();
-      },
-    );
-  }
-}
-
 class _PlanCheckoutBar extends StatelessWidget {
   const _PlanCheckoutBar({
-    this.onLearnMore,
     required this.selectedPlanId,
     required this.checkoutLabel,
     required this.isProcessing,
@@ -861,9 +868,6 @@ class _PlanCheckoutBar extends StatelessWidget {
     required this.onRestore,
   });
 
-  /// 결제 버튼 바로 위에 두는 "더 알아보기". 위쪽 목록 끝에 두었더니 아래
-  /// 고정된 결제 버튼과 사이가 떠서, 따로 노는 버튼처럼 보였다.
-  final VoidCallback? onLearnMore;
   final String? selectedPlanId;
   final String checkoutLabel;
   final bool isProcessing;
@@ -878,10 +882,6 @@ class _PlanCheckoutBar extends StatelessWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        if (onLearnMore != null) ...[
-          _NyangCoachLearnMoreButton(onTap: onLearnMore!),
-          const SizedBox(height: 10),
-        ],
         AppButton(
           label: selectedPlanId == null
               ? '플랜을 선택해주세요'

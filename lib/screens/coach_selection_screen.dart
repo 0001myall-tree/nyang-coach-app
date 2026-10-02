@@ -179,48 +179,42 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen>
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
+                          // 따옴표를 글자 줄 안에 넣는다. 글자 바깥에 따로 띄워
+                          // 두었더니 줄바꿈 위치에 따라 글자와 겹쳤다.
                           Padding(
-                            padding: const EdgeInsets.fromLTRB(24, 8, 24, 28),
-                            child: Stack(
-                              alignment: Alignment.center,
-                              children: [
-                                Text(
-                                  '계획을 세우는 것보다, 실제로\n움직이는 것이 중요하지 않을까요?',
-                                  textAlign: TextAlign.center,
-                                  style: appFont(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w800,
-                                    color: const Color(0xFFA78BFA),
-                                    height: 1.5,
-                                  ),
+                            padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
+                            child: Text.rich(
+                              TextSpan(
+                                style: appFont(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w800,
+                                  color: const Color(0xFFA78BFA),
+                                  height: 1.5,
                                 ),
-                                const Positioned(
-                                  top: -4,
-                                  left: -6,
-                                  child: Text(
-                                    '“',
+                                children: const [
+                                  TextSpan(
+                                    text: '“ ',
                                     style: TextStyle(
-                                      fontSize: 42,
+                                      fontSize: 22,
                                       color: Color(0xFFD8D2FF),
-                                      height: 1,
                                       fontWeight: FontWeight.w900,
                                     ),
                                   ),
-                                ),
-                                const Positioned(
-                                  bottom: -18,
-                                  right: -4,
-                                  child: Text(
-                                    '”',
+                                  TextSpan(
+                                    text:
+                                        '계획을 세우는 것보다, 실제로\n움직이는 것이 중요하지 않을까요?',
+                                  ),
+                                  TextSpan(
+                                    text: ' ”',
                                     style: TextStyle(
-                                      fontSize: 42,
+                                      fontSize: 22,
                                       color: Color(0xFFD8D2FF),
-                                      height: 1,
                                       fontWeight: FontWeight.w900,
                                     ),
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
+                              textAlign: TextAlign.center,
                             ),
                           ),
                           Container(
@@ -231,8 +225,7 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen>
                           _buildTeamIntroSpeaker(
                             imagePath: 'assets/images/cat.png',
                             name: '냥냥코치',
-                            text:
-                                '그래서 냥냥코치가 태어났다냥!\n\n우리는 여러분이 다시 움직일 수 있도록 함께하는 코치들이다냥.',
+                            text: '우리는 여러분이 다시 움직일 수 있도록 함께하는 코치들이다냥.',
                           ),
                           _buildTeamIntroSpeaker(
                             imagePath: 'assets/images/boyfriend.png',
@@ -243,8 +236,7 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen>
                             imagePath: 'assets/images/nyang_halbae.png',
                             name:
                                 CoachConfigs.all['nyang_halbae']?.name ?? '냥할배',
-                            text:
-                                '마스터 코치는 목표와 패턴을 함께 보고, 중요한 흐름을 놓치지 않게 챙겨드립니다.',
+                            text: '마스터 코치는 목표와 패턴을 함께 보고, 머리를 맞대고 코칭해준다냥.',
                           ),
                           _buildTeamIntroSpeaker(
                             imagePath: 'assets/images/sec_female.png',
@@ -266,11 +258,15 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen>
                       top: BorderSide(color: Color(0xFFF0F0F5), width: 1),
                     ),
                   ),
-                  child: SizedBox(
-                    width: double.infinity,
-                    height: 56,
-                    child: ElevatedButton.icon(
-                      onPressed: () {
+                  // 할 일 탭 "루틴 하나 더 만들기"와 같은 모양. 꽉 찬 보라
+                  // 덩어리는 너무 기본형이라, 연한 바탕에 흰 동그라미 아이콘과
+                  // 진보라 글씨로 권하는 말투를 맞춘다.
+                  child: Material(
+                    color: AppDesignTokens.brand.withValues(alpha: 0.16),
+                    shape: const StadiumBorder(),
+                    child: InkWell(
+                      customBorder: const StadiumBorder(),
+                      onTap: () {
                         Navigator.pop(dialogContext);
                         if (backToPlans) {
                           _showPlanGuidePlaceholder(
@@ -279,20 +275,35 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen>
                           );
                         }
                       },
-                      icon: const Icon(Icons.pets, size: 20),
-                      label: Text(
-                        '함께 시작하기',
-                        style: appFont(
-                          fontSize: 17,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF8B7CFF),
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 13),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Container(
+                              width: 28,
+                              height: 28,
+                              decoration: const BoxDecoration(
+                                color: Colors.white,
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.pets,
+                                size: 16,
+                                color: AppDesignTokens.brand,
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Text(
+                              '함께 시작하기',
+                              style: appFont(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 0.2,
+                                color: AppDesignTokens.brandStrong,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
