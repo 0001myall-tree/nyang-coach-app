@@ -28,6 +28,7 @@ import '../services/api_usage_limit_service.dart';
 import '../services/widget_sync_service.dart';
 import '../services/daily_reset_service.dart';
 import '../services/free_access_service.dart';
+import '../widgets/plan_guide_bottom_sheet.dart';
 import '../services/purchase_service.dart';
 import '../services/nyang_banner_nudge.dart';
 import '../services/ongoing_task_nudge_service.dart';
@@ -15642,18 +15643,50 @@ class _TasksScreenState extends State<TasksScreen>
     );
   }
 
+  /// 플랜 없이 적으려 할 때. 카드 없이 쓰는 무료 하루를 없앤 뒤로 여기가
+  /// 체험으로 들어가는 문이다 — "확인"만 있으면 막다른 길이 된다.
   void _showSubscriptionNotice(BuildContext context) {
+    final canCheckout = PurchaseService.storeCheckoutEnabled;
     showDialog(
       context: context,
-      builder: (context) {
+      builder: (dialogContext) {
+        Widget trialButton(String planId, String label) => SizedBox(
+          width: double.infinity,
+          height: 48,
+          child: ElevatedButton(
+            onPressed: () {
+              Navigator.pop(dialogContext);
+              showPlanGuideBottomSheet(
+                context,
+                initialSelection: (planId: planId, isLongTerm: false),
+                onPurchaseCompleted: _loadAll,
+              );
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: planId == 'master'
+                  ? _coach.accentColor
+                  : _coach.accentColor.withValues(alpha: 0.16),
+              foregroundColor: planId == 'master'
+                  ? Colors.white
+                  : _coach.accentColor,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+            ),
+            child: Text(
+              '$label ${FreeAccessService.trialDays}일 무료 체험',
+              style: appFont(fontSize: 15, fontWeight: FontWeight.w900),
+            ),
+          ),
+        );
+
         return AlertDialog(
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20),
           ),
           title: Text(
-            PurchaseService.storeCheckoutEnabled
-                ? '⚠️ 구독 플랜 필요'
-                : '⚠️ 체험 기간 종료',
+            canCheckout ? '코치와 함께 시작해볼까요?' : '⚠️ 체험 기간 종료',
             style: appFont(
               fontWeight: FontWeight.w900,
               color: const Color(0xFF1A1A2E),
@@ -15662,8 +15695,8 @@ class _TasksScreenState extends State<TasksScreen>
           content: Text(
             // 살 수 없는 동안에는 구독하라고 하지 않는다. 갈 수 없는 곳을
             // 가리키면 앱이 고장난 것처럼 보인다.
-            PurchaseService.storeCheckoutEnabled
-                ? '할 일, 일정, 루틴 등록은 Friends 또는 Master 플랜 구독자만 이용할 수 있다냥!'
+            canCheckout
+                ? '할 일, 일정, 루틴은 ${FreeAccessService.trialDays}일 무료 체험하면 적을 수 있어요.\n체험이 끝나면 고른 플랜으로 자동 결제되고, 그 전에 언제든 해지할 수 있어요.'
                 : '무료로 써볼 수 있는 기간이 끝났다냥.\n지금까지 적어둔 것은 그대로 볼 수 있어!',
             style: appFont(
               fontSize: 14,
@@ -15671,16 +15704,30 @@ class _TasksScreenState extends State<TasksScreen>
               color: const Color(0xFF4B5563),
             ),
           ),
+          // 체험은 앱 전체에서 한 번이라, 여기서 어느 쪽으로 해볼지 고른다.
+          // 버튼 글씨가 길어 한 줄에 셋이 안 들어가므로 위아래로 쌓는다.
           actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text(
-                '확인',
-                style: appFont(
-                  fontWeight: FontWeight.w700,
-                  color: _coach.accentColor,
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (canCheckout) ...[
+                  trialButton('friends', '프렌즈'),
+                  const SizedBox(height: 8),
+                  trialButton('master', '마스터'),
+                  const SizedBox(height: 4),
+                ],
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: Text(
+                    canCheckout ? '나중에' : '확인',
+                    style: appFont(
+                      fontWeight: FontWeight.w700,
+                      color: const Color(0xFF8E8A9E),
+                    ),
+                  ),
                 ),
-              ),
+              ],
             ),
           ],
         );

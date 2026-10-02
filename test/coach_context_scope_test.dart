@@ -11,31 +11,32 @@ CoachContextScope master(String current, {String? previous}) {
 
 void main() {
   group('프렌즈 코치', () {
-    test('목표는 다루지 않고 오늘 할 일만 본다', () {
+    // 예전에는 프렌즈에게 목표를 통째로 막았다. 대화 중에 목표를 등록해주는
+    // 코치가 그 목표를 모르게 돼서 풀었다. 판단 규칙은 마스터와 같다.
+    test('목표 얘기가 나오면 목표를 싣는다', () {
       final scope = CoachContextScopeService.resolve(
         isMaster: false,
-        currentText: '오늘 뭐부터 하지?',
+        currentText: '이번 달 목표 어때?',
+      );
+      expect(scope.goal, GoalContextScope.full);
+      expect(scope.allowsGoals, isTrue);
+    });
+
+    test('잡담에는 목표를 싣지 않고 오늘 할 일만 본다', () {
+      final scope = CoachContextScopeService.resolve(
+        isMaster: false,
+        currentText: '심심해',
       );
       expect(scope.goal, GoalContextScope.none);
       expect(scope.tasks, isTrue);
     });
 
-    test('목표 얘기가 오가도 비전은 열리지 않는다', () {
-      final scope = CoachContextScopeService.resolve(
-        isMaster: false,
-        currentText: '이번 달 목표 어때?',
-        previousUserText: '장기 비전 좀 봐줘',
-      );
-      expect(scope.goal, GoalContextScope.none);
-      expect(scope.allowsGoals, isFalse);
-    });
-
-    test('코치가 목표를 요청해도 열어주지 않는다', () {
+    test('코치가 목표를 요청하면 열어준다', () {
       final scope = CoachContextScopeService.resolve(
         isMaster: false,
         currentText: '심심해',
       ).escalated(goals: true);
-      expect(scope.goal, GoalContextScope.none);
+      expect(scope.goal, GoalContextScope.full);
     });
   });
 

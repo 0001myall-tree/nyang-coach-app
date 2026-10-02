@@ -4156,10 +4156,15 @@ ${lines.join('\n')}
     );
   }
 
-  void _showPlanGuideBottomSheet() {
+  /// [planId]를 주면 그 플랜이 골라진 채로 열린다(월간). 체험 안내에서
+  /// 프렌즈·마스터 중 하나를 고르고 온 사람에게 다시 고르게 하지 않는다.
+  void _showPlanGuideBottomSheet({String? planId}) {
     if (!_canOpenSubscriptionGuide) return;
     showPlanGuideBottomSheet(
       context,
+      initialSelection: planId == null
+          ? null
+          : (planId: planId, isLongTerm: false),
       onPurchaseCompleted: () async {
         final updated = await UserDataService.load();
         if (mounted) {
@@ -8453,7 +8458,13 @@ $block
       // 콘솔에서 줄이거나 닫았는데 인사만 "이틀 무료"라고 하면 그 자리에서
       // 거짓말이 된다.
       final freeDays = await FreeAccessService.instance.remainingFreeDays();
-      final freeLine = freeDays > 0 ? '\n$freeDays일 동안은 무료니까 편하게 시켜보라냥!' : '';
+      // 카드 없는 무료 날이 없으면 체험으로 시작하는 길을 알려준다. 소개만
+      // 하고 끝나면, 말을 걸었다가 막혀서야 체험이 있다는 걸 알게 된다.
+      final freeLine = freeDays > 0
+          ? '\n$freeDays일 동안은 무료니까 편하게 시켜보라냥!'
+          : (PurchaseService.storeCheckoutEnabled
+                ? '\n플랜을 고르면 ${FreeAccessService.trialDays}일 동안 무료로 같이 해볼 수 있다냥!'
+                : '');
       final intro =
           '안녕! 나는 냥냥코치다냥 🐾\n'
           '할 일을 적어두는 것까지는 다들 하는데, 막상 시작이 안 될 때가 있잖아.\n'
@@ -13190,7 +13201,9 @@ $block
       if (e is ApiUsageLimitException) {
         _showUsageLimitSheet(
           e.message,
-          showUpgrade: e.message.contains('마스터 플랜'),
+          showUpgrade:
+              e.message.contains('마스터 플랜') ||
+              e.message == ApiUsageLimitService.trialInviteMessage,
         );
       } else {
         unawaited(
@@ -13973,8 +13986,9 @@ $block
     // 오늘 다 해야 해"라고 답할 때 코치가 무엇에 대한 답인지 알아야 대화가
     // 이어진다. 무슨 일을 두고 꺼낸 말이었는지 여기서 알려준다.
 
-    // 7. 이번 주/달 목표 (pro + master)
-    if (_coach.isMaster && (needsGoalContext || needsLightGoalContext)) {
+    // 7. 이번 주/달 목표. 프렌즈도 받는다 — 대화 중에 목표를 등록해주는
+    // 코치가 그 목표를 모르면 안 된다. 비전은 아래에서 마스터만 받는다.
+    if (needsGoalContext || needsLightGoalContext) {
       final wgRaw = prefs.getString('nyang_week_goals');
       if (wgRaw != null) {
         try {
@@ -15817,6 +15831,9 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
     bool showUpgrade = false,
     String? customTitle,
   }) {
+    // 플랜이 없어 막힌 자리. 한도를 다 쓴 것이 아니라 아직 시작을 안 한
+    // 것이라, 제목과 버튼이 체험으로 이끈다.
+    final isTrialInvite = msg == ApiUsageLimitService.trialInviteMessage;
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -15865,7 +15882,9 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
                   Expanded(
                     child: Text(
                       customTitle ??
-                          (showUpgrade
+                          (isTrialInvite
+                              ? '코치와 함께 시작해볼까요?'
+                              : showUpgrade
                               ? '이번 주 대화를 모두 썼어요'
                               : (msg.contains('로그인')
                                     ? '로그인이 필요해요'
@@ -15890,7 +15909,47 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
                 ),
               ),
               const SizedBox(height: 20),
-              if (showUpgrade && _canOpenSubscriptionGuide) ...[
+              // 체험은 앱 전체에서 한 번이라, 여기서 어느 쪽으로 해볼지 고른다.
+              if (isTrialInvite && _canOpenSubscriptionGuide) ...[
+                for (final choice in const [
+                  ('friends', '프렌즈'),
+                  ('master', '마스터'),
+                ]) ...[
+                  SizedBox(
+                    width: double.infinity,
+                    height: 52,
+                    child: ElevatedButton(
+                      onPressed: () {
+                        Navigator.pop(sheetContext);
+                        Future.delayed(
+                          Duration.zero,
+                          () => _showPlanGuideBottomSheet(planId: choice.$1),
+                        );
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: choice.$1 == 'master'
+                            ? _coach.accentColor
+                            : _coach.accentColor.withValues(alpha: 0.16),
+                        foregroundColor: choice.$1 == 'master'
+                            ? Colors.white
+                            : _coach.accentColor,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                      child: Text(
+                        '${choice.$2} ${FreeAccessService.trialDays}일 무료 체험',
+                        style: appFont(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                ],
+              ] else if (showUpgrade && _canOpenSubscriptionGuide) ...[
                 SizedBox(
                   width: double.infinity,
                   height: 52,

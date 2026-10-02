@@ -5,6 +5,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
 import 'package:in_app_purchase_android/in_app_purchase_android.dart';
+import 'package:in_app_purchase_platform_interface/in_app_purchase_platform_interface.dart';
+import 'package:in_app_purchase_storekit/in_app_purchase_storekit.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/user_data.dart';
@@ -97,9 +99,23 @@ class PurchaseService {
     if (response.error != null) {
       debugPrint('Product query error: ${response.error}');
     }
-    _products = {
-      for (final product in response.productDetails) product.id: product,
-    };
+    // 구글은 구독 하나를 혜택마다 따로 돌려준다(기본 요금제, 무료 체험 등).
+    // 이 사람이 받을 수 있는 혜택만 온다 — 이미 체험한 사람에게는 체험이
+    // 빠져서 온다. 무료 구간이 있는 것을 체험으로 따로 챙긴다.
+    final products = <String, ProductDetails>{};
+    final trials = <String, ProductDetails>{};
+    for (final product in response.productDetails) {
+      if (_hasFreePhase(product)) {
+        trials[product.id] = product;
+      } else {
+        products[product.id] = product;
+      }
+    }
+    for (final entry in trials.entries) {
+      products.putIfAbsent(entry.key, () => entry.value);
+    }
+    _products = products;
+    _trialOffers = trials;
     if (response.notFoundIDs.isNotEmpty) {
       debugPrint('Missing store products: ${response.notFoundIDs.join(', ')}');
     }
@@ -111,6 +127,40 @@ class PurchaseService {
 
   ProductDetails? productFor(PurchasePlan plan) => _products[plan.productId];
 
+  /// 무료 체험이 붙은 구글 혜택. 상품 이름으로 찾는다.
+  Map<String, ProductDetails> _trialOffers = {};
+
+  static bool _hasFreePhase(ProductDetails product) {
+    if (product is! GooglePlayProductDetails) return false;
+    final index = product.subscriptionIndex;
+    final offers = product.productDetails.subscriptionOfferDetails;
+    if (index == null || offers == null || index >= offers.length) {
+      return false;
+    }
+    return offers[index].pricingPhases.any(
+      (phase) => phase.priceAmountMicros == 0,
+    );
+  }
+
+  /// 이 사람이 지금 이 플랜을 무료 체험으로 시작할 수 있는지.
+  ///
+  /// 체험은 앱 전체에서 한 번이다(구글은 혜택 자격을 "구독한 적 없음",
+  /// 애플은 같은 구독 그룹으로 묶어서). 그래서 스토어에 묻는다 — 앱이 따로
+  /// 세면 스토어와 어긋나서, 체험이라고 안내했는데 바로 결제되는 일이 생긴다.
+  Future<bool> hasFreeTrial(PurchasePlan plan) async {
+    if (_products.isEmpty) await loadProducts();
+    if (_isAndroid) return _trialOffers.containsKey(plan.productId);
+    if (!_products.containsKey(plan.productId)) return false;
+    try {
+      final platform = InAppPurchasePlatform.instance;
+      if (platform is! InAppPurchaseStoreKitPlatform) return false;
+      return await platform.isIntroductoryOfferEligible(plan.productId);
+    } catch (e) {
+      debugPrint('Intro offer check failed: $e');
+      return false;
+    }
+  }
+
   Future<PurchaseResult> purchase(PurchasePlan plan) async {
     await start();
     final available = await _iap.isAvailable();
@@ -119,7 +169,9 @@ class PurchaseService {
     }
 
     final products = _products.isEmpty ? await loadProducts() : _products;
-    final product = products[plan.productId];
+    // 체험을 받을 수 있으면 체험 혜택으로 산다. 애플은 받을 수 있으면 알아서
+    // 붙인다.
+    final product = _trialOffers[plan.productId] ?? products[plan.productId];
     if (product == null) {
       return PurchaseResult.failure(
         '스토어 상품을 찾지 못했어요. App Store Connect와 Play Console에 ${plan.productId} 상품을 먼저 만들어주세요.',

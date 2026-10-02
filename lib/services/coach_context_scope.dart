@@ -354,15 +354,11 @@ class CoachContextScopeService {
     required String currentText,
     String? previousUserText,
   }) {
-    // 프렌즈 코치는 목표를 다루지 않는다. 오늘 하루만 본다.
-    if (!isMaster) {
-      return const CoachContextScope(
-        goal: GoalContextScope.none,
-        tasks: true,
-        avoidanceLink: false,
-        allowsGoals: false,
-      );
-    }
+    // 프렌즈 코치도 목표를 받는다. 예전에는 여기서 "프렌즈는 오늘 하루만
+    // 본다"며 목표를 통째로 막았는데, 프렌즈도 대화 중에 목표를 등록해주면서
+    // 정작 그 목표를 몰라서 "방금 같이 세운 목표"를 모르는 코치가 됐다.
+    // 비전·마일스톤은 여전히 마스터만 받는다(채팅 화면의 자료 모으는 자리).
+    // [isMaster]는 그 구분을 위해 남겨둔다.
 
     final currentGoal = hasGoalSignal(currentText);
     final currentAvoidance = isAvoidanceMessage(currentText);

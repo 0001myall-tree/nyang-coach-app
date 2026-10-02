@@ -3,6 +3,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import '../theme/app_font.dart';
 
 import '../theme/app_design_tokens.dart';
+import '../services/free_access_service.dart';
 import '../services/plan_catalog.dart';
 import '../services/purchase_service.dart';
 import 'app_bottom_sheet.dart';
@@ -83,6 +84,35 @@ class _PlanGuideBottomSheetState extends State<_PlanGuideBottomSheet> {
     _catalog.load().then((_) {
       if (mounted) setState(() {});
     });
+    _refreshTrial();
+  }
+
+  /// 고른 플랜을 지금 무료 체험으로 시작할 수 있는지. 스토어가 정한다.
+  bool _trialAvailable = false;
+
+  Future<void> _refreshTrial() async {
+    final planId = _selectedPlanId;
+    final plan = planId == null
+        ? null
+        : PurchaseService.instance.planForSelection(planId, _isLongTerm);
+    final available =
+        plan != null && await PurchaseService.instance.hasFreeTrial(plan);
+    if (mounted && planId == _selectedPlanId) {
+      setState(() => _trialAvailable = available);
+    }
+  }
+
+  /// 체험 뒤 얼마가 나가는지. 스토어 정책상 체험을 권하는 자리에 꼭 같이
+  /// 적어야 한다.
+  String? get _trialNote {
+    final planId = _selectedPlanId;
+    if (!_trialAvailable || planId == null) return null;
+    final plan = _planFor(planId);
+    if (plan == null || plan.price.isEmpty) return null;
+    final price = _isLongTerm
+        ? '${_catalog.longTermLabel} ${plan.price}'
+        : plan.price;
+    return '${FreeAccessService.trialDays}일 무료 체험 후 $price 자동 결제 · 체험 중 언제든 해지할 수 있어요';
   }
 
   /// 화면에 쓸 상품. 서버 목록에 없으면 그 자리는 비워둔다.
@@ -166,6 +196,7 @@ class _PlanGuideBottomSheetState extends State<_PlanGuideBottomSheet> {
             longTermLabel: _catalog.longTermLabel,
             onChanged: (value) {
               setState(() => _isLongTerm = value);
+              _refreshTrial();
             },
             onClose: () => Navigator.pop(context),
           ),
@@ -192,6 +223,7 @@ class _PlanGuideBottomSheetState extends State<_PlanGuideBottomSheet> {
                       isSelected: _selectedPlanId == 'friends',
                       onTap: () {
                         setState(() => _selectedPlanId = 'friends');
+                        _refreshTrial();
                       },
                       features: const [
                         ('assets/icons/circle-check.svg', '냥냥코치 이용 가능'),
@@ -217,6 +249,7 @@ class _PlanGuideBottomSheetState extends State<_PlanGuideBottomSheet> {
                       isSelected: _selectedPlanId == 'master',
                       onTap: () {
                         setState(() => _selectedPlanId = 'master');
+                        _refreshTrial();
                       },
                       features: const [
                         ('assets/icons/circle-check.svg', '비서 코치, 냥냥코치 이용 가능'),
@@ -269,7 +302,10 @@ class _PlanGuideBottomSheetState extends State<_PlanGuideBottomSheet> {
       ),
       footer: _PlanCheckoutBar(
         selectedPlanId: _selectedPlanId,
-        checkoutLabel: widget.checkoutLabel,
+        checkoutLabel: _trialAvailable
+            ? '${FreeAccessService.trialDays}일 무료로 시작하기'
+            : widget.checkoutLabel,
+        trialNote: _trialNote,
         isProcessing: _isPurchasing,
         isRestoring: _isRestoring,
         onCheckout: _handleCheckout,
@@ -864,6 +900,7 @@ class _PlanCheckoutBar extends StatelessWidget {
   const _PlanCheckoutBar({
     required this.selectedPlanId,
     required this.checkoutLabel,
+    this.trialNote,
     required this.isProcessing,
     required this.isRestoring,
     required this.onCheckout,
@@ -872,6 +909,9 @@ class _PlanCheckoutBar extends StatelessWidget {
 
   final String? selectedPlanId;
   final String checkoutLabel;
+
+  /// 체험을 권할 때 버튼 위에 적는 "체험 후 얼마 자동 결제".
+  final String? trialNote;
   final bool isProcessing;
   final bool isRestoring;
   final VoidCallback onCheckout;
@@ -884,6 +924,18 @@ class _PlanCheckoutBar extends StatelessWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
+        if (trialNote != null) ...[
+          Text(
+            trialNote!,
+            textAlign: TextAlign.center,
+            style: appFont(
+              fontSize: AppDesignTokens.textCaption,
+              fontWeight: FontWeight.w700,
+              color: AppDesignTokens.brandTextMuted,
+            ),
+          ),
+          const SizedBox(height: 8),
+        ],
         AppButton(
           label: selectedPlanId == null
               ? '플랜을 선택해주세요'
