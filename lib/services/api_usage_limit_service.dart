@@ -49,7 +49,7 @@ class ApiUsageLimitService {
   /// 스토어 무료 체험으로 시작하게 했다. 이 문구를 받은 자리는 체험 안내를
   /// 여는 버튼을 함께 띄운다.
   static const String trialInviteMessage =
-      '코치와 대화는 ${FreeAccessService.trialDays}일 무료 체험으로 시작할 수 있어요.\n체험이 끝나면 고른 플랜으로 자동 결제되고, 그 전에 언제든 해지할 수 있어요.';
+      '${FreeAccessService.trialDays}일 무료 체험으로 코치와 대화해보세요.\n체험이 끝나면 고른 플랜으로 자동 결제되고, 그 전에 언제든 해지할 수 있어요.';
 
   // 한도는 최악의 경우에 얼마까지 나갈 수 있는가를 정하는 값이다. 실사용은
   // 테스터 기준 1인당 하루 7원(월 210원)이라 한도 근처에 가지도 않는다.

@@ -180,9 +180,17 @@ class PurchaseService {
 
     final completer = Completer<PurchaseResult>();
     _pendingPurchases[plan.productId] = completer;
-    final started = await _iap.buyNonConsumable(
-      purchaseParam: PurchaseParam(productDetails: product),
-    );
+    // 스토어가 아예 거절하면 신호 없이 예외로 끝난다. 그때도 기다리던 결제를
+    // 치워야 다음 결제가 막히지 않는다.
+    bool started;
+    try {
+      started = await _iap.buyNonConsumable(
+        purchaseParam: PurchaseParam(productDetails: product),
+      );
+    } catch (e) {
+      debugPrint('buyNonConsumable failed: $e');
+      started = false;
+    }
     if (!started) {
       _pendingPurchases.remove(plan.productId);
       return PurchaseResult.failure('결제를 시작하지 못했어요. 잠시 후 다시 시도해주세요.');
@@ -218,10 +226,16 @@ class PurchaseService {
     _pendingPurchases[productId] = completer;
     // 다 쓴 뒤 다시 살 수 있어야 해서 소모성으로 산다. 자동으로 쓰지 않는다 —
     // 서버 확인 전에 써버리면, 확인이 실패해도 구글이 환불하지 않는다.
-    final started = await _iap.buyConsumable(
-      purchaseParam: PurchaseParam(productDetails: product),
-      autoConsume: false,
-    );
+    bool started;
+    try {
+      started = await _iap.buyConsumable(
+        purchaseParam: PurchaseParam(productDetails: product),
+        autoConsume: false,
+      );
+    } catch (e) {
+      debugPrint('buyConsumable failed: $e');
+      started = false;
+    }
     if (!started) {
       _pendingPurchases.remove(productId);
       return PurchaseResult.failure('결제를 시작하지 못했어요. 잠시 후 다시 시도해주세요.');
@@ -269,6 +283,20 @@ class PurchaseService {
     List<PurchaseDetails> purchaseDetails,
   ) async {
     for (final purchase in purchaseDetails) {
+      // 구글은 결제창을 닫거나 실패하면 어떤 상품인지 비워서 보낸다. 상품으로
+      // 짝을 못 지으니, 기다리던 결제를 전부 풀어준다. 안 풀면 버튼이 5분 동안
+      // "결제 확인 중"에 묶인다.
+      if (purchase.productID.isEmpty &&
+          (purchase.status == PurchaseStatus.canceled ||
+              purchase.status == PurchaseStatus.error)) {
+        final message = purchase.status == PurchaseStatus.canceled
+            ? '결제가 취소됐어요.'
+            : (purchase.error?.message ?? '결제 중 오류가 발생했어요.');
+        for (final id in _pendingPurchases.keys.toList()) {
+          _completePending(id, PurchaseResult.failure(message));
+        }
+        continue;
+      }
       final plan = _planForProductId(purchase.productID);
       final coachId = PlanCatalog.coachForProductId(purchase.productID);
       if (plan == null && coachId == null) {

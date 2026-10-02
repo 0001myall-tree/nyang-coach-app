@@ -133,7 +133,14 @@ class _PlanGuideBottomSheetState extends State<_PlanGuideBottomSheet> {
     }
 
     setState(() => _isPurchasing = true);
-    final result = await PurchaseService.instance.purchase(plan);
+    // 무슨 일이 나도 버튼은 풀려야 한다. 예외로 끝나면 "결제 확인 중"에 갇힌다.
+    PurchaseResult result;
+    try {
+      result = await PurchaseService.instance.purchase(plan);
+    } catch (e) {
+      debugPrint('Checkout failed: $e');
+      result = PurchaseResult.failure('결제를 시작하지 못했어요. 잠시 후 다시 시도해주세요.');
+    }
     if (!mounted) return;
 
     setState(() => _isPurchasing = false);

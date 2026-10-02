@@ -779,7 +779,15 @@ class NyangBannerNudge {
     // 리줌(main_tab_screen.dart의 _checkWidgetIntent) 양쪽이 이미 하던
     // 대로 할 일 창을 열게 한다.
     await prefs.setString('widget_route', 'tasks');
+    // 떠 있는 앱에 바로 알린다. 아이폰은 배너를 누른 처리를 앱이 깨어난
+    // 뒤에 넘겨주는데, 앱은 깨어나자마자 위 자리표를 이미 확인하고 지나간
+    // 참일 수 있다. 그러면 팝업이 다음에 앱에 들어올 때에야 떴다.
+    tapped.value++;
   }
+
+  /// 배너를 눌러 답을 적을 때마다 하나씩 오른다. 메인 화면이 듣고 할 일 창을
+  /// 연다.
+  static final ValueNotifier<int> tapped = ValueNotifier<int>(0);
 }
 
 const String nyangBannerPayload = NyangBannerNudge.payloadPrefix;

@@ -89,6 +89,7 @@ import '../models/user_data.dart';
 import '../theme/app_design_tokens.dart';
 import '../widgets/app_chip.dart';
 import '../widgets/core_reminder_settings_sheet.dart';
+import '../widgets/coach_team_intro_dialog.dart';
 import '../widgets/plan_guide_bottom_sheet.dart';
 
 // ─────────────────────────────────────────────────────────────
@@ -4142,10 +4143,17 @@ ${lines.join('\n')}
                 ),
                 onPressed: () {
                   Navigator.pop(ctx);
-                  _showAboutNyangCoachDialog();
+                  // 코치 선택 화면의 "냥냥코치란?"과 같은 창. 다 읽고 "함께
+                  // 시작하기"를 누르면 구독 안내로 간다.
+                  showCoachTeamIntroDialog(
+                    context,
+                    onStart: _canOpenSubscriptionGuide
+                        ? _showPlanGuideBottomSheet
+                        : null,
+                  );
                 },
                 child: const Text(
-                  '냥냥코치가 궁금하다면?',
+                  '냥냥코치란?',
                   style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
                 ),
               ),
@@ -4174,403 +4182,9 @@ ${lines.join('\n')}
     );
   }
 
-  // ── 냥냥코치 팀 소개 팝업 ──────────────────────────────────
-  void _showAboutNyangCoachDialog() {
-    final scrollController = ScrollController();
-    showDialog(
-      context: context,
-      builder: (ctx) {
-        return Dialog(
-          backgroundColor: Colors.white, // 배경을 흰색으로
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(24),
-          ),
-          insetPadding: const EdgeInsets.symmetric(
-            horizontal: 20,
-            vertical: 24,
-          ),
-          child: Container(
-            constraints: BoxConstraints(
-              maxHeight: MediaQuery.of(context).size.height * 0.8,
-            ),
-            child: Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Row(
-                        children: [
-                          const Icon(
-                            Icons.rocket_launch_rounded,
-                            color: Color(0xFFD8D2FF),
-                            size: 24,
-                          ),
-                          const SizedBox(width: 8),
-                          const Text(
-                            '실행코치 소개',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFF1A1A1A),
-                            ),
-                          ),
-                        ],
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.close, color: Color(0xFF8E8D9B)),
-                        onPressed: () => Navigator.pop(ctx),
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
-                      ),
-                    ],
-                  ),
-                ),
-                Expanded(
-                  child: RawScrollbar(
-                    controller: scrollController,
-                    thumbColor: const Color(0xFFD8D2FF),
-                    radius: const Radius.circular(8),
-                    thickness: 5,
-                    thumbVisibility: true,
-                    child: ShaderMask(
-                      shaderCallback: (Rect rect) {
-                        return const LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [
-                            Colors.black,
-                            Colors.black,
-                            Colors.transparent,
-                          ],
-                          stops: [0.0, 0.95, 1.0],
-                        ).createShader(rect);
-                      },
-                      blendMode: BlendMode.dstIn,
-                      child: SingleChildScrollView(
-                        controller: scrollController,
-                        padding: const EdgeInsets.fromLTRB(20, 10, 20, 40),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            Padding(
-                              padding: const EdgeInsets.only(
-                                bottom: 32,
-                                top: 16,
-                              ),
-                              child: Stack(
-                                alignment: Alignment.center,
-                                children: [
-                                  const Padding(
-                                    padding: EdgeInsets.symmetric(
-                                      horizontal: 32,
-                                      vertical: 12,
-                                    ),
-                                    child: Text.rich(
-                                      const TextSpan(
-                                        children: [
-                                          TextSpan(
-                                            text: '계획',
-                                            style: TextStyle(
-                                              color: Color(0xFF8B7CFF),
-                                            ),
-                                          ),
-                                          TextSpan(text: '을 세우는 것보다, '),
-                                          TextSpan(
-                                            text: '실제로\n움직이는 것',
-                                            style: TextStyle(
-                                              color: Color(0xFF8B7CFF),
-                                            ),
-                                          ),
-                                          TextSpan(text: '이 중요하지 않을까요?'),
-                                        ],
-                                      ),
-                                      textAlign: TextAlign.center,
-                                      style: const TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w700,
-                                        color: Color(0xFFA78BFA),
-                                        height: 1.5,
-                                        letterSpacing: -0.3,
-                                      ),
-                                    ),
-                                  ),
-                                  Positioned(
-                                    top: 0,
-                                    left: 16,
-                                    child: const Text(
-                                      '“',
-                                      style: TextStyle(
-                                        fontSize: 40,
-                                        color: Color(0xFFD8D2FF),
-                                        height: 1.0,
-                                        fontWeight: FontWeight.w900,
-                                      ),
-                                    ),
-                                  ),
-                                  Positioned(
-                                    bottom: -12,
-                                    right: 16,
-                                    child: const Text(
-                                      '”',
-                                      style: TextStyle(
-                                        fontSize: 40,
-                                        color: Color(0xFFD8D2FF),
-                                        height: 1.0,
-                                        fontWeight: FontWeight.w900,
-                                      ),
-                                    ),
-                                  ),
-                                  Positioned(
-                                    top: 0,
-                                    right: 16,
-                                    child: const Icon(
-                                      Icons.auto_awesome,
-                                      color: Color(0xFFF3F0FF),
-                                      size: 16,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            Container(
-                              margin: const EdgeInsets.only(bottom: 24),
-                              height: 1,
-                              color: const Color(0xFFF0F0F5),
-                            ),
-                            _buildAboutSpeaker(
-                              'cat',
-                              '냥냥코치',
-                              '그래서 냥냥코치가 왔다냥!\n\n우리는 여러분이 다시 움직일 수 있도록 함께하는 코치들이다냥.\n특히 우리 프렌즈 코치들은...',
-                            ),
-                            _buildAboutSpeaker(
-                              'boyfriend',
-                              '햇살 코치',
-                              '해내면 때론 애인처럼, 때론 친구처럼 마음껏 칭찬해주고',
-                            ),
-                            _buildAboutSpeaker(
-                              'halmae',
-                              '할매 코치',
-                              '우리 새끼 다독이는 건 내가 최고지.',
-                            ),
-                            _buildAboutSpeaker(
-                              'cat',
-                              '냥냥코치',
-                              '맞다냥!\n하기 싫은 일이 있을 때는 열심히 꼬셔줄 거다냥.\n작은 한 걸음부터 시작할 수 있게.\n한 번 꼬심당해볼래? 😼',
-                            ),
 
-                            _buildAboutSpeaker(
-                              'nyang_halbae',
-                              '냥할배',
-                              '그 부분은 저희 마스터 코치들도 함께 돕고 있습니다.',
-                            ),
-                            _buildAboutSpeaker(
-                              'sec_female',
-                              '비서 실장',
-                              '프렌즈 코치들이 마음을 챙긴다면,\n저희는 실행을 더 체계적으로 보좌합니다.',
-                            ),
-                            _buildAboutSpeaker(
-                              'nyang_halbae',
-                              '냥할배',
-                              '자꾸 미루는 일정을 다시 챙겨드리고,\n언제 하면 좋을지 제안도 드립니다.',
-                            ),
-                            _buildAboutSpeaker(
-                              'sec_female',
-                              '비서 실장',
-                              '목표와 일정을 바탕으로\n오늘 가장 중요한 일을 정리해드리고,\n주간 리포트도 준비해드립니다.',
-                            ),
-                            _buildAboutSpeaker(
-                              'nyang_halbae',
-                              '냥할배',
-                              '최근에는 여러분의 컨디션도 함께 챙기고 있습니다.',
-                            ),
-                            _buildAboutSpeaker(
-                              'sec_female',
-                              '비서 실장',
-                              '잠이 부족하거나 지쳐 있을 때는\n부담스럽지 않은 작은 챌린지도 제안해드리고요.',
-                            ),
-                            _buildAboutSpeaker(
-                              'nyang_halbae',
-                              '냥할배',
-                              '저희에 대해 더 궁금하시다면\n마스터 코치의 더보기를 눌러주세요.',
-                            ),
-                            Padding(
-                              padding: const EdgeInsets.only(
-                                top: 8,
-                                bottom: 24,
-                              ),
-                              child: Row(
-                                children: [
-                                  Expanded(
-                                    child: Container(
-                                      height: 1,
-                                      color: const Color(0xFFF0F0F5),
-                                    ),
-                                  ),
-                                  const Padding(
-                                    padding: EdgeInsets.symmetric(
-                                      horizontal: 16,
-                                    ),
-                                    child: Icon(
-                                      Icons.rocket_launch_rounded,
-                                      color: Color(0xFFD8D2FF),
-                                      size: 16,
-                                    ),
-                                  ),
-                                  Expanded(
-                                    child: Container(
-                                      height: 1,
-                                      color: const Color(0xFFF0F0F5),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            _buildAboutSpeaker(
-                              'cat',
-                              '냥냥코치',
-                              '정리하자면 이렇다냥.\n\n계획만 세우고 끝나는 플래너가 아니라,\n행동을 함께하는 플래너.\n\n그게 냥냥코치다냥.\n\n우리랑 함께 해볼래?',
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                    border: Border(
-                      top: BorderSide(color: Color(0xFFF0F0F5), width: 1),
-                    ),
-                  ),
-                  child: SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF8B7CFF),
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        elevation: 0,
-                      ),
-                      onPressed: () {
-                        Navigator.pop(ctx);
-                        // TODO: 구독/결제 화면 연결
-                      },
-                      icon: const Icon(Icons.rocket_launch_rounded, size: 20),
-                      label: const Text(
-                        '함께 시작하기',
-                        style: TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
 
-  Widget _buildAboutSpeaker(String coachId, String name, String text) {
-    IconData getEmblem() {
-      if (coachId == 'cat') return Icons.pets;
-      if (coachId == 'boyfriend') return Icons.favorite_border;
-      if (coachId == 'halmae') return Icons.volunteer_activism_outlined;
-      if (coachId == 'nyang_halbae' || coachId == 'sec_female')
-        return Icons.business_center_outlined;
-      return Icons.star_border;
-    }
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 24),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 48,
-            height: 48,
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              shape: BoxShape.circle,
-            ),
-            clipBehavior: Clip.hardEdge,
-            child: Image.asset(
-              'assets/images/$coachId.png',
-              fit: BoxFit.cover, // 얼굴 위주로 확대
-              alignment: Alignment.topCenter, // 캐릭터 얼굴이 위쪽에 있다고 가정
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.only(left: 4, bottom: 6),
-                  child: Text(
-                    name,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 13,
-                      color: Color(0xFFA78BFA),
-                    ),
-                  ),
-                ),
-                Stack(
-                  children: [
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.fromLTRB(
-                        16,
-                        14,
-                        16,
-                        24,
-                      ), // 하단 여백 확보 (아이콘 공간)
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: const Color(0xFFF0F0F5),
-                          width: 1.0,
-                        ),
-                      ),
-                      child: Text(
-                        text,
-                        style: const TextStyle(
-                          fontSize: 14.5,
-                          height: 1.6,
-                          color: Color(0xFF333333),
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      bottom: 8,
-                      right: 12,
-                      child: Icon(
-                        getEmblem(),
-                        size: 18,
-                        color: const Color(0xFFEBE5FF),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
   // ── 마스터 코치 (비서/냥할배) 자동 발화 ────────────────
   // 하루 몇 번 말했는지를 prefs에 적지 않는다. nyang_ 키는 클라우드 복원이
@@ -15799,6 +15413,12 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
     if (error is FirebaseFunctionsException) {
       if (error.code == 'deadline-exceeded' || error.code == 'unavailable') {
         return '답변 서버가 잠시 불안정해요. 잠깐 뒤에 다시 보내주세요.';
+      }
+      // 서버가 구독이나 하루 한도로 막았을 때. 서버가 준 문구를 그대로 보인다.
+      if ((error.code == 'permission-denied' ||
+              error.code == 'resource-exhausted') &&
+          (error.message ?? '').isNotEmpty) {
+        return error.message!;
       }
     }
     return '답변을 만드는 중 문제가 생겼어요. 잠시 후 다시 시도해 주세요.';

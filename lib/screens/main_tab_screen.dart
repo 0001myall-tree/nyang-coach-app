@@ -10,6 +10,7 @@ import '../theme/app_font.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:audioplayers/audioplayers.dart';
 import '../models/user_data.dart';
+import '../services/nyang_banner_nudge.dart';
 import '../services/purchase_service.dart';
 import '../services/notification_service.dart';
 import '../services/analytics_service.dart';
@@ -648,6 +649,12 @@ class _MainTabScreenState extends State<MainTabScreen>
     // 치운다. 클라우드 복원이 끝난 뒤에만 돈다.
     unawaited(_cleanUpCalendarPullbackLeftovers());
     _startDailyRolloverWatcher();
+    NyangBannerNudge.tapped.addListener(_onBannerTapped);
+    // 꺼져 있던 앱이 배너로 켜지면, 시작 화면이 자리표를 읽은 뒤에야 배너
+    // 처리가 끝나 자리표가 남을 수 있다. 화면이 서고 한 번 더 본다.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) unawaited(_checkWidgetIntent());
+    });
     _audioPlayer.setAudioContext(
       AudioContext(
         android: const AudioContextAndroid(
@@ -709,6 +716,7 @@ class _MainTabScreenState extends State<MainTabScreen>
 
   @override
   void dispose() {
+    NyangBannerNudge.tapped.removeListener(_onBannerTapped);
     _authSubscription?.cancel();
     TasksSyncService.stopRealTimeSync();
     WidgetsBinding.instance.removeObserver(this);
@@ -1310,6 +1318,12 @@ class _MainTabScreenState extends State<MainTabScreen>
       _widgetIntentDrawerMode = false;
     });
     _chatController.refreshTaskProgress();
+  }
+
+  /// 아이폰 배너를 눌러 답이 적힌 순간. 앱이 깨어날 때 확인하는 자리보다 늦게
+  /// 올 수 있어서, 적히는 그때 할 일 창을 연다.
+  void _onBannerTapped() {
+    if (mounted) unawaited(_checkWidgetIntent());
   }
 
   Future<void> _checkWidgetIntent() async {
