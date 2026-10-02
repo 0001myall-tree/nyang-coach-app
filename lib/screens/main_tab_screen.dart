@@ -10,6 +10,7 @@ import '../theme/app_font.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:audioplayers/audioplayers.dart';
 import '../models/user_data.dart';
+import '../services/purchase_service.dart';
 import '../services/notification_service.dart';
 import '../services/analytics_service.dart';
 import '../services/apple_calendar_sync_service.dart';
@@ -667,6 +668,9 @@ class _MainTabScreenState extends State<MainTabScreen>
     AnalyticsService.logAppOpen();
     _ensureCurrentCoachAccess();
     unawaited(_refreshRecordsNewBadge());
+    // 매달 갱신된 구독과, 확인을 못 받아 마무리 못 한 결제를 하루 한 번 다시
+    // 서버에 맞춘다. 로그인이 끝난 뒤라야 서버가 누구 것인지 안다.
+    unawaited(PurchaseService.instance.refreshOncePerDay());
     if (_openDrawerIndex == 2) {
       unawaited(_markRecordsFeedbackSeen());
     }

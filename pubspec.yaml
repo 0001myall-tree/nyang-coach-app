@@ -61,6 +61,7 @@ dependencies:
   firebase_analytics: ^12.4.5
   device_calendar: ^4.3.3
   in_app_purchase: ^3.3.0
+  in_app_purchase_android: ^0.5.2
   firebase_app_check: ^0.4.8
   image_picker: ^1.2.3
   image_picker_android: ^0.8.13+23

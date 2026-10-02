@@ -87,11 +87,17 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen>
     );
   }
 
-  void _showPlanGuidePlaceholder() {
+  void _showPlanGuidePlaceholder({
+    PlanSelection? selection,
+    bool checkoutNow = false,
+  }) {
     if (!_canOpenSubscriptionGuide) return;
     showPlanGuideBottomSheet(
       context,
-      onLearnMore: _showNyangCoachTeamIntro,
+      initialSelection: selection,
+      checkoutOnOpen: checkoutNow,
+      onLearnMore: (selection) =>
+          _showNyangCoachTeamIntro(backToPlans: true, selection: selection),
       onPurchaseCompleted: () async {
         final updated = await UserDataService.load();
         if (mounted) {
@@ -102,7 +108,16 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen>
     );
   }
 
-  void _showNyangCoachTeamIntro() {
+  /// 실행코치 소개 창.
+  ///
+  /// [backToPlans]면 "함께 시작하기"가 구독 안내를 다시 연다. 구독 안내를 보다
+  /// "더 알아보기"로 넘어온 사람이라, 소개를 읽고 마음먹었을 때 그 자리로 돌아가야
+  /// 한다. 닫기만 하면 코치 고르기 화면에서 구독 안내를 다시 찾아 눌러야 했다.
+  /// 그때 고른 플랜([selection])이 있으면 그 플랜으로 바로 결제를 시작한다.
+  void _showNyangCoachTeamIntro({
+    bool backToPlans = false,
+    PlanSelection? selection,
+  }) {
     final scrollController = ScrollController();
     showDialog(
       context: context,
@@ -255,7 +270,15 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen>
                     width: double.infinity,
                     height: 56,
                     child: ElevatedButton.icon(
-                      onPressed: () => Navigator.pop(dialogContext),
+                      onPressed: () {
+                        Navigator.pop(dialogContext);
+                        if (backToPlans) {
+                          _showPlanGuidePlaceholder(
+                            selection: selection,
+                            checkoutNow: selection != null,
+                          );
+                        }
+                      },
                       icon: const Icon(Icons.pets, size: 20),
                       label: Text(
                         '함께 시작하기',
@@ -656,17 +679,19 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen>
     Map<String, dynamic> coach,
   ) async {
     if (!_canBuySingleCoach) return;
-    // TODO: 실제 결제 연동 시 여기에 IAP 로직 추가
-    // 결제 성공 가정 후 owned_coaches에 추가
-    await UserDataService.addOwnedCoach(coach['id']);
+    // 스토어 결제 → 서버가 스토어에 확인하고 코치를 연다. 앱이 직접 열지
+    // 않는다 — 그러면 결제 없이도 열 수 있다.
+    final result = await PurchaseService.instance.purchaseCoach(
+      coach['id'].toString(),
+    );
     final updated = await UserDataService.load();
     if (mounted) {
       setState(() => _userData = updated);
-      Navigator.pop(context); // 모달 닫기
+      if (result.success) Navigator.pop(context); // 모달 닫기
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            '${coach['name']}이(가) 추가됐어요 🎉',
+            result.success ? '${coach['name']}이(가) 추가됐어요 🎉' : result.message,
             style: appFont(fontWeight: FontWeight.w700),
           ),
           backgroundColor: const Color(0xFF1A1A2E),
@@ -1282,22 +1307,44 @@ class _CoachSelectionScreenState extends State<CoachSelectionScreen>
                       children: [
                         const SizedBox.shrink(),
                         if (_canOpenSubscriptionGuide)
-                          TextButton(
-                            onPressed: _showPlanGuidePlaceholder,
-                            style: TextButton.styleFrom(
-                              foregroundColor: AppDesignTokens.brandAccent,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 6,
-                              ),
-                              minimumSize: Size.zero,
-                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            ),
-                            child: Text(
-                              '구독 안내 >',
-                              style: appFont(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w800,
+                          // 글자 링크로는 눈에 잘 안 띄어서 작은 알약 버튼으로
+                          // 세운다. 다만 꽉 찬 보라로 칠하면 제목과 탭보다 먼저
+                          // 눈에 들어와서, 연한 칩 배경에 보라 글씨로 한 단계
+                          // 낮춘다. 있다는 걸 알 정도면 되는 보조 버튼이다.
+                          Material(
+                            color: AppDesignTokens.brandChip,
+                            shape: const StadiumBorder(),
+                            child: InkWell(
+                              customBorder: const StadiumBorder(),
+                              onTap: _showPlanGuidePlaceholder,
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 6,
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    SvgPicture.asset(
+                                      'assets/icons/crown.svg',
+                                      width: 13,
+                                      height: 13,
+                                      colorFilter: const ColorFilter.mode(
+                                        AppDesignTokens.brand,
+                                        BlendMode.srcIn,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 5),
+                                    Text(
+                                      '구독 안내 >',
+                                      style: appFont(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w800,
+                                        color: AppDesignTokens.brand,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                           )

@@ -9,11 +9,21 @@ import 'app_bottom_sheet.dart';
 import 'app_button.dart';
 import 'app_card.dart';
 
+/// 구독 안내에서 고른 플랜. "더 알아보기"로 나갔다 돌아올 때 들고 다닌다.
+typedef PlanSelection = ({String planId, bool isLongTerm});
+
+/// [onLearnMore]는 그때 고른 플랜을 받는다(안 골랐으면 null).
+///
+/// [initialSelection]을 주면 그 플랜이 골라진 채로 열리고, [checkoutOnOpen]이면
+/// 열리자마자 결제를 시작한다 — 소개를 읽고 "함께 시작하기"를 누른 사람에게
+/// 같은 플랜을 또 고르게 하지 않는다.
 Future<void> showPlanGuideBottomSheet(
   BuildContext context, {
-  VoidCallback? onLearnMore,
+  void Function(PlanSelection? selection)? onLearnMore,
   Future<void> Function()? onPurchaseCompleted,
   String checkoutLabel = '플랜 시작하기',
+  PlanSelection? initialSelection,
+  bool checkoutOnOpen = false,
 }) {
   return showAppBottomSheet<void>(
     context: context,
@@ -22,6 +32,8 @@ Future<void> showPlanGuideBottomSheet(
         onLearnMore: onLearnMore,
         onPurchaseCompleted: onPurchaseCompleted,
         checkoutLabel: checkoutLabel,
+        initialSelection: initialSelection,
+        checkoutOnOpen: checkoutOnOpen,
       );
     },
   );
@@ -32,9 +44,13 @@ class _PlanGuideBottomSheet extends StatefulWidget {
     this.onLearnMore,
     this.onPurchaseCompleted,
     required this.checkoutLabel,
+    this.initialSelection,
+    this.checkoutOnOpen = false,
   });
 
-  final VoidCallback? onLearnMore;
+  final void Function(PlanSelection? selection)? onLearnMore;
+  final PlanSelection? initialSelection;
+  final bool checkoutOnOpen;
   final Future<void> Function()? onPurchaseCompleted;
   final String checkoutLabel;
 
@@ -53,6 +69,16 @@ class _PlanGuideBottomSheetState extends State<_PlanGuideBottomSheet> {
   @override
   void initState() {
     super.initState();
+    final initial = widget.initialSelection;
+    if (initial != null) {
+      _selectedPlanId = initial.planId;
+      _isLongTerm = initial.isLongTerm;
+      if (widget.checkoutOnOpen) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _handleCheckout();
+        });
+      }
+    }
     // 팔 것이 바뀌었을 수 있다. 열릴 때 한 번 확인하고, 늦게 오면 그때 다시 그린다.
     _catalog.load().then((_) {
       if (mounted) setState(() {});
@@ -99,7 +125,7 @@ class _PlanGuideBottomSheetState extends State<_PlanGuideBottomSheet> {
     if (!mounted) return;
 
     setState(() => _isRestoring = false);
-    _showSnackBar('구매 복원을 요청했어요. 잠시 후 권한이 반영됩니다.');
+    _showSnackBar('결제 기록을 확인하고 있어요. 잠시 후 반영돼요.');
   }
 
   void _showSnackBar(String message) {
@@ -167,6 +193,7 @@ class _PlanGuideBottomSheetState extends State<_PlanGuideBottomSheet> {
                           'assets/icons/wand-magic-sparkles.svg',
                           '말 한마디로 일정 추가',
                         ),
+                        ('assets/icons/shield-cat.svg', '딴짓 코칭'),
                       ],
                     ),
                     const SizedBox(height: 14),
@@ -191,8 +218,12 @@ class _PlanGuideBottomSheetState extends State<_PlanGuideBottomSheet> {
                           'assets/icons/wand-magic-sparkles.svg',
                           '말 한마디로 일정 추가',
                         ),
-                        ('assets/icons/thumbtack.svg', '미루는 항목, 마무리될 때까지 관리'),
-                        ('assets/icons/route.svg', '장기 목표 조력'),
+                        ('assets/icons/shield-cat.svg', '딴짓 코칭'),
+                        ('assets/icons/thumbtack.svg', '미루는 항목 마무리될 때까지 적극 코칭'),
+                        (
+                          'assets/icons/magnifying-glass-chart.svg',
+                          '더 세밀한 실행 패턴 분석',
+                        ),
                       ],
                     ),
                     // 코치 한 명만 사는 길이 닫혀 있으면 값도 알리지 않는다.
@@ -211,10 +242,6 @@ class _PlanGuideBottomSheetState extends State<_PlanGuideBottomSheet> {
                         ),
                       ),
                     ),
-                    if (widget.onLearnMore != null) ...[
-                      const SizedBox(height: 14),
-                      _NyangCoachLearnMoreButton(onTap: widget.onLearnMore!),
-                    ],
                   ],
                 ),
               ),
@@ -224,6 +251,13 @@ class _PlanGuideBottomSheetState extends State<_PlanGuideBottomSheet> {
         ),
       ),
       footer: _PlanCheckoutBar(
+        onLearnMore: widget.onLearnMore == null
+            ? null
+            : () => widget.onLearnMore!(
+                _selectedPlanId == null
+                    ? null
+                    : (planId: _selectedPlanId!, isLongTerm: _isLongTerm),
+              ),
         selectedPlanId: _selectedPlanId,
         checkoutLabel: widget.checkoutLabel,
         isProcessing: _isPurchasing,
@@ -644,8 +678,10 @@ class _PlanPriceBox extends StatelessWidget {
           const Divider(color: AppDesignTokens.brandBorder, height: 1),
           const SizedBox(height: 12),
           ...features.map((feature) {
+            // 마스터에만 있는 것을 진하게. 문구를 바꾸면 여기도 같이 바꿔야 한다.
             final isSignatureFeature =
-                feature.$2 == '미루는 항목, 마무리될 때까지 관리' || feature.$2 == '장기 목표 조력';
+                feature.$2 == '미루는 항목 마무리될 때까지 적극 코칭' ||
+                feature.$2 == '더 세밀한 실행 패턴 분석';
             return Padding(
               padding: const EdgeInsets.only(bottom: 8),
               child: Row(
@@ -816,6 +852,7 @@ class _NyangCoachLearnMoreButton extends StatelessWidget {
 
 class _PlanCheckoutBar extends StatelessWidget {
   const _PlanCheckoutBar({
+    this.onLearnMore,
     required this.selectedPlanId,
     required this.checkoutLabel,
     required this.isProcessing,
@@ -824,6 +861,9 @@ class _PlanCheckoutBar extends StatelessWidget {
     required this.onRestore,
   });
 
+  /// 결제 버튼 바로 위에 두는 "더 알아보기". 위쪽 목록 끝에 두었더니 아래
+  /// 고정된 결제 버튼과 사이가 떠서, 따로 노는 버튼처럼 보였다.
+  final VoidCallback? onLearnMore;
   final String? selectedPlanId;
   final String checkoutLabel;
   final bool isProcessing;
@@ -838,6 +878,10 @@ class _PlanCheckoutBar extends StatelessWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
+        if (onLearnMore != null) ...[
+          _NyangCoachLearnMoreButton(onTap: onLearnMore!),
+          const SizedBox(height: 10),
+        ],
         AppButton(
           label: selectedPlanId == null
               ? '플랜을 선택해주세요'
@@ -859,11 +903,22 @@ class _PlanCheckoutBar extends StatelessWidget {
             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
           ),
           child: Text(
-            isRestoring ? '복원 확인 중...' : '이미 구매했다면 복원하기',
+            // 앱을 다시 깔았거나 폰을 바꿨을 때 이미 낸 구독을 다시 가져오는
+            // 버튼. 애플 심사에 꼭 있어야 한다.
+            isRestoring ? '불러오는 중...' : '이전에 결제한 구독 불러오기',
             style: appFont(
               fontSize: AppDesignTokens.textCaption + 1,
               fontWeight: FontWeight.w900,
             ),
+          ),
+        ),
+        // 버튼 이름만으로는 언제 누르는 것인지 감이 안 온다.
+        Text(
+          '앱을 다시 설치했거나 폰을 바꿨다면 눌러주세요',
+          style: appFont(
+            fontSize: AppDesignTokens.textCaption,
+            fontWeight: FontWeight.w500,
+            color: AppDesignTokens.brandPriceMuted,
           ),
         ),
       ],

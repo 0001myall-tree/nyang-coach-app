@@ -141,8 +141,26 @@ class PlanCatalog {
   /// 기간 토글 오른쪽에 쓸 이름. '6개월 구독' 같은 식으로 붙여 쓴다.
   String get longTermLabel => _longTermLabel;
 
-  Set<String> get productIds =>
-      _plans.map((plan) => plan.productId).where((id) => id.isNotEmpty).toSet();
+  /// 따로 1년씩 살 수 있는 프렌즈 코치. 서버(verifyPurchase)의 목록과 같다.
+  static const List<String> friendsCoachIds = ['boyfriend', 'halmae', 'bro'];
+
+  /// 코치 1년 이용권 상품 이름. 끝나면 다시 사야 하므로 스토어에는 소모성
+  /// 상품(구글)·비갱신 구독(애플)으로 만든다.
+  static String coachPassProductId(String coachId) =>
+      'nyang_coach_${coachId}_1y';
+
+  /// 코치 이용권 상품이면 그 코치, 아니면 null.
+  static String? coachForProductId(String productId) {
+    for (final coachId in friendsCoachIds) {
+      if (coachPassProductId(coachId) == productId) return coachId;
+    }
+    return null;
+  }
+
+  Set<String> get productIds => {
+    ..._plans.map((plan) => plan.productId).where((id) => id.isNotEmpty),
+    for (final coachId in friendsCoachIds) coachPassProductId(coachId),
+  };
 
   PurchasePlan? planFor(String planType, {required bool isLongTerm}) {
     for (final plan in _plans) {
