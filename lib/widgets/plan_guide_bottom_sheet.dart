@@ -197,7 +197,7 @@ class _PlanGuideBottomSheetState extends State<_PlanGuideBottomSheet> {
                         ('assets/icons/circle-check.svg', '냥냥코치 이용 가능'),
                         (
                           'assets/icons/circle-check.svg',
-                          '실행코치와 동기부여 대화 및 플래너',
+                          '매일 코치와 대화하며 하루 계획 관리',
                         ),
                         (
                           'assets/icons/wand-magic-sparkles.svg',
@@ -222,7 +222,7 @@ class _PlanGuideBottomSheetState extends State<_PlanGuideBottomSheet> {
                         ('assets/icons/circle-check.svg', '비서 코치, 냥냥코치 이용 가능'),
                         (
                           'assets/icons/circle-check.svg',
-                          '실행코치와 동기부여 대화 및 플래너',
+                          '매일 코치와 대화하며 하루 계획 관리',
                         ),
                         (
                           'assets/icons/wand-magic-sparkles.svg',
@@ -574,6 +574,7 @@ class _PlanGroup extends StatelessWidget {
             originalPrice: originalPrice,
             subPrice: subPrice,
             features: features,
+            expanded: isSelected,
           ),
         ],
       ),
@@ -638,12 +639,17 @@ class _PlanPriceBox extends StatelessWidget {
   const _PlanPriceBox({
     required this.price,
     required this.features,
+    required this.expanded,
     this.originalPrice,
     this.subPrice,
   });
 
   final String price;
   final List<(String, String)> features;
+
+  /// 혜택 목록을 펼칠지. 고른 카드만 펼친다 — 둘 다 펼쳐두면 프렌즈 카드가
+  /// 화면을 다 차지해서 마스터 플랜이 있는 줄도 모른 채 지나간다.
+  final bool expanded;
   final String? originalPrice;
   final String? subPrice;
 
@@ -699,52 +705,81 @@ class _PlanPriceBox extends StatelessWidget {
               ],
             ],
           ),
-          const SizedBox(height: 12),
-          const Divider(color: AppDesignTokens.brandBorder, height: 1),
-          const SizedBox(height: 12),
-          ...features.map((feature) {
-            // 마스터에만 있는 것을 진하게. 문구를 바꾸면 여기도 같이 바꿔야 한다.
-            final isSignatureFeature =
-                feature.$2 == '미루는 항목 마무리될 때까지 적극 코칭' ||
-                feature.$2 == '더 세밀한 실행 패턴 분석';
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SvgPicture.asset(
-                    feature.$1,
-                    width: 16,
-                    height: 16,
-                    colorFilter: const ColorFilter.mode(
-                      AppDesignTokens.brandDisabled,
-                      BlendMode.srcIn,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
+          AnimatedSize(
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOutCubic,
+            alignment: Alignment.topCenter,
+            child: expanded
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const SizedBox(height: 12),
+                      const Divider(
+                        color: AppDesignTokens.brandBorder,
+                        height: 1,
+                      ),
+                      const SizedBox(height: 12),
+                      ..._featureRows(),
+                    ],
+                  )
+                : Padding(
+                    padding: const EdgeInsets.only(top: 8),
                     child: Text(
-                      feature.$2,
+                      '눌러서 혜택 보기 ▾',
                       style: appFont(
-                        fontSize: AppDesignTokens.textCaption + 1,
-                        fontWeight: isSignatureFeature
-                            ? FontWeight.w900
-                            : FontWeight.w700,
-                        color: isSignatureFeature
-                            ? AppDesignTokens.brandStrong
-                            : AppDesignTokens.textPrimary,
-                        height: 1.35,
+                        fontSize: AppDesignTokens.textCaption,
+                        fontWeight: FontWeight.w700,
+                        color: AppDesignTokens.brandPriceMuted,
                       ),
                     ),
                   ),
-                ],
-              ),
-            );
-          }),
+          ),
         ],
       ),
     );
   }
+
+  List<Widget> _featureRows() => [
+    ...features.map((feature) {
+      // 마스터에만 있는 것을 진하게. 문구를 바꾸면 여기도 같이 바꿔야 한다.
+      final isSignatureFeature =
+          feature.$2 == '미루는 항목 마무리될 때까지 적극 코칭' ||
+          feature.$2 == '더 세밀한 실행 패턴 분석';
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SvgPicture.asset(
+              feature.$1,
+              width: 16,
+              height: 16,
+              colorFilter: const ColorFilter.mode(
+                AppDesignTokens.brandDisabled,
+                BlendMode.srcIn,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                feature.$2,
+                style: appFont(
+                  fontSize: AppDesignTokens.textCaption + 1,
+                  fontWeight: isSignatureFeature
+                      ? FontWeight.w900
+                      : FontWeight.w700,
+                  color: isSignatureFeature
+                      ? AppDesignTokens.brandStrong
+                      : AppDesignTokens.textPrimary,
+                  height: 1.35,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }),
+  ];
 }
 
 class _PlanPriceText extends StatelessWidget {
