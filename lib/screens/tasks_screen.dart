@@ -3728,7 +3728,11 @@ class _TasksScreenState extends State<TasksScreen>
       } else {
         monthGoals.add(goal);
       }
+      // 등록한 자리를 보여준다. 목표 탭은 주간이 먼저 펼쳐져 있어서, 월간을
+      // 등록하고 그대로 두면 방금 넣은 것이 안 보이는 주간 목록이 뜬다.
+      _goalTab = type;
     });
+    _openTab(2);
     await _saveGoals(type);
     return true;
   }
