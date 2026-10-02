@@ -527,10 +527,14 @@ class _PlanGroup extends StatelessWidget {
           offset: const Offset(0, 8),
         ),
       ],
+      // 이름·설명은 왼쪽, 가격은 오른쪽 한 줄에 둔다. 가격만 따로 한 줄을 차지하던
+      // 때는 카드가 길어서 마스터 플랜이 화면 아래로 밀려 안 보였다. 혜택은 늘
+      // 펼쳐둔다 — 접어두니 가격만 남아 고를 이유가 안 보였다.
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               if (isMaster)
                 const _PlanCoachAvatars(
@@ -545,39 +549,86 @@ class _PlanGroup extends StatelessWidget {
                   size: 32,
                 ),
               const SizedBox(width: 10),
-              Flexible(
-                child: Text(
-                  title,
-                  textAlign: TextAlign.center,
-                  style: appFont(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w900,
-                    color: AppDesignTokens.brandStrong,
-                  ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: appFont(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                        color: AppDesignTokens.brandStrong,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: appFont(
+                        fontSize: AppDesignTokens.textCaption,
+                        fontWeight: FontWeight.w600,
+                        color: AppDesignTokens.brandTextMuted,
+                      ),
+                    ),
+                  ],
                 ),
+              ),
+              const SizedBox(width: 8),
+              _PlanPriceColumn(
+                price: price,
+                originalPrice: originalPrice,
+                subPrice: subPrice,
               ),
             ],
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 12),
+          _PlanFeatureBox(features: features),
+        ],
+      ),
+    );
+  }
+}
+
+/// 카드 오른쪽의 가격. 6개월권은 정가 줄긋기와 월 환산가가 위아래로 붙는다.
+class _PlanPriceColumn extends StatelessWidget {
+  const _PlanPriceColumn({
+    required this.price,
+    this.originalPrice,
+    this.subPrice,
+  });
+
+  final String price;
+  final String? originalPrice;
+  final String? subPrice;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        if (originalPrice != null)
           Text(
-            subtitle,
-            textAlign: TextAlign.center,
+            '정가 $originalPrice',
             style: appFont(
               fontSize: AppDesignTokens.textCaption,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w800,
+              color: AppDesignTokens.brandPriceMuted,
+              decoration: TextDecoration.lineThrough,
+              decorationColor: AppDesignTokens.brandPriceMuted,
+              decorationThickness: 2,
+            ),
+          ),
+        _PlanPriceText(price),
+        if (subPrice != null)
+          Text(
+            subPrice!,
+            style: appFont(
+              fontSize: AppDesignTokens.textCaption,
+              fontWeight: FontWeight.w800,
               color: AppDesignTokens.brandTextMuted,
             ),
           ),
-          const SizedBox(height: 14),
-          _PlanPriceBox(
-            price: price,
-            originalPrice: originalPrice,
-            subPrice: subPrice,
-            features: features,
-            expanded: isSelected,
-          ),
-        ],
-      ),
+      ],
     );
   }
 }
@@ -635,106 +686,22 @@ class _PlanCoachAvatar extends StatelessWidget {
   }
 }
 
-class _PlanPriceBox extends StatelessWidget {
-  const _PlanPriceBox({
-    required this.price,
-    required this.features,
-    required this.expanded,
-    this.originalPrice,
-    this.subPrice,
-  });
+class _PlanFeatureBox extends StatelessWidget {
+  const _PlanFeatureBox({required this.features});
 
-  final String price;
   final List<(String, String)> features;
-
-  /// 혜택 목록을 펼칠지. 고른 카드만 펼친다 — 둘 다 펼쳐두면 프렌즈 카드가
-  /// 화면을 다 차지해서 마스터 플랜이 있는 줄도 모른 채 지나간다.
-  final bool expanded;
-  final String? originalPrice;
-  final String? subPrice;
 
   @override
   Widget build(BuildContext context) {
     return AppCard(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 4),
       radius: AppDesignTokens.cardInnerRadius,
       backgroundColor: AppDesignTokens.brandSurface,
       borderColor: AppDesignTokens.brandBorder,
       shadows: const [],
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (originalPrice != null) ...[
-            Text(
-              '정가 $originalPrice',
-              style: appFont(
-                fontSize: AppDesignTokens.textCaption + 1,
-                fontWeight: FontWeight.w800,
-                color: AppDesignTokens.brandPriceMuted,
-                decoration: TextDecoration.lineThrough,
-                decorationColor: AppDesignTokens.brandPriceMuted,
-                decorationThickness: 2,
-              ),
-            ),
-            const SizedBox(height: 2),
-          ],
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Expanded(
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerLeft,
-                  child: _PlanPriceText(price),
-                ),
-              ),
-              if (subPrice != null) ...[
-                const SizedBox(width: 8),
-                Flexible(
-                  child: Text(
-                    subPrice!,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: appFont(
-                      fontSize: AppDesignTokens.textCaption,
-                      fontWeight: FontWeight.w800,
-                      color: AppDesignTokens.brandTextMuted,
-                    ),
-                  ),
-                ),
-              ],
-            ],
-          ),
-          AnimatedSize(
-            duration: const Duration(milliseconds: 220),
-            curve: Curves.easeOutCubic,
-            alignment: Alignment.topCenter,
-            child: expanded
-                ? Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const SizedBox(height: 12),
-                      const Divider(
-                        color: AppDesignTokens.brandBorder,
-                        height: 1,
-                      ),
-                      const SizedBox(height: 12),
-                      ..._featureRows(),
-                    ],
-                  )
-                : Padding(
-                    padding: const EdgeInsets.only(top: 8),
-                    child: Text(
-                      '눌러서 혜택 보기 ▾',
-                      style: appFont(
-                        fontSize: AppDesignTokens.textCaption,
-                        fontWeight: FontWeight.w700,
-                        color: AppDesignTokens.brandPriceMuted,
-                      ),
-                    ),
-                  ),
-          ),
-        ],
+        children: _featureRows(),
       ),
     );
   }
