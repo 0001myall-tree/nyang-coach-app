@@ -697,17 +697,6 @@ extension View {
     }
 
     @ViewBuilder
-    func widgetWhiteBackground() -> some View {
-        if #available(iOSApplicationExtension 17.0, *) {
-            containerBackground(for: .widget) {
-                Color.white
-            }
-        } else {
-            background(Color.white)
-        }
-    }
-
-    @ViewBuilder
     func widgetCompactBackground() -> some View {
         if #available(iOSApplicationExtension 17.0, *) {
             containerBackground(for: .widget) {
@@ -754,19 +743,18 @@ struct NyangTaskLiveActivity: Widget {
                         .monospacedDigit()
                         .foregroundColor(Color(red: 0.545, green: 0.486, blue: 1.0))
                         // 한 시간을 넘기면 "1:05:23"이 되어 자리가 모자란다. 줄여서라도 다 보여준다.
+                        //
+                        // 폭은 frame으로 묶는다. fixedSize를 쓰면 잠금화면 카드가 통째로
+                        // 비어버린다 — 다이내믹 아일랜드는 멀쩡한데 잠금화면에 빈 판만
+                        // 남던 이유가 이것이었다.
                         .lineLimit(1)
                         .minimumScaleFactor(0.6)
-                        .fixedSize(horizontal: true, vertical: false)
+                        .frame(maxWidth: 110, alignment: .trailing)
                 }
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
-            // iOS 17부터 위젯은 자기 배경을 직접 밝혀야 한다. 밝히지 않으면 시스템이
-            // 내용을 아예 그리지 않고 빈 상자만 남긴다 — 잠금화면에 검은 칸만 뜨던
-            // 이유가 이것이다. 홈 화면 위젯은 처음부터 이 선언을 하고 있었다.
-            .widgetWhiteBackground()
-            // 잠금화면 카드의 바탕도 흰색으로 맞춘다. 위 선언과 짝이 맞아야
-            // 모서리까지 흰 카드 하나로 보인다.
+            // 잠금화면 카드의 바탕. 글자색을 직접 정해둔 것과 짝이다.
             .activityBackgroundTint(Color.white)
             .activitySystemActionForegroundColor(
                 Color(red: 0.545, green: 0.486, blue: 1.0)
@@ -920,10 +908,11 @@ struct NyangWidgetBundle: WidgetBundle {
     var body: some Widget {
         NyangCharacterWidget()
         NyangCompactWidget()
+        // 조건문으로 감싸지 않는다. "if #available" 안에 두면 iOS가 이 위젯을
+        // 목록에서 못 찾아 잠금화면에 빈 판만 남는다("Activity had no descriptor").
+        // 대신 이 확장의 최소 버전을 16.1로 올렸다.
         #if canImport(ActivityKit)
-        if #available(iOSApplicationExtension 16.1, *) {
-            NyangTaskLiveActivity()
-        }
+        NyangTaskLiveActivity()
         #endif
     }
 }

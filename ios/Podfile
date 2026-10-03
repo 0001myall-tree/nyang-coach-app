@@ -1,5 +1,5 @@
 # Firebase and the current iOS plugin set require iOS 15 or later.
-platform :ios, '15.0'
+platform :ios, '16.1'
 
 # CocoaPods analytics sends network stats synchronously affecting flutter build latency.
 ENV['COCOAPODS_DISABLE_STATS'] = 'true'
