@@ -108,9 +108,9 @@ class PlanCatalog {
       productId: 'nyang_friends_6month',
       entitlementDays: 183,
       termLabel: defaultLongTermLabel,
-      price: '29,400원',
+      price: '29,900원',
       originalPrice: '35,400원',
-      subPrice: '월 4,900원',
+      subPrice: '월 약 4,980원',
     ),
     PurchasePlan(
       planType: 'master',
@@ -126,9 +126,9 @@ class PlanCatalog {
       productId: 'nyang_master_6month',
       entitlementDays: 183,
       termLabel: defaultLongTermLabel,
-      price: '47,400원',
+      price: '47,900원',
       originalPrice: '53,400원',
-      subPrice: '월 7,900원',
+      subPrice: '월 약 7,980원',
     ),
   ];
 
