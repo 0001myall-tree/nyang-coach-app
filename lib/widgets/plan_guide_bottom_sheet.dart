@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../theme/app_font.dart';
 
 import '../theme/app_design_tokens.dart';
@@ -982,7 +983,47 @@ class _PlanCheckoutBar extends StatelessWidget {
             color: AppDesignTokens.brandPriceMuted,
           ),
         ),
+        const SizedBox(height: 6),
+        // 애플 심사 요건: 구독을 파는 화면 안에 이용약관과 개인정보처리방침이
+        // 눌러서 열 수 있게 있어야 한다. 설정 화면에만 있으면 반려된다.
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            _legalLink('이용약관', _termsUrl),
+            Text(
+              '·',
+              style: appFont(
+                fontSize: AppDesignTokens.textCaption,
+                color: AppDesignTokens.brandPriceMuted,
+              ),
+            ),
+            _legalLink('개인정보처리방침', _privacyUrl),
+          ],
+        ),
       ],
+    );
+  }
+
+  // 설정 화면의 약관 링크와 같은 주소다.
+  static final Uri _termsUrl = Uri.parse('https://joflowapp.com/terms');
+  static final Uri _privacyUrl = Uri.parse('https://joflowapp.com/privacy');
+
+  Widget _legalLink(String label, Uri url) {
+    return TextButton(
+      onPressed: () => launchUrl(url, mode: LaunchMode.externalApplication),
+      style: TextButton.styleFrom(
+        foregroundColor: AppDesignTokens.brandPriceMuted,
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        minimumSize: Size.zero,
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      ),
+      child: Text(
+        label,
+        style: appFont(
+          fontSize: AppDesignTokens.textCaption,
+          fontWeight: FontWeight.w600,
+        ).copyWith(decoration: TextDecoration.underline),
+      ),
     );
   }
 }
