@@ -1,12 +1,12 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart'; // kIsWeb 추가
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import '../models/user_data.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/account_retention_service.dart';
-import '../services/coach_id_service.dart';
 import '../services/coach_tier_flags.dart';
 import '../services/free_access_service.dart';
 import '../services/memory_service.dart';
@@ -213,91 +213,26 @@ class AuthService {
     }
   }
 
+  /// 명단에 플랜이 적힌 사람이면 서버에 열어달라고 하고, 서버가 적은 값을
+  /// 받아온다.
+  ///
+  /// 만료일은 앱이 계산하지 않는다. "로그인 후 며칠"처럼 날짜가 안 적힌
+  /// 줄은 규칙이 견줄 값이 없어서, 앱이 계산하게 두면 만료일을 지워 영구
+  /// 플랜으로 만들 수 있었다.
   Future<void> _applyAllowedEmailEntitlement(
     Map<String, dynamic>? allowData,
   ) async {
     if (allowData == null || !allowData.containsKey('plan_type')) return;
-
-    final planType = allowData['plan_type']?.toString();
-    if (planType != 'none' && planType != 'friends' && planType != 'master') {
-      return;
-    }
-    final entitledPlanType = planType!;
-
-    final data = await UserDataService.load();
-    var changed = false;
-
-    if (data.planType != entitledPlanType) {
-      data.planType = entitledPlanType;
-      changed = true;
-    }
-
-    final planExpiresAt = _parseNullableDate(allowData['plan_expires_at']);
-    if (data.planExpiresAt?.toIso8601String() !=
-        planExpiresAt?.toIso8601String()) {
-      data.planExpiresAt = planExpiresAt;
-      changed = true;
-    }
-
-    final ownedCoaches = _stringListFromValue(allowData['owned_coaches']);
-    if (ownedCoaches != null && !listEquals(data.ownedCoaches, ownedCoaches)) {
-      data.ownedCoaches = ownedCoaches;
-      changed = true;
-    }
-
-    final ownedCoachExpiresAt = _coachExpiryMapFromValue(
-      allowData['owned_coach_expires_at'],
-    );
-    if (ownedCoachExpiresAt != null &&
-        !_expiryMapsEqual(data.ownedCoachExpiresAt, ownedCoachExpiresAt)) {
-      data.ownedCoachExpiresAt = ownedCoachExpiresAt;
-      changed = true;
-    }
-
-    if (changed) {
-      await UserDataService.save(data);
-    }
-  }
-
-  DateTime? _parseNullableDate(Object? value) {
-    if (value == null) return null;
-    if (value is Timestamp) return value.toDate();
-    return DateTime.tryParse(value.toString());
-  }
-
-  List<String>? _stringListFromValue(Object? value) {
-    if (value is Iterable) {
-      return value
-          .map((item) => CoachIdService.normalize(item.toString()))
-          .toSet()
-          .toList(growable: true);
-    }
-    return null;
-  }
-
-  Map<String, DateTime?>? _coachExpiryMapFromValue(Object? value) {
-    if (value is! Map) return null;
-    return value.map(
-      (key, expiry) => MapEntry(
-        CoachIdService.normalize(key.toString()),
-        _parseNullableDate(expiry),
-      ),
-    );
-  }
-
-  bool _expiryMapsEqual(
-    Map<String, DateTime?> left,
-    Map<String, DateTime?> right,
-  ) {
-    if (left.length != right.length) return false;
-    for (final entry in left.entries) {
-      if (!right.containsKey(entry.key)) return false;
-      if (right[entry.key]?.toIso8601String() !=
-          entry.value?.toIso8601String()) {
-        return false;
+    try {
+      final result = await FirebaseFunctions.instanceFor(
+        region: 'asia-northeast3',
+      ).httpsCallable('applyTesterPlan').call();
+      if (result.data is Map && result.data['applied'] == true) {
+        await UserDataService.syncFromCloud();
       }
+    } catch (e) {
+      debugPrint('Tester plan apply skipped: $e');
     }
-    return true;
   }
 
   Future<void> _signOutAuthOnly() async {

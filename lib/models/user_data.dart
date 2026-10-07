@@ -28,6 +28,9 @@ class UserData {
   /// 플랜 만료일 (null = 영구)
   DateTime? planExpiresAt;
 
+  /// 플랜 시작일 (null = 즉시)
+  DateTime? planStartsAt;
+
   /// 선택한 코치 ID
   String? selectedCoachId;
 
@@ -44,6 +47,7 @@ class UserData {
     List<String>? ownedCoaches,
     Map<String, DateTime?>? ownedCoachExpiresAt,
     this.planExpiresAt,
+    this.planStartsAt,
     this.selectedCoachId,
     this.masterUnlockAnnounced,
   }) : ownedCoaches = ownedCoaches ?? [],
@@ -57,6 +61,7 @@ class UserData {
     'owned_coach_expires_at': ownedCoachExpiresAt.map(
       (key, value) => MapEntry(key, value?.toIso8601String()),
     ),
+    'plan_starts_at': planStartsAt?.toIso8601String(),
     'plan_expires_at': planExpiresAt?.toIso8601String(),
     'selected_coach_id': selectedCoachId,
     'master_unlock_announced': masterUnlockAnnounced,
@@ -79,6 +84,9 @@ class UserData {
       points: (j['points'] ?? 0) as int,
       ownedCoaches: owned,
       ownedCoachExpiresAt: expires,
+      planStartsAt: j['plan_starts_at'] != null
+          ? DateTime.tryParse(j['plan_starts_at'])
+          : null,
       planExpiresAt: j['plan_expires_at'] != null
           ? DateTime.tryParse(j['plan_expires_at'])
           : null,
@@ -97,8 +105,10 @@ class UserData {
   /// 그래서 [ServerClock]에게 지금을 묻는다.
   bool get isPlanActive {
     if (planType == 'none') return false;
+    final now = ServerClock.now();
+    if (planStartsAt != null && planStartsAt!.isAfter(now)) return false;
     if (planExpiresAt == null) return true; // 만료일 미설정 = 영구
-    return planExpiresAt!.isAfter(ServerClock.now());
+    return planExpiresAt!.isAfter(now);
   }
 
   /// 특정 코치에 접근 가능한지

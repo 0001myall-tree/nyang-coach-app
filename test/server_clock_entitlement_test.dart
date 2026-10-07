@@ -14,6 +14,16 @@ void main() {
       UserData(planType: 'master', planExpiresAt: expiresAt);
 
   group('구독 만료', () {
+    test('시작 전 구독은 아직 쓸 수 없다', () {
+      ServerClock.setOffsetForTest(Duration.zero);
+      final data = UserData(
+        planType: 'master',
+        planStartsAt: DateTime.now().add(const Duration(days: 2)),
+        planExpiresAt: DateTime.now().add(const Duration(days: 31)),
+      );
+      expect(data.isPlanActive, isFalse);
+    });
+
     test('서버가 아직 만료 전이라고 하면 쓸 수 있다', () {
       ServerClock.setOffsetForTest(Duration.zero);
       final data = planUntil(DateTime.now().add(const Duration(days: 3)));

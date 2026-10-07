@@ -12,10 +12,13 @@ service cloud.firestore {
 
     // 이메일이 붙어 있는 로그인인지. 익명 로그인에는 이메일이 없어서,
     // allowedEmails를 조회하기 전에 반드시 먼저 확인해야 한다.
+    // 확인된 이메일이어야 한다. 아니면 남의 테스터 이메일로 가입해서 그
+    // 사람 플랜을 가져갈 수 있다. 구글·애플 로그인은 늘 확인된 이메일이다.
     function hasEmail() {
       return signedIn()
         && request.auth.token.email != null
-        && request.auth.token.email != '';
+        && request.auth.token.email != ''
+        && request.auth.token.email_verified == true;
     }
 
     // allowedEmails는 더 이상 출입을 막는 목록이 아니다. 테스터에게 플랜을
@@ -39,6 +42,7 @@ service cloud.firestore {
         'points',
         'owned_coaches',
         'owned_coach_expires_at',
+        'plan_starts_at',
         'plan_expires_at'
       ];
     }
@@ -54,14 +58,21 @@ service cloud.firestore {
           && (!data.userData.keys().hasAny(['points']) || data.userData.points == 0)
           && (!data.userData.keys().hasAny(['owned_coaches']) || data.userData.owned_coaches.size() == 0)
           && (!data.userData.keys().hasAny(['owned_coach_expires_at']) || data.userData.owned_coach_expires_at.size() == 0)
+          && (!data.userData.keys().hasAny(['plan_starts_at']) || data.userData.plan_starts_at == null)
           && (!data.userData.keys().hasAny(['plan_expires_at']) || data.userData.plan_expires_at == null)
         );
     }
 
+    // 명단 값을 앱이 그대로 옮겨 적는 길. "로그인 후 며칠"이 적힌 줄은
+    // 견줄 날짜가 없어서 앱이 쓰지 못하고, 서버(applyTesterPlan)만 쓴다.
     function hasEntitledPrivilegeUserData(data) {
       return hasUserData(data)
         && hasEntitlementDoc()
         && allowedEmailData().keys().hasAny(['plan_type'])
+        && !allowedEmailData().keys().hasAny([
+          'plan_entitlement_days',
+          'owned_coach_entitlement_days'
+        ])
         && data.userData.plan_type == allowedEmailData().plan_type
         && (!data.userData.keys().hasAny(['points']) || data.userData.points == 0)
         && (
@@ -75,6 +86,10 @@ service cloud.firestore {
         && (
           !allowedEmailData().keys().hasAny(['plan_expires_at'])
           || data.userData.plan_expires_at == allowedEmailData().plan_expires_at
+        )
+        && (
+          !allowedEmailData().keys().hasAny(['plan_starts_at'])
+          || data.userData.plan_starts_at == allowedEmailData().plan_starts_at
         );
     }
 
