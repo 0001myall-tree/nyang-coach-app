@@ -4602,6 +4602,7 @@ class _TasksScreenState extends State<TasksScreen>
   /// 일정은 지금 시각을 보고 한쪽을 찍은 뒤 맞는지만 묻는다. 오늘 한 번 있는
   /// 일이라 지나간 쪽은 뜻이 없어서다. 루틴은 매일 돌아오니 지금 시각이
   /// 아무것도 알려주지 않는다 — 밤에 "7시 기상"을 적으면 오후 7시가 찍혔다.
+  /// 캘린더 일정도 이 창을 쓴다. 다른 날 일이라 지금 시각이 단서가 못 된다.
   Future<bool?> _askRoutineMeridiem(
     ({TimeOfDay start, TimeOfDay? end}) am,
     ({TimeOfDay start, TimeOfDay? end}) pm,
@@ -4730,13 +4731,29 @@ class _TasksScreenState extends State<TasksScreen>
     bool reminderEnabled = false;
 
     if (_todayTimeType == 'none') {
-      final parsed = _parseNaturalLanguageTime(trimmed);
+      var parsed = _parseNaturalLanguageTime(trimmed);
       // 오전·오후를 앱이 찍은 경우에만 묻는다. "오후 7시"나 "19시"처럼
       // 적혀 있으면 찍을 것이 없어서 그냥 넣는다.
-      final confirmed =
-          parsed == null ||
-          !parsed.meridiemGuessed ||
-          await _confirmGuessedTime(parsed.time!);
+      //
+      // 위에서 다른 날을 골라 두고 적으면 지금 시각은 단서가 못 된다. 그때는
+      // 찍지 않고 캘린더처럼 오전·오후를 고르게 한다.
+      bool confirmed;
+      if (parsed != null && parsed.meridiemGuessed && !_isViewingActualToday) {
+        final am = _parseNaturalLanguageTime(trimmed, forcePm: false)!;
+        final pm = _parseNaturalLanguageTime(trimmed, forcePm: true)!;
+        final isPm = await _askRoutineMeridiem(
+          (start: am.time!, end: am.endTime),
+          (start: pm.time!, end: pm.endTime),
+        );
+        if (!mounted) return;
+        confirmed = isPm != null;
+        if (isPm != null) parsed = isPm ? pm : am;
+      } else {
+        confirmed =
+            parsed == null ||
+            !parsed.meridiemGuessed ||
+            await _confirmGuessedTime(parsed.time!);
+      }
       if (parsed != null && confirmed) {
         finalTitle = parsed.cleanText;
         timeStr = _formatTime(parsed.time!);
@@ -12114,14 +12131,46 @@ class _TasksScreenState extends State<TasksScreen>
     var title = text;
     TimeOfDay? readTime;
     TimeOfDay? readEndTime;
-    if (_schTimeType == 'none') {
-      final parsed = _parseNaturalLanguageTime(text);
-      if (parsed == null) {
+    // '특정 시간'을 눌러만 놓고 시각은 안 골랐으면 칸을 안 건드린 것과 같다.
+    // 이걸 'none'만 보고 가르면 이름에 적은 시각까지 버려진다.
+    final timeOptionUnset =
+        _schTimeType == 'none' ||
+        ((_schTimeType == 'single' || _schTimeType == 'range') &&
+            _schStartTime == null) ||
+        (_schTimeType == 'duration' && _schDuration == null);
+    if (timeOptionUnset) {
+      var parsed = _parseNaturalLanguageTime(text);
+      // 지금 시각으로 오전·오후를 찍는 건 오늘 한 번 있는 일일 때만 뜻이 있다.
+      final isTodayOnly =
+          !_schRepeatEnabled && isSameDay(_calSelectedDay, DateTime.now());
+      if (parsed != null && parsed.meridiemGuessed && isTodayOnly) {
+        // 오늘 탭과 같다. 찍은 쪽이 맞는지만 묻는다.
+        if (await _confirmGuessedTime(parsed.time!)) {
+          title = parsed.cleanText;
+          readTime = parsed.time;
+          readEndTime = parsed.endTime;
+        }
+        if (!mounted) return;
+      } else if (parsed != null && parsed.meridiemGuessed) {
+        // 다른 날이면 지금 시각이 아무것도 알려주지 않는다 — 새벽에 17일
+        // "5시 촬영"을 적으면 오전 5시가 찍혔다. 루틴처럼 둘 중 하나를 고르게 한다.
+        final am = _parseNaturalLanguageTime(text, forcePm: false)!;
+        final pm = _parseNaturalLanguageTime(text, forcePm: true)!;
+        final isPm = await _askRoutineMeridiem(
+          (start: am.time!, end: am.endTime),
+          (start: pm.time!, end: pm.endTime),
+        );
+        if (!mounted) return;
+        // 창을 닫으면 적은 그대로 시각 없이 넣는다 — 이름에서 '7시'도 떼지 않는다.
+        parsed = isPm == null ? null : (isPm ? pm : am);
+        if (parsed != null) {
+          title = parsed.cleanText;
+          readTime = parsed.time;
+          readEndTime = parsed.endTime;
+        }
+      } else if (parsed == null) {
         readTime = _timeFromDaypart(text);
-      } else if (!parsed.meridiemGuessed ||
-          await _confirmGuessedTime(parsed.time!)) {
-        // 오전·오후를 앱이 찍은 경우에만 묻는다. 아니라고 하면 적은 그대로
-        // 시각 없이 넣는다 — 이름에서 '7시'도 떼지 않는다.
+      } else {
         title = parsed.cleanText;
         readTime = parsed.time;
         readEndTime = parsed.endTime;
@@ -12199,10 +12248,16 @@ class _TasksScreenState extends State<TasksScreen>
       }
     });
     _schInputCtrl.clear();
+    // 시간 옵션도 오늘 탭처럼 비운다. 남겨두면 다음 일정부터 이름에 적은
+    // 시각을 안 읽어서, "5시 촬영"이 시각 없이 이름 그대로 들어갔다.
     setState(() {
       _schReminderEnabled = false;
       _schRepeatEnabled = false;
       _schRepeatRule = null;
+      _schTimeType = 'none';
+      _schStartTime = null;
+      _schEndTime = null;
+      _schDuration = null;
     });
     _saveSchedules();
   }
