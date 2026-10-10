@@ -1635,6 +1635,9 @@ class _TasksScreenState extends State<TasksScreen>
 
   // ── 데이터 로드 ──────────────────────────────────────────
   Future<void> _loadAll() async {
+    // 앱을 처음 켤 때도 카드 답 반영과 동시에 여기가 돈다. 먼저 읽으면 밤
+    // 카드로 내일로 옮긴 일이 오늘 목록에 남는다.
+    await OngoingTaskNudgeService.settled();
     final prefs = await SharedPreferences.getInstance();
     // 앱이 열려 있는 동안 밖에서(냥냥이 오버레이 등) 고친 값도 함께 읽는다.
     await prefs.reload();
@@ -3456,6 +3459,9 @@ class _TasksScreenState extends State<TasksScreen>
   /// 이 화면은 그 사실을 모른 채 열려 있을 수 있는데, 그대로 두면 메모리에 든
   /// 옛 목록을 다음 저장 때 덮어써서 방금 한 완료가 사라진다.
   Future<void> _reloadIfStoreChanged() async {
+    // 앱이 다시 켜지는 순간 카드 답 반영도 같이 시작된다. 그게 끝나기 전에
+    // 재면 "바뀐 것 없음"이 나와 옛 목록을 계속 들고 있게 된다.
+    await OngoingTaskNudgeService.settled();
     if (await TaskCompletionService.changedSince(_lastStoreLoadAt)) {
       await _loadAll();
       if (mounted) _syncTaskTicker();

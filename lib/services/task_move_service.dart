@@ -66,6 +66,24 @@ class TaskMoveService {
     }
 
     final schedules = _decodeMap(prefs.getString(schedulesKey));
+
+    // 일정 칸에서 내려온 일이면 원본도 그 날짜 칸에서 뺀다. 오늘 목록에 있던
+    // 것은 사본이라, 사본만 지우면 화면이 원본을 보고 오늘에 다시 내려보낸다.
+    // 한 번 미룬 일은 일정 칸으로 들어가므로, 두 번째 미룰 때마다 오늘에 남았다.
+    if (taskId.startsWith('schedule_')) {
+      final scheduleId = taskId.substring('schedule_'.length);
+      for (final key in schedules.keys.toList()) {
+        final day = schedules[key];
+        if (day is! List) continue;
+        final kept = day
+            .where(
+              (item) => !(item is Map && item['id']?.toString() == scheduleId),
+            )
+            .toList();
+        if (kept.length != day.length) schedules[key] = kept;
+      }
+    }
+
     final dateKey = _dateKey(to);
     final day = schedules[dateKey];
     final entries = day is List ? List.from(day) : <dynamic>[];

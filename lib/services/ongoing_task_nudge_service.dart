@@ -573,7 +573,23 @@ class OngoingTaskNudgeService {
   /// 플래너 화면이 열려 있든 말든 상관없다. 앱이 켜지는 순간 여기서 끝난다 —
   /// 예전에는 그 화면이 열려야만 반영돼서, 채팅만 하다 나가면 코치가 계속
   /// "그거 아직 안 했네요"라고 했다.
-  static Future<bool> applyPendingAnswer() async {
+  ///
+  /// 앞선 반영이 끝난 뒤에 줄을 서서 돈다. 할 일 화면은 [settled]를 기다린
+  /// 뒤에 저장소를 읽는다 — 안 기다리면 앱이 켜지는 순간 화면이 먼저 읽고
+  /// "바뀐 것 없음"으로 끝나서, 밤 카드로 내일로 옮긴 일이 오늘에 그대로
+  /// 남았다. 그 화면이 저장 한 번 하면 옛 목록이 덮여 진짜로 되살아났다.
+  static Future<bool> applyPendingAnswer() {
+    final run = _applying.then((_) => _applyPendingAnswer());
+    _applying = run.catchError((_) => false);
+    return run;
+  }
+
+  static Future<bool> _applying = Future.value(false);
+
+  /// 지금 돌고 있는 카드 답 반영이 끝날 때까지 기다린다.
+  static Future<void> settled() => _applying;
+
+  static Future<bool> _applyPendingAnswer() async {
     final answer = await takeAnswer();
     if (answer == null) return false;
     if (answer.isDone) {
