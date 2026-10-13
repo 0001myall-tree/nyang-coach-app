@@ -88,7 +88,6 @@ import '../models/user_data.dart';
 import '../theme/app_design_tokens.dart';
 import '../widgets/app_chip.dart';
 import '../widgets/core_reminder_settings_sheet.dart';
-import '../widgets/coach_team_intro_dialog.dart';
 import '../widgets/plan_guide_bottom_sheet.dart';
 
 // ─────────────────────────────────────────────────────────────
@@ -3905,141 +3904,6 @@ ${lines.join('\n')}
     } catch (e) {
       await prefs.remove('pendingDeferReminder');
     }
-  }
-
-  // ── 냥냥코치 비구독자 업셀 바텀시트 ─────────────────────
-  void _showCatUpsellBottomSheet() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      barrierColor: Colors.black54,
-      isScrollControlled: true,
-      builder: (ctx) => Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        padding: EdgeInsets.fromLTRB(
-          24,
-          32,
-          24,
-          MediaQuery.of(ctx).padding.bottom + 32,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Image.asset('assets/images/logo.png', width: 76, height: 76),
-            const SizedBox(height: 16),
-            // 무엇을 해주는 앱인지부터 말한다. "계속 대화하려면"만 있던 때는
-            // 처음 온 사람에게 유료 챗봇으로 보였다 — 이 앱이 파는 것은 대화가
-            // 아니라 시작하고 끝내는 일이다.
-            const Text(
-              '계획은 세웠는데 시작이 안 될 때',
-              style: TextStyle(
-                fontSize: 17,
-                fontWeight: FontWeight.w700,
-                color: Color(0xFF1A1A1A),
-              ),
-            ),
-            const SizedBox(height: 6),
-            const Text(
-              '냥냥코치는 할 일을 대신 적어주고,\n막히면 잘게 쪼개 시작까지 데려가요.\n루틴과 목표, 알람까지 한자리에서 챙깁니다.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 14,
-                color: Color(0xFF555555),
-                height: 1.5,
-              ),
-            ),
-            const SizedBox(height: 24),
-            if (_canOpenSubscriptionGuide) ...[
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF6D28D9),
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    elevation: 0,
-                  ),
-                  onPressed: () {
-                    Navigator.pop(ctx);
-                    Future.delayed(Duration.zero, _showPlanGuideBottomSheet);
-                  },
-                  child: const Text(
-                    '플랜 보기',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 10),
-            ],
-            SizedBox(
-              width: double.infinity,
-              child: TextButton(
-                style: TextButton.styleFrom(
-                  backgroundColor: const Color(0xFFF4F4F4),
-                  foregroundColor: const Color(0xFF555555),
-                  padding: const EdgeInsets.symmetric(vertical: 13),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                ),
-                onPressed: () {
-                  Navigator.pop(ctx);
-                  // 코치 선택 화면으로 돌아가기
-                  Navigator.of(context, rootNavigator: true).pushReplacement(
-                    MaterialPageRoute(
-                      builder: (_) =>
-                          CoachSelectionScreen(returnCoachId: widget.coachId),
-                    ),
-                  );
-                },
-                child: const Text(
-                  '조금 더 둘러볼게요',
-                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
-                ),
-              ),
-            ),
-            const SizedBox(height: 10),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton(
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: const Color(0xFF6D28D9),
-                  side: const BorderSide(
-                    color: Color(0xFFE5E7EB),
-                    width: 1,
-                  ), // 연한 회색 테두리
-                  padding: const EdgeInsets.symmetric(vertical: 13),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                ),
-                onPressed: () {
-                  Navigator.pop(ctx);
-                  // 코치 선택 화면의 "냥냥코치란?"과 같은 창. 다 읽고 "함께
-                  // 시작하기"를 누르면 구독 안내로 간다.
-                  showCoachTeamIntroDialog(
-                    context,
-                    onStart: _canOpenSubscriptionGuide
-                        ? _showPlanGuideBottomSheet
-                        : null,
-                  );
-                },
-                child: const Text(
-                  '냥냥코치란?',
-                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 
   /// [planId]를 주면 그 플랜이 골라진 채로 열린다(월간). 체험 안내에서
@@ -7978,7 +7842,7 @@ $block
         'last_visit_${widget.coachId}',
         now.toIso8601String(),
       );
-      await _maybeShowCatUpsell(
+      await _maybeShowTrialInvite(
         initialDelay: const Duration(milliseconds: 700),
       );
       return;
@@ -7995,7 +7859,7 @@ $block
         'last_visit_${widget.coachId}',
         now.toIso8601String(),
       );
-      await _maybeShowCatUpsell(
+      await _maybeShowTrialInvite(
         initialDelay: const Duration(milliseconds: 500),
       );
       return;
@@ -8152,17 +8016,26 @@ $block
     );
   }
 
-  /// 플랜 없는 사람에게 안내 시트를 띄운다.
+  /// 플랜 없는 사람에게 무료 체험 안내를 띄운다.
   ///
   /// 예전에는 여기서 자동 시연 화면을 먼저 보여줬다. 플래너가 그때와 많이
   /// 달라져서, 시연이 보여주는 것과 실제 화면이 어긋나게 됐다 — 처음 온
   /// 사람에게 지금 없는 모습을 보여주는 셈이라 걷어냈다.
-  Future<void> _maybeShowCatUpsell({required Duration initialDelay}) async {
+  Future<void> _maybeShowTrialInvite({required Duration initialDelay}) async {
     await Future.delayed(initialDelay);
     if (!mounted) return;
     // 살 수 없는 동안에는 권하지 않는다. 들어올 때마다 뜨는 팝업에 눌러도
     // 아무 일이 없는 버튼만 있으면 앱이 고장난 것처럼 보인다.
-    if (_canOpenSubscriptionGuide) _showCatUpsellBottomSheet();
+    if (!_canOpenSubscriptionGuide) return;
+    // 무료로 대화할 수 있는 날이 남은 사람은 막을 이유가 없다.
+    if (await _usableWithoutPlan()) return;
+    if (!mounted) return;
+    // 소개 시트를 따로 띄우던 때는, 그걸 닫고 한 마디 쳐야 체험 안내가 떴다.
+    // 같은 사람에게 창을 두 번 보여주는 셈이라 체험 안내로 바로 간다.
+    _showUsageLimitSheet(
+      ApiUsageLimitService.trialInviteMessage,
+      showUpgrade: true,
+    );
   }
 
   /// 지금 방에 있는 대화를 저장한다.
