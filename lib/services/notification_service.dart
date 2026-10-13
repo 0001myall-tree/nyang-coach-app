@@ -934,6 +934,10 @@ class NotificationService {
   /// 경우뿐이고, 그때는 조용히 버리는 것이 맞다.
   static const Duration _staleMorningAlarmAfter = Duration(minutes: 5);
 
+  /// 첫 알람에서 이만큼 지나면 그날 모닝콜은 끝난 것으로 본다.
+  /// 안드로이드 쪽 MorningAlarmReceiver.FOLLOW_UP_WINDOW_MILLIS와 같은 값이다.
+  static const Duration _morningFollowUpWindow = Duration(minutes: 30);
+
   Future<void> handleNativeMorningAlarm() async {
     if (kIsWeb) return;
     final prefs = await SharedPreferences.getInstance();
@@ -941,15 +945,24 @@ class NotificationService {
     final payload = prefs.getString('native_morning_payload');
     if (payload == null || !payload.startsWith('morning:')) return;
     final alarmAt = prefs.getInt('native_morning_alarm_at');
+    final firstAt = prefs.getInt('native_morning_first_at');
     await prefs.remove('native_morning_payload');
     await prefs.remove('native_morning_alarm_at');
+    await prefs.remove('native_morning_first_at');
 
     // 지난 모닝콜은 버린다. 이걸 안 보고 울리던 동안에는, 아침에 놓친 알람이
     // 오후에 앱을 열 때 그제서야 터졌다. 사용자에게는 모닝콜이 이상한 시각에
     // 울리는 것으로 보인다.
+    final now = DateTime.now();
     if (alarmAt != null) {
       final firedAt = DateTime.fromMillisecondsSinceEpoch(alarmAt);
-      if (DateTime.now().difference(firedAt) > _staleMorningAlarmAfter) return;
+      if (now.difference(firedAt) > _staleMorningAlarmAfter) return;
+    }
+    // 뒤따르는 알람이 밀렸다가 늦게 터진 경우다. 방금 울렸어도 첫 알람에서
+    // 너무 지났으면 그날 모닝콜은 끝났다. 알림을 눌러 들어오면 이 값은 없다.
+    if (firstAt != null) {
+      final firstFiredAt = DateTime.fromMillisecondsSinceEpoch(firstAt);
+      if (now.difference(firstFiredAt) > _morningFollowUpWindow) return;
     }
 
     WidgetsBinding.instance.addPostFrameCallback((_) {

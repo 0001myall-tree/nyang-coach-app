@@ -24,6 +24,9 @@ class MorningAlarmReceiver : BroadcastReceiver() {
          * ([MainActivity]의 startMorningAlarmSound).
          */
         const val NOTIFICATION_ID = 7304
+
+        /** 첫 알람에서 이만큼 지나면 뒤따르는 알람도, 앱을 열 때의 모닝콜도 없다. */
+        const val FOLLOW_UP_WINDOW_MILLIS = 30 * 60_000L
     }
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -61,10 +64,26 @@ class MorningAlarmReceiver : BroadcastReceiver() {
             return
         }
 
-        prefs.edit()
+        // 폰이 잠들어 있으면 뒤따르는 알람이 한참 밀렸다가 화면을 켤 때 터진다.
+        // 첫 알람에서 너무 지났으면 그날 모닝콜은 끝난 것으로 보고 쪽지까지 치운다.
+        val now = System.currentTimeMillis()
+        val firstAt = prefs.getLong("flutter.native_morning_first_at", 0L)
+        if (isFollowUp && firstAt > 0L && now - firstAt > FOLLOW_UP_WINDOW_MILLIS) {
+            prefs.edit()
+                .remove("flutter.native_morning_payload")
+                .remove("flutter.native_morning_alarm_at")
+                .remove("flutter.native_morning_first_at")
+                .commit()
+            return
+        }
+
+        val editor = prefs.edit()
             .putString("flutter.native_morning_payload", payload)
-            .putLong("flutter.native_morning_alarm_at", System.currentTimeMillis())
-            .commit()
+            .putLong("flutter.native_morning_alarm_at", now)
+        // 첫 알람 시각은 뒤따르는 것들이 덮어쓰지 않는다. 덮으면 늦게 터진
+        // 알람이 매번 "방금 울린 모닝콜"이 되어 위의 창을 빠져나간다.
+        if (!isFollowUp) editor.putLong("flutter.native_morning_first_at", now)
+        editor.commit()
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED

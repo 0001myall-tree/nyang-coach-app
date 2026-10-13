@@ -434,6 +434,8 @@ class MainActivity : FlutterFragmentActivity() {
             prefs.edit()
                 .putString("flutter.native_morning_payload", morningPayload)
                 .putLong("flutter.native_morning_alarm_at", System.currentTimeMillis())
+                // 알림을 직접 눌러 들어온 것이다. 첫 알람에서 오래 지났어도 연다.
+                .remove("flutter.native_morning_first_at")
                 .commit()
         }
 
