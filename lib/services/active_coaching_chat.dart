@@ -104,7 +104,7 @@ class ActiveCoachingChat {
   final List<ActiveCoachingChatLine> lines = [];
 
   /// 대화를 여는 사용자 한 마디. 카드에서 누른 버튼을 말로 옮긴 것이다.
-  String get openingLine => "'$taskName' 하기 싫어";
+  String get openingLine => "'$taskName' 귀찮아";
 
   /// 사용자의 말을 받아 코치의 답을 받아온다. 못 받아오면 null.
   ///
@@ -248,7 +248,7 @@ ${Prompts.executionSupportRule}
 [지금 상황]
 - 시각: ${now.hour}:${now.minute.toString().padLeft(2, '0')}
 - ${situation == null ? '매여 있는 시간대가 아님' : '매여 있는 시간대: $situation'}
-- 앱이 '$taskName'을(를) 할 때라고 말을 걸었고, 사용자는 "하기 싫어"라고 답했습니다.
+- 앱이 '$taskName'을(를) 할 때라고 말을 걸었고, 사용자는 "귀찮아"라고 답했습니다.
 - 오늘 남은 다른 일: ${others.isEmpty ? '없음' : others.join(', ')}
 - 이 대화는 할 일 창 위에 뜬 작은 창에서 오갑니다. 창 아래에는 '$taskName'을(를) 바로 시작하는 버튼이 있습니다.
 

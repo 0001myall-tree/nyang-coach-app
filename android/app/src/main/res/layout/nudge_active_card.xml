@@ -105,7 +105,7 @@
                 android:background="@drawable/nudge_button_secondary"
                 android:gravity="center"
                 android:maxLines="1"
-                android:text="하기 싫어"
+                android:text="귀찮아"
                 android:textColor="#6B6676"
                 android:textSize="13sp" />
         </LinearLayout>

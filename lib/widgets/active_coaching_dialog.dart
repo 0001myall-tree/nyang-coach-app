@@ -13,7 +13,7 @@
 /// 지금 할게            → 바로 시작
 /// 시간이 안 나          → 몇 시부터?
 /// 지금은 못 해          → 이따 / 내일로 / 오늘은 안 할래
-/// 하기 싫어            → 코치와 작은 대화창
+/// 귀찮아              → 코치와 작은 대화창
 /// ```
 ///
 /// 한 수(지금 할 수 있는 조각)를 묻는 단계는 하루를 닫는 카드와, 부를 일이
@@ -239,13 +239,13 @@ class _ActiveCoachingDialogState extends State<ActiveCoachingDialog> {
         }),
         const SizedBox(width: 6),
         _smallChoice(
-          '하기 싫어',
+          '귀찮아',
           () => _close(
             ActiveCoachingOutcome(
               ActiveCoachingOutcomeKind.reluctant,
               taskName: _task,
               taskId: _switchedId,
-              reason: '하기 싫어',
+              reason: '귀찮아',
             ),
           ),
         ),
