@@ -15706,8 +15706,18 @@ class _TasksScreenState extends State<TasksScreen>
 
   /// 플랜 없이 적으려 할 때. 카드 없이 쓰는 무료 하루를 없앤 뒤로 여기가
   /// 체험으로 들어가는 문이다 — "확인"만 있으면 막다른 길이 된다.
-  void _showSubscriptionNotice(BuildContext context) {
+  void _showSubscriptionNotice(BuildContext context, {bool? trialAvailable}) {
     final canCheckout = PurchaseService.storeCheckoutEnabled;
+    // 체험 자격은 스토어에 물어야 안다. 체험을 이미 쓴 사람에게 "무료 체험"을
+    // 띄우면 눌렀을 때 바로 결제가 떠서 속인 셈이 된다.
+    if (canCheckout && trialAvailable == null) {
+      PurchaseService.instance.canStartFreeTrial().then((eligible) {
+        if (!mounted || !context.mounted) return;
+        _showSubscriptionNotice(context, trialAvailable: eligible);
+      });
+      return;
+    }
+    final offersTrial = trialAvailable ?? false;
     showDialog(
       context: context,
       builder: (dialogContext) {
@@ -15736,7 +15746,9 @@ class _TasksScreenState extends State<TasksScreen>
               ),
             ),
             child: Text(
-              '$label ${FreeAccessService.trialDays}일 무료 체험',
+              offersTrial
+                  ? '$label ${FreeAccessService.trialDays}일 무료 체험'
+                  : '$label 플랜 보기',
               style: appFont(fontSize: 15, fontWeight: FontWeight.w900),
             ),
           ),
@@ -15757,7 +15769,9 @@ class _TasksScreenState extends State<TasksScreen>
             // 살 수 없는 동안에는 구독하라고 하지 않는다. 갈 수 없는 곳을
             // 가리키면 앱이 고장난 것처럼 보인다.
             canCheckout
-                ? '할 일, 일정, 루틴은 ${FreeAccessService.trialDays}일 무료 체험하면 적을 수 있어요.\n체험이 끝나면 고른 플랜으로 자동 결제되고, 그 전에 언제든 해지할 수 있어요.'
+                ? (offersTrial
+                      ? '할 일, 일정, 루틴은 ${FreeAccessService.trialDays}일 무료 체험하면 적을 수 있어요.\n체험이 끝나면 고른 플랜으로 자동 결제되고, 그 전에 언제든 해지할 수 있어요.'
+                      : '할 일, 일정, 루틴은 플랜을 고르면 적을 수 있어요.\n구독은 언제든 해지할 수 있어요.')
                 : '무료로 써볼 수 있는 기간이 끝났다냥.\n지금까지 적어둔 것은 그대로 볼 수 있어!',
             style: appFont(
               fontSize: 14,

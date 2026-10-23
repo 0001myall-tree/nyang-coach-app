@@ -161,6 +161,17 @@ class PurchaseService {
     }
   }
 
+  /// 이 사람이 아직 체험을 받을 수 있는지. 체험은 앱 전체에서 한 번이라
+  /// 월간 하나만 물어봐도 된다.
+  ///
+  /// 플랜을 고르기 전 안내 창이 쓴다. 예전에는 거기서 묻지 않고 "3일 무료
+  /// 체험"을 띄워서, 체험을 이미 쓴 애플 심사 계정이 바로 결제로 넘어갔고
+  /// 3.1.2로 반려됐다.
+  Future<bool> canStartFreeTrial() async {
+    final plan = catalog.planFor('master', isLongTerm: false);
+    return plan != null && await hasFreeTrial(plan);
+  }
+
   Future<PurchaseResult> purchase(PurchasePlan plan) async {
     await start();
     final available = await _iap.isAvailable();

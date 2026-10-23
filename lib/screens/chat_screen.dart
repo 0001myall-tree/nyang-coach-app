@@ -15197,10 +15197,28 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
     String msg, {
     bool showUpgrade = false,
     String? customTitle,
+    bool? trialAvailable,
   }) {
     // 플랜이 없어 막힌 자리. 한도를 다 쓴 것이 아니라 아직 시작을 안 한
     // 것이라, 제목과 버튼이 체험으로 이끈다.
     final isTrialInvite = msg == ApiUsageLimitService.trialInviteMessage;
+    // 체험 자격은 스토어에 물어야 안다. 먼저 묻고 다시 들어온다.
+    if (isTrialInvite && trialAvailable == null) {
+      PurchaseService.instance.canStartFreeTrial().then((eligible) {
+        if (!mounted) return;
+        _showUsageLimitSheet(
+          msg,
+          showUpgrade: showUpgrade,
+          customTitle: customTitle,
+          trialAvailable: eligible,
+        );
+      });
+      return;
+    }
+    final offersTrial = trialAvailable ?? false;
+    final shownMsg = isTrialInvite && !offersTrial
+        ? ApiUsageLimitService.subscribeInviteMessage
+        : msg;
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -15267,7 +15285,7 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
               ),
               const SizedBox(height: 14),
               Text(
-                msg,
+                shownMsg,
                 style: appFont(
                   fontSize: 14,
                   height: 1.5,
@@ -15306,7 +15324,9 @@ ${Prompts.outputRulesTail}${contextScope.screen ? Prompts.screenMap : Prompts.sc
                         ),
                       ),
                       child: Text(
-                        '${choice.$2} ${FreeAccessService.trialDays}일 무료 체험',
+                        offersTrial
+                            ? '${choice.$2} ${FreeAccessService.trialDays}일 무료 체험'
+                            : '${choice.$2} 플랜 보기',
                         style: appFont(
                           fontSize: 15,
                           fontWeight: FontWeight.w900,
