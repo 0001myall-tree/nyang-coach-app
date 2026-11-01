@@ -11,10 +11,14 @@
 ///
 /// ```
 /// 지금 할게            → 바로 시작
-/// 시간이 안 나          → 몇 시부터?
-/// 지금은 못 해          → 이따 / 내일로 / 오늘은 안 할래
+/// 이따 할게            → 몇 시부터? (맨 아래 "오늘은 안 할래")
+/// 내일 할게            → 바로 내일로
 /// 귀찮아              → 코치와 작은 대화창
 /// ```
+///
+/// 예전에는 "시간이 안 나"와 "지금은 못 해"가 따로 있었고, 뒤쪽은 "그럼 언제
+/// 할 수 있어?"를 한 번 더 물었다. 둘 다 결국 이따 하거나 내일 하는 길이라
+/// 그 물음 하나를 걷어냈다.
 ///
 /// 한 수(지금 할 수 있는 조각)를 묻는 단계는 하루를 닫는 카드와, 부를 일이
 /// 정해지지 않은 카드에서 들어온 길에 남아 있다.
@@ -148,7 +152,7 @@ class ActiveCoachingDialog extends StatefulWidget {
   State<ActiveCoachingDialog> createState() => _ActiveCoachingDialogState();
 }
 
-enum _Step { choose, notHere, moves, pickAnother, time }
+enum _Step { choose, moves, pickAnother, time }
 
 class _ActiveCoachingDialogState extends State<ActiveCoachingDialog> {
   late _Step _step = switch (widget) {
@@ -201,7 +205,6 @@ class _ActiveCoachingDialogState extends State<ActiveCoachingDialog> {
 
   List<Widget> _children() => switch (_step) {
     _Step.choose => _chooseStep(),
-    _Step.notHere => _notHereStep(),
     _Step.moves => _movesStep(),
     _Step.pickAnother => _pickAnotherStep(),
     _Step.time => _timeStep(),
@@ -209,8 +212,8 @@ class _ActiveCoachingDialogState extends State<ActiveCoachingDialog> {
 
   // ── 어떻게 할래? ────────────────────────────────────────
 
-  /// 안드로이드 카드와 같은 넷. 하겠다는 쪽만 크게, 못 하는 이유 셋은 작게
-  /// 한 줄로 둔다 — 같은 크기로 세우면 빠져나가는 문으로 눈이 먼저 간다.
+  /// 안드로이드 카드와 같은 넷. 하겠다는 쪽만 크게, 나머지 셋은 작게 한 줄로
+  /// 둔다 — 같은 크기로 세우면 빠져나가는 문으로 눈이 먼저 간다.
   List<Widget> _chooseStep() => [
     // 카드와 같은 말. 이 단계는 부를 일이 있을 때만 온다.
     AnswerDialogQuestion("'${_shorten(_task)}' 아직이네.\n지금 조금이라도 해볼까?"),
@@ -226,17 +229,23 @@ class _ActiveCoachingDialogState extends State<ActiveCoachingDialog> {
     const SizedBox(height: 8),
     Row(
       children: [
-        _smallChoice('시간이 안 나', () {
-          _reason = '시간이 안 나';
+        _smallChoice('이따 할게', () {
+          _reason = '이따 할게';
           _goToTime();
         }),
         const SizedBox(width: 6),
-        _smallChoice('지금은 못 해', () {
-          setState(() {
-            _reason = '지금은 못 해';
-            _step = _Step.notHere;
-          });
-        }),
+        // 내일로 옮기는 데 더 물을 것이 없다. 한 번에 끝낸다.
+        _smallChoice(
+          '내일 할게',
+          () => _close(
+            ActiveCoachingOutcome(
+              ActiveCoachingOutcomeKind.moveTomorrow,
+              taskName: _task,
+              taskId: _switchedId,
+              reason: '내일 할게',
+            ),
+          ),
+        ),
         const SizedBox(width: 6),
         _smallChoice(
           '귀찮아',
@@ -276,48 +285,6 @@ class _ActiveCoachingDialogState extends State<ActiveCoachingDialog> {
       ),
     ),
   );
-
-  // ── 지금은 못 해 ───────────────────────────────────────
-
-  /// 밖에 있어서 집에 있는 영양제를 못 먹는 것처럼, 시간이 아니라 자리가
-  /// 막힌 경우. 오늘 접거나 내일로 옮기는 문이 없으면 그 일을 할 때까지 같은
-  /// 일로 계속 불려 온다.
-  List<Widget> _notHereStep() => [
-    const AnswerDialogQuestion('그럼 언제 할 수 있어?'),
-    const SizedBox(height: 16),
-    AnswerChoiceButton(
-      label: '이따 할게',
-      icon: 'fa-clock-regular',
-      isPrimary: true,
-      onTap: _goToTime,
-    ),
-    const SizedBox(height: 8),
-    AnswerChoiceButton(
-      label: '내일로 옮길래',
-      icon: 'clock-rotate-left',
-      onTap: () => _close(
-        ActiveCoachingOutcome(
-          ActiveCoachingOutcomeKind.moveTomorrow,
-          taskName: _task,
-          taskId: _switchedId,
-          reason: _reason,
-        ),
-      ),
-    ),
-    const SizedBox(height: 8),
-    AnswerChoiceButton(
-      label: '오늘은 안 할래',
-      icon: 'circle-check',
-      onTap: () => _close(
-        ActiveCoachingOutcome(
-          ActiveCoachingOutcomeKind.notToday,
-          taskName: _task,
-          taskId: _switchedId,
-          reason: _reason,
-        ),
-      ),
-    ),
-  ];
 
   // ── 지금 뭘 해볼까? ────────────────────────────────────
 
@@ -484,6 +451,23 @@ class _ActiveCoachingDialogState extends State<ActiveCoachingDialog> {
         ),
       ),
     ),
+    // 첫 화면에서 [이따 할게]로 온 사람에게만. 오늘 접는 문이 없으면 그 일을
+    // 할 때까지 같은 일로 계속 불려 오고, 내일로 옮기기 싫은 일도 있다.
+    if (_reason == '이따 할게') ...[
+      const SizedBox(height: 8),
+      AnswerChoiceButton(
+        label: '오늘은 안 할래',
+        icon: 'circle-check',
+        onTap: () => _close(
+          ActiveCoachingOutcome(
+            ActiveCoachingOutcomeKind.notToday,
+            taskName: _task,
+            taskId: _switchedId,
+            reason: _reason,
+          ),
+        ),
+      ),
+    ],
   ];
 
   // ── 공통 ───────────────────────────────────────────────

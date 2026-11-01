@@ -77,6 +77,20 @@
             android:text="직접 고르기"
             android:textColor="#6B6676"
             android:textSize="15sp" />
+
+        <!-- 적극 코칭 카드에서 [이따 할게]로 왔을 때만 보인다. 오늘 접는 문이
+             없으면 그 일을 할 때까지 같은 일로 계속 불려 온다. -->
+        <TextView
+            android:id="@+id/nudge_later_not_today"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:layout_marginTop="8dp"
+            android:background="@drawable/nudge_button_secondary"
+            android:gravity="center"
+            android:text="오늘은 안 할래"
+            android:textColor="#6B6676"
+            android:textSize="15sp"
+            android:visibility="gone" />
     </LinearLayout>
     </ScrollView>
 </FrameLayout>

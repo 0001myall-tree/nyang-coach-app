@@ -435,7 +435,7 @@ object OngoingNudgeState {
         val night: Boolean,
         /** 부르는 일의 이름. 약속을 걸 때 시작 카드가 이 이름으로 부른다. */
         val taskText: String = "",
-        /** "시간이 안 나"에 내밀 시각들. 계획을 세운 시각 기준으로 Dart가 만든다. */
+        /** "이따 할게"에 내밀 시각들. 계획을 세운 시각 기준으로 Dart가 만든다. */
         val times: List<Pair<Int, Int>> = emptyList(),
     )
 

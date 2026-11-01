@@ -200,7 +200,7 @@ class OngoingNudgeService : Service() {
     /** 부르는 일의 이름. 약속을 걸 때 시작 카드에 넘긴다. */
     private var activeTaskText: String = ""
 
-    /** "시간이 안 나"에 내밀 시각들. Dart가 계획을 세울 때 함께 만들어 둔다. */
+    /** "이따 할게"에 내밀 시각들. Dart가 계획을 세울 때 함께 만들어 둔다. */
     private var activeTimes: List<Pair<Int, Int>> = emptyList()
 
     private fun currentTaskText(): String = when {
@@ -683,10 +683,10 @@ class OngoingNudgeService : Service() {
         view.findViewById<TextView>(R.id.nudge_active_title).text = activeTitle
         view.findViewById<TextView>(R.id.nudge_active_go)
             .setOnClickListener { activeStartNow(taskId) }
-        view.findViewById<TextView>(R.id.nudge_active_no_time)
-            .setOnClickListener { activeNoTime(taskId) }
-        view.findViewById<TextView>(R.id.nudge_active_not_here)
-            .setOnClickListener { expandToNotHereCard(taskId) }
+        view.findViewById<TextView>(R.id.nudge_active_later)
+            .setOnClickListener { activeLater(taskId) }
+        view.findViewById<TextView>(R.id.nudge_active_tomorrow)
+            .setOnClickListener { activeTomorrow(taskId) }
         // 하기 싫은 마음은 버튼 몇 개로 풀리지 않는다. 그 일이 무엇이고 왜 무거운지를
         // 보고 코치가 말을 건네야 해서, 할 일 창 위의 작은 대화창으로 데려간다.
         view.findViewById<TextView>(R.id.nudge_active_reluctant).setOnClickListener {
@@ -745,74 +745,33 @@ class OngoingNudgeService : Service() {
     }
 
     /**
-     * "시간이 안 나". 언제 할지를 받는다.
+     * "이따 할게". 언제 할지를 받는다.
      *
-     * 내밀 시각이 남아 있으면 이 창에서 끝낸다. 없으면(밤이 가깝거나 전부 근무
-     * 시간이면) 시각 선택기가 있는 앱으로 간다 — 다른 앱 위에 뜬 창에서는
-     * 선택기를 올릴 수 없다.
+     * 예전에는 "시간이 안 나"와 "지금은 못 해"가 따로 있었고, 뒤쪽은 "그럼 언제
+     * 할 수 있어?"를 한 번 더 물었다. 둘 다 결국 이따 하거나 내일 하는 길이라
+     * 하나로 합쳤다.
+     *
+     * 내밀 시각이 없어도(밤이 가깝거나 전부 근무 시간) 이 창에서 묻는다. 앱으로
+     * 바로 보내면 시계만 나와서 오늘 접는 문이 없다.
      */
-    private fun activeNoTime(taskId: String) {
+    private fun activeLater(taskId: String) {
         val times = OngoingNudgeState.upcoming(activeTimes)
-        if (times.isEmpty()) {
-            answered = true
-            OngoingNudgeAnswerWriter.markPickingLater(this, taskId, activeTaskText)
-            openPlanner()
-            return
-        }
-        expandToLaterCard(times, taskId, activeTaskText)
+        expandToLaterCard(times, taskId, activeTaskText, offerNotToday = true)
     }
 
     /**
-     * "지금은 못 해". 밖에 있어서 집에 있는 영양제를 못 먹는 것처럼, 시간이
-     * 아니라 자리가 막힌 경우다.
+     * "내일 할게". 더 물을 것이 없어 한 번에 끝낸다.
      *
-     * 몇 시에 할지 정할 수 있으면 약속으로 받는다. 그게 안 되는 날도 있어서
-     * 오늘은 접거나 내일로 옮기는 문을 함께 둔다 — 그 문이 없으면 그 일을 할
-     * 때까지 같은 일로 계속 불려 온다.
+     * 루틴은 옮기지 않고 오늘만 접는다(앱이 열릴 때 Dart가 가른다). 그래서
+     * "옮겨둘게"가 아니라 둘 다 맞는 말로 알린다.
      */
-    private fun expandToNotHereCard(taskId: String) {
-        handler.removeCallbacks(autoHide)
-        removeBubble()
-        cardView?.let { runCatching { windowManager.removeView(it) } }
-        cardView = null
-
-        val view = LayoutInflater.from(this).inflate(R.layout.nudge_later_card, null)
-        view.findViewById<TextView>(R.id.nudge_later_title).text = "그럼 언제 할 수 있어?"
-
-        val first = view.findViewById<TextView>(R.id.nudge_later_first)
-        first.text = "이따 할게"
-        first.setOnClickListener { activeNoTime(taskId) }
-
-        val second = view.findViewById<TextView>(R.id.nudge_later_second)
-        second.text = "내일로 옮길래"
-        second.setOnClickListener {
-            answered = true
-            OngoingNudgeState.writeResult(this, taskId, "moveTomorrow")
-            forgetActiveFor(taskId)
-            Toast.makeText(this, "내일 일정으로 옮겨둘게!", Toast.LENGTH_SHORT).show()
-            // 그 일은 정리됐다. 캐릭터가 남으면 아직 답을 기다리는 것처럼 보인다.
-            stopEverything()
-        }
-
-        val third = view.findViewById<TextView>(R.id.nudge_later_pick)
-        third.text = "오늘은 안 할래"
-        third.setOnClickListener {
-            answered = true
-            OngoingNudgeState.writeResult(this, taskId, "notToday")
-            forgetActiveFor(taskId)
-            Toast.makeText(this, "알겠어. 오늘은 이 일로 안 부를게!", Toast.LENGTH_SHORT).show()
-            // 그 일은 정리됐다. 캐릭터가 남으면 아직 답을 기다리는 것처럼 보인다.
-            stopEverything()
-        }
-
-        view.findViewById<View>(R.id.nudge_later_scrim).setOnClickListener {
-            cardView?.let { runCatching { windowManager.removeView(it) } }
-            cardView = null
-            showBubble()
-            handler.postDelayed(autoHide, remainingVisibleMillis())
-        }
-
-        attachCard(view)
+    private fun activeTomorrow(taskId: String) {
+        answered = true
+        OngoingNudgeState.writeResult(this, taskId, "moveTomorrow")
+        forgetActiveFor(taskId)
+        Toast.makeText(this, "알겠어. 내일 다시 부를게!", Toast.LENGTH_SHORT).show()
+        // 그 일은 정리됐다. 캐릭터가 남으면 아직 답을 기다리는 것처럼 보인다.
+        stopEverything()
     }
 
     /**
@@ -1036,6 +995,7 @@ class OngoingNudgeService : Service() {
         times: List<Pair<Int, Int>>,
         taskId: String,
         taskText: String,
+        offerNotToday: Boolean = false,
     ) {
         handler.removeCallbacks(autoHide)
         removeBubble()
@@ -1046,13 +1006,38 @@ class OngoingNudgeService : Service() {
         val first = view.findViewById<TextView>(R.id.nudge_later_first)
         val second = view.findViewById<TextView>(R.id.nudge_later_second)
 
-        first.text = clockLabel(times[0])
-        first.setOnClickListener { promiseAt(times[0], taskId, taskText) }
+        if (offerNotToday) {
+            // 앱 안 팝업과 같은 물음. 내밀 시각이 없으면 오늘 접을지를 먼저 묻는다.
+            val question = if (times.isEmpty()) "오늘은 여기까지 할까?" else "몇 시부터 할까?"
+            val name = taskText.trim()
+            view.findViewById<TextView>(R.id.nudge_later_title).text =
+                if (name.isEmpty()) question else "'$name'\n$question"
+        }
+
+        if (times.isNotEmpty()) {
+            first.text = clockLabel(times[0])
+            first.setOnClickListener { promiseAt(times[0], taskId, taskText) }
+        } else {
+            first.visibility = View.GONE
+        }
         if (times.size > 1) {
             second.text = clockLabel(times[1])
             second.setOnClickListener { promiseAt(times[1], taskId, taskText) }
         } else {
             second.visibility = View.GONE
+        }
+
+        if (offerNotToday) {
+            val notToday = view.findViewById<TextView>(R.id.nudge_later_not_today)
+            notToday.visibility = View.VISIBLE
+            notToday.setOnClickListener {
+                answered = true
+                OngoingNudgeState.writeResult(this, taskId, "notToday")
+                forgetActiveFor(taskId)
+                Toast.makeText(this, "알겠어. 오늘은 이 일로 안 부를게!", Toast.LENGTH_SHORT).show()
+                // 그 일은 정리됐다. 캐릭터가 남으면 아직 답을 기다리는 것처럼 보인다.
+                stopEverything()
+            }
         }
 
         // 버튼에 없는 시각을 고르려면 앱으로 간다. 다른 앱 위에 뜬 창에서는
